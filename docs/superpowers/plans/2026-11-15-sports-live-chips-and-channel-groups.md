@@ -125,3 +125,47 @@ The user reads "… · 21:00 UTC" in the details pane. Card pills already use th
 - [ ] **Step 4:** Tests PASS; compile both flavors.
 - [ ] **Step 5: Emulator check** (emulator zone is America/Chicago): an Upcoming item's pane shows local time and no "UTC". Screenshot.
 - [ ] **Step 6:** Commit `feat(sportslive): show addon event times in local time`.
+
+---
+
+### Task 5: Nebula Sports compatibility (added 2026-11-15, user-supplied test addon)
+
+Observed in `org.nebulastreams.sports` (type `sports`, ids `streamed:`): `releaseInfo` "🔴 LIVE", description "… · Live now", start format "2026-11-15 21:56 UTC", genres ["F1","Replay"].
+
+**Files:** `core/sportslive/SportsLiveCatalogPolicy.kt` (type rule adds `sports`), `core/sportslive/SportsLiveItemBucketer.kt` (live detection), `core/sportslive/SportsLiveTimeParser.kt` (format `yyyy-MM-dd HH:mm 'UTC'`), fixtures `app/src/test/resources/sportslive/nebula_live.json`, `nebula_replays.json` (from `D:\Nuvio\scratch\addons\nebula.streamed-events-live-now.json` and the first 20 metas of `nebula.streamed-replays.json`; no tokens in catalog bodies, verify).
+
+- [ ] Tests: type `sports` claimed by the type rule; `releaseInfo` containing the whole word `LIVE` after stripping non-letters (e.g. "🔴 LIVE") is live; description containing "Live now" case-insensitively as a whole phrase is live (keep "Live on" channel check case-sensitive); "2026-11-15 21:56 UTC" parses to that instant with a time of day; Nebula live fixture → all LIVE_NOW; Nebula replays fixture (catalog name "Replays") → REPLAYS.
+- [ ] Implement; run `--tests "com.nuvio.tv.core.sportslive.*"`; commit `feat(sportslive): understand Nebula Sports live markers and times`.
+
+---
+
+### Task 6: CNCVerse compatibility and large channel lists (added 2026-11-15, user-supplied test addon)
+
+Observed in `com.cncverse.stremiobridge.*`: type `tv` catalogs "⚡SportzX Live Events (tv)" etc. (names like "🔜 AFG vs ZIM", no time, no genres) and "EasyPlay Live TV (tv)" with 4,857 channels named "UK| SKY SPORTS 1" (132 prefixes, ~60 each; 3.8 MB response).
+
+**Rulings:**
+- Kind: a catalog whose name or id contains the phrase "live tv" (case-insensitive) is CHANNELS (in addition to channel/channels); "events" in the name keeps EVENTS.
+- Status emoji in item names: leading 🔴 → live; leading 🔜 → upcoming (not live, start unknown → Upcoming "Time TBA"); the emoji and following whitespace are stripped from the displayed name and from team parsing. A "live"-named catalog no longer marks 🔜 items live.
+- Channel group rule (amends Task 1): prefix before `|` or ` : ` (trimmed), accepted when it is 2–8 characters of letters, digits or `-` and contains a letter (e.g. `UK`, `ASIA-IN`, `DSTV`); the second-genre code rule stays first; addon name last.
+- Performance: the section's 60 s auto-refresh reloads only EVENTS and REPLAY catalogs, not CHANNELS catalogs (channels reload on manual Refresh and on the first load per app session). Bucketing runs once per load, not on every selection change (separate the bucketed tabs from selection in the ViewModel's combine).
+
+**Files:** `core/sportslive/SportsLiveCatalogPolicy.kt`, `SportsLiveItemBucketer.kt`, `SportsLiveChannelGrouper.kt` (from Task 1), `data/repository/SportsLiveRepositoryImpl.kt` (`load(force, includeChannels: Boolean = true)`), `ui/screens/sportslive/SportsLiveViewModel.kt`, fixtures `cnc_live_events.json` (from `D:\Nuvio\scratch\addons\cnc.sportzx.json`) and `cnc_live_tv_sample.json` (first 200 metas of `cnc.cnc_EasyPlayLiveTV_tv.json`); verify no tokens (catalog ids are base64 channel descriptors, not secrets).
+
+- [ ] Tests: "Live TV" catalog → CHANNELS; 🔜 item not live and in Upcoming; 🔴 item live; displayed names stripped; "AFG vs ZIM" parses (for later team features); grouper gives `UK`, `ASIA-IN`, `DSTV`; auto-refresh calls `load(includeChannels = false)`; ViewModel buckets once per load (count calls via a seam or measure that selection changes don't re-invoke the bucketer).
+- [ ] Emulator: install CNCVerse; Channels tab with group chips stays responsive (scroll, filter) with ~4.8k channels; Live Now shows no channels from "Live TV". Screenshots.
+- [ ] Commit `feat(sportslive): handle large live TV catalogs and status emoji`.
+
+---
+
+### Task 7: Plain live TV addons (added 2026-11-15, user-supplied Ultra MAX TV)
+
+Observed in `org.kris.ultra.max.tv.*`: type `tv` catalogs "🇺🇸 United States TV" (200) and "🇬🇧 United Kingdom TV" (91); items have `genres: ["Live TV"]`, no prefix, no time, no live marker; one m3u8 stream each.
+
+**Rulings:**
+- An item whose genres contain "Live TV" (case-insensitive, whole phrase) is a channel (`isChannel = true`), whatever its catalog's kind.
+- Channels appear only in the Channels tab, never in Live Now or Upcoming, unless the item itself carries an explicit live marker (releaseInfo "LIVE"/"🔴 LIVE", or "LIVE NOW" text). This amends spec §7.2 ("A channel that is live also appears in Live Now") to require an explicit marker.
+- Channel group fallback order becomes: second-genre code → name prefix (Task 6 rule) → **catalog name with emoji, "(tv)" and surrounding whitespace removed** → addon name.
+
+**Files:** `core/sportslive/SportsLiveItemBucketer.kt`, `SportsLiveChannelGrouper.kt`, spec §7.2 amendment (`git add -f`), fixture `ultra_tv_uk.json` (copy of `D:\Nuvio\scratch\addons\ultra.tv_uk.json`; ids are base64 channel names, no secrets).
+- [ ] Tests: Ultra fixture items are channels, absent from LIVE_NOW and UPCOMING, present in CHANNELS; group "United Kingdom TV"; highfly leaf items (with "LIVE NOW") still appear in both LIVE_NOW and CHANNELS; CNCVerse Live TV sample stays out of LIVE_NOW.
+- [ ] Commit `feat(sportslive): treat plain live TV addons as channels`.
