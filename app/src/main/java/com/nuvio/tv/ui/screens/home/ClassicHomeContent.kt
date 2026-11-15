@@ -60,6 +60,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.Alignment
 import com.nuvio.tv.ui.components.CatalogRowSection
+import com.nuvio.tv.ui.components.catalogRowShowsSeeAllByDefault
 import com.nuvio.tv.ui.components.CollectionRowSection
 import com.nuvio.tv.ui.components.ContinueWatchingSection
 import com.nuvio.tv.ui.components.LocalLandscapePosterMode
@@ -865,6 +866,8 @@ fun ClassicHomeContent(
                         onItemFocus = handleMetaFocus,
                         isItemWatched = isCatalogItemWatched,
                         onItemLongPress = onCatalogItemLongPress,
+                        showSeeAll = SportsLiveHomeRow.alwaysShowsSeeAll(catalogRow) ||
+                            catalogRowShowsSeeAllByDefault(catalogRow),
                         seeAllLabel = catalogSeeAllLabel,
                         onItemClick = { id, type, addonBaseUrl ->
                             onNavigateToDetail(id, type, addonBaseUrl)

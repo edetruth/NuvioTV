@@ -152,6 +152,25 @@ class SportsLiveItemBucketerTest {
     }
 
     @Test
+    fun `events item with no time and not live lands in upcoming as time TBA`() {
+        val popular = claimed("movie", "top", "Popular", SportsLiveKind.EVENTS)
+        val items = describeAll(
+            listOf(
+                meta("untimed", "Untimed film", releaseInfo = "2025"),
+                meta("timed", "Timed game", releaseInfo = "15 Nov 2026 · 18:00 UTC")
+            ),
+            popular
+        )
+        val tabs = SportsLiveItemBucketer.bucket(items, now)
+        val upcomingTab = tabs.getValue(SportsLiveTab.UPCOMING)
+
+        assertEquals(listOf("timed", "untimed"), upcomingTab.map { it.id })
+        assertNull(upcomingTab.last().startMs)
+        assertFalse(upcomingTab.last().isLive)
+        assertTrue(tabs.getValue(SportsLiveTab.LIVE_NOW).isEmpty())
+    }
+
+    @Test
     fun `unparseable time from an upcoming catalog goes last with null start`() {
         val upcoming = claimed("sport", "events_upcoming", "Upcoming", SportsLiveKind.EVENTS)
         val items = describeAll(

@@ -175,6 +175,7 @@ internal fun buildModernHomePresentation(
                             supportsSkip = row.supportsSkip,
                             hasMore = row.hasMore,
                             isLoading = row.isLoading,
+                            showSeeAll = SportsLiveHomeRow.alwaysShowsSeeAll(row),
                             items = row.items.mapIndexed { itemIndex, item ->
                                 val occurrence = rowItemOccurrenceCounts.getOrDefault(item.id, 0)
                                 rowItemOccurrenceCounts[item.id] = occurrence + 1

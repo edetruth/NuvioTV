@@ -124,7 +124,9 @@ data class HeroCarouselRow(
     val apiType: String? = null,
     val supportsSkip: Boolean = false,
     val hasMore: Boolean = false,
-    val isLoading: Boolean = false
+    val isLoading: Boolean = false,
+    /** Ends the row with a See all card. Only the Live now row sets it; Modern has no paging See all. */
+    val showSeeAll: Boolean = false
 )
 
 @Immutable

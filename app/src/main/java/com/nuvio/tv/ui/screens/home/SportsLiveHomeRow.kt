@@ -25,4 +25,7 @@ object SportsLiveHomeRow {
     )
 
     fun isLiveNowRow(addonBaseUrl: String): Boolean = addonBaseUrl == BASE_URL
+
+    /** The Live now row always ends with See all, which opens the section, whatever its size. */
+    fun alwaysShowsSeeAll(row: CatalogRow): Boolean = isLiveNowRow(row.addonBaseUrl)
 }

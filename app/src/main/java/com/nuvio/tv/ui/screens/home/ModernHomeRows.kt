@@ -106,6 +106,8 @@ import coil3.request.ImageRequest
 import coil3.request.CachePolicy
 import coil3.request.crossfade
 import coil3.request.transformations
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import com.nuvio.tv.R
 import com.nuvio.tv.domain.model.FocusedPosterTrailerPlaybackTarget
 import com.nuvio.tv.domain.model.CardDepthSurface
@@ -482,6 +484,7 @@ internal fun ModernRowSection(
     onCatalogSelectionFocused: (FocusedCatalogSelection) -> Unit,
     onNavigateToDetail: (String, String, String) -> Unit,
     onNavigateToFolderDetail: (String, String) -> Unit,
+    onNavigateToCatalogSeeAll: (String, String, String) -> Unit = { _, _, _ -> },
     onLoadMoreCatalog: (String, String, String) -> Unit,
     onBackdropInteraction: () -> Unit,
     onExpandedCatalogFocusKeyChange: (String?) -> Unit,
@@ -1057,7 +1060,89 @@ internal fun ModernRowSection(
                         }
                     }
                 }
+                if (row.showSeeAll && row.items.list.isNotEmpty()) {
+                    item(key = "${row.key}_see_all", contentType = "modern_see_all_card") {
+                        val seeAllIndex = row.items.list.size
+                        val metrics = remember(
+                            row.items.list.first(),
+                            useLandscapePosters,
+                            portraitCatalogCardWidth,
+                            portraitCatalogCardHeight,
+                            landscapeCatalogCardWidth,
+                            landscapeCatalogCardHeight
+                        ) {
+                            row.items.list.first().catalogCardMetrics(
+                                useLandscapePosters = useLandscapePosters,
+                                portraitCardWidth = portraitCatalogCardWidth,
+                                portraitCardHeight = portraitCatalogCardHeight,
+                                landscapeCardWidth = landscapeCatalogCardWidth,
+                                landscapeCardHeight = landscapeCatalogCardHeight
+                            )
+                        }
+                        ModernSeeAllCard(
+                            width = metrics.width,
+                            height = metrics.height,
+                            cornerRadius = posterCardCornerRadius,
+                            focusRequester = itemFocusRequesters.getOrPut(seeAllIndex) { FocusRequester() },
+                            onClick = {
+                                onNavigateToCatalogSeeAll(
+                                    row.catalogId.orEmpty(),
+                                    row.addonId.orEmpty(),
+                                    row.apiType.orEmpty()
+                                )
+                            }
+                        )
+                    }
+                }
             }
+        }
+    }
+}
+
+/** Trailing card that opens the full list for a row, sized like the row's cards. */
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun ModernSeeAllCard(
+    width: Dp,
+    height: Dp,
+    cornerRadius: Dp,
+    focusRequester: FocusRequester,
+    onClick: () -> Unit
+) {
+    val shape = RoundedCornerShape(cornerRadius)
+    androidx.tv.material3.Card(
+        onClick = onClick,
+        modifier = Modifier
+            .width(width)
+            .height(height)
+            .focusRequester(focusRequester),
+        shape = androidx.tv.material3.CardDefaults.shape(shape = shape),
+        colors = androidx.tv.material3.CardDefaults.colors(
+            containerColor = NuvioTheme.colors.BackgroundCard,
+            focusedContainerColor = NuvioTheme.colors.BackgroundCard
+        ),
+        border = androidx.tv.material3.CardDefaults.border(
+            focusedBorder = Border(border = BorderStroke(2.dp, NuvioTheme.colors.FocusRing), shape = shape)
+        ),
+        scale = androidx.tv.material3.CardDefaults.scale(focusedScale = 1.02f)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            androidx.tv.material3.Icon(
+                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                contentDescription = null,
+                modifier = Modifier.size(NuvioTheme.spacing.xxl),
+                tint = NuvioTheme.colors.TextSecondary
+            )
+            Spacer(modifier = Modifier.height(NuvioTheme.spacing.sm))
+            Text(
+                text = stringResource(R.string.action_see_all),
+                style = MaterialTheme.typography.titleSmall,
+                color = NuvioTheme.colors.TextSecondary
+            )
         }
     }
 }

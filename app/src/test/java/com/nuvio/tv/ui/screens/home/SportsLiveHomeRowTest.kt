@@ -8,6 +8,7 @@ import com.nuvio.tv.domain.model.SportsLiveKind
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import com.nuvio.tv.ui.components.catalogRowShowsSeeAllByDefault
 import org.junit.Test
 
 class SportsLiveHomeRowTest {
@@ -34,6 +35,26 @@ class SportsLiveHomeRowTest {
         assertTrue(SportsLiveHomeRow.isLiveNowRow("nuvio://sports-live"))
         assertFalse(SportsLiveHomeRow.isLiveNowRow("https://addon.example"))
         assertFalse(SportsLiveHomeRow.isLiveNowRow(""))
+    }
+
+    @Test
+    fun `the Live now row always shows see all even when short and without more pages`() {
+        val row = SportsLiveHomeRow.build(listOf(item("a")), "Live now")
+
+        assertTrue(SportsLiveHomeRow.alwaysShowsSeeAll(row))
+        assertFalse(catalogRowShowsSeeAllByDefault(row))
+    }
+
+    @Test
+    fun `ordinary catalog rows keep the default see all rule`() {
+        val shortRow = SportsLiveHomeRow.build(List(3) { item("s$it") }, "Popular")
+            .copy(addonId = "com.cinemeta", addonBaseUrl = "https://cinemeta.example")
+        val longRow = shortRow.copy(items = List(15) { item("l$it").meta })
+
+        assertFalse(SportsLiveHomeRow.alwaysShowsSeeAll(shortRow))
+        assertFalse(catalogRowShowsSeeAllByDefault(shortRow))
+        assertTrue(catalogRowShowsSeeAllByDefault(shortRow.copy(hasMore = true)))
+        assertTrue(catalogRowShowsSeeAllByDefault(longRow))
     }
 
     companion object {

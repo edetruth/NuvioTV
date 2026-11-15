@@ -70,9 +70,11 @@ object SportsLiveItemBucketer {
         return when (tab) {
             SportsLiveTab.LIVE_NOW -> item.isLive && !replay
             // An upcoming-named catalog vouches only for items without a known time of day;
-            // a timed start in the past never counts as upcoming.
+            // a timed start in the past never counts as upcoming. An events item with no start at
+            // all is kept as "Time TBA" so a manually included catalog never disappears.
             SportsLiveTab.UPCOMING -> !item.isLive && !replay &&
                 ((item.startMs != null && item.startMs > nowMs) ||
+                    (item.startMs == null && item.kind == SportsLiveKind.EVENTS) ||
                     (!item.startHasTimeOfDay &&
                         SportsLiveKeywords.containsKeyword(item.catalogName, SportsLiveKeywords.UPCOMING)))
             SportsLiveTab.CHANNELS -> item.isChannel && !replay

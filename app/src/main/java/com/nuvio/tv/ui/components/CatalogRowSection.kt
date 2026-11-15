@@ -80,13 +80,17 @@ import com.nuvio.tv.ui.util.localizedContentType
 import com.nuvio.tv.ui.util.contentTextDirection
 import androidx.compose.ui.platform.LocalContext
 
+/** Default rule for a trailing See all card: the addon has more pages, or the row is long. */
+fun catalogRowShowsSeeAllByDefault(catalogRow: CatalogRow): Boolean =
+    catalogRow.hasMore || catalogRow.items.size >= 15
+
 @OptIn(ExperimentalTvMaterial3Api::class, ExperimentalComposeUiApi::class, ExperimentalFoundationApi::class)
 @Composable
 fun CatalogRowSection(
     catalogRow: CatalogRow,
     onItemClick: (String, String, String) -> Unit,
     onSeeAll: () -> Unit = {},
-    showSeeAll: Boolean = catalogRow.hasMore || catalogRow.items.size >= 15,
+    showSeeAll: Boolean = catalogRowShowsSeeAllByDefault(catalogRow),
     seeAllLabel: String? = null,
     posterCardStyle: PosterCardStyle = PosterCardDefaults.Style,
     showPosterLabels: Boolean = true,
