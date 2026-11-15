@@ -8,7 +8,9 @@ import kotlinx.coroutines.flow.StateFlow
 data class SportsLiveLoad(
     val items: List<SportsLiveItem>,
     val failures: List<SportsLiveFailure>,
-    val loadedAtMs: Long
+    val loadedAtMs: Long,
+    /** Keys of the catalogs this load fetched. */
+    val claimedKeys: Set<String>
 )
 
 data class SportsLiveFailure(val catalog: ClaimedCatalog, val message: String)
@@ -26,10 +28,13 @@ interface SportsLiveRepository {
     /** True when the section is enabled and claims at least one catalog. */
     val sectionAvailable: Flow<Boolean>
 
-    /** Loads the first page of every claimed catalog in parallel; a result under 60 s old is reused unless [force]. */
+    /**
+     * Loads the first page of every claimed catalog in parallel. A result under 60 s old is
+     * reused unless [force] or the claimed catalogs have changed since it was loaded.
+     */
     suspend fun load(force: Boolean = false): SportsLiveLoad
 
-    /** The most recent load, or null before the first one. */
+    /** The most recent load, whether or not every catalog succeeded. */
     val latest: StateFlow<SportsLiveLoad?>
 
     /** Live items from [latest], capped at [limit]; empty when the home row or the section is off. */

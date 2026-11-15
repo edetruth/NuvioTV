@@ -2,6 +2,7 @@ package com.nuvio.tv.core.sportslive
 
 import com.nuvio.tv.domain.model.Addon
 import com.nuvio.tv.domain.model.CatalogDescriptor
+import com.nuvio.tv.domain.model.CatalogExtra
 import com.nuvio.tv.domain.model.ContentType
 import com.nuvio.tv.domain.model.SportsLiveKind
 import com.nuvio.tv.domain.model.SportsLiveOverride
@@ -79,6 +80,28 @@ class SportsLiveCatalogPolicyTest {
         val claim = SportsLiveCatalogPolicy.classify(addon, catalog, mapOf(key to SportsLiveOverride.INCLUDE))
         assertEquals(SportsLiveKind.EVENTS, claim?.kind)
         assertEquals("override:include", claim?.reason)
+    }
+
+    @Test
+    fun `search-only catalog is never claimed even with INCLUDE override`() {
+        val catalog = catalog("sport", "sports_search", "Search")
+            .copy(extra = listOf(CatalogExtra(name = "search", isRequired = true)))
+        val addon = addon("highfly", "Sports Streams", catalog)
+        val key = SportsLiveCatalogPolicy.keyFor(addon, catalog)
+        assertNull(classify(addon, catalog))
+        assertNull(SportsLiveCatalogPolicy.classify(addon, catalog, mapOf(key to SportsLiveOverride.INCLUDE)))
+        val legacy = catalog("sport", "sports_search", "Search").copy(extraRequired = listOf("search"))
+        assertNull(classify(addon("highfly", "Sports Streams", legacy), legacy))
+    }
+
+    @Test
+    fun `catalog with an optional search extra is still claimed`() {
+        val catalog = catalog("sport", "sports_live", "Live Now").copy(
+            extra = listOf(CatalogExtra(name = "search"), CatalogExtra(name = "skip")),
+            extraSupported = listOf("search", "skip")
+        )
+        val claim = classify(addon("highfly", "Sports Streams", catalog), catalog)
+        assertEquals(SportsLiveKind.EVENTS, claim?.kind)
     }
 
     @Test

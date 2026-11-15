@@ -52,6 +52,8 @@ class SportsLiveRepositoryImpl @Inject constructor(
     internal var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 
     private val _latest = MutableStateFlow<SportsLiveLoad?>(null)
+
+    /** The most recent load, whether or not every catalog succeeded. */
     override val latest: StateFlow<SportsLiveLoad?> = _latest.asStateFlow()
 
     override val enabled: Flow<Boolean> = prefs.showSection
@@ -78,10 +80,13 @@ class SportsLiveRepositoryImpl @Inject constructor(
         combine(enabled, claimedCatalogs) { enabled, claimed -> enabled && claimed.isNotEmpty() }
 
     override suspend fun load(force: Boolean): SportsLiveLoad {
-        val cached = _latest.value
-        if (!force && cached != null && nowMs() - cached.loadedAtMs < CACHE_MS) return cached
-
         val claimed = claimedCatalogs.first()
+        val claimedKeys = claimed.map { it.key }.toSet()
+        val cached = _latest.value
+        if (!force && cached != null && nowMs() - cached.loadedAtMs < CACHE_MS && cached.claimedKeys == claimedKeys) {
+            return cached
+        }
+
         val results = coroutineScope {
             claimed.map { catalog -> async(ioDispatcher) { catalog to fetchFirstPage(catalog) } }.awaitAll()
         }
@@ -96,7 +101,7 @@ class SportsLiveRepositoryImpl @Inject constructor(
                 NetworkResult.Loading -> Unit
             }
         }
-        return SportsLiveLoad(items, failures, loadedAtMs = now).also { _latest.value = it }
+        return SportsLiveLoad(items, failures, loadedAtMs = now, claimedKeys = claimedKeys).also { _latest.value = it }
     }
 
     /** The catalog's first non-loading result; a timeout or exception becomes an [NetworkResult.Error]. */

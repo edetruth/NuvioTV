@@ -19,6 +19,7 @@ import com.nuvio.tv.domain.repository.AddonRepository
 import com.nuvio.tv.domain.repository.CatalogRepository
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
@@ -132,6 +133,50 @@ class SportsLiveRepositoryImplTest {
     }
 
     @Test
+    fun `excluding a catalog via override within 60 seconds makes the next non-forced load refetch`() = runTest {
+        catalogRepository.results["sports" to "live"] = success("sports", "live", meta("a", live = true))
+        catalogRepository.results["sports" to "upcoming"] = success("sports", "upcoming", meta("b"))
+        val repository = newRepository()
+        assertEquals(setOf("a", "b"), repository.load().items.map { it.id }.toSet())
+        assertEquals(3, catalogRepository.calls)
+
+        now += 10_000
+        prefs.setOverride(SportsLiveCatalogPolicy.keyFor(sportsAddon, liveCatalog), SportsLiveOverride.EXCLUDE)
+        val reloaded = repository.load()
+
+        assertEquals(5, catalogRepository.calls)
+        assertEquals(setOf("b"), reloaded.items.map { it.id }.toSet())
+    }
+
+    @Test
+    fun `a catalog that throws becomes one failure and the others still load`() = runTest {
+        catalogRepository.results["sports" to "live"] = success("sports", "live", meta("a", live = true))
+        catalogRepository.results["sports" to "upcoming"] = success("sports", "upcoming", meta("b"))
+        catalogRepository.throwing += "generic" to "chan"
+        val repository = newRepository()
+
+        val load = repository.load()
+
+        assertEquals(setOf("a", "b"), load.items.map { it.id }.toSet())
+        assertEquals("chan", load.failures.single().catalog.catalog.id)
+        assertEquals("boom", load.failures.single().message)
+    }
+
+    @Test
+    fun `a catalog that never completes becomes a failure after the timeout`() = runTest {
+        catalogRepository.results["sports" to "live"] = success("sports", "live", meta("a", live = true))
+        catalogRepository.hanging += "generic" to "chan"
+        val repository = newRepository()
+        val startedAt = testScheduler.currentTime
+
+        val load = repository.load()
+
+        assertEquals(15_000L, testScheduler.currentTime - startedAt)
+        assertEquals(listOf("a"), load.items.map { it.id })
+        assertEquals("chan", load.failures.single().catalog.catalog.id)
+    }
+
+    @Test
     fun `liveNow is empty when showHomeRow is false`() = runTest {
         catalogRepository.results["sports" to "live"] = success("sports", "live", meta("a", live = true))
         val repository = newRepository()
@@ -171,6 +216,8 @@ class SportsLiveRepositoryImplTest {
 
     private class FakeCatalogRepository : CatalogRepository {
         val results = mutableMapOf<Pair<String, String>, NetworkResult<CatalogRow>>()
+        val throwing = mutableSetOf<Pair<String, String>>()
+        val hanging = mutableSetOf<Pair<String, String>>()
         var calls = 0
 
         override fun getCatalog(
@@ -188,7 +235,10 @@ class SportsLiveRepositoryImplTest {
         ): Flow<NetworkResult<CatalogRow>> = flow {
             calls++
             emit(NetworkResult.Loading)
-            emit(results[addonId to catalogId] ?: success(addonId, catalogId))
+            val key = addonId to catalogId
+            if (key in throwing) throw IllegalStateException("boom")
+            if (key in hanging) awaitCancellation()
+            emit(results[key] ?: success(addonId, catalogId))
         }
     }
 
