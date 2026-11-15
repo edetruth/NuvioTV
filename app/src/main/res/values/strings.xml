@@ -3491,4 +3491,6 @@
     <string name="autosync_label_synced">Auto synced</string>
     <string name="stream_resume_from_time">Resume from %1$s</string>
     <string name="stream_resume_from_percent">Resume from %1$d%%</string>
+    <string name="sports_live_home_row_title">Live now</string>
+    <string name="sports_live_catalog_order_note">%1$d catalog(s) are shown in Sports &amp; Live instead</string>
 </resources>

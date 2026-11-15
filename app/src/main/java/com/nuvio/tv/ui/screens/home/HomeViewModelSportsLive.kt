@@ -1,0 +1,46 @@
+package com.nuvio.tv.ui.screens.home
+
+import android.util.Log
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+
+/**
+ * Catalogs claimed by Sports & Live leave Home. When the claimed set changes after Home has
+ * loaded, the catalog order is rebuilt and the catalogs loaded again, so rows come back or
+ * disappear without a restart.
+ */
+internal fun HomeViewModel.observeSportsLiveClaimedKeysPipeline() {
+    viewModelScope.launch {
+        sportsLiveRepository.claimedCatalogKeys.collectLatest { keys ->
+            if (keys == sportsLiveClaimedKeys) return@collectLatest
+            sportsLiveClaimedKeys = keys
+            if (addonsCache.isEmpty()) return@collectLatest
+            rebuildCatalogOrder(addonsCache)
+            loadAllCatalogsPipeline(addonsCache)
+        }
+    }
+}
+
+/** Feeds the Live now row. Before the catalogs load, the next catalog update picks the items up. */
+internal fun HomeViewModel.observeLiveNowPipeline() {
+    viewModelScope.launch {
+        sportsLiveRepository.liveNow().collect { items ->
+            if (items == _uiState.value.liveNowItems) return@collect
+            _uiState.update { it.copy(liveNowItems = items) }
+            if (addonsCache.isNotEmpty()) scheduleUpdateCatalogRows()
+        }
+    }
+}
+
+/** Starts a Sports & Live load without waiting for it; a failure only leaves the Live now row empty. */
+internal fun HomeViewModel.refreshSportsLiveInBackground() {
+    viewModelScope.launch {
+        runCatching { sportsLiveRepository.load() }.onFailure { error ->
+            if (error is CancellationException) throw error
+            Log.w(HomeViewModel.TAG, "Sports & Live load failed", error)
+        }
+    }
+}

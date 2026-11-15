@@ -14,6 +14,7 @@ import com.nuvio.tv.domain.model.HomeLayout
 import com.nuvio.tv.domain.model.LibraryListTab
 import com.nuvio.tv.domain.model.LibrarySourceMode
 import com.nuvio.tv.domain.model.MetaPreview
+import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.WatchProgress
 
 @Immutable
@@ -78,7 +79,8 @@ data class HomeUiState(
     val customPosterEnabledScreens: Set<com.nuvio.tv.core.poster.CustomPosterScreen> =
         com.nuvio.tv.core.poster.CustomPosterScreen.ALL,
     val mdbListShowOnHero: Boolean = false,
-    val mdbListRatingOrder: List<String> = com.nuvio.tv.domain.model.MDBListSettings.DEFAULT_RATING_ORDER
+    val mdbListRatingOrder: List<String> = com.nuvio.tv.domain.model.MDBListSettings.DEFAULT_RATING_ORDER,
+    val liveNowItems: List<SportsLiveItem> = emptyList()
 )
 
 @Immutable

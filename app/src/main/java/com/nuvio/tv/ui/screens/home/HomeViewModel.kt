@@ -39,6 +39,8 @@ import com.nuvio.tv.domain.repository.AddonRepository
 import com.nuvio.tv.domain.repository.CatalogRepository
 import com.nuvio.tv.domain.repository.LibraryRepository
 import com.nuvio.tv.domain.repository.MetaRepository
+import com.nuvio.tv.domain.repository.SportsLiveRepository
+import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.repository.WatchProgressRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -89,6 +91,7 @@ class HomeViewModel @Inject constructor(
     internal val profileManager: com.nuvio.tv.core.profile.ProfileManager,
     internal val tvRecommendationManager: TvRecommendationManager,
     internal val serverCatalog: ServerCatalog,
+    internal val sportsLiveRepository: SportsLiveRepository,
     internal val metaPreviewEnricher: MetaPreviewEnricher = MetaPreviewEnricher(
         tmdbService,
         tmdbMetadataService,
@@ -233,6 +236,8 @@ class HomeViewModel @Inject constructor(
     internal var collectionsCache: List<Collection> = emptyList()
     internal var homeCatalogOrderKeys: List<String> = emptyList()
     internal var disabledHomeCatalogKeys: Set<String> = emptySet()
+    /** Catalogs the Sports & Live section claims; they are left out of the Home rows. */
+    internal var sportsLiveClaimedKeys: Set<String> = emptySet()
     internal var followAddonsOrderEnabled: Boolean = false
     internal var customCatalogTitles: Map<String, String> = emptyMap()
     internal var currentHeroCatalogKeys: List<String> = emptyList()
@@ -371,6 +376,8 @@ class HomeViewModel @Inject constructor(
         }
 
         observeStartupAuthNotice()
+        observeSportsLiveClaimedKeysPipeline()
+        observeLiveNowPipeline()
         viewModelScope.launch {
             profileManager.activeProfileReady.first { it }
             observeLayoutPreferences()
@@ -890,6 +897,10 @@ class HomeViewModel @Inject constructor(
         lastHomeCatalogRefreshAtMs = now
         refreshVisibleCatalogsPipeline()
     }
+
+    /** The live item behind a card of the Live now row, or null when it has gone. */
+    fun findLiveNowItem(id: String): SportsLiveItem? =
+        _uiState.value.liveNowItems.firstOrNull { it.id == id }
 
     private suspend fun loadAllCatalogs(addons: List<Addon>, forceReload: Boolean = false) =
         loadAllCatalogsPipeline(addons, forceReload)

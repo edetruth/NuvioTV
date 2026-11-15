@@ -31,12 +31,14 @@ import com.nuvio.tv.domain.model.HomeLayout
 import com.nuvio.tv.domain.model.HomeImdbRatingsVisibility
 import com.nuvio.tv.domain.model.enabledAddons
 import com.nuvio.tv.domain.repository.AddonRepository
+import com.nuvio.tv.domain.repository.SportsLiveRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -178,7 +180,8 @@ class LayoutSettingsViewModel @Inject constructor(
     private val trailerSettingsDataStore: TrailerSettingsDataStore,
     private val addonRepository: AddonRepository,
     private val metaRepository: com.nuvio.tv.domain.repository.MetaRepository,
-    private val homeCatalogSettingsSyncService: HomeCatalogSettingsSyncService
+    private val homeCatalogSettingsSyncService: HomeCatalogSettingsSyncService,
+    private val sportsLiveRepository: SportsLiveRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LayoutSettingsUiState())
@@ -1035,12 +1038,16 @@ class LayoutSettingsViewModel @Inject constructor(
 
     private fun loadAvailableCatalogs() {
         viewModelScope.launch {
-            addonRepository.getInstalledAddons().collectLatest { installedAddons ->
+            combine(
+                addonRepository.getInstalledAddons(),
+                sportsLiveRepository.claimedCatalogKeys
+            ) { installedAddons, sportsLiveKeys -> installedAddons to sportsLiveKeys }.collectLatest { (installedAddons, sportsLiveKeys) ->
                 val addons = installedAddons.enabledAddons()
                 val catalogs = addons.flatMap { addon ->
                     addon.catalogs
                         .filter { catalog ->
-                            !catalog.isSearchOnlyCatalog()
+                            !catalog.isSearchOnlyCatalog() &&
+                                catalogRowLegacyKey(addon.id, catalog.apiType, catalog.id) !in sportsLiveKeys
                         }
                         .map { catalog ->
                             CatalogInfo(

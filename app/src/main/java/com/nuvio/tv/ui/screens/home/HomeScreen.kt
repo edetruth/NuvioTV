@@ -44,6 +44,7 @@ import com.nuvio.tv.domain.model.HomeLayout
 import com.nuvio.tv.domain.model.LibraryListTab
 import com.nuvio.tv.domain.model.LibrarySourceMode
 import com.nuvio.tv.domain.model.MetaPreview
+import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.isSeriesLikeType
 import com.nuvio.tv.ui.components.ErrorState
 import com.nuvio.tv.ui.components.LoadingIndicator
@@ -91,7 +92,9 @@ fun HomeScreen(
     onContinueWatchingStartFromBeginning: (ContinueWatchingItem) -> Unit = onContinueWatchingClick,
     onContinueWatchingPlayManually: (ContinueWatchingItem) -> Unit = onContinueWatchingClick,
     onNavigateToCatalogSeeAll: (String, String, String) -> Unit = { _, _, _ -> },
-    onNavigateToFolderDetail: (String, String) -> Unit = { _, _ -> }
+    onNavigateToFolderDetail: (String, String) -> Unit = { _, _ -> },
+    onNavigateToSportsLive: () -> Unit = {},
+    onLiveNowItemClick: (SportsLiveItem) -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -156,7 +159,16 @@ fun HomeScreen(
         }
     }
 
-    val onNavigateToDetailStable = remember(onNavigateToDetail) { onNavigateToDetail }
+    // Cards of the Live now row open the Sports & Live item, not an addon detail page.
+    val onNavigateToDetailStable: (String, String, String) -> Unit = remember(onNavigateToDetail, onLiveNowItemClick, viewModel) {
+        { itemId, itemType, addonBaseUrl ->
+            if (SportsLiveHomeRow.isLiveNowRow(addonBaseUrl)) {
+                viewModel.findLiveNowItem(itemId)?.let(onLiveNowItemClick)
+            } else {
+                onNavigateToDetail(itemId, itemType, addonBaseUrl)
+            }
+        }
+    }
     val latestContinueWatchingClickAction = androidx.compose.runtime.rememberUpdatedState(uiState.continueWatchingClickAction)
     val onContinueWatchingClickStable = remember(onContinueWatchingClick, onNavigateToDetail) {
         { item: ContinueWatchingItem ->
@@ -172,7 +184,15 @@ fun HomeScreen(
     }
     val onContinueWatchingStartFromBeginningStable = remember(onContinueWatchingStartFromBeginning) { onContinueWatchingStartFromBeginning }
     val onContinueWatchingPlayManuallyStable = remember(onContinueWatchingPlayManually) { onContinueWatchingPlayManually }
-    val onNavigateToCatalogSeeAllStable = remember(onNavigateToCatalogSeeAll) { onNavigateToCatalogSeeAll }
+    val onNavigateToCatalogSeeAllStable: (String, String, String) -> Unit = remember(onNavigateToCatalogSeeAll, onNavigateToSportsLive) {
+        { catalogId, addonId, type ->
+            if (addonId == SportsLiveHomeRow.ADDON_ID) {
+                onNavigateToSportsLive()
+            } else {
+                onNavigateToCatalogSeeAll(catalogId, addonId, type)
+            }
+        }
+    }
     val onNavigateToFolderDetailStable = remember(onNavigateToFolderDetail) { onNavigateToFolderDetail }
     val onRemoveContinueWatchingStable = remember(viewModel) {
         { contentId: String, season: Int?, episode: Int?, isNextUp: Boolean ->
@@ -469,7 +489,7 @@ fun HomeScreen(
             isWatchedPending = statusKey in uiState.movieWatchedPending,
             onDismiss = { posterOptionsTarget = null },
             onDetails = {
-                onNavigateToDetail(item.id, item.apiType, selectedPoster.addonBaseUrl)
+                onNavigateToDetailStable(item.id, item.apiType, selectedPoster.addonBaseUrl)
                 posterOptionsTarget = null
             },
             onToggleLibrary = {

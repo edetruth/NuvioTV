@@ -167,6 +167,16 @@ fun CatalogOrderScreen(
                     }
                 }
             }
+
+            if (uiState.sportsLiveCatalogCount > 0) {
+                item {
+                    Text(
+                        text = stringResource(R.string.sports_live_catalog_order_note, uiState.sportsLiveCatalogCount),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = NuvioTheme.colors.TextSecondary
+                    )
+                }
+            }
         }
     }
 }

@@ -204,6 +204,7 @@ internal suspend fun HomeViewModel.loadAllCatalogsPipeline(
         }
 
         rebuildCatalogOrder(addons)
+        refreshSportsLiveInBackground()
 
         // Hero has its own catalog sources (heroCatalogKeys) configured
         // independently in Layout Settings.  When the user has explicitly
@@ -229,7 +230,7 @@ internal suspend fun HomeViewModel.loadAllCatalogsPipeline(
                         type = it.apiType,
                         catalogId = it.id,
                         catalogName = it.name
-                    )
+                    ) || catalogKey(addon.id, it.apiType, it.id) in sportsLiveClaimedKeys
                 }
                 .map { catalog -> addon to catalog }
         }
@@ -580,6 +581,8 @@ internal suspend fun HomeViewModel.updateCatalogRowsPipeline() {
     val heroSectionEnabled = _uiState.value.heroSectionEnabled
     val hideUnreleased = _uiState.value.hideUnreleasedContent
     val titlesSnapshot = customCatalogTitles
+    val liveNowItems = _uiState.value.liveNowItems
+    val liveNowTitle = if (liveNowItems.isNotEmpty()) appContext.getString(R.string.sports_live_home_row_title) else ""
 
     val (displayRows, baseHeroItems, baseGridItems, fullRowsFiltered) = withContext(Dispatchers.Default) {
         val rawRows = orderedKeys.mapNotNull { key ->
@@ -725,6 +728,9 @@ internal suspend fun HomeViewModel.updateCatalogRowsPipeline() {
                 placeholderDescriptors.associateBy { it.catalogKey }
             }
             val addedCollectionIds = mutableSetOf<String>()
+            if (liveNowItems.isNotEmpty()) {
+                add(HomeRow.Catalog(SportsLiveHomeRow.build(liveNowItems, liveNowTitle)))
+            }
             collectionsCache.forEach { collection ->
                 val key = "collection_${collection.id}"
             if (collection.pinToTop && key !in disabledHomeCatalogKeys && addedCollectionIds.add(collection.id)) {

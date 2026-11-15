@@ -59,7 +59,11 @@ internal fun HomeViewModel.buildHomeCatalogLoadSignature(addons: List<Addon>): S
         .asSequence()
         .sorted()
         .joinToString(separator = ",")
-    return "$addonCatalogSignature::$disabledSignature"
+    val sportsLiveSignature = sportsLiveClaimedKeys
+        .asSequence()
+        .sorted()
+        .joinToString(separator = ",")
+    return "$addonCatalogSignature::$disabledSignature::$sportsLiveSignature"
 }
 
 internal fun HomeViewModel.registerCatalogLoadJob(job: Job) {
@@ -319,7 +323,7 @@ private fun HomeViewModel.buildDefaultCatalogOrder(addons: List<Addon>): List<St
                     type = it.apiType,
                     catalogId = it.id,
                     catalogName = it.name
-                )
+                ) || catalogKey(addon.id, it.apiType, it.id) in sportsLiveClaimedKeys
             }
             .forEach { catalog ->
                 val key = catalogKey(

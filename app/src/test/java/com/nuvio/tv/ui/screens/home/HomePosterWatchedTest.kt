@@ -134,7 +134,12 @@ class HomePosterWatchedTest {
             cwEnrichmentCache = cwEnrichmentCache,
             profileManager = profileManager,
             tvRecommendationManager = mockk(relaxed = true),
-            serverCatalog = mockk(relaxed = true)
+            serverCatalog = mockk(relaxed = true),
+            sportsLiveRepository = mockk(relaxed = true) {
+                every { claimedCatalogKeys } returns flowOf(emptySet())
+                every { liveNow(any()) } returns flowOf(emptyList())
+                every { enabled } returns flowOf(false)
+            }
         )
         viewModel.startupGracePeriodActive = false
         viewModel.currentTmdbSettings = TmdbSettings(enabled = false)

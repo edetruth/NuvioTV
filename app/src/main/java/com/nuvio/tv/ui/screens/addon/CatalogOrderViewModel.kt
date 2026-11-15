@@ -12,6 +12,7 @@ import com.nuvio.tv.domain.model.Addon
 import com.nuvio.tv.domain.model.Collection
 import com.nuvio.tv.domain.model.enabledAddons
 import com.nuvio.tv.domain.repository.AddonRepository
+import com.nuvio.tv.domain.repository.SportsLiveRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -28,7 +29,8 @@ class CatalogOrderViewModel @Inject constructor(
     private val collectionsDataStore: CollectionsDataStore,
     private val layoutPreferenceDataStore: LayoutPreferenceDataStore,
     private val homeCatalogSettingsSyncService: HomeCatalogSettingsSyncService,
-    private val serverCatalog: ServerCatalog
+    private val serverCatalog: ServerCatalog,
+    private val sportsLiveRepository: SportsLiveRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(CatalogOrderUiState())
@@ -167,7 +169,8 @@ class CatalogOrderViewModel @Inject constructor(
                 layoutPreferenceDataStore.homeCatalogOrderKeys,
                 layoutPreferenceDataStore.disabledHomeCatalogKeys,
                 layoutPreferenceDataStore.customCatalogTitles,
-                layoutPreferenceDataStore.followAddonsOrder
+                layoutPreferenceDataStore.followAddonsOrder,
+                sportsLiveRepository.claimedCatalogKeys
             ) { values ->
                 @Suppress("UNCHECKED_CAST")
                 val addons = values[0] as List<Addon>
@@ -180,23 +183,29 @@ class CatalogOrderViewModel @Inject constructor(
                 @Suppress("UNCHECKED_CAST")
                 val customTitles = values[4] as Map<String, String>
                 val followAddons = values[5] as Boolean
+                @Suppress("UNCHECKED_CAST")
+                val sportsLiveKeys = values[6] as Set<String>
 
+                // Catalogs shown in Sports & Live are not Home rows, so they are not ordered here.
+                val (sportsLiveEntries, homeEntries) = buildDefaultCatalogEntries(addons)
+                    .partition { it.key in sportsLiveKeys }
                 val items = buildOrderedCatalogItems(
-                    addons = addons,
+                    defaultEntries = homeEntries,
                     collections = collections,
                     savedOrderKeys = savedOrderKeys,
                     disabledKeys = disabledKeys,
                     customTitles = customTitles,
                     followAddonsOrder = followAddons
                 )
-                Pair(items, followAddons)
-            }.collectLatest { (orderedItems, followAddons) ->
+                Triple(items, followAddons, sportsLiveEntries.size)
+            }.collectLatest { (orderedItems, followAddons, sportsLiveCount) ->
                 disabledKeysCache = orderedItems.filter { it.isDisabled }.map { it.disableKey }.toSet()
                 _uiState.update {
                     it.copy(
                         isLoading = false,
                         items = orderedItems,
-                        followAddonsOrder = followAddons
+                        followAddonsOrder = followAddons,
+                        sportsLiveCatalogCount = sportsLiveCount
                     )
                 }
             }
@@ -204,14 +213,13 @@ class CatalogOrderViewModel @Inject constructor(
     }
 
     private fun buildOrderedCatalogItems(
-        addons: List<Addon>,
+        defaultEntries: List<CatalogOrderEntry>,
         collections: List<Collection> = emptyList(),
         savedOrderKeys: List<String>,
         disabledKeys: Set<String>,
         customTitles: Map<String, String> = emptyMap(),
         followAddonsOrder: Boolean = false
     ): List<CatalogOrderItem> {
-        val defaultEntries = buildDefaultCatalogEntries(addons)
         val collectionEntries = collections.map { collection ->
             CatalogOrderEntry(
                 key = "collection_${collection.id}",
@@ -444,7 +452,9 @@ class CatalogOrderViewModel @Inject constructor(
 data class CatalogOrderUiState(
     val isLoading: Boolean = true,
     val items: List<CatalogOrderItem> = emptyList(),
-    val followAddonsOrder: Boolean = false
+    val followAddonsOrder: Boolean = false,
+    /** Catalogs left out because Sports & Live shows them. */
+    val sportsLiveCatalogCount: Int = 0
 )
 
 data class CatalogOrderItem(
