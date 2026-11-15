@@ -16,6 +16,10 @@ object SportsLiveCatalogPolicy {
     fun keyFor(addon: Addon, catalog: CatalogDescriptor): String =
         catalogRowLegacyKey(addon.id, catalog.apiType, catalog.id)
 
+    /** False for a catalog with a required extra: the section loads first pages without extras. */
+    fun isClaimable(catalog: CatalogDescriptor): Boolean =
+        catalog.extra.none { it.isRequired } && catalog.extraRequired.isEmpty()
+
     /**
      * A catalog with a required extra is never claimed, since the section loads first pages
      * without extras. Otherwise precedence: override, then type rule, then addon-name rule,
@@ -26,7 +30,7 @@ object SportsLiveCatalogPolicy {
         catalog: CatalogDescriptor,
         overrides: Map<String, SportsLiveOverride>
     ): SportsLiveClaim? {
-        if (catalog.extra.any { it.isRequired } || catalog.extraRequired.isNotEmpty()) return null
+        if (!isClaimable(catalog)) return null
         val reason = when (overrides[keyFor(addon, catalog)]) {
             SportsLiveOverride.EXCLUDE -> return null
             SportsLiveOverride.INCLUDE -> "override:include"

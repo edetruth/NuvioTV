@@ -47,7 +47,7 @@ class SportsLiveSettingsViewModel @Inject constructor(
         prefs.showHomeRow
     ) { addons, overrides, showSection, showHomeRow ->
         val catalogs = addons.enabledAddons().flatMap { addon ->
-            addon.catalogs.map { catalog ->
+            addon.catalogs.filter(SportsLiveCatalogPolicy::isClaimable).map { catalog ->
                 val key = SportsLiveCatalogPolicy.keyFor(addon, catalog)
                 SportsLiveCatalogSetting(
                     key = key,

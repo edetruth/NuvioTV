@@ -8,6 +8,7 @@ import com.nuvio.tv.data.local.ProfileDataStoreFactory
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import com.nuvio.tv.domain.model.Addon
 import com.nuvio.tv.domain.model.CatalogDescriptor
+import com.nuvio.tv.domain.model.CatalogExtra
 import com.nuvio.tv.domain.model.ContentType
 import com.nuvio.tv.domain.model.SportsLiveKind
 import com.nuvio.tv.domain.model.SportsLiveOverride
@@ -90,6 +91,21 @@ class SportsLiveSettingsViewModelTest {
 
         assertNull(catalogs[1].autoClaim)
         assertNull(catalogs[1].override)
+    }
+
+    @Test
+    fun `catalogs with a required extra are not listed`() = runTest {
+        val searchOnly = CatalogDescriptor(
+            type = ContentType.MOVIE,
+            id = "search",
+            name = "Search",
+            extra = listOf(CatalogExtra(name = "search", isRequired = true))
+        )
+        addonsFlow.value = listOf(addon("mixed", "Mixed", listOf(searchOnly, MOVIES)))
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+
+        assertEquals(listOf("Movies"), viewModel.uiState.value.catalogs.map { it.catalogName })
     }
 
     @Test
