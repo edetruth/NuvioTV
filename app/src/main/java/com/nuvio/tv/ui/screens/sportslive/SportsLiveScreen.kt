@@ -23,6 +23,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -129,15 +131,21 @@ private fun SportsLiveContent(
     val tabFocusRequesters = remember { SportsLiveTab.entries.associateWith { FocusRequester() } }
     val activeTabFocusRequester = tabFocusRequesters.getValue(uiState.selectedTab)
     val watchFocusRequester = remember { FocusRequester() }
+    // One requester per card, keyed like the LazyColumn: two addons can list the same meta id, and a
+    // requester shared by two cards sends focus to whichever of them attached last.
     val cardFocusRequesters = remember { mutableMapOf<String, FocusRequester>() }
+    fun cardFocusRequester(item: SportsLiveItem) = cardFocusRequesters.getOrPut(item.listKey) { FocusRequester() }
     var listHasFocus by remember { mutableStateOf(false) }
+    // Saved with the back stack entry, so returning from the stream or detail page refocuses this card.
+    var focusedCardKey by rememberSaveable { mutableStateOf<String?>(null) }
     val listState = rememberLazyListState()
     val stateLabelOf = rememberSportsLiveStateLabeler(uiState.selectedTab)
 
-    // The same event can come from two catalogs of one addon; LazyColumn keys must be unique.
-    val items = remember(uiState.visibleItems) { uiState.visibleItems.distinctBy { it.catalogKey to it.id } }
-    val selected = items.firstOrNull { it.id == uiState.selectedItemId } ?: items.firstOrNull()
-    val selectedCardFocusRequester = selected?.let { cardFocusRequesters.getOrPut(it.id) { FocusRequester() } }
+    val items = uiState.visibleItems
+    val selected = items.firstOrNull { it.listKey == focusedCardKey && it.id == uiState.selectedItemId }
+        ?: items.firstOrNull { it.id == uiState.selectedItemId }
+        ?: items.firstOrNull()
+    val selectedCardFocusRequester = selected?.let(::cardFocusRequester)
 
     // Replay "series" items are team folders; the detail page lists their videos.
     val open: (SportsLiveItem) -> Unit = { item ->
@@ -148,7 +156,22 @@ private fun SportsLiveContent(
         runCatching { activeTabFocusRequester.requestFocus() }
     }
 
-    LaunchedEffect(uiState.selectedTab, uiState.selectedSport) {
+    // Back from another screen: put the list back on the card that had focus. Runs once per entry.
+    LaunchedEffect(Unit) {
+        val key = focusedCardKey ?: return@LaunchedEffect
+        val index = items.indexOfFirst { it.listKey == key }
+        if (index < 0) return@LaunchedEffect
+        listState.scrollToItem(index)
+        repeat(2) { withFrameNanos { } }
+        runCatching { cardFocusRequesters[key]?.requestFocus() }
+    }
+
+    // Only a real tab or sport change scrolls to the top; the saved value survives navigation.
+    val filterKey = "${uiState.selectedTab.name}|${uiState.selectedSport.orEmpty()}"
+    var listedFilterKey by rememberSaveable { mutableStateOf(filterKey) }
+    LaunchedEffect(filterKey) {
+        if (filterKey == listedFilterKey) return@LaunchedEffect
+        listedFilterKey = filterKey
         listState.scrollToItem(0)
     }
 
@@ -161,6 +184,7 @@ private fun SportsLiveContent(
             uiState = uiState,
             tabFocusRequesters = tabFocusRequesters,
             onSelectTab = onSelectTab,
+            onOpenTab = { runCatching { selectedCardFocusRequester?.requestFocus() } },
             onSelectSport = onSelectSport,
             onRefresh = onRefresh
         )
@@ -195,16 +219,19 @@ private fun SportsLiveContent(
                     .dpadRepeatThrottle(),
                 verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)
             ) {
-                itemsIndexed(items, key = { _, item -> "${item.catalogKey}|${item.id}" }) { index, item ->
+                itemsIndexed(items, key = { _, item -> item.listKey }) { index, item ->
                     SportsLiveListCard(
                         item = item,
                         stateLabel = stateLabelOf(item),
-                        selected = item.id == selected.id,
+                        selected = item.listKey == selected.listKey,
                         onClick = { open(item) },
                         onLongClick = { onOpenDetail(item) },
-                        onFocus = { onSelectItem(item.id) },
+                        onFocus = {
+                            focusedCardKey = item.listKey
+                            onSelectItem(item.id)
+                        },
                         modifier = Modifier
-                            .focusRequester(cardFocusRequesters.getOrPut(item.id) { FocusRequester() })
+                            .focusRequester(cardFocusRequester(item))
                             .focusProperties {
                                 right = watchFocusRequester
                                 if (index == 0) up = activeTabFocusRequester
@@ -233,6 +260,7 @@ private fun SportsLiveChipRow(
     uiState: SportsLiveUiState,
     tabFocusRequesters: Map<SportsLiveTab, FocusRequester>,
     onSelectTab: (SportsLiveTab) -> Unit,
+    onOpenTab: () -> Unit,
     onSelectSport: (String?) -> Unit,
     onRefresh: () -> Unit
 ) {
@@ -240,7 +268,9 @@ private fun SportsLiveChipRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
+            .horizontalScroll(rememberScrollState())
+            // Room inside the scroll for the focused chip's border, which otherwise clips at the edges.
+            .padding(horizontal = NuvioTheme.spacing.sm, vertical = NuvioTheme.spacing.xs),
         horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -250,7 +280,9 @@ private fun SportsLiveChipRow(
             SourceStatusFilterChip(
                 name = if (count > 0) "$label $count" else label,
                 isSelected = tab == uiState.selectedTab,
-                onClick = { onSelectTab(tab) },
+                // Like FolderDetailScreen, focusing a tab selects it; OK moves into the list.
+                onFocusSelect = { onSelectTab(tab) },
+                onClick = onOpenTab,
                 modifier = Modifier.focusRequester(tabFocusRequesters.getValue(tab))
             )
         }
@@ -271,6 +303,9 @@ private fun SportsLiveChipRow(
         RefreshFilterChip(onClick = onRefresh, isLoading = uiState.isLoading)
     }
 }
+
+/** Unique within a tab: the bucketer keeps one copy of an item per addon. */
+private val SportsLiveItem.listKey: String get() = "$addonId|$id"
 
 private fun SportsLiveTab.labelRes(): Int = when (this) {
     SportsLiveTab.LIVE_NOW -> R.string.sports_live_tab_live_now

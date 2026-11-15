@@ -48,10 +48,16 @@ object SportsLiveItemBucketer {
         )
     }
 
-    /** Every tab is present in the result (possibly empty), each sorted live first, then by start, then by name. */
+    /**
+     * Every tab is present in the result (possibly empty), each sorted live first, then by start, then by name.
+     * An addon often lists the same item in several catalogs (Live Now and Today); within a tab it
+     * appears once, as its first occurrence in [items].
+     */
     fun bucket(items: List<SportsLiveItem>, nowMs: Long): Map<SportsLiveTab, List<SportsLiveItem>> =
         SportsLiveTab.entries.associateWith { tab ->
-            items.filter { belongsTo(it, tab, nowMs) }.sortedWith(tabOrder)
+            items.filter { belongsTo(it, tab, nowMs) }
+                .distinctBy { it.addonId to it.id }
+                .sortedWith(tabOrder)
         }
 
     // MetaPreview does not carry the addon's "category" field, so the fallback goes straight to the catalog name.

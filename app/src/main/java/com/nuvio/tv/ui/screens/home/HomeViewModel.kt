@@ -636,7 +636,11 @@ class HomeViewModel @Inject constructor(
 
     // Live now cards are not addon metas, so they get no enrichment or trailer lookups.
     fun onItemFocus(item: MetaPreview) {
-        if (isLiveNowItem(item.id)) return
+        if (isLiveNowItem(item.id)) {
+            // The Modern hero waits for enrichment while it is enabled; this tells it none is coming.
+            markEnrichmentFailed(item.id)
+            return
+        }
         onItemFocusPipeline(item)
     }
 

@@ -97,6 +97,17 @@ class HomeSportsLiveExclusionTest {
     }
 
     @Test
+    fun `focusing a live now card tells the hero to stop waiting for enrichment`() {
+        val viewModel = newViewModel()
+        val item = SportsLiveHomeRowTest.item("match-1")
+        liveNow.value = listOf(item)
+
+        viewModel.onItemFocus(item.meta)
+
+        assertTrue(item.id in viewModel.failedEnrichmentIds.value)
+    }
+
+    @Test
     fun `no live now row when liveNow is empty`() {
         val viewModel = newViewModel()
         viewModel.rebuildCatalogOrder(listOf(addon()))

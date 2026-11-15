@@ -79,7 +79,8 @@ internal fun SportsLiveStatePill(label: String, isLive: Boolean, modifier: Modif
         maxLines = 1,
         modifier = modifier
             .clip(RoundedCornerShape(NuvioTheme.radii.sm))
-            .background(if (isLive) NuvioTheme.colors.Error else NuvioTheme.colors.SurfaceVariant)
+            // Not SurfaceVariant: that is the selected card's container, so the pill vanished on it.
+            .background(if (isLive) NuvioTheme.colors.Error else NuvioTheme.colors.Background.copy(alpha = 0.8f))
             .padding(horizontal = NuvioTheme.spacing.sm, vertical = NuvioTheme.spacing.xxs)
     )
 }
@@ -187,9 +188,10 @@ internal fun SportsLiveDetailsPane(
             model = item.meta.backdropUrl,
             contentDescription = null,
             contentScale = ContentScale.Crop,
+            // Measured last and shrunk to the space left, so a long title never pushes the buttons off screen.
             modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(16f / 9f)
+                .weight(1f, fill = false)
+                .aspectRatio(16f / 9f, matchHeightConstraintsFirst = true)
                 .clip(RoundedCornerShape(NuvioTheme.radii.md))
                 .background(NuvioTheme.colors.PosterFallback)
         )

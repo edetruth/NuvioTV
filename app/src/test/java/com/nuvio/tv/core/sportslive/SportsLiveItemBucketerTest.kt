@@ -209,6 +209,21 @@ class SportsLiveItemBucketerTest {
     }
 
     @Test
+    fun `same item from two catalogs of one addon appears once per tab`() {
+        val live = meta("dup", "Granada vs Las Palmas", releaseInfo = "LIVE", description = "Live on Channel 1")
+        val items = listOf(
+            SportsLiveItemBucketer.describe(live, highflyLive, now),
+            SportsLiveItemBucketer.describe(live, highflyToday, now)
+        )
+        val tabs = SportsLiveItemBucketer.bucket(items, now)
+
+        val liveNow = tabs.getValue(SportsLiveTab.LIVE_NOW)
+        assertEquals(listOf("dup"), liveNow.map { it.id })
+        assertEquals("highfly_sport_sports_live", liveNow.single().catalogKey)
+        assertEquals(listOf("dup"), tabs.getValue(SportsLiveTab.CHANNELS).map { it.id })
+    }
+
+    @Test
     fun `describe copies addon and catalog details`() {
         val item = SportsLiveItemBucketer.describe(meta("x", "X"), highflyToday, now)
 
