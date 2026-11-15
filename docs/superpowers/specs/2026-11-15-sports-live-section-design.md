@@ -1,7 +1,7 @@
 # Sports & Live section — design
 
 Date: 2026-11-15
-Status: approved by user 2026-11-15
+Status: implemented 2026-11-15 (see docs/superpowers/plans/2026-11-15-sports-live-section.md)
 Branch: `feature/sports-live-section` (local clone of NuvioMedia/NuvioTV, based on `dev` at 1.2.0-beta.1)
 
 ## 1. Intent
