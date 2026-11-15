@@ -271,6 +271,26 @@ class StreamRepositoryPluginIsolationTest {
         assertTrue(groups.single { it.addonName == "Fast Addon" }.streams.all { it.pluginSourceName == null })
     }
 
+    @Test
+    fun `addons that answer with no streams give a final not-found error`() = runTest {
+        val harness = newHarness(emptyList())
+        coEvery { harness.api.getStreams(any()) } returns Response.success(StreamResponseDto(streams = emptyList()))
+
+        val last = harness.repository.getStreamsFromAllAddons(type = "movie", videoId = "tt1341338").toList().last()
+
+        assertEquals(NetworkResult.STREAMS_NOT_FOUND_CODE, (last as NetworkResult.Error).code)
+    }
+
+    @Test
+    fun `an addon request failure gives a plain error`() = runTest {
+        val harness = newHarness(emptyList())
+        coEvery { harness.api.getStreams(any()) } throws java.io.IOException("Failed to connect")
+
+        val last = harness.repository.getStreamsFromAllAddons(type = "movie", videoId = "tt1341338").toList().last()
+
+        assertEquals(null, (last as NetworkResult.Error).code)
+    }
+
     private fun newHarness(enabledScrapers: List<ScraperInfo>): Harness {
         val addon = compatibleAddon()
         val api = mockk<AddonApi>()

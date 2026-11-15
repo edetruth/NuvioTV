@@ -44,7 +44,7 @@ class SportsLiveViewModel @Inject constructor(
     private var autoRefreshJob: Job? = null
 
     val uiState: StateFlow<SportsLiveUiState> =
-        combine(repo.claimedCatalogs, repo.latest, selectionState, ::buildState)
+        combine(repo.claimedCatalogs, repo.latest, repo.endedKeys, selectionState, ::buildState)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SportsLiveUiState())
 
     init {
@@ -59,8 +59,12 @@ class SportsLiveViewModel @Inject constructor(
         selectionState.update { it.copy(sport = sport) }
     }
 
+    /** Focusing a Live now item re-probes its streams when the last probe is stale. */
     fun selectItem(id: String?) {
         selectionState.update { it.copy(itemId = id) }
+        if (id != null && selectionState.value.tab == SportsLiveTab.LIVE_NOW) {
+            uiState.value.tabs[SportsLiveTab.LIVE_NOW]?.firstOrNull { it.id == id }?.let(repo::reprobeIfStale)
+        }
     }
 
     fun refresh(force: Boolean = true) {
@@ -105,13 +109,21 @@ class SportsLiveViewModel @Inject constructor(
     private fun buildState(
         claimed: List<ClaimedCatalog>,
         latest: SportsLiveLoad?,
+        endedKeys: Set<String>,
         selection: Selection
     ): SportsLiveUiState {
         val hasClaimed = claimed.isNotEmpty()
         // Only items of catalogs claimed right now: the cache may still hold another profile's load.
         val claimedKeys = claimed.mapTo(HashSet()) { it.key }
         val items = latest?.items.orEmpty().filter { it.catalogKey in claimedKeys }
-        val tabs = SportsLiveItemBucketer.bucket(items, nowMs())
+        // Live items whose streams are gone have ended; the other tabs are left as they are.
+        val tabs = SportsLiveItemBucketer.bucket(items, nowMs()).mapValues { (tab, tabItems) ->
+            if (tab == SportsLiveTab.LIVE_NOW) {
+                tabItems.filterNot { it.streamKey in endedKeys }
+            } else {
+                tabItems
+            }
+        }
         val tabItems = tabs[selection.tab].orEmpty()
         val sports = tabItems.mapNotNull { it.sport }.distinct().sortedWith(String.CASE_INSENSITIVE_ORDER)
         val sport = selection.sport?.takeIf { it in sports }

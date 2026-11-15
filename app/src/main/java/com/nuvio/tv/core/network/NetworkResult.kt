@@ -20,5 +20,11 @@ sealed class NetworkResult<out T> {
          * as final and not retry it; a transport failure returns a plain Error instead.
          */
         const val META_NOT_FOUND_CODE = -9998
+
+        /**
+         * Sentinel error code used by StreamRepository when every source answered and none of them
+         * returned a stream (after junk filtering). A transport failure returns a plain Error instead.
+         */
+        const val STREAMS_NOT_FOUND_CODE = -9997
     }
 }

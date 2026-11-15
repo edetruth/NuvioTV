@@ -406,14 +406,23 @@ class StreamRepositoryImpl @Inject constructor(
 
             // Emit final result (even if empty)
             if (accumulatedResults.isEmpty()) {
+                val failures = attemptedFailures.toList()
                 val errorMessage = buildAggregateFailureMessage(
                     type = type,
                     id = videoId,
                     attemptedAddonNames = attemptedAddonNames,
-                    failures = attemptedFailures.toList()
+                    failures = failures
                 )
+                // Every source answered and none had a stream: final, not a transport failure.
+                val noStreams = attemptedAddonNames.isNotEmpty() &&
+                    failures.all { it.kind == StreamFailureKind.MISSING }
                 if (errorMessage != null) {
-                    emit(NetworkResult.Error(errorMessage))
+                    emit(
+                        NetworkResult.Error(
+                            errorMessage,
+                            code = if (noStreams) NetworkResult.STREAMS_NOT_FOUND_CODE else null
+                        )
+                    )
                 } else {
                     emit(NetworkResult.Success(emptyList()))
                 }

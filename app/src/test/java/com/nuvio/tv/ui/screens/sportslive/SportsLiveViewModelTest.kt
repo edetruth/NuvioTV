@@ -15,7 +15,10 @@ import com.nuvio.tv.domain.repository.SportsLiveLoad
 import com.nuvio.tv.domain.repository.SportsLiveRepository
 import io.mockk.coEvery
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
+import io.mockk.runs
+import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
@@ -39,12 +42,15 @@ class SportsLiveViewModelTest {
 
     private val claimedFlow = MutableStateFlow(listOf(CLAIMED))
     private val latestFlow = MutableStateFlow<SportsLiveLoad?>(null)
+    private val endedFlow = MutableStateFlow<Set<String>>(emptySet())
     private var nextLoad = load(emptyList())
     private val forcedFlags = mutableListOf<Boolean>()
 
     private val repo = mockk<SportsLiveRepository> {
         every { claimedCatalogs } returns claimedFlow
         every { latest } returns latestFlow
+        every { endedKeys } returns endedFlow
+        every { reprobeIfStale(any()) } just runs
         coEvery { load(any()) } coAnswers {
             forcedFlags += firstArg<Boolean>()
             latestFlow.value = nextLoad
@@ -211,6 +217,44 @@ class SportsLiveViewModelTest {
         assertFalse(state.isLoading)
         assertTrue(state.visibleItems.isEmpty())
         assertNull(state.selectedItemId)
+    }
+
+    @Test
+    fun `ended items are hidden from Live now and stay in the other tabs`() = runTest {
+        val live = item("a", isLive = true, sport = "Soccer")
+        val gone = item("b", isLive = true, sport = "Soccer")
+        val upcoming = item("u", isLive = false, sport = "Tennis", startMs = NOW + HOUR)
+        nextLoad = load(listOf(live, gone, upcoming))
+        endedFlow.value = setOf(gone.streamKey, upcoming.streamKey)
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(listOf("a"), state.tabs.getValue(SportsLiveTab.LIVE_NOW).map { it.id })
+        assertEquals(listOf("a"), state.visibleItems.map { it.id })
+        assertEquals(listOf("u"), state.tabs.getValue(SportsLiveTab.UPCOMING).map { it.id })
+
+        // A later probe that finds streams brings the item back.
+        endedFlow.value = emptySet()
+        runCurrent()
+        assertEquals(listOf("a", "b"), viewModel.uiState.value.visibleItems.map { it.id })
+    }
+
+    @Test
+    fun `focusing a Live now item asks for a re-probe and other tabs never do`() = runTest {
+        val live = item("a", isLive = true, sport = "Soccer")
+        val upcoming = item("u", isLive = false, sport = "Tennis", startMs = NOW + HOUR)
+        nextLoad = load(listOf(live, upcoming))
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+
+        viewModel.selectItem("a")
+        verify(exactly = 1) { repo.reprobeIfStale(live) }
+
+        viewModel.selectTab(SportsLiveTab.UPCOMING)
+        runCurrent()
+        viewModel.selectItem("u")
+        verify(exactly = 1) { repo.reprobeIfStale(any()) }
     }
 
     private fun load(items: List<SportsLiveItem>, failures: List<SportsLiveFailure> = emptyList()) =

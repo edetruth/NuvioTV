@@ -9,23 +9,29 @@ import com.nuvio.tv.core.sportslive.SportsLiveCatalogPolicy
 import com.nuvio.tv.data.local.ProfileDataStoreFactory
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import com.nuvio.tv.domain.model.Addon
+import com.nuvio.tv.domain.model.AddonStreams
 import com.nuvio.tv.domain.model.CatalogDescriptor
 import com.nuvio.tv.domain.model.CatalogRow
 import com.nuvio.tv.domain.model.ContentType
 import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.domain.model.PosterShape
 import com.nuvio.tv.domain.model.SportsLiveOverride
+import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.domain.repository.AddonRepository
 import com.nuvio.tv.domain.repository.CatalogRepository
+import com.nuvio.tv.domain.repository.StreamRepository
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -35,6 +41,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class SportsLiveRepositoryImplTest {
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
@@ -61,9 +68,14 @@ class SportsLiveRepositoryImplTest {
     }
     private val prefs = SportsLivePreferencesDataStore(factory, profiles)
     private var now = 1_700_000_000_000L
+    private val streamRepository = FakeStreamRepository()
+    private val probe = SportsLiveStreamProbe(streamRepository).also {
+        it.nowMs = { now }
+        it.dispatcher = mainDispatcherRule.dispatcher
+    }
 
     private fun newRepository() =
-        SportsLiveRepositoryImpl(addonRepository, catalogRepository, prefs).also {
+        SportsLiveRepositoryImpl(addonRepository, catalogRepository, prefs, probe).also {
             it.nowMs = { now }
             it.ioDispatcher = mainDispatcherRule.dispatcher
         }
@@ -265,6 +277,89 @@ class SportsLiveRepositoryImplTest {
         assertTrue(claimed.getValue("popular").viaOverride)
         assertFalse(claimed.getValue("live").viaOverride)
         assertTrue(repository.load().items.single { it.id == "m" }.viaOverride)
+    }
+
+    @Test
+    fun `liveNow leaves out live items whose streams are gone and only Live now items are probed`() = runTest {
+        catalogRepository.results["sports" to "live"] =
+            success("sports", "live", meta("a", live = true), meta("b", live = true))
+        catalogRepository.results["sports" to "upcoming"] = success("sports", "upcoming", meta("u"))
+        streamRepository.noStreams += "b"
+        val repository = newRepository()
+
+        repository.load()
+        advanceUntilIdle()
+
+        assertEquals(setOf("sports|b"), repository.endedKeys.value)
+        assertEquals(listOf("a"), repository.liveNow().first().map { it.id })
+        assertEquals(setOf("a", "b"), streamRepository.calls.toSet())
+    }
+
+    @Test
+    fun `load returns without waiting for the stream probes`() = runTest {
+        catalogRepository.results["sports" to "live"] = success("sports", "live", meta("a", live = true))
+        streamRepository.hanging += "a"
+        val repository = newRepository()
+        val startedAt = testScheduler.currentTime
+
+        val load = repository.load()
+
+        assertEquals(0L, testScheduler.currentTime - startedAt)
+        assertEquals(load, repository.latest.value)
+        // A probe that times out leaves the item visible.
+        advanceTimeBy(SportsLiveStreamProbe.PROBE_TIMEOUT_MS + 1)
+        assertEquals(listOf("a"), streamRepository.calls)
+        assertEquals(emptySet<String>(), repository.endedKeys.value)
+        assertEquals(listOf("a"), repository.liveNow().first().map { it.id })
+    }
+
+    private class FakeStreamRepository : StreamRepository {
+        val noStreams = mutableSetOf<String>()
+        val hanging = mutableSetOf<String>()
+        val calls = mutableListOf<String>()
+
+        override fun getStreamsFromAllAddons(
+            type: String,
+            videoId: String,
+            season: Int?,
+            episode: Int?,
+            forceRefresh: Boolean,
+            priorityBingeGroup: String?,
+            preferredPluginOnly: Boolean,
+            continuePluginOnly: Boolean
+        ): Flow<NetworkResult<List<AddonStreams>>> = flow {
+            calls += videoId
+            emit(NetworkResult.Loading)
+            if (videoId in hanging) awaitCancellation()
+            val streams = if (videoId in noStreams) emptyList() else listOf(playableStream())
+            emit(NetworkResult.Success(listOf(AddonStreams(addonName = "Sports", addonLogo = null, streams = streams))))
+        }
+
+        override fun setLocalPluginSearchPaused(paused: Boolean) = Unit
+
+        override suspend fun getCachedStreamsFromAllAddons(
+            type: String,
+            videoId: String,
+            season: Int?,
+            episode: Int?
+        ): List<AddonStreams>? = null
+
+        override suspend fun getStreamsFromAddon(addon: Addon, type: String, videoId: String) =
+            NetworkResult.Success(emptyList<Stream>())
+
+        private fun playableStream() = Stream(
+            name = "Stream",
+            title = null,
+            description = null,
+            url = "https://cdn.example/live.m3u8",
+            ytId = null,
+            infoHash = null,
+            fileIdx = null,
+            externalUrl = null,
+            behaviorHints = null,
+            addonName = "Sports",
+            addonLogo = null
+        )
     }
 
     private class FakeCatalogRepository : CatalogRepository {

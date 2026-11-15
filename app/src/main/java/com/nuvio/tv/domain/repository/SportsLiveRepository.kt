@@ -37,6 +37,15 @@ interface SportsLiveRepository {
     /** The most recent load, whether or not every catalog succeeded. */
     val latest: StateFlow<SportsLiveLoad?>
 
-    /** Live items from [latest], capped at [limit]; empty when the home row or the section is off. */
+    /**
+     * Keys (`addonId|id`) of live items whose streams are gone: a probe after each load found no
+     * playable stream. They are left out of Live now everywhere.
+     */
+    val endedKeys: StateFlow<Set<String>>
+
+    /** Re-probes a focused Live now [item] in the background when its probe result is over 2 minutes old. */
+    fun reprobeIfStale(item: SportsLiveItem)
+
+    /** Live items from [latest] that are not ended, capped at [limit]; empty when the home row or the section is off. */
     fun liveNow(limit: Int = 20): Flow<List<SportsLiveItem>>
 }

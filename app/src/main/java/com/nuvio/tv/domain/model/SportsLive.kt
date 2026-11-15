@@ -37,4 +37,7 @@ data class SportsLiveItem(
 ) {
     val id: String get() = meta.id
     val apiType: String get() = meta.apiType
+
+    /** Identifies the item across loads, for its stream probe; see SportsLiveRepository.endedKeys. */
+    val streamKey: String get() = "$addonId|$id"
 }
