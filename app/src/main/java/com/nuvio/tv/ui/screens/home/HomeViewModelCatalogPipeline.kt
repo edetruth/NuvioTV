@@ -245,7 +245,8 @@ internal suspend fun HomeViewModel.loadAllCatalogsPipeline(
                 addon.catalogs
                     .filter { catalog ->
                         val key = catalogKey(addonId = addon.id, type = catalog.apiType, catalogId = catalog.id)
-                        key in heroCatalogSet && key !in alreadyLoadingKeys && !catalog.isSearchOnlyCatalog()
+                        key in heroCatalogSet && key !in alreadyLoadingKeys && !catalog.isSearchOnlyCatalog() &&
+                            key !in sportsLiveClaimedKeys
                     }
                     .map { catalog -> addon to catalog }
             }
@@ -390,7 +391,7 @@ internal fun HomeViewModel.loadHeroCatalogsPipeline() {
         addon.catalogs
             .filter { catalog ->
                 val key = catalogKey(addonId = addon.id, type = catalog.apiType, catalogId = catalog.id)
-                key in missingHeroKeys && !catalog.isSearchOnlyCatalog()
+                key in missingHeroKeys && !catalog.isSearchOnlyCatalog() && key !in sportsLiveClaimedKeys
             }
             .map { catalog -> addon to catalog }
     }

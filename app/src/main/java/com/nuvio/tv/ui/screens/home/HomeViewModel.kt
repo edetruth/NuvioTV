@@ -614,23 +614,36 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    fun requestTrailerPreview(item: MetaPreview) = requestTrailerPreviewPipeline(item)
+    fun requestTrailerPreview(item: MetaPreview) {
+        if (isLiveNowItem(item.id)) return
+        requestTrailerPreviewPipeline(item)
+    }
 
     fun requestTrailerPreview(
         itemId: String,
         title: String,
         releaseInfo: String?,
         apiType: String
-    ) = requestTrailerPreviewPipeline(
-        itemId = itemId,
-        title = title,
-        releaseInfo = releaseInfo,
-        apiType = apiType
-    )
+    ) {
+        if (isLiveNowItem(itemId)) return
+        requestTrailerPreviewPipeline(
+            itemId = itemId,
+            title = title,
+            releaseInfo = releaseInfo,
+            apiType = apiType
+        )
+    }
 
-    fun onItemFocus(item: MetaPreview) = onItemFocusPipeline(item)
+    // Live now cards are not addon metas, so they get no enrichment or trailer lookups.
+    fun onItemFocus(item: MetaPreview) {
+        if (isLiveNowItem(item.id)) return
+        onItemFocusPipeline(item)
+    }
 
-    fun preloadAdjacentItem(item: MetaPreview) = preloadAdjacentItemPipeline(item)
+    fun preloadAdjacentItem(item: MetaPreview) {
+        if (isLiveNowItem(item.id)) return
+        preloadAdjacentItemPipeline(item)
+    }
 
     private fun loadHomeCatalogOrderPreference() = loadHomeCatalogOrderPreferencePipeline()
 
@@ -892,6 +905,8 @@ class HomeViewModel @Inject constructor(
 
     fun refreshHomeCatalogsIfStale() {
         if (addonsCache.isEmpty()) return
+        // The section's own 60 s cache keeps this cheap, so Live now is refreshed on every return.
+        refreshSportsLiveInBackground()
         val now = android.os.SystemClock.elapsedRealtime()
         if (now - lastHomeCatalogRefreshAtMs < HOME_CATALOG_REFRESH_TTL_MS) return
         lastHomeCatalogRefreshAtMs = now
@@ -901,6 +916,8 @@ class HomeViewModel @Inject constructor(
     /** The live item behind a card of the Live now row, or null when it has gone. */
     fun findLiveNowItem(id: String): SportsLiveItem? =
         _uiState.value.liveNowItems.firstOrNull { it.id == id }
+
+    private fun isLiveNowItem(id: String): Boolean = findLiveNowItem(id) != null
 
     private suspend fun loadAllCatalogs(addons: List<Addon>, forceReload: Boolean = false) =
         loadAllCatalogsPipeline(addons, forceReload)

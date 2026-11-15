@@ -36,6 +36,9 @@ class CatalogOrderViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(CatalogOrderUiState())
     val uiState: StateFlow<CatalogOrderUiState> = _uiState.asStateFlow()
     private var disabledKeysCache: Set<String> = emptySet()
+    /** The stored order and claimed keys, to put Sports & Live catalogs back when saving an order. */
+    private var savedOrderKeysCache: List<String> = emptyList()
+    private var sportsLiveKeysCache: Set<String> = emptySet()
 
     init {
         observeCatalogs()
@@ -87,7 +90,7 @@ class CatalogOrderViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            layoutPreferenceDataStore.setHomeCatalogOrderKeys(reordered)
+            layoutPreferenceDataStore.setHomeCatalogOrderKeys(withSportsLiveKeys(reordered))
             homeCatalogSettingsSyncService.triggerPush()
         }
     }
@@ -154,9 +157,23 @@ class CatalogOrderViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            layoutPreferenceDataStore.setHomeCatalogOrderKeys(reordered)
+            layoutPreferenceDataStore.setHomeCatalogOrderKeys(withSportsLiveKeys(reordered))
             homeCatalogSettingsSyncService.triggerPush()
         }
+    }
+
+    /**
+     * Catalogs shown in Sports & Live are not listed here, but their saved positions are kept so
+     * a catalog the section releases returns to where it was.
+     */
+    private fun withSportsLiveKeys(visibleOrder: List<String>): List<String> {
+        val result = visibleOrder.toMutableList()
+        savedOrderKeysCache.forEachIndexed { index, key ->
+            if (key in sportsLiveKeysCache && key !in result) {
+                result.add(index.coerceAtMost(result.size), key)
+            }
+        }
+        return result
     }
 
     private fun observeCatalogs() {
@@ -197,9 +214,26 @@ class CatalogOrderViewModel @Inject constructor(
                     customTitles = customTitles,
                     followAddonsOrder = followAddons
                 )
-                Triple(items, followAddons, sportsLiveEntries.size)
-            }.collectLatest { (orderedItems, followAddons, sportsLiveCount) ->
-                disabledKeysCache = orderedItems.filter { it.isDisabled }.map { it.disableKey }.toSet()
+                // Visible catalogs store their current disable key; every other stored key, such as
+                // one of a catalog shown in Sports & Live, is kept as it is.
+                val visibleLegacyKeys = homeEntries.mapNotNull { it.legacyDisableKey }.toSet()
+                val disabledKeysToKeep = (disabledKeys - visibleLegacyKeys) +
+                    items.filter { it.isDisabled }.map { it.disableKey }
+                CatalogOrderSnapshot(
+                    items = items,
+                    followAddons = followAddons,
+                    sportsLiveCount = sportsLiveEntries.size,
+                    disabledKeys = disabledKeysToKeep,
+                    savedOrderKeys = savedOrderKeys,
+                    sportsLiveKeys = sportsLiveKeys
+                )
+            }.collectLatest { snapshot ->
+                val orderedItems = snapshot.items
+                val followAddons = snapshot.followAddons
+                val sportsLiveCount = snapshot.sportsLiveCount
+                disabledKeysCache = snapshot.disabledKeys
+                savedOrderKeysCache = snapshot.savedOrderKeys
+                sportsLiveKeysCache = snapshot.sportsLiveKeys
                 _uiState.update {
                     it.copy(
                         isLoading = false,
@@ -466,6 +500,15 @@ data class CatalogOrderItem(
     val isDisabled: Boolean,
     val canMoveUp: Boolean,
     val canMoveDown: Boolean
+)
+
+private data class CatalogOrderSnapshot(
+    val items: List<CatalogOrderItem>,
+    val followAddons: Boolean,
+    val sportsLiveCount: Int,
+    val disabledKeys: Set<String>,
+    val savedOrderKeys: List<String>,
+    val sportsLiveKeys: Set<String>
 )
 
 private data class CatalogOrderEntry(

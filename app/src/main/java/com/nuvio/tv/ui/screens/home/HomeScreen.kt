@@ -154,8 +154,11 @@ fun HomeScreen(
     }
     val onCatalogItemLongPress: (MetaPreview, String) -> Unit = remember {
         { item, addonBaseUrl ->
-            posterOptionsTarget = HomePosterOptionsTarget(item, addonBaseUrl)
-            viewModel.refreshPosterLibraryStatus(item)
+            // Live now cards have no poster options; a long press on them does nothing.
+            if (!SportsLiveHomeRow.isLiveNowRow(addonBaseUrl)) {
+                posterOptionsTarget = HomePosterOptionsTarget(item, addonBaseUrl)
+                viewModel.refreshPosterLibraryStatus(item)
+            }
         }
     }
 
