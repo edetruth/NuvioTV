@@ -6,8 +6,10 @@ import com.nuvio.tv.data.local.StreamAutoPlaySource
 import com.nuvio.tv.data.mapper.toDomain
 import com.nuvio.tv.data.remote.dto.StreamResponseDto
 import com.nuvio.tv.domain.model.Stream
+import com.nuvio.tv.domain.model.StreamClientResolve
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+import io.mockk.mockk
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -81,6 +83,63 @@ class UnplayableStreamFilterTest {
     fun `all junk addon yields empty list`() {
         val streams = listOf(stream(url = "https://www.google.com"), stream(url = "https://a.b/health"))
         assertEquals(emptyList<Stream>(), streams.filterNot(UnplayableStreamFilter::isUnplayableJunk))
+    }
+
+    @Test
+    fun `support web page is junk`() {
+        assertTrue(
+            UnplayableStreamFilter.isUnplayableJunk(
+                stream(url = "https://play.rifflehq.in/support.html#from=sports-addon")
+            )
+        )
+        assertTrue(UnplayableStreamFilter.isUnplayableJunk(stream(url = "https://h/about.HTM?x=1")))
+    }
+
+    @Test
+    fun `health with trailing slash is junk`() {
+        assertTrue(UnplayableStreamFilter.isUnplayableJunk(stream(url = "https://h/health/")))
+    }
+
+    @Test
+    fun `hls index playlist is not junk`() {
+        assertFalse(UnplayableStreamFilter.isUnplayableJunk(stream(url = "https://h/live/index.m3u8")))
+    }
+
+    @Test
+    fun `server target stream is never junk`() {
+        assertFalse(
+            UnplayableStreamFilter.isUnplayableJunk(
+                stream(url = "https://www.google.com").copy(serverTarget = mockk(relaxed = true))
+            )
+        )
+    }
+
+    @Test
+    fun `uppercase scheme root is junk`() {
+        assertTrue(UnplayableStreamFilter.isUnplayableJunk(stream(url = "HTTPS://WWW.GOOGLE.COM")))
+    }
+
+    @Test
+    fun `root with port is junk`() {
+        assertTrue(UnplayableStreamFilter.isUnplayableJunk(stream(url = "https://h:8080/")))
+    }
+
+    @Test
+    fun `root with fragment is junk`() {
+        assertTrue(UnplayableStreamFilter.isUnplayableJunk(stream(url = "https://h/#x")))
+    }
+
+    @Test
+    fun `client resolved torrent is never junk`() {
+        val resolve = StreamClientResolve(
+            type = "torrent", infoHash = "988c0dfb1d2b22fbf30d10bb9a75323534532dbb", fileIdx = null,
+            magnetUri = null, sources = null, torrentName = null, filename = null, mediaType = null,
+            mediaId = null, mediaOnlyId = null, title = null, season = null, episode = null,
+            service = null, serviceIndex = null, serviceExtension = null, isCached = null
+        )
+        assertFalse(
+            UnplayableStreamFilter.isUnplayableJunk(stream(url = "https://www.google.com").copy(clientResolve = resolve))
+        )
     }
 
     @Test

@@ -10,7 +10,7 @@ Addons such as highfly add "streams" that cannot play: "CDN (Premium) — Upgrad
 
 ## Rule
 
-A stream is unplayable junk when its `url` is an `http`/`https` link whose path is empty, `/`, or `/health` (case-insensitive, query ignored). Real media links always have a file or playlist path. Torrents (`magnet:`/`infoHash`), YouTube (`ytId`), debrid and server streams, and `externalUrl`-only entries (explicit browser links such as PenguPlay's "support the project") are never classed as junk.
+A stream is unplayable junk when its `url` is an `http`/`https` link whose path is empty, `/`, or `/health` (case-insensitive, query ignored). Real media links always have a file or playlist path. Amended 2026-11-15 (Nebula Sports test addon): a path ending in `.html` or `.htm`, or equal to `/health/`, is also junk (web pages never play); streams with `clientResolve.infoHash` are never junk. Torrents (`magnet:`/`infoHash`), YouTube (`ytId`), debrid and server streams, and `externalUrl`-only entries (explicit browser links such as PenguPlay's "support the project") are never classed as junk.
 
 ## Where
 
