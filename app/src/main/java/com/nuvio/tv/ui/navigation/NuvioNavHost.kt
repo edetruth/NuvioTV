@@ -60,6 +60,8 @@ import com.nuvio.tv.ui.screens.settings.SupportersContributorsScreen
 import com.nuvio.tv.ui.screens.settings.ThemeSettingsScreen
 import com.nuvio.tv.ui.screens.settings.TrackingSettingsScreen
 import com.nuvio.tv.ui.screens.settings.TmdbSettingsScreen
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveScreen
+import com.nuvio.tv.ui.screens.sportslive.streamRouteFor
 import com.nuvio.tv.ui.screens.stream.StreamScreen
 import com.nuvio.tv.ui.screens.home.ContinueWatchingItem
 import com.nuvio.tv.ui.screens.account.AuthQrSignInScreen
@@ -310,7 +312,11 @@ private fun PlaybackNavHost(
                 },
                 onNavigateToFolderDetail = { collectionId, folderId ->
                     navController.navigate(Screen.FolderDetail.createRoute(collectionId, folderId))
-                }
+                },
+                onNavigateToSportsLive = {
+                    navController.navigate(Screen.SportsLive.route) { launchSingleTop = true }
+                },
+                onLiveNowItemClick = { item -> navController.navigate(streamRouteFor(item)) }
             )
         }
 
@@ -1291,6 +1297,22 @@ private fun PlaybackNavHost(
                         )
                     )
                 }
+            )
+        }
+
+        rootComposable(Screen.SportsLive.route) {
+            SportsLiveScreen(
+                onPlay = { item -> navController.navigate(streamRouteFor(item)) },
+                onOpenDetail = { item ->
+                    navController.navigate(
+                        Screen.Detail.createRoute(
+                            itemId = item.id,
+                            itemType = item.apiType,
+                            addonBaseUrl = item.addonBaseUrl
+                        )
+                    )
+                },
+                onOpenAddons = { navController.navigate(Screen.AddonManager.route) }
             )
         }
 

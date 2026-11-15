@@ -177,6 +177,7 @@ import com.nuvio.tv.domain.model.resolveAppTheme
 import com.nuvio.tv.domain.model.resolveCustomThemeColors
 import com.nuvio.tv.domain.deeplink.AppDeepLink
 import com.nuvio.tv.domain.repository.AddonRepository
+import com.nuvio.tv.domain.repository.SportsLiveRepository
 import com.nuvio.tv.ui.components.NuvioScrollDefaults
 import com.nuvio.tv.ui.components.BrandWordmark
 import com.nuvio.tv.ui.components.LocalCardDepthStyle
@@ -286,6 +287,9 @@ open class MainActivity : ComponentActivity() {
 
     @Inject
     lateinit var addonRepository: AddonRepository
+
+    @Inject
+    lateinit var sportsLiveRepository: SportsLiveRepository
 
     @Inject
     lateinit var trackingProgressRefreshCoordinator: TrackingProgressRefreshCoordinator
@@ -612,6 +616,11 @@ open class MainActivity : ComponentActivity() {
                 remember(addonRepository) {
                     addonRepository.getInstalledAddons()
                 }.collectAsState(initial = null)
+            }
+            val sportsLiveAvailable by key(activeProfileId, startupSession) {
+                remember(sportsLiveRepository) {
+                    sportsLiveRepository.sectionAvailable
+                }.collectAsState(initial = false)
             }
             val discoverLocation = mainUiPrefs.discoverLocation
 
@@ -1098,9 +1107,12 @@ open class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    val rootRoutes = remember(discoverLocation) {
+                    val rootRoutes = remember(discoverLocation, sportsLiveAvailable) {
                         buildSet {
                             add(Screen.Home.route)
+                            if (sportsLiveAvailable) {
+                                add(Screen.SportsLive.route)
+                            }
                             add(Screen.Search.route)
                             add(Screen.Library.route)
                             add(Screen.Settings.route)
@@ -1115,13 +1127,16 @@ open class MainActivity : ComponentActivity() {
                     val strNavSearch = stringResource(R.string.nav_search)
                     val strNavLibrary = stringResource(R.string.nav_library)
                     val strNavSettings = stringResource(R.string.nav_settings)
+                    val strNavSportsLive = stringResource(R.string.nav_sports_live)
                     val drawerItems = remember(
                         strNavHome,
                         strNavDiscover,
                         strNavSearch,
                         strNavLibrary,
                         strNavSettings,
-                        discoverLocation
+                        strNavSportsLive,
+                        discoverLocation,
+                        sportsLiveAvailable
                     ) {
                         buildList {
                             add(
@@ -1137,6 +1152,15 @@ open class MainActivity : ComponentActivity() {
                                         route = Screen.Discover.route,
                                         label = strNavDiscover,
                                         icon = Icons.Default.Explore
+                                    )
+                                )
+                            }
+                            if (sportsLiveAvailable) {
+                                add(
+                                    DrawerItem(
+                                        route = Screen.SportsLive.route,
+                                        label = strNavSportsLive,
+                                        iconRes = R.raw.sidebar_sports
                                     )
                                 )
                             }
