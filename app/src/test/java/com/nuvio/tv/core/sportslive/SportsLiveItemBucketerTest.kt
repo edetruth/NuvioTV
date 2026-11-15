@@ -125,6 +125,28 @@ class SportsLiveItemBucketerTest {
         assertFalse(item.isLive)
         assertTrue(tabs.getValue(SportsLiveTab.LIVE_NOW).isEmpty())
         assertTrue(tabs.getValue(SportsLiveTab.UPCOMING).isEmpty())
+        assertTrue(tabs.getValue(SportsLiveTab.REPLAYS).isEmpty())
+    }
+
+    @Test
+    fun `included catalog's past items land in Replays`() {
+        val included = claimed("movie", "top", "Popular", SportsLiveKind.EVENTS, viaOverride = true)
+        val items = describeAll(
+            listOf(
+                meta("old", "Old game", releaseInfo = "15 Nov 2026 · 09:30 UTC"),
+                meta("film", "Old film", released = "2024-03-01T00:00:00.000Z"),
+                meta("live", "Live game", releaseInfo = "LIVE"),
+                meta("next", "Next game", releaseInfo = "15 Nov 2026 · 18:00 UTC"),
+                meta("tba", "Untimed", releaseInfo = "2025")
+            ),
+            included
+        )
+        val tabs = SportsLiveItemBucketer.bucket(items, now)
+
+        assertTrue(items.all { it.viaOverride })
+        assertEquals(listOf("film", "old"), tabs.getValue(SportsLiveTab.REPLAYS).map { it.id })
+        assertEquals(listOf("live"), tabs.getValue(SportsLiveTab.LIVE_NOW).map { it.id })
+        assertEquals(listOf("next", "tba"), tabs.getValue(SportsLiveTab.UPCOMING).map { it.id })
     }
 
     @Test
@@ -267,7 +289,13 @@ class SportsLiveItemBucketerTest {
             .also { assertTrue("fixture $name is empty", it.isNotEmpty()) }
     }
 
-    private fun claimed(type: String, id: String, name: String, kind: SportsLiveKind): ClaimedCatalog {
+    private fun claimed(
+        type: String,
+        id: String,
+        name: String,
+        kind: SportsLiveKind,
+        viaOverride: Boolean = false
+    ): ClaimedCatalog {
         val catalog = CatalogDescriptor(type = ContentType.fromString(type), rawType = type, id = id, name = name)
         val addon = Addon(
             id = "highfly",
@@ -280,7 +308,7 @@ class SportsLiveItemBucketerTest {
             types = listOf(catalog.type),
             resources = emptyList()
         )
-        return ClaimedCatalog(addon, catalog, "highfly_${type}_$id", kind)
+        return ClaimedCatalog(addon, catalog, "highfly_${type}_$id", kind, viaOverride)
     }
 
     private fun meta(

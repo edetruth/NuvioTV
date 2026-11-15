@@ -36,6 +36,14 @@ class SportsLiveCatalogPolicyTest {
     }
 
     @Test
+    fun `channel typed catalog is CHANNELS whatever its name`() {
+        val plain = catalog("channel", "uk", "United Kingdom")
+        assertEquals(SportsLiveKind.CHANNELS, classify(addon("iptv", "Some IPTV", plain), plain)?.kind)
+        val replayNamed = catalog("channel", "replay_tv", "Replay TV")
+        assertEquals(SportsLiveKind.CHANNELS, classify(addon("iptv", "Some IPTV", replayNamed), replayNamed)?.kind)
+    }
+
+    @Test
     fun `addon named Sports Replay claims movie catalogs as REPLAY`() {
         val catalog = catalog("movie", "football", "Football")
         val claim = classify(addon("sports.replay", "Sports Replay | Powered By X", catalog), catalog)

@@ -10,6 +10,9 @@ import com.nuvio.tv.domain.model.catalogRowLegacyKey
 
 /** Decides which addon catalogs the Sports & Live section claims, and as what kind. */
 object SportsLiveCatalogPolicy {
+    /** The claim reason of a catalog the user included by override. */
+    const val REASON_INCLUDE = "override:include"
+
     private val CLAIMED_TYPES = setOf("sport", "tv", "channel")
     private val CATALOG_RULE_TYPES = setOf(ContentType.MOVIE, ContentType.SERIES, ContentType.UNKNOWN)
 
@@ -33,7 +36,7 @@ object SportsLiveCatalogPolicy {
         if (!isClaimable(catalog)) return null
         val reason = when (overrides[keyFor(addon, catalog)]) {
             SportsLiveOverride.EXCLUDE -> return null
-            SportsLiveOverride.INCLUDE -> "override:include"
+            SportsLiveOverride.INCLUDE -> REASON_INCLUDE
             null -> matchReason(addon, catalog) ?: return null
         }
         return SportsLiveClaim(kindOf(addon, catalog), reason)
@@ -50,6 +53,7 @@ object SportsLiveCatalogPolicy {
     }
 
     private fun kindOf(addon: Addon, catalog: CatalogDescriptor): SportsLiveKind {
+        if (catalog.apiType.equals("channel", ignoreCase = true)) return SportsLiveKind.CHANNELS
         val isReplay = catalog.id.startsWith("recap", ignoreCase = true) ||
             listOf(addon.name, catalog.name, catalog.id).any {
                 SportsLiveKeywords.containsKeyword(it, SportsLiveKeywords.REPLAY)

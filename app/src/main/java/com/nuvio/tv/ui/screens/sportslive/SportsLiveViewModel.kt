@@ -69,11 +69,15 @@ class SportsLiveViewModel @Inject constructor(
         viewModelScope.launch { load(force) }
     }
 
-    /** While the screen is visible, reloads every 60 s so the Live now tab stays current. */
+    /**
+     * On becoming visible (including a resume), loads at once (served from the repository's cache
+     * when still fresh), then reloads every 60 s so the Live now tab stays current.
+     */
     fun onScreenVisible(visible: Boolean) {
         autoRefreshJob?.cancel()
         autoRefreshJob = if (visible) {
             viewModelScope.launch {
+                load(force = false)
                 while (isActive) {
                     delay(AUTO_REFRESH_MS)
                     load(force = true)
@@ -104,7 +108,9 @@ class SportsLiveViewModel @Inject constructor(
         selection: Selection
     ): SportsLiveUiState {
         val hasClaimed = claimed.isNotEmpty()
-        val items = if (hasClaimed) latest?.items.orEmpty() else emptyList()
+        // Only items of catalogs claimed right now: the cache may still hold another profile's load.
+        val claimedKeys = claimed.mapTo(HashSet()) { it.key }
+        val items = latest?.items.orEmpty().filter { it.catalogKey in claimedKeys }
         val tabs = SportsLiveItemBucketer.bucket(items, nowMs())
         val tabItems = tabs[selection.tab].orEmpty()
         val sports = tabItems.mapNotNull { it.sport }.distinct().sortedWith(String.CASE_INSENSITIVE_ORDER)

@@ -19,14 +19,18 @@ import com.nuvio.tv.domain.repository.AddonRepository
 import com.nuvio.tv.domain.repository.CatalogRepository
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -214,10 +218,60 @@ class SportsLiveRepositoryImplTest {
         assertFalse(key in repository.claimedCatalogKeys.first())
     }
 
+    @Test
+    fun `profile switch mid-load does not publish the old profile's items`() = runTest {
+        catalogRepository.results["sports" to "live"] = success("sports", "live", meta("a", live = true))
+        val gate = CompletableDeferred<Unit>()
+        catalogRepository.gates["sports" to "live"] = gate
+        val repository = newRepository()
+
+        val oldLoad = async { repository.load() }
+        runCurrent()
+        // The other profile has only the generic addon installed.
+        addons.value = listOf(genericAddon)
+        gate.complete(Unit)
+        oldLoad.await()
+
+        assertNull(repository.latest.value)
+        assertEquals(emptyList<Any>(), repository.liveNow().first())
+
+        catalogRepository.results["generic" to "chan"] = success("generic", "chan", meta("ch", live = true))
+        val newLoad = repository.load()
+        assertEquals(listOf("ch"), newLoad.items.map { it.id })
+        assertEquals(newLoad, repository.latest.value)
+        assertEquals(listOf("ch"), repository.liveNow().first().map { it.id })
+    }
+
+    @Test
+    fun `liveNow drops items whose catalog is no longer claimed`() = runTest {
+        catalogRepository.results["sports" to "live"] = success("sports", "live", meta("a", live = true))
+        catalogRepository.results["sports" to "upcoming"] = success("sports", "upcoming", meta("b", live = true))
+        val repository = newRepository()
+        repository.load()
+        assertEquals(setOf("a", "b"), repository.liveNow().first().map { it.id }.toSet())
+
+        prefs.setOverride(SportsLiveCatalogPolicy.keyFor(sportsAddon, liveCatalog), SportsLiveOverride.EXCLUDE)
+
+        assertEquals(listOf("b"), repository.liveNow().first().map { it.id })
+    }
+
+    @Test
+    fun `an include override marks the claimed catalog and its items`() = runTest {
+        prefs.setOverride(SportsLiveCatalogPolicy.keyFor(genericAddon, popularCatalog), SportsLiveOverride.INCLUDE)
+        catalogRepository.results["generic" to "popular"] = success("generic", "popular", meta("m"))
+        val repository = newRepository()
+
+        val claimed = repository.claimedCatalogs.first().associateBy { it.catalog.id }
+        assertTrue(claimed.getValue("popular").viaOverride)
+        assertFalse(claimed.getValue("live").viaOverride)
+        assertTrue(repository.load().items.single { it.id == "m" }.viaOverride)
+    }
+
     private class FakeCatalogRepository : CatalogRepository {
         val results = mutableMapOf<Pair<String, String>, NetworkResult<CatalogRow>>()
         val throwing = mutableSetOf<Pair<String, String>>()
         val hanging = mutableSetOf<Pair<String, String>>()
+        val gates = mutableMapOf<Pair<String, String>, CompletableDeferred<Unit>>()
         var calls = 0
 
         override fun getCatalog(
@@ -238,6 +292,7 @@ class SportsLiveRepositoryImplTest {
             val key = addonId to catalogId
             if (key in throwing) throw IllegalStateException("boom")
             if (key in hanging) awaitCancellation()
+            gates[key]?.await()
             emit(results[key] ?: success(addonId, catalogId))
         }
     }

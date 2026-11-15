@@ -30,6 +30,8 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -52,6 +54,7 @@ class SportsLiveRepositoryImpl @Inject constructor(
     internal var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 
     private val _latest = MutableStateFlow<SportsLiveLoad?>(null)
+    private val loadMutex = Mutex()
 
     /** The most recent load, whether or not every catalog succeeded. */
     override val latest: StateFlow<SportsLiveLoad?> = _latest.asStateFlow()
@@ -67,7 +70,13 @@ class SportsLiveRepositoryImpl @Inject constructor(
         addons.flatMap { addon ->
             addon.catalogs.mapNotNull { catalog ->
                 SportsLiveCatalogPolicy.classify(addon, catalog, overrides)?.let {
-                    ClaimedCatalog(addon, catalog, SportsLiveCatalogPolicy.keyFor(addon, catalog), it.kind)
+                    ClaimedCatalog(
+                        addon = addon,
+                        catalog = catalog,
+                        key = SportsLiveCatalogPolicy.keyFor(addon, catalog),
+                        kind = it.kind,
+                        viaOverride = it.reason == SportsLiveCatalogPolicy.REASON_INCLUDE
+                    )
                 }
             }
         }
@@ -79,12 +88,17 @@ class SportsLiveRepositoryImpl @Inject constructor(
     override val sectionAvailable: Flow<Boolean> =
         combine(enabled, claimedCatalogs) { enabled, claimed -> enabled && claimed.isNotEmpty() }
 
-    override suspend fun load(force: Boolean): SportsLiveLoad {
+    /**
+     * Loads are serialised. The result is published to [latest] only if the claimed catalogs (which
+     * follow the active profile and the overrides) did not change while it was fetching, so a load
+     * started for one profile never overwrites the cache after a switch to another.
+     */
+    override suspend fun load(force: Boolean): SportsLiveLoad = loadMutex.withLock {
         val claimed = claimedCatalogs.first()
         val claimedKeys = claimed.map { it.key }.toSet()
         val cached = _latest.value
         if (!force && cached != null && nowMs() - cached.loadedAtMs < CACHE_MS && cached.claimedKeys == claimedKeys) {
-            return cached
+            return@withLock cached
         }
 
         val results = coroutineScope {
@@ -101,7 +115,9 @@ class SportsLiveRepositoryImpl @Inject constructor(
                 NetworkResult.Loading -> Unit
             }
         }
-        return SportsLiveLoad(items, failures, loadedAtMs = now, claimedKeys = claimedKeys).also { _latest.value = it }
+        val load = SportsLiveLoad(items, failures, loadedAtMs = now, claimedKeys = claimedKeys)
+        if (claimedCatalogKeys.first() == claimedKeys) _latest.value = load
+        load
     }
 
     /** The catalog's first non-loading result; a timeout or exception becomes an [NetworkResult.Error]. */
@@ -127,12 +143,14 @@ class SportsLiveRepositoryImpl @Inject constructor(
         }
     }
 
+    /** Only items of catalogs claimed right now, so a profile switch or an exclusion hides stale items at once. */
     override fun liveNow(limit: Int): Flow<List<SportsLiveItem>> =
-        combine(latest, prefs.showHomeRow, enabled) { load, showHomeRow, enabled ->
+        combine(latest, prefs.showHomeRow, enabled, claimedCatalogKeys) { load, showHomeRow, enabled, keys ->
             if (load == null || !showHomeRow || !enabled) {
                 emptyList()
             } else {
-                SportsLiveItemBucketer.bucket(load.items, nowMs())[SportsLiveTab.LIVE_NOW].orEmpty().take(limit)
+                val items = load.items.filter { it.catalogKey in keys }
+                SportsLiveItemBucketer.bucket(items, nowMs())[SportsLiveTab.LIVE_NOW].orEmpty().take(limit)
             }
         }
 }

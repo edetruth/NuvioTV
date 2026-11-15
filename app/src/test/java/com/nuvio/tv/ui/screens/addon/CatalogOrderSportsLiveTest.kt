@@ -50,6 +50,34 @@ class CatalogOrderSportsLiveTest {
     }
 
     @Test
+    fun `with no claimed catalogs toggling saves exactly the visible disabled keys, as upstream`() {
+        val staleKey = catalogRowLegacyKey("uninstalled.addon", "movie", "gone")
+        val store = layoutStore(savedOrder = emptyList(), disabled = listOf(staleKey, SPORTS_KEY))
+        val viewModel = newViewModel(store, claimedKeys = emptySet())
+        assertEquals(listOf(POPULAR_KEY, SPORTS_KEY, TOP_KEY), viewModel.uiState.value.items.map { it.key })
+        val sportsDisableKey = viewModel.uiState.value.items.single { it.key == SPORTS_KEY }.disableKey
+
+        viewModel.toggleCatalogEnabled(POPULAR_KEY)
+
+        coVerify(timeout = 2_000) {
+            store.setDisabledHomeCatalogKeys(match { it.toSet() == setOf(sportsDisableKey, POPULAR_KEY) })
+        }
+    }
+
+    @Test
+    fun `stale keys of uninstalled addons are dropped while a claimed catalog's flag is kept`() {
+        val staleKey = catalogRowLegacyKey("uninstalled.addon", "movie", "gone")
+        val store = layoutStore(savedOrder = emptyList(), disabled = listOf(staleKey, SPORTS_KEY))
+        val viewModel = newViewModel(store)
+
+        viewModel.toggleCatalogEnabled(POPULAR_KEY)
+
+        coVerify(timeout = 2_000) {
+            store.setDisabledHomeCatalogKeys(match { it.toSet() == setOf(SPORTS_KEY, POPULAR_KEY) })
+        }
+    }
+
+    @Test
     fun `moving a catalog preserves claimed catalogs' saved positions`() {
         val store = layoutStore(savedOrder = listOf(POPULAR_KEY, SPORTS_KEY, TOP_KEY), disabled = emptyList())
         val viewModel = newViewModel(store)
@@ -69,9 +97,12 @@ class CatalogOrderSportsLiveTest {
             every { followAddonsOrder } returns flowOf(false)
         }
 
-    private fun newViewModel(store: LayoutPreferenceDataStore): CatalogOrderViewModel {
+    private fun newViewModel(
+        store: LayoutPreferenceDataStore,
+        claimedKeys: Set<String> = setOf(SPORTS_KEY)
+    ): CatalogOrderViewModel {
         val sportsLiveRepository = mockk<SportsLiveRepository>(relaxed = true) {
-            every { claimedCatalogKeys } returns flowOf(setOf(SPORTS_KEY))
+            every { claimedCatalogKeys } returns flowOf(claimedKeys)
         }
         val viewModel = CatalogOrderViewModel(
             addonRepository = mockk(relaxed = true) { every { getInstalledAddons() } returns flowOf(listOf(addon())) },

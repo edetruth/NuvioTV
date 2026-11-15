@@ -316,7 +316,7 @@ private fun PlaybackNavHost(
                 onNavigateToSportsLive = {
                     navController.navigate(Screen.SportsLive.route) { launchSingleTop = true }
                 },
-                onLiveNowItemClick = { item -> navController.navigate(streamRouteFor(item)) }
+                onLiveNowItemClick = { item -> navController.navigate(streamRouteFor(item, returnToHomeOnBack = true)) }
             )
         }
 
@@ -1302,7 +1302,7 @@ private fun PlaybackNavHost(
 
         rootComposable(Screen.SportsLive.route) {
             SportsLiveScreen(
-                onPlay = { item -> navController.navigate(streamRouteFor(item)) },
+                onPlay = { item -> navController.navigate(streamRouteFor(item, returnToHomeOnBack = false)) },
                 onOpenDetail = { item ->
                     navController.navigate(
                         Screen.Detail.createRoute(

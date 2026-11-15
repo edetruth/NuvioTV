@@ -11,7 +11,9 @@ data class ClaimedCatalog(
     val addon: Addon,
     val catalog: CatalogDescriptor,
     val key: String,
-    val kind: SportsLiveKind
+    val kind: SportsLiveKind,
+    /** True when the user included this catalog by override rather than a rule claiming it. */
+    val viaOverride: Boolean = false
 )
 
 enum class SportsLiveTab { LIVE_NOW, UPCOMING, CHANNELS, REPLAYS }
@@ -29,7 +31,9 @@ data class SportsLiveItem(
     val isChannel: Boolean,
     val startMs: Long?,
     val sport: String?,
-    val startHasTimeOfDay: Boolean = false
+    val startHasTimeOfDay: Boolean = false,
+    /** True when the item's catalog was included by override; see [ClaimedCatalog.viaOverride]. */
+    val viaOverride: Boolean = false
 ) {
     val id: String get() = meta.id
     val apiType: String get() = meta.apiType

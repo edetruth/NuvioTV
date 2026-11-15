@@ -159,7 +159,7 @@ class SportsLiveViewModelTest {
     }
 
     @Test
-    fun `auto refresh calls load every 60 seconds only while visible`() = runTest {
+    fun `becoming visible loads at once then every 60 seconds only while visible`() = runTest {
         nextLoad = load(listOf(item("a", isLive = true, sport = "Soccer")))
         val viewModel = newViewModel()
         runCurrent()
@@ -167,12 +167,37 @@ class SportsLiveViewModelTest {
 
         viewModel.onScreenVisible(true)
         viewModel.onScreenVisible(true) // a second call must not start a second loop
+        runCurrent()
+        // The resume load is non-forced (served from the repository's cache when fresh).
+        assertEquals(listOf(false, false), forcedFlags)
         advanceTimeBy(61_000)
-        assertEquals(listOf(false, true), forcedFlags)
+        assertEquals(listOf(false, false, true), forcedFlags)
 
         viewModel.onScreenVisible(false)
         advanceTimeBy(120_000)
-        assertEquals(2, forcedFlags.size)
+        assertEquals(3, forcedFlags.size)
+    }
+
+    @Test
+    fun `items of catalogs that are no longer claimed are not shown`() = runTest {
+        val other = CLAIMED.copy(key = "other.addon_tv_events")
+        nextLoad = load(
+            listOf(
+                item("mine", isLive = true, sport = "Soccer"),
+                item("theirs", isLive = true, sport = "Soccer").copy(catalogKey = other.key)
+            )
+        )
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(listOf("mine"), state.visibleItems.map { it.id })
+        assertEquals(listOf("mine"), state.tabs.getValue(SportsLiveTab.LIVE_NOW).map { it.id })
+
+        // After a profile switch to one whose catalogs differ, the cached items vanish at once.
+        claimedFlow.value = listOf(other)
+        runCurrent()
+        assertEquals(listOf("theirs"), viewModel.uiState.value.visibleItems.map { it.id })
     }
 
     @Test

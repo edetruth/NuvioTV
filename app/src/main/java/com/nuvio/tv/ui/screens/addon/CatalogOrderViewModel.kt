@@ -214,10 +214,13 @@ class CatalogOrderViewModel @Inject constructor(
                     customTitles = customTitles,
                     followAddonsOrder = followAddons
                 )
-                // Visible catalogs store their current disable key; every other stored key, such as
-                // one of a catalog shown in Sports & Live, is kept as it is.
-                val visibleLegacyKeys = homeEntries.mapNotNull { it.legacyDisableKey }.toSet()
-                val disabledKeysToKeep = (disabledKeys - visibleLegacyKeys) +
+                // As upstream, the visible disabled items are saved; in addition, the stored keys of
+                // catalogs shown in Sports & Live are kept so they come back disabled when released.
+                // Any other stored key (e.g. of an uninstalled addon) is dropped, as upstream does.
+                val sportsLiveDisableKeys = sportsLiveEntries
+                    .flatMap { listOfNotNull(it.disableKey, it.legacyDisableKey) }
+                    .toSet()
+                val disabledKeysToKeep = (disabledKeys intersect sportsLiveDisableKeys) +
                     items.filter { it.isDisabled }.map { it.disableKey }
                 CatalogOrderSnapshot(
                     items = items,

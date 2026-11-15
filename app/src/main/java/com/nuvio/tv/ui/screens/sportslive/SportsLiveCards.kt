@@ -38,30 +38,43 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
 import com.nuvio.tv.R
+import com.nuvio.tv.core.sportslive.SportsLivePillTime
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveTab
 import com.nuvio.tv.ui.components.LightweightCard
 import com.nuvio.tv.ui.theme.NuvioTheme
 import com.nuvio.tv.ui.util.rememberLongPressKeyTracker
-import java.text.DateFormat
-import java.util.Date
+import java.time.ZoneId
+import java.util.Locale
 
 /**
- * The state shown in a card's pill and the pane's meta line: `LIVE`, the local start time (or
- * date when the addon gave no time of day), `Time TBA` for an untimed Upcoming item, else null.
+ * The state shown in a card's pill and the pane's meta line: `LIVE`, the local start (time only
+ * today, "Tomorrow" + time, else weekday or date + time; just the date when the addon gave no time
+ * of day), `Time TBA` for an untimed Upcoming item, else null.
  */
 @Composable
 internal fun rememberSportsLiveStateLabeler(tab: SportsLiveTab): (SportsLiveItem) -> String? {
     val live = stringResource(R.string.sports_live_live_pill)
     val tba = stringResource(R.string.sports_live_time_tba)
-    return remember(tab, live, tba) {
-        val timeFormat = DateFormat.getTimeInstance(DateFormat.SHORT)
-        val dateFormat = DateFormat.getDateInstance(DateFormat.SHORT)
+    val tomorrow = stringResource(R.string.sports_live_tomorrow)
+    return remember(tab, live, tba, tomorrow) {
         val labeler: (SportsLiveItem) -> String? = { item ->
             val startMs = item.startMs
             when {
                 item.isLive -> live
-                startMs != null -> (if (item.startHasTimeOfDay) timeFormat else dateFormat).format(Date(startMs))
+                startMs != null -> when (
+                    val pill = SportsLivePillTime.of(
+                        startMs = startMs,
+                        hasTimeOfDay = item.startHasTimeOfDay,
+                        nowMs = System.currentTimeMillis(),
+                        zone = ZoneId.systemDefault(),
+                        locale = Locale.getDefault()
+                    )
+                ) {
+                    is SportsLivePillTime.Today -> pill.time
+                    is SportsLivePillTime.Tomorrow -> String.format(tomorrow, pill.time)
+                    is SportsLivePillTime.Other -> pill.text
+                }
                 tab == SportsLiveTab.UPCOMING -> tba
                 else -> null
             }

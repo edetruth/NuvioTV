@@ -617,11 +617,14 @@ open class MainActivity : ComponentActivity() {
                     addonRepository.getInstalledAddons()
                 }.collectAsState(initial = null)
             }
-            val sportsLiveAvailable by key(activeProfileId, startupSession) {
+            // Null until the first emission, so a restore onto Sports & Live is not redirected
+            // before the stores have loaded; the sidebar treats null as not available.
+            val sportsLiveAvailability by key(activeProfileId, startupSession) {
                 remember(sportsLiveRepository) {
                     sportsLiveRepository.sectionAvailable
-                }.collectAsState(initial = false)
+                }.collectAsState(initial = null as Boolean?)
             }
+            val sportsLiveAvailable = sportsLiveAvailability == true
             val discoverLocation = mainUiPrefs.discoverLocation
 
             NuvioTheme(
@@ -1107,10 +1110,10 @@ open class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    LaunchedEffect(sportsLiveAvailable, currentRoute) {
+                    LaunchedEffect(sportsLiveAvailability, currentRoute) {
                         val onSportsLiveRoute = currentRoute == Screen.SportsLive.route ||
                             currentRoute?.startsWith("${Screen.SportsLive.route}/") == true
-                        if (!sportsLiveAvailable && onSportsLiveRoute) {
+                        if (sportsLiveAvailability == false && onSportsLiveRoute) {
                             navController.navigate(Screen.Home.route) {
                                 popUpTo(navController.graph.startDestinationId) { saveState = false }
                                 launchSingleTop = true

@@ -44,7 +44,8 @@ object SportsLiveItemBucketer {
             isChannel = isChannel,
             startMs = startMs,
             startHasTimeOfDay = start?.hasTimeOfDay == true,
-            sport = sportOf(meta, catalog.name)
+            sport = sportOf(meta, catalog.name),
+            viaOverride = claimed.viaOverride
         )
     }
 
@@ -69,16 +70,21 @@ object SportsLiveItemBucketer {
         val replay = item.kind == SportsLiveKind.REPLAY
         return when (tab) {
             SportsLiveTab.LIVE_NOW -> item.isLive && !replay
-            // An upcoming-named catalog vouches only for items without a known time of day;
-            // a timed start in the past never counts as upcoming. An events item with no start at
-            // all is kept as "Time TBA" so a manually included catalog never disappears.
-            SportsLiveTab.UPCOMING -> !item.isLive && !replay &&
-                ((item.startMs != null && item.startMs > nowMs) ||
-                    (item.startMs == null && item.kind == SportsLiveKind.EVENTS) ||
-                    (!item.startHasTimeOfDay &&
-                        SportsLiveKeywords.containsKeyword(item.catalogName, SportsLiveKeywords.UPCOMING)))
+            SportsLiveTab.UPCOMING -> !item.isLive && !replay && isUpcoming(item, nowMs)
             SportsLiveTab.CHANNELS -> item.isChannel && !replay
-            SportsLiveTab.REPLAYS -> replay
+            // A finished event from a catalog the user included by override is shown on demand as a
+            // replay rather than dropped; rule-claimed catalogs keep the 4-hour cut-off.
+            SportsLiveTab.REPLAYS -> replay ||
+                (item.viaOverride && item.kind == SportsLiveKind.EVENTS && !item.isLive && !isUpcoming(item, nowMs))
         }
     }
+
+    // An upcoming-named catalog vouches only for items without a known time of day;
+    // a timed start in the past never counts as upcoming. An events item with no start at
+    // all is kept as "Time TBA" so a manually included catalog never disappears.
+    private fun isUpcoming(item: SportsLiveItem, nowMs: Long): Boolean =
+        (item.startMs != null && item.startMs > nowMs) ||
+            (item.startMs == null && item.kind == SportsLiveKind.EVENTS) ||
+            (!item.startHasTimeOfDay &&
+                SportsLiveKeywords.containsKeyword(item.catalogName, SportsLiveKeywords.UPCOMING))
 }
