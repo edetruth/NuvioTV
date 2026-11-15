@@ -13,3 +13,23 @@ data class ClaimedCatalog(
     val key: String,
     val kind: SportsLiveKind
 )
+
+enum class SportsLiveTab { LIVE_NOW, UPCOMING, CHANNELS, REPLAYS }
+
+/** A catalog item from a claimed catalog, annotated with what the Sports & Live tabs need. */
+data class SportsLiveItem(
+    val meta: MetaPreview,
+    val addonId: String,
+    val addonName: String,
+    val addonBaseUrl: String,
+    val catalogKey: String,
+    val catalogName: String,
+    val kind: SportsLiveKind,
+    val isLive: Boolean,
+    val isChannel: Boolean,
+    val startMs: Long?,
+    val sport: String?
+) {
+    val id: String get() = meta.id
+    val apiType: String get() = meta.apiType
+}
