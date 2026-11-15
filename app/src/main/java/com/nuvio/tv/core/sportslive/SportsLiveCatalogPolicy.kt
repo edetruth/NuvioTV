@@ -1,0 +1,57 @@
+package com.nuvio.tv.core.sportslive
+
+import com.nuvio.tv.domain.model.Addon
+import com.nuvio.tv.domain.model.CatalogDescriptor
+import com.nuvio.tv.domain.model.ContentType
+import com.nuvio.tv.domain.model.SportsLiveClaim
+import com.nuvio.tv.domain.model.SportsLiveKind
+import com.nuvio.tv.domain.model.SportsLiveOverride
+import com.nuvio.tv.domain.model.catalogRowLegacyKey
+
+/** Decides which addon catalogs the Sports & Live section claims, and as what kind. */
+object SportsLiveCatalogPolicy {
+    private val CLAIMED_TYPES = setOf("sport", "tv", "channel")
+    private val CATALOG_RULE_TYPES = setOf(ContentType.MOVIE, ContentType.SERIES, ContentType.UNKNOWN)
+
+    fun keyFor(addon: Addon, catalog: CatalogDescriptor): String =
+        catalogRowLegacyKey(addon.id, catalog.apiType, catalog.id)
+
+    /**
+     * Precedence: override, then type rule, then addon-name rule, then catalog name/id rule.
+     * Addon descriptions are never matched.
+     */
+    fun classify(
+        addon: Addon,
+        catalog: CatalogDescriptor,
+        overrides: Map<String, SportsLiveOverride>
+    ): SportsLiveClaim? {
+        val reason = when (overrides[keyFor(addon, catalog)]) {
+            SportsLiveOverride.EXCLUDE -> return null
+            SportsLiveOverride.INCLUDE -> "override:include"
+            null -> matchReason(addon, catalog) ?: return null
+        }
+        return SportsLiveClaim(kindOf(addon, catalog), reason)
+    }
+
+    private fun matchReason(addon: Addon, catalog: CatalogDescriptor): String? {
+        val apiType = catalog.apiType.lowercase()
+        if (apiType in CLAIMED_TYPES) return "type:$apiType"
+        SportsLiveKeywords.findKeyword(addon.name, SportsLiveKeywords.SPORTS)?.let { return "addon:$it" }
+        if (catalog.type !in CATALOG_RULE_TYPES) return null
+        val catalogKeyword = SportsLiveKeywords.findKeyword(catalog.name, SportsLiveKeywords.SPORTS)
+            ?: SportsLiveKeywords.findKeyword(catalog.id, SportsLiveKeywords.SPORTS)
+        return catalogKeyword?.let { "catalog:$it" }
+    }
+
+    private fun kindOf(addon: Addon, catalog: CatalogDescriptor): SportsLiveKind {
+        val isReplay = catalog.id.startsWith("recap", ignoreCase = true) ||
+            listOf(addon.name, catalog.name, catalog.id).any {
+                SportsLiveKeywords.containsKeyword(it, SportsLiveKeywords.REPLAY)
+            }
+        if (isReplay) return SportsLiveKind.REPLAY
+        val isChannels = listOf(catalog.name, catalog.id).any {
+            SportsLiveKeywords.containsKeyword(it, SportsLiveKeywords.CHANNELS)
+        }
+        return if (isChannels) SportsLiveKind.CHANNELS else SportsLiveKind.EVENTS
+    }
+}
