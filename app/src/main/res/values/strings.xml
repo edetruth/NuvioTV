@@ -3494,4 +3494,19 @@
     <string name="stream_resume_from_percent">Resume from %1$d%%</string>
     <string name="sports_live_home_row_title">Live now</string>
     <string name="sports_live_catalog_order_note">%1$d catalog(s) are shown in Sports &amp; Live instead</string>
+    <string name="sports_live_tab_live_now">Live Now</string>
+    <string name="sports_live_tab_upcoming">Upcoming</string>
+    <string name="sports_live_tab_channels">Channels</string>
+    <string name="sports_live_tab_replays">Replays</string>
+    <string name="sports_live_filter_all">All</string>
+    <string name="sports_live_watch">Watch</string>
+    <string name="sports_live_details">Details</string>
+    <string name="sports_live_refresh">Refresh</string>
+    <string name="sports_live_live_pill">LIVE</string>
+    <string name="sports_live_time_tba">Time TBA</string>
+    <string name="sports_live_empty_tab">Nothing here right now</string>
+    <string name="sports_live_no_addons_title">No sports or live addons</string>
+    <string name="sports_live_no_addons_subtitle">Install an addon that offers live sports or TV channels to use this section</string>
+    <string name="sports_live_open_addons">Open add-ons</string>
+    <string name="sports_live_partial_failure">%1$d source(s) didn\'t respond</string>
 </resources>

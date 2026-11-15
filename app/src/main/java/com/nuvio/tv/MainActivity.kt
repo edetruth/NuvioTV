@@ -1107,6 +1107,17 @@ open class MainActivity : ComponentActivity() {
                         }
                     }
 
+                    LaunchedEffect(sportsLiveAvailable, currentRoute) {
+                        val onSportsLiveRoute = currentRoute == Screen.SportsLive.route ||
+                            currentRoute?.startsWith("${Screen.SportsLive.route}/") == true
+                        if (!sportsLiveAvailable && onSportsLiveRoute) {
+                            navController.navigate(Screen.Home.route) {
+                                popUpTo(navController.graph.startDestinationId) { saveState = false }
+                                launchSingleTop = true
+                            }
+                        }
+                    }
+
                     val rootRoutes = remember(discoverLocation, sportsLiveAvailable) {
                         buildSet {
                             add(Screen.Home.route)
