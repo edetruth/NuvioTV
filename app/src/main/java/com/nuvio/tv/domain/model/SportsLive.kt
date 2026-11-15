@@ -28,7 +28,8 @@ data class SportsLiveItem(
     val isLive: Boolean,
     val isChannel: Boolean,
     val startMs: Long?,
-    val sport: String?
+    val sport: String?,
+    val startHasTimeOfDay: Boolean = false
 ) {
     val id: String get() = meta.id
     val apiType: String get() = meta.apiType

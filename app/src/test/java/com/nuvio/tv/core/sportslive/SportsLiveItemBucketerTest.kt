@@ -72,17 +72,83 @@ class SportsLiveItemBucketerTest {
     }
 
     @Test
-    fun `start more than 10 minutes past in an events catalog is live`() {
+    fun `highfly today timed items land in UPCOMING in ascending start order`() {
+        val metas = loadMetas("highfly_today.json", "sport")
+        val timedIds = metas.filter { it.releaseInfo != "LIVE" }.map { it.id }.toSet()
+        val upcoming = SportsLiveItemBucketer.bucket(describeAll(metas, highflyToday), now)
+            .getValue(SportsLiveTab.UPCOMING)
+
+        assertTrue(timedIds.isNotEmpty())
+        assertEquals(timedIds, upcoming.map { it.id }.toSet())
+        val starts = upcoming.map { it.startMs!! }
+        assertEquals(starts.sorted(), starts)
+        assertTrue(starts.all { it > now })
+    }
+
+    @Test
+    fun `event that started 2 hours ago with a time of day is live`() {
         val item = SportsLiveItemBucketer.describe(
-            meta("started", "Started game", releaseInfo = "15 Nov 2026 · 14:00 UTC"),
+            meta("started", "Started game", releaseInfo = "15 Nov 2026 · 12:30 UTC"),
             highflyFootball,
             now
         )
         val tabs = SportsLiveItemBucketer.bucket(listOf(item), now)
 
         assertTrue(item.isLive)
+        assertTrue(item.startHasTimeOfDay)
         assertEquals(listOf("started"), tabs.getValue(SportsLiveTab.LIVE_NOW).map { it.id })
         assertTrue(tabs.getValue(SportsLiveTab.UPCOMING).isEmpty())
+    }
+
+    @Test
+    fun `event that started 1 minute ago is live`() {
+        val item = SportsLiveItemBucketer.describe(
+            meta("kickoff", "Kickoff", released = "2026-11-15T14:29:00Z"),
+            highflyFootball,
+            now
+        )
+
+        assertTrue(item.isLive)
+        assertEquals(listOf("kickoff"), SportsLiveItemBucketer.bucket(listOf(item), now).getValue(SportsLiveTab.LIVE_NOW).map { it.id })
+    }
+
+    @Test
+    fun `event that started 5 hours ago is in neither LIVE_NOW nor UPCOMING`() {
+        // "Today" matches the UPCOMING catalog keywords, so this also checks that a known past start wins over the keyword.
+        val item = SportsLiveItemBucketer.describe(
+            meta("old", "Old game", releaseInfo = "15 Nov 2026 · 09:30 UTC"),
+            highflyToday,
+            now
+        )
+        val tabs = SportsLiveItemBucketer.bucket(listOf(item), now)
+
+        assertFalse(item.isLive)
+        assertTrue(tabs.getValue(SportsLiveTab.LIVE_NOW).isEmpty())
+        assertTrue(tabs.getValue(SportsLiveTab.UPCOMING).isEmpty())
+    }
+
+    @Test
+    fun `events item with bare date yesterday is not live`() {
+        val item = SportsLiveItemBucketer.describe(
+            meta("yesterday", "Yesterday game", releaseInfo = "2026-11-14"),
+            highflyFootball,
+            now
+        )
+
+        assertFalse(item.startHasTimeOfDay)
+        assertFalse(item.isLive)
+        assertTrue(SportsLiveItemBucketer.bucket(listOf(item), now).getValue(SportsLiveTab.LIVE_NOW).isEmpty())
+    }
+
+    @Test
+    fun `lowercase live on in a description does not make an event a channel`() {
+        val item = SportsLiveItemBucketer.describe(
+            meta("espn", "Big game", releaseInfo = "15 Nov 2026 · 18:00 UTC", description = "Watch it live on ESPN+"),
+            highflyFootball,
+            now
+        )
+
+        assertFalse(item.isChannel)
     }
 
     @Test
@@ -188,7 +254,8 @@ class SportsLiveItemBucketerTest {
         name: String,
         releaseInfo: String? = null,
         description: String? = null,
-        genres: List<String> = emptyList()
+        genres: List<String> = emptyList(),
+        released: String? = null
     ) = MetaPreview(
         id = id,
         type = ContentType.UNKNOWN,
@@ -201,6 +268,7 @@ class SportsLiveItemBucketerTest {
         description = description,
         releaseInfo = releaseInfo,
         imdbRating = null,
-        genres = genres
+        genres = genres,
+        released = released
     )
 }

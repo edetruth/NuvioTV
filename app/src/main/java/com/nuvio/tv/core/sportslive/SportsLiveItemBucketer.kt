@@ -8,7 +8,8 @@ import com.nuvio.tv.domain.model.SportsLiveTab
 
 /** Annotates items from claimed catalogs and sorts them into the Sports & Live tabs. */
 object SportsLiveItemBucketer {
-    private const val STARTED_GRACE_MS = 10 * 60 * 1000L
+    /** How long after a timed start an events-catalog item still counts as live. */
+    private const val LIVE_WINDOW_MS = 4 * 60 * 60 * 1000L
 
     private val tabOrder: Comparator<SportsLiveItem> =
         compareByDescending<SportsLiveItem> { it.isLive }
@@ -17,18 +18,20 @@ object SportsLiveItemBucketer {
 
     fun describe(meta: MetaPreview, claimed: ClaimedCatalog, nowMs: Long): SportsLiveItem {
         val catalog = claimed.catalog
-        val startMs = SportsLiveTimeParser.parseStartMs(meta.releaseInfo, meta.released, nowMs)
+        val start = SportsLiveTimeParser.parseStart(meta.releaseInfo, meta.released)
+        val startMs = start?.startMs
         val liveCatalog = SportsLiveKeywords.containsKeyword(catalog.name, SportsLiveKeywords.LIVE) ||
             SportsLiveKeywords.containsKeyword(catalog.id, SportsLiveKeywords.LIVE)
         val isLive = meta.releaseInfo?.trim().equals("LIVE", ignoreCase = true) ||
-            meta.name.contains("LIVE NOW", ignoreCase = true) ||
-            meta.description?.contains("LIVE NOW", ignoreCase = true) == true ||
+            meta.name.contains("LIVE NOW") ||
+            meta.description?.contains("LIVE NOW") == true ||
             (liveCatalog && startMs == null) ||
-            (claimed.kind == SportsLiveKind.EVENTS && startMs != null && startMs < nowMs - STARTED_GRACE_MS)
+            (claimed.kind == SportsLiveKind.EVENTS && start != null && start.hasTimeOfDay &&
+                start.startMs > nowMs - LIVE_WINDOW_MS && start.startMs <= nowMs)
         val description = meta.description.orEmpty()
         val isChannel = claimed.kind == SportsLiveKind.CHANNELS ||
-            description.contains("IPTV", ignoreCase = true) ||
-            description.contains("Live on", ignoreCase = true)
+            description.contains("IPTV") ||
+            description.contains("Live on")
         return SportsLiveItem(
             meta = meta,
             addonId = claimed.addon.id,
@@ -40,6 +43,7 @@ object SportsLiveItemBucketer {
             isLive = isLive,
             isChannel = isChannel,
             startMs = startMs,
+            startHasTimeOfDay = start?.hasTimeOfDay == true,
             sport = sportOf(meta, catalog.name)
         )
     }
@@ -59,9 +63,12 @@ object SportsLiveItemBucketer {
         val replay = item.kind == SportsLiveKind.REPLAY
         return when (tab) {
             SportsLiveTab.LIVE_NOW -> item.isLive && !replay
+            // An upcoming-named catalog vouches only for items without a known time of day;
+            // a timed start in the past never counts as upcoming.
             SportsLiveTab.UPCOMING -> !item.isLive && !replay &&
                 ((item.startMs != null && item.startMs > nowMs) ||
-                    SportsLiveKeywords.containsKeyword(item.catalogName, SportsLiveKeywords.UPCOMING))
+                    (!item.startHasTimeOfDay &&
+                        SportsLiveKeywords.containsKeyword(item.catalogName, SportsLiveKeywords.UPCOMING)))
             SportsLiveTab.CHANNELS -> item.isChannel && !replay
             SportsLiveTab.REPLAYS -> replay
         }

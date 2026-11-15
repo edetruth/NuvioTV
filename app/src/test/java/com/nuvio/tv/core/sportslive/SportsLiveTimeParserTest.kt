@@ -37,11 +37,34 @@ class SportsLiveTimeParserTest {
     }
 
     @Test
+    fun `parses ISO released with a numeric offset and any fraction length`() {
+        assertEquals(
+            Instant.parse("2026-11-14T00:00:00Z").toEpochMilli(),
+            SportsLiveTimeParser.parseStartMs(null, "2026-11-14T00:00:00+00:00", now)
+        )
+        assertEquals(
+            Instant.parse("2026-11-14T18:45:00.123456Z").toEpochMilli(),
+            SportsLiveTimeParser.parseStartMs(null, "2026-11-14T20:45:00.123456+02:00", now)
+        )
+    }
+
+    @Test
     fun `bare date without released gives midnight UTC`() {
         assertEquals(
             Instant.parse("2026-11-14T00:00:00Z").toEpochMilli(),
             SportsLiveTimeParser.parseStartMs("2026-11-14", null, now)
         )
+    }
+
+    @Test
+    fun `parseStart reports whether a time of day was present`() {
+        assertEquals(SportsLiveStart(thirteenUtc, hasTimeOfDay = true), SportsLiveTimeParser.parseStart("15 Nov 2026 · 13:00 UTC", null))
+        assertEquals(true, SportsLiveTimeParser.parseStart("2026-11-14", "2026-11-14T19:45:00Z")?.hasTimeOfDay)
+        assertEquals(
+            SportsLiveStart(Instant.parse("2026-11-14T00:00:00Z").toEpochMilli(), hasTimeOfDay = false),
+            SportsLiveTimeParser.parseStart("2026-11-14", null)
+        )
+        assertNull(SportsLiveTimeParser.parseStart("TBD", null))
     }
 
     @Test
