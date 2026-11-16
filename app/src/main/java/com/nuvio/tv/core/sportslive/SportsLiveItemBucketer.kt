@@ -2,6 +2,7 @@ package com.nuvio.tv.core.sportslive
 
 import com.nuvio.tv.domain.model.CatalogStats
 import com.nuvio.tv.domain.model.ClaimedCatalog
+import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveKind
@@ -115,7 +116,9 @@ object SportsLiveItemBucketer {
             sport = sportOf(meta, catalog.name),
             viaOverride = claimed.viaOverride,
             group = if (isChannel) SportsLiveChannelGrouper.groupOf(meta, catalog.name, claimed.addon.name) else null,
-            isFinished = status == DONE_EMOJI
+            isFinished = status == DONE_EMOJI,
+            // Channel names are never games ("Sky Sports - HD"), and skipping them keeps big lists cheap.
+            teams = if (isChannel) null else SportsLiveTeams.parse(meta.name)
         )
         val hasSignal = status == LIVE_EMOJI || status == SOON_EMOJI || start != null || liveMarker || isChannel
         return item to hasSignal
@@ -135,6 +138,18 @@ object SportsLiveItemBucketer {
         items.filter { !it.isFinished && belongsTo(it, tab, nowMs) }
             .distinctBy { it.addonId to it.id }
             .sortedWith(if (tab == SportsLiveTab.REPLAYS) replayOrder else tabOrder)
+
+    /**
+     * Marks the items a followed team plays in and moves them first, each part keeping its order.
+     * For Live Now, Upcoming and Replays; Channels are left as they are.
+     */
+    fun pinFollowed(items: List<SportsLiveItem>, followed: List<FollowedTeam>): List<SportsLiveItem> {
+        if (followed.isEmpty()) return items
+        val (pinned, rest) = items
+            .map { if (SportsLiveTeams.isFollowed(it, followed)) it.copy(followed = true) else it }
+            .partition { it.followed }
+        return pinned + rest
+    }
 
     // "LIVE", "🔴 LIVE": the word LIVE once emoji, punctuation and digits are stripped.
     private fun isLiveMarker(releaseInfo: String?): Boolean =

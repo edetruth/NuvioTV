@@ -1,23 +1,28 @@
 package com.nuvio.tv.ui.screens.sportslive
 
 import com.nuvio.tv.core.sportslive.SportsLiveItemBucketer
+import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveTab
 
 /**
  * The player's live games panel: the section's Live now list (claimed catalogs only, ended games left
- * out), narrowed to the session's sport filter when the session was started from Live now.
+ * out, [followed] teams' games first), narrowed to the session's filter (a sport or "★ My teams") when
+ * the session was started from Live now.
  */
 internal fun liveGamesPanelItems(
     items: List<SportsLiveItem>,
     claimedKeys: Set<String>,
     endedKeys: Set<String>,
+    followed: List<FollowedTeam>,
     session: SportsLiveZapSession,
     nowMs: Long
 ): List<SportsLiveItem> {
     val live = SportsLiveItemBucketer.bucketTab(items.filter { it.catalogKey in claimedKeys }, SportsLiveTab.LIVE_NOW, nowMs)
+        .let { SportsLiveItemBucketer.pinFollowed(it, followed) }
         .filterNot { it.streamKey in endedKeys }
     val filter = session.filter?.takeIf { session.tab == SportsLiveTab.LIVE_NOW } ?: return live
+    if (filter == SportsLiveUiState.MY_TEAMS_FILTER) return live.filter { it.followed }
     return live.filter { it.sport == filter }
 }
 

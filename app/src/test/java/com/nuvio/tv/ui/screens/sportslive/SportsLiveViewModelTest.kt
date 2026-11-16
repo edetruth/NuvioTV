@@ -2,10 +2,12 @@ package com.nuvio.tv.ui.screens.sportslive
 
 import com.nuvio.tv.MainDispatcherRule
 import com.nuvio.tv.core.sportslive.SportsLiveItemBucketer
+import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.domain.model.Addon
 import com.nuvio.tv.domain.model.CatalogDescriptor
 import com.nuvio.tv.domain.model.ClaimedCatalog
 import com.nuvio.tv.domain.model.ContentType
+import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.domain.model.PosterShape
 import com.nuvio.tv.domain.model.SportsLiveItem
@@ -61,6 +63,7 @@ class SportsLiveViewModelTest {
     private val claimedFlow = MutableStateFlow(listOf(CLAIMED))
     private val latestFlow = MutableStateFlow<SportsLiveLoad?>(null)
     private val endedFlow = MutableStateFlow<Set<String>>(emptySet())
+    private val followedFlow = MutableStateFlow<List<FollowedTeam>>(emptyList())
     private var nextLoad = load(emptyList())
     private val forcedFlags = mutableListOf<Boolean>()
     private val includeChannelsFlags = mutableListOf<Boolean>()
@@ -69,6 +72,7 @@ class SportsLiveViewModelTest {
         every { claimedCatalogs } returns claimedFlow
         every { latest } returns latestFlow
         every { endedKeys } returns endedFlow
+        every { followedTeams } returns followedFlow
         every { reprobeIfStale(any()) } just runs
         coEvery { load(any(), any()) } coAnswers {
             forcedFlags += firstArg<Boolean>()
@@ -426,6 +430,84 @@ class SportsLiveViewModelTest {
         assertEquals(afterLoad + 1, bucketCalls)
     }
 
+    @Test
+    fun `followed games come first in Live Now, Upcoming and Replays but not Channels`() = runTest {
+        followedFlow.value = listOf(FollowedTeam("Celtics", "Basketball"))
+        nextLoad = load(
+            listOf(
+                item("a", isLive = true, sport = "Basketball", name = "Bulls vs Heat"),
+                item("b", isLive = true, sport = "Basketball", name = "Knicks vs Celtics"),
+                item("u1", isLive = false, sport = "Basketball", startMs = NOW + HOUR, name = "Bulls vs Nets"),
+                item("u2", isLive = false, sport = "Basketball", startMs = NOW + 2 * HOUR, name = "Celtics vs Nets"),
+                item("r1", isLive = false, sport = "Basketball", startMs = NOW - HOUR, name = "Lakers vs Suns")
+                    .copy(kind = SportsLiveKind.REPLAY),
+                item("r2", isLive = false, sport = "Basketball", startMs = NOW - 2 * HOUR, name = "Celtics vs Suns")
+                    .copy(kind = SportsLiveKind.REPLAY),
+                channel("ch1", "US"),
+                channel("ch2", "US").copy(teams = teamsOf("Celtics vs Heat"))
+            )
+        )
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+
+        val tabs = viewModel.uiState.value.tabs
+        assertEquals(listOf("b", "a"), tabs.getValue(SportsLiveTab.LIVE_NOW).map { it.id })
+        assertEquals(listOf("u2", "u1"), tabs.getValue(SportsLiveTab.UPCOMING).map { it.id })
+        assertEquals(listOf("r2", "r1"), tabs.getValue(SportsLiveTab.REPLAYS).map { it.id })
+        assertEquals(listOf("ch1", "ch2"), tabs.getValue(SportsLiveTab.CHANNELS).map { it.id })
+        assertTrue(tabs.getValue(SportsLiveTab.CHANNELS).none { it.followed })
+
+        // A follow in another sport does not count; unfollowing restores the order without a re-bucket.
+        followedFlow.value = listOf(FollowedTeam("Celtics", "Soccer"))
+        runCurrent()
+        assertEquals(listOf("a", "b"), viewModel.uiState.value.tabs.getValue(SportsLiveTab.LIVE_NOW).map { it.id })
+    }
+
+    @Test
+    fun `my teams filter leads the filters when a followed game is in the tab and shows only those`() = runTest {
+        followedFlow.value = listOf(FollowedTeam("Celtics", null))
+        nextLoad = load(
+            listOf(
+                item("a", isLive = true, sport = "Basketball", name = "Bulls vs Heat"),
+                item("b", isLive = true, sport = "Basketball", name = "Knicks vs Celtics"),
+                item("s", isLive = true, sport = "Soccer", name = "Arsenal vs Chelsea"),
+                item("u", isLive = false, sport = "Soccer", startMs = NOW + HOUR, name = "Leeds vs Spurs"),
+                channel("ch1", "US"),
+                channel("ch2", "UK")
+            )
+        )
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+
+        val my = SportsLiveUiState.MY_TEAMS_FILTER
+        assertEquals(listOf(my, "Basketball", "Soccer"), viewModel.uiState.value.filters)
+
+        viewModel.selectFilter(my)
+        runCurrent()
+        assertEquals(my, viewModel.uiState.value.selectedFilter)
+        assertEquals(listOf("b"), viewModel.uiState.value.visibleItems.map { it.id })
+
+        // No followed game on Upcoming, and never on Channels.
+        viewModel.selectTab(SportsLiveTab.UPCOMING)
+        runCurrent()
+        assertEquals(listOf("Soccer"), viewModel.uiState.value.filters)
+        viewModel.selectTab(SportsLiveTab.CHANNELS)
+        runCurrent()
+        assertEquals(listOf("UK", "US"), viewModel.uiState.value.filters)
+
+        // Unfollowing while the filter is selected clears it.
+        viewModel.selectTab(SportsLiveTab.LIVE_NOW)
+        viewModel.selectFilter(my)
+        runCurrent()
+        followedFlow.value = emptyList()
+        runCurrent()
+        assertNull(viewModel.uiState.value.selectedFilter)
+        assertEquals(listOf("Basketball", "Soccer"), viewModel.uiState.value.filters)
+        assertEquals(listOf("s", "a", "b"), viewModel.uiState.value.visibleItems.map { it.id })
+    }
+
+    private fun teamsOf(name: String) = SportsLiveTeams.parse(name)
+
     private fun channel(id: String, group: String, isLive: Boolean = false, sport: String? = null) =
         item(id, isLive = isLive, sport = sport, name = "Channel $id").copy(isChannel = true, group = group)
 
@@ -463,7 +545,8 @@ class SportsLiveViewModelTest {
         isChannel = false,
         startMs = startMs,
         sport = sport,
-        startHasTimeOfDay = startMs != null
+        startHasTimeOfDay = startMs != null,
+        teams = SportsLiveTeams.parse(name)
     )
 
     private companion object {

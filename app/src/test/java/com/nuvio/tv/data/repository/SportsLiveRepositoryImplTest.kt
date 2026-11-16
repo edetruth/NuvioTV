@@ -16,6 +16,7 @@ import com.nuvio.tv.domain.model.CatalogOption
 import com.nuvio.tv.domain.model.CatalogRow
 import com.nuvio.tv.domain.model.CatalogStats
 import com.nuvio.tv.domain.model.ContentType
+import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.domain.model.PosterShape
 import com.nuvio.tv.domain.model.SportsLiveKind
@@ -331,6 +332,26 @@ class SportsLiveRepositoryImplTest {
     }
 
     @Test
+    fun `liveNow puts followed teams' games first and follows a change at once`() = runTest {
+        catalogRepository.results["sports" to "live"] = success(
+            "sports", "live",
+            meta("a", live = true, name = "Arsenal vs Chelsea"),
+            meta("b", live = true, name = "Bulls vs Celtics"),
+            meta("c", live = true, name = "Clippers vs Lakers")
+        )
+        val repository = newRepository()
+        repository.load()
+        assertEquals(listOf("a", "b", "c"), repository.liveNow().first().map { it.id })
+
+        prefs.follow(FollowedTeam("Boston Celtics", null))
+
+        val live = repository.liveNow().first()
+        assertEquals(listOf("b", "a", "c"), live.map { it.id })
+        assertEquals(listOf(true, false, false), live.map { it.followed })
+        assertEquals(listOf(FollowedTeam("Boston Celtics", null)), repository.followedTeams.first())
+    }
+
+    @Test
     fun `liveNow is capped at limit and only contains live items`() = runTest {
         val liveItems = (1..25).map { meta("live$it", live = true) }
         val otherItems = (1..5).map { meta("other$it") }
@@ -626,11 +647,11 @@ class SportsLiveRepositoryImplTest {
             enabled = enabled
         )
 
-        fun meta(id: String, live: Boolean = false) = MetaPreview(
+        fun meta(id: String, live: Boolean = false, name: String = id) = MetaPreview(
             id = id,
             type = ContentType.UNKNOWN,
             rawType = "sport",
-            name = id,
+            name = name,
             poster = null,
             posterShape = PosterShape.POSTER,
             background = null,

@@ -1,5 +1,8 @@
 package com.nuvio.tv.core.sportslive
 
+import com.nuvio.tv.domain.model.FollowedTeam
+import com.nuvio.tv.domain.model.SportsLiveItem
+
 /** Display names of the two sides of a game, rankings removed. */
 data class TeamPair(val home: String, val away: String)
 
@@ -11,6 +14,8 @@ object SportsLiveTeams {
     private val LEADING_RANK = Regex("^\\d+\\s+")
     private val WHITESPACE = Regex("\\s+")
     private val CLUB_SUFFIXES = setOf("fc", "sc", "cf")
+    // "Celtics [HD]", "76ers (2026-11-10 19:00:05)": a trailing bracketed group is not part of the name.
+    private val TRAILING_GROUP = Regex("""\s*[\[(][^\[\]()]*[\])]\s*$""")
 
     fun parse(name: String): TeamPair? {
         for (separator in SEPARATORS) {
@@ -25,7 +30,7 @@ object SportsLiveTeams {
     }
 
     fun normalise(team: String): String {
-        val tokens = team.trim().lowercase().replace(LEADING_RANK, "").split(WHITESPACE).toMutableList()
+        val tokens = clean(team).lowercase().replace(LEADING_RANK, "").split(WHITESPACE).toMutableList()
         while (tokens.size > 1 && tokens.last() in CLUB_SUFFIXES) tokens.removeAt(tokens.lastIndex)
         return tokens.joinToString(" ").trim()
     }
@@ -37,5 +42,35 @@ object SportsLiveTeams {
         return x == y || x.endsWith(" $y") || y.endsWith(" $x")
     }
 
-    private fun display(side: String): String = side.trim().replace(LEADING_RANK, "").trim()
+    /** True when [team] plays in [item]: its name matches either side, and the sports agree or either is unknown. */
+    fun follows(team: FollowedTeam, item: SportsLiveItem): Boolean {
+        val pair = item.teams ?: return false
+        val sportsAgree = team.sport == null || item.sport == null || team.sport.equals(item.sport, ignoreCase = true)
+        return sportsAgree && (matches(team.name, pair.home) || matches(team.name, pair.away))
+    }
+
+    fun isFollowed(item: SportsLiveItem, followed: List<FollowedTeam>): Boolean = followed.any { follows(it, item) }
+
+    private fun display(side: String): String = clean(side).replace(LEADING_RANK, "").trim()
+
+    /**
+     * Drops what an addon wraps around a team name: anything up to an unclosed `[`
+     * ("US| PEACOCK PPV 004 [Celtics"), then trailing `[...]` / `(...)` groups and a stray `]` or `)`.
+     */
+    private fun clean(side: String): String {
+        var text = side.trim()
+        val open = text.lastIndexOf('[')
+        if (open >= 0 && text.indexOf(']', open) < 0) text = text.substring(open + 1).trim()
+        while (true) {
+            val next = when {
+                TRAILING_GROUP.containsMatchIn(text) -> text.replace(TRAILING_GROUP, "")
+                text.endsWith("]") && '[' !in text -> text.dropLast(1)
+                text.endsWith(")") && '(' !in text -> text.dropLast(1)
+                else -> break
+            }.trim()
+            if (next.isEmpty()) break
+            text = next
+        }
+        return text
+    }
 }

@@ -7,6 +7,7 @@ import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.domain.model.CatalogOption
+import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveOverride
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -30,12 +31,16 @@ class SportsLivePreferencesDataStore @Inject constructor(
     // catalogKey -> {"extra": name, "value": value}; plain maps, so release minification cannot rename fields.
     private val optionsType = object : TypeToken<Map<String, Map<String, String>>>() {}.type
 
+    // [{"name": name, "sport": sport or null}]; plain maps, like the options.
+    private val followedType = object : TypeToken<List<Map<String, String?>>>() {}.type
+
     private fun store() = factory.get(profileManager.activeProfileId.value, FEATURE)
 
     private val showSectionKey = booleanPreferencesKey("sports_live_show_section")
     private val showHomeRowKey = booleanPreferencesKey("sports_live_show_home_row")
     private val overridesKey = stringPreferencesKey("sports_live_overrides")
     private val catalogOptionsKey = stringPreferencesKey("sports_live_catalog_options")
+    private val followedTeamsKey = stringPreferencesKey("sports_live_followed_teams")
 
     val showSection: Flow<Boolean> = profileManager.activeProfileId.flatMapLatest { pid ->
         factory.get(pid, FEATURE).data.map { it[showSectionKey] ?: true }
@@ -52,6 +57,30 @@ class SportsLivePreferencesDataStore @Inject constructor(
     /** Pinned catalog option per catalog key; a catalog with no entry loads everything (All). */
     val catalogOptions: Flow<Map<String, CatalogOption>> = profileManager.activeProfileId.flatMapLatest { pid ->
         factory.get(pid, FEATURE).data.map { decodeOptions(it[catalogOptionsKey]) }
+    }
+
+    /** Followed teams of the active profile, in the order they were followed. */
+    val followedTeams: Flow<List<FollowedTeam>> = profileManager.activeProfileId.flatMapLatest { pid ->
+        factory.get(pid, FEATURE).data.map { decodeFollowed(it[followedTeamsKey]) }
+    }
+
+    /** Adds [team] unless the same name and sport are already followed (ignoring case). */
+    suspend fun follow(team: FollowedTeam) {
+        val name = team.name.trim()
+        if (name.isEmpty()) return
+        val followed = FollowedTeam(name, team.sport?.trim()?.takeIf { it.isNotEmpty() })
+        store().edit { prefs ->
+            val current = decodeFollowed(prefs[followedTeamsKey])
+            if (current.none { it.sameAs(followed) }) prefs[followedTeamsKey] = encodeFollowed(current + followed)
+        }
+    }
+
+    /** Removes [team] (same name and sport, ignoring case). */
+    suspend fun unfollow(team: FollowedTeam) {
+        val removed = FollowedTeam(team.name.trim(), team.sport?.trim()?.takeIf { it.isNotEmpty() })
+        store().edit { prefs ->
+            prefs[followedTeamsKey] = encodeFollowed(decodeFollowed(prefs[followedTeamsKey]).filterNot { it.sameAs(removed) })
+        }
     }
 
     suspend fun setShowSection(v: Boolean) {
@@ -77,6 +106,22 @@ class SportsLivePreferencesDataStore @Inject constructor(
             if (option == null) updated.remove(catalogKey) else updated[catalogKey] = option
             prefs[catalogOptionsKey] = gson.toJson(updated.mapValues { mapOf("extra" to it.value.extra, "value" to it.value.value) })
         }
+    }
+
+    private fun FollowedTeam.sameAs(other: FollowedTeam): Boolean =
+        name.equals(other.name, ignoreCase = true) && (sport ?: "").equals(other.sport ?: "", ignoreCase = true)
+
+    private fun encodeFollowed(teams: List<FollowedTeam>): String =
+        gson.toJson(teams.map { mapOf("name" to it.name, "sport" to it.sport) })
+
+    private fun decodeFollowed(json: String?): List<FollowedTeam> {
+        if (json.isNullOrBlank()) return emptyList()
+        return runCatching {
+            gson.fromJson<List<Map<String, String?>?>?>(json, followedType).orEmpty().mapNotNull { stored ->
+                val name = stored?.get("name")?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                FollowedTeam(name, stored["sport"]?.takeIf { it.isNotBlank() })
+            }
+        }.getOrDefault(emptyList())
     }
 
     private fun decodeOptions(json: String?): Map<String, CatalogOption> {

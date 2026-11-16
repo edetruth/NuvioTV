@@ -3541,6 +3541,7 @@
     <string name="sports_live_tab_channels">Channels</string>
     <string name="sports_live_tab_replays">Replays</string>
     <string name="sports_live_filter_all">All</string>
+    <string name="sports_live_filter_my_teams">★ My teams</string>
     <string name="sports_live_watch">Watch</string>
     <string name="sports_live_details">Details</string>
     <string name="sports_live_refresh">Refresh</string>

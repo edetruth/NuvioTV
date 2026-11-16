@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import com.nuvio.tv.TestPreferencesStore
 import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.domain.model.CatalogOption
+import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveOverride
 import io.mockk.every
 import io.mockk.mockk
@@ -50,6 +51,50 @@ class SportsLivePreferencesDataStoreTest {
         store.setOverride("a_sport_x", SportsLiveOverride.EXCLUDE)
         activeProfile.value = 2
         assertEquals(emptyMap<String, SportsLiveOverride>(), store.overrides.first())
+    }
+
+    @Test
+    fun `followed teams round trip in order, skip duplicates, and unfollow by name and sport`() = runTest {
+        val store = SportsLivePreferencesDataStore(factory, profiles)
+        assertEquals(emptyList<FollowedTeam>(), store.followedTeams.first())
+
+        store.follow(FollowedTeam("Celtics", "Basketball"))
+        store.follow(FollowedTeam("Arsenal", null))
+        store.follow(FollowedTeam(" celtics ", "BASKETBALL"))
+        store.follow(FollowedTeam("Celtics", null))
+        store.follow(FollowedTeam("  ", "Soccer"))
+        assertEquals(
+            listOf(FollowedTeam("Celtics", "Basketball"), FollowedTeam("Arsenal", null), FollowedTeam("Celtics", null)),
+            store.followedTeams.first()
+        )
+
+        store.unfollow(FollowedTeam("CELTICS", "basketball"))
+        assertEquals(listOf(FollowedTeam("Arsenal", null), FollowedTeam("Celtics", null)), store.followedTeams.first())
+    }
+
+    @Test
+    fun `followed teams are stored per profile as plain maps`() = runTest {
+        val store = SportsLivePreferencesDataStore(factory, profiles)
+        store.follow(FollowedTeam("Celtics", "Basketball"))
+        val json = profile1Store.data.first()[stringPreferencesKey("sports_live_followed_teams")]
+        assertEquals("""[{"name":"Celtics","sport":"Basketball"}]""", json)
+
+        activeProfile.value = 2
+        assertEquals(emptyList<FollowedTeam>(), store.followedTeams.first())
+        store.follow(FollowedTeam("Arsenal", null))
+        assertEquals(listOf(FollowedTeam("Arsenal", null)), store.followedTeams.first())
+
+        activeProfile.value = 1
+        assertEquals(listOf(FollowedTeam("Celtics", "Basketball")), store.followedTeams.first())
+    }
+
+    @Test
+    fun `malformed followed teams json yields no teams`() = runTest {
+        profile1Store.updateData {
+            mutablePreferencesOf(stringPreferencesKey("sports_live_followed_teams") to "{oops")
+        }
+        val store = SportsLivePreferencesDataStore(factory, profiles)
+        assertEquals(emptyList<FollowedTeam>(), store.followedTeams.first())
     }
 
     @Test

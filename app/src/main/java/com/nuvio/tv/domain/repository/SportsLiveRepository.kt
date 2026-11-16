@@ -3,6 +3,7 @@ package com.nuvio.tv.domain.repository
 import com.nuvio.tv.domain.model.CatalogOption
 import com.nuvio.tv.domain.model.CatalogStats
 import com.nuvio.tv.domain.model.ClaimedCatalog
+import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveItem
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
@@ -57,6 +58,12 @@ interface SportsLiveRepository {
     /** Re-probes a focused Live now [item] in the background when its probe result is over 2 minutes old. */
     fun reprobeIfStale(item: SportsLiveItem)
 
-    /** Live items from [latest] that are not ended, capped at [limit]; empty when the home row or the section is off. */
+    /** The active profile's followed teams; their games are pinned first in Live Now, Upcoming and Replays. */
+    val followedTeams: Flow<List<FollowedTeam>>
+
+    /**
+     * Live items from [latest] that are not ended, followed teams' games first, capped at [limit];
+     * empty when the home row or the section is off.
+     */
     fun liveNow(limit: Int = 20): Flow<List<SportsLiveItem>>
 }

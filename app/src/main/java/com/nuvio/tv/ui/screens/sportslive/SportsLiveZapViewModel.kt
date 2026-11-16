@@ -116,9 +116,9 @@ class SportsLiveZapViewModel @Inject constructor(
         if (session == null) {
             flowOf(null)
         } else {
-            combine(repo.latest, repo.claimedCatalogKeys, repo.endedKeys) { load, keys, ended ->
+            combine(repo.latest, repo.claimedCatalogKeys, repo.endedKeys, repo.followedTeams) { load, keys, ended, followed ->
                 SportsLiveZapPanelState(
-                    items = liveGamesPanelItems(load?.items.orEmpty(), keys, ended, session, System.currentTimeMillis()),
+                    items = liveGamesPanelItems(load?.items.orEmpty(), keys, ended, followed, session, System.currentTimeMillis()),
                     currentKey = session.current.streamKey
                 )
             }.flowOn(Dispatchers.Default)

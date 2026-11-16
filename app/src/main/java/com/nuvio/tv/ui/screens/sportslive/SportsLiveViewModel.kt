@@ -65,8 +65,17 @@ class SportsLiveViewModel @Inject constructor(
         Bucketed(hasClaimed = claimed.isNotEmpty(), hasLoad = latest != null, tabs = bucket(items, nowMs()))
     }.flowOn(Dispatchers.Default)
 
+    // Followed teams' games first in every tab but Channels; a follow change does not re-bucket.
+    private val pinned = combine(bucketed, repo.followedTeams) { bucketed, followed ->
+        bucketed.copy(
+            tabs = bucketed.tabs.mapValues { (tab, items) ->
+                if (tab == SportsLiveTab.CHANNELS) items else SportsLiveItemBucketer.pinFollowed(items, followed)
+            }
+        )
+    }.flowOn(Dispatchers.Default)
+
     val uiState: StateFlow<SportsLiveUiState> =
-        combine(bucketed, repo.endedKeys, selectionState, ::buildState)
+        combine(pinned, repo.endedKeys, selectionState, ::buildState)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SportsLiveUiState())
 
     init {
@@ -77,7 +86,7 @@ class SportsLiveViewModel @Inject constructor(
         selectionState.update { it.copy(tab = tab, filter = null, itemId = null) }
     }
 
-    /** [value] is a sport, or a group on the Channels tab; null means All. */
+    /** [value] is a sport, a group on the Channels tab, or [SportsLiveUiState.MY_TEAMS_FILTER]; null means All. */
     fun selectFilter(value: String?) {
         selectionState.update { it.copy(filter = value) }
     }
@@ -173,14 +182,24 @@ class SportsLiveViewModel @Inject constructor(
         // Channels are filtered by group, every other tab by sport.
         val filterOf: (SportsLiveItem) -> String? =
             if (selection.tab == SportsLiveTab.CHANNELS) SportsLiveItem::group else SportsLiveItem::sport
-        val filters = tabItems.mapNotNull(filterOf).distinct().sortedWith(String.CASE_INSENSITIVE_ORDER)
+        val values = tabItems.mapNotNull(filterOf).distinct().sortedWith(String.CASE_INSENSITIVE_ORDER)
+        // "★ My teams" leads whenever a followed team plays in the tab (never on Channels).
+        val filters = if (selection.tab != SportsLiveTab.CHANNELS && tabItems.any { it.followed }) {
+            listOf(SportsLiveUiState.MY_TEAMS_FILTER) + values
+        } else {
+            values
+        }
         val filter = selection.filter?.takeIf { it in filters }
         // A filter that left the list is cleared rather than kept hidden, so it never silently
         // comes back on a later load that lists it again.
         if (selection.filter != null && filter == null) {
             selectionState.update { if (it.filter == selection.filter) it.copy(filter = null) else it }
         }
-        val visible = if (filter == null) tabItems else tabItems.filter { filterOf(it) == filter }
+        val visible = when (filter) {
+            null -> tabItems
+            SportsLiveUiState.MY_TEAMS_FILTER -> tabItems.filter { it.followed }
+            else -> tabItems.filter { filterOf(it) == filter }
+        }
         val selectedId = selection.itemId?.takeIf { id -> visible.any { it.id == id } }
             ?: visible.firstOrNull()?.id
         return SportsLiveUiState(

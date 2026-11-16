@@ -1,5 +1,11 @@
 package com.nuvio.tv.core.sportslive
 
+import com.nuvio.tv.domain.model.ContentType
+import com.nuvio.tv.domain.model.FollowedTeam
+import com.nuvio.tv.domain.model.MetaPreview
+import com.nuvio.tv.domain.model.PosterShape
+import com.nuvio.tv.domain.model.SportsLiveItem
+import com.nuvio.tv.domain.model.SportsLiveKind
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -90,6 +96,34 @@ class SportsLiveTeamsTest {
     }
 
     @Test
+    fun `normalise and parse drop bracketed groups and channel prefixes`() {
+        assertEquals("celtics", SportsLiveTeams.normalise("US| PEACOCK PPV 004 [Celtics"))
+        assertEquals("76ers", SportsLiveTeams.normalise("76ers (2026-11-10 19:00:05)]"))
+        assertEquals("arsenal", SportsLiveTeams.normalise("Arsenal [HD] (1080p)"))
+        assertEquals("chelsea", SportsLiveTeams.normalise("Chelsea)"))
+        assertEquals("(hd)", SportsLiveTeams.normalise("(HD)"))
+        assertEquals(
+            TeamPair("Celtics", "76ers"),
+            SportsLiveTeams.parse("US| PEACOCK PPV 004 [Celtics vs 76ers (2026-11-10 19:00:05)]")
+        )
+        assertTrue(SportsLiveTeams.matches("Boston Celtics", "US| PEACOCK PPV 004 [Celtics"))
+    }
+
+    @Test
+    fun `a followed team matches by name when the sports agree or either is unknown`() {
+        val game = game("Patriots Academy FC vs New England Patriots", "American Football")
+        assertTrue(SportsLiveTeams.follows(FollowedTeam("Patriots", "American Football"), game))
+        assertTrue(SportsLiveTeams.follows(FollowedTeam("patriots", "american football"), game))
+        assertTrue(SportsLiveTeams.follows(FollowedTeam("Patriots", null), game))
+        assertTrue(SportsLiveTeams.follows(FollowedTeam("Patriots", "Soccer"), game.copy(sport = null)))
+        assertFalse(SportsLiveTeams.follows(FollowedTeam("Patriots", "Soccer"), game))
+        assertFalse(SportsLiveTeams.follows(FollowedTeam("Lions", null), game))
+        assertFalse(SportsLiveTeams.follows(FollowedTeam("Patriots", null), game.copy(teams = null)))
+        assertTrue(SportsLiveTeams.isFollowed(game, listOf(FollowedTeam("Lions"), FollowedTeam("Patriots"))))
+        assertFalse(SportsLiveTeams.isFollowed(game, emptyList()))
+    }
+
+    @Test
     fun `matches equal or whole-word suffix both ways case-insensitively`() {
         assertTrue(SportsLiveTeams.matches("Patriots", "New England Patriots"))
         assertTrue(SportsLiveTeams.matches("NEW ENGLAND PATRIOTS", "patriots"))
@@ -123,6 +157,17 @@ class SportsLiveTeamsTest {
         assertTrue(names.size > 20)
         names.forEach { assertNull(it, SportsLiveTeams.parse(it)) }
     }
+
+    private fun game(name: String, sport: String?) = SportsLiveItem(
+        meta = MetaPreview(
+            id = name, type = ContentType.UNKNOWN, rawType = "sport", name = name, poster = null,
+            posterShape = PosterShape.LANDSCAPE, background = null, logo = null, description = null,
+            releaseInfo = null, imdbRating = null, genres = emptyList()
+        ),
+        addonId = "a", addonName = "A", addonBaseUrl = "https://a.example", catalogKey = "k", catalogName = "Live",
+        kind = SportsLiveKind.EVENTS, isLive = true, isChannel = false, startMs = null, sport = sport,
+        teams = SportsLiveTeams.parse(name)
+    )
 
     private fun fixtureNames(file: String): List<String> {
         val json = javaClass.classLoader!!.getResourceAsStream("sportslive/$file")!!

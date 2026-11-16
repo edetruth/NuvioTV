@@ -366,7 +366,10 @@ private fun SportsLiveFilterRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         FilterRowChip(name = stringResource(R.string.sports_live_filter_all), value = null)
-        uiState.filters.forEach { filter -> FilterRowChip(name = filter, value = filter) }
+        uiState.filters.forEach { filter ->
+            val name = if (filter == SportsLiveUiState.MY_TEAMS_FILTER) stringResource(R.string.sports_live_filter_my_teams) else filter
+            FilterRowChip(name = name, value = filter)
+        }
     }
 }
 

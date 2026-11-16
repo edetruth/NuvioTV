@@ -10,6 +10,7 @@ import com.nuvio.tv.domain.model.CatalogOption
 import com.nuvio.tv.domain.model.CatalogRow
 import com.nuvio.tv.domain.model.CatalogStats
 import com.nuvio.tv.domain.model.ClaimedCatalog
+import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveKind
 import com.nuvio.tv.domain.model.SportsLiveTab
@@ -201,16 +202,25 @@ class SportsLiveRepositoryImpl @Inject constructor(
 
     override val endedKeys: StateFlow<Set<String>> = streamProbe.ended
 
+    override val followedTeams: Flow<List<FollowedTeam>> = prefs.followedTeams
+
     override fun reprobeIfStale(item: SportsLiveItem) = streamProbe.reprobeIfStale(item)
 
     /** Only items of catalogs claimed right now, so a profile switch or an exclusion hides stale items at once. */
     override fun liveNow(limit: Int): Flow<List<SportsLiveItem>> =
-        combine(latest, prefs.showHomeRow, enabled, claimedCatalogKeys, endedKeys) { load, showHomeRow, enabled, keys, ended ->
-            if (load == null || !showHomeRow || !enabled) {
+        combine(
+            latest,
+            combine(prefs.showHomeRow, enabled) { showHomeRow, enabled -> showHomeRow && enabled },
+            claimedCatalogKeys,
+            endedKeys,
+            followedTeams
+        ) { load, shown, keys, ended, followed ->
+            if (load == null || !shown) {
                 emptyList()
             } else {
                 val items = load.items.filter { it.catalogKey in keys }
-                SportsLiveItemBucketer.bucketTab(items, SportsLiveTab.LIVE_NOW, nowMs())
+                val live = SportsLiveItemBucketer.bucketTab(items, SportsLiveTab.LIVE_NOW, nowMs())
+                SportsLiveItemBucketer.pinFollowed(live, followed)
                     .filterNot { it.streamKey in ended }
                     .take(limit)
             }

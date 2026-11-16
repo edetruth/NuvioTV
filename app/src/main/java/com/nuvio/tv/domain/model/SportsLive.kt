@@ -1,5 +1,7 @@
 package com.nuvio.tv.domain.model
 
+import com.nuvio.tv.core.sportslive.TeamPair
+
 enum class SportsLiveKind { EVENTS, CHANNELS, REPLAY }
 
 enum class SportsLiveOverride { INCLUDE, EXCLUDE }
@@ -17,6 +19,9 @@ data class ClaimedCatalog(
     /** The pinned extra value the catalog is loaded with; null loads everything (All). */
     val option: CatalogOption? = null
 )
+
+/** A team the user follows; [sport] (when known at follow time) scopes it, so a namesake in another sport does not match. */
+data class FollowedTeam(val name: String, val sport: String? = null)
 
 /** A pinned catalog extra value, e.g. `genre` = "United States". */
 data class CatalogOption(val extra: String, val value: String)
@@ -58,7 +63,11 @@ data class SportsLiveItem(
     /** Channels-tab group (e.g. a country code); null for non-channel items. */
     val group: String? = null,
     /** True for an item its addon marks as finished (a leading ✅); it is shown in no tab. */
-    val isFinished: Boolean = false
+    val isFinished: Boolean = false,
+    /** The two sides when the name is a game ("A vs B"); null for channels and other names. */
+    val teams: TeamPair? = null,
+    /** True when a followed team plays in it; set where the followed teams are known, not by describe. */
+    val followed: Boolean = false
 ) {
     val id: String get() = meta.id
     val apiType: String get() = meta.apiType

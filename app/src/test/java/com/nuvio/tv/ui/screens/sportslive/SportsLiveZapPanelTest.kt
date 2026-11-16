@@ -1,6 +1,8 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.domain.model.ContentType
+import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.domain.model.PosterShape
 import com.nuvio.tv.domain.model.SportsLiveItem
@@ -26,23 +28,39 @@ class SportsLiveZapPanelTest {
 
     @Test
     fun `panel lists live games of claimed catalogs without ended ones`() {
-        val items = liveGamesPanelItems(all, setOf(CATALOG), setOf(football2.streamKey), session(SportsLiveTab.LIVE_NOW, null), NOW)
+        val items = liveGamesPanelItems(all, setOf(CATALOG), setOf(football2.streamKey), emptyList(), session(SportsLiveTab.LIVE_NOW, null), NOW)
 
         assertEquals(setOf("f1", "b1"), items.map { it.id }.toSet())
     }
 
     @Test
     fun `panel keeps the session's sport filter only for a live now session`() {
-        val liveNow = liveGamesPanelItems(all, setOf(CATALOG), emptySet(), session(SportsLiveTab.LIVE_NOW, "Football"), NOW)
-        val channels = liveGamesPanelItems(all, setOf(CATALOG), emptySet(), session(SportsLiveTab.CHANNELS, "UK"), NOW)
+        val liveNow = liveGamesPanelItems(all, setOf(CATALOG), emptySet(), emptyList(), session(SportsLiveTab.LIVE_NOW, "Football"), NOW)
+        val channels = liveGamesPanelItems(all, setOf(CATALOG), emptySet(), emptyList(), session(SportsLiveTab.CHANNELS, "UK"), NOW)
 
         assertEquals(setOf("f1", "f2"), liveNow.map { it.id }.toSet())
         assertEquals(setOf("f1", "f2", "b1"), channels.map { it.id }.toSet())
     }
 
     @Test
+    fun `panel puts followed games first and keeps a my teams filter`() {
+        val celtics = item("c1", sport = "Basketball").let { it.copy(teams = SportsLiveTeams.parse("Celtics vs Heat")) }
+        val items = listOf(football1, basketball, celtics)
+        val followed = listOf(FollowedTeam("Celtics", null))
+
+        val all = liveGamesPanelItems(items, setOf(CATALOG), emptySet(), followed, session(SportsLiveTab.LIVE_NOW, null), NOW)
+        val mine = liveGamesPanelItems(
+            items, setOf(CATALOG), emptySet(), followed, session(SportsLiveTab.LIVE_NOW, SportsLiveUiState.MY_TEAMS_FILTER), NOW
+        )
+
+        assertEquals("c1", all.first().id)
+        assertEquals(3, all.size)
+        assertEquals(listOf("c1"), mine.map { it.id })
+    }
+
+    @Test
     fun `panel is empty without a load`() {
-        assertTrue(liveGamesPanelItems(emptyList(), setOf(CATALOG), emptySet(), session(SportsLiveTab.LIVE_NOW, null), NOW).isEmpty())
+        assertTrue(liveGamesPanelItems(emptyList(), setOf(CATALOG), emptySet(), emptyList(), session(SportsLiveTab.LIVE_NOW, null), NOW).isEmpty())
     }
 
     @Test
