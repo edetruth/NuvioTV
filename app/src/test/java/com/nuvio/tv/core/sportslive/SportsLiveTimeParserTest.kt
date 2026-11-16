@@ -25,6 +25,14 @@ class SportsLiveTimeParserTest {
     }
 
     @Test
+    fun `parses year month day time UTC with a time of day`() {
+        assertEquals(
+            SportsLiveStart(Instant.parse("2026-11-15T21:56:00Z").toEpochMilli(), hasTimeOfDay = true),
+            SportsLiveTimeParser.parseStart("2026-11-15 21:56 UTC", null)
+        )
+    }
+
+    @Test
     fun `parses ISO released when releaseInfo is a bare date`() {
         assertEquals(
             Instant.parse("2026-11-14T00:00:00.000Z").toEpochMilli(),

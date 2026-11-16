@@ -21,6 +21,20 @@ class SportsLiveCatalogPolicyTest {
     }
 
     @Test
+    fun `sports typed catalog is claimed by the type rule`() {
+        val live = catalog("sports", "streamed-events-live-now", "Nebula Sports: Live Now")
+        val replays = catalog("sports", "streamed-replays", "Nebula Sports: Replays")
+        val addon = addon("org.nebulastreams.sports", "Nebula Sports", live, replays)
+
+        val liveClaim = classify(addon, live)
+        assertEquals("type:sports", liveClaim?.reason)
+        assertEquals(SportsLiveKind.EVENTS, liveClaim?.kind)
+        assertEquals(SportsLiveKind.REPLAY, classify(addon, replays)?.kind)
+        val plain = catalog("sports", "all", "Schedule")
+        assertEquals("type:sports", classify(addon("plain", "Plain Addon", plain), plain)?.reason)
+    }
+
+    @Test
     fun `tv typed catalog from any addon is claimed`() {
         val catalog = catalog("tv", "news", "News")
         val claim = classify(addon("news.iptv", "News IPTV", catalog), catalog)

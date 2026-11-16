@@ -179,6 +179,60 @@ class SportsLiveItemBucketerTest {
     }
 
     @Test
+    fun `releaseInfo with the word LIVE among emoji is live`() {
+        val item = SportsLiveItemBucketer.describe(meta("e", "Game", releaseInfo = "🔴 LIVE"), highflyFootball, now)
+
+        assertTrue(item.isLive)
+        assertFalse(item.isChannel)
+        assertFalse(SportsLiveItemBucketer.describe(meta("f", "Game", releaseInfo = "LIVERPOOL"), highflyFootball, now).isLive)
+    }
+
+    @Test
+    fun `description with the phrase live now in any case is live`() {
+        val item = SportsLiveItemBucketer.describe(
+            meta("e", "Game", description = "American Football · Live now\nRaiders v Seahawks"),
+            highflyFootball,
+            now
+        )
+
+        assertTrue(item.isLive)
+        assertFalse(item.isChannel)
+        assertFalse(
+            SportsLiveItemBucketer.describe(meta("f", "Game", description = "Alive nowhere"), highflyFootball, now).isLive
+        )
+    }
+
+    @Test
+    fun `nebula live fixture all land in LIVE_NOW from the live and schedule catalogs`() {
+        val metas = loadMetas("nebula_live.json", "sports")
+        listOf(
+            claimed("sports", "streamed-events-live-now", "Nebula Sports: Live Now", SportsLiveKind.EVENTS),
+            claimed("sports", "all", "Nebula Sports: Schedule", SportsLiveKind.EVENTS)
+        ).forEach { catalog ->
+            val items = describeAll(metas, catalog)
+            val tabs = SportsLiveItemBucketer.bucket(items, now)
+
+            assertTrue(items.all { it.isLive && !it.isChannel })
+            assertEquals(metas.map { it.id }.toSet(), tabs.getValue(SportsLiveTab.LIVE_NOW).map { it.id }.toSet())
+        }
+    }
+
+    @Test
+    fun `nebula replays fixture lands in REPLAYS only with timed starts`() {
+        val items = describeAll(
+            loadMetas("nebula_replays.json", "sports"),
+            claimed("sports", "streamed-replays", "Replays", SportsLiveKind.REPLAY)
+        )
+        val tabs = SportsLiveItemBucketer.bucket(items, now)
+
+        assertEquals(20, tabs.getValue(SportsLiveTab.REPLAYS).size)
+        assertTrue(items.all { it.startMs != null && it.startHasTimeOfDay })
+        assertTrue(tabs.getValue(SportsLiveTab.LIVE_NOW).isEmpty())
+        assertTrue(tabs.getValue(SportsLiveTab.UPCOMING).isEmpty())
+        assertTrue(tabs.getValue(SportsLiveTab.CHANNELS).isEmpty())
+    }
+
+    @Test
     fun `lowercase live on in a description does not make an event a channel`() {
         val item = SportsLiveItemBucketer.describe(
             meta("espn", "Big game", releaseInfo = "15 Nov 2026 · 18:00 UTC", description = "Watch it live on ESPN+"),

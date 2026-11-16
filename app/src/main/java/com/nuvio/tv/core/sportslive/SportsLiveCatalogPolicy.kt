@@ -13,7 +13,7 @@ object SportsLiveCatalogPolicy {
     /** The claim reason of a catalog the user included by override. */
     const val REASON_INCLUDE = "override:include"
 
-    private val CLAIMED_TYPES = setOf("sport", "tv", "channel")
+    private val CLAIMED_TYPES = setOf("sport", "sports", "tv", "channel")
     private val CATALOG_RULE_TYPES = setOf(ContentType.MOVIE, ContentType.SERIES, ContentType.UNKNOWN)
 
     fun keyFor(addon: Addon, catalog: CatalogDescriptor): String =

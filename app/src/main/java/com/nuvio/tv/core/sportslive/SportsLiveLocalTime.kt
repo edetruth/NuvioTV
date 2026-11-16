@@ -5,9 +5,10 @@ import java.util.Locale
 
 /** Rewrites the UTC start stamps sports addons put in descriptions into the viewer's local time. */
 object SportsLiveLocalTime {
-    // "15 Nov 2026 · 21:00 UTC", also with the "Â·" mojibake or a plain space as the separator.
+    // "15 Nov 2026 · 21:00 UTC", also with the "Â·" mojibake or a plain space as the separator,
+    // and "2026-11-15 21:56 UTC".
     private val utcStamp = Regex(
-        """\b\d{1,2} [A-Za-z]{3} \d{4}(?:\s*Â?·\s*|\s+)\d{2}:\d{2} UTC\b""",
+        """\b(?:\d{1,2} [A-Za-z]{3} \d{4}(?:\s*Â?·\s*|\s+)|\d{4}-\d{2}-\d{2} )\d{2}:\d{2} UTC\b""",
         RegexOption.IGNORE_CASE
     )
 

@@ -11,6 +11,10 @@ object SportsLiveItemBucketer {
     /** How long after a timed start an events-catalog item still counts as live. */
     private const val LIVE_WINDOW_MS = 4 * 60 * 60 * 1000L
 
+    private val nonLetters = Regex("""[^\p{L}]+""")
+    // "LIVE NOW", "Live now": a whole phrase, so "Alive nowhere" does not count.
+    private val liveNowPhrase = Regex("""(?<![\p{L}\p{N}])live now(?![\p{L}\p{N}])""", RegexOption.IGNORE_CASE)
+
     private val tabOrder: Comparator<SportsLiveItem> =
         compareByDescending<SportsLiveItem> { it.isLive }
             .thenBy(nullsLast()) { it.startMs }
@@ -22,9 +26,9 @@ object SportsLiveItemBucketer {
         val startMs = start?.startMs
         val liveCatalog = SportsLiveKeywords.containsKeyword(catalog.name, SportsLiveKeywords.LIVE) ||
             SportsLiveKeywords.containsKeyword(catalog.id, SportsLiveKeywords.LIVE)
-        val isLive = meta.releaseInfo?.trim().equals("LIVE", ignoreCase = true) ||
+        val isLive = isLiveMarker(meta.releaseInfo) ||
             meta.name.contains("LIVE NOW") ||
-            meta.description?.contains("LIVE NOW") == true ||
+            meta.description?.let(liveNowPhrase::containsMatchIn) == true ||
             (liveCatalog && startMs == null) ||
             (claimed.kind == SportsLiveKind.EVENTS && start != null && start.hasTimeOfDay &&
                 start.startMs > nowMs - LIVE_WINDOW_MS && start.startMs <= nowMs)
@@ -61,6 +65,10 @@ object SportsLiveItemBucketer {
                 .distinctBy { it.addonId to it.id }
                 .sortedWith(tabOrder)
         }
+
+    // "LIVE", "🔴 LIVE": the word LIVE once emoji, punctuation and digits are stripped.
+    private fun isLiveMarker(releaseInfo: String?): Boolean =
+        releaseInfo?.split(nonLetters)?.any { it.equals("LIVE", ignoreCase = true) } == true
 
     // MetaPreview does not carry the addon's "category" field, so the fallback goes straight to the catalog name.
     fun sportOf(meta: MetaPreview, catalogName: String): String? =

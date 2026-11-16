@@ -19,6 +19,9 @@ object SportsLiveTimeParser {
         .parseCaseInsensitive()
         .appendPattern("d MMM yyyy HH:mm 'UTC'")
         .toFormatter(Locale.ENGLISH)
+    // e.g. "2026-11-15 21:56 UTC" (Nebula Sports).
+    private val isoDateTimeUtc: DateTimeFormatter =
+        DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm 'UTC'", Locale.ENGLISH)
     private val bareDate: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.ENGLISH)
     private val whitespace = Regex("\\s+")
 
@@ -32,6 +35,8 @@ object SportsLiveTimeParser {
         val iso = released?.trim().orEmpty()
         return parseOrNull(info, hasTimeOfDay = true) {
             LocalDateTime.parse(it, dayMonthYearUtc).toInstant(ZoneOffset.UTC).toEpochMilli()
+        } ?: parseOrNull(info, hasTimeOfDay = true) {
+            LocalDateTime.parse(it, isoDateTimeUtc).toInstant(ZoneOffset.UTC).toEpochMilli()
         } ?: parseOrNull(iso, hasTimeOfDay = true) {
             // ISO-8601 with "Z" or a numeric offset and any fraction length.
             OffsetDateTime.parse(it).toInstant().toEpochMilli()

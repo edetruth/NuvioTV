@@ -37,6 +37,11 @@ class SportsLiveLocalTimeTest {
     }
 
     @Test
+    fun `year month day stamp handled`() {
+        assertEquals("F1 · F1 · 3:56 PM", localize("F1 · F1 · 2026-11-15 21:56 UTC"))
+    }
+
+    @Test
     fun `text without stamp unchanged`() {
         val text = "Tenerife vs Ceuta · Segunda División"
         assertEquals(text, localize(text))
