@@ -47,6 +47,22 @@ class SportsLiveItemBucketerTest {
     }
 
     @Test
+    fun `leaf channels from fixture get country groups`() {
+        val channels = describeAll(loadMetas("highfly_live.json", "sport"), highflyLive).filter { it.isChannel }
+
+        assertTrue(channels.isNotEmpty())
+        assertEquals(setOf("CA", "UK", "US"), channels.map { it.group }.toSet())
+    }
+
+    @Test
+    fun `non channel items have null group`() {
+        val events = describeAll(loadMetas("highfly_live.json", "sport"), highflyLive).filter { !it.isChannel }
+
+        assertTrue(events.isNotEmpty())
+        assertTrue(events.all { it.group == null })
+    }
+
+    @Test
     fun `streamed event with LIVE NOW is not a channel`() {
         val items = describeAll(loadMetas("highfly_today.json", "sport"), highflyToday)
         val event = items.single { it.id == "streamed:football-tenerife-ceuta-20772" }

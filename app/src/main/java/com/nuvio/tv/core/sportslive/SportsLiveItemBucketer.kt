@@ -45,7 +45,8 @@ object SportsLiveItemBucketer {
             startMs = startMs,
             startHasTimeOfDay = start?.hasTimeOfDay == true,
             sport = sportOf(meta, catalog.name),
-            viaOverride = claimed.viaOverride
+            viaOverride = claimed.viaOverride,
+            group = if (isChannel) SportsLiveChannelGrouper.groupOf(meta, claimed.addon.name) else null
         )
     }
 

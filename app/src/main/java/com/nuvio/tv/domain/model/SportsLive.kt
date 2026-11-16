@@ -33,7 +33,9 @@ data class SportsLiveItem(
     val sport: String?,
     val startHasTimeOfDay: Boolean = false,
     /** True when the item's catalog was included by override; see [ClaimedCatalog.viaOverride]. */
-    val viaOverride: Boolean = false
+    val viaOverride: Boolean = false,
+    /** Channels-tab group (e.g. a country code); null for non-channel items. */
+    val group: String? = null
 ) {
     val id: String get() = meta.id
     val apiType: String get() = meta.apiType
