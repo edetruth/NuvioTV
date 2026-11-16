@@ -1,0 +1,133 @@
+package com.nuvio.tv.ui.screens.sportslive.dual
+
+import android.content.Context
+import androidx.annotation.OptIn
+import androidx.media3.common.C
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.mediacodec.MediaCodecRenderer
+import com.nuvio.tv.domain.model.SportsLiveItem
+import com.nuvio.tv.domain.model.Stream
+import com.nuvio.tv.ui.screens.player.PlayerMediaSourceFactory
+
+/**
+ * The dual screen's two ExoPlayers. [sync] plays each pane of a [DualState] (a pane keeps its
+ * player across a swap, so swapping does not restart either stream) and gives sound only to the
+ * [DualState.audibleSide] pane. Media sources come from the player's [PlayerMediaSourceFactory],
+ * so a stream's proxy request headers are sent as in the full player.
+ *
+ * Neither player handles audio focus (the builder default): two players taking focus from each
+ * other would pause one another.
+ */
+@OptIn(UnstableApi::class)
+internal class DualPlayers(
+    context: Context,
+    private val onFirstFrame: (SportsLiveItem) -> Unit,
+    /** [decoderInit]: the player could not get a decoder. */
+    private val onError: (item: SportsLiveItem, decoderInit: Boolean) -> Unit
+) {
+    private val appContext = context.applicationContext
+
+    private inner class Slot {
+        val player: ExoPlayer = ExoPlayer.Builder(appContext)
+            .setVideoChangeFrameRateStrategy(C.VIDEO_CHANGE_FRAME_RATE_STRATEGY_OFF)
+            .build()
+        // Its own instance: parallel connections and the VOD cache stay at their defaults (off).
+        val mediaSourceFactory = PlayerMediaSourceFactory(appContext)
+
+        /** The game and stream this player plays; null when it is stopped. */
+        var loaded: Pair<SportsLiveItem, Stream>? = null
+
+        init {
+            player.addListener(object : Player.Listener {
+                override fun onRenderedFirstFrame() {
+                    loaded?.let { onFirstFrame(it.first) }
+                }
+
+                override fun onPlayerError(error: PlaybackException) {
+                    loaded?.let { onError(it.first, error.isDecoderInitFailure()) }
+                }
+            })
+        }
+
+        fun show(pane: DualPane) {
+            val wanted = pane.playable()
+            if (wanted == loaded) return
+            loaded = wanted
+            if (wanted == null) {
+                player.stop()
+                player.clearMediaItems()
+                return
+            }
+            val stream = wanted.second
+            val request = PlayerMediaSourceFactory.normalizePlaybackRequest(
+                url = stream.getStreamUrl() ?: return,
+                headers = stream.behaviorHints?.proxyHeaders?.request
+            )
+            player.setMediaSource(
+                mediaSourceFactory.createMediaSource(
+                    context = appContext,
+                    url = request.url,
+                    headers = request.headers,
+                    filename = stream.behaviorHints?.filename
+                )
+            )
+            player.prepare()
+            player.playWhenReady = true
+        }
+    }
+
+    private val slots = listOf(Slot(), Slot())
+    private var bySide: Map<Side, Slot> = mapOf(Side.LEFT to slots[0], Side.RIGHT to slots[1])
+    private var released = false
+
+    /** The player showing [side]'s pane, for its video surface; null once released. */
+    fun player(side: Side): ExoPlayer? = if (released) null else bySide.getValue(side).player
+
+    fun sync(state: DualState) {
+        if (released) return
+        // A player already playing a pane's game and stream stays with that pane.
+        val assigned = mutableMapOf<Side, Slot>()
+        for (side in Side.entries) {
+            val playable = state.pane(side).playable() ?: continue
+            slots.firstOrNull { it.loaded == playable && it !in assigned.values }?.let { assigned[side] = it }
+        }
+        for (side in Side.entries) {
+            if (side !in assigned) assigned[side] = slots.first { it !in assigned.values }
+        }
+        bySide = assigned
+        for (side in Side.entries) {
+            val slot = assigned.getValue(side)
+            slot.show(state.pane(side))
+            slot.player.volume = if (side == state.audibleSide) 1f else 0f
+        }
+    }
+
+    /** Releases both players; later calls do nothing. */
+    fun release() {
+        if (released) return
+        released = true
+        slots.forEach {
+            it.loaded = null
+            it.player.release()
+        }
+    }
+}
+
+/** The game and stream a pane's player plays: one with a stream, still starting or playing. */
+private fun DualPane.playable(): Pair<SportsLiveItem, Stream>? =
+    stream?.takeIf { status == PaneStatus.Loading || status == PaneStatus.Playing }?.let { item to it }
+
+private fun PlaybackException.isDecoderInitFailure(): Boolean {
+    if (errorCode == PlaybackException.ERROR_CODE_DECODER_INIT_FAILED ||
+        errorCode == PlaybackException.ERROR_CODE_DECODER_QUERY_FAILED
+    ) return true
+    var cause: Throwable? = cause
+    while (cause != null) {
+        if (cause is MediaCodecRenderer.DecoderInitializationException) return true
+        cause = cause.cause
+    }
+    return false
+}
