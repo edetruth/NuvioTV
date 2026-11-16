@@ -19,6 +19,7 @@ import com.nuvio.tv.domain.model.Video
 import com.nuvio.tv.domain.model.enabledAddons
 import com.nuvio.tv.ui.components.SourceChipItem
 import com.nuvio.tv.ui.components.SourceChipStatus
+import com.nuvio.tv.ui.screens.sportslive.withSportsLiveExtras
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.cancel
@@ -242,7 +243,7 @@ internal fun PlayerRuntimeController.loadSourceStreams(forceRefresh: Boolean) {
             episode = episodeArg,
             forceRefresh = forceRefresh,
             priorityBingeGroup = currentStreamBingeGroup
-        ).collect { result ->
+        ).withSportsLiveExtras(contentId).collect { result ->
             when (result) {
                 is NetworkResult.Success -> {
                     val addonStreams = StreamAutoPlaySelector.orderAddonStreams(result.data, installedAddonOrder, preferredServerNames)

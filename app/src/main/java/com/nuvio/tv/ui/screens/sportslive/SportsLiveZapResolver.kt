@@ -92,6 +92,28 @@ class SportsLiveZapResolver @Inject constructor(
             emptyList()
         }
 
+    /**
+     * The alternates' streams of [item] (not the primary's), fetched in parallel, junk dropped,
+     * each keeping its addon name. Unlike [resolveAll], streams that need preparation (server,
+     * YouTube or debrid resolve) are kept: the player's Sources panel prepares them in place.
+     * The fetches join the stream repository's shared search sessions, so a search the play
+     * path already ran is reused. Empty when there are no alternates or none came back.
+     */
+    suspend fun resolveAlternates(item: SportsLiveItem): List<Stream> =
+        try {
+            val installedOrder = installedOrder()
+            coroutineScope {
+                item.alternates
+                    .map { source -> async { fetch(source, installedOrder, dropPreparation = false) } }
+                    .awaitAll()
+                    .flatten()
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            emptyList()
+        }
+
     private suspend fun installedOrder(): List<String> =
         addonRepository.getInstalledAddons().first().enabledAddons().map { it.displayName }
 
@@ -104,7 +126,7 @@ class SportsLiveZapResolver @Inject constructor(
         val settings = playerSettingsDataStore.playerSettings.first()
         val installedOrder = installedOrder()
         val fetches = sources(item).mapIndexed { index, source ->
-            fetchScope.async { fetch(source, installedOrder, isAlternate = index > 0) }
+            fetchScope.async { fetch(source, installedOrder, dropPreparation = index > 0) }
         }
         return fetches.firstNotNullOfOrNull { fetch ->
             val streams = fetch.await()
@@ -119,17 +141,17 @@ class SportsLiveZapResolver @Inject constructor(
     private suspend fun fetchSources(item: SportsLiveItem, installedOrder: List<String>): List<List<Stream>> =
         coroutineScope {
             sources(item)
-                .mapIndexed { index, source -> async { fetch(source, installedOrder, isAlternate = index > 0) } }
+                .mapIndexed { index, source -> async { fetch(source, installedOrder, dropPreparation = index > 0) } }
                 .awaitAll()
         }
 
     /**
      * [source]'s streams in addon order, junk dropped. A finished fetch is reported to the probe for
      * the source's own key; a timeout keeps what came back so far and reports nothing.
-     * An alternate's streams that need the Stream screen's preparation are dropped: that screen
-     * opens for the primary, which does not list them.
+     * With [dropPreparation] (an alternate on the play path), streams that need the Stream screen's
+     * preparation are dropped: that screen opens for the primary, which does not list them.
      */
-    private suspend fun fetch(source: SportsLiveItem, installedOrder: List<String>, isAlternate: Boolean): List<Stream> {
+    private suspend fun fetch(source: SportsLiveItem, installedOrder: List<String>, dropPreparation: Boolean): List<Stream> {
         var last: NetworkResult<List<AddonStreams>>? = null
         val finished = try {
             withTimeoutOrNull(timeoutMs) {
@@ -148,7 +170,7 @@ class SportsLiveZapResolver @Inject constructor(
             installedOrder
         ).flatMap { it.streams }
             .filterNot(UnplayableStreamFilter::isUnplayableJunk)
-            .filterNot { isAlternate && sportsLiveNeedsPreparation(it, directDebridResolver) }
+            .filterNot { dropPreparation && sportsLiveNeedsPreparation(it, directDebridResolver) }
     }
 
     private suspend fun search(item: SportsLiveItem): Stream? {

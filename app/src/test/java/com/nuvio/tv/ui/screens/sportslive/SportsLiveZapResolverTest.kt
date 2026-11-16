@@ -237,6 +237,16 @@ class SportsLiveZapResolverTest {
         assertEquals(PREPARE_PRIMARY, newResolver().resolve(MERGED))
     }
 
+    @Test
+    fun `resolveAlternates lists only the alternates' streams and keeps those that need preparation`() = runTest {
+        streams.responses["game"] = { flowOf(success(WEB)) }
+        streams.responses["alt1"] = { flowOf(success(PREPARE_ALT, addon = "Other")) }
+        streams.responses["alt2"] = { flowOf(success(OTHER_HD, addon = "Third")) }
+
+        assertEquals(listOf(PREPARE_ALT, OTHER_HD), newResolver().resolveAlternates(MERGED))
+        assertEquals(emptyList<Stream>(), newResolver().resolveAlternates(MERGED.copy(alternates = emptyList())))
+    }
+
     private class FakeStreamRepository : StreamRepository {
         var response: () -> Flow<NetworkResult<List<AddonStreams>>> = { flowOf() }
 

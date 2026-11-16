@@ -6,6 +6,8 @@ import com.nuvio.tv.core.debrid.DirectDebridPlayableResult
 import com.nuvio.tv.core.player.StreamAutoPlaySelector
 import com.nuvio.tv.data.local.PlayerSettings
 import com.nuvio.tv.domain.model.Stream
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveExtraSources
+import com.nuvio.tv.ui.screens.sportslive.sportsLiveFallbackCandidate
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
@@ -105,8 +107,13 @@ internal fun PlayerRuntimeController.tryFallbackToNextSourceAfterError(errorMess
         var polls = 0
         while (sourceFallbackAttempts < streamAutoPlayFallbackMaxSources) {
             val sources = _uiState.value
-            val next = nextSourceFallbackCandidate(
+            val searchDone = !sources.isLoadingSourceStreams &&
+                (sources.sourceAllStreams.isNotEmpty() || sources.sourceStreamsError != null)
+            // A merged Sports & Live game's other addons' streams come after these; none for other content.
+            val next = sportsLiveFallbackCandidate(
                 streams = sources.sourceAllStreams,
+                extras = SportsLiveExtraSources.cachedStreamsFor(contentId),
+                extrasAllowed = searchDone || polls >= SOURCE_FALLBACK_POLL_COUNT,
                 settings = settings,
                 installedAddonNames = installedAddonNames,
                 triedKeys = sourceFallbackTriedKeys,
@@ -114,8 +121,6 @@ internal fun PlayerRuntimeController.tryFallbackToNextSourceAfterError(errorMess
                 failedInfoHash = failedInfoHash
             )
             if (next == null) {
-                val searchDone = !sources.isLoadingSourceStreams &&
-                    (sources.sourceAllStreams.isNotEmpty() || sources.sourceStreamsError != null)
                 if (searchDone || polls >= SOURCE_FALLBACK_POLL_COUNT) break
                 delay(SOURCE_FALLBACK_POLL_INTERVAL_MS)
                 polls++

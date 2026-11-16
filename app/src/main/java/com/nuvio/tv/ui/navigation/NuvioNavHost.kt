@@ -61,6 +61,7 @@ import com.nuvio.tv.ui.screens.settings.ThemeSettingsScreen
 import com.nuvio.tv.ui.screens.settings.TrackingSettingsScreen
 import com.nuvio.tv.ui.screens.settings.TmdbSettingsScreen
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveScreen
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveExtraSources
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapSessions
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapTarget
 import com.nuvio.tv.ui.screens.sportslive.streamRouteFor
@@ -148,7 +149,8 @@ private fun sportsLivePlayerRoute(target: SportsLiveZapTarget): String? {
     return playerRouteFor(
         streamUrl = streamUrl,
         playbackInfo = playback,
-        autoPlayNav = false,
+        // A merged game's auto-picked stream falls back to other sources, as an autoplayed one does.
+        autoPlayNav = target.autoPicked,
         returnToDetailOnBack = false,
         returnToHomeOnBack = target.returnToHomeOnBack,
         startFromBeginning = false,
@@ -177,9 +179,14 @@ private fun navigateToSportsLiveZapTarget(navController: NavHostController, targ
 /** Saved state flag of a Stream screen opened by a Sports & Live zap. */
 private const val SPORTS_LIVE_ZAP_HOP = "sportsLiveZapHop"
 
-/** Back to anything but the player's own Stream screen ends a Sports & Live zap session. */
-private fun clearSportsLiveZapSessionOnPlayerBack(navController: NavHostController) {
-    if (!navController.previousIsStreamScreen()) SportsLiveZapSessions.clear()
+/**
+ * Back to anything but the player's own Stream screen ends a Sports & Live zap session, and drops
+ * the other addons' streams registered for the player's content.
+ */
+private fun clearSportsLiveZapSessionOnPlayerBack(navController: NavHostController, contentId: String?) {
+    if (navController.previousIsStreamScreen()) return
+    SportsLiveZapSessions.clear()
+    SportsLiveExtraSources.clear(contentId)
 }
 
 // Root destinations carry the legacy sidebar inset themselves so the NavHost container
@@ -987,7 +994,7 @@ private fun PlaybackNavHost(
 
             PlayerScreen(
                 onBackPress = { currentVideoId, currentSeason, currentEpisode, autoPlayEnabled, playbackCompleted ->
-                    clearSportsLiveZapSessionOnPlayerBack(navController)
+                    clearSportsLiveZapSessionOnPlayerBack(navController, backStackEntry.arguments?.getString("contentId"))
                     val args = backStackEntry.arguments
                     val initialSeason = args?.getString("season")?.toIntOrNull()
                     val initialEpisode = args?.getString("episode")?.toIntOrNull()

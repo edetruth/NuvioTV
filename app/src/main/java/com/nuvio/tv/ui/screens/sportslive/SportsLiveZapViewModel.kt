@@ -43,11 +43,14 @@ import javax.inject.Inject
 /**
  * Where a zap goes. [playback] is the Player route's stream; null when the stream needs the
  * Stream screen's preparation (server, YouTube or debrid resolve), so the item's Stream screen opens.
+ * [autoPicked]: the stream was picked by autoplay settings for a merged game, so the player's
+ * source fallback (which includes the other addons' streams) applies to it.
  */
 data class SportsLiveZapTarget(
     val item: SportsLiveItem,
     val playback: StreamPlaybackInfo?,
-    val returnToHomeOnBack: Boolean
+    val returnToHomeOnBack: Boolean,
+    val autoPicked: Boolean = false
 )
 
 sealed interface SportsLiveZapEvent {
@@ -84,6 +87,9 @@ class SportsLiveZapViewModel @Inject constructor(
         resolve = resolver::resolve,
         onNavigate = { item, stream ->
             val target = targetFor(item, stream)
+            // The player zapped to gets the target's other addons' streams; this player's go.
+            if (contentId != item.id) SportsLiveExtraSources.clear(contentId)
+            SportsLiveExtraSources.register(item.id, item)
             SportsLiveZapSessions.markZapArrival()
             _events.send(SportsLiveZapEvent.Navigate(target))
         },
@@ -206,7 +212,8 @@ class SportsLiveZapViewModel @Inject constructor(
             stream = stream,
             profileId = profileId,
             returnToHomeOnBack = SportsLiveZapSessions.current()?.returnToHomeOnBack == true,
-            directDebridResolver = directDebridResolver
+            directDebridResolver = directDebridResolver,
+            autoPicked = item.alternates.isNotEmpty()
         )
 }
 

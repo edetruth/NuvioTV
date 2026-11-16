@@ -54,7 +54,8 @@ internal suspend fun sportsLiveZapTarget(
     stream: Stream,
     profileId: Int,
     returnToHomeOnBack: Boolean,
-    directDebridResolver: DirectDebridResolver
+    directDebridResolver: DirectDebridResolver,
+    autoPicked: Boolean = false
 ): SportsLiveZapTarget {
     val playback = if (sportsLiveNeedsPreparation(stream, directDebridResolver)) {
         null
@@ -78,7 +79,7 @@ internal suspend fun sportsLiveZapTarget(
             contentLanguage = null
         ).takeIf { it.url != null || it.isTorrent }
     }
-    return SportsLiveZapTarget(item, playback, returnToHomeOnBack)
+    return SportsLiveZapTarget(item, playback, returnToHomeOnBack, autoPicked)
 }
 
 sealed interface SportsLivePlayState {
@@ -127,7 +128,7 @@ class SportsLivePlayViewModel @Inject constructor(
                 SportsLivePlayAction.PLAY_BEST -> {
                     val stream = resolver.resolve(item)
                     _state.value = SportsLivePlayState.Idle
-                    if (stream == null) noStream(item) else playStream(item, stream)
+                    if (stream == null) noStream(item) else playStream(item, stream, autoPicked = true)
                 }
                 SportsLivePlayAction.PICK -> {
                     val streams = resolver.resolveAll(item)
@@ -159,14 +160,17 @@ class SportsLivePlayViewModel @Inject constructor(
         while (_events.tryReceive().isSuccess) Unit
     }
 
-    private suspend fun playStream(item: SportsLiveItem, stream: Stream) {
+    private suspend fun playStream(item: SportsLiveItem, stream: Stream, autoPicked: Boolean = false) {
         val target = sportsLiveZapTarget(
             item = item,
             stream = stream,
             profileId = profileManager.activeProfileId.value,
             returnToHomeOnBack = false,
-            directDebridResolver = directDebridResolver
+            directDebridResolver = directDebridResolver,
+            autoPicked = autoPicked
         )
+        // The player (or the primary's Stream screen) gets the other addons' streams for fallback and Sources.
+        SportsLiveExtraSources.register(item.id, item)
         _events.send(SportsLivePlayEvent.Play(target))
     }
 
