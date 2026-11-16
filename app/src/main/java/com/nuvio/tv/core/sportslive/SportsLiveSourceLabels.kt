@@ -42,7 +42,10 @@ object SportsLiveSourceLabels {
             } else {
                 source.addonName
             }
-            source.streamKey to label
+            source.streamKey to label.ifBlank { FALLBACK }
         }
     }
+
+    // Never an empty label: a blank catalog name AND a blank addon name is degenerate but possible.
+    private const val FALLBACK = "Source"
 }

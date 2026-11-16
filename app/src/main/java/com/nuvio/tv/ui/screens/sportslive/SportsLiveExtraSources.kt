@@ -3,6 +3,7 @@ package com.nuvio.tv.ui.screens.sportslive
 import androidx.annotation.VisibleForTesting
 import com.nuvio.tv.core.network.NetworkResult
 import com.nuvio.tv.core.player.StreamAutoPlaySelector
+import com.nuvio.tv.core.sportslive.SportsLiveSourceLabels
 import com.nuvio.tv.data.local.PlayerSettings
 import com.nuvio.tv.data.local.StreamAutoPlayMode
 import com.nuvio.tv.data.local.StreamAutoPlaySource
@@ -129,6 +130,19 @@ object SportsLiveExtraSources {
         }
     }
 
+    /**
+     * How to relabel the primary's search group so the whole pooled set reads by provider: its addon's
+     * display name (the group's name) mapped to its provider label, or null when the primary is its
+     * addon's only source (then its addon name already labels it). The alternates are relabeled where
+     * they are resolved; the primary's streams come from the player's own search, so they are relabeled
+     * here, in [appendExtraGroups].
+     */
+    fun primaryGroupRelabel(contentId: String?): Pair<String, String>? {
+        val item = entry(contentId)?.item ?: return null
+        val label = SportsLiveSourceLabels.of(item)[item.streamKey] ?: return null
+        return if (label == item.addonName) null else item.addonName to label
+    }
+
     private fun entry(contentId: String?): Entry? =
         if (contentId == null) null else synchronized(entries) { entries[contentId] }
 
@@ -151,11 +165,12 @@ fun Flow<NetworkResult<List<AddonStreams>>>.withSportsLiveExtras(
     refresh: Boolean = false
 ): Flow<NetworkResult<List<AddonStreams>>> {
     if (!SportsLiveExtraSources.isRegistered(contentId)) return this
+    val primaryRelabel = SportsLiveExtraSources.primaryGroupRelabel(contentId)
     val extras = flow<List<Stream>?> {
         emit(null)
         emit(SportsLiveExtraSources.extraStreamsFor(contentId, refresh))
     }
-    return combine(this, extras, ::withExtraStreams)
+    return combine(this, extras) { result, ex -> withExtraStreams(result, ex, primaryRelabel) }
 }
 
 /**
@@ -165,23 +180,41 @@ fun Flow<NetworkResult<List<AddonStreams>>>.withSportsLiveExtras(
  */
 internal fun withExtraStreams(
     result: NetworkResult<List<AddonStreams>>,
-    extras: List<Stream>?
+    extras: List<Stream>?,
+    primaryRelabel: Pair<String, String>? = null
 ): NetworkResult<List<AddonStreams>> {
     if (extras == null && result is NetworkResult.Error) return NetworkResult.Loading
-    if (extras.isNullOrEmpty()) return result
+    if (extras.isNullOrEmpty() && primaryRelabel == null) return result
     return when (result) {
-        is NetworkResult.Success -> NetworkResult.Success(appendExtraGroups(result.data, extras))
-        is NetworkResult.Error -> NetworkResult.Success(appendExtraGroups(emptyList(), extras))
+        is NetworkResult.Success -> NetworkResult.Success(appendExtraGroups(result.data, extras.orEmpty(), primaryRelabel))
+        is NetworkResult.Error -> NetworkResult.Success(appendExtraGroups(emptyList(), extras.orEmpty(), primaryRelabel))
         NetworkResult.Loading -> result
     }
 }
 
-// Extras the search already lists (the same source from an addon both share) are not added again.
-private fun appendExtraGroups(groups: List<AddonStreams>, extras: List<Stream>): List<AddonStreams> {
-    val listedKeys = groups.flatMap { it.streams }.mapTo(HashSet()) { it.sourceFallbackKey() }
+/**
+ * [result]'s groups with the primary's group relabeled by provider ([primaryRelabel]) and the extras
+ * appended under their own labels, so a single-addon multi-provider card reads consistently by
+ * provider. Extras the search already lists are not added again.
+ */
+private fun appendExtraGroups(
+    groups: List<AddonStreams>,
+    extras: List<Stream>,
+    primaryRelabel: Pair<String, String>? = null
+): List<AddonStreams> {
+    val relabeledGroups = if (primaryRelabel == null) {
+        groups
+    } else {
+        val (from, to) = primaryRelabel
+        groups.map { group ->
+            if (group.addonName != from) group
+            else group.copy(addonName = to, streams = group.streams.map { it.copy(addonName = to) })
+        }
+    }
+    val listedKeys = relabeledGroups.flatMap { it.streams }.mapTo(HashSet()) { it.sourceFallbackKey() }
     val extraByAddon = extras.filterNot { it.sourceFallbackKey() in listedKeys }.groupBy { it.addonName }
-    val names = groups.mapTo(HashSet()) { it.addonName }
-    return groups.map { group ->
+    val names = relabeledGroups.mapTo(HashSet()) { it.addonName }
+    return relabeledGroups.map { group ->
         extraByAddon[group.addonName]?.let { group.copy(streams = group.streams + it) } ?: group
     } + extraByAddon.filterKeys { it !in names }.map { (name, streams) ->
         AddonStreams(addonName = name, addonLogo = streams.first().addonLogo, streams = streams)
