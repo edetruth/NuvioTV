@@ -146,6 +146,10 @@ private fun SportsLiveContent(
         ?: items.firstOrNull { it.id == uiState.selectedItemId }
         ?: items.firstOrNull()
     val selectedCardFocusRequester = selected?.let(::cardFocusRequester)
+    // Attached to whichever filter chip is selected; the row only shows with two or more values.
+    val filterFocusRequester = remember { FocusRequester() }
+    val showFilterRow = uiState.filters.size >= 2
+    val aboveListFocusRequester = if (showFilterRow) filterFocusRequester else activeTabFocusRequester
 
     // Replay "series" items are team folders; the detail page lists their videos.
     val open: (SportsLiveItem) -> Unit = { item ->
@@ -180,14 +184,26 @@ private fun SportsLiveContent(
             .fillMaxSize()
             .padding(horizontal = NuvioTheme.spacing.screen.horizontal, vertical = NuvioTheme.spacing.screen.vertical)
     ) {
-        SportsLiveChipRow(
+        val openList: () -> Unit = { runCatching { selectedCardFocusRequester?.requestFocus() } }
+        SportsLiveTabRow(
             uiState = uiState,
             tabFocusRequesters = tabFocusRequesters,
+            downFocusRequester = if (showFilterRow) filterFocusRequester else selectedCardFocusRequester,
             onSelectTab = onSelectTab,
-            onOpenTab = { runCatching { selectedCardFocusRequester?.requestFocus() } },
-            onSelectFilter = onSelectFilter,
+            onOpenTab = openList,
             onRefresh = onRefresh
         )
+        if (showFilterRow) {
+            SportsLiveFilterRow(
+                uiState = uiState,
+                filterFocusRequester = filterFocusRequester,
+                upFocusRequester = activeTabFocusRequester,
+                downFocusRequester = selectedCardFocusRequester,
+                onSelectFilter = onSelectFilter,
+                onOpenFilter = openList,
+                modifier = Modifier.padding(top = NuvioTheme.spacing.xs)
+            )
+        }
         if (uiState.failures.isNotEmpty()) {
             Text(
                 text = stringResource(R.string.sports_live_partial_failure, uiState.failures.size),
@@ -234,7 +250,7 @@ private fun SportsLiveContent(
                             .focusRequester(cardFocusRequester(item))
                             .focusProperties {
                                 right = watchFocusRequester
-                                if (index == 0) up = activeTabFocusRequester
+                                if (index == 0) up = aboveListFocusRequester
                             }
                     )
                 }
@@ -256,14 +272,16 @@ private fun SportsLiveContent(
 }
 
 @Composable
-private fun SportsLiveChipRow(
+private fun SportsLiveTabRow(
     uiState: SportsLiveUiState,
     tabFocusRequesters: Map<SportsLiveTab, FocusRequester>,
+    downFocusRequester: FocusRequester?,
     onSelectTab: (SportsLiveTab) -> Unit,
     onOpenTab: () -> Unit,
-    onSelectFilter: (String?) -> Unit,
     onRefresh: () -> Unit
 ) {
+    // Down goes to the selected filter chip (or card), never to whichever chip sits below, since filter chips select on focus.
+    val downModifier = Modifier.focusProperties { downFocusRequester?.let { down = it } }
     // A plain scrolling Row keeps every chip composed, so the tab FocusRequesters stay attached.
     Row(
         modifier = Modifier
@@ -283,24 +301,54 @@ private fun SportsLiveChipRow(
                 // Like FolderDetailScreen, focusing a tab selects it; OK moves into the list.
                 onFocusSelect = { onSelectTab(tab) },
                 onClick = onOpenTab,
-                modifier = Modifier.focusRequester(tabFocusRequesters.getValue(tab))
+                modifier = Modifier
+                    .focusRequester(tabFocusRequesters.getValue(tab))
+                    .then(downModifier)
             )
         }
         Spacer(modifier = Modifier.width(NuvioTheme.spacing.md))
+        RefreshFilterChip(onClick = onRefresh, isLoading = uiState.isLoading, modifier = downModifier)
+    }
+}
+
+@Composable
+private fun SportsLiveFilterRow(
+    uiState: SportsLiveUiState,
+    filterFocusRequester: FocusRequester,
+    upFocusRequester: FocusRequester,
+    downFocusRequester: FocusRequester?,
+    onSelectFilter: (String?) -> Unit,
+    onOpenFilter: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    @Composable
+    fun FilterRowChip(name: String, value: String?) {
+        val isSelected = value == uiState.selectedFilter
         SourceStatusFilterChip(
-            name = stringResource(R.string.sports_live_filter_all),
-            isSelected = uiState.selectedFilter == null,
-            onClick = { onSelectFilter(null) }
+            name = name,
+            isSelected = isSelected,
+            outlined = true,
+            // Like the tabs, focusing a filter selects it; OK moves into the list.
+            onFocusSelect = { onSelectFilter(value) },
+            onClick = onOpenFilter,
+            modifier = Modifier
+                .then(if (isSelected) Modifier.focusRequester(filterFocusRequester) else Modifier)
+                .focusProperties {
+                    up = upFocusRequester
+                    downFocusRequester?.let { down = it }
+                }
         )
-        uiState.filters.forEach { filter ->
-            SourceStatusFilterChip(
-                name = filter,
-                isSelected = filter == uiState.selectedFilter,
-                onClick = { onSelectFilter(filter) }
-            )
-        }
-        Spacer(modifier = Modifier.width(NuvioTheme.spacing.md))
-        RefreshFilterChip(onClick = onRefresh, isLoading = uiState.isLoading)
+    }
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = NuvioTheme.spacing.sm, vertical = NuvioTheme.spacing.xs),
+        horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        FilterRowChip(name = stringResource(R.string.sports_live_filter_all), value = null)
+        uiState.filters.forEach { filter -> FilterRowChip(name = filter, value = filter) }
     }
 }
 

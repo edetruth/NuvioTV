@@ -16,6 +16,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Border
@@ -45,6 +46,8 @@ fun SourceStatusFilterChip(
     isSelectable: Boolean = true,
     onClick: () -> Unit,
     onFocusSelect: (() -> Unit)? = null,
+    /** Unselected, the chip is a 1dp outline with no fill, to read differently from filled chips. */
+    outlined: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     var isFocused by remember { mutableStateOf(false) }
@@ -98,7 +101,11 @@ fun SourceStatusFilterChip(
                 }
             },
         colors = FilterChipDefaults.colors(
-            containerColor = if (shouldUseNormalColors) NuvioTheme.colors.BackgroundCard else NuvioTheme.colors.Error.copy(alpha = 0.05f),
+            containerColor = when {
+                !shouldUseNormalColors -> NuvioTheme.colors.Error.copy(alpha = 0.05f)
+                outlined -> Color.Transparent
+                else -> NuvioTheme.colors.BackgroundCard
+            },
             focusedContainerColor = if (shouldUseNormalColors) NuvioTheme.colors.Secondary else NuvioTheme.colors.Error.copy(alpha = 0.08f),
             selectedContainerColor = if (shouldUseNormalColors) NuvioTheme.colors.Secondary else NuvioTheme.colors.Error.copy(alpha = 0.07f),
             focusedSelectedContainerColor = if (shouldUseNormalColors) NuvioTheme.colors.Secondary else NuvioTheme.colors.Error.copy(alpha = 0.09f),
@@ -109,7 +116,14 @@ fun SourceStatusFilterChip(
         ),
         border = FilterChipDefaults.border(
             border = Border(
-                border = BorderStroke(NuvioTheme.spacing.hairline, if (isError) NuvioTheme.colors.Error.copy(alpha = 0.7f) else NuvioTheme.colors.Border),
+                border = BorderStroke(
+                    NuvioTheme.spacing.hairline,
+                    when {
+                        isError -> NuvioTheme.colors.Error.copy(alpha = 0.7f)
+                        outlined -> NuvioTheme.colors.TextTertiary
+                        else -> NuvioTheme.colors.Border
+                    }
+                ),
                 shape = RoundedCornerShape(20.dp)
             ),
             focusedBorder = Border(
