@@ -183,6 +183,9 @@ Observed in `org.kris.ultra.max.tv.*`: type `tv` catalogs "🇺🇸 United State
 - Live items from the fallback are still subject to the ended-games probe.
 - Recognition stats per catalog key from the last load: counts of live, timed, upcoming-TBA, channel, unrecognised (= items that landed in no tab). Kept in memory by the repository (`val catalogStats: StateFlow<Map<String, CatalogStats>>`); shown in Settings → Sports & Live as the catalog row's second line, e.g. "12 live · 8 timed · 3 unrecognised" (strings with plurals), only for claimed catalogs that have been loaded this session.
 
+- Generic catalog names never become channel groups (from Task 7 review): when the catalog-name fallback would yield a generic name (after stripping emoji/"(tv)": "channels", "channel list", "live tv", "tv", "live channels", "all channels", case-insensitive), use the addon name instead, upper-cased. Test: Nebula channels without prefix group as "NEBULA SPORTS"; two addons with a "Live TV" catalog get two different chips.
+- Spec cleanup (Task 7 review): in `docs/superpowers/specs/2026-11-15-sports-live-section-design.md` §7.2, reword "Includes both events and channels" (Live Now) and the "sorted … by start time" closing sentence to match the amended channel rule and newest-first Replays (include with `git add -f`).
+
 **Files:** `core/sportslive/SportsLiveKeywords.kt`, `SportsLiveItemBucketer.kt` (or a new `SportsLiveCatalogFallback.kt`), `data/repository/SportsLiveRepositoryImpl.kt`, `ui/screens/settings/SportsLiveSettingsViewModel.kt` + `SportsLiveSettingsContent.kt`, `values/strings.xml`.
 - [ ] Tests: signal-less catalog named "Live Events" → all live; "Agenda de hoy" → Upcoming TBA; "Full Match Replays" → Replays; catalog with at least one signalled item → per-item rules unchanged; stats counts on a mixed fixture.
 - [ ] Commit `feat(sportslive): fall back to catalog names for unknown addons and show recognition stats`.
