@@ -299,7 +299,8 @@ internal fun SportsLiveDetailsPane(
 
 /**
  * The long-press menu of a card naming a game: Follow / Unfollow for each side ([sides] holds each
- * side's display name and whether a followed team is that side), then Details. Laid out like
+ * side's display name and whether a followed team is that side), then "Watch with another game"
+ * when offered, then Details. Laid out like
  * `PosterOptionsDialog`.
  */
 @Composable
@@ -308,7 +309,9 @@ internal fun SportsLiveCardMenu(
     sides: List<Pair<String, Boolean>>,
     onToggleFollow: (String) -> Unit,
     onDetails: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    /** "Watch with another game"; null hides it (only live game cards offer it). */
+    onWatchWith: (() -> Unit)? = null
 ) {
     val firstFocusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { firstFocusRequester.requestFocus() } }
@@ -321,10 +324,17 @@ internal fun SportsLiveCardMenu(
                 modifier = if (index == 0) Modifier.focusRequester(firstFocusRequester) else Modifier
             )
         }
+        if (onWatchWith != null) {
+            SportsLiveMenuButton(
+                text = stringResource(R.string.sports_live_dual_watch_with),
+                onClick = onWatchWith,
+                modifier = if (sides.isEmpty()) Modifier.focusRequester(firstFocusRequester) else Modifier
+            )
+        }
         SportsLiveMenuButton(
             text = stringResource(R.string.sports_live_details),
             onClick = onDetails,
-            modifier = if (sides.isEmpty()) Modifier.focusRequester(firstFocusRequester) else Modifier
+            modifier = if (sides.isEmpty() && onWatchWith == null) Modifier.focusRequester(firstFocusRequester) else Modifier
         )
     }
 }

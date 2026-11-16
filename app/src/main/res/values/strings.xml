@@ -3567,4 +3567,9 @@
     </plurals>
     <string name="sports_live_rewind_behind">−%1$s · LIVE ▸</string>
     <string name="sports_live_partial_failure">%1$d source(s) didn\'t respond</string>
+    <string name="sports_live_dual_watch_with">Watch with another game</string>
+    <string name="sports_live_dual_pick">Pick a second game</string>
+    <string name="sports_live_dual_stream_error">Couldn\'t play this stream</string>
+    <string name="sports_live_dual_stream_error_hint">Press OK to open it in the full player, which can prepare more kinds of streams</string>
+    <string name="sports_live_dual_device_limit">This device can\'t play two streams at once</string>
 </resources>

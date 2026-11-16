@@ -67,6 +67,9 @@ import com.nuvio.tv.ui.screens.sportslive.SportsLivePlayViewModel
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapSessions
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapTarget
 import com.nuvio.tv.ui.screens.sportslive.streamRouteFor
+import com.nuvio.tv.ui.screens.sportslive.dual.LocalOpenSportsLiveDual
+import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualScreen
+import androidx.compose.runtime.remember
 import com.nuvio.tv.ui.screens.stream.StreamPlaybackInfo
 import com.nuvio.tv.ui.screens.stream.StreamScreen
 import com.nuvio.tv.ui.screens.home.ContinueWatchingItem
@@ -89,7 +92,12 @@ fun NuvioNavHost(
         // composed under, so use the session store when MainActivity provides one.
         val navViewModelStoreOwner = LocalNavViewModelStoreOwner.current
             ?: checkNotNull(LocalViewModelStoreOwner.current)
-        CompositionLocalProvider(LocalViewModelStoreOwner provides navViewModelStoreOwner) {
+        // The player's live games panel opens dual screen through this.
+        val openSportsLiveDual: () -> Unit = remember(navController) { { openSportsLiveDualFromPlayer(navController) } }
+        CompositionLocalProvider(
+            LocalViewModelStoreOwner provides navViewModelStoreOwner,
+            LocalOpenSportsLiveDual provides openSportsLiveDual
+        ) {
             PlaybackNavHost(navController, startDestination, hideBuiltInHeaders, discoverIsRoot)
         }
     }
@@ -175,6 +183,29 @@ private fun navigateToSportsLiveZapTarget(navController: NavHostController, targ
     if (playerRoute == null) {
         // The target's Stream screen is a hop: the stream picked there replaces it, so Back still returns once.
         navController.currentBackStackEntry?.savedStateHandle?.set(SPORTS_LIVE_ZAP_HOP, true)
+    }
+}
+
+/**
+ * Leaves the playing Player for dual screen, on the session already in SportsLiveDualSessions. The
+ * player (and its Stream screen when below it, as a zap pops it) goes, so it never plays alongside the
+ * two panes and Back from dual screen returns to where the game was started from. Like Back from the
+ * player, its zap session and the other addons' streams registered for it end.
+ */
+private fun openSportsLiveDualFromPlayer(navController: NavHostController) {
+    val playerEntry = navController.currentBackStackEntry
+        ?.takeIf { it.destination.route == Screen.Player.route } ?: return
+    SportsLiveZapSessions.clear()
+    SportsLiveExtraSources.clear(playerEntry.arguments?.getString("contentId"))
+    // A player opened from dual screen replaces that dual screen rather than stacking a second one.
+    val dualBelow = navController.currentBackStack.value.any { it.destination.route == Screen.SportsLiveDual.route }
+    val popUpToRoute = when {
+        dualBelow -> Screen.SportsLiveDual.route
+        navController.previousIsStreamScreen() -> Screen.Stream.route
+        else -> Screen.Player.route
+    }
+    navController.navigate(Screen.SportsLiveDual.route) {
+        popUpTo(popUpToRoute) { inclusive = true }
     }
 }
 
@@ -1387,7 +1418,22 @@ private fun PlaybackNavHost(
                         )
                     )
                 },
-                onOpenAddons = { navController.navigate(Screen.AddonManager.route) }
+                onOpenAddons = { navController.navigate(Screen.AddonManager.route) },
+                onOpenDual = { navController.navigate(Screen.SportsLiveDual.route) }
+            )
+        }
+
+        composable(Screen.SportsLiveDual.route) {
+            SportsLiveDualScreen(
+                onBack = {
+                    // Once only: a second Back during the exit transition must not also pop the screen below.
+                    if (navController.currentDestination?.route == Screen.SportsLiveDual.route) navController.popBackStack()
+                },
+                // OK plays the highlighted game as the section does; Back from it returns here.
+                onOpenStreamScreen = { item -> navController.navigate(streamRouteFor(item, returnToHomeOnBack = false)) },
+                onPlayTarget = { target ->
+                    navController.navigate(sportsLivePlayerRoute(target) ?: streamRouteFor(target.item, returnToHomeOnBack = false))
+                }
             )
         }
 

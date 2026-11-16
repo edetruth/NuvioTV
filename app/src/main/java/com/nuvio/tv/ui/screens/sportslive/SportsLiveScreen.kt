@@ -55,6 +55,10 @@ import com.nuvio.tv.ui.components.EmptyScreenState
 import com.nuvio.tv.ui.components.LoadingIndicator
 import com.nuvio.tv.ui.components.RefreshFilterChip
 import com.nuvio.tv.ui.components.SourceStatusFilterChip
+import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualPick
+import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualPickerDialog
+import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualSession
+import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualSessions
 import com.nuvio.tv.ui.theme.NuvioTheme
 import com.nuvio.tv.ui.util.dpadRepeatThrottle
 import kotlinx.coroutines.delay
@@ -66,7 +70,9 @@ fun SportsLiveScreen(
     onPlay: (SportsLiveItem) -> Unit,
     onPlayTarget: (SportsLiveZapTarget) -> Unit,
     onOpenDetail: (SportsLiveItem) -> Unit,
-    onOpenAddons: () -> Unit
+    onOpenAddons: () -> Unit,
+    /** Opens dual screen on the session just put in [SportsLiveDualSessions]. */
+    onOpenDual: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val followedTeams by viewModel.followedTeams.collectAsStateWithLifecycle()
@@ -118,7 +124,11 @@ fun SportsLiveScreen(
             onRefresh = { viewModel.refresh() },
             onPlay = playViewModel::play,
             onOpenDetail = onOpenDetail,
-            onToggleFollow = viewModel::toggleFollow
+            onToggleFollow = viewModel::toggleFollow,
+            onOpenDual = { session ->
+                SportsLiveDualSessions.start(session)
+                onOpenDual()
+            }
         )
     }
 }
@@ -152,7 +162,8 @@ private fun SportsLiveContent(
     onRefresh: () -> Unit,
     onPlay: (SportsLiveItem) -> Unit,
     onOpenDetail: (SportsLiveItem) -> Unit,
-    onToggleFollow: (SportsLiveItem, String) -> Unit
+    onToggleFollow: (SportsLiveItem, String) -> Unit,
+    onOpenDual: (SportsLiveDualSession) -> Unit
 ) {
     val tabFocusRequesters = remember { SportsLiveTab.entries.associateWith { FocusRequester() } }
     val activeTabFocusRequester = tabFocusRequesters.getValue(uiState.selectedTab)
@@ -223,12 +234,39 @@ private fun SportsLiveContent(
         // Cleared last: clearing restarts this effect, which would cancel the focus request above.
         if (gone) followedCardKey = null
     }
+    // "Watch with another game": only a live game card on Live now (not a channel).
+    val canWatchWith: (SportsLiveItem) -> Boolean = { item ->
+        uiState.selectedTab == SportsLiveTab.LIVE_NOW && item.kind == SportsLiveKind.EVENTS && !item.isChannel
+    }
+    // The second-game picker, open for its chosen game.
+    var dualPick by remember { mutableStateOf<SportsLiveDualPick?>(null) }
+    dualPick?.let { pick ->
+        SportsLiveDualPickerDialog(
+            candidates = pick.candidates,
+            onPick = { second ->
+                dualPick = null
+                onOpenDual(pick.session(second))
+            },
+            onDismiss = { dualPick = null }
+        )
+    }
     items.firstOrNull { it.listKey == menuCardKey }?.let { item ->
-        val teams = item.teams ?: return@let
+        val watchWith = canWatchWith(item)
+        val teams = item.teams
+        if (teams == null && !watchWith) return@let
         SportsLiveCardMenu(
             title = item.meta.name,
-            sides = teams.inTitleOrder(item.meta.name).map { side ->
+            sides = teams?.inTitleOrder(item.meta.name).orEmpty().map { side ->
                 side to followedTeams.any { SportsLiveTeams.followsSideOfAnySource(it, side, item) }
+            },
+            onWatchWith = if (watchWith) {
+                {
+                    menuCardKey = null
+                    // Live now under the section's filter; ended games are already left out.
+                    dualPick = SportsLiveDualPick(chosen = item, items = items, filter = uiState.selectedFilter)
+                }
+            } else {
+                null
             },
             onToggleFollow = { side ->
                 menuCardKey = null
@@ -347,8 +385,10 @@ private fun SportsLiveContent(
                         stateLabel = stateLabelOf(item),
                         selected = item.listKey == selected.listKey,
                         onClick = { open(item) },
-                        // A card naming a game opens the follow menu; other cards open Details directly.
-                        onLongClick = { if (item.teams != null) menuCardKey = item.listKey else onOpenDetail(item) },
+                        // A card naming a game, or a live game, opens the menu; other cards open Details directly.
+                        onLongClick = {
+                            if (item.teams != null || canWatchWith(item)) menuCardKey = item.listKey else onOpenDetail(item)
+                        },
                         menuOpen = item.listKey == menuCardKey,
                         onFocus = {
                             if (item.listKey != followedCardKey) followedCardKey = null

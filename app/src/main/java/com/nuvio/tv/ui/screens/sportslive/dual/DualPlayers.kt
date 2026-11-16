@@ -34,7 +34,14 @@ internal class DualPlayers(
 
     private inner class Slot {
         // Decoder fallback as in the full player, so a second pane can fall back to a software decoder.
-        val player: ExoPlayer = ExoPlayer.Builder(appContext, DefaultRenderersFactory(appContext).setEnableDecoderFallback(true))
+        // The FFmpeg audio renderer backs up the platform ones, as in the full player: live channels often
+        // carry E-AC-3, which devices without that decoder could not play at all.
+        val player: ExoPlayer = ExoPlayer.Builder(
+            appContext,
+            DefaultRenderersFactory(appContext)
+                .setEnableDecoderFallback(true)
+                .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
+        )
             .setVideoChangeFrameRateStrategy(C.VIDEO_CHANGE_FRAME_RATE_STRATEGY_OFF)
             .build()
         // Its own instance: parallel connections and the VOD cache stay at their defaults (off).

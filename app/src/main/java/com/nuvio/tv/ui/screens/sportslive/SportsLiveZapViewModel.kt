@@ -17,8 +17,10 @@ import com.nuvio.tv.R
 import com.nuvio.tv.core.debrid.DirectDebridResolver
 import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.domain.model.SportsLiveItem
+import com.nuvio.tv.domain.model.SportsLiveTab
 import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.domain.repository.SportsLiveRepository
+import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualPick
 import com.nuvio.tv.ui.screens.stream.StreamPlaybackInfo
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -206,6 +208,21 @@ class SportsLiveZapViewModel @Inject constructor(
     /** True for the key events of the Back press that has already closed the panel. */
     fun isBackKeyOfPanelClose(event: KeyEvent): Boolean =
         event.keyCode == KeyEvent.KEYCODE_BACK && event.downTime <= panelClosedOnBackAtMs
+
+    /**
+     * "Watch with another game" in the live games panel, for the game playing: the second-game picker
+     * over the session list. Null (no action) when the session is not Live now or the game is a channel.
+     */
+    fun dualPick(): SportsLiveDualPick? {
+        val session = panelSession.value ?: controller.session(contentId) ?: return null
+        if (session.tab != SportsLiveTab.LIVE_NOW || session.current.isChannel) return null
+        return SportsLiveDualPick(
+            chosen = session.current,
+            items = session.items,
+            filter = session.filter,
+            endedKeys = repo.endedKeys.value
+        )
+    }
 
     /** [item] was picked in the live games panel: the panel closes and the player zaps to it. */
     fun onPanelPick(item: SportsLiveItem) {

@@ -4,9 +4,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nuvio.tv.core.debrid.DirectDebridResolver
 import com.nuvio.tv.domain.model.SportsLiveItem
+import com.nuvio.tv.domain.model.SportsLiveTab
 import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.domain.repository.SportsLiveRepository
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapResolver
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapSession
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapSessions
 import com.nuvio.tv.ui.screens.sportslive.sportsLiveNeedsPreparation
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -22,8 +25,32 @@ import javax.inject.Inject
 data class SportsLiveDualSession(
     val left: SportsLiveItem,
     val right: SportsLiveItem,
-    val items: List<SportsLiveItem>
+    val items: List<SportsLiveItem>,
+    /** The Live now filter [items] were listed under, kept by the zap session OK starts. */
+    val filter: String? = null
 )
+
+/**
+ * "Watch with another game" for [chosen], from a Live now list ([items], shown under [filter]): the
+ * picker lists [candidates], and the pick starts a [SportsLiveDualSession] over [items].
+ */
+data class SportsLiveDualPick(
+    val chosen: SportsLiveItem,
+    val items: List<SportsLiveItem>,
+    val filter: String?,
+    val endedKeys: Set<String> = emptySet()
+) {
+    /** The other games of the list that are not known to have ended; never [chosen] or one of its sources. */
+    val candidates: List<SportsLiveItem> = run {
+        val chosenKeys = (listOf(chosen) + chosen.alternates).mapTo(HashSet()) { it.streamKey }
+        items.filter { item ->
+            item.streamKey !in chosenKeys && item.alternates.none { it.streamKey in chosenKeys } && !item.hasEnded(endedKeys)
+        }
+    }
+
+    fun session(second: SportsLiveItem): SportsLiveDualSession =
+        SportsLiveDualSession(left = chosen, right = second, items = items.toList(), filter = filter)
+}
 
 /** The dual screen's starting games, process-wide like the zap session; not route arguments. */
 internal object SportsLiveDualSessions {
@@ -71,6 +98,7 @@ class SportsLiveDualViewModel internal constructor(
     )
 
     private val items: List<SportsLiveItem> = session?.items.orEmpty()
+    private val filter: String? = session?.filter
 
     private val _state = MutableStateFlow(session?.let { DualState(DualPane(it.left), DualPane(it.right)) })
 
@@ -108,6 +136,21 @@ class SportsLiveDualViewModel internal constructor(
         val target = zapTarget(state.pane(side).item, state.pane(side.other).item, forward) ?: return false
         load(side, target)
         return true
+    }
+
+    /**
+     * Before OK plays [item] full screen: the player zaps through the dual screen's list, and Back
+     * from it returns here. With no session to start, any earlier one ends.
+     */
+    fun startZapSession(item: SportsLiveItem) {
+        val session = SportsLiveZapSession.of(
+            items = items,
+            itemKey = item.streamKey,
+            tab = SportsLiveTab.LIVE_NOW,
+            filter = filter,
+            returnToHomeOnBack = false
+        )
+        if (session != null) SportsLiveZapSessions.start(session) else SportsLiveZapSessions.clear()
     }
 
     fun onFirstFrame(item: SportsLiveItem) {

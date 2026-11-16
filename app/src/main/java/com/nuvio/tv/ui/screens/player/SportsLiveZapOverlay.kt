@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -65,6 +66,10 @@ import com.nuvio.tv.ui.screens.sportslive.SportsLiveRewind
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapBanner
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapPanelState
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapViewModel
+import com.nuvio.tv.ui.screens.sportslive.dual.LocalOpenSportsLiveDual
+import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualPick
+import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualPickerDialog
+import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualSessions
 import com.nuvio.tv.ui.theme.NuvioTheme
 import kotlinx.coroutines.delay
 
@@ -88,6 +93,8 @@ internal fun BoxScope.SportsLiveZapOverlay(
     val panelOpen by viewModel.panelOpen.collectAsState()
     BehindLiveIndicator(liveWindow = liveWindow, engine = engine, covered = playerOverlayVisible || panelOpen)
     val panel by viewModel.panel.collectAsState()
+    val openDual = LocalOpenSportsLiveDual.current
+    var dualPick by remember { mutableStateOf<SportsLiveDualPick?>(null) }
 
     // The last banner, kept on screen while it fades out.
     var lastBanner by remember { mutableStateOf<SportsLiveZapBanner?>(null) }
@@ -127,12 +134,34 @@ internal fun BoxScope.SportsLiveZapOverlay(
             .zIndex(3.2f)
     ) {
         panel?.let { state ->
+            val canWatchWith = remember(state) { openDual != null && viewModel.dualPick() != null }
             LiveGamesPanel(
                 state = state,
                 onPick = viewModel::onPanelPick,
-                onClose = { viewModel.closePanel() }
+                onClose = { viewModel.closePanel() },
+                onWatchWith = if (canWatchWith) {
+                    {
+                        dualPick = viewModel.dualPick()
+                        viewModel.closePanel()
+                    }
+                } else {
+                    null
+                }
             )
         }
+    }
+
+    // The second-game picker; the pick leaves this player for dual screen.
+    dualPick?.let { pick ->
+        SportsLiveDualPickerDialog(
+            candidates = pick.candidates,
+            onPick = { second ->
+                dualPick = null
+                SportsLiveDualSessions.start(pick.session(second))
+                openDual?.invoke()
+            },
+            onDismiss = { dualPick = null }
+        )
     }
 }
 
@@ -211,7 +240,9 @@ private fun ZapBanner(banner: SportsLiveZapBanner) {
 private fun LiveGamesPanel(
     state: SportsLiveZapPanelState,
     onPick: (SportsLiveItem) -> Unit,
-    onClose: () -> Unit
+    onClose: () -> Unit,
+    /** "Watch with another game" for the game playing, above the list; null hides it. */
+    onWatchWith: (() -> Unit)?
 ) {
     val listState = rememberLazyListState()
     val focusRequester = remember { FocusRequester() }
@@ -260,6 +291,19 @@ private fun LiveGamesPanel(
                 overflow = TextOverflow.Ellipsis
             )
             Spacer(modifier = Modifier.height(NuvioTheme.spacing.lg))
+            if (onWatchWith != null) {
+                PanelCard(onClick = onWatchWith, modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = stringResource(R.string.sports_live_dual_watch_with),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = NuvioTheme.colors.TextPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.height(NuvioTheme.spacing.sm))
+            }
             if (state.items.isEmpty()) {
                 Text(
                     text = stringResource(R.string.sports_live_zap_panel_empty),
@@ -301,22 +345,7 @@ private fun LiveGameItem(
     modifier: Modifier,
     onClick: () -> Unit
 ) {
-    Card(
-        onClick = onClick,
-        modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.colors(
-            containerColor = NuvioTheme.colors.BackgroundCard,
-            focusedContainerColor = NuvioTheme.colors.FocusBackground
-        ),
-        border = CardDefaults.border(
-            focusedBorder = Border(
-                border = NuvioTheme.focusRing.border(NuvioTheme.spacing.xxs),
-                shape = RoundedCornerShape(NuvioTheme.radii.xl)
-            )
-        ),
-        scale = CardDefaults.scale(focusedScale = 1.01f),
-        shape = CardDefaults.shape(shape = RoundedCornerShape(NuvioTheme.radii.xl))
-    ) {
+    PanelCard(onClick = onClick, modifier = modifier.fillMaxWidth()) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -350,4 +379,30 @@ private fun LiveGameItem(
             }
         }
     }
+}
+
+/** A focusable row of the live games panel. */
+@Composable
+private fun PanelCard(
+    onClick: () -> Unit,
+    modifier: Modifier,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Card(
+        onClick = onClick,
+        modifier = modifier,
+        colors = CardDefaults.colors(
+            containerColor = NuvioTheme.colors.BackgroundCard,
+            focusedContainerColor = NuvioTheme.colors.FocusBackground
+        ),
+        border = CardDefaults.border(
+            focusedBorder = Border(
+                border = NuvioTheme.focusRing.border(NuvioTheme.spacing.xxs),
+                shape = RoundedCornerShape(NuvioTheme.radii.xl)
+            )
+        ),
+        scale = CardDefaults.scale(focusedScale = 1.01f),
+        shape = CardDefaults.shape(shape = RoundedCornerShape(NuvioTheme.radii.xl)),
+        content = content
+    )
 }
