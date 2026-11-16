@@ -17,6 +17,10 @@ Use stream availability as the signal for **Live Now only**:
 - Upcoming, Replays and Channels are never probed or hidden by this rule.
 - Probes share the stream repository's session cache, so a later OK on a probed game opens instantly.
 
+## Amendment after first implementation (2026-11-15)
+
+Bulk probing of every Live Now item per load triggered highfly's rate limit ("wait 9 min") on the emulator, blocking playback. Replaced with on-demand probing: only the item focused in the section is probed (TTL 10 min, re-probe when older than 2 min), and any stream fetch for a sports item made by the Stream screen, zap or merged cards that ends with "no streams found" marks that item ended. Rate-limit/network errors and timeouts never mark ended; a response containing any stream with an info hash (including debrid-pending torrents) counts as alive.
+
 ## Non-goals
 
 Probing Upcoming/Channels. Showing an "Ended" badge (items simply disappear).

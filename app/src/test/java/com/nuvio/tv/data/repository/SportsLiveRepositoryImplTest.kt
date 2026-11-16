@@ -280,42 +280,35 @@ class SportsLiveRepositoryImplTest {
     }
 
     @Test
-    fun `liveNow leaves out live items whose streams are gone and only Live now items are probed`() = runTest {
+    fun `a load issues no stream probes`() = runTest {
         catalogRepository.results["sports" to "live"] =
             success("sports", "live", meta("a", live = true), meta("b", live = true))
-        catalogRepository.results["sports" to "upcoming"] = success("sports", "upcoming", meta("u"))
-        streamRepository.noStreams += "b"
         val repository = newRepository()
 
         repository.load()
+        repository.load(force = true)
         advanceUntilIdle()
 
-        assertEquals(setOf("sports|b"), repository.endedKeys.value)
-        assertEquals(listOf("a"), repository.liveNow().first().map { it.id })
-        assertEquals(setOf("a", "b"), streamRepository.calls.toSet())
+        assertEquals(emptyList<String>(), streamRepository.calls)
     }
 
     @Test
-    fun `load returns without waiting for the stream probes`() = runTest {
-        catalogRepository.results["sports" to "live"] = success("sports", "live", meta("a", live = true))
-        streamRepository.hanging += "a"
+    fun `liveNow leaves out live items whose streams are gone`() = runTest {
+        catalogRepository.results["sports" to "live"] =
+            success("sports", "live", meta("a", live = true), meta("b", live = true))
+        streamRepository.noStreams += "b"
         val repository = newRepository()
-        val startedAt = testScheduler.currentTime
+        val items = repository.load().items
 
-        val load = repository.load()
+        items.forEach(repository::reprobeIfStale)
+        advanceTimeBy(1)
 
-        assertEquals(0L, testScheduler.currentTime - startedAt)
-        assertEquals(load, repository.latest.value)
-        // A probe that times out leaves the item visible.
-        advanceTimeBy(SportsLiveStreamProbe.PROBE_TIMEOUT_MS + 1)
-        assertEquals(listOf("a"), streamRepository.calls)
-        assertEquals(emptySet<String>(), repository.endedKeys.value)
+        assertEquals(setOf("sports|b"), repository.endedKeys.value)
         assertEquals(listOf("a"), repository.liveNow().first().map { it.id })
     }
 
     private class FakeStreamRepository : StreamRepository {
         val noStreams = mutableSetOf<String>()
-        val hanging = mutableSetOf<String>()
         val calls = mutableListOf<String>()
 
         override fun getStreamsFromAllAddons(
@@ -330,7 +323,6 @@ class SportsLiveRepositoryImplTest {
         ): Flow<NetworkResult<List<AddonStreams>>> = flow {
             calls += videoId
             emit(NetworkResult.Loading)
-            if (videoId in hanging) awaitCancellation()
             val streams = if (videoId in noStreams) emptyList() else listOf(playableStream())
             emit(NetworkResult.Success(listOf(AddonStreams(addonName = "Sports", addonLogo = null, streams = streams))))
         }

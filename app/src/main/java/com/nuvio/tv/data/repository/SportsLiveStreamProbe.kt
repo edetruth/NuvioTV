@@ -5,13 +5,14 @@ import com.nuvio.tv.core.network.NetworkResult
 import com.nuvio.tv.core.player.StreamAutoPlaySelector
 import com.nuvio.tv.domain.model.AddonStreams
 import com.nuvio.tv.domain.model.SportsLiveItem
+import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.domain.repository.StreamRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -25,9 +26,11 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Some addons keep a game marked live after it ends; its streams are gone by then. This probes the
- * streams of live items and marks an item ended when the search finishes with no playable stream.
- * A timeout or a transport error never marks an item ended.
+ * Some addons keep a game marked live after it ends; its streams are gone by then. Probing every
+ * live item trips addon rate limits, so an item is probed only on demand (when focused), and stream
+ * fetches made elsewhere can report their result through [recordResult].
+ * Only a finished search with nothing playable marks an item ended; rate limits, errors and
+ * timeouts never do. An ended verdict expires after [CACHE_TTL_MS], so the item shows again.
  */
 @Singleton
 class SportsLiveStreamProbe @Inject constructor(
@@ -38,6 +41,8 @@ class SportsLiveStreamProbe @Inject constructor(
         const val PROBE_TIMEOUT_MS = 8_000L
         const val CACHE_TTL_MS = 600_000L
         const val REPROBE_AFTER_MS = 120_000L
+
+        private val rateLimitWords = listOf("rate limit", "too many")
     }
 
     @VisibleForTesting
@@ -55,54 +60,45 @@ class SportsLiveStreamProbe @Inject constructor(
 
     private val _ended = MutableStateFlow<Set<String>>(emptySet())
 
-    /** Keys ([SportsLiveItem.streamKey]) of items whose latest conclusive probe found no playable stream. */
+    /** Keys ([SportsLiveItem.streamKey]) of items whose latest conclusive result found no playable stream. */
     val ended: StateFlow<Set<String>> = _ended.asStateFlow()
 
-    /**
-     * Probes [items] whose result is missing or older than [CACHE_TTL_MS]; returns when they finish.
-     * An ended item stays ended until its re-probe finds streams. Expired entries of items no
-     * longer listed are dropped.
-     */
-    suspend fun probe(items: List<SportsLiveItem>) {
-        val listed = items.distinctBy { it.streamKey }
-        val listedKeys = listed.mapTo(HashSet()) { it.streamKey }
-        val now = nowMs()
-        val dropped = entries.filter { (key, entry) -> key !in listedKeys && now - entry.probedAtMs >= CACHE_TTL_MS }.keys
-        if (dropped.isNotEmpty()) {
-            dropped.forEach { entries.remove(it) }
-            _ended.update { it - dropped }
-        }
-        coroutineScope {
-            listed.filter { isStale(it.streamKey, CACHE_TTL_MS) }.forEach { launch { probeOne(it) } }
-        }
-    }
-
-    /** Re-probes [item] in the background when its result is missing or older than [REPROBE_AFTER_MS]. */
+    /** Probes [item] in the background when its result is missing or older than [REPROBE_AFTER_MS]. */
     fun reprobeIfStale(item: SportsLiveItem) {
-        if (isStale(item.streamKey, REPROBE_AFTER_MS)) scope.launch { probeOne(item) }
-    }
-
-    private fun isStale(key: String, maxAgeMs: Long): Boolean {
-        val entry = entries[key] ?: return true
-        return nowMs() - entry.probedAtMs >= maxAgeMs
-    }
-
-    private suspend fun probeOne(item: SportsLiveItem) {
         val key = item.streamKey
+        val entry = entries[key]
+        if (entry != null && nowMs() - entry.probedAtMs < REPROBE_AFTER_MS) return
         if (!inFlight.add(key)) return
-        try {
-            val ended = permits.withPermit { searchEnded(item) }
-            // An inconclusive probe keeps the previous verdict, so it is not retried on every load.
-            val verdict = ended ?: entries[key]?.ended ?: false
-            entries[key] = Entry(verdict, nowMs())
-            _ended.update { if (verdict) it + key else it - key }
-        } finally {
-            inFlight.remove(key)
+        scope.launch {
+            try {
+                permits.withPermit { record(key, search(item)) }
+            } finally {
+                inFlight.remove(key)
+            }
         }
     }
 
-    /** True when the search finished with no playable stream; null on a timeout or a transport error. */
-    private suspend fun searchEnded(item: SportsLiveItem): Boolean? {
+    /** Records the outcome of a stream fetch made elsewhere for the item with [itemKey]. */
+    fun recordResult(itemKey: String, result: NetworkResult<List<AddonStreams>>) {
+        record(itemKey, verdictOf(result))
+    }
+
+    /** [ended] null means inconclusive: the previous verdict stands, but the entry is stamped. */
+    private fun record(key: String, ended: Boolean?) {
+        val entry = Entry(ended ?: entries[key]?.ended ?: false, nowMs())
+        entries[key] = entry
+        _ended.update { if (entry.ended) it + key else it - key }
+        if (entry.ended) {
+            scope.launch {
+                delay(CACHE_TTL_MS)
+                // Expire only if no newer result replaced this one.
+                if (entries.remove(key, entry)) _ended.update { it - key }
+            }
+        }
+    }
+
+    /** The verdict of a full search; null on a timeout or an exception. */
+    private suspend fun search(item: SportsLiveItem): Boolean? {
         var last: NetworkResult<List<AddonStreams>>? = null
         val finished = try {
             withTimeoutOrNull(PROBE_TIMEOUT_MS) {
@@ -114,12 +110,27 @@ class SportsLiveStreamProbe @Inject constructor(
         } catch (_: Exception) {
             null
         }
-        if (finished == null) return null
-        return when (val result = last) {
-            is NetworkResult.Success ->
-                result.data.none { group -> group.streams.any(StreamAutoPlaySelector::isPlayable) }
-            is NetworkResult.Error -> if (result.code == NetworkResult.STREAMS_NOT_FOUND_CODE) true else null
-            NetworkResult.Loading, null -> null
+        return if (finished == null) null else last?.let(::verdictOf)
+    }
+
+    /** True = ended, false = alive, null = inconclusive. */
+    private fun verdictOf(result: NetworkResult<List<AddonStreams>>): Boolean? = when (result) {
+        is NetworkResult.Success -> {
+            val streams = result.data.flatMap { it.streams }
+            when {
+                streams.any(::isRateLimitNotice) -> null
+                // A torrent may still be resolving through debrid; it is never proof of an end.
+                streams.any { it.getEffectiveInfoHash() != null } -> false
+                else -> streams.none(StreamAutoPlaySelector::isPlayable)
+            }
         }
+        is NetworkResult.Error -> if (result.code == NetworkResult.STREAMS_NOT_FOUND_CODE) true else null
+        NetworkResult.Loading -> null
+    }
+
+    /** Addons such as highfly answer a rate limit with an informational "stream". */
+    private fun isRateLimitNotice(stream: Stream): Boolean {
+        val text = listOfNotNull(stream.name, stream.title, stream.description).joinToString(" ").lowercase()
+        return rateLimitWords.any { it in text }
     }
 }

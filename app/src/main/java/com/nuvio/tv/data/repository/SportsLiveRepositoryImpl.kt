@@ -17,9 +17,7 @@ import com.nuvio.tv.domain.repository.SportsLiveLoad
 import com.nuvio.tv.domain.repository.SportsLiveRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -32,7 +30,6 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
@@ -59,9 +56,6 @@ class SportsLiveRepositoryImpl @Inject constructor(
 
     private val _latest = MutableStateFlow<SportsLiveLoad?>(null)
     private val loadMutex = Mutex()
-
-    /** Runs stream probes so a load never waits for them; lives as long as this singleton. */
-    private val probeScope by lazy { CoroutineScope(SupervisorJob() + ioDispatcher) }
 
     /** The most recent load, whether or not every catalog succeeded. */
     override val latest: StateFlow<SportsLiveLoad?> = _latest.asStateFlow()
@@ -123,11 +117,7 @@ class SportsLiveRepositoryImpl @Inject constructor(
             }
         }
         val load = SportsLiveLoad(items, failures, loadedAtMs = now, claimedKeys = claimedKeys)
-        if (claimedCatalogKeys.first() == claimedKeys) {
-            _latest.value = load
-            val liveNow = SportsLiveItemBucketer.bucket(items, now)[SportsLiveTab.LIVE_NOW].orEmpty()
-            probeScope.launch { streamProbe.probe(liveNow) }
-        }
+        if (claimedCatalogKeys.first() == claimedKeys) _latest.value = load
         load
     }
 

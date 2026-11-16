@@ -38,8 +38,8 @@ interface SportsLiveRepository {
     val latest: StateFlow<SportsLiveLoad?>
 
     /**
-     * Keys (`addonId|id`) of live items whose streams are gone: a probe after each load found no
-     * playable stream. They are left out of Live now everywhere.
+     * Keys (`addonId|id`) of live items whose streams are gone: a probe of the focused item (or a
+     * reported stream fetch) found no playable stream. They are left out of Live now everywhere.
      */
     val endedKeys: StateFlow<Set<String>>
 

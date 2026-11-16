@@ -10,9 +10,10 @@ import com.nuvio.tv.domain.model.PosterShape
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveKind
 import com.nuvio.tv.domain.model.Stream
+import com.nuvio.tv.domain.model.StreamDebridCacheState
+import com.nuvio.tv.domain.model.StreamDebridCacheStatus
 import com.nuvio.tv.domain.repository.StreamRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -24,7 +25,6 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -41,105 +41,111 @@ class SportsLiveStreamProbeTest {
     }
 
     @Test
-    fun `a finished search with no playable stream marks the item ended`() = runTest {
-        streams.responses["empty"] = { flowOf(NetworkResult.Loading, NetworkResult.Success(emptyList())) }
-        streams.responses["external"] = { result(stream(externalUrl = "https://site.example/watch")) }
-        streams.responses["junk"] = {
+    fun `focusing an item whose addons have no streams marks it ended`() = runTest {
+        streams.responses["gone"] = {
             flowOf(NetworkResult.Loading, NetworkResult.Error("none", NetworkResult.STREAMS_NOT_FOUND_CODE))
         }
-        streams.responses["ok"] = { result(stream(externalUrl = "https://site.example/watch"), PLAYABLE) }
+        streams.responses["web"] = { result(stream(externalUrl = "https://site.example/watch")) }
+        streams.responses["ok"] = { result(PLAYABLE) }
         val probe = newProbe()
-        val items = listOf(item("empty"), item("external"), item("junk"), item("ok"))
 
-        probe.probe(items)
+        listOf("gone", "web", "ok").forEach { probe.reprobeIfStale(item(it)) }
+        advanceTimeBy(1)
 
-        assertEquals(setOf("sports|empty", "sports|external", "sports|junk"), probe.ended.value)
+        assertEquals(setOf("sports|gone", "sports|web"), probe.ended.value)
         assertEquals(listOf("sport"), streams.calls.map { it.first }.distinct())
     }
 
     @Test
-    fun `a timeout or a transport error does not mark the item ended`() = runTest {
+    fun `a rate limit, an error or a timeout never marks an item ended`() = runTest {
+        streams.responses["limited"] = { flowOf(NetworkResult.Loading, NetworkResult.Error("Too Many Requests", 429)) }
+        streams.responses["notice"] = {
+            result(stream(name = "Rate limit reached", title = "Too many stream requests in a short time."))
+        }
         streams.responses["slow"] = { flow { emit(NetworkResult.Loading); awaitCancellation() } }
-        streams.responses["down"] = { flowOf(NetworkResult.Loading, NetworkResult.Error("HTTP 500", 500)) }
         val probe = newProbe()
-        val startedAt = testScheduler.currentTime
 
-        probe.probe(listOf(item("slow"), item("down")))
+        listOf("limited", "notice", "slow").forEach { probe.reprobeIfStale(item(it)) }
+        advanceTimeBy(SportsLiveStreamProbe.PROBE_TIMEOUT_MS + 1)
 
-        assertEquals(SportsLiveStreamProbe.PROBE_TIMEOUT_MS, testScheduler.currentTime - startedAt)
+        assertEquals(3, streams.calls.size)
         assertEquals(emptySet<String>(), probe.ended.value)
+    }
+
+    @Test
+    fun `a stream with an info hash keeps the item alive even when not yet playable`() = runTest {
+        streams.responses["torrent"] = {
+            result(stream(infoHash = "0123456789abcdef0123456789abcdef01234567").copy(
+                debridCacheStatus = StreamDebridCacheStatus(
+                    providerId = "rd",
+                    providerName = "Real-Debrid",
+                    state = StreamDebridCacheState.NOT_CACHED
+                )
+            ))
+        }
+        val probe = newProbe()
+
+        probe.reprobeIfStale(item("torrent"))
+        advanceTimeBy(1)
+
+        assertEquals(1, streams.calls.size)
+        assertEquals(emptySet<String>(), probe.ended.value)
+    }
+
+    @Test
+    fun `focus re-probes only after two minutes and an ended verdict expires after ten`() = runTest {
+        streams.responses["x"] = { flowOf(NetworkResult.Success(emptyList())) }
+        val probe = newProbe()
+        probe.reprobeIfStale(item("x"))
+        advanceTimeBy(1)
+        assertEquals(setOf("sports|x"), probe.ended.value)
+
+        advanceTimeBy(SportsLiveStreamProbe.REPROBE_AFTER_MS - 2)
+        probe.reprobeIfStale(item("x"))
+        runCurrent()
+        assertEquals(1, streams.calls.size)
+
+        advanceTimeBy(1)
+        probe.reprobeIfStale(item("x"))
+        runCurrent()
+        assertEquals(2, streams.calls.size)
+        assertEquals(setOf("sports|x"), probe.ended.value)
+
+        // Ten minutes after the latest verdict the item shows again.
+        advanceTimeBy(SportsLiveStreamProbe.CACHE_TTL_MS - 1)
+        assertEquals(setOf("sports|x"), probe.ended.value)
+        advanceTimeBy(1)
+        runCurrent()
+        assertEquals(emptySet<String>(), probe.ended.value)
+    }
+
+    @Test
+    fun `a result reported by another stream fetch marks or clears an item`() = runTest {
+        val probe = newProbe()
+
+        probe.recordResult("sports|x", NetworkResult.Error("none", NetworkResult.STREAMS_NOT_FOUND_CODE))
+        assertEquals(setOf("sports|x"), probe.ended.value)
+
+        probe.recordResult("sports|x", NetworkResult.Error("HTTP 503", 503))
+        assertEquals(setOf("sports|x"), probe.ended.value)
+
+        probe.recordResult("sports|x", NetworkResult.Success(listOf(AddonStreams("Sports", null, listOf(PLAYABLE)))))
+        assertEquals(emptySet<String>(), probe.ended.value)
+        assertEquals(0, streams.calls.size)
     }
 
     @Test
     fun `at most three probes run at once`() = runTest {
-        val ids = (1..7).map { "g$it" }
+        val ids = (1..5).map { "g$it" }
         ids.forEach { id -> streams.responses[id] = { flow { delay(1_000); emitAll(result(PLAYABLE)) } } }
         val probe = newProbe()
-        val startedAt = testScheduler.currentTime
 
-        probe.probe(ids.map(::item))
+        ids.forEach { probe.reprobeIfStale(item(it)) }
+        advanceUntilIdle()
 
         assertEquals(3, streams.maxActive)
-        assertEquals(7, streams.calls.size)
-        assertEquals(3_000L, testScheduler.currentTime - startedAt)
-    }
-
-    @Test
-    fun `results are cached for ten minutes and an ended item returns once streams come back`() = runTest {
-        streams.responses["x"] = { flowOf(NetworkResult.Success(emptyList())) }
-        val probe = newProbe()
-        probe.probe(listOf(item("x")))
-        assertEquals(setOf("sports|x"), probe.ended.value)
-
-        advanceTimeBy(SportsLiveStreamProbe.CACHE_TTL_MS - 1)
-        probe.probe(listOf(item("x")))
-        assertEquals(1, streams.calls.size)
-
-        streams.responses["x"] = { flow { delay(1_000); emitAll(result(PLAYABLE)) } }
-        advanceTimeBy(1)
-        val reprobe = async { probe.probe(listOf(item("x"))) }
-        runCurrent()
-        // Until the re-probe answers the item stays ended.
-        assertEquals(setOf("sports|x"), probe.ended.value)
-        reprobe.await()
-
-        assertEquals(2, streams.calls.size)
-        assertEquals(emptySet<String>(), probe.ended.value)
-    }
-
-    @Test
-    fun `an expired ended entry of an item no longer listed is dropped`() = runTest {
-        streams.responses["x"] = { flowOf(NetworkResult.Success(emptyList())) }
-        val probe = newProbe()
-        probe.probe(listOf(item("x")))
-        assertEquals(setOf("sports|x"), probe.ended.value)
-
-        advanceTimeBy(SportsLiveStreamProbe.CACHE_TTL_MS)
-        probe.probe(emptyList())
-
-        assertEquals(emptySet<String>(), probe.ended.value)
-    }
-
-    @Test
-    fun `focus re-probes only an entry older than two minutes`() = runTest {
-        val probe = newProbe()
-
-        // No entry yet: probes at once.
-        probe.reprobeIfStale(item("a"))
-        advanceUntilIdle()
-        assertEquals(1, streams.calls.size)
-
-        advanceTimeBy(SportsLiveStreamProbe.REPROBE_AFTER_MS - 1)
-        probe.reprobeIfStale(item("a"))
-        advanceUntilIdle()
-        assertEquals(1, streams.calls.size)
-
-        advanceTimeBy(1)
-        streams.responses["a"] = { flowOf(NetworkResult.Success(emptyList())) }
-        probe.reprobeIfStale(item("a"))
-        advanceUntilIdle()
-        assertEquals(2, streams.calls.size)
-        assertTrue("sports|a" in probe.ended.value)
+        assertEquals(5, streams.calls.size)
+        assertEquals(2_000L, testScheduler.currentTime)
     }
 
     private class FakeStreamRepository : StreamRepository {
@@ -184,13 +190,19 @@ class SportsLiveStreamProbeTest {
     private companion object {
         val PLAYABLE = stream(url = "https://cdn.example/live.m3u8")
 
-        fun stream(url: String? = null, externalUrl: String? = null) = Stream(
-            name = "Stream",
-            title = null,
+        fun stream(
+            url: String? = null,
+            externalUrl: String? = null,
+            infoHash: String? = null,
+            name: String = "Stream",
+            title: String? = null
+        ) = Stream(
+            name = name,
+            title = title,
             description = null,
             url = url,
             ytId = null,
-            infoHash = null,
+            infoHash = infoHash,
             fileIdx = null,
             externalUrl = externalUrl,
             behaviorHints = null,
