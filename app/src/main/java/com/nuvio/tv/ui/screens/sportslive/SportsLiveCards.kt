@@ -15,7 +15,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Star
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -23,6 +25,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.layout.ContentScale
@@ -43,6 +47,7 @@ import com.nuvio.tv.core.sportslive.SportsLivePillTime
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveTab
 import com.nuvio.tv.ui.components.LightweightCard
+import com.nuvio.tv.ui.components.NuvioDialog
 import com.nuvio.tv.ui.theme.NuvioTheme
 import com.nuvio.tv.ui.util.rememberLongPressKeyTracker
 import java.time.ZoneId
@@ -166,13 +171,27 @@ internal fun SportsLiveListCard(
                 if (stateLabel != null) {
                     SportsLiveStatePill(label = stateLabel, isLive = item.isLive)
                 }
-                Text(
-                    text = item.meta.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = NuvioTheme.colors.TextPrimary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // A followed team plays (or is named on this channel).
+                    if (item.followed) {
+                        Icon(
+                            imageVector = Icons.Rounded.Star,
+                            contentDescription = null,
+                            tint = NuvioTheme.colors.Primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    Text(
+                        text = item.meta.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = NuvioTheme.colors.TextPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
                 Text(
                     text = "${item.sport ?: item.catalogName} · ${item.addonName}",
                     style = MaterialTheme.typography.bodySmall,
@@ -257,6 +276,52 @@ internal fun SportsLiveDetailsPane(
                 Text(stringResource(R.string.sports_live_details))
             }
         }
+    }
+}
+
+/**
+ * The long-press menu of a card naming a game: Follow / Unfollow for each side ([sides] holds each
+ * side's display name and whether a followed team is that side), then Details. Laid out like
+ * `PosterOptionsDialog`.
+ */
+@Composable
+internal fun SportsLiveCardMenu(
+    title: String,
+    sides: List<Pair<String, Boolean>>,
+    onToggleFollow: (String) -> Unit,
+    onDetails: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val firstFocusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { firstFocusRequester.requestFocus() } }
+
+    NuvioDialog(onDismiss = onDismiss, title = title) {
+        sides.forEachIndexed { index, (side, followed) ->
+            SportsLiveMenuButton(
+                text = stringResource(if (followed) R.string.sports_live_unfollow else R.string.sports_live_follow, side),
+                onClick = { onToggleFollow(side) },
+                modifier = if (index == 0) Modifier.focusRequester(firstFocusRequester) else Modifier
+            )
+        }
+        SportsLiveMenuButton(
+            text = stringResource(R.string.sports_live_details),
+            onClick = onDetails,
+            modifier = if (sides.isEmpty()) Modifier.focusRequester(firstFocusRequester) else Modifier
+        )
+    }
+}
+
+@Composable
+private fun SportsLiveMenuButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Button(
+        onClick = onClick,
+        modifier = modifier.fillMaxWidth(),
+        colors = ButtonDefaults.colors(
+            containerColor = NuvioTheme.colors.BackgroundCard,
+            contentColor = NuvioTheme.colors.TextPrimary
+        )
+    ) {
+        Text(text, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 

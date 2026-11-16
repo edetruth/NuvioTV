@@ -12,6 +12,7 @@ import com.nuvio.tv.domain.model.CatalogOption
 import com.nuvio.tv.domain.model.CatalogStats
 import com.nuvio.tv.domain.model.CatalogExtra
 import com.nuvio.tv.domain.model.ContentType
+import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveKind
 import com.nuvio.tv.domain.model.SportsLiveOverride
 import com.nuvio.tv.domain.repository.AddonRepository
@@ -65,6 +66,22 @@ class SportsLiveSettingsViewModelTest {
         val viewModel = SportsLiveSettingsViewModel(prefs, addonRepository, sportsLiveRepository)
         backgroundScope.launch { viewModel.uiState.collect {} }
         return viewModel
+    }
+
+    @Test
+    fun `followed teams are listed in follow order and unfollow removes one`() = runTest {
+        prefs.follow(FollowedTeam("Celtics", "Basketball"))
+        prefs.follow(FollowedTeam("Arsenal", null))
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+        assertEquals(
+            listOf(FollowedTeam("Celtics", "Basketball"), FollowedTeam("Arsenal", null)),
+            viewModel.uiState.value.followedTeams
+        )
+
+        viewModel.unfollow(FollowedTeam("Celtics", "Basketball"))
+        advanceUntilIdle()
+        assertEquals(listOf(FollowedTeam("Arsenal", null)), viewModel.uiState.value.followedTeams)
     }
 
     @Test

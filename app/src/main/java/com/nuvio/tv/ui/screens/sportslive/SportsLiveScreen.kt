@@ -44,6 +44,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.nuvio.tv.R
+import com.nuvio.tv.core.sportslive.SportsLiveTeams
+import com.nuvio.tv.core.sportslive.TeamPair
+import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveKind
 import com.nuvio.tv.domain.model.SportsLiveTab
@@ -53,6 +56,7 @@ import com.nuvio.tv.ui.components.RefreshFilterChip
 import com.nuvio.tv.ui.components.SourceStatusFilterChip
 import com.nuvio.tv.ui.theme.NuvioTheme
 import com.nuvio.tv.ui.util.dpadRepeatThrottle
+import kotlinx.coroutines.delay
 
 @Composable
 fun SportsLiveScreen(
@@ -62,6 +66,7 @@ fun SportsLiveScreen(
     onOpenAddons: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val followedTeams by viewModel.followedTeams.collectAsStateWithLifecycle()
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -90,6 +95,7 @@ fun SportsLiveScreen(
         }
         else -> SportsLiveContent(
             uiState = uiState,
+            followedTeams = followedTeams,
             onSelectTab = viewModel::selectTab,
             onSelectFilter = viewModel::selectFilter,
             onSelectItem = viewModel::selectItem,
@@ -98,7 +104,8 @@ fun SportsLiveScreen(
                 viewModel.startZapSession(item)
                 onPlay(item)
             },
-            onOpenDetail = onOpenDetail
+            onOpenDetail = onOpenDetail,
+            onToggleFollow = viewModel::toggleFollow
         )
     }
 }
@@ -125,12 +132,14 @@ private fun NoAddonsState(onOpenAddons: () -> Unit) {
 @Composable
 private fun SportsLiveContent(
     uiState: SportsLiveUiState,
+    followedTeams: List<FollowedTeam>,
     onSelectTab: (SportsLiveTab) -> Unit,
     onSelectFilter: (String?) -> Unit,
     onSelectItem: (String?) -> Unit,
     onRefresh: () -> Unit,
     onPlay: (SportsLiveItem) -> Unit,
-    onOpenDetail: (SportsLiveItem) -> Unit
+    onOpenDetail: (SportsLiveItem) -> Unit,
+    onToggleFollow: (SportsLiveItem, String) -> Unit
 ) {
     val tabFocusRequesters = remember { SportsLiveTab.entries.associateWith { FocusRequester() } }
     val activeTabFocusRequester = tabFocusRequesters.getValue(uiState.selectedTab)
@@ -168,6 +177,44 @@ private fun SportsLiveContent(
     // Replay "series" items are team folders; the detail page lists their videos.
     val open: (SportsLiveItem) -> Unit = { item ->
         if (item.kind == SportsLiveKind.REPLAY && item.apiType == "series") onOpenDetail(item) else onPlay(item)
+    }
+
+    // The card whose long-press menu is open; the menu closes if a refresh drops the card.
+    var menuCardKey by remember { mutableStateOf<String?>(null) }
+    // A follow moves the card (to the top, or back down); focus and the scroll go with it. The
+    // reorder lands a moment after the menu closes, so the card is followed for a short while.
+    var followedCardKey by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(followedCardKey) {
+        if (followedCardKey == null) return@LaunchedEffect
+        delay(FOLLOW_REFOCUS_WINDOW_MS)
+        followedCardKey = null
+    }
+    LaunchedEffect(followedCardKey, items) {
+        val key = followedCardKey ?: return@LaunchedEffect
+        val index = items.indexOfFirst { it.listKey == key }
+        if (index < 0) return@LaunchedEffect
+        if (listState.layoutInfo.visibleItemsInfo.none { it.index == index }) listState.scrollToItem(index)
+        repeat(2) { withFrameNanos { } }
+        runCatching { cardFocusRequesters[key]?.requestFocus() }
+    }
+    items.firstOrNull { it.listKey == menuCardKey }?.let { item ->
+        val teams = item.teams ?: return@let
+        SportsLiveCardMenu(
+            title = item.meta.name,
+            sides = teams.inTitleOrder(item.meta.name).map { side ->
+                side to followedTeams.any { SportsLiveTeams.followsSide(it, side, item) }
+            },
+            onToggleFollow = { side ->
+                menuCardKey = null
+                followedCardKey = item.listKey
+                onToggleFollow(item, side)
+            },
+            onDetails = {
+                menuCardKey = null
+                onOpenDetail(item)
+            },
+            onDismiss = { menuCardKey = null }
+        )
     }
 
     BackHandler(enabled = listHasFocus) {
@@ -259,7 +306,8 @@ private fun SportsLiveContent(
                         stateLabel = stateLabelOf(item),
                         selected = item.listKey == selected.listKey,
                         onClick = { open(item) },
-                        onLongClick = { onOpenDetail(item) },
+                        // A card naming a game opens the follow menu; other cards open Details directly.
+                        onLongClick = { if (item.teams != null) menuCardKey = item.listKey else onOpenDetail(item) },
                         onFocus = {
                             focusedCardKey = item.listKey
                             onSelectItem(item.id)
@@ -372,6 +420,12 @@ private fun SportsLiveFilterRow(
         }
     }
 }
+
+private const val FOLLOW_REFOCUS_WINDOW_MS = 1_500L
+
+/** The two sides in the order the title names them ("Patriots at Jets": Patriots, then Jets). */
+private fun TeamPair.inTitleOrder(title: String): List<String> =
+    listOf(home, away).sortedBy { side -> title.indexOf(side, ignoreCase = true).let { if (it < 0) Int.MAX_VALUE else it } }
 
 /** Unique within a tab: the bucketer keeps one copy of an item per addon. */
 private val SportsLiveItem.listKey: String get() = "$addonId|$id"

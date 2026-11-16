@@ -61,6 +61,12 @@ interface SportsLiveRepository {
     /** The active profile's followed teams; their games are pinned first in Live Now, Upcoming and Replays. */
     val followedTeams: Flow<List<FollowedTeam>>
 
+    /** Follows [team] for the active profile; a team already followed (same name and sport) is not added again. */
+    suspend fun follow(team: FollowedTeam)
+
+    /** Stops following [team] (same name and sport, ignoring case). */
+    suspend fun unfollow(team: FollowedTeam)
+
     /**
      * Live items from [latest] that are not ended, followed teams' games first, capped at [limit];
      * empty when the home row or the section is off.

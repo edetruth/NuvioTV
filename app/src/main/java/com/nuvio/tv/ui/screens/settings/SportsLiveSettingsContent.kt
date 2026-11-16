@@ -3,7 +3,10 @@ package com.nuvio.tv.ui.screens.settings
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -17,6 +20,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Text
 import com.nuvio.tv.R
 import com.nuvio.tv.domain.model.CatalogStats
 import com.nuvio.tv.domain.model.SportsLiveOverride
@@ -60,6 +65,30 @@ internal fun SportsLiveSettingsContent(
                     onToggle = { viewModel.setShowHomeRow(!state.showHomeRow) },
                     enabled = state.showSection
                 )
+            }
+        }
+        item(key = "my_teams") {
+            SettingsGroupCard(
+                modifier = Modifier.fillMaxWidth(),
+                title = stringResource(R.string.sports_live_my_teams_title)
+            ) {
+                if (state.followedTeams.isEmpty()) {
+                    Text(
+                        text = stringResource(R.string.sports_live_my_teams_empty),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = NuvioTheme.colors.TextSecondary,
+                        modifier = Modifier.padding(NuvioTheme.spacing.sm)
+                    )
+                }
+                // OK unfollows at once; following again is a long-press away.
+                state.followedTeams.forEach { team ->
+                    SettingsActionRow(
+                        title = listOfNotNull(team.name, team.sport).joinToString(" · "),
+                        subtitle = null,
+                        onClick = { viewModel.unfollow(team) },
+                        trailingIcon = Icons.Rounded.Close
+                    )
+                }
             }
         }
         if (state.catalogs.isNotEmpty()) {

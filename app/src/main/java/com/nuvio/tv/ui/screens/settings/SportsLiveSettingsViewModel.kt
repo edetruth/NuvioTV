@@ -7,6 +7,7 @@ import com.nuvio.tv.core.sportslive.SportsLiveCatalogPolicy
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import com.nuvio.tv.domain.model.CatalogOption
 import com.nuvio.tv.domain.model.CatalogStats
+import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveClaim
 import com.nuvio.tv.domain.model.SportsLiveOverride
 import com.nuvio.tv.domain.model.enabledAddons
@@ -44,7 +45,9 @@ data class SportsLiveCatalogSetting(
 data class SportsLiveSettingsUiState(
     val showSection: Boolean = true,
     val showHomeRow: Boolean = true,
-    val catalogs: List<SportsLiveCatalogSetting> = emptyList()
+    val catalogs: List<SportsLiveCatalogSetting> = emptyList(),
+    /** The active profile's followed teams, in follow order. */
+    val followedTeams: List<FollowedTeam> = emptyList()
 )
 
 @HiltViewModel
@@ -61,11 +64,11 @@ class SportsLiveSettingsViewModel @Inject constructor(
 
     val uiState: StateFlow<SportsLiveSettingsUiState> = combine(
         addonRepository.getInstalledAddons(),
-        combine(prefs.overrides, prefs.catalogOptions, ::Pair),
+        combine(prefs.overrides, prefs.catalogOptions, prefs.followedTeams, ::Triple),
         prefs.showSection,
         prefs.showHomeRow,
         claimedStats
-    ) { addons, (overrides, options), showSection, showHomeRow, stats ->
+    ) { addons, (overrides, options, followedTeams), showSection, showHomeRow, stats ->
         val catalogs = addons.enabledAddons().flatMap { addon ->
             addon.catalogs.filter(SportsLiveCatalogPolicy::isClaimable).map { catalog ->
                 val key = SportsLiveCatalogPolicy.keyFor(addon, catalog)
@@ -88,7 +91,7 @@ class SportsLiveSettingsViewModel @Inject constructor(
                 )
             }
         }
-        SportsLiveSettingsUiState(showSection, showHomeRow, catalogs)
+        SportsLiveSettingsUiState(showSection, showHomeRow, catalogs, followedTeams)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SportsLiveSettingsUiState())
 
     fun setShowSection(show: Boolean) {
@@ -97,6 +100,10 @@ class SportsLiveSettingsViewModel @Inject constructor(
 
     fun setShowHomeRow(show: Boolean) {
         viewModelScope.launch { prefs.setShowHomeRow(show) }
+    }
+
+    fun unfollow(team: FollowedTeam) {
+        viewModelScope.launch { prefs.unfollow(team) }
     }
 
     /** Auto, then INCLUDE, then EXCLUDE, then back to Auto. */

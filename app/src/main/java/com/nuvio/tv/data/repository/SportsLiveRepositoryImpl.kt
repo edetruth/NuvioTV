@@ -204,6 +204,10 @@ class SportsLiveRepositoryImpl @Inject constructor(
 
     override val followedTeams: Flow<List<FollowedTeam>> = prefs.followedTeams
 
+    override suspend fun follow(team: FollowedTeam) = prefs.follow(team)
+
+    override suspend fun unfollow(team: FollowedTeam) = prefs.unfollow(team)
+
     override fun reprobeIfStale(item: SportsLiveItem) = streamProbe.reprobeIfStale(item)
 
     /** Only items of catalogs claimed right now, so a profile switch or an exclusion hides stale items at once. */

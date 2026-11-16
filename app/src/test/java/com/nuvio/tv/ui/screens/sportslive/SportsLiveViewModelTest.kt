@@ -74,6 +74,9 @@ class SportsLiveViewModelTest {
         every { endedKeys } returns endedFlow
         every { followedTeams } returns followedFlow
         every { reprobeIfStale(any()) } just runs
+        // Stubbed here, before setUp mocks Dispatchers statically (stubbing after that fails).
+        coEvery { follow(any()) } coAnswers { followedFlow.value = followedFlow.value + firstArg<FollowedTeam>() }
+        coEvery { unfollow(any()) } coAnswers { followedFlow.value = followedFlow.value - firstArg<FollowedTeam>() }
         coEvery { load(any(), any()) } coAnswers {
             forcedFlags += firstArg<Boolean>()
             includeChannelsFlags += secondArg<Boolean>()
@@ -506,6 +509,30 @@ class SportsLiveViewModelTest {
         assertNull(viewModel.uiState.value.selectedFilter)
         assertEquals(listOf("Basketball", "Soccer"), viewModel.uiState.value.filters)
         assertEquals(listOf("s", "a", "b"), viewModel.uiState.value.visibleItems.map { it.id })
+    }
+
+    @Test
+    fun `toggleFollow follows a side with the item's sport, none for a channel, and unfollows every match`() = runTest {
+        val game = item("g", isLive = true, sport = "American Football", name = "Jets vs New England Patriots")
+            .copy(teams = teamsOf("Jets vs New England Patriots"))
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+
+        viewModel.toggleFollow(game, "New England Patriots")
+        advanceUntilIdle()
+        assertEquals(listOf(FollowedTeam("New England Patriots", "American Football")), followedFlow.value)
+
+        // A channel's sport is only its catalog name, so none is stored.
+        val ppv = channel("ch", "US", sport = "EasyPlay Live TV").copy(teams = teamsOf("Celtics vs 76ers"))
+        viewModel.toggleFollow(ppv, "Celtics")
+        advanceUntilIdle()
+        assertEquals(FollowedTeam("Celtics", null), followedFlow.value.last())
+
+        // A shorter follow ("Patriots") of the same side is removed too; Celtics stays.
+        followedFlow.value = followedFlow.value + FollowedTeam("Patriots", null)
+        viewModel.toggleFollow(game, "New England Patriots")
+        advanceUntilIdle()
+        assertEquals(listOf(FollowedTeam("Celtics", null)), followedFlow.value)
     }
 
     private fun teamsOf(name: String) = SportsLiveTeams.parse(name)

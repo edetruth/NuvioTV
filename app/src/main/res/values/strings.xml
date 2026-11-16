@@ -3544,6 +3544,10 @@
     <string name="sports_live_filter_my_teams">★ My teams</string>
     <string name="sports_live_watch">Watch</string>
     <string name="sports_live_details">Details</string>
+    <string name="sports_live_follow">Follow %1$s</string>
+    <string name="sports_live_unfollow">Unfollow %1$s</string>
+    <string name="sports_live_my_teams_title">My teams</string>
+    <string name="sports_live_my_teams_empty">Long-press a game to follow a team</string>
     <string name="sports_live_refresh">Refresh</string>
     <string name="sports_live_live_pill">LIVE</string>
     <string name="sports_live_time_tba">Time TBA</string>

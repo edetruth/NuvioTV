@@ -151,6 +151,16 @@ class SportsLiveTeamsTest {
     }
 
     @Test
+    fun `followsSide matches one side only, under the same sport rule`() {
+        val game = game("Patriots Academy FC vs New England Patriots", "American Football")
+        val patriots = FollowedTeam("Patriots", "American Football")
+        assertTrue(SportsLiveTeams.followsSide(patriots, "New England Patriots", game))
+        assertFalse(SportsLiveTeams.followsSide(patriots, "Patriots Academy FC", game))
+        assertFalse(SportsLiveTeams.followsSide(FollowedTeam("Patriots", "Soccer"), "New England Patriots", game))
+        assertTrue(SportsLiveTeams.followsSide(FollowedTeam("Patriots", "Soccer"), "New England Patriots", game.copy(isChannel = true)))
+    }
+
+    @Test
     fun `a channel naming a followed game matches whatever its catalog-name sport`() {
         val ppvName = "US| PEACOCK PPV 004 [Celtics vs. 76ers (2026-11-10 19:00:05)]"
         val channel = game(ppvName, "EasyPlay Live TV (tv)")

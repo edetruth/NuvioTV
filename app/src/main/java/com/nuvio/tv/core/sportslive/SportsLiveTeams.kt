@@ -63,9 +63,14 @@ object SportsLiveTeams {
      */
     fun follows(team: FollowedTeam, item: SportsLiveItem): Boolean {
         val pair = item.teams ?: return false
+        return followsSide(team, pair.home, item) || followsSide(team, pair.away, item)
+    }
+
+    /** True when [team] is the side [side] of [item], under the same sport rule as [follows]. */
+    fun followsSide(team: FollowedTeam, side: String, item: SportsLiveItem): Boolean {
         val sportsAgree = item.isChannel || team.sport == null || item.sport == null ||
             team.sport.equals(item.sport, ignoreCase = true)
-        return sportsAgree && (matches(team.name, pair.home) || matches(team.name, pair.away))
+        return sportsAgree && matches(team.name, side)
     }
 
     fun isFollowed(item: SportsLiveItem, followed: List<FollowedTeam>): Boolean = followed.any { follows(it, item) }

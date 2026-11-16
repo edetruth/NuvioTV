@@ -4,6 +4,8 @@ import androidx.annotation.VisibleForTesting
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nuvio.tv.core.sportslive.SportsLiveItemBucketer
+import com.nuvio.tv.core.sportslive.SportsLiveTeams
+import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveTab
 import com.nuvio.tv.domain.repository.SportsLiveFailure
@@ -17,6 +19,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -83,8 +86,28 @@ class SportsLiveViewModel @Inject constructor(
         combine(pinned, repo.endedKeys, selectionState, ::buildState)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SportsLiveUiState())
 
+    /** The active profile's followed teams, for the card menu's Follow / Unfollow labels. */
+    val followedTeams: StateFlow<List<FollowedTeam>> =
+        repo.followedTeams.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     init {
         refresh(force = false)
+    }
+
+    /**
+     * Unfollows every followed team that is [side] of [item] ("Patriots" for "New England Patriots"),
+     * or, when none is, follows [side] with the item's sport (none for a channel, whose sport is only
+     * its catalog's name).
+     */
+    fun toggleFollow(item: SportsLiveItem, side: String) {
+        viewModelScope.launch {
+            val matching = repo.followedTeams.first().filter { SportsLiveTeams.followsSide(it, side, item) }
+            if (matching.isEmpty()) {
+                repo.follow(FollowedTeam(side, if (item.isChannel) null else item.sport))
+            } else {
+                matching.forEach { repo.unfollow(it) }
+            }
+        }
     }
 
     fun selectTab(tab: SportsLiveTab) {
