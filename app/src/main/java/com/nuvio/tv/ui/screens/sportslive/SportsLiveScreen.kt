@@ -242,10 +242,8 @@ private fun SportsLiveContent(
     // Pick-second mode: the first game, chosen in the menu; OK on another eligible card opens dual
     // screen with both. Back leaves the mode; leaving the section drops it (not saved).
     var pickFirst by remember { mutableStateOf<SportsLiveItem?>(null) }
-    // Upcoming and Replays have no dual screen: going there ends pick mode.
-    LaunchedEffect(uiState.selectedTab) {
-        if (!uiState.selectedTab.offersDual()) pickFirst = null
-    }
+    // Pick mode survives tab changes (tabs select on focus, so Live now → Channels passes Upcoming);
+    // OK on Upcoming/Replays cards is ignored while picking.
     LaunchedEffect(pickFirst) {
         val first = pickFirst ?: return@LaunchedEffect
         // The menu has just closed: focus goes back to the first game's card.
