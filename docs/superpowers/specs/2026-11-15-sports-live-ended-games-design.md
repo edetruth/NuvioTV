@@ -19,8 +19,8 @@ Use stream availability as the signal for **Live Now only**:
 
 ## Amendment after first implementation (2026-11-15)
 
-Bulk probing of every Live Now item per load triggered highfly's rate limit ("wait 9 min") on the emulator, blocking playback. Replaced with on-demand probing: only the item focused in the section is probed (TTL 10 min, re-probe when older than 2 min), and any stream fetch for a sports item made by the Stream screen, zap or merged cards that ends with "no streams found" marks that item ended. Rate-limit/network errors and timeouts never mark ended; a response containing any stream with an info hash (including debrid-pending torrents) counts as alive.
-Two more guards: an item whose known kickoff (with time of day) was under 30 minutes ago is never marked ended (links often appear after kickoff), and an ended verdict expires after 3 minutes so the game reappears and is re-checked on the next focus (alive results keep the 10-minute TTL).
+Bulk probing of every Live Now item per load triggered highfly's rate limit ("wait 9 min") on the emulator, blocking playback. Replaced with on-demand probing: only the Live Now item the user settles on for 700 ms in the section is probed (again when its result is older than 2 minutes; re-probes bypass the stream session cache so an end is seen within minutes). Stream fetches from zap/merged cards will mark items ended once the zap resolver calls `recordResult` (not yet wired). Rate-limit/network errors and timeouts never mark ended; a response containing any stream with an info hash (including debrid-pending torrents) counts as alive.
+Two more guards: an item whose known kickoff (with time of day) was under 30 minutes ago is never marked ended (links often appear after kickoff), and an ended verdict expires after 3 minutes so the game reappears and is re-checked on the next focus (alive entries have no TTL: they are simply re-probed on focus after 2 minutes).
 
 ## Non-goals
 

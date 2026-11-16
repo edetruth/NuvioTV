@@ -109,6 +109,8 @@ class SportsLiveStreamProbeTest {
         probe.reprobeIfStale(item("x"))
         runCurrent()
         assertEquals(2, streams.calls.size)
+        // The first probe shares the stream cache; the re-probe bypasses it.
+        assertEquals(listOf(false, true), streams.forceRefreshes)
         assertEquals(setOf("sports|x"), probe.ended.value)
 
         // Three minutes after the latest verdict the item shows again.
@@ -165,6 +167,7 @@ class SportsLiveStreamProbeTest {
     private class FakeStreamRepository : StreamRepository {
         val responses = mutableMapOf<String, () -> Flow<NetworkResult<List<AddonStreams>>>>()
         val calls = mutableListOf<Pair<String, String>>()
+        val forceRefreshes = mutableListOf<Boolean>()
         private var active = 0
         var maxActive = 0
 
@@ -179,6 +182,7 @@ class SportsLiveStreamProbeTest {
             continuePluginOnly: Boolean
         ): Flow<NetworkResult<List<AddonStreams>>> = flow {
             calls += type to videoId
+            forceRefreshes += forceRefresh
             active++
             maxActive = maxOf(maxActive, active)
             try {

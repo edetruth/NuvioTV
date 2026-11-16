@@ -59,6 +59,7 @@ class SportsLiveStreamProbe @Inject constructor(
     private val entries = ConcurrentHashMap<String, Entry>()
     private val inFlight = ConcurrentHashMap.newKeySet<String>()
     private val permits = Semaphore(CONCURRENCY)
+    private val lock = Any()
     private val scope by lazy { CoroutineScope(SupervisorJob() + dispatcher) }
 
     private val _ended = MutableStateFlow<Set<String>>(emptySet())
@@ -72,9 +73,11 @@ class SportsLiveStreamProbe @Inject constructor(
         val entry = entries[key]
         if (entry != null && nowMs() - entry.probedAtMs < REPROBE_AFTER_MS) return
         if (!inFlight.add(key)) return
+        // A re-probe bypasses the stream session cache, which would otherwise replay the old answer.
+        val forceRefresh = entry != null
         scope.launch {
             try {
-                permits.withPermit { record(item, search(item)) }
+                permits.withPermit { record(item, search(item, forceRefresh)) }
             } finally {
                 inFlight.remove(key)
             }
@@ -93,24 +96,31 @@ class SportsLiveStreamProbe @Inject constructor(
         val start = item.startMs?.takeIf { item.startHasTimeOfDay }
         val inGrace = start != null && now - start < KICKOFF_GRACE_MS
         val verdict = if (ended == true && inGrace) false else ended
-        val entry = Entry(verdict ?: entries[key]?.ended ?: false, now)
-        entries[key] = entry
-        _ended.update { if (entry.ended) it + key else it - key }
+        // Atomic so a probe and a recordResult racing on one key cannot leave the key in [ended]
+        // while its entry says alive (or the reverse).
+        val entry = synchronized(lock) {
+            Entry(verdict ?: entries[key]?.ended ?: false, now).also { entry ->
+                entries[key] = entry
+                _ended.update { if (entry.ended) it + key else it - key }
+            }
+        }
         if (entry.ended) {
             scope.launch {
                 delay(ENDED_TTL_MS)
                 // Expire only if no newer result replaced this one.
-                if (entries.remove(key, entry)) _ended.update { it - key }
+                synchronized(lock) {
+                    if (entries.remove(key, entry)) _ended.update { it - key }
+                }
             }
         }
     }
 
     /** The verdict of a full search; null on a timeout or an exception. */
-    private suspend fun search(item: SportsLiveItem): Boolean? {
+    private suspend fun search(item: SportsLiveItem, forceRefresh: Boolean): Boolean? {
         var last: NetworkResult<List<AddonStreams>>? = null
         val finished = try {
             withTimeoutOrNull(PROBE_TIMEOUT_MS) {
-                streamRepository.getStreamsFromAllAddons(item.apiType, item.id).collect { last = it }
+                streamRepository.getStreamsFromAllAddons(item.apiType, item.id, forceRefresh = forceRefresh).collect { last = it }
                 true
             }
         } catch (e: CancellationException) {
