@@ -228,7 +228,7 @@ private fun LiveGamesPanel(
     Box(
         modifier = Modifier
             .fillMaxHeight()
-            .width(520.dp)
+            .width(340.dp)
             .clip(RoundedCornerShape(topEnd = NuvioTheme.spacing.lg, bottomEnd = NuvioTheme.spacing.lg))
             .background(NuvioTheme.colors.BackgroundElevated)
             .focusProperties { onExit = { cancelFocusChange() } }
@@ -247,7 +247,9 @@ private fun LiveGamesPanel(
             Text(
                 text = stringResource(R.string.sports_live_zap_panel_title),
                 style = MaterialTheme.typography.headlineSmall,
-                color = NuvioTheme.colors.TextPrimary
+                color = NuvioTheme.colors.TextPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
             Spacer(modifier = Modifier.height(NuvioTheme.spacing.lg))
             if (state.items.isEmpty()) {

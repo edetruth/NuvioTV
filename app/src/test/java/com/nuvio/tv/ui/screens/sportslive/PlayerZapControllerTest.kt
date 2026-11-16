@@ -32,6 +32,7 @@ class PlayerZapControllerTest {
     private val cancelled = mutableListOf<String>()
     private val navigated = mutableListOf<Pair<String, Stream>>()
     private val noStream = mutableListOf<String>()
+    private var ended = emptySet<String>()
 
     @After
     fun tearDown() {
@@ -51,7 +52,8 @@ class PlayerZapControllerTest {
             }
         },
         onNavigate = { item, stream -> navigated += item.id to stream },
-        onNoStream = { item -> noStream += item.id }
+        onNoStream = { item -> noStream += item.id },
+        endedKeys = { ended }
     )
 
     private fun startOn(id: String) {
@@ -91,6 +93,48 @@ class PlayerZapControllerTest {
 
         assertEquals(listOf("b" to STREAM), navigated)
         assertEquals("b", SportsLiveZapSessions.activeFor("b")?.current?.id)
+    }
+
+    @Test
+    fun `zaps skip games known to have ended`() = runTest {
+        startOn("a")
+        ended = setOf("addon|b", "addon|d")
+        val controller = controller()
+
+        assertTrue(controller.zap("a", forward = true))
+        runCurrent()
+        assertEquals("c", SportsLiveZapSessions.current()?.current?.id)
+        controller.zap("a", forward = true)
+        runCurrent()
+        // From "c" forward: "d" ended, wraps to "a".
+        assertEquals("a", SportsLiveZapSessions.current()?.current?.id)
+        controller.zap("a", forward = false)
+        runCurrent()
+
+        assertEquals(listOf("c", "a", "c"), resolveCalls)
+        assertEquals(4, SportsLiveZapSessions.current()?.items?.size)
+    }
+
+    @Test
+    fun `when every other game has ended the zap stays on the playing game`() = runTest {
+        startOn("a")
+        ended = setOf("addon|b", "addon|c", "addon|d")
+        val controller = controller()
+
+        assertFalse(controller.zap("a", forward = true))
+        assertFalse(controller.zap("a", forward = false))
+        assertTrue(resolveCalls.isEmpty())
+        assertEquals("a", SportsLiveZapSessions.activeFor("a")?.current?.id)
+    }
+
+    @Test
+    fun `starting a session drops a pending zap arrival`() {
+        SportsLiveZapSessions.markZapArrival()
+        startOn("a")
+
+        assertFalse(SportsLiveZapSessions.consumeZapArrival())
+        SportsLiveZapSessions.markZapArrival()
+        assertTrue(SportsLiveZapSessions.consumeZapArrival())
     }
 
     @Test

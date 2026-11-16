@@ -152,6 +152,12 @@ import com.nuvio.tv.core.party.PartySync
 import com.nuvio.tv.ui.screens.party.ConfirmDialog
 import com.nuvio.tv.ui.screens.party.PartyPanel
 import com.nuvio.tv.ui.screens.party.PartyStatusPill
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveShortPress
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapTarget
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapViewModel
+import com.nuvio.tv.ui.screens.sportslive.liveWindow
+import com.nuvio.tv.ui.screens.sportslive.rememberSportsLiveZapKeyHandler
+import com.nuvio.tv.ui.screens.sportslive.seekWithinSportsLiveWindow
 import com.nuvio.tv.core.player.PlayerWindowBackdrop
 import com.nuvio.tv.ui.util.keepLtr
 import com.nuvio.tv.ui.util.localizeEpisodeTitle
@@ -179,11 +185,6 @@ import com.nuvio.tv.libass.media.widget.AssSubtitleSurfaceView
 import kotlin.math.abs
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.withContext
-import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapTarget
-import com.nuvio.tv.ui.screens.sportslive.rememberSportsLiveZapKeyHandler
-import com.nuvio.tv.ui.screens.sportslive.seekWithinSportsLiveWindow
-import com.nuvio.tv.ui.screens.sportslive.liveWindow
-import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapViewModel
 
 private const val PLAYER_CONTROLS_FADE_DURATION_MS = 200
 
@@ -224,6 +225,8 @@ fun PlayerScreen(
     val sportsLiveZap: SportsLiveZapViewModel = hiltViewModel()
     val playerBadges = rememberPlayerBadges(viewModel, uiState)
     val partyState by viewModel.party.state.collectAsState()
+    // Sports & Live zapping, its panel and live rewind are off during a watch party.
+    val partyActive = partyState.party != null
     val partyPlayback by viewModel.party.playback.collectAsState()
     val partyAvailable by viewModel.party.available.collectAsState()
     val partyCanUse by viewModel.party.canUse.collectAsState()
@@ -855,12 +858,25 @@ fun PlayerScreen(
                         uiState.postPlayMode is PostPlayMode.StillWatching ||
                         postPlayRecommendationState.isVisible ||
                         uiState.error != null
-                if (panelOrDialogOpen) return@onKeyEvent false
-                // Sports & Live: a short Left press opens the live games panel, which then keeps the keys.
-                if (sportsLiveZap.panelOpen.value) return@onKeyEvent false
-                if (!uiState.showControls && !uiState.showPauseOverlay &&
-                    sportsLiveZap.onLeftKey(keyEvent.nativeKeyEvent)
+                // Sports & Live zap: Up/Down also zap away from the playback error screen.
+                if (uiState.error != null && keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN &&
+                    sportsLiveZapKey(keyEvent.nativeKeyEvent.keyCode, partyActive)
                 ) return@onKeyEvent true
+                if (panelOrDialogOpen) return@onKeyEvent false
+                // Sports & Live: a short Left press opens the live games panel, which then keeps the keys;
+                // a short Right press shows the controls (seeking is a no-op on live).
+                if (sportsLiveZap.panelOpen.value) return@onKeyEvent false
+                if (!uiState.showControls && !uiState.showPauseOverlay) {
+                    when (sportsLiveZap.onShortPressKey(keyEvent.nativeKeyEvent, partyActive)) {
+                        SportsLiveShortPress.NONE -> Unit
+                        SportsLiveShortPress.CONSUMED,
+                        SportsLiveShortPress.OPEN_PANEL -> return@onKeyEvent true
+                        SportsLiveShortPress.SHOW_CONTROLS -> {
+                            viewModel.onEvent(PlayerEvent.OnToggleControls)
+                            return@onKeyEvent true
+                        }
+                    }
+                }
 
                 if (keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_UP) {
                     when (keyEvent.nativeKeyEvent.keyCode) {
@@ -896,12 +912,12 @@ fun PlayerScreen(
                         return@onKeyEvent true
                     }
                     // Sports & Live zap: only for a player with a zap session, with the controls hidden.
-                    if (!uiState.showControls && sportsLiveZapKey(keyEvent.nativeKeyEvent.keyCode)) {
+                    if (!uiState.showControls && sportsLiveZapKey(keyEvent.nativeKeyEvent.keyCode, partyActive)) {
                         return@onKeyEvent true
                     }
                     // Sports & Live: held Left/Right and REW/FF seek inside a zap session's live window.
                     if (!uiState.showControls && seekWithinSportsLiveWindow(
-                            keyEvent.nativeKeyEvent, sportsLiveZap.hasSession,
+                            keyEvent.nativeKeyEvent, sportsLiveZap.hasSession && !partyActive,
                             viewModel.controller.currentInternalPlayerEngine, viewModel.exoPlayer
                         )
                     ) return@onKeyEvent true

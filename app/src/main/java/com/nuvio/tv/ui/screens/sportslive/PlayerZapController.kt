@@ -21,7 +21,9 @@ class PlayerZapController(
     private val scope: CoroutineScope,
     private val resolve: suspend (SportsLiveItem) -> Stream?,
     private val onNavigate: suspend (SportsLiveItem, Stream) -> Unit,
-    private val onNoStream: (SportsLiveItem) -> Unit
+    private val onNoStream: (SportsLiveItem) -> Unit,
+    /** Stream keys of the games known to have ended, which zaps skip. */
+    private val endedKeys: () -> Set<String> = { emptySet() }
 ) {
     private var job: Job? = null
 
@@ -45,13 +47,14 @@ class PlayerZapController(
 
     /**
      * Zaps from the player showing [contentId]. Returns false, leaving the key to the player,
-     * when that player has no session or the session has a single game.
+     * when that player has no session or every other game of the session is known to have ended.
      */
     fun zap(contentId: String?, forward: Boolean): Boolean {
         val inFlight = job?.isActive == true
-        val base = session(contentId)?.takeIf { it.items.size > 1 } ?: return false
+        val base = session(contentId) ?: return false
+        val target = base.step(forward, endedKeys()) ?: return false
         if (!inFlight) playing = base
-        return zapTo(if (forward) base.next() else base.previous())
+        return zapTo(target)
     }
 
     /**

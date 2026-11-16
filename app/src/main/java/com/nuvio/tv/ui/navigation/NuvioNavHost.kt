@@ -166,7 +166,14 @@ private fun navigateToSportsLiveZapTarget(navController: NavHostController, targ
     navController.navigate(route) {
         popUpTo(popUpToRoute) { inclusive = true }
     }
+    if (playback == null || streamUrl == null) {
+        // The target's Stream screen is a hop: the stream picked there replaces it, so Back still returns once.
+        navController.currentBackStackEntry?.savedStateHandle?.set(SPORTS_LIVE_ZAP_HOP, true)
+    }
 }
+
+/** Saved state flag of a Stream screen opened by a Sports & Live zap. */
+private const val SPORTS_LIVE_ZAP_HOP = "sportsLiveZapHop"
 
 /** Back to anything but the player's own Stream screen ends a Sports & Live zap session. */
 private fun clearSportsLiveZapSessionOnPlayerBack(navController: NavHostController) {
@@ -729,6 +736,7 @@ private fun PlaybackNavHost(
                 onStreamSelected = { playbackInfo ->
                     val streamUrl = playbackInfo.url
                         ?: if (playbackInfo.isTorrent) "torrent://${playbackInfo.infoHash}" else null
+                    val zapHop = streamSavedState.get<Boolean>(SPORTS_LIVE_ZAP_HOP) == true
                     streamUrl?.let { url ->
                         navController.navigate(
                             playerRouteFor(
@@ -740,7 +748,9 @@ private fun PlaybackNavHost(
                                 startFromBeginning = startFromBeginning,
                                 fromLinkCache = false
                             )
-                        )
+                        ) {
+                            if (zapHop) popUpTo(Screen.Stream.route) { inclusive = true }
+                        }
                     }
                 },
                 onAutoPlayResolved = { playbackInfo ->

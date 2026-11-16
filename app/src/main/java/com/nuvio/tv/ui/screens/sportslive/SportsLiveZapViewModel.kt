@@ -19,7 +19,6 @@ import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.domain.repository.SportsLiveRepository
-import com.nuvio.tv.ui.util.LongPressKeyTracker
 import com.nuvio.tv.ui.screens.stream.StreamPlaybackInfo
 import com.nuvio.tv.ui.screens.stream.streamPlaybackInfoFor
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -89,7 +88,8 @@ class SportsLiveZapViewModel @Inject constructor(
             SportsLiveZapSessions.markZapArrival()
             _events.send(SportsLiveZapEvent.Navigate(target))
         },
-        onNoStream = { item -> _events.trySend(SportsLiveZapEvent.NoStream(item.meta.name)) }
+        onNoStream = { item -> _events.trySend(SportsLiveZapEvent.NoStream(item.meta.name)) },
+        endedKeys = { repo.endedKeys.value }
     )
 
     /** True when this player was opened with a zap session for its content; only then is the overlay shown. */
@@ -125,9 +125,7 @@ class SportsLiveZapViewModel @Inject constructor(
         }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
-    private val leftKeyTracker = LongPressKeyTracker()
-    private var leftDownSeen = false
-    private var leftLongPress = false
+    private val shortPressKeys = SportsLiveShortPressKeys()
 
     init {
         if (arrival.value != null) {
@@ -138,33 +136,22 @@ class SportsLiveZapViewModel @Inject constructor(
         }
     }
 
-    /** True when the key was used for a zap. */
-    fun onKey(keyCode: Int): Boolean {
-        val forward = zapDirection(keyCode) ?: return false
+    /** True when the key was used for a zap. No zaps while a watch party is active. */
+    fun onKey(keyCode: Int, partyActive: Boolean): Boolean {
+        val forward = zapDirection(keyCode, partyActive) ?: return false
         return controller.zap(contentId, forward)
     }
 
     /**
-     * Left, pressed with the controls hidden: a short press opens the live games panel (on release).
-     * A long press is left to the player, so it gets the repeats and the release.
+     * Left or Right, pressed with the controls hidden: a short Left opens the live games panel, a
+     * short Right is returned as [SportsLiveShortPress.SHOW_CONTROLS] (both on release). A long press
+     * is left to the player, so it gets the repeats and the release. Inactive during a watch party.
      */
-    fun onLeftKey(event: KeyEvent): Boolean {
-        if (event.keyCode != KeyEvent.KEYCODE_DPAD_LEFT) return false
-        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
-            leftDownSeen = controller.session(contentId) != null
-            leftLongPress = false
-        }
-        if (!leftDownSeen) return false
-        leftKeyTracker.handle(event, { it == KeyEvent.KEYCODE_DPAD_LEFT }) { leftLongPress = true }
-        return when (event.action) {
-            KeyEvent.ACTION_DOWN -> !leftLongPress
-            KeyEvent.ACTION_UP -> {
-                leftDownSeen = false
-                if (!leftLongPress) openPanel()
-                !leftLongPress
-            }
-            else -> false
-        }
+    fun onShortPressKey(event: KeyEvent, partyActive: Boolean): SportsLiveShortPress {
+        val active = !partyActive && controller.session(contentId) != null
+        val result = shortPressKeys.onKey(event, active)
+        if (result == SportsLiveShortPress.OPEN_PANEL) openPanel()
+        return result
     }
 
     private fun openPanel() {
@@ -247,8 +234,8 @@ class SportsLiveZapViewModel @Inject constructor(
 
 private const val BANNER_MS = 3_000L
 
-/** true = next game, false = previous game, null = not a zap key. */
-internal fun zapDirection(keyCode: Int): Boolean? = when (keyCode) {
+/** true = next game, false = previous game, null = not a zap key or a watch party is active. */
+internal fun zapDirection(keyCode: Int, partyActive: Boolean): Boolean? = if (partyActive) null else when (keyCode) {
     KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_CHANNEL_DOWN, KeyEvent.KEYCODE_MEDIA_NEXT -> true
     KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_MEDIA_PREVIOUS -> false
     else -> null
@@ -259,7 +246,9 @@ internal fun zapDirection(keyCode: Int): Boolean? = when (keyCode) {
  * to another Sports & Live game. Players without a session for their content get false for every key.
  */
 @Composable
-fun rememberSportsLiveZapKeyHandler(onZap: (SportsLiveZapTarget) -> Unit): (keyCode: Int) -> Boolean {
+fun rememberSportsLiveZapKeyHandler(
+    onZap: (SportsLiveZapTarget) -> Unit
+): (keyCode: Int, partyActive: Boolean) -> Boolean {
     val viewModel: SportsLiveZapViewModel = hiltViewModel()
     val context = LocalContext.current
     val currentOnZap by rememberUpdatedState(onZap)
