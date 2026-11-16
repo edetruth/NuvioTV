@@ -4,6 +4,7 @@ import androidx.annotation.VisibleForTesting
 import com.nuvio.tv.core.debrid.DirectDebridResolver
 import com.nuvio.tv.core.network.NetworkResult
 import com.nuvio.tv.core.player.StreamAutoPlaySelector
+import com.nuvio.tv.core.sportslive.SportsLiveSourceLabels
 import com.nuvio.tv.core.streams.UnplayableStreamFilter
 import com.nuvio.tv.data.local.PlayerSettings
 import com.nuvio.tv.data.local.PlayerSettingsDataStore
@@ -126,12 +127,20 @@ class SportsLiveZapResolver @Inject constructor(
     suspend fun resolveAlternates(item: SportsLiveItem): SportsLiveExtraLookup =
         try {
             val installedOrder = installedOrder()
+            // Each source keeps its own label (provider sub-catalog, or addon name): the Sources panel
+            // groups by stream.addonName, so a shared addon's sub-catalogs must not reuse one label.
+            val labels = SportsLiveSourceLabels.of(item)
             val fetched = coroutineScope {
                 item.alternates
-                    .map { source -> async { fetchSource(source, installedOrder, dropPreparation = false) } }
+                    .map { source ->
+                        async { fetchSource(source, installedOrder, dropPreparation = false) to labels[source.streamKey] }
+                    }
                     .awaitAll()
             }
-            SportsLiveExtraLookup(fetched.flatMap { it.streams }, complete = fetched.all { it.finished })
+            val streams = fetched.flatMap { (source, label) ->
+                if (label == null) source.streams else source.streams.map { it.copy(addonName = label) }
+            }
+            SportsLiveExtraLookup(streams, complete = fetched.all { it.first.finished })
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
