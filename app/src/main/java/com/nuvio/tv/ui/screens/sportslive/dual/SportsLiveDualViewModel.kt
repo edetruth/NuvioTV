@@ -110,15 +110,22 @@ class SportsLiveDualViewModel internal constructor(
         return true
     }
 
-    fun onFirstFrame(item: SportsLiveItem) = dispatch(DualAction.FirstFrame(item))
+    fun onFirstFrame(item: SportsLiveItem) {
+        val side = _state.value?.sideOf(item) ?: return
+        dispatch(DualAction.FirstFrame(item))
+        // Playing now: the pane's first-frame timeout is no longer needed.
+        if (_state.value?.pane(side)?.status == PaneStatus.Playing) jobs.remove(side)?.cancel()
+    }
 
     /** A pane's player failed; [decoderInit] when it could not get a decoder. */
     fun onPlayerError(item: SportsLiveItem, decoderInit: Boolean) {
         val state = _state.value ?: return
         val side = state.sideOf(item) ?: return
-        // No decoder while the other pane plays: the device cannot play two streams at once.
-        val otherPlaying = state.pane(side.other).status == PaneStatus.Playing
-        dispatch(if (decoderInit && otherPlaying) DualAction.DeviceLimit(item) else DualAction.Failed(item))
+        // No decoder while the other pane holds one (starting or playing): the device cannot play two at once.
+        val other = state.pane(side.other)
+        val otherActive = other.stream != null &&
+            (other.status == PaneStatus.Loading || other.status == PaneStatus.Playing)
+        dispatch(if (decoderInit && otherActive) DualAction.DeviceLimit(item) else DualAction.Failed(item))
     }
 
     private fun zapTarget(current: SportsLiveItem, other: SportsLiveItem, forward: Boolean): SportsLiveItem? {

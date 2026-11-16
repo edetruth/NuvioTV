@@ -108,6 +108,19 @@ class SportsLiveDualStateTest {
     }
 
     @Test
+    fun `sound moves to the playing pane when the highlighted one fails`() {
+        val state = initial.reduce(DualAction.Resolved(a, dualStream("a")))
+            .reduce(DualAction.FirstFrame(a))
+            .reduce(DualAction.Resolved(b, dualStream("b")))
+            .reduce(DualAction.FirstFrame(b))
+            .reduce(DualAction.Highlight(Side.RIGHT))
+        assertEquals(Side.RIGHT, state.audibleSide)
+        val failed = state.reduce(DualAction.Failed(b))
+        assertEquals(PaneStatus.Error, failed.right.status)
+        assertEquals(Side.LEFT, failed.audibleSide)
+    }
+
+    @Test
     fun `stale results for an item no pane shows are ignored`() {
         val zapped = initial.reduce(DualAction.ZapRequested(Side.LEFT, c))
         assertSame(zapped, zapped.reduce(DualAction.Resolved(a, dualStream("a"))))

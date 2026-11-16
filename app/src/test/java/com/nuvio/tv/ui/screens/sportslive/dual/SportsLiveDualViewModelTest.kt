@@ -7,6 +7,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.currentTime
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -220,5 +222,46 @@ class SportsLiveDualViewModelTest {
         runCurrent()
         viewModel.onPlayerError(a, decoderInit = true)
         assertEquals(PaneStatus.Error, viewModel.current().left.status)
+    }
+
+    @Test
+    fun `a decoder failure while the other pane is still starting is the device limit`() = runTest(mainDispatcherRule.dispatcher) {
+        val viewModel = newViewModel()
+        runCurrent()
+        answer("a", dualStream("a"))
+        answer("b", dualStream("b"))
+        runCurrent()
+
+        // Both panes start together: neither has a first frame yet.
+        viewModel.onPlayerError(b, decoderInit = true)
+
+        assertEquals(PaneStatus.DeviceLimit, viewModel.current().right.status)
+        assertEquals(PaneStatus.Loading, viewModel.current().left.status)
+    }
+
+    @Test
+    fun `a decoder failure while the other pane is still looking its stream up is a stream error`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            val viewModel = newViewModel()
+            runCurrent()
+            answer("b", dualStream("b"))
+            runCurrent()
+            viewModel.onPlayerError(b, decoderInit = true)
+            assertEquals(PaneStatus.Error, viewModel.current().right.status)
+        }
+
+    @Test
+    fun `the first frame cancels the pane's timeout`() = runTest(mainDispatcherRule.dispatcher) {
+        val viewModel = newViewModel()
+        runCurrent()
+        answer("a", dualStream("a"))
+        runCurrent()
+        viewModel.onFirstFrame(a)
+        runCurrent()
+        // With the timeout still pending, running idle would move virtual time 15 s on.
+        val before = currentTime
+        advanceUntilIdle()
+        assertEquals(before, currentTime)
+        assertEquals(PaneStatus.Playing, viewModel.current().left.status)
     }
 }

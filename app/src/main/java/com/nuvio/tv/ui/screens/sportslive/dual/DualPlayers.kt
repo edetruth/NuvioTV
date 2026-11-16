@@ -6,6 +6,7 @@ import androidx.media3.common.C
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.mediacodec.MediaCodecRenderer
 import com.nuvio.tv.domain.model.SportsLiveItem
@@ -15,7 +16,8 @@ import com.nuvio.tv.ui.screens.player.PlayerMediaSourceFactory
 /**
  * The dual screen's two ExoPlayers. [sync] plays each pane of a [DualState] (a pane keeps its
  * player across a swap, so swapping does not restart either stream) and gives sound only to the
- * [DualState.audibleSide] pane. Media sources come from the player's [PlayerMediaSourceFactory],
+ * [DualState.audibleSide] pane: the other pane's audio track is disabled (volume 0 alone does not
+ * mute AC3/EAC3 passthrough over HDMI, and a disabled track frees its audio decoder). Media sources come from the player's [PlayerMediaSourceFactory],
  * so a stream's proxy request headers are sent as in the full player.
  *
  * Neither player handles audio focus (the builder default): two players taking focus from each
@@ -31,7 +33,8 @@ internal class DualPlayers(
     private val appContext = context.applicationContext
 
     private inner class Slot {
-        val player: ExoPlayer = ExoPlayer.Builder(appContext)
+        // Decoder fallback as in the full player, so a second pane can fall back to a software decoder.
+        val player: ExoPlayer = ExoPlayer.Builder(appContext, DefaultRenderersFactory(appContext).setEnableDecoderFallback(true))
             .setVideoChangeFrameRateStrategy(C.VIDEO_CHANGE_FRAME_RATE_STRATEGY_OFF)
             .build()
         // Its own instance: parallel connections and the VOD cache stay at their defaults (off).
@@ -40,30 +43,57 @@ internal class DualPlayers(
         /** The game and stream this player plays; null when it is stopped. */
         var loaded: Pair<SportsLiveItem, Stream>? = null
 
-        init {
-            player.addListener(object : Player.Listener {
+        /** Counts loads; a load's listener drops events once a newer load (or a stop) has started. */
+        private var loads = 0
+        private var listener: Player.Listener? = null
+
+        /** Replaces the listener with one that reports [item]'s events for this load only. */
+        private fun listenToLoad(item: SportsLiveItem) {
+            val load = ++loads
+            listener?.let(player::removeListener)
+            listener = object : Player.Listener {
                 override fun onRenderedFirstFrame() {
-                    loaded?.let { onFirstFrame(it.first) }
+                    if (load == loads) onFirstFrame(item)
                 }
 
                 override fun onPlayerError(error: PlaybackException) {
-                    loaded?.let { onError(it.first, error.isDecoderInitFailure()) }
+                    if (load == loads) onError(item, error.isDecoderInitFailure())
                 }
-            })
+            }.also(player::addListener)
+        }
+
+        fun release() {
+            loads++
+            player.release()
+        }
+
+        fun setAudible(audible: Boolean) {
+            player.volume = if (audible) 1f else 0f
+            val disabled = !audible
+            val params = player.trackSelectionParameters
+            if (C.TRACK_TYPE_AUDIO in params.disabledTrackTypes != disabled) {
+                player.trackSelectionParameters = params.buildUpon()
+                    .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, disabled)
+                    .build()
+            }
         }
 
         fun show(pane: DualPane) {
             val wanted = pane.playable()
             if (wanted == loaded) return
-            loaded = wanted
-            if (wanted == null) {
+            val url = wanted?.second?.getStreamUrl()
+            if (wanted == null || url == null) {
+                loaded = null
+                loads++
                 player.stop()
                 player.clearMediaItems()
                 return
             }
+            loaded = wanted
+            listenToLoad(wanted.first)
             val stream = wanted.second
             val request = PlayerMediaSourceFactory.normalizePlaybackRequest(
-                url = stream.getStreamUrl() ?: return,
+                url = url,
                 headers = stream.behaviorHints?.proxyHeaders?.request
             )
             player.setMediaSource(
@@ -71,7 +101,8 @@ internal class DualPlayers(
                     context = appContext,
                     url = request.url,
                     headers = request.headers,
-                    filename = stream.behaviorHints?.filename
+                    filename = stream.behaviorHints?.filename,
+                    responseHeaders = stream.behaviorHints?.proxyHeaders?.response.orEmpty()
                 )
             )
             player.prepare()
@@ -101,7 +132,7 @@ internal class DualPlayers(
         for (side in Side.entries) {
             val slot = assigned.getValue(side)
             slot.show(state.pane(side))
-            slot.player.volume = if (side == state.audibleSide) 1f else 0f
+            slot.setAudible(side == state.audibleSide)
         }
     }
 
@@ -111,7 +142,7 @@ internal class DualPlayers(
         released = true
         slots.forEach {
             it.loaded = null
-            it.player.release()
+            it.release()
         }
     }
 }
