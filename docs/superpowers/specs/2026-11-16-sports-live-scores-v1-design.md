@@ -19,6 +19,7 @@ Show live and final scores on Sports & Live game cards and in the details pane, 
    - **Details pane:** scoreline with team abbreviations, a linescore row (quarters / halves / periods) and, for soccer, goal scorers from `competitions[].details` — all from the scoreboard (no extra call).
    - **Results:** a "Results" chip/tab entry on Sports & Live listing finished games from yesterday and earlier (date chips: Yesterday, 2 days ago, … up to 7) for leagues the user has watched or followed teams in (My Teams) — each row: teams, final score, league. Selecting a result opens Replays for that game if an addon has one, else nothing.
    - **Merged cards** use the primary's teams/time; one chip per card.
+5b. **Our own game card art (user request):** game cards replace the addon's poster with a card Nuvio Live draws: both team names (abbreviations on small cards), local kickoff time, league name and the score chip; team logos and league badges from the score data where available (loaded by URL, cached), large team-name type when not. Channels keep the addon's artwork. Unmatched games still get the drawn card (names + local time, no logos/score).
 6. **Spoilers:** setting "Scores" in Settings → Sports & Live: **Show** (default) / **Hide until focused** / **Off**. Hide-until-focused blurs/replaces the score with "Score hidden" until the card is focused for 1 s; Results rows always respect it. Replays tab never shows scores in v1.
 7. **Data minimisation:** requests carry only league and date; no user data; generic User-Agent.
 
