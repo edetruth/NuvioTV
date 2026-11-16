@@ -18,8 +18,11 @@ import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
+import io.mockk.mockkStatic
+import io.mockk.unmockkStatic
 import io.mockk.runs
 import io.mockk.verify
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
@@ -32,6 +35,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.After
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 
@@ -40,6 +45,18 @@ class SportsLiveViewModelTest {
 
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
+
+    // The ViewModel buckets on Dispatchers.Default; the test dispatcher keeps that deterministic.
+    @Before
+    fun setUp() {
+        mockkStatic(Dispatchers::class)
+        every { Dispatchers.Default } returns mainDispatcherRule.dispatcher
+    }
+
+    @After
+    fun tearDown() {
+        unmockkStatic(Dispatchers::class)
+    }
 
     private val claimedFlow = MutableStateFlow(listOf(CLAIMED))
     private val latestFlow = MutableStateFlow<SportsLiveLoad?>(null)

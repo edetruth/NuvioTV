@@ -171,6 +171,40 @@ class SportsLiveRepositoryImplTest {
     }
 
     @Test
+    fun `a load without channels refetches channels from another install of the same addon`() = runTest {
+        catalogRepository.results["generic" to "chan"] = success("generic", "chan", meta("ch1"))
+        val repository = newRepository()
+        repository.load()
+        assertEquals(3, catalogRepository.calls)
+
+        // Another profile installs the same addon under a different manifest URL: same catalog keys.
+        addons.value = listOf(sportsAddon, genericAddon.copy(baseUrl = "https://generic-b.example.test"), disabledAddon)
+        catalogRepository.results["generic" to "chan"] = success("generic", "chan", meta("ch2"))
+        val reload = repository.load(force = true, includeChannels = false)
+
+        assertEquals(6, catalogRepository.calls)
+        val channel = reload.items.single { it.catalogKey == SportsLiveCatalogPolicy.keyFor(genericAddon, channelsCatalog) }
+        assertEquals("ch2", channel.id)
+        assertEquals("https://generic-b.example.test", channel.addonBaseUrl)
+    }
+
+    @Test
+    fun `a load without channels refetches channels when the claimed catalogs changed`() = runTest {
+        catalogRepository.results["generic" to "chan"] = success("generic", "chan", meta("ch1"))
+        val repository = newRepository()
+        repository.load()
+        assertEquals(3, catalogRepository.calls)
+
+        prefs.setOverride(SportsLiveCatalogPolicy.keyFor(sportsAddon, upcomingCatalog), SportsLiveOverride.EXCLUDE)
+        catalogRepository.results["generic" to "chan"] = success("generic", "chan", meta("ch2"))
+        val reload = repository.load(force = true, includeChannels = false)
+
+        assertEquals(5, catalogRepository.calls)
+        assertTrue(reload.items.any { it.id == "ch2" })
+        assertFalse(reload.items.any { it.id == "ch1" })
+    }
+
+    @Test
     fun `a load without channels fetches channels that were never loaded or failed`() = runTest {
         catalogRepository.results["generic" to "chan"] = NetworkResult.Error("too big")
         val repository = newRepository()

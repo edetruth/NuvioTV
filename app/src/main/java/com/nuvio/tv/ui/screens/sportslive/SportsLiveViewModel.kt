@@ -10,12 +10,14 @@ import com.nuvio.tv.domain.repository.SportsLiveFailure
 import com.nuvio.tv.domain.repository.SportsLiveRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
@@ -54,13 +56,14 @@ class SportsLiveViewModel @Inject constructor(
     private var autoRefreshJob: Job? = null
     private var focusProbeJob: Job? = null
 
-    // Bucketing a large channel list is the expensive step, so selection changes do not repeat it.
+    // Bucketing a large channel list is the expensive step, so selection changes do not repeat it,
+    // and it runs off the main thread.
     private val bucketed = combine(repo.claimedCatalogs, repo.latest) { claimed, latest ->
         // Only items of catalogs claimed right now: the cache may still hold another profile's load.
         val claimedKeys = claimed.mapTo(HashSet()) { it.key }
         val items = latest?.items.orEmpty().filter { it.catalogKey in claimedKeys }
         Bucketed(hasClaimed = claimed.isNotEmpty(), hasLoad = latest != null, tabs = bucket(items, nowMs()))
-    }
+    }.flowOn(Dispatchers.Default)
 
     val uiState: StateFlow<SportsLiveUiState> =
         combine(bucketed, repo.endedKeys, selectionState, ::buildState)

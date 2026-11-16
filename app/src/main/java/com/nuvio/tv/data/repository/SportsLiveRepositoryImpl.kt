@@ -102,21 +102,26 @@ class SportsLiveRepositoryImpl @Inject constructor(
         if (!force && cached != null && nowMs() - cached.loadedAtMs < CACHE_MS && cached.claimedKeys == claimedKeys) {
             return@withLock cached
         }
-        // Channels catalogs the cached load fetched successfully are carried over rather than refetched.
-        val carriedKeys = if (includeChannels || cached == null) {
-            emptySet()
-        } else {
-            val failedKeys = cached.failures.mapTo(HashSet()) { it.catalog.key }
-            claimed.filter { it.kind == SportsLiveKind.CHANNELS && it.key in cached.claimedKeys && it.key !in failedKeys }
-                .mapTo(HashSet()) { it.key }
-        }
+        // A channels catalog is carried over from the cached load, rather than refetched, only when that
+        // load covered exactly the catalogs claimed now and its items came from the same addon install:
+        // keys have no base URL, and two profiles can install one addon under different manifest URLs.
+        val carriedItems: Map<String, List<SportsLiveItem>> =
+            if (includeChannels || cached == null || cached.claimedKeys != claimedKeys) {
+                emptyMap()
+            } else {
+                val cachedByKey = cached.items.groupBy { it.catalogKey }
+                claimed.filter { it.kind == SportsLiveKind.CHANNELS }.mapNotNull { catalog ->
+                    cachedByKey[catalog.key]
+                        ?.takeIf { items -> items.all { it.addonBaseUrl == catalog.addon.baseUrl } }
+                        ?.let { catalog.key to it }
+                }.toMap()
+            }
 
         val fetched = coroutineScope {
-            claimed.filterNot { it.key in carriedKeys }
+            claimed.filterNot { it.key in carriedItems }
                 .map { catalog -> async(ioDispatcher) { catalog.key to fetchFirstPage(catalog) } }
                 .awaitAll()
         }.toMap()
-        val carriedItems = cached?.items.orEmpty().filter { it.catalogKey in carriedKeys }.groupBy { it.catalogKey }
         val now = nowMs()
         val items = mutableListOf<SportsLiveItem>()
         val failures = mutableListOf<SportsLiveFailure>()
