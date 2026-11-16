@@ -4,6 +4,8 @@ import android.content.Context
 import android.view.ViewGroup
 import androidx.annotation.OptIn
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -17,14 +19,22 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -164,9 +174,14 @@ class SportsLiveMiniPlayerViewModel @Inject constructor(
 
 /**
  * The in-app mini player, drawn above the NavHost: bottom-right, 24% of the screen's width, 16:9,
- * with "<game> · Play/Pause to expand" under it. It never takes focus, so the D-pad keeps working
- * the screen underneath. [onExpand] opens the full player for an expand's target, after the mini
- * player has stopped.
+ * with "<game> · Play/Pause to expand" under it. [onExpand] opens the full player for an expand's
+ * target, after the mini player has stopped.
+ *
+ * It is focusable but never asks for focus: it comes after the whole app in the hierarchy, so a
+ * screen's initial focus never lands on it, and only a D-pad move (Down/Right) with nothing else
+ * that way reaches it (a list scrolls its items in before focus leaves it). Focused, it shows a
+ * ring and "OK to expand · Back to close": OK expands, Back stops it and focus goes back up to the
+ * content, and Up/Left move focus back as usual.
  */
 @OptIn(UnstableApi::class)
 @Composable
@@ -181,6 +196,8 @@ fun SportsLiveMiniPlayerHost(
     val playing = state as? SportsLiveMiniState.Playing
     val playback = remember { SportsLiveMiniPlayback(context, controller::onStreamError) }
     val currentOnExpand by rememberUpdatedState(onExpand)
+    val focusManager = LocalFocusManager.current
+    var focused by remember { mutableStateOf(false) }
 
     DisposableEffect(playback) {
         val release: () -> Unit = playback::release
@@ -191,7 +208,13 @@ fun SportsLiveMiniPlayerHost(
         }
     }
     LaunchedEffect(playing?.sessionId) {
-        if (playing == null) playback.release() else playback.play(playing.sessionId, playing.stream)
+        if (playing == null) {
+            playback.release()
+            // Removed while focused: the next mini player starts without the focus ring.
+            focused = false
+        } else {
+            playback.play(playing.sessionId, playing.stream)
+        }
     }
     LaunchedEffect(viewModel) {
         viewModel.targets.collect { target ->
@@ -220,6 +243,30 @@ fun SportsLiveMiniPlayerHost(
                     .align(Alignment.BottomEnd)
                     .padding(end = 24.dp, bottom = 24.dp)
                     .width(maxWidth * 0.24f)
+                    .onFocusChanged { focused = it.isFocused }
+                    .onKeyEvent { event ->
+                        val native = event.nativeKeyEvent
+                        val key = sportsLiveMiniKey(
+                            keyCode = native.keyCode,
+                            down = event.type == KeyEventType.KeyDown,
+                            repeatCount = native.repeatCount
+                        ) ?: return@onKeyEvent false
+                        when (key) {
+                            SportsLiveMiniKey.EXPAND -> controller.requestExpand()
+                            SportsLiveMiniKey.CLOSE -> {
+                                // Focus goes back to the content first, as the Now playing card's Stop.
+                                if (!focusManager.moveFocus(FocusDirection.Up) &&
+                                    !focusManager.moveFocus(FocusDirection.Left)
+                                ) {
+                                    focusManager.clearFocus()
+                                }
+                                controller.stop(SportsLiveMiniStop.USER_STOP)
+                            }
+                            SportsLiveMiniKey.CONSUME -> Unit
+                        }
+                        true
+                    }
+                    .focusable()
             },
             horizontalAlignment = Alignment.Start
         ) {
@@ -231,6 +278,9 @@ fun SportsLiveMiniPlayerHost(
                     Modifier
                         .aspectRatio(16f / 9f)
                         .shadow(elevation = 12.dp, shape = shape)
+                        // The ring sits outside the video, which would cover it.
+                        .border(3.dp, if (focused) NuvioTheme.colors.FocusRing else Color.Transparent, shape)
+                        .padding(3.dp)
                         .clip(shape)
                         .background(Color.Black)
                 }
@@ -256,7 +306,10 @@ fun SportsLiveMiniPlayerHost(
             }
             if (!inPip) {
                 Text(
-                    text = stringResource(R.string.sports_live_mini_hint, playing.item.meta.name),
+                    text = stringResource(
+                        if (focused) R.string.sports_live_mini_ok_hint else R.string.sports_live_mini_hint,
+                        playing.item.meta.name
+                    ),
                     style = MaterialTheme.typography.labelMedium,
                     color = NuvioTheme.colors.TextPrimary,
                     maxLines = 1,

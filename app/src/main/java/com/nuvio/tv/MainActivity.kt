@@ -1310,7 +1310,7 @@ open class MainActivity : ComponentActivity() {
                                 }
                             }
 
-                            // The Sports & Live mini player, above the NavHost; it never takes focus.
+                            // The Sports & Live mini player, above the NavHost; focus reaches it only by a D-pad move.
                             SportsLiveMiniPlayerHost(
                                 onExpand = { target -> navController.navigate(sportsLiveTargetRoute(target)) }
                             )
