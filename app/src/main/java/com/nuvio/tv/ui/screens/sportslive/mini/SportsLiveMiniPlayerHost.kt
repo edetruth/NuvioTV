@@ -15,6 +15,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -205,25 +206,36 @@ fun SportsLiveMiniPlayerHost(
     expanding?.let { SportsLiveResolvingDialog(it, onDismiss = viewModel::cancelExpand) }
 
     if (playing == null) return
+    // In picture-in-picture only the video shows, filling the window.
+    val inPip by SportsLivePip.inPip.collectAsState()
     BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
+            .then(if (inPip) Modifier.background(Color.Black) else Modifier)
             .focusProperties { canFocus = false }
     ) {
         Column(
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(end = 24.dp, bottom = 24.dp)
-                .width(maxWidth * 0.24f),
+            modifier = if (inPip) {
+                Modifier.fillMaxSize()
+            } else {
+                Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 24.dp, bottom = 24.dp)
+                    .width(maxWidth * 0.24f)
+            },
             horizontalAlignment = Alignment.Start
         ) {
             val shape = RoundedCornerShape(NuvioTheme.radii.md)
             Box(
-                modifier = Modifier
-                    .aspectRatio(16f / 9f)
-                    .shadow(elevation = 12.dp, shape = shape)
-                    .clip(shape)
-                    .background(Color.Black)
+                modifier = if (inPip) {
+                    Modifier.fillMaxSize()
+                } else {
+                    Modifier
+                        .aspectRatio(16f / 9f)
+                        .shadow(elevation = 12.dp, shape = shape)
+                        .clip(shape)
+                        .background(Color.Black)
+                }
             ) {
                 AndroidView(
                     factory = { ctx ->
@@ -244,18 +256,20 @@ fun SportsLiveMiniPlayerHost(
                     modifier = Modifier.fillMaxSize()
                 )
             }
-            Text(
-                text = stringResource(R.string.sports_live_mini_hint, playing.item.meta.name),
-                style = MaterialTheme.typography.labelMedium,
-                color = NuvioTheme.colors.TextPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .padding(top = 6.dp)
-                    .clip(RoundedCornerShape(NuvioTheme.radii.sm))
-                    .background(Color.Black.copy(alpha = 0.6f))
-                    .padding(horizontal = 8.dp, vertical = 2.dp)
-            )
+            if (!inPip) {
+                Text(
+                    text = stringResource(R.string.sports_live_mini_hint, playing.item.meta.name),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = NuvioTheme.colors.TextPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .padding(top = 6.dp)
+                        .clip(RoundedCornerShape(NuvioTheme.radii.sm))
+                        .background(Color.Black.copy(alpha = 0.6f))
+                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                )
+            }
         }
     }
 }

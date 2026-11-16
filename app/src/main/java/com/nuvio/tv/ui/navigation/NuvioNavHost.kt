@@ -23,6 +23,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.collectAsState
@@ -74,6 +75,7 @@ import com.nuvio.tv.ui.screens.sportslive.dual.LocalOpenSportsLiveDual
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualScreen
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniPlayers
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniStop
+import com.nuvio.tv.ui.screens.sportslive.mini.SportsLivePip
 import com.nuvio.tv.ui.screens.sportslive.mini.sportsLiveMiniStream
 import com.nuvio.tv.ui.screens.stream.StreamPlaybackInfo
 import com.nuvio.tv.ui.screens.stream.StreamScreen
@@ -1078,8 +1080,19 @@ private fun PlaybackNavHost(
             // Any player opening stops the Sports & Live mini player, before it starts its own sound.
             DisposableEffect(backStackEntry.id) {
                 SportsLiveMiniPlayers.controller.stop(SportsLiveMiniStop.OTHER_PLAYER)
-                onDispose { }
+                // Home can put this player in picture-in-picture when it plays a zap session;
+                // closing that window stops it and leaves the player, as Back does.
+                val contentId = backStackEntry.arguments?.getString("contentId")
+                val pipToken = SportsLivePip.attachFullPlayer(contentId) {
+                    playerViewModel.stopAndRelease()
+                    clearSportsLiveZapSessionOnPlayerBack(navController, contentId)
+                    if (navController.currentBackStackEntry?.id == backStackEntry.id) navController.popBackStack()
+                }
+                onDispose { SportsLivePip.detachFullPlayer(pipToken) }
             }
+            // In picture-in-picture only the video shows: the controls are hidden.
+            val inPip by SportsLivePip.inPip.collectAsState()
+            LaunchedEffect(inPip) { if (inPip) playerViewModel.hideControls() }
             PlayerScreen(
                 viewModel = playerViewModel,
                 onBackPress = { currentVideoId, currentSeason, currentEpisode, autoPlayEnabled, playbackCompleted ->

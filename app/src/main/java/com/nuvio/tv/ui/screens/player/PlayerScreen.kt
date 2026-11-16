@@ -495,7 +495,8 @@ fun PlayerScreen(
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_PAUSE -> {
-                    viewModel.pauseForLifecycle()
+                    // Sports & Live picture-in-picture keeps playing (only zap-session players enter it).
+                    if ((context as? android.app.Activity)?.isInPictureInPictureMode != true) viewModel.pauseForLifecycle()
                 }
                 Lifecycle.Event.ON_STOP -> {
                     // This back stack entry also stops when the player is navigated away from or

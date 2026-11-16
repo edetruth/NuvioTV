@@ -1,11 +1,15 @@
 package com.nuvio.tv
 
+import android.app.PictureInPictureParams
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.drawable.ColorDrawable
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
+import android.util.Rational
 import android.view.KeyEvent
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -121,6 +125,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.os.ConfigurationCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.metrics.performance.JankStats
 import androidx.metrics.performance.PerformanceMetricsState
@@ -190,6 +195,8 @@ import com.nuvio.tv.ui.navigation.sportsLiveTargetRoute
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniPlayerHost
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniPlayers
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniStop
+import com.nuvio.tv.ui.screens.sportslive.mini.SportsLivePip
+import com.nuvio.tv.ui.screens.sportslive.mini.sportsLivePipEligible
 import com.nuvio.tv.ui.navigation.Screen
 import com.nuvio.tv.ui.navigation.rememberNavSessionViewModelStoreOwner
 import com.nuvio.tv.ui.screens.party.PartyEffects
@@ -1490,8 +1497,43 @@ open class MainActivity : ComponentActivity() {
         androidTvChannelSyncService.onForegroundChanged(true)
     }
 
+    // Home while Sports & Live plays: picture-in-picture (16:9) when the device has it.
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        val eligible = sportsLivePipEligible(
+            sdkInt = Build.VERSION.SDK_INT,
+            hasPipFeature = packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE),
+            sportsFullPlayerShowing = SportsLivePip.sportsFullPlayerShowing(),
+            miniPlayerActive = SportsLiveMiniPlayers.controller.isActive
+        )
+        if (eligible && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            runCatching {
+                enterPictureInPictureMode(
+                    PictureInPictureParams.Builder().setAspectRatio(Rational(16, 9)).build()
+                )
+            }
+        }
+    }
+
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        // Leaving PiP while stopped means its window was closed; otherwise the full UI is back.
+        if (!isInPictureInPictureMode && !lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+            SportsLivePip.onClosed()
+        } else {
+            SportsLivePip.onModeChanged(isInPictureInPictureMode)
+        }
+    }
+
     override fun onStop() {
         externalPlaybackTracker.onExternalPlayerCoveredApp()
+        when {
+            // The PiP window was closed: its playback stops and the players are released.
+            isInPictureInPictureMode -> SportsLivePip.onClosed()
+            // No sound in the background: the mini player stops when the app leaves (an external
+            // player included) without picture-in-picture.
+            !isChangingConfigurations -> SportsLiveMiniPlayers.controller.stop(SportsLiveMiniStop.APP_BACKGROUND)
+        }
         super.onStop()
         startupSyncService.stopPeriodicSurfacePulls()
         // App going to background (e.g. user returning to the launcher): reconcile the
