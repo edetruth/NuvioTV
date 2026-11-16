@@ -7,6 +7,7 @@ import com.nuvio.tv.domain.model.AddonStreams
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.domain.repository.StreamRepository
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveResolveCache
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -36,7 +37,8 @@ import javax.inject.Singleton
  */
 @Singleton
 class SportsLiveStreamProbe @Inject constructor(
-    private val streamRepository: StreamRepository
+    private val streamRepository: StreamRepository,
+    private val resolveCache: SportsLiveResolveCache
 ) {
     companion object {
         const val CONCURRENCY = 3
@@ -70,6 +72,9 @@ class SportsLiveStreamProbe @Inject constructor(
     /** Probes [item] in the background when its result is missing or older than [REPROBE_AFTER_MS]. */
     fun reprobeIfStale(item: SportsLiveItem) {
         val key = item.streamKey
+        // A fresh resolve (from preview/zap/section) already proved the game alive; don't spend a
+        // request probing on mere focus.
+        if (resolveCache.isFresh(key)) return
         val entry = entries[key]
         if (entry != null && nowMs() - entry.probedAtMs < REPROBE_AFTER_MS) return
         if (!inFlight.add(key)) return

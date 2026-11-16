@@ -25,6 +25,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -34,8 +35,9 @@ class SportsLiveStreamProbeTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     private val streams = FakeStreamRepository()
+    private val resolveCache = com.nuvio.tv.ui.screens.sportslive.SportsLiveResolveCache()
 
-    private fun newProbe() = SportsLiveStreamProbe(streams).also {
+    private fun newProbe() = SportsLiveStreamProbe(streams, resolveCache).also {
         it.nowMs = { mainDispatcherRule.dispatcher.scheduler.currentTime }
         it.dispatcher = mainDispatcherRule.dispatcher
     }
@@ -54,6 +56,18 @@ class SportsLiveStreamProbeTest {
 
         assertEquals(setOf("sports|gone", "sports|web"), probe.ended.value)
         assertEquals(listOf("sport"), streams.calls.map { it.first }.distinct())
+    }
+
+    @Test
+    fun `a fresh cached resolve skips the on-focus probe`() = runTest {
+        streams.responses["ok"] = { result(PLAYABLE) }
+        resolveCache.put(item("ok").streamKey, PLAYABLE)
+        val probe = newProbe()
+
+        probe.reprobeIfStale(item("ok"))
+        advanceTimeBy(1)
+
+        assertTrue(streams.calls.isEmpty())
     }
 
     @Test

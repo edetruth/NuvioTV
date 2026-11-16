@@ -4,6 +4,7 @@ import androidx.annotation.VisibleForTesting
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nuvio.tv.core.debrid.DirectDebridResolver
+import com.nuvio.tv.core.sportslive.SportsLiveDataSaver
 import com.nuvio.tv.core.sportslive.SportsLiveItemBucketer
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
@@ -44,7 +45,9 @@ class SportsLiveViewModel internal constructor(
     previewResolve: suspend (SportsLiveItem) -> Stream? = { null },
     hoverPreviewEnabled: Flow<Boolean> = flowOf(false),
     /** The mini player plays: it takes priority, so no preview starts meanwhile. */
-    miniPlayerActive: Flow<Boolean> = flowOf(false)
+    miniPlayerActive: Flow<Boolean> = flowOf(false),
+    /** Data saver: when on, the on-focus ended-probe is skipped (hover preview is already gated off). */
+    dataSaver: Flow<Boolean> = flowOf(false)
 ) : ViewModel() {
 
     @Inject
@@ -59,8 +62,11 @@ class SportsLiveViewModel internal constructor(
         previewResolve = { item ->
             resolver.resolve(item)?.takeIf { stream -> sportsLiveLightPlayable(stream, directDebridResolver) }
         },
-        hoverPreviewEnabled = prefs.hoverPreview,
-        miniPlayerActive = SportsLiveMiniPlayers.controller.state.map { it is SportsLiveMiniState.Playing }
+        hoverPreviewEnabled = combine(prefs.hoverPreview, prefs.dataSaver) { hover, saver ->
+            SportsLiveDataSaver.hoverPreviewAllowed(hover, saver)
+        },
+        miniPlayerActive = SportsLiveMiniPlayers.controller.state.map { it is SportsLiveMiniState.Playing },
+        dataSaver = prefs.dataSaver
     )
 
     private data class Selection(
@@ -89,6 +95,10 @@ class SportsLiveViewModel internal constructor(
     private val selectionState = MutableStateFlow(Selection())
     private var autoRefreshJob: Job? = null
     private var focusProbeJob: Job? = null
+
+    // Latest Data saver value; the on-focus probe is skipped while it is on.
+    @Volatile
+    private var dataSaverActive = false
 
     // Bucketing a large channel list is the expensive step, so selection changes do not repeat it,
     // and it runs off the main thread.
@@ -137,6 +147,7 @@ class SportsLiveViewModel internal constructor(
             combine(hoverPreviewEnabled, miniPlayerActive) { enabled, mini -> enabled && !mini }
                 .collect(previewController::onEnabled)
         }
+        viewModelScope.launch { dataSaver.collect { dataSaverActive = it } }
     }
 
     /**
@@ -192,6 +203,8 @@ class SportsLiveViewModel internal constructor(
         selectionState.update { it.copy(itemId = id) }
         focusProbeJob?.cancel()
         if (id == null || selectionState.value.tab != SportsLiveTab.LIVE_NOW) return
+        // Data saver: resolve/probe only on explicit play or zap-settle, never on mere focus.
+        if (!SportsLiveDataSaver.onFocusProbeAllowed(dataSaverActive)) return
         focusProbeJob = viewModelScope.launch {
             delay(FOCUS_PROBE_DELAY_MS)
             val selection = selectionState.value

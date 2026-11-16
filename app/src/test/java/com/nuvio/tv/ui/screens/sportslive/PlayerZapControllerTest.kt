@@ -14,6 +14,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -39,7 +40,10 @@ class PlayerZapControllerTest {
         SportsLiveZapSessions.clear()
     }
 
-    private fun TestScope.controller(scope: CoroutineScope = backgroundScope) = PlayerZapController(
+    private fun TestScope.controller(
+        scope: CoroutineScope = backgroundScope,
+        settleMs: Long = 0L
+    ) = PlayerZapController(
         scope = scope,
         resolve = { item ->
             resolveCalls += item.id
@@ -53,7 +57,8 @@ class PlayerZapControllerTest {
         },
         onNavigate = { item, stream -> navigated += item.id to stream },
         onNoStream = { item -> noStream += item.id },
-        endedKeys = { ended }
+        endedKeys = { ended },
+        settleMs = settleMs
     )
 
     private fun startOn(id: String) {
@@ -168,6 +173,30 @@ class PlayerZapControllerTest {
 
         assertEquals(listOf("b" to STREAM), navigated)
         assertEquals("b", SportsLiveZapSessions.current()?.current?.id)
+    }
+
+    @Test
+    fun `flipping past channels only resolves the one settled on`() = runTest {
+        startOn("a")
+        val controller = controller(settleMs = 600L)
+
+        // Flip forward three times quickly, each within the settle window.
+        controller.zap("a", forward = true)
+        runCurrent()
+        controller.zap("a", forward = true)
+        runCurrent()
+        controller.zap("a", forward = true)
+        runCurrent()
+        // Nothing resolved yet: still settling.
+        assertTrue(resolveCalls.isEmpty())
+
+        advanceTimeBy(601)
+        runCurrent()
+        // Only the channel settled on ("d") resolved — one request, not three.
+        assertEquals(listOf("d"), resolveCalls)
+        pending.getValue("d").complete(STREAM)
+        runCurrent()
+        assertEquals(listOf("d" to STREAM), navigated)
     }
 
     @Test

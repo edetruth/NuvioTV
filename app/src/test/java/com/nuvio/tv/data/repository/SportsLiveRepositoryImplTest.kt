@@ -83,7 +83,7 @@ class SportsLiveRepositoryImplTest {
     private val prefs = SportsLivePreferencesDataStore(factory, profiles)
     private var now = 1_700_000_000_000L
     private val streamRepository = FakeStreamRepository()
-    private val probe = SportsLiveStreamProbe(streamRepository).also {
+    private val probe = SportsLiveStreamProbe(streamRepository, com.nuvio.tv.ui.screens.sportslive.SportsLiveResolveCache()).also {
         it.nowMs = { now }
         it.dispatcher = mainDispatcherRule.dispatcher
     }

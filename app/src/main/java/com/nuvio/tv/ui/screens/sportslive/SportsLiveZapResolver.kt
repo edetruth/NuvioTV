@@ -46,7 +46,8 @@ class SportsLiveZapResolver @Inject constructor(
     private val playerSettingsDataStore: PlayerSettingsDataStore,
     private val addonRepository: AddonRepository,
     private val streamProbe: SportsLiveStreamProbe,
-    private val directDebridResolver: DirectDebridResolver
+    private val directDebridResolver: DirectDebridResolver,
+    private val resolveCache: SportsLiveResolveCache
 ) {
     companion object {
         const val TIMEOUT_MS = 12_000L
@@ -76,14 +77,27 @@ class SportsLiveZapResolver @Inject constructor(
      * or the search failed. A merged game ([SportsLiveItem.alternates]) plays the best of the
      * primary's streams, else the best of the first alternate that has one.
      */
-    suspend fun resolve(item: SportsLiveItem): Stream? =
+    suspend fun resolve(item: SportsLiveItem): Stream? = resolve(item, forceRefresh = false)
+
+    /**
+     * The stream to play for [item]. A fresh cached resolve (keyed by [SportsLiveItem.streamKey]) is
+     * reused so re-visiting a card while flipping does not re-resolve against the provider's quota.
+     * [forceRefresh] (a re-resolve after a playback failure) skips the cache and refreshes the entry.
+     */
+    suspend fun resolve(item: SportsLiveItem, forceRefresh: Boolean): Stream? =
         try {
-            if (item.alternates.isEmpty()) search(item) else bestAcrossSources(item)
+            if (!forceRefresh) resolveCache.get(item.streamKey)?.let { return it }
+            val stream = if (item.alternates.isEmpty()) search(item) else bestAcrossSources(item)
+            if (stream != null) resolveCache.put(item.streamKey, stream)
+            stream
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
             null
         }
+
+    /** Drops the cached resolve for [item] (after a playback failure), so the next resolve refreshes it. */
+    fun invalidate(item: SportsLiveItem) = resolveCache.invalidate(item.streamKey)
 
     /**
      * Every stream of [item] and its alternates, fetched in parallel (each within [timeoutMs]):

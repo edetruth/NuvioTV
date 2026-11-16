@@ -46,6 +46,7 @@ data class SportsLiveSettingsUiState(
     val showSection: Boolean = true,
     val showHomeRow: Boolean = true,
     val hoverPreview: Boolean = true,
+    val dataSaver: Boolean = false,
     val catalogs: List<SportsLiveCatalogSetting> = emptyList(),
     /** The active profile's followed teams, in follow order. */
     val followedTeams: List<FollowedTeam> = emptyList()
@@ -67,9 +68,9 @@ class SportsLiveSettingsViewModel @Inject constructor(
         addonRepository.getInstalledAddons(),
         combine(prefs.overrides, prefs.catalogOptions, prefs.followedTeams, ::Triple),
         prefs.showSection,
-        combine(prefs.showHomeRow, prefs.hoverPreview, ::Pair),
+        combine(prefs.showHomeRow, prefs.hoverPreview, prefs.dataSaver, ::Triple),
         claimedStats
-    ) { addons, (overrides, options, followedTeams), showSection, (showHomeRow, hoverPreview), stats ->
+    ) { addons, (overrides, options, followedTeams), showSection, (showHomeRow, hoverPreview, dataSaver), stats ->
         val catalogs = addons.enabledAddons().flatMap { addon ->
             addon.catalogs.filter(SportsLiveCatalogPolicy::isClaimable).map { catalog ->
                 val key = SportsLiveCatalogPolicy.keyFor(addon, catalog)
@@ -92,7 +93,7 @@ class SportsLiveSettingsViewModel @Inject constructor(
                 )
             }
         }
-        SportsLiveSettingsUiState(showSection, showHomeRow, hoverPreview, catalogs, followedTeams)
+        SportsLiveSettingsUiState(showSection, showHomeRow, hoverPreview, dataSaver, catalogs, followedTeams)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SportsLiveSettingsUiState())
 
     fun setShowSection(show: Boolean) {
@@ -105,6 +106,10 @@ class SportsLiveSettingsViewModel @Inject constructor(
 
     fun setHoverPreview(enabled: Boolean) {
         viewModelScope.launch { prefs.setHoverPreview(enabled) }
+    }
+
+    fun setDataSaver(enabled: Boolean) {
+        viewModelScope.launch { prefs.setDataSaver(enabled) }
     }
 
     fun unfollow(team: FollowedTeam) {

@@ -42,6 +42,7 @@ import org.junit.Test
 class SportsLiveZapResolverTest {
 
     private val streams = FakeStreamRepository()
+    private val resolveCache = SportsLiveResolveCache()
     private val probe = mockk<SportsLiveStreamProbe>(relaxed = true)
     private var settings = PlayerSettings()
     private var preparationCheckThrows = false
@@ -53,11 +54,13 @@ class SportsLiveZapResolverTest {
     }
 
     private fun TestScope.newResolver(probe: SportsLiveStreamProbe = this@SportsLiveZapResolverTest.probe): SportsLiveZapResolver {
+        // Each fresh resolver starts with an empty cache so tests that re-resolve an item re-fetch it.
+        resolveCache.clear()
         val dataStore = mockk<PlayerSettingsDataStore>()
         every { dataStore.playerSettings } answers { flowOf(settings) }
         val addons = mockk<AddonRepository>()
         every { addons.getInstalledAddons() } returns flowOf(listOf(addon("Sports"), addon("Off", enabled = false)))
-        return SportsLiveZapResolver(streams, dataStore, addons, probe, debrid).also { it.fetchScope = backgroundScope }
+        return SportsLiveZapResolver(streams, dataStore, addons, probe, debrid, resolveCache).also { it.fetchScope = backgroundScope }
     }
 
     @Test
@@ -195,7 +198,7 @@ class SportsLiveZapResolverTest {
         streams.responses["alt1"] = { flowOf(NetworkResult.Error("none", NetworkResult.STREAMS_NOT_FOUND_CODE)) }
         streams.responses["alt2"] = { flow { throw IllegalStateException("boom") } }
         streams.responses["alt3"] = { flowOf(NetworkResult.Error("server", 500)) }
-        val realProbe = SportsLiveStreamProbe(streams).apply { dispatcher = StandardTestDispatcher(testScheduler) }
+        val realProbe = SportsLiveStreamProbe(streams, resolveCache).apply { dispatcher = StandardTestDispatcher(testScheduler) }
         val merged = MERGED.copy(alternates = MERGED.alternates + ALT3)
 
         val resolver = newResolver(realProbe)
@@ -297,6 +300,43 @@ class SportsLiveZapResolverTest {
         runCurrent()
         // Only the last fetch of the previous game was still running; the new game's alt1 runs on.
         assertEquals(1, cancelled)
+    }
+
+    @Test
+    fun `a cached resolve is reused within the TTL and re-fetches after it expires`() = runTest {
+        var now = 0L
+        resolveCache.nowMs = { now }
+        streams.response = { result(SD) }
+        val resolver = newResolver()
+
+        assertEquals(SD, resolver.resolve(ITEM))
+        assertEquals(SD, resolver.resolve(ITEM))
+        assertEquals(1, streams.calls.size) // second resolve served from cache
+
+        now += SportsLiveResolveCache.TTL_MS
+        assertEquals(SD, resolver.resolve(ITEM))
+        assertEquals(2, streams.calls.size) // entry expired, re-fetched
+    }
+
+    @Test
+    fun `forceRefresh ignores the cache and refreshes the entry`() = runTest {
+        streams.response = { result(SD) }
+        val resolver = newResolver()
+
+        assertEquals(SD, resolver.resolve(ITEM))
+        assertEquals(SD, resolver.resolve(ITEM, forceRefresh = true))
+        assertEquals(2, streams.calls.size)
+    }
+
+    @Test
+    fun `invalidate drops the cached resolve so the next resolve re-fetches`() = runTest {
+        streams.response = { result(SD) }
+        val resolver = newResolver()
+
+        resolver.resolve(ITEM)
+        resolver.invalidate(ITEM)
+        resolver.resolve(ITEM)
+        assertEquals(2, streams.calls.size)
     }
 
     private class FakeStreamRepository : StreamRepository {

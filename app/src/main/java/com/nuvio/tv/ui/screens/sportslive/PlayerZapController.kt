@@ -5,6 +5,7 @@ import com.nuvio.tv.domain.model.Stream
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -23,8 +24,18 @@ class PlayerZapController(
     private val onNavigate: suspend (SportsLiveItem, Stream) -> Unit,
     private val onNoStream: (SportsLiveItem) -> Unit,
     /** Stream keys of the games known to have ended, which zaps skip. */
-    private val endedKeys: () -> Set<String> = { emptySet() }
+    private val endedKeys: () -> Set<String> = { emptySet() },
+    /**
+     * How long a flip must settle before its stream is resolved. Flipping on cancels the previous
+     * flip's job during this window, so skipping past channels to land on one costs a single resolve
+     * instead of one per channel.
+     */
+    private val settleMs: Long = SETTLE_MS
 ) {
+    companion object {
+        const val SETTLE_MS = 600L
+    }
+
     private var job: Job? = null
 
     /** The session of the game playing, from before the zaps whose lookup is still running. */
@@ -82,6 +93,8 @@ class PlayerZapController(
         job = scope.launch {
             val item = target.current
             try {
+                // Settle first: a newer flip cancels this job here, so skipped channels never resolve.
+                if (settleMs > 0) delay(settleMs)
                 val stream = resolve(item)
                 if (stream == null) {
                     revertIfCurrent(target, revertTo)

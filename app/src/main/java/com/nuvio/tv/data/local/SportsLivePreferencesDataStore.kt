@@ -40,6 +40,7 @@ class SportsLivePreferencesDataStore @Inject constructor(
     private val showSectionKey = booleanPreferencesKey("sports_live_show_section")
     private val showHomeRowKey = booleanPreferencesKey("sports_live_show_home_row")
     private val hoverPreviewKey = booleanPreferencesKey("sports_live_hover_preview")
+    private val dataSaverKey = booleanPreferencesKey("sports_live_data_saver")
     private val overridesKey = stringPreferencesKey("sports_live_overrides")
     private val catalogOptionsKey = stringPreferencesKey("sports_live_catalog_options")
     private val followedTeamsKey = stringPreferencesKey("sports_live_followed_teams")
@@ -56,6 +57,15 @@ class SportsLivePreferencesDataStore @Inject constructor(
     /** Whether resting on a Live now or Channels card previews it, muted, in the details pane. */
     val hoverPreview: Flow<Boolean> = profileManager.activeProfileId.flatMapLatest { pid ->
         factory.get(pid, FEATURE).data.map { it[hoverPreviewKey] ?: true }
+    }
+
+    /**
+     * Data saver for limited/metered stream providers: when on, hover preview and the on-focus
+     * ended-probe are skipped so a stream resolves only on an explicit play or zap-settle. Off by
+     * default, so behaviour is unchanged for most users.
+     */
+    val dataSaver: Flow<Boolean> = profileManager.activeProfileId.flatMapLatest { pid ->
+        factory.get(pid, FEATURE).data.map { it[dataSaverKey] ?: false }
     }
 
     val overrides: Flow<Map<String, SportsLiveOverride>> = profileManager.activeProfileId.flatMapLatest { pid ->
@@ -115,6 +125,10 @@ class SportsLivePreferencesDataStore @Inject constructor(
 
     suspend fun setHoverPreview(v: Boolean) {
         store().edit { it[hoverPreviewKey] = v }
+    }
+
+    suspend fun setDataSaver(v: Boolean) {
+        store().edit { it[dataSaverKey] = v }
     }
 
     suspend fun setOverride(catalogKey: String, override: SportsLiveOverride?) {

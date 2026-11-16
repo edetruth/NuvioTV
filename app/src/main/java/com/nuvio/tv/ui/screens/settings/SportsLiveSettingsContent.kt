@@ -81,10 +81,17 @@ internal fun SportsLiveSettingsContent(
                 SettingsToggleRow(
                     title = stringResource(R.string.sports_live_setting_hover_preview),
                     subtitle = null,
-                    checked = state.hoverPreview,
+                    checked = state.hoverPreview && !state.dataSaver,
                     onToggle = { viewModel.setHoverPreview(!state.hoverPreview) },
-                    enabled = state.showSection,
+                    enabled = state.showSection && !state.dataSaver,
                     modifier = if (state.showSection) Modifier.focusRequester(switchFocusRequester) else Modifier
+                )
+                SettingsToggleRow(
+                    title = stringResource(R.string.sports_live_setting_data_saver),
+                    subtitle = stringResource(R.string.sports_live_setting_data_saver_subtitle),
+                    checked = state.dataSaver,
+                    onToggle = { viewModel.setDataSaver(!state.dataSaver) },
+                    enabled = state.showSection
                 )
             }
         }
