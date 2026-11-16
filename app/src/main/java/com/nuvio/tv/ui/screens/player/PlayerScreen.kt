@@ -1503,6 +1503,16 @@ fun PlayerScreen(
         if (uiState.error != null) {
             ErrorOverlay(
                 message = uiState.error!!,
+                onChooseSource = if (uiState.canChooseAnotherSource) {
+                    { viewModel.onEvent(PlayerEvent.OnRecoverToSources) }
+                } else {
+                    null
+                },
+                onRetry = if (uiState.canChooseAnotherSource) {
+                    { viewModel.onEvent(PlayerEvent.OnRetryPlayback) }
+                } else {
+                    null
+                },
                 showSwitchToMpvAction = uiState.showSwitchToMpvErrorAction &&
                     uiState.internalPlayerEngine != InternalPlayerEngine.MVP_PLAYER,
                 onSwitchToMpv = { viewModel.onEvent(PlayerEvent.OnSwitchToMpvPlayer) },
@@ -4137,6 +4147,8 @@ private fun LoadingIssueReportAction(
 @Composable
 private fun ErrorOverlay(
     message: String,
+    onChooseSource: (() -> Unit)? = null,
+    onRetry: (() -> Unit)? = null,
     showSwitchToMpvAction: Boolean = false,
     onSwitchToMpv: (() -> Unit)? = null,
     showReportAction: Boolean,
@@ -4149,16 +4161,25 @@ private fun ErrorOverlay(
     val exitFocusRequester = remember { FocusRequester() }
     val reportFocusRequester = remember { FocusRequester() }
     val mpvFocusRequester = remember { FocusRequester() }
+    val chooseSourceFocusRequester = remember { FocusRequester() }
+    val retryFocusRequester = remember { FocusRequester() }
     val onSwitchMpvAction = onSwitchToMpv.takeIf { showSwitchToMpvAction }
-    val targetFocusRequester = if (onSwitchMpvAction != null) mpvFocusRequester else exitFocusRequester
+    // The recovery action is the primary one when present, so it takes focus first.
+    val targetFocusRequester = when {
+        onChooseSource != null -> chooseSourceFocusRequester
+        onSwitchMpvAction != null -> mpvFocusRequester
+        else -> exitFocusRequester
+    }
 
-    var targetButtonPlaced by remember(onSwitchMpvAction != null) { mutableStateOf(false) }
-    var mpvFocused by remember(onSwitchMpvAction != null) { mutableStateOf(false) }
-    var reportFocused by remember(onSwitchMpvAction != null) { mutableStateOf(false) }
-    var exitFocused by remember(onSwitchMpvAction != null) { mutableStateOf(false) }
-    val hasOverlayFocus = mpvFocused || reportFocused || exitFocused
+    var targetButtonPlaced by remember(onSwitchMpvAction != null, onChooseSource != null) { mutableStateOf(false) }
+    var chooseSourceFocused by remember(onSwitchMpvAction != null, onChooseSource != null) { mutableStateOf(false) }
+    var retryFocused by remember(onSwitchMpvAction != null, onChooseSource != null) { mutableStateOf(false) }
+    var mpvFocused by remember(onSwitchMpvAction != null, onChooseSource != null) { mutableStateOf(false) }
+    var reportFocused by remember(onSwitchMpvAction != null, onChooseSource != null) { mutableStateOf(false) }
+    var exitFocused by remember(onSwitchMpvAction != null, onChooseSource != null) { mutableStateOf(false) }
+    val hasOverlayFocus = chooseSourceFocused || retryFocused || mpvFocused || reportFocused || exitFocused
 
-    LaunchedEffect(targetButtonPlaced, onSwitchMpvAction != null) {
+    LaunchedEffect(targetButtonPlaced, onSwitchMpvAction != null, onChooseSource != null) {
         if (!targetButtonPlaced) return@LaunchedEffect
         val focused = targetFocusRequester.requestFocusAfterFrames(frames = 0)
         if (!focused) {
@@ -4234,6 +4255,43 @@ private fun ErrorOverlay(
                 horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.lg),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                if (onChooseSource != null) {
+                    PlayerOverlayButton(
+                        text = stringResource(R.string.player_choose_another_source),
+                        onClick = onChooseSource,
+                        primary = true,
+                        modifier = Modifier
+                            .focusRequester(chooseSourceFocusRequester)
+                            .onPlaced { targetButtonPlaced = true }
+                            .onFocusChanged { chooseSourceFocused = it.isFocused }
+                            .focusProperties {
+                                right = when {
+                                    onRetry != null -> retryFocusRequester
+                                    onSwitchMpvAction != null -> mpvFocusRequester
+                                    showReportAction -> reportFocusRequester
+                                    else -> exitFocusRequester
+                                }
+                            }
+                    )
+                }
+                if (onRetry != null) {
+                    PlayerOverlayButton(
+                        text = stringResource(R.string.player_retry_stream),
+                        onClick = onRetry,
+                        primary = false,
+                        modifier = Modifier
+                            .focusRequester(retryFocusRequester)
+                            .onFocusChanged { retryFocused = it.isFocused }
+                            .focusProperties {
+                                if (onChooseSource != null) left = chooseSourceFocusRequester
+                                right = when {
+                                    onSwitchMpvAction != null -> mpvFocusRequester
+                                    showReportAction -> reportFocusRequester
+                                    else -> exitFocusRequester
+                                }
+                            }
+                    )
+                }
                 if (onSwitchMpvAction != null) {
                     PlayerOverlayButton(
                         text = stringResource(R.string.player_switch_to_mpv),
@@ -4244,6 +4302,7 @@ private fun ErrorOverlay(
                             .onPlaced { targetButtonPlaced = true }
                             .onFocusChanged { mpvFocused = it.isFocused }
                             .focusProperties {
+                                if (onChooseSource != null) left = chooseSourceFocusRequester
                                 right = if (showReportAction) reportFocusRequester else exitFocusRequester
                             }
                     )
@@ -4263,7 +4322,11 @@ private fun ErrorOverlay(
                             .focusRequester(reportFocusRequester)
                             .onFocusChanged { reportFocused = it.isFocused }
                             .focusProperties {
-                                if (onSwitchMpvAction != null) left = mpvFocusRequester
+                                left = when {
+                                    onSwitchMpvAction != null -> mpvFocusRequester
+                                    onChooseSource != null -> chooseSourceFocusRequester
+                                    else -> FocusRequester.Default
+                                }
                                 right = exitFocusRequester
                             }
                     )
@@ -4271,7 +4334,7 @@ private fun ErrorOverlay(
                 PlayerOverlayButton(
                     text = stringResource(R.string.player_go_back),
                     onClick = onBack,
-                    primary = onSwitchMpvAction == null,
+                    primary = onSwitchMpvAction == null && onChooseSource == null,
                     modifier = Modifier
                         .focusRequester(exitFocusRequester)
                         .onPlaced {
@@ -4283,6 +4346,8 @@ private fun ErrorOverlay(
                                 reportFocusRequester
                             } else if (onSwitchMpvAction != null) {
                                 mpvFocusRequester
+                            } else if (onChooseSource != null) {
+                                chooseSourceFocusRequester
                             } else {
                                 FocusRequester.Default
                             }

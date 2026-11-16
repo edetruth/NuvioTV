@@ -1936,6 +1936,17 @@ fun PlayerRuntimeController.onEvent(
         PlayerEvent.OnShowSourcesPanel -> {
             showSourcesPanel()
         }
+        PlayerEvent.OnRecoverToSources -> {
+            // Clear the playback error so the Sources panel (hidden while an error shows) can open.
+            // The panel is gated on error == null, not on showControls, so it opens from the dead-error
+            // state when the normal control bar is unreachable.
+            _uiState.update { it.copy(error = null) }
+            showSourcesPanel()
+        }
+        PlayerEvent.OnRetryPlayback -> {
+            _uiState.update { it.copy(error = null) }
+            reinitializeCurrentStream()
+        }
         PlayerEvent.OnDismissSourcesPanel -> {
             dismissSourcesPanel()
         }

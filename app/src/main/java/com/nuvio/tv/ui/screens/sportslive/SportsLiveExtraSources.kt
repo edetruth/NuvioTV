@@ -42,6 +42,10 @@ object SportsLiveExtraSources {
     // Insertion order is age order; guarded by itself.
     private val entries = LinkedHashMap<String, Entry>()
 
+    // Content ids of Sports & Live games/channels being played, merged or single-addon, so the full
+    // player can scope auto-failover and the error overlay to sports only. Bounded like [entries].
+    private val sportsPlaybackIds = LinkedHashSet<String>()
+
     @Volatile
     private var fetcher: (suspend (SportsLiveItem) -> SportsLiveExtraLookup)? = null
 
@@ -52,6 +56,7 @@ object SportsLiveExtraSources {
 
     /** Registers merged [item] for the player showing [contentId]; a single-source item only clears it. */
     fun register(contentId: String, item: SportsLiveItem) {
+        markSportsPlayback(contentId)
         synchronized(entries) {
             entries.remove(contentId)
             if (item.alternates.isEmpty()) return
@@ -59,6 +64,23 @@ object SportsLiveExtraSources {
             while (entries.size > MAX_ENTRIES) entries.remove(entries.keys.first())
         }
     }
+
+    /**
+     * Marks [contentId] as a Sports & Live playback (merged or single-addon) so the full player
+     * scopes auto-failover and the recovery overlay to sports. Set before the player opens.
+     */
+    fun markSportsPlayback(contentId: String?) {
+        if (contentId == null) return
+        synchronized(sportsPlaybackIds) {
+            sportsPlaybackIds.remove(contentId)
+            sportsPlaybackIds.add(contentId)
+            while (sportsPlaybackIds.size > MAX_ENTRIES) sportsPlaybackIds.remove(sportsPlaybackIds.first())
+        }
+    }
+
+    /** Whether the player for [contentId] is playing a Sports & Live game/channel. */
+    fun isSportsPlayback(contentId: String?): Boolean =
+        contentId != null && synchronized(sportsPlaybackIds) { contentId in sportsPlaybackIds }
 
     fun clear(contentId: String?) {
         if (contentId == null) return
@@ -96,6 +118,7 @@ object SportsLiveExtraSources {
     @VisibleForTesting
     internal fun reset() {
         synchronized(entries) { entries.clear() }
+        synchronized(sportsPlaybackIds) { sportsPlaybackIds.clear() }
         fetcher = null
     }
 }

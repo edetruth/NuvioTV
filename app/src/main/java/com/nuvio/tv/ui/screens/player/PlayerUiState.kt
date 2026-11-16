@@ -190,6 +190,8 @@ data class PlayerUiState(
     val streamBadgePlacement: StreamBadgePlacement = StreamBadgePlacement.BOTTOM,
     val playerBadgeFilters: List<CompiledStreamBadgeFilter> = emptyList(),
     val error: String? = null,
+    /** A Sports & Live game with alternate sources: a playback error offers "Choose another source". */
+    val canChooseAnotherSource: Boolean = false,
     val showSwitchToMpvErrorAction: Boolean = false,
     val playbackIssueReportStatus: PlaybackIssueReportStatus = PlaybackIssueReportStatus.Idle,
     val playbackIssueReportId: String? = null,
@@ -382,6 +384,10 @@ sealed class PlayerEvent {
     data class OnEpisodeAddonFilterSelected(val addonName: String?) : PlayerEvent()
     data class OnEpisodeStreamSelected(val stream: Stream) : PlayerEvent()
     data object OnShowSourcesPanel : PlayerEvent()
+    /** From the error overlay of a sports stream: clear the error and open the Sources panel. */
+    data object OnRecoverToSources : PlayerEvent()
+    /** From the error overlay: clear the error and re-attempt the current stream. */
+    data object OnRetryPlayback : PlayerEvent()
     data object OnDismissSourcesPanel : PlayerEvent()
     data object OnShowPartyPanel : PlayerEvent()
     data object OnDismissPartyPanel : PlayerEvent()

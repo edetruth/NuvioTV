@@ -1471,6 +1471,8 @@ internal fun PlayerRuntimeController.initializePlayer(
                         }
                         refreshStableProgressResetGate()
                         cancelFirstFrameWatchdog()
+                        // Playback has started: begin the sports stall watchdog (sports-only, guarded).
+                        scheduleSportsStallWatchdog()
                         _uiState.update {
                             it.copy(
                                 showLoadingOverlay = false,
@@ -1654,6 +1656,11 @@ internal fun PlayerRuntimeController.initializePlayer(
 
                         // A link that has likely expired is fetched again before anything else is tried on it.
                         if (tryRefreshExpiredLinkAfterError(detailedError)) {
+                            return
+                        }
+                        // Sports & Live: auto-fail over to the next untried source (capped), or show the
+                        // standalone recovery overlay. Scoped to sports; returns false for movies/shows.
+                        if (trySportsLiveFailoverAfterError(detailedError)) {
                             return
                         }
                         if (tryFallbackToNextSourceAfterError(detailedError)) {

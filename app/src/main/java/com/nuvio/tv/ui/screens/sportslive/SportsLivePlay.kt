@@ -8,6 +8,7 @@ import com.nuvio.tv.data.local.PlayerSettingsDataStore
 import com.nuvio.tv.data.local.StreamAutoPlayMode
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.Stream
+import com.nuvio.tv.ui.screens.player.SportsLiveLaunchHeaders
 import com.nuvio.tv.ui.screens.stream.streamPlaybackInfoFor
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -79,6 +80,13 @@ internal suspend fun sportsLiveZapTarget(
             contentLanguage = null
         ).takeIf { it.url != null || it.isTorrent }
     }
+    // Scope the full player's auto-failover and recovery overlay to this sports game/channel.
+    SportsLiveExtraSources.markSportsPlayback(item.id)
+    // The full-player launch carries only request headers; stash the response headers so the player
+    // seeds them at init and plays with the same proxy headers as the details -> play / preview paths.
+    playback?.url?.let { url ->
+        SportsLiveLaunchHeaders.set(url, stream.behaviorHints?.proxyHeaders?.response.orEmpty())
+    }
     return SportsLiveZapTarget(item, playback, returnToHomeOnBack, autoPicked)
 }
 
@@ -119,6 +127,9 @@ class SportsLivePlayViewModel @Inject constructor(
 
     fun play(item: SportsLiveItem, returnToHomeOnBack: Boolean = false) {
         if (item.alternates.isEmpty()) {
+            // Single-addon card: the Stream screen plays it, but mark it sports so its full player
+            // still auto-fails over across the addon's multiple links and shows the recovery overlay.
+            SportsLiveExtraSources.markSportsPlayback(item.id)
             _events.trySend(SportsLivePlayEvent.OpenStreamScreen(item))
             return
         }

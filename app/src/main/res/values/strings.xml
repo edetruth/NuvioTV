@@ -833,6 +833,7 @@
     <string name="autoplay_fallback_startup_timeout_value">%1$ds</string>
     <string name="autoplay_fallback_next_source_blocked_by_engine_switch">Turn off auto-switch engine on startup error to use this.</string>
     <string name="player_error_source_startup_timeout">The source did not start within %1$d seconds.</string>
+    <string name="player_error_source_stalled">The stream stopped responding.</string>
     <string name="playback_release_decoder_on_background">Release decoder in background</string>
     <string name="playback_release_decoder_on_background_sub">Free the video decoder when Nuvio goes to the background. Turn on if playback fails with a decoder error after returning to the app. The player reloads on return, also after the screensaver</string>
     <string name="playback_external_forward_subtitles">Forward subtitles to external player</string>
@@ -1988,6 +1989,8 @@
     <string name="player_subtitle_delay">Subtitles Delay</string>
     <string name="player_error_title">Playback Error</string>
     <string name="player_go_back">Go Back</string>
+    <string name="player_choose_another_source">Try another source</string>
+    <string name="player_retry_stream">Retry</string>
     <string name="player_switch_to_mpv">Switch to MPV Player</string>
     <string name="player_report_issue">Report Issue</string>
     <string name="player_report_issue_sending">Sending playback report...</string>

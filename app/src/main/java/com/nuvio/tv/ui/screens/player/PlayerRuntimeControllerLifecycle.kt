@@ -16,6 +16,10 @@ internal fun PlayerRuntimeController.releasePlayer(
 ) {
     logScrobbleDiagnostic("release_player", "flushPlaybackState=$flushPlaybackState")
 
+    // Stop the sports stall watchdog so it cannot fire against a torn-down or switching player; the
+    // next source's first frame reschedules it with a fresh progress baseline.
+    cancelSportsStallWatchdog()
+
     // Preserve current subtitle selection across any rebuild. When the user explicitly
     // selected a track, persistedTrackPreference was nulled and the choice lives only
     // in the UI state. Capture it so applyPersistedTrackPreference restores it.

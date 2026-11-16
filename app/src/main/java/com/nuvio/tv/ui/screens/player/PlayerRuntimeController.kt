@@ -285,6 +285,11 @@ class PlayerRuntimeController(
     internal var sourceFallbackJob: Job? = null
     internal var sourceStartupTimeoutJob: Job? = null
 
+    /** Sports & Live auto-failover: distinct sources auto-tried this session, and their keys. */
+    internal var sportsFailoverAttempts = 0
+    internal val sportsFailoverTriedKeys = mutableSetOf<String>()
+    internal var sportsStallWatchdogJob: Job? = null
+
     fun getCurrentStreamUrl(): String = currentStreamUrl
     fun getCurrentHeaders(): Map<String, String> = currentHeaders
 
@@ -352,7 +357,10 @@ class PlayerRuntimeController(
             currentSeason = currentSeason,
             currentEpisode = currentEpisode,
             currentVideoId = currentVideoId,
-            currentEpisodeTitle = currentEpisodeTitle
+            currentEpisodeTitle = currentEpisodeTitle,
+            // A Sports & Live game/channel can offer alternate sources, so a playback error can too.
+            canChooseAnotherSource =
+                com.nuvio.tv.ui.screens.sportslive.SportsLiveExtraSources.isSportsPlayback(contentId)
         )
     )
     val uiState: StateFlow<PlayerUiState> = _uiState.asStateFlow()
