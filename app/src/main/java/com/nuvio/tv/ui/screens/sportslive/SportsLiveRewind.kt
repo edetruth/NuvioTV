@@ -83,8 +83,17 @@ object SportsLiveRewind {
         }
     }
 
-    /** How far behind the edge to show, or null when the indicator stays hidden. */
-    fun indicatorBehindMs(hasSession: Boolean, engine: InternalPlayerEngine, window: LiveWindow?): Long? {
+    /**
+     * How far behind the edge to show, or null when the indicator stays hidden. [covered]: the
+     * player controls, a player panel or dialog, or the live games panel is on screen.
+     */
+    fun indicatorBehindMs(
+        hasSession: Boolean,
+        engine: InternalPlayerEngine,
+        window: LiveWindow?,
+        covered: Boolean
+    ): Long? {
+        if (covered) return null
         window ?: return null
         val canSeek = seekDeltaMs(
             hasSession, engine, window.isDynamic, window.windowMs, window.liveEdgeMs, window.behindEdgeMs,

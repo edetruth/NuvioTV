@@ -76,12 +76,18 @@ class SportsLiveRewindTest {
     fun `indicator shows only when behind the edge of a seekable session window`() {
         val behind = LiveWindow(isDynamic = true, windowMs = 120_000L, liveEdgeMs = 100_000L, behindEdgeMs = 80_000L)
         val exo = InternalPlayerEngine.EXOPLAYER
-        assertEquals(80_000L, SportsLiveRewind.indicatorBehindMs(true, exo, behind))
-        assertNull(SportsLiveRewind.indicatorBehindMs(true, exo, behind.copy(behindEdgeMs = 2_000L)))
-        assertNull(SportsLiveRewind.indicatorBehindMs(false, exo, behind))
-        assertNull(SportsLiveRewind.indicatorBehindMs(true, InternalPlayerEngine.MVP_PLAYER, behind))
-        assertNull(SportsLiveRewind.indicatorBehindMs(true, exo, behind.copy(windowMs = 20_000L)))
-        assertNull(SportsLiveRewind.indicatorBehindMs(true, exo, null))
+        assertEquals(80_000L, SportsLiveRewind.indicatorBehindMs(true, exo, behind, covered = false))
+        assertNull(SportsLiveRewind.indicatorBehindMs(true, exo, behind.copy(behindEdgeMs = 2_000L), covered = false))
+        assertNull(SportsLiveRewind.indicatorBehindMs(false, exo, behind, covered = false))
+        assertNull(SportsLiveRewind.indicatorBehindMs(true, InternalPlayerEngine.MVP_PLAYER, behind, covered = false))
+        assertNull(SportsLiveRewind.indicatorBehindMs(true, exo, behind.copy(windowMs = 20_000L), covered = false))
+        assertNull(SportsLiveRewind.indicatorBehindMs(true, exo, null, covered = false))
+    }
+
+    @Test
+    fun `indicator hides while controls or a panel cover the player`() {
+        val behind = LiveWindow(isDynamic = true, windowMs = 120_000L, liveEdgeMs = 100_000L, behindEdgeMs = 80_000L)
+        assertNull(SportsLiveRewind.indicatorBehindMs(true, InternalPlayerEngine.EXOPLAYER, behind, covered = true))
     }
 
     @Test

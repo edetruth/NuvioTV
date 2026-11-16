@@ -2239,7 +2239,12 @@ fun PlayerScreen(
             viewModel = sportsLiveZap,
             playerFocusRequester = containerFocusRequester,
             liveWindow = { viewModel.exoPlayer?.liveWindow() },
-            engine = { viewModel.controller.currentInternalPlayerEngine }
+            engine = { viewModel.controller.currentInternalPlayerEngine },
+            playerOverlayVisible = uiState.showControls || uiState.showEpisodesPanel ||
+                uiState.showSourcesPanel || uiState.showPartyPanel || uiState.showChaptersPanel ||
+                uiState.showAudioOverlay || uiState.showSubtitleOverlay || uiState.showSubtitleStylePanel ||
+                uiState.showSpeedDialog || uiState.showSubtitleDelayOverlay ||
+                uiState.showSubtitleTimingDialog || uiState.showMoreDialog
         )
     }
 }

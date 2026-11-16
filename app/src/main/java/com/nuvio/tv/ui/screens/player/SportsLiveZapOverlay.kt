@@ -72,19 +72,21 @@ import kotlinx.coroutines.delay
  * The Sports & Live zap overlay of a player with a zap session: the banner naming the game after a
  * zap (or the one being switched to), and the live games panel that Left opens. Draws nothing for
  * other players. Closing the panel gives focus back to [playerFocusRequester]. While a rewind keeps
- * playback behind the edge of [liveWindow], a small "−1:20 · LIVE ▸" indicator shows it.
+ * playback behind the edge of [liveWindow], a small "−1:20 · LIVE ▸" indicator shows it,
+ * hidden while [playerOverlayVisible] (controls, a player panel or dialog) or the live games panel is up.
  */
 @Composable
 internal fun BoxScope.SportsLiveZapOverlay(
     viewModel: SportsLiveZapViewModel,
     playerFocusRequester: FocusRequester,
     liveWindow: () -> LiveWindow?,
-    engine: () -> InternalPlayerEngine
+    engine: () -> InternalPlayerEngine,
+    playerOverlayVisible: Boolean
 ) {
     if (!viewModel.hasSession) return
-    BehindLiveIndicator(liveWindow = liveWindow, engine = engine)
     val banner by viewModel.banner.collectAsState()
     val panelOpen by viewModel.panelOpen.collectAsState()
+    BehindLiveIndicator(liveWindow = liveWindow, engine = engine, covered = playerOverlayVisible || panelOpen)
     val panel by viewModel.panel.collectAsState()
 
     // The last banner, kept on screen while it fades out.
@@ -135,15 +137,21 @@ internal fun BoxScope.SportsLiveZapOverlay(
 }
 
 @Composable
-private fun BoxScope.BehindLiveIndicator(liveWindow: () -> LiveWindow?, engine: () -> InternalPlayerEngine) {
-    var behindMs by remember { mutableStateOf<Long?>(null) }
+private fun BoxScope.BehindLiveIndicator(
+    liveWindow: () -> LiveWindow?,
+    engine: () -> InternalPlayerEngine,
+    covered: Boolean
+) {
+    var window by remember { mutableStateOf<LiveWindow?>(null) }
     LaunchedEffect(Unit) {
         while (true) {
-            behindMs = SportsLiveRewind.indicatorBehindMs(hasSession = true, engine = engine(), window = liveWindow())
+            window = liveWindow()
             delay(500)
         }
     }
-    val shown = behindMs ?: return
+    val shown = SportsLiveRewind.indicatorBehindMs(
+        hasSession = true, engine = engine(), window = window, covered = covered
+    ) ?: return
     Text(
         text = stringResource(R.string.sports_live_rewind_behind, SportsLiveRewind.formatBehind(shown)),
         style = MaterialTheme.typography.labelLarge,
