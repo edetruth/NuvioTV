@@ -163,11 +163,15 @@ Observed in `org.kris.ultra.max.tv.*`: type `tv` catalogs "🇺🇸 United State
 
 **Rulings:**
 - An item whose genres contain "Live TV" (case-insensitive, whole phrase) is a channel (`isChannel = true`), whatever its catalog's kind.
-- Channels appear only in the Channels tab, never in Live Now or Upcoming, unless the item itself carries an explicit live marker (releaseInfo "LIVE"/"🔴 LIVE", or "LIVE NOW" text). This amends spec §7.2 ("A channel that is live also appears in Live Now") to require an explicit marker.
+- Channels appear only in the Channels tab, never in Live Now or Upcoming, unless the item comes from an EVENTS-kind catalog (e.g. highfly lists TSN in its "Live Now" catalog) AND is live. Channels from CHANNELS-kind catalogs never appear in Live Now even when marked live (Nebula's Channels catalog marks ~1000 channels "live", flooding Live Now to 1073 items on the emulator). This amends spec §7.2 ("A channel that is live also appears in Live Now").
+- Replays are sorted newest first (start descending, null last) instead of oldest first.
+- Items whose name starts with the status emoji ✅ (finished, as CNCVerse marks them) are excluded from every tab; the emoji is never shown.
+- Channel group names are compared case-insensitively and displayed upper-cased ("BiH" and "BIH" are one chip "BIH").
 - Channel group fallback order becomes: second-genre code → name prefix (Task 6 rule) → **catalog name with emoji, "(tv)" and surrounding whitespace removed** → addon name.
 
 **Files:** `core/sportslive/SportsLiveItemBucketer.kt`, `SportsLiveChannelGrouper.kt`, spec §7.2 amendment (`git add -f`), fixture `ultra_tv_uk.json` (copy of `D:\Nuvio\scratch\addons\ultra.tv_uk.json`; ids are base64 channel names, no secrets).
 - [ ] Tests: Ultra fixture items are channels, absent from LIVE_NOW and UPCOMING, present in CHANNELS; group "United Kingdom TV"; highfly leaf items (with "LIVE NOW") still appear in both LIVE_NOW and CHANNELS; CNCVerse Live TV sample stays out of LIVE_NOW.
+- [ ] Tests: Nebula channels fixture (first 30 metas of D:/Nuvio/scratch/addons/nebula.streamed-events-dlhd-channels.json, read as UTF-8; catalog kind CHANNELS) stays out of LIVE_NOW; Replays order newest first. Tests: ✅ item appears in no tab; groups "BiH" and "BIH" yield one filter "BIH".
 - [ ] Commit `feat(sportslive): treat plain live TV addons as channels`.
 
 ---
