@@ -13,6 +13,7 @@ import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveKind
 import com.nuvio.tv.domain.model.Stream
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -148,6 +149,40 @@ class SportsLivePlayViewModelTest {
         advanceUntilIdle()
 
         assertEquals(listOf(SportsLivePlayEvent.OpenStreamScreen(SINGLE)), events)
+    }
+
+    @Test
+    fun `a previewed stream plays at once, without a lookup or the Stream screen`() = runTest(mainDispatcherRule.dispatcher) {
+        SportsLiveExtraSources.reset()
+        val viewModel = newViewModel()
+        val events = eventsOf(viewModel)
+
+        viewModel.playResolved(SINGLE, STREAM)
+        viewModel.playResolved(MERGED, STREAM)
+        advanceUntilIdle()
+
+        val target = (events.single() as SportsLivePlayEvent.Play).target
+        assertEquals(MERGED, target.item)
+        assertEquals(STREAM.url, target.playback?.url)
+        assertTrue(target.autoPicked)
+        assertTrue(!target.returnToHomeOnBack)
+        assertTrue(SportsLiveExtraSources.isRegistered(MERGED.id))
+        coVerify(exactly = 0) { resolver.resolve(any()) }
+        SportsLiveExtraSources.reset()
+    }
+
+    @Test
+    fun `a previewed single-source stream opens the player directly`() = runTest(mainDispatcherRule.dispatcher) {
+        val viewModel = newViewModel()
+        val events = eventsOf(viewModel)
+
+        viewModel.playResolved(SINGLE, STREAM)
+        advanceUntilIdle()
+
+        val target = (events.single() as SportsLivePlayEvent.Play).target
+        assertEquals(SINGLE, target.item)
+        assertEquals(STREAM.url, target.playback?.url)
+        assertTrue(!target.autoPicked)
     }
 
     private companion object {

@@ -10,7 +10,7 @@ import com.nuvio.tv.domain.repository.SportsLiveRepository
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapResolver
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapSession
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapSessions
-import com.nuvio.tv.ui.screens.sportslive.sportsLiveNeedsPreparation
+import com.nuvio.tv.ui.screens.sportslive.sportsLiveLightPlayable
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -128,10 +128,7 @@ class SportsLiveDualViewModel internal constructor(
     ) : this(
         // A pane plays a plain url only: no Stream screen preparation (server, YouTube, debrid) or torrent.
         resolve = { item ->
-            resolver.resolve(item)?.takeIf { stream ->
-                !stream.isExternal() && !stream.isTorrent() && stream.getStreamUrl() != null &&
-                    !sportsLiveNeedsPreparation(stream, directDebridResolver)
-            }
+            resolver.resolve(item)?.takeIf { stream -> sportsLiveLightPlayable(stream, directDebridResolver) }
         },
         endedKeys = { repo.endedKeys.value },
         session = SportsLiveDualSessions.take()

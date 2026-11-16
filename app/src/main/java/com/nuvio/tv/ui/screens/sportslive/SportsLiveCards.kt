@@ -3,11 +3,13 @@ package com.nuvio.tv.ui.screens.sportslive
 import android.view.KeyEvent as AndroidKeyEvent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -50,6 +52,7 @@ import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveTab
 import com.nuvio.tv.ui.components.LightweightCard
 import com.nuvio.tv.ui.components.NuvioDialog
+import com.nuvio.tv.ui.screens.sportslive.preview.SportsLivePreviewLabel
 import com.nuvio.tv.ui.theme.NuvioTheme
 import com.nuvio.tv.ui.util.rememberLongPressKeyTracker
 import java.time.ZoneId
@@ -236,23 +239,36 @@ internal fun SportsLiveDetailsPane(
     onWatch: () -> Unit,
     onDetails: () -> Unit,
     modifier: Modifier = Modifier,
-    watchModifier: Modifier = Modifier
+    watchModifier: Modifier = Modifier,
+    /** The hover preview's video, composed under the art while a preview plays; null when none does. */
+    preview: (@Composable () -> Unit)? = null,
+    /** The preview's first frame is on screen: the art gives way to the video and its label. */
+    previewShowing: Boolean = false
 ) {
     Column(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md)
     ) {
-        AsyncImage(
-            model = item.meta.backdropUrl,
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
+        Box(
             // Measured last and shrunk to the space left, so a long title never pushes the buttons off screen.
             modifier = Modifier
                 .weight(1f, fill = false)
                 .aspectRatio(16f / 9f, matchHeightConstraintsFirst = true)
                 .clip(RoundedCornerShape(NuvioTheme.radii.md))
                 .background(NuvioTheme.colors.PosterFallback)
-        )
+        ) {
+            preview?.invoke()
+            if (previewShowing) {
+                SportsLivePreviewLabel(modifier = Modifier.align(Alignment.TopStart))
+            } else {
+                AsyncImage(
+                    model = item.meta.backdropUrl,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        }
         Text(
             text = item.meta.name,
             style = MaterialTheme.typography.headlineSmall,

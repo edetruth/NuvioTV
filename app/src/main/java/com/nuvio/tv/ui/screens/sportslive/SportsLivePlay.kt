@@ -147,6 +147,17 @@ class SportsLivePlayViewModel @Inject constructor(
         }
     }
 
+    /**
+     * [stream], already found for [item] (the hover preview's), plays at once: no lookup and no
+     * Stream screen, with [item]'s other sources registered as on the auto play path.
+     */
+    fun playResolved(item: SportsLiveItem, stream: Stream) {
+        job?.cancel()
+        returnToHomeOnBack = false
+        _state.value = SportsLivePlayState.Idle
+        job = viewModelScope.launch { playStream(item, stream, autoPicked = item.alternates.isNotEmpty()) }
+    }
+
     /** A stream picked in the picker plays. */
     fun pick(stream: Stream) {
         val picking = _state.value as? SportsLivePlayState.Picking ?: return

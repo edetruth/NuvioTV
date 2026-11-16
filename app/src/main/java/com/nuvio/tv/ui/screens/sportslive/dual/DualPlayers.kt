@@ -7,12 +7,13 @@ import androidx.media3.common.C
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.mediacodec.MediaCodecRenderer
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.ui.screens.player.PlayerMediaSourceFactory
+import com.nuvio.tv.ui.screens.sportslive.buildSportsLiveLightPlayer
+import com.nuvio.tv.ui.screens.sportslive.playSportsLiveStream
 
 /**
  * The dual screen's two ExoPlayers. [sync] plays each pane of a [DualState] (a pane keeps its
@@ -39,17 +40,7 @@ internal class DualPlayers(
     private val appContext = context.applicationContext
 
     private inner class Slot {
-        // Decoder fallback as in the full player, so a second pane can fall back to a software decoder.
-        // The FFmpeg audio renderer backs up the platform ones, as in the full player: live channels often
-        // carry E-AC-3, which devices without that decoder could not play at all.
-        val player: ExoPlayer = ExoPlayer.Builder(
-            appContext,
-            DefaultRenderersFactory(appContext)
-                .setEnableDecoderFallback(true)
-                .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
-        )
-            .setVideoChangeFrameRateStrategy(C.VIDEO_CHANGE_FRAME_RATE_STRATEGY_OFF)
-            .build()
+        val player: ExoPlayer = buildSportsLiveLightPlayer(appContext)
         // Its own instance: parallel connections and the VOD cache stay at their defaults (off).
         val mediaSourceFactory = PlayerMediaSourceFactory(appContext)
 
@@ -111,22 +102,7 @@ internal class DualPlayers(
             }
             loaded = wanted
             listenToLoad(wanted.first)
-            val stream = wanted.second
-            val request = PlayerMediaSourceFactory.normalizePlaybackRequest(
-                url = url,
-                headers = stream.behaviorHints?.proxyHeaders?.request
-            )
-            player.setMediaSource(
-                mediaSourceFactory.createMediaSource(
-                    context = appContext,
-                    url = request.url,
-                    headers = request.headers,
-                    filename = stream.behaviorHints?.filename,
-                    responseHeaders = stream.behaviorHints?.proxyHeaders?.response.orEmpty()
-                )
-            )
-            player.prepare()
-            player.playWhenReady = true
+            player.playSportsLiveStream(appContext, mediaSourceFactory, wanted.second, url)
         }
     }
 

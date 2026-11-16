@@ -1,0 +1,62 @@
+package com.nuvio.tv.ui.screens.sportslive.preview
+
+import android.view.ViewGroup
+import androidx.annotation.OptIn
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.ui.AspectRatioFrameLayout
+import androidx.media3.ui.PlayerView
+import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Text
+import com.nuvio.tv.R
+import com.nuvio.tv.ui.theme.NuvioTheme
+
+/**
+ * The preview's video in the details pane: a [PlayerView] with its default SurfaceView (composited
+ * by the display hardware, as in the dual screen) showing [player]'s video. It never takes focus.
+ */
+@OptIn(UnstableApi::class)
+@Composable
+internal fun SportsLivePreviewVideo(player: SportsLivePreviewPlayer, modifier: Modifier = Modifier) {
+    AndroidView(
+        factory = { ctx ->
+            PlayerView(ctx).apply {
+                layoutParams = ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+                )
+                useController = false
+                resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                setShutterBackgroundColor(android.graphics.Color.BLACK)
+                isFocusable = false
+                descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+            }.also(player::attach)
+        },
+        onRelease = { player.attach(null) },
+        modifier = modifier.fillMaxSize()
+    )
+}
+
+/** The small "Preview" tag on a playing preview. */
+@Composable
+internal fun SportsLivePreviewLabel(modifier: Modifier = Modifier) {
+    Text(
+        text = stringResource(R.string.sports_live_preview_label),
+        style = MaterialTheme.typography.labelMedium,
+        color = Color.White,
+        modifier = modifier
+            .padding(NuvioTheme.spacing.sm)
+            .clip(RoundedCornerShape(NuvioTheme.radii.sm))
+            .background(Color.Black.copy(alpha = 0.6f))
+            .padding(horizontal = NuvioTheme.spacing.sm, vertical = NuvioTheme.spacing.xs)
+    )
+}

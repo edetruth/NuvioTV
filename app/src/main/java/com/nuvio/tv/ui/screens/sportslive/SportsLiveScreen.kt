@@ -38,6 +38,7 @@ import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -62,6 +63,10 @@ import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualSession
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualSessions
 import com.nuvio.tv.ui.screens.sportslive.dual.offersDual
 import com.nuvio.tv.ui.screens.sportslive.dual.sportsLivePickModeSession
+import com.nuvio.tv.ui.screens.sportslive.preview.SportsLivePreviewPlayer
+import com.nuvio.tv.ui.screens.sportslive.preview.SportsLivePreviewState
+import com.nuvio.tv.ui.screens.sportslive.preview.SportsLivePreviewVideo
+import com.nuvio.tv.ui.screens.sportslive.preview.previewKey
 import com.nuvio.tv.ui.theme.NuvioTheme
 import com.nuvio.tv.ui.util.dpadRepeatThrottle
 import kotlinx.coroutines.delay
@@ -79,6 +84,19 @@ fun SportsLiveScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val followedTeams by viewModel.followedTeams.collectAsStateWithLifecycle()
+    val preview by viewModel.preview.collectAsStateWithLifecycle()
+    val playState by playViewModel.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+
+    // The hover preview's one player: it plays while the preview does, and is freed the moment the
+    // screen pauses or leaves, or OK hands its stream to the full player.
+    val previewPlayer = remember {
+        SportsLivePreviewPlayer(context, viewModel::onPreviewFirstFrame, viewModel::onPreviewError)
+    }
+    val playing = preview as? SportsLivePreviewState.Playing
+    LaunchedEffect(playing?.item?.previewKey, playing?.stream) {
+        if (playing == null) previewPlayer.release() else previewPlayer.play(playing.item, playing.stream)
+    }
 
     // A merged game plays across its sources; every other card opens its Stream screen as before.
     SportsLivePlayHost(
@@ -88,6 +106,7 @@ fun SportsLiveScreen(
             onPlay(item)
         },
         onPlayTarget = { target ->
+            previewPlayer.release()
             viewModel.startZapSession(target.item)
             onPlayTarget(target)
         }
@@ -98,7 +117,10 @@ fun SportsLiveScreen(
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_RESUME -> viewModel.onScreenVisible(true)
-                Lifecycle.Event.ON_PAUSE -> viewModel.onScreenVisible(false)
+                Lifecycle.Event.ON_PAUSE -> {
+                    viewModel.onScreenVisible(false)
+                    previewPlayer.release()
+                }
                 else -> Unit
             }
         }
@@ -106,6 +128,7 @@ fun SportsLiveScreen(
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
             viewModel.onScreenVisible(false)
+            previewPlayer.release()
         }
     }
 
@@ -125,7 +148,21 @@ fun SportsLiveScreen(
             onSelectFilter = viewModel::selectFilter,
             onSelectItem = viewModel::selectItem,
             onRefresh = { viewModel.refresh() },
-            onPlay = playViewModel::play,
+            onPlay = { item ->
+                // OK on a playing preview: its stream plays full screen at once; otherwise as before.
+                val previewed = viewModel.takeOverPreview(item)
+                if (previewed == null) {
+                    playViewModel.play(item)
+                } else {
+                    // Freed before the full player starts, so the two never hold decoders together.
+                    previewPlayer.release()
+                    playViewModel.playResolved(item, previewed.stream)
+                }
+            },
+            preview = playing,
+            previewPlayer = previewPlayer,
+            dialogOpen = playState != SportsLivePlayState.Idle,
+            onPreviewFocus = viewModel::setPreviewFocus,
             onOpenDetail = onOpenDetail,
             onToggleFollow = viewModel::toggleFollow,
             onOpenDual = { session ->
@@ -164,6 +201,11 @@ private fun SportsLiveContent(
     onSelectItem: (String?) -> Unit,
     onRefresh: () -> Unit,
     onPlay: (SportsLiveItem) -> Unit,
+    preview: SportsLivePreviewState.Playing?,
+    previewPlayer: SportsLivePreviewPlayer,
+    /** OK's stream lookup or picker is open. */
+    dialogOpen: Boolean,
+    onPreviewFocus: (SportsLiveItem?) -> Unit,
     onOpenDetail: (SportsLiveItem) -> Unit,
     onToggleFollow: (SportsLiveItem, String) -> Unit,
     onOpenDual: (SportsLiveDualSession) -> Unit
@@ -176,6 +218,7 @@ private fun SportsLiveContent(
     val cardFocusRequesters = remember { mutableMapOf<String, FocusRequester>() }
     fun cardFocusRequester(item: SportsLiveItem) = cardFocusRequesters.getOrPut(item.listKey) { FocusRequester() }
     var listHasFocus by remember { mutableStateOf(false) }
+    var paneHasFocus by remember { mutableStateOf(false) }
     // Saved with the back stack entry, so returning from the stream or detail page refocuses this card.
     var focusedCardKey by rememberSaveable { mutableStateOf<String?>(null) }
     val listState = rememberLazyListState()
@@ -288,6 +331,15 @@ private fun SportsLiveContent(
     BackHandler(enabled = pickFirst != null) {
         pickFirst = null
     }
+
+    // The preview follows the focused card (in the list, or its pane's buttons) while no menu, pick
+    // mode or dialog is open; anything else stops it.
+    val previewItem = selected?.takeIf {
+        (listHasFocus || paneHasFocus) && menuCardKey == null && pickFirst == null && !dialogOpen
+    }
+    val currentOnPreviewFocus by rememberUpdatedState(onPreviewFocus)
+    LaunchedEffect(previewItem?.listKey) { currentOnPreviewFocus(previewItem) }
+    DisposableEffect(Unit) { onDispose { currentOnPreviewFocus(null) } }
 
     // Back from another screen: put the list back on the card that had focus. Runs once per entry.
     LaunchedEffect(Unit) {
@@ -445,14 +497,22 @@ private fun SportsLiveContent(
                     )
                 }
             }
+            val selectedPreview = preview?.takeIf { it.item.listKey == selected.listKey }
             SportsLiveDetailsPane(
                 item = selected,
                 stateLabel = stateLabelOf(selected),
                 onWatch = { open(selected) },
                 onDetails = { onOpenDetail(selected) },
+                preview = if (selectedPreview != null) {
+                    { SportsLivePreviewVideo(previewPlayer) }
+                } else {
+                    null
+                },
+                previewShowing = selectedPreview?.rendering == true,
                 modifier = Modifier
                     .weight(0.55f)
-                    .fillMaxHeight(),
+                    .fillMaxHeight()
+                    .onFocusChanged { paneHasFocus = it.hasFocus },
                 watchModifier = Modifier
                     .focusRequester(watchFocusRequester)
                     .focusProperties { left = selectedCardFocusRequester }

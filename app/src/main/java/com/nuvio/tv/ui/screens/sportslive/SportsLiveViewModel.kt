@@ -3,23 +3,30 @@ package com.nuvio.tv.ui.screens.sportslive
 import androidx.annotation.VisibleForTesting
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.nuvio.tv.core.debrid.DirectDebridResolver
 import com.nuvio.tv.core.sportslive.SportsLiveItemBucketer
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
+import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveTab
+import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.domain.repository.SportsLiveFailure
 import com.nuvio.tv.domain.repository.SportsLiveRepository
+import com.nuvio.tv.ui.screens.sportslive.preview.SportsLivePreviewController
+import com.nuvio.tv.ui.screens.sportslive.preview.SportsLivePreviewState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -28,9 +35,27 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
-class SportsLiveViewModel @Inject constructor(
-    private val repo: SportsLiveRepository
+class SportsLiveViewModel internal constructor(
+    private val repo: SportsLiveRepository,
+    /** The hover preview's stream for an item: one a light player can play as it is, else null. */
+    previewResolve: suspend (SportsLiveItem) -> Stream? = { null },
+    hoverPreviewEnabled: Flow<Boolean> = flowOf(false)
 ) : ViewModel() {
+
+    @Inject
+    constructor(
+        repo: SportsLiveRepository,
+        resolver: SportsLiveZapResolver,
+        directDebridResolver: DirectDebridResolver,
+        prefs: SportsLivePreferencesDataStore
+    ) : this(
+        repo = repo,
+        // The zap's pick, which joins the stream search the ended-games probe started on settle.
+        previewResolve = { item ->
+            resolver.resolve(item)?.takeIf { stream -> sportsLiveLightPlayable(stream, directDebridResolver) }
+        },
+        hoverPreviewEnabled = prefs.hoverPreview
+    )
 
     private data class Selection(
         val tab: SportsLiveTab = SportsLiveTab.LIVE_NOW,
@@ -92,9 +117,32 @@ class SportsLiveViewModel @Inject constructor(
     val followedTeams: StateFlow<List<FollowedTeam>> =
         repo.followedTeams.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    private val previewController = SportsLivePreviewController(viewModelScope, previewResolve).apply {
+        onTab(selectionState.value.tab)
+    }
+
+    /** The details pane's hover preview. */
+    val preview: StateFlow<SportsLivePreviewState> = previewController.state
+
     init {
         refresh(force = false)
+        viewModelScope.launch { hoverPreviewEnabled.collect(previewController::onEnabled) }
     }
+
+    /**
+     * The card the preview may play: the focused card while the list or the details pane holds
+     * focus and no dialog, menu or pick mode is open; null otherwise.
+     */
+    fun setPreviewFocus(item: SportsLiveItem?) {
+        previewController.onFocus(item)
+    }
+
+    fun onPreviewFirstFrame(item: SportsLiveItem) = previewController.onFirstFrame(item)
+
+    fun onPreviewError(item: SportsLiveItem) = previewController.onError(item)
+
+    /** [item]'s preview when it is playing on screen, stopped so the full player can take its stream over. */
+    fun takeOverPreview(item: SportsLiveItem): SportsLivePreviewState.Playing? = previewController.takeOver(item)
 
     /**
      * Unfollows every followed team that is [side] of [item] or of any of its alternates ("Patriots"
@@ -116,10 +164,13 @@ class SportsLiveViewModel @Inject constructor(
 
     fun selectTab(tab: SportsLiveTab) {
         selectionState.update { it.copy(tab = tab, filter = null, itemId = null) }
+        previewController.onTab(tab)
     }
 
     /** [value] is a sport, a group on the Channels tab, or [SportsLiveUiState.MY_TEAMS_FILTER]; null means All. */
     fun selectFilter(value: String?) {
+        // Another filter lists other cards: the preview stops until a card is focused again.
+        if (value != selectionState.value.filter) previewController.onFocus(null)
         selectionState.update { it.copy(filter = value) }
     }
 
@@ -168,6 +219,8 @@ class SportsLiveViewModel @Inject constructor(
      * load and on a manual refresh.
      */
     fun onScreenVisible(visible: Boolean) {
+        // The preview stops while the screen is hidden; coming back, it waits for a fresh settle.
+        previewController.onVisible(visible)
         autoRefreshJob?.cancel()
         autoRefreshJob = if (visible) {
             viewModelScope.launch {
