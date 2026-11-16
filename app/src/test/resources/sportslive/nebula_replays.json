@@ -4,7 +4,7 @@
       "id": "streamed:sportzx-replay-100029",
       "type": "sports",
       "name": "Formula 1",
-      "poster": "https://sports.example.invalid/sports/poster/v16/75dc7195b6.jpg?title=Formula+1&genre=F1&meta=F1&time=2026-11-15+21%3A56+UTC&info=F1+event+%C2%B7+2026-11-15+21%3A56+UTC&badge=EVENT&sources=Nebula+Sports&kind=event&sig=75dc7195b6&sport=F1",
+      "poster": "https://example.invalid/sports/poster/v16/75dc7195b6.jpg?title=Formula+1&genre=F1&meta=F1&time=2026-11-15+21%3A56+UTC&info=F1+event+%C2%B7+2026-11-15+21%3A56+UTC&badge=EVENT&sources=Nebula+Sports&kind=event&sig=75dc7195b6&sport=F1",
       "posterShape": "landscape",
       "genres": [
         "F1",
@@ -15,7 +15,7 @@
       "isLive": false,
       "description": "F1 · F1 · 2026-11-15 21:56 UTC",
       "genre": "F1",
-      "background": "https://sports.example.invalid/sports/poster/v16/f67c1b010d.jpg?title=Formula+1&genre=F1&meta=F1&time=2026-11-15+21%3A56+UTC&info=F1+event+%C2%B7+2026-11-15+21%3A56+UTC&badge=EVENT&sources=Nebula+Sports&kind=event&sig=f67c1b010d&sport=F1&layer=bg",
+      "background": "https://example.invalid/sports/poster/v16/f67c1b010d.jpg?title=Formula+1&genre=F1&meta=F1&time=2026-11-15+21%3A56+UTC&info=F1+event+%C2%B7+2026-11-15+21%3A56+UTC&badge=EVENT&sources=Nebula+Sports&kind=event&sig=f67c1b010d&sport=F1&layer=bg",
       "country": "Sports",
       "countryCode": "sports",
       "time": "2026-11-15 21:56 UTC",

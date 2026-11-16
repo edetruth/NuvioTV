@@ -4,7 +4,7 @@
       "id": "streamed:sportzx-50065",
       "type": "sports",
       "name": "Las Vegas Raiders vs Seattle Seahawks",
-      "poster": "https://sports.example.invalid/sports/poster/v16/5297c43e07.jpg?title=Las+Vegas+Raiders+vs+Seattle+Seahawks&genre=American+Football&meta=American+Football&time=Live+now&info=American+Football+event&badge=LIVE&sources=Nebula+Sports&kind=event&sig=5297c43e07&teams=Las+Vegas+Raiders%7CSeattle+Seahawks&sport=American+Football",
+      "poster": "https://example.invalid/sports/poster/v16/5297c43e07.jpg?title=Las+Vegas+Raiders+vs+Seattle+Seahawks&genre=American+Football&meta=American+Football&time=Live+now&info=American+Football+event&badge=LIVE&sources=Nebula+Sports&kind=event&sig=5297c43e07&teams=Las+Vegas+Raiders%7CSeattle+Seahawks&sport=American+Football",
       "posterShape": "landscape",
       "genres": [
         "American Football"
@@ -14,7 +14,7 @@
       "isLive": true,
       "description": "American Football · Live now\nRaiders v Seahawks",
       "genre": "American Football",
-      "background": "https://sports.example.invalid/sports/poster/v16/82b1765ada.jpg?title=Las+Vegas+Raiders+vs+Seattle+Seahawks&genre=American+Football&meta=American+Football&time=Live+now&info=American+Football+event&badge=LIVE&sources=Nebula+Sports&kind=event&sig=82b1765ada&teams=Las+Vegas+Raiders%7CSeattle+Seahawks&sport=American+Football&layer=bg",
+      "background": "https://example.invalid/sports/poster/v16/82b1765ada.jpg?title=Las+Vegas+Raiders+vs+Seattle+Seahawks&genre=American+Football&meta=American+Football&time=Live+now&info=American+Football+event&badge=LIVE&sources=Nebula+Sports&kind=event&sig=82b1765ada&teams=Las+Vegas+Raiders%7CSeattle+Seahawks&sport=American+Football&layer=bg",
       "country": "Sports",
       "countryCode": "sports",
       "time": "🔴 LIVE",
@@ -24,7 +24,7 @@
       "id": "streamed:sportzx-50067",
       "type": "sports",
       "name": "Arizona Cardinals vs Los Angeles Rams",
-      "poster": "https://sports.example.invalid/sports/poster/v16/adf49f215b.jpg?title=Arizona+Cardinals+vs+Los+Angeles+Rams&genre=American+Football&meta=American+Football&time=Live+now&info=American+Football+event&badge=LIVE&sources=Nebula+Sports&kind=event&sig=adf49f215b&teams=Arizona+Cardinals%7CLos+Angeles+Rams&sport=American+Football",
+      "poster": "https://example.invalid/sports/poster/v16/adf49f215b.jpg?title=Arizona+Cardinals+vs+Los+Angeles+Rams&genre=American+Football&meta=American+Football&time=Live+now&info=American+Football+event&badge=LIVE&sources=Nebula+Sports&kind=event&sig=adf49f215b&teams=Arizona+Cardinals%7CLos+Angeles+Rams&sport=American+Football",
       "posterShape": "landscape",
       "genres": [
         "American Football"
@@ -34,7 +34,7 @@
       "isLive": true,
       "description": "American Football · Live now\nCardinals v Rams",
       "genre": "American Football",
-      "background": "https://sports.example.invalid/sports/poster/v16/48c1cc25bd.jpg?title=Arizona+Cardinals+vs+Los+Angeles+Rams&genre=American+Football&meta=American+Football&time=Live+now&info=American+Football+event&badge=LIVE&sources=Nebula+Sports&kind=event&sig=48c1cc25bd&teams=Arizona+Cardinals%7CLos+Angeles+Rams&sport=American+Football&layer=bg",
+      "background": "https://example.invalid/sports/poster/v16/48c1cc25bd.jpg?title=Arizona+Cardinals+vs+Los+Angeles+Rams&genre=American+Football&meta=American+Football&time=Live+now&info=American+Football+event&badge=LIVE&sources=Nebula+Sports&kind=event&sig=48c1cc25bd&teams=Arizona+Cardinals%7CLos+Angeles+Rams&sport=American+Football&layer=bg",
       "country": "Sports",
       "countryCode": "sports",
       "time": "🔴 LIVE",
@@ -44,7 +44,7 @@
       "id": "streamed:sportzx-50042",
       "type": "sports",
       "name": "Dallas Cowboys vs San Francisco 49ers",
-      "poster": "https://sports.example.invalid/sports/poster/v16/7e7bca61cc.jpg?title=Dallas+Cowboys+vs+San+Francisco+49ers&genre=American+Football&meta=American+Football&time=Live+now&info=American+Football+event&badge=LIVE&sources=Nebula+Sports&kind=event&sig=7e7bca61cc&teams=Dallas+Cowboys%7CSan+Francisco+49ers&sport=American+Football",
+      "poster": "https://example.invalid/sports/poster/v16/7e7bca61cc.jpg?title=Dallas+Cowboys+vs+San+Francisco+49ers&genre=American+Football&meta=American+Football&time=Live+now&info=American+Football+event&badge=LIVE&sources=Nebula+Sports&kind=event&sig=7e7bca61cc&teams=Dallas+Cowboys%7CSan+Francisco+49ers&sport=American+Football",
       "posterShape": "landscape",
       "genres": [
         "American Football"
@@ -54,7 +54,7 @@
       "isLive": true,
       "description": "American Football · Live now\nCowboys v 49ers",
       "genre": "American Football",
-      "background": "https://sports.example.invalid/sports/poster/v16/c68297c431.jpg?title=Dallas+Cowboys+vs+San+Francisco+49ers&genre=American+Football&meta=American+Football&time=Live+now&info=American+Football+event&badge=LIVE&sources=Nebula+Sports&kind=event&sig=c68297c431&teams=Dallas+Cowboys%7CSan+Francisco+49ers&sport=American+Football&layer=bg",
+      "background": "https://example.invalid/sports/poster/v16/c68297c431.jpg?title=Dallas+Cowboys+vs+San+Francisco+49ers&genre=American+Football&meta=American+Football&time=Live+now&info=American+Football+event&badge=LIVE&sources=Nebula+Sports&kind=event&sig=c68297c431&teams=Dallas+Cowboys%7CSan+Francisco+49ers&sport=American+Football&layer=bg",
       "country": "Sports",
       "countryCode": "sports",
       "time": "🔴 LIVE",
@@ -64,7 +64,7 @@
       "id": "streamed:sportzx-50023",
       "type": "sports",
       "name": "NFL REDZONE",
-      "poster": "https://sports.example.invalid/sports/poster/v16/40057323c4.jpg?title=NFL+REDZONE&genre=American+Football&meta=American+Football&time=Live+now&info=American+Football+event&badge=LIVE&sources=Nebula+Sports&kind=event&sig=40057323c4&sport=American+Football",
+      "poster": "https://example.invalid/sports/poster/v16/40057323c4.jpg?title=NFL+REDZONE&genre=American+Football&meta=American+Football&time=Live+now&info=American+Football+event&badge=LIVE&sources=Nebula+Sports&kind=event&sig=40057323c4&sport=American+Football",
       "posterShape": "landscape",
       "genres": [
         "American Football"
@@ -74,7 +74,7 @@
       "isLive": true,
       "description": "American Football · Live now\nNFL v REDZONE",
       "genre": "American Football",
-      "background": "https://sports.example.invalid/sports/poster/v16/e56e4f7b79.jpg?title=NFL+REDZONE&genre=American+Football&meta=American+Football&time=Live+now&info=American+Football+event&badge=LIVE&sources=Nebula+Sports&kind=event&sig=e56e4f7b79&sport=American+Football&layer=bg",
+      "background": "https://example.invalid/sports/poster/v16/e56e4f7b79.jpg?title=NFL+REDZONE&genre=American+Football&meta=American+Football&time=Live+now&info=American+Football+event&badge=LIVE&sources=Nebula+Sports&kind=event&sig=e56e4f7b79&sport=American+Football&layer=bg",
       "country": "Sports",
       "countryCode": "sports",
       "time": "🔴 LIVE",
@@ -84,7 +84,7 @@
       "id": "streamed:sportzx-50019",
       "type": "sports",
       "name": "ATP 250",
-      "poster": "https://sports.example.invalid/sports/poster/v16/7641b21e08.jpg?title=ATP+250&genre=Tennis&meta=Tennis&time=Live+now&info=Tennis+event&badge=LIVE&sources=Nebula+Sports&kind=event&sig=7641b21e08&sport=Tennis",
+      "poster": "https://example.invalid/sports/poster/v16/7641b21e08.jpg?title=ATP+250&genre=Tennis&meta=Tennis&time=Live+now&info=Tennis+event&badge=LIVE&sources=Nebula+Sports&kind=event&sig=7641b21e08&sport=Tennis",
       "posterShape": "landscape",
       "genres": [
         "Tennis"
@@ -94,7 +94,7 @@
       "isLive": true,
       "description": "Tennis · Live now\nATP 250 v Stockholm Open",
       "genre": "Tennis",
-      "background": "https://sports.example.invalid/sports/poster/v16/737ed87514.jpg?title=ATP+250&genre=Tennis&meta=Tennis&time=Live+now&info=Tennis+event&badge=LIVE&sources=Nebula+Sports&kind=event&sig=737ed87514&sport=Tennis&layer=bg",
+      "background": "https://example.invalid/sports/poster/v16/737ed87514.jpg?title=ATP+250&genre=Tennis&meta=Tennis&time=Live+now&info=Tennis+event&badge=LIVE&sources=Nebula+Sports&kind=event&sig=737ed87514&sport=Tennis&layer=bg",
       "country": "Sports",
       "countryCode": "sports",
       "time": "🔴 LIVE",
@@ -104,7 +104,7 @@
       "id": "streamed:sportzx-50147",
       "type": "sports",
       "name": "Phoenix Suns vs Los Angeles Lakers",
-      "poster": "https://sports.example.invalid/sports/poster/v16/b6a699c6b5.jpg?title=Phoenix+Suns+vs+Los+Angeles+Lakers&genre=Basketball&meta=Basketball&time=Live+now&info=Basketball+event&badge=LIVE&sources=Nebula+Sports&kind=event&sig=b6a699c6b5&teams=Phoenix+Suns%7CLos+Angeles+Lakers&sport=Basketball",
+      "poster": "https://example.invalid/sports/poster/v16/b6a699c6b5.jpg?title=Phoenix+Suns+vs+Los+Angeles+Lakers&genre=Basketball&meta=Basketball&time=Live+now&info=Basketball+event&badge=LIVE&sources=Nebula+Sports&kind=event&sig=b6a699c6b5&teams=Phoenix+Suns%7CLos+Angeles+Lakers&sport=Basketball",
       "posterShape": "landscape",
       "genres": [
         "Basketball"
@@ -114,7 +114,7 @@
       "isLive": true,
       "description": "Basketball · Live now\nPhoenix Suns v Los Angeles Lakers",
       "genre": "Basketball",
-      "background": "https://sports.example.invalid/sports/poster/v16/d15bbcc951.jpg?title=Phoenix+Suns+vs+Los+Angeles+Lakers&genre=Basketball&meta=Basketball&time=Live+now&info=Basketball+event&badge=LIVE&sources=Nebula+Sports&kind=event&sig=d15bbcc951&teams=Phoenix+Suns%7CLos+Angeles+Lakers&sport=Basketball&layer=bg",
+      "background": "https://example.invalid/sports/poster/v16/d15bbcc951.jpg?title=Phoenix+Suns+vs+Los+Angeles+Lakers&genre=Basketball&meta=Basketball&time=Live+now&info=Basketball+event&badge=LIVE&sources=Nebula+Sports&kind=event&sig=d15bbcc951&teams=Phoenix+Suns%7CLos+Angeles+Lakers&sport=Basketball&layer=bg",
       "country": "Sports",
       "countryCode": "sports",
       "time": "🔴 LIVE",
@@ -124,7 +124,7 @@
       "id": "streamed:sportzx-50146",
       "type": "sports",
       "name": "Los Angeles Clippers vs Charlotte Hornets",
-      "poster": "https://sports.example.invalid/sports/poster/v16/c88e4362a9.jpg?title=Los+Angeles+Clippers+vs+Charlotte+Hornets&genre=Basketball&meta=Basketball&time=Live+now&info=Basketball+event&badge=LIVE&sources=Nebula+Sports&kind=event&sig=c88e4362a9&teams=Los+Angeles+Clippers%7CCharlotte+Hornets&sport=Basketball",
+      "poster": "https://example.invalid/sports/poster/v16/c88e4362a9.jpg?title=Los+Angeles+Clippers+vs+Charlotte+Hornets&genre=Basketball&meta=Basketball&time=Live+now&info=Basketball+event&badge=LIVE&sources=Nebula+Sports&kind=event&sig=c88e4362a9&teams=Los+Angeles+Clippers%7CCharlotte+Hornets&sport=Basketball",
       "posterShape": "landscape",
       "genres": [
         "Basketball"
@@ -134,7 +134,7 @@
       "isLive": true,
       "description": "Basketball · Live now\nLos Angeles Clippers v Charlotte Hornets",
       "genre": "Basketball",
-      "background": "https://sports.example.invalid/sports/poster/v16/ef3da11b4e.jpg?title=Los+Angeles+Clippers+vs+Charlotte+Hornets&genre=Basketball&meta=Basketball&time=Live+now&info=Basketball+event&badge=LIVE&sources=Nebula+Sports&kind=event&sig=ef3da11b4e&teams=Los+Angeles+Clippers%7CCharlotte+Hornets&sport=Basketball&layer=bg",
+      "background": "https://example.invalid/sports/poster/v16/ef3da11b4e.jpg?title=Los+Angeles+Clippers+vs+Charlotte+Hornets&genre=Basketball&meta=Basketball&time=Live+now&info=Basketball+event&badge=LIVE&sources=Nebula+Sports&kind=event&sig=ef3da11b4e&teams=Los+Angeles+Clippers%7CCharlotte+Hornets&sport=Basketball&layer=bg",
       "country": "Sports",
       "countryCode": "sports",
       "time": "🔴 LIVE",
