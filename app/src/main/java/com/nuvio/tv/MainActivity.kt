@@ -186,6 +186,9 @@ import com.nuvio.tv.ui.components.LocalAlwaysBackdropWithLogo
 import com.nuvio.tv.ui.components.ProfileAvatarCircle
 import com.nuvio.tv.ui.navigation.LocalNavViewModelStoreOwner
 import com.nuvio.tv.ui.navigation.NuvioNavHost
+import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniPlayerHost
+import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniPlayers
+import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniStop
 import com.nuvio.tv.ui.navigation.Screen
 import com.nuvio.tv.ui.navigation.rememberNavSessionViewModelStoreOwner
 import com.nuvio.tv.ui.screens.party.PartyEffects
@@ -1244,6 +1247,7 @@ open class MainActivity : ComponentActivity() {
                         onFeedbackShown = updateViewModel::consumeFeedbackMessage
                     ) {
                         val handleSwitchProfile = {
+                            SportsLiveMiniPlayers.controller.stop(SportsLiveMiniStop.PROFILE_SWITCH)
                             startupSession++
                             splashTriggered = false
                             profileSwitchedManually = true
@@ -1297,6 +1301,9 @@ open class MainActivity : ComponentActivity() {
                                     )
                                 }
                             }
+
+                            // The Sports & Live mini player, above the NavHost; it never takes focus.
+                            SportsLiveMiniPlayerHost()
 
                             val autoNextOverlay by externalPlaybackTracker.autoNextOverlay.collectAsState()
                             autoNextOverlay?.let { ov ->
@@ -1437,6 +1444,7 @@ open class MainActivity : ComponentActivity() {
     override fun onUserInteraction() {
         super.onUserInteraction()
         ambientIdleController.onInteraction()
+        SportsLiveMiniPlayers.controller.onInteraction()
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
@@ -1480,6 +1488,7 @@ open class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        if (isFinishing) SportsLiveMiniPlayers.controller.stop(SportsLiveMiniStop.APP_FINISH)
         super.onDestroy()
         PluginRuntimeHooks.onActivityDestroy()
     }

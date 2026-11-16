@@ -14,6 +14,8 @@ import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.ui.screens.player.PlayerMediaSourceFactory
 import com.nuvio.tv.ui.screens.sportslive.buildSportsLiveLightPlayer
+import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniPlayers
+import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniStop
 import com.nuvio.tv.ui.screens.sportslive.playSportsLiveStream
 
 /**
@@ -52,6 +54,8 @@ internal class SportsLivePreviewPlayer(
         val wanted = item.previewKey to stream
         if (suspended || (wanted == loaded && player != null)) return
         release()
+        // A preview starting ends the mini player, so the two never hold decoders together.
+        SportsLiveMiniPlayers.controller.stop(SportsLiveMiniStop.HOVER_PREVIEW)
         val url = stream.getStreamUrl() ?: return onError(item)
         var rendered = false
         val built = buildSportsLiveLightPlayer(appContext).apply {

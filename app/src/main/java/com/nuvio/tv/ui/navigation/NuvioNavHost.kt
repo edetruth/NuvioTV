@@ -22,6 +22,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.collectAsState
@@ -46,6 +47,7 @@ import com.nuvio.tv.ui.screens.addon.CatalogOrderScreen
 import com.nuvio.tv.ui.screens.library.LibraryScreen
 import com.nuvio.tv.ui.screens.player.PlayerExitReason
 import com.nuvio.tv.ui.screens.player.PlayerScreen
+import com.nuvio.tv.ui.screens.player.PlayerViewModel
 import com.nuvio.tv.ui.screens.player.PostPlayRecommendation
 import com.nuvio.tv.ui.screens.player.playerBackOpensCurrentEpisodeStreams
 import com.nuvio.tv.ui.screens.party.PartyScreen
@@ -70,6 +72,9 @@ import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapTarget
 import com.nuvio.tv.ui.screens.sportslive.streamRouteFor
 import com.nuvio.tv.ui.screens.sportslive.dual.LocalOpenSportsLiveDual
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualScreen
+import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniPlayers
+import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniStop
+import com.nuvio.tv.ui.screens.sportslive.mini.sportsLiveMiniStream
 import com.nuvio.tv.ui.screens.stream.StreamPlaybackInfo
 import com.nuvio.tv.ui.screens.stream.StreamScreen
 import com.nuvio.tv.ui.screens.home.ContinueWatchingItem
@@ -220,6 +225,28 @@ private fun clearSportsLiveZapSessionOnPlayerBack(navController: NavHostControll
     if (navController.previousIsStreamScreen()) return
     SportsLiveZapSessions.clear()
     SportsLiveExtraSources.clear(contentId)
+}
+
+/**
+ * Back from a player whose content has a Sports & Live zap session starts the mini player on the
+ * stream that player plays now (its url and headers, after any source fallback); any other
+ * player (movies, series) leaves it alone. Runs before the session is cleared.
+ */
+private fun startSportsLiveMiniPlayerOnBack(contentId: String?, player: PlayerViewModel) {
+    val session = SportsLiveZapSessions.activeFor(contentId) ?: return
+    val playing = player.controller
+    SportsLiveMiniPlayers.controller.onBackFromPlayer(
+        contentId = contentId,
+        session = session,
+        stream = sportsLiveMiniStream(
+            url = player.getCurrentStreamUrl(),
+            headers = player.getCurrentHeaders(),
+            responseHeaders = playing.currentStreamResponseHeaders,
+            filename = playing.currentFilename,
+            name = null,
+            addonName = playing.currentAddonName
+        )
+    )
 }
 
 // Root destinations carry the legacy sidebar inset themselves so the NavHost container
@@ -1042,8 +1069,19 @@ private fun PlaybackNavHost(
                 }
             }
 
+            // The PlayerScreen's own view model (same back stack entry): Back reads its current stream.
+            val playerViewModel: PlayerViewModel = androidx.hilt.navigation.compose.hiltViewModel()
+            // Any player opening stops the Sports & Live mini player, before it starts its own sound.
+            DisposableEffect(backStackEntry.id) {
+                SportsLiveMiniPlayers.controller.stop(SportsLiveMiniStop.OTHER_PLAYER)
+                onDispose { }
+            }
             PlayerScreen(
+                viewModel = playerViewModel,
                 onBackPress = { currentVideoId, currentSeason, currentEpisode, autoPlayEnabled, playbackCompleted ->
+                    if (!playbackCompleted) {
+                        startSportsLiveMiniPlayerOnBack(backStackEntry.arguments?.getString("contentId"), playerViewModel)
+                    }
                     clearSportsLiveZapSessionOnPlayerBack(navController, backStackEntry.arguments?.getString("contentId"))
                     val args = backStackEntry.arguments
                     val initialSeason = args?.getString("season")?.toIntOrNull()

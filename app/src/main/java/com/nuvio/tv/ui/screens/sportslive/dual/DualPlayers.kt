@@ -13,6 +13,8 @@ import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.ui.screens.player.PlayerMediaSourceFactory
 import com.nuvio.tv.ui.screens.sportslive.buildSportsLiveLightPlayer
+import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniPlayers
+import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniStop
 import com.nuvio.tv.ui.screens.sportslive.playSportsLiveStream
 
 /**
@@ -38,6 +40,11 @@ internal class DualPlayers(
     private val onError: (item: SportsLiveItem, decoderInit: Boolean) -> Unit
 ) {
     private val appContext = context.applicationContext
+
+    init {
+        // Dual screen and the mini player never play sound together.
+        SportsLiveMiniPlayers.controller.stop(SportsLiveMiniStop.DUAL_SCREEN)
+    }
 
     private inner class Slot {
         val player: ExoPlayer = buildSportsLiveLightPlayer(appContext)
