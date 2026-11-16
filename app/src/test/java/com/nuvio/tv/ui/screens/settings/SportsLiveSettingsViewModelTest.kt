@@ -8,13 +8,17 @@ import com.nuvio.tv.data.local.ProfileDataStoreFactory
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import com.nuvio.tv.domain.model.Addon
 import com.nuvio.tv.domain.model.CatalogDescriptor
+import com.nuvio.tv.domain.model.CatalogOption
 import com.nuvio.tv.domain.model.CatalogStats
 import com.nuvio.tv.domain.model.CatalogExtra
 import com.nuvio.tv.domain.model.ContentType
 import com.nuvio.tv.domain.model.SportsLiveKind
 import com.nuvio.tv.domain.model.SportsLiveOverride
 import com.nuvio.tv.domain.repository.AddonRepository
+import com.nuvio.tv.domain.repository.SportsLiveLoad
 import com.nuvio.tv.domain.repository.SportsLiveRepository
+import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -54,6 +58,7 @@ class SportsLiveSettingsViewModelTest {
     private val sportsLiveRepository = mockk<SportsLiveRepository> {
         every { claimedCatalogKeys } returns claimedKeys
         every { catalogStats } returns this@SportsLiveSettingsViewModelTest.catalogStats
+        coEvery { load(any(), any()) } returns SportsLiveLoad(emptyList(), emptyList(), 0L, emptySet())
     }
 
     private fun TestScope.newViewModel(): SportsLiveSettingsViewModel {
@@ -150,7 +155,80 @@ class SportsLiveSettingsViewModelTest {
         assertFalse(prefs.showHomeRow.first())
     }
 
+    @Test
+    fun `filter exposes the eligible extra, its options and the pinned value`() = runTest {
+        addonsFlow.value = listOf(addon("tv", "TV", listOf(COUNTRY_TV, MOVIES)))
+        val tvKey = SportsLiveCatalogPolicy.keyFor(addonsFlow.value[0], COUNTRY_TV)
+        prefs.setCatalogOption(tvKey, CatalogOption("genre", "United States"))
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+
+        val (tv, movies) = viewModel.uiState.value.catalogs
+        assertEquals("genre", tv.filterExtra)
+        assertEquals(COUNTRIES, tv.filterOptions)
+        assertEquals("United States", tv.filterValue)
+        assertNull(movies.filterExtra)
+        assertEquals(emptyList<String>(), movies.filterOptions)
+        assertNull(movies.filterValue)
+    }
+
+    @Test
+    fun `a pin the addon no longer offers shows as All`() = runTest {
+        addonsFlow.value = listOf(addon("tv", "TV", listOf(COUNTRY_TV)))
+        val tvKey = SportsLiveCatalogPolicy.keyFor(addonsFlow.value[0], COUNTRY_TV)
+        prefs.setCatalogOption(tvKey, CatalogOption("genre", "Atlantis"))
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+
+        val tv = viewModel.uiState.value.catalogs.single()
+        assertEquals("genre", tv.filterExtra)
+        assertNull(tv.filterValue)
+    }
+
+    @Test
+    fun `setCatalogFilter stores the value exactly, clears with null and reloads each time`() = runTest {
+        addonsFlow.value = listOf(addon("tv", "TV", listOf(COUNTRY_TV)))
+        val tvKey = SportsLiveCatalogPolicy.keyFor(addonsFlow.value[0], COUNTRY_TV)
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+
+        viewModel.setCatalogFilter(tvKey, "genre", BOXING)
+        advanceUntilIdle()
+        assertEquals(CatalogOption("genre", BOXING), prefs.catalogOptions.first()[tvKey])
+        assertEquals(BOXING, viewModel.uiState.value.catalogs.single().filterValue)
+        coVerify(exactly = 1) { sportsLiveRepository.load(force = false, includeChannels = false) }
+
+        viewModel.setCatalogFilter(tvKey, "genre", null)
+        advanceUntilIdle()
+        assertNull(prefs.catalogOptions.first()[tvKey])
+        assertNull(viewModel.uiState.value.catalogs.single().filterValue)
+        coVerify(exactly = 2) { sportsLiveRepository.load(force = false, includeChannels = false) }
+    }
+
+    @Test
+    fun `a failed reload after setting a filter keeps the pin`() = runTest {
+        coEvery { sportsLiveRepository.load(any(), any()) } throws IllegalStateException("offline")
+        addonsFlow.value = listOf(addon("tv", "TV", listOf(COUNTRY_TV)))
+        val tvKey = SportsLiveCatalogPolicy.keyFor(addonsFlow.value[0], COUNTRY_TV)
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+
+        viewModel.setCatalogFilter(tvKey, "genre", "United States")
+        advanceUntilIdle()
+        assertEquals(CatalogOption("genre", "United States"), prefs.catalogOptions.first()[tvKey])
+    }
+
     private companion object {
+        /** Addons can give values with stray whitespace; they are stored and sent as given. */
+        const val BOXING = "TV Boxing "
+        val COUNTRIES = listOf("United Kingdom", "United States", BOXING)
+        val COUNTRY_TV = CatalogDescriptor(
+            type = ContentType.TV,
+            id = "live",
+            name = "Live TV",
+            extra = listOf(CatalogExtra(name = "skip"), CatalogExtra(name = "genre", options = COUNTRIES))
+        )
+
         val EVENTS = CatalogDescriptor(type = ContentType.UNKNOWN, rawType = "sport", id = "events", name = "Events")
         val MOVIES = CatalogDescriptor(type = ContentType.MOVIE, id = "movies", name = "Movies")
         val TRENDING = CatalogDescriptor(type = ContentType.SERIES, id = "trending", name = "Trending")

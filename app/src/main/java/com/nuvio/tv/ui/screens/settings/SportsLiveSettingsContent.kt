@@ -6,11 +6,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nuvio.tv.R
@@ -24,6 +28,7 @@ internal fun SportsLiveSettingsContent(
     viewModel: SportsLiveSettingsViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    var filterKey by remember { mutableStateOf<String?>(null) }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -66,15 +71,45 @@ internal fun SportsLiveSettingsContent(
                     state.catalogs.forEach { catalog ->
                         SettingsActionRow(
                             title = "${catalog.addonName} · ${catalog.catalogName}",
-                            subtitle = listOfNotNull(catalogStatus(catalog), catalog.stats?.let { catalogStats(it) })
-                                .joinToString("\n"),
+                            subtitle = listOfNotNull(
+                                catalogStatus(catalog),
+                                catalog.stats?.let { catalogStats(it, catalog.filterValue) }
+                            ).joinToString("\n"),
                             onClick = { viewModel.cycleOverride(catalog.key) },
                             enabled = state.showSection
                         )
+                        if (catalog.filterExtra != null) {
+                            SettingsActionRow(
+                                title = stringResource(
+                                    R.string.sports_live_filter_action,
+                                    catalog.filterValue ?: stringResource(R.string.sports_live_filter_all_option)
+                                ),
+                                subtitle = null,
+                                onClick = { filterKey = catalog.key },
+                                enabled = state.showSection
+                            )
+                        }
                     }
                 }
             }
         }
+    }
+
+    state.catalogs.firstOrNull { it.key == filterKey }?.let { catalog ->
+        val extra = catalog.filterExtra ?: return@let
+        SettingsSingleChoiceDialog(
+            title = stringResource(R.string.sports_live_filter_picker_title),
+            subtitle = "${catalog.addonName} · ${catalog.catalogName}",
+            options = listOf(SettingsPickerOption<String?>(null, stringResource(R.string.sports_live_filter_all_option))) +
+                catalog.filterOptions.map { SettingsPickerOption<String?>(it, it) },
+            selectedValue = catalog.filterValue,
+            onOptionSelected = { value ->
+                filterKey = null
+                viewModel.setCatalogFilter(catalog.key, extra, value)
+            },
+            onDismiss = { filterKey = null },
+            maxHeight = 420.dp
+        )
     }
 }
 
@@ -87,9 +122,12 @@ private fun catalogStatus(catalog: SportsLiveCatalogSetting): String = when (cat
     } ?: stringResource(R.string.sports_live_override_auto_out)
 }
 
-/** "12 live · 8 timed · 3 unrecognised": the non-zero counts, or "No items". */
+/**
+ * "12 live · 8 timed · 3 unrecognised": the non-zero counts, or "No items" ("No items for United States"
+ * when a pinned [filterValue] emptied it).
+ */
 @Composable
-private fun catalogStats(stats: CatalogStats): String {
+private fun catalogStats(stats: CatalogStats, filterValue: String?): String {
     val parts = listOf(
         R.plurals.sports_live_stat_live to stats.live,
         R.plurals.sports_live_stat_timed to stats.timed,
@@ -99,5 +137,9 @@ private fun catalogStats(stats: CatalogStats): String {
         R.plurals.sports_live_stat_ended to stats.ended,
         R.plurals.sports_live_stat_unrecognised to stats.unrecognised
     ).filter { it.second > 0 }.map { (res, count) -> pluralStringResource(res, count, count) }
-    return if (parts.isEmpty()) stringResource(R.string.sports_live_stat_empty) else parts.joinToString(" · ")
+    return when {
+        parts.isNotEmpty() -> parts.joinToString(" · ")
+        filterValue != null -> stringResource(R.string.sports_live_stat_no_items_for, filterValue)
+        else -> stringResource(R.string.sports_live_stat_empty)
+    }
 }

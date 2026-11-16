@@ -513,6 +513,10 @@
         <item quantity="other">%d ended</item>
     </plurals>
     <string name="sports_live_stat_empty">No items</string>
+    <string name="sports_live_stat_no_items_for">No items for %1$s</string>
+    <string name="sports_live_filter_action">Filter: %1$s</string>
+    <string name="sports_live_filter_all_option">All</string>
+    <string name="sports_live_filter_picker_title">Show only</string>
     <string name="settings_plugins">Plugins</string>
     <string name="settings_plugins_subtitle">Repositories and providers</string>
     <string name="settings_integration">Integrations</string>

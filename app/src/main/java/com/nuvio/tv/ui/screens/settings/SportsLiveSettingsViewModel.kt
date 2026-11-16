@@ -2,8 +2,10 @@ package com.nuvio.tv.ui.screens.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.nuvio.tv.core.sportslive.SportsLiveCatalogOptions
 import com.nuvio.tv.core.sportslive.SportsLiveCatalogPolicy
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
+import com.nuvio.tv.domain.model.CatalogOption
 import com.nuvio.tv.domain.model.CatalogStats
 import com.nuvio.tv.domain.model.SportsLiveClaim
 import com.nuvio.tv.domain.model.SportsLiveOverride
@@ -11,6 +13,7 @@ import com.nuvio.tv.domain.model.enabledAddons
 import com.nuvio.tv.domain.repository.AddonRepository
 import com.nuvio.tv.domain.repository.SportsLiveRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -29,7 +32,13 @@ data class SportsLiveCatalogSetting(
     val autoClaim: SportsLiveClaim?,
     val override: SportsLiveOverride?,
     /** How this session's last load recognised the catalog's items; null unless it is claimed and was loaded. */
-    val stats: CatalogStats? = null
+    val stats: CatalogStats? = null,
+    /** Name of the extra the user can pin a value of; null when the catalog offers none. */
+    val filterExtra: String? = null,
+    /** The values the addon offers for [filterExtra], exactly as it gives them. */
+    val filterOptions: List<String> = emptyList(),
+    /** The pinned value; null for All, including a pin the addon no longer offers. */
+    val filterValue: String? = null
 )
 
 data class SportsLiveSettingsUiState(
@@ -42,7 +51,7 @@ data class SportsLiveSettingsUiState(
 class SportsLiveSettingsViewModel @Inject constructor(
     private val prefs: SportsLivePreferencesDataStore,
     addonRepository: AddonRepository,
-    sportsLiveRepository: SportsLiveRepository
+    private val sportsLiveRepository: SportsLiveRepository
 ) : ViewModel() {
 
     private val claimedStats = combine(
@@ -52,14 +61,15 @@ class SportsLiveSettingsViewModel @Inject constructor(
 
     val uiState: StateFlow<SportsLiveSettingsUiState> = combine(
         addonRepository.getInstalledAddons(),
-        prefs.overrides,
+        combine(prefs.overrides, prefs.catalogOptions, ::Pair),
         prefs.showSection,
         prefs.showHomeRow,
         claimedStats
-    ) { addons, overrides, showSection, showHomeRow, stats ->
+    ) { addons, (overrides, options), showSection, showHomeRow, stats ->
         val catalogs = addons.enabledAddons().flatMap { addon ->
             addon.catalogs.filter(SportsLiveCatalogPolicy::isClaimable).map { catalog ->
                 val key = SportsLiveCatalogPolicy.keyFor(addon, catalog)
+                val extra = SportsLiveCatalogOptions.eligibleExtra(catalog)
                 SportsLiveCatalogSetting(
                     key = key,
                     addonName = addon.displayName,
@@ -67,7 +77,10 @@ class SportsLiveSettingsViewModel @Inject constructor(
                     apiType = catalog.apiType,
                     autoClaim = SportsLiveCatalogPolicy.classify(addon, catalog, emptyMap()),
                     override = overrides[key],
-                    stats = stats[key]
+                    stats = stats[key],
+                    filterExtra = extra?.name,
+                    filterOptions = extra?.options.orEmpty(),
+                    filterValue = SportsLiveCatalogOptions.effectiveOption(catalog, options[key])?.value
                 )
             }
         }
@@ -91,6 +104,23 @@ class SportsLiveSettingsViewModel @Inject constructor(
                 SportsLiveOverride.EXCLUDE -> null
             }
             prefs.setOverride(key, next)
+        }
+    }
+
+    /**
+     * Pins [value] of [extra] for the catalog [key] (null for All), then reloads so it applies now.
+     * Channels catalogs whose pin did not change are carried over rather than refetched.
+     */
+    fun setCatalogFilter(key: String, extra: String, value: String?) {
+        viewModelScope.launch {
+            prefs.setCatalogOption(key, value?.let { CatalogOption(extra, it) })
+            try {
+                sportsLiveRepository.load(force = false, includeChannels = false)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // The section loads with the new pin next time it opens.
+            }
         }
     }
 }
