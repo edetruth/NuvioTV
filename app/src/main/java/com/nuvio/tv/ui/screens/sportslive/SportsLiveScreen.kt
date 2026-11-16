@@ -21,6 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -182,8 +183,11 @@ private fun SportsLiveContent(
     // The card whose long-press menu is open; the menu closes if a refresh drops the card.
     var menuCardKey by remember { mutableStateOf<String?>(null) }
     // A follow moves the card (to the top, or back down); focus and the scroll go with it. The
-    // reorder lands a moment after the menu closes, so the card is followed for a short while.
+    // reorder lands a moment after the menu closes, so the card is followed for a short while, or
+    // until focus lands anywhere else in the screen or the tab or filter changes.
     var followedCardKey by remember { mutableStateOf<String?>(null) }
+    // Where the followed card last was, for when an unfollow drops it (under "★ My teams").
+    var followedCardIndex by remember { mutableIntStateOf(0) }
     LaunchedEffect(followedCardKey) {
         if (followedCardKey == null) return@LaunchedEffect
         delay(FOLLOW_REFOCUS_WINDOW_MS)
@@ -192,10 +196,20 @@ private fun SportsLiveContent(
     LaunchedEffect(followedCardKey, items) {
         val key = followedCardKey ?: return@LaunchedEffect
         val index = items.indexOfFirst { it.listKey == key }
-        if (index < 0) return@LaunchedEffect
-        if (listState.layoutInfo.visibleItemsInfo.none { it.index == index }) listState.scrollToItem(index)
-        repeat(2) { withFrameNanos { } }
-        runCatching { cardFocusRequesters[key]?.requestFocus() }
+        val gone = index < 0
+        if (!gone) followedCardIndex = index
+        // Gone from the list: the card that took its place (or the last one) gets focus instead.
+        val targetIndex = if (gone) followedCardIndex.coerceAtMost(items.lastIndex) else index
+        val target = items.getOrNull(targetIndex)
+        if (target == null) {
+            runCatching { activeTabFocusRequester.requestFocus() }
+        } else {
+            if (listState.layoutInfo.visibleItemsInfo.none { it.index == targetIndex }) listState.scrollToItem(targetIndex)
+            repeat(2) { withFrameNanos { } }
+            runCatching { cardFocusRequester(target).requestFocus() }
+        }
+        // Cleared last: clearing restarts this effect, which would cancel the focus request above.
+        if (gone) followedCardKey = null
     }
     items.firstOrNull { it.listKey == menuCardKey }?.let { item ->
         val teams = item.teams ?: return@let
@@ -207,6 +221,7 @@ private fun SportsLiveContent(
             onToggleFollow = { side ->
                 menuCardKey = null
                 followedCardKey = item.listKey
+                followedCardIndex = items.indexOf(item).coerceAtLeast(0)
                 onToggleFollow(item, side)
             },
             onDetails = {
@@ -237,7 +252,15 @@ private fun SportsLiveContent(
     LaunchedEffect(filterKey) {
         if (filterKey == listedFilterKey) return@LaunchedEffect
         listedFilterKey = filterKey
+        // A follow refocus still pending means the change came from the unfollow itself (it cleared
+        // "★ My teams"), not from a chip, so focus goes to the new list's first card.
+        val refocus = followedCardKey != null
+        followedCardKey = null
         listState.scrollToItem(0)
+        if (refocus) {
+            repeat(2) { withFrameNanos { } }
+            runCatching { selectedCardFocusRequester?.requestFocus() }
+        }
     }
 
     Column(
@@ -252,7 +275,8 @@ private fun SportsLiveContent(
             downFocusRequester = if (showFilterRow) filterFocusRequester else selectedCardFocusRequester,
             onSelectTab = onSelectTab,
             onOpenTab = openList,
-            onRefresh = onRefresh
+            onRefresh = onRefresh,
+            modifier = Modifier.onFocusChanged { if (it.hasFocus) followedCardKey = null }
         )
         if (showFilterRow) {
             SportsLiveFilterRow(
@@ -265,7 +289,12 @@ private fun SportsLiveContent(
                 modifier = Modifier
                     .padding(top = NuvioTheme.spacing.xs)
                     .onFocusChanged { state ->
-                        if (state.hasFocus) filterRowHasFocus = true else if (currentShowFilterRow) filterRowHasFocus = false
+                        if (state.hasFocus) {
+                            filterRowHasFocus = true
+                            followedCardKey = null
+                        } else if (currentShowFilterRow) {
+                            filterRowHasFocus = false
+                        }
                     }
             )
         }
@@ -308,7 +337,9 @@ private fun SportsLiveContent(
                         onClick = { open(item) },
                         // A card naming a game opens the follow menu; other cards open Details directly.
                         onLongClick = { if (item.teams != null) menuCardKey = item.listKey else onOpenDetail(item) },
+                        menuOpen = item.listKey == menuCardKey,
                         onFocus = {
+                            if (item.listKey != followedCardKey) followedCardKey = null
                             focusedCardKey = item.listKey
                             onSelectItem(item.id)
                         },
@@ -344,13 +375,14 @@ private fun SportsLiveTabRow(
     downFocusRequester: FocusRequester?,
     onSelectTab: (SportsLiveTab) -> Unit,
     onOpenTab: () -> Unit,
-    onRefresh: () -> Unit
+    onRefresh: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     // Down goes to the selected filter chip (or card), never to whichever chip sits below, since filter chips select on focus.
     val downModifier = Modifier.focusProperties { downFocusRequester?.let { down = it } }
     // A plain scrolling Row keeps every chip composed, so the tab FocusRequesters stay attached.
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .horizontalScroll(rememberScrollState())
             // Room inside the scroll for the focused chip's border, which otherwise clips at the edges.

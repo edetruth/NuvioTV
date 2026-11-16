@@ -28,6 +28,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
@@ -112,11 +113,14 @@ internal fun SportsLiveListCard(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     onFocus: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    menuOpen: Boolean = false
 ) {
     val shape = RoundedCornerShape(NuvioTheme.radii.md)
     var longPressTriggered by remember { mutableStateOf(false) }
     val longPressKeyTracker = rememberLongPressKeyTracker()
+    // The menu takes the key-up of the long press, so the flag would swallow the next short OK.
+    LaunchedEffect(menuOpen) { longPressTriggered = false }
 
     LightweightCard(
         onClick = {
@@ -124,7 +128,7 @@ internal fun SportsLiveListCard(
         },
         modifier = modifier
             .fillMaxWidth()
-            .onFocusChanged { if (it.isFocused) onFocus() }
+            .onFocusChanged { if (it.isFocused) onFocus() else longPressTriggered = false }
             .onPreviewKeyEvent { event ->
                 val native = event.nativeKeyEvent
                 if (native.action == AndroidKeyEvent.ACTION_DOWN && native.keyCode == AndroidKeyEvent.KEYCODE_MENU) {
@@ -180,7 +184,7 @@ internal fun SportsLiveListCard(
                         Icon(
                             imageVector = Icons.Rounded.Star,
                             contentDescription = null,
-                            tint = NuvioTheme.colors.Primary,
+                            tint = FOLLOWED_STAR_COLOR,
                             modifier = Modifier.size(18.dp)
                         )
                     }
@@ -345,6 +349,8 @@ internal fun SportsLivePaneButton(
         content = content
     )
 }
+
+private val FOLLOWED_STAR_COLOR = Color(0xFFFFC107)
 
 private fun isSelectKey(keyCode: Int): Boolean =
     keyCode == AndroidKeyEvent.KEYCODE_DPAD_CENTER ||

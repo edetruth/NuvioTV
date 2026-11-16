@@ -8,10 +8,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -24,6 +26,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.nuvio.tv.R
 import com.nuvio.tv.domain.model.CatalogStats
+import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveOverride
 import com.nuvio.tv.ui.theme.NuvioTheme
 
@@ -34,6 +37,18 @@ internal fun SportsLiveSettingsContent(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var filterKey by remember { mutableStateOf<String?>(null) }
+    // After OK unfollows a team, focus goes to the row now in its place (the next team, else the
+    // previous one); with no team left, to the nearest enabled switch above the card.
+    val teamFocusRequesters = remember { mutableMapOf<FollowedTeam, FocusRequester>() }
+    val switchFocusRequester = remember { FocusRequester() }
+    var unfollowedIndex by remember { mutableStateOf<Int?>(null) }
+    LaunchedEffect(state.followedTeams) {
+        val index = unfollowedIndex ?: return@LaunchedEffect
+        unfollowedIndex = null
+        val next = state.followedTeams.getOrNull(index.coerceAtMost(state.followedTeams.lastIndex))
+        withFrameNanos { }
+        runCatching { (next?.let(teamFocusRequesters::get) ?: switchFocusRequester).requestFocus() }
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -52,18 +67,17 @@ internal fun SportsLiveSettingsContent(
                     subtitle = null,
                     checked = state.showSection,
                     onToggle = { viewModel.setShowSection(!state.showSection) },
-                    modifier = if (initialFocusRequester != null) {
-                        Modifier.focusRequester(initialFocusRequester)
-                    } else {
-                        Modifier
-                    }
+                    modifier = Modifier
+                        .then(if (initialFocusRequester != null) Modifier.focusRequester(initialFocusRequester) else Modifier)
+                        .then(if (state.showSection) Modifier else Modifier.focusRequester(switchFocusRequester))
                 )
                 SettingsToggleRow(
                     title = stringResource(R.string.sports_live_setting_home_row),
                     subtitle = null,
                     checked = state.showHomeRow,
                     onToggle = { viewModel.setShowHomeRow(!state.showHomeRow) },
-                    enabled = state.showSection
+                    enabled = state.showSection,
+                    modifier = if (state.showSection) Modifier.focusRequester(switchFocusRequester) else Modifier
                 )
             }
         }
@@ -81,12 +95,16 @@ internal fun SportsLiveSettingsContent(
                     )
                 }
                 // OK unfollows at once; following again is a long-press away.
-                state.followedTeams.forEach { team ->
+                state.followedTeams.forEachIndexed { index, team ->
                     SettingsActionRow(
                         title = listOfNotNull(team.name, team.sport).joinToString(" · "),
                         subtitle = null,
-                        onClick = { viewModel.unfollow(team) },
-                        trailingIcon = Icons.Rounded.Close
+                        onClick = {
+                            unfollowedIndex = index
+                            viewModel.unfollow(team)
+                        },
+                        trailingIcon = Icons.Rounded.Close,
+                        modifier = Modifier.focusRequester(teamFocusRequesters.getOrPut(team) { FocusRequester() })
                     )
                 }
             }
