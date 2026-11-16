@@ -28,6 +28,32 @@ internal fun buildSportsLiveLightPlayer(appContext: Context): ExoPlayer = ExoPla
     .build()
 
 /**
+ * The one correct way to describe a Sports & Live media source: the normalized playback url, the
+ * proxy request headers AND response headers, and the filename hint — exactly what the full player's
+ * [PlayerRuntimeControllerStreams] source switch uses. Every sports playback path builds through this
+ * so none drops a header map and 403s where the details -> play path would have worked.
+ */
+internal data class SportsLiveMediaSourceSpec(
+    val url: String,
+    val requestHeaders: Map<String, String>,
+    val responseHeaders: Map<String, String>,
+    val filename: String?
+)
+
+internal fun sportsLiveMediaSourceSpec(stream: Stream, url: String): SportsLiveMediaSourceSpec {
+    val request = PlayerMediaSourceFactory.normalizePlaybackRequest(
+        url = url,
+        headers = stream.behaviorHints?.proxyHeaders?.request
+    )
+    return SportsLiveMediaSourceSpec(
+        url = request.url,
+        requestHeaders = request.headers,
+        responseHeaders = stream.behaviorHints?.proxyHeaders?.response.orEmpty(),
+        filename = stream.behaviorHints?.filename
+    )
+}
+
+/**
  * Plays [stream] (at [url], its stream url) on this player. The media source comes from the
  * player's [PlayerMediaSourceFactory], so the stream's proxy request and response headers are
  * used as in the full player.
@@ -39,17 +65,14 @@ internal fun ExoPlayer.playSportsLiveStream(
     stream: Stream,
     url: String
 ) {
-    val request = PlayerMediaSourceFactory.normalizePlaybackRequest(
-        url = url,
-        headers = stream.behaviorHints?.proxyHeaders?.request
-    )
+    val spec = sportsLiveMediaSourceSpec(stream, url)
     setMediaSource(
         mediaSourceFactory.createMediaSource(
             context = appContext,
-            url = request.url,
-            headers = request.headers,
-            filename = stream.behaviorHints?.filename,
-            responseHeaders = stream.behaviorHints?.proxyHeaders?.response.orEmpty()
+            url = spec.url,
+            headers = spec.requestHeaders,
+            filename = spec.filename,
+            responseHeaders = spec.responseHeaders
         )
     )
     prepare()
