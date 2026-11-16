@@ -38,6 +38,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
 import com.nuvio.tv.R
+import com.nuvio.tv.core.sportslive.SportsLiveLocalTime
 import com.nuvio.tv.core.sportslive.SportsLivePillTime
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveTab
@@ -222,7 +223,18 @@ internal fun SportsLiveDetailsPane(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
-        item.meta.description?.takeIf { it.isNotBlank() }?.let { description ->
+        val tomorrow = stringResource(R.string.sports_live_tomorrow)
+        val description = remember(item.meta.id, item.meta.description, tomorrow) {
+            item.meta.description?.let {
+                SportsLiveLocalTime.localizeUtcStamps(
+                    text = it,
+                    nowMs = System.currentTimeMillis(),
+                    zone = ZoneId.systemDefault(),
+                    locale = Locale.getDefault()
+                ) { time -> String.format(tomorrow, time) }
+            }
+        }
+        description?.takeIf { it.isNotBlank() }?.let { description ->
             Text(
                 text = description,
                 style = MaterialTheme.typography.bodyMedium,
