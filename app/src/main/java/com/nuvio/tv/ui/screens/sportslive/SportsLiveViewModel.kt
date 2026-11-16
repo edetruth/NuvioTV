@@ -106,14 +106,15 @@ class SportsLiveViewModel @Inject constructor(
 
     /**
      * On becoming visible (including a resume), loads at once (served from the repository's cache
-     * when still fresh), then reloads every 60 s so the Live now tab stays current. The 60 s
-     * reloads leave channels catalogs out; they reload on a manual refresh.
+     * when still fresh), then reloads every 60 s so the Live now tab stays current. These loads
+     * leave channels catalogs out (carried over from the last load); they reload on the first
+     * load and on a manual refresh.
      */
     fun onScreenVisible(visible: Boolean) {
         autoRefreshJob?.cancel()
         autoRefreshJob = if (visible) {
             viewModelScope.launch {
-                load(force = false)
+                load(force = false, includeChannels = false)
                 while (isActive) {
                     delay(AUTO_REFRESH_MS)
                     load(force = true, includeChannels = false)
@@ -158,6 +159,11 @@ class SportsLiveViewModel @Inject constructor(
             if (selection.tab == SportsLiveTab.CHANNELS) SportsLiveItem::group else SportsLiveItem::sport
         val filters = tabItems.mapNotNull(filterOf).distinct().sortedWith(String.CASE_INSENSITIVE_ORDER)
         val filter = selection.filter?.takeIf { it in filters }
+        // A filter that left the list is cleared rather than kept hidden, so it never silently
+        // comes back on a later load that lists it again.
+        if (selection.filter != null && filter == null) {
+            selectionState.update { if (it.filter == selection.filter) it.copy(filter = null) else it }
+        }
         val visible = if (filter == null) tabItems else tabItems.filter { filterOf(it) == filter }
         val selectedId = selection.itemId?.takeIf { id -> visible.any { it.id == id } }
             ?: visible.firstOrNull()?.id

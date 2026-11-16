@@ -508,6 +508,10 @@
         <item quantity="one">%d unrecognised</item>
         <item quantity="other">%d unrecognised</item>
     </plurals>
+    <plurals name="sports_live_stat_ended">
+        <item quantity="one">%d ended</item>
+        <item quantity="other">%d ended</item>
+    </plurals>
     <string name="sports_live_stat_empty">No items</string>
     <string name="settings_plugins">Plugins</string>
     <string name="settings_plugins_subtitle">Repositories and providers</string>

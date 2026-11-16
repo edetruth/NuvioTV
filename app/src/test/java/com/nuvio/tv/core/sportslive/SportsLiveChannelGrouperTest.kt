@@ -62,9 +62,16 @@ class SportsLiveChannelGrouperTest {
         val flag = "🇬🇧"
         assertEquals("UNITED KINGDOM TV", group("Afrobeats", listOf("Live TV"), catalog = "$flag United Kingdom TV"))
         assertEquals("EASYPLAY LIVE TV", group("Some channel", emptyList(), catalog = "EasyPlay Live TV (tv)"))
-        assertEquals("SPORTZX LIVE EVENTS", group("Some channel", emptyList(), catalog = "⚡SportzX Live Events (tv)"))
         assertEquals("US", group("US| ESPN", emptyList(), catalog = "$flag United Kingdom TV"))
         assertEquals(addonGroup, group("Some channel", emptyList(), catalog = " ⚡ (tv) "))
+    }
+
+    @Test
+    fun `events catalog names fall back to the addon name`() {
+        listOf("USA Live", "⚡SportzX Live Events (tv)", "Today", "Upcoming Fights", "Fight Schedule").forEach { name ->
+            assertEquals(name, addonGroup, group("Some channel", emptyList(), catalog = name))
+        }
+        assertEquals("EASYPLAY LIVE TV", group("Some channel", emptyList(), catalog = "EasyPlay Live TV (tv)"))
     }
 
     @Test

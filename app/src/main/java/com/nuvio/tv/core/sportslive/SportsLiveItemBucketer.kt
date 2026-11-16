@@ -51,6 +51,7 @@ object SportsLiveItemBucketer {
         var replays = 0
         var timed = 0
         var upcomingTba = 0
+        var ended = 0
         var unrecognised = 0
         for (item in items) {
             if (item.isFinished) continue
@@ -60,10 +61,12 @@ object SportsLiveItemBucketer {
                 belongsTo(item, SportsLiveTab.REPLAYS, nowMs) -> replays++
                 belongsTo(item, SportsLiveTab.UPCOMING, nowMs) ->
                     if (item.startMs != null) timed++ else upcomingTba++
+                // Recognised, but its start is past the live window: the event is over.
+                item.startMs != null && item.startMs <= nowMs -> ended++
                 else -> unrecognised++
             }
         }
-        return CatalogStats(live, timed, upcomingTba, channels, replays, unrecognised)
+        return CatalogStats(live, timed, upcomingTba, channels, replays, unrecognised, ended)
     }
 
     /** The item, and whether the item itself (not its catalog) says what it is. */
@@ -82,19 +85,21 @@ object SportsLiveItemBucketer {
         val liveMarker = isLiveMarker(meta.releaseInfo) ||
             meta.name.contains("LIVE NOW") ||
             meta.description?.let(liveNowPhrase::containsMatchIn) == true
-        val isLive = when (status) {
-            LIVE_EMOJI -> true
-            SOON_EMOJI, DONE_EMOJI -> false
-            else -> liveMarker ||
-                (liveCatalog && startMs == null) ||
-                (claimed.kind == SportsLiveKind.EVENTS && start != null && start.hasTimeOfDay &&
-                    start.startMs > nowMs - LIVE_WINDOW_MS && start.startMs <= nowMs)
-        }
         val description = meta.description.orEmpty()
         val isChannel = claimed.kind == SportsLiveKind.CHANNELS ||
             description.contains("IPTV") ||
             description.contains("Live on") ||
             meta.genres.any { SportsLiveKeywords.containsKeyword(it, SportsLiveKeywords.LIVE_TV) }
+        // A channel is live only on a signal of its own (marker, 🔴, timed window): a "Live" catalog
+        // name alone would mark every channel listed beside the events live.
+        val isLive = when (status) {
+            LIVE_EMOJI -> true
+            SOON_EMOJI, DONE_EMOJI -> false
+            else -> liveMarker ||
+                (liveCatalog && startMs == null && !isChannel) ||
+                (claimed.kind == SportsLiveKind.EVENTS && start != null && start.hasTimeOfDay &&
+                    start.startMs > nowMs - LIVE_WINDOW_MS && start.startMs <= nowMs)
+        }
         val item = SportsLiveItem(
             meta = meta,
             addonId = claimed.addon.id,
@@ -123,11 +128,13 @@ object SportsLiveItemBucketer {
      * appears once, as its first occurrence in [items].
      */
     fun bucket(items: List<SportsLiveItem>, nowMs: Long): Map<SportsLiveTab, List<SportsLiveItem>> =
-        SportsLiveTab.entries.associateWith { tab ->
-            items.filter { !it.isFinished && belongsTo(it, tab, nowMs) }
-                .distinctBy { it.addonId to it.id }
-                .sortedWith(if (tab == SportsLiveTab.REPLAYS) replayOrder else tabOrder)
-        }
+        SportsLiveTab.entries.associateWith { tab -> bucketTab(items, tab, nowMs) }
+
+    /** One tab of [bucket], without sorting the other tabs' items (the Home row needs only Live Now). */
+    fun bucketTab(items: List<SportsLiveItem>, tab: SportsLiveTab, nowMs: Long): List<SportsLiveItem> =
+        items.filter { !it.isFinished && belongsTo(it, tab, nowMs) }
+            .distinctBy { it.addonId to it.id }
+            .sortedWith(if (tab == SportsLiveTab.REPLAYS) replayOrder else tabOrder)
 
     // "LIVE", "🔴 LIVE": the word LIVE once emoji, punctuation and digits are stripped.
     private fun isLiveMarker(releaseInfo: String?): Boolean =
@@ -141,8 +148,8 @@ object SportsLiveItemBucketer {
     private fun belongsTo(item: SportsLiveItem, tab: SportsLiveTab, nowMs: Long): Boolean {
         val replay = item.kind == SportsLiveKind.REPLAY
         return when (tab) {
-            // A channel is shown live only when an events catalog lists it (highfly's "Live Now");
-            // a channels catalog marking its whole list live would flood the tab.
+            // A channel is shown live only when an events catalog lists it with a live signal of its
+            // own (highfly's "LIVE NOW"); a channels catalog marking its whole list live would flood the tab.
             SportsLiveTab.LIVE_NOW -> item.isLive && !replay &&
                 (!item.isChannel || item.kind == SportsLiveKind.EVENTS)
             SportsLiveTab.UPCOMING -> !item.isLive && !replay && !item.isChannel && isUpcoming(item, nowMs)

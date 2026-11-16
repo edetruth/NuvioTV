@@ -13,6 +13,7 @@ import com.nuvio.tv.domain.repository.SportsLiveLoad
 import com.nuvio.tv.domain.repository.SportsLiveRepository
 import com.nuvio.tv.domain.repository.WatchProgressRepository
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -35,6 +36,7 @@ class HomeSportsLiveExclusionTest {
     private val created = mutableListOf<HomeViewModel>()
     private val claimedKeys = MutableStateFlow<Set<String>>(emptySet())
     private val liveNow = MutableStateFlow<List<SportsLiveItem>>(emptyList())
+    private lateinit var sportsLiveRepository: SportsLiveRepository
 
     @Before
     fun setUp() = Dispatchers.setMain(Dispatchers.Unconfined)
@@ -108,6 +110,16 @@ class HomeSportsLiveExclusionTest {
     }
 
     @Test
+    fun `the Home Sports & Live load leaves channels catalogs to be carried over`() {
+        val viewModel = newViewModel()
+
+        viewModel.refreshSportsLiveInBackground()
+
+        coVerify { sportsLiveRepository.load(false, false) }
+        coVerify(exactly = 0) { sportsLiveRepository.load(any(), true) }
+    }
+
+    @Test
     fun `no live now row when liveNow is empty`() {
         val viewModel = newViewModel()
         viewModel.rebuildCatalogOrder(listOf(addon()))
@@ -158,11 +170,11 @@ class HomeSportsLiveExclusionTest {
             every { getAllEpisodeProgress(any()) } returns flowOf(emptyMap())
             every { observeWatchedMovieIds() } returns MutableStateFlow(emptySet())
         }
-        val sportsLiveRepository = mockk<SportsLiveRepository>(relaxed = true) {
+        sportsLiveRepository = mockk<SportsLiveRepository>(relaxed = true) {
             every { claimedCatalogKeys } returns claimedKeys
             every { liveNow(any()) } returns liveNow
             every { enabled } returns flowOf(true)
-            coEvery { load(any()) } returns SportsLiveLoad(emptyList(), emptyList(), 0L, emptySet())
+            coEvery { load(any(), any()) } returns SportsLiveLoad(emptyList(), emptyList(), 0L, emptySet())
         }
         val appContext = mockk<Context>(relaxed = true) {
             every { getString(any()) } returns "Live now"

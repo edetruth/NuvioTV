@@ -79,6 +79,7 @@ class SportsLiveRepositoryImplTest {
         SportsLiveRepositoryImpl(addonRepository, catalogRepository, prefs, probe).also {
             it.nowMs = { now }
             it.ioDispatcher = mainDispatcherRule.dispatcher
+            it.computeDispatcher = mainDispatcherRule.dispatcher
         }
 
     @Test
@@ -188,6 +189,28 @@ class SportsLiveRepositoryImplTest {
         assertEquals(8, catalogRepository.calls)
         assertTrue(full.items.any { it.id == "ch2" })
         assertFalse(full.items.any { it.id == "ch1" })
+    }
+
+    @Test
+    fun `routine loads without channels fetch channels cold, then reuse them once the cache is stale`() = runTest {
+        catalogRepository.results["generic" to "chan"] = success("generic", "chan", meta("ch1"))
+        val repository = newRepository()
+        // Home's load and the section's on-visible load: nothing cached yet, so channels are fetched.
+        val cold = repository.load(includeChannels = false)
+        assertEquals(3, catalogRepository.calls)
+        assertTrue(cold.items.any { it.id == "ch1" })
+
+        // Returning after the 60 s cache went stale refetches events, not the channels catalog.
+        now += 61_000
+        catalogRepository.results["generic" to "chan"] = success("generic", "chan", meta("ch2"))
+        val home = repository.load(includeChannels = false)
+        assertEquals(5, catalogRepository.calls)
+        assertTrue(home.items.any { it.id == "ch1" })
+        assertFalse(home.items.any { it.id == "ch2" })
+
+        now += 61_000
+        repository.load(force = false, includeChannels = false)
+        assertEquals(7, catalogRepository.calls)
     }
 
     @Test

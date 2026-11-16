@@ -198,8 +198,8 @@ class SportsLiveViewModelTest {
         assertEquals(listOf(false, false), forcedFlags)
         advanceTimeBy(61_000)
         assertEquals(listOf(false, false, true), forcedFlags)
-        // The 60 s reload leaves channels catalogs out; the first loads include them.
-        assertEquals(listOf(true, true, false), includeChannelsFlags)
+        // Only the first load includes channels catalogs; becoming visible and the 60 s reloads carry them over.
+        assertEquals(listOf(true, false, false), includeChannelsFlags)
 
         viewModel.onScreenVisible(false)
         advanceTimeBy(120_000)
@@ -363,6 +363,27 @@ class SportsLiveViewModelTest {
         val state = viewModel.uiState.value
         assertNull(state.selectedFilter)
         assertEquals(listOf("a", "b"), state.visibleItems.map { it.id })
+    }
+
+    @Test
+    fun `a filter that leaves the list is cleared and does not come back`() = runTest {
+        nextLoad = load(listOf(channel("uk1", "UK"), channel("ca1", "CA"), channel("us1", "US")))
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+        viewModel.selectTab(SportsLiveTab.CHANNELS)
+        viewModel.selectFilter("UK")
+        runCurrent()
+        assertEquals("UK", viewModel.uiState.value.selectedFilter)
+
+        latestFlow.value = load(listOf(channel("ca1", "CA"), channel("us1", "US")))
+        runCurrent()
+        assertNull(viewModel.uiState.value.selectedFilter)
+        assertEquals(listOf("ca1", "us1"), viewModel.uiState.value.visibleItems.map { it.id })
+
+        latestFlow.value = load(listOf(channel("uk1", "UK"), channel("ca1", "CA"), channel("us1", "US")))
+        runCurrent()
+        assertNull(viewModel.uiState.value.selectedFilter)
+        assertEquals(3, viewModel.uiState.value.visibleItems.size)
     }
 
     @Test

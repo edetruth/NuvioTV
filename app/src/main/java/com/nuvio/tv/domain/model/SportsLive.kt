@@ -21,7 +21,7 @@ enum class SportsLiveTab { LIVE_NOW, UPCOMING, CHANNELS, REPLAYS }
 /**
  * How a catalog's items were recognised in a load. Each item that is not finished counts once, in the
  * first of: live (in Live Now), channel, replay, timed (upcoming with a start), upcoming "Time TBA",
- * unrecognised (in no tab).
+ * ended (a past start in no tab), unrecognised (in no tab).
  */
 data class CatalogStats(
     val live: Int = 0,
@@ -29,7 +29,9 @@ data class CatalogStats(
     val upcomingTba: Int = 0,
     val channels: Int = 0,
     val replays: Int = 0,
-    val unrecognised: Int = 0
+    val unrecognised: Int = 0,
+    /** Timed events whose start is past the live window (not counted as unrecognised). */
+    val ended: Int = 0
 )
 
 /** A catalog item from a claimed catalog, annotated with what the Sports & Live tabs need. */

@@ -31,9 +31,11 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -55,6 +57,10 @@ class SportsLiveRepositoryImpl @Inject constructor(
 
     @VisibleForTesting
     internal var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+
+    /** Describing and bucketing thousands of channels is too much work for the caller's (main) thread. */
+    @VisibleForTesting
+    internal var computeDispatcher: CoroutineDispatcher = Dispatchers.Default
 
     private val _latest = MutableStateFlow<SportsLiveLoad?>(null)
     private val loadMutex = Mutex()
@@ -131,19 +137,21 @@ class SportsLiveRepositoryImpl @Inject constructor(
         val items = mutableListOf<SportsLiveItem>()
         val failures = mutableListOf<SportsLiveFailure>()
         val stats = mutableMapOf<String, CatalogStats>()
-        // In claimed order, as the bucketer keeps an item's first occurrence.
-        for (catalog in claimed) {
-            val catalogItems = when (val result = fetched[catalog.key]) {
-                null -> carriedItems[catalog.key].orEmpty()
-                is NetworkResult.Success -> SportsLiveItemBucketer.describeCatalog(result.data.items, catalog, now)
-                is NetworkResult.Error -> {
-                    failures += SportsLiveFailure(catalog, result.message)
-                    continue
+        withContext(computeDispatcher) {
+            // In claimed order, as the bucketer keeps an item's first occurrence.
+            for (catalog in claimed) {
+                val catalogItems = when (val result = fetched[catalog.key]) {
+                    null -> carriedItems[catalog.key].orEmpty()
+                    is NetworkResult.Success -> SportsLiveItemBucketer.describeCatalog(result.data.items, catalog, now)
+                    is NetworkResult.Error -> {
+                        failures += SportsLiveFailure(catalog, result.message)
+                        continue
+                    }
+                    NetworkResult.Loading -> continue
                 }
-                NetworkResult.Loading -> continue
+                items += catalogItems
+                stats[catalog.key] = SportsLiveItemBucketer.stats(catalogItems, now)
             }
-            items += catalogItems
-            stats[catalog.key] = SportsLiveItemBucketer.stats(catalogItems, now)
         }
         val load = SportsLiveLoad(items, failures, loadedAtMs = now, claimedKeys = claimedKeys)
         if (claimedCatalogKeys.first() == claimedKeys) {
@@ -187,9 +195,9 @@ class SportsLiveRepositoryImpl @Inject constructor(
                 emptyList()
             } else {
                 val items = load.items.filter { it.catalogKey in keys }
-                SportsLiveItemBucketer.bucket(items, nowMs())[SportsLiveTab.LIVE_NOW].orEmpty()
+                SportsLiveItemBucketer.bucketTab(items, SportsLiveTab.LIVE_NOW, nowMs())
                     .filterNot { it.streamKey in ended }
                     .take(limit)
             }
-        }
+        }.flowOn(computeDispatcher)
 }

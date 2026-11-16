@@ -35,10 +35,14 @@ internal fun HomeViewModel.observeLiveNowPipeline() {
     }
 }
 
-/** Starts a Sports & Live load without waiting for it; a failure only leaves the Live now row empty. */
+/**
+ * Starts a Sports & Live load without waiting for it; a failure only leaves the Live now row empty.
+ * Channels catalogs (megabytes for large addons) are carried over from the last load rather than
+ * refetched on every return to Home; a load with nothing cached still fetches them.
+ */
 internal fun HomeViewModel.refreshSportsLiveInBackground() {
     viewModelScope.launch {
-        runCatching { sportsLiveRepository.load() }.onFailure { error ->
+        runCatching { sportsLiveRepository.load(includeChannels = false) }.onFailure { error ->
             if (error is CancellationException) throw error
             Log.w(HomeViewModel.TAG, "Sports & Live load failed", error)
         }

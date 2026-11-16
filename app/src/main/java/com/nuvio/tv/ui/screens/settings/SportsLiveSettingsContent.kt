@@ -96,6 +96,7 @@ private fun catalogStats(stats: CatalogStats): String {
         R.plurals.sports_live_stat_time_tba to stats.upcomingTba,
         R.plurals.sports_live_stat_channels to stats.channels,
         R.plurals.sports_live_stat_replays to stats.replays,
+        R.plurals.sports_live_stat_ended to stats.ended,
         R.plurals.sports_live_stat_unrecognised to stats.unrecognised
     ).filter { it.second > 0 }.map { (res, count) -> pluralStringResource(res, count, count) }
     return if (parts.isEmpty()) stringResource(R.string.sports_live_stat_empty) else parts.joinToString(" · ")

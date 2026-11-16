@@ -23,6 +23,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.setValue
@@ -150,6 +151,16 @@ private fun SportsLiveContent(
     val filterFocusRequester = remember { FocusRequester() }
     val showFilterRow = uiState.filters.size >= 2
     val aboveListFocusRequester = if (showFilterRow) filterFocusRequester else activeTabFocusRequester
+    // A refresh can drop the filter row while a chip holds focus; focus then goes to the active tab
+    // instead of being lost. Losing focus because the row is being removed does not clear the flag.
+    var filterRowHasFocus by remember { mutableStateOf(false) }
+    val currentShowFilterRow by rememberUpdatedState(showFilterRow)
+    LaunchedEffect(showFilterRow) {
+        if (showFilterRow || !filterRowHasFocus) return@LaunchedEffect
+        filterRowHasFocus = false
+        withFrameNanos { }
+        runCatching { activeTabFocusRequester.requestFocus() }
+    }
 
     // Replay "series" items are team folders; the detail page lists their videos.
     val open: (SportsLiveItem) -> Unit = { item ->
@@ -201,7 +212,11 @@ private fun SportsLiveContent(
                 downFocusRequester = selectedCardFocusRequester,
                 onSelectFilter = onSelectFilter,
                 onOpenFilter = openList,
-                modifier = Modifier.padding(top = NuvioTheme.spacing.xs)
+                modifier = Modifier
+                    .padding(top = NuvioTheme.spacing.xs)
+                    .onFocusChanged { state ->
+                        if (state.hasFocus) filterRowHasFocus = true else if (currentShowFilterRow) filterRowHasFocus = false
+                    }
             )
         }
         if (uiState.failures.isNotEmpty()) {

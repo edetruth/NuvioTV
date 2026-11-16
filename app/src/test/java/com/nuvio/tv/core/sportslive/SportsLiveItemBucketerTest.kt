@@ -586,11 +586,47 @@ class SportsLiveItemBucketerTest {
         )
 
         assertEquals(
-            CatalogStats(live = 2, timed = 1, upcomingTba = 1, channels = 1, replays = 0, unrecognised = 1),
+            CatalogStats(live = 2, timed = 1, upcomingTba = 1, channels = 1, replays = 0, unrecognised = 0, ended = 1),
             SportsLiveItemBucketer.stats(items, now)
         )
         val replays = describeAll(listOf(meta("r", "R")), claimed("sports", "r", "Replays", SportsLiveKind.REPLAY))
         assertEquals(CatalogStats(replays = 1), SportsLiveItemBucketer.stats(replays, now))
+    }
+
+    @Test
+    fun `stats count past timed events as ended, not unrecognised`() {
+        val items = describeAll(
+            listOf(
+                meta("old", "Old", releaseInfo = "15 Nov 2026 · 04:00 UTC"),
+                meta("older", "Older", releaseInfo = "14 Nov 2026 · 20:00 UTC")
+            ),
+            highflyFootball
+        )
+
+        assertEquals(CatalogStats(ended = 2), SportsLiveItemBucketer.stats(items, now))
+    }
+
+    @Test
+    fun `a Live TV channel in a Live-named events catalog with no item signal is a channel, not live`() {
+        val usaLive = claimed("tv", "usa_live", "USA Live", SportsLiveKind.EVENTS)
+        val item = SportsLiveItemBucketer.describe(meta("ch", "ESPN", genres = listOf("Live TV")), usaLive, now)
+        val tabs = SportsLiveItemBucketer.bucket(listOf(item), now)
+
+        assertFalse(item.isLive)
+        assertTrue(tabs.getValue(SportsLiveTab.LIVE_NOW).isEmpty())
+        assertEquals(listOf("ch"), tabs.getValue(SportsLiveTab.CHANNELS).map { it.id })
+        // An event in the same catalog is still live from the catalog name.
+        assertTrue(SportsLiveItemBucketer.describe(meta("ev", "A vs B"), usaLive, now).isLive)
+    }
+
+    @Test
+    fun `bucketTab matches the tab bucket returns`() {
+        val items = describeAll(loadMetas("highfly_today.json", "sport"), highflyToday)
+        val tabs = SportsLiveItemBucketer.bucket(items, now)
+
+        SportsLiveTab.entries.forEach { tab ->
+            assertEquals(tab.name, tabs.getValue(tab), SportsLiveItemBucketer.bucketTab(items, tab, now))
+        }
     }
 
     private fun describeAll(metas: List<MetaPreview>, claimed: ClaimedCatalog) =
