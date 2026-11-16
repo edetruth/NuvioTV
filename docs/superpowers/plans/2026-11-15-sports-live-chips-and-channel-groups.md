@@ -169,3 +169,16 @@ Observed in `org.kris.ultra.max.tv.*`: type `tv` catalogs "🇺🇸 United State
 **Files:** `core/sportslive/SportsLiveItemBucketer.kt`, `SportsLiveChannelGrouper.kt`, spec §7.2 amendment (`git add -f`), fixture `ultra_tv_uk.json` (copy of `D:\Nuvio\scratch\addons\ultra.tv_uk.json`; ids are base64 channel names, no secrets).
 - [ ] Tests: Ultra fixture items are channels, absent from LIVE_NOW and UPCOMING, present in CHANNELS; group "United Kingdom TV"; highfly leaf items (with "LIVE NOW") still appear in both LIVE_NOW and CHANNELS; CNCVerse Live TV sample stays out of LIVE_NOW.
 - [ ] Commit `feat(sportslive): treat plain live TV addons as channels`.
+
+---
+
+### Task 8: Unknown-addon safety net and recognition stats (added 2026-11-15, user request "Go ahead" on scalability)
+
+**Rulings:**
+- Per catalog, after describing items: if no item has a per-item signal (parseable start, explicit live marker, 🔜/🔴, or channel marker), classify all items from the catalog name: LIVE words (live, live now, en vivo, ao vivo, direct, direto) → live; SCHEDULE words (schedule, upcoming, today, next, coming up, programación, agenda) → Upcoming "Time TBA"; REPLAY words (existing + full match, highlights, resumen, melhores momentos) → Replays; otherwise unchanged. Keyword sets live in `SportsLiveKeywords`.
+- Live items from the fallback are still subject to the ended-games probe.
+- Recognition stats per catalog key from the last load: counts of live, timed, upcoming-TBA, channel, unrecognised (= items that landed in no tab). Kept in memory by the repository (`val catalogStats: StateFlow<Map<String, CatalogStats>>`); shown in Settings → Sports & Live as the catalog row's second line, e.g. "12 live · 8 timed · 3 unrecognised" (strings with plurals), only for claimed catalogs that have been loaded this session.
+
+**Files:** `core/sportslive/SportsLiveKeywords.kt`, `SportsLiveItemBucketer.kt` (or a new `SportsLiveCatalogFallback.kt`), `data/repository/SportsLiveRepositoryImpl.kt`, `ui/screens/settings/SportsLiveSettingsViewModel.kt` + `SportsLiveSettingsContent.kt`, `values/strings.xml`.
+- [ ] Tests: signal-less catalog named "Live Events" → all live; "Agenda de hoy" → Upcoming TBA; "Full Match Replays" → Replays; catalog with at least one signalled item → per-item rules unchanged; stats counts on a mixed fixture.
+- [ ] Commit `feat(sportslive): fall back to catalog names for unknown addons and show recognition stats`.
