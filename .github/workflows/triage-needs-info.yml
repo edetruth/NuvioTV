@@ -11,6 +11,7 @@ permissions:
 
 jobs:
   needs_info:
+    if: github.repository == 'NuvioMedia/NuvioTV'
     runs-on: ubuntu-latest
     steps:
       - name: Label low-context issues

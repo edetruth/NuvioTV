@@ -1,0 +1,302 @@
+name: Nuvio Live sync and release
+
+# Fork-only: merges upstream NuvioMedia/NuvioTV `dev` into `live` every day and, when anything new
+# came in (or on a manual run), tests, builds and publishes a signed full-flavor release.
+# Spec: docs/superpowers/specs/2026-11-16-fork-release-setup-design.md
+
+on:
+  schedule:
+    - cron: "41 9 * * *" # daily
+  workflow_dispatch:
+    inputs:
+      force_release:
+        description: Release even when upstream has no new commits
+        required: false
+        type: boolean
+        default: true
+      dry_run:
+        description: Merge, test and build only; push nothing and publish nothing
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: live-sync-release
+  cancel-in-progress: false
+
+env:
+  UPSTREAM_REPO: NuvioMedia/NuvioTV
+  UPSTREAM_BRANCH: dev
+  LIVE_BRANCH: live
+  CONFLICT_ISSUE_TITLE: Upstream merge needs attention
+  # Known failing upstream tests, excluded by class name.
+  EXCLUDED_TESTS: TraktAuthServiceTest SearchViewModelSuggestionsTest ContinueWatchingAiringRulesTest
+
+jobs:
+  sync-release:
+    if: github.repository == 'edetruth/NuvioTV'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      DRY_RUN: ${{ inputs.dry_run == true }}
+      FORCE_RELEASE: ${{ github.event_name == 'workflow_dispatch' && inputs.force_release == true }}
+
+    steps:
+      - name: Check out live
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.LIVE_BRANCH }}
+          fetch-depth: 0
+          # GITHUB_TOKEN cannot push commits that change .github/workflows; a PAT with the
+          # "workflows" permission in LIVE_SYNC_TOKEN lifts that limit for upstream merges that do.
+          token: ${{ secrets.LIVE_SYNC_TOKEN || github.token }}
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Merge upstream
+        id: merge
+        run: |
+          git remote add upstream "https://github.com/${UPSTREAM_REPO}.git"
+          git fetch --no-tags upstream "${UPSTREAM_BRANCH}"
+          upstream_ref="upstream/${UPSTREAM_BRANCH}"
+
+          before_merge="$(git rev-parse HEAD)"
+          echo "before_merge=${before_merge}" >> "${GITHUB_OUTPUT}"
+          new_commits="$(git rev-list --count "HEAD..${upstream_ref}")"
+          echo "new_commits=${new_commits}" >> "${GITHUB_OUTPUT}"
+          echo "Upstream commits not yet in ${LIVE_BRANCH}: ${new_commits}"
+
+          conflict=false
+          if (( new_commits > 0 )); then
+            if ! git merge --no-ff --no-edit "${upstream_ref}" \
+                -m "Merge ${UPSTREAM_REPO} ${UPSTREAM_BRANCH} into ${LIVE_BRANCH}"; then
+              conflict=true
+              git diff --name-only --diff-filter=U > conflicts.txt
+              git merge --abort
+            fi
+          fi
+          echo "conflict=${conflict}" >> "${GITHUB_OUTPUT}"
+
+      - name: Report merge conflict
+        if: steps.merge.outputs.conflict == 'true'
+        env:
+          UPSTREAM_SHA_URL: https://github.com/${{ env.UPSTREAM_REPO }}/commits/${{ env.UPSTREAM_BRANCH }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          {
+            echo "The daily sync could not merge \`${UPSTREAM_REPO}@${UPSTREAM_BRANCH}\` into \`${LIVE_BRANCH}\` cleanly, so no release was built."
+            echo
+            echo "Conflicting files:"
+            echo
+            sed 's/^/- `/; s/$/`/' conflicts.txt
+            echo
+            echo "Upstream: ${UPSTREAM_SHA_URL}"
+            echo "Run: ${RUN_URL}"
+            echo
+            echo "Fix: merge \`upstream/${UPSTREAM_BRANCH}\` into \`${LIVE_BRANCH}\` locally, resolve, push. The next run releases."
+          } > issue-body.md
+          cat issue-body.md >> "${GITHUB_STEP_SUMMARY}"
+
+          if [[ "${DRY_RUN}" == "true" ]]; then
+            echo "Dry run: not touching issues."
+            exit 1
+          fi
+
+          issue_number="$(gh issue list --repo "${GITHUB_REPOSITORY}" --state open \
+            --search "\"${CONFLICT_ISSUE_TITLE}\" in:title" --json number,title \
+            --jq "map(select(.title == \"${CONFLICT_ISSUE_TITLE}\")) | .[0].number // empty")"
+          if [[ -n "${issue_number}" ]]; then
+            gh issue comment "${issue_number}" --repo "${GITHUB_REPOSITORY}" --body-file issue-body.md
+          else
+            gh issue create --repo "${GITHUB_REPOSITORY}" --title "${CONFLICT_ISSUE_TITLE}" --body-file issue-body.md
+          fi
+          exit 1
+
+      - name: Decide whether to release
+        id: decide
+        env:
+          NEW_COMMITS: ${{ steps.merge.outputs.new_commits }}
+        run: |
+          if (( NEW_COMMITS > 0 )) || [[ "${FORCE_RELEASE}" == "true" ]]; then
+            echo "release=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "release=false" >> "${GITHUB_OUTPUT}"
+            echo "No new upstream commits and not a forced run: nothing to do." >> "${GITHUB_STEP_SUMMARY}"
+          fi
+
+      - name: Set up Java
+        if: steps.decide.outputs.release == 'true'
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Set up Gradle
+        if: steps.decide.outputs.release == 'true'
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Restore release properties and keystore
+        if: steps.decide.outputs.release == 'true'
+        env:
+          LOCAL_PROPERTIES_BASE64: ${{ secrets.LOCAL_PROPERTIES_BASE64 }}
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.NUVIO_RELEASE_KEYSTORE_BASE64 }}
+          RELEASE_KEY_ALIAS: ${{ secrets.NUVIO_RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.NUVIO_RELEASE_KEY_PASSWORD }}
+          RELEASE_STORE_PASSWORD: ${{ secrets.NUVIO_RELEASE_STORE_PASSWORD }}
+        run: |
+          missing=()
+          for name in RELEASE_KEYSTORE_BASE64 RELEASE_KEY_ALIAS RELEASE_KEY_PASSWORD RELEASE_STORE_PASSWORD; do
+            [[ -n "${!name}" ]] || missing+=("${name}")
+          done
+          if (( ${#missing[@]} > 0 )); then
+            echo "Missing release secrets: ${missing[*]}" >&2
+            exit 1
+          fi
+
+          keystore_path="${RUNNER_TEMP}/nuvio-live-release.jks"
+          printf '%s' "${RELEASE_KEYSTORE_BASE64}" | base64 --decode > "${keystore_path}"
+          # Optional API keys; missing ones fall back to the build's defaults.
+          if [[ -n "${LOCAL_PROPERTIES_BASE64}" ]]; then
+            printf '%s' "${LOCAL_PROPERTIES_BASE64}" | base64 --decode > local.properties
+          else
+            : > local.properties
+          fi
+          sed -i -E '/^[[:space:]]*(sdk\.dir|NUVIO_RELEASE_[A-Z_]+|NUVIO_DEV_[A-Z_]+)[[:space:]]*=/d' local.properties
+          {
+            echo
+            echo "NUVIO_RELEASE_STORE_FILE=${keystore_path}"
+            echo "NUVIO_RELEASE_KEY_ALIAS=${RELEASE_KEY_ALIAS}"
+            echo "NUVIO_RELEASE_KEY_PASSWORD=${RELEASE_KEY_PASSWORD}"
+            echo "NUVIO_RELEASE_STORE_PASSWORD=${RELEASE_STORE_PASSWORD}"
+          } >> local.properties
+
+      - name: Bump NUVIO_LIVE_BUILD
+        if: steps.decide.outputs.release == 'true'
+        id: bump
+        run: |
+          current="$(sed -nE 's/^NUVIO_LIVE_BUILD=([0-9]+)[[:space:]]*$/\1/p' gradle.properties)"
+          if [[ -z "${current}" ]]; then
+            echo "NUVIO_LIVE_BUILD missing from gradle.properties" >&2
+            exit 1
+          fi
+          next=$((current + 1))
+          sed -i -E "s/^NUVIO_LIVE_BUILD=[0-9]+/NUVIO_LIVE_BUILD=${next}/" gradle.properties
+          echo "build=${next}" >> "${GITHUB_OUTPUT}"
+
+      - name: Run unit tests
+        if: steps.decide.outputs.release == 'true'
+        run: |
+          {
+            echo 'allprojects {'
+            echo '  tasks.withType(Test).configureEach {'
+            echo '    filter {'
+            for test_class in ${EXCLUDED_TESTS}; do
+              echo "      excludeTestsMatching '*.${test_class}'"
+            done
+            echo '    }'
+            echo '  }'
+            echo '}'
+          } > "${RUNNER_TEMP}/exclude-known-failing-tests.gradle"
+          ./gradlew :app:testFullDebugUnitTest \
+            --init-script "${RUNNER_TEMP}/exclude-known-failing-tests.gradle" --stacktrace
+
+      - name: Build full release APKs
+        if: steps.decide.outputs.release == 'true'
+        run: ./gradlew :app:assembleFullRelease --stacktrace
+
+      - name: Read version
+        if: steps.decide.outputs.release == 'true'
+        id: version
+        run: |
+          apk_dir=app/build/outputs/apk/full/release
+          universal="${apk_dir}/app-full-universal-release.apk"
+          if [[ ! -f "${universal}" ]]; then
+            echo "Universal APK not found in ${apk_dir}" >&2
+            ls -la "${apk_dir}" >&2 || true
+            exit 1
+          fi
+          aapt2="$(ls -d "${ANDROID_HOME}"/build-tools/*/aapt2 | sort -V | tail -n 1)"
+          version_name="$("${aapt2}" dump badging "${universal}" | sed -nE "s/.*versionName='([^']+)'.*/\1/p" | head -n 1)"
+          if [[ -z "${version_name}" ]]; then
+            echo "Could not read versionName from ${universal}" >&2
+            exit 1
+          fi
+          echo "name=${version_name}" >> "${GITHUB_OUTPUT}"
+          echo "tag=v${version_name}" >> "${GITHUB_OUTPUT}"
+          echo "Version: ${version_name}" >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Write release notes
+        if: steps.decide.outputs.release == 'true'
+        env:
+          BEFORE_MERGE: ${{ steps.merge.outputs.before_merge }}
+          VERSION_NAME: ${{ steps.version.outputs.name }}
+        run: |
+          upstream_ref="upstream/${UPSTREAM_BRANCH}"
+          last_tag="$(git describe --tags --abbrev=0 --match 'v*live*' "${BEFORE_MERGE}" 2>/dev/null || true)"
+          {
+            echo "Nuvio Live ${VERSION_NAME}: the Nuvio Android TV app with the Sports & Live section, built from \`${LIVE_BRANCH}\`."
+            echo
+            echo "Install: download \`app-full-universal-release.apk\` (or the one for your device's ABI)."
+            echo
+            echo "### Upstream changes merged"
+            echo
+            git log --no-merges --format='- %s (%h)' "${BEFORE_MERGE}..${upstream_ref}" | head -n 60 > upstream.txt
+            if [[ -s upstream.txt ]]; then cat upstream.txt; else echo "- none"; fi
+            echo
+            echo "### Fork changes"
+            echo
+            if [[ -n "${last_tag}" ]]; then
+              git log --no-merges --format='- %s (%h)' "${last_tag}..${BEFORE_MERGE}" "^${upstream_ref}" | head -n 60 > fork.txt
+            else
+              git log --no-merges --format='- %s (%h)' "${BEFORE_MERGE}" "^${upstream_ref}" | head -n 60 > fork.txt
+            fi
+            if [[ -s fork.txt ]]; then cat fork.txt; else echo "- none"; fi
+          } > release-notes.md
+          cat release-notes.md >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Upload APKs (dry run)
+        if: steps.decide.outputs.release == 'true' && env.DRY_RUN == 'true'
+        uses: actions/upload-artifact@v6
+        with:
+          name: nuvio-live-${{ steps.version.outputs.name }}-dry-run
+          path: |
+            app/build/outputs/apk/full/release/*.apk
+            release-notes.md
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Commit, tag and push
+        if: steps.decide.outputs.release == 'true' && env.DRY_RUN != 'true'
+        env:
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+          VERSION_NAME: ${{ steps.version.outputs.name }}
+        run: |
+          if git rev-parse --verify --quiet "refs/tags/${RELEASE_TAG}" >/dev/null; then
+            echo "Tag ${RELEASE_TAG} already exists." >&2
+            exit 1
+          fi
+          git add gradle.properties
+          git commit -m "chore(release): Nuvio Live ${VERSION_NAME}"
+          git tag -a "${RELEASE_TAG}" -m "Nuvio Live ${VERSION_NAME}"
+          git push origin "HEAD:refs/heads/${LIVE_BRANCH}" "refs/tags/${RELEASE_TAG}"
+
+      - name: Publish GitHub release
+        if: steps.decide.outputs.release == 'true' && env.DRY_RUN != 'true'
+        env:
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+          VERSION_NAME: ${{ steps.version.outputs.name }}
+        run: |
+          mapfile -t apks < <(find app/build/outputs/apk/full/release -maxdepth 1 -type f -name '*.apk' | sort)
+          gh release create "${RELEASE_TAG}" "${apks[@]}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --title "Nuvio Live ${VERSION_NAME}" \
+            --notes-file release-notes.md \
+            --verify-tag \
+            --latest

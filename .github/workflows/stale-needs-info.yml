@@ -10,6 +10,7 @@ permissions:
 
 jobs:
   close_stale:
+    if: github.repository == 'NuvioMedia/NuvioTV'
     runs-on: ubuntu-latest
     steps:
       - name: Close inactive needs-info bug issues

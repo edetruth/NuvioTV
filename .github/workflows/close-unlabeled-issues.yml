@@ -16,6 +16,7 @@ permissions:
 
 jobs:
   close_unlabeled:
+    if: github.repository == 'NuvioMedia/NuvioTV'
     runs-on: ubuntu-latest
     steps:
       - name: Close open issues with no labels
