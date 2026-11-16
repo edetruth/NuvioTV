@@ -11,7 +11,7 @@ highfly's Sports Streams keeps games marked "LIVE NOW" after they end; opening o
 ## Ruling
 
 Use stream availability as the signal for **Live Now only**:
-- After each section/Home load, probe streams for Live Now items with `StreamRepository.getStreamsFromAllAddons(apiType, id)` (junk already filtered), max 3 concurrent, 8 s timeout each, results cached per `addonId|id` for 10 minutes in the repository.
+- After each section/Home load, probe streams for Live Now items with `StreamRepository.getStreamsFromAllAddons(apiType, id)` (junk already filtered), max 3 concurrent, 8 s timeout each, results kept per `addonId|id` (the stream session cache itself lasts 15 minutes). *Superseded by the amendment below: no probing after loads.*
 - An item whose probe finishes with **zero playable streams** (`StreamAutoPlaySelector.isPlayable` false for all) is marked ended and excluded from LIVE_NOW, the Home Live now row, and zap/dual lists. Timeouts and errors do **not** mark ended (stay visible).
 - Focusing a card in the section re-probes that item if its cache entry is older than 2 minutes.
 - Upcoming, Replays and Channels are never probed or hidden by this rule.

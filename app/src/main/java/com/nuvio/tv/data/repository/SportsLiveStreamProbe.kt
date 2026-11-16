@@ -107,9 +107,13 @@ class SportsLiveStreamProbe @Inject constructor(
         if (entry.ended) {
             scope.launch {
                 delay(ENDED_TTL_MS)
-                // Expire only if no newer result replaced this one.
+                // Expire only if no newer result replaced this one. A stale alive entry (not none)
+                // stays behind so the next probe forces a refresh instead of replaying the stream
+                // session cache's old empty answer.
                 synchronized(lock) {
-                    if (entries.remove(key, entry)) _ended.update { it - key }
+                    if (entries.replace(key, entry, Entry(ended = false, probedAtMs = 0L))) {
+                        _ended.update { it - key }
+                    }
                 }
             }
         }

@@ -122,6 +122,27 @@ class SportsLiveStreamProbeTest {
     }
 
     @Test
+    fun `the first probe after an ended game reappears bypasses the stream cache`() = runTest {
+        streams.responses["x"] = { flowOf(NetworkResult.Success(emptyList())) }
+        val probe = newProbe()
+        probe.reprobeIfStale(item("x"))
+        runCurrent()
+        assertEquals(setOf("sports|x"), probe.ended.value)
+
+        advanceTimeBy(SportsLiveStreamProbe.ENDED_TTL_MS)
+        runCurrent()
+        assertEquals(emptySet<String>(), probe.ended.value)
+
+        // Links were posted late: the forced re-check finds them and the game stays visible.
+        streams.responses["x"] = { result(PLAYABLE) }
+        probe.reprobeIfStale(item("x"))
+        runCurrent()
+
+        assertEquals(listOf(false, true), streams.forceRefreshes)
+        assertEquals(emptySet<String>(), probe.ended.value)
+    }
+
+    @Test
     fun `a result reported by another stream fetch marks or clears an item`() = runTest {
         val probe = newProbe()
 
