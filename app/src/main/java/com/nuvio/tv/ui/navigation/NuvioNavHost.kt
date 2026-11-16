@@ -62,6 +62,8 @@ import com.nuvio.tv.ui.screens.settings.TrackingSettingsScreen
 import com.nuvio.tv.ui.screens.settings.TmdbSettingsScreen
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveScreen
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveExtraSources
+import com.nuvio.tv.ui.screens.sportslive.SportsLivePlayHost
+import com.nuvio.tv.ui.screens.sportslive.SportsLivePlayViewModel
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapSessions
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapTarget
 import com.nuvio.tv.ui.screens.sportslive.streamRouteFor
@@ -370,6 +372,15 @@ private fun PlaybackNavHost(
                 }
             }
 
+            // A merged Live now game plays across its sources, as in the section.
+            val sportsLivePlayViewModel: SportsLivePlayViewModel = androidx.hilt.navigation.compose.hiltViewModel()
+            SportsLivePlayHost(
+                playViewModel = sportsLivePlayViewModel,
+                onOpenStreamScreen = { item -> navController.navigate(streamRouteFor(item, returnToHomeOnBack = true)) },
+                onPlayTarget = { target ->
+                    navController.navigate(sportsLivePlayerRoute(target) ?: streamRouteFor(target.item, returnToHomeOnBack = true))
+                }
+            )
             HomeScreen(
                 onNavigateToDetail = { itemId, itemType, addonBaseUrl ->
                     val heroBackdrop = HeroBackdropState.consumeAndClear()
@@ -416,7 +427,13 @@ private fun PlaybackNavHost(
                 onNavigateToSportsLive = {
                     navController.navigate(Screen.SportsLive.route) { launchSingleTop = true }
                 },
-                onLiveNowItemClick = { item -> navController.navigate(streamRouteFor(item, returnToHomeOnBack = true)) }
+                onLiveNowItemClick = { item ->
+                    if (item.alternates.isEmpty()) {
+                        navController.navigate(streamRouteFor(item, returnToHomeOnBack = true))
+                    } else {
+                        sportsLivePlayViewModel.play(item, returnToHomeOnBack = true)
+                    }
+                }
             )
         }
 
@@ -714,6 +731,8 @@ private fun PlaybackNavHost(
                 onBackPress = {
                     val streamContentType = streamArgs?.getString("contentType").orEmpty()
                     val streamContentId = streamArgs?.getString("contentId").orEmpty()
+                    // Leaving a merged Sports & Live game's Stream screen drops its other addons' streams.
+                    SportsLiveExtraSources.clear(streamContentId)
                     val season = streamArgs?.getString("season")?.toIntOrNull()
                     val episode = streamArgs?.getString("episode")?.toIntOrNull()
                     if (streamContentType.equals("series", ignoreCase = true) && streamContentId.isNotBlank()) {

@@ -107,6 +107,39 @@ class SportsLivePlayViewModelTest {
     }
 
     @Test
+    fun `an event not yet collected when dismissed is never delivered`() = runTest(mainDispatcherRule.dispatcher) {
+        coEvery { resolver.resolve(any()) } returns STREAM
+        val viewModel = newViewModel()
+
+        // No collector: the screen is stopped while the stream is found.
+        viewModel.play(MERGED)
+        advanceUntilIdle()
+        viewModel.dismiss()
+        val events = eventsOf(viewModel)
+        advanceUntilIdle()
+
+        assertEquals(emptyList<SportsLivePlayEvent>(), events)
+    }
+
+    @Test
+    fun `a merged game from Home plays its best stream, returns Home, and registers its other sources`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            SportsLiveExtraSources.reset()
+            coEvery { resolver.resolve(any()) } returns STREAM
+            val viewModel = newViewModel()
+            val events = eventsOf(viewModel)
+
+            viewModel.play(MERGED, returnToHomeOnBack = true)
+            advanceUntilIdle()
+
+            val target = (events.single() as SportsLivePlayEvent.Play).target
+            assertTrue(target.returnToHomeOnBack)
+            assertTrue(target.autoPicked)
+            assertTrue(SportsLiveExtraSources.isRegistered(MERGED.id))
+            SportsLiveExtraSources.reset()
+        }
+
+    @Test
     fun `a single-source card opens its Stream screen`() = runTest(mainDispatcherRule.dispatcher) {
         val viewModel = newViewModel()
         val events = eventsOf(viewModel)

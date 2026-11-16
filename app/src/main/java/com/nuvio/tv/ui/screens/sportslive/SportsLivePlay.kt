@@ -94,7 +94,10 @@ sealed interface SportsLivePlayEvent {
     data class NoStream(val name: String) : SportsLivePlayEvent
 }
 
-/** OK on a section card: single-source cards open the Stream screen; merged cards play across sources. */
+/**
+ * OK on a section card or a Home Live now card: single-source cards open the Stream screen; merged
+ * cards play across sources. The screen shows [state] and runs [events] with [SportsLivePlayHost].
+ */
 @HiltViewModel
 class SportsLivePlayViewModel @Inject constructor(
     private val resolver: SportsLiveZapResolver,
@@ -111,21 +114,22 @@ class SportsLivePlayViewModel @Inject constructor(
 
     private var job: Job? = null
 
-    fun play(item: SportsLiveItem) {
+    /** Whether Back from the played stream returns to Home (the Home Live now row) rather than the section. */
+    private var returnToHomeOnBack = false
+
+    fun play(item: SportsLiveItem, returnToHomeOnBack: Boolean = false) {
         if (item.alternates.isEmpty()) {
             _events.trySend(SportsLivePlayEvent.OpenStreamScreen(item))
             return
         }
         job?.cancel()
+        this.returnToHomeOnBack = returnToHomeOnBack
         _state.value = SportsLivePlayState.Resolving(item)
         job = viewModelScope.launch {
             val mode = playerSettingsDataStore.playerSettings.first().streamAutoPlayMode
+            // STREAM_SCREEN is only for single-source cards, handled above.
             when (sportsLivePlayAction(item, mode)) {
-                SportsLivePlayAction.STREAM_SCREEN -> {
-                    _state.value = SportsLivePlayState.Idle
-                    _events.send(SportsLivePlayEvent.OpenStreamScreen(item))
-                }
-                SportsLivePlayAction.PLAY_BEST -> {
+                SportsLivePlayAction.STREAM_SCREEN, SportsLivePlayAction.PLAY_BEST -> {
                     val stream = resolver.resolve(item)
                     _state.value = SportsLivePlayState.Idle
                     if (stream == null) noStream(item) else playStream(item, stream, autoPicked = true)
@@ -165,7 +169,7 @@ class SportsLivePlayViewModel @Inject constructor(
             item = item,
             stream = stream,
             profileId = profileManager.activeProfileId.value,
-            returnToHomeOnBack = false,
+            returnToHomeOnBack = returnToHomeOnBack,
             directDebridResolver = directDebridResolver,
             autoPicked = autoPicked
         )
