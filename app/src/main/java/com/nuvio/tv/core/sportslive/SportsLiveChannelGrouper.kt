@@ -24,12 +24,15 @@ object SportsLiveChannelGrouper {
     )
 
     /**
-     * Falls back to the catalog name ("🇬🇧 United Kingdom TV" → "United Kingdom TV"), then the addon name.
+     * Falls back to the catalog name ("🇬🇧 United Kingdom TV" → "United Kingdom TV"), then the addon name;
+     * a generic catalog name ("Channels", "Live TV") is skipped, so two addons' channels never share it.
      * Groups are upper-cased so "BiH" and "BIH" are one group.
      */
     fun groupOf(meta: MetaPreview, catalogName: String, addonName: String): String =
         (strategies.firstNotNullOfOrNull { it(meta) }
-            ?: catalogName.replace(catalogNoise, "").trim().takeIf { it.isNotEmpty() }
+            ?: catalogName.replace(catalogNoise, "").trim().takeIf {
+                it.isNotEmpty() && it.lowercase(Locale.ROOT) !in SportsLiveKeywords.GENERIC_CHANNEL_CATALOGS
+            }
             ?: addonName).uppercase(Locale.ROOT)
 
     private fun namePrefix(name: String): String? {

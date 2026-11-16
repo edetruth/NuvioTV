@@ -6,6 +6,7 @@ import com.nuvio.tv.core.sportslive.SportsLiveCatalogPolicy
 import com.nuvio.tv.core.sportslive.SportsLiveItemBucketer
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import com.nuvio.tv.domain.model.CatalogRow
+import com.nuvio.tv.domain.model.CatalogStats
 import com.nuvio.tv.domain.model.ClaimedCatalog
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveKind
@@ -60,6 +61,10 @@ class SportsLiveRepositoryImpl @Inject constructor(
 
     /** The most recent load, whether or not every catalog succeeded. */
     override val latest: StateFlow<SportsLiveLoad?> = _latest.asStateFlow()
+
+    private val _catalogStats = MutableStateFlow<Map<String, CatalogStats>>(emptyMap())
+
+    override val catalogStats: StateFlow<Map<String, CatalogStats>> = _catalogStats.asStateFlow()
 
     override val enabled: Flow<Boolean> = prefs.showSection
 
@@ -125,18 +130,26 @@ class SportsLiveRepositoryImpl @Inject constructor(
         val now = nowMs()
         val items = mutableListOf<SportsLiveItem>()
         val failures = mutableListOf<SportsLiveFailure>()
+        val stats = mutableMapOf<String, CatalogStats>()
         // In claimed order, as the bucketer keeps an item's first occurrence.
         for (catalog in claimed) {
-            when (val result = fetched[catalog.key]) {
-                null -> items += carriedItems[catalog.key].orEmpty()
-                is NetworkResult.Success ->
-                    result.data.items.mapTo(items) { SportsLiveItemBucketer.describe(it, catalog, now) }
-                is NetworkResult.Error -> failures += SportsLiveFailure(catalog, result.message)
-                NetworkResult.Loading -> Unit
+            val catalogItems = when (val result = fetched[catalog.key]) {
+                null -> carriedItems[catalog.key].orEmpty()
+                is NetworkResult.Success -> SportsLiveItemBucketer.describeCatalog(result.data.items, catalog, now)
+                is NetworkResult.Error -> {
+                    failures += SportsLiveFailure(catalog, result.message)
+                    continue
+                }
+                NetworkResult.Loading -> continue
             }
+            items += catalogItems
+            stats[catalog.key] = SportsLiveItemBucketer.stats(catalogItems, now)
         }
         val load = SportsLiveLoad(items, failures, loadedAtMs = now, claimedKeys = claimedKeys)
-        if (claimedCatalogKeys.first() == claimedKeys) _latest.value = load
+        if (claimedCatalogKeys.first() == claimedKeys) {
+            _latest.value = load
+            _catalogStats.value = stats
+        }
         load
     }
 

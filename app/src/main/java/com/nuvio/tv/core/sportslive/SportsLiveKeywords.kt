@@ -16,6 +16,16 @@ object SportsLiveKeywords {
     val LIVE: Set<String> = setOf("live")
     val UPCOMING: Set<String> = setOf("upcoming", "today", "schedule")
 
+    // Catalog-name fallback for a catalog whose items carry no signals of their own.
+    val FALLBACK_LIVE: Set<String> = setOf("live", "live now", "en vivo", "ao vivo", "direct", "direto")
+    val FALLBACK_SCHEDULE: Set<String> =
+        setOf("schedule", "upcoming", "today", "next", "coming up", "programación", "agenda")
+    val FALLBACK_REPLAY: Set<String> = REPLAY + setOf("full match", "highlights", "resumen", "melhores momentos")
+
+    /** Catalog names too generic to name a channel group ("Channels", "Live TV"), compared lowercased. */
+    val GENERIC_CHANNEL_CATALOGS: Set<String> =
+        setOf("channels", "channel list", "live tv", "tv", "live channels", "all channels")
+
     private val regexCache = ConcurrentHashMap<Set<String>, Regex>()
 
     fun containsKeyword(text: String?, keywords: Set<String>): Boolean =

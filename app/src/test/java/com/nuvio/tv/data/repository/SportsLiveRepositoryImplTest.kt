@@ -12,6 +12,7 @@ import com.nuvio.tv.domain.model.Addon
 import com.nuvio.tv.domain.model.AddonStreams
 import com.nuvio.tv.domain.model.CatalogDescriptor
 import com.nuvio.tv.domain.model.CatalogRow
+import com.nuvio.tv.domain.model.CatalogStats
 import com.nuvio.tv.domain.model.ContentType
 import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.domain.model.PosterShape
@@ -127,6 +128,25 @@ class SportsLiveRepositoryImplTest {
         assertEquals("boom", load.failures.single().message)
         assertEquals(now, load.loadedAtMs)
         assertEquals(load, repository.latest.value)
+    }
+
+    @Test
+    fun `load publishes recognition stats for the catalogs it loaded`() = runTest {
+        catalogRepository.results["sports" to "live"] = success("sports", "live", meta("a", live = true), meta("b"))
+        catalogRepository.results["sports" to "upcoming"] = success("sports", "upcoming", meta("c"))
+        catalogRepository.results["generic" to "chan"] = NetworkResult.Error("boom")
+        val repository = newRepository()
+        assertEquals(emptyMap<String, CatalogStats>(), repository.catalogStats.value)
+
+        repository.load()
+
+        assertEquals(
+            mapOf(
+                SportsLiveCatalogPolicy.keyFor(sportsAddon, liveCatalog) to CatalogStats(live = 1, timed = 1),
+                SportsLiveCatalogPolicy.keyFor(sportsAddon, upcomingCatalog) to CatalogStats(timed = 1)
+            ),
+            repository.catalogStats.value
+        )
     }
 
     @Test

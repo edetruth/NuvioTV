@@ -1,5 +1,6 @@
 package com.nuvio.tv.domain.repository
 
+import com.nuvio.tv.domain.model.CatalogStats
 import com.nuvio.tv.domain.model.ClaimedCatalog
 import com.nuvio.tv.domain.model.SportsLiveItem
 import kotlinx.coroutines.flow.Flow
@@ -39,6 +40,9 @@ interface SportsLiveRepository {
 
     /** The most recent load, whether or not every catalog succeeded. */
     val latest: StateFlow<SportsLiveLoad?>
+
+    /** How the items of each catalog the last published load got (by catalog key) were recognised; in memory only. */
+    val catalogStats: StateFlow<Map<String, CatalogStats>>
 
     /**
      * Keys (`addonId|id`) of live items whose streams are gone: a probe of the focused item (or a

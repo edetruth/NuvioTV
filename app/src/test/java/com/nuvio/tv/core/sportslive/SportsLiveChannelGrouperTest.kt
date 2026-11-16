@@ -68,6 +68,17 @@ class SportsLiveChannelGrouperTest {
     }
 
     @Test
+    fun `generic catalog names fall back to the addon name`() {
+        assertEquals("NEBULA SPORTS", SportsLiveChannelGrouper.groupOf(meta("Sky Sports Main Event", emptyList()), "Channels", "Nebula Sports"))
+        for (catalog in listOf("channels", "Channel List", "📺 Live TV (tv)", "TV", "Live Channels", "ALL CHANNELS")) {
+            assertEquals(catalog, addonGroup, group("Some channel", emptyList(), catalog = catalog))
+        }
+        val one = SportsLiveChannelGrouper.groupOf(meta("ESPN", emptyList()), "Live TV", "Addon One")
+        val two = SportsLiveChannelGrouper.groupOf(meta("ESPN", emptyList()), "Live TV", "Addon Two")
+        assertEquals(listOf("ADDON ONE", "ADDON TWO"), listOf(one, two))
+    }
+
+    @Test
     fun `groups differing only in case are one upper-cased group`() {
         assertEquals("BIH", group("BiH| FACE TV", emptyList()))
         assertEquals("BIH", group("BIH| N1", emptyList()))

@@ -1,5 +1,6 @@
 package com.nuvio.tv.core.sportslive
 
+import com.nuvio.tv.domain.model.CatalogStats
 import com.nuvio.tv.domain.model.ClaimedCatalog
 import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.domain.model.SportsLiveItem
@@ -29,7 +30,44 @@ object SportsLiveItemBucketer {
             .thenBy(nullsLast(reverseOrder())) { it.startMs }
             .thenBy(String.CASE_INSENSITIVE_ORDER) { it.meta.name }
 
-    fun describe(rawMeta: MetaPreview, claimed: ClaimedCatalog, nowMs: Long): SportsLiveItem {
+    fun describe(rawMeta: MetaPreview, claimed: ClaimedCatalog, nowMs: Long): SportsLiveItem =
+        describeWithSignal(rawMeta, claimed, nowMs).first
+
+    /**
+     * Describes a catalog's items. When none of them carries a signal of its own (a parseable start,
+     * a live marker, a 🔴/🔜 status or a channel marker), the catalog name decides for all of them;
+     * see [SportsLiveCatalogFallback].
+     */
+    fun describeCatalog(metas: List<MetaPreview>, claimed: ClaimedCatalog, nowMs: Long): List<SportsLiveItem> {
+        val described = metas.map { describeWithSignal(it, claimed, nowMs) }
+        val items = described.map { it.first }
+        return if (described.any { it.second }) items else SportsLiveCatalogFallback.apply(items, claimed.catalog.name)
+    }
+
+    /** Recognition counts for one catalog's items, each counted once; see [CatalogStats]. */
+    fun stats(items: List<SportsLiveItem>, nowMs: Long): CatalogStats {
+        var live = 0
+        var channels = 0
+        var replays = 0
+        var timed = 0
+        var upcomingTba = 0
+        var unrecognised = 0
+        for (item in items) {
+            if (item.isFinished) continue
+            when {
+                belongsTo(item, SportsLiveTab.LIVE_NOW, nowMs) -> live++
+                belongsTo(item, SportsLiveTab.CHANNELS, nowMs) -> channels++
+                belongsTo(item, SportsLiveTab.REPLAYS, nowMs) -> replays++
+                belongsTo(item, SportsLiveTab.UPCOMING, nowMs) ->
+                    if (item.startMs != null) timed++ else upcomingTba++
+                else -> unrecognised++
+            }
+        }
+        return CatalogStats(live, timed, upcomingTba, channels, replays, unrecognised)
+    }
+
+    /** The item, and whether the item itself (not its catalog) says what it is. */
+    private fun describeWithSignal(rawMeta: MetaPreview, claimed: ClaimedCatalog, nowMs: Long): Pair<SportsLiveItem, Boolean> {
         val catalog = claimed.catalog
         // A leading 🔴 / 🔜 / ✅ (CNCVerse) is a status, not part of the name.
         val trimmedName = rawMeta.name.trimStart()
@@ -41,12 +79,13 @@ object SportsLiveItemBucketer {
         val liveCatalog = claimed.kind != SportsLiveKind.CHANNELS &&
             (SportsLiveKeywords.containsKeyword(catalog.name, SportsLiveKeywords.LIVE) ||
                 SportsLiveKeywords.containsKeyword(catalog.id, SportsLiveKeywords.LIVE))
+        val liveMarker = isLiveMarker(meta.releaseInfo) ||
+            meta.name.contains("LIVE NOW") ||
+            meta.description?.let(liveNowPhrase::containsMatchIn) == true
         val isLive = when (status) {
             LIVE_EMOJI -> true
             SOON_EMOJI, DONE_EMOJI -> false
-            else -> isLiveMarker(meta.releaseInfo) ||
-                meta.name.contains("LIVE NOW") ||
-                meta.description?.let(liveNowPhrase::containsMatchIn) == true ||
+            else -> liveMarker ||
                 (liveCatalog && startMs == null) ||
                 (claimed.kind == SportsLiveKind.EVENTS && start != null && start.hasTimeOfDay &&
                     start.startMs > nowMs - LIVE_WINDOW_MS && start.startMs <= nowMs)
@@ -56,7 +95,7 @@ object SportsLiveItemBucketer {
             description.contains("IPTV") ||
             description.contains("Live on") ||
             meta.genres.any { SportsLiveKeywords.containsKeyword(it, SportsLiveKeywords.LIVE_TV) }
-        return SportsLiveItem(
+        val item = SportsLiveItem(
             meta = meta,
             addonId = claimed.addon.id,
             addonName = claimed.addon.name,
@@ -73,6 +112,8 @@ object SportsLiveItemBucketer {
             group = if (isChannel) SportsLiveChannelGrouper.groupOf(meta, catalog.name, claimed.addon.name) else null,
             isFinished = status == DONE_EMOJI
         )
+        val hasSignal = status == LIVE_EMOJI || status == SOON_EMOJI || start != null || liveMarker || isChannel
+        return item to hasSignal
     }
 
     /**

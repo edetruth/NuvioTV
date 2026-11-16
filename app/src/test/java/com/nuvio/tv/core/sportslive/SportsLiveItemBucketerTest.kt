@@ -4,6 +4,7 @@ import com.nuvio.tv.data.mapper.toDomainOrNull
 import com.nuvio.tv.data.remote.dto.CatalogResponseDto
 import com.nuvio.tv.domain.model.Addon
 import com.nuvio.tv.domain.model.CatalogDescriptor
+import com.nuvio.tv.domain.model.CatalogStats
 import com.nuvio.tv.domain.model.ClaimedCatalog
 import com.nuvio.tv.domain.model.ContentType
 import com.nuvio.tv.domain.model.MetaPreview
@@ -420,6 +421,16 @@ class SportsLiveItemBucketerTest {
     }
 
     @Test
+    fun `Nebula channels without a prefix group under the addon name, not the generic catalog name`() {
+        val base = claimed("sports", "streamed-events-dlhd-channels", "Channels", SportsLiveKind.CHANNELS)
+        val nebula = base.copy(addon = base.addon.copy(name = "Nebula Sports"))
+        val items = describeAll(loadMetas("nebula_channels.json", "sports"), nebula)
+
+        assertTrue(items.any { it.group == "NEBULA SPORTS" })
+        assertTrue(items.none { it.group == "CHANNELS" })
+    }
+
+    @Test
     fun `a Live TV genre makes an events catalog item a channel, which shows live only from an events catalog`() {
         val liveChannel = meta("ch", "Sky Sports", releaseInfo = "LIVE", genres = listOf("Live TV"))
         val fromEvents = SportsLiveItemBucketer.describe(liveChannel, highflyLive, now)
@@ -486,6 +497,100 @@ class SportsLiveItemBucketerTest {
         assertEquals("highfly_sport_sports_today", item.catalogKey)
         assertEquals("Today", item.catalogName)
         assertEquals(SportsLiveKind.EVENTS, item.kind)
+    }
+
+    @Test
+    fun `signal-less catalog named Live Events is all live`() {
+        val metas = listOf(meta("a", "Team A vs Team B"), meta("b", "Team C vs Team D"))
+        for (name in listOf("Live Events", "Fútbol en vivo", "Direct")) {
+            val items = SportsLiveItemBucketer.describeCatalog(metas, claimed("sport", "x", name, SportsLiveKind.EVENTS), now)
+
+            assertTrue(name, items.all { it.isLive })
+            assertEquals(name, 2, SportsLiveItemBucketer.bucket(items, now).getValue(SportsLiveTab.LIVE_NOW).size)
+        }
+    }
+
+    @Test
+    fun `signal-less catalog named Agenda de hoy is upcoming Time TBA`() {
+        val catalog = claimed("sport", "agenda", "Agenda de hoy", SportsLiveKind.EVENTS)
+        val items = SportsLiveItemBucketer.describeCatalog(listOf(meta("a", "A vs B"), meta("b", "C vs D")), catalog, now)
+        val tabs = SportsLiveItemBucketer.bucket(items, now)
+
+        assertTrue(items.none { it.isLive || it.startMs != null })
+        assertEquals(listOf("a", "b"), tabs.getValue(SportsLiveTab.UPCOMING).map { it.id })
+        assertTrue(tabs.getValue(SportsLiveTab.LIVE_NOW).isEmpty())
+    }
+
+    @Test
+    fun `signal-less catalog named Full Match Replays is replays`() {
+        for (name in listOf("Full Match Replays", "Full Match", "Melhores Momentos")) {
+            val catalog = claimed("sport", "fm", name, SportsLiveKind.EVENTS)
+            val items = SportsLiveItemBucketer.describeCatalog(listOf(meta("a", "A vs B")), catalog, now)
+            val tabs = SportsLiveItemBucketer.bucket(items, now)
+
+            assertEquals(name, listOf("a"), tabs.getValue(SportsLiveTab.REPLAYS).map { it.id })
+            assertTrue(name, tabs.getValue(SportsLiveTab.UPCOMING).isEmpty())
+        }
+    }
+
+    @Test
+    fun `signal-less catalog with an unknown name is unchanged`() {
+        val catalog = claimed("sport", "misc", "Misc", SportsLiveKind.EVENTS)
+        val metas = listOf(meta("a", "A vs B"))
+
+        assertEquals(
+            metas.map { SportsLiveItemBucketer.describe(it, catalog, now) },
+            SportsLiveItemBucketer.describeCatalog(metas, catalog, now)
+        )
+    }
+
+    @Test
+    fun `a catalog with one signalled item keeps the per-item rules`() {
+        val metas = listOf(
+            meta("timed", "Timed", releaseInfo = "15 Nov 2026 · 18:00 UTC"),
+            meta("plain", "Plain")
+        )
+        for ((name, kind) in listOf("Full Match" to SportsLiveKind.EVENTS, "Channels" to SportsLiveKind.CHANNELS)) {
+            val catalog = claimed("sport", "c", name, kind)
+            assertEquals(
+                name,
+                metas.map { SportsLiveItemBucketer.describe(it, catalog, now) },
+                SportsLiveItemBucketer.describeCatalog(metas, catalog, now)
+            )
+        }
+        // A channels catalog's items are channels: a signal, so "Live" in its name changes nothing.
+        val liveTv = claimed("tv", "ltv", "Live TV", SportsLiveKind.CHANNELS)
+        assertTrue(SportsLiveItemBucketer.describeCatalog(listOf(meta("ch", "ESPN")), liveTv, now).none { it.isLive })
+        val liveMarked = claimed("sport", "l", "Full Match", SportsLiveKind.EVENTS)
+        val marked = SportsLiveItemBucketer.describeCatalog(
+            listOf(meta("m", "M", releaseInfo = "LIVE"), meta("p", "P")),
+            liveMarked,
+            now
+        )
+        assertTrue(marked.none { it.kind == SportsLiveKind.REPLAY })
+    }
+
+    @Test
+    fun `stats count each item once on a mixed catalog`() {
+        val items = describeAll(
+            listOf(
+                meta("live1", "Live 1", releaseInfo = "LIVE"),
+                meta("live2", "$liveEmoji Live 2"),
+                meta("timed", "Timed", releaseInfo = "15 Nov 2026 · 18:00 UTC"),
+                meta("tba", "TBA"),
+                meta("channel", "Channel", description = "IPTV feed"),
+                meta("old", "Old", releaseInfo = "15 Nov 2026 · 04:00 UTC"),
+                meta("done", "✅ Done")
+            ),
+            highflyFootball
+        )
+
+        assertEquals(
+            CatalogStats(live = 2, timed = 1, upcomingTba = 1, channels = 1, replays = 0, unrecognised = 1),
+            SportsLiveItemBucketer.stats(items, now)
+        )
+        val replays = describeAll(listOf(meta("r", "R")), claimed("sports", "r", "Replays", SportsLiveKind.REPLAY))
+        assertEquals(CatalogStats(replays = 1), SportsLiveItemBucketer.stats(replays, now))
     }
 
     private fun describeAll(metas: List<MetaPreview>, claimed: ClaimedCatalog) =

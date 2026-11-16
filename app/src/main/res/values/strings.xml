@@ -484,6 +484,31 @@
     <string name="sports_live_override_auto_out">Auto · on Home</string>
     <string name="sports_live_override_included">Included</string>
     <string name="sports_live_override_excluded">Excluded</string>
+    <plurals name="sports_live_stat_live">
+        <item quantity="one">%d live</item>
+        <item quantity="other">%d live</item>
+    </plurals>
+    <plurals name="sports_live_stat_timed">
+        <item quantity="one">%d timed</item>
+        <item quantity="other">%d timed</item>
+    </plurals>
+    <plurals name="sports_live_stat_time_tba">
+        <item quantity="one">%d time TBA</item>
+        <item quantity="other">%d time TBA</item>
+    </plurals>
+    <plurals name="sports_live_stat_channels">
+        <item quantity="one">%d channel</item>
+        <item quantity="other">%d channels</item>
+    </plurals>
+    <plurals name="sports_live_stat_replays">
+        <item quantity="one">%d replay</item>
+        <item quantity="other">%d replays</item>
+    </plurals>
+    <plurals name="sports_live_stat_unrecognised">
+        <item quantity="one">%d unrecognised</item>
+        <item quantity="other">%d unrecognised</item>
+    </plurals>
+    <string name="sports_live_stat_empty">No items</string>
     <string name="settings_plugins">Plugins</string>
     <string name="settings_plugins_subtitle">Repositories and providers</string>
     <string name="settings_integration">Integrations</string>

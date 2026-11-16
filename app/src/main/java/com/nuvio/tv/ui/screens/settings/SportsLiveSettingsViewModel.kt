@@ -4,10 +4,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nuvio.tv.core.sportslive.SportsLiveCatalogPolicy
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
+import com.nuvio.tv.domain.model.CatalogStats
 import com.nuvio.tv.domain.model.SportsLiveClaim
 import com.nuvio.tv.domain.model.SportsLiveOverride
 import com.nuvio.tv.domain.model.enabledAddons
 import com.nuvio.tv.domain.repository.AddonRepository
+import com.nuvio.tv.domain.repository.SportsLiveRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -25,7 +27,9 @@ data class SportsLiveCatalogSetting(
     val apiType: String,
     /** What automatic classification would do, ignoring any override. */
     val autoClaim: SportsLiveClaim?,
-    val override: SportsLiveOverride?
+    val override: SportsLiveOverride?,
+    /** How this session's last load recognised the catalog's items; null unless it is claimed and was loaded. */
+    val stats: CatalogStats? = null
 )
 
 data class SportsLiveSettingsUiState(
@@ -37,15 +41,22 @@ data class SportsLiveSettingsUiState(
 @HiltViewModel
 class SportsLiveSettingsViewModel @Inject constructor(
     private val prefs: SportsLivePreferencesDataStore,
-    addonRepository: AddonRepository
+    addonRepository: AddonRepository,
+    sportsLiveRepository: SportsLiveRepository
 ) : ViewModel() {
+
+    private val claimedStats = combine(
+        sportsLiveRepository.claimedCatalogKeys,
+        sportsLiveRepository.catalogStats
+    ) { keys, stats -> stats.filterKeys { it in keys } }
 
     val uiState: StateFlow<SportsLiveSettingsUiState> = combine(
         addonRepository.getInstalledAddons(),
         prefs.overrides,
         prefs.showSection,
-        prefs.showHomeRow
-    ) { addons, overrides, showSection, showHomeRow ->
+        prefs.showHomeRow,
+        claimedStats
+    ) { addons, overrides, showSection, showHomeRow, stats ->
         val catalogs = addons.enabledAddons().flatMap { addon ->
             addon.catalogs.filter(SportsLiveCatalogPolicy::isClaimable).map { catalog ->
                 val key = SportsLiveCatalogPolicy.keyFor(addon, catalog)
@@ -55,7 +66,8 @@ class SportsLiveSettingsViewModel @Inject constructor(
                     catalogName = catalog.name,
                     apiType = catalog.apiType,
                     autoClaim = SportsLiveCatalogPolicy.classify(addon, catalog, emptyMap()),
-                    override = overrides[key]
+                    override = overrides[key],
+                    stats = stats[key]
                 )
             }
         }

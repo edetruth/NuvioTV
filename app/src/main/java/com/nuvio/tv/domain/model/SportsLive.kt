@@ -18,6 +18,20 @@ data class ClaimedCatalog(
 
 enum class SportsLiveTab { LIVE_NOW, UPCOMING, CHANNELS, REPLAYS }
 
+/**
+ * How a catalog's items were recognised in a load. Each item that is not finished counts once, in the
+ * first of: live (in Live Now), channel, replay, timed (upcoming with a start), upcoming "Time TBA",
+ * unrecognised (in no tab).
+ */
+data class CatalogStats(
+    val live: Int = 0,
+    val timed: Int = 0,
+    val upcomingTba: Int = 0,
+    val channels: Int = 0,
+    val replays: Int = 0,
+    val unrecognised: Int = 0
+)
+
 /** A catalog item from a claimed catalog, annotated with what the Sports & Live tabs need. */
 data class SportsLiveItem(
     val meta: MetaPreview,

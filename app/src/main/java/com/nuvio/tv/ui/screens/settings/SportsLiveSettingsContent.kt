@@ -9,10 +9,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nuvio.tv.R
+import com.nuvio.tv.domain.model.CatalogStats
 import com.nuvio.tv.domain.model.SportsLiveOverride
 import com.nuvio.tv.ui.theme.NuvioTheme
 
@@ -64,7 +66,8 @@ internal fun SportsLiveSettingsContent(
                     state.catalogs.forEach { catalog ->
                         SettingsActionRow(
                             title = "${catalog.addonName} · ${catalog.catalogName}",
-                            subtitle = catalogStatus(catalog),
+                            subtitle = listOfNotNull(catalogStatus(catalog), catalog.stats?.let { catalogStats(it) })
+                                .joinToString("\n"),
                             onClick = { viewModel.cycleOverride(catalog.key) },
                             enabled = state.showSection
                         )
@@ -82,4 +85,18 @@ private fun catalogStatus(catalog: SportsLiveCatalogSetting): String = when (cat
     null -> catalog.autoClaim?.let {
         "${stringResource(R.string.sports_live_override_auto_in)} (${it.reason})"
     } ?: stringResource(R.string.sports_live_override_auto_out)
+}
+
+/** "12 live · 8 timed · 3 unrecognised": the non-zero counts, or "No items". */
+@Composable
+private fun catalogStats(stats: CatalogStats): String {
+    val parts = listOf(
+        R.plurals.sports_live_stat_live to stats.live,
+        R.plurals.sports_live_stat_timed to stats.timed,
+        R.plurals.sports_live_stat_time_tba to stats.upcomingTba,
+        R.plurals.sports_live_stat_channels to stats.channels,
+        R.plurals.sports_live_stat_replays to stats.replays,
+        R.plurals.sports_live_stat_unrecognised to stats.unrecognised
+    ).filter { it.second > 0 }.map { (res, count) -> pluralStringResource(res, count, count) }
+    return if (parts.isEmpty()) stringResource(R.string.sports_live_stat_empty) else parts.joinToString(" · ")
 }

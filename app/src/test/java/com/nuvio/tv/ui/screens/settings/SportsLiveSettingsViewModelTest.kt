@@ -8,11 +8,13 @@ import com.nuvio.tv.data.local.ProfileDataStoreFactory
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import com.nuvio.tv.domain.model.Addon
 import com.nuvio.tv.domain.model.CatalogDescriptor
+import com.nuvio.tv.domain.model.CatalogStats
 import com.nuvio.tv.domain.model.CatalogExtra
 import com.nuvio.tv.domain.model.ContentType
 import com.nuvio.tv.domain.model.SportsLiveKind
 import com.nuvio.tv.domain.model.SportsLiveOverride
 import com.nuvio.tv.domain.repository.AddonRepository
+import com.nuvio.tv.domain.repository.SportsLiveRepository
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -47,8 +49,15 @@ class SportsLiveSettingsViewModelTest {
         every { getInstalledAddons() } returns addonsFlow
     }
 
+    private val claimedKeys = MutableStateFlow(setOf(SportsLiveCatalogPolicy.keyFor(SPORTS_ADDON, EVENTS)))
+    private val catalogStats = MutableStateFlow<Map<String, CatalogStats>>(emptyMap())
+    private val sportsLiveRepository = mockk<SportsLiveRepository> {
+        every { claimedCatalogKeys } returns claimedKeys
+        every { catalogStats } returns this@SportsLiveSettingsViewModelTest.catalogStats
+    }
+
     private fun TestScope.newViewModel(): SportsLiveSettingsViewModel {
-        val viewModel = SportsLiveSettingsViewModel(prefs, addonRepository)
+        val viewModel = SportsLiveSettingsViewModel(prefs, addonRepository, sportsLiveRepository)
         backgroundScope.launch { viewModel.uiState.collect {} }
         return viewModel
     }
@@ -106,6 +115,25 @@ class SportsLiveSettingsViewModelTest {
         advanceUntilIdle()
 
         assertEquals(listOf("Movies"), viewModel.uiState.value.catalogs.map { it.catalogName })
+    }
+
+    @Test
+    fun `stats are shown only for claimed catalogs that were loaded`() = runTest {
+        val eventsKey = SportsLiveCatalogPolicy.keyFor(SPORTS_ADDON, EVENTS)
+        val moviesKey = SportsLiveCatalogPolicy.keyFor(PLAIN_ADDON, MOVIES)
+        val eventsStats = CatalogStats(live = 12, timed = 8, unrecognised = 3)
+        catalogStats.value = mapOf(eventsKey to eventsStats, moviesKey to CatalogStats(live = 1))
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+
+        val byKey = viewModel.uiState.value.catalogs.associateBy { it.key }
+        assertEquals(eventsStats, byKey.getValue(eventsKey).stats)
+        assertNull(byKey.getValue(moviesKey).stats)
+        assertNull(byKey.getValue(SportsLiveCatalogPolicy.keyFor(PLAIN_ADDON, TRENDING)).stats)
+
+        claimedKeys.value = emptySet()
+        advanceUntilIdle()
+        assertNull(viewModel.uiState.value.catalogs.single { it.key == eventsKey }.stats)
     }
 
     @Test
