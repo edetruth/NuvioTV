@@ -2,9 +2,11 @@ package com.nuvio.tv.data.repository
 
 import androidx.annotation.VisibleForTesting
 import com.nuvio.tv.core.network.NetworkResult
+import com.nuvio.tv.core.sportslive.SportsLiveCatalogOptions
 import com.nuvio.tv.core.sportslive.SportsLiveCatalogPolicy
 import com.nuvio.tv.core.sportslive.SportsLiveItemBucketer
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
+import com.nuvio.tv.domain.model.CatalogOption
 import com.nuvio.tv.domain.model.CatalogRow
 import com.nuvio.tv.domain.model.CatalogStats
 import com.nuvio.tv.domain.model.ClaimedCatalog
@@ -77,18 +79,21 @@ class SportsLiveRepositoryImpl @Inject constructor(
     override val claimedCatalogs: Flow<List<ClaimedCatalog>> = combine(
         enabled,
         addonRepository.getInstalledAddons().map { it.enabledAddons() },
-        prefs.overrides
-    ) { enabled, addons, overrides ->
+        prefs.overrides,
+        prefs.catalogOptions
+    ) { enabled, addons, overrides, options ->
         if (!enabled) return@combine emptyList()
         addons.flatMap { addon ->
             addon.catalogs.mapNotNull { catalog ->
                 SportsLiveCatalogPolicy.classify(addon, catalog, overrides)?.let {
+                    val key = SportsLiveCatalogPolicy.keyFor(addon, catalog)
                     ClaimedCatalog(
                         addon = addon,
                         catalog = catalog,
-                        key = SportsLiveCatalogPolicy.keyFor(addon, catalog),
+                        key = key,
                         kind = it.kind,
-                        viaOverride = it.reason == SportsLiveCatalogPolicy.REASON_INCLUDE
+                        viaOverride = it.reason == SportsLiveCatalogPolicy.REASON_INCLUDE,
+                        option = SportsLiveCatalogOptions.effectiveOption(catalog, options[key])
                     )
                 }
             }
@@ -103,29 +108,34 @@ class SportsLiveRepositoryImpl @Inject constructor(
 
     /**
      * Loads are serialised. The result is published to [latest] only if the claimed catalogs (which
-     * follow the active profile and the overrides) did not change while it was fetching, so a load
-     * started for one profile never overwrites the cache after a switch to another.
+     * follow the active profile, the overrides and the pinned options) did not change while it was
+     * fetching, so a load started for one profile never overwrites the cache after a switch to another.
      */
     override suspend fun load(force: Boolean, includeChannels: Boolean): SportsLiveLoad = loadMutex.withLock {
         val claimed = claimedCatalogs.first()
         val claimedKeys = claimed.map { it.key }.toSet()
+        val options = optionsOf(claimed)
         val cached = _latest.value
-        if (!force && cached != null && nowMs() - cached.loadedAtMs < CACHE_MS && cached.claimedKeys == claimedKeys) {
+        if (!force && cached != null && nowMs() - cached.loadedAtMs < CACHE_MS &&
+            cached.claimedKeys == claimedKeys && cached.catalogOptions == options
+        ) {
             return@withLock cached
         }
         // A channels catalog is carried over from the cached load, rather than refetched, only when that
-        // load covered exactly the catalogs claimed now and its items came from the same addon install:
-        // keys have no base URL, and two profiles can install one addon under different manifest URLs.
+        // load covered exactly the catalogs claimed now, loaded this one with the same pinned option, and
+        // its items came from the same addon install: keys have no base URL, and two profiles can install
+        // one addon under different manifest URLs.
         val carriedItems: Map<String, List<SportsLiveItem>> =
             if (includeChannels || cached == null || cached.claimedKeys != claimedKeys) {
                 emptyMap()
             } else {
                 val cachedByKey = cached.items.groupBy { it.catalogKey }
-                claimed.filter { it.kind == SportsLiveKind.CHANNELS }.mapNotNull { catalog ->
-                    cachedByKey[catalog.key]
-                        ?.takeIf { items -> items.all { it.addonBaseUrl == catalog.addon.baseUrl } }
-                        ?.let { catalog.key to it }
-                }.toMap()
+                claimed.filter { it.kind == SportsLiveKind.CHANNELS && cached.catalogOptions[it.key] == it.option }
+                    .mapNotNull { catalog ->
+                        cachedByKey[catalog.key]
+                            ?.takeIf { items -> items.all { it.addonBaseUrl == catalog.addon.baseUrl } }
+                            ?.let { catalog.key to it }
+                    }.toMap()
             }
 
         val fetched = coroutineScope {
@@ -153,13 +163,17 @@ class SportsLiveRepositoryImpl @Inject constructor(
                 stats[catalog.key] = SportsLiveItemBucketer.stats(catalogItems, now)
             }
         }
-        val load = SportsLiveLoad(items, failures, loadedAtMs = now, claimedKeys = claimedKeys)
-        if (claimedCatalogKeys.first() == claimedKeys) {
+        val load = SportsLiveLoad(items, failures, loadedAtMs = now, claimedKeys = claimedKeys, catalogOptions = options)
+        val claimedNow = claimedCatalogs.first()
+        if (claimedNow.map { it.key }.toSet() == claimedKeys && optionsOf(claimedNow) == options) {
             _latest.value = load
             _catalogStats.value = stats
         }
         load
     }
+
+    private fun optionsOf(claimed: List<ClaimedCatalog>): Map<String, CatalogOption> =
+        claimed.mapNotNull { catalog -> catalog.option?.let { catalog.key to it } }.toMap()
 
     /** The catalog's first non-loading result; a timeout or exception becomes an [NetworkResult.Error]. */
     private suspend fun fetchFirstPage(claimed: ClaimedCatalog): NetworkResult<CatalogRow> {
@@ -175,6 +189,7 @@ class SportsLiveRepositoryImpl @Inject constructor(
                     catalogName = catalog.name,
                     type = catalog.apiType,
                     skip = 0,
+                    extraArgs = claimed.option?.let { mapOf(it.extra to it.value) }.orEmpty(),
                     supportsSkip = false
                 ).filter { it !is NetworkResult.Loading }.first()
             } ?: NetworkResult.Error("Timed out")

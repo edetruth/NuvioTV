@@ -1,5 +1,6 @@
 package com.nuvio.tv.domain.repository
 
+import com.nuvio.tv.domain.model.CatalogOption
 import com.nuvio.tv.domain.model.CatalogStats
 import com.nuvio.tv.domain.model.ClaimedCatalog
 import com.nuvio.tv.domain.model.SportsLiveItem
@@ -11,7 +12,9 @@ data class SportsLiveLoad(
     val failures: List<SportsLiveFailure>,
     val loadedAtMs: Long,
     /** Keys of the catalogs this load fetched. */
-    val claimedKeys: Set<String>
+    val claimedKeys: Set<String>,
+    /** The pinned option each catalog was loaded with, by catalog key; catalogs loaded with All are absent. */
+    val catalogOptions: Map<String, CatalogOption> = emptyMap()
 )
 
 data class SportsLiveFailure(val catalog: ClaimedCatalog, val message: String)
@@ -31,10 +34,11 @@ interface SportsLiveRepository {
 
     /**
      * Loads the first page of every claimed catalog in parallel. A result under 60 s old is
-     * reused unless [force] or the claimed catalogs have changed since it was loaded.
+     * reused unless [force] or the claimed catalogs or their pinned options have changed since it was
+     * loaded. A catalog with a pinned option is asked only for items matching it.
      * Without [includeChannels], CHANNELS catalogs the previous load fetched with items, for the same
-     * claimed catalogs and addon installs, are not refetched; their items are carried over (they are
-     * large and rarely change).
+     * claimed catalogs, addon installs and pinned option, are not refetched; their items are carried
+     * over (they are large and rarely change).
      */
     suspend fun load(force: Boolean = false, includeChannels: Boolean = true): SportsLiveLoad
 

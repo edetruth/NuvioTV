@@ -13,8 +13,13 @@ data class ClaimedCatalog(
     val key: String,
     val kind: SportsLiveKind,
     /** True when the user included this catalog by override rather than a rule claiming it. */
-    val viaOverride: Boolean = false
+    val viaOverride: Boolean = false,
+    /** The pinned extra value the catalog is loaded with; null loads everything (All). */
+    val option: CatalogOption? = null
 )
+
+/** A pinned catalog extra value, e.g. `genre` = "United States". */
+data class CatalogOption(val extra: String, val value: String)
 
 enum class SportsLiveTab { LIVE_NOW, UPCOMING, CHANNELS, REPLAYS }
 

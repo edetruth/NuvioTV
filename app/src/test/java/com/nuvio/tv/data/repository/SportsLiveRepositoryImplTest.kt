@@ -11,11 +11,14 @@ import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import com.nuvio.tv.domain.model.Addon
 import com.nuvio.tv.domain.model.AddonStreams
 import com.nuvio.tv.domain.model.CatalogDescriptor
+import com.nuvio.tv.domain.model.CatalogExtra
+import com.nuvio.tv.domain.model.CatalogOption
 import com.nuvio.tv.domain.model.CatalogRow
 import com.nuvio.tv.domain.model.CatalogStats
 import com.nuvio.tv.domain.model.ContentType
 import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.domain.model.PosterShape
+import com.nuvio.tv.domain.model.SportsLiveKind
 import com.nuvio.tv.domain.model.SportsLiveOverride
 import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.domain.repository.AddonRepository
@@ -54,6 +57,15 @@ class SportsLiveRepositoryImplTest {
     private val sportsAddon = addon("sports", "Sports Streams", liveCatalog, upcomingCatalog)
     private val genericAddon = addon("generic", "Generic Addon", popularCatalog, channelsCatalog)
     private val disabledAddon = addon("off", "Off Sports", catalog("sport", "off_live", "Live"), enabled = false)
+    private val countryCatalog = catalog("tv", "country", "Live TV").copy(
+        extra = listOf(
+            CatalogExtra("genre", options = listOf("United States", "Canada")),
+            CatalogExtra("search")
+        )
+    )
+    private val tvAddon = addon("tvaddon", "TV Addon", countryCatalog)
+    private val countryKey = SportsLiveCatalogPolicy.keyFor(tvAddon, countryCatalog)
+    private val us = CatalogOption("genre", "United States")
 
     private val addons = MutableStateFlow(listOf(sportsAddon, genericAddon, disabledAddon))
     private val addonRepository = mockk<AddonRepository> {
@@ -422,6 +434,97 @@ class SportsLiveRepositoryImplTest {
         assertEquals(listOf("a"), repository.liveNow().first().map { it.id })
     }
 
+    @Test
+    fun `a pinned option is sent as the catalog's extra args and recorded on the load`() = runTest {
+        addons.value = listOf(sportsAddon, genericAddon, tvAddon)
+        prefs.setCatalogOption(countryKey, us)
+        val repository = newRepository()
+
+        assertEquals(us, repository.claimedCatalogs.first().single { it.key == countryKey }.option)
+        val load = repository.load()
+
+        assertEquals(mapOf("genre" to "United States"), catalogRepository.requestedExtraArgs["tvaddon" to "country"])
+        assertEquals(emptyMap<String, String>(), catalogRepository.requestedExtraArgs["generic" to "chan"])
+        assertEquals(emptyMap<String, String>(), catalogRepository.requestedExtraArgs["sports" to "live"])
+        assertEquals(mapOf(countryKey to us), load.catalogOptions)
+    }
+
+    @Test
+    fun `a stored pin the catalog no longer offers loads everything`() = runTest {
+        addons.value = listOf(sportsAddon, genericAddon, tvAddon)
+        prefs.setCatalogOption(countryKey, CatalogOption("genre", "Atlantis"))
+        val repository = newRepository()
+
+        assertNull(repository.claimedCatalogs.first().single { it.key == countryKey }.option)
+        val load = repository.load()
+
+        assertEquals(emptyMap<String, String>(), catalogRepository.requestedExtraArgs["tvaddon" to "country"])
+        assertEquals(emptyMap<String, CatalogOption>(), load.catalogOptions)
+    }
+
+    @Test
+    fun `changing a pin within 60 seconds refetches that channels catalog and carries the others`() = runTest {
+        addons.value = listOf(sportsAddon, genericAddon, tvAddon)
+        catalogRepository.results["generic" to "chan"] = success("generic", "chan", meta("ch1"))
+        catalogRepository.results["tvaddon" to "country"] = success("tvaddon", "country", meta("all1"))
+        val repository = newRepository()
+        repository.load()
+        assertEquals(4, catalogRepository.calls)
+
+        now += 10_000
+        prefs.setCatalogOption(countryKey, us)
+        catalogRepository.results["generic" to "chan"] = success("generic", "chan", meta("ch2"))
+        catalogRepository.results["tvaddon" to "country"] = success("tvaddon", "country", meta("us1"))
+        val pinned = repository.load(includeChannels = false)
+
+        // The two events catalogs and the re-pinned channels catalog; the other channels catalog is carried.
+        assertEquals(7, catalogRepository.calls)
+        assertEquals(mapOf("genre" to "United States"), catalogRepository.requestedExtraArgs["tvaddon" to "country"])
+        assertEquals(setOf("ch1", "us1"), pinned.items.filter { it.kind == SportsLiveKind.CHANNELS }.map { it.id }.toSet())
+        assertEquals(pinned, repository.latest.value)
+
+        // Unchanged pin within 60 s: the cached load.
+        assertEquals(pinned, repository.load(includeChannels = false))
+        assertEquals(7, catalogRepository.calls)
+    }
+
+    @Test
+    fun `a pinned load's channels are never carried into an unpinned load`() = runTest {
+        addons.value = listOf(sportsAddon, genericAddon, tvAddon)
+        prefs.setCatalogOption(countryKey, us)
+        catalogRepository.results["generic" to "chan"] = success("generic", "chan", meta("ch1"))
+        catalogRepository.results["tvaddon" to "country"] = success("tvaddon", "country", meta("us1"))
+        val repository = newRepository()
+        repository.load()
+        assertEquals(4, catalogRepository.calls)
+
+        prefs.setCatalogOption(countryKey, null)
+        catalogRepository.results["tvaddon" to "country"] = success("tvaddon", "country", meta("all1"))
+        val unpinned = repository.load(force = true, includeChannels = false)
+
+        assertEquals(7, catalogRepository.calls)
+        assertEquals(emptyMap<String, String>(), catalogRepository.requestedExtraArgs["tvaddon" to "country"])
+        assertTrue(unpinned.items.any { it.id == "all1" })
+        assertFalse(unpinned.items.any { it.id == "us1" })
+        assertEquals(emptyMap<String, CatalogOption>(), unpinned.catalogOptions)
+    }
+
+    @Test
+    fun `a pin changed mid-load does not publish the load`() = runTest {
+        addons.value = listOf(sportsAddon, genericAddon, tvAddon)
+        val gate = CompletableDeferred<Unit>()
+        catalogRepository.gates["tvaddon" to "country"] = gate
+        val repository = newRepository()
+
+        val load = async { repository.load() }
+        runCurrent()
+        prefs.setCatalogOption(countryKey, us)
+        gate.complete(Unit)
+        load.await()
+
+        assertNull(repository.latest.value)
+    }
+
     private class FakeStreamRepository : StreamRepository {
         val noStreams = mutableSetOf<String>()
         val calls = mutableListOf<String>()
@@ -474,6 +577,8 @@ class SportsLiveRepositoryImplTest {
         val throwing = mutableSetOf<Pair<String, String>>()
         val hanging = mutableSetOf<Pair<String, String>>()
         val gates = mutableMapOf<Pair<String, String>, CompletableDeferred<Unit>>()
+        /** The extra args of each catalog's latest request. */
+        val requestedExtraArgs = mutableMapOf<Pair<String, String>, Map<String, String>>()
         var calls = 0
 
         override fun getCatalog(
@@ -490,8 +595,9 @@ class SportsLiveRepositoryImplTest {
             posterScreen: CustomPosterScreen
         ): Flow<NetworkResult<CatalogRow>> = flow {
             calls++
-            emit(NetworkResult.Loading)
             val key = addonId to catalogId
+            requestedExtraArgs[key] = extraArgs
+            emit(NetworkResult.Loading)
             if (key in throwing) throw IllegalStateException("boom")
             if (key in hanging) awaitCancellation()
             gates[key]?.await()
