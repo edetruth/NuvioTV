@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -29,6 +30,10 @@ import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.ui.components.LoadingIndicator
 import com.nuvio.tv.ui.components.NuvioDialog
 import com.nuvio.tv.ui.theme.NuvioTheme
+import kotlinx.coroutines.delay
+
+private const val FOCUS_ATTEMPTS = 5
+private const val FOCUS_RETRY_MS = 50L
 
 /**
  * The streams of every source of a merged game, under their addon's name, in the order given
@@ -50,7 +55,14 @@ internal fun SportsLiveStreamPickerDialog(
         }
     }
     val firstFocusRequester = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { firstFocusRequester.requestFocus() } }
+    // The first row may not be laid out yet when the dialog opens.
+    LaunchedEffect(Unit) {
+        repeat(2) { withFrameNanos { } }
+        repeat(FOCUS_ATTEMPTS) {
+            if (runCatching { firstFocusRequester.requestFocus() }.isSuccess) return@LaunchedEffect
+            delay(FOCUS_RETRY_MS)
+        }
+    }
 
     NuvioDialog(
         onDismiss = onDismiss,

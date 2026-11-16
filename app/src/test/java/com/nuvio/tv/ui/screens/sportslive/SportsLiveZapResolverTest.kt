@@ -15,6 +15,8 @@ import com.nuvio.tv.domain.model.SportsLiveKind
 import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.domain.repository.AddonRepository
 import com.nuvio.tv.domain.repository.StreamRepository
+import com.nuvio.tv.core.debrid.DirectDebridResolver
+import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -25,6 +27,9 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -36,13 +41,16 @@ class SportsLiveZapResolverTest {
     private val streams = FakeStreamRepository()
     private val probe = mockk<SportsLiveStreamProbe>(relaxed = true)
     private var settings = PlayerSettings()
+    private val debrid = mockk<DirectDebridResolver>().also {
+        coEvery { it.shouldResolveToPlayableStream(any()) } answers { firstArg<Stream>() in NEEDS_PREPARATION }
+    }
 
-    private fun newResolver(): SportsLiveZapResolver {
+    private fun TestScope.newResolver(probe: SportsLiveStreamProbe = this@SportsLiveZapResolverTest.probe): SportsLiveZapResolver {
         val dataStore = mockk<PlayerSettingsDataStore>()
         every { dataStore.playerSettings } answers { flowOf(settings) }
         val addons = mockk<AddonRepository>()
         every { addons.getInstalledAddons() } returns flowOf(listOf(addon("Sports"), addon("Off", enabled = false)))
-        return SportsLiveZapResolver(streams, dataStore, addons, probe)
+        return SportsLiveZapResolver(streams, dataStore, addons, probe, debrid).also { it.fetchScope = backgroundScope }
     }
 
     @Test
@@ -179,10 +187,54 @@ class SportsLiveZapResolverTest {
         streams.responses["game"] = { flowOf(success(JUNK)) }
         streams.responses["alt1"] = { flowOf(NetworkResult.Error("none", NetworkResult.STREAMS_NOT_FOUND_CODE)) }
         streams.responses["alt2"] = { flow { throw IllegalStateException("boom") } }
+        streams.responses["alt3"] = { flowOf(NetworkResult.Error("server", 500)) }
+        val realProbe = SportsLiveStreamProbe(streams).apply { dispatcher = StandardTestDispatcher(testScheduler) }
+        val merged = MERGED.copy(alternates = MERGED.alternates + ALT3)
 
-        val resolver = newResolver()
-        assertNull(resolver.resolve(MERGED))
-        assertEquals(emptyList<Stream>(), resolver.resolveAll(MERGED))
+        val resolver = newResolver(realProbe)
+        assertNull(resolver.resolve(merged))
+        assertEquals(emptyList<Stream>(), resolver.resolveAll(merged))
+        // "Not found" is proof of an end; a throwing source records nothing and a server error is
+        // inconclusive. (The primary's raw answer still holds a URL the probe counts as alive.)
+        assertEquals(setOf(ALT1.streamKey), realProbe.ended.value)
+    }
+
+    @Test
+    fun `a throwing source records nothing`() = runTest {
+        streams.responses["game"] = { flowOf(success(SD)) }
+        streams.responses["alt1"] = { flow { throw IllegalStateException("boom") } }
+        streams.responses["alt2"] = { flowOf(success(HD, addon = "Third")) }
+
+        newResolver().resolveAll(MERGED)
+
+        verify(exactly = 0) { probe.recordResult(ALT1, any()) }
+        verify { probe.recordResult(ALT2, any()) }
+    }
+
+    @Test
+    fun `the primary's stream plays without waiting for the alternates, which are still recorded`() = runTest {
+        streams.responses["game"] = { flowOf(success(SD)) }
+        streams.responses["alt1"] = { flow { delay(5_000); emit(success(HD, addon = "Other")) } }
+        streams.responses["alt2"] = { flow { delay(8_000); emit(success(OTHER_HD, addon = "Third")) } }
+
+        assertEquals(SD, newResolver().resolve(MERGED))
+        assertEquals(0L, testScheduler.currentTime)
+
+        advanceTimeBy(8_001)
+        verify { probe.recordResult(ALT1, any()) }
+        verify { probe.recordResult(ALT2, any()) }
+    }
+
+    @Test
+    fun `an alternate's stream that needs the Stream screen is skipped, a primary's is not`() = runTest {
+        streams.responses["game"] = { flowOf(success(WEB)) }
+        streams.responses["alt1"] = { flowOf(success(PREPARE_ALT, addon = "Other")) }
+        streams.responses["alt2"] = { flowOf(success(OTHER_HD, addon = "Third")) }
+        assertEquals(OTHER_HD, newResolver().resolve(MERGED))
+        assertEquals(listOf(WEB, OTHER_HD), newResolver().resolveAll(MERGED))
+
+        streams.responses["game"] = { flowOf(success(PREPARE_PRIMARY)) }
+        assertEquals(PREPARE_PRIMARY, newResolver().resolve(MERGED))
     }
 
     private class FakeStreamRepository : StreamRepository {
@@ -225,6 +277,9 @@ class SportsLiveZapResolverTest {
         val WEB = stream(externalUrl = "https://site.example/watch", name = "Watch on web")
         val OTHER_HD = stream(url = "https://cdn3.example/hd.m3u8", name = "Third 1080p", addonName = "Third")
         val JUNK = stream(url = "https://site.example/", name = "Support us")
+        val PREPARE_ALT = stream(url = "https://cdn2.example/debrid", name = "Other debrid", addonName = "Other")
+        val PREPARE_PRIMARY = stream(url = "https://cdn.example/debrid", name = "Sports debrid")
+        val NEEDS_PREPARATION = setOf(PREPARE_ALT, PREPARE_PRIMARY)
 
         fun stream(url: String? = null, externalUrl: String? = null, name: String, addonName: String = "Sports") = Stream(
             name = name,
@@ -288,6 +343,7 @@ class SportsLiveZapResolverTest {
 
         val ALT1 = ITEM.copy(meta = ITEM.meta.copy(id = "alt1"), addonId = "other", addonName = "Other")
         val ALT2 = ITEM.copy(meta = ITEM.meta.copy(id = "alt2"), addonId = "third", addonName = "Third")
+        val ALT3 = ITEM.copy(meta = ITEM.meta.copy(id = "alt3"), addonId = "fourth", addonName = "Fourth")
         val MERGED = ITEM.copy(alternates = listOf(ALT1, ALT2))
     }
 }

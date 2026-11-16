@@ -1,6 +1,7 @@
 package com.nuvio.tv.ui.screens.sportslive
 
 import androidx.annotation.VisibleForTesting
+import com.nuvio.tv.core.debrid.DirectDebridResolver
 import com.nuvio.tv.core.network.NetworkResult
 import com.nuvio.tv.core.player.StreamAutoPlaySelector
 import com.nuvio.tv.core.streams.UnplayableStreamFilter
@@ -15,6 +16,9 @@ import com.nuvio.tv.domain.model.enabledAddons
 import com.nuvio.tv.domain.repository.AddonRepository
 import com.nuvio.tv.domain.repository.StreamRepository
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -38,7 +42,8 @@ class SportsLiveZapResolver @Inject constructor(
     private val streamRepository: StreamRepository,
     private val playerSettingsDataStore: PlayerSettingsDataStore,
     private val addonRepository: AddonRepository,
-    private val streamProbe: SportsLiveStreamProbe
+    private val streamProbe: SportsLiveStreamProbe,
+    private val directDebridResolver: DirectDebridResolver
 ) {
     companion object {
         const val TIMEOUT_MS = 12_000L
@@ -49,6 +54,10 @@ class SportsLiveZapResolver @Inject constructor(
 
     @VisibleForTesting
     internal var timeoutMs = TIMEOUT_MS
+
+    /** Runs a merged game's fetches, so alternates still finish (and are recorded) after the primary is played. */
+    @VisibleForTesting
+    internal var fetchScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private sealed interface Event {
         data class Result(val result: NetworkResult<List<AddonStreams>>) : Event
@@ -86,28 +95,41 @@ class SportsLiveZapResolver @Inject constructor(
     private suspend fun installedOrder(): List<String> =
         addonRepository.getInstalledAddons().first().enabledAddons().map { it.displayName }
 
+    /**
+     * All sources are fetched at once in [fetchScope]; the primary's best stream plays as soon as it
+     * is known, while the alternates finish in the background (their results are still recorded).
+     * Only when the primary has nothing are the alternates awaited, in order.
+     */
     private suspend fun bestAcrossSources(item: SportsLiveItem): Stream? {
         val settings = playerSettingsDataStore.playerSettings.first()
         val installedOrder = installedOrder()
-        return fetchSources(item, installedOrder).firstNotNullOfOrNull { streams ->
+        val fetches = sources(item).mapIndexed { index, source ->
+            fetchScope.async { fetch(source, installedOrder, isAlternate = index > 0) }
+        }
+        return fetches.firstNotNullOfOrNull { fetch ->
+            val streams = fetch.await()
             preferredStream(streams, settings, installedOrder.toSet())
                 ?: streams.firstOrNull(StreamAutoPlaySelector::isPlayable)
         }
     }
 
+    private fun sources(item: SportsLiveItem): List<SportsLiveItem> = listOf(item) + item.alternates
+
     /** One list per source: the primary's, then each alternate's in order. */
     private suspend fun fetchSources(item: SportsLiveItem, installedOrder: List<String>): List<List<Stream>> =
         coroutineScope {
-            (listOf(item) + item.alternates)
-                .map { source -> async { fetch(source, installedOrder) } }
+            sources(item)
+                .mapIndexed { index, source -> async { fetch(source, installedOrder, isAlternate = index > 0) } }
                 .awaitAll()
         }
 
     /**
      * [source]'s streams in addon order, junk dropped. A finished fetch is reported to the probe for
      * the source's own key; a timeout keeps what came back so far and reports nothing.
+     * An alternate's streams that need the Stream screen's preparation are dropped: that screen
+     * opens for the primary, which does not list them.
      */
-    private suspend fun fetch(source: SportsLiveItem, installedOrder: List<String>): List<Stream> {
+    private suspend fun fetch(source: SportsLiveItem, installedOrder: List<String>, isAlternate: Boolean): List<Stream> {
         var last: NetworkResult<List<AddonStreams>>? = null
         val finished = try {
             withTimeoutOrNull(timeoutMs) {
@@ -124,7 +146,9 @@ class SportsLiveZapResolver @Inject constructor(
         return StreamAutoPlaySelector.orderAddonStreams(
             (result as? NetworkResult.Success)?.data.orEmpty(),
             installedOrder
-        ).flatMap { it.streams }.filterNot(UnplayableStreamFilter::isUnplayableJunk)
+        ).flatMap { it.streams }
+            .filterNot(UnplayableStreamFilter::isUnplayableJunk)
+            .filterNot { isAlternate && sportsLiveNeedsPreparation(it, directDebridResolver) }
     }
 
     private suspend fun search(item: SportsLiveItem): Stream? {

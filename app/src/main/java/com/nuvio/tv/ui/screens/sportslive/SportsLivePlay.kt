@@ -39,6 +39,12 @@ fun sportsLivePlayAction(item: SportsLiveItem, mode: StreamAutoPlayMode): Sports
     else -> SportsLivePlayAction.PLAY_BEST
 }
 
+/** True when [stream] needs the Stream screen's preparation (server, YouTube or debrid resolve). */
+internal suspend fun sportsLiveNeedsPreparation(stream: Stream, directDebridResolver: DirectDebridResolver): Boolean =
+    stream.serverTarget != null ||
+        stream.youTubeIdToResolve() != null ||
+        directDebridResolver.shouldResolveToPlayableStream(stream)
+
 /**
  * Where playing [stream] for [item] goes: the Player route, or (null playback) the item's Stream
  * screen when the stream needs that screen's preparation (server, YouTube or debrid resolve).
@@ -50,10 +56,7 @@ internal suspend fun sportsLiveZapTarget(
     returnToHomeOnBack: Boolean,
     directDebridResolver: DirectDebridResolver
 ): SportsLiveZapTarget {
-    val needsPreparation = stream.serverTarget != null ||
-        stream.youTubeIdToResolve() != null ||
-        directDebridResolver.shouldResolveToPlayableStream(stream)
-    val playback = if (needsPreparation) {
+    val playback = if (sportsLiveNeedsPreparation(stream, directDebridResolver)) {
         null
     } else {
         // Same mapping as the Stream screen's getStreamForPlayback, with the item as the content.
@@ -146,10 +149,14 @@ class SportsLivePlayViewModel @Inject constructor(
         job = viewModelScope.launch { playStream(picking.item, stream) }
     }
 
-    /** Back on the picker or while a stream is looked up. */
+    /**
+     * Back on the picker or while a stream is looked up, or the screen stopped: nothing started
+     * before plays later, including an event not yet collected.
+     */
     fun dismiss() {
         job?.cancel()
         _state.value = SportsLivePlayState.Idle
+        while (_events.tryReceive().isSuccess) Unit
     }
 
     private suspend fun playStream(item: SportsLiveItem, stream: Stream) {

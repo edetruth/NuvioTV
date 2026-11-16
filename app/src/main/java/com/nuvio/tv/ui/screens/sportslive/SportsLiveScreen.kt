@@ -44,6 +44,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.nuvio.tv.R
@@ -78,22 +79,25 @@ fun SportsLiveScreen(
     val context = LocalContext.current
     val currentOnPlay by rememberUpdatedState(onPlay)
     val currentOnPlayTarget by rememberUpdatedState(onPlayTarget)
-    LaunchedEffect(playViewModel) {
-        playViewModel.events.collect { event ->
-            when (event) {
-                is SportsLivePlayEvent.OpenStreamScreen -> {
-                    viewModel.startZapSession(event.item)
-                    currentOnPlay(event.item)
+    val playLifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(playViewModel, playLifecycleOwner) {
+        playLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            playViewModel.events.collect { event ->
+                when (event) {
+                    is SportsLivePlayEvent.OpenStreamScreen -> {
+                        viewModel.startZapSession(event.item)
+                        currentOnPlay(event.item)
+                    }
+                    is SportsLivePlayEvent.Play -> {
+                        viewModel.startZapSession(event.target.item)
+                        currentOnPlayTarget(event.target)
+                    }
+                    is SportsLivePlayEvent.NoStream -> Toast.makeText(
+                        context,
+                        context.getString(R.string.sports_live_zap_no_stream, event.name),
+                        Toast.LENGTH_SHORT
+                    ).show()
                 }
-                is SportsLivePlayEvent.Play -> {
-                    viewModel.startZapSession(event.target.item)
-                    currentOnPlayTarget(event.target)
-                }
-                is SportsLivePlayEvent.NoStream -> Toast.makeText(
-                    context,
-                    context.getString(R.string.sports_live_zap_no_stream, event.name),
-                    Toast.LENGTH_SHORT
-                ).show()
             }
         }
     }
@@ -114,6 +118,8 @@ fun SportsLiveScreen(
             when (event) {
                 Lifecycle.Event.ON_RESUME -> viewModel.onScreenVisible(true)
                 Lifecycle.Event.ON_PAUSE -> viewModel.onScreenVisible(false)
+                // A lookup still running when the user leaves (Home) must not navigate on return.
+                Lifecycle.Event.ON_STOP -> playViewModel.dismiss()
                 else -> Unit
             }
         }
