@@ -161,31 +161,37 @@ object SportsLiveItemBucketer {
             .sortedWith(if (tab == SportsLiveTab.REPLAYS) replayOrder else tabOrder)
 
     /**
-     * Folds copies of one game from different addons into one item: the copy of the addon first in
-     * [addonOrder] (unknown addons last) is kept, carrying the others as [SportsLiveItem.alternates].
-     * Two copies are one game when both are events (not channels, not replays) whose team pairs match
-     * either way round, their sports (from genres) agree or one is unknown, and both are live or their
-     * starts are within [MERGE_START_WINDOW_MS]. Each copy is compared with a group's primary; items
-     * that merge with nothing are returned unchanged and in place. A merged card shows the first
-     * known sport ([SportsLiveTeams.knownSport]) of its primary, then its alternates.
+     * Folds copies of one game into one item, pooling every source: the primary (first in [addonOrder],
+     * unknown addons last; among one addon's copies the first catalog name) is kept, carrying the others
+     * as [SportsLiveItem.alternates]. A source is identified by its [SportsLiveItem.streamKey]
+     * (`addonId|id`), so copies pool across addons AND across one addon's provider sub-catalogs (each
+     * exposes the same game with its own stream under a different catalog/id); only two sources sharing
+     * a stream key are never pooled twice. Two copies are one game when both are events (not channels,
+     * not replays) whose canonical team pairs match either way round, their sports (from genres) agree
+     * or one is unknown, and both are live or their starts are within [MERGE_START_WINDOW_MS]. Each copy
+     * is compared with a group's primary; items that merge with nothing are returned unchanged and in
+     * place. A merged card shows the first known sport ([SportsLiveTeams.knownSport]) of its sources.
      */
     fun merge(items: List<SportsLiveItem>, addonOrder: List<String>): List<SportsLiveItem> {
         val rank = addonOrder.withIndex().associate { (index, id) -> id to index }
-        // Matching team names share their last word, so only items under one key are compared.
+        // Copies of one game share a canonical team-pair key, so only plausible matches are compared.
         val candidates = items.filter { it.kind == SportsLiveKind.EVENTS && !it.isChannel && it.teams != null }
             .groupBy { pairKey(it.teams!!) }
             .values.filter { it.size > 1 }
         if (candidates.isEmpty()) return items
-        // By stream key, unique after the per-addon dedupe.
+        // Keyed by the primary's stream key; a source joins at most one primary.
         val alternatesOf = HashMap<String, MutableList<SportsLiveItem>>()
         val folded = HashSet<String>()
         for (group in candidates) {
             val primaries = mutableListOf<SportsLiveItem>()
-            for (item in group.sortedBy { rank[it.addonId] ?: Int.MAX_VALUE }) {
+            // Deterministic primary: addon order, then catalog name, then id (independent of input order).
+            val ordered = group.sortedWith(
+                compareBy({ rank[it.addonId] ?: Int.MAX_VALUE }, { it.catalogName }, { it.id })
+            )
+            for (item in ordered) {
                 val primary = primaries.firstOrNull { primary ->
-                    val copies = alternatesOf[primary.streamKey].orEmpty()
-                    primary.addonId != item.addonId && copies.none { it.addonId == item.addonId } &&
-                        sameGame(primary, item)
+                    val pooled = alternatesOf[primary.streamKey].orEmpty() + primary
+                    pooled.none { it.streamKey == item.streamKey } && sameGame(primary, item)
                 }
                 if (primary == null) {
                     primaries += item
@@ -218,9 +224,11 @@ object SportsLiveItemBucketer {
         return teamsMatch && sportsAgree && sameTime
     }
 
+    // The canonical name folds abbreviations in ("SL" -> "sri lanka"), so a game's copies bucket together
+    // whichever side names a team by its code; the last word keeps the bucket coarse, matches() is precise.
     private fun pairKey(teams: TeamPair): Pair<String, String> {
-        val a = SportsLiveTeams.normalise(teams.home).substringAfterLast(' ')
-        val b = SportsLiveTeams.normalise(teams.away).substringAfterLast(' ')
+        val a = SportsLiveTeams.canonicalise(teams.home).substringAfterLast(' ')
+        val b = SportsLiveTeams.canonicalise(teams.away).substringAfterLast(' ')
         return if (a <= b) a to b else b to a
     }
 

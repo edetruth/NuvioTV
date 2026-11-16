@@ -737,20 +737,88 @@ class SportsLiveItemBucketerTest {
     }
 
     @Test
-    fun `channels, replays and copies within one addon never merge`() {
+    fun `channels and replays never merge even as copies of one game`() {
         val channelA = event("a", "ch1", "US| NFL [Raiders vs Seahawks]", "LIVE", listOf("Live TV"))
         val channelB = event("b", "ch2", "UK| NFL [Raiders vs Seahawks]", "LIVE", listOf("Live TV"))
-        val sameAddon1 = event("a", "e1", "Raiders vs Seahawks", "LIVE")
-        val sameAddon2 = event("a", "e2", "Las Vegas Raiders vs Seattle Seahawks", "LIVE")
         val replayA = describe("a", "r1", "Raiders vs Seahawks", "15 Nov 2026 · 10:00 UTC", kind = SportsLiveKind.REPLAY)
         val replayB = describe("b", "r2", "Raiders vs Seahawks", "15 Nov 2026 · 10:00 UTC", kind = SportsLiveKind.REPLAY)
         assertTrue(channelA.isChannel && channelA.teams != null && channelA.isLive)
 
-        val tabs = SportsLiveItemBucketer.bucket(listOf(channelA, channelB, sameAddon1, sameAddon2, replayA, replayB), now)
+        val tabs = SportsLiveItemBucketer.bucket(listOf(channelA, channelB, replayA, replayB), now)
 
-        assertEquals(setOf("ch1", "ch2", "e1", "e2"), tabs.getValue(SportsLiveTab.LIVE_NOW).map { it.id }.toSet())
+        assertEquals(setOf("ch1", "ch2"), tabs.getValue(SportsLiveTab.LIVE_NOW).map { it.id }.toSet())
         assertEquals(setOf("r1", "r2"), tabs.getValue(SportsLiveTab.REPLAYS).map { it.id }.toSet())
         assertTrue(tabs.values.flatten().all { it.alternates.isEmpty() })
+    }
+
+    @Test
+    fun `one addon's provider sub-catalogs listing the same game pool into one card`() {
+        // One live-TV addon exposes the same match from four provider catalogs, each with its own id/stream.
+        val providers = listOf(
+            "cnc_SportzXLiveEvents_tv" to "⚡SportzX Live Events (tv)",
+            "cnc_LivXowLiveEvents_tv" to "⚡LivXow Live Events (tv)",
+            "cnc_SKTechLiveEvents_tv" to "⚡SKTech Live Events (tv)",
+            "cnc_PlayFyLiveEvents_tv" to "⚡ PlayFy Live Events (tv)"
+        )
+        val items = providers.mapIndexed { i, (id, name) ->
+            SportsLiveItemBucketer.describe(
+                meta("game-$i", "PAK vs SL", releaseInfo = "LIVE"),
+                claimed("tv", id, name, SportsLiveKind.EVENTS, addonId = "cnc"),
+                now
+            )
+        }
+
+        val card = SportsLiveItemBucketer.bucketTab(items, SportsLiveTab.LIVE_NOW, now).single()
+        val sourceKeys = (listOf(card) + card.alternates).map { it.streamKey }
+
+        assertEquals(4, card.sourceCount)
+        // Each pooled source keeps its own stream key (resolveAll fetches each separately).
+        assertEquals(listOf("cnc|game-0", "cnc|game-1", "cnc|game-2", "cnc|game-3"), sourceKeys.sorted())
+        assertEquals(4, sourceKeys.toSet().size)
+        // Labeled by provider, not by the one shared addon name.
+        assertEquals(
+            setOf("SportzX", "LivXow", "SKTech", "PlayFy"),
+            SportsLiveSourceLabels.of(card).values.toSet()
+        )
+    }
+
+    @Test
+    fun `a cross-addon abbreviation and full name pool into one card`() {
+        val abbrev = event("cnc", "g1", "PAK vs SL", "LIVE")
+        val full = event("neb", "g2", "Pakistan vs Sri Lanka", "LIVE")
+
+        val card = SportsLiveItemBucketer.bucketTab(
+            listOf(abbrev, full), SportsLiveTab.LIVE_NOW, now, addonOrder = listOf("cnc", "neb")
+        ).single()
+
+        assertEquals("cnc", card.addonId)
+        assertEquals(2, card.sourceCount)
+        assertEquals(listOf("g2"), card.alternates.map { it.id })
+    }
+
+    @Test
+    fun `the alias layer keeps different teams and women's games separate`() {
+        // Different matchup: shares only one side.
+        val differentTeams = SportsLiveItemBucketer.bucketTab(
+            listOf(event("a", "1", "PAK vs SL", "LIVE"), event("b", "2", "PAK vs IND", "LIVE")),
+            SportsLiveTab.LIVE_NOW, now
+        )
+        assertEquals(2, differentTeams.size)
+        assertTrue(differentTeams.all { it.alternates.isEmpty() })
+
+        // Women's copy does not fold into the men's game, but two women's copies do.
+        val womenVsMen = SportsLiveItemBucketer.bucketTab(
+            listOf(event("a", "1", "PAK (W) vs SL (W)", "LIVE"), event("b", "2", "Pakistan vs Sri Lanka", "LIVE")),
+            SportsLiveTab.LIVE_NOW, now
+        )
+        assertEquals(2, womenVsMen.size)
+
+        val women = SportsLiveItemBucketer.bucketTab(
+            listOf(event("a", "1", "PAK (W) vs SL (W)", "LIVE"), event("b", "2", "Pakistan (W) vs Sri Lanka (W)", "LIVE")),
+            SportsLiveTab.LIVE_NOW, now, addonOrder = listOf("a", "b")
+        )
+        assertEquals(1, women.size)
+        assertEquals(2, women.single().sourceCount)
     }
 
     @Test
