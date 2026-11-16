@@ -31,6 +31,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -196,8 +197,14 @@ internal fun SportsLiveListCard(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
+                // A merged game names its primary addon and how many addons carry it.
+                val sources = if (item.alternates.isEmpty()) {
+                    null
+                } else {
+                    pluralStringResource(R.plurals.sports_live_sources_count, item.sourceCount, item.sourceCount)
+                }
                 Text(
-                    text = "${item.sport ?: item.catalogName} · ${item.addonName}",
+                    text = listOfNotNull(item.sport ?: item.catalogName, item.addonName, sources).joinToString(" · "),
                     style = MaterialTheme.typography.bodySmall,
                     color = NuvioTheme.colors.TextSecondary,
                     maxLines = 1,
@@ -240,7 +247,14 @@ internal fun SportsLiveDetailsPane(
             overflow = TextOverflow.Ellipsis
         )
         Text(
-            text = listOfNotNull(item.sport, stateLabel, item.addonName).joinToString(" · "),
+            text = listOfNotNull(
+                item.sport,
+                stateLabel,
+                item.addonName,
+                item.alternates.takeIf { it.isNotEmpty() }?.let {
+                    pluralStringResource(R.plurals.sports_live_sources_count, item.sourceCount, item.sourceCount)
+                }
+            ).joinToString(" · "),
             style = MaterialTheme.typography.bodyMedium,
             color = NuvioTheme.colors.TextSecondary,
             maxLines = 1,

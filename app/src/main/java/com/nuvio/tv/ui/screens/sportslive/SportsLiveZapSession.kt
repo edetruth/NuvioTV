@@ -28,14 +28,14 @@ data class SportsLiveZapSession(
     fun previous(): SportsLiveZapSession = copy(index = (index - 1 + items.size) % items.size)
 
     /**
-     * The next (or previous) game whose [SportsLiveItem.streamKey] is not in [endedKeys];
+     * The next (or previous) game not known to have ended ([SportsLiveItem.hasEnded]);
      * null when every other game of the list is known to have ended.
      */
     fun step(forward: Boolean, endedKeys: Set<String>): SportsLiveZapSession? {
         var moved = this
         repeat(items.size - 1) {
             moved = if (forward) moved.next() else moved.previous()
-            if (moved.current.streamKey !in endedKeys) return moved
+            if (!moved.current.hasEnded(endedKeys)) return moved
         }
         return null
     }

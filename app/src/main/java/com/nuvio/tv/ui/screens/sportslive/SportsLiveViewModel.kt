@@ -201,7 +201,7 @@ class SportsLiveViewModel @Inject constructor(
         // Live items whose streams are gone have ended; the other tabs are left as they are.
         val tabs = bucketed.tabs.mapValues { (tab, tabItems) ->
             if (tab == SportsLiveTab.LIVE_NOW) {
-                tabItems.filterNot { it.streamKey in endedKeys }
+                tabItems.filterNot { it.hasEnded(endedKeys) }
             } else {
                 tabItems
             }

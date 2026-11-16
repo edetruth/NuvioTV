@@ -7,11 +7,15 @@ import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveKind
 import com.nuvio.tv.domain.model.SportsLiveTab
+import kotlin.math.abs
 
 /** Annotates items from claimed catalogs and sorts them into the Sports & Live tabs. */
 object SportsLiveItemBucketer {
     /** How long after a timed start an events-catalog item still counts as live. */
     private const val LIVE_WINDOW_MS = 4 * 60 * 60 * 1000L
+
+    /** How far apart two addons' starts for one game may be. */
+    private const val MERGE_START_WINDOW_MS = 30 * 60 * 1000L
 
     private val nonLetters = Regex("""[^\p{L}]+""")
     // "LIVE NOW", "Live now": a whole phrase, so "Alive nowhere" does not count.
@@ -128,16 +132,96 @@ object SportsLiveItemBucketer {
      * Every tab is present in the result (possibly empty), each sorted live first, then by start
      * (newest first on Replays), then by name. Finished items are in no tab.
      * An addon often lists the same item in several catalogs (Live Now and Today); within a tab it
-     * appears once, as its first occurrence in [items].
+     * appears once, as its first occurrence in [items]. Copies of one game from different addons are
+     * one item; see [merge].
      */
-    fun bucket(items: List<SportsLiveItem>, nowMs: Long): Map<SportsLiveTab, List<SportsLiveItem>> =
-        SportsLiveTab.entries.associateWith { tab -> bucketTab(items, tab, nowMs) }
+    fun bucket(
+        items: List<SportsLiveItem>,
+        nowMs: Long,
+        addonOrder: List<String> = firstSeenAddons(items)
+    ): Map<SportsLiveTab, List<SportsLiveItem>> =
+        SportsLiveTab.entries.associateWith { tab -> bucketTab(items, tab, nowMs, addonOrder) }
 
-    /** One tab of [bucket], without sorting the other tabs' items (the Home row needs only Live Now). */
-    fun bucketTab(items: List<SportsLiveItem>, tab: SportsLiveTab, nowMs: Long): List<SportsLiveItem> =
+    /**
+     * One tab of [bucket], without sorting the other tabs' items (the Home row needs only Live Now).
+     * The same game from several addons becomes one item ([merge]); [addonOrder] (addon ids, the
+     * user's order) picks its primary copy.
+     */
+    fun bucketTab(
+        items: List<SportsLiveItem>,
+        tab: SportsLiveTab,
+        nowMs: Long,
+        addonOrder: List<String> = firstSeenAddons(items)
+    ): List<SportsLiveItem> =
         items.filter { !it.isFinished && belongsTo(it, tab, nowMs) }
             .distinctBy { it.addonId to it.id }
+            .let { merge(it, addonOrder) }
             .sortedWith(if (tab == SportsLiveTab.REPLAYS) replayOrder else tabOrder)
+
+    /**
+     * Folds copies of one game from different addons into one item: the copy of the addon first in
+     * [addonOrder] (unknown addons last) is kept, carrying the others as [SportsLiveItem.alternates].
+     * Two copies are one game when both are events (not channels, not replays) whose team pairs match
+     * either way round, their sports (from genres) agree or one is unknown, and both are live or their
+     * starts are within [MERGE_START_WINDOW_MS]. Each copy is compared with a group's primary; items
+     * that merge with nothing are returned unchanged and in place.
+     */
+    fun merge(items: List<SportsLiveItem>, addonOrder: List<String>): List<SportsLiveItem> {
+        val rank = addonOrder.withIndex().associate { (index, id) -> id to index }
+        // Matching team names share their last word, so only items under one key are compared.
+        val candidates = items.filter { it.kind == SportsLiveKind.EVENTS && !it.isChannel && it.teams != null }
+            .groupBy { pairKey(it.teams!!) }
+            .values.filter { it.size > 1 }
+        if (candidates.isEmpty()) return items
+        // By stream key, unique after the per-addon dedupe.
+        val alternatesOf = HashMap<String, MutableList<SportsLiveItem>>()
+        val folded = HashSet<String>()
+        for (group in candidates) {
+            val primaries = mutableListOf<SportsLiveItem>()
+            for (item in group.sortedBy { rank[it.addonId] ?: Int.MAX_VALUE }) {
+                val primary = primaries.firstOrNull { primary ->
+                    val copies = alternatesOf[primary.streamKey].orEmpty()
+                    primary.addonId != item.addonId && copies.none { it.addonId == item.addonId } &&
+                        sameGame(primary, item)
+                }
+                if (primary == null) {
+                    primaries += item
+                } else {
+                    alternatesOf.getOrPut(primary.streamKey) { mutableListOf() } += item
+                    folded += item.streamKey
+                }
+            }
+        }
+        if (folded.isEmpty()) return items
+        return items.mapNotNull { item ->
+            if (item.streamKey in folded) null else alternatesOf[item.streamKey]?.let { item.copy(alternates = it) } ?: item
+        }
+    }
+
+    private fun sameGame(a: SportsLiveItem, b: SportsLiveItem): Boolean {
+        val x = a.teams ?: return false
+        val y = b.teams ?: return false
+        val teamsMatch = (SportsLiveTeams.matches(x.home, y.home) && SportsLiveTeams.matches(x.away, y.away)) ||
+            (SportsLiveTeams.matches(x.home, y.away) && SportsLiveTeams.matches(x.away, y.home))
+        val sportA = knownSport(a)
+        val sportB = knownSport(b)
+        val sportsAgree = sportA == null || sportB == null || sportA.equals(sportB, ignoreCase = true)
+        val sameTime = (a.isLive && b.isLive) ||
+            (a.startMs != null && b.startMs != null && abs(a.startMs - b.startMs) <= MERGE_START_WINDOW_MS)
+        return teamsMatch && sportsAgree && sameTime
+    }
+
+    // A sport taken from the catalog's name ("⚡SportzX Live Events (tv)") is not a known sport.
+    private fun knownSport(item: SportsLiveItem): String? =
+        item.sport?.takeIf { item.meta.genres.any { it.isNotBlank() } }
+
+    private fun pairKey(teams: TeamPair): Pair<String, String> {
+        val a = SportsLiveTeams.normalise(teams.home).substringAfterLast(' ')
+        val b = SportsLiveTeams.normalise(teams.away).substringAfterLast(' ')
+        return if (a <= b) a to b else b to a
+    }
+
+    private fun firstSeenAddons(items: List<SportsLiveItem>): List<String> = items.mapTo(LinkedHashSet()) { it.addonId }.toList()
 
     /**
      * Marks the items a followed team plays in and moves them first, each part keeping its order.
@@ -150,7 +234,16 @@ object SportsLiveItemBucketer {
 
     /** Marks the items a followed team plays in, keeping the order (Channels). */
     fun markFollowed(items: List<SportsLiveItem>, followed: List<FollowedTeam>): List<SportsLiveItem> =
-        if (followed.isEmpty()) items else items.map { if (SportsLiveTeams.isFollowed(it, followed)) it.copy(followed = true) else it }
+        if (followed.isEmpty()) {
+            items
+        } else {
+            // A merged game is followed when any of its sources is (their sports may differ).
+            items.map { item ->
+                val isFollowed = SportsLiveTeams.isFollowed(item, followed) ||
+                    item.alternates.any { SportsLiveTeams.isFollowed(it, followed) }
+                if (isFollowed) item.copy(followed = true) else item
+            }
+        }
 
     // "LIVE", "🔴 LIVE": the word LIVE once emoji, punctuation and digits are stripped.
     private fun isLiveMarker(releaseInfo: String?): Boolean =

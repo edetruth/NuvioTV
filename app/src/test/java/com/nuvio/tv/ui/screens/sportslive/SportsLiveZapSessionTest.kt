@@ -109,6 +109,15 @@ class SportsLiveZapSessionTest {
         assertNull(SportsLiveZapSessions.activeFor("a"))
     }
 
+    @Test
+    fun `step skips a merged game only when every source has ended`() {
+        val merged = item("b").copy(alternates = listOf(item("b2", addonId = "other")))
+        val start = session(listOf(item("a"), merged, item("c")), 0)
+
+        assertEquals("b", start.step(forward = true, endedKeys = setOf("addon|b"))?.current?.id)
+        assertEquals("c", start.step(forward = true, endedKeys = setOf("addon|b", "other|b2"))?.current?.id)
+    }
+
     private fun session(items: List<SportsLiveItem>, index: Int) = SportsLiveZapSession(
         items = items,
         index = index,

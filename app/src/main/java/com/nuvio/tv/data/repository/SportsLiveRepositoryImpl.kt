@@ -208,7 +208,11 @@ class SportsLiveRepositoryImpl @Inject constructor(
 
     override suspend fun unfollow(team: FollowedTeam) = prefs.unfollow(team)
 
-    override fun reprobeIfStale(item: SportsLiveItem) = streamProbe.reprobeIfStale(item)
+    // A merged game ends only when every source has, so each source is probed.
+    override fun reprobeIfStale(item: SportsLiveItem) {
+        streamProbe.reprobeIfStale(item)
+        item.alternates.forEach(streamProbe::reprobeIfStale)
+    }
 
     /** Only items of catalogs claimed right now, so a profile switch or an exclusion hides stale items at once. */
     override fun liveNow(limit: Int): Flow<List<SportsLiveItem>> =
@@ -225,7 +229,7 @@ class SportsLiveRepositoryImpl @Inject constructor(
                 val items = load.items.filter { it.catalogKey in keys }
                 val live = SportsLiveItemBucketer.bucketTab(items, SportsLiveTab.LIVE_NOW, nowMs())
                 SportsLiveItemBucketer.pinFollowed(live, followed)
-                    .filterNot { it.streamKey in ended }
+                    .filterNot { it.hasEnded(ended) }
                     .take(limit)
             }
         }.flowOn(computeDispatcher)

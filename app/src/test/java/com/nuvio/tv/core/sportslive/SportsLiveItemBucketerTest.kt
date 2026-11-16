@@ -658,6 +658,142 @@ class SportsLiveItemBucketerTest {
         }
     }
 
+    @Test
+    fun `the same live game from two addons is one card, primary from the first addon`() {
+        val cnc = describeAll(
+            loadMetas("cnc_live_events.json", "tv"),
+            claimed("tv", "cnc_events", "⚡SportzX Live Events (tv)", SportsLiveKind.EVENTS, addonId = "cnc")
+        )
+        val nebula = describeAll(
+            loadMetas("nebula_live.json", "sports"),
+            claimed("sports", "streamed-events-live-now", "Nebula Sports: Live Now", SportsLiveKind.EVENTS, addonId = "nebula")
+        )
+        val items = cnc + nebula
+        val separate = SportsLiveItemBucketer.bucketTab(cnc, SportsLiveTab.LIVE_NOW, now).size +
+            SportsLiveItemBucketer.bucketTab(nebula, SportsLiveTab.LIVE_NOW, now).size
+
+        val live = SportsLiveItemBucketer.bucketTab(items, SportsLiveTab.LIVE_NOW, now, addonOrder = listOf("nebula", "cnc"))
+        val game = live.single { "Raiders" in it.meta.name }
+
+        assertEquals("nebula", game.addonId)
+        assertEquals("Las Vegas Raiders vs Seattle Seahawks", game.meta.name)
+        assertEquals(listOf("cnc"), game.alternates.map { it.addonId })
+        assertEquals(2, game.sourceCount)
+        // Both fixtures carry the same SportzX feed: these five games merge; "NFL vs REDZONE" and
+        // "ATP 250 vs Stockholm Open" do not match Nebula's "NFL REDZONE" / "ATP 250".
+        assertEquals(
+            setOf(
+                "Las Vegas Raiders vs Seattle Seahawks",
+                "Arizona Cardinals vs Los Angeles Rams",
+                "Dallas Cowboys vs San Francisco 49ers",
+                "Phoenix Suns vs Los Angeles Lakers",
+                "Los Angeles Clippers vs Charlotte Hornets"
+            ),
+            live.filter { it.alternates.isNotEmpty() }.map { it.meta.name }.toSet()
+        )
+        assertEquals(separate - 5, live.size)
+
+        // By default the first addon seen leads: CNC's copy.
+        val byDefault = SportsLiveItemBucketer.bucket(items, now).getValue(SportsLiveTab.LIVE_NOW)
+            .single { "Raiders" in it.meta.name }
+        assertEquals("cnc", byDefault.addonId)
+        assertEquals(listOf("nebula"), byDefault.alternates.map { it.addonId })
+    }
+
+    @Test
+    fun `upcoming copies within 30 minutes merge either way round`() {
+        val a = event("a", "a1", "Detroit Lions vs New England Patriots", "15 Nov 2026 · 18:00 UTC", listOf("American Football"))
+        val b = event("b", "b1", "Patriots @ Lions", "15 Nov 2026 · 18:25 UTC")
+
+        val upcoming = SportsLiveItemBucketer.bucketTab(listOf(b, a), SportsLiveTab.UPCOMING, now, addonOrder = listOf("a", "b"))
+
+        assertEquals(listOf("a1"), upcoming.map { it.id })
+        assertEquals(listOf("b1"), upcoming.single().alternates.map { it.id })
+    }
+
+    @Test
+    fun `the same teams on consecutive days or over 30 minutes apart do not merge`() {
+        val a = event("a", "a1", "Lions vs Patriots", "15 Nov 2026 · 18:00 UTC")
+        val b = event("b", "b1", "Lions vs Patriots", "16 Nov 2026 · 18:00 UTC")
+        val c = event("c", "c1", "Lions vs Patriots", "15 Nov 2026 · 18:31 UTC")
+
+        val upcoming = SportsLiveItemBucketer.bucketTab(listOf(a, b, c), SportsLiveTab.UPCOMING, now)
+
+        assertEquals(3, upcoming.size)
+        assertTrue(upcoming.all { it.alternates.isEmpty() })
+    }
+
+    @Test
+    fun `different sports do not merge but an unknown sport does`() {
+        val football = event("a", "a1", "Arsenal vs Chelsea", "LIVE", listOf("Football"))
+        val basketball = event("b", "b1", "Arsenal vs Chelsea", "LIVE", listOf("Basketball"))
+        val unknown = event("c", "c1", "Arsenal FC vs Chelsea FC", "LIVE")
+
+        val live = SportsLiveItemBucketer.bucketTab(listOf(football, basketball, unknown), SportsLiveTab.LIVE_NOW, now)
+
+        assertEquals(setOf("a1", "b1"), live.map { it.id }.toSet())
+        assertEquals(listOf("c1"), live.single { it.id == "a1" }.alternates.map { it.id })
+        assertTrue(live.single { it.id == "b1" }.alternates.isEmpty())
+    }
+
+    @Test
+    fun `channels, replays and copies within one addon never merge`() {
+        val channelA = event("a", "ch1", "US| NFL [Raiders vs Seahawks]", "LIVE", listOf("Live TV"))
+        val channelB = event("b", "ch2", "UK| NFL [Raiders vs Seahawks]", "LIVE", listOf("Live TV"))
+        val sameAddon1 = event("a", "e1", "Raiders vs Seahawks", "LIVE")
+        val sameAddon2 = event("a", "e2", "Las Vegas Raiders vs Seattle Seahawks", "LIVE")
+        val replayA = describe("a", "r1", "Raiders vs Seahawks", "15 Nov 2026 · 10:00 UTC", kind = SportsLiveKind.REPLAY)
+        val replayB = describe("b", "r2", "Raiders vs Seahawks", "15 Nov 2026 · 10:00 UTC", kind = SportsLiveKind.REPLAY)
+        assertTrue(channelA.isChannel && channelA.teams != null && channelA.isLive)
+
+        val tabs = SportsLiveItemBucketer.bucket(listOf(channelA, channelB, sameAddon1, sameAddon2, replayA, replayB), now)
+
+        assertEquals(setOf("ch1", "ch2", "e1", "e2"), tabs.getValue(SportsLiveTab.LIVE_NOW).map { it.id }.toSet())
+        assertEquals(setOf("r1", "r2"), tabs.getValue(SportsLiveTab.REPLAYS).map { it.id }.toSet())
+        assertTrue(tabs.values.flatten().all { it.alternates.isEmpty() })
+    }
+
+    @Test
+    fun `a merged card has ended only when every source has`() {
+        val a = event("a", "a1", "Lions vs Patriots", "LIVE")
+        val b = event("b", "b1", "Lions vs Patriots", "LIVE")
+        val merged = SportsLiveItemBucketer.bucketTab(listOf(a, b), SportsLiveTab.LIVE_NOW, now).single()
+
+        assertFalse(merged.hasEnded(setOf(a.streamKey)))
+        assertFalse(merged.hasEnded(setOf(b.streamKey)))
+        assertTrue(merged.hasEnded(setOf(a.streamKey, b.streamKey)))
+        assertTrue(a.hasEnded(setOf(a.streamKey)))
+    }
+
+    @Test
+    fun `a merged card is followed when any source is`() {
+        // The primary's sport is only its catalog's name, so the followed team matches only the alternate.
+        val a = event("a", "a1", "Lions vs Patriots", "LIVE")
+        val b = event("b", "b1", "Detroit Lions vs New England Patriots", "LIVE", listOf("American Football"))
+        val merged = SportsLiveItemBucketer.merge(listOf(a, b), listOf("a", "b")).single()
+        val followed = listOf(FollowedTeam("Patriots", "American Football"))
+
+        assertEquals("a1", merged.id)
+        assertFalse(SportsLiveTeams.isFollowed(merged, followed))
+        assertTrue(SportsLiveItemBucketer.markFollowed(listOf(merged), followed).single().followed)
+    }
+
+    private fun event(addonId: String, id: String, name: String, releaseInfo: String?, genres: List<String> = emptyList()) =
+        describe(addonId, id, name, releaseInfo, genres)
+
+    private fun describe(
+        addonId: String,
+        id: String,
+        name: String,
+        releaseInfo: String?,
+        genres: List<String> = emptyList(),
+        kind: SportsLiveKind = SportsLiveKind.EVENTS
+    ) = SportsLiveItemBucketer.describe(
+        meta(id, name, releaseInfo = releaseInfo, genres = genres),
+        claimed("sport", "events", "Events", kind, addonId = addonId),
+        now
+    )
+
     private fun describeAll(metas: List<MetaPreview>, claimed: ClaimedCatalog) =
         metas.map { SportsLiveItemBucketer.describe(it, claimed, now) }
 
@@ -676,11 +812,12 @@ class SportsLiveItemBucketerTest {
         id: String,
         name: String,
         kind: SportsLiveKind,
-        viaOverride: Boolean = false
+        viaOverride: Boolean = false,
+        addonId: String = "highfly"
     ): ClaimedCatalog {
         val catalog = CatalogDescriptor(type = ContentType.fromString(type), rawType = type, id = id, name = name)
         val addon = Addon(
-            id = "highfly",
+            id = addonId,
             name = "Sports Streams",
             version = "1.0.0",
             description = null,
@@ -690,7 +827,7 @@ class SportsLiveItemBucketerTest {
             types = listOf(catalog.type),
             resources = emptyList()
         )
-        return ClaimedCatalog(addon, catalog, "highfly_${type}_$id", kind, viaOverride)
+        return ClaimedCatalog(addon, catalog, "${addonId}_${type}_$id", kind, viaOverride)
     }
 
     private fun meta(

@@ -20,7 +20,7 @@ internal fun liveGamesPanelItems(
 ): List<SportsLiveItem> {
     val live = SportsLiveItemBucketer.bucketTab(items.filter { it.catalogKey in claimedKeys }, SportsLiveTab.LIVE_NOW, nowMs)
         .let { SportsLiveItemBucketer.pinFollowed(it, followed) }
-        .filterNot { it.streamKey in endedKeys }
+        .filterNot { it.hasEnded(endedKeys) }
     val filter = session.filter?.takeIf { session.tab == SportsLiveTab.LIVE_NOW } ?: return live
     if (filter == SportsLiveUiState.MY_TEAMS_FILTER) return live.filter { it.followed }
     return live.filter { it.sport == filter }

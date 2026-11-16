@@ -67,11 +67,20 @@ data class SportsLiveItem(
     /** The two sides when the name is a game ("A vs B"); null for channels and other names. */
     val teams: TeamPair? = null,
     /** True when a followed team plays in it; set where the followed teams are known, not by describe. */
-    val followed: Boolean = false
+    val followed: Boolean = false,
+    /** Other addons' copies of the same game (see SportsLiveItemBucketer.merge); this item is the primary. */
+    val alternates: List<SportsLiveItem> = emptyList()
 ) {
     val id: String get() = meta.id
     val apiType: String get() = meta.apiType
 
     /** Identifies the item across loads, for its stream probe; see SportsLiveRepository.endedKeys. */
     val streamKey: String get() = "$addonId|$id"
+
+    /** Addons this card plays from: 1 plus the [alternates]. */
+    val sourceCount: Int get() = 1 + alternates.size
+
+    /** True when this item and every alternate are in [endedKeys] (ended keys are per source). */
+    fun hasEnded(endedKeys: Set<String>): Boolean =
+        streamKey in endedKeys && alternates.all { it.streamKey in endedKeys }
 }
