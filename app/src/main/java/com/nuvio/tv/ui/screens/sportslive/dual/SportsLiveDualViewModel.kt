@@ -3,6 +3,7 @@ package com.nuvio.tv.ui.screens.sportslive.dual
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nuvio.tv.core.debrid.DirectDebridResolver
+import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveTab
 import com.nuvio.tv.domain.model.Stream
@@ -117,21 +118,25 @@ internal object SportsLiveDualSessions {
 class SportsLiveDualViewModel internal constructor(
     private val resolve: suspend (SportsLiveItem) -> Stream?,
     private val endedKeys: () -> Set<String>,
-    session: SportsLiveDualSession?
+    session: SportsLiveDualSession?,
+    /** Counts this entry for the keys hint; true when the hint shows (see [keysHint]). */
+    claimKeysHint: suspend () -> Boolean = { false }
 ) : ViewModel() {
 
     @Inject
     constructor(
         resolver: SportsLiveZapResolver,
         repo: SportsLiveRepository,
-        directDebridResolver: DirectDebridResolver
+        directDebridResolver: DirectDebridResolver,
+        preferences: SportsLivePreferencesDataStore
     ) : this(
         // A pane plays a plain url only: no Stream screen preparation (server, YouTube, debrid) or torrent.
         resolve = { item ->
             resolver.resolve(item)?.takeIf { stream -> sportsLiveLightPlayable(stream, directDebridResolver) }
         },
         endedKeys = { repo.endedKeys.value },
-        session = SportsLiveDualSessions.take()
+        session = SportsLiveDualSessions.take(),
+        claimKeysHint = preferences::claimDualKeysHint
     )
 
     private val items: List<SportsLiveItem> = session?.items.orEmpty()
@@ -143,6 +148,11 @@ class SportsLiveDualViewModel internal constructor(
     /** Null when there is no session (process death): the screen leaves. */
     val state: StateFlow<DualState?> = _state.asStateFlow()
 
+    private val _keysHint = MutableStateFlow(false)
+
+    /** The keys hint shows for [KEYS_HINT_MS] after the screen opens, on the profile's first entries. */
+    val keysHint: StateFlow<Boolean> = _keysHint.asStateFlow()
+
     private val jobs = mutableMapOf<Side, Job>()
 
     /** Stream keys of the games whose decoder failure has had its one retry. */
@@ -152,6 +162,13 @@ class SportsLiveDualViewModel internal constructor(
         session?.let {
             load(Side.LEFT, it.left)
             load(Side.RIGHT, it.right)
+            viewModelScope.launch {
+                if (runCatching { claimKeysHint() }.getOrDefault(false)) {
+                    _keysHint.value = true
+                    delay(KEYS_HINT_MS)
+                    _keysHint.value = false
+                }
+            }
         }
     }
 
@@ -287,5 +304,8 @@ class SportsLiveDualViewModel internal constructor(
 
         /** A pane that found no decoder starts again once, this long later, before showing the device limit. */
         const val DEVICE_LIMIT_RETRY_MS = 1_000L
+
+        /** How long the keys hint shows after the screen opens. */
+        const val KEYS_HINT_MS = 4_000L
     }
 }

@@ -4,6 +4,15 @@ import android.view.KeyEvent
 import android.view.ViewGroup
 import androidx.activity.compose.BackHandler
 import androidx.annotation.OptIn
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
@@ -15,6 +24,10 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -29,6 +42,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.platform.LocalContext
@@ -45,6 +60,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.nuvio.tv.R
@@ -56,6 +72,9 @@ import com.nuvio.tv.ui.screens.sportslive.SportsLivePlayViewModel
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapTarget
 import com.nuvio.tv.ui.screens.sportslive.zapDirection
 import com.nuvio.tv.ui.theme.NuvioTheme
+import kotlin.math.PI
+import kotlin.math.abs
+import kotlin.math.sin
 
 /**
  * Opens dual screen on the session just put in [SportsLiveDualSessions], leaving the player that
@@ -85,6 +104,7 @@ fun SportsLiveDualScreen(
     playViewModel: SportsLivePlayViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val keysHint by viewModel.keysHint.collectAsStateWithLifecycle()
     val currentOnBack by rememberUpdatedState(onBack)
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -195,6 +215,7 @@ fun SportsLiveDualScreen(
                 DualPaneView(
                     pane = dual.pane(side),
                     highlighted = side == dual.highlighted,
+                    sound = dual.paneSound(side, players?.isPlaying(side) == true),
                     onViewCreated = { view ->
                         views[side] = view
                         view.player = players?.player(side)
@@ -202,6 +223,24 @@ fun SportsLiveDualScreen(
                     modifier = Modifier.weight(1f)
                 )
             }
+        }
+        // Not focusable: keys stay with the screen.
+        AnimatedVisibility(
+            visible = keysHint,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 32.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.sports_live_dual_keys_hint),
+                style = MaterialTheme.typography.bodyMedium,
+                color = NuvioTheme.colors.TextPrimary,
+                modifier = Modifier
+                    .background(Color.Black.copy(alpha = 0.7f), RoundedCornerShape(50))
+                    .padding(horizontal = 20.dp, vertical = 10.dp)
+            )
         }
     }
 }
@@ -211,6 +250,7 @@ fun SportsLiveDualScreen(
 private fun DualPaneView(
     pane: DualPane,
     highlighted: Boolean,
+    sound: PaneSound,
     onViewCreated: (PlayerView) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -249,16 +289,67 @@ private fun DualPaneView(
             )
             PaneStatusOverlay(pane.status)
         }
-        Text(
-            text = "${pane.item.meta.name} · ${pane.item.sport ?: pane.item.catalogName}",
-            style = MaterialTheme.typography.bodyMedium,
-            color = if (highlighted) NuvioTheme.colors.TextPrimary else NuvioTheme.colors.TextSecondary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 8.dp, start = 4.dp, end = 4.dp)
-        )
+        ) {
+            PaneSoundIndicator(sound)
+            Text(
+                text = "${pane.item.meta.name} · ${pane.item.sport ?: pane.item.catalogName}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (highlighted) NuvioTheme.colors.TextPrimary else NuvioTheme.colors.TextSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(start = 8.dp)
+            )
+        }
+    }
+}
+
+/** A speaker on the pane with sound (with moving bars while it plays), a faint muted one on the other. */
+@Composable
+private fun PaneSoundIndicator(sound: PaneSound) {
+    val audible = sound != PaneSound.MUTED
+    val color = if (audible) NuvioTheme.colors.TextPrimary else NuvioTheme.colors.TextPrimary.copy(alpha = 0.4f)
+    Icon(
+        imageVector = if (audible) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff,
+        contentDescription = stringResource(
+            if (audible) R.string.sports_live_dual_sound_on else R.string.sports_live_dual_sound_off
+        ),
+        tint = color,
+        modifier = Modifier.size(20.dp)
+    )
+    if (sound == PaneSound.AUDIBLE_PLAYING) SoundBars(color = color, modifier = Modifier.padding(start = 4.dp))
+}
+
+/**
+ * Three bars moving like an equaliser. The phase is read only while drawing, so the animation
+ * redraws this small canvas and recomposes nothing.
+ */
+@Composable
+private fun SoundBars(color: Color, modifier: Modifier = Modifier) {
+    val transition = rememberInfiniteTransition(label = "soundBars")
+    val phase by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(durationMillis = 900, easing = LinearEasing)),
+        label = "soundBarsPhase"
+    )
+    Canvas(modifier = modifier.size(width = 14.dp, height = 14.dp)) {
+        val barWidth = size.width / 5f
+        repeat(3) { i ->
+            val fraction = 0.25f + 0.75f * abs(sin((phase + i / 3f) * PI.toFloat()))
+            val barHeight = size.height * fraction
+            drawRect(
+                color = color,
+                topLeft = Offset(x = i * 2 * barWidth, y = size.height - barHeight),
+                size = Size(barWidth, barHeight)
+            )
+        }
     }
 }
 

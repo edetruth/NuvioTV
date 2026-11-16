@@ -329,4 +329,20 @@ class SportsLiveDualViewModelTest {
         assertEquals(before, currentTime)
         assertEquals(PaneStatus.Playing, viewModel.current().left.status)
     }
+
+    @Test
+    fun `the keys hint shows for its time when claimed, and not otherwise`() = runTest(mainDispatcherRule.dispatcher) {
+        val session = SportsLiveDualSession(a, b, items, null, SportsLiveTab.LIVE_NOW)
+        val shown = SportsLiveDualViewModel(resolve = { null }, endedKeys = { emptySet() }, session = session, claimKeysHint = { true })
+        runCurrent()
+        assertTrue(shown.keysHint.value)
+        advanceTimeBy(SportsLiveDualViewModel.KEYS_HINT_MS - 1)
+        assertTrue(shown.keysHint.value)
+        advanceTimeBy(2)
+        assertFalse(shown.keysHint.value)
+
+        val notShown = SportsLiveDualViewModel(resolve = { null }, endedKeys = { emptySet() }, session = session, claimKeysHint = { false })
+        runCurrent()
+        assertFalse(notShown.keysHint.value)
+    }
 }

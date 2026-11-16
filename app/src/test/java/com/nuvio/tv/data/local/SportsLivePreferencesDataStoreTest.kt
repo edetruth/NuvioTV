@@ -1,6 +1,7 @@
 package com.nuvio.tv.data.local
 
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.mutablePreferencesOf
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.nuvio.tv.TestPreferencesStore
@@ -174,5 +175,22 @@ class SportsLivePreferencesDataStoreTest {
             )
         }
         assertEquals(mapOf("c" to CatalogOption("genre", "Canada")), store.catalogOptions.first())
+    }
+
+    @Test
+    fun `dual keys hint shows below three shown`() {
+        assertTrue(shouldShowDualKeysHint(0))
+        assertTrue(shouldShowDualKeysHint(2))
+        assertEquals(false, shouldShowDualKeysHint(3))
+        assertEquals(false, shouldShowDualKeysHint(10))
+    }
+
+    @Test
+    fun `dual keys hint is claimed on the first three entries per profile`() = runTest {
+        val store = SportsLivePreferencesDataStore(factory, profiles)
+        assertEquals(listOf(true, true, true, false, false), List(5) { store.claimDualKeysHint() })
+        assertEquals(3, profile1Store.data.first()[intPreferencesKey("sports_live_dual_hint_shown")])
+        activeProfile.value = 2
+        assertTrue(store.claimDualKeysHint())
     }
 }

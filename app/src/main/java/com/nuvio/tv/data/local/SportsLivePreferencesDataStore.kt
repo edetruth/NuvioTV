@@ -2,6 +2,7 @@ package com.nuvio.tv.data.local
 
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
@@ -42,6 +43,7 @@ class SportsLivePreferencesDataStore @Inject constructor(
     private val overridesKey = stringPreferencesKey("sports_live_overrides")
     private val catalogOptionsKey = stringPreferencesKey("sports_live_catalog_options")
     private val followedTeamsKey = stringPreferencesKey("sports_live_followed_teams")
+    private val dualHintShownKey = intPreferencesKey("sports_live_dual_hint_shown")
 
     val showSection: Flow<Boolean> = profileManager.activeProfileId.flatMapLatest { pid ->
         factory.get(pid, FEATURE).data.map { it[showSectionKey] ?: true }
@@ -87,6 +89,20 @@ class SportsLivePreferencesDataStore @Inject constructor(
         store().edit { prefs ->
             prefs[followedTeamsKey] = encodeFollowed(decodeFollowed(prefs[followedTeamsKey]).filterNot { it.sameAs(removed) })
         }
+    }
+
+    /**
+     * Called once per dual screen entry: true when its keys hint shows this time (the profile's first
+     * [DUAL_KEYS_HINT_ENTRIES] entries), which is then counted.
+     */
+    suspend fun claimDualKeysHint(): Boolean {
+        var show = false
+        store().edit { prefs ->
+            val shown = prefs[dualHintShownKey] ?: 0
+            show = shouldShowDualKeysHint(shown)
+            if (show) prefs[dualHintShownKey] = shown + 1
+        }
+        return show
     }
 
     suspend fun setShowSection(v: Boolean) {
@@ -158,3 +174,9 @@ class SportsLivePreferencesDataStore @Inject constructor(
         }.getOrDefault(emptyMap())
     }
 }
+
+/** Dual screen entries that show the keys hint. */
+const val DUAL_KEYS_HINT_ENTRIES = 3
+
+/** Whether the dual screen's keys hint shows, after it has shown [shownCount] times. */
+fun shouldShowDualKeysHint(shownCount: Int): Boolean = shownCount < DUAL_KEYS_HINT_ENTRIES

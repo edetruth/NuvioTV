@@ -2,6 +2,9 @@ package com.nuvio.tv.ui.screens.sportslive.dual
 
 import android.content.Context
 import androidx.annotation.OptIn
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.PlaybackException
@@ -54,6 +57,10 @@ internal class DualPlayers(
         /** The game and stream this player plays; null when it is stopped. */
         var loaded: Pair<SportsLiveItem, Stream>? = null
 
+        /** [Player.isPlaying] of the current load, as Compose state; false between loads. */
+        var isPlaying by mutableStateOf(false)
+            private set
+
         /** Counts loads; a load's listener drops events once a newer load (or a stop) has started. */
         private var loads = 0
         private var listener: Player.Listener? = null
@@ -61,6 +68,7 @@ internal class DualPlayers(
         /** Replaces the listener with one that reports [item]'s events for this load only. */
         private fun listenToLoad(item: SportsLiveItem) {
             val load = ++loads
+            isPlaying = false
             listener?.let(player::removeListener)
             listener = object : Player.Listener {
                 override fun onRenderedFirstFrame() {
@@ -70,11 +78,16 @@ internal class DualPlayers(
                 override fun onPlayerError(error: PlaybackException) {
                     if (load == loads) onError(item, error.isDecoderInitFailure())
                 }
+
+                override fun onIsPlayingChanged(isPlaying: Boolean) {
+                    if (load == loads) this@Slot.isPlaying = isPlaying
+                }
             }.also(player::addListener)
         }
 
         fun release() {
             loads++
+            isPlaying = false
             player.release()
         }
 
@@ -103,6 +116,7 @@ internal class DualPlayers(
             if (wanted == null || url == null) {
                 loaded = null
                 loads++
+                isPlaying = false
                 player.stop()
                 player.clearMediaItems()
                 return
@@ -114,11 +128,18 @@ internal class DualPlayers(
     }
 
     private val slots = listOf(Slot(), Slot())
-    private var bySide: Map<Side, Slot> = mapOf(Side.LEFT to slots[0], Side.RIGHT to slots[1])
+    // Compose state, so [isPlaying] follows a swap.
+    private var bySide: Map<Side, Slot> by mutableStateOf(mapOf(Side.LEFT to slots[0], Side.RIGHT to slots[1]))
     private var released = false
 
     /** The player showing [side]'s pane, for its video surface; null once released. */
     fun player(side: Side): ExoPlayer? = if (released) null else bySide.getValue(side).player
+
+    /**
+     * Whether [side]'s player is playing ([Player.isPlaying], for its current load only), as Compose
+     * state; kept apart from [DualState], which only knows whether a first frame came.
+     */
+    fun isPlaying(side: Side): Boolean = bySide.getValue(side).isPlaying
 
     fun sync(state: DualState) {
         if (released) return

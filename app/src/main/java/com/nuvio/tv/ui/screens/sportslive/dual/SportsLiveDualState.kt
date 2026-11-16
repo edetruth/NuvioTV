@@ -91,6 +91,28 @@ data class DualState(
     }
 }
 
+/** What a pane's label shows about its sound. */
+enum class PaneSound {
+    /** Muted pane: a faint muted speaker. */
+    MUTED,
+
+    /** The pane with sound, not playing right now (starting, buffering, failed): a still speaker. */
+    AUDIBLE,
+
+    /** The pane with sound, playing: the speaker and moving bars. */
+    AUDIBLE_PLAYING
+}
+
+/**
+ * The sound shown on [side]'s label: it follows [DualState.audibleSide], not the highlight, and the
+ * bars move only while the pane is [PaneStatus.Playing] and its player [isPlaying].
+ */
+fun DualState.paneSound(side: Side, isPlaying: Boolean): PaneSound = when {
+    side != audibleSide -> PaneSound.MUTED
+    pane(side).status == PaneStatus.Playing && isPlaying -> PaneSound.AUDIBLE_PLAYING
+    else -> PaneSound.AUDIBLE
+}
+
 /**
  * What changes the dual screen. Results name the item they are for, not a side: a pane that was
  * zapped to another game or swapped meanwhile ignores a result for a game it no longer shows.
