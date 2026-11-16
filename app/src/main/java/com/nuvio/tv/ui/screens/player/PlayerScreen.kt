@@ -181,6 +181,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.withContext
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapTarget
 import com.nuvio.tv.ui.screens.sportslive.rememberSportsLiveZapKeyHandler
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapViewModel
 
 private const val PLAYER_CONTROLS_FADE_DURATION_MS = 200
 
@@ -218,6 +219,7 @@ fun PlayerScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val sportsLiveZapKey = rememberSportsLiveZapKeyHandler(onZap)
+    val sportsLiveZap: SportsLiveZapViewModel = hiltViewModel()
     val playerBadges = rememberPlayerBadges(viewModel, uiState)
     val partyState by viewModel.party.state.collectAsState()
     val partyPlayback by viewModel.party.playback.collectAsState()
@@ -357,6 +359,7 @@ fun PlayerScreen(
 
     val handleBackPress = handleBackPress@{
         if (externalHandoffInProgress) return@handleBackPress
+        if (sportsLiveZap.closePanelOnBack()) return@handleBackPress
         if (postPlayRecommendationState.canReturnToPlayer && !uiState.playbackEnded) {
             returnToPlayerFromPostPlay()
             viewModel.hideControls()
@@ -685,6 +688,9 @@ fun PlayerScreen(
                     return@onPreviewKeyEvent true
                 }
 
+                // The Back press that already closed the live games panel (through the back callback) ends here.
+                if (sportsLiveZap.isBackKeyOfPanelClose(keyEvent.nativeKeyEvent)) return@onPreviewKeyEvent true
+
                 val postPlayHandlesBack = postPlayRecommendationState.isVisible ||
                     postPlayRecommendationState.isLoadingRecommendation ||
                     postPlayRecommendationState.isTrailerPlaying
@@ -848,6 +854,11 @@ fun PlayerScreen(
                         postPlayRecommendationState.isVisible ||
                         uiState.error != null
                 if (panelOrDialogOpen) return@onKeyEvent false
+                // Sports & Live: a short Left press opens the live games panel, which then keeps the keys.
+                if (sportsLiveZap.panelOpen.value) return@onKeyEvent false
+                if (!uiState.showControls && !uiState.showPauseOverlay &&
+                    sportsLiveZap.onLeftKey(keyEvent.nativeKeyEvent)
+                ) return@onKeyEvent true
 
                 if (keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_UP) {
                     when (keyEvent.nativeKeyEvent.keyCode) {
@@ -2199,6 +2210,8 @@ fun PlayerScreen(
                 brightness = uiState.playerControlsBrightness
             )
         }
+
+        SportsLiveZapOverlay(viewModel = sportsLiveZap, playerFocusRequester = containerFocusRequester)
     }
 }
 

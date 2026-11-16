@@ -200,6 +200,74 @@ class PlayerZapControllerTest {
         assertNull(SportsLiveZapSession.of(items, "other|a", SportsLiveTab.LIVE_NOW, null, false))
     }
 
+    @Test
+    fun `picking a game of the session moves the session to it and shows it as switching`() = runTest {
+        startOn("a")
+        val controller = controller()
+
+        assertTrue(controller.pick("a", items[2], panelItems = listOf(items[2])))
+        runCurrent()
+
+        assertEquals(listOf("c"), resolveCalls)
+        assertEquals("c", controller.resolving.value?.current?.id)
+        assertEquals(4, SportsLiveZapSessions.current()?.items?.size)
+        pending.getValue("c").complete(STREAM)
+        runCurrent()
+
+        assertEquals(listOf("c" to STREAM), navigated)
+        assertNull(controller.resolving.value)
+    }
+
+    @Test
+    fun `picking a game the session lacks starts a live now session over the panel list`() = runTest {
+        startOn("a")
+        val panel = listOf(item("x"), item("a"), item("y"))
+        val controller = controller()
+
+        assertTrue(controller.pick("a", panel[2], panel))
+
+        val session = SportsLiveZapSessions.current()!!
+        assertEquals(listOf("x", "a", "y"), session.items.map { it.id })
+        assertEquals(2, session.index)
+        assertEquals(SportsLiveTab.LIVE_NOW, session.tab)
+    }
+
+    @Test
+    fun `picking the game playing zaps nothing and cancels a running lookup`() = runTest {
+        startOn("a")
+        val controller = controller()
+
+        assertFalse(controller.pick("a", items[0], items))
+        assertTrue(resolveCalls.isEmpty())
+
+        controller.zap("a", forward = true)
+        runCurrent()
+        assertFalse(controller.pick("a", items[0], items))
+        runCurrent()
+
+        assertEquals(listOf("b"), cancelled)
+        assertNull(controller.resolving.value)
+        assertEquals("a", SportsLiveZapSessions.activeFor("a")?.current?.id)
+    }
+
+    @Test
+    fun `a cancelled lookup leaves the newer lookup shown as switching`() = runTest {
+        startOn("a")
+        val controller = controller()
+
+        controller.zap("a", forward = true)
+        runCurrent()
+        controller.zap("a", forward = false)
+        runCurrent()
+        controller.zap("a", forward = true)
+        runCurrent()
+
+        assertEquals("b", controller.resolving.value?.current?.id)
+        pending.getValue("b").complete(null)
+        runCurrent()
+        assertNull(controller.resolving.value)
+    }
+
     private companion object {
         val STREAM = Stream(
             name = "HD",

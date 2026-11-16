@@ -61,6 +61,10 @@ internal object SportsLiveZapSessions {
     @Volatile
     private var session: SportsLiveZapSession? = null
 
+    /** Set when a zap navigates, so the player it opens shows the zap banner. */
+    @Volatile
+    private var zapArrivalPending = false
+
     fun start(session: SportsLiveZapSession) {
         this.session = session
     }
@@ -79,7 +83,15 @@ internal object SportsLiveZapSessions {
         this.session = session
     }
 
+    fun markZapArrival() {
+        zapArrivalPending = true
+    }
+
+    /** True once after [markZapArrival]: the player opening now was reached by a zap. */
+    fun consumeZapArrival(): Boolean = zapArrivalPending.also { zapArrivalPending = false }
+
     fun clear() {
         session = null
+        zapArrivalPending = false
     }
 }
