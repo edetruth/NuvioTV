@@ -13,6 +13,7 @@ import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.domain.model.enabledAddons
 import com.nuvio.tv.domain.repository.AddonRepository
 import com.nuvio.tv.domain.repository.StreamRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
@@ -51,8 +52,20 @@ class SportsLiveZapResolver @Inject constructor(
         data object Finished : Event
     }
 
-    /** The stream to play for [item], or null when nothing playable came back within [timeoutMs]. */
-    suspend fun resolve(item: SportsLiveItem): Stream? {
+    /**
+     * The stream to play for [item], or null when nothing playable came back within [timeoutMs]
+     * or the search failed.
+     */
+    suspend fun resolve(item: SportsLiveItem): Stream? =
+        try {
+            search(item)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null
+        }
+
+    private suspend fun search(item: SportsLiveItem): Stream? {
         val settings = playerSettingsDataStore.playerSettings.first()
         val installedOrder = addonRepository.getInstalledAddons().first().enabledAddons().map { it.displayName }
 

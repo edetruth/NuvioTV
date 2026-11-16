@@ -179,6 +179,8 @@ import com.nuvio.tv.libass.media.widget.AssSubtitleSurfaceView
 import kotlin.math.abs
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.withContext
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapTarget
+import com.nuvio.tv.ui.screens.sportslive.rememberSportsLiveZapKeyHandler
 
 private const val PLAYER_CONTROLS_FADE_DURATION_MS = 200
 
@@ -211,9 +213,11 @@ fun PlayerScreen(
     onPlaybackEnded: ((nextVideoId: String?, nextSeason: Int?, nextEpisode: Int?, exitReason: PlayerExitReason?) -> Unit)? = null,
     onPlayRecommendation: (PostPlayRecommendation, manualSelection: Boolean) -> Unit = { _, _ -> },
     onOpenRecommendationDetails: (PostPlayRecommendation) -> Unit = {},
-    onOpenPartyMedia: (PartyMedia) -> Unit = {}
+    onOpenPartyMedia: (PartyMedia) -> Unit = {},
+    onZap: (SportsLiveZapTarget) -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val sportsLiveZapKey = rememberSportsLiveZapKeyHandler(onZap)
     val playerBadges = rememberPlayerBadges(viewModel, uiState)
     val partyState by viewModel.party.state.collectAsState()
     val partyPlayback by viewModel.party.playback.collectAsState()
@@ -876,6 +880,10 @@ fun PlayerScreen(
                                 viewModel.onEvent(PlayerEvent.OnDismissPauseOverlay)
                             }
                         }
+                        return@onKeyEvent true
+                    }
+                    // Sports & Live zap: only for a player with a zap session, with the controls hidden.
+                    if (!uiState.showControls && sportsLiveZapKey(keyEvent.nativeKeyEvent.keyCode)) {
                         return@onKeyEvent true
                     }
                     when (keyEvent.nativeKeyEvent.keyCode) {

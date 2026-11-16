@@ -32,6 +32,24 @@ data class SportsLiveZapSession(
         items.indexOfFirst { it.streamKey == itemKey }
             .takeIf { it >= 0 }
             ?.let { copy(index = it) }
+
+    companion object {
+        /**
+         * A session over a copy of [items], on the item whose [SportsLiveItem.streamKey] is [itemKey];
+         * null (no session, so upstream player behavior) when the list is empty or lacks that item.
+         */
+        fun of(
+            items: List<SportsLiveItem>,
+            itemKey: String,
+            tab: SportsLiveTab,
+            filter: String?,
+            returnToHomeOnBack: Boolean
+        ): SportsLiveZapSession? {
+            val snapshot = items.toList()
+            if (snapshot.isEmpty()) return null
+            return SportsLiveZapSession(snapshot, 0, tab, filter, returnToHomeOnBack).moveTo(itemKey)
+        }
+    }
 }
 
 /**

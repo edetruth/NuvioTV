@@ -1651,16 +1651,10 @@ class StreamScreenViewModel @Inject constructor(
      */
     fun getStreamForPlayback(stream: Stream, saveLastLink: Boolean = true): StreamPlaybackInfo {
         cancelStreamsLoad()
-        val playbackInfo = StreamPlaybackInfo(
-            url = stream.getStreamUrl(),
+        val playbackInfo = streamPlaybackInfoFor(
+            stream = stream,
             title = _uiState.value.title,
-            streamName = stream.name ?: stream.addonName,
             year = year,
-            isExternal = stream.isExternal(),
-            isTorrent = stream.isTorrent(),
-            infoHash = stream.getEffectiveInfoHash(),
-            ytId = stream.ytId,
-            headers = stream.behaviorHints?.proxyHeaders?.request,
             contentId = contentId ?: videoId.substringBefore(":"),  // Use explicit contentId or extract from videoId
             contentType = contentType,
             contentName = contentName ?: title,
@@ -1671,19 +1665,8 @@ class StreamScreenViewModel @Inject constructor(
             season = season,
             episode = episode,
             episodeTitle = episodeName,
-            bingeGroup = stream.behaviorHints?.bingeGroup,
             profileId = playbackProfileId,
-            filename = stream.behaviorHints?.filename,
-            videoHash = stream.behaviorHints?.videoHash,
-            videoSize = stream.behaviorHints?.videoSize,
-            addonName = stream.addonName,
-            addonLogo = stream.addonLogo,
-            streamDescription = stream.description,
-            fileIdx = stream.getEffectiveFileIdx(),
-            sources = stream.sources,
-            contentLanguage = contentLanguage,
-            audioDelayMs = stream.behaviorHints?.audioDelayMs,
-            audioDelayLanguage = stream.behaviorHints?.audioDelayLanguage
+            contentLanguage = contentLanguage
         )
         StreamSidecarSubtitles.set(playbackUrlFor(playbackInfo), stream.subtitles)
 
@@ -2207,6 +2190,58 @@ private fun Stream.badgeMergeKey(): String {
     }
     return "$addonName|${name}:${title}:${description?.hashCode() ?: 0}"
 }
+
+/** The playback info for [stream] of the given content; the mapping [StreamScreenViewModel.getStreamForPlayback] uses. */
+internal fun streamPlaybackInfoFor(
+    stream: Stream,
+    title: String,
+    year: String?,
+    contentId: String?,
+    contentType: String?,
+    contentName: String?,
+    poster: String?,
+    backdrop: String?,
+    logo: String?,
+    videoId: String?,
+    season: Int?,
+    episode: Int?,
+    episodeTitle: String?,
+    profileId: Int,
+    contentLanguage: String?
+): StreamPlaybackInfo = StreamPlaybackInfo(
+    url = stream.getStreamUrl(),
+    title = title,
+    streamName = stream.name ?: stream.addonName,
+    year = year,
+    isExternal = stream.isExternal(),
+    isTorrent = stream.isTorrent(),
+    infoHash = stream.getEffectiveInfoHash(),
+    ytId = stream.ytId,
+    headers = stream.behaviorHints?.proxyHeaders?.request,
+    contentId = contentId,
+    contentType = contentType,
+    contentName = contentName,
+    poster = poster,
+    backdrop = backdrop,
+    logo = logo,
+    videoId = videoId,
+    season = season,
+    episode = episode,
+    episodeTitle = episodeTitle,
+    bingeGroup = stream.behaviorHints?.bingeGroup,
+    profileId = profileId,
+    filename = stream.behaviorHints?.filename,
+    videoHash = stream.behaviorHints?.videoHash,
+    videoSize = stream.behaviorHints?.videoSize,
+    addonName = stream.addonName,
+    addonLogo = stream.addonLogo,
+    streamDescription = stream.description,
+    fileIdx = stream.getEffectiveFileIdx(),
+    sources = stream.sources,
+    contentLanguage = contentLanguage,
+    audioDelayMs = stream.behaviorHints?.audioDelayMs,
+    audioDelayLanguage = stream.behaviorHints?.audioDelayLanguage
+)
 
 data class StreamPlaybackInfo(
     val url: String?,

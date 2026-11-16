@@ -98,6 +98,22 @@ class SportsLiveViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Before [item] is played: the player may zap through the list shown now (this tab and filter).
+     * With no session to start, any earlier one ends.
+     */
+    fun startZapSession(item: SportsLiveItem) {
+        val state = uiState.value
+        val session = SportsLiveZapSession.of(
+            items = state.visibleItems,
+            itemKey = item.streamKey,
+            tab = state.selectedTab,
+            filter = state.selectedFilter,
+            returnToHomeOnBack = false
+        )
+        if (session != null) SportsLiveZapSessions.start(session) else SportsLiveZapSessions.clear()
+    }
+
     fun refresh(force: Boolean = true) {
         // Set before launching so the first frame already shows loading rather than an empty section.
         selectionState.update { it.copy(isRefreshing = true) }

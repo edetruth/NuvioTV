@@ -94,7 +94,10 @@ fun SportsLiveScreen(
             onSelectFilter = viewModel::selectFilter,
             onSelectItem = viewModel::selectItem,
             onRefresh = { viewModel.refresh() },
-            onPlay = onPlay,
+            onPlay = { item ->
+                viewModel.startZapSession(item)
+                onPlay(item)
+            },
             onOpenDetail = onOpenDetail
         )
     }

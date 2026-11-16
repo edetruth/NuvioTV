@@ -61,7 +61,10 @@ import com.nuvio.tv.ui.screens.settings.ThemeSettingsScreen
 import com.nuvio.tv.ui.screens.settings.TrackingSettingsScreen
 import com.nuvio.tv.ui.screens.settings.TmdbSettingsScreen
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveScreen
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapSessions
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapTarget
 import com.nuvio.tv.ui.screens.sportslive.streamRouteFor
+import com.nuvio.tv.ui.screens.stream.StreamPlaybackInfo
 import com.nuvio.tv.ui.screens.stream.StreamScreen
 import com.nuvio.tv.ui.screens.home.ContinueWatchingItem
 import com.nuvio.tv.ui.screens.account.AuthQrSignInScreen
@@ -87,6 +90,87 @@ fun NuvioNavHost(
             PlaybackNavHost(navController, startDestination, hideBuiltInHeaders, discoverIsRoot)
         }
     }
+}
+
+/** The Player route for a stream the Stream screen (or a Sports & Live zap) resolved to [playbackInfo]. */
+private fun playerRouteFor(
+    streamUrl: String,
+    playbackInfo: StreamPlaybackInfo,
+    autoPlayNav: Boolean,
+    returnToDetailOnBack: Boolean,
+    returnToHomeOnBack: Boolean,
+    startFromBeginning: Boolean,
+    fromLinkCache: Boolean
+): String = Screen.Player.createRoute(
+    streamUrl = streamUrl,
+    title = playbackInfo.title,
+    streamName = playbackInfo.streamName,
+    year = playbackInfo.year,
+    headers = playbackInfo.headers,
+    contentId = playbackInfo.contentId,
+    contentType = playbackInfo.contentType,
+    contentName = playbackInfo.contentName,
+    poster = playbackInfo.poster,
+    backdrop = playbackInfo.backdrop,
+    logo = playbackInfo.logo,
+    videoId = playbackInfo.videoId,
+    season = playbackInfo.season,
+    episode = playbackInfo.episode,
+    episodeTitle = playbackInfo.episodeTitle,
+    bingeGroup = playbackInfo.bingeGroup,
+    autoPlayNav = autoPlayNav,
+    returnToDetailOnBack = returnToDetailOnBack,
+    returnToHomeOnBack = returnToHomeOnBack,
+    filename = playbackInfo.filename,
+    videoHash = playbackInfo.videoHash,
+    videoSize = playbackInfo.videoSize,
+    startFromBeginning = startFromBeginning,
+    addonName = playbackInfo.addonName,
+    addonLogo = playbackInfo.addonLogo,
+    streamDescription = playbackInfo.streamDescription,
+    infoHash = playbackInfo.infoHash,
+    fileIdx = playbackInfo.fileIdx,
+    sources = playbackInfo.sources,
+    contentLanguage = playbackInfo.contentLanguage,
+    profileId = playbackInfo.profileId,
+    audioDelayMs = playbackInfo.audioDelayMs,
+    audioDelayLanguage = playbackInfo.audioDelayLanguage,
+    fromLinkCache = fromLinkCache
+)
+
+private fun NavHostController.previousIsStreamScreen(): Boolean =
+    previousBackStackEntry?.destination?.route?.startsWith("stream/") == true
+
+/**
+ * Replaces the playing Player with the zap target's. The first game's Stream screen (when it is
+ * below the player) goes too, so Back from any zapped game returns once to where the session began.
+ * A stream that needs the Stream screen's preparation opens the target's Stream screen instead.
+ */
+private fun navigateToSportsLiveZapTarget(navController: NavHostController, target: SportsLiveZapTarget) {
+    val playback = target.playback
+    val streamUrl = playback?.let { it.url ?: if (it.isTorrent) "torrent://${it.infoHash}" else null }
+    val route = if (playback != null && streamUrl != null) {
+        playerRouteFor(
+            streamUrl = streamUrl,
+            playbackInfo = playback,
+            autoPlayNav = false,
+            returnToDetailOnBack = false,
+            returnToHomeOnBack = target.returnToHomeOnBack,
+            startFromBeginning = false,
+            fromLinkCache = false
+        )
+    } else {
+        streamRouteFor(target.item, target.returnToHomeOnBack)
+    }
+    val popUpToRoute = if (navController.previousIsStreamScreen()) Screen.Stream.route else Screen.Player.route
+    navController.navigate(route) {
+        popUpTo(popUpToRoute) { inclusive = true }
+    }
+}
+
+/** Back to anything but the player's own Stream screen ends a Sports & Live zap session. */
+private fun clearSportsLiveZapSessionOnPlayerBack(navController: NavHostController) {
+    if (!navController.previousIsStreamScreen()) SportsLiveZapSessions.clear()
 }
 
 // Root destinations carry the legacy sidebar inset themselves so the NavHost container
@@ -647,40 +731,14 @@ private fun PlaybackNavHost(
                         ?: if (playbackInfo.isTorrent) "torrent://${playbackInfo.infoHash}" else null
                     streamUrl?.let { url ->
                         navController.navigate(
-                            Screen.Player.createRoute(
+                            playerRouteFor(
                                 streamUrl = url,
-                                title = playbackInfo.title,
-                                streamName = playbackInfo.streamName,
-                                year = playbackInfo.year,
-                                headers = playbackInfo.headers,
-                                contentId = playbackInfo.contentId,
-                                contentType = playbackInfo.contentType,
-                                contentName = playbackInfo.contentName,
-                                poster = playbackInfo.poster,
-                                backdrop = playbackInfo.backdrop,
-                                logo = playbackInfo.logo,
-                                videoId = playbackInfo.videoId,
-                                season = playbackInfo.season,
-                                episode = playbackInfo.episode,
-                                episodeTitle = playbackInfo.episodeTitle,
-                                bingeGroup = playbackInfo.bingeGroup,
+                                playbackInfo = playbackInfo,
                                 autoPlayNav = false,
                                 returnToDetailOnBack = returnToDetailOnBack,
                                 returnToHomeOnBack = returnToHomeOnBack,
-                                filename = playbackInfo.filename,
-                                videoHash = playbackInfo.videoHash,
-                                videoSize = playbackInfo.videoSize,
                                 startFromBeginning = startFromBeginning,
-                                addonName = playbackInfo.addonName,
-                                addonLogo = playbackInfo.addonLogo,
-                                streamDescription = playbackInfo.streamDescription,
-                                infoHash = playbackInfo.infoHash,
-                                fileIdx = playbackInfo.fileIdx,
-                                sources = playbackInfo.sources,
-                                contentLanguage = playbackInfo.contentLanguage,
-                                profileId = playbackInfo.profileId,
-                                audioDelayMs = playbackInfo.audioDelayMs,
-                                audioDelayLanguage = playbackInfo.audioDelayLanguage
+                                fromLinkCache = false
                             )
                         )
                     }
@@ -690,40 +748,13 @@ private fun PlaybackNavHost(
                         ?: if (playbackInfo.isTorrent) "torrent://${playbackInfo.infoHash}" else null
                     autoPlayUrl?.let { url ->
                         navController.navigate(
-                            Screen.Player.createRoute(
+                            playerRouteFor(
                                 streamUrl = url,
-                                title = playbackInfo.title,
-                                streamName = playbackInfo.streamName,
-                                year = playbackInfo.year,
-                                headers = playbackInfo.headers,
-                                contentId = playbackInfo.contentId,
-                                contentType = playbackInfo.contentType,
-                                contentName = playbackInfo.contentName,
-                                poster = playbackInfo.poster,
-                                backdrop = playbackInfo.backdrop,
-                                logo = playbackInfo.logo,
-                                videoId = playbackInfo.videoId,
-                                season = playbackInfo.season,
-                                episode = playbackInfo.episode,
-                                episodeTitle = playbackInfo.episodeTitle,
-                                bingeGroup = playbackInfo.bingeGroup,
+                                playbackInfo = playbackInfo,
                                 autoPlayNav = true,
                                 returnToDetailOnBack = returnToDetailOnBack,
                                 returnToHomeOnBack = returnToHomeOnBack,
-                                filename = playbackInfo.filename,
-                                videoHash = playbackInfo.videoHash,
-                                videoSize = playbackInfo.videoSize,
                                 startFromBeginning = startFromBeginning,
-                                addonName = playbackInfo.addonName,
-                                addonLogo = playbackInfo.addonLogo,
-                                streamDescription = playbackInfo.streamDescription,
-                                infoHash = playbackInfo.infoHash,
-                                fileIdx = playbackInfo.fileIdx,
-                                sources = playbackInfo.sources,
-                                contentLanguage = playbackInfo.contentLanguage,
-                                profileId = playbackInfo.profileId,
-                                audioDelayMs = playbackInfo.audioDelayMs,
-                                audioDelayLanguage = playbackInfo.audioDelayLanguage,
                                 fromLinkCache = playbackInfo.fromLinkCache
                             )
                         ) {
@@ -944,6 +975,7 @@ private fun PlaybackNavHost(
 
             PlayerScreen(
                 onBackPress = { currentVideoId, currentSeason, currentEpisode, autoPlayEnabled, playbackCompleted ->
+                    clearSportsLiveZapSessionOnPlayerBack(navController)
                     val args = backStackEntry.arguments
                     val initialSeason = args?.getString("season")?.toIntOrNull()
                     val initialEpisode = args?.getString("episode")?.toIntOrNull()
@@ -1181,6 +1213,7 @@ private fun PlaybackNavHost(
                     )
                 },
                 onOpenPartyMedia = ::openPartyMedia,
+                onZap = { target -> navigateToSportsLiveZapTarget(navController, target) },
                 onPlaybackErrorBack = {
                     val returnedToStream = popBackToStream()
                     if (!returnedToStream) {

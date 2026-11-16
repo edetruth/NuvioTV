@@ -2,6 +2,10 @@ package com.nuvio.tv.ui.screens.home
 
 import android.util.Log
 import androidx.lifecycle.viewModelScope
+import com.nuvio.tv.domain.model.SportsLiveItem
+import com.nuvio.tv.domain.model.SportsLiveTab
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapSession
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapSessions
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
@@ -22,6 +26,21 @@ internal fun HomeViewModel.observeSportsLiveClaimedKeysPipeline() {
             loadAllCatalogsPipeline(addonsCache)
         }
     }
+}
+
+/**
+ * Before [item] of the Live now row is played: the player may zap through the row's items.
+ * With no session to start, any earlier one ends.
+ */
+internal fun HomeViewModel.startLiveNowZapSession(item: SportsLiveItem) {
+    val session = SportsLiveZapSession.of(
+        items = _uiState.value.liveNowItems,
+        itemKey = item.streamKey,
+        tab = SportsLiveTab.LIVE_NOW,
+        filter = null,
+        returnToHomeOnBack = true
+    )
+    if (session != null) SportsLiveZapSessions.start(session) else SportsLiveZapSessions.clear()
 }
 
 /** Feeds the Live now row. Before the catalogs load, the next catalog update picks the items up. */

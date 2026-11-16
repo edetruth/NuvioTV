@@ -166,7 +166,10 @@ fun HomeScreen(
     val onNavigateToDetailStable: (String, String, String) -> Unit = remember(onNavigateToDetail, onLiveNowItemClick, viewModel) {
         { itemId, itemType, addonBaseUrl ->
             if (SportsLiveHomeRow.isLiveNowRow(addonBaseUrl)) {
-                viewModel.findLiveNowItem(itemId)?.let(onLiveNowItemClick)
+                viewModel.findLiveNowItem(itemId)?.let { item ->
+                    viewModel.startLiveNowZapSession(item)
+                    onLiveNowItemClick(item)
+                }
             } else {
                 onNavigateToDetail(itemId, itemType, addonBaseUrl)
             }
