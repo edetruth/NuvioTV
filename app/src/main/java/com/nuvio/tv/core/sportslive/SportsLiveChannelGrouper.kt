@@ -1,6 +1,7 @@
 package com.nuvio.tv.core.sportslive
 
 import com.nuvio.tv.domain.model.MetaPreview
+import java.util.Locale
 
 /** Derives the group a channel is filed under on the Channels tab. */
 object SportsLiveChannelGrouper {
@@ -8,6 +9,8 @@ object SportsLiveChannelGrouper {
     private val prefixSeparator = Regex("""\||\s:\s""")
     private val groupPrefix = Regex("""^[\p{L}0-9-]{2,8}$""")
     private val letter = Regex("""\p{L}""")
+    // Emoji (flags are pairs of So code points) and their joiners/variation selectors, plus the "(tv)" type tag.
+    private val catalogNoise = Regex("""[\p{So}\p{Sk}\p{Cs}\u200D\uFE0F]|\(tv\)""", RegexOption.IGNORE_CASE)
 
     /** Tried in order; the first non-null result is the group. Add rules for other addons here. */
     private val strategies: List<(MetaPreview) -> String?> = listOf(
@@ -20,8 +23,14 @@ object SportsLiveChannelGrouper {
         { meta -> namePrefix(meta.name) }
     )
 
-    fun groupOf(meta: MetaPreview, addonName: String): String =
-        strategies.firstNotNullOfOrNull { it(meta) } ?: addonName
+    /**
+     * Falls back to the catalog name ("🇬🇧 United Kingdom TV" → "United Kingdom TV"), then the addon name.
+     * Groups are upper-cased so "BiH" and "BIH" are one group.
+     */
+    fun groupOf(meta: MetaPreview, catalogName: String, addonName: String): String =
+        (strategies.firstNotNullOfOrNull { it(meta) }
+            ?: catalogName.replace(catalogNoise, "").trim().takeIf { it.isNotEmpty() }
+            ?: addonName).uppercase(Locale.ROOT)
 
     private fun namePrefix(name: String): String? {
         val separator = prefixSeparator.find(name) ?: return null

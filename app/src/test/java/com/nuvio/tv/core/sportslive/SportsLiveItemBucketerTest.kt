@@ -164,7 +164,7 @@ class SportsLiveItemBucketerTest {
         val tabs = SportsLiveItemBucketer.bucket(items, now)
 
         assertTrue(items.all { it.viaOverride })
-        assertEquals(listOf("film", "old"), tabs.getValue(SportsLiveTab.REPLAYS).map { it.id })
+        assertEquals(listOf("old", "film"), tabs.getValue(SportsLiveTab.REPLAYS).map { it.id })
         assertEquals(listOf("live"), tabs.getValue(SportsLiveTab.LIVE_NOW).map { it.id })
         assertEquals(listOf("next", "tba"), tabs.getValue(SportsLiveTab.UPCOMING).map { it.id })
     }
@@ -388,6 +388,92 @@ class SportsLiveItemBucketerTest {
         assertTrue(tabs.getValue(SportsLiveTab.LIVE_NOW).isEmpty())
         assertEquals(items.map { it.id }.toSet(), tabs.getValue(SportsLiveTab.CHANNELS).map { it.id }.toSet())
         assertTrue(items.map { it.group }.toSet().containsAll(setOf("UK", "US", "ASIA-IN")))
+    }
+
+    @Test
+    fun `plain live TV addon items are channels grouped by catalog name, never live or upcoming`() {
+        // Ultra MAX TV: genres ["Live TV"], no time, no live marker, in a catalog the policy claims as events.
+        val ultraUk = claimed("tv", "tv_uk", "🇬🇧 United Kingdom TV", SportsLiveKind.EVENTS)
+        val items = describeAll(loadMetas("ultra_tv_uk.json", "tv"), ultraUk)
+        val tabs = SportsLiveItemBucketer.bucket(items, now)
+
+        assertEquals(91, items.size)
+        assertTrue(items.all { it.isChannel && !it.isLive })
+        assertTrue(tabs.getValue(SportsLiveTab.LIVE_NOW).isEmpty())
+        assertTrue(tabs.getValue(SportsLiveTab.UPCOMING).isEmpty())
+        assertEquals(items.map { it.id }.toSet(), tabs.getValue(SportsLiveTab.CHANNELS).map { it.id }.toSet())
+        assertEquals(setOf("UNITED KINGDOM TV"), items.map { it.group }.toSet())
+    }
+
+    @Test
+    fun `channels catalog items marked live stay out of LIVE_NOW`() {
+        val nebulaChannels = claimed("sports", "streamed-events-dlhd-channels", "Channels", SportsLiveKind.CHANNELS)
+        val items = describeAll(loadMetas("nebula_channels.json", "sports"), nebulaChannels)
+        val tabs = SportsLiveItemBucketer.bucket(items, now)
+
+        assertEquals(30, items.size)
+        assertTrue(items.all { it.isChannel })
+        assertTrue(items.any { it.isLive })
+        assertTrue(tabs.getValue(SportsLiveTab.LIVE_NOW).isEmpty())
+        assertTrue(tabs.getValue(SportsLiveTab.UPCOMING).isEmpty())
+        assertEquals(items.map { it.id }.toSet(), tabs.getValue(SportsLiveTab.CHANNELS).map { it.id }.toSet())
+    }
+
+    @Test
+    fun `a Live TV genre makes an events catalog item a channel, which shows live only from an events catalog`() {
+        val liveChannel = meta("ch", "Sky Sports", releaseInfo = "LIVE", genres = listOf("Live TV"))
+        val fromEvents = SportsLiveItemBucketer.describe(liveChannel, highflyLive, now)
+        val fromChannels = SportsLiveItemBucketer.describe(liveChannel, cncLiveTv, now)
+
+        assertTrue(fromEvents.isChannel && fromChannels.isChannel)
+        assertEquals(listOf("ch"), SportsLiveItemBucketer.bucket(listOf(fromEvents), now).getValue(SportsLiveTab.LIVE_NOW).map { it.id })
+        assertTrue(SportsLiveItemBucketer.bucket(listOf(fromChannels), now).getValue(SportsLiveTab.LIVE_NOW).isEmpty())
+        assertFalse(SportsLiveItemBucketer.describe(meta("x", "X", genres = listOf("Live TVs")), highflyLive, now).isChannel)
+    }
+
+    @Test
+    fun `replays are sorted newest first with undated last`() {
+        val replays = claimed("sports", "streamed-replays", "Replays", SportsLiveKind.REPLAY)
+        val items = describeAll(
+            listOf(
+                meta("undated", "Undated", releaseInfo = "TBD"),
+                meta("older", "Older", releaseInfo = "14 Nov 2026 · 18:00 UTC"),
+                meta("newer", "Newer", releaseInfo = "15 Nov 2026 · 12:00 UTC")
+            ),
+            replays
+        ) + describeAll(loadMetas("nebula_replays.json", "sports"), replays)
+        val tab = SportsLiveItemBucketer.bucket(items, now).getValue(SportsLiveTab.REPLAYS)
+        val starts = tab.mapNotNull { it.startMs }
+
+        assertEquals(starts.sortedDescending(), starts)
+        assertEquals("undated", tab.last().id)
+        assertTrue(tab.indexOfFirst { it.id == "newer" } < tab.indexOfFirst { it.id == "older" })
+    }
+
+    @Test
+    fun `CNCVerse finished items are in no tab and lose the emoji`() {
+        val doneEmoji = "✅"
+        val raw = loadMetas("cnc_live_events.json", "tv")
+        val doneIds = raw.filter { it.name.startsWith(doneEmoji) }.map { it.id }.toSet()
+        val items = describeAll(raw, cncEvents)
+        val tabs = SportsLiveItemBucketer.bucket(items, now)
+
+        assertTrue(doneIds.isNotEmpty())
+        assertTrue(items.filter { it.id in doneIds }.all { it.isFinished && !it.isLive })
+        assertTrue(items.none { it.meta.name.startsWith(doneEmoji) })
+        assertTrue(tabs.values.flatten().none { it.id in doneIds })
+        assertTrue(tabs.getValue(SportsLiveTab.LIVE_NOW).isNotEmpty())
+    }
+
+    @Test
+    fun `channel groups differing only in case make one filter`() {
+        val items = describeAll(
+            listOf(meta("a", "BiH| FACE TV"), meta("b", "BIH| N1"), meta("c", "bih| HAYAT")),
+            cncLiveTv
+        )
+        val groups = SportsLiveItemBucketer.bucket(items, now).getValue(SportsLiveTab.CHANNELS).mapNotNull { it.group }
+
+        assertEquals(listOf("BIH"), groups.distinct())
     }
 
     @Test

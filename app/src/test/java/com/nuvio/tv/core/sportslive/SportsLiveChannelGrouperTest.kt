@@ -8,6 +8,7 @@ import org.junit.Test
 
 class SportsLiveChannelGrouperTest {
     private val addon = "Sports Streams"
+    private val addonGroup = "SPORTS STREAMS"
 
     @Test
     fun `country from second genre token`() {
@@ -27,7 +28,7 @@ class SportsLiveChannelGrouperTest {
     @Test
     fun `bare league tag in second genre is not a group`() {
         assertEquals("US", group("US : ESPN HD", listOf("Sports", "NFL")))
-        assertEquals(addon, group("Sky Sports Main Event", listOf("Sports", "NFL")))
+        assertEquals(addonGroup, group("Sky Sports Main Event", listOf("Sports", "NFL")))
     }
 
     @Test
@@ -45,24 +46,40 @@ class SportsLiveChannelGrouperTest {
 
     @Test
     fun `prefixes that are too short, too long, spaced or digits only are not groups`() {
-        assertEquals(addon, group("L| DISNEY JR", emptyList()))
-        assertEquals(addon, group("CINE Y SERIE | AXN HD", emptyList()))
-        assertEquals(addon, group("VERYLONGPREFIX| X", emptyList()))
-        assertEquals(addon, group("24| NEWS", emptyList()))
+        assertEquals(addonGroup, group("L| DISNEY JR", emptyList()))
+        assertEquals(addonGroup, group("CINE Y SERIE | AXN HD", emptyList()))
+        assertEquals(addonGroup, group("VERYLONGPREFIX| X", emptyList()))
+        assertEquals(addonGroup, group("24| NEWS", emptyList()))
     }
 
     @Test
     fun `addon name fallback`() {
-        assertEquals(addon, group("Sky Sports Main Event", emptyList()))
+        assertEquals(addonGroup, group("Sky Sports Main Event", emptyList()))
+    }
+
+    @Test
+    fun `catalog name without emoji and type tag comes before the addon name`() {
+        val flag = "🇬🇧"
+        assertEquals("UNITED KINGDOM TV", group("Afrobeats", listOf("Live TV"), catalog = "$flag United Kingdom TV"))
+        assertEquals("EASYPLAY LIVE TV", group("Some channel", emptyList(), catalog = "EasyPlay Live TV (tv)"))
+        assertEquals("SPORTZX LIVE EVENTS", group("Some channel", emptyList(), catalog = "⚡SportzX Live Events (tv)"))
+        assertEquals("US", group("US| ESPN", emptyList(), catalog = "$flag United Kingdom TV"))
+        assertEquals(addonGroup, group("Some channel", emptyList(), catalog = " ⚡ (tv) "))
+    }
+
+    @Test
+    fun `groups differing only in case are one upper-cased group`() {
+        assertEquals("BIH", group("BiH| FACE TV", emptyList()))
+        assertEquals("BIH", group("BIH| N1", emptyList()))
     }
 
     @Test
     fun `HD marker is not a group`() {
-        assertEquals(addon, group("(HD) : TNT SPORT 1", listOf("Sports")))
+        assertEquals(addonGroup, group("(HD) : TNT SPORT 1", listOf("Sports")))
     }
 
-    private fun group(name: String, genres: List<String>) =
-        SportsLiveChannelGrouper.groupOf(meta(name, genres), addon)
+    private fun group(name: String, genres: List<String>, catalog: String = "") =
+        SportsLiveChannelGrouper.groupOf(meta(name, genres), catalog, addon)
 
     private fun meta(name: String, genres: List<String>) = MetaPreview(
         id = name,

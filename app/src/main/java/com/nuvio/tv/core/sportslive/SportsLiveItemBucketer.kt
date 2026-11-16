@@ -16,17 +16,24 @@ object SportsLiveItemBucketer {
     private val liveNowPhrase = Regex("""(?<![\p{L}\p{N}])live now(?![\p{L}\p{N}])""", RegexOption.IGNORE_CASE)
     private const val LIVE_EMOJI = "🔴" // 🔴
     private const val SOON_EMOJI = "🔜" // 🔜
+    private const val DONE_EMOJI = "✅" // ✅
 
     private val tabOrder: Comparator<SportsLiveItem> =
         compareByDescending<SportsLiveItem> { it.isLive }
             .thenBy(nullsLast()) { it.startMs }
             .thenBy(String.CASE_INSENSITIVE_ORDER) { it.meta.name }
 
+    // Replays: newest first, undated last.
+    private val replayOrder: Comparator<SportsLiveItem> =
+        compareByDescending<SportsLiveItem> { it.isLive }
+            .thenBy(nullsLast(reverseOrder())) { it.startMs }
+            .thenBy(String.CASE_INSENSITIVE_ORDER) { it.meta.name }
+
     fun describe(rawMeta: MetaPreview, claimed: ClaimedCatalog, nowMs: Long): SportsLiveItem {
         val catalog = claimed.catalog
-        // A leading 🔴 / 🔜 (CNCVerse) is a status, not part of the name.
+        // A leading 🔴 / 🔜 / ✅ (CNCVerse) is a status, not part of the name.
         val trimmedName = rawMeta.name.trimStart()
-        val status = listOf(LIVE_EMOJI, SOON_EMOJI).firstOrNull { trimmedName.startsWith(it) }
+        val status = listOf(LIVE_EMOJI, SOON_EMOJI, DONE_EMOJI).firstOrNull { trimmedName.startsWith(it) }
         val meta = if (status == null) rawMeta else rawMeta.copy(name = trimmedName.removePrefix(status).trimStart())
         val start = SportsLiveTimeParser.parseStart(meta.releaseInfo, meta.released)
         val startMs = start?.startMs
@@ -36,7 +43,7 @@ object SportsLiveItemBucketer {
                 SportsLiveKeywords.containsKeyword(catalog.id, SportsLiveKeywords.LIVE))
         val isLive = when (status) {
             LIVE_EMOJI -> true
-            SOON_EMOJI -> false
+            SOON_EMOJI, DONE_EMOJI -> false
             else -> isLiveMarker(meta.releaseInfo) ||
                 meta.name.contains("LIVE NOW") ||
                 meta.description?.let(liveNowPhrase::containsMatchIn) == true ||
@@ -47,7 +54,8 @@ object SportsLiveItemBucketer {
         val description = meta.description.orEmpty()
         val isChannel = claimed.kind == SportsLiveKind.CHANNELS ||
             description.contains("IPTV") ||
-            description.contains("Live on")
+            description.contains("Live on") ||
+            meta.genres.any { SportsLiveKeywords.containsKeyword(it, SportsLiveKeywords.LIVE_TV) }
         return SportsLiveItem(
             meta = meta,
             addonId = claimed.addon.id,
@@ -62,20 +70,22 @@ object SportsLiveItemBucketer {
             startHasTimeOfDay = start?.hasTimeOfDay == true,
             sport = sportOf(meta, catalog.name),
             viaOverride = claimed.viaOverride,
-            group = if (isChannel) SportsLiveChannelGrouper.groupOf(meta, claimed.addon.name) else null
+            group = if (isChannel) SportsLiveChannelGrouper.groupOf(meta, catalog.name, claimed.addon.name) else null,
+            isFinished = status == DONE_EMOJI
         )
     }
 
     /**
-     * Every tab is present in the result (possibly empty), each sorted live first, then by start, then by name.
+     * Every tab is present in the result (possibly empty), each sorted live first, then by start
+     * (newest first on Replays), then by name. Finished items are in no tab.
      * An addon often lists the same item in several catalogs (Live Now and Today); within a tab it
      * appears once, as its first occurrence in [items].
      */
     fun bucket(items: List<SportsLiveItem>, nowMs: Long): Map<SportsLiveTab, List<SportsLiveItem>> =
         SportsLiveTab.entries.associateWith { tab ->
-            items.filter { belongsTo(it, tab, nowMs) }
+            items.filter { !it.isFinished && belongsTo(it, tab, nowMs) }
                 .distinctBy { it.addonId to it.id }
-                .sortedWith(tabOrder)
+                .sortedWith(if (tab == SportsLiveTab.REPLAYS) replayOrder else tabOrder)
         }
 
     // "LIVE", "🔴 LIVE": the word LIVE once emoji, punctuation and digits are stripped.
@@ -90,8 +100,11 @@ object SportsLiveItemBucketer {
     private fun belongsTo(item: SportsLiveItem, tab: SportsLiveTab, nowMs: Long): Boolean {
         val replay = item.kind == SportsLiveKind.REPLAY
         return when (tab) {
-            SportsLiveTab.LIVE_NOW -> item.isLive && !replay
-            SportsLiveTab.UPCOMING -> !item.isLive && !replay && isUpcoming(item, nowMs)
+            // A channel is shown live only when an events catalog lists it (highfly's "Live Now");
+            // a channels catalog marking its whole list live would flood the tab.
+            SportsLiveTab.LIVE_NOW -> item.isLive && !replay &&
+                (!item.isChannel || item.kind == SportsLiveKind.EVENTS)
+            SportsLiveTab.UPCOMING -> !item.isLive && !replay && !item.isChannel && isUpcoming(item, nowMs)
             SportsLiveTab.CHANNELS -> item.isChannel && !replay
             // A finished event from a catalog the user included by override is shown on demand as a
             // replay rather than dropped; rule-claimed catalogs keep the 4-hour cut-off.

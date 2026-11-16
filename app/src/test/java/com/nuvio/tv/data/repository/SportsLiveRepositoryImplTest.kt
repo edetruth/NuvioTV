@@ -310,19 +310,20 @@ class SportsLiveRepositoryImplTest {
 
         val oldLoad = async { repository.load() }
         runCurrent()
-        // The other profile has only the generic addon installed.
-        addons.value = listOf(genericAddon)
+        // The other profile has a different sports addon installed.
+        val otherAddon = addon("other", "Other Sports", catalog("sport", "live", "Live Now"))
+        addons.value = listOf(otherAddon)
         gate.complete(Unit)
         oldLoad.await()
 
         assertNull(repository.latest.value)
         assertEquals(emptyList<Any>(), repository.liveNow().first())
 
-        catalogRepository.results["generic" to "chan"] = success("generic", "chan", meta("ch", live = true))
+        catalogRepository.results["other" to "live"] = success("other", "live", meta("b", live = true))
         val newLoad = repository.load()
-        assertEquals(listOf("ch"), newLoad.items.map { it.id })
+        assertEquals(listOf("b"), newLoad.items.map { it.id })
         assertEquals(newLoad, repository.latest.value)
-        assertEquals(listOf("ch"), repository.liveNow().first().map { it.id })
+        assertEquals(listOf("b"), repository.liveNow().first().map { it.id })
     }
 
     @Test

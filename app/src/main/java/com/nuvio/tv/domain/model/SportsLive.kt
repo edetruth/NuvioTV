@@ -35,7 +35,9 @@ data class SportsLiveItem(
     /** True when the item's catalog was included by override; see [ClaimedCatalog.viaOverride]. */
     val viaOverride: Boolean = false,
     /** Channels-tab group (e.g. a country code); null for non-channel items. */
-    val group: String? = null
+    val group: String? = null,
+    /** True for an item its addon marks as finished (a leading ✅); it is shown in no tab. */
+    val isFinished: Boolean = false
 ) {
     val id: String get() = meta.id
     val apiType: String get() = meta.apiType
