@@ -41,9 +41,13 @@ object SportsLiveTeams {
     }
 
     fun normalise(team: String): String {
-        val tokens = clean(team).lowercase().replace(LEADING_RANK, "").split(WHITESPACE).toMutableList()
+        val cleaned = clean(team).lowercase()
+        // A qualifier is set aside so "Arsenal FC (W)" still loses its club suffix: "arsenal (w)".
+        val qualifier = QUALIFIER.find(cleaned)
+        val base = if (qualifier == null) cleaned else cleaned.substring(0, qualifier.range.first)
+        val tokens = base.trim().replace(LEADING_RANK, "").split(WHITESPACE).toMutableList()
         while (tokens.size > 1 && tokens.last() in CLUB_SUFFIXES) tokens.removeAt(tokens.lastIndex)
-        return tokens.joinToString(" ").trim()
+        return (tokens.joinToString(" ") + " " + qualifier?.value?.trim().orEmpty()).trim()
     }
 
     fun matches(a: String, b: String): Boolean {
@@ -53,10 +57,14 @@ object SportsLiveTeams {
         return x == y || x.endsWith(" $y") || y.endsWith(" $x")
     }
 
-    /** True when [team] plays in [item]: its name matches either side, and the sports agree or either is unknown. */
+    /**
+     * True when [team] plays in [item]: its name matches either side, and the sports agree or either is
+     * unknown. A channel's sport is only its catalog's name ("EasyPlay Live TV"), so it is not compared.
+     */
     fun follows(team: FollowedTeam, item: SportsLiveItem): Boolean {
         val pair = item.teams ?: return false
-        val sportsAgree = team.sport == null || item.sport == null || team.sport.equals(item.sport, ignoreCase = true)
+        val sportsAgree = item.isChannel || team.sport == null || item.sport == null ||
+            team.sport.equals(item.sport, ignoreCase = true)
         return sportsAgree && (matches(team.name, pair.home) || matches(team.name, pair.away))
     }
 

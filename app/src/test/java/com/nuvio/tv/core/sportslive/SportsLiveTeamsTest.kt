@@ -117,6 +117,10 @@ class SportsLiveTeamsTest {
         assertEquals("england [u21]", SportsLiveTeams.normalise("England [U21] (1080p)"))
         assertEquals("arsenal", SportsLiveTeams.normalise("Arsenal (HD)"))
         assertEquals(TeamPair("Arsenal (W)", "Chelsea (W)"), SportsLiveTeams.parse("Arsenal (W) vs Chelsea (W) (2026-11-10)"))
+        assertEquals("arsenal (w)", SportsLiveTeams.normalise("Arsenal FC (W)"))
+        assertEquals(SportsLiveTeams.normalise("Arsenal (W)"), SportsLiveTeams.normalise("Arsenal FC (W) [HD]"))
+        assertEquals("sevilla [u21]", SportsLiveTeams.normalise("2 Sevilla CF [U21]"))
+        assertTrue(SportsLiveTeams.matches("Arsenal FC (W)", "Arsenal (W)"))
         assertFalse(SportsLiveTeams.matches("Arsenal", "Arsenal (W)"))
         assertTrue(SportsLiveTeams.matches("Arsenal (W)", "arsenal (w)"))
     }
@@ -144,6 +148,18 @@ class SportsLiveTeamsTest {
         assertFalse(SportsLiveTeams.follows(FollowedTeam("Patriots", null), game.copy(teams = null)))
         assertTrue(SportsLiveTeams.isFollowed(game, listOf(FollowedTeam("Lions"), FollowedTeam("Patriots"))))
         assertFalse(SportsLiveTeams.isFollowed(game, emptyList()))
+    }
+
+    @Test
+    fun `a channel naming a followed game matches whatever its catalog-name sport`() {
+        val ppvName = "US| PEACOCK PPV 004 [Celtics vs. 76ers (2026-11-10 19:00:05)]"
+        val channel = game(ppvName, "EasyPlay Live TV (tv)")
+            .copy(isChannel = true, teams = SportsLiveTeams.parseBracketed(ppvName))
+
+        assertTrue(SportsLiveTeams.follows(FollowedTeam("Celtics", "Basketball"), channel))
+        assertFalse(SportsLiveTeams.follows(FollowedTeam("Lakers", "Basketball"), channel))
+        // An event keeps the sport check.
+        assertFalse(SportsLiveTeams.follows(FollowedTeam("Celtics", "Basketball"), channel.copy(isChannel = false)))
     }
 
     @Test
