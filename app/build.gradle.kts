@@ -124,6 +124,11 @@ val releaseKeyPasswordValue = env("NUVIO_RELEASE_KEY_PASSWORD")
     ?: localProperties.getProperty("NUVIO_RELEASE_KEY_PASSWORD", "815787")
 val releaseStorePasswordValue = env("NUVIO_RELEASE_STORE_PASSWORD")
     ?: localProperties.getProperty("NUVIO_RELEASE_STORE_PASSWORD", "815787")
+// Nuvio Live fork: optional separate key for debug builds, so debug installs keep their signature when the
+// release key changes. Without it, debug builds are signed with the release key as upstream does.
+val devStoreFilePath = localProperties.getProperty("NUVIO_DEV_STORE_FILE")?.trim()?.takeIf { it.isNotBlank() }
+// Nuvio Live fork: release counter, bumped by .github/workflows/live-sync-release.yml.
+val nuvioLiveBuild = providers.gradleProperty("NUVIO_LIVE_BUILD").get().trim().toInt()
 
 android {
     namespace = "com.nuvio.tv"
@@ -177,7 +182,7 @@ android {
         buildConfigField("String", "SENTRY_DSN", buildConfigString(sentryDsn))
 
         // In-app updater (GitHub Releases)
-        buildConfigField("String", "GITHUB_OWNER", "\"NuvioMedia\"")
+        buildConfigField("String", "GITHUB_OWNER", "\"edetruth\"")
         buildConfigField("String", "GITHUB_REPO", "\"NuvioTV\"")
     }
 
@@ -185,6 +190,13 @@ android {
     productFlavors {
         create("full") {
             dimension = "distribution"
+            // Nuvio Live fork identity and version (see docs/superpowers/specs/2026-11-16-fork-release-setup-design.md).
+            // A prerelease upstream name gets ".live.N" so numeric identifiers stay separate for semver ordering
+            // (1.2.0-beta.10.live.N > 1.2.0-beta.9.live.N); a stable one gets "-live.N".
+            applicationId = "io.github.edetruth.nuviotv"
+            val upstreamVersionName = defaultConfig.versionName!!
+            versionNameSuffix = (if ('-' in upstreamVersionName) ".live." else "-live.") + nuvioLiveBuild
+            versionCode = defaultConfig.versionCode!! * 100 + nuvioLiveBuild
             buildConfigField("boolean", "FEATURE_PLUGINS_ENABLED", "true")
             buildConfigField("boolean", "FEATURE_IN_APP_UPDATES_ENABLED", "true")
             buildConfigField("boolean", "FEATURE_IN_APP_TRAILERS_ENABLED", "true")
@@ -219,11 +231,19 @@ android {
             storeFile = releaseStoreFilePath?.let(::file) ?: file("../nuviotv.jks")
             storePassword = releaseStorePasswordValue
         }
+        if (devStoreFilePath != null) {
+            create("dev") {
+                storeFile = file(devStoreFilePath)
+                keyAlias = localProperties.getProperty("NUVIO_DEV_KEY_ALIAS")
+                keyPassword = localProperties.getProperty("NUVIO_DEV_KEY_PASSWORD")
+                storePassword = localProperties.getProperty("NUVIO_DEV_STORE_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
         debug {
-            signingConfig = signingConfigs.getByName("release")
+            signingConfig = signingConfigs.findByName("dev") ?: signingConfigs.getByName("release")
             isDebuggable = parseBooleanProperty(providers.gradleProperty("debuggable").orNull)
             isMinifyEnabled = false
 
