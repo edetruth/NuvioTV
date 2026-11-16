@@ -11,10 +11,11 @@ import java.util.Locale
 enum class LiveRewindKey { LEFT_HOLD, RIGHT_HOLD, RIGHT_SHORT, REWIND, FAST_FORWARD }
 
 /**
- * The live window of the playing item. [windowMs] is the seekable span from the window start to
- * the live edge (Exo's default position); [behindEdgeMs] is how far playback is behind that edge.
+ * The live window of the playing item, in Exo window positions: [windowMs] is the window's duration,
+ * [liveEdgeMs] the live edge (Exo's default position, the window end minus the target live offset)
+ * and [behindEdgeMs] how far playback is behind that edge.
  */
-data class LiveWindow(val isDynamic: Boolean, val windowMs: Long, val behindEdgeMs: Long)
+data class LiveWindow(val isDynamic: Boolean, val windowMs: Long, val liveEdgeMs: Long, val behindEdgeMs: Long)
 
 object SportsLiveRewind {
     const val STEP_MS = 10_000L
@@ -42,23 +43,26 @@ object SportsLiveRewind {
      * The seek delta [key] may make, or null to keep upstream's live blocking: only a zap session's
      * ExoPlayer playback of a dynamic item whose window is longer than [MIN_WINDOW_MS] seeks, back by
      * up to [STEP_MS] (never past the window start margin) or forward by up to [STEP_MS] (never past
-     * the live edge). A short Right keeps upstream behavior.
+     * the live edge at [liveEdgeMs]). A short Right keeps upstream behavior.
      */
     fun seekDeltaMs(
         hasSession: Boolean,
         engine: InternalPlayerEngine,
         isDynamic: Boolean,
         windowMs: Long,
+        liveEdgeMs: Long,
         positionFromEdgeMs: Long,
         key: LiveRewindKey
     ): Long? {
         if (!hasSession || engine != InternalPlayerEngine.EXOPLAYER || !isDynamic) return null
         if (windowMs <= MIN_WINDOW_MS) return null
-        val behind = positionFromEdgeMs.coerceIn(0L, windowMs)
+        val edge = liveEdgeMs.coerceIn(0L, windowMs)
+        val behind = positionFromEdgeMs.coerceIn(0L, edge)
         return when (key) {
             LiveRewindKey.RIGHT_SHORT -> null
             LiveRewindKey.LEFT_HOLD, LiveRewindKey.REWIND -> {
-                val room = windowMs - behind - START_MARGIN_MS
+                // The current position is edge - behind; keep START_MARGIN_MS from the window start.
+                val room = edge - behind - START_MARGIN_MS
                 if (room <= 0L) null else -minOf(STEP_MS, room)
             }
             LiveRewindKey.RIGHT_HOLD, LiveRewindKey.FAST_FORWARD ->
@@ -83,7 +87,8 @@ object SportsLiveRewind {
     fun indicatorBehindMs(hasSession: Boolean, engine: InternalPlayerEngine, window: LiveWindow?): Long? {
         window ?: return null
         val canSeek = seekDeltaMs(
-            hasSession, engine, window.isDynamic, window.windowMs, window.behindEdgeMs, LiveRewindKey.FAST_FORWARD
+            hasSession, engine, window.isDynamic, window.windowMs, window.liveEdgeMs, window.behindEdgeMs,
+            LiveRewindKey.FAST_FORWARD
         ) != null
         return window.behindEdgeMs.takeIf { canSeek && it >= INDICATOR_MIN_BEHIND_MS }
     }
@@ -98,7 +103,8 @@ fun ExoPlayer.liveWindow(): LiveWindow? {
     val edgeMs = window.defaultPositionMs.takeIf { it != C.TIME_UNSET && it > 0L } ?: durationMs
     return LiveWindow(
         isDynamic = window.isDynamic,
-        windowMs = edgeMs,
+        windowMs = durationMs,
+        liveEdgeMs = edgeMs,
         behindEdgeMs = (edgeMs - currentPosition).coerceAtLeast(0L)
     )
 }
@@ -118,7 +124,7 @@ fun seekWithinSportsLiveWindow(
     val key = SportsLiveRewind.keyFor(event.keyCode, event.repeatCount) ?: return false
     val window = player.liveWindow() ?: return false
     val delta = SportsLiveRewind.seekDeltaMs(
-        hasSession, engine, window.isDynamic, window.windowMs, window.behindEdgeMs, key
+        hasSession, engine, window.isDynamic, window.windowMs, window.liveEdgeMs, window.behindEdgeMs, key
     ) ?: return false
     if (event.repeatCount > 0 && (event.repeatCount - 1) % SportsLiveRewind.HOLD_REPEAT_STRIDE != 0) return true
     if (delta >= window.behindEdgeMs) {

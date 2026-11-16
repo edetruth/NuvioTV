@@ -14,8 +14,9 @@ class SportsLiveRewindTest {
         engine: InternalPlayerEngine = InternalPlayerEngine.EXOPLAYER,
         isDynamic: Boolean = true,
         windowMs: Long = 120_000L,
+        liveEdgeMs: Long = 100_000L,
         fromEdgeMs: Long = 0L
-    ) = SportsLiveRewind.seekDeltaMs(hasSession, engine, isDynamic, windowMs, fromEdgeMs, key)
+    ) = SportsLiveRewind.seekDeltaMs(hasSession, engine, isDynamic, windowMs, liveEdgeMs, fromEdgeMs, key)
 
     @Test
     fun `rewind steps back ten seconds inside a session window`() {
@@ -35,8 +36,17 @@ class SportsLiveRewindTest {
 
     @Test
     fun `rewind stops short of the window start`() {
-        assertEquals(-5_000L, delta(LiveRewindKey.REWIND, windowMs = 120_000L, fromEdgeMs = 105_000L))
-        assertNull(delta(LiveRewindKey.REWIND, windowMs = 120_000L, fromEdgeMs = 110_000L))
+        assertEquals(-5_000L, delta(LiveRewindKey.REWIND, fromEdgeMs = 85_000L))
+        assertNull(delta(LiveRewindKey.REWIND, fromEdgeMs = 90_000L))
+    }
+
+    @Test
+    fun `a 48 s hls window with an 18 s live offset rewinds 20 s`() {
+        // highfly: 8 x 6 s segments, Exo's default live offset is 3 target durations.
+        assertEquals(-10_000L, delta(LiveRewindKey.REWIND, windowMs = 48_000L, liveEdgeMs = 30_000L))
+        assertEquals(-10_000L, delta(LiveRewindKey.REWIND, windowMs = 48_000L, liveEdgeMs = 30_000L, fromEdgeMs = 10_000L))
+        assertNull(delta(LiveRewindKey.REWIND, windowMs = 48_000L, liveEdgeMs = 30_000L, fromEdgeMs = 20_000L))
+        assertEquals(10_000L, delta(LiveRewindKey.FAST_FORWARD, windowMs = 48_000L, liveEdgeMs = 30_000L, fromEdgeMs = 20_000L))
     }
 
     @Test
@@ -64,7 +74,7 @@ class SportsLiveRewindTest {
 
     @Test
     fun `indicator shows only when behind the edge of a seekable session window`() {
-        val behind = LiveWindow(isDynamic = true, windowMs = 120_000L, behindEdgeMs = 80_000L)
+        val behind = LiveWindow(isDynamic = true, windowMs = 120_000L, liveEdgeMs = 100_000L, behindEdgeMs = 80_000L)
         val exo = InternalPlayerEngine.EXOPLAYER
         assertEquals(80_000L, SportsLiveRewind.indicatorBehindMs(true, exo, behind))
         assertNull(SportsLiveRewind.indicatorBehindMs(true, exo, behind.copy(behindEdgeMs = 2_000L)))
