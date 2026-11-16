@@ -3572,6 +3572,9 @@
     <string name="sports_live_dual_pick">Pick another to watch</string>
     <string name="sports_live_preview_label">Preview</string>
     <string name="sports_live_mini_hint">%1$s · Play/Pause to expand</string>
+    <string name="sports_live_now_playing">Now playing</string>
+    <string name="sports_live_expand">Expand</string>
+    <string name="sports_live_stop">Stop</string>
     <string name="sports_live_dual_pick_banner">Pick another to watch · %1$s</string>
     <string name="sports_live_dual_hold_hint">Hold OK on a game to watch both</string>
     <string name="sports_live_dual_stream_error">Couldn\'t play this stream</string>

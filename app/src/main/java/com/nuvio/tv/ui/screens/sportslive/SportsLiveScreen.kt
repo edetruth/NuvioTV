@@ -62,6 +62,10 @@ import com.nuvio.tv.ui.components.SourceStatusFilterChip
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualSession
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualSessions
 import com.nuvio.tv.ui.screens.sportslive.dual.offersDual
+import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniPlayers
+import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniState
+import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniStop
+import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveNowPlayingCard
 import com.nuvio.tv.ui.screens.sportslive.dual.sportsLivePickModeSession
 import com.nuvio.tv.ui.screens.sportslive.preview.SportsLivePreviewPlayer
 import com.nuvio.tv.ui.screens.sportslive.preview.SportsLivePreviewState
@@ -378,6 +382,31 @@ private fun SportsLiveContent(
             .padding(horizontal = NuvioTheme.spacing.screen.horizontal, vertical = NuvioTheme.spacing.screen.vertical)
     ) {
         val openList: () -> Unit = { runCatching { selectedCardFocusRequester?.requestFocus() } }
+        val miniPlayer = SportsLiveMiniPlayers.controller
+        val miniState by miniPlayer.state.collectAsStateWithLifecycle()
+        val nowPlaying = (miniState as? SportsLiveMiniState.Playing)?.item
+        // A card that goes away (idle timeout, profile switch) while focused hands focus to the active tab.
+        var nowPlayingHasFocus by remember { mutableStateOf(false) }
+        LaunchedEffect(nowPlaying == null) {
+            if (nowPlaying != null || !nowPlayingHasFocus) return@LaunchedEffect
+            nowPlayingHasFocus = false
+            withFrameNanos { }
+            runCatching { activeTabFocusRequester.requestFocus() }
+        }
+        if (nowPlaying != null) {
+            SportsLiveNowPlayingCard(
+                name = nowPlaying.meta.name,
+                onExpand = { miniPlayer.requestExpand() },
+                onStop = {
+                    runCatching { activeTabFocusRequester.requestFocus() }
+                    miniPlayer.stop(SportsLiveMiniStop.USER_STOP)
+                },
+                modifier = Modifier
+                    .padding(bottom = NuvioTheme.spacing.xs)
+                    // Losing focus because the card is being removed keeps the flag.
+                    .onFocusChanged { if (it.hasFocus || miniPlayer.isActive) nowPlayingHasFocus = it.hasFocus }
+            )
+        }
         SportsLiveTabRow(
             uiState = uiState,
             tabFocusRequesters = tabFocusRequesters,

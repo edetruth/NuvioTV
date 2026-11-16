@@ -17,6 +17,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -43,14 +44,24 @@ import androidx.media3.ui.PlayerView
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.nuvio.tv.R
+import com.nuvio.tv.core.debrid.DirectDebridResolver
 import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.ui.screens.player.PlayerMediaSourceFactory
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveExtraSources
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapResolver
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapSessions
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapTarget
 import com.nuvio.tv.ui.screens.sportslive.buildSportsLiveLightPlayer
 import com.nuvio.tv.ui.screens.sportslive.playSportsLiveStream
+import com.nuvio.tv.ui.screens.sportslive.sportsLiveZapTarget
 import com.nuvio.tv.ui.theme.NuvioTheme
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -106,28 +117,65 @@ internal class SportsLiveMiniPlayback(context: Context, private val onError: (se
     }
 }
 
-/** Stops the mini player when the active profile changes. */
+/**
+ * Expands the mini player: a fresh stream for the session's current game (the mini player's own
+ * when none comes back), the zap session and the game's other sources registered as on the
+ * section's play path. Also stops the mini player when the active profile changes.
+ */
 @HiltViewModel
 class SportsLiveMiniPlayerViewModel @Inject constructor(
-    profileManager: ProfileManager
+    private val resolver: SportsLiveZapResolver,
+    private val directDebridResolver: DirectDebridResolver,
+    private val profileManager: ProfileManager
 ) : ViewModel() {
+    private val controller = SportsLiveMiniPlayers.controller
+    private val _targets = Channel<SportsLiveZapTarget>(Channel.BUFFERED)
+    val targets: Flow<SportsLiveZapTarget> = _targets.receiveAsFlow()
+    private var expandJob: Job? = null
+
     init {
         viewModelScope.launch {
-            profileManager.activeProfileId.drop(1).collect {
-                SportsLiveMiniPlayers.controller.stop(SportsLiveMiniStop.PROFILE_SWITCH)
+            profileManager.activeProfileId.drop(1).collect { controller.stop(SportsLiveMiniStop.PROFILE_SWITCH) }
+        }
+        viewModelScope.launch {
+            controller.expandRequests.collect { playing ->
+                // Presses while a stream is looked up do not start another lookup.
+                if (expandJob?.isActive == true) return@collect
+                expandJob = launch { expand(playing) }
             }
         }
+    }
+
+    private suspend fun expand(playing: SportsLiveMiniState.Playing) {
+        val item = playing.item
+        val stream = resolver.resolve(item) ?: playing.stream
+        // Stopped meanwhile (Stop, another player, a profile switch): nothing opens.
+        if (!controller.isCurrent(playing)) return
+        val target = sportsLiveZapTarget(
+            item = item,
+            stream = stream,
+            profileId = profileManager.activeProfileId.value,
+            returnToHomeOnBack = playing.session.returnToHomeOnBack,
+            directDebridResolver = directDebridResolver,
+            autoPicked = item.alternates.isNotEmpty() && stream !== playing.stream
+        )
+        if (!controller.isCurrent(playing)) return
+        SportsLiveZapSessions.start(playing.session)
+        SportsLiveExtraSources.register(item.id, item)
+        _targets.send(target)
     }
 }
 
 /**
  * The in-app mini player, drawn above the NavHost: bottom-right, 24% of the screen's width, 16:9,
  * with "<game> · Play/Pause to expand" under it. It never takes focus, so the D-pad keeps working
- * the screen underneath.
+ * the screen underneath. [onExpand] opens the full player for an expand's target, after the mini
+ * player has stopped.
  */
 @OptIn(UnstableApi::class)
 @Composable
 fun SportsLiveMiniPlayerHost(
+    onExpand: (SportsLiveZapTarget) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: SportsLiveMiniPlayerViewModel = hiltViewModel()
 ) {
@@ -136,6 +184,7 @@ fun SportsLiveMiniPlayerHost(
     val state by controller.state.collectAsStateWithLifecycle()
     val playing = state as? SportsLiveMiniState.Playing
     val playback = remember { SportsLiveMiniPlayback(context, controller::onStreamError) }
+    val currentOnExpand by rememberUpdatedState(onExpand)
 
     DisposableEffect(playback) {
         val release: () -> Unit = playback::release
@@ -147,6 +196,13 @@ fun SportsLiveMiniPlayerHost(
     }
     LaunchedEffect(playing?.sessionId) {
         if (playing == null) playback.release() else playback.play(playing.sessionId, playing.stream)
+    }
+    LaunchedEffect(viewModel) {
+        viewModel.targets.collect { target ->
+            // The mini player's sound stops before the full player starts.
+            controller.stop(SportsLiveMiniStop.EXPANDED)
+            currentOnExpand(target)
+        }
     }
 
     if (playing == null) return

@@ -173,6 +173,10 @@ private fun sportsLivePlayerRoute(target: SportsLiveZapTarget): String? {
     )
 }
 
+/** The route that plays a Sports & Live target: its Player route, else its Stream screen. */
+fun sportsLiveTargetRoute(target: SportsLiveZapTarget): String =
+    sportsLivePlayerRoute(target) ?: streamRouteFor(target.item, target.returnToHomeOnBack)
+
 /**
  * Replaces the playing Player with the zap target's. The first game's Stream screen (when it is
  * below the player) goes too, so Back from any zapped game returns once to where the session began.

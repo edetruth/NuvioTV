@@ -186,6 +186,7 @@ import com.nuvio.tv.ui.components.LocalAlwaysBackdropWithLogo
 import com.nuvio.tv.ui.components.ProfileAvatarCircle
 import com.nuvio.tv.ui.navigation.LocalNavViewModelStoreOwner
 import com.nuvio.tv.ui.navigation.NuvioNavHost
+import com.nuvio.tv.ui.navigation.sportsLiveTargetRoute
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniPlayerHost
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniPlayers
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniStop
@@ -1303,7 +1304,9 @@ open class MainActivity : ComponentActivity() {
                             }
 
                             // The Sports & Live mini player, above the NavHost; it never takes focus.
-                            SportsLiveMiniPlayerHost()
+                            SportsLiveMiniPlayerHost(
+                                onExpand = { target -> navController.navigate(sportsLiveTargetRoute(target)) }
+                            )
 
                             val autoNextOverlay by externalPlaybackTracker.autoNextOverlay.collectAsState()
                             autoNextOverlay?.let { ov ->
@@ -1449,6 +1452,15 @@ open class MainActivity : ComponentActivity() {
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (ambientIdleController.consumeKeyEvent(event)) return true
+        // Play/Pause while the Sports & Live mini player plays expands it; otherwise upstream behavior.
+        if ((event.keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE || event.keyCode == KeyEvent.KEYCODE_MEDIA_PLAY) &&
+            SportsLiveMiniPlayers.controller.isActive
+        ) {
+            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                SportsLiveMiniPlayers.controller.requestExpand()
+            }
+            return true
+        }
         if (event.keyCode == KeyEvent.KEYCODE_BACK) {
             if (longPressBackHeld.value) {
                 if (event.action == KeyEvent.ACTION_UP) longPressBackHeld.value = false
