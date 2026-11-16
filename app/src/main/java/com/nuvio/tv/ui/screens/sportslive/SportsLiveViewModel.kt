@@ -15,6 +15,8 @@ import com.nuvio.tv.domain.repository.SportsLiveFailure
 import com.nuvio.tv.domain.repository.SportsLiveRepository
 import com.nuvio.tv.ui.screens.sportslive.preview.SportsLivePreviewController
 import com.nuvio.tv.ui.screens.sportslive.preview.SportsLivePreviewState
+import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniPlayers
+import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -28,6 +30,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
@@ -39,7 +42,9 @@ class SportsLiveViewModel internal constructor(
     private val repo: SportsLiveRepository,
     /** The hover preview's stream for an item: one a light player can play as it is, else null. */
     previewResolve: suspend (SportsLiveItem) -> Stream? = { null },
-    hoverPreviewEnabled: Flow<Boolean> = flowOf(false)
+    hoverPreviewEnabled: Flow<Boolean> = flowOf(false),
+    /** The mini player plays: it takes priority, so no preview starts meanwhile. */
+    miniPlayerActive: Flow<Boolean> = flowOf(false)
 ) : ViewModel() {
 
     @Inject
@@ -54,7 +59,8 @@ class SportsLiveViewModel internal constructor(
         previewResolve = { item ->
             resolver.resolve(item)?.takeIf { stream -> sportsLiveLightPlayable(stream, directDebridResolver) }
         },
-        hoverPreviewEnabled = prefs.hoverPreview
+        hoverPreviewEnabled = prefs.hoverPreview,
+        miniPlayerActive = SportsLiveMiniPlayers.controller.state.map { it is SportsLiveMiniState.Playing }
     )
 
     private data class Selection(
@@ -126,7 +132,11 @@ class SportsLiveViewModel internal constructor(
 
     init {
         refresh(force = false)
-        viewModelScope.launch { hoverPreviewEnabled.collect(previewController::onEnabled) }
+        // An active mini player counts as the setting off; once it stops, a fresh settle starts.
+        viewModelScope.launch {
+            combine(hoverPreviewEnabled, miniPlayerActive) { enabled, mini -> enabled && !mini }
+                .collect(previewController::onEnabled)
+        }
     }
 
     /**

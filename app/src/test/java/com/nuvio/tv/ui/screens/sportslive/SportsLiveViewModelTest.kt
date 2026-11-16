@@ -629,6 +629,43 @@ class SportsLiveViewModelTest {
         viewModel.onScreenVisible(false)
     }
 
+    @Test
+    fun `an active mini player holds the hover preview off, and a fresh settle follows its stop`() = runTest {
+        nextLoad = load(listOf(item("a", isLive = true, sport = "Soccer")))
+        val mini = MutableStateFlow(true)
+        val stream = dualStream("a")
+        val viewModel = SportsLiveViewModel(
+            repo,
+            previewResolve = { stream },
+            hoverPreviewEnabled = MutableStateFlow(true),
+            miniPlayerActive = mini
+        )
+        viewModel.nowMs = { NOW }
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        val a = item("a", isLive = true, sport = "Soccer")
+
+        viewModel.onScreenVisible(true)
+        viewModel.setPreviewFocus(a)
+        advanceTimeBy(10_000)
+        runCurrent()
+        assertEquals("mini player active", SportsLivePreviewState.Idle, viewModel.preview.value)
+
+        mini.value = false
+        runCurrent()
+        advanceTimeBy(1_999)
+        runCurrent()
+        assertEquals("settling again", SportsLivePreviewState.Idle, viewModel.preview.value)
+        advanceTimeBy(2)
+        runCurrent()
+        assertEquals(SportsLivePreviewState.Playing(a, stream), viewModel.preview.value)
+
+        mini.value = true
+        runCurrent()
+        assertEquals("a new mini player stops the preview", SportsLivePreviewState.Idle, viewModel.preview.value)
+
+        viewModel.onScreenVisible(false)
+    }
+
     private fun teamsOf(name: String) = SportsLiveTeams.parse(name)
 
     private fun channel(id: String, group: String, isLive: Boolean = false, sport: String? = null) =

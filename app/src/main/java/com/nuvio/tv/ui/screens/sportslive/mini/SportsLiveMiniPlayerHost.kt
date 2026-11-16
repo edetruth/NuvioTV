@@ -46,22 +46,20 @@ import androidx.tv.material3.Text
 import com.nuvio.tv.R
 import com.nuvio.tv.core.debrid.DirectDebridResolver
 import com.nuvio.tv.core.profile.ProfileManager
+import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.ui.screens.player.PlayerMediaSourceFactory
-import com.nuvio.tv.ui.screens.sportslive.SportsLiveExtraSources
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveResolvingDialog
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapResolver
-import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapSessions
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapTarget
 import com.nuvio.tv.ui.screens.sportslive.buildSportsLiveLightPlayer
 import com.nuvio.tv.ui.screens.sportslive.playSportsLiveStream
 import com.nuvio.tv.ui.screens.sportslive.sportsLiveZapTarget
 import com.nuvio.tv.ui.theme.NuvioTheme
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.drop
-import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -118,52 +116,50 @@ internal class SportsLiveMiniPlayback(context: Context, private val onError: (se
 }
 
 /**
- * Expands the mini player: a fresh stream for the session's current game (the mini player's own
- * when none comes back), the zap session and the game's other sources registered as on the
- * section's play path. Also stops the mini player when the active profile changes.
+ * Runs the mini player's expand ([SportsLiveMiniExpander]) with the zap resolver, and stops the
+ * mini player when the active profile changes.
  */
 @HiltViewModel
 class SportsLiveMiniPlayerViewModel @Inject constructor(
-    private val resolver: SportsLiveZapResolver,
+    resolver: SportsLiveZapResolver,
     private val directDebridResolver: DirectDebridResolver,
     private val profileManager: ProfileManager
 ) : ViewModel() {
     private val controller = SportsLiveMiniPlayers.controller
-    private val _targets = Channel<SportsLiveZapTarget>(Channel.BUFFERED)
-    val targets: Flow<SportsLiveZapTarget> = _targets.receiveAsFlow()
-    private var expandJob: Job? = null
+
+    private val expander = SportsLiveMiniExpander(
+        scope = viewModelScope,
+        controller = controller,
+        resolve = resolver::resolve,
+        toTarget = { playing, stream, fresh ->
+            sportsLiveZapTarget(
+                item = playing.item,
+                stream = stream,
+                profileId = profileManager.activeProfileId.value,
+                returnToHomeOnBack = playing.session.returnToHomeOnBack,
+                directDebridResolver = directDebridResolver,
+                autoPicked = fresh && playing.item.alternates.isNotEmpty()
+            )
+        }
+    )
+
+    /** The game whose stream is looked up for an expand; the progress dialog shows meanwhile. */
+    val expanding: StateFlow<SportsLiveItem?> = expander.expanding
+    val targets: Flow<SportsLiveZapTarget> = expander.targets
 
     init {
         viewModelScope.launch {
             profileManager.activeProfileId.drop(1).collect { controller.stop(SportsLiveMiniStop.PROFILE_SWITCH) }
         }
+        viewModelScope.launch { controller.expandRequests.collect(expander::expand) }
+        // A mini player stopped elsewhere ends its lookup and dialog.
         viewModelScope.launch {
-            controller.expandRequests.collect { playing ->
-                // Presses while a stream is looked up do not start another lookup.
-                if (expandJob?.isActive == true) return@collect
-                expandJob = launch { expand(playing) }
-            }
+            controller.state.collect { if (it !is SportsLiveMiniState.Playing) expander.cancel() }
         }
     }
 
-    private suspend fun expand(playing: SportsLiveMiniState.Playing) {
-        val item = playing.item
-        val stream = resolver.resolve(item) ?: playing.stream
-        // Stopped meanwhile (Stop, another player, a profile switch): nothing opens.
-        if (!controller.isCurrent(playing)) return
-        val target = sportsLiveZapTarget(
-            item = item,
-            stream = stream,
-            profileId = profileManager.activeProfileId.value,
-            returnToHomeOnBack = playing.session.returnToHomeOnBack,
-            directDebridResolver = directDebridResolver,
-            autoPicked = item.alternates.isNotEmpty() && stream !== playing.stream
-        )
-        if (!controller.isCurrent(playing)) return
-        SportsLiveZapSessions.start(playing.session)
-        SportsLiveExtraSources.register(item.id, item)
-        _targets.send(target)
-    }
+    /** Back on the progress dialog: the mini player plays on. */
+    fun cancelExpand() = expander.cancel()
 }
 
 /**
@@ -204,6 +200,9 @@ fun SportsLiveMiniPlayerHost(
             currentOnExpand(target)
         }
     }
+
+    val expanding by viewModel.expanding.collectAsStateWithLifecycle()
+    expanding?.let { SportsLiveResolvingDialog(it, onDismiss = viewModel::cancelExpand) }
 
     if (playing == null) return
     BoxWithConstraints(
