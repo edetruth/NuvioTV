@@ -84,8 +84,9 @@ val LocalOpenSportsLiveDual = staticCompositionLocalOf<(() -> Unit)?> { null }
 
 /**
  * Two Sports & Live games side by side; only the highlighted pane has sound. Left/Right highlight a
- * pane, Up/Down zap it, MENU swaps the panes, OK plays the highlighted game in the full player (the
- * section's path: Stream screen, or a merged game's best stream) and Back leaves.
+ * pane, Up/Down zap it, MENU swaps the panes, OK plays the highlighted game in the full player (its
+ * playing stream as is; a pane not playing takes the section's path: Stream screen, or a merged
+ * game's best stream) and Back leaves.
  *
  * Each pane is a [PlayerView] with its default SurfaceView: two SurfaceViews are composited by the
  * display hardware directly, cheaper than TextureViews (no GPU copy per frame) and the right surface
@@ -156,7 +157,8 @@ fun SportsLiveDualScreen(
         Side.entries.forEach { side -> views[side]?.player = current.player(side) }
     }
 
-    // OK takes the section's path; the players stop before the full player (or Stream screen) opens.
+    // OK plays the pane's stream (or takes the section's path); the players stop before the full
+    // player (or Stream screen) opens, and the zap session runs over the dual list.
     SportsLivePlayHost(
         playViewModel = playViewModel,
         onOpenStreamScreen = { item ->
@@ -194,7 +196,13 @@ fun SportsLiveDualScreen(
                     KeyEvent.KEYCODE_DPAD_RIGHT -> viewModel.highlight(Side.RIGHT)
                     KeyEvent.KEYCODE_MENU -> if (native.repeatCount == 0) viewModel.swap()
                     KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER ->
-                        if (native.repeatCount == 0) playViewModel.play(dual.pane(dual.highlighted).item)
+                        if (native.repeatCount == 0) {
+                            val pane = dual.pane(dual.highlighted)
+                            // A playing pane's stream goes straight to the full player.
+                            val stream = pane.okStream
+                            if (stream != null) playViewModel.playResolved(pane.item, stream)
+                            else playViewModel.play(pane.item)
+                        }
                     else -> {
                         val forward = zapDirection(native.keyCode, partyActive = false) ?: return@onKeyEvent false
                         if (native.repeatCount == 0) viewModel.zap(forward)

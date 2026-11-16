@@ -19,6 +19,21 @@ class SportsLiveDualStateTest {
     private val initial = DualState(DualPane(a), DualPane(b))
 
     @Test
+    fun `OK hands over only a playing pane's stream`() {
+        val stream = dualStream("a")
+        val resolved = initial.reduce(DualAction.Resolved(a, stream))
+        // Looking up, then starting: the normal play path.
+        assertNull(initial.left.okStream)
+        assertNull(resolved.left.okStream)
+        val playing = resolved.reduce(DualAction.FirstFrame(a))
+        assertSame(stream, playing.left.okStream)
+        // Failed or out of decoders: the normal play path again.
+        assertNull(playing.reduce(DualAction.Failed(a)).left.okStream)
+        assertNull(playing.reduce(DualAction.DeviceLimit(a)).left.okStream)
+        assertNull(initial.reduce(DualAction.Resolved(a, null)).left.okStream)
+    }
+
+    @Test
     fun `starts highlighted on the left with both panes loading`() {
         assertEquals(Side.LEFT, initial.highlighted)
         assertEquals(PaneStatus.Loading, initial.left.status)

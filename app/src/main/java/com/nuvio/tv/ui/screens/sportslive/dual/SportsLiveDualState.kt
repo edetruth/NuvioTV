@@ -91,6 +91,13 @@ data class DualState(
     }
 }
 
+/**
+ * The stream OK hands to the full player as is: the one this pane is playing. Null while it is
+ * loading or failed (Error, DeviceLimit), when OK takes the section's normal play path.
+ */
+val DualPane.okStream: Stream?
+    get() = stream.takeIf { status == PaneStatus.Playing }
+
 /** What a pane's label shows about its sound. */
 enum class PaneSound {
     /** Muted pane: a faint muted speaker. */
