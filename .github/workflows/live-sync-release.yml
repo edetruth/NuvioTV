@@ -59,6 +59,8 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # The fork keeps its own README.md (.gitattributes: README.md merge=ours).
+          git config merge.ours.driver true
 
       - name: Merge upstream
         id: merge
