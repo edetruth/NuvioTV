@@ -72,8 +72,8 @@ val LocalOpenSportsLiveDual = staticCompositionLocalOf<(() -> Unit)?> { null }
  * display hardware directly, cheaper than TextureViews (no GPU copy per frame) and the right surface
  * for video on TV; the Compose overlays draw over them in the window.
  *
- * The [DualPlayers] live only while the screen is started: ON_STOP (Home, Back, another screen),
- * leaving the composition and OK release them, and ON_START creates them again and replays the state.
+ * The [DualPlayers] live only while the screen is on: ON_STOP (Home, Back, another screen), leaving
+ * the composition and OK release them, and ON_RESUME creates them again and replays the state.
  */
 @OptIn(UnstableApi::class)
 @Composable
@@ -103,12 +103,15 @@ fun SportsLiveDualScreen(
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_START -> if (players == null) {
+                // Resumed, not started: a screen being navigated to resumes once its transition has
+                // ended, by when the full player it may come from has let its decoder go.
+                Lifecycle.Event.ON_RESUME -> if (players == null) {
                     players = DualPlayers(
                         context = context,
                         onFirstFrame = viewModel::onFirstFrame,
                         onError = viewModel::onPlayerError
                     )
+                    viewModel.onPlayersCreated()
                 }
                 Lifecycle.Event.ON_STOP -> releasePlayers()
                 else -> Unit

@@ -23,6 +23,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.collectAsState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
@@ -69,7 +70,6 @@ import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapTarget
 import com.nuvio.tv.ui.screens.sportslive.streamRouteFor
 import com.nuvio.tv.ui.screens.sportslive.dual.LocalOpenSportsLiveDual
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualScreen
-import androidx.compose.runtime.remember
 import com.nuvio.tv.ui.screens.stream.StreamPlaybackInfo
 import com.nuvio.tv.ui.screens.stream.StreamScreen
 import com.nuvio.tv.ui.screens.home.ContinueWatchingItem

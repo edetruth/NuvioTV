@@ -41,15 +41,21 @@ data class SportsLiveDualPick(
     val endedKeys: Set<String> = emptySet()
 ) {
     /** The other games of the list that are not known to have ended; never [chosen] or one of its sources. */
-    val candidates: List<SportsLiveItem> = run {
-        val chosenKeys = (listOf(chosen) + chosen.alternates).mapTo(HashSet()) { it.streamKey }
-        items.filter { item ->
-            item.streamKey !in chosenKeys && item.alternates.none { it.streamKey in chosenKeys } && !item.hasEnded(endedKeys)
-        }
-    }
+    val candidates: List<SportsLiveItem> =
+        items.filter { item -> !item.sharesSourceWith(chosen) && !item.hasEnded(endedKeys) }
 
     fun session(second: SportsLiveItem): SportsLiveDualSession =
         SportsLiveDualSession(left = chosen, right = second, items = items.toList(), filter = filter)
+}
+
+/**
+ * True when this card and [other] play the same game from a common source: one of the two, or one of
+ * their merged [SportsLiveItem.alternates], has the same [SportsLiveItem.streamKey]. Such a card is
+ * never paired with [other], in the picker or by a zap.
+ */
+internal fun SportsLiveItem.sharesSourceWith(other: SportsLiveItem): Boolean {
+    val otherKeys = (listOf(other) + other.alternates).mapTo(HashSet()) { it.streamKey }
+    return streamKey in otherKeys || alternates.any { it.streamKey in otherKeys }
 }
 
 /** The dual screen's starting games, process-wide like the zap session; not route arguments. */
@@ -107,6 +113,9 @@ class SportsLiveDualViewModel internal constructor(
 
     private val jobs = mutableMapOf<Side, Job>()
 
+    /** Stream keys of the games whose decoder failure has had its one retry. */
+    private val deviceLimitRetried = mutableSetOf<String>()
+
     init {
         session?.let {
             load(Side.LEFT, it.left)
@@ -156,8 +165,12 @@ class SportsLiveDualViewModel internal constructor(
     fun onFirstFrame(item: SportsLiveItem) {
         val side = _state.value?.sideOf(item) ?: return
         dispatch(DualAction.FirstFrame(item))
-        // Playing now: the pane's first-frame timeout is no longer needed.
-        if (_state.value?.pane(side)?.status == PaneStatus.Playing) jobs.remove(side)?.cancel()
+        // Playing now: the pane's first-frame timeout is no longer needed, and a later decoder
+        // failure gets its retry again.
+        if (_state.value?.pane(side)?.status == PaneStatus.Playing) {
+            jobs.remove(side)?.cancel()
+            deviceLimitRetried.remove(item.streamKey)
+        }
     }
 
     /** A pane's player failed; [decoderInit] when it could not get a decoder. */
@@ -168,7 +181,35 @@ class SportsLiveDualViewModel internal constructor(
         val other = state.pane(side.other)
         val otherActive = other.stream != null &&
             (other.status == PaneStatus.Loading || other.status == PaneStatus.Playing)
-        dispatch(if (decoderInit && otherActive) DualAction.DeviceLimit(item) else DualAction.Failed(item))
+        if (!decoderInit || !otherActive) {
+            dispatch(DualAction.Failed(item))
+            return
+        }
+        // A decoder can still be held by a player that is just closing (the full player opening this
+        // screen); the pane starts again once before the device limit shows.
+        if (deviceLimitRetried.add(item.streamKey)) {
+            load(side, item, delayMs = DEVICE_LIMIT_RETRY_MS)
+        } else {
+            dispatch(DualAction.DeviceLimit(item))
+        }
+    }
+
+    /**
+     * The screen created its players again (back from Home or another screen): panes that were
+     * playing start again, so their first-frame timeout applies again.
+     */
+    fun onPlayersCreated() {
+        val state = _state.value ?: return
+        for (side in Side.entries) {
+            val pane = state.pane(side)
+            if (pane.status != PaneStatus.Playing) continue
+            jobs.remove(side)?.cancel()
+            dispatch(DualAction.Restarted(pane.item))
+            jobs[side] = viewModelScope.launch {
+                delay(FIRST_FRAME_TIMEOUT_MS)
+                dispatch(DualAction.TimedOut(pane.item))
+            }
+        }
     }
 
     private fun zapTarget(current: SportsLiveItem, other: SportsLiveItem, forward: Boolean): SportsLiveItem? {
@@ -181,18 +222,20 @@ class SportsLiveDualViewModel internal constructor(
         repeat(items.size) {
             index = Math.floorMod(index + step, items.size)
             val candidate = items[index]
-            val skip = candidate.streamKey == current.streamKey ||
-                candidate.streamKey == other.streamKey ||
+            val skip = candidate.sharesSourceWith(current) ||
+                candidate.sharesSourceWith(other) ||
                 candidate.hasEnded(ended)
             if (!skip) return candidate
         }
         return null
     }
 
-    private fun load(side: Side, item: SportsLiveItem) {
+    /** [delayMs]: wait this long before the lookup (a retry). */
+    private fun load(side: Side, item: SportsLiveItem, delayMs: Long = 0L) {
         jobs.remove(side)?.cancel()
         dispatch(DualAction.ZapRequested(side, item))
         jobs[side] = viewModelScope.launch {
+            if (delayMs > 0) delay(delayMs)
             val stream = resolve(item)
             dispatch(DualAction.Resolved(item, stream))
             if (stream != null) {
@@ -209,5 +252,8 @@ class SportsLiveDualViewModel internal constructor(
     companion object {
         /** A pane with no first frame this long after its stream was found shows an error. */
         const val FIRST_FRAME_TIMEOUT_MS = 15_000L
+
+        /** A pane that found no decoder starts again once, this long later, before showing the device limit. */
+        const val DEVICE_LIMIT_RETRY_MS = 1_000L
     }
 }

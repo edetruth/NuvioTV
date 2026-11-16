@@ -74,6 +74,9 @@ data class DualState(
         is DualAction.FirstFrame -> updatePaneOf(action.item) { pane ->
             if (pane.status == PaneStatus.Loading && pane.stream != null) pane.copy(status = PaneStatus.Playing) else null
         }
+        is DualAction.Restarted -> updatePaneOf(action.item) { pane ->
+            if (pane.status == PaneStatus.Playing && pane.stream != null) pane.copy(status = PaneStatus.Loading) else null
+        }
         is DualAction.TimedOut -> updatePaneOf(action.item) { pane ->
             if (pane.status == PaneStatus.Loading) pane.copy(status = PaneStatus.Error) else null
         }
@@ -104,6 +107,9 @@ sealed interface DualAction {
     /** The stream found for [item]; null when there is none. */
     data class Resolved(val item: SportsLiveItem, val stream: Stream?) : DualAction
     data class FirstFrame(val item: SportsLiveItem) : DualAction
+
+    /** [item]'s player was created again: a playing pane waits for its first frame again. */
+    data class Restarted(val item: SportsLiveItem) : DualAction
 
     /** No first frame within the pane timeout. */
     data class TimedOut(val item: SportsLiveItem) : DualAction

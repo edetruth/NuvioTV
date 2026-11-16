@@ -2,6 +2,7 @@ package com.nuvio.tv.ui.screens.sportslive.dual
 
 import android.content.Context
 import androidx.annotation.OptIn
+import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -20,8 +21,13 @@ import com.nuvio.tv.ui.screens.player.PlayerMediaSourceFactory
  * mute AC3/EAC3 passthrough over HDMI, and a disabled track frees its audio decoder). Media sources come from the player's [PlayerMediaSourceFactory],
  * so a stream's proxy request headers are sent as in the full player.
  *
- * Neither player handles audio focus (the builder default): two players taking focus from each
- * other would pause one another.
+ * Only the audible pane's player handles audio focus ([setAudioAttributes] with focus handling on),
+ * so the dual screen holds focus like the full player (another app's audio pauses it, and it pauses
+ * other apps) while the muted pane never takes focus from the audible one. [sync] mutes first, so
+ * the pane losing sound gives focus up before the other requests it.
+ *
+ * The FFmpeg audio renderer is always on as a fallback (EXTENSION_RENDERER_MODE_ON): the user's
+ * decoder priority setting of the full player is not applied here.
  */
 @OptIn(UnstableApi::class)
 internal class DualPlayers(
@@ -74,7 +80,14 @@ internal class DualPlayers(
             player.release()
         }
 
+        /** Whether this player holds audio focus; null before the first [setAudible]. */
+        private var handlesFocus: Boolean? = null
+
         fun setAudible(audible: Boolean) {
+            if (handlesFocus != audible) {
+                handlesFocus = audible
+                player.setAudioAttributes(MEDIA_AUDIO, /* handleAudioFocus = */ audible)
+            }
             player.volume = if (audible) 1f else 0f
             val disabled = !audible
             val params = player.trackSelectionParameters
@@ -136,11 +149,11 @@ internal class DualPlayers(
             if (side !in assigned) assigned[side] = slots.first { it !in assigned.values }
         }
         bySide = assigned
-        for (side in Side.entries) {
-            val slot = assigned.getValue(side)
-            slot.show(state.pane(side))
-            slot.setAudible(side == state.audibleSide)
-        }
+        for (side in Side.entries) assigned.getValue(side).show(state.pane(side))
+        // Muted first, so its focus is abandoned before the audible player requests it.
+        val audible = state.audibleSide
+        assigned.getValue(audible.other).setAudible(false)
+        assigned.getValue(audible).setAudible(true)
     }
 
     /** Releases both players; later calls do nothing. */
@@ -153,6 +166,11 @@ internal class DualPlayers(
         }
     }
 }
+
+private val MEDIA_AUDIO: AudioAttributes = AudioAttributes.Builder()
+    .setUsage(C.USAGE_MEDIA)
+    .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
+    .build()
 
 /** The game and stream a pane's player plays: one with a stream, still starting or playing. */
 private fun DualPane.playable(): Pair<SportsLiveItem, Stream>? =
