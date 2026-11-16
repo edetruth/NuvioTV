@@ -230,6 +230,29 @@ class SportsLiveTeamsTest {
     }
 
     @Test
+    fun `canonical aliases fold country codes to their full names`() {
+        assertTrue(SportsLiveTeams.matches("PAK", "Pakistan"))
+        assertTrue(SportsLiveTeams.matches("SL", "Sri Lanka"))
+        assertTrue(SportsLiveTeams.matches("nz", "New Zealand"))
+        assertTrue(SportsLiveTeams.matches("South Africa", "SA"))
+        assertTrue(SportsLiveTeams.matches("USA", "United States"))
+        assertEquals("pakistan", SportsLiveTeams.canonicalise("PAK"))
+        assertEquals(SportsLiveTeams.canonicalise("Sri Lanka"), SportsLiveTeams.canonicalise("SL"))
+        assertEquals(SportsLiveTeams.canonicalise("New Zealand"), SportsLiveTeams.canonicalise("NZ"))
+    }
+
+    @Test
+    fun `aliases fold only when both sides resolve and keep qualifiers distinct`() {
+        assertFalse(SportsLiveTeams.matches("PAK", "Pakistan A")) // one side does not resolve
+        assertFalse(SportsLiveTeams.matches("PAK", "IND")) // different canonical teams
+        assertFalse(SportsLiveTeams.matches("PAK (W)", "Pakistan")) // women vs men
+        assertTrue(SportsLiveTeams.matches("PAK (W)", "Pakistan (W)"))
+        // An unknown name is canonicalised to itself, unchanged.
+        assertEquals("chelsea", SportsLiveTeams.canonicalise("Chelsea"))
+        assertEquals("las vegas raiders", SportsLiveTeams.canonicalise("Las Vegas Raiders"))
+    }
+
+    @Test
     fun `fixture event names with a separator all parse`() {
         val names = fixtureNames("highfly_live.json") + fixtureNames("nebula_live.json") +
             fixtureNames("nebula_replays.json") + fixtureNames("replay_football.json") +

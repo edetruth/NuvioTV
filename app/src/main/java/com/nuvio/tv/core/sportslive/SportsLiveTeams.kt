@@ -54,7 +54,29 @@ object SportsLiveTeams {
         val x = normalise(a)
         val y = normalise(b)
         if (x.isEmpty() || y.isEmpty() || x in CLUB_SUFFIXES || y in CLUB_SUFFIXES) return false
-        return x == y || x.endsWith(" $y") || y.endsWith(" $x")
+        if (x == y || x.endsWith(" $y") || y.endsWith(" $x")) return true
+        // Alias layer: fold "PAK" and "Pakistan" only when BOTH resolve to the same canonical team.
+        val canonicalX = canonicalOrNull(x)
+        return canonicalX != null && canonicalX == canonicalOrNull(y)
+    }
+
+    /**
+     * The canonical form of a team name for bucketing and matching: its normalised name, with a known
+     * abbreviation/alias replaced by the canonical team ([SportsLiveTeamAliases]). An unknown name is
+     * returned unchanged. A (W)/U21 qualifier is kept, so "PAK (W)" never resolves to "Pakistan".
+     */
+    fun canonicalise(team: String): String {
+        val normalised = normalise(team)
+        return canonicalOrNull(normalised) ?: normalised
+    }
+
+    // [normalised] is already lowercase with club suffix removed; a trailing qualifier is set aside so
+    // only the base name is looked up, then reattached to the canonical team.
+    private fun canonicalOrNull(normalised: String): String? {
+        val qualifier = QUALIFIER.find(normalised)
+        val base = (if (qualifier == null) normalised else normalised.substring(0, qualifier.range.first)).trim()
+        val canonical = SportsLiveTeamAliases.canonical(base) ?: return null
+        return if (qualifier == null) canonical else "$canonical ${qualifier.value.trim()}"
     }
 
     /**
