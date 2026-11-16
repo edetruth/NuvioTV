@@ -65,11 +65,16 @@ class SportsLiveViewModel @Inject constructor(
         Bucketed(hasClaimed = claimed.isNotEmpty(), hasLoad = latest != null, tabs = bucket(items, nowMs()))
     }.flowOn(Dispatchers.Default)
 
-    // Followed teams' games first in every tab but Channels; a follow change does not re-bucket.
+    // Followed teams' games first in every tab but Channels, where they are only marked (for the
+    // card star); a follow change does not re-bucket.
     private val pinned = combine(bucketed, repo.followedTeams) { bucketed, followed ->
         bucketed.copy(
             tabs = bucketed.tabs.mapValues { (tab, items) ->
-                if (tab == SportsLiveTab.CHANNELS) items else SportsLiveItemBucketer.pinFollowed(items, followed)
+                if (tab == SportsLiveTab.CHANNELS) {
+                    SportsLiveItemBucketer.markFollowed(items, followed)
+                } else {
+                    SportsLiveItemBucketer.pinFollowed(items, followed)
+                }
             }
         )
     }.flowOn(Dispatchers.Default)

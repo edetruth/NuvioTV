@@ -17,6 +17,17 @@ object SportsLiveTeams {
     // "Celtics [HD]", "76ers (2026-11-10 19:00:05)": a trailing bracketed group is not part of the name.
     private val TRAILING_GROUP = Regex("""\s*[\[(][^\[\]()]*[\])]\s*$""")
 
+    // "(W)", "(Women)", "(U21)", "[U21]": they tell teams apart, so they stay part of the name.
+    private val QUALIFIER = Regex("""\s*(\((w|women|u\d+)\)|\[u\d+])\s*$""", RegexOption.IGNORE_CASE)
+    private val BRACKET_GROUP = Regex("""\[([^\[\]]*)]""")
+
+    /**
+     * A game named inside a channel's `[...]` group ("US| PEACOCK PPV 004 [Celtics vs. 76ers (...)]");
+     * the rest of a channel name is never parsed, so "Sky Sports - HD" stays null.
+     */
+    fun parseBracketed(channelName: String): TeamPair? =
+        BRACKET_GROUP.findAll(channelName).firstNotNullOfOrNull { parse(it.groupValues[1]) }
+
     fun parse(name: String): TeamPair? {
         for (separator in SEPARATORS) {
             val index = name.indexOf(separator, ignoreCase = true)
@@ -63,6 +74,7 @@ object SportsLiveTeams {
         if (open >= 0 && text.indexOf(']', open) < 0) text = text.substring(open + 1).trim()
         while (true) {
             val next = when {
+                QUALIFIER.containsMatchIn(text) -> break
                 TRAILING_GROUP.containsMatchIn(text) -> text.replace(TRAILING_GROUP, "")
                 text.endsWith("]") && '[' !in text -> text.dropLast(1)
                 text.endsWith(")") && '(' !in text -> text.dropLast(1)

@@ -110,6 +110,29 @@ class SportsLiveTeamsTest {
     }
 
     @Test
+    fun `team qualifiers stay part of the name while other trailing groups go`() {
+        assertEquals("arsenal (w)", SportsLiveTeams.normalise("Arsenal (W)"))
+        assertEquals("arsenal (women)", SportsLiveTeams.normalise("Arsenal (Women) [HD]"))
+        assertEquals("england (u21)", SportsLiveTeams.normalise("England (U21)"))
+        assertEquals("england [u21]", SportsLiveTeams.normalise("England [U21] (1080p)"))
+        assertEquals("arsenal", SportsLiveTeams.normalise("Arsenal (HD)"))
+        assertEquals(TeamPair("Arsenal (W)", "Chelsea (W)"), SportsLiveTeams.parse("Arsenal (W) vs Chelsea (W) (2026-11-10)"))
+        assertFalse(SportsLiveTeams.matches("Arsenal", "Arsenal (W)"))
+        assertTrue(SportsLiveTeams.matches("Arsenal (W)", "arsenal (w)"))
+    }
+
+    @Test
+    fun `channel names are games only inside a bracket group with a separator`() {
+        assertEquals(
+            TeamPair("Celtics", "76ers"),
+            SportsLiveTeams.parseBracketed("US| PEACOCK PPV 004 [Celtics vs. 76ers (2026-11-10 19:00:05)]")
+        )
+        assertNull(SportsLiveTeams.parseBracketed("Sky Sports - HD"))
+        assertNull(SportsLiveTeams.parseBracketed("US| PEACOCK PPV 004 [HD] - Backup"))
+        assertNull(SportsLiveTeams.parseBracketed("Celtics vs 76ers"))
+    }
+
+    @Test
     fun `a followed team matches by name when the sports agree or either is unknown`() {
         val game = game("Patriots Academy FC vs New England Patriots", "American Football")
         assertTrue(SportsLiveTeams.follows(FollowedTeam("Patriots", "American Football"), game))

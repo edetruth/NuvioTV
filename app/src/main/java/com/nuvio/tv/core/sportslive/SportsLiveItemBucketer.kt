@@ -117,8 +117,8 @@ object SportsLiveItemBucketer {
             viaOverride = claimed.viaOverride,
             group = if (isChannel) SportsLiveChannelGrouper.groupOf(meta, catalog.name, claimed.addon.name) else null,
             isFinished = status == DONE_EMOJI,
-            // Channel names are never games ("Sky Sports - HD"), and skipping them keeps big lists cheap.
-            teams = if (isChannel) null else SportsLiveTeams.parse(meta.name)
+            // A channel is a game only when its [...] group names one; "Sky Sports - HD" is not.
+            teams = if (isChannel) SportsLiveTeams.parseBracketed(meta.name) else SportsLiveTeams.parse(meta.name)
         )
         val hasSignal = status == LIVE_EMOJI || status == SOON_EMOJI || start != null || liveMarker || isChannel
         return item to hasSignal
@@ -141,15 +141,16 @@ object SportsLiveItemBucketer {
 
     /**
      * Marks the items a followed team plays in and moves them first, each part keeping its order.
-     * For Live Now, Upcoming and Replays; Channels are left as they are.
+     * For Live Now, Upcoming and Replays; Channels are only marked ([markFollowed]).
      */
     fun pinFollowed(items: List<SportsLiveItem>, followed: List<FollowedTeam>): List<SportsLiveItem> {
-        if (followed.isEmpty()) return items
-        val (pinned, rest) = items
-            .map { if (SportsLiveTeams.isFollowed(it, followed)) it.copy(followed = true) else it }
-            .partition { it.followed }
+        val (pinned, rest) = markFollowed(items, followed).partition { it.followed }
         return pinned + rest
     }
+
+    /** Marks the items a followed team plays in, keeping the order (Channels). */
+    fun markFollowed(items: List<SportsLiveItem>, followed: List<FollowedTeam>): List<SportsLiveItem> =
+        if (followed.isEmpty()) items else items.map { if (SportsLiveTeams.isFollowed(it, followed)) it.copy(followed = true) else it }
 
     // "LIVE", "🔴 LIVE": the word LIVE once emoji, punctuation and digits are stripped.
     private fun isLiveMarker(releaseInfo: String?): Boolean =

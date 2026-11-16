@@ -431,7 +431,7 @@ class SportsLiveViewModelTest {
     }
 
     @Test
-    fun `followed games come first in Live Now, Upcoming and Replays but not Channels`() = runTest {
+    fun `followed games come first in Live Now, Upcoming and Replays and are only marked on Channels`() = runTest {
         followedFlow.value = listOf(FollowedTeam("Celtics", "Basketball"))
         nextLoad = load(
             listOf(
@@ -444,7 +444,8 @@ class SportsLiveViewModelTest {
                 item("r2", isLive = false, sport = "Basketball", startMs = NOW - 2 * HOUR, name = "Celtics vs Suns")
                     .copy(kind = SportsLiveKind.REPLAY),
                 channel("ch1", "US"),
-                channel("ch2", "US").copy(teams = teamsOf("Celtics vs Heat"))
+                channel("ch2", "US").copy(teams = teamsOf("Celtics vs Heat")),
+                channel("ch3", "US")
             )
         )
         val viewModel = newViewModel()
@@ -454,8 +455,9 @@ class SportsLiveViewModelTest {
         assertEquals(listOf("b", "a"), tabs.getValue(SportsLiveTab.LIVE_NOW).map { it.id })
         assertEquals(listOf("u2", "u1"), tabs.getValue(SportsLiveTab.UPCOMING).map { it.id })
         assertEquals(listOf("r2", "r1"), tabs.getValue(SportsLiveTab.REPLAYS).map { it.id })
-        assertEquals(listOf("ch1", "ch2"), tabs.getValue(SportsLiveTab.CHANNELS).map { it.id })
-        assertTrue(tabs.getValue(SportsLiveTab.CHANNELS).none { it.followed })
+        // Channels keep their order; a channel naming a followed game is only marked.
+        assertEquals(listOf("ch1", "ch2", "ch3"), tabs.getValue(SportsLiveTab.CHANNELS).map { it.id })
+        assertEquals(listOf(false, true, false), tabs.getValue(SportsLiveTab.CHANNELS).map { it.followed })
 
         // A follow in another sport does not count; unfollowing restores the order without a re-bucket.
         followedFlow.value = listOf(FollowedTeam("Celtics", "Soccer"))
@@ -473,7 +475,7 @@ class SportsLiveViewModelTest {
                 item("s", isLive = true, sport = "Soccer", name = "Arsenal vs Chelsea"),
                 item("u", isLive = false, sport = "Soccer", startMs = NOW + HOUR, name = "Leeds vs Spurs"),
                 channel("ch1", "US"),
-                channel("ch2", "UK")
+                channel("ch2", "UK").copy(teams = teamsOf("Celtics vs Heat"))
             )
         )
         val viewModel = newViewModel()

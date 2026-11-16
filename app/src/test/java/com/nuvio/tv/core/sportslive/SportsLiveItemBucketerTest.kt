@@ -489,13 +489,17 @@ class SportsLiveItemBucketerTest {
     }
 
     @Test
-    fun `describe parses teams for events but never for channels`() {
+    fun `describe parses teams for events and for channels only inside brackets`() {
         val event = SportsLiveItemBucketer.describe(meta("e", "Celtics vs 76ers"), highflyToday, now)
         val channel = SportsLiveItemBucketer.describe(meta("c", "Sky Sports - HD"), cncLiveTv, now)
+        val ppv = SportsLiveItemBucketer.describe(
+            meta("p", "US| PEACOCK PPV 004 [Celtics vs. 76ers (2026-11-10 19:00:05)]"), cncLiveTv, now
+        )
         val other = SportsLiveItemBucketer.describe(meta("o", "NFL RedZone"), highflyToday, now)
 
         assertEquals(TeamPair("Celtics", "76ers"), event.teams)
         assertNull(channel.teams)
+        assertEquals(TeamPair("Celtics", "76ers"), ppv.teams)
         assertNull(other.teams)
         assertFalse(event.followed)
     }
