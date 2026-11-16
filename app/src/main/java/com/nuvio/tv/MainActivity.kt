@@ -1398,6 +1398,7 @@ open class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        SportsLivePip.ownLaunchInFlight = false
         ambientIdleController.dismiss()
         if (::jankStats.isInitialized) jankStats.isTrackingEnabled = true
         memberAccessRepository.refreshIfStale()
@@ -1497,6 +1498,13 @@ open class MainActivity : ComponentActivity() {
         androidTvChannelSyncService.onForegroundChanged(true)
     }
 
+    // Every in-app launch (startActivity included) passes here; its leave hint is not Home.
+    @Deprecated("Deprecated in ComponentActivity")
+    override fun startActivityForResult(intent: Intent, requestCode: Int, options: Bundle?) {
+        SportsLivePip.ownLaunchInFlight = true
+        super.startActivityForResult(intent, requestCode, options)
+    }
+
     // Home while Sports & Live plays: picture-in-picture (16:9) when the device has it.
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
@@ -1504,7 +1512,8 @@ open class MainActivity : ComponentActivity() {
             sdkInt = Build.VERSION.SDK_INT,
             hasPipFeature = packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE),
             sportsFullPlayerShowing = SportsLivePip.sportsFullPlayerShowing(),
-            miniPlayerActive = SportsLiveMiniPlayers.controller.isActive
+            miniPlayerActive = SportsLiveMiniPlayers.controller.isActive,
+            ownLaunchInFlight = SportsLivePip.ownLaunchInFlight
         )
         if (eligible && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             runCatching {

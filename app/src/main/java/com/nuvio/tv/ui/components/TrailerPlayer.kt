@@ -10,6 +10,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -37,6 +38,8 @@ import com.nuvio.tv.core.player.LetterboxTracker
 import com.nuvio.tv.core.player.LocalTrailerPlayerPool
 import com.nuvio.tv.core.player.TrailerPlayerPool
 import com.nuvio.tv.data.trailer.YoutubeChunkedDataSourceFactory
+import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniPlayers
+import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniState
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import android.view.LayoutInflater
@@ -107,10 +110,12 @@ fun TrailerPlayer(
         }
     }
 
+    // The Sports & Live mini player's sound wins: trailers stay silent while it plays.
+    val miniPlaying = SportsLiveMiniPlayers.controller.state.collectAsState().value is SportsLiveMiniState.Playing
     // Configure player settings when acquired
-    LaunchedEffect(trailerPlayer, muted, cropToFill) {
+    LaunchedEffect(trailerPlayer, muted, cropToFill, miniPlaying) {
         val player = trailerPlayer ?: return@LaunchedEffect
-        player.volume = if (muted) 0f else 1f
+        player.volume = if (muted || miniPlaying) 0f else 1f
         player.videoScalingMode = if (cropToFill) {
             C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING
         } else {
@@ -120,7 +125,7 @@ fun TrailerPlayer(
 
     LaunchedEffect(isPlaying, trailerUrl, trailerAudioUrl, muted, trailerPlayer) {
         val player = trailerPlayer ?: return@LaunchedEffect
-        player.volume = if (muted) 0f else 1f
+        player.volume = if (muted || miniPlaying) 0f else 1f
         if (isPlaying && trailerUrl != null) {
             hasRenderedFirstFrame = false
             if (!trailerAudioUrl.isNullOrBlank()) {

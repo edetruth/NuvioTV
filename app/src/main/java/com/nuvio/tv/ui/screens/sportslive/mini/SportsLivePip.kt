@@ -15,8 +15,11 @@ fun sportsLivePipEligible(
     sdkInt: Int,
     hasPipFeature: Boolean,
     sportsFullPlayerShowing: Boolean,
-    miniPlayerActive: Boolean
-): Boolean = sdkInt >= Build.VERSION_CODES.O && hasPipFeature && (sportsFullPlayerShowing || miniPlayerActive)
+    miniPlayerActive: Boolean,
+    /** The app itself is starting another activity (external player, browser): not the user leaving. */
+    ownLaunchInFlight: Boolean = false
+): Boolean = sdkInt >= Build.VERSION_CODES.O && hasPipFeature && !ownLaunchInFlight &&
+    (sportsFullPlayerShowing || miniPlayerActive)
 
 /**
  * The app's picture-in-picture state for Sports & Live. [inPip] makes the full player hide its
@@ -27,6 +30,13 @@ fun sportsLivePipEligible(
 object SportsLivePip {
     private val _inPip = MutableStateFlow(false)
     val inPip: StateFlow<Boolean> = _inPip.asStateFlow()
+
+    /**
+     * Set when the app starts another activity itself, cleared on resume: the leave hint that
+     * launch gives is not the user pressing Home, so neither PiP nor the mini player starts.
+     */
+    @Volatile
+    var ownLaunchInFlight = false
 
     private class FullPlayer(val contentId: String?, val close: () -> Unit)
 
@@ -51,7 +61,10 @@ object SportsLivePip {
     /** The PiP window was closed: its playback stops and the players are released. */
     fun onClosed() {
         _inPip.value = false
-        fullPlayer?.close?.invoke()
+        // Taken first, so a second close (onStop and the mode change both report it) does nothing.
+        val closing = fullPlayer
+        fullPlayer = null
+        closing?.close?.invoke()
         SportsLiveMiniPlayers.controller.stop(SportsLiveMiniStop.PIP_CLOSED)
     }
 }

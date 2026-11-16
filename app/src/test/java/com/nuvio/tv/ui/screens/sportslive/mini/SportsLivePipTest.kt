@@ -28,6 +28,16 @@ class SportsLivePipTest {
     }
 
     @Test
+    fun `an in-app launch (external player, browser) is not Home`() {
+        assertFalse(
+            sportsLivePipEligible(36, true, sportsFullPlayerShowing = true, miniPlayerActive = true, ownLaunchInFlight = true)
+        )
+        assertTrue(
+            sportsLivePipEligible(36, true, sportsFullPlayerShowing = true, miniPlayerActive = false, ownLaunchInFlight = false)
+        )
+    }
+
+    @Test
     fun `a full player counts only while it plays the zap session's game`() {
         val a = dualItem("a")
         val token = SportsLivePip.attachFullPlayer("a") {}
@@ -52,8 +62,9 @@ class SportsLivePipTest {
         SportsLivePip.onModeChanged(true)
 
         SportsLivePip.onClosed()
+        SportsLivePip.onClosed()
 
-        assertEquals(1, closed)
+        assertEquals("closed once", 1, closed)
         assertFalse(SportsLivePip.inPip.value)
         SportsLivePip.detachFullPlayer(token)
     }

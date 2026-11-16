@@ -155,6 +155,14 @@ class SportsLiveMiniPlayerStateTest {
     fun `only a plain http stream can play in the mini player`() {
         assertNull(sportsLiveMiniStream("torrent://abc", emptyMap(), emptyMap(), null, null, null))
         assertNull(sportsLiveMiniStream(null, emptyMap(), emptyMap(), null, null, null))
+        for (local in listOf(
+            "http://127.0.0.1:11470/abc/0",
+            "http://localhost:8080/stream",
+            "http://[::1]:9000/live.m3u8",
+            "HTTP://LOCALHOST/x"
+        )) {
+            assertNull(local, sportsLiveMiniStream(local, emptyMap(), emptyMap(), null, null, null))
+        }
 
         val mini = sportsLiveMiniStream(
             url = "https://example.invalid/live.m3u8",

@@ -134,6 +134,14 @@ object SportsLiveMiniPlayers {
     }
 }
 
+private val LOOPBACK_HOSTS = setOf("127.0.0.1", "localhost", "::1", "[::1]")
+
+internal fun isLoopbackUrl(url: String): Boolean {
+    val host = runCatching { java.net.URI(url).host }.getOrNull()
+        ?: url.substringAfter("://").substringBefore('/').substringBeforeLast(':')
+    return host.lowercase() in LOOPBACK_HOSTS || host.startsWith("127.")
+}
+
 /**
  * The stream the full player plays now as a [Stream] the mini player can play, or null when it is
  * not a plain http(s) url (a torrent, or nothing).
@@ -149,6 +157,8 @@ internal fun sportsLiveMiniStream(
     if (url == null || !(url.startsWith("http://", ignoreCase = true) || url.startsWith("https://", ignoreCase = true))) {
         return null
     }
+    // A loopback url is served by the player's own local server (torrent, server streams), gone once it exits.
+    if (isLoopbackUrl(url)) return null
     return Stream(
         name = name,
         title = null,

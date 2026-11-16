@@ -70,6 +70,7 @@ import com.nuvio.tv.ui.screens.sportslive.dual.LocalOpenSportsLiveDual
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualPick
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualPickerDialog
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualSessions
+import com.nuvio.tv.ui.screens.sportslive.mini.SportsLivePip
 import com.nuvio.tv.ui.theme.NuvioTheme
 import kotlinx.coroutines.delay
 
@@ -89,6 +90,10 @@ internal fun BoxScope.SportsLiveZapOverlay(
     playerOverlayVisible: Boolean
 ) {
     if (!viewModel.hasSession) return
+    // In picture-in-picture only the video shows: no banner, indicator or panel.
+    val inPip by SportsLivePip.inPip.collectAsState()
+    LaunchedEffect(inPip) { if (inPip) viewModel.closePanel() }
+    if (inPip) return
     val banner by viewModel.banner.collectAsState()
     val panelOpen by viewModel.panelOpen.collectAsState()
     BehindLiveIndicator(liveWindow = liveWindow, engine = engine, covered = playerOverlayVisible || panelOpen)

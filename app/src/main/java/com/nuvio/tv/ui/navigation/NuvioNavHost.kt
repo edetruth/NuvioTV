@@ -239,6 +239,8 @@ private fun clearSportsLiveZapSessionOnPlayerBack(navController: NavHostControll
  * player (movies, series) leaves it alone. Runs before the session is cleared.
  */
 private fun startSportsLiveMiniPlayerOnBack(contentId: String?, player: PlayerViewModel) {
+    // An exit for an in-app launch (external player, browser) is not the user going back to browse.
+    if (SportsLivePip.ownLaunchInFlight) return
     val session = SportsLiveZapSessions.activeFor(contentId) ?: return
     val playing = player.controller
     SportsLiveMiniPlayers.controller.onBackFromPlayer(

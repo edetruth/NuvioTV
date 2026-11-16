@@ -23,7 +23,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -212,7 +211,6 @@ fun SportsLiveMiniPlayerHost(
         modifier = modifier
             .fillMaxSize()
             .then(if (inPip) Modifier.background(Color.Black) else Modifier)
-            .focusProperties { canFocus = false }
     ) {
         Column(
             modifier = if (inPip) {
