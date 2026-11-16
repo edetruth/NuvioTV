@@ -163,13 +163,16 @@ class SportsLiveSettingsViewModelTest {
         val viewModel = newViewModel()
         viewModel.setShowSection(false)
         viewModel.setShowHomeRow(false)
+        viewModel.setHoverPreview(false)
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
         assertFalse(state.showSection)
         assertFalse(state.showHomeRow)
+        assertFalse(state.hoverPreview)
         assertFalse(prefs.showSection.first())
         assertFalse(prefs.showHomeRow.first())
+        assertFalse(prefs.hoverPreview.first())
     }
 
     @Test

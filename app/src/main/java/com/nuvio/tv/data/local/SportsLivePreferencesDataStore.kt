@@ -38,6 +38,7 @@ class SportsLivePreferencesDataStore @Inject constructor(
 
     private val showSectionKey = booleanPreferencesKey("sports_live_show_section")
     private val showHomeRowKey = booleanPreferencesKey("sports_live_show_home_row")
+    private val hoverPreviewKey = booleanPreferencesKey("sports_live_hover_preview")
     private val overridesKey = stringPreferencesKey("sports_live_overrides")
     private val catalogOptionsKey = stringPreferencesKey("sports_live_catalog_options")
     private val followedTeamsKey = stringPreferencesKey("sports_live_followed_teams")
@@ -48,6 +49,11 @@ class SportsLivePreferencesDataStore @Inject constructor(
 
     val showHomeRow: Flow<Boolean> = profileManager.activeProfileId.flatMapLatest { pid ->
         factory.get(pid, FEATURE).data.map { it[showHomeRowKey] ?: true }
+    }
+
+    /** Whether resting on a Live now or Channels card previews it, muted, in the details pane. */
+    val hoverPreview: Flow<Boolean> = profileManager.activeProfileId.flatMapLatest { pid ->
+        factory.get(pid, FEATURE).data.map { it[hoverPreviewKey] ?: true }
     }
 
     val overrides: Flow<Map<String, SportsLiveOverride>> = profileManager.activeProfileId.flatMapLatest { pid ->
@@ -89,6 +95,10 @@ class SportsLivePreferencesDataStore @Inject constructor(
 
     suspend fun setShowHomeRow(v: Boolean) {
         store().edit { it[showHomeRowKey] = v }
+    }
+
+    suspend fun setHoverPreview(v: Boolean) {
+        store().edit { it[hoverPreviewKey] = v }
     }
 
     suspend fun setOverride(catalogKey: String, override: SportsLiveOverride?) {

@@ -76,6 +76,13 @@ internal fun SportsLiveSettingsContent(
                     subtitle = null,
                     checked = state.showHomeRow,
                     onToggle = { viewModel.setShowHomeRow(!state.showHomeRow) },
+                    enabled = state.showSection
+                )
+                SettingsToggleRow(
+                    title = stringResource(R.string.sports_live_setting_hover_preview),
+                    subtitle = null,
+                    checked = state.hoverPreview,
+                    onToggle = { viewModel.setHoverPreview(!state.hoverPreview) },
                     enabled = state.showSection,
                     modifier = if (state.showSection) Modifier.focusRequester(switchFocusRequester) else Modifier
                 )

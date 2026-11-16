@@ -45,6 +45,7 @@ data class SportsLiveCatalogSetting(
 data class SportsLiveSettingsUiState(
     val showSection: Boolean = true,
     val showHomeRow: Boolean = true,
+    val hoverPreview: Boolean = true,
     val catalogs: List<SportsLiveCatalogSetting> = emptyList(),
     /** The active profile's followed teams, in follow order. */
     val followedTeams: List<FollowedTeam> = emptyList()
@@ -66,9 +67,9 @@ class SportsLiveSettingsViewModel @Inject constructor(
         addonRepository.getInstalledAddons(),
         combine(prefs.overrides, prefs.catalogOptions, prefs.followedTeams, ::Triple),
         prefs.showSection,
-        prefs.showHomeRow,
+        combine(prefs.showHomeRow, prefs.hoverPreview, ::Pair),
         claimedStats
-    ) { addons, (overrides, options, followedTeams), showSection, showHomeRow, stats ->
+    ) { addons, (overrides, options, followedTeams), showSection, (showHomeRow, hoverPreview), stats ->
         val catalogs = addons.enabledAddons().flatMap { addon ->
             addon.catalogs.filter(SportsLiveCatalogPolicy::isClaimable).map { catalog ->
                 val key = SportsLiveCatalogPolicy.keyFor(addon, catalog)
@@ -91,7 +92,7 @@ class SportsLiveSettingsViewModel @Inject constructor(
                 )
             }
         }
-        SportsLiveSettingsUiState(showSection, showHomeRow, catalogs, followedTeams)
+        SportsLiveSettingsUiState(showSection, showHomeRow, hoverPreview, catalogs, followedTeams)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SportsLiveSettingsUiState())
 
     fun setShowSection(show: Boolean) {
@@ -100,6 +101,10 @@ class SportsLiveSettingsViewModel @Inject constructor(
 
     fun setShowHomeRow(show: Boolean) {
         viewModelScope.launch { prefs.setShowHomeRow(show) }
+    }
+
+    fun setHoverPreview(enabled: Boolean) {
+        viewModelScope.launch { prefs.setHoverPreview(enabled) }
     }
 
     fun unfollow(team: FollowedTeam) {

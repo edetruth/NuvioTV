@@ -1,5 +1,6 @@
 package com.nuvio.tv.data.local
 
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.mutablePreferencesOf
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.nuvio.tv.TestPreferencesStore
@@ -33,7 +34,18 @@ class SportsLivePreferencesDataStoreTest {
         val store = SportsLivePreferencesDataStore(factory, profiles)
         assertTrue(store.showSection.first())
         assertTrue(store.showHomeRow.first())
+        assertTrue(store.hoverPreview.first())
         assertEquals(emptyMap<String, SportsLiveOverride>(), store.overrides.first())
+    }
+
+    @Test
+    fun `hover preview round trips under its own key`() = runTest {
+        val store = SportsLivePreferencesDataStore(factory, profiles)
+        store.setHoverPreview(false)
+        assertEquals(false, store.hoverPreview.first())
+        assertEquals(false, profile1Store.data.first()[booleanPreferencesKey("sports_live_hover_preview")])
+        store.setHoverPreview(true)
+        assertTrue(store.hoverPreview.first())
     }
 
     @Test

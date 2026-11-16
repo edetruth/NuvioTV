@@ -479,6 +479,7 @@
     <string name="sports_live_setting_show_section">Show Sports &amp; Live section</string>
     <string name="sports_live_setting_show_section_subtitle">Moves live sports and TV catalogs out of Home into their own section</string>
     <string name="sports_live_setting_home_row">Show \"Live now\" row on Home</string>
+    <string name="sports_live_setting_hover_preview">Preview games on hover</string>
     <string name="sports_live_setting_catalogs">Catalogs</string>
     <string name="sports_live_override_auto_in">Auto · in Sports &amp; Live</string>
     <string name="sports_live_override_auto_out">Auto · on Home</string>
