@@ -26,30 +26,37 @@ data class SportsLiveDualSession(
     val left: SportsLiveItem,
     val right: SportsLiveItem,
     val items: List<SportsLiveItem>,
-    /** The Live now filter [items] were listed under, kept by the zap session OK starts. */
-    val filter: String? = null
+    /** The filter (sport, or channel group) [items] were listed under, kept by the zap session OK starts. */
+    val filter: String?,
+    /** The tab [items] come from (Live now or Channels), kept by the zap session OK starts. */
+    val tab: SportsLiveTab
 )
 
 /**
- * "Watch with another game" for [chosen], from a Live now list ([items], shown under [filter]): the
- * picker lists [candidates], and the pick starts a [SportsLiveDualSession] over [items].
+ * "Watch with another game" for [chosen], from a Live now or Channels list ([items], shown on [tab]
+ * under [filter]): the picker lists [candidates], and the pick starts a [SportsLiveDualSession] over [items].
  */
 data class SportsLiveDualPick(
     val chosen: SportsLiveItem,
     val items: List<SportsLiveItem>,
     val filter: String?,
+    val tab: SportsLiveTab,
     val endedKeys: Set<String> = emptySet()
 ) {
     /** The other games of the list that are not known to have ended; never [chosen] or one of its sources. */
-    val candidates: List<SportsLiveItem> = items.filter(::isCandidate)
+    val candidates: List<SportsLiveItem> by lazy { items.filter(::isCandidate) }
+
+    // Built once per pick, not once per item checked.
+    private val chosenKeys: Set<String> by lazy { chosen.sourceKeys() }
 
     fun session(second: SportsLiveItem): SportsLiveDualSession =
-        SportsLiveDualSession(left = chosen, right = second, items = items.toList(), filter = filter)
+        SportsLiveDualSession(left = chosen, right = second, items = items.toList(), filter = filter, tab = tab)
 
     /** The session pairing [chosen] with [second]; null when [second] is [chosen], shares a source with it, or has ended. */
     fun pairWith(second: SportsLiveItem): SportsLiveDualSession? = if (isCandidate(second)) session(second) else null
 
-    private fun isCandidate(item: SportsLiveItem): Boolean = !item.sharesSourceWith(chosen) && !item.hasEnded(endedKeys)
+    private fun isCandidate(item: SportsLiveItem): Boolean =
+        !item.sharesSourceWith(chosenKeys) && !item.hasEnded(endedKeys)
 }
 
 /** Dual screen is offered on Live now and Channels only. */
@@ -67,15 +74,20 @@ internal fun sportsLivePickModeSession(
     items: List<SportsLiveItem>,
     filter: String?
 ): SportsLiveDualSession? =
-    if (!tab.offersDual()) null else SportsLiveDualPick(chosen = chosen, items = items, filter = filter).pairWith(item)
+    if (!tab.offersDual()) null else SportsLiveDualPick(chosen = chosen, items = items, filter = filter, tab = tab).pairWith(item)
 
 /**
  * True when this card and [other] play the same game from a common source: one of the two, or one of
  * their merged [SportsLiveItem.alternates], has the same [SportsLiveItem.streamKey]. Such a card is
  * never paired with [other], in the picker or by a zap.
  */
-internal fun SportsLiveItem.sharesSourceWith(other: SportsLiveItem): Boolean {
-    val otherKeys = (listOf(other) + other.alternates).mapTo(HashSet()) { it.streamKey }
+internal fun SportsLiveItem.sharesSourceWith(other: SportsLiveItem): Boolean = sharesSourceWith(other.sourceKeys())
+
+/** The stream keys of this card and its merged [SportsLiveItem.alternates]. */
+internal fun SportsLiveItem.sourceKeys(): Set<String> = (listOf(this) + alternates).mapTo(HashSet()) { it.streamKey }
+
+/** True when this card or one of its alternates has one of [otherKeys] (see [sourceKeys]). */
+internal fun SportsLiveItem.sharesSourceWith(otherKeys: Set<String>): Boolean {
     return streamKey in otherKeys || alternates.any { it.streamKey in otherKeys }
 }
 
@@ -88,7 +100,8 @@ internal object SportsLiveDualSessions {
         this.session = session
     }
 
-    fun current(): SportsLiveDualSession? = session
+    /** The session, handed over once: the dual ViewModel keeps it, so the list is not held process-wide. */
+    fun take(): SportsLiveDualSession? = session.also { session = null }
 
     fun clear() {
         session = null
@@ -121,11 +134,12 @@ class SportsLiveDualViewModel internal constructor(
             }
         },
         endedKeys = { repo.endedKeys.value },
-        session = SportsLiveDualSessions.current()
+        session = SportsLiveDualSessions.take()
     )
 
     private val items: List<SportsLiveItem> = session?.items.orEmpty()
     private val filter: String? = session?.filter
+    private val tab: SportsLiveTab = session?.tab ?: SportsLiveTab.LIVE_NOW
 
     private val _state = MutableStateFlow(session?.let { DualState(DualPane(it.left), DualPane(it.right)) })
 
@@ -176,7 +190,7 @@ class SportsLiveDualViewModel internal constructor(
         val session = SportsLiveZapSession.of(
             items = items,
             itemKey = item.streamKey,
-            tab = SportsLiveTab.LIVE_NOW,
+            tab = tab,
             filter = filter,
             returnToHomeOnBack = false
         )

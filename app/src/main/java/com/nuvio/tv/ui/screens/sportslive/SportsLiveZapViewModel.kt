@@ -212,15 +212,18 @@ class SportsLiveZapViewModel @Inject constructor(
 
     /**
      * "Watch with another game" in the live games panel, for the game playing: the second-game picker
-     * over the session list. Null (no action) when the session is not Live now or the game is a channel.
+     * over the session list. Null (no action) when the session is neither Live now nor Channels.
      */
-    fun dualPick(): SportsLiveDualPick? {
+    fun dualPick(): SportsLiveDualPick? = dualPick { it.items }
+
+    private inline fun dualPick(items: (SportsLiveZapSession) -> List<SportsLiveItem>): SportsLiveDualPick? {
         val session = panelSession.value ?: controller.session(contentId) ?: return null
         if (!session.tab.offersDual()) return null
         return SportsLiveDualPick(
             chosen = session.current,
-            items = session.items,
+            items = items(session),
             filter = session.filter,
+            tab = session.tab,
             endedKeys = repo.endedKeys.value
         )
     }
@@ -230,10 +233,8 @@ class SportsLiveZapViewModel @Inject constructor(
      * [item] on the right, over the panel's list. Null when the panel offers no dual screen, or when
      * [item] is the game playing, shares a source with it, or has ended.
      */
-    fun dualSessionWith(item: SportsLiveItem): SportsLiveDualSession? {
-        val pick = dualPick() ?: return null
-        return pick.copy(items = panel.value?.items ?: pick.items).pairWith(item)
-    }
+    fun dualSessionWith(item: SportsLiveItem): SportsLiveDualSession? =
+        dualPick { session -> panel.value?.items ?: session.items }?.pairWith(item)
 
     /** [item] was picked in the live games panel: the panel closes and the player zaps to it. */
     fun onPanelPick(item: SportsLiveItem) {

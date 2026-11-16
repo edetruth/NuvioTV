@@ -2,6 +2,7 @@ package com.nuvio.tv.ui.screens.sportslive.dual
 
 import com.nuvio.tv.MainDispatcherRule
 import com.nuvio.tv.domain.model.SportsLiveItem
+import com.nuvio.tv.domain.model.SportsLiveTab
 import com.nuvio.tv.domain.model.Stream
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -53,7 +54,7 @@ class SportsLiveDualViewModelTest {
             }
         },
         endedKeys = { ended },
-        session = SportsLiveDualSession(left, right, items)
+        session = SportsLiveDualSession(left, right, items, null, SportsLiveTab.LIVE_NOW)
     )
 
     private fun answer(id: String, stream: Stream?) {
@@ -268,7 +269,7 @@ class SportsLiveDualViewModelTest {
         val viewModel = SportsLiveDualViewModel(
             resolve = { null },
             endedKeys = { emptySet() },
-            session = SportsLiveDualSession(a, b, listOf(a, b, bElsewhere, aElsewhere, c))
+            session = SportsLiveDualSession(a, b, listOf(a, b, bElsewhere, aElsewhere, c), null, SportsLiveTab.LIVE_NOW)
         )
         runCurrent()
         assertTrue(viewModel.zap(forward = true))
