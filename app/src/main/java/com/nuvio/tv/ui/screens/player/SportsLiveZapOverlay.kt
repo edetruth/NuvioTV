@@ -58,7 +58,10 @@ import androidx.tv.material3.Border
 import androidx.tv.material3.Card
 import androidx.tv.material3.CardDefaults
 import com.nuvio.tv.R
+import com.nuvio.tv.data.local.InternalPlayerEngine
 import com.nuvio.tv.domain.model.SportsLiveItem
+import com.nuvio.tv.ui.screens.sportslive.LiveWindow
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveRewind
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapBanner
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapPanelState
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapViewModel
@@ -68,14 +71,18 @@ import kotlinx.coroutines.delay
 /**
  * The Sports & Live zap overlay of a player with a zap session: the banner naming the game after a
  * zap (or the one being switched to), and the live games panel that Left opens. Draws nothing for
- * other players. Closing the panel gives focus back to [playerFocusRequester].
+ * other players. Closing the panel gives focus back to [playerFocusRequester]. While a rewind keeps
+ * playback behind the edge of [liveWindow], a small "−1:20 · LIVE ▸" indicator shows it.
  */
 @Composable
 internal fun BoxScope.SportsLiveZapOverlay(
     viewModel: SportsLiveZapViewModel,
-    playerFocusRequester: FocusRequester
+    playerFocusRequester: FocusRequester,
+    liveWindow: () -> LiveWindow?,
+    engine: () -> InternalPlayerEngine
 ) {
     if (!viewModel.hasSession) return
+    BehindLiveIndicator(liveWindow = liveWindow, engine = engine)
     val banner by viewModel.banner.collectAsState()
     val panelOpen by viewModel.panelOpen.collectAsState()
     val panel by viewModel.panel.collectAsState()
@@ -125,6 +132,30 @@ internal fun BoxScope.SportsLiveZapOverlay(
             )
         }
     }
+}
+
+@Composable
+private fun BoxScope.BehindLiveIndicator(liveWindow: () -> LiveWindow?, engine: () -> InternalPlayerEngine) {
+    var behindMs by remember { mutableStateOf<Long?>(null) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            behindMs = SportsLiveRewind.indicatorBehindMs(hasSession = true, engine = engine(), window = liveWindow())
+            delay(500)
+        }
+    }
+    val shown = behindMs ?: return
+    Text(
+        text = stringResource(R.string.sports_live_rewind_behind, SportsLiveRewind.formatBehind(shown)),
+        style = MaterialTheme.typography.labelLarge,
+        color = NuvioTheme.colors.TextPrimary,
+        modifier = Modifier
+            .align(Alignment.TopEnd)
+            .padding(top = 32.dp, end = 32.dp)
+            .zIndex(3f)
+            .clip(RoundedCornerShape(NuvioTheme.radii.xl))
+            .background(NuvioTheme.colors.BackgroundElevated.copy(alpha = 0.92f))
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    )
 }
 
 @Composable

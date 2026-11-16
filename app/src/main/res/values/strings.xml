@@ -3552,5 +3552,6 @@
     <string name="sports_live_zap_switching">Switching to %1$s…</string>
     <string name="sports_live_zap_panel_title">Live now</string>
     <string name="sports_live_zap_panel_empty">Nothing live right now</string>
+    <string name="sports_live_rewind_behind">−%1$s · LIVE ▸</string>
     <string name="sports_live_partial_failure">%1$d source(s) didn\'t respond</string>
 </resources>

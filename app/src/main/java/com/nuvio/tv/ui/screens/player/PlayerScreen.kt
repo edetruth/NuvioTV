@@ -181,6 +181,8 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.withContext
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapTarget
 import com.nuvio.tv.ui.screens.sportslive.rememberSportsLiveZapKeyHandler
+import com.nuvio.tv.ui.screens.sportslive.seekWithinSportsLiveWindow
+import com.nuvio.tv.ui.screens.sportslive.liveWindow
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapViewModel
 
 private const val PLAYER_CONTROLS_FADE_DURATION_MS = 200
@@ -897,6 +899,12 @@ fun PlayerScreen(
                     if (!uiState.showControls && sportsLiveZapKey(keyEvent.nativeKeyEvent.keyCode)) {
                         return@onKeyEvent true
                     }
+                    // Sports & Live: held Left/Right and REW/FF seek inside a zap session's live window.
+                    if (!uiState.showControls && seekWithinSportsLiveWindow(
+                            keyEvent.nativeKeyEvent, sportsLiveZap.hasSession,
+                            viewModel.controller.currentInternalPlayerEngine, viewModel.exoPlayer
+                        )
+                    ) return@onKeyEvent true
                     when (keyEvent.nativeKeyEvent.keyCode) {
                         KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
                             if (!uiState.showControls) {
@@ -2211,7 +2219,12 @@ fun PlayerScreen(
             )
         }
 
-        SportsLiveZapOverlay(viewModel = sportsLiveZap, playerFocusRequester = containerFocusRequester)
+        SportsLiveZapOverlay(
+            viewModel = sportsLiveZap,
+            playerFocusRequester = containerFocusRequester,
+            liveWindow = { viewModel.exoPlayer?.liveWindow() },
+            engine = { viewModel.controller.currentInternalPlayerEngine }
+        )
     }
 }
 
