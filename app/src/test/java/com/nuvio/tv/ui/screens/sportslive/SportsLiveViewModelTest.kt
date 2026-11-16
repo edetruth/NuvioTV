@@ -85,8 +85,8 @@ class SportsLiveViewModelTest {
         assertEquals(listOf("u"), state.tabs.getValue(SportsLiveTab.UPCOMING).map { it.id })
         assertEquals(SportsLiveTab.LIVE_NOW, state.selectedTab)
         assertEquals(listOf("a", "b"), state.visibleItems.map { it.id })
-        assertEquals(listOf("Basketball", "Soccer"), state.sports)
-        assertNull(state.selectedSport)
+        assertEquals(listOf("Basketball", "Soccer"), state.filters)
+        assertNull(state.selectedFilter)
         assertEquals("a", state.selectedItemId)
         assertEquals(NOW, state.lastRefreshedMs)
         assertEquals(listOf(false), forcedFlags)
@@ -107,16 +107,16 @@ class SportsLiveViewModelTest {
         runCurrent()
         assertEquals("a", viewModel.uiState.value.selectedItemId)
 
-        viewModel.selectSport("Soccer")
+        viewModel.selectFilter("Soccer")
         runCurrent()
 
         val filtered = viewModel.uiState.value
-        assertEquals("Soccer", filtered.selectedSport)
+        assertEquals("Soccer", filtered.selectedFilter)
         assertEquals(listOf("b", "c"), filtered.visibleItems.map { it.id })
         assertEquals("b", filtered.selectedItemId)
 
         viewModel.selectItem("c")
-        viewModel.selectSport(null)
+        viewModel.selectFilter(null)
         runCurrent()
 
         val all = viewModel.uiState.value
@@ -136,18 +136,18 @@ class SportsLiveViewModelTest {
         )
         val viewModel = newViewModel()
         advanceUntilIdle()
-        viewModel.selectSport("Golf")
+        viewModel.selectFilter("Golf")
         runCurrent()
-        assertEquals("Golf", viewModel.uiState.value.selectedSport)
+        assertEquals("Golf", viewModel.uiState.value.selectedFilter)
 
         viewModel.selectTab(SportsLiveTab.UPCOMING)
         runCurrent()
 
         val state = viewModel.uiState.value
         assertEquals(SportsLiveTab.UPCOMING, state.selectedTab)
-        assertNull(state.selectedSport)
+        assertNull(state.selectedFilter)
         assertEquals(listOf("soon", "mid", "late"), state.visibleItems.map { it.id })
-        assertEquals(listOf("Soccer", "Tennis"), state.sports)
+        assertEquals(listOf("Soccer", "Tennis"), state.filters)
         assertEquals("soon", state.selectedItemId)
     }
 
@@ -275,6 +275,76 @@ class SportsLiveViewModelTest {
 
         verify(exactly = 0) { repo.reprobeIfStale(any()) }
     }
+
+    @Test
+    fun `channels tab exposes groups as filters`() = runTest {
+        nextLoad = load(listOf(channel("uk1", "UK"), channel("ca1", "CA"), item("a", isLive = true, sport = "Soccer")))
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+
+        viewModel.selectTab(SportsLiveTab.CHANNELS)
+        runCurrent()
+
+        val state = viewModel.uiState.value
+        assertEquals(listOf("CA", "UK"), state.filters)
+        assertNull(state.selectedFilter)
+    }
+
+    @Test
+    fun `live tab exposes sports as filters`() = runTest {
+        nextLoad = load(
+            listOf(
+                channel("uk1", "UK", isLive = true, sport = "Soccer"),
+                item("a", isLive = true, sport = "Tennis")
+            )
+        )
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+
+        assertEquals(listOf("Soccer", "Tennis"), viewModel.uiState.value.filters)
+    }
+
+    @Test
+    fun `selecting a group filters channels`() = runTest {
+        nextLoad = load(listOf(channel("uk1", "UK"), channel("ca1", "CA"), channel("uk2", "UK")))
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+        viewModel.selectTab(SportsLiveTab.CHANNELS)
+        viewModel.selectFilter("UK")
+        runCurrent()
+
+        val state = viewModel.uiState.value
+        assertEquals("UK", state.selectedFilter)
+        assertEquals(listOf("uk1", "uk2"), state.visibleItems.map { it.id })
+    }
+
+    @Test
+    fun `switching tabs resets the filter`() = runTest {
+        nextLoad = load(
+            listOf(
+                channel("uk1", "UK"),
+                channel("ca1", "CA"),
+                item("a", isLive = true, sport = "Soccer", name = "A"),
+                item("b", isLive = true, sport = "Tennis", name = "B")
+            )
+        )
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+        viewModel.selectTab(SportsLiveTab.CHANNELS)
+        viewModel.selectFilter("UK")
+        runCurrent()
+        assertEquals("UK", viewModel.uiState.value.selectedFilter)
+
+        viewModel.selectTab(SportsLiveTab.LIVE_NOW)
+        runCurrent()
+
+        val state = viewModel.uiState.value
+        assertNull(state.selectedFilter)
+        assertEquals(listOf("a", "b"), state.visibleItems.map { it.id })
+    }
+
+    private fun channel(id: String, group: String, isLive: Boolean = false, sport: String? = null) =
+        item(id, isLive = isLive, sport = sport, name = "Channel $id").copy(isChannel = true, group = group)
 
     private fun load(items: List<SportsLiveItem>, failures: List<SportsLiveFailure> = emptyList()) =
         SportsLiveLoad(items = items, failures = failures, loadedAtMs = NOW, claimedKeys = setOf(CLAIMED.key))

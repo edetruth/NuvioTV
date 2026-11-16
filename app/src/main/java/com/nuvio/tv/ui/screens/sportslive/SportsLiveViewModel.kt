@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nuvio.tv.core.sportslive.SportsLiveItemBucketer
 import com.nuvio.tv.domain.model.ClaimedCatalog
+import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveTab
 import com.nuvio.tv.domain.repository.SportsLiveFailure
 import com.nuvio.tv.domain.repository.SportsLiveLoad
@@ -30,7 +31,7 @@ class SportsLiveViewModel @Inject constructor(
 
     private data class Selection(
         val tab: SportsLiveTab = SportsLiveTab.LIVE_NOW,
-        val sport: String? = null,
+        val filter: String? = null,
         val itemId: String? = null,
         val isRefreshing: Boolean = false,
         val failures: List<SportsLiveFailure> = emptyList(),
@@ -53,11 +54,12 @@ class SportsLiveViewModel @Inject constructor(
     }
 
     fun selectTab(tab: SportsLiveTab) {
-        selectionState.update { it.copy(tab = tab, sport = null, itemId = null) }
+        selectionState.update { it.copy(tab = tab, filter = null, itemId = null) }
     }
 
-    fun selectSport(sport: String?) {
-        selectionState.update { it.copy(sport = sport) }
+    /** [value] is a sport, or a group on the Channels tab; null means All. */
+    fun selectFilter(value: String?) {
+        selectionState.update { it.copy(filter = value) }
     }
 
     /**
@@ -134,9 +136,12 @@ class SportsLiveViewModel @Inject constructor(
             }
         }
         val tabItems = tabs[selection.tab].orEmpty()
-        val sports = tabItems.mapNotNull { it.sport }.distinct().sortedWith(String.CASE_INSENSITIVE_ORDER)
-        val sport = selection.sport?.takeIf { it in sports }
-        val visible = if (sport == null) tabItems else tabItems.filter { it.sport == sport }
+        // Channels are filtered by group, every other tab by sport.
+        val filterOf: (SportsLiveItem) -> String? =
+            if (selection.tab == SportsLiveTab.CHANNELS) SportsLiveItem::group else SportsLiveItem::sport
+        val filters = tabItems.mapNotNull(filterOf).distinct().sortedWith(String.CASE_INSENSITIVE_ORDER)
+        val filter = selection.filter?.takeIf { it in filters }
+        val visible = if (filter == null) tabItems else tabItems.filter { filterOf(it) == filter }
         val selectedId = selection.itemId?.takeIf { id -> visible.any { it.id == id } }
             ?: visible.firstOrNull()?.id
         return SportsLiveUiState(
@@ -145,8 +150,8 @@ class SportsLiveViewModel @Inject constructor(
             hasClaimedCatalogs = hasClaimed,
             tabs = tabs,
             selectedTab = selection.tab,
-            sports = sports,
-            selectedSport = sport,
+            filters = filters,
+            selectedFilter = filter,
             visibleItems = visible,
             selectedItemId = selectedId,
             failures = selection.failures,

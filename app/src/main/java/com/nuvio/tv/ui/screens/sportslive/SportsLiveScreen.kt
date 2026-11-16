@@ -90,7 +90,7 @@ fun SportsLiveScreen(
         else -> SportsLiveContent(
             uiState = uiState,
             onSelectTab = viewModel::selectTab,
-            onSelectSport = viewModel::selectSport,
+            onSelectFilter = viewModel::selectFilter,
             onSelectItem = viewModel::selectItem,
             onRefresh = { viewModel.refresh() },
             onPlay = onPlay,
@@ -122,7 +122,7 @@ private fun NoAddonsState(onOpenAddons: () -> Unit) {
 private fun SportsLiveContent(
     uiState: SportsLiveUiState,
     onSelectTab: (SportsLiveTab) -> Unit,
-    onSelectSport: (String?) -> Unit,
+    onSelectFilter: (String?) -> Unit,
     onSelectItem: (String?) -> Unit,
     onRefresh: () -> Unit,
     onPlay: (SportsLiveItem) -> Unit,
@@ -166,8 +166,8 @@ private fun SportsLiveContent(
         runCatching { cardFocusRequesters[key]?.requestFocus() }
     }
 
-    // Only a real tab or sport change scrolls to the top; the saved value survives navigation.
-    val filterKey = "${uiState.selectedTab.name}|${uiState.selectedSport.orEmpty()}"
+    // Only a real tab or filter change scrolls to the top; the saved value survives navigation.
+    val filterKey = "${uiState.selectedTab.name}|${uiState.selectedFilter.orEmpty()}"
     var listedFilterKey by rememberSaveable { mutableStateOf(filterKey) }
     LaunchedEffect(filterKey) {
         if (filterKey == listedFilterKey) return@LaunchedEffect
@@ -185,7 +185,7 @@ private fun SportsLiveContent(
             tabFocusRequesters = tabFocusRequesters,
             onSelectTab = onSelectTab,
             onOpenTab = { runCatching { selectedCardFocusRequester?.requestFocus() } },
-            onSelectSport = onSelectSport,
+            onSelectFilter = onSelectFilter,
             onRefresh = onRefresh
         )
         if (uiState.failures.isNotEmpty()) {
@@ -261,7 +261,7 @@ private fun SportsLiveChipRow(
     tabFocusRequesters: Map<SportsLiveTab, FocusRequester>,
     onSelectTab: (SportsLiveTab) -> Unit,
     onOpenTab: () -> Unit,
-    onSelectSport: (String?) -> Unit,
+    onSelectFilter: (String?) -> Unit,
     onRefresh: () -> Unit
 ) {
     // A plain scrolling Row keeps every chip composed, so the tab FocusRequesters stay attached.
@@ -289,14 +289,14 @@ private fun SportsLiveChipRow(
         Spacer(modifier = Modifier.width(NuvioTheme.spacing.md))
         SourceStatusFilterChip(
             name = stringResource(R.string.sports_live_filter_all),
-            isSelected = uiState.selectedSport == null,
-            onClick = { onSelectSport(null) }
+            isSelected = uiState.selectedFilter == null,
+            onClick = { onSelectFilter(null) }
         )
-        uiState.sports.forEach { sport ->
+        uiState.filters.forEach { filter ->
             SourceStatusFilterChip(
-                name = sport,
-                isSelected = sport == uiState.selectedSport,
-                onClick = { onSelectSport(sport) }
+                name = filter,
+                isSelected = filter == uiState.selectedFilter,
+                onClick = { onSelectFilter(filter) }
             )
         }
         Spacer(modifier = Modifier.width(NuvioTheme.spacing.md))

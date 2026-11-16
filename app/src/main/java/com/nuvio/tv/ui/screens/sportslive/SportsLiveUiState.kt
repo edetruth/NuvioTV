@@ -9,11 +9,11 @@ data class SportsLiveUiState(
     val hasClaimedCatalogs: Boolean = false,
     val tabs: Map<SportsLiveTab, List<SportsLiveItem>> = emptyMap(),
     val selectedTab: SportsLiveTab = SportsLiveTab.LIVE_NOW,
-    /** Sports present in [selectedTab], sorted alphabetically. */
-    val sports: List<String> = emptyList(),
+    /** Filter values present in [selectedTab], sorted alphabetically: groups on Channels, sports elsewhere. */
+    val filters: List<String> = emptyList(),
     /** null means All. */
-    val selectedSport: String? = null,
-    /** [selectedTab]'s items filtered by [selectedSport]. */
+    val selectedFilter: String? = null,
+    /** [selectedTab]'s items filtered by [selectedFilter]. */
     val visibleItems: List<SportsLiveItem> = emptyList(),
     val selectedItemId: String? = null,
     val failures: List<SportsLiveFailure> = emptyList(),
