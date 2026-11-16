@@ -30,7 +30,9 @@ import javax.inject.Singleton
  * live item trips addon rate limits, so an item is probed only on demand (when focused), and stream
  * fetches made elsewhere can report their result through [recordResult].
  * Only a finished search with nothing playable marks an item ended; rate limits, errors and
- * timeouts never do. An ended verdict expires after [CACHE_TTL_MS], so the item shows again.
+ * timeouts never do, nor does anything within [KICKOFF_GRACE_MS] of a known kickoff, since links are
+ * often posted after it. An ended verdict expires after [ENDED_TTL_MS], so the item shows again and
+ * the next focus re-checks it.
  */
 @Singleton
 class SportsLiveStreamProbe @Inject constructor(
@@ -39,7 +41,8 @@ class SportsLiveStreamProbe @Inject constructor(
     companion object {
         const val CONCURRENCY = 3
         const val PROBE_TIMEOUT_MS = 8_000L
-        const val CACHE_TTL_MS = 600_000L
+        const val ENDED_TTL_MS = 180_000L
+        const val KICKOFF_GRACE_MS = 30 * 60 * 1000L
         const val REPROBE_AFTER_MS = 120_000L
 
         private val rateLimitWords = listOf("rate limit", "too many")
@@ -71,26 +74,31 @@ class SportsLiveStreamProbe @Inject constructor(
         if (!inFlight.add(key)) return
         scope.launch {
             try {
-                permits.withPermit { record(key, search(item)) }
+                permits.withPermit { record(item, search(item)) }
             } finally {
                 inFlight.remove(key)
             }
         }
     }
 
-    /** Records the outcome of a stream fetch made elsewhere for the item with [itemKey]. */
-    fun recordResult(itemKey: String, result: NetworkResult<List<AddonStreams>>) {
-        record(itemKey, verdictOf(result))
+    /** Records the outcome of a stream fetch made elsewhere (zap, merged cards) for [item]. */
+    fun recordResult(item: SportsLiveItem, result: NetworkResult<List<AddonStreams>>) {
+        record(item, verdictOf(result))
     }
 
     /** [ended] null means inconclusive: the previous verdict stands, but the entry is stamped. */
-    private fun record(key: String, ended: Boolean?) {
-        val entry = Entry(ended ?: entries[key]?.ended ?: false, nowMs())
+    private fun record(item: SportsLiveItem, ended: Boolean?) {
+        val key = item.streamKey
+        val now = nowMs()
+        val start = item.startMs?.takeIf { item.startHasTimeOfDay }
+        val inGrace = start != null && now - start < KICKOFF_GRACE_MS
+        val verdict = if (ended == true && inGrace) false else ended
+        val entry = Entry(verdict ?: entries[key]?.ended ?: false, now)
         entries[key] = entry
         _ended.update { if (entry.ended) it + key else it - key }
         if (entry.ended) {
             scope.launch {
-                delay(CACHE_TTL_MS)
+                delay(ENDED_TTL_MS)
                 // Expire only if no newer result replaced this one.
                 if (entries.remove(key, entry)) _ended.update { it - key }
             }

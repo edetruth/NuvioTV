@@ -93,7 +93,7 @@ class SportsLiveStreamProbeTest {
     }
 
     @Test
-    fun `focus re-probes only after two minutes and an ended verdict expires after ten`() = runTest {
+    fun `focus re-probes only after two minutes and an ended verdict expires after three`() = runTest {
         streams.responses["x"] = { flowOf(NetworkResult.Success(emptyList())) }
         val probe = newProbe()
         probe.reprobeIfStale(item("x"))
@@ -111,8 +111,8 @@ class SportsLiveStreamProbeTest {
         assertEquals(2, streams.calls.size)
         assertEquals(setOf("sports|x"), probe.ended.value)
 
-        // Ten minutes after the latest verdict the item shows again.
-        advanceTimeBy(SportsLiveStreamProbe.CACHE_TTL_MS - 1)
+        // Three minutes after the latest verdict the item shows again.
+        advanceTimeBy(SportsLiveStreamProbe.ENDED_TTL_MS - 1)
         assertEquals(setOf("sports|x"), probe.ended.value)
         advanceTimeBy(1)
         runCurrent()
@@ -123,15 +123,29 @@ class SportsLiveStreamProbeTest {
     fun `a result reported by another stream fetch marks or clears an item`() = runTest {
         val probe = newProbe()
 
-        probe.recordResult("sports|x", NetworkResult.Error("none", NetworkResult.STREAMS_NOT_FOUND_CODE))
+        probe.recordResult(item("x"), NetworkResult.Error("none", NetworkResult.STREAMS_NOT_FOUND_CODE))
         assertEquals(setOf("sports|x"), probe.ended.value)
 
-        probe.recordResult("sports|x", NetworkResult.Error("HTTP 503", 503))
+        probe.recordResult(item("x"), NetworkResult.Error("HTTP 503", 503))
         assertEquals(setOf("sports|x"), probe.ended.value)
 
-        probe.recordResult("sports|x", NetworkResult.Success(listOf(AddonStreams("Sports", null, listOf(PLAYABLE)))))
+        probe.recordResult(item("x"), NetworkResult.Success(listOf(AddonStreams("Sports", null, listOf(PLAYABLE)))))
         assertEquals(emptySet<String>(), probe.ended.value)
         assertEquals(0, streams.calls.size)
+    }
+
+    @Test
+    fun `a game that kicked off under 30 minutes ago is never marked ended`() = runTest {
+        streams.responses["new"] = { flowOf(NetworkResult.Success(emptyList())) }
+        streams.responses["old"] = { flowOf(NetworkResult.Success(emptyList())) }
+        val probe = newProbe()
+        advanceTimeBy(HOUR)
+
+        probe.reprobeIfStale(item("new", startMs = HOUR - 10 * MINUTE))
+        probe.reprobeIfStale(item("old", startMs = HOUR - 45 * MINUTE))
+        runCurrent()
+
+        assertEquals(setOf("sports|old"), probe.ended.value)
     }
 
     @Test
@@ -215,7 +229,10 @@ class SportsLiveStreamProbeTest {
             NetworkResult.Success(listOf(AddonStreams(addonName = "Sports", addonLogo = null, streams = streams.toList())))
         )
 
-        fun item(id: String) = SportsLiveItem(
+        const val MINUTE = 60_000L
+        const val HOUR = 60 * MINUTE
+
+        fun item(id: String, startMs: Long? = null) = SportsLiveItem(
             meta = MetaPreview(
                 id = id,
                 type = ContentType.UNKNOWN,
@@ -238,8 +255,9 @@ class SportsLiveStreamProbeTest {
             kind = SportsLiveKind.EVENTS,
             isLive = true,
             isChannel = false,
-            startMs = null,
-            sport = null
+            startMs = startMs,
+            sport = null,
+            startHasTimeOfDay = startMs != null
         )
     }
 }
