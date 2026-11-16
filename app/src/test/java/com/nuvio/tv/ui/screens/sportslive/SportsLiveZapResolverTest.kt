@@ -339,6 +339,18 @@ class SportsLiveZapResolverTest {
         assertEquals(2, streams.calls.size)
     }
 
+    @Test
+    fun `an errored key invalidated by content id is re-resolved next time`() = runTest {
+        streams.response = { result(SD) }
+        val resolver = newResolver()
+
+        resolver.resolve(ITEM)
+        // The full player, which knows only the content id, evicts the stream that just failed.
+        resolver.invalidateByContentId(ITEM.id)
+        resolver.resolve(ITEM)
+        assertEquals(2, streams.calls.size)
+    }
+
     private class FakeStreamRepository : StreamRepository {
         var response: () -> Flow<NetworkResult<List<AddonStreams>>> = { flowOf() }
 

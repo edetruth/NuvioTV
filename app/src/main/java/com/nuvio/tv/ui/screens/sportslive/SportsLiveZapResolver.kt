@@ -99,6 +99,9 @@ class SportsLiveZapResolver @Inject constructor(
     /** Drops the cached resolve for [item] (after a playback failure), so the next resolve refreshes it. */
     fun invalidate(item: SportsLiveItem) = resolveCache.invalidate(item.streamKey)
 
+    /** Drops cached resolves for content id [contentId] (the full player knows only the content id). */
+    fun invalidateByContentId(contentId: String) = resolveCache.invalidateByContentId(contentId)
+
     /**
      * Every stream of [item] and its alternates, fetched in parallel (each within [timeoutMs]):
      * the primary's first, then each alternate's in its order (addon order). Empty when none came back.

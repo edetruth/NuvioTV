@@ -47,7 +47,9 @@ class SportsLiveViewModel internal constructor(
     /** The mini player plays: it takes priority, so no preview starts meanwhile. */
     miniPlayerActive: Flow<Boolean> = flowOf(false),
     /** Data saver: when on, the on-focus ended-probe is skipped (hover preview is already gated off). */
-    dataSaver: Flow<Boolean> = flowOf(false)
+    dataSaver: Flow<Boolean> = flowOf(false),
+    /** Drops [item]'s cached resolve after its preview failed, so the next play/preview re-resolves. */
+    private val onResolveFailed: (SportsLiveItem) -> Unit = {}
 ) : ViewModel() {
 
     @Inject
@@ -66,7 +68,8 @@ class SportsLiveViewModel internal constructor(
             SportsLiveDataSaver.hoverPreviewAllowed(hover, saver)
         },
         miniPlayerActive = SportsLiveMiniPlayers.controller.state.map { it is SportsLiveMiniState.Playing },
-        dataSaver = prefs.dataSaver
+        dataSaver = prefs.dataSaver,
+        onResolveFailed = resolver::invalidate
     )
 
     private data class Selection(
@@ -160,7 +163,11 @@ class SportsLiveViewModel internal constructor(
 
     fun onPreviewFirstFrame(item: SportsLiveItem) = previewController.onFirstFrame(item)
 
-    fun onPreviewError(item: SportsLiveItem) = previewController.onError(item)
+    fun onPreviewError(item: SportsLiveItem) {
+        // The previewed stream failed to play: drop its cached resolve so it is re-resolved next time.
+        onResolveFailed(item)
+        previewController.onError(item)
+    }
 
     /** [item]'s preview when it is playing on screen, stopped so the full player can take its stream over. */
     fun takeOverPreview(item: SportsLiveItem): SportsLivePreviewState.Playing? = previewController.takeOver(item)

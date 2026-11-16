@@ -251,7 +251,7 @@ class PlayerRuntimeController(
         // Sports & Live launches lose their proxy response headers in the nav args (request-only), so
         // the play/zap path stashes them here; seed them before the mime inference below. Guarded by a
         // URL match, so non-sports launches keep the empty default.
-        SportsLiveLaunchHeaders.forUrl(initialStreamUrl, currentStreamUrl)
+        SportsLiveLaunchHeaders.consume(initialStreamUrl, currentStreamUrl)
             .takeIf { it.isNotEmpty() }
             ?.let { currentStreamResponseHeaders = it }
         currentStreamMimeType = PlayerMediaSourceFactory.inferMimeType(

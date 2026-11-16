@@ -95,6 +95,9 @@ class NuvioApplication : Application(), SingletonImageLoader.Factory {
         androidTvChannelSyncService.start()
         serverUserStateProjection.start()
         SportsLiveExtraSources.install { item -> sportsLiveZapResolver.get().resolveAlternates(item) }
+        SportsLiveExtraSources.installResolveInvalidator { contentId ->
+            sportsLiveZapResolver.get().invalidateByContentId(contentId)
+        }
         // Load locale synchronously so it's available before Activity.attachBaseContext.
         // SharedPreferences reads are fast (cached in memory after first access).
         val tag = getSharedPreferences("app_locale", Context.MODE_PRIVATE)

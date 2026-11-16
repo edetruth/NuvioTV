@@ -47,6 +47,17 @@ class SportsLiveResolveCache @Inject constructor() {
         entries.remove(key)
     }
 
+    /**
+     * Drops every entry for content id [contentId] (streamKey is "addonId|id"), used by the full
+     * player — which knows only the content id — to evict a stream that just failed so the next
+     * play/zap re-resolves instead of serving the dead URL.
+     */
+    fun invalidateByContentId(contentId: String) {
+        entries.keys
+            .filter { it == contentId || it.endsWith("|$contentId") }
+            .forEach { entries.remove(it) }
+    }
+
     @VisibleForTesting
     internal fun clear() = entries.clear()
 }

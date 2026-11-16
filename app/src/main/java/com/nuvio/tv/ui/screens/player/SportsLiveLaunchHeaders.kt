@@ -29,4 +29,15 @@ internal object SportsLiveLaunchHeaders {
         val stored = playbackUrl ?: return emptyMap()
         return if (stored == initialUrl || stored == normalizedUrl) responseHeaders else emptyMap()
     }
+
+    /**
+     * Like [forUrl], but clears the stored entry once it matches, so a consumed entry cannot linger
+     * for the process lifetime. The controller keeps its own copy of the headers, so a later rebuild
+     * is unaffected.
+     */
+    fun consume(initialUrl: String, normalizedUrl: String): Map<String, String> {
+        val headers = forUrl(initialUrl, normalizedUrl)
+        if (headers.isNotEmpty()) set(null, emptyMap())
+        return headers
+    }
 }

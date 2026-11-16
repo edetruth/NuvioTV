@@ -37,6 +37,8 @@ private const val SPORTS_STALL_POLL_INTERVAL_MS = 2_000L
  */
 internal fun PlayerRuntimeController.trySportsLiveFailoverAfterError(errorMessage: String): Boolean {
     if (!SportsLiveExtraSources.isSportsPlayback(contentId)) return false
+    // The source that just failed must not be re-served from the resolve cache next time.
+    SportsLiveExtraSources.invalidateResolve(contentId)
     if (sourceFallbackJob?.isActive == true) return true
     cancelSportsStallWatchdog()
 

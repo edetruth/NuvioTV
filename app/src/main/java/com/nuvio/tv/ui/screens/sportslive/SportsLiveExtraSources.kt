@@ -49,9 +49,26 @@ object SportsLiveExtraSources {
     @Volatile
     private var fetcher: (suspend (SportsLiveItem) -> SportsLiveExtraLookup)? = null
 
+    // Drops the resolve cache for a content id; the full player uses it to evict a dead stream.
+    @Volatile
+    private var resolveInvalidator: ((String) -> Unit)? = null
+
     /** Sets how a registered game's alternates are resolved; the Application installs the zap resolver. */
     fun install(fetch: suspend (SportsLiveItem) -> SportsLiveExtraLookup) {
         fetcher = fetch
+    }
+
+    /** Sets how a content id's resolve cache is evicted; the Application installs the zap resolver. */
+    fun installResolveInvalidator(invalidate: (String) -> Unit) {
+        resolveInvalidator = invalidate
+    }
+
+    /**
+     * Evicts the resolve cache for [contentId] after a playback failure, so the next play/zap of this
+     * game/channel re-resolves instead of serving the dead URL. No-op until the invalidator is installed.
+     */
+    fun invalidateResolve(contentId: String?) {
+        if (contentId != null) resolveInvalidator?.invoke(contentId)
     }
 
     /** Registers merged [item] for the player showing [contentId]; a single-source item only clears it. */
@@ -120,6 +137,7 @@ object SportsLiveExtraSources {
         synchronized(entries) { entries.clear() }
         synchronized(sportsPlaybackIds) { sportsPlaybackIds.clear() }
         fetcher = null
+        resolveInvalidator = null
     }
 }
 
