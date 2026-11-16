@@ -20,7 +20,6 @@ import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.domain.repository.SportsLiveRepository
 import com.nuvio.tv.ui.screens.stream.StreamPlaybackInfo
-import com.nuvio.tv.ui.screens.stream.streamPlaybackInfoFor
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -201,35 +200,14 @@ class SportsLiveZapViewModel @Inject constructor(
         controller.pick(contentId, item, items)
     }
 
-    private suspend fun targetFor(item: SportsLiveItem, stream: Stream): SportsLiveZapTarget {
-        val returnToHomeOnBack = SportsLiveZapSessions.current()?.returnToHomeOnBack == true
-        val needsPreparation = stream.serverTarget != null ||
-            stream.youTubeIdToResolve() != null ||
-            directDebridResolver.shouldResolveToPlayableStream(stream)
-        val playback = if (needsPreparation) {
-            null
-        } else {
-            // Same mapping as the Stream screen's getStreamForPlayback, with the item as the content.
-            streamPlaybackInfoFor(
-                stream = stream,
-                title = item.meta.name,
-                year = null,
-                contentId = item.id,
-                contentType = item.apiType,
-                contentName = item.meta.name,
-                poster = item.meta.poster,
-                backdrop = item.meta.backdropUrl,
-                logo = item.meta.logo,
-                videoId = item.id,
-                season = null,
-                episode = null,
-                episodeTitle = null,
-                profileId = profileId,
-                contentLanguage = null
-            ).takeIf { it.url != null || it.isTorrent }
-        }
-        return SportsLiveZapTarget(item, playback, returnToHomeOnBack)
-    }
+    private suspend fun targetFor(item: SportsLiveItem, stream: Stream): SportsLiveZapTarget =
+        sportsLiveZapTarget(
+            item = item,
+            stream = stream,
+            profileId = profileId,
+            returnToHomeOnBack = SportsLiveZapSessions.current()?.returnToHomeOnBack == true,
+            directDebridResolver = directDebridResolver
+        )
 }
 
 private const val BANNER_MS = 3_000L

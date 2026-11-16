@@ -125,8 +125,71 @@ class SportsLiveZapResolverTest {
         assertEquals(SportsLiveZapResolver.EARLY_PICK_MS, testScheduler.currentTime)
     }
 
+    @Test
+    fun `resolveAll lists the primary's streams first, then each alternate's, fetched in parallel`() = runTest {
+        streams.responses["game"] = { flow { delay(2_000); emit(success(SD)) } }
+        streams.responses["alt1"] = { flowOf(success(HD, addon = "Other")) }
+        streams.responses["alt2"] = { flow { delay(1_000); emit(success(OTHER_HD, JUNK, addon = "Third")) } }
+
+        val all = newResolver().resolveAll(MERGED)
+
+        assertEquals(listOf(SD, HD, OTHER_HD), all)
+        assertEquals(2_000L, testScheduler.currentTime)
+        verify { probe.recordResult(MERGED, any()) }
+        verify { probe.recordResult(ALT1, any()) }
+        verify { probe.recordResult(ALT2, any()) }
+    }
+
+    @Test
+    fun `resolveAll keeps a timed out source's partial streams but does not report it`() = runTest {
+        streams.responses["game"] = { flow { emit(success(SD)); awaitCancellation() } }
+        streams.responses["alt1"] = { flowOf(success(HD, addon = "Other")) }
+        streams.responses["alt2"] = { flowOf(success(addon = "Third")) }
+
+        assertEquals(listOf(SD, HD), newResolver().resolveAll(MERGED))
+        verify(exactly = 0) { probe.recordResult(MERGED, any()) }
+        verify { probe.recordResult(ALT1, any()) }
+        verify { probe.recordResult(ALT2, any()) }
+    }
+
+    @Test
+    fun `a merged game plays the primary's best stream when it has one`() = runTest {
+        settings = PlayerSettings(streamAutoPlayMode = StreamAutoPlayMode.REGEX_MATCH, streamAutoPlayRegex = "1080")
+        streams.responses["game"] = { flowOf(success(SD)) }
+        streams.responses["alt1"] = { flowOf(success(HD, addon = "Other")) }
+        streams.responses["alt2"] = { flowOf(success(addon = "Third")) }
+
+        assertEquals(SD, newResolver().resolve(MERGED))
+    }
+
+    @Test
+    fun `a merged game falls back to the first alternate with a playable stream`() = runTest {
+        streams.responses["game"] = { flowOf(success(WEB, JUNK)) }
+        streams.responses["alt1"] = { flowOf(success(addon = "Other")) }
+        streams.responses["alt2"] = { flowOf(success(OTHER_HD, addon = "Third")) }
+
+        assertEquals(OTHER_HD, newResolver().resolve(MERGED))
+        verify { probe.recordResult(MERGED, any()) }
+        verify { probe.recordResult(ALT1, any()) }
+        verify { probe.recordResult(ALT2, any()) }
+    }
+
+    @Test
+    fun `a merged game with only empty or junk sources resolves to nothing`() = runTest {
+        streams.responses["game"] = { flowOf(success(JUNK)) }
+        streams.responses["alt1"] = { flowOf(NetworkResult.Error("none", NetworkResult.STREAMS_NOT_FOUND_CODE)) }
+        streams.responses["alt2"] = { flow { throw IllegalStateException("boom") } }
+
+        val resolver = newResolver()
+        assertNull(resolver.resolve(MERGED))
+        assertEquals(emptyList<Stream>(), resolver.resolveAll(MERGED))
+    }
+
     private class FakeStreamRepository : StreamRepository {
         var response: () -> Flow<NetworkResult<List<AddonStreams>>> = { flowOf() }
+
+        /** Per video id; ids not listed get [response]. */
+        val responses = mutableMapOf<String, () -> Flow<NetworkResult<List<AddonStreams>>>>()
         val calls = mutableListOf<Triple<String, String, Boolean>>()
 
         override fun getStreamsFromAllAddons(
@@ -140,7 +203,7 @@ class SportsLiveZapResolverTest {
             continuePluginOnly: Boolean
         ): Flow<NetworkResult<List<AddonStreams>>> = flow {
             calls += Triple(type, videoId, forceRefresh)
-            emitAll(response())
+            emitAll((responses[videoId] ?: response)())
         }
 
         override fun setLocalPluginSearchPaused(paused: Boolean) = Unit
@@ -160,8 +223,10 @@ class SportsLiveZapResolverTest {
         val SD = stream(url = "https://cdn.example/sd.m3u8", name = "Sports 720p")
         val HD = stream(url = "https://cdn.example/hd.m3u8", name = "Sports 1080p")
         val WEB = stream(externalUrl = "https://site.example/watch", name = "Watch on web")
+        val OTHER_HD = stream(url = "https://cdn3.example/hd.m3u8", name = "Third 1080p", addonName = "Third")
+        val JUNK = stream(url = "https://site.example/", name = "Support us")
 
-        fun stream(url: String? = null, externalUrl: String? = null, name: String) = Stream(
+        fun stream(url: String? = null, externalUrl: String? = null, name: String, addonName: String = "Sports") = Stream(
             name = name,
             title = null,
             description = null,
@@ -171,12 +236,12 @@ class SportsLiveZapResolverTest {
             fileIdx = null,
             externalUrl = externalUrl,
             behaviorHints = null,
-            addonName = "Sports",
+            addonName = addonName,
             addonLogo = null
         )
 
-        fun success(vararg streams: Stream): NetworkResult<List<AddonStreams>> =
-            NetworkResult.Success(listOf(AddonStreams(addonName = "Sports", addonLogo = null, streams = streams.toList())))
+        fun success(vararg streams: Stream, addon: String = "Sports"): NetworkResult<List<AddonStreams>> =
+            NetworkResult.Success(listOf(AddonStreams(addonName = addon, addonLogo = null, streams = streams.toList())))
 
         fun result(vararg streams: Stream): Flow<NetworkResult<List<AddonStreams>>> =
             flowOf(NetworkResult.Loading, success(*streams))
@@ -220,5 +285,9 @@ class SportsLiveZapResolverTest {
             startMs = null,
             sport = null
         )
+
+        val ALT1 = ITEM.copy(meta = ITEM.meta.copy(id = "alt1"), addonId = "other", addonName = "Other")
+        val ALT2 = ITEM.copy(meta = ITEM.meta.copy(id = "alt2"), addonId = "third", addonName = "Third")
+        val MERGED = ITEM.copy(alternates = listOf(ALT1, ALT2))
     }
 }

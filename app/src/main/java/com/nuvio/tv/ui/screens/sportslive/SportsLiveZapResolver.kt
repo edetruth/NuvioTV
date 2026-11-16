@@ -3,6 +3,7 @@ package com.nuvio.tv.ui.screens.sportslive
 import androidx.annotation.VisibleForTesting
 import com.nuvio.tv.core.network.NetworkResult
 import com.nuvio.tv.core.player.StreamAutoPlaySelector
+import com.nuvio.tv.core.streams.UnplayableStreamFilter
 import com.nuvio.tv.data.local.PlayerSettings
 import com.nuvio.tv.data.local.PlayerSettingsDataStore
 import com.nuvio.tv.data.local.StreamAutoPlayMode
@@ -14,6 +15,9 @@ import com.nuvio.tv.domain.model.enabledAddons
 import com.nuvio.tv.domain.repository.AddonRepository
 import com.nuvio.tv.domain.repository.StreamRepository
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
@@ -54,20 +58,78 @@ class SportsLiveZapResolver @Inject constructor(
 
     /**
      * The stream to play for [item], or null when nothing playable came back within [timeoutMs]
-     * or the search failed.
+     * or the search failed. A merged game ([SportsLiveItem.alternates]) plays the best of the
+     * primary's streams, else the best of the first alternate that has one.
      */
     suspend fun resolve(item: SportsLiveItem): Stream? =
         try {
-            search(item)
+            if (item.alternates.isEmpty()) search(item) else bestAcrossSources(item)
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
             null
         }
 
+    /**
+     * Every stream of [item] and its alternates, fetched in parallel (each within [timeoutMs]):
+     * the primary's first, then each alternate's in its order (addon order). Empty when none came back.
+     */
+    suspend fun resolveAll(item: SportsLiveItem): List<Stream> =
+        try {
+            fetchSources(item, installedOrder()).flatten()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            emptyList()
+        }
+
+    private suspend fun installedOrder(): List<String> =
+        addonRepository.getInstalledAddons().first().enabledAddons().map { it.displayName }
+
+    private suspend fun bestAcrossSources(item: SportsLiveItem): Stream? {
+        val settings = playerSettingsDataStore.playerSettings.first()
+        val installedOrder = installedOrder()
+        return fetchSources(item, installedOrder).firstNotNullOfOrNull { streams ->
+            preferredStream(streams, settings, installedOrder.toSet())
+                ?: streams.firstOrNull(StreamAutoPlaySelector::isPlayable)
+        }
+    }
+
+    /** One list per source: the primary's, then each alternate's in order. */
+    private suspend fun fetchSources(item: SportsLiveItem, installedOrder: List<String>): List<List<Stream>> =
+        coroutineScope {
+            (listOf(item) + item.alternates)
+                .map { source -> async { fetch(source, installedOrder) } }
+                .awaitAll()
+        }
+
+    /**
+     * [source]'s streams in addon order, junk dropped. A finished fetch is reported to the probe for
+     * the source's own key; a timeout keeps what came back so far and reports nothing.
+     */
+    private suspend fun fetch(source: SportsLiveItem, installedOrder: List<String>): List<Stream> {
+        var last: NetworkResult<List<AddonStreams>>? = null
+        val finished = try {
+            withTimeoutOrNull(timeoutMs) {
+                streamRepository.getStreamsFromAllAddons(source.apiType, source.id).collect { last = it }
+                true
+            } == true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            return emptyList()
+        }
+        val result = last
+        if (finished && result != null) streamProbe.recordResult(source, result)
+        return StreamAutoPlaySelector.orderAddonStreams(
+            (result as? NetworkResult.Success)?.data.orEmpty(),
+            installedOrder
+        ).flatMap { it.streams }.filterNot(UnplayableStreamFilter::isUnplayableJunk)
+    }
+
     private suspend fun search(item: SportsLiveItem): Stream? {
         val settings = playerSettingsDataStore.playerSettings.first()
-        val installedOrder = addonRepository.getInstalledAddons().first().enabledAddons().map { it.displayName }
+        val installedOrder = installedOrder()
 
         var last: NetworkResult<List<AddonStreams>>? = null
         var earlyPickAllowed = false

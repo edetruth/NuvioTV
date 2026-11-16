@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -35,6 +36,7 @@ import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -62,12 +64,49 @@ import kotlinx.coroutines.delay
 @Composable
 fun SportsLiveScreen(
     viewModel: SportsLiveViewModel = hiltViewModel(),
+    playViewModel: SportsLivePlayViewModel = hiltViewModel(),
     onPlay: (SportsLiveItem) -> Unit,
+    onPlayTarget: (SportsLiveZapTarget) -> Unit,
     onOpenDetail: (SportsLiveItem) -> Unit,
     onOpenAddons: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val followedTeams by viewModel.followedTeams.collectAsStateWithLifecycle()
+    val playState by playViewModel.state.collectAsStateWithLifecycle()
+
+    // A merged game plays across its sources; every other card opens its Stream screen as before.
+    val context = LocalContext.current
+    val currentOnPlay by rememberUpdatedState(onPlay)
+    val currentOnPlayTarget by rememberUpdatedState(onPlayTarget)
+    LaunchedEffect(playViewModel) {
+        playViewModel.events.collect { event ->
+            when (event) {
+                is SportsLivePlayEvent.OpenStreamScreen -> {
+                    viewModel.startZapSession(event.item)
+                    currentOnPlay(event.item)
+                }
+                is SportsLivePlayEvent.Play -> {
+                    viewModel.startZapSession(event.target.item)
+                    currentOnPlayTarget(event.target)
+                }
+                is SportsLivePlayEvent.NoStream -> Toast.makeText(
+                    context,
+                    context.getString(R.string.sports_live_zap_no_stream, event.name),
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+    }
+    when (val state = playState) {
+        is SportsLivePlayState.Resolving -> SportsLiveResolvingDialog(state.item, onDismiss = playViewModel::dismiss)
+        is SportsLivePlayState.Picking -> SportsLiveStreamPickerDialog(
+            item = state.item,
+            streams = state.streams,
+            onPick = playViewModel::pick,
+            onDismiss = playViewModel::dismiss
+        )
+        SportsLivePlayState.Idle -> Unit
+    }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -101,10 +140,7 @@ fun SportsLiveScreen(
             onSelectFilter = viewModel::selectFilter,
             onSelectItem = viewModel::selectItem,
             onRefresh = { viewModel.refresh() },
-            onPlay = { item ->
-                viewModel.startZapSession(item)
-                onPlay(item)
-            },
+            onPlay = playViewModel::play,
             onOpenDetail = onOpenDetail,
             onToggleFollow = viewModel::toggleFollow
         )

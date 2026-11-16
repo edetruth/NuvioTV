@@ -141,32 +141,34 @@ private fun playerRouteFor(
 private fun NavHostController.previousIsStreamScreen(): Boolean =
     previousBackStackEntry?.destination?.route?.startsWith("stream/") == true
 
+/** The Player route for a Sports & Live zap target; null when its stream needs the Stream screen. */
+private fun sportsLivePlayerRoute(target: SportsLiveZapTarget): String? {
+    val playback = target.playback ?: return null
+    val streamUrl = playback.url ?: if (playback.isTorrent) "torrent://${playback.infoHash}" else return null
+    return playerRouteFor(
+        streamUrl = streamUrl,
+        playbackInfo = playback,
+        autoPlayNav = false,
+        returnToDetailOnBack = false,
+        returnToHomeOnBack = target.returnToHomeOnBack,
+        startFromBeginning = false,
+        fromLinkCache = false
+    )
+}
+
 /**
  * Replaces the playing Player with the zap target's. The first game's Stream screen (when it is
  * below the player) goes too, so Back from any zapped game returns once to where the session began.
  * A stream that needs the Stream screen's preparation opens the target's Stream screen instead.
  */
 private fun navigateToSportsLiveZapTarget(navController: NavHostController, target: SportsLiveZapTarget) {
-    val playback = target.playback
-    val streamUrl = playback?.let { it.url ?: if (it.isTorrent) "torrent://${it.infoHash}" else null }
-    val route = if (playback != null && streamUrl != null) {
-        playerRouteFor(
-            streamUrl = streamUrl,
-            playbackInfo = playback,
-            autoPlayNav = false,
-            returnToDetailOnBack = false,
-            returnToHomeOnBack = target.returnToHomeOnBack,
-            startFromBeginning = false,
-            fromLinkCache = false
-        )
-    } else {
-        streamRouteFor(target.item, target.returnToHomeOnBack)
-    }
+    val playerRoute = sportsLivePlayerRoute(target)
+    val route = playerRoute ?: streamRouteFor(target.item, target.returnToHomeOnBack)
     val popUpToRoute = if (navController.previousIsStreamScreen()) Screen.Stream.route else Screen.Player.route
     navController.navigate(route) {
         popUpTo(popUpToRoute) { inclusive = true }
     }
-    if (playback == null || streamUrl == null) {
+    if (playerRoute == null) {
         // The target's Stream screen is a hop: the stream picked there replaces it, so Back still returns once.
         navController.currentBackStackEntry?.savedStateHandle?.set(SPORTS_LIVE_ZAP_HOP, true)
     }
@@ -1346,6 +1348,10 @@ private fun PlaybackNavHost(
         rootComposable(Screen.SportsLive.route) {
             SportsLiveScreen(
                 onPlay = { item -> navController.navigate(streamRouteFor(item, returnToHomeOnBack = false)) },
+                // A merged game's stream, picked across its sources, plays straight from the section.
+                onPlayTarget = { target ->
+                    navController.navigate(sportsLivePlayerRoute(target) ?: streamRouteFor(target.item, returnToHomeOnBack = false))
+                },
                 onOpenDetail = { item ->
                     navController.navigate(
                         Screen.Detail.createRoute(
