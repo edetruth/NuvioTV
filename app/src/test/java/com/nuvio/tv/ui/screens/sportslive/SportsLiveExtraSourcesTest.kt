@@ -13,11 +13,14 @@ import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.ui.screens.player.nextSourceFallbackCandidate
 import com.nuvio.tv.ui.screens.player.sourceFallbackKey
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -38,7 +41,10 @@ class SportsLiveExtraSourcesTest {
         SportsLiveExtraSources.install { item ->
             fetches++
             delay(100)
-            item.alternates.map { alt -> stream("${alt.id} stream", "https://${alt.addonName}.example/${alt.id}.m3u8", alt.addonName) }
+            SportsLiveExtraLookup(
+                item.alternates.map { alt -> stream("${alt.id} stream", "https://${alt.addonName}.example/${alt.id}.m3u8", alt.addonName) },
+                complete = true
+            )
         }
     }
 
@@ -92,6 +98,43 @@ class SportsLiveExtraSourcesTest {
     }
 
     @Test
+    fun `a cancelled lookup caches nothing`() = runTest {
+        SportsLiveExtraSources.install { awaitCancellation() }
+        SportsLiveExtraSources.register("game", MERGED)
+
+        val lookup = launch { SportsLiveExtraSources.extraStreamsFor("game") }
+        runCurrent()
+        lookup.cancel()
+        runCurrent()
+
+        assertTrue(SportsLiveExtraSources.cachedStreamsFor("game").isEmpty())
+        SportsLiveExtraSources.install { SportsLiveExtraLookup(listOf(EXTRA), complete = true) }
+        assertEquals(listOf(EXTRA), SportsLiveExtraSources.extraStreamsFor("game"))
+    }
+
+    @Test
+    fun `an empty or incomplete lookup is not cached, and a refresh looks again`() = runTest {
+        var next = SportsLiveExtraLookup(emptyList(), complete = true)
+        SportsLiveExtraSources.install { fetches++; next }
+        SportsLiveExtraSources.register("game", MERGED)
+
+        assertTrue(SportsLiveExtraSources.extraStreamsFor("game").isEmpty())
+        next = SportsLiveExtraLookup(listOf(EXTRA), complete = false)
+        // A timed-out lookup's streams are shown but not kept.
+        assertEquals(listOf(EXTRA), SportsLiveExtraSources.extraStreamsFor("game"))
+        assertTrue(SportsLiveExtraSources.cachedStreamsFor("game").isEmpty())
+        next = SportsLiveExtraLookup(listOf(EXTRA), complete = true)
+        assertEquals(listOf(EXTRA), SportsLiveExtraSources.extraStreamsFor("game"))
+        assertEquals(listOf(EXTRA), SportsLiveExtraSources.cachedStreamsFor("game"))
+        assertEquals(3, fetches)
+
+        SportsLiveExtraSources.extraStreamsFor("game")
+        assertEquals(3, fetches)
+        SportsLiveExtraSources.extraStreamsFor("game", refresh = true)
+        assertEquals(4, fetches)
+    }
+
+    @Test
     fun `registering a single-source item clears the content id`() {
         SportsLiveExtraSources.register("game", MERGED)
 
@@ -137,6 +180,36 @@ class SportsLiveExtraSourcesTest {
         assertEquals(listOf("one", "two"), last.data.map { it.addonName })
         assertEquals(listOf("p"), last.data[0].streams.map { it.name })
         assertEquals(listOf("alt stream"), last.data[1].streams.map { it.name })
+    }
+
+    @Test
+    fun `a search still loading shows Loading, then the primary's streams with the extras`() = runTest {
+        SportsLiveExtraSources.register("game", MERGED)
+        val primary = stream("p", "https://one.example/p.m3u8", "one")
+        val search = flow {
+            emit(NetworkResult.Loading)
+            delay(500)
+            emit(NetworkResult.Success(listOf(AddonStreams("one", null, listOf(primary)))))
+        }
+
+        val results = search.withSportsLiveExtras("game").toList()
+
+        assertEquals(NetworkResult.Loading, results.first())
+        val last = results.last() as NetworkResult.Success
+        assertEquals(listOf("p", "alt stream"), last.data.flatMap { g -> g.streams.map { it.name } })
+    }
+
+    @Test
+    fun `extras the search already lists are not added again`() {
+        val shared = stream("shared", "https://cdn.example/shared.m3u8", "two")
+        val extra = stream("extra", "https://two.example/extra.m3u8", "two")
+
+        val result = withExtraStreams(
+            NetworkResult.Success(listOf(AddonStreams("one", null, listOf(shared.copy(addonName = "one"))))),
+            listOf(shared, extra)
+        )
+
+        assertEquals(listOf(listOf("shared"), listOf("extra")), (result as NetworkResult.Success).data.map { g -> g.streams.map { it.name } })
     }
 
     @Test
@@ -221,6 +294,48 @@ class SportsLiveExtraSourcesTest {
     }
 
     @Test
+    fun `an extra that is the torrent that just failed is skipped`() {
+        val failed = stream("t", url = null, addon = "two").copy(infoHash = "ABC")
+        val primaryTried = primary.map { it.sourceFallbackKey() }.toSet()
+
+        val next = sportsLiveFallbackCandidate(
+            streams = primary,
+            extras = listOf(failed, extras[0]),
+            extrasAllowed = true,
+            settings = settings,
+            installedAddonNames = setOf("one", "two"),
+            triedKeys = primaryTried,
+            failedAddonName = "two",
+            failedInfoHash = "abc"
+        )
+
+        assertEquals(extras[0], next)
+    }
+
+    @Test
+    fun `with a regex or chosen sources, only extras the user's settings pick are tried`() {
+        val primaryTried = primary.map { it.sourceFallbackKey() }.toSet()
+        fun next(settings: PlayerSettings) = sportsLiveFallbackCandidate(
+            streams = primary,
+            extras = extras,
+            extrasAllowed = true,
+            settings = settings,
+            installedAddonNames = setOf("one", "two"),
+            triedKeys = primaryTried,
+            failedAddonName = "one",
+            failedInfoHash = null
+        )
+
+        // No extra matches the regex: none is tried.
+        assertNull(next(settings.copy(streamAutoPlayMode = StreamAutoPlayMode.REGEX_MATCH, streamAutoPlayRegex = "4K")))
+        assertEquals(extras[1], next(settings.copy(streamAutoPlayMode = StreamAutoPlayMode.REGEX_MATCH, streamAutoPlayRegex = "E2")))
+        // Addon "two" is not among the chosen addons.
+        assertNull(next(settings.copy(streamAutoPlaySelectedAddons = setOf("one"))))
+        // Manual mode has no choice of its own: the first playable extra.
+        assertEquals(extras[0], next(settings.copy(streamAutoPlayMode = StreamAutoPlayMode.MANUAL)))
+    }
+
+    @Test
     fun `extras the fallback cannot prepare are skipped`() {
         val youTube = stream("yt", url = null, addon = "two").copy(ytId = "abc")
         val primaryTried = primary.map { it.sourceFallbackKey() }.toSet()
@@ -271,6 +386,7 @@ class SportsLiveExtraSourcesTest {
             sport = null
         )
 
+        val EXTRA = stream("extra", "https://two.example/extra.m3u8", "two")
         val SINGLE = item("game", "one")
         val MERGED = SINGLE.copy(alternates = listOf(item("alt", "two")))
     }

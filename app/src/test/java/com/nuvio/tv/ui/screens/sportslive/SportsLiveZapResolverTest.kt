@@ -30,9 +30,12 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -41,8 +44,12 @@ class SportsLiveZapResolverTest {
     private val streams = FakeStreamRepository()
     private val probe = mockk<SportsLiveStreamProbe>(relaxed = true)
     private var settings = PlayerSettings()
+    private var preparationCheckThrows = false
     private val debrid = mockk<DirectDebridResolver>().also {
-        coEvery { it.shouldResolveToPlayableStream(any()) } answers { firstArg<Stream>() in NEEDS_PREPARATION }
+        coEvery { it.shouldResolveToPlayableStream(any()) } answers {
+            if (preparationCheckThrows && firstArg<Stream>() == PREPARE_ALT) error("debrid check failed")
+            firstArg<Stream>() in NEEDS_PREPARATION
+        }
     }
 
     private fun TestScope.newResolver(probe: SportsLiveStreamProbe = this@SportsLiveZapResolverTest.probe): SportsLiveZapResolver {
@@ -243,8 +250,53 @@ class SportsLiveZapResolverTest {
         streams.responses["alt1"] = { flowOf(success(PREPARE_ALT, addon = "Other")) }
         streams.responses["alt2"] = { flowOf(success(OTHER_HD, addon = "Third")) }
 
-        assertEquals(listOf(PREPARE_ALT, OTHER_HD), newResolver().resolveAlternates(MERGED))
-        assertEquals(emptyList<Stream>(), newResolver().resolveAlternates(MERGED.copy(alternates = emptyList())))
+        val lookup = newResolver().resolveAlternates(MERGED)
+        assertEquals(listOf(PREPARE_ALT, OTHER_HD), lookup.streams)
+        assertTrue(lookup.complete)
+        assertEquals(emptyList<Stream>(), newResolver().resolveAlternates(MERGED.copy(alternates = emptyList())).streams)
+    }
+
+    @Test
+    fun `resolveAlternates is incomplete when a source times out`() = runTest {
+        streams.responses["alt1"] = { flow { awaitCancellation() } }
+        streams.responses["alt2"] = { flowOf(success(OTHER_HD, addon = "Third")) }
+
+        val lookup = newResolver().resolveAlternates(MERGED)
+
+        assertEquals(listOf(OTHER_HD), lookup.streams)
+        assertFalse(lookup.complete)
+    }
+
+    @Test
+    fun `a failing preparation check on one alternate does not lose the others`() = runTest {
+        preparationCheckThrows = true
+        streams.responses["game"] = { flowOf(success(WEB)) }
+        streams.responses["alt1"] = { flowOf(success(PREPARE_ALT, addon = "Other")) }
+        streams.responses["alt2"] = { flowOf(success(OTHER_HD, addon = "Third")) }
+
+        assertEquals(OTHER_HD, newResolver().resolve(MERGED))
+    }
+
+    @Test
+    fun `resolving another merged game cancels the previous game's running fetches`() = runTest {
+        var cancelled = 0
+        streams.responses["game"] = { flowOf(success(SD)) }
+        streams.responses["game2"] = { flowOf(success(HD)) }
+        streams.responses["alt1"] = { flow { try { awaitCancellation() } finally { cancelled++ } } }
+        streams.responses["alt2"] = { flowOf(success(OTHER_HD, addon = "Third")) }
+        val resolver = newResolver()
+
+        assertEquals(SD, resolver.resolve(MERGED))
+        runCurrent()
+        // The same game again keeps its fetches.
+        assertEquals(SD, resolver.resolve(MERGED))
+        runCurrent()
+        assertEquals(0, cancelled)
+
+        assertEquals(HD, resolver.resolve(MERGED.copy(meta = MERGED.meta.copy(id = "game2"))))
+        runCurrent()
+        // Only the last fetch of the previous game was still running; the new game's alt1 runs on.
+        assertEquals(1, cancelled)
     }
 
     private class FakeStreamRepository : StreamRepository {

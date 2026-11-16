@@ -4,6 +4,8 @@ import androidx.annotation.VisibleForTesting
 import com.nuvio.tv.core.network.NetworkResult
 import com.nuvio.tv.core.player.StreamAutoPlaySelector
 import com.nuvio.tv.data.local.PlayerSettings
+import com.nuvio.tv.data.local.StreamAutoPlayMode
+import com.nuvio.tv.data.local.StreamAutoPlaySource
 import com.nuvio.tv.domain.model.AddonStreams
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.Stream
@@ -14,6 +16,9 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+
+/** A lookup of a merged game's alternates' streams; one that is not [complete] (a source timed out or failed) is not cached. */
+class SportsLiveExtraLookup(val streams: List<Stream>, val complete: Boolean)
 
 /**
  * The other addons' streams of a merged Sports & Live game, for the player playing its primary:
@@ -38,10 +43,10 @@ object SportsLiveExtraSources {
     private val entries = LinkedHashMap<String, Entry>()
 
     @Volatile
-    private var fetcher: (suspend (SportsLiveItem) -> List<Stream>)? = null
+    private var fetcher: (suspend (SportsLiveItem) -> SportsLiveExtraLookup)? = null
 
     /** Sets how a registered game's alternates are resolved; the Application installs the zap resolver. */
-    fun install(fetch: suspend (SportsLiveItem) -> List<Stream>) {
+    fun install(fetch: suspend (SportsLiveItem) -> SportsLiveExtraLookup) {
         fetcher = fetch
     }
 
@@ -63,20 +68,25 @@ object SportsLiveExtraSources {
     fun isRegistered(contentId: String?): Boolean =
         contentId != null && synchronized(entries) { contentId in entries }
 
-    /** The extra streams already resolved for [contentId]; empty when not registered or not resolved yet. */
+    /** The extra streams resolved and cached for [contentId]; empty when not registered or not resolved yet. */
     fun cachedStreamsFor(contentId: String?): List<Stream> = entry(contentId)?.streams.orEmpty()
 
     /**
      * The alternates' streams of the game registered for [contentId] (not the primary's), with their
      * addon names and junk filtered out. Resolved once and cached; concurrent callers share the lookup.
-     * A cancelled lookup caches nothing, so the next call tries again.
+     * A cancelled, empty or incomplete (timed-out) lookup caches nothing, so the next call tries again.
+     * [refresh] (the Sources panel's reload) drops the cache first.
      */
-    suspend fun extraStreamsFor(contentId: String?): List<Stream> {
+    suspend fun extraStreamsFor(contentId: String?, refresh: Boolean = false): List<Stream> {
         val entry = entry(contentId) ?: return emptyList()
+        if (refresh) entry.streams = null
         entry.streams?.let { return it }
         val fetch = fetcher ?: return emptyList()
         return entry.mutex.withLock {
-            entry.streams ?: fetch(entry.item).also { entry.streams = it }
+            entry.streams ?: fetch(entry.item).let { lookup ->
+                if (lookup.complete && lookup.streams.isNotEmpty()) entry.streams = lookup.streams
+                lookup.streams
+            }
         }
     }
 
@@ -93,12 +103,16 @@ object SportsLiveExtraSources {
 /**
  * The player's source search with the extra streams of the game registered for [contentId]
  * appended under their addon names once resolved; unchanged when nothing is registered.
+ * [refresh] (a forced reload) looks the extras up again rather than reusing the cached ones.
  */
-fun Flow<NetworkResult<List<AddonStreams>>>.withSportsLiveExtras(contentId: String?): Flow<NetworkResult<List<AddonStreams>>> {
+fun Flow<NetworkResult<List<AddonStreams>>>.withSportsLiveExtras(
+    contentId: String?,
+    refresh: Boolean = false
+): Flow<NetworkResult<List<AddonStreams>>> {
     if (!SportsLiveExtraSources.isRegistered(contentId)) return this
     val extras = flow<List<Stream>?> {
         emit(null)
-        emit(SportsLiveExtraSources.extraStreamsFor(contentId))
+        emit(SportsLiveExtraSources.extraStreamsFor(contentId, refresh))
     }
     return combine(this, extras, ::withExtraStreams)
 }
@@ -121,8 +135,10 @@ internal fun withExtraStreams(
     }
 }
 
+// Extras the search already lists (the same source from an addon both share) are not added again.
 private fun appendExtraGroups(groups: List<AddonStreams>, extras: List<Stream>): List<AddonStreams> {
-    val extraByAddon = extras.groupBy { it.addonName }
+    val listedKeys = groups.flatMap { it.streams }.mapTo(HashSet()) { it.sourceFallbackKey() }
+    val extraByAddon = extras.filterNot { it.sourceFallbackKey() in listedKeys }.groupBy { it.addonName }
     val names = groups.mapTo(HashSet()) { it.addonName }
     return groups.map { group ->
         extraByAddon[group.addonName]?.let { group.copy(streams = group.streams + it) } ?: group
@@ -168,6 +184,15 @@ internal fun sportsLiveFallbackCandidate(
             (failedInfoHash != null && stream.addonName == failedAddonName &&
                 stream.getEffectiveInfoHash().equals(failedInfoHash, ignoreCase = true))
     }
-    // As on the play path: the user's autoplay choice, else the first playable stream.
-    return pick(untried) ?: untried.firstOrNull(StreamAutoPlaySelector::isPlayable)
+    // As on the play path: the user's autoplay choice, else the first playable stream, unless the
+    // user's regex or source/addon choice rules streams out (then only a stream it picks is tried).
+    pick(untried)?.let { return it }
+    return if (honoursAutoPlayFilters(settings)) null else untried.firstOrNull(StreamAutoPlaySelector::isPlayable)
 }
+
+/** True when the user's autoplay settings narrow which streams may play (a regex, or chosen sources). */
+private fun honoursAutoPlayFilters(settings: PlayerSettings): Boolean =
+    settings.streamAutoPlayMode == StreamAutoPlayMode.REGEX_MATCH ||
+        settings.streamAutoPlaySource != StreamAutoPlaySource.ALL_SOURCES ||
+        settings.streamAutoPlaySelectedAddons.isNotEmpty() ||
+        settings.streamAutoPlaySelectedPlugins.isNotEmpty()

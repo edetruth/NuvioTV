@@ -10,12 +10,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -55,11 +57,15 @@ internal fun SportsLiveStreamPickerDialog(
         }
     }
     val firstFocusRequester = remember { FocusRequester() }
-    // The first row may not be laid out yet when the dialog opens.
+    val firstFocused = remember { mutableStateOf(false) }
+    // The first row may not be laid out yet when the dialog opens: retry until it has focus
+    // (a request can throw, or be ignored, before the row is attached).
     LaunchedEffect(Unit) {
         repeat(2) { withFrameNanos { } }
         repeat(FOCUS_ATTEMPTS) {
-            if (runCatching { firstFocusRequester.requestFocus() }.isSuccess) return@LaunchedEffect
+            runCatching { firstFocusRequester.requestFocus() }
+            withFrameNanos { }
+            if (firstFocused.value) return@LaunchedEffect
             delay(FOCUS_RETRY_MS)
         }
     }
@@ -92,7 +98,13 @@ internal fun SportsLiveStreamPickerDialog(
                     StreamButton(
                         stream = stream,
                         onClick = { onPick(stream) },
-                        modifier = if (groupIndex == 0 && index == 0) Modifier.focusRequester(firstFocusRequester) else Modifier
+                        modifier = if (groupIndex == 0 && index == 0) {
+                            Modifier
+                                .focusRequester(firstFocusRequester)
+                                .onFocusChanged { firstFocused.value = it.isFocused }
+                        } else {
+                            Modifier
+                        }
                     )
                 }
             }

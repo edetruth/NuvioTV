@@ -19,6 +19,7 @@ import com.nuvio.tv.domain.model.Video
 import com.nuvio.tv.domain.model.enabledAddons
 import com.nuvio.tv.ui.components.SourceChipItem
 import com.nuvio.tv.ui.components.SourceChipStatus
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveExtraSources
 import com.nuvio.tv.ui.screens.sportslive.withSportsLiveExtras
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -230,6 +231,7 @@ internal fun PlayerRuntimeController.loadSourceStreams(forceRefresh: Boolean) {
         val installedAddonNames = installedAddonOrder.toSet()
         val preferredServerNames = serverStreams.preferredSourceNames(type, vid)
         var debridPreparationLaunched = false
+        var sportsLiveExtrasPrepared = false
 
         // On resume, skip chip reset — keep existing chip statuses
         if (!isResume) {
@@ -243,7 +245,7 @@ internal fun PlayerRuntimeController.loadSourceStreams(forceRefresh: Boolean) {
             episode = episodeArg,
             forceRefresh = forceRefresh,
             priorityBingeGroup = currentStreamBingeGroup
-        ).withSportsLiveExtras(contentId).collect { result ->
+        ).withSportsLiveExtras(contentId, refresh = forceRefresh).collect { result ->
             when (result) {
                 is NetworkResult.Success -> {
                     val addonStreams = StreamAutoPlaySelector.orderAddonStreams(result.data, installedAddonOrder, preferredServerNames)
@@ -296,6 +298,14 @@ internal fun PlayerRuntimeController.loadSourceStreams(forceRefresh: Boolean) {
                             ),
                             sourceStreamsError = null
                         )
+                    }
+                    // A merged Sports & Live game's other addons' streams arrive later: prepared once too.
+                    val sportsLiveExtras = SportsLiveExtraSources.cachedStreamsFor(contentId).filter { it in allStreams }
+                    if (sportsLiveExtras.isNotEmpty() && !sportsLiveExtrasPrepared) {
+                        sportsLiveExtrasPrepared = true
+                        if (debridPreparationLaunched) {
+                            launchSourceDebridPreparationIfNeeded(false, sportsLiveExtras, seasonArg, episodeArg, installedAddonNames) {}
+                        }
                     }
                     launchSourceDebridPreparationIfNeeded(
                         launched = debridPreparationLaunched,

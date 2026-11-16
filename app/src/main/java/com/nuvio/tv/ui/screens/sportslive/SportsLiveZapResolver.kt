@@ -17,11 +17,14 @@ import com.nuvio.tv.domain.repository.AddonRepository
 import com.nuvio.tv.domain.repository.StreamRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
@@ -58,6 +61,9 @@ class SportsLiveZapResolver @Inject constructor(
     /** Runs a merged game's fetches, so alternates still finish (and are recorded) after the primary is played. */
     @VisibleForTesting
     internal var fetchScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /** The last merged game resolved ([SportsLiveItem.streamKey]) and its fetches, still running or done. */
+    private var backgroundFetches: Pair<String, List<Deferred<List<Stream>>>>? = null
 
     private sealed interface Event {
         data class Result(val result: NetworkResult<List<AddonStreams>>) : Event
@@ -97,21 +103,22 @@ class SportsLiveZapResolver @Inject constructor(
      * each keeping its addon name. Unlike [resolveAll], streams that need preparation (server,
      * YouTube or debrid resolve) are kept: the player's Sources panel prepares them in place.
      * The fetches join the stream repository's shared search sessions, so a search the play
-     * path already ran is reused. Empty when there are no alternates or none came back.
+     * path already ran is reused. Empty when there are no alternates or none came back; not
+     * [SportsLiveExtraLookup.complete] when a source timed out or failed.
      */
-    suspend fun resolveAlternates(item: SportsLiveItem): List<Stream> =
+    suspend fun resolveAlternates(item: SportsLiveItem): SportsLiveExtraLookup =
         try {
             val installedOrder = installedOrder()
-            coroutineScope {
+            val fetched = coroutineScope {
                 item.alternates
-                    .map { source -> async { fetch(source, installedOrder, dropPreparation = false) } }
+                    .map { source -> async { fetchSource(source, installedOrder, dropPreparation = false) } }
                     .awaitAll()
-                    .flatten()
             }
+            SportsLiveExtraLookup(fetched.flatMap { it.streams }, complete = fetched.all { it.finished })
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
-            emptyList()
+            SportsLiveExtraLookup(emptyList(), complete = false)
         }
 
     private suspend fun installedOrder(): List<String> =
@@ -120,7 +127,8 @@ class SportsLiveZapResolver @Inject constructor(
     /**
      * All sources are fetched at once in [fetchScope]; the primary's best stream plays as soon as it
      * is known, while the alternates finish in the background (their results are still recorded).
-     * Only when the primary has nothing are the alternates awaited, in order.
+     * Only when the primary has nothing are the alternates awaited, in order. Starting on another
+     * game cancels the previous game's fetches still running, so fast zaps do not pile them up.
      */
     private suspend fun bestAcrossSources(item: SportsLiveItem): Stream? {
         val settings = playerSettingsDataStore.playerSettings.first()
@@ -128,8 +136,19 @@ class SportsLiveZapResolver @Inject constructor(
         val fetches = sources(item).mapIndexed { index, source ->
             fetchScope.async { fetch(source, installedOrder, dropPreparation = index > 0) }
         }
+        val previous = synchronized(this) {
+            backgroundFetches.also { backgroundFetches = item.streamKey to fetches }
+        }
+        // Finished fetches have recorded their results already; only running ones are cancelled.
+        if (previous != null && previous.first != item.streamKey) previous.second.forEach { it.cancel() }
         return fetches.firstNotNullOfOrNull { fetch ->
-            val streams = fetch.await()
+            val streams = try {
+                fetch.await()
+            } catch (e: CancellationException) {
+                // A newer game cancelled this fetch: unless this lookup is cancelled too, it found nothing.
+                currentCoroutineContext().ensureActive()
+                emptyList()
+            }
             preferredStream(streams, settings, installedOrder.toSet())
                 ?: streams.firstOrNull(StreamAutoPlaySelector::isPlayable)
         }
@@ -145,33 +164,39 @@ class SportsLiveZapResolver @Inject constructor(
                 .awaitAll()
         }
 
+    private suspend fun fetch(source: SportsLiveItem, installedOrder: List<String>, dropPreparation: Boolean): List<Stream> =
+        fetchSource(source, installedOrder, dropPreparation).streams
+
+    private class Fetched(val streams: List<Stream>, val finished: Boolean)
+
     /**
      * [source]'s streams in addon order, junk dropped. A finished fetch is reported to the probe for
      * the source's own key; a timeout keeps what came back so far and reports nothing.
      * With [dropPreparation] (an alternate on the play path), streams that need the Stream screen's
      * preparation are dropped: that screen opens for the primary, which does not list them.
+     * Any failure, the preparation check included, gives no streams rather than failing the caller.
      */
-    private suspend fun fetch(source: SportsLiveItem, installedOrder: List<String>, dropPreparation: Boolean): List<Stream> {
-        var last: NetworkResult<List<AddonStreams>>? = null
-        val finished = try {
-            withTimeoutOrNull(timeoutMs) {
+    private suspend fun fetchSource(source: SportsLiveItem, installedOrder: List<String>, dropPreparation: Boolean): Fetched =
+        try {
+            var last: NetworkResult<List<AddonStreams>>? = null
+            val finished = withTimeoutOrNull(timeoutMs) {
                 streamRepository.getStreamsFromAllAddons(source.apiType, source.id).collect { last = it }
                 true
             } == true
+            val result = last
+            if (finished && result != null) streamProbe.recordResult(source, result)
+            val streams = StreamAutoPlaySelector.orderAddonStreams(
+                (result as? NetworkResult.Success)?.data.orEmpty(),
+                installedOrder
+            ).flatMap { it.streams }
+                .filterNot(UnplayableStreamFilter::isUnplayableJunk)
+                .filterNot { dropPreparation && sportsLiveNeedsPreparation(it, directDebridResolver) }
+            Fetched(streams, finished)
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
-            return emptyList()
+            Fetched(emptyList(), finished = false)
         }
-        val result = last
-        if (finished && result != null) streamProbe.recordResult(source, result)
-        return StreamAutoPlaySelector.orderAddonStreams(
-            (result as? NetworkResult.Success)?.data.orEmpty(),
-            installedOrder
-        ).flatMap { it.streams }
-            .filterNot(UnplayableStreamFilter::isUnplayableJunk)
-            .filterNot { dropPreparation && sportsLiveNeedsPreparation(it, directDebridResolver) }
-    }
 
     private suspend fun search(item: SportsLiveItem): Stream? {
         val settings = playerSettingsDataStore.playerSettings.first()
