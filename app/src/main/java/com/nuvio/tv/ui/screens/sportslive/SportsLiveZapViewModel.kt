@@ -215,7 +215,7 @@ class SportsLiveZapViewModel @Inject constructor(
      */
     fun dualPick(): SportsLiveDualPick? {
         val session = panelSession.value ?: controller.session(contentId) ?: return null
-        if (session.tab != SportsLiveTab.LIVE_NOW || session.current.isChannel) return null
+        if (session.tab != SportsLiveTab.LIVE_NOW && session.tab != SportsLiveTab.CHANNELS) return null
         return SportsLiveDualPick(
             chosen = session.current,
             items = session.items,

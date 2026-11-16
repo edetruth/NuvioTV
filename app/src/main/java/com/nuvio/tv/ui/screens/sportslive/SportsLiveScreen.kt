@@ -234,9 +234,9 @@ private fun SportsLiveContent(
         // Cleared last: clearing restarts this effect, which would cancel the focus request above.
         if (gone) followedCardKey = null
     }
-    // "Watch with another game": only a live game card on Live now (not a channel).
-    val canWatchWith: (SportsLiveItem) -> Boolean = { item ->
-        uiState.selectedTab == SportsLiveTab.LIVE_NOW && item.kind == SportsLiveKind.EVENTS && !item.isChannel
+    // "Watch with another game": any card on Live now or Channels (games and channels alike).
+    val canWatchWith: (SportsLiveItem) -> Boolean = {
+        uiState.selectedTab == SportsLiveTab.LIVE_NOW || uiState.selectedTab == SportsLiveTab.CHANNELS
     }
     // The second-game picker, open for its chosen game.
     var dualPick by remember { mutableStateOf<SportsLiveDualPick?>(null) }
