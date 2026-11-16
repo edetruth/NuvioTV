@@ -152,6 +152,12 @@ jobs:
           RELEASE_KEY_ALIAS: ${{ secrets.NUVIO_RELEASE_KEY_ALIAS }}
           RELEASE_KEY_PASSWORD: ${{ secrets.NUVIO_RELEASE_KEY_PASSWORD }}
           RELEASE_STORE_PASSWORD: ${{ secrets.NUVIO_RELEASE_STORE_PASSWORD }}
+          # Nuvio account sign-in backend (public anon key) + avatar bucket, from
+          # individual secrets so the base64 bundle need not carry them. Each is
+          # optional; when unset, sign-in stays off and the build still succeeds.
+          NUVIO_SUPABASE_URL: ${{ secrets.NUVIO_SUPABASE_URL }}
+          NUVIO_SUPABASE_ANON_KEY: ${{ secrets.NUVIO_SUPABASE_ANON_KEY }}
+          AVATAR_PUBLIC_BASE_URL: ${{ secrets.AVATAR_PUBLIC_BASE_URL }}
         run: |
           missing=()
           for name in RELEASE_KEYSTORE_BASE64 RELEASE_KEY_ALIAS RELEASE_KEY_PASSWORD RELEASE_STORE_PASSWORD; do
@@ -178,6 +184,16 @@ jobs:
             echo "NUVIO_RELEASE_KEY_PASSWORD=${RELEASE_KEY_PASSWORD}"
             echo "NUVIO_RELEASE_STORE_PASSWORD=${RELEASE_STORE_PASSWORD}"
           } >> local.properties
+
+          # Overwrite any bundled value for these with the dedicated secret.
+          set_prop() {
+            [[ -n "$2" ]] || return 0
+            sed -i -E "/^[[:space:]]*$1[[:space:]]*=/d" local.properties
+            printf '\n%s=%s\n' "$1" "$2" >> local.properties
+          }
+          set_prop NUVIO_SUPABASE_URL "${NUVIO_SUPABASE_URL}"
+          set_prop NUVIO_SUPABASE_ANON_KEY "${NUVIO_SUPABASE_ANON_KEY}"
+          set_prop AVATAR_PUBLIC_BASE_URL "${AVATAR_PUBLIC_BASE_URL}"
 
       - name: Bump NUVIO_LIVE_BUILD
         if: steps.decide.outputs.release == 'true'
