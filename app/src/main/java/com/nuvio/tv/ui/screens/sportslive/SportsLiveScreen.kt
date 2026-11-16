@@ -12,11 +12,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -30,6 +32,7 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
@@ -55,10 +58,10 @@ import com.nuvio.tv.ui.components.EmptyScreenState
 import com.nuvio.tv.ui.components.LoadingIndicator
 import com.nuvio.tv.ui.components.RefreshFilterChip
 import com.nuvio.tv.ui.components.SourceStatusFilterChip
-import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualPick
-import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualPickerDialog
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualSession
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualSessions
+import com.nuvio.tv.ui.screens.sportslive.dual.offersDual
+import com.nuvio.tv.ui.screens.sportslive.dual.sportsLivePickModeSession
 import com.nuvio.tv.ui.theme.NuvioTheme
 import com.nuvio.tv.ui.util.dpadRepeatThrottle
 import kotlinx.coroutines.delay
@@ -235,20 +238,15 @@ private fun SportsLiveContent(
         if (gone) followedCardKey = null
     }
     // "Watch with another game": any card on Live now or Channels (games and channels alike).
-    val canWatchWith: (SportsLiveItem) -> Boolean = {
-        uiState.selectedTab == SportsLiveTab.LIVE_NOW || uiState.selectedTab == SportsLiveTab.CHANNELS
-    }
-    // The second-game picker, open for its chosen game.
-    var dualPick by remember { mutableStateOf<SportsLiveDualPick?>(null) }
-    dualPick?.let { pick ->
-        SportsLiveDualPickerDialog(
-            candidates = pick.candidates,
-            onPick = { second ->
-                dualPick = null
-                onOpenDual(pick.session(second))
-            },
-            onDismiss = { dualPick = null }
-        )
+    val canWatchWith: (SportsLiveItem) -> Boolean = { uiState.selectedTab.offersDual() }
+    // Pick-second mode: the first game, chosen in the menu; OK on another eligible card opens dual
+    // screen with both. Back leaves the mode; leaving the section drops it (not saved).
+    var pickFirst by remember { mutableStateOf<SportsLiveItem?>(null) }
+    LaunchedEffect(pickFirst) {
+        val first = pickFirst ?: return@LaunchedEffect
+        // The menu has just closed: focus goes back to the first game's card.
+        repeat(2) { withFrameNanos { } }
+        runCatching { cardFocusRequesters[first.listKey]?.requestFocus() }
     }
     items.firstOrNull { it.listKey == menuCardKey }?.let { item ->
         val watchWith = canWatchWith(item)
@@ -262,8 +260,7 @@ private fun SportsLiveContent(
             onWatchWith = if (watchWith) {
                 {
                     menuCardKey = null
-                    // Live now under the section's filter; ended games are already left out.
-                    dualPick = SportsLiveDualPick(chosen = item, items = items, filter = uiState.selectedFilter)
+                    pickFirst = item
                 }
             } else {
                 null
@@ -284,6 +281,10 @@ private fun SportsLiveContent(
 
     BackHandler(enabled = listHasFocus) {
         runCatching { activeTabFocusRequester.requestFocus() }
+    }
+    // Composed after the list's handler, so Back leaves pick mode first.
+    BackHandler(enabled = pickFirst != null) {
+        pickFirst = null
     }
 
     // Back from another screen: put the list back on the card that had focus. Runs once per entry.
@@ -358,6 +359,20 @@ private fun SportsLiveContent(
                 modifier = Modifier.padding(top = NuvioTheme.spacing.sm)
             )
         }
+        pickFirst?.let { first ->
+            Text(
+                text = "${stringResource(R.string.sports_live_dual_pick)} · ${first.meta.name}",
+                style = MaterialTheme.typography.titleMedium,
+                color = NuvioTheme.colors.TextPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .padding(top = NuvioTheme.spacing.sm)
+                    .clip(RoundedCornerShape(NuvioTheme.radii.md))
+                    .background(NuvioTheme.colors.FocusBackground)
+                    .padding(horizontal = NuvioTheme.spacing.md, vertical = NuvioTheme.spacing.xs)
+            )
+        }
         Spacer(modifier = Modifier.height(NuvioTheme.spacing.lg))
 
         if (selected == null || selectedCardFocusRequester == null) {
@@ -384,12 +399,36 @@ private fun SportsLiveContent(
                         item = item,
                         stateLabel = stateLabelOf(item),
                         selected = item.listKey == selected.listKey,
-                        onClick = { open(item) },
+                        onClick = {
+                            val first = pickFirst
+                            if (first == null) {
+                                open(item)
+                            } else {
+                                // Pick mode: OK pairs an eligible card (the list as shown is the dual
+                                // list); any other card, or a tab without dual screen, ignores it.
+                                sportsLivePickModeSession(
+                                    chosen = first,
+                                    item = item,
+                                    tab = uiState.selectedTab,
+                                    items = items,
+                                    filter = uiState.selectedFilter
+                                )?.let { session ->
+                                    pickFirst = null
+                                    onOpenDual(session)
+                                }
+                            }
+                        },
                         // A card naming a game, or a live game, opens the menu; other cards open Details directly.
+                        // Ignored in pick mode.
                         onLongClick = {
-                            if (item.teams != null || canWatchWith(item)) menuCardKey = item.listKey else onOpenDetail(item)
+                            when {
+                                pickFirst != null -> Unit
+                                item.teams != null || canWatchWith(item) -> menuCardKey = item.listKey
+                                else -> onOpenDetail(item)
+                            }
                         },
                         menuOpen = item.listKey == menuCardKey,
+                        pickedFirst = item.listKey == pickFirst?.listKey,
                         onFocus = {
                             if (item.listKey != followedCardKey) followedCardKey = null
                             focusedCardKey = item.listKey

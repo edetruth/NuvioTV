@@ -138,6 +138,18 @@ internal fun BoxScope.SportsLiveZapOverlay(
             LiveGamesPanel(
                 state = state,
                 onPick = viewModel::onPanelPick,
+                // Long-press OK: dual screen right away, the game playing beside the one held.
+                onLongPick = if (canWatchWith) {
+                    { item ->
+                        viewModel.dualSessionWith(item)?.let { session ->
+                            viewModel.closePanel()
+                            SportsLiveDualSessions.start(session)
+                            openDual?.invoke()
+                        }
+                    }
+                } else {
+                    null
+                },
                 onClose = { viewModel.closePanel() },
                 onWatchWith = if (canWatchWith) {
                     {
@@ -234,12 +246,15 @@ private fun ZapBanner(banner: SportsLiveZapBanner) {
 
 /**
  * The games live now, from the left edge. Focus opens on the game playing; Left or Right closes the
- * panel (Back is handled by the player), and Up/Down stay inside it.
+ * panel (Back is handled by the player), and Up/Down stay inside it. OK on a game zaps to it; a
+ * long press calls [onLongPick] instead, when given.
  */
 @Composable
 private fun LiveGamesPanel(
     state: SportsLiveZapPanelState,
     onPick: (SportsLiveItem) -> Unit,
+    /** Long-press OK on a game (dual screen with the game playing); null leaves long presses alone. */
+    onLongPick: ((SportsLiveItem) -> Unit)?,
     onClose: () -> Unit,
     /** "Watch with another game" for the game playing, above the list; null hides it. */
     onWatchWith: (() -> Unit)?
@@ -290,6 +305,16 @@ private fun LiveGamesPanel(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+            if (onLongPick != null) {
+                Text(
+                    text = stringResource(R.string.sports_live_dual_hold_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = NuvioTheme.extendedColors.textSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = NuvioTheme.spacing.xs)
+                )
+            }
             Spacer(modifier = Modifier.height(NuvioTheme.spacing.lg))
             if (onWatchWith != null) {
                 PanelCard(onClick = onWatchWith, modifier = Modifier.fillMaxWidth()) {
@@ -329,7 +354,8 @@ private fun LiveGamesPanel(
                             } else {
                                 Modifier
                             },
-                            onClick = { onPick(item) }
+                            onClick = { onPick(item) },
+                            onLongClick = onLongPick?.let { { it(item) } }
                         )
                     }
                 }
@@ -343,9 +369,10 @@ private fun LiveGameItem(
     item: SportsLiveItem,
     isCurrent: Boolean,
     modifier: Modifier,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onLongClick: (() -> Unit)?
 ) {
-    PanelCard(onClick = onClick, modifier = modifier.fillMaxWidth()) {
+    PanelCard(onClick = onClick, onLongClick = onLongClick, modifier = modifier.fillMaxWidth()) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -381,15 +408,20 @@ private fun LiveGameItem(
     }
 }
 
-/** A focusable row of the live games panel. */
+/**
+ * A focusable row of the live games panel. With [onLongClick], the Card's own long press (OK held)
+ * calls it and skips the click that the key's release would otherwise fire.
+ */
 @Composable
 private fun PanelCard(
     onClick: () -> Unit,
     modifier: Modifier,
+    onLongClick: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
     Card(
         onClick = onClick,
+        onLongClick = onLongClick,
         modifier = modifier,
         colors = CardDefaults.colors(
             containerColor = NuvioTheme.colors.BackgroundCard,

@@ -115,7 +115,9 @@ internal fun SportsLiveListCard(
     onLongClick: () -> Unit,
     onFocus: () -> Unit,
     modifier: Modifier = Modifier,
-    menuOpen: Boolean = false
+    menuOpen: Boolean = false,
+    /** The first game of the section's pick-second mode: a "1" badge before the title. */
+    pickedFirst: Boolean = false
 ) {
     val shape = RoundedCornerShape(NuvioTheme.radii.md)
     var longPressTriggered by remember { mutableStateOf(false) }
@@ -180,6 +182,18 @@ internal fun SportsLiveListCard(
                     horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    if (pickedFirst) {
+                        Text(
+                            text = "1",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = NuvioTheme.colors.OnPrimary,
+                            maxLines = 1,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(NuvioTheme.radii.sm))
+                                .background(NuvioTheme.colors.Primary)
+                                .padding(horizontal = NuvioTheme.spacing.sm, vertical = NuvioTheme.spacing.xxs)
+                        )
+                    }
                     // A followed team plays (or is named on this channel).
                     if (item.followed) {
                         Icon(
@@ -298,10 +312,9 @@ internal fun SportsLiveDetailsPane(
 }
 
 /**
- * The long-press menu of a card naming a game: Follow / Unfollow for each side ([sides] holds each
- * side's display name and whether a followed team is that side), then "Watch with another game"
- * when offered, then Details. Laid out like
- * `PosterOptionsDialog`.
+ * The long-press menu of a card: "Watch with another game" first when offered (it takes the first
+ * focus), then Follow / Unfollow for each side ([sides] holds each side's display name and whether
+ * a followed team is that side), then Details. Laid out like `PosterOptionsDialog`.
  */
 @Composable
 internal fun SportsLiveCardMenu(
@@ -317,18 +330,18 @@ internal fun SportsLiveCardMenu(
     LaunchedEffect(Unit) { runCatching { firstFocusRequester.requestFocus() } }
 
     NuvioDialog(onDismiss = onDismiss, title = title) {
-        sides.forEachIndexed { index, (side, followed) ->
-            SportsLiveMenuButton(
-                text = stringResource(if (followed) R.string.sports_live_unfollow else R.string.sports_live_follow, side),
-                onClick = { onToggleFollow(side) },
-                modifier = if (index == 0) Modifier.focusRequester(firstFocusRequester) else Modifier
-            )
-        }
         if (onWatchWith != null) {
             SportsLiveMenuButton(
                 text = stringResource(R.string.sports_live_dual_watch_with),
                 onClick = onWatchWith,
-                modifier = if (sides.isEmpty()) Modifier.focusRequester(firstFocusRequester) else Modifier
+                modifier = Modifier.focusRequester(firstFocusRequester)
+            )
+        }
+        sides.forEachIndexed { index, (side, followed) ->
+            SportsLiveMenuButton(
+                text = stringResource(if (followed) R.string.sports_live_unfollow else R.string.sports_live_follow, side),
+                onClick = { onToggleFollow(side) },
+                modifier = if (index == 0 && onWatchWith == null) Modifier.focusRequester(firstFocusRequester) else Modifier
             )
         }
         SportsLiveMenuButton(

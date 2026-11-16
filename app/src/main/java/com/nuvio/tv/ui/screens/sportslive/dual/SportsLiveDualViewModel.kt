@@ -41,12 +41,33 @@ data class SportsLiveDualPick(
     val endedKeys: Set<String> = emptySet()
 ) {
     /** The other games of the list that are not known to have ended; never [chosen] or one of its sources. */
-    val candidates: List<SportsLiveItem> =
-        items.filter { item -> !item.sharesSourceWith(chosen) && !item.hasEnded(endedKeys) }
+    val candidates: List<SportsLiveItem> = items.filter(::isCandidate)
 
     fun session(second: SportsLiveItem): SportsLiveDualSession =
         SportsLiveDualSession(left = chosen, right = second, items = items.toList(), filter = filter)
+
+    /** The session pairing [chosen] with [second]; null when [second] is [chosen], shares a source with it, or has ended. */
+    fun pairWith(second: SportsLiveItem): SportsLiveDualSession? = if (isCandidate(second)) session(second) else null
+
+    private fun isCandidate(item: SportsLiveItem): Boolean = !item.sharesSourceWith(chosen) && !item.hasEnded(endedKeys)
 }
+
+/** Dual screen is offered on Live now and Channels only. */
+internal fun SportsLiveTab.offersDual(): Boolean = this == SportsLiveTab.LIVE_NOW || this == SportsLiveTab.CHANNELS
+
+/**
+ * The section's pick-second mode: OK on [item], shown on [tab] in [items] under [filter], after
+ * [chosen] was picked first. The dual session, or null when OK does nothing: a tab without dual
+ * screen, or an [item] that [SportsLiveDualPick.pairWith] refuses.
+ */
+internal fun sportsLivePickModeSession(
+    chosen: SportsLiveItem,
+    item: SportsLiveItem,
+    tab: SportsLiveTab,
+    items: List<SportsLiveItem>,
+    filter: String?
+): SportsLiveDualSession? =
+    if (!tab.offersDual()) null else SportsLiveDualPick(chosen = chosen, items = items, filter = filter).pairWith(item)
 
 /**
  * True when this card and [other] play the same game from a common source: one of the two, or one of

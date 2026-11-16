@@ -3569,6 +3569,7 @@
     <string name="sports_live_partial_failure">%1$d source(s) didn\'t respond</string>
     <string name="sports_live_dual_watch_with">Watch with another game</string>
     <string name="sports_live_dual_pick">Pick another to watch</string>
+    <string name="sports_live_dual_hold_hint">Hold OK on a game to watch both</string>
     <string name="sports_live_dual_stream_error">Couldn\'t play this stream</string>
     <string name="sports_live_dual_stream_error_hint">Press OK to open it in the full player, which can prepare more kinds of streams</string>
     <string name="sports_live_dual_device_limit">This device can\'t play two streams at once</string>

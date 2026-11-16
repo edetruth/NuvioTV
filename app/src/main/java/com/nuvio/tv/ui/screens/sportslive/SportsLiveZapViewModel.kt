@@ -17,10 +17,11 @@ import com.nuvio.tv.R
 import com.nuvio.tv.core.debrid.DirectDebridResolver
 import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.domain.model.SportsLiveItem
-import com.nuvio.tv.domain.model.SportsLiveTab
 import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.domain.repository.SportsLiveRepository
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualPick
+import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualSession
+import com.nuvio.tv.ui.screens.sportslive.dual.offersDual
 import com.nuvio.tv.ui.screens.stream.StreamPlaybackInfo
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -215,13 +216,23 @@ class SportsLiveZapViewModel @Inject constructor(
      */
     fun dualPick(): SportsLiveDualPick? {
         val session = panelSession.value ?: controller.session(contentId) ?: return null
-        if (session.tab != SportsLiveTab.LIVE_NOW && session.tab != SportsLiveTab.CHANNELS) return null
+        if (!session.tab.offersDual()) return null
         return SportsLiveDualPick(
             chosen = session.current,
             items = session.items,
             filter = session.filter,
             endedKeys = repo.endedKeys.value
         )
+    }
+
+    /**
+     * Long-press on [item] in the live games panel: dual screen with the game playing on the left,
+     * [item] on the right, over the panel's list. Null when the panel offers no dual screen, or when
+     * [item] is the game playing, shares a source with it, or has ended.
+     */
+    fun dualSessionWith(item: SportsLiveItem): SportsLiveDualSession? {
+        val pick = dualPick() ?: return null
+        return pick.copy(items = panel.value?.items ?: pick.items).pairWith(item)
     }
 
     /** [item] was picked in the live games panel: the panel closes and the player zaps to it. */
