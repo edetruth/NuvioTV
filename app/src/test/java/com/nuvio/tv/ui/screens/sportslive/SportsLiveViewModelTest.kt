@@ -1,6 +1,7 @@
 package com.nuvio.tv.ui.screens.sportslive
 
 import com.nuvio.tv.MainDispatcherRule
+import com.nuvio.tv.core.sportslive.SportsLiveItemBucketer
 import com.nuvio.tv.domain.model.Addon
 import com.nuvio.tv.domain.model.CatalogDescriptor
 import com.nuvio.tv.domain.model.ClaimedCatalog
@@ -45,14 +46,16 @@ class SportsLiveViewModelTest {
     private val endedFlow = MutableStateFlow<Set<String>>(emptySet())
     private var nextLoad = load(emptyList())
     private val forcedFlags = mutableListOf<Boolean>()
+    private val includeChannelsFlags = mutableListOf<Boolean>()
 
     private val repo = mockk<SportsLiveRepository> {
         every { claimedCatalogs } returns claimedFlow
         every { latest } returns latestFlow
         every { endedKeys } returns endedFlow
         every { reprobeIfStale(any()) } just runs
-        coEvery { load(any()) } coAnswers {
+        coEvery { load(any(), any()) } coAnswers {
             forcedFlags += firstArg<Boolean>()
+            includeChannelsFlags += secondArg<Boolean>()
             latestFlow.value = nextLoad
             nextLoad
         }
@@ -178,6 +181,8 @@ class SportsLiveViewModelTest {
         assertEquals(listOf(false, false), forcedFlags)
         advanceTimeBy(61_000)
         assertEquals(listOf(false, false, true), forcedFlags)
+        // The 60 s reload leaves channels catalogs out; the first loads include them.
+        assertEquals(listOf(true, true, false), includeChannelsFlags)
 
         viewModel.onScreenVisible(false)
         advanceTimeBy(120_000)
@@ -341,6 +346,46 @@ class SportsLiveViewModelTest {
         val state = viewModel.uiState.value
         assertNull(state.selectedFilter)
         assertEquals(listOf("a", "b"), state.visibleItems.map { it.id })
+    }
+
+    @Test
+    fun `manual refresh includes channels`() = runTest {
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+
+        viewModel.refresh()
+        advanceUntilIdle()
+
+        assertEquals(listOf(false, true), forcedFlags)
+        assertEquals(listOf(true, true), includeChannelsFlags)
+    }
+
+    @Test
+    fun `items are bucketed once per load, not on selection changes`() = runTest {
+        nextLoad = load(listOf(channel("uk1", "UK"), channel("ca1", "CA"), item("a", isLive = true, sport = "Soccer")))
+        var bucketCalls = 0
+        val viewModel = SportsLiveViewModel(repo)
+        viewModel.nowMs = { NOW }
+        viewModel.bucket = { items, now -> bucketCalls++; SportsLiveItemBucketer.bucket(items, now) }
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+        val afterLoad = bucketCalls
+
+        viewModel.selectTab(SportsLiveTab.CHANNELS)
+        runCurrent()
+        viewModel.selectFilter("UK")
+        runCurrent()
+        viewModel.selectItem("uk1")
+        runCurrent()
+        endedFlow.value = setOf("x|y")
+        runCurrent()
+
+        assertEquals(listOf("uk1"), viewModel.uiState.value.visibleItems.map { it.id })
+        assertEquals(afterLoad, bucketCalls)
+
+        latestFlow.value = load(listOf(channel("uk2", "UK")))
+        runCurrent()
+        assertEquals(afterLoad + 1, bucketCalls)
     }
 
     private fun channel(id: String, group: String, isLive: Boolean = false, sport: String? = null) =

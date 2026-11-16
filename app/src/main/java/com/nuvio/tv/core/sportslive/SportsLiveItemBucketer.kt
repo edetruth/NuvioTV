@@ -14,24 +14,36 @@ object SportsLiveItemBucketer {
     private val nonLetters = Regex("""[^\p{L}]+""")
     // "LIVE NOW", "Live now": a whole phrase, so "Alive nowhere" does not count.
     private val liveNowPhrase = Regex("""(?<![\p{L}\p{N}])live now(?![\p{L}\p{N}])""", RegexOption.IGNORE_CASE)
+    private const val LIVE_EMOJI = "🔴" // 🔴
+    private const val SOON_EMOJI = "🔜" // 🔜
 
     private val tabOrder: Comparator<SportsLiveItem> =
         compareByDescending<SportsLiveItem> { it.isLive }
             .thenBy(nullsLast()) { it.startMs }
             .thenBy(String.CASE_INSENSITIVE_ORDER) { it.meta.name }
 
-    fun describe(meta: MetaPreview, claimed: ClaimedCatalog, nowMs: Long): SportsLiveItem {
+    fun describe(rawMeta: MetaPreview, claimed: ClaimedCatalog, nowMs: Long): SportsLiveItem {
         val catalog = claimed.catalog
+        // A leading 🔴 / 🔜 (CNCVerse) is a status, not part of the name.
+        val trimmedName = rawMeta.name.trimStart()
+        val status = listOf(LIVE_EMOJI, SOON_EMOJI).firstOrNull { trimmedName.startsWith(it) }
+        val meta = if (status == null) rawMeta else rawMeta.copy(name = trimmedName.removePrefix(status).trimStart())
         val start = SportsLiveTimeParser.parseStart(meta.releaseInfo, meta.released)
         val startMs = start?.startMs
-        val liveCatalog = SportsLiveKeywords.containsKeyword(catalog.name, SportsLiveKeywords.LIVE) ||
-            SportsLiveKeywords.containsKeyword(catalog.id, SportsLiveKeywords.LIVE)
-        val isLive = isLiveMarker(meta.releaseInfo) ||
-            meta.name.contains("LIVE NOW") ||
-            meta.description?.let(liveNowPhrase::containsMatchIn) == true ||
-            (liveCatalog && startMs == null) ||
-            (claimed.kind == SportsLiveKind.EVENTS && start != null && start.hasTimeOfDay &&
-                start.startMs > nowMs - LIVE_WINDOW_MS && start.startMs <= nowMs)
+        // "Live TV" in a channels catalog's name is a kind of content, not a sign its channels are on now.
+        val liveCatalog = claimed.kind != SportsLiveKind.CHANNELS &&
+            (SportsLiveKeywords.containsKeyword(catalog.name, SportsLiveKeywords.LIVE) ||
+                SportsLiveKeywords.containsKeyword(catalog.id, SportsLiveKeywords.LIVE))
+        val isLive = when (status) {
+            LIVE_EMOJI -> true
+            SOON_EMOJI -> false
+            else -> isLiveMarker(meta.releaseInfo) ||
+                meta.name.contains("LIVE NOW") ||
+                meta.description?.let(liveNowPhrase::containsMatchIn) == true ||
+                (liveCatalog && startMs == null) ||
+                (claimed.kind == SportsLiveKind.EVENTS && start != null && start.hasTimeOfDay &&
+                    start.startMs > nowMs - LIVE_WINDOW_MS && start.startMs <= nowMs)
+        }
         val description = meta.description.orEmpty()
         val isChannel = claimed.kind == SportsLiveKind.CHANNELS ||
             description.contains("IPTV") ||

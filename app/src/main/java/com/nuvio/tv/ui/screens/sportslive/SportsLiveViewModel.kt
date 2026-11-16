@@ -4,11 +4,9 @@ import androidx.annotation.VisibleForTesting
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nuvio.tv.core.sportslive.SportsLiveItemBucketer
-import com.nuvio.tv.domain.model.ClaimedCatalog
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveTab
 import com.nuvio.tv.domain.repository.SportsLiveFailure
-import com.nuvio.tv.domain.repository.SportsLiveLoad
 import com.nuvio.tv.domain.repository.SportsLiveRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -38,15 +36,34 @@ class SportsLiveViewModel @Inject constructor(
         val lastRefreshedMs: Long? = null
     )
 
+    /** A load sorted into tabs; recomputed only when the load or the claimed catalogs change. */
+    private data class Bucketed(
+        val hasClaimed: Boolean,
+        val hasLoad: Boolean,
+        val tabs: Map<SportsLiveTab, List<SportsLiveItem>>
+    )
+
     @VisibleForTesting
     internal var nowMs: () -> Long = { System.currentTimeMillis() }
+
+    @VisibleForTesting
+    internal var bucket: (List<SportsLiveItem>, Long) -> Map<SportsLiveTab, List<SportsLiveItem>> =
+        SportsLiveItemBucketer::bucket
 
     private val selectionState = MutableStateFlow(Selection())
     private var autoRefreshJob: Job? = null
     private var focusProbeJob: Job? = null
 
+    // Bucketing a large channel list is the expensive step, so selection changes do not repeat it.
+    private val bucketed = combine(repo.claimedCatalogs, repo.latest) { claimed, latest ->
+        // Only items of catalogs claimed right now: the cache may still hold another profile's load.
+        val claimedKeys = claimed.mapTo(HashSet()) { it.key }
+        val items = latest?.items.orEmpty().filter { it.catalogKey in claimedKeys }
+        Bucketed(hasClaimed = claimed.isNotEmpty(), hasLoad = latest != null, tabs = bucket(items, nowMs()))
+    }
+
     val uiState: StateFlow<SportsLiveUiState> =
-        combine(repo.claimedCatalogs, repo.latest, repo.endedKeys, selectionState, ::buildState)
+        combine(bucketed, repo.endedKeys, selectionState, ::buildState)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SportsLiveUiState())
 
     init {
@@ -86,7 +103,8 @@ class SportsLiveViewModel @Inject constructor(
 
     /**
      * On becoming visible (including a resume), loads at once (served from the repository's cache
-     * when still fresh), then reloads every 60 s so the Live now tab stays current.
+     * when still fresh), then reloads every 60 s so the Live now tab stays current. The 60 s
+     * reloads leave channels catalogs out; they reload on a manual refresh.
      */
     fun onScreenVisible(visible: Boolean) {
         autoRefreshJob?.cancel()
@@ -95,7 +113,7 @@ class SportsLiveViewModel @Inject constructor(
                 load(force = false)
                 while (isActive) {
                     delay(AUTO_REFRESH_MS)
-                    load(force = true)
+                    load(force = true, includeChannels = false)
                 }
             }
         } else {
@@ -104,10 +122,10 @@ class SportsLiveViewModel @Inject constructor(
     }
 
     /** A failed load keeps the previous failures and items. */
-    private suspend fun load(force: Boolean) {
+    private suspend fun load(force: Boolean, includeChannels: Boolean = true) {
         selectionState.update { it.copy(isRefreshing = true) }
         try {
-            val result = repo.load(force)
+            val result = repo.load(force, includeChannels)
             selectionState.update { it.copy(failures = result.failures, lastRefreshedMs = result.loadedAtMs) }
         } catch (e: CancellationException) {
             throw e
@@ -118,17 +136,13 @@ class SportsLiveViewModel @Inject constructor(
     }
 
     private fun buildState(
-        claimed: List<ClaimedCatalog>,
-        latest: SportsLiveLoad?,
+        bucketed: Bucketed,
         endedKeys: Set<String>,
         selection: Selection
     ): SportsLiveUiState {
-        val hasClaimed = claimed.isNotEmpty()
-        // Only items of catalogs claimed right now: the cache may still hold another profile's load.
-        val claimedKeys = claimed.mapTo(HashSet()) { it.key }
-        val items = latest?.items.orEmpty().filter { it.catalogKey in claimedKeys }
+        val hasClaimed = bucketed.hasClaimed
         // Live items whose streams are gone have ended; the other tabs are left as they are.
-        val tabs = SportsLiveItemBucketer.bucket(items, nowMs()).mapValues { (tab, tabItems) ->
+        val tabs = bucketed.tabs.mapValues { (tab, tabItems) ->
             if (tab == SportsLiveTab.LIVE_NOW) {
                 tabItems.filterNot { it.streamKey in endedKeys }
             } else {
@@ -146,7 +160,7 @@ class SportsLiveViewModel @Inject constructor(
             ?: visible.firstOrNull()?.id
         return SportsLiveUiState(
             // Only a load with no data yet shows as loading, so a refresh does not blank the list.
-            isLoading = hasClaimed && latest == null && selection.isRefreshing,
+            isLoading = hasClaimed && !bucketed.hasLoad && selection.isRefreshing,
             hasClaimedCatalogs = hasClaimed,
             tabs = tabs,
             selectedTab = selection.tab,

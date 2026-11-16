@@ -31,8 +31,10 @@ interface SportsLiveRepository {
     /**
      * Loads the first page of every claimed catalog in parallel. A result under 60 s old is
      * reused unless [force] or the claimed catalogs have changed since it was loaded.
+     * Without [includeChannels], CHANNELS catalogs the previous load fetched successfully are not
+     * refetched; their items are carried over (they are large and rarely change).
      */
-    suspend fun load(force: Boolean = false): SportsLiveLoad
+    suspend fun load(force: Boolean = false, includeChannels: Boolean = true): SportsLiveLoad
 
     /** The most recent load, whether or not every catalog succeeded. */
     val latest: StateFlow<SportsLiveLoad?>

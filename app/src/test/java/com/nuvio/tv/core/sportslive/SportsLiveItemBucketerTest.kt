@@ -21,10 +21,14 @@ import org.junit.Test
 
 class SportsLiveItemBucketerTest {
     private val now = Instant.parse("2026-11-15T14:30:00Z").toEpochMilli()
+    private val soonEmoji = "🔜" // 🔜
+    private val liveEmoji = "🔴" // 🔴
 
     private val highflyLive = claimed("sport", "sports_live", "Live Now", SportsLiveKind.EVENTS)
     private val highflyToday = claimed("sport", "sports_today", "Today", SportsLiveKind.EVENTS)
     private val highflyFootball = claimed("sport", "sports_football", "Football", SportsLiveKind.EVENTS)
+    private val cncEvents = claimed("tv", "cnc_SportzXLiveEvents_tv", "⚡SportzX Live Events (tv)", SportsLiveKind.EVENTS)
+    private val cncLiveTv = claimed("tv", "cnc_EasyPlayLiveTV_tv", "EasyPlay Live TV (tv)", SportsLiveKind.CHANNELS)
 
     @Test
     fun `highfly live fixture all land in LIVE_NOW`() {
@@ -332,6 +336,58 @@ class SportsLiveItemBucketerTest {
         assertEquals(listOf("dup"), liveNow.map { it.id })
         assertEquals("highfly_sport_sports_live", liveNow.single().catalogKey)
         assertEquals(listOf("dup"), tabs.getValue(SportsLiveTab.CHANNELS).map { it.id })
+    }
+
+    @Test
+    fun `CNCVerse soon items are upcoming time TBA and live dot items are live, both with clean names`() {
+        val raw = loadMetas("cnc_live_events.json", "tv")
+        val items = describeAll(raw, cncEvents)
+        val tabs = SportsLiveItemBucketer.bucket(items, now)
+        val soonIds = raw.filter { it.name.startsWith(soonEmoji) }.map { it.id }.toSet()
+        val liveIds = raw.filter { it.name.startsWith(liveEmoji) }.map { it.id }.toSet()
+        val upcoming = tabs.getValue(SportsLiveTab.UPCOMING).map { it.id }.toSet()
+        val liveNow = tabs.getValue(SportsLiveTab.LIVE_NOW).map { it.id }.toSet()
+
+        assertTrue(soonIds.isNotEmpty() && liveIds.isNotEmpty())
+        assertTrue(items.filter { it.id in soonIds }.none { it.isLive || it.startMs != null })
+        assertTrue(upcoming.containsAll(soonIds))
+        assertTrue(liveNow.intersect(soonIds).isEmpty())
+        assertTrue(items.filter { it.id in liveIds }.all { it.isLive })
+        assertTrue(liveNow.containsAll(liveIds))
+        assertTrue(items.none { it.meta.name.startsWith(soonEmoji) || it.meta.name.startsWith(liveEmoji) })
+    }
+
+    @Test
+    fun `stripped name keeps the match for team parsing`() {
+        val item = SportsLiveItemBucketer.describe(meta("afg", "$soonEmoji  AFG vs ZIM"), cncEvents, now)
+
+        assertEquals("AFG vs ZIM", item.meta.name)
+        assertEquals(listOf("AFG", "ZIM"), item.meta.name.split(" vs "))
+        assertFalse(item.isLive)
+    }
+
+    @Test
+    fun `live dot is live even with a future start and soon is not live even with a LIVE marker`() {
+        val live = SportsLiveItemBucketer.describe(
+            meta("l", "$liveEmoji A vs B", releaseInfo = "15 Nov 2026 · 18:00 UTC"), cncEvents, now
+        )
+        val soon = SportsLiveItemBucketer.describe(meta("s", "$soonEmoji C vs D", releaseInfo = "LIVE"), cncEvents, now)
+
+        assertTrue(live.isLive)
+        assertEquals("A vs B", live.meta.name)
+        assertFalse(soon.isLive)
+    }
+
+    @Test
+    fun `CNCVerse Live TV channels are channels, never live, grouped by prefix`() {
+        val items = describeAll(loadMetas("cnc_live_tv_sample.json", "tv"), cncLiveTv)
+        val tabs = SportsLiveItemBucketer.bucket(items, now)
+
+        assertEquals(200, items.size)
+        assertTrue(items.all { it.isChannel && !it.isLive })
+        assertTrue(tabs.getValue(SportsLiveTab.LIVE_NOW).isEmpty())
+        assertEquals(items.map { it.id }.toSet(), tabs.getValue(SportsLiveTab.CHANNELS).map { it.id }.toSet())
+        assertTrue(items.map { it.group }.toSet().containsAll(setOf("UK", "US", "ASIA-IN")))
     }
 
     @Test

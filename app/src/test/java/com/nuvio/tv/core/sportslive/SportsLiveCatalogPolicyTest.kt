@@ -140,6 +140,20 @@ class SportsLiveCatalogPolicyTest {
     }
 
     @Test
+    fun `tv catalog named Live TV is CHANNELS and Live Events stays EVENTS`() {
+        val liveTv = catalog("tv", "cnc_EasyPlayLiveTV_tv", "EasyPlay Live TV (tv)")
+        val events = catalog("tv", "cnc_SportzXLiveEvents_tv", "⚡SportzX Live Events (tv)")
+        val addon = addon("com.cncverse.stremiobridge", "CNCVerse Bridge", liveTv, events)
+
+        assertEquals(SportsLiveKind.CHANNELS, classify(addon, liveTv)?.kind)
+        assertEquals(SportsLiveKind.EVENTS, classify(addon, events)?.kind)
+        val liveTvEvents = catalog("tv", "x", "Live TV Events")
+        assertEquals(SportsLiveKind.EVENTS, classify(addon("x", "X", liveTvEvents), liveTvEvents)?.kind)
+        val idOnly = catalog("tv", "live tv", "Box")
+        assertEquals(SportsLiveKind.CHANNELS, classify(addon("y", "Y", idOnly), idOnly)?.kind)
+    }
+
+    @Test
     fun `keyFor uses the legacy catalog row key`() {
         val catalog = catalog("sport", "sports_live", "Live Now")
         val addon = addon("highfly", "Sports Streams", catalog)

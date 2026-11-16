@@ -149,6 +149,43 @@ class SportsLiveRepositoryImplTest {
     }
 
     @Test
+    fun `a load without channels carries the previous channels items and refetches the rest`() = runTest {
+        catalogRepository.results["sports" to "live"] = success("sports", "live", meta("a", live = true))
+        catalogRepository.results["generic" to "chan"] = success("generic", "chan", meta("ch1"))
+        val repository = newRepository()
+        repository.load()
+        assertEquals(3, catalogRepository.calls)
+
+        catalogRepository.results["sports" to "live"] = success("sports", "live", meta("a2", live = true))
+        catalogRepository.results["generic" to "chan"] = success("generic", "chan", meta("ch2"))
+        val partial = repository.load(force = true, includeChannels = false)
+
+        assertEquals(5, catalogRepository.calls)
+        assertEquals(setOf("a2", "ch1"), partial.items.map { it.id }.toSet())
+        assertEquals(partial, repository.latest.value)
+
+        val full = repository.load(force = true)
+        assertEquals(8, catalogRepository.calls)
+        assertTrue(full.items.any { it.id == "ch2" })
+        assertFalse(full.items.any { it.id == "ch1" })
+    }
+
+    @Test
+    fun `a load without channels fetches channels that were never loaded or failed`() = runTest {
+        catalogRepository.results["generic" to "chan"] = NetworkResult.Error("too big")
+        val repository = newRepository()
+        repository.load(includeChannels = false)
+        assertEquals(3, catalogRepository.calls)
+
+        catalogRepository.results["generic" to "chan"] = success("generic", "chan", meta("ch1"))
+        val retried = repository.load(force = true, includeChannels = false)
+
+        assertEquals(6, catalogRepository.calls)
+        assertTrue(retried.items.any { it.id == "ch1" })
+        assertTrue(retried.failures.isEmpty())
+    }
+
+    @Test
     fun `excluding a catalog via override within 60 seconds makes the next non-forced load refetch`() = runTest {
         catalogRepository.results["sports" to "live"] = success("sports", "live", meta("a", live = true))
         catalogRepository.results["sports" to "upcoming"] = success("sports", "upcoming", meta("b"))

@@ -1,0 +1,2204 @@
+{
+ "metas": [
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyNDgzMyIsIm5hbWUiOiJBU0lBLUlOfCBKSU8gRVZFTlRTIEZIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGaW5kJTJGZmxnLnBuZyIsImNhdGVnb3J5IjoiVklQIHwgQVNJQU4gU1BPUlQgUFBWIn0=",
+   "type": "tv",
+   "name": "ASIA-IN| JIO EVENTS FHD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fflg.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fflg.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyNDgzMyIsIm5hbWUiOiJBU0lBLUlOfCBKSU8gRVZFTlRTIEZIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGaW5kJTJGZmxnLnBuZyIsImNhdGVnb3J5IjoiVklQIHwgQVNJQU4gU1BPUlQgUFBWIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyNDgzNCIsIm5hbWUiOiJBU0lBLUlOfCBTUE9SVFMgMTggRkhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZpbmQlMkZmbGcucG5nIiwiY2F0ZWdvcnkiOiJWSVAgfCBBU0lBTiBTUE9SVCBQUFYifQ==",
+   "type": "tv",
+   "name": "ASIA-IN| SPORTS 18 FHD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fflg.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fflg.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyNDgzNCIsIm5hbWUiOiJBU0lBLUlOfCBTUE9SVFMgMTggRkhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZpbmQlMkZmbGcucG5nIiwiY2F0ZWdvcnkiOiJWSVAgfCBBU0lBTiBTUE9SVCBQUFYifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyNDgzNSIsIm5hbWUiOiJBU0lBLUlOfCBTVEFSIFNQT1JUUyAxIEhJTkRJIEZIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGaW5kJTJGc3Ryc3AxaG5kLnBuZyIsImNhdGVnb3J5IjoiVklQIHwgQVNJQU4gU1BPUlQgUFBWIn0=",
+   "type": "tv",
+   "name": "ASIA-IN| STAR SPORTS 1 HINDI FHD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fstrsp1hnd.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fstrsp1hnd.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyNDgzNSIsIm5hbWUiOiJBU0lBLUlOfCBTVEFSIFNQT1JUUyAxIEhJTkRJIEZIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGaW5kJTJGc3Ryc3AxaG5kLnBuZyIsImNhdGVnb3J5IjoiVklQIHwgQVNJQU4gU1BPUlQgUFBWIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyNDgzNiIsIm5hbWUiOiJBU0lBLUlOfCBTVEFSIFNQT1JUUyAyIEZIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGaW5kJTJGc3RhcnNwMi5wbmciLCJjYXRlZ29yeSI6IlZJUCB8IEFTSUFOIFNQT1JUIFBQViJ9",
+   "type": "tv",
+   "name": "ASIA-IN| STAR SPORTS 2 FHD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fstarsp2.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fstarsp2.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyNDgzNiIsIm5hbWUiOiJBU0lBLUlOfCBTVEFSIFNQT1JUUyAyIEZIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGaW5kJTJGc3RhcnNwMi5wbmciLCJjYXRlZ29yeSI6IlZJUCB8IEFTSUFOIFNQT1JUIFBQViJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyNDgzNyIsIm5hbWUiOiJBU0lBLUlOfCBTVEFSIFNQT1JUUyAzIEhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZpbmQlMkZzdHJzcDMucG5nIiwiY2F0ZWdvcnkiOiJWSVAgfCBBU0lBTiBTUE9SVCBQUFYifQ==",
+   "type": "tv",
+   "name": "ASIA-IN| STAR SPORTS 3 HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fstrsp3.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fstrsp3.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyNDgzNyIsIm5hbWUiOiJBU0lBLUlOfCBTVEFSIFNQT1JUUyAzIEhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZpbmQlMkZzdHJzcDMucG5nIiwiY2F0ZWdvcnkiOiJWSVAgfCBBU0lBTiBTUE9SVCBQUFYifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyNDgzOCIsIm5hbWUiOiJBU0lBLUlOfCBTVEFSIFNQT1JUUyBTRUxFQ1QgMSBGSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRmluZCUyRnN0cnNwczEucG5nIiwiY2F0ZWdvcnkiOiJWSVAgfCBBU0lBTiBTUE9SVCBQUFYifQ==",
+   "type": "tv",
+   "name": "ASIA-IN| STAR SPORTS SELECT 1 FHD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fstrsps1.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fstrsps1.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyNDgzOCIsIm5hbWUiOiJBU0lBLUlOfCBTVEFSIFNQT1JUUyBTRUxFQ1QgMSBGSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRmluZCUyRnN0cnNwczEucG5nIiwiY2F0ZWdvcnkiOiJWSVAgfCBBU0lBTiBTUE9SVCBQUFYifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyNDgzOSIsIm5hbWUiOiJBU0lBLUlOfCBTVEFSIFNQT1JUUyBTRUxFQ1QgMiAgRkhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZpbmQlMkZzdHJzcHMyLnBuZyIsImNhdGVnb3J5IjoiVklQIHwgQVNJQU4gU1BPUlQgUFBWIn0=",
+   "type": "tv",
+   "name": "ASIA-IN| STAR SPORTS SELECT 2  FHD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fstrsps2.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fstrsps2.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyNDgzOSIsIm5hbWUiOiJBU0lBLUlOfCBTVEFSIFNQT1JUUyBTRUxFQ1QgMiAgRkhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZpbmQlMkZzdHJzcHMyLnBuZyIsImNhdGVnb3J5IjoiVklQIHwgQVNJQU4gU1BPUlQgUFBWIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyNDg0MCIsIm5hbWUiOiJBU0lBLUlOfCBTVEFSIFNQT1JUUyAxIFRFTFVHVSBGSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRmluZCUyRmZsZy5wbmciLCJjYXRlZ29yeSI6IlZJUCB8IEFTSUFOIFNQT1JUIFBQViJ9",
+   "type": "tv",
+   "name": "ASIA-IN| STAR SPORTS 1 TELUGU FHD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fflg.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fflg.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyNDg0MCIsIm5hbWUiOiJBU0lBLUlOfCBTVEFSIFNQT1JUUyAxIFRFTFVHVSBGSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRmluZCUyRmZsZy5wbmciLCJjYXRlZ29yeSI6IlZJUCB8IEFTSUFOIFNQT1JUIFBQViJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyNDg0MSIsIm5hbWUiOiJBU0lBLUlOfCBTVEFSIFNQT1JUUyAxIFRBTUlMIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZpbmQlMkZzdHJzcDF0LnBuZyIsImNhdGVnb3J5IjoiVklQIHwgQVNJQU4gU1BPUlQgUFBWIn0=",
+   "type": "tv",
+   "name": "ASIA-IN| STAR SPORTS 1 TAMIL",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fstrsp1t.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fstrsp1t.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyNDg0MSIsIm5hbWUiOiJBU0lBLUlOfCBTVEFSIFNQT1JUUyAxIFRBTUlMIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZpbmQlMkZzdHJzcDF0LnBuZyIsImNhdGVnb3J5IjoiVklQIHwgQVNJQU4gU1BPUlQgUFBWIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyNDg0MiIsIm5hbWUiOiJBU0lBLUlOfCBTVEFSIFNQT1JUUyAyIFRBTUlMIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZpbmQlMkZzdGFyc3AyLnBuZyIsImNhdGVnb3J5IjoiVklQIHwgQVNJQU4gU1BPUlQgUFBWIn0=",
+   "type": "tv",
+   "name": "ASIA-IN| STAR SPORTS 2 TAMIL",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fstarsp2.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fstarsp2.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyNDg0MiIsIm5hbWUiOiJBU0lBLUlOfCBTVEFSIFNQT1JUUyAyIFRBTUlMIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZpbmQlMkZzdGFyc3AyLnBuZyIsImNhdGVnb3J5IjoiVklQIHwgQVNJQU4gU1BPUlQgUFBWIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyNDg0MyIsIm5hbWUiOiJBU0lBLUlOfCBTVEFSIFNQT1JUUyAxIEtBTk5BREEgSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRmluZCUyRnN0cnNwMWsucG5nIiwiY2F0ZWdvcnkiOiJWSVAgfCBBU0lBTiBTUE9SVCBQUFYifQ==",
+   "type": "tv",
+   "name": "ASIA-IN| STAR SPORTS 1 KANNADA HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fstrsp1k.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fstrsp1k.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyNDg0MyIsIm5hbWUiOiJBU0lBLUlOfCBTVEFSIFNQT1JUUyAxIEtBTk5BREEgSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRmluZCUyRnN0cnNwMWsucG5nIiwiY2F0ZWdvcnkiOiJWSVAgfCBBU0lBTiBTUE9SVCBQUFYifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyNDg0NCIsIm5hbWUiOiJBU0lBLUlOfCBUIFNQT1JUUyIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGaW5kJTJGdHNwLnBuZyIsImNhdGVnb3J5IjoiVklQIHwgQVNJQU4gU1BPUlQgUFBWIn0=",
+   "type": "tv",
+   "name": "ASIA-IN| T SPORTS",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Ftsp.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Ftsp.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyNDg0NCIsIm5hbWUiOiJBU0lBLUlOfCBUIFNQT1JUUyIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGaW5kJTJGdHNwLnBuZyIsImNhdGVnb3J5IjoiVklQIHwgQVNJQU4gU1BPUlQgUFBWIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyNDg0NSIsIm5hbWUiOiJBU0lBLUlOfCBIdWIgU3BvcnRzIDEiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRmluZCUyRkh1YiUyMFNwb3J0cyUyMDEucG5nIiwiY2F0ZWdvcnkiOiJWSVAgfCBBU0lBTiBTUE9SVCBQUFYifQ==",
+   "type": "tv",
+   "name": "ASIA-IN| Hub Sports 1",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2FHub%20Sports%201.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2FHub%20Sports%201.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyNDg0NSIsIm5hbWUiOiJBU0lBLUlOfCBIdWIgU3BvcnRzIDEiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRmluZCUyRkh1YiUyMFNwb3J0cyUyMDEucG5nIiwiY2F0ZWdvcnkiOiJWSVAgfCBBU0lBTiBTUE9SVCBQUFYifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyNDg0NiIsIm5hbWUiOiJBU0lBLUlOfCBIdWIgU3BvcnRzIDIiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRmluZCUyRkh1YiUyMFNwb3J0cyUyMDIucG5nIiwiY2F0ZWdvcnkiOiJWSVAgfCBBU0lBTiBTUE9SVCBQUFYifQ==",
+   "type": "tv",
+   "name": "ASIA-IN| Hub Sports 2",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2FHub%20Sports%202.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2FHub%20Sports%202.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyNDg0NiIsIm5hbWUiOiJBU0lBLUlOfCBIdWIgU3BvcnRzIDIiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRmluZCUyRkh1YiUyMFNwb3J0cyUyMDIucG5nIiwiY2F0ZWdvcnkiOiJWSVAgfCBBU0lBTiBTUE9SVCBQUFYifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyNDg0NyIsIm5hbWUiOiJBU0lBLUlOfCBIdWIgU3BvcnRzIDMiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRmluZCUyRkh1YiUyMFNwb3J0cyUyMDMucG5nIiwiY2F0ZWdvcnkiOiJWSVAgfCBBU0lBTiBTUE9SVCBQUFYifQ==",
+   "type": "tv",
+   "name": "ASIA-IN| Hub Sports 3",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2FHub%20Sports%203.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2FHub%20Sports%203.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyNDg0NyIsIm5hbWUiOiJBU0lBLUlOfCBIdWIgU3BvcnRzIDMiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRmluZCUyRkh1YiUyMFNwb3J0cyUyMDMucG5nIiwiY2F0ZWdvcnkiOiJWSVAgfCBBU0lBTiBTUE9SVCBQUFYifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyNDg0OCIsIm5hbWUiOiJBU0lBLUlOfCBIdWIgU3BvcnRzIDQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRmluZCUyRkh1YiUyMFNwb3J0cyUyMDQucG5nIiwiY2F0ZWdvcnkiOiJWSVAgfCBBU0lBTiBTUE9SVCBQUFYifQ==",
+   "type": "tv",
+   "name": "ASIA-IN| Hub Sports 4",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2FHub%20Sports%204.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2FHub%20Sports%204.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyNDg0OCIsIm5hbWUiOiJBU0lBLUlOfCBIdWIgU3BvcnRzIDQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRmluZCUyRkh1YiUyMFNwb3J0cyUyMDQucG5nIiwiY2F0ZWdvcnkiOiJWSVAgfCBBU0lBTiBTUE9SVCBQUFYifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyNDg0OSIsIm5hbWUiOiJBU0lBLUlOfCBIdWIgU3BvcnRzIDUiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRmluZCUyRmZsZy5wbmciLCJjYXRlZ29yeSI6IlZJUCB8IEFTSUFOIFNQT1JUIFBQViJ9",
+   "type": "tv",
+   "name": "ASIA-IN| Hub Sports 5",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fflg.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fflg.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyNDg0OSIsIm5hbWUiOiJBU0lBLUlOfCBIdWIgU3BvcnRzIDUiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRmluZCUyRmZsZy5wbmciLCJjYXRlZ29yeSI6IlZJUCB8IEFTSUFOIFNQT1JUIFBQViJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTAxOCIsIm5hbWUiOiJCQUJ8IEFTVFJPIENSSUNLRVQgSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRk1BTEFZJTJGYXN0cm9hdXIucG5nIiwiY2F0ZWdvcnkiOiJCQUIgfCBDUklDS0VUIn0=",
+   "type": "tv",
+   "name": "BAB| ASTRO CRICKET HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2FMALAY%2Fastroaur.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2FMALAY%2Fastroaur.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTAxOCIsIm5hbWUiOiJCQUJ8IEFTVFJPIENSSUNLRVQgSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRk1BTEFZJTJGYXN0cm9hdXIucG5nIiwiY2F0ZWdvcnkiOiJCQUIgfCBDUklDS0VUIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTAxOSIsIm5hbWUiOiJCQUJ8IFNQT1JUUyAxOCBGSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRmluZCUyRmZsZy5wbmciLCJjYXRlZ29yeSI6IkJBQiB8IENSSUNLRVQifQ==",
+   "type": "tv",
+   "name": "BAB| SPORTS 18 FHD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fflg.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fflg.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTAxOSIsIm5hbWUiOiJCQUJ8IFNQT1JUUyAxOCBGSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRmluZCUyRmZsZy5wbmciLCJjYXRlZ29yeSI6IkJBQiB8IENSSUNLRVQifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTAyMCIsIm5hbWUiOiJCQUJ8IFNLWSBTUE9SVFMgQ1JJQ0tFVCBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZza3lzcGNyazAucG5nIiwiY2F0ZWdvcnkiOiJCQUIgfCBDUklDS0VUIn0=",
+   "type": "tv",
+   "name": "BAB| SKY SPORTS CRICKET HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fskyspcrk0.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fskyspcrk0.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTAyMCIsIm5hbWUiOiJCQUJ8IFNLWSBTUE9SVFMgQ1JJQ0tFVCBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZza3lzcGNyazAucG5nIiwiY2F0ZWdvcnkiOiJCQUIgfCBDUklDS0VUIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTAyMSIsIm5hbWUiOiJCQUJ8IFNLWSBTUE9SVFMgQ1JJQ0tFVCBGSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnVrJTJGc2t5c3BjcmswLnBuZyIsImNhdGVnb3J5IjoiQkFCIHwgQ1JJQ0tFVCJ9",
+   "type": "tv",
+   "name": "BAB| SKY SPORTS CRICKET FHD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fskyspcrk0.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fskyspcrk0.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTAyMSIsIm5hbWUiOiJCQUJ8IFNLWSBTUE9SVFMgQ1JJQ0tFVCBGSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnVrJTJGc2t5c3BjcmswLnBuZyIsImNhdGVnb3J5IjoiQkFCIHwgQ1JJQ0tFVCJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTAyMiIsIm5hbWUiOiJCQUJ8IEZPWCBDUklDS0VUIDUwMSBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGY3JpY2tldCUyRmZ4Y3JrLnBuZyIsImNhdGVnb3J5IjoiQkFCIHwgQ1JJQ0tFVCJ9",
+   "type": "tv",
+   "name": "BAB| FOX CRICKET 501 HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fcricket%2Ffxcrk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fcricket%2Ffxcrk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTAyMiIsIm5hbWUiOiJCQUJ8IEZPWCBDUklDS0VUIDUwMSBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGY3JpY2tldCUyRmZ4Y3JrLnBuZyIsImNhdGVnb3J5IjoiQkFCIHwgQ1JJQ0tFVCJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTAyMyIsIm5hbWUiOiJCQUJ8IFBUViBTUE9SVFMgSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnBrJTJGcHRzLnBuZyIsImNhdGVnb3J5IjoiQkFCIHwgQ1JJQ0tFVCJ9",
+   "type": "tv",
+   "name": "BAB| PTV SPORTS HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fpk%2Fpts.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fpk%2Fpts.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTAyMyIsIm5hbWUiOiJCQUJ8IFBUViBTUE9SVFMgSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnBrJTJGcHRzLnBuZyIsImNhdGVnb3J5IjoiQkFCIHwgQ1JJQ0tFVCJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTAyNCIsIm5hbWUiOiJCQUJ8IEdFTyBTVVBFUiBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGcGslMkZncy5wbmciLCJjYXRlZ29yeSI6IkJBQiB8IENSSUNLRVQifQ==",
+   "type": "tv",
+   "name": "BAB| GEO SUPER HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fpk%2Fgs.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fpk%2Fgs.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTAyNCIsIm5hbWUiOiJCQUJ8IEdFTyBTVVBFUiBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGcGslMkZncy5wbmciLCJjYXRlZ29yeSI6IkJBQiB8IENSSUNLRVQifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTAyNSIsIm5hbWUiOiJCQUJ8IFRFTiBTUE9SVFMgRkhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZjcmlja2V0JTJGdGVuc3AucG5nIiwiY2F0ZWdvcnkiOiJCQUIgfCBDUklDS0VUIn0=",
+   "type": "tv",
+   "name": "BAB| TEN SPORTS FHD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fcricket%2Ftensp.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fcricket%2Ftensp.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTAyNSIsIm5hbWUiOiJCQUJ8IFRFTiBTUE9SVFMgRkhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZjcmlja2V0JTJGdGVuc3AucG5nIiwiY2F0ZWdvcnkiOiJCQUIgfCBDUklDS0VUIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTAyNiIsIm5hbWUiOiJCQUJ8IFNPTlkgVEVOIDEgRkhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwayUyRnNvbi5wbmciLCJjYXRlZ29yeSI6IkJBQiB8IENSSUNLRVQifQ==",
+   "type": "tv",
+   "name": "BAB| SONY TEN 1 FHD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fpk%2Fson.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fpk%2Fson.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTAyNiIsIm5hbWUiOiJCQUJ8IFNPTlkgVEVOIDEgRkhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwayUyRnNvbi5wbmciLCJjYXRlZ29yeSI6IkJBQiB8IENSSUNLRVQifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTAyNyIsIm5hbWUiOiJCQUJ8IFNPTlkgVEVOIDIgRkhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwayUyRnNvbjEucG5nIiwiY2F0ZWdvcnkiOiJCQUIgfCBDUklDS0VUIn0=",
+   "type": "tv",
+   "name": "BAB| SONY TEN 2 FHD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fpk%2Fson1.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fpk%2Fson1.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTAyNyIsIm5hbWUiOiJCQUJ8IFNPTlkgVEVOIDIgRkhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwayUyRnNvbjEucG5nIiwiY2F0ZWdvcnkiOiJCQUIgfCBDUklDS0VUIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTAyOCIsIm5hbWUiOiJCQUJ8IFNPTlkgVEVOIDMgRkhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwayUyRnNvLnBuZyIsImNhdGVnb3J5IjoiQkFCIHwgQ1JJQ0tFVCJ9",
+   "type": "tv",
+   "name": "BAB| SONY TEN 3 FHD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fpk%2Fso.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fpk%2Fso.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTAyOCIsIm5hbWUiOiJCQUJ8IFNPTlkgVEVOIDMgRkhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwayUyRnNvLnBuZyIsImNhdGVnb3J5IjoiQkFCIHwgQ1JJQ0tFVCJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTAyOSIsIm5hbWUiOiJCQUJ8IEEgU1BPUlRTIEhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwayUyRmFzcC5wbmciLCJjYXRlZ29yeSI6IkJBQiB8IENSSUNLRVQifQ==",
+   "type": "tv",
+   "name": "BAB| A SPORTS HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fpk%2Fasp.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fpk%2Fasp.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTAyOSIsIm5hbWUiOiJCQUJ8IEEgU1BPUlRTIEhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwayUyRmFzcC5wbmciLCJjYXRlZ29yeSI6IkJBQiB8IENSSUNLRVQifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTAzMCIsIm5hbWUiOiJCQUJ8IEpJTyBFVkVOVFMgRkhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZpbmQlMkZmbGcucG5nIiwiY2F0ZWdvcnkiOiJCQUIgfCBDUklDS0VUIn0=",
+   "type": "tv",
+   "name": "BAB| JIO EVENTS FHD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fflg.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fflg.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTAzMCIsIm5hbWUiOiJCQUJ8IEpJTyBFVkVOVFMgRkhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZpbmQlMkZmbGcucG5nIiwiY2F0ZWdvcnkiOiJCQUIgfCBDUklDS0VUIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTAzMSIsIm5hbWUiOiJCQUJ8IFNPTlkgVEVOIDUgRkhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwayUyRnNvcy5wbmciLCJjYXRlZ29yeSI6IkJBQiB8IENSSUNLRVQifQ==",
+   "type": "tv",
+   "name": "BAB| SONY TEN 5 FHD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fpk%2Fsos.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fpk%2Fsos.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTAzMSIsIm5hbWUiOiJCQUJ8IFNPTlkgVEVOIDUgRkhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwayUyRnNvcy5wbmciLCJjYXRlZ29yeSI6IkJBQiB8IENSSUNLRVQifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTAzMiIsIm5hbWUiOiJCQUJ8IFROVCBTUE9SVCAxIEhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZ1ayUyRnRudHNwb3J0LnBuZyIsImNhdGVnb3J5IjoiQkFCIHwgQ1JJQ0tFVCJ9",
+   "type": "tv",
+   "name": "BAB| TNT SPORT 1 HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Ftntsport.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Ftntsport.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTAzMiIsIm5hbWUiOiJCQUJ8IFROVCBTUE9SVCAxIEhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZ1ayUyRnRudHNwb3J0LnBuZyIsImNhdGVnb3J5IjoiQkFCIHwgQ1JJQ0tFVCJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTAzMyIsIm5hbWUiOiJCQUJ8IFROVCBTUE9SVCAyIEhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZ1ayUyRnRudHNwb3J0LnBuZyIsImNhdGVnb3J5IjoiQkFCIHwgQ1JJQ0tFVCJ9",
+   "type": "tv",
+   "name": "BAB| TNT SPORT 2 HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Ftntsport.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Ftntsport.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTAzMyIsIm5hbWUiOiJCQUJ8IFROVCBTUE9SVCAyIEhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZ1ayUyRnRudHNwb3J0LnBuZyIsImNhdGVnb3J5IjoiQkFCIHwgQ1JJQ0tFVCJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTAzNCIsIm5hbWUiOiJCQUJ8IFNUQVIgU1BPUlRTIDEgS0FOTkFEQSBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGaW5kJTJGc3Ryc3Axay5wbmciLCJjYXRlZ29yeSI6IkJBQiB8IENSSUNLRVQifQ==",
+   "type": "tv",
+   "name": "BAB| STAR SPORTS 1 KANNADA HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fstrsp1k.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fstrsp1k.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTAzNCIsIm5hbWUiOiJCQUJ8IFNUQVIgU1BPUlRTIDEgS0FOTkFEQSBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGaW5kJTJGc3Ryc3Axay5wbmciLCJjYXRlZ29yeSI6IkJBQiB8IENSSUNLRVQifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTAzNSIsIm5hbWUiOiJCQUJ8IFNUQVIgU1BPUlRTIDEgRkhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZpbmQlMkZzdGFyc3AxLnBuZyIsImNhdGVnb3J5IjoiQkFCIHwgQ1JJQ0tFVCJ9",
+   "type": "tv",
+   "name": "BAB| STAR SPORTS 1 FHD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fstarsp1.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fstarsp1.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTAzNSIsIm5hbWUiOiJCQUJ8IFNUQVIgU1BPUlRTIDEgRkhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZpbmQlMkZzdGFyc3AxLnBuZyIsImNhdGVnb3J5IjoiQkFCIHwgQ1JJQ0tFVCJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTAzNiIsIm5hbWUiOiJCQUJ8IFNUQVIgU1BPUlRTIDIgRkhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZpbmQlMkZzdGFyc3AyLnBuZyIsImNhdGVnb3J5IjoiQkFCIHwgQ1JJQ0tFVCJ9",
+   "type": "tv",
+   "name": "BAB| STAR SPORTS 2 FHD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fstarsp2.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fstarsp2.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTAzNiIsIm5hbWUiOiJCQUJ8IFNUQVIgU1BPUlRTIDIgRkhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZpbmQlMkZzdGFyc3AyLnBuZyIsImNhdGVnb3J5IjoiQkFCIHwgQ1JJQ0tFVCJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTAzNyIsIm5hbWUiOiJCQUJ8IFNUQVIgU1BPUlRTIDMgSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRmluZCUyRnN0cnNwMy5wbmciLCJjYXRlZ29yeSI6IkJBQiB8IENSSUNLRVQifQ==",
+   "type": "tv",
+   "name": "BAB| STAR SPORTS 3 HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fstrsp3.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fstrsp3.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTAzNyIsIm5hbWUiOiJCQUJ8IFNUQVIgU1BPUlRTIDMgSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRmluZCUyRnN0cnNwMy5wbmciLCJjYXRlZ29yeSI6IkJBQiB8IENSSUNLRVQifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTAzOCIsIm5hbWUiOiJCQUJ8IFNUQVIgU1BPUlRTIFNFTEVDVCAxIEZIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGaW5kJTJGc3Ryc3BzMS5wbmciLCJjYXRlZ29yeSI6IkJBQiB8IENSSUNLRVQifQ==",
+   "type": "tv",
+   "name": "BAB| STAR SPORTS SELECT 1 FHD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fstrsps1.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fstrsps1.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTAzOCIsIm5hbWUiOiJCQUJ8IFNUQVIgU1BPUlRTIFNFTEVDVCAxIEZIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGaW5kJTJGc3Ryc3BzMS5wbmciLCJjYXRlZ29yeSI6IkJBQiB8IENSSUNLRVQifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTAzOSIsIm5hbWUiOiJCQUJ8IFNUQVIgU1BPUlRTIFNFTEVDVCAyICBGSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRmluZCUyRnN0cnNwczIucG5nIiwiY2F0ZWdvcnkiOiJCQUIgfCBDUklDS0VUIn0=",
+   "type": "tv",
+   "name": "BAB| STAR SPORTS SELECT 2  FHD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fstrsps2.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fstrsps2.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTAzOSIsIm5hbWUiOiJCQUJ8IFNUQVIgU1BPUlRTIFNFTEVDVCAyICBGSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRmluZCUyRnN0cnNwczIucG5nIiwiY2F0ZWdvcnkiOiJCQUIgfCBDUklDS0VUIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTA0MCIsIm5hbWUiOiJCQUJ8IFNUQVIgU1BPUlRTIDEgSElOREkgRkhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZpbmQlMkZzdHJzcDFobmQucG5nIiwiY2F0ZWdvcnkiOiJCQUIgfCBDUklDS0VUIn0=",
+   "type": "tv",
+   "name": "BAB| STAR SPORTS 1 HINDI FHD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fstrsp1hnd.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fstrsp1hnd.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTA0MCIsIm5hbWUiOiJCQUJ8IFNUQVIgU1BPUlRTIDEgSElOREkgRkhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZpbmQlMkZzdHJzcDFobmQucG5nIiwiY2F0ZWdvcnkiOiJCQUIgfCBDUklDS0VUIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTA0MSIsIm5hbWUiOiJCQUJ8IFNUQVIgU1BPUlRTIDEgVEFNSUwiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRmluZCUyRnN0cnNwMXQucG5nIiwiY2F0ZWdvcnkiOiJCQUIgfCBDUklDS0VUIn0=",
+   "type": "tv",
+   "name": "BAB| STAR SPORTS 1 TAMIL",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fstrsp1t.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fstrsp1t.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTA0MSIsIm5hbWUiOiJCQUJ8IFNUQVIgU1BPUlRTIDEgVEFNSUwiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRmluZCUyRnN0cnNwMXQucG5nIiwiY2F0ZWdvcnkiOiJCQUIgfCBDUklDS0VUIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTA0MiIsIm5hbWUiOiJCQUJ8IFNVUEVSIFNQT1JUIENSSUNLRVQgSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRmFmJTJGc3Byc3Bjcmljay5wbmciLCJjYXRlZ29yeSI6IkJBQiB8IENSSUNLRVQifQ==",
+   "type": "tv",
+   "name": "BAB| SUPER SPORT CRICKET HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Faf%2Fsprspcrick.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Faf%2Fsprspcrick.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTA0MiIsIm5hbWUiOiJCQUJ8IFNVUEVSIFNQT1JUIENSSUNLRVQgSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRmFmJTJGc3Byc3Bjcmljay5wbmciLCJjYXRlZ29yeSI6IkJBQiB8IENSSUNLRVQifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTA0MyIsIm5hbWUiOiJCQUJ8IFdJTExPVyBDUklDS0VUIEhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZjcmlja2V0JTJGd2lsdy5wbmciLCJjYXRlZ29yeSI6IkJBQiB8IENSSUNLRVQifQ==",
+   "type": "tv",
+   "name": "BAB| WILLOW CRICKET HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fcricket%2Fwilw.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fcricket%2Fwilw.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTA0MyIsIm5hbWUiOiJCQUJ8IFdJTExPVyBDUklDS0VUIEhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZjcmlja2V0JTJGd2lsdy5wbmciLCJjYXRlZ29yeSI6IkJBQiB8IENSSUNLRVQifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTA0NCIsIm5hbWUiOiJCQUJ8IFdJTExPVyBFWFRSQSBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGY3JpY2tldCUyRndpbHcucG5nIiwiY2F0ZWdvcnkiOiJCQUIgfCBDUklDS0VUIn0=",
+   "type": "tv",
+   "name": "BAB| WILLOW EXTRA HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fcricket%2Fwilw.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fcricket%2Fwilw.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTA0NCIsIm5hbWUiOiJCQUJ8IFdJTExPVyBFWFRSQSBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGY3JpY2tldCUyRndpbHcucG5nIiwiY2F0ZWdvcnkiOiJCQUIgfCBDUklDS0VUIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTA0NiIsIm5hbWUiOiJJTnwgQ0hBTk5FTCBXSU4gU0QiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRmluZCUyRmNod2luLnBuZyIsImNhdGVnb3J5IjoiSU5ESUEgSElOREkifQ==",
+   "type": "tv",
+   "name": "IN| CHANNEL WIN SD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fchwin.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fchwin.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTA0NiIsIm5hbWUiOiJJTnwgQ0hBTk5FTCBXSU4gU0QiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRmluZCUyRmNod2luLnBuZyIsImNhdGVnb3J5IjoiSU5ESUEgSElOREkifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTA0NyIsIm5hbWUiOiJJTnwgVFYgQVNJQSIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGaW5kJTJGZmxnLnBuZyIsImNhdGVnb3J5IjoiSU5ESUEgSElOREkifQ==",
+   "type": "tv",
+   "name": "IN| TV ASIA",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fflg.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fflg.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTA0NyIsIm5hbWUiOiJJTnwgVFYgQVNJQSIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGaW5kJTJGZmxnLnBuZyIsImNhdGVnb3J5IjoiSU5ESUEgSElOREkifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTA0OCIsIm5hbWUiOiJJTnwgU09OWSBBU0lBIEhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZpbmQlMkZzb255LnBuZyIsImNhdGVnb3J5IjoiSU5ESUEgSElOREkifQ==",
+   "type": "tv",
+   "name": "IN| SONY ASIA HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fsony.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fsony.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTA0OCIsIm5hbWUiOiJJTnwgU09OWSBBU0lBIEhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZpbmQlMkZzb255LnBuZyIsImNhdGVnb3J5IjoiSU5ESUEgSElOREkifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTA0OSIsIm5hbWUiOiJJTnwgQ0hBTk5FTC1TIEhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZpbmQlMkZjaHMwLnBuZyIsImNhdGVnb3J5IjoiSU5ESUEgSElOREkifQ==",
+   "type": "tv",
+   "name": "IN| CHANNEL-S HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fchs0.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fchs0.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTA0OSIsIm5hbWUiOiJJTnwgQ0hBTk5FTC1TIEhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZpbmQlMkZjaHMwLnBuZyIsImNhdGVnb3J5IjoiSU5ESUEgSElOREkifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTA1MCIsIm5hbWUiOiJJTnwgTkVQQUwgMSBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGaW5kJTJGbnBsMS5wbmciLCJjYXRlZ29yeSI6IklORElBIEhJTkRJIn0=",
+   "type": "tv",
+   "name": "IN| NEPAL 1 HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fnpl1.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fnpl1.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTA1MCIsIm5hbWUiOiJJTnwgTkVQQUwgMSBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGaW5kJTJGbnBsMS5wbmciLCJjYXRlZ29yeSI6IklORElBIEhJTkRJIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTA1MiIsIm5hbWUiOiJJTnwgQUFTVEhBIEhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZpbmQlMkZhYXN0aGEucG5nIiwiY2F0ZWdvcnkiOiJJTkRJQSBISU5ESSJ9",
+   "type": "tv",
+   "name": "IN| AASTHA HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Faastha.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Faastha.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTA1MiIsIm5hbWUiOiJJTnwgQUFTVEhBIEhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZpbmQlMkZhYXN0aGEucG5nIiwiY2F0ZWdvcnkiOiJJTkRJQSBISU5ESSJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTA1MyIsIm5hbWUiOiJJTnwgQUFTVEhBIEJIQUpBTiBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGaW5kJTJGYXNzdGgucG5nIiwiY2F0ZWdvcnkiOiJJTkRJQSBISU5ESSJ9",
+   "type": "tv",
+   "name": "IN| AASTHA BHAJAN HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fassth.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fassth.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTA1MyIsIm5hbWUiOiJJTnwgQUFTVEhBIEJIQUpBTiBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGaW5kJTJGYXNzdGgucG5nIiwiY2F0ZWdvcnkiOiJJTkRJQSBISU5ESSJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTA1NCIsIm5hbWUiOiJJTnwgQVJJSEFOVCBUViBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGaW5kJTJGYXJpaC5wbmciLCJjYXRlZ29yeSI6IklORElBIEhJTkRJIn0=",
+   "type": "tv",
+   "name": "IN| ARIHANT TV HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Farih.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Farih.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTA1NCIsIm5hbWUiOiJJTnwgQVJJSEFOVCBUViBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGaW5kJTJGYXJpaC5wbmciLCJjYXRlZ29yeSI6IklORElBIEhJTkRJIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTA1NSIsIm5hbWUiOiJJTnwgSEFSVkVTVCBUViBVU0EgU0QiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRmluZCUyRmhhdnVzYS5wbmciLCJjYXRlZ29yeSI6IklORElBIEhJTkRJIn0=",
+   "type": "tv",
+   "name": "IN| HARVEST TV USA SD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fhavusa.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fhavusa.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTA1NSIsIm5hbWUiOiJJTnwgSEFSVkVTVCBUViBVU0EgU0QiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRmluZCUyRmhhdnVzYS5wbmciLCJjYXRlZ29yeSI6IklORElBIEhJTkRJIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTA1NiIsIm5hbWUiOiJJTnwgSElORFUgREhBUk1BTSBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGaW5kJTJGaGluZGRoMS5wbmciLCJjYXRlZ29yeSI6IklORElBIEhJTkRJIn0=",
+   "type": "tv",
+   "name": "IN| HINDU DHARMAM HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fhinddh1.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fhinddh1.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTA1NiIsIm5hbWUiOiJJTnwgSElORFUgREhBUk1BTSBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGaW5kJTJGaGluZGRoMS5wbmciLCJjYXRlZ29yeSI6IklORElBIEhJTkRJIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTA1NyIsIm5hbWUiOiJJTnwgSVNIV0FSIFRWIFNEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZpbmQlMkZpc2h3LnBuZyIsImNhdGVnb3J5IjoiSU5ESUEgSElOREkifQ==",
+   "type": "tv",
+   "name": "IN| ISHWAR TV SD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fishw.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fishw.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTA1NyIsIm5hbWUiOiJJTnwgSVNIV0FSIFRWIFNEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZpbmQlMkZpc2h3LnBuZyIsImNhdGVnb3J5IjoiSU5ESUEgSElOREkifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTA1OCIsIm5hbWUiOiJJTnwgUEVBQ0UgT0YgTUlORCBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGaW5kJTJGcGVhYy5wbmciLCJjYXRlZ29yeSI6IklORElBIEhJTkRJIn0=",
+   "type": "tv",
+   "name": "IN| PEACE OF MIND HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fpeac.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fpeac.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTA1OCIsIm5hbWUiOiJJTnwgUEVBQ0UgT0YgTUlORCBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGaW5kJTJGcGVhYy5wbmciLCJjYXRlZ29yeSI6IklORElBIEhJTkRJIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTA1OSIsIm5hbWUiOiJJTnwgU0hVQkggVFYgSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRmluZCUyRnNodWIucG5nIiwiY2F0ZWdvcnkiOiJJTkRJQSBISU5ESSJ9",
+   "type": "tv",
+   "name": "IN| SHUBH TV HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fshub.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fshub.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTA1OSIsIm5hbWUiOiJJTnwgU0hVQkggVFYgSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRmluZCUyRnNodWIucG5nIiwiY2F0ZWdvcnkiOiJJTkRJQSBISU5ESSJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTA2MCIsIm5hbWUiOiJJTnwgVkVESUMgSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRmluZCUyRnZlZGljLnBuZyIsImNhdGVnb3J5IjoiSU5ESUEgSElOREkifQ==",
+   "type": "tv",
+   "name": "IN| VEDIC HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fvedic.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fvedic.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTA2MCIsIm5hbWUiOiJJTnwgVkVESUMgSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRmluZCUyRnZlZGljLnBuZyIsImNhdGVnb3J5IjoiSU5ESUEgSElOREkifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTA2MSIsIm5hbWUiOiJJTnwgRElWWUEgSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRmluZCUyRmRpdnlhMS5wbmciLCJjYXRlZ29yeSI6IklORElBIEhJTkRJIn0=",
+   "type": "tv",
+   "name": "IN| DIVYA HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fdivya1.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fdivya1.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTA2MSIsIm5hbWUiOiJJTnwgRElWWUEgSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRmluZCUyRmRpdnlhMS5wbmciLCJjYXRlZ29yeSI6IklORElBIEhJTkRJIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTA2MiIsIm5hbWUiOiJJTnwgU0FESE5BIFBMVVMgU0QiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRmluZCUyRnNhZGhwbC5wbmciLCJjYXRlZ29yeSI6IklORElBIEhJTkRJIn0=",
+   "type": "tv",
+   "name": "IN| SADHNA PLUS SD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fsadhpl.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Find%2Fsadhpl.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIxOTA2MiIsIm5hbWUiOiJJTnwgU0FESE5BIFBMVVMgU0QiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRmluZCUyRnNhZGhwbC5wbmciLCJjYXRlZ29yeSI6IklORElBIEhJTkRJIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM2OSIsIm5hbWUiOiJVU3wgUEVBQ09DSyBTRVJJRVMgMSBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGcHB2cyUyRnBzYmsucG5nIiwiY2F0ZWdvcnkiOiJVU0EgUEVBQ09DSyJ9",
+   "type": "tv",
+   "name": "US| PEACOCK SERIES 1 HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM2OSIsIm5hbWUiOiJVU3wgUEVBQ09DSyBTRVJJRVMgMSBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGcHB2cyUyRnBzYmsucG5nIiwiY2F0ZWdvcnkiOiJVU0EgUEVBQ09DSyJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM3MCIsIm5hbWUiOiJVU3wgUEVBQ09DSyBTRVJJRVMgMiBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGcHB2cyUyRnBzYmsucG5nIiwiY2F0ZWdvcnkiOiJVU0EgUEVBQ09DSyJ9",
+   "type": "tv",
+   "name": "US| PEACOCK SERIES 2 HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM3MCIsIm5hbWUiOiJVU3wgUEVBQ09DSyBTRVJJRVMgMiBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGcHB2cyUyRnBzYmsucG5nIiwiY2F0ZWdvcnkiOiJVU0EgUEVBQ09DSyJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM3MSIsIm5hbWUiOiJVU3wgUEVBQ09DSyBTRVJJRVMgMyBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGcHB2cyUyRnBzYmsucG5nIiwiY2F0ZWdvcnkiOiJVU0EgUEVBQ09DSyJ9",
+   "type": "tv",
+   "name": "US| PEACOCK SERIES 3 HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM3MSIsIm5hbWUiOiJVU3wgUEVBQ09DSyBTRVJJRVMgMyBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGcHB2cyUyRnBzYmsucG5nIiwiY2F0ZWdvcnkiOiJVU0EgUEVBQ09DSyJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM3MiIsIm5hbWUiOiJVU3wgUEVBQ09DSyBTRVJJRVMgNCBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGcHB2cyUyRnBzYmsucG5nIiwiY2F0ZWdvcnkiOiJVU0EgUEVBQ09DSyJ9",
+   "type": "tv",
+   "name": "US| PEACOCK SERIES 4 HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM3MiIsIm5hbWUiOiJVU3wgUEVBQ09DSyBTRVJJRVMgNCBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGcHB2cyUyRnBzYmsucG5nIiwiY2F0ZWdvcnkiOiJVU0EgUEVBQ09DSyJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM3MyIsIm5hbWUiOiJVU3wgUEVBQ09DSyBTRVJJRVMgNSBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGcHB2cyUyRnBzYmsucG5nIiwiY2F0ZWdvcnkiOiJVU0EgUEVBQ09DSyJ9",
+   "type": "tv",
+   "name": "US| PEACOCK SERIES 5 HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM3MyIsIm5hbWUiOiJVU3wgUEVBQ09DSyBTRVJJRVMgNSBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGcHB2cyUyRnBzYmsucG5nIiwiY2F0ZWdvcnkiOiJVU0EgUEVBQ09DSyJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM3NCIsIm5hbWUiOiJVU3wgUEVBQ09DSyBTRVJJRVMgNiBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGcHB2cyUyRnBzYmsucG5nIiwiY2F0ZWdvcnkiOiJVU0EgUEVBQ09DSyJ9",
+   "type": "tv",
+   "name": "US| PEACOCK SERIES 6 HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM3NCIsIm5hbWUiOiJVU3wgUEVBQ09DSyBTRVJJRVMgNiBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGcHB2cyUyRnBzYmsucG5nIiwiY2F0ZWdvcnkiOiJVU0EgUEVBQ09DSyJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM3NSIsIm5hbWUiOiJVU3wgUEVBQ09DSyBTRVJJRVMgNyBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGcHB2cyUyRnBzYmsucG5nIiwiY2F0ZWdvcnkiOiJVU0EgUEVBQ09DSyJ9",
+   "type": "tv",
+   "name": "US| PEACOCK SERIES 7 HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM3NSIsIm5hbWUiOiJVU3wgUEVBQ09DSyBTRVJJRVMgNyBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGcHB2cyUyRnBzYmsucG5nIiwiY2F0ZWdvcnkiOiJVU0EgUEVBQ09DSyJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM3NiIsIm5hbWUiOiJVU3wgUEVBQ09DSyBTRVJJRVMgOCBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGcHB2cyUyRnBzYmsucG5nIiwiY2F0ZWdvcnkiOiJVU0EgUEVBQ09DSyJ9",
+   "type": "tv",
+   "name": "US| PEACOCK SERIES 8 HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM3NiIsIm5hbWUiOiJVU3wgUEVBQ09DSyBTRVJJRVMgOCBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGcHB2cyUyRnBzYmsucG5nIiwiY2F0ZWdvcnkiOiJVU0EgUEVBQ09DSyJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM3NyIsIm5hbWUiOiJVU3wgUEVBQ09DSyBTRVJJRVMgOSBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGcHB2cyUyRnBzYmsucG5nIiwiY2F0ZWdvcnkiOiJVU0EgUEVBQ09DSyJ9",
+   "type": "tv",
+   "name": "US| PEACOCK SERIES 9 HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM3NyIsIm5hbWUiOiJVU3wgUEVBQ09DSyBTRVJJRVMgOSBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGcHB2cyUyRnBzYmsucG5nIiwiY2F0ZWdvcnkiOiJVU0EgUEVBQ09DSyJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM3OCIsIm5hbWUiOiJVU3wgUEVBQ09DSyBTRVJJRVMgMTAgSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnBwdnMlMkZwc2JrLnBuZyIsImNhdGVnb3J5IjoiVVNBIFBFQUNPQ0sifQ==",
+   "type": "tv",
+   "name": "US| PEACOCK SERIES 10 HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM3OCIsIm5hbWUiOiJVU3wgUEVBQ09DSyBTRVJJRVMgMTAgSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnBwdnMlMkZwc2JrLnBuZyIsImNhdGVnb3J5IjoiVVNBIFBFQUNPQ0sifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM3OSIsIm5hbWUiOiJVU3wgUEVBQ09DSyBTRVJJRVMgMTEgSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnBwdnMlMkZwc2JrLnBuZyIsImNhdGVnb3J5IjoiVVNBIFBFQUNPQ0sifQ==",
+   "type": "tv",
+   "name": "US| PEACOCK SERIES 11 HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM3OSIsIm5hbWUiOiJVU3wgUEVBQ09DSyBTRVJJRVMgMTEgSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnBwdnMlMkZwc2JrLnBuZyIsImNhdGVnb3J5IjoiVVNBIFBFQUNPQ0sifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM4MCIsIm5hbWUiOiJVU3wgUEVBQ09DSyBTRVJJRVMgMTIgSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnBwdnMlMkZwc2JrLnBuZyIsImNhdGVnb3J5IjoiVVNBIFBFQUNPQ0sifQ==",
+   "type": "tv",
+   "name": "US| PEACOCK SERIES 12 HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM4MCIsIm5hbWUiOiJVU3wgUEVBQ09DSyBTRVJJRVMgMTIgSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnBwdnMlMkZwc2JrLnBuZyIsImNhdGVnb3J5IjoiVVNBIFBFQUNPQ0sifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM4MiIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDAxIFtNZW4ncyBBbGxfQXJvdW5kIEZpbmFsICgyMDI2LTExLTEwIDA2OjMwOjAwKV0iLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnBwdnMlMkZwc2JrLnBuZyIsImNhdGVnb3J5IjoiVVNBIFBFQUNPQ0sifQ==",
+   "type": "tv",
+   "name": "US| PEACOCK PPV 001 [Men's All_Around Final (2026-11-10 06:30:00)]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM4MiIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDAxIFtNZW4ncyBBbGxfQXJvdW5kIEZpbmFsICgyMDI2LTExLTEwIDA2OjMwOjAwKV0iLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnBwdnMlMkZwc2JrLnBuZyIsImNhdGVnb3J5IjoiVVNBIFBFQUNPQ0sifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM4MyIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDAyIFtXb21lbidzIEFsbF9Bcm91bmQgRmluYWwgKDIwMjYtMTEtMTAgMTE6MTU6MDApXSIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGcHB2cyUyRnBzYmsucG5nIiwiY2F0ZWdvcnkiOiJVU0EgUEVBQ09DSyJ9",
+   "type": "tv",
+   "name": "US| PEACOCK PPV 002 [Women's All_Around Final (2026-11-10 11:15:00)]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM4MyIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDAyIFtXb21lbidzIEFsbF9Bcm91bmQgRmluYWwgKDIwMjYtMTEtMTAgMTE6MTU6MDApXSIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGcHB2cyUyRnBzYmsucG5nIiwiY2F0ZWdvcnkiOiJVU0EgUEVBQ09DSyJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM4NCIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDAzIFtQZXJmb3JtYW5jZSBWaWV3OiBCT1MgdnMuIFBISSAoMjAyNi0xMS0xMCAxOTowMDowMCldIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwcHZzJTJGcHNiay5wbmciLCJjYXRlZ29yeSI6IlVTQSBQRUFDT0NLIn0=",
+   "type": "tv",
+   "name": "US| PEACOCK PPV 003 [Performance View: BOS vs. PHI (2026-11-10 19:00:00)]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM4NCIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDAzIFtQZXJmb3JtYW5jZSBWaWV3OiBCT1MgdnMuIFBISSAoMjAyNi0xMS0xMCAxOTowMDowMCldIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwcHZzJTJGcHNiay5wbmciLCJjYXRlZ29yeSI6IlVTQSBQRUFDT0NLIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM4NSIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDA0IFtDZWx0aWNzIHZzLiA3NmVycyAoMjAyNi0xMS0xMCAxOTowMDowNSldIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwcHZzJTJGcHNiay5wbmciLCJjYXRlZ29yeSI6IlVTQSBQRUFDT0NLIn0=",
+   "type": "tv",
+   "name": "US| PEACOCK PPV 004 [Celtics vs. 76ers (2026-11-10 19:00:05)]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM4NSIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDA0IFtDZWx0aWNzIHZzLiA3NmVycyAoMjAyNi0xMS0xMCAxOTowMDowNSldIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwcHZzJTJGcHNiay5wbmciLCJjYXRlZ29yeSI6IlVTQSBQRUFDT0NLIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM4NiIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDA1IFtJbGxpbm9pcyB2cy4gVGV4YXMgVGVjaCAoMjAyNi0xMS0xMCAxOTozMDowMCldIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwcHZzJTJGcHNiay5wbmciLCJjYXRlZ29yeSI6IlVTQSBQRUFDT0NLIn0=",
+   "type": "tv",
+   "name": "US| PEACOCK PPV 005 [Illinois vs. Texas Tech (2026-11-10 19:30:00)]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM4NiIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDA1IFtJbGxpbm9pcyB2cy4gVGV4YXMgVGVjaCAoMjAyNi0xMS0xMCAxOTozMDowMCldIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwcHZzJTJGcHNiay5wbmciLCJjYXRlZ29yeSI6IlVTQSBQRUFDT0NLIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM4NyIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDA2IFtUaHVuZGVyIHZzLiBUcmFpbCBCbGF6ZXJzICgyMDI2LTExLTEwIDIzOjAwOjAwKV0iLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnBwdnMlMkZwc2JrLnBuZyIsImNhdGVnb3J5IjoiVVNBIFBFQUNPQ0sifQ==",
+   "type": "tv",
+   "name": "US| PEACOCK PPV 006 [Thunder vs. Trail Blazers (2026-11-10 23:00:00)]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM4NyIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDA2IFtUaHVuZGVyIHZzLiBUcmFpbCBCbGF6ZXJzICgyMDI2LTExLTEwIDIzOjAwOjAwKV0iLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnBwdnMlMkZwc2JrLnBuZyIsImNhdGVnb3J5IjoiVVNBIFBFQUNPQ0sifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM4OCIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDA3IFtQZXJmb3JtYW5jZSBWaWV3OiBPS0MgdnMuIFBPUiAoMjAyNi0xMS0xMCAyMzowMDowNSldIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwcHZzJTJGcHNiay5wbmciLCJjYXRlZ29yeSI6IlVTQSBQRUFDT0NLIn0=",
+   "type": "tv",
+   "name": "US| PEACOCK PPV 007 [Performance View: OKC vs. POR (2026-11-10 23:00:05)]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM4OCIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDA3IFtQZXJmb3JtYW5jZSBWaWV3OiBPS0MgdnMuIFBPUiAoMjAyNi0xMS0xMCAyMzowMDowNSldIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwcHZzJTJGcHNiay5wbmciLCJjYXRlZ29yeSI6IlVTQSBQRUFDT0NLIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM4OSIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDA4IFtNaXhlZCBUZWFtIEZpbmFsICgyMDI2LTExLTExIDEyOjAwOjAwKV0iLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnBwdnMlMkZwc2JrLnBuZyIsImNhdGVnb3J5IjoiVVNBIFBFQUNPQ0sifQ==",
+   "type": "tv",
+   "name": "US| PEACOCK PPV 008 [Mixed Team Final (2026-11-11 12:00:00)]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM4OSIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDA4IFtNaXhlZCBUZWFtIEZpbmFsICgyMDI2LTExLTExIDEyOjAwOjAwKV0iLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnBwdnMlMkZwc2JrLnBuZyIsImNhdGVnb3J5IjoiVVNBIFBFQUNPQ0sifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM5MCIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDA5IFtDb2xnYXRlIHZzLiBTdC4gSm9obidzICgyMDI2LTExLTExIDE4OjMwOjAwKV0iLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnBwdnMlMkZwc2JrLnBuZyIsImNhdGVnb3J5IjoiVVNBIFBFQUNPQ0sifQ==",
+   "type": "tv",
+   "name": "US| PEACOCK PPV 009 [Colgate vs. St. John's (2026-11-11 18:30:00)]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM5MCIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDA5IFtDb2xnYXRlIHZzLiBTdC4gSm9obidzICgyMDI2LTExLTExIDE4OjMwOjAwKV0iLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnBwdnMlMkZwc2JrLnBuZyIsImNhdGVnb3J5IjoiVVNBIFBFQUNPQ0sifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM5MSIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDEwIFtQb3dlciBGQyB2LiBCcm9va2x5biBGQyAoMjAyNi0xMS0xMSAxOTowMDowMCldIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwcHZzJTJGcHNiay5wbmciLCJjYXRlZ29yeSI6IlVTQSBQRUFDT0NLIn0=",
+   "type": "tv",
+   "name": "US| PEACOCK PPV 010 [Power FC v. Brooklyn FC (2026-11-11 19:00:00)]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM5MSIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDEwIFtQb3dlciBGQyB2LiBCcm9va2x5biBGQyAoMjAyNi0xMS0xMSAxOTowMDowMCldIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwcHZzJTJGcHNiay5wbmciLCJjYXRlZ29yeSI6IlVTQSBQRUFDT0NLIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM5MiIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDExIFtBcmthbnNhc19QaW5lIEJsdWZmIHZzLiBVQ0xBICgyMDI2LTExLTExIDIxOjAwOjAwKV0iLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnBwdnMlMkZwc2JrLnBuZyIsImNhdGVnb3J5IjoiVVNBIFBFQUNPQ0sifQ==",
+   "type": "tv",
+   "name": "US| PEACOCK PPV 011 [Arkansas_Pine Bluff vs. UCLA (2026-11-11 21:00:00)]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM5MiIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDExIFtBcmthbnNhc19QaW5lIEJsdWZmIHZzLiBVQ0xBICgyMDI2LTExLTExIDIxOjAwOjAwKV0iLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnBwdnMlMkZwc2JrLnBuZyIsImNhdGVnb3J5IjoiVVNBIFBFQUNPQ0sifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM5MyIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDEyIFtNaWNoaWdhbiBTdGF0ZSB2cy4gTm90cmUgRGFtZSAoMjAyNi0xMS0xMiAxOTowMDowMCldIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwcHZzJTJGcHNiay5wbmciLCJjYXRlZ29yeSI6IlVTQSBQRUFDT0NLIn0=",
+   "type": "tv",
+   "name": "US| PEACOCK PPV 012 [Michigan State vs. Notre Dame (2026-11-12 19:00:00)]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM5MyIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDEyIFtNaWNoaWdhbiBTdGF0ZSB2cy4gTm90cmUgRGFtZSAoMjAyNi0xMS0xMiAxOTowMDowMCldIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwcHZzJTJGcHNiay5wbmciLCJjYXRlZ29yeSI6IlVTQSBQRUFDT0NLIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM5NCIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDEzIFtQaXR0c2J1cmdoIHZzLiBCdXRsZXIgKDIwMjYtMTEtMTMgMTg6MDA6MDApXSIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGcHB2cyUyRnBzYmsucG5nIiwiY2F0ZWdvcnkiOiJVU0EgUEVBQ09DSyJ9",
+   "type": "tv",
+   "name": "US| PEACOCK PPV 013 [Pittsburgh vs. Butler (2026-11-13 18:00:00)]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM5NCIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDEzIFtQaXR0c2J1cmdoIHZzLiBCdXRsZXIgKDIwMjYtMTEtMTMgMTg6MDA6MDApXSIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGcHB2cyUyRnBzYmsucG5nIiwiY2F0ZWdvcnkiOiJVU0EgUEVBQ09DSyJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM5NSIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDE0IFtNaWNoaWdhbiBTdGF0ZSB2cy4gTm90cmUgRGFtZSAoMjAyNi0xMS0xMyAxOTowMDowMCldIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwcHZzJTJGcHNiay5wbmciLCJjYXRlZ29yeSI6IlVTQSBQRUFDT0NLIn0=",
+   "type": "tv",
+   "name": "US| PEACOCK PPV 014 [Michigan State vs. Notre Dame (2026-11-13 19:00:00)]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM5NSIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDE0IFtNaWNoaWdhbiBTdGF0ZSB2cy4gTm90cmUgRGFtZSAoMjAyNi0xMS0xMyAxOTowMDowMCldIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwcHZzJTJGcHNiay5wbmciLCJjYXRlZ29yeSI6IlVTQSBQRUFDT0NLIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM5NiIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDE1IFtMZXhpbmd0b24gU0Mgdi4gRlRMIFVuaXRlZCAoMjAyNi0xMS0xMyAxOTozMDowMCldIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwcHZzJTJGcHNiay5wbmciLCJjYXRlZ29yeSI6IlVTQSBQRUFDT0NLIn0=",
+   "type": "tv",
+   "name": "US| PEACOCK PPV 015 [Lexington SC v. FTL United (2026-11-13 19:30:00)]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM5NiIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDE1IFtMZXhpbmd0b24gU0Mgdi4gRlRMIFVuaXRlZCAoMjAyNi0xMS0xMyAxOTozMDowMCldIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwcHZzJTJGcHNiay5wbmciLCJjYXRlZ29yeSI6IlVTQSBQRUFDT0NLIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM5NyIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDE2IFtWaXJnaW5pYSB2cy4gTWFyeWxhbmQgKDIwMjYtMTEtMTMgMjA6MDA6MDApXSIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGcHB2cyUyRnBzYmsucG5nIiwiY2F0ZWdvcnkiOiJVU0EgUEVBQ09DSyJ9",
+   "type": "tv",
+   "name": "US| PEACOCK PPV 016 [Virginia vs. Maryland (2026-11-13 20:00:00)]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM5NyIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDE2IFtWaXJnaW5pYSB2cy4gTWFyeWxhbmQgKDIwMjYtMTEtMTMgMjA6MDA6MDApXSIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGcHB2cyUyRnBzYmsucG5nIiwiY2F0ZWdvcnkiOiJVU0EgUEVBQ09DSyJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM5OCIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDE3IFtXb21lbidzIFNsYWxvbSBSdW4gMSAoMjAyNi0xMS0xNCAwNDowMDowMCldIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwcHZzJTJGcHNiay5wbmciLCJjYXRlZ29yeSI6IlVTQSBQRUFDT0NLIn0=",
+   "type": "tv",
+   "name": "US| PEACOCK PPV 017 [Women's Slalom Run 1 (2026-11-14 04:00:00)]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM5OCIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDE3IFtXb21lbidzIFNsYWxvbSBSdW4gMSAoMjAyNi0xMS0xNCAwNDowMDowMCldIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwcHZzJTJGcHNiay5wbmciLCJjYXRlZ29yeSI6IlVTQSBQRUFDT0NLIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM5OSIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDE4IFtXb21lbidzIFNsYWxvbSBSdW4gMiAoMjAyNi0xMS0xNCAwNzowMDowMCldIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwcHZzJTJGcHNiay5wbmciLCJjYXRlZ29yeSI6IlVTQSBQRUFDT0NLIn0=",
+   "type": "tv",
+   "name": "US| PEACOCK PPV 018 [Women's Slalom Run 2 (2026-11-14 07:00:00)]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjM5OSIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDE4IFtXb21lbidzIFNsYWxvbSBSdW4gMiAoMjAyNi0xMS0xNCAwNzowMDowMCldIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwcHZzJTJGcHNiay5wbmciLCJjYXRlZ29yeSI6IlVTQSBQRUFDT0NLIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQwMCIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDE5IFtCb3N0b24gQ29sbGVnZSB2cy4gTm90cmUgRGFtZSAoMjAyNi0xMS0xNCAxNTowMDowMCldIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwcHZzJTJGcHNiay5wbmciLCJjYXRlZ29yeSI6IlVTQSBQRUFDT0NLIn0=",
+   "type": "tv",
+   "name": "US| PEACOCK PPV 019 [Boston College vs. Notre Dame (2026-11-14 15:00:00)]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQwMCIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDE5IFtCb3N0b24gQ29sbGVnZSB2cy4gTm90cmUgRGFtZSAoMjAyNi0xMS0xNCAxNTowMDowMCldIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwcHZzJTJGcHNiay5wbmciLCJjYXRlZ29yeSI6IlVTQSBQRUFDT0NLIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQwMSIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDIwIFtTdW4gRkMgdi4gVHJpbml0eSBGQyAoMjAyNi0xMS0xNCAxODowMDowMCldIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwcHZzJTJGcHNiay5wbmciLCJjYXRlZ29yeSI6IlVTQSBQRUFDT0NLIn0=",
+   "type": "tv",
+   "name": "US| PEACOCK PPV 020 [Sun FC v. Trinity FC (2026-11-14 18:00:00)]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQwMSIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDIwIFtTdW4gRkMgdi4gVHJpbml0eSBGQyAoMjAyNi0xMS0xNCAxODowMDowMCldIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwcHZzJTJGcHNiay5wbmciLCJjYXRlZ29yeSI6IlVTQSBQRUFDT0NLIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQwMiIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDIxIFtDb2xvcmFkbyB2cy4gUHJvdmlkZW5jZSAoMjAyNi0xMS0xNCAxODowMDowNSldIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwcHZzJTJGcHNiay5wbmciLCJjYXRlZ29yeSI6IlVTQSBQRUFDT0NLIn0=",
+   "type": "tv",
+   "name": "US| PEACOCK PPV 021 [Colorado vs. Providence (2026-11-14 18:00:05)]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQwMiIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDIxIFtDb2xvcmFkbyB2cy4gUHJvdmlkZW5jZSAoMjAyNi0xMS0xNCAxODowMDowNSldIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwcHZzJTJGcHNiay5wbmciLCJjYXRlZ29yeSI6IlVTQSBQRUFDT0NLIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQwMyIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDIyIFtQdXJkdWUgdnMuIElvd2EgKDIwMjYtMTEtMTQgMTk6MDA6MDApXSIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGcHB2cyUyRnBzYmsucG5nIiwiY2F0ZWdvcnkiOiJVU0EgUEVBQ09DSyJ9",
+   "type": "tv",
+   "name": "US| PEACOCK PPV 022 [Purdue vs. Iowa (2026-11-14 19:00:00)]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQwMyIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDIyIFtQdXJkdWUgdnMuIElvd2EgKDIwMjYtMTEtMTQgMTk6MDA6MDApXSIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGcHB2cyUyRnBzYmsucG5nIiwiY2F0ZWdvcnkiOiJVU0EgUEVBQ09DSyJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQwNCIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDIzIFtNZW4ncyBTbGFsb20gUnVuIDEgKDIwMjYtMTEtMTUgMDQ6MDA6MDApXSIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGcHB2cyUyRnBzYmsucG5nIiwiY2F0ZWdvcnkiOiJVU0EgUEVBQ09DSyJ9",
+   "type": "tv",
+   "name": "US| PEACOCK PPV 023 [Men's Slalom Run 1 (2026-11-15 04:00:00)]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQwNCIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDIzIFtNZW4ncyBTbGFsb20gUnVuIDEgKDIwMjYtMTEtMTUgMDQ6MDA6MDApXSIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGcHB2cyUyRnBzYmsucG5nIiwiY2F0ZWdvcnkiOiJVU0EgUEVBQ09DSyJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQwNSIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDI0IFtNZW4ncyBTbGFsb20gUnVuIDIgKDIwMjYtMTEtMTUgMDc6MDA6MDApXSIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGcHB2cyUyRnBzYmsucG5nIiwiY2F0ZWdvcnkiOiJVU0EgUEVBQ09DSyJ9",
+   "type": "tv",
+   "name": "US| PEACOCK PPV 024 [Men's Slalom Run 2 (2026-11-15 07:00:00)]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQwNSIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDI0IFtNZW4ncyBTbGFsb20gUnVuIDIgKDIwMjYtMTEtMTUgMDc6MDA6MDApXSIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGcHB2cyUyRnBzYmsucG5nIiwiY2F0ZWdvcnkiOiJVU0EgUEVBQ09DSyJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQwNiIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDI1IFtNaXNzb3VyaSB2cy4gTWFycXVldHRlICgyMDI2LTExLTE1IDE0OjMwOjAwKV0iLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnBwdnMlMkZwc2JrLnBuZyIsImNhdGVnb3J5IjoiVVNBIFBFQUNPQ0sifQ==",
+   "type": "tv",
+   "name": "US| PEACOCK PPV 025 [Missouri vs. Marquette (2026-11-15 14:30:00)]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQwNiIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDI1IFtNaXNzb3VyaSB2cy4gTWFycXVldHRlICgyMDI2LTExLTE1IDE0OjMwOjAwKV0iLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnBwdnMlMkZwc2JrLnBuZyIsImNhdGVnb3J5IjoiVVNBIFBFQUNPQ0sifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQwNyIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDI2IFtOZXcgSGF2ZW4gdnMuIFBlbm4gU3RhdGUgKDIwMjYtMTEtMTUgMTY6MzA6MDApXSIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGcHB2cyUyRnBzYmsucG5nIiwiY2F0ZWdvcnkiOiJVU0EgUEVBQ09DSyJ9",
+   "type": "tv",
+   "name": "US| PEACOCK PPV 026 [New Haven vs. Penn State (2026-11-15 16:30:00)]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQwNyIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDI2IFtOZXcgSGF2ZW4gdnMuIFBlbm4gU3RhdGUgKDIwMjYtMTEtMTUgMTY6MzA6MDApXSIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGcHB2cyUyRnBzYmsucG5nIiwiY2F0ZWdvcnkiOiJVU0EgUEVBQ09DSyJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQwOCIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDI3IFtTcG9ydGluZyBKQVggdi4gUG93ZXIgRkMgKDIwMjYtMTEtMTUgMTc6MDA6MDApXSIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGcHB2cyUyRnBzYmsucG5nIiwiY2F0ZWdvcnkiOiJVU0EgUEVBQ09DSyJ9",
+   "type": "tv",
+   "name": "US| PEACOCK PPV 027 [Sporting JAX v. Power FC (2026-11-15 17:00:00)]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQwOCIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDI3IFtTcG9ydGluZyBKQVggdi4gUG93ZXIgRkMgKDIwMjYtMTEtMTUgMTc6MDA6MDApXSIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGcHB2cyUyRnBzYmsucG5nIiwiY2F0ZWdvcnkiOiJVU0EgUEVBQ09DSyJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQwOSIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDI4IFtTeXJhY3VzZSB2cy4gU3QuIEpvaG4ncyAoMjAyNi0xMS0xNSAxODozMDowMCldIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwcHZzJTJGcHNiay5wbmciLCJjYXRlZ29yeSI6IlVTQSBQRUFDT0NLIn0=",
+   "type": "tv",
+   "name": "US| PEACOCK PPV 028 [Syracuse vs. St. John's (2026-11-15 18:30:00)]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQwOSIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDI4IFtTeXJhY3VzZSB2cy4gU3QuIEpvaG4ncyAoMjAyNi0xMS0xNSAxODozMDowMCldIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwcHZzJTJGcHNiay5wbmciLCJjYXRlZ29yeSI6IlVTQSBQRUFDT0NLIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQxMCIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDI5IFtTdGVlbGVycyB2cy4gQmVuZ2FscyAoMjAyNi0xMS0xNSAxOTowMDowMCldIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwcHZzJTJGcHNiay5wbmciLCJjYXRlZ29yeSI6IlVTQSBQRUFDT0NLIn0=",
+   "type": "tv",
+   "name": "US| PEACOCK PPV 029 [Steelers vs. Bengals (2026-11-15 19:00:00)]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQxMCIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDI5IFtTdGVlbGVycyB2cy4gQmVuZ2FscyAoMjAyNi0xMS0xNSAxOTowMDowMCldIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwcHZzJTJGcHNiay5wbmciLCJjYXRlZ29yeSI6IlVTQSBQRUFDT0NLIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQxMSIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDMwIFtTdW5kYXkgTmlnaHQgRm9vdGJhbGwgRmluYWwgKDIwMjYtMTEtMTUgMjM6MzA6MDApXSIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGcHB2cyUyRnBzYmsucG5nIiwiY2F0ZWdvcnkiOiJVU0EgUEVBQ09DSyJ9",
+   "type": "tv",
+   "name": "US| PEACOCK PPV 030 [Sunday Night Football Final (2026-11-15 23:30:00)]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQxMSIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDMwIFtTdW5kYXkgTmlnaHQgRm9vdGJhbGwgRmluYWwgKDIwMjYtMTEtMTUgMjM6MzA6MDApXSIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGcHB2cyUyRnBzYmsucG5nIiwiY2F0ZWdvcnkiOiJVU0EgUEVBQ09DSyJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQxMiIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDMxIFtNYWdpYyB2cy4gQ2VsdGljcyAoMjAyNi0xMS0xNiAxODozMDowMCldIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwcHZzJTJGcHNiay5wbmciLCJjYXRlZ29yeSI6IlVTQSBQRUFDT0NLIn0=",
+   "type": "tv",
+   "name": "US| PEACOCK PPV 031 [Magic vs. Celtics (2026-11-16 18:30:00)]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQxMiIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDMxIFtNYWdpYyB2cy4gQ2VsdGljcyAoMjAyNi0xMS0xNiAxODozMDowMCldIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwcHZzJTJGcHNiay5wbmciLCJjYXRlZ29yeSI6IlVTQSBQRUFDT0NLIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQxMyIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDMyIFtQZXJmb3JtYW5jZSBWaWV3OiBPUkwgdnMuIEJPUyAoMjAyNi0xMS0xNiAxODozMDowNSldIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwcHZzJTJGcHNiay5wbmciLCJjYXRlZ29yeSI6IlVTQSBQRUFDT0NLIn0=",
+   "type": "tv",
+   "name": "US| PEACOCK PPV 032 [Performance View: ORL vs. BOS (2026-11-16 18:30:05)]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQxMyIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDMyIFtQZXJmb3JtYW5jZSBWaWV3OiBPUkwgdnMuIEJPUyAoMjAyNi0xMS0xNiAxODozMDowNSldIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwcHZzJTJGcHNiay5wbmciLCJjYXRlZ29yeSI6IlVTQSBQRUFDT0NLIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQxNCIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDMzIFtQaXN0b25zIHZzLiBTcHVycyAoMjAyNi0xMS0xNyAxOTowMDowMCldIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwcHZzJTJGcHNiay5wbmciLCJjYXRlZ29yeSI6IlVTQSBQRUFDT0NLIn0=",
+   "type": "tv",
+   "name": "US| PEACOCK PPV 033 [Pistons vs. Spurs (2026-11-17 19:00:00)]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQxNCIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDMzIFtQaXN0b25zIHZzLiBTcHVycyAoMjAyNi0xMS0xNyAxOTowMDowMCldIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwcHZzJTJGcHNiay5wbmciLCJjYXRlZ29yeSI6IlVTQSBQRUFDT0NLIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQxNSIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDM0IFtQZXJmb3JtYW5jZSBWaWV3OiBERVQgdnMuIFNBUyAoMjAyNi0xMS0xNyAxOTowMDowNSldIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwcHZzJTJGcHNiay5wbmciLCJjYXRlZ29yeSI6IlVTQSBQRUFDT0NLIn0=",
+   "type": "tv",
+   "name": "US| PEACOCK PPV 034 [Performance View: DET vs. SAS (2026-11-17 19:00:05)]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQxNSIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDM0IFtQZXJmb3JtYW5jZSBWaWV3OiBERVQgdnMuIFNBUyAoMjAyNi0xMS0xNyAxOTowMDowNSldIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwcHZzJTJGcHNiay5wbmciLCJjYXRlZ29yeSI6IlVTQSBQRUFDT0NLIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQxNiIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDM1IFtUZXhhcyBBJk0gdnMuIFRDVSAoMjAyNi0xMS0xOSAxOTozMDowMCldIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwcHZzJTJGcHNiay5wbmciLCJjYXRlZ29yeSI6IlVTQSBQRUFDT0NLIn0=",
+   "type": "tv",
+   "name": "US| PEACOCK PPV 035 [Texas A&M vs. TCU (2026-11-19 19:30:00)]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQxNiIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDM1IFtUZXhhcyBBJk0gdnMuIFRDVSAoMjAyNi0xMS0xOSAxOTozMDowMCldIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwcHZzJTJGcHNiay5wbmciLCJjYXRlZ29yeSI6IlVTQSBQRUFDT0NLIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQxNyIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDM2IFtTVCBXb3JsZCBUb3VyOiBTZW91bCAxICgyMDI2LTExLTIxIDAwOjAwOjAwKV0iLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnBwdnMlMkZwc2JrLnBuZyIsImNhdGVnb3J5IjoiVVNBIFBFQUNPQ0sifQ==",
+   "type": "tv",
+   "name": "US| PEACOCK PPV 036 [ST World Tour: Seoul 1 (2026-11-21 00:00:00)]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQxNyIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDM2IFtTVCBXb3JsZCBUb3VyOiBTZW91bCAxICgyMDI2LTExLTIxIDAwOjAwOjAwKV0iLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnBwdnMlMkZwc2JrLnBuZyIsImNhdGVnb3J5IjoiVVNBIFBFQUNPQ0sifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQxOCIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDM3IFtDaGVsc2VhIHYuIExlZWRzIFVuaXRlZCAoMjAyNi0xMS0yMSAwOTo1MDowMCldIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwcHZzJTJGcHNiay5wbmciLCJjYXRlZ29yeSI6IlVTQSBQRUFDT0NLIn0=",
+   "type": "tv",
+   "name": "US| PEACOCK PPV 037 [Chelsea v. Leeds United (2026-11-21 09:50:00)]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQxOCIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDM3IFtDaGVsc2VhIHYuIExlZWRzIFVuaXRlZCAoMjAyNi0xMS0yMSAwOTo1MDowMCldIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwcHZzJTJGcHNiay5wbmciLCJjYXRlZ29yeSI6IlVTQSBQRUFDT0NLIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQxOSIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDM4IFtBc3RvbiBWaWxsYSB2LiBTdW5kZXJsYW5kICgyMDI2LTExLTIxIDA5OjUwOjA1KV0iLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnBwdnMlMkZwc2JrLnBuZyIsImNhdGVnb3J5IjoiVVNBIFBFQUNPQ0sifQ==",
+   "type": "tv",
+   "name": "US| PEACOCK PPV 038 [Aston Villa v. Sunderland (2026-11-21 09:50:05)]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQxOSIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDM4IFtBc3RvbiBWaWxsYSB2LiBTdW5kZXJsYW5kICgyMDI2LTExLTIxIDA5OjUwOjA1KV0iLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnBwdnMlMkZwc2JrLnBuZyIsImNhdGVnb3J5IjoiVVNBIFBFQUNPQ0sifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQyMCIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDM5IFtCb3VybmVtb3V0aCB2LiBOb3R0aW5naGFtIEZvcmVzdCAoMjAyNi0xMS0yMSAwOTo1MDoxMCldIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwcHZzJTJGcHNiay5wbmciLCJjYXRlZ29yeSI6IlVTQSBQRUFDT0NLIn0=",
+   "type": "tv",
+   "name": "US| PEACOCK PPV 039 [Bournemouth v. Nottingham Forest (2026-11-21 09:50:10)]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQyMCIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDM5IFtCb3VybmVtb3V0aCB2LiBOb3R0aW5naGFtIEZvcmVzdCAoMjAyNi0xMS0yMSAwOTo1MDoxMCldIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwcHZzJTJGcHNiay5wbmciLCJjYXRlZ29yeSI6IlVTQSBQRUFDT0NLIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQyMSIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDQwIFtDb3ZlbnRyeSBDaXR5IHYuIENyeXN0YWwgUGFsYWNlICgyMDI2LTExLTIxIDA5OjUwOjE1KV0iLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnBwdnMlMkZwc2JrLnBuZyIsImNhdGVnb3J5IjoiVVNBIFBFQUNPQ0sifQ==",
+   "type": "tv",
+   "name": "US| PEACOCK PPV 040 [Coventry City v. Crystal Palace (2026-11-21 09:50:15)]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQyMSIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDQwIFtDb3ZlbnRyeSBDaXR5IHYuIENyeXN0YWwgUGFsYWNlICgyMDI2LTExLTIxIDA5OjUwOjE1KV0iLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnBwdnMlMkZwc2JrLnBuZyIsImNhdGVnb3J5IjoiVVNBIFBFQUNPQ0sifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQyMiIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDQxIFtHb2FsIFJ1c2g6IE1hdGNod2VlayAxMSAoMjAyNi0xMS0yMSAwOTo1MDoyMCldIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwcHZzJTJGcHNiay5wbmciLCJjYXRlZ29yeSI6IlVTQSBQRUFDT0NLIn0=",
+   "type": "tv",
+   "name": "US| PEACOCK PPV 041 [Goal Rush: Matchweek 11 (2026-11-21 09:50:20)]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQyMiIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDQxIFtHb2FsIFJ1c2g6IE1hdGNod2VlayAxMSAoMjAyNi0xMS0yMSAwOTo1MDoyMCldIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwcHZzJTJGcHNiay5wbmciLCJjYXRlZ29yeSI6IlVTQSBQRUFDT0NLIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQyMyIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDQyIFtXaXNjb25zaW4gdnMuIFB1cmR1ZSAoMjAyNi0xMS0yMSAxMjowMDowMCldIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwcHZzJTJGcHNiay5wbmciLCJjYXRlZ29yeSI6IlVTQSBQRUFDT0NLIn0=",
+   "type": "tv",
+   "name": "US| PEACOCK PPV 042 [Wisconsin vs. Purdue (2026-11-21 12:00:00)]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQyMyIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDQyIFtXaXNjb25zaW4gdnMuIFB1cmR1ZSAoMjAyNi0xMS0yMSAxMjowMDowMCldIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwcHZzJTJGcHNiay5wbmciLCJjYXRlZ29yeSI6IlVTQSBQRUFDT0NLIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQyNCIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDQzIFtCaWcgVGVuIFNhdHVyZGF5OiBXZWVrIDEyICgyMDI2LTExLTIxIDE1OjMwOjAwKV0iLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnBwdnMlMkZwc2JrLnBuZyIsImNhdGVnb3J5IjoiVVNBIFBFQUNPQ0sifQ==",
+   "type": "tv",
+   "name": "US| PEACOCK PPV 043 [Big Ten Saturday: Week 12 (2026-11-21 15:30:00)]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQyNCIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDQzIFtCaWcgVGVuIFNhdHVyZGF5OiBXZWVrIDEyICgyMDI2LTExLTIxIDE1OjMwOjAwKV0iLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnBwdnMlMkZwc2JrLnBuZyIsImNhdGVnb3J5IjoiVVNBIFBFQUNPQ0sifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQyNSIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDQ0IFtTTVUgdnMuIE5vdHJlIERhbWUgKDIwMjYtMTEtMjEgMTk6MDA6MDApXSIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGcHB2cyUyRnBzYmsucG5nIiwiY2F0ZWdvcnkiOiJVU0EgUEVBQ09DSyJ9",
+   "type": "tv",
+   "name": "US| PEACOCK PPV 044 [SMU vs. Notre Dame (2026-11-21 19:00:00)]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQyNSIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDQ0IFtTTVUgdnMuIE5vdHJlIERhbWUgKDIwMjYtMTEtMjEgMTk6MDA6MDApXSIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGcHB2cyUyRnBzYmsucG5nIiwiY2F0ZWdvcnkiOiJVU0EgUEVBQ09DSyJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQyNiIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDQ1IFtIaWdoIERpdmluZyBXb3JsZCBDdXA6IENoaW5hIDEgKDIwMjYtMTEtMjEgMjI6MDI6MDApXSIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGcHB2cyUyRnBzYmsucG5nIiwiY2F0ZWdvcnkiOiJVU0EgUEVBQ09DSyJ9",
+   "type": "tv",
+   "name": "US| PEACOCK PPV 045 [High Diving World Cup: China 1 (2026-11-21 22:02:00)]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQyNiIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDQ1IFtIaWdoIERpdmluZyBXb3JsZCBDdXA6IENoaW5hIDEgKDIwMjYtMTEtMjEgMjI6MDI6MDApXSIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGcHB2cyUyRnBzYmsucG5nIiwiY2F0ZWdvcnkiOiJVU0EgUEVBQ09DSyJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQyNyIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDQ2IFtTVCBXb3JsZCBUb3VyOiBTZW91bCAyICgyMDI2LTExLTIyIDAwOjAwOjAwKV0iLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnBwdnMlMkZwc2JrLnBuZyIsImNhdGVnb3J5IjoiVVNBIFBFQUNPQ0sifQ==",
+   "type": "tv",
+   "name": "US| PEACOCK PPV 046 [ST World Tour: Seoul 2 (2026-11-22 00:00:00)]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQyNyIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDQ2IFtTVCBXb3JsZCBUb3VyOiBTZW91bCAyICgyMDI2LTExLTIyIDAwOjAwOjAwKV0iLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnBwdnMlMkZwc2JrLnBuZyIsImNhdGVnb3J5IjoiVVNBIFBFQUNPQ0sifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQyOCIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDQ3IFtWaWtpbmdzIHZzLiA0OWVycyAoMjAyNi0xMS0yMiAxOTowMDowMCldIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwcHZzJTJGcHNiay5wbmciLCJjYXRlZ29yeSI6IlVTQSBQRUFDT0NLIn0=",
+   "type": "tv",
+   "name": "US| PEACOCK PPV 047 [Vikings vs. 49ers (2026-11-22 19:00:00)]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQyOCIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDQ3IFtWaWtpbmdzIHZzLiA0OWVycyAoMjAyNi0xMS0yMiAxOTowMDowMCldIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZwcHZzJTJGcHNiay5wbmciLCJjYXRlZ29yeSI6IlVTQSBQRUFDT0NLIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQyOSIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDQ4IFtIaWdoIERpdmluZyBXb3JsZCBDdXA6IENoaW5hIDIgKDIwMjYtMTEtMjIgMjI6MDI6MDApXSIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGcHB2cyUyRnBzYmsucG5nIiwiY2F0ZWdvcnkiOiJVU0EgUEVBQ09DSyJ9",
+   "type": "tv",
+   "name": "US| PEACOCK PPV 048 [High Diving World Cup: China 2 (2026-11-22 22:02:00)]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fppvs%2Fpsbk.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMjQyOSIsIm5hbWUiOiJVU3wgUEVBQ09DSyBQUFYgMDQ4IFtIaWdoIERpdmluZyBXb3JsZCBDdXA6IENoaW5hIDIgKDIwMjYtMTEtMjIgMjI6MDI6MDApXSIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGcHB2cyUyRnBzYmsucG5nIiwiY2F0ZWdvcnkiOiJVU0EgUEVBQ09DSyJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODQ4IiwibmFtZSI6IlVLfCBCQkMgMSBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZiYmMxLnBuZyIsImNhdGVnb3J5IjoiVUsgR0VORVJBTCJ9",
+   "type": "tv",
+   "name": "UK| BBC 1 HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fbbc1.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fbbc1.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODQ4IiwibmFtZSI6IlVLfCBCQkMgMSBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZiYmMxLnBuZyIsImNhdGVnb3J5IjoiVUsgR0VORVJBTCJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODQ5IiwibmFtZSI6IlVLfCBCQkMgMSBbQktdIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZ1ayUyRmJiYzEucG5nIiwiY2F0ZWdvcnkiOiJVSyBHRU5FUkFMIn0=",
+   "type": "tv",
+   "name": "UK| BBC 1 [BK]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fbbc1.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fbbc1.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODQ5IiwibmFtZSI6IlVLfCBCQkMgMSBbQktdIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZ1ayUyRmJiYzEucG5nIiwiY2F0ZWdvcnkiOiJVSyBHRU5FUkFMIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODUwIiwibmFtZSI6IlVLfCBCQkMgMiBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZiYmMyLnBuZyIsImNhdGVnb3J5IjoiVUsgR0VORVJBTCJ9",
+   "type": "tv",
+   "name": "UK| BBC 2 HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fbbc2.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fbbc2.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODUwIiwibmFtZSI6IlVLfCBCQkMgMiBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZiYmMyLnBuZyIsImNhdGVnb3J5IjoiVUsgR0VORVJBTCJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODUxIiwibmFtZSI6IlVLfCBCQkMgMiBbQktdIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZ1ayUyRmJiYzIucG5nIiwiY2F0ZWdvcnkiOiJVSyBHRU5FUkFMIn0=",
+   "type": "tv",
+   "name": "UK| BBC 2 [BK]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fbbc2.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fbbc2.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODUxIiwibmFtZSI6IlVLfCBCQkMgMiBbQktdIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZ1ayUyRmJiYzIucG5nIiwiY2F0ZWdvcnkiOiJVSyBHRU5FUkFMIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODUyIiwibmFtZSI6IlVLfCBCQkMgMyBDQkJDIEhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZ1ayUyRmZsZy5wbmciLCJjYXRlZ29yeSI6IlVLIEdFTkVSQUwifQ==",
+   "type": "tv",
+   "name": "UK| BBC 3 CBBC HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fflg.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fflg.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODUyIiwibmFtZSI6IlVLfCBCQkMgMyBDQkJDIEhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZ1ayUyRmZsZy5wbmciLCJjYXRlZ29yeSI6IlVLIEdFTkVSQUwifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODUzIiwibmFtZSI6IlVLfCBCQkMgNCAvIENCRUVCSUVTIEhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZ1ayUyRmJiYzQucG5nIiwiY2F0ZWdvcnkiOiJVSyBHRU5FUkFMIn0=",
+   "type": "tv",
+   "name": "UK| BBC 4 / CBEEBIES HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fbbc4.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fbbc4.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODUzIiwibmFtZSI6IlVLfCBCQkMgNCAvIENCRUVCSUVTIEhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZ1ayUyRmJiYzQucG5nIiwiY2F0ZWdvcnkiOiJVSyBHRU5FUkFMIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODU0IiwibmFtZSI6IlVLfCBDQkJDIEhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZ1ayUyRmNiYmMucG5nIiwiY2F0ZWdvcnkiOiJVSyBHRU5FUkFMIn0=",
+   "type": "tv",
+   "name": "UK| CBBC HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fcbbc.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fcbbc.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODU0IiwibmFtZSI6IlVLfCBDQkJDIEhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZ1ayUyRmNiYmMucG5nIiwiY2F0ZWdvcnkiOiJVSyBHRU5FUkFMIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODU1IiwibmFtZSI6IlVLfCBJVFYgMSBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZpdHYwLnBuZyIsImNhdGVnb3J5IjoiVUsgR0VORVJBTCJ9",
+   "type": "tv",
+   "name": "UK| ITV 1 HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fitv0.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fitv0.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODU1IiwibmFtZSI6IlVLfCBJVFYgMSBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZpdHYwLnBuZyIsImNhdGVnb3J5IjoiVUsgR0VORVJBTCJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODU2IiwibmFtZSI6IlVLfCBJVFYgMSBbQktdIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZ1ayUyRml0djAucG5nIiwiY2F0ZWdvcnkiOiJVSyBHRU5FUkFMIn0=",
+   "type": "tv",
+   "name": "UK| ITV 1 [BK]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fitv0.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fitv0.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODU2IiwibmFtZSI6IlVLfCBJVFYgMSBbQktdIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZ1ayUyRml0djAucG5nIiwiY2F0ZWdvcnkiOiJVSyBHRU5FUkFMIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODU3IiwibmFtZSI6IlVLfCAoSVRWWCkgSVRWMSIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZpdHYwLnBuZyIsImNhdGVnb3J5IjoiVUsgR0VORVJBTCJ9",
+   "type": "tv",
+   "name": "UK| (ITVX) ITV1",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fitv0.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fitv0.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODU3IiwibmFtZSI6IlVLfCAoSVRWWCkgSVRWMSIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZpdHYwLnBuZyIsImNhdGVnb3J5IjoiVUsgR0VORVJBTCJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODU4IiwibmFtZSI6IlVLfCBJVFYrIDEgSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnVrJTJGaXR2MC5wbmciLCJjYXRlZ29yeSI6IlVLIEdFTkVSQUwifQ==",
+   "type": "tv",
+   "name": "UK| ITV+ 1 HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fitv0.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fitv0.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODU4IiwibmFtZSI6IlVLfCBJVFYrIDEgSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnVrJTJGaXR2MC5wbmciLCJjYXRlZ29yeSI6IlVLIEdFTkVSQUwifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODU5IiwibmFtZSI6IlVLfCBJVFYgMiBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZpdHYyMC5wbmciLCJjYXRlZ29yeSI6IlVLIEdFTkVSQUwifQ==",
+   "type": "tv",
+   "name": "UK| ITV 2 HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fitv20.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fitv20.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODU5IiwibmFtZSI6IlVLfCBJVFYgMiBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZpdHYyMC5wbmciLCJjYXRlZ29yeSI6IlVLIEdFTkVSQUwifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODYwIiwibmFtZSI6IlVLfCBJVFYgMiBbQktdIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZ1ayUyRml0djIwLnBuZyIsImNhdGVnb3J5IjoiVUsgR0VORVJBTCJ9",
+   "type": "tv",
+   "name": "UK| ITV 2 [BK]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fitv20.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fitv20.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODYwIiwibmFtZSI6IlVLfCBJVFYgMiBbQktdIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZ1ayUyRml0djIwLnBuZyIsImNhdGVnb3J5IjoiVUsgR0VORVJBTCJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODYxIiwibmFtZSI6IlVLfCAoSVRWWCkgSVRWMiIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZpdHYwLnBuZyIsImNhdGVnb3J5IjoiVUsgR0VORVJBTCJ9",
+   "type": "tv",
+   "name": "UK| (ITVX) ITV2",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fitv0.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fitv0.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODYxIiwibmFtZSI6IlVLfCAoSVRWWCkgSVRWMiIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZpdHYwLnBuZyIsImNhdGVnb3J5IjoiVUsgR0VORVJBTCJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODYyIiwibmFtZSI6IlVLfCBJVFYgMyBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZpdHYzMC5wbmciLCJjYXRlZ29yeSI6IlVLIEdFTkVSQUwifQ==",
+   "type": "tv",
+   "name": "UK| ITV 3 HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fitv30.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fitv30.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODYyIiwibmFtZSI6IlVLfCBJVFYgMyBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZpdHYzMC5wbmciLCJjYXRlZ29yeSI6IlVLIEdFTkVSQUwifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODYzIiwibmFtZSI6IlVLfCBJVFYgMyBbQktdIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZ1ayUyRml0djMwLnBuZyIsImNhdGVnb3J5IjoiVUsgR0VORVJBTCJ9",
+   "type": "tv",
+   "name": "UK| ITV 3 [BK]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fitv30.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fitv30.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODYzIiwibmFtZSI6IlVLfCBJVFYgMyBbQktdIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZ1ayUyRml0djMwLnBuZyIsImNhdGVnb3J5IjoiVUsgR0VORVJBTCJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODY0IiwibmFtZSI6IlVLfCAoSVRWWCkgSVRWMyIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZpdHYwLnBuZyIsImNhdGVnb3J5IjoiVUsgR0VORVJBTCJ9",
+   "type": "tv",
+   "name": "UK| (ITVX) ITV3",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fitv0.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fitv0.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODY0IiwibmFtZSI6IlVLfCAoSVRWWCkgSVRWMyIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZpdHYwLnBuZyIsImNhdGVnb3J5IjoiVUsgR0VORVJBTCJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODY1IiwibmFtZSI6IlVLfCBJVFYgNCBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZpdHY0MC5wbmciLCJjYXRlZ29yeSI6IlVLIEdFTkVSQUwifQ==",
+   "type": "tv",
+   "name": "UK| ITV 4 HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fitv40.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fitv40.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODY1IiwibmFtZSI6IlVLfCBJVFYgNCBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZpdHY0MC5wbmciLCJjYXRlZ29yeSI6IlVLIEdFTkVSQUwifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODY2IiwibmFtZSI6IlVLfCBJVFYgNCBbQktdIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZ1ayUyRml0djQwLnBuZyIsImNhdGVnb3J5IjoiVUsgR0VORVJBTCJ9",
+   "type": "tv",
+   "name": "UK| ITV 4 [BK]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fitv40.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fitv40.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODY2IiwibmFtZSI6IlVLfCBJVFYgNCBbQktdIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZ1ayUyRml0djQwLnBuZyIsImNhdGVnb3J5IjoiVUsgR0VORVJBTCJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODY3IiwibmFtZSI6IlVLfCAoSVRWWCkgSVRWNCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZpdHYwLnBuZyIsImNhdGVnb3J5IjoiVUsgR0VORVJBTCJ9",
+   "type": "tv",
+   "name": "UK| (ITVX) ITV4",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fitv0.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fitv0.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODY3IiwibmFtZSI6IlVLfCAoSVRWWCkgSVRWNCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZpdHYwLnBuZyIsImNhdGVnb3J5IjoiVUsgR0VORVJBTCJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODY4IiwibmFtZSI6IlVLfCBJVFYgNCArMSBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZpdHY0MC5wbmciLCJjYXRlZ29yeSI6IlVLIEdFTkVSQUwifQ==",
+   "type": "tv",
+   "name": "UK| ITV 4 +1 HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fitv40.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fitv40.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODY4IiwibmFtZSI6IlVLfCBJVFYgNCArMSBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZpdHY0MC5wbmciLCJjYXRlZ29yeSI6IlVLIEdFTkVSQUwifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODY5IiwibmFtZSI6IlVLfCBDSEFOTkVMIDQgSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnVrJTJGY2hhbDQucG5nIiwiY2F0ZWdvcnkiOiJVSyBHRU5FUkFMIn0=",
+   "type": "tv",
+   "name": "UK| CHANNEL 4 HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fchal4.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fchal4.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODY5IiwibmFtZSI6IlVLfCBDSEFOTkVMIDQgSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnVrJTJGY2hhbDQucG5nIiwiY2F0ZWdvcnkiOiJVSyBHRU5FUkFMIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODcwIiwibmFtZSI6IlVLfCBDSEFOTkVMIDQgW0JLXSIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZjaGFsNC5wbmciLCJjYXRlZ29yeSI6IlVLIEdFTkVSQUwifQ==",
+   "type": "tv",
+   "name": "UK| CHANNEL 4 [BK]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fchal4.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fchal4.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODcwIiwibmFtZSI6IlVLfCBDSEFOTkVMIDQgW0JLXSIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZjaGFsNC5wbmciLCJjYXRlZ29yeSI6IlVLIEdFTkVSQUwifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODcxIiwibmFtZSI6IlVLfCBDSEFOTkVMIDUgSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnVrJTJGY2hhbDUucG5nIiwiY2F0ZWdvcnkiOiJVSyBHRU5FUkFMIn0=",
+   "type": "tv",
+   "name": "UK| CHANNEL 5 HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fchal5.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fchal5.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODcxIiwibmFtZSI6IlVLfCBDSEFOTkVMIDUgSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnVrJTJGY2hhbDUucG5nIiwiY2F0ZWdvcnkiOiJVSyBHRU5FUkFMIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODcyIiwibmFtZSI6IlVLfCBDSEFOTkVMIDUgW0JLXSIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZjaGFsNS5wbmciLCJjYXRlZ29yeSI6IlVLIEdFTkVSQUwifQ==",
+   "type": "tv",
+   "name": "UK| CHANNEL 5 [BK]",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fchal5.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fchal5.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODcyIiwibmFtZSI6IlVLfCBDSEFOTkVMIDUgW0JLXSIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZjaGFsNS5wbmciLCJjYXRlZ29yeSI6IlVLIEdFTkVSQUwifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODczIiwibmFtZSI6IlVLfCBDSEFOTkVMIDUgKyAxICBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZjaHAucG5nIiwiY2F0ZWdvcnkiOiJVSyBHRU5FUkFMIn0=",
+   "type": "tv",
+   "name": "UK| CHANNEL 5 + 1  HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fchp.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fchp.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODczIiwibmFtZSI6IlVLfCBDSEFOTkVMIDUgKyAxICBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZjaHAucG5nIiwiY2F0ZWdvcnkiOiJVSyBHRU5FUkFMIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODc0IiwibmFtZSI6IlVLfCBFNCBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZlNDAucG5nIiwiY2F0ZWdvcnkiOiJVSyBHRU5FUkFMIn0=",
+   "type": "tv",
+   "name": "UK| E4 HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fe40.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fe40.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODc0IiwibmFtZSI6IlVLfCBFNCBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZlNDAucG5nIiwiY2F0ZWdvcnkiOiJVSyBHRU5FUkFMIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODc1IiwibmFtZSI6IlVLfCBFNCBFWFRSQSIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZlNDAucG5nIiwiY2F0ZWdvcnkiOiJVSyBHRU5FUkFMIn0=",
+   "type": "tv",
+   "name": "UK| E4 EXTRA",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fe40.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fe40.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODc1IiwibmFtZSI6IlVLfCBFNCBFWFRSQSIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZlNDAucG5nIiwiY2F0ZWdvcnkiOiJVSyBHRU5FUkFMIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODc2IiwibmFtZSI6IlVLfCA0U0VWRU4gSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnVrJTJGNHNldi5wbmciLCJjYXRlZ29yeSI6IlVLIEdFTkVSQUwifQ==",
+   "type": "tv",
+   "name": "UK| 4SEVEN HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2F4sev.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2F4sev.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODc2IiwibmFtZSI6IlVLfCA0U0VWRU4gSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnVrJTJGNHNldi5wbmciLCJjYXRlZ29yeSI6IlVLIEdFTkVSQUwifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODc3IiwibmFtZSI6IlVLfCBBTElCSSBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZhbGliaS5wbmciLCJjYXRlZ29yeSI6IlVLIEdFTkVSQUwifQ==",
+   "type": "tv",
+   "name": "UK| ALIBI HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Falibi.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Falibi.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODc3IiwibmFtZSI6IlVLfCBBTElCSSBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZhbGliaS5wbmciLCJjYXRlZ29yeSI6IlVLIEdFTkVSQUwifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODc4IiwibmFtZSI6IlVLfCBBTElCSSArMSBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZhbGliaS5wbmciLCJjYXRlZ29yeSI6IlVLIEdFTkVSQUwifQ==",
+   "type": "tv",
+   "name": "UK| ALIBI +1 HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Falibi.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Falibi.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODc4IiwibmFtZSI6IlVLfCBBTElCSSArMSBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZhbGliaS5wbmciLCJjYXRlZ29yeSI6IlVLIEdFTkVSQUwifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODc5IiwibmFtZSI6IlVLfCBCQkMgTkVXUyBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZiYmNucy5wbmciLCJjYXRlZ29yeSI6IlVLIEdFTkVSQUwifQ==",
+   "type": "tv",
+   "name": "UK| BBC NEWS HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fbbcns.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fbbcns.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODc5IiwibmFtZSI6IlVLfCBCQkMgTkVXUyBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZiYmNucy5wbmciLCJjYXRlZ29yeSI6IlVLIEdFTkVSQUwifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODgwIiwibmFtZSI6IlVLfCBDTk4gSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnVrJTJGY25uLnBuZyIsImNhdGVnb3J5IjoiVUsgR0VORVJBTCJ9",
+   "type": "tv",
+   "name": "UK| CNN HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fcnn.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fcnn.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODgwIiwibmFtZSI6IlVLfCBDTk4gSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnVrJTJGY25uLnBuZyIsImNhdGVnb3J5IjoiVUsgR0VORVJBTCJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODgxIiwibmFtZSI6IlVLfCBSVEUgMSBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZydGUxLnBuZyIsImNhdGVnb3J5IjoiVUsgR0VORVJBTCJ9",
+   "type": "tv",
+   "name": "UK| RTE 1 HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Frte1.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Frte1.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODgxIiwibmFtZSI6IlVLfCBSVEUgMSBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZydGUxLnBuZyIsImNhdGVnb3J5IjoiVUsgR0VORVJBTCJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODgyIiwibmFtZSI6IlVLfCBSVEUgMiBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZ0cmUyLnBuZyIsImNhdGVnb3J5IjoiVUsgR0VORVJBTCJ9",
+   "type": "tv",
+   "name": "UK| RTE 2 HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Ftre2.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Ftre2.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODgyIiwibmFtZSI6IlVLfCBSVEUgMiBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZ0cmUyLnBuZyIsImNhdGVnb3J5IjoiVUsgR0VORVJBTCJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODgzIiwibmFtZSI6IlVLfCBJMjQgTkVXUyBIRCBFTkdMSVNIIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZ1ayUyRjI0JTIwTkVXUy5wbmciLCJjYXRlZ29yeSI6IlVLIEdFTkVSQUwifQ==",
+   "type": "tv",
+   "name": "UK| I24 NEWS HD ENGLISH",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2F24%20NEWS.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2F24%20NEWS.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODgzIiwibmFtZSI6IlVLfCBJMjQgTkVXUyBIRCBFTkdMSVNIIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZ1ayUyRjI0JTIwTkVXUy5wbmciLCJjYXRlZ29yeSI6IlVLIEdFTkVSQUwifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODg0IiwibmFtZSI6IlVLfCBTS1kgTkVXUyBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZza3lucy5wbmciLCJjYXRlZ29yeSI6IlVLIEdFTkVSQUwifQ==",
+   "type": "tv",
+   "name": "UK| SKY NEWS HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fskyns.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fskyns.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODg0IiwibmFtZSI6IlVLfCBTS1kgTkVXUyBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZza3lucy5wbmciLCJjYXRlZ29yeSI6IlVLIEdFTkVSQUwifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODg1IiwibmFtZSI6IlVLfCBBTCBKQVpFRVJBIEhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZ1ayUyRmFsanoucG5nIiwiY2F0ZWdvcnkiOiJVSyBHRU5FUkFMIn0=",
+   "type": "tv",
+   "name": "UK| AL JAZEERA HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Faljz.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Faljz.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODg1IiwibmFtZSI6IlVLfCBBTCBKQVpFRVJBIEhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZ1ayUyRmFsanoucG5nIiwiY2F0ZWdvcnkiOiJVSyBHRU5FUkFMIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODg2IiwibmFtZSI6IlVLfCBHQiBORVdTIEhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZ1ayUyRmdiMC5wbmciLCJjYXRlZ29yeSI6IlVLIEdFTkVSQUwifQ==",
+   "type": "tv",
+   "name": "UK| GB NEWS HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fgb0.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fgb0.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODg2IiwibmFtZSI6IlVLfCBHQiBORVdTIEhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZ1ayUyRmdiMC5wbmciLCJjYXRlZ29yeSI6IlVLIEdFTkVSQUwifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODg3IiwibmFtZSI6IlVLfCBDTkJDIEhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZ1ayUyRkNOQkMlMjBGSEQucG5nIiwiY2F0ZWdvcnkiOiJVSyBHRU5FUkFMIn0=",
+   "type": "tv",
+   "name": "UK| CNBC HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2FCNBC%20FHD.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2FCNBC%20FHD.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODg3IiwibmFtZSI6IlVLfCBDTkJDIEhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZ1ayUyRkNOQkMlMjBGSEQucG5nIiwiY2F0ZWdvcnkiOiJVSyBHRU5FUkFMIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODg4IiwibmFtZSI6IlVLfCBVVFYgSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnVrJTJGdXR2LnBuZyIsImNhdGVnb3J5IjoiVUsgR0VORVJBTCJ9",
+   "type": "tv",
+   "name": "UK| UTV HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Futv.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Futv.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODg4IiwibmFtZSI6IlVLfCBVVFYgSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnVrJTJGdXR2LnBuZyIsImNhdGVnb3J5IjoiVUsgR0VORVJBTCJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODg5IiwibmFtZSI6IlVLfCBGT1ggTkVXUyBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZGT1glMjBORVdTLnBuZyIsImNhdGVnb3J5IjoiVUsgR0VORVJBTCJ9",
+   "type": "tv",
+   "name": "UK| FOX NEWS HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2FFOX%20NEWS.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2FFOX%20NEWS.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODg5IiwibmFtZSI6IlVLfCBGT1ggTkVXUyBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZGT1glMjBORVdTLnBuZyIsImNhdGVnb3J5IjoiVUsgR0VORVJBTCJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODkwIiwibmFtZSI6IlVLfCBCTE9PTUJFUkcgSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnVrJTJGYmxvbWIucG5nIiwiY2F0ZWdvcnkiOiJVSyBHRU5FUkFMIn0=",
+   "type": "tv",
+   "name": "UK| BLOOMBERG HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fblomb.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fblomb.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODkwIiwibmFtZSI6IlVLfCBCTE9PTUJFUkcgSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnVrJTJGYmxvbWIucG5nIiwiY2F0ZWdvcnkiOiJVSyBHRU5FUkFMIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODkxIiwibmFtZSI6IlVLfCBTVFYgSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnVrJTJGc3R2MS5wbmciLCJjYXRlZ29yeSI6IlVLIEdFTkVSQUwifQ==",
+   "type": "tv",
+   "name": "UK| STV HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fstv1.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fstv1.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODkxIiwibmFtZSI6IlVLfCBTVFYgSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnVrJTJGc3R2MS5wbmciLCJjYXRlZ29yeSI6IlVLIEdFTkVSQUwifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODkyIiwibmFtZSI6IlVLfCBUUlQgV09STEQgSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnVrJTJGVFJUJTIwV09STEQucG5nIiwiY2F0ZWdvcnkiOiJVSyBHRU5FUkFMIn0=",
+   "type": "tv",
+   "name": "UK| TRT WORLD HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2FTRT%20WORLD.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2FTRT%20WORLD.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODkyIiwibmFtZSI6IlVLfCBUUlQgV09STEQgSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnVrJTJGVFJUJTIwV09STEQucG5nIiwiY2F0ZWdvcnkiOiJVSyBHRU5FUkFMIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODkzIiwibmFtZSI6IlVLfCBOQkMgTkVXUyBOT1cgSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnVrJTJGbmJjbjAucG5nIiwiY2F0ZWdvcnkiOiJVSyBHRU5FUkFMIn0=",
+   "type": "tv",
+   "name": "UK| NBC NEWS NOW HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fnbcn0.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fnbcn0.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODkzIiwibmFtZSI6IlVLfCBOQkMgTkVXUyBOT1cgSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnVrJTJGbmJjbjAucG5nIiwiY2F0ZWdvcnkiOiJVSyBHRU5FUkFMIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODk1IiwibmFtZSI6IlVLfCBCQkMgMSBGSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnVrJTJGYmJjMS5wbmciLCJjYXRlZ29yeSI6IlVLIEdFTkVSQUwifQ==",
+   "type": "tv",
+   "name": "UK| BBC 1 FHD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fbbc1.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fbbc1.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODk1IiwibmFtZSI6IlVLfCBCQkMgMSBGSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnVrJTJGYmJjMS5wbmciLCJjYXRlZ29yeSI6IlVLIEdFTkVSQUwifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODk2IiwibmFtZSI6IlVLfCBCQkMgMSA0ayIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZiYmMxLnBuZyIsImNhdGVnb3J5IjoiVUsgR0VORVJBTCJ9",
+   "type": "tv",
+   "name": "UK| BBC 1 4k",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fbbc1.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fbbc1.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODk2IiwibmFtZSI6IlVLfCBCQkMgMSA0ayIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZiYmMxLnBuZyIsImNhdGVnb3J5IjoiVUsgR0VORVJBTCJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODk3IiwibmFtZSI6IlVLfCBCQkMgMiBGSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnVrJTJGYmJjMi5wbmciLCJjYXRlZ29yeSI6IlVLIEdFTkVSQUwifQ==",
+   "type": "tv",
+   "name": "UK| BBC 2 FHD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fbbc2.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fbbc2.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODk3IiwibmFtZSI6IlVLfCBCQkMgMiBGSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnVrJTJGYmJjMi5wbmciLCJjYXRlZ29yeSI6IlVLIEdFTkVSQUwifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODk4IiwibmFtZSI6IlVLfCBCQkMgNCAvIENCRUVCSUVTIEZIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZiYmM0LnBuZyIsImNhdGVnb3J5IjoiVUsgR0VORVJBTCJ9",
+   "type": "tv",
+   "name": "UK| BBC 4 / CBEEBIES FHD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fbbc4.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fbbc4.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODk4IiwibmFtZSI6IlVLfCBCQkMgNCAvIENCRUVCSUVTIEZIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZiYmM0LnBuZyIsImNhdGVnb3J5IjoiVUsgR0VORVJBTCJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODk5IiwibmFtZSI6IlVLfCBJVFYgMSBGSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnVrJTJGaXR2MC5wbmciLCJjYXRlZ29yeSI6IlVLIEdFTkVSQUwifQ==",
+   "type": "tv",
+   "name": "UK| ITV 1 FHD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fitv0.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fitv0.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0ODk5IiwibmFtZSI6IlVLfCBJVFYgMSBGSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnVrJTJGaXR2MC5wbmciLCJjYXRlZ29yeSI6IlVLIEdFTkVSQUwifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0OTAwIiwibmFtZSI6IlVLfCBJVFYgMiBGSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnVrJTJGaXR2MjAucG5nIiwiY2F0ZWdvcnkiOiJVSyBHRU5FUkFMIn0=",
+   "type": "tv",
+   "name": "UK| ITV 2 FHD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fitv20.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fitv20.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0OTAwIiwibmFtZSI6IlVLfCBJVFYgMiBGSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnVrJTJGaXR2MjAucG5nIiwiY2F0ZWdvcnkiOiJVSyBHRU5FUkFMIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0OTAxIiwibmFtZSI6IlVLfCBJVFYgMyBGSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnVrJTJGaXR2MzAucG5nIiwiY2F0ZWdvcnkiOiJVSyBHRU5FUkFMIn0=",
+   "type": "tv",
+   "name": "UK| ITV 3 FHD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fitv30.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fitv30.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0OTAxIiwibmFtZSI6IlVLfCBJVFYgMyBGSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnVrJTJGaXR2MzAucG5nIiwiY2F0ZWdvcnkiOiJVSyBHRU5FUkFMIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0OTAyIiwibmFtZSI6IlVLfCBJVFYgNCBGSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnVrJTJGaXR2NDAucG5nIiwiY2F0ZWdvcnkiOiJVSyBHRU5FUkFMIn0=",
+   "type": "tv",
+   "name": "UK| ITV 4 FHD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fitv40.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fitv40.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0OTAyIiwibmFtZSI6IlVLfCBJVFYgNCBGSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnVrJTJGaXR2NDAucG5nIiwiY2F0ZWdvcnkiOiJVSyBHRU5FUkFMIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0OTAzIiwibmFtZSI6IlVLfCBDSEFOTkVMIDQgRkhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZ1ayUyRmNoYWw0LnBuZyIsImNhdGVnb3J5IjoiVUsgR0VORVJBTCJ9",
+   "type": "tv",
+   "name": "UK| CHANNEL 4 FHD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fchal4.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fchal4.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0OTAzIiwibmFtZSI6IlVLfCBDSEFOTkVMIDQgRkhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZ1ayUyRmNoYWw0LnBuZyIsImNhdGVnb3J5IjoiVUsgR0VORVJBTCJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0OTA0IiwibmFtZSI6IlVLfCBDSEFOTkVMIDQgSEVWQyIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZjaGFsNC5wbmciLCJjYXRlZ29yeSI6IlVLIEdFTkVSQUwifQ==",
+   "type": "tv",
+   "name": "UK| CHANNEL 4 HEVC",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fchal4.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fchal4.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0OTA0IiwibmFtZSI6IlVLfCBDSEFOTkVMIDQgSEVWQyIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZjaGFsNC5wbmciLCJjYXRlZ29yeSI6IlVLIEdFTkVSQUwifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0OTA1IiwibmFtZSI6IlVLfCBDSEFOTkVMIDUgRkhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZ1ayUyRmNoYWw1LnBuZyIsImNhdGVnb3J5IjoiVUsgR0VORVJBTCJ9",
+   "type": "tv",
+   "name": "UK| CHANNEL 5 FHD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fchal5.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fchal5.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0OTA1IiwibmFtZSI6IlVLfCBDSEFOTkVMIDUgRkhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZ1ayUyRmNoYWw1LnBuZyIsImNhdGVnb3J5IjoiVUsgR0VORVJBTCJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0OTA2IiwibmFtZSI6IlVLfCBUQUxLIFRWIEZIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZ0YWwucG5nIiwiY2F0ZWdvcnkiOiJVSyBHRU5FUkFMIn0=",
+   "type": "tv",
+   "name": "UK| TALK TV FHD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Ftal.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Ftal.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0OTA2IiwibmFtZSI6IlVLfCBUQUxLIFRWIEZIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZ0YWwucG5nIiwiY2F0ZWdvcnkiOiJVSyBHRU5FUkFMIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0OTA3IiwibmFtZSI6IlVLfCBDQkJDIEZIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZjYmJjLnBuZyIsImNhdGVnb3J5IjoiVUsgR0VORVJBTCJ9",
+   "type": "tv",
+   "name": "UK| CBBC FHD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fcbbc.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fcbbc.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0OTA3IiwibmFtZSI6IlVLfCBDQkJDIEZIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGdWslMkZjYmJjLnBuZyIsImNhdGVnb3J5IjoiVUsgR0VORVJBTCJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0OTA4IiwibmFtZSI6IlVLfCBFNCBGSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnVrJTJGZTQucG5nIiwiY2F0ZWdvcnkiOiJVSyBHRU5FUkFMIn0=",
+   "type": "tv",
+   "name": "UK| E4 FHD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fe4.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fuk%2Fe4.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiI0OTA4IiwibmFtZSI6IlVLfCBFNCBGSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRnVrJTJGZTQucG5nIiwiY2F0ZWdvcnkiOiJVSyBHRU5FUkFMIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMzAwOSIsIm5hbWUiOiJDQXwgKEZSKSBUVkEgU1BPUlRTIEhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZjYSUyRnR2YW1udHJlYWwwLnBuZyIsImNhdGVnb3J5IjoiQ0FOQURBIEZSQU7Dh0FJUyBTUE9SVCJ9",
+   "type": "tv",
+   "name": "CA| (FR) TVA SPORTS HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fca%2Ftvamntreal0.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fca%2Ftvamntreal0.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMzAwOSIsIm5hbWUiOiJDQXwgKEZSKSBUVkEgU1BPUlRTIEhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZjYSUyRnR2YW1udHJlYWwwLnBuZyIsImNhdGVnb3J5IjoiQ0FOQURBIEZSQU7Dh0FJUyBTUE9SVCJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMzAxMCIsIm5hbWUiOiJDQXwgKEZSKSBUVkEgU1BPUlRTIDIgSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRmNhJTJGdHZhbW50cmVhbDAucG5nIiwiY2F0ZWdvcnkiOiJDQU5BREEgRlJBTsOHQUlTIFNQT1JUIn0=",
+   "type": "tv",
+   "name": "CA| (FR) TVA SPORTS 2 HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fca%2Ftvamntreal0.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fca%2Ftvamntreal0.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMzAxMCIsIm5hbWUiOiJDQXwgKEZSKSBUVkEgU1BPUlRTIDIgSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRmNhJTJGdHZhbW50cmVhbDAucG5nIiwiY2F0ZWdvcnkiOiJDQU5BREEgRlJBTsOHQUlTIFNQT1JUIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMzAxMSIsIm5hbWUiOiJDQXwgKEZSKSBSRFMiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRmNhJTJGcmRzMC5wbmciLCJjYXRlZ29yeSI6IkNBTkFEQSBGUkFOw4dBSVMgU1BPUlQifQ==",
+   "type": "tv",
+   "name": "CA| (FR) RDS",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fca%2Frds0.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fca%2Frds0.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMzAxMSIsIm5hbWUiOiJDQXwgKEZSKSBSRFMiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRmNhJTJGcmRzMC5wbmciLCJjYXRlZ29yeSI6IkNBTkFEQSBGUkFOw4dBSVMgU1BPUlQifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMzAxMiIsIm5hbWUiOiJDQXwgKEZSKSBSRFMxIEhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZjYSUyRnJkcy5wbmciLCJjYXRlZ29yeSI6IkNBTkFEQSBGUkFOw4dBSVMgU1BPUlQifQ==",
+   "type": "tv",
+   "name": "CA| (FR) RDS1 HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fca%2Frds.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fca%2Frds.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMzAxMiIsIm5hbWUiOiJDQXwgKEZSKSBSRFMxIEhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZjYSUyRnJkcy5wbmciLCJjYXRlZ29yeSI6IkNBTkFEQSBGUkFOw4dBSVMgU1BPUlQifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMzAxMyIsIm5hbWUiOiJDQXwgKEZSKSBSRFMyIEhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZjYSUyRnJkczIucG5nIiwiY2F0ZWdvcnkiOiJDQU5BREEgRlJBTsOHQUlTIFNQT1JUIn0=",
+   "type": "tv",
+   "name": "CA| (FR) RDS2 HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fca%2Frds2.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fca%2Frds2.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMzAxMyIsIm5hbWUiOiJDQXwgKEZSKSBSRFMyIEhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZjYSUyRnJkczIucG5nIiwiY2F0ZWdvcnkiOiJDQU5BREEgRlJBTsOHQUlTIFNQT1JUIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMzAxNCIsIm5hbWUiOiJDQXwgKEZSKSBSRFMgU1BPUlRTIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZjYSUyRnJkcy5wbmciLCJjYXRlZ29yeSI6IkNBTkFEQSBGUkFOw4dBSVMgU1BPUlQifQ==",
+   "type": "tv",
+   "name": "CA| (FR) RDS SPORTS",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fca%2Frds.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fca%2Frds.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMzAxNCIsIm5hbWUiOiJDQXwgKEZSKSBSRFMgU1BPUlRTIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZjYSUyRnJkcy5wbmciLCJjYXRlZ29yeSI6IkNBTkFEQSBGUkFOw4dBSVMgU1BPUlQifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMzAxNSIsIm5hbWUiOiJDQXwgKEZSKSBSRFMgKExRKSAgKFIpIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZjYSUyRnJkcy5wbmciLCJjYXRlZ29yeSI6IkNBTkFEQSBGUkFOw4dBSVMgU1BPUlQifQ==",
+   "type": "tv",
+   "name": "CA| (FR) RDS (LQ)  (R)",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fca%2Frds.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fca%2Frds.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMzAxNSIsIm5hbWUiOiJDQXwgKEZSKSBSRFMgKExRKSAgKFIpIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZjYSUyRnJkcy5wbmciLCJjYXRlZ29yeSI6IkNBTkFEQSBGUkFOw4dBSVMgU1BPUlQifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMzAxNiIsIm5hbWUiOiJDQXwgKEZSKSBSRFMgSU5GTyIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGY2ElMkZyZHMwLnBuZyIsImNhdGVnb3J5IjoiQ0FOQURBIEZSQU7Dh0FJUyBTUE9SVCJ9",
+   "type": "tv",
+   "name": "CA| (FR) RDS INFO",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fca%2Frds0.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fca%2Frds0.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMzAxNiIsIm5hbWUiOiJDQXwgKEZSKSBSRFMgSU5GTyIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGY2ElMkZyZHMwLnBuZyIsImNhdGVnb3J5IjoiQ0FOQURBIEZSQU7Dh0FJUyBTUE9SVCJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyODQ3NSIsIm5hbWUiOiJDQXwgKEZSKSBSRFMyIEZIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGY2ElMkZyZHMyLnBuZyIsImNhdGVnb3J5IjoiQ0FOQURBIEZSQU7Dh0FJUyBTUE9SVCJ9",
+   "type": "tv",
+   "name": "CA| (FR) RDS2 FHD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fca%2Frds2.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fca%2Frds2.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyODQ3NSIsIm5hbWUiOiJDQXwgKEZSKSBSRFMyIEZIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGY2ElMkZyZHMyLnBuZyIsImNhdGVnb3J5IjoiQ0FOQURBIEZSQU7Dh0FJUyBTUE9SVCJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMzAxOCIsIm5hbWUiOiJDQXwgKEZSKSBDQVNBIEhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZjYSUyRihGUiklMjBDQVNBLnBuZyIsImNhdGVnb3J5IjoiQ0FOQURBIEZSQU7Dh0FJUyBFTlRSVEVOTUVOVCJ9",
+   "type": "tv",
+   "name": "CA| (FR) CASA HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fca%2F(FR)%20CASA.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fca%2F(FR)%20CASA.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMzAxOCIsIm5hbWUiOiJDQXwgKEZSKSBDQVNBIEhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZjYSUyRihGUiklMjBDQVNBLnBuZyIsImNhdGVnb3J5IjoiQ0FOQURBIEZSQU7Dh0FJUyBFTlRSVEVOTUVOVCJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMzAxOSIsIm5hbWUiOiJDQXwgKEZSKSBNQVggSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRmNhJTJGbWF4LnBuZyIsImNhdGVnb3J5IjoiQ0FOQURBIEZSQU7Dh0FJUyBFTlRSVEVOTUVOVCJ9",
+   "type": "tv",
+   "name": "CA| (FR) MAX HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fca%2Fmax.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fca%2Fmax.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMzAxOSIsIm5hbWUiOiJDQXwgKEZSKSBNQVggSEQiLCJsb2dvIjoiaHR0cHM6Ly9zdGFyaXB0di5tZS9hcGkvaXB0di9sb2dvLXByb3h5P3VybD1odHRwcyUzQSUyRiUyRmxvMS5pbiUyRmNhJTJGbWF4LnBuZyIsImNhdGVnb3J5IjoiQ0FOQURBIEZSQU7Dh0FJUyBFTlRSVEVOTUVOVCJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMzAyMCIsIm5hbWUiOiJDQXwgKEZSKSBFVkFTSU9OIEhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZjYSUyRmV2YXMucG5nIiwiY2F0ZWdvcnkiOiJDQU5BREEgRlJBTsOHQUlTIEVOVFJURU5NRU5UIn0=",
+   "type": "tv",
+   "name": "CA| (FR) EVASION HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fca%2Fevas.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fca%2Fevas.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMzAyMCIsIm5hbWUiOiJDQXwgKEZSKSBFVkFTSU9OIEhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZjYSUyRmV2YXMucG5nIiwiY2F0ZWdvcnkiOiJDQU5BREEgRlJBTsOHQUlTIEVOVFJURU5NRU5UIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMzAyMSIsIm5hbWUiOiJDQXwgKEZSKSBGUklTU09OUyBUViBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGY2ElMkZmcnNvbi5wbmciLCJjYXRlZ29yeSI6IkNBTkFEQSBGUkFOw4dBSVMgRU5UUlRFTk1FTlQifQ==",
+   "type": "tv",
+   "name": "CA| (FR) FRISSONS TV HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fca%2Ffrson.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fca%2Ffrson.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMzAyMSIsIm5hbWUiOiJDQXwgKEZSKSBGUklTU09OUyBUViBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGY2ElMkZmcnNvbi5wbmciLCJjYXRlZ29yeSI6IkNBTkFEQSBGUkFOw4dBSVMgRU5UUlRFTk1FTlQifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMzAyMiIsIm5hbWUiOiJDQXwgKEZSKSBUVkEgUklWSUVSRS1EVS1MT1VQIEhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZjYSUyRnR2YW1udHJlYWwwLnBuZyIsImNhdGVnb3J5IjoiQ0FOQURBIEZSQU7Dh0FJUyBFTlRSVEVOTUVOVCJ9",
+   "type": "tv",
+   "name": "CA| (FR) TVA RIVIERE-DU-LOUP HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fca%2Ftvamntreal0.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fca%2Ftvamntreal0.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMzAyMiIsIm5hbWUiOiJDQXwgKEZSKSBUVkEgUklWSUVSRS1EVS1MT1VQIEhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZjYSUyRnR2YW1udHJlYWwwLnBuZyIsImNhdGVnb3J5IjoiQ0FOQURBIEZSQU7Dh0FJUyBFTlRSVEVOTUVOVCJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMzAyMyIsIm5hbWUiOiJDQXwgKEZSKSBDR1ROIEZSQU7Dh0FJUyBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGY2ElMkZjZ3RuZnIucG5nIiwiY2F0ZWdvcnkiOiJDQU5BREEgRlJBTsOHQUlTIEVOVFJURU5NRU5UIn0=",
+   "type": "tv",
+   "name": "CA| (FR) CGTN FRANÇAIS HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fca%2Fcgtnfr.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fca%2Fcgtnfr.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMzAyMyIsIm5hbWUiOiJDQXwgKEZSKSBDR1ROIEZSQU7Dh0FJUyBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGY2ElMkZjZ3RuZnIucG5nIiwiY2F0ZWdvcnkiOiJDQU5BREEgRlJBTsOHQUlTIEVOVFJURU5NRU5UIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMzAyNSIsIm5hbWUiOiJDQXwgKEZSKSBJQ0kgVEVMRVZJU0lPTiBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGY2ElMkYoRlIpJTIwSUNJJTIwVEVMRVZJU0lPTi5wbmciLCJjYXRlZ29yeSI6IkNBTkFEQSBGUkFOw4dBSVMgRU5UUlRFTk1FTlQifQ==",
+   "type": "tv",
+   "name": "CA| (FR) ICI TELEVISION HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fca%2F(FR)%20ICI%20TELEVISION.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fca%2F(FR)%20ICI%20TELEVISION.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMzAyNSIsIm5hbWUiOiJDQXwgKEZSKSBJQ0kgVEVMRVZJU0lPTiBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGY2ElMkYoRlIpJTIwSUNJJTIwVEVMRVZJU0lPTi5wbmciLCJjYXRlZ29yeSI6IkNBTkFEQSBGUkFOw4dBSVMgRU5UUlRFTk1FTlQifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMzAyNiIsIm5hbWUiOiJDQXwgKEZSKSBBUFROIEhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZjYSUyRmFwdG4ucG5nIiwiY2F0ZWdvcnkiOiJDQU5BREEgRlJBTsOHQUlTIEVOVFJURU5NRU5UIn0=",
+   "type": "tv",
+   "name": "CA| (FR) APTN HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fca%2Faptn.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fca%2Faptn.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMzAyNiIsIm5hbWUiOiJDQXwgKEZSKSBBUFROIEhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZjYSUyRmFwdG4ucG5nIiwiY2F0ZWdvcnkiOiJDQU5BREEgRlJBTsOHQUlTIEVOVFJURU5NRU5UIn0="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMzAyOCIsIm5hbWUiOiJDQXwgKEZSKSBURUxFIFFVRUJFQyBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGY2ElMkZ0bHFiYy5wbmciLCJjYXRlZ29yeSI6IkNBTkFEQSBGUkFOw4dBSVMgRU5UUlRFTk1FTlQifQ==",
+   "type": "tv",
+   "name": "CA| (FR) TELE QUEBEC HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fca%2Ftlqbc.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fca%2Ftlqbc.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMzAyOCIsIm5hbWUiOiJDQXwgKEZSKSBURUxFIFFVRUJFQyBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGY2ElMkZ0bHFiYy5wbmciLCJjYXRlZ29yeSI6IkNBTkFEQSBGUkFOw4dBSVMgRU5UUlRFTk1FTlQifQ=="
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMzAyOSIsIm5hbWUiOiJDQXwgKEZSKSBURUxFTUFHSU5PIEhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZjYSUyRnRsbWVnaW5vLnBuZyIsImNhdGVnb3J5IjoiQ0FOQURBIEZSQU7Dh0FJUyBFTlRSVEVOTUVOVCJ9",
+   "type": "tv",
+   "name": "CA| (FR) TELEMAGINO HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fca%2Ftlmegino.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fca%2Ftlmegino.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMzAyOSIsIm5hbWUiOiJDQXwgKEZSKSBURUxFTUFHSU5PIEhEIiwibG9nbyI6Imh0dHBzOi8vc3RhcmlwdHYubWUvYXBpL2lwdHYvbG9nby1wcm94eT91cmw9aHR0cHMlM0ElMkYlMkZsbzEuaW4lMkZjYSUyRnRsbWVnaW5vLnBuZyIsImNhdGVnb3J5IjoiQ0FOQURBIEZSQU7Dh0FJUyBFTlRSVEVOTUVOVCJ9"
+   }
+  },
+  {
+   "id": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMzAzMCIsIm5hbWUiOiJDQXwgKEZSKSBURUxFVE9PTiBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGY2ElMkZ0bHRucy5wbmciLCJjYXRlZ29yeSI6IkNBTkFEQSBGUkFOw4dBSVMgRU5UUlRFTk1FTlQifQ==",
+   "type": "tv",
+   "name": "CA| (FR) TELETOON HD",
+   "poster": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fca%2Ftltns.png",
+   "posterShape": "landscape",
+   "background": "https://example.invalid/api/iptv/logo-proxy?url=https%3A%2F%2Flo1.in%2Fca%2Ftltns.png",
+   "behaviorHints": {
+    "defaultVideoId": "cnc:RWFzeVBsYXlMaXZlVFY6Onsic3RyZWFtSWQiOiIyMzAzMCIsIm5hbWUiOiJDQXwgKEZSKSBURUxFVE9PTiBIRCIsImxvZ28iOiJodHRwczovL3N0YXJpcHR2Lm1lL2FwaS9pcHR2L2xvZ28tcHJveHk_dXJsPWh0dHBzJTNBJTJGJTJGbG8xLmluJTJGY2ElMkZ0bHRucy5wbmciLCJjYXRlZ29yeSI6IkNBTkFEQSBGUkFOw4dBSVMgRU5UUlRFTk1FTlQifQ=="
+   }
+  }
+ ]
+}
