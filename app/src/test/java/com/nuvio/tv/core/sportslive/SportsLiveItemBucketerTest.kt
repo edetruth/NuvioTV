@@ -767,15 +767,86 @@ class SportsLiveItemBucketerTest {
 
     @Test
     fun `a merged card is followed when any source is`() {
-        // The primary's sport is only its catalog's name, so the followed team matches only the alternate.
-        val a = event("a", "a1", "Lions vs Patriots", "LIVE")
-        val b = event("b", "b1", "Detroit Lions vs New England Patriots", "LIVE", listOf("American Football"))
+        // The primary's sport differs from the followed team's; the alternate's is unknown, so only it matches.
+        val a = event("a", "a1", "Lions vs Patriots", "LIVE", listOf("NFL"))
+        val b = event("b", "b1", "Detroit Lions vs New England Patriots", "LIVE")
         val merged = SportsLiveItemBucketer.merge(listOf(a, b), listOf("a", "b")).single()
         val followed = listOf(FollowedTeam("Patriots", "American Football"))
 
         assertEquals("a1", merged.id)
         assertFalse(SportsLiveTeams.isFollowed(merged, followed))
         assertTrue(SportsLiveItemBucketer.markFollowed(listOf(merged), followed).single().followed)
+    }
+
+    @Test
+    fun `a merged card shows the first known sport of its sources`() {
+        // The primary's sport is only its catalog's name ("Events"); the alternate's genre names it.
+        val a = event("a", "a1", "Lions vs Patriots", "LIVE")
+        val b = event("b", "b1", "Detroit Lions vs New England Patriots", "LIVE", listOf("American Football"))
+        val c = event("c", "c1", "Lions vs Patriots", "LIVE", listOf("Sports"))
+        val nfl = event("a", "a1", "Lions vs Patriots", "LIVE", listOf("NFL"))
+
+        assertEquals("American Football", SportsLiveItemBucketer.merge(listOf(a, b), listOf("a", "b")).single().sport)
+        assertEquals("NFL", SportsLiveItemBucketer.merge(listOf(nfl, c), listOf("a", "c")).single().sport)
+        // Nothing known: the primary's own sport stays.
+        assertEquals("Events", SportsLiveItemBucketer.merge(listOf(a, c), listOf("a", "c")).single().sport)
+    }
+
+    @Test
+    fun `a chain of near starts merges only with the primary`() {
+        // a~b and b~c are within 30 minutes, a and c are not: c stays its own card.
+        val a = event("a", "a1", "Lions vs Patriots", "15 Nov 2026 · 18:00 UTC")
+        val b = event("b", "b1", "Lions vs Patriots", "15 Nov 2026 · 18:25 UTC")
+        val c = event("c", "c1", "Lions vs Patriots", "15 Nov 2026 · 18:50 UTC")
+
+        val upcoming = SportsLiveItemBucketer.bucketTab(listOf(a, b, c), SportsLiveTab.UPCOMING, now, addonOrder = listOf("a", "b", "c"))
+
+        assertEquals(listOf("a1", "c1"), upcoming.map { it.id })
+        assertEquals(listOf("b1"), upcoming.first().alternates.map { it.id })
+        assertTrue(upcoming.last().alternates.isEmpty())
+    }
+
+    @Test
+    fun `an addon missing from the addon order ranks last`() {
+        val unknown = event("x", "x1", "Lions vs Patriots", "LIVE")
+        val known = event("b", "b1", "Lions vs Patriots", "LIVE")
+
+        val merged = SportsLiveItemBucketer.merge(listOf(unknown, known), listOf("b")).single()
+
+        assertEquals("b1", merged.id)
+        assertEquals(listOf("x1"), merged.alternates.map { it.id })
+    }
+
+    @Test
+    fun `two live copies merge whatever their starts`() {
+        // Both are live, though their listed starts are an hour apart.
+        val a = event("a", "a1", "Lions vs Patriots", "15 Nov 2026 · 12:00 UTC")
+        val b = event("b", "b1", "Lions vs Patriots", "15 Nov 2026 · 13:00 UTC")
+        assertTrue(a.isLive && b.isLive)
+
+        val live = SportsLiveItemBucketer.bucketTab(listOf(a, b), SportsLiveTab.LIVE_NOW, now, addonOrder = listOf("a", "b"))
+
+        assertEquals(listOf("b1"), live.single().alternates.map { it.id })
+    }
+
+    @Test
+    fun `copies on the replays tab are not merged`() {
+        // Past events of catalogs included by override are shown as replays.
+        val a = SportsLiveItemBucketer.describe(
+            meta("a1", "Lions vs Patriots", releaseInfo = "14 Nov 2026 · 18:00 UTC"),
+            claimed("sport", "events", "Events", SportsLiveKind.EVENTS, viaOverride = true, addonId = "a"),
+            now
+        )
+        val b = SportsLiveItemBucketer.describe(
+            meta("b1", "Lions vs Patriots", releaseInfo = "14 Nov 2026 · 18:05 UTC"),
+            claimed("sport", "events", "Events", SportsLiveKind.EVENTS, viaOverride = true, addonId = "b"),
+            now
+        )
+
+        val replays = SportsLiveItemBucketer.bucketTab(listOf(a, b), SportsLiveTab.REPLAYS, now)
+
+        assertEquals(setOf("a1", "b1"), replays.map { it.id }.toSet())
+        assertTrue(replays.all { it.alternates.isEmpty() })
     }
 
     private fun event(addonId: String, id: String, name: String, releaseInfo: String?, genres: List<String> = emptyList()) =

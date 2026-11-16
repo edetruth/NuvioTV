@@ -52,7 +52,7 @@ class SportsLiveViewModel @Inject constructor(
     internal var nowMs: () -> Long = { System.currentTimeMillis() }
 
     @VisibleForTesting
-    internal var bucket: (List<SportsLiveItem>, Long) -> Map<SportsLiveTab, List<SportsLiveItem>> =
+    internal var bucket: (List<SportsLiveItem>, Long, List<String>) -> Map<SportsLiveTab, List<SportsLiveItem>> =
         SportsLiveItemBucketer::bucket
 
     private val selectionState = MutableStateFlow(Selection())
@@ -65,7 +65,9 @@ class SportsLiveViewModel @Inject constructor(
         // Only items of catalogs claimed right now: the cache may still hold another profile's load.
         val claimedKeys = claimed.mapTo(HashSet()) { it.key }
         val items = latest?.items.orEmpty().filter { it.catalogKey in claimedKeys }
-        Bucketed(hasClaimed = claimed.isNotEmpty(), hasLoad = latest != null, tabs = bucket(items, nowMs()))
+        // Claimed catalogs come in the user's addon order, which picks a merged game's primary.
+        val addonOrder = claimed.map { it.addon.id }.distinct()
+        Bucketed(hasClaimed = claimed.isNotEmpty(), hasLoad = latest != null, tabs = bucket(items, nowMs(), addonOrder))
     }.flowOn(Dispatchers.Default)
 
     // Followed teams' games first in every tab but Channels, where they are only marked (for the
@@ -95,15 +97,17 @@ class SportsLiveViewModel @Inject constructor(
     }
 
     /**
-     * Unfollows every followed team that is [side] of [item] ("Patriots" for "New England Patriots"),
-     * or, when none is, follows [side] with the item's sport (none for a channel, whose sport is only
-     * its catalog's name).
+     * Unfollows every followed team that is [side] of [item] or of any of its alternates ("Patriots"
+     * for "New England Patriots"), or, when none is, follows [side] with the first known sport of
+     * its sources ([SportsLiveTeams.knownSport]; none for a channel or a catalog-named sport), so the
+     * follow matches the team in every addon.
      */
     fun toggleFollow(item: SportsLiveItem, side: String) {
         viewModelScope.launch {
-            val matching = repo.followedTeams.first().filter { SportsLiveTeams.followsSide(it, side, item) }
+            val matching = repo.followedTeams.first().filter { SportsLiveTeams.followsSideOfAnySource(it, side, item) }
             if (matching.isEmpty()) {
-                repo.follow(FollowedTeam(side, if (item.isChannel) null else item.sport))
+                val sport = if (item.isChannel) null else (listOf(item) + item.alternates).firstNotNullOfOrNull(SportsLiveTeams::knownSport)
+                repo.follow(FollowedTeam(side, sport))
             } else {
                 matching.forEach { repo.unfollow(it) }
             }

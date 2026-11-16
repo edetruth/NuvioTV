@@ -219,15 +219,18 @@ class SportsLiveRepositoryImpl @Inject constructor(
         combine(
             latest,
             combine(prefs.showHomeRow, enabled) { showHomeRow, enabled -> showHomeRow && enabled },
-            claimedCatalogKeys,
+            claimedCatalogs,
             endedKeys,
             followedTeams
-        ) { load, shown, keys, ended, followed ->
+        ) { load, shown, claimed, ended, followed ->
             if (load == null || !shown) {
                 emptyList()
             } else {
+                val keys = claimed.mapTo(HashSet()) { it.key }
                 val items = load.items.filter { it.catalogKey in keys }
-                val live = SportsLiveItemBucketer.bucketTab(items, SportsLiveTab.LIVE_NOW, nowMs())
+                // The user's addon order picks a merged game's primary.
+                val addonOrder = claimed.map { it.addon.id }.distinct()
+                val live = SportsLiveItemBucketer.bucketTab(items, SportsLiveTab.LIVE_NOW, nowMs(), addonOrder)
                 SportsLiveItemBucketer.pinFollowed(live, followed)
                     .filterNot { it.hasEnded(ended) }
                     .take(limit)

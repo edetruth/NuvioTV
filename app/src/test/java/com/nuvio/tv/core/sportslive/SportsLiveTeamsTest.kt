@@ -173,6 +173,50 @@ class SportsLiveTeamsTest {
     }
 
     @Test
+    fun `knownSport takes genres, never the catalog name or a generic genre`() {
+        val basketball = game("Celtics vs 76ers", "Basketball").withGenres("Basketball")
+        assertEquals("Basketball", SportsLiveTeams.knownSport(basketball))
+        // No genres: the sport is the catalog's name.
+        assertNull(SportsLiveTeams.knownSport(game("Celtics vs 76ers", "Live")))
+        listOf("Sports", "Live TV", "live", "TV", "EVENTS").forEach { generic ->
+            assertNull(generic, SportsLiveTeams.knownSport(game("Celtics vs 76ers", generic).withGenres(generic)))
+        }
+        assertNull(SportsLiveTeams.knownSport(game("Celtics vs 76ers", null)))
+    }
+
+    @Test
+    fun `a follow made in one addon matches the same team in another`() {
+        // Addon A has no genres (its sport is its catalog's name); addon B says Basketball.
+        val inA = game("Celtics vs 76ers", "Live")
+        val inB = game("Boston Celtics vs Philadelphia 76ers", "Basketball").withGenres("Basketball")
+        val followedInA = FollowedTeam("Celtics", SportsLiveTeams.knownSport(inA))
+        val followedInB = FollowedTeam("Boston Celtics", SportsLiveTeams.knownSport(inB))
+
+        assertNull(followedInA.sport)
+        assertTrue(SportsLiveTeams.follows(followedInA, inB))
+        assertTrue(SportsLiveTeams.follows(followedInB, inA))
+        // A legacy follow that stored a catalog name still matches where the sport is unknown.
+        assertTrue(SportsLiveTeams.follows(FollowedTeam("Celtics", "SportzX Live Events"), inA))
+        // A stored generic genre is no sport either.
+        assertTrue(SportsLiveTeams.follows(FollowedTeam("Celtics", "Sports"), inB))
+    }
+
+    @Test
+    fun `a merged card follows a side when any of its sources does`() {
+        val primary = game("Celtics vs 76ers", "Basketball").withGenres("Basketball")
+        // The alternate's addon has no genres: its sport is unknown.
+        val alternate = game("Boston Celtics vs Philadelphia 76ers", "Live")
+        val merged = primary.copy(alternates = listOf(alternate))
+        val followed = FollowedTeam("Celtics", "NBA")
+
+        assertFalse(SportsLiveTeams.followsSide(followed, "Celtics", merged))
+        assertTrue(SportsLiveTeams.followsSideOfAnySource(followed, "Celtics", merged))
+        assertFalse(SportsLiveTeams.followsSideOfAnySource(followed, "76ers", merged))
+        // The card's star (markFollowed) and its menu agree.
+        assertTrue(SportsLiveItemBucketer.markFollowed(listOf(merged), listOf(followed)).single().followed)
+    }
+
+    @Test
     fun `matches equal or whole-word suffix both ways case-insensitively`() {
         assertTrue(SportsLiveTeams.matches("Patriots", "New England Patriots"))
         assertTrue(SportsLiveTeams.matches("NEW ENGLAND PATRIOTS", "patriots"))
@@ -217,6 +261,8 @@ class SportsLiveTeamsTest {
         kind = SportsLiveKind.EVENTS, isLive = true, isChannel = false, startMs = null, sport = sport,
         teams = SportsLiveTeams.parse(name)
     )
+
+    private fun SportsLiveItem.withGenres(vararg genres: String) = copy(meta = meta.copy(genres = genres.toList()))
 
     private fun fixtureNames(file: String): List<String> {
         val json = javaClass.classLoader!!.getResourceAsStream("sportslive/$file")!!

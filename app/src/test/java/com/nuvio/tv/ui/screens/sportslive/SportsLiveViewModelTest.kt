@@ -411,7 +411,7 @@ class SportsLiveViewModelTest {
         var bucketCalls = 0
         val viewModel = SportsLiveViewModel(repo)
         viewModel.nowMs = { NOW }
-        viewModel.bucket = { items, now -> bucketCalls++; SportsLiveItemBucketer.bucket(items, now) }
+        viewModel.bucket = { items, now, order -> bucketCalls++; SportsLiveItemBucketer.bucket(items, now, order) }
         backgroundScope.launch { viewModel.uiState.collect {} }
         advanceUntilIdle()
         val afterLoad = bucketCalls
@@ -533,6 +533,45 @@ class SportsLiveViewModelTest {
         viewModel.toggleFollow(game, "New England Patriots")
         advanceUntilIdle()
         assertEquals(listOf(FollowedTeam("Celtics", null)), followedFlow.value)
+    }
+
+    @Test
+    fun `toggleFollow stores no catalog-name sport, so the follow matches the team in every addon`() = runTest {
+        // This addon has no genres: the item's sport is its catalog's name.
+        val game = item("g", isLive = true, sport = CLAIMED.catalog.name, name = "Celtics vs 76ers")
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+
+        viewModel.toggleFollow(game, "Celtics")
+        advanceUntilIdle()
+
+        assertEquals(listOf(FollowedTeam("Celtics", null)), followedFlow.value)
+        val otherAddon = item("o", isLive = true, sport = "Basketball", name = "Boston Celtics vs Philadelphia 76ers")
+        assertTrue(SportsLiveTeams.isFollowed(otherAddon, followedFlow.value))
+    }
+
+    @Test
+    fun `toggleFollow on a merged card follows with an alternate's sport and unfollows every matching entry`() = runTest {
+        val primary = item("p", isLive = true, sport = CLAIMED.catalog.name, name = "Celtics vs 76ers")
+        val alternate = item("a", isLive = true, sport = "Basketball", name = "Boston Celtics vs Philadelphia 76ers")
+            .let { it.copy(addonId = "other.addon", meta = it.meta.copy(genres = listOf("Basketball"))) }
+        val merged = primary.copy(alternates = listOf(alternate))
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+
+        viewModel.toggleFollow(merged, "Celtics")
+        advanceUntilIdle()
+        assertEquals(listOf(FollowedTeam("Celtics", "Basketball")), followedFlow.value)
+
+        // Duplicates from earlier follows (another addon's label, no sport) all go; other teams stay.
+        followedFlow.value = listOf(
+            FollowedTeam("Celtics", "Basketball"),
+            FollowedTeam("Boston Celtics", null),
+            FollowedTeam("Lakers", null)
+        )
+        viewModel.toggleFollow(merged, "Celtics")
+        advanceUntilIdle()
+        assertEquals(listOf(FollowedTeam("Lakers", null)), followedFlow.value)
     }
 
     private fun teamsOf(name: String) = SportsLiveTeams.parse(name)

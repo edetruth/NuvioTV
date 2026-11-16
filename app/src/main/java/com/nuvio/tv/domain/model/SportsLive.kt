@@ -64,7 +64,10 @@ data class SportsLiveItem(
     val group: String? = null,
     /** True for an item its addon marks as finished (a leading ✅); it is shown in no tab. */
     val isFinished: Boolean = false,
-    /** The two sides when the name is a game ("A vs B"); null for channels and other names. */
+    /**
+     * The two sides when the name is a game ("A vs B"), or a channel's bracketed game
+     * ("US| PEACOCK PPV 004 [Celtics vs. 76ers]"); null for other names.
+     */
     val teams: TeamPair? = null,
     /** True when a followed team plays in it; set where the followed teams are known, not by describe. */
     val followed: Boolean = false,

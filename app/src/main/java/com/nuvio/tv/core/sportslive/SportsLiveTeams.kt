@@ -59,19 +59,42 @@ object SportsLiveTeams {
 
     /**
      * True when [team] plays in [item]: its name matches either side, and the sports agree or either is
-     * unknown. A channel's sport is only its catalog's name ("EasyPlay Live TV"), so it is not compared.
+     * unknown ([knownSport]). A channel's sport is only its catalog's name ("EasyPlay Live TV"), so it is not compared.
      */
     fun follows(team: FollowedTeam, item: SportsLiveItem): Boolean {
         val pair = item.teams ?: return false
         return followsSide(team, pair.home, item) || followsSide(team, pair.away, item)
     }
 
-    /** True when [team] is the side [side] of [item], under the same sport rule as [follows]. */
+    /**
+     * True when [team] is the side [side] of [item], under the same sport rule as [follows]: the
+     * stored sport and the item's [knownSport] are compared only when both are known.
+     */
     fun followsSide(team: FollowedTeam, side: String, item: SportsLiveItem): Boolean {
-        val sportsAgree = item.isChannel || team.sport == null || item.sport == null ||
-            team.sport.equals(item.sport, ignoreCase = true)
+        val teamSport = team.sport?.takeUnless(::isGenericSport)
+        val itemSport = if (item.isChannel) null else knownSport(item)
+        val sportsAgree = teamSport == null || itemSport == null || teamSport.equals(itemSport, ignoreCase = true)
         return sportsAgree && matches(team.name, side)
     }
+
+    /** [followsSide] for a merged card: true when [team] is [side] in the card or any of its alternates. */
+    fun followsSideOfAnySource(team: FollowedTeam, side: String, item: SportsLiveItem): Boolean =
+        followsSide(team, side, item) || item.alternates.any { followsSide(team, side, it) }
+
+    /**
+     * The item's sport when it is one: taken from its genres, not its catalog's name ("⚡SportzX Live
+     * Events (tv)"), and not a generic genre ("Sports", "Live TV"). Null when unknown.
+     */
+    fun knownSport(item: SportsLiveItem): String? {
+        val sport = item.sport?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        // With no genres the sport is the catalog's name (a merged card may carry an alternate's sport).
+        val fromCatalog = item.meta.genres.none { it.isNotBlank() } && sport.equals(item.catalogName.trim(), ignoreCase = true)
+        return sport.takeUnless { fromCatalog || isGenericSport(it) }
+    }
+
+    private val GENERIC_SPORTS = setOf("sports", "live tv", "live", "tv", "events")
+
+    private fun isGenericSport(sport: String): Boolean = sport.trim().lowercase() in GENERIC_SPORTS
 
     fun isFollowed(item: SportsLiveItem, followed: List<FollowedTeam>): Boolean = followed.any { follows(it, item) }
 

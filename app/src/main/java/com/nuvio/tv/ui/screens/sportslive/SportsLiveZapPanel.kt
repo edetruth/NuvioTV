@@ -7,7 +7,7 @@ import com.nuvio.tv.domain.model.SportsLiveTab
 
 /**
  * The player's live games panel: the section's Live now list (claimed catalogs only, ended games left
- * out, [followed] teams' games first), narrowed to the session's filter (a sport or "★ My teams") when
+ * out, [followed] teams' games first, merged games' primaries picked by [addonOrder]), narrowed to the session's filter (a sport or "★ My teams") when
  * the session was started from Live now.
  */
 internal fun liveGamesPanelItems(
@@ -16,9 +16,10 @@ internal fun liveGamesPanelItems(
     endedKeys: Set<String>,
     followed: List<FollowedTeam>,
     session: SportsLiveZapSession,
-    nowMs: Long
+    nowMs: Long,
+    addonOrder: List<String> = emptyList()
 ): List<SportsLiveItem> {
-    val live = SportsLiveItemBucketer.bucketTab(items.filter { it.catalogKey in claimedKeys }, SportsLiveTab.LIVE_NOW, nowMs)
+    val live = SportsLiveItemBucketer.bucketTab(items.filter { it.catalogKey in claimedKeys }, SportsLiveTab.LIVE_NOW, nowMs, addonOrder)
         .let { SportsLiveItemBucketer.pinFollowed(it, followed) }
         .filterNot { it.hasEnded(endedKeys) }
     val filter = session.filter?.takeIf { session.tab == SportsLiveTab.LIVE_NOW } ?: return live
