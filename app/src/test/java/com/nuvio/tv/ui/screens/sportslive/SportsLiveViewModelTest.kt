@@ -16,6 +16,8 @@ import com.nuvio.tv.domain.model.SportsLiveTab
 import com.nuvio.tv.domain.repository.SportsLiveFailure
 import com.nuvio.tv.domain.repository.SportsLiveLoad
 import com.nuvio.tv.domain.repository.SportsLiveRepository
+import com.nuvio.tv.ui.screens.sportslive.dual.dualStream
+import com.nuvio.tv.ui.screens.sportslive.preview.SportsLivePreviewState
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.just
@@ -572,6 +574,59 @@ class SportsLiveViewModelTest {
         viewModel.toggleFollow(merged, "Celtics")
         advanceUntilIdle()
         assertEquals(listOf(FollowedTeam("Lakers", null)), followedFlow.value)
+    }
+
+    @Test
+    fun `tab, filter, visibility and the setting each reach the hover preview`() = runTest {
+        nextLoad = load(listOf(item("a", isLive = true, sport = "Soccer"), item("b", isLive = true, sport = "Tennis")))
+        val enabled = MutableStateFlow(false)
+        val stream = dualStream("a")
+        val viewModel = SportsLiveViewModel(repo, previewResolve = { stream }, hoverPreviewEnabled = enabled)
+        viewModel.nowMs = { NOW }
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        val a = item("a", isLive = true, sport = "Soccer")
+        fun settle() { advanceTimeBy(2_001); runCurrent() }
+        val playing = SportsLivePreviewState.Playing(a, stream)
+
+        viewModel.onScreenVisible(true)
+        viewModel.setPreviewFocus(a)
+        settle()
+        assertEquals("setting off", SportsLivePreviewState.Idle, viewModel.preview.value)
+
+        enabled.value = true
+        runCurrent()
+        settle()
+        assertEquals(playing, viewModel.preview.value)
+
+        enabled.value = false
+        runCurrent()
+        assertEquals("setting turned off", SportsLivePreviewState.Idle, viewModel.preview.value)
+        enabled.value = true
+        runCurrent()
+        settle()
+        assertEquals(playing, viewModel.preview.value)
+
+        viewModel.onScreenVisible(false)
+        assertEquals("screen hidden", SportsLivePreviewState.Idle, viewModel.preview.value)
+        viewModel.onScreenVisible(true)
+        settle()
+        assertEquals(playing, viewModel.preview.value)
+
+        viewModel.selectFilter("Soccer")
+        assertEquals("filter changed", SportsLivePreviewState.Idle, viewModel.preview.value)
+        viewModel.setPreviewFocus(a)
+        settle()
+        assertEquals(playing, viewModel.preview.value)
+
+        viewModel.selectTab(SportsLiveTab.UPCOMING)
+        assertEquals("tab changed", SportsLivePreviewState.Idle, viewModel.preview.value)
+        settle()
+        assertEquals("no preview on Upcoming", SportsLivePreviewState.Idle, viewModel.preview.value)
+        viewModel.selectTab(SportsLiveTab.CHANNELS)
+        settle()
+        assertEquals(playing, viewModel.preview.value)
+
+        viewModel.onScreenVisible(false)
     }
 
     private fun teamsOf(name: String) = SportsLiveTeams.parse(name)

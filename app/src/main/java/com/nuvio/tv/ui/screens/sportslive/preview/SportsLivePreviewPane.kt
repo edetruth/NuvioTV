@@ -9,8 +9,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.AspectRatioFrameLayout
@@ -52,11 +52,10 @@ internal fun SportsLivePreviewLabel(modifier: Modifier = Modifier) {
     Text(
         text = stringResource(R.string.sports_live_preview_label),
         style = MaterialTheme.typography.labelMedium,
-        color = Color.White,
+        color = NuvioTheme.colors.TextPrimary,
         modifier = modifier
-            .padding(NuvioTheme.spacing.sm)
             .clip(RoundedCornerShape(NuvioTheme.radii.sm))
-            .background(Color.Black.copy(alpha = 0.6f))
-            .padding(horizontal = NuvioTheme.spacing.sm, vertical = NuvioTheme.spacing.xs)
+            .background(NuvioTheme.colors.FocusBackground)
+            .padding(horizontal = NuvioTheme.spacing.sm, vertical = 2.dp)
     )
 }

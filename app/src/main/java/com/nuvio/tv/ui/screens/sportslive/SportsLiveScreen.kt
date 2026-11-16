@@ -116,8 +116,12 @@ fun SportsLiveScreen(
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_RESUME -> viewModel.onScreenVisible(true)
+                Lifecycle.Event.ON_RESUME -> {
+                    previewPlayer.suspended = false
+                    viewModel.onScreenVisible(true)
+                }
                 Lifecycle.Event.ON_PAUSE -> {
+                    previewPlayer.suspended = true
                     viewModel.onScreenVisible(false)
                     previewPlayer.release()
                 }

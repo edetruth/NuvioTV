@@ -1,6 +1,8 @@
 package com.nuvio.tv.ui.screens.sportslive.preview
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import androidx.annotation.OptIn
 import androidx.media3.common.C
 import androidx.media3.common.PlaybackException
@@ -19,7 +21,9 @@ import com.nuvio.tv.ui.screens.sportslive.playSportsLiveStream
  * plays: [play] releases any previous player before building the next, and [release] frees it, so
  * there is never more than one. It is muted for good: the audio track type is disabled before the
  * stream is prepared (volume 0 alone does not mute AC3/EAC3 passthrough, and a disabled track uses
- * no audio decoder), and it never asks for audio focus.
+ * no audio decoder), and it never asks for audio focus. While [suspended] (the screen is paused) [play]
+ * does nothing, so a late call cannot build a player after the pause released it. A stream that
+ * buffers for [STALL_TIMEOUT_MS] after its first frame counts as an error.
  */
 @OptIn(UnstableApi::class)
 internal class SportsLivePreviewPlayer(
@@ -31,6 +35,11 @@ internal class SportsLivePreviewPlayer(
     private var player: ExoPlayer? = null
     private var loaded: Pair<String, Stream>? = null
     private var view: PlayerView? = null
+    private val handler = Handler(Looper.getMainLooper())
+    private var stallCheck: Runnable? = null
+
+    /** Set from ON_PAUSE to ON_RESUME: [play] is ignored meanwhile. */
+    var suspended = false
 
     /** The pane's view: it shows the player while one plays. */
     fun attach(view: PlayerView?) {
@@ -41,9 +50,10 @@ internal class SportsLivePreviewPlayer(
 
     fun play(item: SportsLiveItem, stream: Stream) {
         val wanted = item.previewKey to stream
-        if (wanted == loaded && player != null) return
+        if (suspended || (wanted == loaded && player != null)) return
         release()
         val url = stream.getStreamUrl() ?: return onError(item)
+        var rendered = false
         val built = buildSportsLiveLightPlayer(appContext).apply {
             volume = 0f
             trackSelectionParameters = trackSelectionParameters.buildUpon()
@@ -51,7 +61,20 @@ internal class SportsLivePreviewPlayer(
                 .build()
             addListener(object : Player.Listener {
                 override fun onRenderedFirstFrame() {
-                    if (player === this@apply) onFirstFrame(item)
+                    if (player !== this@apply) return
+                    rendered = true
+                    onFirstFrame(item)
+                }
+
+                override fun onPlaybackStateChanged(playbackState: Int) {
+                    if (player !== this@apply) return
+                    cancelStallCheck()
+                    if (playbackState == Player.STATE_BUFFERING && rendered) {
+                        val stalled = this@apply
+                        stallCheck = Runnable {
+                            if (player === stalled && stalled.playbackState == Player.STATE_BUFFERING) onError(item)
+                        }.also { handler.postDelayed(it, STALL_TIMEOUT_MS) }
+                    }
                 }
 
                 override fun onPlayerError(error: PlaybackException) {
@@ -68,10 +91,20 @@ internal class SportsLivePreviewPlayer(
 
     /** Frees the player at once (the view lets go of it first); does nothing when none plays. */
     fun release() {
+        cancelStallCheck()
         val current = player ?: return
         player = null
         loaded = null
         view?.player = null
         current.release()
+    }
+
+    private fun cancelStallCheck() {
+        stallCheck?.let(handler::removeCallbacks)
+        stallCheck = null
+    }
+
+    private companion object {
+        const val STALL_TIMEOUT_MS = 10_000L
     }
 }

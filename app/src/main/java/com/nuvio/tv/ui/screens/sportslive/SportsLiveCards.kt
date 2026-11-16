@@ -242,7 +242,7 @@ internal fun SportsLiveDetailsPane(
     watchModifier: Modifier = Modifier,
     /** The hover preview's video, composed under the art while a preview plays; null when none does. */
     preview: (@Composable () -> Unit)? = null,
-    /** The preview's first frame is on screen: the art gives way to the video and its label. */
+    /** The preview's first frame is on screen: the art gives way to the video, and the state line gets a label. */
     previewShowing: Boolean = false
 ) {
     Column(
@@ -258,9 +258,7 @@ internal fun SportsLiveDetailsPane(
                 .background(NuvioTheme.colors.PosterFallback)
         ) {
             preview?.invoke()
-            if (previewShowing) {
-                SportsLivePreviewLabel(modifier = Modifier.align(Alignment.TopStart))
-            } else {
+            if (!previewShowing) {
                 AsyncImage(
                     model = item.meta.backdropUrl,
                     contentDescription = null,
@@ -276,20 +274,28 @@ internal fun SportsLiveDetailsPane(
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )
-        Text(
-            text = listOfNotNull(
-                item.sport,
-                stateLabel,
-                item.addonName,
-                item.alternates.takeIf { it.isNotEmpty() }?.let {
-                    pluralStringResource(R.plurals.sports_live_sources_count, item.sourceCount, item.sourceCount)
-                }
-            ).joinToString(" · "),
-            style = MaterialTheme.typography.bodyMedium,
-            color = NuvioTheme.colors.TextSecondary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
+        // The preview's label leads the state line, off the video, so it never covers the stream's
+        // own score graphics.
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (previewShowing) SportsLivePreviewLabel()
+            Text(
+                text = listOfNotNull(
+                    item.sport,
+                    stateLabel,
+                    item.addonName,
+                    item.alternates.takeIf { it.isNotEmpty() }?.let {
+                        pluralStringResource(R.plurals.sports_live_sources_count, item.sourceCount, item.sourceCount)
+                    }
+                ).joinToString(" · "),
+                style = MaterialTheme.typography.bodyMedium,
+                color = NuvioTheme.colors.TextSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
         val tomorrow = stringResource(R.string.sports_live_tomorrow)
         val description = remember(item.meta.id, item.meta.description, tomorrow) {
             item.meta.description?.let {
