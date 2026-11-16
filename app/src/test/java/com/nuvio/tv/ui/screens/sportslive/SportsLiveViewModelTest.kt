@@ -241,20 +241,39 @@ class SportsLiveViewModelTest {
     }
 
     @Test
-    fun `focusing a Live now item asks for a re-probe and other tabs never do`() = runTest {
-        val live = item("a", isLive = true, sport = "Soccer")
-        val upcoming = item("u", isLive = false, sport = "Tennis", startMs = NOW + HOUR)
-        nextLoad = load(listOf(live, upcoming))
+    fun `only the Live now item the user settles on for 700 ms is re-probed`() = runTest {
+        val items = (1..5).map { item("g$it", isLive = true, sport = "Soccer", name = "G$it") }
+        nextLoad = load(items)
         val viewModel = newViewModel()
         advanceUntilIdle()
 
-        viewModel.selectItem("a")
-        verify(exactly = 1) { repo.reprobeIfStale(live) }
+        // Moving through five items, each held under 700 ms, probes none of them.
+        items.forEach { item ->
+            viewModel.selectItem(item.id)
+            advanceTimeBy(699)
+        }
+        verify(exactly = 0) { repo.reprobeIfStale(any()) }
+
+        // Resting on the last one for 700 ms probes exactly that item, once.
+        advanceTimeBy(1)
+        runCurrent()
+        verify(exactly = 1) { repo.reprobeIfStale(any()) }
+        verify(exactly = 1) { repo.reprobeIfStale(items.last()) }
+    }
+
+    @Test
+    fun `resting on an item in another tab never re-probes`() = runTest {
+        val upcoming = item("u", isLive = false, sport = "Tennis", startMs = NOW + HOUR)
+        nextLoad = load(listOf(item("a", isLive = true, sport = "Soccer"), upcoming))
+        val viewModel = newViewModel()
+        advanceUntilIdle()
 
         viewModel.selectTab(SportsLiveTab.UPCOMING)
         runCurrent()
         viewModel.selectItem("u")
-        verify(exactly = 1) { repo.reprobeIfStale(any()) }
+        advanceTimeBy(5_000)
+
+        verify(exactly = 0) { repo.reprobeIfStale(any()) }
     }
 
     private fun load(items: List<SportsLiveItem>, failures: List<SportsLiveFailure> = emptyList()) =

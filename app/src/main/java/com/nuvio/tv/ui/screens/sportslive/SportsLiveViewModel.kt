@@ -42,6 +42,7 @@ class SportsLiveViewModel @Inject constructor(
 
     private val selectionState = MutableStateFlow(Selection())
     private var autoRefreshJob: Job? = null
+    private var focusProbeJob: Job? = null
 
     val uiState: StateFlow<SportsLiveUiState> =
         combine(repo.claimedCatalogs, repo.latest, repo.endedKeys, selectionState, ::buildState)
@@ -59,10 +60,18 @@ class SportsLiveViewModel @Inject constructor(
         selectionState.update { it.copy(sport = sport) }
     }
 
-    /** Focusing a Live now item re-probes its streams when the last probe is stale. */
+    /**
+     * A Live now item the user settles on (selected for [FOCUS_PROBE_DELAY_MS]) has its streams
+     * re-probed when the last probe is stale; scrolling past items probes nothing.
+     */
     fun selectItem(id: String?) {
         selectionState.update { it.copy(itemId = id) }
-        if (id != null && selectionState.value.tab == SportsLiveTab.LIVE_NOW) {
+        focusProbeJob?.cancel()
+        if (id == null || selectionState.value.tab != SportsLiveTab.LIVE_NOW) return
+        focusProbeJob = viewModelScope.launch {
+            delay(FOCUS_PROBE_DELAY_MS)
+            val selection = selectionState.value
+            if (selection.tab != SportsLiveTab.LIVE_NOW || selection.itemId != id) return@launch
             uiState.value.tabs[SportsLiveTab.LIVE_NOW]?.firstOrNull { it.id == id }?.let(repo::reprobeIfStale)
         }
     }
@@ -147,5 +156,6 @@ class SportsLiveViewModel @Inject constructor(
 
     private companion object {
         const val AUTO_REFRESH_MS = 60_000L
+        const val FOCUS_PROBE_DELAY_MS = 700L
     }
 }
