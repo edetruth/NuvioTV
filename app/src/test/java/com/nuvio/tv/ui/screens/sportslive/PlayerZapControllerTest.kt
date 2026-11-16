@@ -9,6 +9,9 @@ import com.nuvio.tv.domain.model.SportsLiveTab
 import com.nuvio.tv.domain.model.Stream
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
@@ -35,8 +38,8 @@ class PlayerZapControllerTest {
         SportsLiveZapSessions.clear()
     }
 
-    private fun TestScope.controller() = PlayerZapController(
-        scope = backgroundScope,
+    private fun TestScope.controller(scope: CoroutineScope = backgroundScope) = PlayerZapController(
+        scope = scope,
         resolve = { item ->
             resolveCalls += item.id
             val deferred = pending.getOrPut(item.id) { CompletableDeferred() }
@@ -141,6 +144,40 @@ class PlayerZapControllerTest {
         // The player keeps zapping from the game it shows.
         assertTrue(controller.zap("a", forward = true))
         assertEquals("b", SportsLiveZapSessions.current()?.current?.id)
+    }
+
+    @Test
+    fun `leaving the player mid lookup puts the session back on the playing game`() = runTest {
+        startOn("a")
+        val playerScope = CoroutineScope(backgroundScope.coroutineContext + Job())
+        val controller = controller(playerScope)
+
+        controller.zap("a", forward = true)
+        runCurrent()
+        controller.zap("a", forward = true)
+        runCurrent()
+        playerScope.cancel()
+        runCurrent()
+
+        assertEquals(listOf("b", "c"), cancelled)
+        assertTrue(navigated.isEmpty())
+        assertTrue(noStream.isEmpty())
+        assertEquals("a", SportsLiveZapSessions.activeFor("a")?.current?.id)
+    }
+
+    @Test
+    fun `a player for other content ends the session and a matching one keeps it`() {
+        startOn("a")
+
+        SportsLiveZapSessions.keepOnlyFor("a")
+        assertEquals("a", SportsLiveZapSessions.current()?.current?.id)
+
+        SportsLiveZapSessions.keepOnlyFor("movie")
+        assertNull(SportsLiveZapSessions.current())
+
+        startOn("a")
+        SportsLiveZapSessions.keepOnlyFor(null)
+        assertNull(SportsLiveZapSessions.current())
     }
 
     @Test

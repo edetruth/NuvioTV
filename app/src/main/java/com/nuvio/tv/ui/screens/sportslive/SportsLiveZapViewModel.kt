@@ -49,7 +49,11 @@ class SportsLiveZapViewModel @Inject constructor(
     profileManager: ProfileManager
 ) : ViewModel() {
 
-    private val contentId: String? = savedStateHandle.get<String>("contentId")
+    private val contentId: String? = savedStateHandle.get<String>("contentId").also { id ->
+        // A player for other content ends the session; zap targets match because the
+        // controller moves the session before navigating.
+        SportsLiveZapSessions.keepOnlyFor(id)
+    }
 
     // The player's profile, resolved the way PlayerViewModel resolves it.
     private val profileId: Int = savedStateHandle.get<String>("profileId")?.toIntOrNull()

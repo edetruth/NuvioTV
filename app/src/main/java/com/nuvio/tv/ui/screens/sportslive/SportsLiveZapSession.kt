@@ -70,6 +70,11 @@ internal object SportsLiveZapSessions {
     fun activeFor(contentId: String?): SportsLiveZapSession? =
         session?.takeIf { contentId != null && it.current.id == contentId }
 
+    /** A player opening for [contentId] ends a session that is not on that content. */
+    fun keepOnlyFor(contentId: String?) {
+        if (activeFor(contentId) == null) clear()
+    }
+
     fun update(session: SportsLiveZapSession) {
         this.session = session
     }

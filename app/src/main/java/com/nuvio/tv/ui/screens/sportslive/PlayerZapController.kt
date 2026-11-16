@@ -2,6 +2,7 @@ package com.nuvio.tv.ui.screens.sportslive
 
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.Stream
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -43,14 +44,24 @@ class PlayerZapController(
         job?.cancel()
         job = scope.launch {
             val item = target.current
-            val stream = resolve(item)
-            if (stream == null) {
-                if (SportsLiveZapSessions.current() === target) SportsLiveZapSessions.update(revertTo)
-                onNoStream(item)
-            } else {
-                onNavigate(item, stream)
+            try {
+                val stream = resolve(item)
+                if (stream == null) {
+                    revertIfCurrent(target, revertTo)
+                    onNoStream(item)
+                } else {
+                    onNavigate(item, stream)
+                }
+            } catch (e: CancellationException) {
+                // A newer zap has already moved the session on; a player left mid-lookup has not.
+                revertIfCurrent(target, revertTo)
+                throw e
             }
         }
         return true
+    }
+
+    private fun revertIfCurrent(target: SportsLiveZapSession, playing: SportsLiveZapSession) {
+        if (SportsLiveZapSessions.current() === target) SportsLiveZapSessions.update(playing)
     }
 }
