@@ -173,6 +173,34 @@ class SportsLiveSettingsViewModelTest {
     }
 
     @Test
+    fun `filter is offered only for catalogs the section uses and keeps the stored pin`() = runTest {
+        val genreMovies = MOVIES.copy(extra = listOf(CatalogExtra(name = "genre", options = listOf("Drama", "Comedy"))))
+        addonsFlow.value = listOf(addon("plain", "Plain", listOf(genreMovies)))
+        val key = SportsLiveCatalogPolicy.keyFor(addonsFlow.value[0], genreMovies)
+        prefs.setCatalogOption(key, CatalogOption("genre", "Drama"))
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+
+        val unclaimed = viewModel.uiState.value.catalogs.single()
+        assertNull(unclaimed.autoClaim)
+        assertNull(unclaimed.filterExtra)
+        assertEquals(emptyList<String>(), unclaimed.filterOptions)
+        assertNull(unclaimed.filterValue)
+
+        prefs.setOverride(key, SportsLiveOverride.INCLUDE)
+        advanceUntilIdle()
+        val included = viewModel.uiState.value.catalogs.single()
+        assertEquals("genre", included.filterExtra)
+        assertEquals(listOf("Drama", "Comedy"), included.filterOptions)
+        assertEquals("Drama", included.filterValue)
+
+        prefs.setOverride(key, SportsLiveOverride.EXCLUDE)
+        advanceUntilIdle()
+        assertNull(viewModel.uiState.value.catalogs.single().filterExtra)
+        assertEquals(CatalogOption("genre", "Drama"), prefs.catalogOptions.first()[key])
+    }
+
+    @Test
     fun `a pin the addon no longer offers shows as All`() = runTest {
         addonsFlow.value = listOf(addon("tv", "TV", listOf(COUNTRY_TV)))
         val tvKey = SportsLiveCatalogPolicy.keyFor(addonsFlow.value[0], COUNTRY_TV)

@@ -33,7 +33,7 @@ data class SportsLiveCatalogSetting(
     val override: SportsLiveOverride?,
     /** How this session's last load recognised the catalog's items; null unless it is claimed and was loaded. */
     val stats: CatalogStats? = null,
-    /** Name of the extra the user can pin a value of; null when the catalog offers none. */
+    /** Name of the extra the user can pin a value of; null when the catalog offers none or the section does not use it. */
     val filterExtra: String? = null,
     /** The values the addon offers for [filterExtra], exactly as it gives them. */
     val filterOptions: List<String> = emptyList(),
@@ -69,18 +69,22 @@ class SportsLiveSettingsViewModel @Inject constructor(
         val catalogs = addons.enabledAddons().flatMap { addon ->
             addon.catalogs.filter(SportsLiveCatalogPolicy::isClaimable).map { catalog ->
                 val key = SportsLiveCatalogPolicy.keyFor(addon, catalog)
-                val extra = SportsLiveCatalogOptions.eligibleExtra(catalog)
+                val autoClaim = SportsLiveCatalogPolicy.classify(addon, catalog, emptyMap())
+                val override = overrides[key]
+                val claimed = override == SportsLiveOverride.INCLUDE || (override == null && autoClaim != null)
+                // A pin only matters for catalogs the section loads; the stored pin is kept either way.
+                val extra = if (claimed) SportsLiveCatalogOptions.eligibleExtra(catalog) else null
                 SportsLiveCatalogSetting(
                     key = key,
                     addonName = addon.displayName,
                     catalogName = catalog.name,
                     apiType = catalog.apiType,
-                    autoClaim = SportsLiveCatalogPolicy.classify(addon, catalog, emptyMap()),
-                    override = overrides[key],
+                    autoClaim = autoClaim,
+                    override = override,
                     stats = stats[key],
                     filterExtra = extra?.name,
                     filterOptions = extra?.options.orEmpty(),
-                    filterValue = SportsLiveCatalogOptions.effectiveOption(catalog, options[key])?.value
+                    filterValue = extra?.let { SportsLiveCatalogOptions.effectiveOption(catalog, options[key])?.value }
                 )
             }
         }
