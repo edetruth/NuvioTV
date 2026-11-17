@@ -118,10 +118,13 @@ class SportsLivePreferencesDataStore @Inject constructor(
         factory.get(pid, FEATURE).data.map { MySports.decode(it[mySportsKey]) }
     }
 
-    /** "When I open a game" (#56): Play best stream (default) / Let me choose. */
-    val openGame: Flow<SportsLiveOpenGame> = profileManager.activeProfileId.flatMapLatest { pid ->
+    /**
+     * "When I open a game" (#56) as the user chose it; null when never set (or unreadable), so the
+     * default can follow the player's autoplay mode ([SportsLiveOpenGame.effective]).
+     */
+    val openGame: Flow<SportsLiveOpenGame?> = profileManager.activeProfileId.flatMapLatest { pid ->
         factory.get(pid, FEATURE).data.map { prefs ->
-            SportsLiveOpenGame.entries.firstOrNull { it.name == prefs[openGameKey] } ?: SportsLiveOpenGame.PLAY_BEST
+            SportsLiveOpenGame.entries.firstOrNull { it.name == prefs[openGameKey] }
         }
     }
 

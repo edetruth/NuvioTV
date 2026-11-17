@@ -232,6 +232,59 @@ class SportsLiveZapResolverTest {
     }
 
     @Test
+    fun `lookup tells nothing found from none playable with one request per source`() = runTest {
+        // Every addon empty: nothing found, after one request.
+        streams.response = { flowOf(NetworkResult.Loading, success()) }
+        assertEquals(SportsLiveLookup.NothingFound, newResolver().lookup(ITEM))
+        assertEquals(1, streams.calls.size)
+
+        // A failed search: nothing found too.
+        streams.calls.clear()
+        streams.response = { flowOf(NetworkResult.Error("server", 500)) }
+        assertEquals(SportsLiveLookup.NothingFound, newResolver().lookup(ITEM))
+        assertEquals(1, streams.calls.size)
+
+        // Only an external link: streams came back but none may play, still one request.
+        streams.calls.clear()
+        streams.response = { result(WEB) }
+        assertEquals(SportsLiveLookup.NonePlayable(listOf(WEB)), newResolver().lookup(ITEM))
+        assertEquals(1, streams.calls.size)
+    }
+
+    @Test
+    fun `a merged lookup with none playable lists every source's fetched streams without fetching again`() = runTest {
+        settings = PlayerSettings(streamAutoPlayMode = StreamAutoPlayMode.REGEX_MATCH, streamAutoPlayRegex = "4K")
+        streams.responses["game"] = { flowOf(success(SD)) }
+        streams.responses["alt1"] = { flowOf(success(HD, addon = "Other")) }
+        streams.responses["alt2"] = { flowOf(success(addon = "Third")) }
+
+        val found = newResolver().lookup(MERGED)
+
+        assertEquals(SportsLiveLookup.NonePlayable(listOf(SD, HD)), found)
+        assertEquals(3, streams.calls.size)
+    }
+
+    @Test
+    fun `a merged lookup where every source is empty finds nothing`() = runTest {
+        streams.responses["game"] = { flowOf(success()) }
+        streams.responses["alt1"] = { flowOf(NetworkResult.Error("none", NetworkResult.STREAMS_NOT_FOUND_CODE)) }
+        streams.responses["alt2"] = { flowOf(success(addon = "Third")) }
+
+        assertEquals(SportsLiveLookup.NothingFound, newResolver().lookup(MERGED))
+        assertEquals(3, streams.calls.size)
+    }
+
+    @Test
+    fun `a found lookup is cached, so the next one asks no addon`() = runTest {
+        streams.response = { result(SD) }
+        val resolver = newResolver()
+
+        assertEquals(SportsLiveLookup.Found(SD), resolver.lookup(ITEM))
+        assertEquals(SportsLiveLookup.Found(SD), resolver.lookup(ITEM))
+        assertEquals(1, streams.calls.size)
+    }
+
+    @Test
     fun `a merged game falls back to the first alternate with a playable stream`() = runTest {
         streams.responses["game"] = { flowOf(success(WEB, JUNK)) }
         streams.responses["alt1"] = { flowOf(success(addon = "Other")) }

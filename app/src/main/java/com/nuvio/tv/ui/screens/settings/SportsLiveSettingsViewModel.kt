@@ -11,7 +11,9 @@ import com.nuvio.tv.core.sportslive.scores.MySport
 import com.nuvio.tv.core.sportslive.scores.MySports
 import com.nuvio.tv.core.sportslive.scores.ScoreSettings
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
+import com.nuvio.tv.data.local.PlayerSettingsDataStore
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
+import com.nuvio.tv.data.local.StreamAutoPlayMode
 import com.nuvio.tv.domain.model.CatalogOption
 import com.nuvio.tv.domain.model.CatalogStats
 import com.nuvio.tv.domain.model.FollowedTeam
@@ -71,8 +73,17 @@ data class SportsLiveSettingsUiState(
 class SportsLiveSettingsViewModel @Inject constructor(
     private val prefs: SportsLivePreferencesDataStore,
     addonRepository: AddonRepository,
-    private val sportsLiveRepository: SportsLiveRepository
+    private val sportsLiveRepository: SportsLiveRepository,
+    playerSettingsDataStore: PlayerSettingsDataStore
 ) : ViewModel() {
+
+    /** The "When I open a game" in effect: the stored choice, else the default for the player's autoplay mode. */
+    private val openGame = combine(prefs.openGame, playerSettingsDataStore.playerSettings) { stored, player ->
+        SportsLiveOpenGame.effective(
+            stored,
+            manualPlayer = player.streamAutoPlayModeChosen && player.streamAutoPlayMode == StreamAutoPlayMode.MANUAL
+        )
+    }
 
     private val claimedStats = combine(
         sportsLiveRepository.claimedCatalogKeys,
@@ -84,7 +95,7 @@ class SportsLiveSettingsViewModel @Inject constructor(
         combine(prefs.overrides, prefs.catalogOptions, prefs.followedTeams, ::Triple),
         prefs.showSection,
         combine(prefs.showHomeRow, prefs.hoverPreview, prefs.dataSaver, ::Triple),
-        combine(claimedStats, prefs.pipEnabled, combine(prefs.scoreSettings, prefs.mySports, prefs.openGame, ::Triple), ::Triple)
+        combine(claimedStats, prefs.pipEnabled, combine(prefs.scoreSettings, prefs.mySports, openGame, ::Triple), ::Triple)
     ) { addons, (overrides, options, followedTeams), showSection, (showHomeRow, hoverPreview, dataSaver), (stats, pipEnabled, scoreAndSports) ->
         val (scores, mySports, openGame) = scoreAndSports
         val catalogs = addons.enabledAddons().flatMap { addon ->

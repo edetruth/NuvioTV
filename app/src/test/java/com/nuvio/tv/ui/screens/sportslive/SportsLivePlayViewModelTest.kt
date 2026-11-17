@@ -43,11 +43,12 @@ class SportsLivePlayViewModelTest {
 
     private val resolver = mockk<SportsLiveZapResolver>()
     private var mode = StreamAutoPlayMode.FIRST_STREAM
-    private val openGame = MutableStateFlow(SportsLiveOpenGame.PLAY_BEST)
+    private var modeChosen = true
+    private val openGame = MutableStateFlow<SportsLiveOpenGame?>(null)
 
     private fun newViewModel(): SportsLivePlayViewModel {
         val settings = mockk<PlayerSettingsDataStore>()
-        every { settings.playerSettings } answers { flowOf(PlayerSettings(streamAutoPlayMode = mode)) }
+        every { settings.playerSettings } answers { flowOf(PlayerSettings(streamAutoPlayMode = mode, streamAutoPlayModeChosen = modeChosen)) }
         val debrid = mockk<DirectDebridResolver>()
         coEvery { debrid.shouldResolveToPlayableStream(any()) } returns false
         val profiles = mockk<ProfileManager>()
@@ -65,7 +66,7 @@ class SportsLivePlayViewModelTest {
 
     @Test
     fun `dismiss while a stream is looked up plays nothing`() = runTest(mainDispatcherRule.dispatcher) {
-        coEvery { resolver.resolve(any()) } coAnswers { awaitCancellation() }
+        coEvery { resolver.lookup(any()) } coAnswers { awaitCancellation() }
         val viewModel = newViewModel()
         val events = eventsOf(viewModel)
 
@@ -114,12 +115,12 @@ class SportsLivePlayViewModelTest {
         assertEquals(STREAM.url, play.target.playback?.url)
         // A stream the user picked is not announced.
         assertNull(play.source)
-        coVerify(exactly = 0) { resolver.resolve(any()) }
+        coVerify(exactly = 0) { resolver.lookup(any()) }
     }
 
     @Test
     fun `an event not yet collected when dismissed is never delivered`() = runTest(mainDispatcherRule.dispatcher) {
-        coEvery { resolver.resolve(any()) } returns STREAM
+        coEvery { resolver.lookup(any()) } returns SportsLiveLookup.Found(STREAM)
         val viewModel = newViewModel()
 
         // No collector: the screen is stopped while the stream is found.
@@ -136,7 +137,7 @@ class SportsLivePlayViewModelTest {
     fun `a merged game from Home plays its best stream, returns Home, and registers its other sources`() =
         runTest(mainDispatcherRule.dispatcher) {
             SportsLiveExtraSources.reset()
-            coEvery { resolver.resolve(any()) } returns STREAM
+            coEvery { resolver.lookup(any()) } returns SportsLiveLookup.Found(STREAM)
             val viewModel = newViewModel()
             val events = eventsOf(viewModel)
 
@@ -153,7 +154,7 @@ class SportsLivePlayViewModelTest {
     @Test
     fun `OK on a live single-source game plays its best stream with one lookup and names the source`() =
         runTest(mainDispatcherRule.dispatcher) {
-            coEvery { resolver.resolve(any()) } returns STREAM
+            coEvery { resolver.lookup(any()) } returns SportsLiveLookup.Found(STREAM)
             val viewModel = newViewModel()
             val events = eventsOf(viewModel)
 
@@ -168,13 +169,13 @@ class SportsLivePlayViewModelTest {
             assertEquals("two", play.source)
             assertEquals(SportsLivePlayState.Idle, viewModel.state.value)
             // One lookup (the resolver's cached one), never the all-sources fetch.
-            coVerify(exactly = 1) { resolver.resolve(SINGLE) }
+            coVerify(exactly = 1) { resolver.lookup(SINGLE) }
             coVerify(exactly = 0) { resolver.resolveAll(any()) }
         }
 
     @Test
     fun `OK on a channel plays its best stream too`() = runTest(mainDispatcherRule.dispatcher) {
-        coEvery { resolver.resolve(any()) } returns STREAM
+        coEvery { resolver.lookup(any()) } returns SportsLiveLookup.Found(STREAM)
         val viewModel = newViewModel()
         val events = eventsOf(viewModel)
 
@@ -187,9 +188,27 @@ class SportsLivePlayViewModelTest {
     }
 
     @Test
-    fun `a lookup with nothing playable falls back to picking on the Stream screen with a message`() =
+    fun `no streams at all shows a toast and opens nothing, so no addon is asked again`() =
         runTest(mainDispatcherRule.dispatcher) {
-            coEvery { resolver.resolve(any()) } returns null
+            coEvery { resolver.lookup(any()) } returns SportsLiveLookup.NothingFound
+            val viewModel = newViewModel()
+            val events = eventsOf(viewModel)
+
+            viewModel.play(SINGLE)
+            advanceUntilIdle()
+            viewModel.play(MERGED)
+            advanceUntilIdle()
+
+            assertEquals(listOf(SportsLivePlayEvent.NothingFound, SportsLivePlayEvent.NothingFound), events)
+            assertEquals(SportsLivePlayState.Idle, viewModel.state.value)
+            coVerify(exactly = 2) { resolver.lookup(any()) }
+            coVerify(exactly = 0) { resolver.resolveAll(any()) }
+        }
+
+    @Test
+    fun `streams with none playable open the single source's Stream screen to pick, with a message`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            coEvery { resolver.lookup(any()) } returns SportsLiveLookup.NonePlayable(listOf(STREAM))
             val viewModel = newViewModel()
             val events = eventsOf(viewModel)
 
@@ -200,28 +219,58 @@ class SportsLivePlayViewModelTest {
                 listOf(SportsLivePlayEvent.OpenStreamScreen(SINGLE, manualSelection = true, noStreamFound = true)),
                 events
             )
-            assertEquals(SportsLivePlayState.Idle, viewModel.state.value)
-            coVerify(exactly = 1) { resolver.resolve(any()) }
+            coVerify(exactly = 1) { resolver.lookup(any()) }
             coVerify(exactly = 0) { resolver.resolveAll(any()) }
         }
 
     @Test
-    fun `a live merged game with nothing playable falls back to its Stream screen too`() = runTest(mainDispatcherRule.dispatcher) {
-        SportsLiveExtraSources.reset()
-        coEvery { resolver.resolve(any()) } returns null
+    fun `a merged game with none playable lists its already fetched streams in the picker`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            coEvery { resolver.lookup(any()) } returns SportsLiveLookup.NonePlayable(listOf(STREAM))
+            val viewModel = newViewModel()
+            val events = eventsOf(viewModel)
+
+            viewModel.play(MERGED)
+            advanceUntilIdle()
+
+            assertEquals(SportsLivePlayState.Picking(MERGED, listOf(STREAM)), viewModel.state.value)
+            assertEquals(emptyList<SportsLivePlayEvent>(), events)
+            // The picker's streams come from the one lookup: no all-sources fetch.
+            coVerify(exactly = 1) { resolver.lookup(any()) }
+            coVerify(exactly = 0) { resolver.resolveAll(any()) }
+        }
+
+    @Test
+    fun `an unset setting is Let me choose for a manual-autoplay player, and an explicit choice wins`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            mode = StreamAutoPlayMode.MANUAL
+            coEvery { resolver.lookup(any()) } returns SportsLiveLookup.Found(STREAM)
+            val viewModel = newViewModel()
+            val events = eventsOf(viewModel)
+
+            viewModel.play(SINGLE)
+            advanceUntilIdle()
+            assertEquals(listOf(SportsLivePlayEvent.OpenStreamScreen(SINGLE, manualSelection = true)), events)
+            coVerify(exactly = 0) { resolver.lookup(any()) }
+
+            openGame.value = SportsLiveOpenGame.PLAY_BEST
+            viewModel.play(SINGLE)
+            advanceUntilIdle()
+            assertTrue(events.last() is SportsLivePlayEvent.Play)
+        }
+
+    @Test
+    fun `the player's untouched manual default still plays the best stream`() = runTest(mainDispatcherRule.dispatcher) {
+        mode = StreamAutoPlayMode.MANUAL
+        modeChosen = false
+        coEvery { resolver.lookup(any()) } returns SportsLiveLookup.Found(STREAM)
         val viewModel = newViewModel()
         val events = eventsOf(viewModel)
 
-        viewModel.play(MERGED)
+        viewModel.play(SINGLE)
         advanceUntilIdle()
 
-        assertEquals(
-            listOf(SportsLivePlayEvent.OpenStreamScreen(MERGED, manualSelection = true, noStreamFound = true)),
-            events
-        )
-        assertTrue(SportsLiveExtraSources.isRegistered(MERGED.id))
-        coVerify(exactly = 0) { resolver.resolveAll(any()) }
-        SportsLiveExtraSources.reset()
+        assertTrue(events.single() is SportsLivePlayEvent.Play)
     }
 
     @Test
@@ -234,7 +283,7 @@ class SportsLivePlayViewModelTest {
         advanceUntilIdle()
 
         assertEquals(listOf(SportsLivePlayEvent.OpenStreamScreen(SINGLE, manualSelection = true)), events)
-        coVerify(exactly = 0) { resolver.resolve(any()) }
+        coVerify(exactly = 0) { resolver.lookup(any()) }
     }
 
     @Test
@@ -246,7 +295,7 @@ class SportsLivePlayViewModelTest {
         advanceUntilIdle()
 
         assertEquals(listOf(SportsLivePlayEvent.OpenStreamScreen(SINGLE, manualSelection = true)), events)
-        coVerify(exactly = 0) { resolver.resolve(any()) }
+        coVerify(exactly = 0) { resolver.lookup(any()) }
     }
 
     @Test
@@ -260,7 +309,7 @@ class SportsLivePlayViewModelTest {
 
         assertEquals(SportsLivePlayState.Picking(MERGED, listOf(STREAM)), viewModel.state.value)
         assertEquals(emptyList<SportsLivePlayEvent>(), events)
-        coVerify(exactly = 0) { resolver.resolve(any()) }
+        coVerify(exactly = 0) { resolver.lookup(any()) }
     }
 
     @Test
@@ -269,6 +318,7 @@ class SportsLivePlayViewModelTest {
         val events = eventsOf(viewModel)
 
         viewModel.play(REPLAY)
+        advanceUntilIdle()
         viewModel.play(UPCOMING)
         advanceUntilIdle()
 
@@ -276,21 +326,32 @@ class SportsLivePlayViewModelTest {
             listOf(SportsLivePlayEvent.OpenStreamScreen(REPLAY), SportsLivePlayEvent.OpenStreamScreen(UPCOMING)),
             events
         )
-        coVerify(exactly = 0) { resolver.resolve(any()) }
+        coVerify(exactly = 0) { resolver.lookup(any()) }
     }
 
     @Test
-    fun `userChooses follows the setting for live cards only`() = runTest(mainDispatcherRule.dispatcher) {
-        val viewModel = newViewModel()
-        advanceUntilIdle()
-        assertFalse(viewModel.userChooses(SINGLE))
+    fun `OK on a card takes over its playing preview only when the stored setting plays the best stream`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            // Stored before the view model exists: the very first OK must honour it.
+            openGame.value = SportsLiveOpenGame.LET_ME_CHOOSE
+            var takeOvers = 0
+            val viewModel = newViewModel()
+            val events = eventsOf(viewModel)
 
-        openGame.value = SportsLiveOpenGame.LET_ME_CHOOSE
-        advanceUntilIdle()
+            viewModel.playCard(SINGLE) { takeOvers++; STREAM }
+            advanceUntilIdle()
+            assertEquals(0, takeOvers)
+            assertEquals(listOf(SportsLivePlayEvent.OpenStreamScreen(SINGLE, manualSelection = true)), events)
 
-        assertTrue(viewModel.userChooses(SINGLE))
-        assertFalse(viewModel.userChooses(REPLAY))
-    }
+            openGame.value = SportsLiveOpenGame.PLAY_BEST
+            viewModel.playCard(SINGLE) { takeOvers++; STREAM }
+            advanceUntilIdle()
+            assertEquals(1, takeOvers)
+            val play = events.last() as SportsLivePlayEvent.Play
+            assertEquals(STREAM.url, play.target.playback?.url)
+            // Instant start: the preview's stream, no lookup.
+            coVerify(exactly = 0) { resolver.lookup(any()) }
+        }
 
     @Test
     fun `a previewed stream plays at once, without a lookup or the Stream screen`() = runTest(mainDispatcherRule.dispatcher) {
@@ -310,7 +371,7 @@ class SportsLivePlayViewModelTest {
         assertTrue(!target.returnToHomeOnBack)
         assertEquals("two", play.source)
         assertTrue(SportsLiveExtraSources.isRegistered(MERGED.id))
-        coVerify(exactly = 0) { resolver.resolve(any()) }
+        coVerify(exactly = 0) { resolver.lookup(any()) }
         SportsLiveExtraSources.reset()
     }
 

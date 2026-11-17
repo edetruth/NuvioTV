@@ -59,6 +59,16 @@ class SportsLivePlayActionTest {
     }
 
     @Test
+    fun `an unset setting is Let me choose for a manual-autoplay player, and a stored choice always wins`() {
+        assertEquals(SportsLiveOpenGame.PLAY_BEST, SportsLiveOpenGame.effective(null, manualPlayer = false))
+        assertEquals(SportsLiveOpenGame.LET_ME_CHOOSE, SportsLiveOpenGame.effective(null, manualPlayer = true))
+        SportsLiveOpenGame.entries.forEach { stored ->
+            assertEquals(stored, SportsLiveOpenGame.effective(stored, manualPlayer = true))
+            assertEquals(stored, SportsLiveOpenGame.effective(stored, manualPlayer = false))
+        }
+    }
+
+    @Test
     fun `only live games and channels are eligible`() {
         assertTrue(sportsLiveAutoPlayEligible(SINGLE))
         assertTrue(sportsLiveAutoPlayEligible(CHANNEL))

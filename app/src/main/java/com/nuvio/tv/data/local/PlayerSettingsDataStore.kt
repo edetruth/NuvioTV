@@ -368,6 +368,8 @@ data class PlayerSettings(
     val resolutionMatchingEnabled: Boolean = false,
     // Stream selection settings
     val streamAutoPlayMode: StreamAutoPlayMode = StreamAutoPlayMode.MANUAL,
+    /** True when the user set [streamAutoPlayMode] (MANUAL by choice rather than by default). */
+    val streamAutoPlayModeChosen: Boolean = false,
     val streamAutoPlaySource: StreamAutoPlaySource = StreamAutoPlaySource.ALL_SOURCES,
     val streamAutoPlaySelectedAddons: Set<String> = emptySet(),
     val streamAutoPlaySelectedPlugins: Set<String> = emptySet(),
@@ -1125,6 +1127,7 @@ class PlayerSettingsDataStore @Inject constructor(
                 streamAutoPlayMode = prefs[streamAutoPlayModeKey]?.let {
                     runCatching { StreamAutoPlayMode.valueOf(it) }.getOrDefault(StreamAutoPlayMode.MANUAL)
                 } ?: StreamAutoPlayMode.MANUAL,
+                streamAutoPlayModeChosen = prefs[streamAutoPlayModeKey] != null,
                 streamAutoPlaySource = prefs[streamAutoPlaySourceKey]?.let {
                     runCatching { StreamAutoPlaySource.valueOf(it) }.getOrDefault(StreamAutoPlaySource.ALL_SOURCES)
                 } ?: StreamAutoPlaySource.ALL_SOURCES,

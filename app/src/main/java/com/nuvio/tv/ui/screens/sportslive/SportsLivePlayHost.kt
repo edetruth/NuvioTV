@@ -49,6 +49,11 @@ fun SportsLivePlayHost(
                             Toast.makeText(context, context.getString(R.string.sports_live_playing_from, source), Toast.LENGTH_LONG).show()
                         }
                     }
+                    SportsLivePlayEvent.NothingFound -> Toast.makeText(
+                        context,
+                        context.getString(R.string.sports_live_no_streams_found),
+                        Toast.LENGTH_SHORT
+                    ).show()
                     is SportsLivePlayEvent.NoStream -> Toast.makeText(
                         context,
                         context.getString(R.string.sports_live_zap_no_stream, event.name),

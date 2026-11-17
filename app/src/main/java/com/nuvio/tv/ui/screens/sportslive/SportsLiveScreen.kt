@@ -229,15 +229,14 @@ fun SportsLiveScreen(
             onSelectItem = viewModel::selectItem,
             onRefresh = { viewModel.refresh() },
             onPlay = { item ->
-                // OK on a playing preview: its stream plays full screen at once (unless the user
-                // chooses streams); otherwise the best stream is looked up.
-                val previewed = if (playViewModel.userChooses(item)) null else viewModel.takeOverPreview(item)
-                if (previewed == null) {
-                    playViewModel.play(item)
-                } else {
-                    // Freed before the full player starts, so the two never hold decoders together.
-                    previewPlayer.release()
-                    playViewModel.playResolved(item, previewed.stream)
+                // OK on a playing preview: its stream plays full screen at once (unless the stored
+                // setting lets the user choose); otherwise the best stream is looked up.
+                playViewModel.playCard(item) {
+                    viewModel.takeOverPreview(item)?.let { previewed ->
+                        // Freed before the full player starts, so the two never hold decoders together.
+                        previewPlayer.release()
+                        previewed.stream
+                    }
                 }
             },
             onChooseStream = { item -> playViewModel.chooseStream(item) },

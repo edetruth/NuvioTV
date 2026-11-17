@@ -39,6 +39,22 @@ import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/** What OK's lookup for a game found (#56). */
+sealed interface SportsLiveLookup {
+    /** The stream to play. */
+    data class Found(val stream: Stream) : SportsLiveLookup
+
+    /**
+     * Streams came back but none may play (the user's filters rule them out, only external links,
+     * or the search timed out before a pick). [streams]: what came back (a merged game's sources in
+     * rank order), already fetched, so a picker can list them without another request.
+     */
+    data class NonePlayable(val streams: List<Stream>) : SportsLiveLookup
+
+    /** No source returned any stream (every addon empty, failed or timed out with nothing). */
+    data object NothingFound : SportsLiveLookup
+}
+
 /**
  * Picks the stream a zap plays for a Sports & Live item, the way the player picks the next
  * episode's stream: the user's autoplay settings first, then the first playable stream.
@@ -88,15 +104,28 @@ class SportsLiveZapResolver @Inject constructor(
      * [forceRefresh] (a re-resolve after a playback failure) skips the cache and refreshes the entry.
      */
     suspend fun resolve(item: SportsLiveItem, forceRefresh: Boolean): Stream? =
+        (lookup(item, forceRefresh) as? SportsLiveLookup.Found)?.stream
+
+    /**
+     * [resolve] that also tells, when nothing plays, whether any stream came back at all (#56: OK on
+     * a game). Same single search and cache as [resolve]; no further request.
+     */
+    suspend fun lookup(item: SportsLiveItem): SportsLiveLookup = lookup(item, forceRefresh = false)
+
+    suspend fun lookup(item: SportsLiveItem, forceRefresh: Boolean): SportsLiveLookup =
         try {
-            if (!forceRefresh) resolveCache.get(item.streamKey)?.let { return it }
-            val stream = if (item.alternates.isEmpty()) search(item) else bestAcrossSources(item)
-            if (stream != null) resolveCache.put(item.streamKey, stream)
-            stream
+            val cached = if (forceRefresh) null else resolveCache.get(item.streamKey)
+            if (cached != null) {
+                SportsLiveLookup.Found(cached)
+            } else {
+                val found = if (item.alternates.isEmpty()) search(item) else bestAcrossSources(item)
+                if (found is SportsLiveLookup.Found) resolveCache.put(item.streamKey, found.stream)
+                found
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
-            null
+            SportsLiveLookup.NothingFound
         }
 
     /** Drops the cached resolve for [item] (after a playback failure), so the next resolve refreshes it. */
@@ -206,7 +235,7 @@ class SportsLiveZapResolver @Inject constructor(
      * Only when the primary has nothing are the alternates awaited, in order. Starting on another
      * game cancels the previous game's fetches still running, so fast zaps do not pile them up.
      */
-    private suspend fun bestAcrossSources(item: SportsLiveItem): Stream? {
+    private suspend fun bestAcrossSources(item: SportsLiveItem): SportsLiveLookup {
         val settings = playerSettingsDataStore.playerSettings.first()
         val installedOrder = installedOrder()
         // The most reliable source first; its best stream plays as soon as it is known.
@@ -237,12 +266,16 @@ class SportsLiveZapResolver @Inject constructor(
                 currentCoroutineContext().ensureActive()
                 emptyList()
             }
-            preferredStream(streams, settings, installedOrder.toSet())?.let { return it }
+            preferredStream(streams, settings, installedOrder.toSet())?.let { return SportsLiveLookup.Found(it) }
             fetched += streams
         }
         // Then, only when the user's settings do not narrow what may play, the first playable stream.
-        if (honoursAutoPlayFilters(settings)) return null
-        return fetched.firstNotNullOfOrNull { streams -> streams.firstOrNull(StreamAutoPlaySelector::isPlayable) }
+        if (!honoursAutoPlayFilters(settings)) {
+            fetched.firstNotNullOfOrNull { streams -> streams.firstOrNull(StreamAutoPlaySelector::isPlayable) }
+                ?.let { return SportsLiveLookup.Found(it) }
+        }
+        val all = fetched.flatten()
+        return if (all.isEmpty()) SportsLiveLookup.NothingFound else SportsLiveLookup.NonePlayable(all)
     }
 
     /**
@@ -294,7 +327,7 @@ class SportsLiveZapResolver @Inject constructor(
             Fetched(emptyList(), finished = false)
         }
 
-    private suspend fun search(item: SportsLiveItem): Stream? {
+    private suspend fun search(item: SportsLiveItem): SportsLiveLookup {
         val settings = playerSettingsDataStore.playerSettings.first()
         val installedOrder = installedOrder()
 
@@ -329,7 +362,12 @@ class SportsLiveZapResolver @Inject constructor(
         }
         // A timeout is inconclusive, so it is not reported; the probe would keep the old verdict anyway.
         if (decision != null) last?.let { streamProbe.recordResult(item, it) }
-        return decision?.stream
+        decision?.stream?.let { return SportsLiveLookup.Found(it) }
+        val came = StreamAutoPlaySelector.orderAddonStreams(
+            (last as? NetworkResult.Success)?.data.orEmpty(),
+            installedOrder
+        ).flatMap { it.streams }
+        return if (came.isEmpty()) SportsLiveLookup.NothingFound else SportsLiveLookup.NonePlayable(came)
     }
 
     private class Decision(val stream: Stream?)

@@ -3650,6 +3650,7 @@
     <string name="sports_live_details">Details</string>
     <string name="sports_live_choose_stream">Choose stream</string>
     <string name="sports_live_choose_stream_menu">Choose stream…</string>
+    <string name="sports_live_no_streams_found">No streams found for this game right now</string>
     <string name="sports_live_open_choose_stream">No stream played automatically. Choose one.</string>
     <string name="sports_live_playing_from">Playing from %1$s</string>
     <string name="sports_live_follow">Follow %1$s</string>

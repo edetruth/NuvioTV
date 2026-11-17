@@ -10,7 +10,10 @@ import com.nuvio.tv.core.sportslive.scores.MySport
 import com.nuvio.tv.core.sportslive.scores.MySports
 import com.nuvio.tv.core.sportslive.scores.ScoreSettings
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
+import com.nuvio.tv.data.local.PlayerSettings
+import com.nuvio.tv.data.local.PlayerSettingsDataStore
 import com.nuvio.tv.data.local.ProfileDataStoreFactory
+import com.nuvio.tv.data.local.StreamAutoPlayMode
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import com.nuvio.tv.domain.model.Addon
 import com.nuvio.tv.domain.model.CatalogDescriptor
@@ -69,8 +72,13 @@ class SportsLiveSettingsViewModelTest {
         coEvery { load(any(), any()) } returns SportsLiveLoad(emptyList(), emptyList(), 0L, emptySet())
     }
 
+    private val playerSettings = MutableStateFlow(PlayerSettings())
+    private val playerSettingsDataStore = mockk<PlayerSettingsDataStore> {
+        every { playerSettings } returns this@SportsLiveSettingsViewModelTest.playerSettings
+    }
+
     private fun TestScope.newViewModel(): SportsLiveSettingsViewModel {
-        val viewModel = SportsLiveSettingsViewModel(prefs, addonRepository, sportsLiveRepository)
+        val viewModel = SportsLiveSettingsViewModel(prefs, addonRepository, sportsLiveRepository, playerSettingsDataStore)
         backgroundScope.launch { viewModel.uiState.collect {} }
         return viewModel
     }
@@ -223,6 +231,19 @@ class SportsLiveSettingsViewModelTest {
 
         assertEquals(SportsLiveOpenGame.LET_ME_CHOOSE, viewModel.uiState.value.openGame)
         assertEquals(SportsLiveOpenGame.LET_ME_CHOOSE, prefs.openGame.first())
+    }
+
+    @Test
+    fun `a manual-autoplay player shows Let me choose until the user picks, and an explicit choice wins`() = runTest {
+        playerSettings.value = PlayerSettings(streamAutoPlayMode = StreamAutoPlayMode.MANUAL, streamAutoPlayModeChosen = true)
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+        assertEquals(SportsLiveOpenGame.LET_ME_CHOOSE, viewModel.uiState.value.openGame)
+
+        viewModel.setOpenGame(SportsLiveOpenGame.PLAY_BEST)
+        advanceUntilIdle()
+
+        assertEquals(SportsLiveOpenGame.PLAY_BEST, viewModel.uiState.value.openGame)
     }
 
     @Test
