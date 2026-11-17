@@ -94,20 +94,19 @@ class GameSummaryRepositoryTest {
     }
 
     @Test
-    fun `delayed values - each becomes current once it is the delay old`() {
-        val values = DelayedValues<String>(30_000)
-        values.push("a", 0)
+    fun `delayed values - each becomes current once its own hold has passed`() {
+        val values = DelayedValues<String>()
+        values.push("a", 0, 30_000)
         assertNull(values.current(29_999))
         assertEquals(30_000L, values.nextDueAt(29_999))
         assertEquals("a", values.current(30_000))
-        values.push("b", 30_000)
+        values.push("b", 30_000, 30_000)
         assertEquals("a", values.current(59_999))
         assertEquals(60_000L, values.nextDueAt(59_999))
         assertEquals("b", values.current(60_000))
         assertNull(values.nextDueAt(60_000))
-        // No delay: current at once.
-        val now = DelayedValues<String>(0)
-        now.push("x", 5)
-        assertEquals("x", now.current(5))
+        // No hold: current at once.
+        values.push("x", 70_000, 0)
+        assertEquals("x", values.current(70_000))
     }
 }

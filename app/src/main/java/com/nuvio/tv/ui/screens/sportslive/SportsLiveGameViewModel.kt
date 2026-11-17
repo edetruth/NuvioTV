@@ -62,7 +62,7 @@ enum class GameLoadStatus {
 data class SportsLiveGameUiState(
     /** The game as opened (null: nothing to show, the page closes). */
     val event: ScoreSnapshot? = null,
-    /** The summary shown: for a live game with a score delay, one that is at least the delay old. */
+    /** The summary shown: one not final is at least the score delay old. */
     val summary: GameSummary? = null,
     val status: GameLoadStatus = GameLoadStatus.LOADING,
     val mode: ScoresMode = ScoresMode.SHOW,
@@ -84,8 +84,8 @@ data class SportsLiveGameUiState(
 /**
  * The Game page (#18): one ESPN summary, loaded through [GameSummaryRepository] (finals cached for good,
  * a live game at most 30 s old) and refreshed every [REFRESH_MS] only while the page is visible and the
- * game is live. Scores Off: no request until Reveal. A game live when opened shows each summary only
- * once the score delay has passed. Follow ‹team› writes the profile's My Teams list (#54).
+ * game is live. Scores Off: no request until Reveal. Every summary not final (and a final that follows
+ * one) shows only once the score delay has passed. Follow ‹team› writes the profile's My Teams list (#54).
  */
 @HiltViewModel
 class SportsLiveGameViewModel internal constructor(
@@ -140,9 +140,12 @@ class SportsLiveGameViewModel internal constructor(
         SportsLiveGameUiState(event = request?.event, replay = request?.replay, revealed = request?.revealed == true)
     )
 
-    // Summaries waiting out the score delay; kept across visibility changes while the delay is the same.
-    private var buffer: DelayedValues<GameSummary>? = null
-    private var bufferDelayMs = -1L
+    // Summaries waiting out the score delay; kept across visibility changes.
+    private val buffer = DelayedValues<GameSummary>()
+
+    // A summary not yet final was fetched: the game may have ended while the page was open, so its
+    // final is held for the delay too (a final that was already final when opened shows at once).
+    private var sawUnfinished = false
 
     init {
         val event = request?.event
@@ -158,26 +161,27 @@ class SportsLiveGameViewModel internal constructor(
                         }
                         if (page.value.status == GameLoadStatus.WAITING_REVEAL) page.update { it.copy(status = GameLoadStatus.LOADING) }
                         if (!isVisible) return@collectLatest
-                        val delayMs = if (event.state == ScoreState.IN) settings.delaySeconds * 1_000L else 0L
-                        val values = buffer?.takeIf { bufferDelayMs == delayMs }
-                            ?: DelayedValues<GameSummary>(delayMs).also {
-                                buffer = it
-                                bufferDelayMs = delayMs
-                            }
-                        refreshWhileVisible(event, values)
+                        refreshWhileVisible(event, settings.delaySeconds * 1_000L)
                     }
             }
         }
     }
 
-    /** Loads, then (while the game is live) reloads every [REFRESH_MS]; shows each summary once it is due. */
-    private suspend fun refreshWhileVisible(event: ScoreSnapshot, values: DelayedValues<GameSummary>) {
+    /**
+     * Loads, then (while the game is live) reloads every [REFRESH_MS]; shows each summary once it is due.
+     * The delay is decided per summary from its own state: every summary not final is held [delayMs]
+     * (a card opened right after kick-off may still say "scheduled" while ESPN says "in play").
+     */
+    private suspend fun refreshWhileVisible(event: ScoreSnapshot, delayMs: Long) {
+        val values = buffer
         var nextFetchAt = now()
         while (true) {
             if (now() >= nextFetchAt) {
                 val live = when (val load = loadSummary(event.league, event.eventId)) {
                     is GameSummaryLoad.Loaded -> {
-                        values.push(load.summary, now())
+                        val hold = !load.final || sawUnfinished
+                        if (!load.final) sawUnfinished = true
+                        values.push(load.summary, now(), if (hold) delayMs else 0L)
                         !load.final && load.summary.isLive
                     }
                     GameSummaryLoad.Failed -> {

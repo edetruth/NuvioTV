@@ -154,6 +154,42 @@ class SportsLiveGameViewModelTest {
     }
 
     @Test
+    fun `opened right after kick-off - the card still says scheduled but the live summary waits out the delay`() = runTest(mainDispatcherRule.dispatcher) {
+        settings.value = ScoreSettings(delaySeconds = 60)
+        nextLoad = { GameSummaryLoad.Loaded(liveNba(), final = false) }
+        // The delayed scoreboard still shows the game as scheduled.
+        val vm = viewModel(SportsLiveGameRequest(liveEvent().copy(state = ScoreState.PRE)))
+        vm.setVisible(true)
+        runCurrent()
+        assertNull(vm.uiState.value.summary)
+        advanceTimeBy(59_999); runCurrent()
+        assertNull(vm.uiState.value.summary)
+        advanceTimeBy(1); runCurrent()
+        assertEquals(ScoreState.IN, vm.uiState.value.summary?.state)
+        vm.setVisible(false)
+        runCurrent()
+    }
+
+    @Test
+    fun `a game that ends while the page is open holds its final for the delay too`() = runTest(mainDispatcherRule.dispatcher) {
+        settings.value = ScoreSettings(delaySeconds = 30)
+        var calls = 0
+        nextLoad = {
+            if (calls++ == 0) GameSummaryLoad.Loaded(liveNba(), final = false) else GameSummaryLoad.Loaded(nbaSummary, final = true)
+        }
+        val vm = viewModel(SportsLiveGameRequest(liveEvent()))
+        vm.setVisible(true)
+        runCurrent()
+        // At 30 s the live summary is due and the final is fetched; the final waits its own 30 s.
+        advanceTimeBy(30_000); runCurrent()
+        assertEquals(ScoreState.IN, vm.uiState.value.summary?.state)
+        advanceTimeBy(29_999); runCurrent()
+        assertEquals(ScoreState.IN, vm.uiState.value.summary?.state)
+        advanceTimeBy(1); runCurrent()
+        assertSame(nbaSummary, vm.uiState.value.summary)
+    }
+
+    @Test
     fun `a final opened with a delay set shows at once - the delay is for live games`() = runTest(mainDispatcherRule.dispatcher) {
         settings.value = ScoreSettings(delaySeconds = 90)
         val vm = viewModel(SportsLiveGameRequest(palaceGame))

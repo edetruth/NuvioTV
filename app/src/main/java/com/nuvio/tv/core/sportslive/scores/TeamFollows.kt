@@ -23,7 +23,8 @@ object TeamFollows {
             sport = sportWord(event.league),
             espnId = side.id,
             abbreviation = side.abbreviation,
-            league = "${event.league.sport}/${event.leagueSlug}"
+            // The feed the event came from ("basketball/nba", "soccer/all"): the card side matches by it.
+            league = event.league.path
         )
     }
 
@@ -53,7 +54,7 @@ object TeamFollows {
         val stored = team.league?.split('/')
         val storedSport = stored?.getOrNull(0)
         if (team.espnId != null && side.id != null && storedSport == event.league.sport &&
-            (storedSport == SOCCER || stored?.getOrNull(1) == event.leagueSlug)
+            (storedSport == SOCCER || stored?.getOrNull(1) == event.league.league)
         ) {
             return team.espnId == side.id
         }

@@ -132,6 +132,8 @@ data class GameSummary(
 object GameSummaryParser {
 
     fun parse(dto: EspnSummaryDto, league: EspnLeague, eventId: String): GameSummary? {
+        // Another game's summary is never shown as this one.
+        dto.header?.id?.takeIf { it.isNotBlank() }?.let { if (it != eventId) return null }
         val competition = dto.header?.competitions?.firstOrNull() ?: return null
         val competitors = competition.competitors.orEmpty()
         val homeDto = competitors.firstOrNull { it.homeAway == "home" } ?: return null
@@ -143,7 +145,7 @@ object GameSummaryParser {
         val away = team(awayDto, played) ?: return null
         val sport = league.sport
         return GameSummary(
-            eventId = dto.header?.id?.takeIf { it.isNotBlank() } ?: eventId,
+            eventId = eventId,
             league = league,
             state = state,
             isFinal = state != ScoreState.OFF && type?.completed == true,

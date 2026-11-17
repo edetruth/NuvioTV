@@ -175,7 +175,8 @@ fun SportsLiveGameScreen(
         GameHeader(
             state = state,
             event = event,
-            downFocusRequester = if (sections.isNotEmpty()) sectionFocusRequester else bodyFocusRequester,
+            // No sections: nothing focusable below the header, so Down stays put.
+            downFocusRequester = if (sections.isNotEmpty() && section != null) sectionFocusRequester else null,
             revealFocusRequester = revealFocusRequester,
             replayFocusRequester = replayFocusRequester,
             followFocusRequester = followFocusRequester,
@@ -252,7 +253,7 @@ private fun headerSides(summary: GameSummary?, event: ScoreSnapshot): Pair<Heade
 private fun GameHeader(
     state: SportsLiveGameUiState,
     event: ScoreSnapshot,
-    downFocusRequester: FocusRequester,
+    downFocusRequester: FocusRequester?,
     revealFocusRequester: FocusRequester,
     replayFocusRequester: FocusRequester,
     followFocusRequester: FocusRequester,
@@ -307,7 +308,7 @@ private fun GameHeader(
         ) {
             val buttonModifier = Modifier
                 .fillMaxWidth()
-                .focusProperties { down = downFocusRequester }
+                .focusProperties { down = downFocusRequester ?: FocusRequester.Cancel }
             if (!showsScore) {
                 SportsLivePaneButton(onClick = onReveal, modifier = buttonModifier.focusRequester(revealFocusRequester)) {
                     Text(stringResource(R.string.sports_live_game_reveal), maxLines = 1, overflow = TextOverflow.Ellipsis)

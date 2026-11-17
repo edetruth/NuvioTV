@@ -160,6 +160,12 @@ class GameSummaryParserTest {
     }
 
     @Test
+    fun `a summary for another event id is never shown as the requested game`() {
+        assertNull(GameSummaryParser.parse(GameSummaryFixtures.dto(GameSummaryFixtures.NBA), EspnLeagueMap.NBA, "401909995"))
+        assertEquals("401909994", GameSummaryParser.parse(GameSummaryFixtures.dto(GameSummaryFixtures.NBA), EspnLeagueMap.NBA, "401909994")!!.eventId)
+    }
+
+    @Test
     fun `better side - higher wins, lower for turnovers-like stats, none on a tie or a missing value`() {
         assertEquals(ScoreSide.HOME, GameSummaryParser.better(GameStat.REBOUNDS, 41.0, 47.0))
         assertEquals(ScoreSide.AWAY, GameSummaryParser.better(GameStat.REBOUNDS, 50.0, 47.0))

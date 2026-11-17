@@ -1,9 +1,9 @@
 package com.nuvio.tv.core.sportslive
 
+import com.nuvio.tv.core.sportslive.scores.EspnLeague
 import com.nuvio.tv.core.sportslive.scores.EspnLeagueMap
 import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveItem
-import java.util.concurrent.ConcurrentHashMap
 
 /** Display names of the two sides of a game, rankings removed. */
 data class TeamPair(val home: String, val away: String)
@@ -135,28 +135,40 @@ object SportsLiveTeams {
 
     /**
      * True when [team] is the side [side] of [item], under the same sport rule as [follows]: the
-     * stored sport and the item's [knownSport] are compared only when both are known, and agree when
-     * they are the same word or name the same ESPN sport ("Basketball" and "NBA"; a team followed from
-     * ESPN results is stored with such a sport word).
+     * stored sport and the item's [knownSport] are compared only when both are known (same word,
+     * ignoring case). A team followed from ESPN ([FollowedTeam.espnId] and [FollowedTeam.league]) is
+     * matched by league instead: the card must route to that same ESPN feed ([EspnLeagueMap]; pro and
+     * college feeds stay apart, any soccer feed for a soccer team), so an NFL "Panthers" never stars
+     * a college "Pittsburgh Panthers" and an NBA "Kings" never an NBL "Sydney Kings".
      */
     fun followsSide(team: FollowedTeam, side: String, item: SportsLiveItem): Boolean {
-        val teamSport = team.sport?.takeUnless(::isGenericSport)
         val itemSport = if (item.isChannel) null else knownSport(item)
-        val sportsAgree = teamSport == null || itemSport == null || sameSport(teamSport, itemSport)
+        val espnLeague = espnLeagueOf(team)
+        val sportsAgree = if (espnLeague != null) {
+            item.isChannel || cardMatchesLeague(item, itemSport, espnLeague)
+        } else {
+            val teamSport = team.sport?.takeUnless(::isGenericSport)
+            teamSport == null || itemSport == null || teamSport.equals(itemSport, ignoreCase = true)
+        }
         return sportsAgree && matches(team.name, side)
     }
 
-    private fun sameSport(a: String, b: String): Boolean {
-        if (a.equals(b, ignoreCase = true)) return true
-        val sportsA = espnSports(a)
-        return sportsA.isNotEmpty() && espnSports(b).any { it in sportsA }
+    /** The ESPN feed a team followed from ESPN came from ("basketball/nba"); null for a name-only follow. */
+    private fun espnLeagueOf(team: FollowedTeam): EspnLeague? {
+        if (team.espnId == null) return null
+        val parts = team.league?.split('/')?.takeIf { it.size == 2 && it.all(String::isNotBlank) } ?: return null
+        return EspnLeague(parts[0], parts[1])
     }
 
-    // Sport words are few and repeat on every card: their ESPN sports are worked out once each.
-    private val espnSportsByWord = ConcurrentHashMap<String, Set<String>>()
+    // The card's feeds must include the team's (soccer: any soccer feed, as soccer/all lists every
+    // competition). A card that routes nowhere and has no known sport is not compared, as before.
+    private fun cardMatchesLeague(item: SportsLiveItem, itemSport: String?, league: EspnLeague): Boolean {
+        val feeds = EspnLeagueMap.leaguesFor(item)
+        if (feeds.isEmpty()) return itemSport == null
+        return if (league.sport == SOCCER) feeds.any { it.sport == SOCCER } else league in feeds
+    }
 
-    private fun espnSports(sport: String): Set<String> =
-        espnSportsByWord.getOrPut(sport.lowercase()) { EspnLeagueMap.espnSportsOf(sport).orEmpty() }
+    private const val SOCCER = "soccer"
 
     /** [followsSide] for a merged card: true when [team] is [side] in the card or any of its alternates. */
     fun followsSideOfAnySource(team: FollowedTeam, side: String, item: SportsLiveItem): Boolean =
