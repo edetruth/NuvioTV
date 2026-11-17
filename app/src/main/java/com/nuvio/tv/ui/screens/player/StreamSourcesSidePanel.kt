@@ -56,6 +56,7 @@ import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.ui.components.LoadingIndicator
 import com.nuvio.tv.ui.components.SourceChipStatus
 import com.nuvio.tv.ui.theme.NuvioTheme
+import com.nuvio.tv.ui.screens.sportslive.sportsLiveSourceLoadingRows
 import androidx.compose.ui.res.stringResource
 import com.nuvio.tv.R
 import com.nuvio.tv.ui.util.localizeEpisodeTitle
@@ -519,6 +520,7 @@ internal fun StreamSourcesSidePanel(
                                 }} else null
                             )
                         }
+                        sportsLiveSourceLoadingRows(uiState.sourceSportsLiveLoading, uiState.sourceSelectedAddonFilter)
                         if (uiState.isLoadingSourceStreams) {
                             item(key = "loading-more") {
                                 Box(

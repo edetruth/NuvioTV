@@ -13,14 +13,22 @@ import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.ui.screens.player.nextSourceFallbackCandidate
 import com.nuvio.tv.ui.screens.player.sourceFallbackKey
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.last
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 /** A lookup of a merged game's alternates' streams; one that is not [complete] (a source timed out or failed) is not cached. */
 class SportsLiveExtraLookup(val streams: List<Stream>, val complete: Boolean)
+
+/** The alternates' streams found so far for the Sources panel; [done] once every source has answered or timed out. */
+class SportsLiveExtrasProgress(val streams: List<Stream>, val done: Boolean)
 
 /**
  * The other addons' streams of a merged Sports & Live game, for the player playing its primary:
@@ -39,7 +47,20 @@ object SportsLiveExtraSources {
 
         @Volatile
         var streams: List<Stream>? = null
+
+        // The labels of the alternates still being fetched for the Sources panel, best first.
+        @Volatile
+        var pending: List<String> = emptyList()
     }
+
+    // The alternates' streams the play path already fetched, per card content id, so the Sources panel
+    // opens from them; kept like a resolve-cache entry (see [seed]). Bounded like [entries].
+    private class Seed(val streamKey: String, val streams: List<Stream>, val atMs: Long)
+
+    private val seeds = LinkedHashMap<String, Seed>()
+
+    @VisibleForTesting
+    internal var nowMs: () -> Long = { System.currentTimeMillis() }
 
     // Insertion order is age order; guarded by itself.
     private val entries = LinkedHashMap<String, Entry>()
@@ -59,15 +80,16 @@ object SportsLiveExtraSources {
     private val streamSources = LinkedHashMap<String, String>()
     private const val MAX_STREAM_SOURCES = 256
 
+    // Fetches one alternate (second) of a card (first), its streams labeled as the Sources panel lists them.
     @Volatile
-    private var fetcher: (suspend (SportsLiveItem) -> SportsLiveExtraLookup)? = null
+    private var fetcher: (suspend (SportsLiveItem, SportsLiveItem) -> SportsLiveExtraLookup)? = null
 
     // Drops the resolve cache for a content id; the full player uses it to evict a dead stream.
     @Volatile
     private var resolveInvalidator: ((String) -> Unit)? = null
 
-    /** Sets how a registered game's alternates are resolved; the Application installs the zap resolver. */
-    fun install(fetch: suspend (SportsLiveItem) -> SportsLiveExtraLookup) {
+    /** Sets how a registered game's alternates are resolved, one source at a time; the Application installs the zap resolver. */
+    fun install(fetch: suspend (card: SportsLiveItem, source: SportsLiveItem) -> SportsLiveExtraLookup) {
         fetcher = fetch
     }
 
@@ -81,7 +103,37 @@ object SportsLiveExtraSources {
      * game/channel re-resolves instead of serving the dead URL. No-op until the invalidator is installed.
      */
     fun invalidateResolve(contentId: String?) {
-        if (contentId != null) resolveInvalidator?.invoke(contentId)
+        if (contentId == null) return
+        resolveInvalidator?.invoke(contentId)
+        // Like the resolve cache, the play path's copy of the alternates is not re-served after a failure.
+        synchronized(seeds) { seeds.remove(contentId) }
+    }
+
+    /**
+     * The play path fetched every alternate of merged [item] (labeled as the Sources panel lists them):
+     * the panel opens from [streams] instead of fetching them again. Only a [complete], non-empty
+     * result is seeded. It fills the game's panel entry now when it is registered and not yet looked
+     * up, and is kept (like a resolve-cache entry, [SportsLiveResolveCache.TTL_MS]) for when it is
+     * registered next. A playback failure ([invalidateResolve]) or a panel reload drops it.
+     */
+    fun seed(item: SportsLiveItem, streams: List<Stream>, complete: Boolean) {
+        if (!complete || streams.isEmpty() || item.alternates.isEmpty()) return
+        synchronized(seeds) {
+            seeds.remove(item.id)
+            seeds[item.id] = Seed(item.streamKey, streams, nowMs())
+            while (seeds.size > MAX_ENTRIES) seeds.remove(seeds.keys.first())
+        }
+        entry(item.id)?.takeIf { it.item.streamKey == item.streamKey && it.streams == null }?.streams = streams
+    }
+
+    /** The streams seeded for [item] (played as content id [item].id) while still fresh, else null. */
+    private fun seededStreamsFor(item: SportsLiveItem): List<Stream>? = synchronized(seeds) {
+        val seed = seeds[item.id] ?: return null
+        if (nowMs() - seed.atMs >= SportsLiveResolveCache.TTL_MS) {
+            seeds.remove(item.id)
+            return null
+        }
+        seed.streams.takeIf { seed.streamKey == item.streamKey }
     }
 
     /** Registers merged [item] for the player showing [contentId]; a single-source item only clears it. */
@@ -90,7 +142,7 @@ object SportsLiveExtraSources {
         synchronized(entries) {
             entries.remove(contentId)
             if (item.alternates.isEmpty()) return
-            entries[contentId] = Entry(item)
+            entries[contentId] = Entry(item).apply { streams = seededStreamsFor(item) }
             while (entries.size > MAX_ENTRIES) entries.remove(entries.keys.first())
         }
     }
@@ -201,24 +253,68 @@ object SportsLiveExtraSources {
     /** The extra streams resolved and cached for [contentId]; empty when not registered or not resolved yet. */
     fun cachedStreamsFor(contentId: String?): List<Stream> = entry(contentId)?.streams.orEmpty()
 
+    /** The alternates' streams of the game registered for [contentId], all at once; see [extraStreamsProgress]. */
+    suspend fun extraStreamsFor(contentId: String?, refresh: Boolean = false): List<Stream> =
+        extraStreamsProgress(contentId, refresh).last().streams
+
     /**
      * The alternates' streams of the game registered for [contentId] (not the primary's), with their
-     * addon names and junk filtered out. Resolved once and cached; concurrent callers share the lookup.
-     * A cancelled, empty or incomplete (timed-out) lookup caches nothing, so the next call tries again.
-     * [refresh] (the Sources panel's reload) drops the cache first.
+     * addon names and junk filtered out, growing as each source answers (each fetch keeps its own
+     * timeout). Resolved once and cached, or seeded from the play path ([seed]); a concurrent caller
+     * waits for the running lookup, then reads its cache. A cancelled, empty or incomplete (timed-out)
+     * lookup caches nothing, so the next call tries again. [refresh] (the Sources panel's reload)
+     * drops the cache and the play path's copy first. While it runs, [pendingSourcesFor] names the
+     * sources still fetching. With nothing registered: one empty, done emission.
      */
-    suspend fun extraStreamsFor(contentId: String?, refresh: Boolean = false): List<Stream> {
-        val entry = entry(contentId) ?: return emptyList()
-        if (refresh) entry.streams = null
-        entry.streams?.let { return it }
-        val fetch = fetcher ?: return emptyList()
-        return entry.mutex.withLock {
-            entry.streams ?: fetch(entry.item).let { lookup ->
-                if (lookup.complete && lookup.streams.isNotEmpty()) entry.streams = lookup.streams
-                lookup.streams
+    fun extraStreamsProgress(contentId: String?, refresh: Boolean = false): Flow<SportsLiveExtrasProgress> = channelFlow {
+        val entry = entry(contentId)
+        val fetch = fetcher
+        if (refresh && entry != null) {
+            entry.streams = null
+            synchronized(seeds) { seeds.remove(contentId) }
+        }
+        if (entry == null || fetch == null) {
+            send(SportsLiveExtrasProgress(entry?.streams.orEmpty(), done = true))
+            return@channelFlow
+        }
+        entry.streams?.let { send(SportsLiveExtrasProgress(it, done = true)); return@channelFlow }
+        entry.mutex.withLock {
+            entry.streams?.let { send(SportsLiveExtrasProgress(it, done = true)); return@withLock }
+            val card = entry.item
+            val labels = SportsLiveSourceLabels.of(card)
+            fun labelOf(source: SportsLiveItem) = labels[source.streamKey] ?: source.addonName
+            val sources = SportsLiveSourceReliability.rank(
+                candidates = card.alternates,
+                scoreOf = { SportsLiveSourceReliability.scoreOf(SportsLiveSourceReliability.keyOf(it)) },
+                primaryIndex = -1
+            )
+            val answered = Channel<Pair<SportsLiveItem, SportsLiveExtraLookup>>(Channel.UNLIMITED)
+            entry.pending = sources.map(::labelOf)
+            try {
+                // Nothing yet: lets the panel show the sources' "loading" rows straight away.
+                send(SportsLiveExtrasProgress(emptyList(), done = false))
+                sources.forEach { source -> launch { answered.send(source to fetch(card, source)) } }
+                val found = mutableListOf<Stream>()
+                var complete = true
+                repeat(sources.size) { index ->
+                    val (source, lookup) = answered.receive()
+                    found += lookup.streams
+                    complete = complete && lookup.complete
+                    entry.pending = entry.pending - labelOf(source)
+                    send(SportsLiveExtrasProgress(found.toList(), done = index == sources.lastIndex))
+                }
+                if (complete && found.isNotEmpty()) entry.streams = found.toList()
+            } finally {
+                entry.pending = emptyList()
             }
         }
     }
+
+    /**
+     * The Sources-panel labels of [contentId]'s alternates still being fetched, best first, for their
+     * "loading" rows; empty when none are, and always for content with nothing registered.
+     */
+    fun pendingSourcesFor(contentId: String?): List<String> = entry(contentId)?.pending.orEmpty()
 
     /**
      * How to relabel the primary's search group so the whole pooled set reads by provider: its addon's
@@ -242,6 +338,8 @@ object SportsLiveExtraSources {
         synchronized(sportsPlaybackIds) { sportsPlaybackIds.clear() }
         synchronized(sourceNames) { sourceNames.clear() }
         synchronized(streamSources) { streamSources.clear() }
+        synchronized(seeds) { seeds.clear() }
+        nowMs = { System.currentTimeMillis() }
         fetcher = null
         resolveInvalidator = null
     }
@@ -249,8 +347,8 @@ object SportsLiveExtraSources {
 
 /**
  * The player's source search with the extra streams of the game registered for [contentId]
- * appended under their addon names once resolved; unchanged when nothing is registered.
- * [refresh] (a forced reload) looks the extras up again rather than reusing the cached ones.
+ * appended under their addon names, each source's as soon as it answers; unchanged when nothing
+ * is registered. [refresh] (a forced reload) looks the extras up again rather than reusing the cached ones.
  */
 fun Flow<NetworkResult<List<AddonStreams>>>.withSportsLiveExtras(
     contentId: String?,
@@ -258,10 +356,10 @@ fun Flow<NetworkResult<List<AddonStreams>>>.withSportsLiveExtras(
 ): Flow<NetworkResult<List<AddonStreams>>> {
     if (!SportsLiveExtraSources.isRegistered(contentId)) return this
     val primaryRelabel = SportsLiveExtraSources.primaryGroupRelabel(contentId)
-    val extras = flow<List<Stream>?> {
-        emit(null)
-        emit(SportsLiveExtraSources.extraStreamsFor(contentId, refresh))
-    }
+    // Null (pending) until a source has answered with streams or every source has answered.
+    val extras = SportsLiveExtraSources.extraStreamsProgress(contentId, refresh)
+        .map<SportsLiveExtrasProgress, List<Stream>?> { if (!it.done && it.streams.isEmpty()) null else it.streams }
+        .onStart { emit(null) }
     return combine(this, extras) { result, ex -> withExtraStreams(result, ex, primaryRelabel) }
 }
 

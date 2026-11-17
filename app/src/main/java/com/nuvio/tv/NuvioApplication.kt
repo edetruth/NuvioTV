@@ -102,7 +102,7 @@ class NuvioApplication : Application(), SingletonImageLoader.Factory {
         PluginRuntimeHooks.onApplicationCreate(this)
         androidTvChannelSyncService.start()
         serverUserStateProjection.start()
-        SportsLiveExtraSources.install { item -> sportsLiveZapResolver.get().resolveAlternates(item) }
+        SportsLiveExtraSources.install { card, source -> sportsLiveZapResolver.get().resolveAlternate(card, source) }
         SportsLiveExtraSources.installResolveInvalidator { contentId ->
             sportsLiveZapResolver.get().invalidateByContentId(contentId)
         }

@@ -322,6 +322,45 @@ class SportsLiveZapResolverTest {
     }
 
     @Test
+    fun `playing a merged game seeds the Sources panel, which then opens without fetching`() = runTest {
+        streams.responses["game"] = { flowOf(success(SD)) }
+        streams.responses["alt1"] = { flow { delay(3_000); emit(success(PREPARE_ALT, addon = "Other")) } }
+        streams.responses["alt2"] = { flowOf(success(OTHER_HD, addon = "Third")) }
+        val resolver = newResolver()
+        SportsLiveExtraSources.install { card, source -> resolver.resolveAlternate(card, source) }
+
+        // The primary plays at once; the player registers the game before the alternates finish.
+        assertEquals(SD, resolver.resolve(MERGED))
+        SportsLiveExtraSources.register(MERGED.id, MERGED)
+        advanceTimeBy(3_001)
+        val calls = streams.calls.size
+
+        // Same as the panel's own lookup would list: alternates only, preparation streams kept.
+        assertEquals(listOf(PREPARE_ALT, OTHER_HD), SportsLiveExtraSources.extraStreamsFor(MERGED.id))
+        assertEquals(calls, streams.calls.size)
+        // A forced reload still fetches.
+        SportsLiveExtraSources.extraStreamsFor(MERGED.id, refresh = true)
+        assertEquals(calls + 2, streams.calls.size)
+    }
+
+    @Test
+    fun `the picker's lookup seeds the Sources panel too, but a timed out alternate seeds nothing`() = runTest {
+        streams.responses["game"] = { flowOf(success(SD)) }
+        streams.responses["alt1"] = { flowOf(success(HD, addon = "Other")) }
+        streams.responses["alt2"] = { flowOf(success(OTHER_HD, addon = "Third")) }
+        newResolver().resolveAll(MERGED)
+        SportsLiveExtraSources.register(MERGED.id, MERGED)
+        // Labeled by source, as the panel lists them.
+        assertEquals(listOf(HD.copy(addonName = "Other"), OTHER_HD), SportsLiveExtraSources.cachedStreamsFor(MERGED.id))
+
+        SportsLiveExtraSources.reset()
+        streams.responses["alt1"] = { flow { awaitCancellation() } }
+        newResolver().resolveAll(MERGED)
+        SportsLiveExtraSources.register(MERGED.id, MERGED)
+        assertTrue(SportsLiveExtraSources.cachedStreamsFor(MERGED.id).isEmpty())
+    }
+
+    @Test
     fun `a failing preparation check on one alternate does not lose the others`() = runTest {
         preparationCheckThrows = true
         streams.responses["game"] = { flowOf(success(WEB)) }

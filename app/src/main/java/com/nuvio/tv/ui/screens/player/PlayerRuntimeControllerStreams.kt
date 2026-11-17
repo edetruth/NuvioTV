@@ -222,7 +222,8 @@ internal fun PlayerRuntimeController.loadSourceStreams(forceRefresh: Boolean) {
                 sourceSelectedAddonFilter = if (forceRefresh || targetChanged) null else it.sourceSelectedAddonFilter,
                 sourceFilteredStreams = if (forceRefresh || targetChanged) emptyList() else it.sourceFilteredStreams,
                 sourceAvailableAddons = if (forceRefresh || targetChanged) emptyList() else it.sourceAvailableAddons,
-                sourceChips = if (forceRefresh || targetChanged) emptyList() else it.sourceChips
+                sourceChips = if (forceRefresh || targetChanged) emptyList() else it.sourceChips,
+                sourceSportsLiveLoading = emptyList()
             )
         }
 
@@ -300,7 +301,9 @@ internal fun PlayerRuntimeController.loadSourceStreams(forceRefresh: Boolean) {
                                 existing = it.sourceChips,
                                 succeededNames = addonStreams.map { group -> group.addonName }
                             ),
-                            sourceStreamsError = null
+                            sourceStreamsError = null,
+                            // A merged Sports & Live game's providers still fetching (always empty otherwise).
+                            sourceSportsLiveLoading = SportsLiveExtraSources.pendingSourcesFor(contentId)
                         )
                     }
                     // A merged Sports & Live game's other addons' streams arrive later: prepared once too.
@@ -336,7 +339,7 @@ internal fun PlayerRuntimeController.loadSourceStreams(forceRefresh: Boolean) {
             }
         }
         sourceStreamsFetchCompleted = true
-        _uiState.update { it.copy(isLoadingSourceStreams = false) }
+        _uiState.update { it.copy(isLoadingSourceStreams = false, sourceSportsLiveLoading = emptyList()) }
         markRemainingSourceChipsAsError()
     }
 }

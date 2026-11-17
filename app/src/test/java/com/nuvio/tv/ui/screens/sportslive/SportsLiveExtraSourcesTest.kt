@@ -38,11 +38,11 @@ class SportsLiveExtraSourcesTest {
     @Before
     fun setUp() {
         SportsLiveExtraSources.reset()
-        SportsLiveExtraSources.install { item ->
+        SportsLiveExtraSources.install { _, alt ->
             fetches++
             delay(100)
             SportsLiveExtraLookup(
-                item.alternates.map { alt -> stream("${alt.id} stream", "https://${alt.addonName}.example/${alt.id}.m3u8", alt.addonName) },
+                listOf(stream("${alt.id} stream", "https://${alt.addonName}.example/${alt.id}.m3u8", alt.addonName)),
                 complete = true
             )
         }
@@ -99,7 +99,7 @@ class SportsLiveExtraSourcesTest {
 
     @Test
     fun `a cancelled lookup caches nothing`() = runTest {
-        SportsLiveExtraSources.install { awaitCancellation() }
+        SportsLiveExtraSources.install { _, _ -> awaitCancellation() }
         SportsLiveExtraSources.register("game", MERGED)
 
         val lookup = launch { SportsLiveExtraSources.extraStreamsFor("game") }
@@ -108,14 +108,14 @@ class SportsLiveExtraSourcesTest {
         runCurrent()
 
         assertTrue(SportsLiveExtraSources.cachedStreamsFor("game").isEmpty())
-        SportsLiveExtraSources.install { SportsLiveExtraLookup(listOf(EXTRA), complete = true) }
+        SportsLiveExtraSources.install { _, _ -> SportsLiveExtraLookup(listOf(EXTRA), complete = true) }
         assertEquals(listOf(EXTRA), SportsLiveExtraSources.extraStreamsFor("game"))
     }
 
     @Test
     fun `an empty or incomplete lookup is not cached, and a refresh looks again`() = runTest {
         var next = SportsLiveExtraLookup(emptyList(), complete = true)
-        SportsLiveExtraSources.install { fetches++; next }
+        SportsLiveExtraSources.install { _, _ -> fetches++; next }
         SportsLiveExtraSources.register("game", MERGED)
 
         assertTrue(SportsLiveExtraSources.extraStreamsFor("game").isEmpty())

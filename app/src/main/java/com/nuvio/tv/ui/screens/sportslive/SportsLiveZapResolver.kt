@@ -27,6 +27,7 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
@@ -66,7 +67,7 @@ class SportsLiveZapResolver @Inject constructor(
     internal var fetchScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /** The last merged game resolved ([SportsLiveItem.streamKey]) and its fetches, still running or done. */
-    private var backgroundFetches: Pair<String, List<Deferred<List<Stream>>>>? = null
+    private var backgroundFetches: Pair<String, List<Deferred<Fetched>>>? = null
 
     private sealed interface Event {
         data class Result(val result: NetworkResult<List<AddonStreams>>) : Event
@@ -107,12 +108,19 @@ class SportsLiveZapResolver @Inject constructor(
     /**
      * Every stream of [item] and its alternates, fetched in parallel (each within [timeoutMs]):
      * source by source in [rankedSources] order (the most reliable first; with no evidence, the
-     * primary's first, then each alternate's in addon order). Empty when none came back.
+     * primary's first, then each alternate's in addon order). Empty when none came back. The
+     * alternates' streams seed the Sources panel ([seedExtras]).
      */
     suspend fun resolveAll(item: SportsLiveItem): List<Stream> =
         try {
             val settings = playerSettingsDataStore.playerSettings.first()
-            fetchSources(item, rankedSources(item, settings), installedOrder()).flatten()
+            val sources = rankedSources(item, settings)
+            val installedOrder = installedOrder()
+            val fetched = coroutineScope {
+                sources.map { source -> async { fetchSource(item, source, installedOrder) } }.awaitAll()
+            }
+            seedExtras(item, sources.zip(fetched))
+            sources.zip(fetched).flatMap { (source, result) -> playablePerSource(item, source, result.streams) }
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
@@ -128,26 +136,65 @@ class SportsLiveZapResolver @Inject constructor(
      * [SportsLiveExtraLookup.complete] when a source timed out or failed.
      */
     suspend fun resolveAlternates(item: SportsLiveItem): SportsLiveExtraLookup =
+        coroutineScope {
+            val lookups = item.alternates.map { source -> async { resolveAlternate(item, source) } }.awaitAll()
+            SportsLiveExtraLookup(lookups.flatMap { it.streams }, complete = lookups.all { it.complete })
+        }
+
+    /**
+     * One alternate [source] of merged [card], as [resolveAlternates] lists it: the Sources panel
+     * fetches each alternate this way, so each source's group shows as soon as it answers.
+     */
+    suspend fun resolveAlternate(card: SportsLiveItem, source: SportsLiveItem): SportsLiveExtraLookup =
         try {
-            val installedOrder = installedOrder()
-            // Each source keeps its own label (provider sub-catalog, or addon name): the Sources panel
-            // groups by stream.addonName, so a shared addon's sub-catalogs must not reuse one label.
-            val labels = SportsLiveSourceLabels.of(item)
-            val fetched = coroutineScope {
-                item.alternates
-                    .map { source ->
-                        async { fetchSource(item, source, installedOrder, dropPreparation = false) to labels[source.streamKey] }
-                    }
-                    .awaitAll()
-            }
-            val streams = fetched.flatMap { (source, label) ->
-                if (label == null) source.streams else source.streams.map { it.copy(addonName = label) }
-            }
-            SportsLiveExtraLookup(streams, complete = fetched.all { it.first.finished })
+            val fetched = fetchSource(card, source, installedOrder())
+            SportsLiveExtraLookup(labeled(card, source, fetched.streams), complete = fetched.finished)
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
             SportsLiveExtraLookup(emptyList(), complete = false)
+        }
+
+    /**
+     * [streams] of [card]'s [source] under the source's own label (provider sub-catalog, or addon
+     * name): the Sources panel groups by stream.addonName, so a shared addon's sub-catalogs must not
+     * reuse one label.
+     */
+    private fun labeled(card: SportsLiveItem, source: SportsLiveItem, streams: List<Stream>): List<Stream> {
+        val label = SportsLiveSourceLabels.of(card)[source.streamKey] ?: return streams
+        return streams.map { it.copy(addonName = label) }
+    }
+
+    /**
+     * The play path fetched every source of merged [card] ([fetched], any order): its alternates'
+     * streams, labeled and listed as [resolveAlternates] lists them, seed the Sources panel so it
+     * does not fetch them again. Nothing is seeded unless every alternate finished.
+     */
+    private fun seedExtras(card: SportsLiveItem, fetched: List<Pair<SportsLiveItem, Fetched>>) {
+        val alternates = card.alternates.map { alt -> fetched.firstOrNull { it.first === alt } ?: return }
+        SportsLiveExtraSources.seed(
+            item = card,
+            streams = alternates.flatMap { (source, result) -> labeled(card, source, result.streams) },
+            complete = alternates.all { it.second.finished }
+        )
+    }
+
+    /**
+     * [streams] of [card]'s [source] that the play path may play: an alternate's that need the Stream
+     * screen's preparation are dropped, since that screen opens for the primary, which does not list
+     * them. A failing preparation check gives that source nothing rather than failing the caller.
+     */
+    private suspend fun playablePerSource(card: SportsLiveItem, source: SportsLiveItem, streams: List<Stream>): List<Stream> =
+        if (source === card) {
+            streams
+        } else {
+            try {
+                streams.filterNot { sportsLiveNeedsPreparation(it, directDebridResolver) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                emptyList()
+            }
         }
 
     private suspend fun installedOrder(): List<String> =
@@ -163,20 +210,28 @@ class SportsLiveZapResolver @Inject constructor(
         val settings = playerSettingsDataStore.playerSettings.first()
         val installedOrder = installedOrder()
         // The most reliable source first; its best stream plays as soon as it is known.
-        val fetches = rankedSources(item, settings).map { source ->
-            fetchScope.async { fetch(item, source, installedOrder, dropPreparation = source !== item) }
-        }
+        val sources = rankedSources(item, settings)
+        val fetches = sources.map { source -> fetchScope.async { fetchSource(item, source, installedOrder) } }
         val previous = synchronized(this) {
             backgroundFetches.also { backgroundFetches = item.streamKey to fetches }
         }
         // Finished fetches have recorded their results already; only running ones are cancelled.
         if (previous != null && previous.first != item.streamKey) previous.second.forEach { it.cancel() }
+        // Once every alternate has answered, the Sources panel gets them without fetching them again.
+        fetchScope.launch {
+            val fetched = try {
+                sources.zip(fetches.awaitAll())
+            } catch (_: CancellationException) {
+                return@launch // a newer game cancelled them: nothing complete to seed
+            }
+            seedExtras(item, fetched)
+        }
         // First the user's choice across every source, in rank order, so a reliable source with
         // nothing the user's regex or chosen addons allow never plays a stream they rule out.
         val fetched = mutableListOf<List<Stream>>()
-        for (fetch in fetches) {
+        for ((source, fetch) in sources.zip(fetches)) {
             val streams = try {
-                fetch.await()
+                playablePerSource(item, source, fetch.await().streams)
             } catch (e: CancellationException) {
                 // A newer game cancelled this fetch: unless this lookup is cancelled too, it found nothing.
                 currentCoroutineContext().ensureActive()
@@ -204,35 +259,18 @@ class SportsLiveZapResolver @Inject constructor(
         )
     }
 
-    /** One list per source of [sources] ([item]'s, in that order); only [item]'s own keep streams that need preparation. */
-    private suspend fun fetchSources(
-        item: SportsLiveItem,
-        sources: List<SportsLiveItem>,
-        installedOrder: List<String>
-    ): List<List<Stream>> =
-        coroutineScope {
-            sources
-                .map { source -> async { fetch(item, source, installedOrder, dropPreparation = source !== item) } }
-                .awaitAll()
-        }
-
-    private suspend fun fetch(card: SportsLiveItem, source: SportsLiveItem, installedOrder: List<String>, dropPreparation: Boolean): List<Stream> =
-        fetchSource(card, source, installedOrder, dropPreparation).streams
-
     private class Fetched(val streams: List<Stream>, val finished: Boolean)
 
     /**
-     * [source]'s streams in addon order, junk dropped. A finished fetch is reported to the probe for
-     * the source's own key; a timeout keeps what came back so far and reports nothing.
-     * With [dropPreparation] (an alternate on the play path), streams that need the Stream screen's
-     * preparation are dropped: that screen opens for the primary, which does not list them.
-     * Any failure, the preparation check included, gives no streams rather than failing the caller.
+     * [source]'s streams in addon order, junk dropped (those that need preparation kept: see
+     * [playablePerSource]). A finished fetch is reported to the probe for the source's own key; a
+     * timeout keeps what came back so far and reports nothing. Any failure gives no streams rather
+     * than failing the caller.
      */
     private suspend fun fetchSource(
         card: SportsLiveItem,
         source: SportsLiveItem,
-        installedOrder: List<String>,
-        dropPreparation: Boolean
+        installedOrder: List<String>
     ): Fetched =
         try {
             var last: NetworkResult<List<AddonStreams>>? = null
@@ -247,7 +285,6 @@ class SportsLiveZapResolver @Inject constructor(
                 installedOrder
             ).flatMap { it.streams }
                 .filterNot(UnplayableStreamFilter::isUnplayableJunk)
-                .filterNot { dropPreparation && sportsLiveNeedsPreparation(it, directDebridResolver) }
             // Remember where each stream came from, so its plays are credited to this source.
             streams.forEach { SportsLiveExtraSources.noteStreamSource(card.id, it, source) }
             Fetched(streams, finished)
