@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -22,6 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -237,6 +239,20 @@ private fun SportsLiveContent(
         ?: items.firstOrNull { it.id == uiState.selectedItemId }
         ?: items.firstOrNull()
     val selectedCardFocusRequester = selected?.let(::cardFocusRequester)
+    // Where a move into the list lands: the focused card while on screen, else the first card on
+    // screen. Read from the layout, so Down never aims at a card scrolled away (which traps focus).
+    val currentItemKeys by rememberUpdatedState(items.map { it.listKey })
+    val entryKey by remember(listState) {
+        derivedStateOf {
+            sportsLiveListEntryKey(
+                keys = currentItemKeys,
+                focusedKey = focusedCardKey,
+                visibleIndices = listState.layoutInfo.visibleItemsInfo.map { it.index }
+            )
+        }
+    }
+    val entryCardFocusRequester = items.firstOrNull { it.listKey == entryKey }?.let(::cardFocusRequester)
+        ?: selectedCardFocusRequester
     // Attached to whichever filter chip is selected; the row only shows with two or more values.
     val filterFocusRequester = remember { FocusRequester() }
     val showFilterRow = uiState.filters.size >= 2
@@ -381,7 +397,7 @@ private fun SportsLiveContent(
             .fillMaxSize()
             .padding(horizontal = NuvioTheme.spacing.screen.horizontal, vertical = NuvioTheme.spacing.screen.vertical)
     ) {
-        val openList: () -> Unit = { runCatching { selectedCardFocusRequester?.requestFocus() } }
+        val openList: () -> Unit = { runCatching { entryCardFocusRequester?.requestFocus() } }
         val miniPlayer = SportsLiveMiniPlayers.controller
         val miniState by miniPlayer.state.collectAsStateWithLifecycle()
         val nowPlaying = (miniState as? SportsLiveMiniState.Playing)?.item
@@ -410,7 +426,7 @@ private fun SportsLiveContent(
         SportsLiveTabRow(
             uiState = uiState,
             tabFocusRequesters = tabFocusRequesters,
-            downFocusRequester = if (showFilterRow) filterFocusRequester else selectedCardFocusRequester,
+            downFocusRequester = if (showFilterRow) filterFocusRequester else entryCardFocusRequester,
             onSelectTab = onSelectTab,
             onOpenTab = openList,
             onRefresh = onRefresh,
@@ -421,7 +437,7 @@ private fun SportsLiveContent(
                 uiState = uiState,
                 filterFocusRequester = filterFocusRequester,
                 upFocusRequester = activeTabFocusRequester,
-                downFocusRequester = selectedCardFocusRequester,
+                downFocusRequester = entryCardFocusRequester,
                 onSelectFilter = onSelectFilter,
                 onOpenFilter = openList,
                 modifier = Modifier
@@ -477,7 +493,7 @@ private fun SportsLiveContent(
                     .weight(0.45f)
                     .fillMaxHeight()
                     .onFocusChanged { listHasFocus = it.hasFocus }
-                    .focusRestorer(selectedCardFocusRequester)
+                    .focusRestorer(entryCardFocusRequester ?: selectedCardFocusRequester)
                     .dpadRepeatThrottle(),
                 verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)
             ) {
@@ -548,7 +564,7 @@ private fun SportsLiveContent(
                     .onFocusChanged { paneHasFocus = it.hasFocus },
                 watchModifier = Modifier
                     .focusRequester(watchFocusRequester)
-                    .focusProperties { left = selectedCardFocusRequester }
+                    .focusProperties { left = entryCardFocusRequester ?: selectedCardFocusRequester }
             )
         }
     }
@@ -566,10 +582,15 @@ private fun SportsLiveTabRow(
 ) {
     // Down goes to the selected filter chip (or card), never to whichever chip sits below, since filter chips select on focus.
     val downModifier = Modifier.focusProperties { downFocusRequester?.let { down = it } }
+    val activeTabFocusRequester = tabFocusRequesters.getValue(uiState.selectedTab)
     // A plain scrolling Row keeps every chip composed, so the tab FocusRequesters stay attached.
     Row(
         modifier = modifier
             .fillMaxWidth()
+            // Entering the row from elsewhere (the pane, the list) lands on the active tab, never on
+            // whichever tab sits nearest, since tabs select on focus.
+            .focusProperties { onEnter = { activeTabFocusRequester.requestFocus() } }
+            .focusGroup()
             .horizontalScroll(rememberScrollState())
             // Room inside the scroll for the focused chip's border, which otherwise clips at the edges.
             .padding(horizontal = NuvioTheme.spacing.sm, vertical = NuvioTheme.spacing.xs),
@@ -626,6 +647,10 @@ private fun SportsLiveFilterRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
+            // Entering the row from elsewhere (the pane, the list) lands on the active chip, never
+            // on whichever chip sits nearest, since chips select on focus.
+            .focusProperties { onEnter = { filterFocusRequester.requestFocus() } }
+            .focusGroup()
             .horizontalScroll(rememberScrollState())
             .padding(horizontal = NuvioTheme.spacing.sm, vertical = NuvioTheme.spacing.xs),
         horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm),
