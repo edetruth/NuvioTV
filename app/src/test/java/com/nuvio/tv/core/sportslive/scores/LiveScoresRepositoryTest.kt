@@ -325,12 +325,15 @@ class LiveScoresRepositoryTest {
     }
 
     @Test
-    fun `dates cover the local day and the neighbouring UTC day near midnight`() = runTest {
-        val repo = repository("2026-11-16T12:00:00Z", zone = ZoneId.of("America/New_York"))
+    fun `dates are ESPN's US Eastern days within 3 h of the start`() = runTest {
+        val repo = repository("2026-11-16T12:00:00Z", zone = ZoneId.of("Europe/London"))
         val today = LocalDate.of(2026, 11, 16)
         fun dates(name: String, start: String?, timed: Boolean = true) =
             repo.datesFor(ScoreCard.from(item(name, "Basketball", start, timed))!!, today).toSet()
-        assertEquals(setOf(LocalDate.of(2026, 11, 15), today), dates("A vs B", "2026-11-16T01:00:00Z"))
+        // 23:00 Eastern on the 15th (04:00 UTC on the 16th): the 15th and, within 3 h, the 16th.
+        assertEquals(setOf(LocalDate.of(2026, 11, 15), today), dates("A vs B", "2026-11-16T04:00:00Z"))
+        // 20:00 Eastern on the 15th is 01:00 UTC on the 16th, but ESPN files it on the 15th only.
+        assertEquals(setOf(LocalDate.of(2026, 11, 15)), dates("A vs B", "2026-11-16T01:00:00Z"))
         assertEquals(setOf(LocalDate.of(2026, 11, 15)), dates("A vs B", "2026-11-15T18:00:00Z"))
         assertEquals(setOf(LocalDate.of(2026, 11, 14)), dates("A vs B", "2026-11-14T00:00:00Z", timed = false))
         assertEquals(setOf(today, LocalDate.of(2026, 11, 15)), dates("A vs B", null))

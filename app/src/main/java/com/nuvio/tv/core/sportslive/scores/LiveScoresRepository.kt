@@ -267,16 +267,21 @@ class LiveScoresRepository internal constructor(
     private fun today(): LocalDate = Instant.ofEpochMilli(now()).atZone(zone()).toLocalDate()
 
     /**
-     * The scoreboard dates for [card]: a timed card's local day plus the UTC days within ±3 h of its
-     * start (near UTC midnight, the neighbouring one); a bare date's own day; no start: today and yesterday.
+     * The scoreboard dates for [card]. ESPN files games under their US Eastern date, so a timed card
+     * asks for the Eastern dates within ±3 h of its start (the neighbouring one near Eastern midnight).
+     * A bare date asks for that date; no start: today and yesterday, by the device's and by Eastern days.
+     * ESPN rejects `dates=A-B` ranges (HTTP 400, checked 2026-11-17), so each date is its own request.
      */
     internal fun datesFor(card: ScoreCard, today: LocalDate): List<LocalDate> {
-        val start = card.startMs ?: return listOf(today, today.minusDays(1))
+        val start = card.startMs
+        if (start == null) {
+            val easternToday = Instant.ofEpochMilli(now()).atZone(EASTERN).toLocalDate()
+            return listOf(today, today.minusDays(1), easternToday, easternToday.minusDays(1)).distinct()
+        }
         if (!card.hasTimeOfDay) return listOf(Instant.ofEpochMilli(start).atZone(ZoneOffset.UTC).toLocalDate())
         return listOf(
-            Instant.ofEpochMilli(start).atZone(zone()).toLocalDate(),
-            Instant.ofEpochMilli(start - WINDOW_MS).atZone(ZoneOffset.UTC).toLocalDate(),
-            Instant.ofEpochMilli(start + WINDOW_MS).atZone(ZoneOffset.UTC).toLocalDate()
+            Instant.ofEpochMilli(start - WINDOW_MS).atZone(EASTERN).toLocalDate(),
+            Instant.ofEpochMilli(start + WINDOW_MS).atZone(EASTERN).toLocalDate()
         ).distinct()
     }
 
@@ -287,5 +292,6 @@ class LiveScoresRepository internal constructor(
         const val WINDOW_MS = 3 * 60 * 60 * 1000L
         const val MAX_REMEMBERED = 2_000
         val SLUG = Regex("""[a-z0-9._-]+""")
+        val EASTERN: ZoneId = ZoneId.of("America/New_York")
     }
 }

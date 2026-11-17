@@ -36,7 +36,8 @@ class EspnScoreProvider internal constructor(
 
     override suspend fun scoreboard(league: EspnLeague, date: LocalDate): ScoreboardResult =
         withContext(Dispatchers.IO) {
-            val url = "$baseUrl${league.path}/scoreboard?dates=${date.format(DateTimeFormatter.BASIC_ISO_DATE)}"
+            val url = "$baseUrl${league.path}/scoreboard?dates=${date.format(DateTimeFormatter.BASIC_ISO_DATE)}" +
+                "&limit=$LIMIT${groupsFor(league)}"
             try {
                 val request = Request.Builder().url(url).apply {
                     // Yesterday's late games and today's can still change: revalidate rather than reuse
@@ -72,6 +73,24 @@ class EspnScoreProvider internal constructor(
         // ".../gameId/401930175/league/fifa.friendly_u21"
         private val LEAGUE_IN_LINK = Regex("""/league/([a-z0-9._-]+)""")
         private const val PAST_DAY_MAX_STALE_DAYS = 7
+
+        // Without a limit a busy soccer/all day can be cut short.
+        private const val LIMIT = 1000
+
+        /**
+         * College scoreboards list only featured games unless a group is asked for: 80 = FBS football,
+         * 50 = Division I men's basketball.
+         */
+        internal fun groupsFor(league: EspnLeague): String = when (league) {
+            EspnLeagueMap.COLLEGE_FOOTBALL -> "&groups=80"
+            EspnLeagueMap.COLLEGE_BASKETBALL -> "&groups=50"
+            else -> ""
+        }
+
+        // status.type.name of a game that is not being played: STATUS_POSTPONED, STATUS_CANCELED,
+        // STATUS_SUSPENDED, STATUS_DELAYED, STATUS_FORFEIT, STATUS_ABANDONED. Adapted from OFF_STATUS
+        // in SportsFeeds of homelessbrian/NuvioPlusIPTV (GPL-3.0, as this project).
+        private val OFF_STATUS = Regex("POSTPONED|CANCEL|SUSPENDED|DELAYED|FORFEIT|ABANDON")
 
         /** Retry-After in seconds (the HTTP-date form is ignored), capped at 15 minutes. */
         internal fun retryAfterMs(header: String?): Long? =
@@ -109,12 +128,15 @@ class EspnScoreProvider internal constructor(
             val homeTeam = toTeam(home) ?: return null
             val awayTeam = toTeam(away) ?: return null
             val type = event.status?.type
-            val state = when (type?.state) {
-                "pre" -> ScoreState.PRE
-                "in" -> ScoreState.IN
-                "post" -> ScoreState.POST
+            val state = when {
+                type?.name?.let { OFF_STATUS.containsMatchIn(it.uppercase()) } == true -> ScoreState.OFF
+                type?.state == "pre" -> ScoreState.PRE
+                type?.state == "in" -> ScoreState.IN
+                type?.state == "post" -> ScoreState.POST
                 else -> ScoreState.UNKNOWN
             }
+            // Before kick-off ESPN sends "0": no score then, nor for a game that is off.
+            val scored = state != ScoreState.PRE && state != ScoreState.OFF
             return ScoreSnapshot(
                 eventId = id,
                 league = league,
@@ -124,10 +146,10 @@ class EspnScoreProvider internal constructor(
                 startMs = event.date?.let(::parseDate),
                 state = state,
                 clockText = type?.shortDetail?.takeIf { it.isNotBlank() },
-                isFinal = type?.completed == true,
-                home = homeTeam,
-                away = awayTeam,
-                scorers = scorers(competition.details.orEmpty(), homeTeam.id, awayTeam.id)
+                isFinal = state != ScoreState.OFF && type?.completed == true,
+                home = if (scored) homeTeam else homeTeam.copy(score = null, linescores = emptyList()),
+                away = if (scored) awayTeam else awayTeam.copy(score = null, linescores = emptyList()),
+                scorers = if (scored) scorers(competition.details.orEmpty(), homeTeam.id, awayTeam.id) else emptyList()
             )
         }
 

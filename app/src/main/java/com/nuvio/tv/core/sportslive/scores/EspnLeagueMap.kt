@@ -87,22 +87,28 @@ object EspnLeagueMap {
     private val COLLEGE = Regex("""\bncaa\w*|\bcollege\b""")
     private val COLLEGE_FEEDS = setOf(COLLEGE_FOOTBALL, COLLEGE_BASKETBALL)
 
-    /** Feeds for [item]: its sport, title, genres and catalog name. Empty when none applies. */
+    /**
+     * Feeds for [item]: its sport, title, genres and catalog name. Empty when none applies. The catalog
+     * name routes but never excludes: a mixed "Live Sports (Soccer, Tennis, F1)" catalog does not block
+     * its soccer cards.
+     */
     fun leaguesFor(item: SportsLiveItem): List<EspnLeague> =
         leaguesFor(
             sport = SportsLiveTeams.knownSport(item),
-            hints = listOf(item.meta.name) + item.meta.genres + item.catalogName
+            hints = listOf(item.meta.name) + item.meta.genres,
+            routingHints = listOf(item.catalogName)
         )
 
     /**
      * Feeds for a card with [sport] (null when unknown) and text [hints] in priority order (title first).
      * A competition named in the sport or a hint wins; otherwise the sport word decides ("Basketball",
-     * "Football" = soccer). A card naming an excluded sport or league anywhere gets none, as does a
-     * college card without a college feed.
+     * "Football" = soccer). A card whose sport or hints name an excluded sport or league gets none, as
+     * does a college card without a college feed. [routingHints] (the catalog name) route only.
      */
-    fun leaguesFor(sport: String?, hints: List<String>): List<EspnLeague> {
-        val texts = (listOfNotNull(sport) + hints).map(::fold).filter { it.isNotEmpty() }
-        if (texts.any { EXCLUDED.containsMatchIn(it) }) return emptyList()
+    fun leaguesFor(sport: String?, hints: List<String>, routingHints: List<String> = emptyList()): List<EspnLeague> {
+        val own = (listOfNotNull(sport) + hints).map(::fold).filter { it.isNotEmpty() }
+        if (own.any { EXCLUDED.containsMatchIn(it) }) return emptyList()
+        val texts = own + routingHints.map(::fold).filter { it.isNotEmpty() }
         val leagues = (firstCompetition(texts) ?: firstSport(texts)).orEmpty()
         val college = texts.any { COLLEGE.containsMatchIn(it) }
         return if (college && leagues.none { it in COLLEGE_FEEDS }) emptyList() else leagues
@@ -130,5 +136,5 @@ object EspnLeagueMap {
     private val WHITESPACE = Regex("""\s+""")
 
     private fun fold(text: String): String =
-        Normalizer.normalize(text, Normalizer.Form.NFD).replace(MARKS, "").lowercase().replace(WHITESPACE, " ").trim()
+        Normalizer.normalize(text.replace('’', '\''), Normalizer.Form.NFD).replace(MARKS, "").lowercase().replace(WHITESPACE, " ").trim()
 }

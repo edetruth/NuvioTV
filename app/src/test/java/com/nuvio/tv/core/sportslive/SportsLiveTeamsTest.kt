@@ -101,7 +101,7 @@ class SportsLiveTeamsTest {
         assertEquals("76ers", SportsLiveTeams.normalise("76ers (2026-11-10 19:00:05)]"))
         assertEquals("arsenal", SportsLiveTeams.normalise("Arsenal [HD] (1080p)"))
         assertEquals("chelsea", SportsLiveTeams.normalise("Chelsea)"))
-        assertEquals("(hd)", SportsLiveTeams.normalise("(HD)"))
+        assertEquals("hd", SportsLiveTeams.normalise("(HD)"))
         assertEquals(
             TeamPair("Celtics", "76ers"),
             SportsLiveTeams.parse("US| PEACOCK PPV 004 [Celtics vs 76ers (2026-11-10 19:00:05)]")
@@ -291,5 +291,43 @@ class SportsLiveTeamsTest {
         val json = javaClass.classLoader!!.getResourceAsStream("sportslive/$file")!!
             .bufferedReader().use { it.readText() }
         return Regex("\"name\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"").findAll(json).map { it.groupValues[1] }.toList()
+    }
+
+    @Test
+    fun `youth forms are read as one qualifier`() {
+        assertEquals("england u21", SportsLiveTeams.normalise("England U-21"))
+        assertEquals("england u21", SportsLiveTeams.normalise("England Under 21"))
+        assertEquals("england u21", SportsLiveTeams.normalise("England Under-21"))
+        assertEquals("england u21", SportsLiveTeams.normalise("England U21s"))
+        assertEquals("sevilla u19", SportsLiveTeams.normalise("Sevilla CF U19"))
+        assertTrue(SportsLiveTeams.matches("England U-21", "England Under 21"))
+        assertFalse(SportsLiveTeams.matches("England", "England U-21"))
+        assertEquals("thunder", SportsLiveTeams.normalise("Thunder"))
+    }
+
+    @Test
+    fun `ampersand, punctuation and small raised letters fold`() {
+        assertEquals("brighton and hove albion", SportsLiveTeams.normalise("Brighton & Hove Albion"))
+        assertEquals("st louis blues", SportsLiveTeams.normalise("St. Louis Blues"))
+        assertEquals("paris saint germain", SportsLiveTeams.normalise("Paris Saint-Germain"))
+        assertEquals("arsenal", SportsLiveTeams.normalise("Arsenal ᴸᴵⱽᴱ"))
+        assertEquals("arsenal", SportsLiveTeams.normalise("Arsenal ᴴᴰ"))
+        assertEquals("arsenal", SportsLiveTeams.normalise("ᴬʀꜱᴇɴᴀʟ"))
+        assertTrue(SportsLiveTeams.matches("St Louis Blues", "St. Louis Blues"))
+    }
+
+    @Test
+    fun `leading club tags drop and club aliases fold`() {
+        assertEquals("milan", SportsLiveTeams.normalise("AC Milan"))
+        assertEquals("roma", SportsLiveTeams.normalise("AS Roma"))
+        assertEquals("stuttgart", SportsLiveTeams.normalise("VfB Stuttgart"))
+        assertEquals("koln", SportsLiveTeams.normalise("1. FC Koln"))
+        assertEquals("bournemouth", SportsLiveTeams.normalise("AFC Bournemouth"))
+        assertEquals("sc state", SportsLiveTeams.normalise("SC State"))
+        assertEquals(SportsLiveTeams.canonicalise("Manchester United"), SportsLiveTeams.canonicalise("Man Utd"))
+        assertEquals(SportsLiveTeams.canonicalise("Paris Saint-Germain"), SportsLiveTeams.canonicalise("PSG"))
+        assertTrue(SportsLiveTeams.matches("Man Utd", "Manchester United FC"))
+        assertFalse(SportsLiveTeams.matches("Inter Milan", "AC Milan"))
+        assertFalse(SportsLiveTeams.matches("Spurs", "Tottenham Hotspur"))
     }
 }

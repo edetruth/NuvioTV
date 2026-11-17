@@ -47,7 +47,7 @@ class EspnScoreProviderTest {
         val result = provider(respond(200, EspnFixtures.json(EspnFixtures.NBA_20261115)))
             .scoreboard(EspnLeagueMap.NBA, day)
 
-        assertEquals(listOf("https://example.invalid/apis/site/v2/sports/basketball/nba/scoreboard?dates=20261115"), requested)
+        assertEquals(listOf("https://example.invalid/apis/site/v2/sports/basketball/nba/scoreboard?dates=20261115&limit=1000"), requested)
         assertFalse(result.failed)
         assertEquals(5, result.events.size)
         val game = result.events.first { it.eventId == "401909985" }
@@ -178,6 +178,61 @@ class EspnScoreProviderTest {
         )
         for (failure in failures) {
             assertEquals(ScoreboardResult.FAILED, provider(failure).scoreboard(EspnLeagueMap.NBA, day))
+        }
+    }
+
+    @Test
+    fun `college feeds ask for every Division I game`() = runTest {
+        val p = provider(respond(200, "{}"))
+        p.scoreboard(EspnLeagueMap.COLLEGE_FOOTBALL, day)
+        p.scoreboard(EspnLeagueMap.COLLEGE_BASKETBALL, day)
+        p.scoreboard(EspnLeague("soccer", "all"), day)
+        assertEquals(
+            listOf(
+                "https://example.invalid/apis/site/v2/sports/football/college-football/scoreboard?dates=20261115&limit=1000&groups=80",
+                "https://example.invalid/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard?dates=20261115&limit=1000&groups=50",
+                "https://example.invalid/apis/site/v2/sports/soccer/all/scoreboard?dates=20261115&limit=1000"
+            ),
+            requested
+        )
+    }
+
+    private fun game(id: String, name: String, state: String, completed: Boolean, home: String, away: String) = """
+        {"id":"$id","date":"2026-11-15T18:00Z",
+         "status":{"type":{"name":"$name","state":"$state","completed":$completed,"shortDetail":"x"}},
+         "competitions":[{"competitors":[
+           {"homeAway":"home","score":"$home","team":{"id":"1","displayName":"Home Team"},"linescores":[{"value":1.0}]},
+           {"homeAway":"away","score":"$away","team":{"id":"2","displayName":"Away Team"}}]}]}
+    """
+
+    @Test
+    fun `postponed, cancelled, suspended and delayed games are OFF with no score, and pre-game shows none`() = runTest {
+        val body = """{"events":[
+            ${game("pp", "STATUS_POSTPONED", "post", false, "0", "0")},
+            ${game("cx", "STATUS_CANCELED", "post", true, "0", "0")},
+            ${game("su", "STATUS_SUSPENDED", "in", false, "2", "1")},
+            ${game("dl", "STATUS_DELAYED", "in", false, "3", "3")},
+            ${game("pre", "STATUS_SCHEDULED", "pre", false, "0", "0")},
+            ${game("live", "STATUS_IN_PROGRESS", "in", false, "2", "1")}
+        ]}"""
+        val events = provider(respond(200, body)).scoreboard(EspnLeagueMap.NBA, day).events.associateBy { it.eventId }
+        for (id in listOf("pp", "cx", "su", "dl")) {
+            val game = events.getValue(id)
+            assertEquals(id, ScoreState.OFF, game.state)
+            assertNull(id, game.homeScore)
+            assertNull(id, game.awayScore)
+            assertFalse(id, game.isFinal)
+            assertTrue(id, game.home.linescores.isEmpty())
+        }
+        events.getValue("pre").let {
+            assertEquals(ScoreState.PRE, it.state)
+            assertNull(it.homeScore)
+            assertNull(it.awayScore)
+        }
+        events.getValue("live").let {
+            assertEquals(ScoreState.IN, it.state)
+            assertEquals(2, it.homeScore)
+            assertEquals(listOf(1), it.home.linescores)
         }
     }
 }

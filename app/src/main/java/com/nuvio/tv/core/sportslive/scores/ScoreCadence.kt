@@ -20,7 +20,7 @@ internal object ScoreCadence {
      * - After a failure: the backoff for [failures] (30 s → 60 s → 2 min → 5 min), or [retryAfterMs] if longer.
      * - A day before yesterday is final: fetched once.
      * - Any matched game live: 30 s. All matched games final: stop. Only upcoming: 5 min, tightening to
-     *   30 s from 5 min before the earliest start.
+     *   30 s from 5 min before the earliest start. Postponed/suspended/delayed (OFF) only: 5 min.
      * - No matched game: 5 min (a miss is retried), or stop when every game in the feed is final.
      * - `soccer/all` never under 60 s.
      */
@@ -46,8 +46,9 @@ internal object ScoreCadence {
             return if (events.isNotEmpty() && events.all { it.state == ScoreState.POST }) null else UPCOMING_MS
         }
         if (matched.any { it.state == ScoreState.IN }) return LIVE_MS
-        val waiting = matched.filter { it.state != ScoreState.POST }
-        if (waiting.isEmpty()) return null
+        val waiting = matched.filter { it.state == ScoreState.PRE || it.state == ScoreState.UNKNOWN }
+        // A suspended or delayed game may resume: checked at the upcoming pace, never faster.
+        if (waiting.isEmpty()) return if (matched.any { it.state == ScoreState.OFF }) UPCOMING_MS else null
         val earliest = waiting.mapNotNull { it.startMs }.minOrNull() ?: return UPCOMING_MS
         return (earliest - SOON_MS - nowMs).coerceIn(LIVE_MS, UPCOMING_MS)
     }

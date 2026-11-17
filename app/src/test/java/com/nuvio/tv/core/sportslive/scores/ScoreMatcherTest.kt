@@ -161,13 +161,27 @@ class ScoreMatcherTest {
     }
 
     @Test
-    fun `a tie goes to the closest start`() {
+    fun `two different events tied for the best score give no match`() {
         val original = caf.first { it.eventId == "401927170" }
         val later = original.copy(eventId = "later", startMs = original.startMs!! + 2 * hour)
         val events = caf + later
-        assertEquals("401927170", match("NAM vs CMR", "2026-11-16T13:30:00Z", events))
-        assertEquals("later", ScoreMatcher(zone = { ZoneOffset.UTC })
-            .match(card("NAM vs CMR", "2026-11-16T14:30:00Z"), events, ms("2026-11-16T20:00:00Z"))?.eventId)
+        // A doubleheader-like pair: the closer start no longer decides.
+        assertNull(match("NAM vs CMR", "2026-11-16T13:30:00Z", events))
+        assertNull(match("NAM vs CMR", null, events, now = "2026-11-16T20:00:00Z"))
+        val bareDate = ScoreCard("bare", TeamPair("NAM", "CMR"), ms("2026-11-16T00:00:00Z"), hasTimeOfDay = false)
+        assertNull(ScoreMatcher(zone = { ZoneOffset.UTC }).match(bareDate, events, ms("2026-11-30T00:00:00Z")))
+        // A better-scoring event still wins over a weaker one.
+        val weaker = later.copy(home = later.home.copy(abbreviation = null, displayName = "North Namibia", shortDisplayName = null, name = null, location = null))
+        assertEquals("401927170", match("NAM vs CMR", "2026-11-16T13:30:00Z", caf + weaker))
+    }
+
+    @Test
+    fun `an ambiguous day does not fall back to the day before`() {
+        val original = caf.first { it.eventId == "401927170" }
+        val twin = original.copy(eventId = "twin", startMs = original.startMs!! + 2 * hour)
+        val dayBefore = original.copy(eventId = "before", startMs = original.startMs - 24 * hour)
+        val bareDate = ScoreCard("bare", TeamPair("NAM", "CMR"), ms("2026-11-16T00:00:00Z"), hasTimeOfDay = false)
+        assertNull(ScoreMatcher(zone = { ZoneOffset.UTC }).match(bareDate, listOf(original, twin, dayBefore), ms("2026-11-30T00:00:00Z")))
     }
 
     @Test

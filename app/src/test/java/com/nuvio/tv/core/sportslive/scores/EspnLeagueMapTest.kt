@@ -131,4 +131,38 @@ class EspnLeagueMapTest {
         )
         assertEquals(listOf(EspnLeague("soccer", "eng.1")), EspnLeagueMap.leaguesFor(item))
     }
+
+    private fun leagueItem(title: String, sport: String?, genres: List<String>, catalog: String) = SportsLiveItem(
+        meta = MetaPreview(
+            id = title, type = ContentType.UNKNOWN, rawType = "sport", name = title, poster = null,
+            posterShape = PosterShape.LANDSCAPE, background = null, logo = null, description = null,
+            releaseInfo = null, imdbRating = null, genres = genres
+        ),
+        addonId = "a", addonName = "A", addonBaseUrl = "https://example.invalid", catalogKey = "k", catalogName = catalog,
+        kind = SportsLiveKind.EVENTS, isLive = true, isChannel = false, startMs = null, sport = sport,
+        teams = SportsLiveTeams.parse(title)
+    )
+
+    @Test
+    fun `a mixed catalog name routes but never excludes`() {
+        val mixed = "Live Sports (Soccer, Tennis, F1)"
+        assertEquals(listOf("soccer/all"), EspnLeagueMap.leaguesFor(leagueItem("Arsenal vs Chelsea", "Soccer", listOf("Soccer"), mixed)).map { it.path })
+        assertEquals(emptyList<String>(), EspnLeagueMap.leaguesFor(leagueItem("Sinner vs Alcaraz", "Tennis", listOf("Tennis"), mixed)).map { it.path })
+        // The catalog still routes when the card itself says nothing.
+        assertEquals(listOf("soccer/eng.1"), EspnLeagueMap.leaguesFor(leagueItem("Arsenal vs Chelsea", null, emptyList(), "Premier League")).map { it.path })
+    }
+
+    @Test
+    fun `short excluded tokens are whole words only`() {
+        assertEquals(listOf("soccer/all"), slugs("Soccer", "Odisha FC vs Kerala Blasters"))
+        assertEquals(listOf("soccer/all"), slugs("Soccer", "Rot Weiss Ahlen vs Wuppertal"))
+        assertEquals(listOf("soccer/all"), slugs("Soccer", "Ipswich vs Norwich", "Football"))
+        assertEquals(emptyList<String>(), slugs(null, "ODI: India vs Australia"))
+        assertEquals(emptyList<String>(), slugs(null, "IPL: CSK vs MI"))
+    }
+
+    @Test
+    fun `a curly apostrophe still reads as women's`() {
+        assertEquals(emptyList<String>(), slugs("Soccer", "Women’s Super League: Arsenal vs Chelsea"))
+    }
 }

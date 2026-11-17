@@ -5,8 +5,11 @@ data class EspnLeague(val sport: String, val league: String) {
     val path: String get() = "$sport/$league"
 }
 
-/** ESPN `status.type.state`: pre (scheduled), in (in progress), post (finished, postponed, ...). */
-enum class ScoreState { PRE, IN, POST, UNKNOWN }
+/**
+ * ESPN `status.type.state`: pre (scheduled), in (in progress), post (finished). [OFF] is a game
+ * postponed, cancelled, suspended or delayed (from `status.type.name`): it never shows a score.
+ */
+enum class ScoreState { PRE, IN, POST, OFF, UNKNOWN }
 
 enum class ScoreSide { HOME, AWAY }
 

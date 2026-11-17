@@ -51,7 +51,7 @@ data class ScoreCard(
  * - Time: within ±3 h of a timed card's start. A card with a bare date, or none (today), is matched on
  *   that day first, ranked by distance from mid-day, and on the day before only when that day has no
  *   match, all in the device time zone.
- * - Best score wins; a tie goes to the closest start.
+ * - Best score wins; two different events tied for the best score give no match (ambiguous).
  * A match is cached per card per day, so a later poll finds the event by id. A miss returns null and is
  * not cached, so the next refresh retries.
  */
@@ -76,11 +76,13 @@ class ScoreMatcher(private val zone: () -> ZoneId = { ZoneId.systemDefault() }) 
         }
         val home = side(card.teams.home)
         val away = side(card.teams.away)
-        val best = if (timed) {
+        // The day before is tried only when the day has no candidate at all, not when it is ambiguous.
+        val pick = if (timed) {
             best(home, away, events, (start!! - WINDOW_MS)..(start + WINDOW_MS), reference = start)
         } else {
             bestOnDay(home, away, events, day, zoneId) ?: bestOnDay(home, away, events, day.minusDays(1), zoneId)
         }
+        val best = pick?.event
         if (best == null) {
             if (BuildConfig.DEBUG) Log.d(TAG, "no match: ${card.teams.home} / ${card.teams.away}")
             return null
@@ -90,20 +92,36 @@ class ScoreMatcher(private val zone: () -> ZoneId = { ZoneId.systemDefault() }) 
         return best
     }
 
-    private fun bestOnDay(home: Side, away: Side, events: List<ScoreSnapshot>, day: LocalDate, zoneId: ZoneId): ScoreSnapshot? {
+    private fun bestOnDay(home: Side, away: Side, events: List<ScoreSnapshot>, day: LocalDate, zoneId: ZoneId): Pick? {
         val from = day.atStartOfDay(zoneId).toInstant().toEpochMilli()
         val until = day.plusDays(1).atStartOfDay(zoneId).toInstant().toEpochMilli()
         val midDay = day.atTime(12, 0).atZone(zoneId).toInstant().toEpochMilli()
         return best(home, away, events, from until until, reference = midDay)
     }
 
-    private fun best(home: Side, away: Side, events: List<ScoreSnapshot>, window: LongRange, reference: Long): ScoreSnapshot? =
-        events.asSequence()
+    /** A window's outcome: [event] is null when two different events tie for the best score. */
+    private class Pick(val event: ScoreSnapshot?)
+
+    /**
+     * The best-scoring event in [window]; null when none matches. When two different events share the
+     * best score (a doubleheader, two meetings on one day, a same-city pair) the pick has no event:
+     * no score beats a wrong one.
+     */
+    private fun best(home: Side, away: Side, events: List<ScoreSnapshot>, window: LongRange, reference: Long): Pick? {
+        val ranked = events.asSequence()
             .filter { event -> event.startMs != null && event.startMs in window }
             .mapNotNull { event -> score(home, away, event)?.let { event to it } }
             .sortedWith(compareByDescending<Pair<ScoreSnapshot, Int>> { it.second }
                 .thenBy { abs(it.first.startMs!! - reference) })
-            .firstOrNull()?.first
+            .toList()
+        val top = ranked.firstOrNull() ?: return null
+        val tied = ranked.drop(1).any { it.second == top.second && it.first.eventId != top.first.eventId }
+        if (tied) {
+            if (BuildConfig.DEBUG) Log.d(TAG, "ambiguous: ${ranked.size} candidates for ${home.base} / ${away.base}")
+            return Pick(null)
+        }
+        return Pick(top.first)
+    }
 
     /** A card side: its base name (qualifier removed) for the suffix rule, equality keys and qualifier. */
     private class Side(val base: String, val keys: Set<String>, val qualifier: String?)
@@ -173,14 +191,22 @@ class ScoreMatcher(private val zone: () -> ZoneId = { ZoneId.systemDefault() }) 
 
         // Trailing qualifiers that tell a team apart: "(W)", "Women", "Women's", " W"; "U21", "(U21)", "[U21]".
         val WOMEN = Regex("""\s*(\((w|women)\)|\bwomen'?s?|\s+w)\s*$""", RegexOption.IGNORE_CASE)
-        val YOUTH = Regex("""\s*([\[(]u(\d{1,2})[\])]|\bu(\d{1,2}))\s*$""", RegexOption.IGNORE_CASE)
+        // "U21", "U-21", "Under 21", "Under-21", "U21s", bracketed or not.
+        val YOUTH = Regex(
+            """\s*([\[(](?:u|under)[- ]?(\d{1,2})s?[\])]|\b(?:u|under)[- ]?(\d{1,2})s?)\s*$""",
+            RegexOption.IGNORE_CASE
+        )
 
-        // League slugs of women's and youth competitions: "eng.w.1", "uefa.wchampions", "usa.nwsl",
-        // "fifa.wwc"; "fifa.friendly_u21", "uefa.euro_u21_qual".
-        val WOMEN_SLUG = Regex("""(^|\.)w(\.|$)|\.wchampions|\.wwc|nwsl|women""")
+        // League slugs of women's competitions, an explicit list checked against ESPN: "eng.w.1",
+        // "can.w.nsl", "usa.w.usl.1", "usa.nwsl", "uefa.wchampions", "fifa.wwc", "uefa.weuro",
+        // "uefa.wnations", "fifa.wworld.u17", "fifa.wworldq.uefa", "esp.copa_de_la_reina". Not
+        // "fifa.world" or "fifa.worldq.*" (men's), nor "wal.1" (Wales).
+        val WOMEN_SLUG = Regex("""(^|\.)w(\.|$)|wchampions|\.wwc|nwsl|\.weuro|\.wnations|\.wworld|copa_de_la_reina|women""")
+        // Youth: "fifa.friendly_u21", "uefa.euro_u21_qual", "fifa.world.u17".
         val YOUTH_SLUG = Regex("""(?<![a-z])u(\d{1,2})(?!\d)""")
 
-        fun fold(text: String): String = Normalizer.normalize(text, Normalizer.Form.NFD).replace(MARKS, "").trim()
+        fun fold(text: String): String =
+            Normalizer.normalize(text.replace('’', '\''), Normalizer.Form.NFD).replace(MARKS, "").trim()
 
         /** "Namibia (W)" → ("Namibia", "w"); "England U21" → ("England", "u21"); "Arsenal" → ("Arsenal", null). */
         fun splitQualifier(name: String): Pair<String, String?> {

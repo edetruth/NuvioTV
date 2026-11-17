@@ -31,7 +31,7 @@ object SportsLiveTeamAliases {
         "netherlands" to listOf("ned", "nl"),
         "namibia" to listOf("nam"),
         "cameroon" to listOf("cmr"),
-        "cote d'ivoire" to listOf("civ", "ivory coast", "côte d'ivoire"),
+        "cote d ivoire" to listOf("civ", "ivory coast", "côte d ivoire"),
         "dr congo" to listOf("cod", "drc", "congo dr"),
         "nigeria" to listOf("nga", "ngr"),
         "egypt" to listOf("egy"),
@@ -47,7 +47,47 @@ object SportsLiveTeamAliases {
         "france" to listOf("fra"),
         "spain" to listOf("esp"),
         "italy" to listOf("ita")
-    )
+    ) + CLUBS
+
+    /**
+     * Soccer clubs: the names addons use for them. Keys and values in normalised form (leading
+     * AC/AS/FC tags and trailing FC dropped, "&" as "and"). Names that mean more than one club or
+     * team are left out ("spurs", "villa", "palace", "galaxy", "atletico"), and "milan" is listed so
+     * "Inter Milan" never matches it by suffix.
+     *
+     * Adapted from the ALIASES table of SportsCatalog in homelessbrian/NuvioPlusIPTV (GPL-3.0, as
+     * this project).
+     */
+    private val CLUBS: List<Pair<String, List<String>>>
+        get() = listOf(
+            "manchester united" to listOf("man utd", "man united", "man u"),
+            "manchester city" to listOf("man city"),
+            "tottenham hotspur" to listOf("tottenham"),
+            "wolverhampton wanderers" to listOf("wolves", "wolverhampton"),
+            "brighton and hove albion" to listOf("brighton"),
+            "west ham united" to listOf("west ham"),
+            "newcastle united" to listOf("newcastle"),
+            "nottingham forest" to listOf("nottm forest", "nottingham f"),
+            "leicester city" to listOf("leicester"),
+            "leeds united" to listOf("leeds"),
+            "sheffield united" to listOf("sheff utd", "sheffield utd"),
+            "sheffield wednesday" to listOf("sheff wed", "sheffield wed"),
+            "queens park rangers" to listOf("qpr"),
+            "west bromwich albion" to listOf("west brom", "wba"),
+            "bournemouth" to emptyList(),
+            "ipswich town" to listOf("ipswich"),
+            "luton town" to listOf("luton"),
+            "paris saint germain" to listOf("psg", "paris sg", "paris st germain"),
+            "internazionale" to listOf("inter milan", "internazionale milano"),
+            "milan" to emptyList(),
+            "bayern munich" to listOf("bayern", "bayern munchen", "bayern münchen"),
+            "borussia dortmund" to listOf("dortmund", "bvb"),
+            "bayer leverkusen" to listOf("leverkusen"),
+            "barcelona" to listOf("barca", "barça"),
+            "inter miami" to emptyList(),
+            "new york red bulls" to listOf("red bulls", "ny red bulls"),
+            "new york city" to listOf("nycfc")
+        )
 
     private val TO_CANONICAL: Map<String, String> = buildMap {
         for ((canonical, aliases) in GROUPS) {

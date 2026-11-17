@@ -13,12 +13,19 @@ object SportsLiveTeams {
     private val AWAY_FIRST = setOf(" at ", " @ ")
     private val LEADING_RANK = Regex("^\\d+\\s+")
     private val WHITESPACE = Regex("\\s+")
-    private val CLUB_SUFFIXES = setOf("fc", "sc", "cf")
+    private val CLUB_SUFFIXES = setOf("fc", "sc", "cf", "afc")
+    // Leading club tags ("AC Milan", "AS Roma", "VfB Stuttgart", "1. FC Köln"): addons and ESPN differ
+    // on them. "SC" and "CA" are left alone ("SC State" is a college).
+    private val CLUB_PREFIXES = setOf("fc", "afc", "cf", "ac", "as", "ss", "ssc", "rc", "cd", "sv", "vfb", "vfl", "tsg")
     // "Celtics [HD]", "76ers (2026-11-10 19:00:05)": a trailing bracketed group is not part of the name.
     private val TRAILING_GROUP = Regex("""\s*[\[(][^\[\]()]*[\])]\s*$""")
 
-    // "(W)", "(Women)", "(U21)", "[U21]": they tell teams apart, so they stay part of the name.
-    private val QUALIFIER = Regex("""\s*(\((w|women|u\d+)\)|\[u\d+])\s*$""", RegexOption.IGNORE_CASE)
+    // "(W)", "(Women)", "(U21)", "[U21]", "U21", "U-21", "Under 21", "U21s": they tell teams apart, so
+    // they stay part of the name. An unbracketed youth form is written "u21" in a normalised name.
+    private val QUALIFIER = Regex(
+        """\s*(\((w|women|u\d+)\)|\[u\d+]|\b(u|under)[- ]?(\d{1,2})s?)\s*$""",
+        RegexOption.IGNORE_CASE
+    )
     private val BRACKET_GROUP = Regex("""\[([^\[\]]*)]""")
 
     /**
@@ -40,24 +47,42 @@ object SportsLiveTeams {
         return null
     }
 
+    /**
+     * A team name for comparison: lowercase; small raised letters made plain ("ᴸᴵⱽᴱ" marks dropped);
+     * "&" read as "and" and other punctuation as a space ("St. Louis" = "St Louis"); leading rank and
+     * club tags/suffixes removed; a (W)/U21 qualifier kept at the end.
+     */
     fun normalise(team: String): String {
-        val cleaned = clean(team).lowercase()
+        val cleaned = SportsLiveSmallLetters.plain(clean(team)).lowercase()
         // A qualifier is set aside so "Arsenal FC (W)" still loses its club suffix: "arsenal (w)".
         val qualifier = QUALIFIER.find(cleaned)
         val base = if (qualifier == null) cleaned else cleaned.substring(0, qualifier.range.first)
-        val tokens = base.trim().replace(LEADING_RANK, "").split(WHITESPACE).toMutableList()
+        val words = base.replace("&", " and ").replace(PUNCTUATION, " ").trim()
+        val tokens = words.replace(LEADING_RANK, "").split(WHITESPACE).filter { it.isNotEmpty() }.toMutableList()
+        while (tokens.size > 1 && tokens.first() in CLUB_PREFIXES) tokens.removeAt(0)
         while (tokens.size > 1 && tokens.last() in CLUB_SUFFIXES) tokens.removeAt(tokens.lastIndex)
-        return (tokens.joinToString(" ") + " " + qualifier?.value?.trim().orEmpty()).trim()
+        return (tokens.joinToString(" ") + " " + qualifier?.let(::qualifierText).orEmpty()).trim()
+    }
+
+    private val PUNCTUATION = Regex("""[^\p{L}\p{N}\s]+""")
+
+    // "(w)" and "[u21]" as written; an unbracketed youth form as "u21".
+    private fun qualifierText(match: MatchResult): String {
+        val age = match.groups[4]?.value
+        return if (age != null) "u$age" else match.value.trim()
     }
 
     fun matches(a: String, b: String): Boolean {
         val x = normalise(a)
         val y = normalise(b)
         if (x.isEmpty() || y.isEmpty() || x in CLUB_SUFFIXES || y in CLUB_SUFFIXES) return false
-        if (x == y || x.endsWith(" $y") || y.endsWith(" $x")) return true
-        // Alias layer: fold "PAK" and "Pakistan" only when BOTH resolve to the same canonical team.
+        if (x == y) return true
+        // Alias layer: fold "PAK" and "Pakistan" only when BOTH resolve to the same canonical team;
+        // two different known teams never match by suffix ("Inter Milan" is not "Milan").
         val canonicalX = canonicalOrNull(x)
-        return canonicalX != null && canonicalX == canonicalOrNull(y)
+        val canonicalY = canonicalOrNull(y)
+        if (canonicalX != null && canonicalY != null) return canonicalX == canonicalY
+        return x.endsWith(" $y") || y.endsWith(" $x")
     }
 
     /**
@@ -76,7 +101,7 @@ object SportsLiveTeams {
         val qualifier = QUALIFIER.find(normalised)
         val base = (if (qualifier == null) normalised else normalised.substring(0, qualifier.range.first)).trim()
         val canonical = SportsLiveTeamAliases.canonical(base) ?: return null
-        return if (qualifier == null) canonical else "$canonical ${qualifier.value.trim()}"
+        return if (qualifier == null) canonical else "$canonical ${qualifierText(qualifier)}"
     }
 
     /**

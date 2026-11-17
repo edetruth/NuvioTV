@@ -41,4 +41,13 @@ class ScoreCadenceTest {
         assertEquals(300_000L, ScoreCadence.nextIntervalMs(ScoreFeed(EspnLeagueMap.NBA, today), emptyList(), listOf(live), 0, null, today, now))
         assertNull(ScoreCadence.nextIntervalMs(ScoreFeed(EspnLeagueMap.NBA, today), emptyList(), listOf(game), 0, null, today, now))
     }
+
+    @Test
+    fun `a game that is off is checked at the upcoming pace, and done games stop`() {
+        val off = game.copy(state = ScoreState.OFF)
+        assertEquals(300_000L, interval(EspnLeagueMap.NBA, listOf(off)))
+        assertEquals(300_000L, interval(EspnLeagueMap.NBA, listOf(off, game)))
+        assertEquals(30_000L, interval(EspnLeagueMap.NBA, listOf(off, live)))
+        assertNull(interval(EspnLeagueMap.NBA, listOf(game)))
+    }
 }

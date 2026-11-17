@@ -24,6 +24,8 @@ data class EspnStatusDto(val type: EspnStatusTypeDto? = null)
 
 @JsonClass(generateAdapter = true)
 data class EspnStatusTypeDto(
+    /** "STATUS_SCHEDULED", "STATUS_FINAL", "STATUS_POSTPONED", "STATUS_CANCELED"... */
+    val name: String? = null,
     val state: String? = null,
     val completed: Boolean? = null,
     val shortDetail: String? = null
