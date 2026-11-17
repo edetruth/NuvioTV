@@ -27,7 +27,7 @@ class EspnScoreProvider internal constructor(
     moshi: Moshi,
     private val baseUrl: String,
     private val today: () -> LocalDate = { LocalDate.now() }
-) : ScoreProvider {
+) : ScoreProvider, GameSummarySource {
 
     @Inject
     constructor(okHttpClient: OkHttpClient, moshi: Moshi) : this(espnClient(okHttpClient), moshi, BASE_URL)
@@ -64,6 +64,34 @@ class EspnScoreProvider internal constructor(
             } catch (e: Exception) {
                 debugLog("${league.path} $date: ${e.javaClass.simpleName}")
                 ScoreboardResult.FAILED
+            }
+        }
+
+    /**
+     * The game summary of [eventId] on [league]'s feed path, as ESPN sent it; null on any failure. Never
+     * stored in the HTTP cache (a summary is ~500 KB): finals have their own trimmed disk copy.
+     */
+    override suspend fun summary(league: EspnLeague, eventId: String): String? =
+        withContext(Dispatchers.IO) {
+            val url = "$baseUrl${league.path}/summary?event=$eventId"
+            try {
+                val request = Request.Builder().url(url)
+                    .cacheControl(CacheControl.Builder().noCache().noStore().build())
+                    .build()
+                client.newCall(request).execute().use { response ->
+                    val body = response.body?.string()
+                    if (!response.isSuccessful || body == null) {
+                        debugLog("${league.path} summary $eventId: HTTP ${response.code}")
+                        null
+                    } else {
+                        body
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                debugLog("${league.path} summary $eventId: ${e.javaClass.simpleName}")
+                null
             }
         }
 
@@ -152,13 +180,7 @@ class EspnScoreProvider internal constructor(
             val homeTeam = toTeam(home) ?: return null
             val awayTeam = toTeam(away) ?: return null
             val type = event.status?.type
-            val state = when {
-                type?.name?.let { OFF_STATUS.containsMatchIn(it.uppercase()) } == true -> ScoreState.OFF
-                type?.state == "pre" -> ScoreState.PRE
-                type?.state == "in" -> ScoreState.IN
-                type?.state == "post" -> ScoreState.POST
-                else -> ScoreState.UNKNOWN
-            }
+            val state = stateOf(type)
             // Before kick-off ESPN sends "0": a score shows only once a game is in play or over.
             val scored = state == ScoreState.IN || state == ScoreState.POST
             val leagueSlug = event.links.orEmpty().firstNotNullOfOrNull { link ->
@@ -220,8 +242,17 @@ class EspnScoreProvider internal constructor(
                 )
             }
 
+        /** A game's [ScoreState] from its ESPN status type (scoreboard and summary alike). */
+        internal fun stateOf(type: EspnStatusTypeDto?): ScoreState = when {
+            type?.name?.let { OFF_STATUS.containsMatchIn(it.uppercase()) } == true -> ScoreState.OFF
+            type?.state == "pre" -> ScoreState.PRE
+            type?.state == "in" -> ScoreState.IN
+            type?.state == "post" -> ScoreState.POST
+            else -> ScoreState.UNKNOWN
+        }
+
         // ESPN writes "2026-11-15T18:00Z" (no seconds); OffsetDateTime reads that and full ISO forms.
-        private fun parseDate(date: String): Long? =
+        internal fun parseDate(date: String): Long? =
             try {
                 OffsetDateTime.parse(date.trim()).toInstant().toEpochMilli()
             } catch (e: Exception) {

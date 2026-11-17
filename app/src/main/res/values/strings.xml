@@ -3657,6 +3657,49 @@
     <string name="sports_live_unfollow">Unfollow %1$s</string>
     <string name="sports_live_my_teams_title">My teams</string>
     <string name="sports_live_my_teams_empty">Long-press a game to follow a team</string>
+    <!-- Game page (#18): ESPN stats for one game; Follow from Results and the Game page (#54). -->
+    <string name="sports_live_game_stats">Game stats</string>
+    <string name="sports_live_results_menu_title">%1$s at %2$s</string>
+    <string name="sports_live_game_watch_replay">Watch replay</string>
+    <string name="sports_live_game_following">Following %1$s</string>
+    <string name="sports_live_game_reveal">Reveal score and stats</string>
+    <string name="sports_live_game_hidden">Score and stats are hidden</string>
+    <string name="sports_live_game_section_game">Game</string>
+    <string name="sports_live_game_section_box_score">Box Score</string>
+    <string name="sports_live_game_section_standings">Standings</string>
+    <string name="sports_live_game_section_highlights">Highlights</string>
+    <string name="sports_live_game_top_performers">Top performers</string>
+    <string name="sports_live_game_team_stats">Team stats</string>
+    <string name="sports_live_game_info_separator">" · "</string>
+    <string name="sports_live_game_unavailable">Stats are unavailable for this game</string>
+    <string name="sports_live_game_no_stats">No stats for this game yet</string>
+    <string name="sports_live_game_percent">%1$s%%</string>
+    <string name="sports_live_game_performer_stat">%1$s %2$s</string>
+    <string name="sports_live_game_team">Team</string>
+    <string name="sports_live_game_totals">Totals</string>
+    <string name="sports_live_game_duration">%1$d:%2$02d</string>
+    <string name="sports_live_game_highlights_note">Highlight titles from ESPN, for information</string>
+    <string name="sports_live_game_keys">← → sections · ↑ ↓ scroll · Back to return</string>
+    <string name="sports_live_stat_fg_pct" formatted="false">Field goal %</string>
+    <string name="sports_live_stat_three_pct" formatted="false">3-point %</string>
+    <string name="sports_live_stat_rebounds">Rebounds</string>
+    <string name="sports_live_stat_assists">Assists</string>
+    <string name="sports_live_stat_turnovers">Turnovers</string>
+    <string name="sports_live_stat_total_yards">Total yards</string>
+    <string name="sports_live_stat_passing_yards">Passing yards</string>
+    <string name="sports_live_stat_rushing_yards">Rushing yards</string>
+    <string name="sports_live_stat_first_downs">First downs</string>
+    <string name="sports_live_stat_possession_time">Time of possession</string>
+    <string name="sports_live_stat_shots">Shots</string>
+    <string name="sports_live_stat_faceoff_pct" formatted="false">Faceoff %</string>
+    <string name="sports_live_stat_power_play_goals">Power play goals</string>
+    <string name="sports_live_stat_hits">Hits</string>
+    <string name="sports_live_stat_blocked_shots">Blocked shots</string>
+    <string name="sports_live_stat_penalty_minutes">Penalty minutes</string>
+    <string name="sports_live_stat_possession">Possession</string>
+    <string name="sports_live_stat_shots_on_target">Shots on target</string>
+    <string name="sports_live_stat_corners">Corners</string>
+    <string name="sports_live_stat_fouls">Fouls</string>
     <string name="sports_live_refresh">Refresh</string>
     <string name="sports_live_live_pill">LIVE</string>
     <string name="sports_live_time_tba">Time TBA</string>

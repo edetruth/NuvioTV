@@ -8,7 +8,9 @@ import com.nuvio.tv.core.sportslive.scores.ResultDay
 import com.nuvio.tv.core.sportslive.scores.ResultRow
 import com.nuvio.tv.core.sportslive.scores.ResultsLoad
 import com.nuvio.tv.core.sportslive.scores.ResultsRepository
+import com.nuvio.tv.core.sportslive.scores.ScoreSide
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
+import com.nuvio.tv.core.sportslive.scores.TeamFollows
 import com.nuvio.tv.core.sportslive.scores.SportsResults
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import com.nuvio.tv.domain.model.SportsLiveItem
@@ -24,6 +26,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -86,7 +89,7 @@ data class SportsLiveResultsUiState(
 @HiltViewModel
 class SportsLiveResultsViewModel @Inject constructor(
     private val results: ResultsRepository,
-    prefs: SportsLivePreferencesDataStore
+    private val prefs: SportsLivePreferencesDataStore
 ) : ViewModel() {
 
     private data class Selection(val sport: MySport? = null, val league: String? = null, val expanded: Set<String> = emptySet())
@@ -200,6 +203,24 @@ class SportsLiveResultsViewModel @Inject constructor(
 
     /** The row now focused (null when none): under Hide until focused its score shows after 1 s. */
     fun onRowFocus(eventId: String?) = reveal.onFocus(eventId)
+
+    /**
+     * Hold OK on a row → Follow / Following ‹team› (#54): follows [side]'s team with ESPN's name, a sport
+     * word and its ESPN id ([TeamFollows.teamToFollow]), or unfollows every followed team that is that
+     * side. The day reloads (from memory) with the row under YOUR TEAMS, and Live Now / Upcoming star it.
+     */
+    fun toggleFollow(row: ResultRow, side: ScoreSide) {
+        val event = row.event
+        val team = if (side == ScoreSide.HOME) event.home else event.away
+        viewModelScope.launch {
+            val matching = TeamFollows.followersOf(prefs.followedTeams.first(), event, team)
+            if (matching.isEmpty()) {
+                TeamFollows.teamToFollow(event, team)?.let { prefs.follow(it) }
+            } else {
+                matching.forEach { prefs.unfollow(it) }
+            }
+        }
+    }
 
     /** The section's Replays tab items, for opening a result's replay. */
     fun setReplays(items: List<SportsLiveItem>) {
@@ -322,6 +343,13 @@ internal class ResultSpoilerReveal(private val scope: CoroutineScope, private va
         }
     }
 }
+
+/**
+ * OK on a Results row: the Game page for its event (#18), carrying the row's strict replay match (Watch
+ * replay) and whether its score already shows here (Hide until focused: a revealed row opens revealed).
+ */
+internal fun SportsLiveResultsUiState.gameRequestFor(row: ResultRow): SportsLiveGameRequest =
+    SportsLiveGameRequest(event = row.event, replay = replays[row.key], revealed = showsScore(row))
 
 /** A result row's list key. */
 internal val ResultRow.key: String get() = event.eventId

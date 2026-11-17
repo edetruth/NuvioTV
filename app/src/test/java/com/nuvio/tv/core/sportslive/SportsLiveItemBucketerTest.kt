@@ -835,8 +835,9 @@ class SportsLiveItemBucketerTest {
 
     @Test
     fun `a merged card is followed when any source is`() {
-        // The primary's sport differs from the followed team's; the alternate's is unknown, so only it matches.
-        val a = event("a", "a1", "Lions vs Patriots", "LIVE", listOf("NFL"))
+        // The primary's sport differs from the followed team's (a soccer genre is not American football,
+        // while "NFL" would now agree with it); the alternate's is unknown, so only it matches.
+        val a = event("a", "a1", "Lions vs Patriots", "LIVE", listOf("Soccer"))
         val b = event("b", "b1", "Detroit Lions vs New England Patriots", "LIVE")
         val merged = SportsLiveItemBucketer.merge(listOf(a, b), listOf("a", "b")).single()
         val followed = listOf(FollowedTeam("Patriots", "American Football"))

@@ -116,6 +116,20 @@ class SportsLivePreferencesDataStoreTest {
     }
 
     @Test
+    fun `a team followed from ESPN keeps its id, abbreviation and league, old name-only follows still read`() = runTest {
+        profile1Store.updateData {
+            mutablePreferencesOf(stringPreferencesKey("sports_live_followed_teams") to """[{"name":"Arsenal","sport":"Soccer"}]""")
+        }
+        val store = SportsLivePreferencesDataStore(factory, profiles)
+        val celtics = FollowedTeam("Boston Celtics", "Basketball", espnId = "2", abbreviation = "BOS", league = "basketball/nba")
+        store.follow(celtics)
+        assertEquals(listOf(FollowedTeam("Arsenal", "Soccer"), celtics), store.followedTeams.first())
+
+        store.unfollow(celtics)
+        assertEquals(listOf(FollowedTeam("Arsenal", "Soccer")), store.followedTeams.first())
+    }
+
+    @Test
     fun `followed teams are stored per profile as plain maps`() = runTest {
         val store = SportsLivePreferencesDataStore(factory, profiles)
         store.follow(FollowedTeam("Celtics", "Basketball"))

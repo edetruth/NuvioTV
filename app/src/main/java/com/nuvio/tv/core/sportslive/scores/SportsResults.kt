@@ -38,9 +38,6 @@ object SportsResults {
         return RelevantLeagues(effective.feeds().distinct(), effective)
     }
 
-    private fun leaguesOfTeam(team: FollowedTeam): List<EspnLeague> =
-        team.sport?.let { EspnLeagueMap.leaguesFor(sport = it, hints = emptyList()) }.orEmpty()
-
     /**
      * The rows for one day: finished games only (completed `post`; postponed, cancelled, live and
      * upcoming games are left out), each event once (a competition feed's copy before `soccer/all`'s);
@@ -64,30 +61,18 @@ object SportsResults {
      * True when [team] played in [event]: its name is either side by strong equality with the same
      * (W)/U21 qualifier ([ScoreMatcher.isStrongSide]; never a city or suffix match; the competition
      * name stands in for an unknown slug), and the event is in one of the team's sports
-     * ([sportsOf]). A followed soccer "Rangers" never stars the NHL or MLB Rangers.
+     * ([sportsOf]). A followed soccer "Rangers" never stars the NHL or MLB Rangers. A team followed from
+     * ESPN matches by its ESPN id ([TeamFollows.followsSide]).
      */
-    fun follows(team: FollowedTeam, event: ScoreSnapshot): Boolean {
-        val sports = sportsOf(team)
-        if (sports != null && event.league.sport !in sports) return false
-        return listOf(event.home, event.away).any { side ->
-            ScoreMatcher.isStrongSide(team.name, side, event.leagueSlug, event.leagueName)
-        }
-    }
+    fun follows(team: FollowedTeam, event: ScoreSnapshot): Boolean =
+        TeamFollows.followsSide(team, event, event.home) || TeamFollows.followsSide(team, event, event.away)
 
     /**
      * The ESPN sports [team] can play: those of the feeds its sport routes to. A team routed only to
      * `soccer/all` plays soccer, or soccer and American football when its sport says "Football" (an
      * addon's "Football" may be either). Null when its sport routes nowhere (no sport given).
      */
-    internal fun sportsOf(team: FollowedTeam): Set<String>? {
-        val leagues = leaguesOfTeam(team)
-        if (leagues.isEmpty()) return null
-        val sports = leagues.mapTo(HashSet()) { it.sport }
-        if (leagues.all { it == EspnLeagueMap.SOCCER_ALL } && team.sport.orEmpty().contains("football", ignoreCase = true)) {
-            sports += EspnLeagueMap.NFL.sport
-        }
-        return sports
-    }
+    internal fun sportsOf(team: FollowedTeam): Set<String>? = team.sport?.let(EspnLeagueMap::espnSportsOf)
 
     /**
      * A row's league section: the ESPN league id (one per competition, so men's, women's and youth

@@ -114,6 +114,19 @@ object EspnLeagueMap {
         return if (college && leagues.none { it in COLLEGE_FEEDS }) emptyList() else leagues
     }
 
+    /**
+     * The ESPN sports a stored or addon [sport] word can mean: those of the feeds it routes to ("NBA" and
+     * "Basketball" → basketball). A word routed only to `soccer/all` that says "Football" may also be
+     * American football. Null when it routes nowhere (unknown or excluded).
+     */
+    fun espnSportsOf(sport: String): Set<String>? {
+        val leagues = leaguesFor(sport = sport, hints = emptyList())
+        if (leagues.isEmpty()) return null
+        val sports = leagues.mapTo(HashSet()) { it.sport }
+        if (leagues.all { it == SOCCER_ALL } && sport.contains("football", ignoreCase = true)) sports += NFL.sport
+        return sports
+    }
+
     // Text by text (sport, title, genres, catalog): the first text naming a competition decides.
     private fun firstCompetition(texts: List<String>): List<EspnLeague>? {
         for (text in texts) {

@@ -153,7 +153,7 @@ class SportsLivePreferencesDataStore @Inject constructor(
     suspend fun follow(team: FollowedTeam) {
         val name = team.name.trim()
         if (name.isEmpty()) return
-        val followed = FollowedTeam(name, team.sport?.trim()?.takeIf { it.isNotEmpty() })
+        val followed = team.copy(name = name, sport = team.sport?.trim()?.takeIf { it.isNotEmpty() })
         store().edit { prefs ->
             val current = decodeFollowed(prefs[followedTeamsKey])
             if (current.none { it.sameAs(followed) }) prefs[followedTeamsKey] = encodeFollowed(current + followed)
@@ -223,14 +223,24 @@ class SportsLivePreferencesDataStore @Inject constructor(
         name.equals(other.name, ignoreCase = true) && (sport ?: "").equals(other.sport ?: "", ignoreCase = true)
 
     private fun encodeFollowed(teams: List<FollowedTeam>): String =
-        gson.toJson(teams.map { mapOf("name" to it.name, "sport" to it.sport) })
+        gson.toJson(
+            teams.map {
+                mapOf("name" to it.name, "sport" to it.sport, "espnId" to it.espnId, "abbreviation" to it.abbreviation, "league" to it.league)
+            }
+        )
 
     private fun decodeFollowed(json: String?): List<FollowedTeam> {
         if (json.isNullOrBlank()) return emptyList()
         return runCatching {
             gson.fromJson<List<Map<String, String?>?>?>(json, followedType).orEmpty().mapNotNull { stored ->
                 val name = stored?.get("name")?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-                FollowedTeam(name, stored["sport"]?.takeIf { it.isNotBlank() })
+                FollowedTeam(
+                    name = name,
+                    sport = stored["sport"]?.takeIf { it.isNotBlank() },
+                    espnId = stored["espnId"]?.takeIf { it.isNotBlank() },
+                    abbreviation = stored["abbreviation"]?.takeIf { it.isNotBlank() },
+                    league = stored["league"]?.takeIf { it.isNotBlank() }
+                )
             }
         }.getOrDefault(emptyList())
     }

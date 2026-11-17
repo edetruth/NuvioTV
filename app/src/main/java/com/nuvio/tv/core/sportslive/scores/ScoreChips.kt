@@ -71,6 +71,16 @@ object ScoreChips {
         }
     }
 
+    /**
+     * [snapshot] when it is [item]'s strict match with the card's sides on it one way round only (what a
+     * chip needs), else null. Only such a game offers "Game stats": a wrong game is worse than none.
+     */
+    fun matchedEvent(item: SportsLiveItem, snapshot: ScoreSnapshot?): ScoreSnapshot? {
+        val event = snapshot ?: return null
+        val (first, second) = orderedSides(item) ?: return null
+        return event.takeIf { ScoreMatcher.firstIsHome(first, second, it) != null }
+    }
+
     fun text(chip: ScoreChip, strings: ScoreChipStrings): String = when (chip) {
         is ScoreChip.Live -> {
             val score = chip.score?.let { String.format(strings.score, it.first, it.second) }

@@ -1,0 +1,1787 @@
+{
+ "header": {
+  "id": "401892726",
+  "competitions": [
+   {
+    "id": "401892726",
+    "date": "2026-11-17T00:30Z",
+    "status": {
+     "type": {
+      "name": "STATUS_FINAL",
+      "state": "post",
+      "completed": true,
+      "description": "Final",
+      "detail": "Final",
+      "shortDetail": "Final"
+     }
+    },
+    "competitors": [
+     {
+      "id": "13",
+      "homeAway": "home",
+      "winner": true,
+      "score": "3",
+      "linescores": [
+       {
+        "displayValue": "0"
+       },
+       {
+        "displayValue": "2"
+       },
+       {
+        "displayValue": "1"
+       }
+      ],
+      "record": [
+       {
+        "type": "total",
+        "summary": "13-8-1"
+       },
+       {
+        "type": "home",
+        "summary": "9-2-0"
+       }
+      ],
+      "team": {
+       "id": "13",
+       "abbreviation": "NYR",
+       "displayName": "New York Rangers",
+       "name": "Rangers",
+       "location": "New York",
+       "logos": [
+        {
+         "href": "https://a.espncdn.com/i/teamlogos/nhl/500/nyr.png"
+        }
+       ]
+      }
+     },
+     {
+      "id": "10",
+      "homeAway": "away",
+      "winner": false,
+      "score": "1",
+      "linescores": [
+       {
+        "displayValue": "0"
+       },
+       {
+        "displayValue": "1"
+       },
+       {
+        "displayValue": "0"
+       }
+      ],
+      "record": [
+       {
+        "type": "total",
+        "summary": "12-5-4"
+       },
+       {
+        "type": "road",
+        "summary": "7-2-1"
+       }
+      ],
+      "team": {
+       "id": "10",
+       "abbreviation": "MTL",
+       "displayName": "Montreal Canadiens",
+       "name": "Canadiens",
+       "location": "Montreal",
+       "logos": [
+        {
+         "href": "https://a.espncdn.com/i/teamlogos/nhl/500/mtl.png"
+        }
+       ]
+      }
+     }
+    ]
+   }
+  ],
+  "league": {
+   "name": "National Hockey League",
+   "abbreviation": "NHL",
+   "slug": "nhl"
+  }
+ },
+ "gameInfo": {
+  "venue": {
+   "fullName": "Madison Square Garden",
+   "address": {
+    "city": "New York",
+    "state": "NY",
+    "country": "USA"
+   }
+  }
+ },
+ "boxscore": {
+  "teams": [
+   {
+    "homeAway": "away",
+    "team": {
+     "id": "10",
+     "abbreviation": "MTL",
+     "displayName": "Montreal Canadiens",
+     "shortDisplayName": "Canadiens",
+     "name": "Canadiens",
+     "location": "Montreal",
+     "logo": "https://a.espncdn.com/i/teamlogos/nhl/500/mtl.png"
+    },
+    "statistics": [
+     {
+      "name": "blockedShots",
+      "label": "Blocked Shots",
+      "displayValue": "13"
+     },
+     {
+      "name": "hits",
+      "label": "Hits",
+      "displayValue": "28"
+     },
+     {
+      "name": "takeaways",
+      "label": "Takeaways",
+      "displayValue": "4"
+     },
+     {
+      "name": "shotsTotal",
+      "label": "Shots",
+      "displayValue": "25"
+     },
+     {
+      "name": "powerPlayGoals",
+      "label": "Power Play Goals",
+      "displayValue": "0"
+     },
+     {
+      "name": "powerPlayOpportunities",
+      "label": "Power Play Opportunities",
+      "displayValue": "4"
+     },
+     {
+      "name": "powerPlayPct",
+      "label": "Power Play Percentage",
+      "displayValue": "0.0"
+     },
+     {
+      "name": "shortHandedGoals",
+      "label": "Short Handed Goals",
+      "displayValue": "0"
+     },
+     {
+      "name": "shootoutGoals",
+      "label": "Shootout Goals",
+      "displayValue": "0"
+     },
+     {
+      "name": "faceoffsWon",
+      "label": "Faceoffs Won",
+      "displayValue": "32"
+     },
+     {
+      "name": "faceoffPercent",
+      "label": "Faceoff Win Percent",
+      "displayValue": "53.3"
+     },
+     {
+      "name": "giveaways",
+      "label": "Giveaways",
+      "displayValue": "8"
+     },
+     {
+      "name": "penalties",
+      "label": "Total Penalties",
+      "displayValue": "4"
+     },
+     {
+      "name": "penaltyMinutes",
+      "label": "Penalty Minutes",
+      "displayValue": "8"
+     }
+    ]
+   },
+   {
+    "homeAway": "home",
+    "team": {
+     "id": "13",
+     "abbreviation": "NYR",
+     "displayName": "New York Rangers",
+     "shortDisplayName": "Rangers",
+     "name": "Rangers",
+     "location": "New York",
+     "logo": "https://a.espncdn.com/i/teamlogos/nhl/500/nyr.png"
+    },
+    "statistics": [
+     {
+      "name": "blockedShots",
+      "label": "Blocked Shots",
+      "displayValue": "16"
+     },
+     {
+      "name": "hits",
+      "label": "Hits",
+      "displayValue": "23"
+     },
+     {
+      "name": "takeaways",
+      "label": "Takeaways",
+      "displayValue": "1"
+     },
+     {
+      "name": "shotsTotal",
+      "label": "Shots",
+      "displayValue": "26"
+     },
+     {
+      "name": "powerPlayGoals",
+      "label": "Power Play Goals",
+      "displayValue": "0"
+     },
+     {
+      "name": "powerPlayOpportunities",
+      "label": "Power Play Opportunities",
+      "displayValue": "3"
+     },
+     {
+      "name": "powerPlayPct",
+      "label": "Power Play Percentage",
+      "displayValue": "0.0"
+     },
+     {
+      "name": "shortHandedGoals",
+      "label": "Short Handed Goals",
+      "displayValue": "1"
+     },
+     {
+      "name": "shootoutGoals",
+      "label": "Shootout Goals",
+      "displayValue": "0"
+     },
+     {
+      "name": "faceoffsWon",
+      "label": "Faceoffs Won",
+      "displayValue": "28"
+     },
+     {
+      "name": "faceoffPercent",
+      "label": "Faceoff Win Percent",
+      "displayValue": "46.7"
+     },
+     {
+      "name": "giveaways",
+      "label": "Giveaways",
+      "displayValue": "17"
+     },
+     {
+      "name": "penalties",
+      "label": "Total Penalties",
+      "displayValue": "5"
+     },
+     {
+      "name": "penaltyMinutes",
+      "label": "Penalty Minutes",
+      "displayValue": "10"
+     }
+    ]
+   }
+  ],
+  "players": [
+   {
+    "team": {
+     "id": "10",
+     "abbreviation": "MTL",
+     "displayName": "Montreal Canadiens",
+     "shortDisplayName": "Canadiens",
+     "name": "Canadiens",
+     "location": "Montreal",
+     "logo": "https://a.espncdn.com/i/teamlogos/nhl/500/mtl.png"
+    },
+    "statistics": [
+     {
+      "name": "forwards",
+      "labels": [
+       "BS",
+       "HT",
+       "TK",
+       "+/-",
+       "TOI",
+       "PPTOI",
+       "SHTOI",
+       "ESTOI",
+       "SHFT",
+       "G",
+       "YTDG",
+       "A",
+       "S",
+       "SM",
+       "SOG",
+       "FW",
+       "FL",
+       "FO%",
+       "GV",
+       "PN",
+       "PIM"
+      ],
+      "athletes": [
+       {
+        "stats": [
+         "1",
+         "3",
+         "0",
+         "0",
+         "9:00",
+         "0:34",
+         "0:00",
+         "8:26",
+         "12",
+         "0",
+         "1",
+         "0",
+         "0",
+         "0",
+         "0",
+         "0",
+         "0",
+         "0.0",
+         "0",
+         "1",
+         "2"
+        ],
+        "athlete": {
+         "id": "5080202",
+         "displayName": "Owen Beck",
+         "shortName": "O. Beck",
+         "position": {
+          "abbreviation": "C"
+         }
+        }
+       },
+       {
+        "stats": [
+         "0",
+         "3",
+         "0",
+         "1",
+         "18:43",
+         "4:56",
+         "0:00",
+         "13:47",
+         "18",
+         "0",
+         "6",
+         "0",
+         "1",
+         "0",
+         "0",
+         "0",
+         "0",
+         "0.0",
+         "0",
+         "0",
+         "0"
+        ],
+        "athlete": {
+         "id": "4874734",
+         "displayName": "Zack Bolduc",
+         "shortName": "Z. Bolduc",
+         "position": {
+          "abbreviation": "RW"
+         }
+        }
+       },
+       {
+        "stats": [
+         "0",
+         "1",
+         "2",
+         "-1",
+         "22:11",
+         "5:40",
+         "0:00",
+         "16:31",
+         "21",
+         "0",
+         "12",
+         "0",
+         "2",
+         "0",
+         "0",
+         "0",
+         "0",
+         "0.0",
+         "1",
+         "0",
+         "0"
+        ],
+        "athlete": {
+         "id": "4565236",
+         "displayName": "Cole Caufield",
+         "shortName": "C. Caufield",
+         "position": {
+          "abbreviation": "RW"
+         }
+        }
+       },
+       {
+        "stats": [
+         "0",
+         "0",
+         "0",
+         "-2",
+         "12:57",
+         "1:46",
+         "0:59",
+         "10:12",
+         "18",
+         "0",
+         "2",
+         "0",
+         "0",
+         "0",
+         "0",
+         "0",
+         "1",
+         "0.0",
+         "1",
+         "0",
+         "0"
+        ],
+        "athlete": {
+         "id": "4565224",
+         "displayName": "Kirby Dach",
+         "shortName": "K. Dach",
+         "position": {
+          "abbreviation": "C"
+         }
+        }
+       },
+       {
+        "stats": [
+         "0",
+         "0",
+         "0",
+         "1",
+         "18:12",
+         "1:23",
+         "2:04",
+         "14:45",
+         "20",
+         "1",
+         "3",
+         "0",
+         "5",
+         "1",
+         "0",
+         "9",
+         "8",
+         "52.9",
+         "0",
+         "0",
+         "0"
+        ],
+        "athlete": {
+         "id": "2562602",
+         "displayName": "Phillip Danault",
+         "shortName": "P. Danault",
+         "position": {
+          "abbreviation": "C"
+         }
+        }
+       }
+      ]
+     },
+     {
+      "name": "defenses",
+      "labels": [
+       "BS",
+       "HT",
+       "TK",
+       "+/-",
+       "TOI",
+       "PPTOI",
+       "SHTOI",
+       "ESTOI",
+       "SHFT",
+       "G",
+       "YTDG",
+       "A",
+       "S",
+       "SM",
+       "SOG",
+       "FW",
+       "FL",
+       "FO%",
+       "GV",
+       "PN",
+       "PIM"
+      ],
+      "athletes": [
+       {
+        "stats": [
+         "1",
+         "2",
+         "0",
+         "0",
+         "17:18",
+         "0:00",
+         "3:21",
+         "13:57",
+         "21",
+         "0",
+         "1",
+         "0",
+         "2",
+         "0",
+         "0",
+         "0",
+         "0",
+         "0.0",
+         "0",
+         "0",
+         "0"
+        ],
+        "athlete": {
+         "id": "3942064",
+         "displayName": "Alexandre Carrier",
+         "shortName": "A. Carrier",
+         "position": {
+          "abbreviation": "D"
+         }
+        }
+       },
+       {
+        "stats": [
+         "1",
+         "1",
+         "0",
+         "-2",
+         "20:10",
+         "1:10",
+         "0:00",
+         "19:00",
+         "27",
+         "0",
+         "0",
+         "1",
+         "1",
+         "0",
+         "0",
+         "0",
+         "0",
+         "0.0",
+         "1",
+         "1",
+         "2"
+        ],
+        "athlete": {
+         "id": "4352732",
+         "displayName": "Noah Dobson",
+         "shortName": "N. Dobson",
+         "position": {
+          "abbreviation": "D"
+         }
+        }
+       },
+       {
+        "stats": [
+         "0",
+         "1",
+         "0",
+         "0",
+         "13:29",
+         "0:31",
+         "0:21",
+         "12:37",
+         "18",
+         "0",
+         "1",
+         "0",
+         "0",
+         "1",
+         "0",
+         "0",
+         "0",
+         "0.0",
+         "0",
+         "0",
+         "0"
+        ],
+        "athlete": {
+         "id": "5188450",
+         "displayName": "Adam Engstrom",
+         "shortName": "A. Engstrom",
+         "position": {
+          "abbreviation": "D"
+         }
+        }
+       },
+       {
+        "stats": [
+         "2",
+         "2",
+         "1",
+         "0",
+         "19:37",
+         "0:15",
+         "3:23",
+         "15:59",
+         "23",
+         "0",
+         "2",
+         "0",
+         "1",
+         "0",
+         "0",
+         "0",
+         "0",
+         "0.0",
+         "0",
+         "0",
+         "0"
+        ],
+        "athlete": {
+         "id": "4697399",
+         "displayName": "Kaiden Guhle",
+         "shortName": "K. Guhle",
+         "position": {
+          "abbreviation": "D"
+         }
+        }
+       },
+       {
+        "stats": [
+         "4",
+         "2",
+         "1",
+         "-1",
+         "28:38",
+         "6:18",
+         "0:00",
+         "22:20",
+         "25",
+         "0",
+         "3",
+         "1",
+         "1",
+         "1",
+         "0",
+         "0",
+         "0",
+         "0.0",
+         "1",
+         "0",
+         "0"
+        ],
+        "athlete": {
+         "id": "5080230",
+         "displayName": "Lane Hutson",
+         "shortName": "L. Hutson",
+         "position": {
+          "abbreviation": "D"
+         }
+        }
+       }
+      ]
+     },
+     {
+      "name": "skaters",
+      "labels": [
+       "BS",
+       "HT",
+       "TK",
+       "+/-",
+       "TOI",
+       "PPTOI",
+       "SHTOI",
+       "ESTOI",
+       "SHFT",
+       "G",
+       "YTDG",
+       "A",
+       "S",
+       "SM",
+       "SOG",
+       "FW",
+       "FL",
+       "FO%",
+       "GV",
+       "PN",
+       "PIM"
+      ],
+      "athletes": []
+     },
+     {
+      "name": "goalies",
+      "labels": [
+       "GA",
+       "SA",
+       "SOS",
+       "SOSA",
+       "SV",
+       "SV%",
+       "ESSV",
+       "PPSV",
+       "SHSV",
+       "TOI",
+       "YTDG",
+       "PIM"
+      ],
+      "athletes": [
+       {
+        "stats": [
+         "3",
+         "26",
+         "0",
+         "0",
+         "23",
+         ".885",
+         "21",
+         "2",
+         "0",
+         "56:05",
+         "0",
+         "2"
+        ],
+        "athlete": {
+         "id": "5188437",
+         "displayName": "Jacob Fowler",
+         "shortName": "J. Fowler",
+         "position": {
+          "abbreviation": "G"
+         }
+        }
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "team": {
+     "id": "13",
+     "abbreviation": "NYR",
+     "displayName": "New York Rangers",
+     "shortDisplayName": "Rangers",
+     "name": "Rangers",
+     "location": "New York",
+     "logo": "https://a.espncdn.com/i/teamlogos/nhl/500/nyr.png"
+    },
+    "statistics": [
+     {
+      "name": "forwards",
+      "labels": [
+       "BS",
+       "HT",
+       "TK",
+       "+/-",
+       "TOI",
+       "PPTOI",
+       "SHTOI",
+       "ESTOI",
+       "SHFT",
+       "G",
+       "YTDG",
+       "A",
+       "S",
+       "SM",
+       "SOG",
+       "FW",
+       "FL",
+       "FO%",
+       "GV",
+       "PN",
+       "PIM"
+      ],
+      "athletes": [
+       {
+        "stats": [
+         "0",
+         "1",
+         "0",
+         "1",
+         "10:56",
+         "0:12",
+         "0:00",
+         "10:44",
+         "14",
+         "0",
+         "7",
+         "0",
+         "0",
+         "0",
+         "0",
+         "0",
+         "0",
+         "0.0",
+         "0",
+         "0",
+         "0"
+        ],
+        "athlete": {
+         "id": "3042095",
+         "displayName": "Oliver Bjorkstrand",
+         "shortName": "O. Bjorkstrand",
+         "position": {
+          "abbreviation": "RW"
+         }
+        }
+       },
+       {
+        "stats": [
+         "1",
+         "1",
+         "0",
+         "-1",
+         "8:36",
+         "0:00",
+         "0:00",
+         "8:36",
+         "13",
+         "0",
+         "2",
+         "0",
+         "1",
+         "0",
+         "0",
+         "0",
+         "1",
+         "0.0",
+         "0",
+         "0",
+         "0"
+        ],
+        "athlete": {
+         "id": "5188348",
+         "displayName": "Jaroslav Chmelar",
+         "shortName": "J. Chmelar",
+         "position": {
+          "abbreviation": "RW"
+         }
+        }
+       },
+       {
+        "stats": [
+         "1",
+         "1",
+         "0",
+         "2",
+         "18:22",
+         "0:33",
+         "2:35",
+         "15:14",
+         "23",
+         "2",
+         "6",
+         "0",
+         "4",
+         "1",
+         "0",
+         "0",
+         "0",
+         "0.0",
+         "2",
+         "1",
+         "2"
+        ],
+        "athlete": {
+         "id": "4697468",
+         "displayName": "Will Cuylle",
+         "shortName": "W. Cuylle",
+         "position": {
+          "abbreviation": "LW"
+         }
+        }
+       },
+       {
+        "stats": [
+         "1",
+         "2",
+         "0",
+         "-1",
+         "7:34",
+         "0:00",
+         "0:00",
+         "7:34",
+         "11",
+         "0",
+         "2",
+         "0",
+         "1",
+         "0",
+         "0",
+         "1",
+         "3",
+         "25.0",
+         "0",
+         "0",
+         "0"
+        ],
+        "athlete": {
+         "id": "3942352",
+         "displayName": "Glenn Gawdin",
+         "shortName": "G. Gawdin",
+         "position": {
+          "abbreviation": "C"
+         }
+        }
+       },
+       {
+        "stats": [
+         "0",
+         "0",
+         "0",
+         "1",
+         "16:55",
+         "0:36",
+         "2:26",
+         "13:53",
+         "22",
+         "0",
+         "7",
+         "0",
+         "2",
+         "1",
+         "0",
+         "0",
+         "1",
+         "0.0",
+         "0",
+         "1",
+         "2"
+        ],
+        "athlete": {
+         "id": "4588750",
+         "displayName": "Tye Kartye",
+         "shortName": "T. Kartye",
+         "position": {
+          "abbreviation": "LW"
+         }
+        }
+       }
+      ]
+     },
+     {
+      "name": "defenses",
+      "labels": [
+       "BS",
+       "HT",
+       "TK",
+       "+/-",
+       "TOI",
+       "PPTOI",
+       "SHTOI",
+       "ESTOI",
+       "SHFT",
+       "G",
+       "YTDG",
+       "A",
+       "S",
+       "SM",
+       "SOG",
+       "FW",
+       "FL",
+       "FO%",
+       "GV",
+       "PN",
+       "PIM"
+      ],
+      "athletes": [
+       {
+        "stats": [
+         "5",
+         "1",
+         "0",
+         "1",
+         "23:28",
+         "3:22",
+         "3:31",
+         "16:35",
+         "27",
+         "0",
+         "2",
+         "1",
+         "1",
+         "0",
+         "0",
+         "0",
+         "0",
+         "0.0",
+         "2",
+         "0",
+         "0"
+        ],
+        "athlete": {
+         "id": "4197146",
+         "displayName": "Adam Fox",
+         "shortName": "A. Fox",
+         "position": {
+          "abbreviation": "D"
+         }
+        }
+       },
+       {
+        "stats": [
+         "1",
+         "2",
+         "0",
+         "0",
+         "21:13",
+         "0:30",
+         "3:48",
+         "16:55",
+         "24",
+         "0",
+         "1",
+         "0",
+         "1",
+         "0",
+         "0",
+         "0",
+         "0",
+         "0.0",
+         "0",
+         "0",
+         "0"
+        ],
+        "athlete": {
+         "id": "3942292",
+         "displayName": "Vladislav Gavrikov",
+         "shortName": "V. Gavrikov",
+         "position": {
+          "abbreviation": "D"
+         }
+        }
+       },
+       {
+        "stats": [
+         "1",
+         "1",
+         "0",
+         "1",
+         "13:30",
+         "0:00",
+         "0:00",
+         "13:30",
+         "16",
+         "1",
+         "1",
+         "0",
+         "3",
+         "0",
+         "0",
+         "0",
+         "0",
+         "0.0",
+         "1",
+         "0",
+         "0"
+        ],
+        "athlete": {
+         "id": "4874882",
+         "displayName": "Scott Morrow",
+         "shortName": "S. Morrow",
+         "position": {
+          "abbreviation": "D"
+         }
+        }
+       },
+       {
+        "stats": [
+         "1",
+         "2",
+         "1",
+         "1",
+         "23:26",
+         "0:07",
+         "3:45",
+         "19:34",
+         "25",
+         "0",
+         "0",
+         "1",
+         "2",
+         "0",
+         "0",
+         "0",
+         "0",
+         "0.0",
+         "0",
+         "0",
+         "0"
+        ],
+        "athlete": {
+         "id": "3114995",
+         "displayName": "Marcus Pettersson",
+         "shortName": "M. Pettersson",
+         "position": {
+          "abbreviation": "D"
+         }
+        }
+       },
+       {
+        "stats": [
+         "0",
+         "1",
+         "0",
+         "1",
+         "14:01",
+         "0:00",
+         "0:00",
+         "14:01",
+         "20",
+         "0",
+         "0",
+         "0",
+         "0",
+         "0",
+         "0",
+         "0",
+         "0",
+         "0.0",
+         "0",
+         "2",
+         "4"
+        ],
+        "athlete": {
+         "id": "4565272",
+         "displayName": "Matthew Robertson",
+         "shortName": "M. Robertson",
+         "position": {
+          "abbreviation": "D"
+         }
+        }
+       }
+      ]
+     },
+     {
+      "name": "skaters",
+      "labels": [
+       "BS",
+       "HT",
+       "TK",
+       "+/-",
+       "TOI",
+       "PPTOI",
+       "SHTOI",
+       "ESTOI",
+       "SHFT",
+       "G",
+       "YTDG",
+       "A",
+       "S",
+       "SM",
+       "SOG",
+       "FW",
+       "FL",
+       "FO%",
+       "GV",
+       "PN",
+       "PIM"
+      ],
+      "athletes": []
+     },
+     {
+      "name": "goalies",
+      "labels": [
+       "GA",
+       "SA",
+       "SOS",
+       "SOSA",
+       "SV",
+       "SV%",
+       "ESSV",
+       "PPSV",
+       "SHSV",
+       "TOI",
+       "YTDG",
+       "PIM"
+      ],
+      "athletes": [
+       {
+        "stats": [
+         "1",
+         "25",
+         "0",
+         "0",
+         "24",
+         ".960",
+         "18",
+         "4",
+         "2",
+         "60:00",
+         "0",
+         "0"
+        ],
+        "athlete": {
+         "id": "3069266",
+         "displayName": "Joonas Korpisalo",
+         "shortName": "J. Korpisalo",
+         "position": {
+          "abbreviation": "G"
+         }
+        }
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ "leaders": [
+  {
+   "team": {
+    "id": "13",
+    "abbreviation": "NYR",
+    "displayName": "New York Rangers"
+   },
+   "leaders": [
+    {
+     "name": "goals",
+     "displayName": "Goals",
+     "leaders": [
+      {
+       "displayValue": "2",
+       "athlete": {
+        "id": "4697468",
+        "displayName": "Will Cuylle",
+        "shortName": "W. Cuylle"
+       }
+      }
+     ]
+    },
+    {
+     "name": "assists",
+     "displayName": "Assists",
+     "leaders": [
+      {
+       "displayValue": "1",
+       "athlete": {
+        "id": "2590852",
+        "displayName": "J.T. Miller",
+        "shortName": "J.T. Miller"
+       }
+      }
+     ]
+    },
+    {
+     "name": "points",
+     "displayName": "Points",
+     "leaders": [
+      {
+       "displayValue": "2",
+       "athlete": {
+        "id": "4697468",
+        "displayName": "Will Cuylle",
+        "shortName": "W. Cuylle"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "team": {
+    "id": "10",
+    "abbreviation": "MTL",
+    "displayName": "Montreal Canadiens"
+   },
+   "leaders": [
+    {
+     "name": "goals",
+     "displayName": "Goals",
+     "leaders": [
+      {
+       "displayValue": "1",
+       "athlete": {
+        "id": "2562602",
+        "displayName": "Phillip Danault",
+        "shortName": "P. Danault"
+       }
+      }
+     ]
+    },
+    {
+     "name": "assists",
+     "displayName": "Assists",
+     "leaders": [
+      {
+       "displayValue": "1",
+       "athlete": {
+        "id": "5080230",
+        "displayName": "Lane Hutson",
+        "shortName": "L. Hutson"
+       }
+      }
+     ]
+    },
+    {
+     "name": "points",
+     "displayName": "Points",
+     "leaders": [
+      {
+       "displayValue": "1",
+       "athlete": {
+        "id": "2562602",
+        "displayName": "Phillip Danault",
+        "shortName": "P. Danault"
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "standings": {
+  "header": null,
+  "groups": [
+   {
+    "header": "2026-27 Atlantic Division Standings",
+    "standings": {
+     "entries": [
+      {
+       "team": "Tampa Bay",
+       "id": "20",
+       "stats": [
+        {
+         "name": "otLosses",
+         "abbreviation": "OTL",
+         "displayValue": "2"
+        },
+        {
+         "name": "losses",
+         "abbreviation": "L",
+         "displayValue": "5"
+        },
+        {
+         "name": "points",
+         "abbreviation": "PTS",
+         "displayValue": "28"
+        },
+        {
+         "name": "wins",
+         "abbreviation": "W",
+         "displayValue": "13"
+        }
+       ]
+      },
+      {
+       "team": "Ottawa",
+       "id": "14",
+       "stats": [
+        {
+         "name": "otLosses",
+         "abbreviation": "OTL",
+         "displayValue": "2"
+        },
+        {
+         "name": "losses",
+         "abbreviation": "L",
+         "displayValue": "6"
+        },
+        {
+         "name": "points",
+         "abbreviation": "PTS",
+         "displayValue": "28"
+        },
+        {
+         "name": "wins",
+         "abbreviation": "W",
+         "displayValue": "13"
+        }
+       ]
+      },
+      {
+       "team": "Montreal",
+       "id": "10",
+       "stats": [
+        {
+         "name": "otLosses",
+         "abbreviation": "OTL",
+         "displayValue": "4"
+        },
+        {
+         "name": "losses",
+         "abbreviation": "L",
+         "displayValue": "5"
+        },
+        {
+         "name": "points",
+         "abbreviation": "PTS",
+         "displayValue": "28"
+        },
+        {
+         "name": "wins",
+         "abbreviation": "W",
+         "displayValue": "12"
+        }
+       ]
+      },
+      {
+       "team": "Boston",
+       "id": "1",
+       "stats": [
+        {
+         "name": "otLosses",
+         "abbreviation": "OTL",
+         "displayValue": "1"
+        },
+        {
+         "name": "losses",
+         "abbreviation": "L",
+         "displayValue": "6"
+        },
+        {
+         "name": "points",
+         "abbreviation": "PTS",
+         "displayValue": "27"
+        },
+        {
+         "name": "wins",
+         "abbreviation": "W",
+         "displayValue": "13"
+        }
+       ]
+      },
+      {
+       "team": "Florida",
+       "id": "26",
+       "stats": [
+        {
+         "name": "otLosses",
+         "abbreviation": "OTL",
+         "displayValue": "3"
+        },
+        {
+         "name": "losses",
+         "abbreviation": "L",
+         "displayValue": "7"
+        },
+        {
+         "name": "points",
+         "abbreviation": "PTS",
+         "displayValue": "27"
+        },
+        {
+         "name": "wins",
+         "abbreviation": "W",
+         "displayValue": "12"
+        }
+       ]
+      },
+      {
+       "team": "Buffalo",
+       "id": "2",
+       "stats": [
+        {
+         "name": "otLosses",
+         "abbreviation": "OTL",
+         "displayValue": "4"
+        },
+        {
+         "name": "losses",
+         "abbreviation": "L",
+         "displayValue": "8"
+        },
+        {
+         "name": "points",
+         "abbreviation": "PTS",
+         "displayValue": "20"
+        },
+        {
+         "name": "wins",
+         "abbreviation": "W",
+         "displayValue": "8"
+        }
+       ]
+      },
+      {
+       "team": "Detroit",
+       "id": "5",
+       "stats": [
+        {
+         "name": "otLosses",
+         "abbreviation": "OTL",
+         "displayValue": "3"
+        },
+        {
+         "name": "losses",
+         "abbreviation": "L",
+         "displayValue": "10"
+        },
+        {
+         "name": "points",
+         "abbreviation": "PTS",
+         "displayValue": "19"
+        },
+        {
+         "name": "wins",
+         "abbreviation": "W",
+         "displayValue": "8"
+        }
+       ]
+      },
+      {
+       "team": "Toronto",
+       "id": "21",
+       "stats": [
+        {
+         "name": "otLosses",
+         "abbreviation": "OTL",
+         "displayValue": "2"
+        },
+        {
+         "name": "losses",
+         "abbreviation": "L",
+         "displayValue": "12"
+        },
+        {
+         "name": "points",
+         "abbreviation": "PTS",
+         "displayValue": "18"
+        },
+        {
+         "name": "wins",
+         "abbreviation": "W",
+         "displayValue": "8"
+        }
+       ]
+      }
+     ]
+    }
+   },
+   {
+    "header": "2026-27 Metropolitan Division Standings",
+    "standings": {
+     "entries": [
+      {
+       "team": "Carolina",
+       "id": "7",
+       "stats": [
+        {
+         "name": "otLosses",
+         "abbreviation": "OTL",
+         "displayValue": "2"
+        },
+        {
+         "name": "losses",
+         "abbreviation": "L",
+         "displayValue": "3"
+        },
+        {
+         "name": "points",
+         "abbreviation": "PTS",
+         "displayValue": "34"
+        },
+        {
+         "name": "wins",
+         "abbreviation": "W",
+         "displayValue": "16"
+        }
+       ]
+      },
+      {
+       "team": "New Jersey",
+       "id": "11",
+       "stats": [
+        {
+         "name": "otLosses",
+         "abbreviation": "OTL",
+         "displayValue": "0"
+        },
+        {
+         "name": "losses",
+         "abbreviation": "L",
+         "displayValue": "6"
+        },
+        {
+         "name": "points",
+         "abbreviation": "PTS",
+         "displayValue": "30"
+        },
+        {
+         "name": "wins",
+         "abbreviation": "W",
+         "displayValue": "15"
+        }
+       ]
+      },
+      {
+       "team": "NY Rangers",
+       "id": "13",
+       "stats": [
+        {
+         "name": "otLosses",
+         "abbreviation": "OTL",
+         "displayValue": "1"
+        },
+        {
+         "name": "losses",
+         "abbreviation": "L",
+         "displayValue": "8"
+        },
+        {
+         "name": "points",
+         "abbreviation": "PTS",
+         "displayValue": "27"
+        },
+        {
+         "name": "wins",
+         "abbreviation": "W",
+         "displayValue": "13"
+        }
+       ]
+      },
+      {
+       "team": "NY Islanders",
+       "id": "12",
+       "stats": [
+        {
+         "name": "otLosses",
+         "abbreviation": "OTL",
+         "displayValue": "4"
+        },
+        {
+         "name": "losses",
+         "abbreviation": "L",
+         "displayValue": "6"
+        },
+        {
+         "name": "points",
+         "abbreviation": "PTS",
+         "displayValue": "22"
+        },
+        {
+         "name": "wins",
+         "abbreviation": "W",
+         "displayValue": "9"
+        }
+       ]
+      },
+      {
+       "team": "Washington",
+       "id": "23",
+       "stats": [
+        {
+         "name": "otLosses",
+         "abbreviation": "OTL",
+         "displayValue": "0"
+        },
+        {
+         "name": "losses",
+         "abbreviation": "L",
+         "displayValue": "8"
+        },
+        {
+         "name": "points",
+         "abbreviation": "PTS",
+         "displayValue": "20"
+        },
+        {
+         "name": "wins",
+         "abbreviation": "W",
+         "displayValue": "10"
+        }
+       ]
+      },
+      {
+       "team": "Philadelphia",
+       "id": "15",
+       "stats": [
+        {
+         "name": "otLosses",
+         "abbreviation": "OTL",
+         "displayValue": "6"
+        },
+        {
+         "name": "losses",
+         "abbreviation": "L",
+         "displayValue": "11"
+        },
+        {
+         "name": "points",
+         "abbreviation": "PTS",
+         "displayValue": "18"
+        },
+        {
+         "name": "wins",
+         "abbreviation": "W",
+         "displayValue": "6"
+        }
+       ]
+      },
+      {
+       "team": "Pittsburgh",
+       "id": "16",
+       "stats": [
+        {
+         "name": "otLosses",
+         "abbreviation": "OTL",
+         "displayValue": "2"
+        },
+        {
+         "name": "losses",
+         "abbreviation": "L",
+         "displayValue": "11"
+        },
+        {
+         "name": "points",
+         "abbreviation": "PTS",
+         "displayValue": "16"
+        },
+        {
+         "name": "wins",
+         "abbreviation": "W",
+         "displayValue": "7"
+        }
+       ]
+      },
+      {
+       "team": "Columbus",
+       "id": "29",
+       "stats": [
+        {
+         "name": "otLosses",
+         "abbreviation": "OTL",
+         "displayValue": "0"
+        },
+        {
+         "name": "losses",
+         "abbreviation": "L",
+         "displayValue": "11"
+        },
+        {
+         "name": "points",
+         "abbreviation": "PTS",
+         "displayValue": "14"
+        },
+        {
+         "name": "wins",
+         "abbreviation": "W",
+         "displayValue": "7"
+        }
+       ]
+      }
+     ]
+    }
+   }
+  ]
+ },
+ "videos": [
+  {
+   "id": 50506818,
+   "headline": "Phillip Danault tallies goal vs. Rangers",
+   "thumbnail": "https://espnmedia-cdn.akamaized.net/espn/media/common/wsc/2026/1117/d4c717b5-64e6-4534-969a-533c3e46f8bc/d4c717b5-64e6-4534-969a-533c3e46f8bc.jpg",
+   "duration": 56
+  },
+  {
+   "id": 50506854,
+   "headline": "Will Cuylle lights the lamp",
+   "thumbnail": "https://espnmedia-cdn.akamaized.net/espn/media/common/wsc/2026/1117/ddfb839b-5631-48f3-b7c4-464a65f12a59/ddfb839b-5631-48f3-b7c4-464a65f12a59.jpg",
+   "duration": 49
+  },
+  {
+   "id": 50506992,
+   "headline": "Will Cuylle's second goal of the game gives Rangers lead",
+   "thumbnail": "https://espnmedia-cdn.akamaized.net/espn/media/common/2026/1116/aaa16c017559422e91410fcc5ae4ba4e1336/aaa16c017559422e91410fcc5ae4ba4e1336.jpg",
+   "duration": 57
+  }
+ ]
+}

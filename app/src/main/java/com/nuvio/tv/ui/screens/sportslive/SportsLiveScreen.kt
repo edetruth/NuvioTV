@@ -62,6 +62,9 @@ import com.nuvio.tv.core.sportslive.scores.ScoreChip
 import com.nuvio.tv.core.sportslive.scores.ScoreChips
 import com.nuvio.tv.core.sportslive.scores.ScoreDetails
 import com.nuvio.tv.core.sportslive.scores.ScoreDetailsBuilder
+import com.nuvio.tv.core.sportslive.scores.ScoreSide
+import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
+import com.nuvio.tv.core.sportslive.scores.TeamFollows
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveItem
@@ -101,7 +104,9 @@ fun SportsLiveScreen(
     /** Opens Settings → Sports & Live → My sports (Results' "Edit my sports"). */
     onOpenMySports: () -> Unit = {},
     /** Opens dual screen on the session just put in [SportsLiveDualSessions]. */
-    onOpenDual: () -> Unit
+    onOpenDual: () -> Unit,
+    /** Opens the Game page on the request just put in [SportsLiveGameRequests]. */
+    onOpenGame: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val followedTeams by viewModel.followedTeams.collectAsStateWithLifecycle()
@@ -141,6 +146,10 @@ fun SportsLiveScreen(
         { item ->
             if (scoredTab) ScoreDetailsBuilder.of(item, scores[item.streamKey], scoresMode, item.streamKey in revealed) else null
         }
+    }
+    // The ESPN game behind a card, only for a strict match (as the chip needs): "Game stats" opens it.
+    val gameOf: (SportsLiveItem) -> ScoreSnapshot? = remember(scores, scoredTab) {
+        { item -> if (scoredTab) ScoreChips.matchedEvent(item, scores[item.streamKey]) else null }
     }
     val artOf: (SportsLiveItem) -> GameArt? = remember(scores) {
         val cache = HashMap<SportsLiveItem, GameArt?>()
@@ -223,6 +232,13 @@ fun SportsLiveScreen(
             chipOf = chipOf,
             artOf = artOf,
             detailsOf = detailsOf,
+            gameOf = gameOf,
+            onOpenGame = { item, event ->
+                SportsLiveGameRequests.open(
+                    SportsLiveGameRequest(event, revealed = scoresMode == ScoresMode.SHOW || item.streamKey in revealed)
+                )
+                onOpenGame()
+            },
             onCardFocus = scoresViewModel::onCardFocus,
             onSelectTab = viewModel::selectTab,
             onSelectFilter = viewModel::selectFilter,
@@ -259,16 +275,11 @@ fun SportsLiveScreen(
             onEditMySports = onOpenMySports,
             onResultFocus = resultsViewModel::onRowFocus,
             onOpenResult = { row ->
-                // The game's replay when an addon lists it (strict match); a row without one does nothing (#51).
-                val replay = resultsState.replays[row.key]
-                if (replay == null) {
-                    // No replay: nothing happens; the Game page (R3) will take OK over.
-                } else if (replay.apiType == "series") {
-                    onOpenDetail(replay)
-                } else {
-                    playViewModel.play(replay)
-                }
-            }
+                // The Game page (#18), which carries the strict replay match (Watch replay) and Follow.
+                SportsLiveGameRequests.open(resultsState.gameRequestFor(row))
+                onOpenGame()
+            },
+            onToggleResultFollow = resultsViewModel::toggleFollow
         )
     }
 }
@@ -302,6 +313,9 @@ private fun SportsLiveContent(
     artOf: (SportsLiveItem) -> GameArt?,
     /** A card's score block for the details pane (Live now / Upcoming only, spoiler setting applied). */
     detailsOf: (SportsLiveItem) -> ScoreDetails?,
+    /** A card's strictly matched ESPN game (Live now / Upcoming only); null offers no "Game stats". */
+    gameOf: (SportsLiveItem) -> ScoreSnapshot?,
+    onOpenGame: (SportsLiveItem, ScoreSnapshot) -> Unit,
     /** The focused card's key (null: none), for Hide until focused. */
     onCardFocus: (String?) -> Unit,
     onSelectTab: (SportsLiveTab) -> Unit,
@@ -328,7 +342,8 @@ private fun SportsLiveContent(
     onExpandResultsGroup: (String) -> Unit,
     onEditMySports: () -> Unit,
     onResultFocus: (String?) -> Unit,
-    onOpenResult: (ResultRow) -> Unit
+    onOpenResult: (ResultRow) -> Unit,
+    onToggleResultFollow: (ResultRow, ScoreSide) -> Unit
 ) {
     val tabFocusRequesters = remember { SportsLiveTab.entries.associateWith { FocusRequester() } }
     val activeTabFocusRequester = tabFocusRequesters.getValue(uiState.selectedTab)
@@ -460,6 +475,12 @@ private fun SportsLiveContent(
                 }
             } else {
                 null
+            },
+            onGameStats = gameOf(item)?.let { event ->
+                {
+                    menuCardKey = null
+                    onOpenGame(item, event)
+                }
             },
             onToggleFollow = { side ->
                 menuCardKey = null
@@ -605,7 +626,11 @@ private fun SportsLiveContent(
                 onExpandGroup = onExpandResultsGroup,
                 onEditMySports = onEditMySports,
                 onRowFocus = onResultFocus,
-                onOpen = onOpenResult
+                onOpen = onOpenResult,
+                isFollowed = { row, side ->
+                    TeamFollows.followersOf(followedTeams, row.event, if (side == ScoreSide.HOME) row.event.home else row.event.away).isNotEmpty()
+                },
+                onToggleFollow = onToggleResultFollow
             )
             return@Column
         }
@@ -743,6 +768,7 @@ private fun SportsLiveContent(
                 } else {
                     null
                 },
+                onGameStats = gameOf(selected)?.let { event -> { onOpenGame(selected, event) } },
                 preview = if (selectedPreview != null) {
                     { SportsLivePreviewVideo(previewPlayer) }
                 } else {

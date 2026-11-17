@@ -66,6 +66,7 @@ import com.nuvio.tv.ui.screens.settings.ThemeSettingsScreen
 import com.nuvio.tv.ui.screens.settings.TrackingSettingsScreen
 import com.nuvio.tv.ui.screens.settings.TmdbSettingsScreen
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveScreen
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveGameScreen
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveExtraSources
 import com.nuvio.tv.ui.screens.sportslive.SportsLivePlayHost
 import com.nuvio.tv.ui.screens.sportslive.SportsLivePlayViewModel
@@ -1486,7 +1487,32 @@ private fun PlaybackNavHost(
                 },
                 onOpenAddons = { navController.navigate(Screen.AddonManager.route) },
                 onOpenMySports = { navController.navigate(Screen.SportsLiveMySports.route) },
-                onOpenDual = { navController.navigate(Screen.SportsLiveDual.route) }
+                onOpenDual = { navController.navigate(Screen.SportsLiveDual.route) },
+                onOpenGame = { navController.navigate(Screen.SportsLiveGame.route) }
+            )
+        }
+
+        composable(Screen.SportsLiveGame.route) {
+            SportsLiveGameScreen(
+                onBack = {
+                    // Once only: a second Back during the exit transition must not also pop the screen below.
+                    if (navController.currentDestination?.route == Screen.SportsLiveGame.route) navController.popBackStack()
+                },
+                onPlay = { item, manual ->
+                    navController.navigate(streamRouteFor(item, returnToHomeOnBack = false, manualSelection = manual))
+                },
+                onPlayTarget = { target ->
+                    navController.navigate(sportsLivePlayerRoute(target) ?: streamRouteFor(target.item, returnToHomeOnBack = false))
+                },
+                onOpenDetail = { item ->
+                    navController.navigate(
+                        Screen.Detail.createRoute(
+                            itemId = item.id,
+                            itemType = item.apiType,
+                            addonBaseUrl = item.addonBaseUrl
+                        )
+                    )
+                }
             )
         }
 

@@ -63,6 +63,7 @@ import com.nuvio.tv.R
 import com.nuvio.tv.core.sportslive.scores.FinalNote
 import com.nuvio.tv.core.sportslive.scores.MySport
 import com.nuvio.tv.core.sportslive.scores.ResultRow
+import com.nuvio.tv.core.sportslive.scores.ScoreSide
 import com.nuvio.tv.core.sportslive.scores.ScoreTeam
 import com.nuvio.tv.ui.components.EmptyScreenState
 import com.nuvio.tv.ui.components.LightweightCard
@@ -95,7 +96,12 @@ internal fun SportsLiveResultsView(
     /** "Edit my sports": Settings → Sports & Live → My sports. */
     onEditMySports: () -> Unit,
     onRowFocus: (String?) -> Unit,
+    /** OK on a row: the Game page (#18). */
     onOpen: (ResultRow) -> Unit,
+    /** Whether a followed team is [ScoreSide] of the row's game (the menu's Follow / Following). */
+    isFollowed: (ResultRow, ScoreSide) -> Boolean = { _, _ -> false },
+    /** Hold OK → Follow / Following ‹team› (#54). */
+    onToggleFollow: (ResultRow, ScoreSide) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
     val sportFocusRequester = remember { FocusRequester() }
@@ -185,6 +191,26 @@ internal fun SportsLiveResultsView(
     }
     BackHandler(enabled = listHasFocus) {
         runCatching { tabFocusRequester.requestFocus() }
+    }
+    // Hold OK on a row: Game stats and Follow / Following for each side (away first, as listed).
+    var menuRowKey by remember { mutableStateOf<String?>(null) }
+    items.firstNotNullOfOrNull { (it as? ResultListItem.Row)?.row?.takeIf { row -> row.key == menuRowKey } }?.let { row ->
+        val sides = listOf(ScoreSide.AWAY to row.event.away, ScoreSide.HOME to row.event.home)
+        SportsLiveCardMenu(
+            title = stringResource(R.string.sports_live_results_menu_title, row.event.away.listName, row.event.home.listName),
+            sides = sides.map { (side, team) -> team.listName to isFollowed(row, side) },
+            onToggleFollow = { name ->
+                menuRowKey = null
+                sides.firstOrNull { it.second.listName == name }?.let { (side, _) -> onToggleFollow(row, side) }
+            },
+            onDetails = null,
+            onDismiss = { menuRowKey = null },
+            onGameStats = {
+                menuRowKey = null
+                onOpen(row)
+            },
+            followingLabel = true
+        )
     }
 
     Column(modifier = modifier.fillMaxSize()) {
@@ -276,6 +302,8 @@ internal fun SportsLiveResultsView(
                                 showScore = state.showsScore(item.row),
                                 hasReplay = item.hasReplay,
                                 onClick = { onOpen(item.row) },
+                                onLongClick = { menuRowKey = item.key },
+                                menuOpen = menuRowKey == item.key,
                                 onFocus = {
                                     focusedKey = item.key
                                     onRowFocus(item.key)
@@ -529,16 +557,20 @@ private fun ResultRowCard(
     showScore: Boolean,
     hasReplay: Boolean,
     onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    menuOpen: Boolean,
     onFocus: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val shape = RoundedCornerShape(NuvioTheme.radii.md)
     val event = row.event
+    val (longPress, click) = rememberSportsLiveLongPress(menuOpen = menuOpen, onLongClick = onLongClick, onClick = onClick)
     LightweightCard(
-        onClick = onClick,
+        onClick = click,
         modifier = modifier
             .fillMaxWidth()
-            .onFocusChanged { if (it.isFocused) onFocus() },
+            .onFocusChanged { if (it.isFocused) onFocus() }
+            .then(longPress),
         shape = shape,
         containerColor = NuvioTheme.colors.BackgroundCard,
         focusedBorder = Border(border = NuvioTheme.focusRing.border(NuvioTheme.spacing.xxs), shape = shape)
@@ -652,7 +684,7 @@ private fun TeamLine(team: ScoreTeam, bold: Boolean) {
             )
         }
         Text(
-            text = team.displayName ?: team.shortDisplayName ?: team.name ?: team.abbreviation.orEmpty(),
+            text = team.listName,
             style = MaterialTheme.typography.titleMedium.let { if (bold) it.copy(fontWeight = FontWeight.Bold) else it },
             color = NuvioTheme.colors.TextPrimary,
             maxLines = 1,
@@ -660,6 +692,9 @@ private fun TeamLine(team: ScoreTeam, bold: Boolean) {
         )
     }
 }
+
+/** A Results team line's name: ESPN's full name, else a shorter one. */
+private val ScoreTeam.listName: String get() = displayName ?: shortDisplayName ?: name ?: abbreviation.orEmpty()
 
 /** An ESPN sport key as a chip or row label. */
 @Composable

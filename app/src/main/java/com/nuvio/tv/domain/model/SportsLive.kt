@@ -20,8 +20,18 @@ data class ClaimedCatalog(
     val option: CatalogOption? = null
 )
 
-/** A team the user follows; [sport] (when known at follow time) scopes it, so a namesake in another sport does not match. */
-data class FollowedTeam(val name: String, val sport: String? = null)
+/**
+ * A team the user follows; [sport] (when known at follow time) scopes it, so a namesake in another sport does not match.
+ * A team followed from ESPN (Results, Game page) also keeps ESPN's team [espnId], [abbreviation] and feed
+ * [league] ("basketball/nba"), so that team is recognised exactly in ESPN data; name-only follows keep working.
+ */
+data class FollowedTeam(
+    val name: String,
+    val sport: String? = null,
+    val espnId: String? = null,
+    val abbreviation: String? = null,
+    val league: String? = null
+)
 
 /** A pinned catalog extra value, e.g. `genre` = "United States". */
 data class CatalogOption(val extra: String, val value: String)

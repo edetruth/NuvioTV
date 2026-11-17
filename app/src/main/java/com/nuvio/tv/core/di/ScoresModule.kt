@@ -2,6 +2,7 @@ package com.nuvio.tv.core.di
 
 import android.content.Context
 import com.nuvio.tv.core.sportslive.scores.EspnScoreProvider
+import com.nuvio.tv.core.sportslive.scores.GameSummarySource
 import com.nuvio.tv.core.sportslive.scores.ScoreProvider
 import com.squareup.moshi.Moshi
 import dagger.Module
@@ -23,16 +24,22 @@ object ScoresModule {
     /**
      * ESPN scoreboards get their own ~10 MB cache, apart from the app's, honouring ESPN's max-age;
      * the provider asks for no-cache for today and yesterday and accepts up to 7-day-old copies of
-     * older days.
+     * older days. Game summaries bypass it (see [EspnScoreProvider.summary]).
      */
     @Provides
     @Singleton
-    fun provideScoreProvider(
+    fun provideEspnScoreProvider(
         @ApplicationContext context: Context,
         okHttpClient: OkHttpClient,
         moshi: Moshi
-    ): ScoreProvider = EspnScoreProvider(
+    ): EspnScoreProvider = EspnScoreProvider(
         okHttpClient.newBuilder().cache(Cache(File(context.cacheDir, "espn_scores"), CACHE_BYTES)).build(),
         moshi
     )
+
+    @Provides
+    fun provideScoreProvider(espn: EspnScoreProvider): ScoreProvider = espn
+
+    @Provides
+    fun provideGameSummarySource(espn: EspnScoreProvider): GameSummarySource = espn
 }

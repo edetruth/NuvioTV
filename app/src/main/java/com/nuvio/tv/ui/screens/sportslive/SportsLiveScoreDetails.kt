@@ -45,7 +45,12 @@ internal fun rememberScoreDetailsStrings(): ScoreDetailsStrings {
  * card's reveal; postponed games show their status only.
  */
 @Composable
-internal fun SportsLiveScoreDetails(details: ScoreDetails, modifier: Modifier = Modifier) {
+internal fun SportsLiveScoreDetails(
+    details: ScoreDetails,
+    modifier: Modifier = Modifier,
+    /** False on the Game page, whose header already shows the score: linescore and scorers only. */
+    showScoreline: Boolean = true
+) {
     val strings = rememberScoreDetailsStrings()
     val chipStrings = rememberScoreChipStrings()
     val tabular = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum")
@@ -63,7 +68,7 @@ internal fun SportsLiveScoreDetails(details: ScoreDetails, modifier: Modifier = 
             modifier = modifier
         )
         is ScoreDetails.Shown -> Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md)) {
+            if (showScoreline) Row(horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md)) {
                 Text(
                     text = ScoreDetailsBuilder.scorelineText(details, strings),
                     style = tabular,

@@ -1,0 +1,265 @@
+package com.nuvio.tv.ui.screens.sportslive
+
+import com.nuvio.tv.MainDispatcherRule
+import com.nuvio.tv.core.sportslive.scores.EspnFixtures
+import com.nuvio.tv.core.sportslive.scores.EspnLeague
+import com.nuvio.tv.core.sportslive.scores.EspnLeagueMap
+import com.nuvio.tv.core.sportslive.scores.FinalNote
+import com.nuvio.tv.core.sportslive.scores.GameSection
+import com.nuvio.tv.core.sportslive.scores.GameSummary
+import com.nuvio.tv.core.sportslive.scores.GameSummaryFixtures
+import com.nuvio.tv.core.sportslive.scores.GameSummaryLoad
+import com.nuvio.tv.core.sportslive.scores.ResultRow
+import com.nuvio.tv.core.sportslive.scores.ScoreSettings
+import com.nuvio.tv.core.sportslive.scores.ScoreSide
+import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
+import com.nuvio.tv.core.sportslive.scores.ScoreState
+import com.nuvio.tv.core.sportslive.scores.ScoresMode
+import com.nuvio.tv.domain.model.ContentType
+import com.nuvio.tv.domain.model.FollowedTeam
+import com.nuvio.tv.domain.model.MetaPreview
+import com.nuvio.tv.domain.model.PosterShape
+import com.nuvio.tv.domain.model.SportsLiveItem
+import com.nuvio.tv.domain.model.SportsLiveKind
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
+import org.junit.Assert.assertTrue
+import org.junit.Rule
+import org.junit.Test
+
+@OptIn(ExperimentalCoroutinesApi::class)
+class SportsLiveGameViewModelTest {
+
+    @get:Rule
+    val mainDispatcherRule = MainDispatcherRule()
+
+    // Crystal Palace (home) 1–3 Liverpool (away), FT: the scoreboard event and its summary.
+    private val palaceGame = EspnFixtures.events(EspnFixtures.ENG1_20261108, EspnFixtures.ENG1).first { it.eventId == "401879243" }
+    private val palaceSummary = GameSummaryFixtures.summary(GameSummaryFixtures.SOCCER, EspnFixtures.ENG1, "401879243")
+    private val nbaSummary = GameSummaryFixtures.summary(GameSummaryFixtures.NBA, EspnLeagueMap.NBA, "401909994")
+
+    private val settings = MutableStateFlow(ScoreSettings())
+    private val followed = MutableStateFlow<List<FollowedTeam>>(emptyList())
+    private val requests = mutableListOf<String>()
+    private var nextLoad: () -> GameSummaryLoad = { GameSummaryLoad.Loaded(palaceSummary, final = true) }
+
+    private fun TestScope.viewModel(request: SportsLiveGameRequest?) = SportsLiveGameViewModel(
+        request = request,
+        loadSummary = { league: EspnLeague, id: String ->
+            requests += "${league.path}/$id"
+            nextLoad()
+        },
+        settings = settings,
+        followedTeams = followed,
+        follow = { team -> followed.update { it + team } },
+        unfollow = { team -> followed.update { list -> list.filterNot { it == team } } },
+        now = { testScheduler.currentTime }
+    ).also { vm -> backgroundScope.launch { vm.uiState.collect {} } }
+
+    @Test
+    fun `Scores Off - nothing is requested until Reveal, and nothing shows`() = runTest(mainDispatcherRule.dispatcher) {
+        settings.value = ScoreSettings(mode = ScoresMode.OFF)
+        val vm = viewModel(SportsLiveGameRequest(palaceGame))
+        vm.setVisible(true)
+        advanceTimeBy(120_000); runCurrent()
+        assertTrue(requests.isEmpty())
+        assertEquals(GameLoadStatus.WAITING_REVEAL, vm.uiState.value.status)
+        assertTrue(vm.uiState.value.sections.isEmpty())
+
+        vm.reveal()
+        runCurrent()
+        assertEquals(listOf("soccer/eng.1/401879243"), requests)
+        assertEquals(GameLoadStatus.READY, vm.uiState.value.status)
+        assertTrue(vm.uiState.value.showsScore)
+        assertEquals(listOf(GameSection.GAME, GameSection.STANDINGS), vm.uiState.value.sections)
+    }
+
+    @Test
+    fun `hide until focused - a row already revealed opens revealed, otherwise score and sections wait for Reveal`() = runTest(mainDispatcherRule.dispatcher) {
+        settings.value = ScoreSettings(mode = ScoresMode.HIDE_UNTIL_FOCUSED)
+        val hidden = viewModel(SportsLiveGameRequest(palaceGame, revealed = false))
+        hidden.setVisible(true)
+        runCurrent()
+        assertTrue(!hidden.uiState.value.showsScore)
+        // Empty and hidden: no section shows before Reveal.
+        assertTrue(hidden.uiState.value.sections.isEmpty())
+        hidden.reveal()
+        runCurrent()
+        assertEquals(GameSection.GAME, hidden.uiState.value.section)
+
+        val revealed = viewModel(SportsLiveGameRequest(palaceGame, revealed = true))
+        revealed.setVisible(true)
+        runCurrent()
+        assertTrue(revealed.uiState.value.showsScore)
+    }
+
+    @Test
+    fun `nothing loads while the page is not visible`() = runTest(mainDispatcherRule.dispatcher) {
+        val vm = viewModel(SportsLiveGameRequest(palaceGame))
+        runCurrent()
+        assertTrue(requests.isEmpty())
+        vm.setVisible(true)
+        runCurrent()
+        assertEquals(1, requests.size)
+        // A final is never refreshed.
+        advanceTimeBy(10 * 60_000L); runCurrent()
+        assertEquals(1, requests.size)
+    }
+
+    @Test
+    fun `a live game refreshes every 30 s while visible, and stops when the page is not`() = runTest(mainDispatcherRule.dispatcher) {
+        val live = liveNba()
+        nextLoad = { GameSummaryLoad.Loaded(live, final = false) }
+        val vm = viewModel(SportsLiveGameRequest(liveEvent()))
+        vm.setVisible(true)
+        runCurrent()
+        assertEquals(1, requests.size)
+        advanceTimeBy(SportsLiveGameViewModel.REFRESH_MS); runCurrent()
+        assertEquals(2, requests.size)
+        vm.setVisible(false)
+        advanceTimeBy(5 * SportsLiveGameViewModel.REFRESH_MS); runCurrent()
+        assertEquals(2, requests.size)
+    }
+
+    @Test
+    fun `score delay - a live game shows each summary only once it is the delay old`() = runTest(mainDispatcherRule.dispatcher) {
+        settings.value = ScoreSettings(delaySeconds = 30)
+        val first = liveNba()
+        val second = first.copy(clockText = "Q4 1:00")
+        var calls = 0
+        nextLoad = { GameSummaryLoad.Loaded(if (calls++ == 0) first else second, final = false) }
+        val vm = viewModel(SportsLiveGameRequest(liveEvent()))
+        vm.setVisible(true)
+        runCurrent()
+        assertNull(vm.uiState.value.summary)
+        advanceTimeBy(29_999); runCurrent()
+        assertNull(vm.uiState.value.summary)
+        advanceTimeBy(1); runCurrent()
+        // Due now: the first summary; the second (fetched now) waits its own 30 s.
+        assertSame(first, vm.uiState.value.summary)
+        advanceTimeBy(30_000); runCurrent()
+        assertSame(second, vm.uiState.value.summary)
+        // Leaving stops the 30 s refresh (the test then ends with nothing scheduled).
+        vm.setVisible(false)
+        runCurrent()
+    }
+
+    @Test
+    fun `a final opened with a delay set shows at once - the delay is for live games`() = runTest(mainDispatcherRule.dispatcher) {
+        settings.value = ScoreSettings(delaySeconds = 90)
+        val vm = viewModel(SportsLiveGameRequest(palaceGame))
+        vm.setVisible(true)
+        runCurrent()
+        assertSame(palaceSummary, vm.uiState.value.summary)
+    }
+
+    @Test
+    fun `a failed load says so`() = runTest(mainDispatcherRule.dispatcher) {
+        nextLoad = { GameSummaryLoad.Failed }
+        val vm = viewModel(SportsLiveGameRequest(palaceGame))
+        vm.setVisible(true)
+        runCurrent()
+        assertEquals(GameLoadStatus.FAILED, vm.uiState.value.status)
+    }
+
+    @Test
+    fun `Follow and Following - writes the My Teams list, OK again unfollows`() = runTest(mainDispatcherRule.dispatcher) {
+        followed.value = listOf(FollowedTeam("Arsenal", "Soccer"))
+        val vm = viewModel(SportsLiveGameRequest(palaceGame))
+        runCurrent()
+        vm.toggleFollow(ScoreSide.AWAY)
+        runCurrent()
+        val liverpool = followed.value.last()
+        assertEquals("Liverpool", liverpool.name)
+        assertEquals("Soccer", liverpool.sport)
+        assertEquals(palaceGame.away.id, liverpool.espnId)
+        assertTrue(vm.uiState.value.awayFollowed)
+        assertTrue(!vm.uiState.value.homeFollowed)
+
+        vm.toggleFollow(ScoreSide.AWAY)
+        runCurrent()
+        assertEquals(listOf(FollowedTeam("Arsenal", "Soccer")), followed.value)
+        assertTrue(!vm.uiState.value.awayFollowed)
+
+        // A name-only follow of the same team shows as Following, and OK removes it.
+        followed.value = listOf(FollowedTeam("Crystal Palace", "Football"))
+        runCurrent()
+        assertTrue(vm.uiState.value.homeFollowed)
+        vm.toggleFollow(ScoreSide.HOME)
+        runCurrent()
+        assertTrue(followed.value.isEmpty())
+    }
+
+    @Test
+    fun `sections - the chosen one sticks, an empty one is never offered`() = runTest(mainDispatcherRule.dispatcher) {
+        val vm = viewModel(SportsLiveGameRequest(palaceGame))
+        vm.setVisible(true)
+        runCurrent()
+        vm.selectSection(GameSection.STANDINGS)
+        runCurrent()
+        assertEquals(GameSection.STANDINGS, vm.uiState.value.section)
+        // Soccer has no box score here: choosing it falls back to the first section shown.
+        vm.selectSection(GameSection.BOX_SCORE)
+        runCurrent()
+        assertEquals(GameSection.GAME, vm.uiState.value.section)
+    }
+
+    @Test
+    fun `Results OK opens the Game page with the row's strict replay and its reveal state`() {
+        val row = ResultRow(palaceGame, followed = false, note = FinalNote.FT)
+        val replay = replayItem()
+        val state = SportsLiveResultsUiState(mode = ScoresMode.HIDE_UNTIL_FOCUSED, revealed = setOf(row.key), replays = mapOf(row.key to replay))
+        assertEquals(SportsLiveGameRequest(palaceGame, replay = replay, revealed = true), state.gameRequestFor(row))
+        // No replay match and not revealed: the page opens without Watch replay, score hidden.
+        val plain = SportsLiveResultsUiState(mode = ScoresMode.HIDE_UNTIL_FOCUSED)
+        assertEquals(SportsLiveGameRequest(palaceGame, replay = null, revealed = false), plain.gameRequestFor(row))
+        assertEquals(true, SportsLiveResultsUiState().gameRequestFor(row).revealed)
+    }
+
+    @Test
+    fun `no request at all, the page closes`() = runTest(mainDispatcherRule.dispatcher) {
+        val vm = viewModel(null)
+        vm.setVisible(true)
+        runCurrent()
+        assertNull(vm.uiState.value.event)
+        assertTrue(requests.isEmpty())
+    }
+
+    @Test
+    fun `stat bars - shares follow the values, never vanish, even when missing`() {
+        assertEquals(41f to 47f, statBarWeights(41.0, 47.0))
+        assertEquals(1f to 1f, statBarWeights(null, 3.0))
+        assertEquals(1f to 1f, statBarWeights(0.0, 0.0))
+        val (zero, three) = statBarWeights(0.0, 3.0)
+        assertTrue(zero > 0f && three == 3f)
+    }
+
+    private fun liveNba(): GameSummary = nbaSummary.copy(state = ScoreState.IN, isFinal = false, clockText = "Q3 8:42")
+
+    private fun liveEvent(): ScoreSnapshot = palaceGame.copy(
+        eventId = "401909994",
+        league = EspnLeagueMap.NBA,
+        leagueSlug = "nba",
+        state = ScoreState.IN,
+        isFinal = false
+    )
+
+    private fun replayItem() = SportsLiveItem(
+        meta = MetaPreview(
+            id = "r", type = ContentType.UNKNOWN, rawType = "sport", name = "Crystal Palace vs Liverpool", poster = null,
+            posterShape = PosterShape.LANDSCAPE, background = null, logo = null, description = null,
+            releaseInfo = null, imdbRating = null, genres = emptyList()
+        ),
+        addonId = "a", addonName = "a", addonBaseUrl = "https://example.invalid", catalogKey = "k", catalogName = "Replays",
+        kind = SportsLiveKind.REPLAY, isLive = false, isChannel = false, startMs = null, sport = "Soccer", teams = null
+    )
+}

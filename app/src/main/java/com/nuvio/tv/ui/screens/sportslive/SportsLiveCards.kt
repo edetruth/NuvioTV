@@ -23,6 +23,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -260,6 +261,8 @@ internal fun SportsLiveDetailsPane(
     watchModifier: Modifier = Modifier,
     /** "Choose stream" beside Watch (live games and channels); null hides it. */
     onChooseStream: (() -> Unit)? = null,
+    /** "Game stats" beside Choose stream: the Game page, for a game with a strict ESPN match; null hides it. */
+    onGameStats: (() -> Unit)? = null,
     /** The hover preview's video, composed under the art while a preview plays; null when none does. */
     preview: (@Composable () -> Unit)? = null,
     /** The preview's first frame is on screen: the art gives way to the video, and the state line gets a label. */
@@ -377,6 +380,11 @@ internal fun SportsLiveDetailsPane(
                     Text(stringResource(R.string.sports_live_choose_stream))
                 }
             }
+            if (onGameStats != null) {
+                SportsLivePaneButton(onClick = onGameStats) {
+                    Text(stringResource(R.string.sports_live_game_stats))
+                }
+            }
             SportsLivePaneButton(onClick = onDetails) {
                 Text(stringResource(R.string.sports_live_details))
             }
@@ -386,54 +394,80 @@ internal fun SportsLiveDetailsPane(
 
 /**
  * The long-press menu of a card: "Watch with another game" first when offered (it takes the first
- * focus), then Follow / Unfollow for each side ([sides] holds each side's display name and whether
- * a followed team is that side), then Details. Laid out like `PosterOptionsDialog`.
+ * focus), then Choose stream, Game stats, Follow / Unfollow for each side ([sides] holds each side's
+ * display name and whether a followed team is that side), then Details. Laid out like `PosterOptionsDialog`.
+ * A Results row uses it too, with Game stats and the sides only.
  */
 @Composable
 internal fun SportsLiveCardMenu(
     title: String,
     sides: List<Pair<String, Boolean>>,
     onToggleFollow: (String) -> Unit,
-    onDetails: () -> Unit,
+    /** Details (the addon's page); null hides it (a Results row has none). */
+    onDetails: (() -> Unit)?,
     onDismiss: () -> Unit,
     /** "Watch with another game"; null hides it (only live game cards offer it). */
     onWatchWith: (() -> Unit)? = null,
     /** "Choose stream": the card's streams to pick from; null hides it (live games and channels offer it). */
-    onChooseStream: (() -> Unit)? = null
+    onChooseStream: (() -> Unit)? = null,
+    /** "Game stats": the Game page (#18); null hides it (only a game with a strict ESPN match offers it). */
+    onGameStats: (() -> Unit)? = null,
+    /** "Following ‹team›" in place of "Unfollow ‹team›" (the Results / Game page wording). */
+    followingLabel: Boolean = false
 ) {
     val firstFocusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { firstFocusRequester.requestFocus() } }
     // The first button shown takes the first focus.
-    val chooseFirst = onWatchWith == null
-    val sidesFirst = chooseFirst && onChooseStream == null
+    val firstButton = when {
+        onWatchWith != null -> MENU_WATCH_WITH
+        onChooseStream != null -> MENU_CHOOSE_STREAM
+        onGameStats != null -> MENU_GAME_STATS
+        sides.isNotEmpty() -> MENU_FIRST_SIDE
+        else -> MENU_DETAILS
+    }
+    fun first(button: Int): Modifier = if (button == firstButton) Modifier.focusRequester(firstFocusRequester) else Modifier
 
     NuvioDialog(onDismiss = onDismiss, title = title) {
         if (onWatchWith != null) {
             SportsLiveMenuButton(
                 text = stringResource(R.string.sports_live_dual_watch_with),
                 onClick = onWatchWith,
-                modifier = Modifier.focusRequester(firstFocusRequester)
+                modifier = first(MENU_WATCH_WITH)
             )
         }
         if (onChooseStream != null) {
             SportsLiveMenuButton(
                 text = stringResource(R.string.sports_live_choose_stream_menu),
                 onClick = onChooseStream,
-                modifier = if (chooseFirst) Modifier.focusRequester(firstFocusRequester) else Modifier
+                modifier = first(MENU_CHOOSE_STREAM)
+            )
+        }
+        if (onGameStats != null) {
+            SportsLiveMenuButton(
+                text = stringResource(R.string.sports_live_game_stats),
+                onClick = onGameStats,
+                modifier = first(MENU_GAME_STATS)
             )
         }
         sides.forEachIndexed { index, (side, followed) ->
+            val label = when {
+                !followed -> R.string.sports_live_follow
+                followingLabel -> R.string.sports_live_game_following
+                else -> R.string.sports_live_unfollow
+            }
             SportsLiveMenuButton(
-                text = stringResource(if (followed) R.string.sports_live_unfollow else R.string.sports_live_follow, side),
+                text = stringResource(label, side),
                 onClick = { onToggleFollow(side) },
-                modifier = if (index == 0 && sidesFirst) Modifier.focusRequester(firstFocusRequester) else Modifier
+                modifier = if (index == 0) first(MENU_FIRST_SIDE) else Modifier
             )
         }
-        SportsLiveMenuButton(
-            text = stringResource(R.string.sports_live_details),
-            onClick = onDetails,
-            modifier = if (sides.isEmpty() && sidesFirst) Modifier.focusRequester(firstFocusRequester) else Modifier
-        )
+        if (onDetails != null) {
+            SportsLiveMenuButton(
+                text = stringResource(R.string.sports_live_details),
+                onClick = onDetails,
+                modifier = first(MENU_DETAILS)
+            )
+        }
     }
 }
 
@@ -473,6 +507,52 @@ internal fun SportsLivePaneButton(
 }
 
 private val FOLLOWED_STAR_COLOR = Color(0xFFFFC107)
+
+private const val MENU_WATCH_WITH = 0
+private const val MENU_CHOOSE_STREAM = 1
+private const val MENU_GAME_STATS = 2
+private const val MENU_FIRST_SIDE = 3
+private const val MENU_DETAILS = 4
+
+/**
+ * Hold OK (or press Menu) on a card that is not a [SportsLiveListCard] (a Results row): [onLongClick],
+ * with the release and the short OK that follow the hold swallowed. Pass the result's [onClick] wrapper
+ * to the card. [menuOpen] resets the hold once the menu takes the key-up.
+ */
+@Composable
+internal fun rememberSportsLiveLongPress(menuOpen: Boolean, onLongClick: () -> Unit, onClick: () -> Unit): Pair<Modifier, () -> Unit> {
+    var longPressTriggered by remember { mutableStateOf(false) }
+    val tracker = rememberLongPressKeyTracker()
+    val currentOnLongClick by rememberUpdatedState(onLongClick)
+    val currentOnClick by rememberUpdatedState(onClick)
+    LaunchedEffect(menuOpen) { longPressTriggered = false }
+    val modifier = Modifier
+        .onFocusChanged { if (!it.isFocused) longPressTriggered = false }
+        .onPreviewKeyEvent { event ->
+            val native = event.nativeKeyEvent
+            if (native.action == AndroidKeyEvent.ACTION_DOWN && native.keyCode == AndroidKeyEvent.KEYCODE_MENU) {
+                longPressTriggered = true
+                currentOnLongClick()
+                return@onPreviewKeyEvent true
+            }
+            if (tracker.handle(native, ::isSelectKey) {
+                    longPressTriggered = true
+                    currentOnLongClick()
+                }
+            ) {
+                if (native.action == AndroidKeyEvent.ACTION_UP) longPressTriggered = false
+                return@onPreviewKeyEvent true
+            }
+            if (native.action == AndroidKeyEvent.ACTION_UP && longPressTriggered &&
+                (isSelectKey(native.keyCode) || native.keyCode == AndroidKeyEvent.KEYCODE_MENU)
+            ) {
+                longPressTriggered = false
+                return@onPreviewKeyEvent true
+            }
+            false
+        }
+    return modifier to { if (longPressTriggered) longPressTriggered = false else currentOnClick() }
+}
 
 private fun isSelectKey(keyCode: Int): Boolean =
     keyCode == AndroidKeyEvent.KEYCODE_DPAD_CENTER ||

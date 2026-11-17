@@ -1,0 +1,1909 @@
+{
+ "header": {
+  "id": "401873060",
+  "competitions": [
+   {
+    "id": "401873060",
+    "date": "2026-11-15T18:00Z",
+    "status": {
+     "type": {
+      "name": "STATUS_FINAL",
+      "state": "post",
+      "completed": true,
+      "description": "Final",
+      "detail": "Final",
+      "shortDetail": "Final"
+     }
+    },
+    "competitors": [
+     {
+      "id": "9",
+      "homeAway": "home",
+      "winner": false,
+      "score": "10",
+      "linescores": [
+       {
+        "displayValue": "0"
+       },
+       {
+        "displayValue": "0"
+       },
+       {
+        "displayValue": "10"
+       },
+       {
+        "displayValue": "0"
+       }
+      ],
+      "record": [
+       {
+        "type": "total",
+        "summary": "6-4"
+       },
+       {
+        "type": "home",
+        "summary": "3-2"
+       }
+      ],
+      "team": {
+       "id": "9",
+       "abbreviation": "GB",
+       "displayName": "Green Bay Packers",
+       "name": "Packers",
+       "location": "Green Bay",
+       "logos": [
+        {
+         "href": "https://a.espncdn.com/i/teamlogos/nfl/500/gb.png"
+        }
+       ]
+      }
+     },
+     {
+      "id": "16",
+      "homeAway": "away",
+      "winner": true,
+      "score": "30",
+      "linescores": [
+       {
+        "displayValue": "10"
+       },
+       {
+        "displayValue": "7"
+       },
+       {
+        "displayValue": "3"
+       },
+       {
+        "displayValue": "10"
+       }
+      ],
+      "record": [
+       {
+        "type": "total",
+        "summary": "7-2"
+       },
+       {
+        "type": "road",
+        "summary": "4-1"
+       }
+      ],
+      "team": {
+       "id": "16",
+       "abbreviation": "MIN",
+       "displayName": "Minnesota Vikings",
+       "name": "Vikings",
+       "location": "Minnesota",
+       "logos": [
+        {
+         "href": "https://a.espncdn.com/i/teamlogos/nfl/500/min.png"
+        }
+       ]
+      }
+     }
+    ]
+   }
+  ],
+  "league": {
+   "name": "National Football League",
+   "abbreviation": "NFL",
+   "slug": "nfl"
+  }
+ },
+ "gameInfo": {
+  "venue": {
+   "fullName": "Lambeau Field",
+   "address": {
+    "city": "Green Bay",
+    "state": "WI",
+    "zipCode": "54304",
+    "country": "USA"
+   }
+  }
+ },
+ "boxscore": {
+  "teams": [
+   {
+    "homeAway": "away",
+    "team": {
+     "id": "16",
+     "abbreviation": "MIN",
+     "displayName": "Minnesota Vikings",
+     "shortDisplayName": "Vikings",
+     "name": "Vikings",
+     "location": "Minnesota",
+     "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/min.png"
+    },
+    "statistics": [
+     {
+      "name": "firstDowns",
+      "label": "1st Downs",
+      "displayValue": "19"
+     },
+     {
+      "name": "firstDownsPassing",
+      "label": "Passing 1st downs",
+      "displayValue": "11"
+     },
+     {
+      "name": "firstDownsRushing",
+      "label": "Rushing 1st downs",
+      "displayValue": "7"
+     },
+     {
+      "name": "firstDownsPenalty",
+      "label": "1st downs from penalties",
+      "displayValue": "1"
+     },
+     {
+      "name": "thirdDownEff",
+      "label": "3rd down efficiency",
+      "displayValue": "8-16"
+     },
+     {
+      "name": "fourthDownEff",
+      "label": "4th down efficiency",
+      "displayValue": "1-1"
+     },
+     {
+      "name": "totalOffensivePlays",
+      "label": "Total Plays",
+      "displayValue": "65"
+     },
+     {
+      "name": "totalYards",
+      "label": "Total Yards",
+      "displayValue": "312"
+     },
+     {
+      "name": "yardsPerPlay",
+      "label": "Yards per Play",
+      "displayValue": "4.8"
+     },
+     {
+      "name": "totalDrives",
+      "label": "Total Drives",
+      "displayValue": "12"
+     },
+     {
+      "name": "netPassingYards",
+      "label": "Passing",
+      "displayValue": "183"
+     },
+     {
+      "name": "completionAttempts",
+      "label": "Comp/Att",
+      "displayValue": "21/31"
+     },
+     {
+      "name": "yardsPerPass",
+      "label": "Yards per pass",
+      "displayValue": "5.4"
+     },
+     {
+      "name": "interceptions",
+      "label": "Interceptions thrown",
+      "displayValue": "1"
+     },
+     {
+      "name": "sacksYardsLost",
+      "label": "Sacks-Yards Lost",
+      "displayValue": "3-24"
+     },
+     {
+      "name": "rushingYards",
+      "label": "Rushing",
+      "displayValue": "129"
+     },
+     {
+      "name": "rushingAttempts",
+      "label": "Rushing Attempts",
+      "displayValue": "31"
+     },
+     {
+      "name": "yardsPerRushAttempt",
+      "label": "Yards per rush",
+      "displayValue": "4.2"
+     },
+     {
+      "name": "redZoneAttempts",
+      "label": "Red Zone (Made-Att)",
+      "displayValue": "1-4"
+     },
+     {
+      "name": "totalPenaltiesYards",
+      "label": "Penalties",
+      "displayValue": "7-75"
+     },
+     {
+      "name": "turnovers",
+      "label": "Turnovers",
+      "displayValue": "1"
+     },
+     {
+      "name": "fumblesLost",
+      "label": "Fumbles lost",
+      "displayValue": "0"
+     },
+     {
+      "name": "interceptions",
+      "label": "Interceptions thrown",
+      "displayValue": "1"
+     },
+     {
+      "name": "defensiveTouchdowns",
+      "label": "Defensive / Special Teams TDs",
+      "displayValue": "0"
+     },
+     {
+      "name": "possessionTime",
+      "label": "Possession",
+      "displayValue": "35:16"
+     }
+    ]
+   },
+   {
+    "homeAway": "home",
+    "team": {
+     "id": "9",
+     "abbreviation": "GB",
+     "displayName": "Green Bay Packers",
+     "shortDisplayName": "Packers",
+     "name": "Packers",
+     "location": "Green Bay",
+     "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/gb.png"
+    },
+    "statistics": [
+     {
+      "name": "firstDowns",
+      "label": "1st Downs",
+      "displayValue": "16"
+     },
+     {
+      "name": "firstDownsPassing",
+      "label": "Passing 1st downs",
+      "displayValue": "11"
+     },
+     {
+      "name": "firstDownsRushing",
+      "label": "Rushing 1st downs",
+      "displayValue": "3"
+     },
+     {
+      "name": "firstDownsPenalty",
+      "label": "1st downs from penalties",
+      "displayValue": "2"
+     },
+     {
+      "name": "thirdDownEff",
+      "label": "3rd down efficiency",
+      "displayValue": "3-10"
+     },
+     {
+      "name": "fourthDownEff",
+      "label": "4th down efficiency",
+      "displayValue": "1-1"
+     },
+     {
+      "name": "totalOffensivePlays",
+      "label": "Total Plays",
+      "displayValue": "54"
+     },
+     {
+      "name": "totalYards",
+      "label": "Total Yards",
+      "displayValue": "220"
+     },
+     {
+      "name": "yardsPerPlay",
+      "label": "Yards per Play",
+      "displayValue": "4.1"
+     },
+     {
+      "name": "totalDrives",
+      "label": "Total Drives",
+      "displayValue": "11"
+     },
+     {
+      "name": "netPassingYards",
+      "label": "Passing",
+      "displayValue": "164"
+     },
+     {
+      "name": "completionAttempts",
+      "label": "Comp/Att",
+      "displayValue": "18/29"
+     },
+     {
+      "name": "yardsPerPass",
+      "label": "Yards per pass",
+      "displayValue": "4.4"
+     },
+     {
+      "name": "interceptions",
+      "label": "Interceptions thrown",
+      "displayValue": "1"
+     },
+     {
+      "name": "sacksYardsLost",
+      "label": "Sacks-Yards Lost",
+      "displayValue": "8-59"
+     },
+     {
+      "name": "rushingYards",
+      "label": "Rushing",
+      "displayValue": "56"
+     },
+     {
+      "name": "rushingAttempts",
+      "label": "Rushing Attempts",
+      "displayValue": "17"
+     },
+     {
+      "name": "yardsPerRushAttempt",
+      "label": "Yards per rush",
+      "displayValue": "3.3"
+     },
+     {
+      "name": "redZoneAttempts",
+      "label": "Red Zone (Made-Att)",
+      "displayValue": "0-1"
+     },
+     {
+      "name": "totalPenaltiesYards",
+      "label": "Penalties",
+      "displayValue": "6-45"
+     },
+     {
+      "name": "turnovers",
+      "label": "Turnovers",
+      "displayValue": "4"
+     },
+     {
+      "name": "fumblesLost",
+      "label": "Fumbles lost",
+      "displayValue": "3"
+     },
+     {
+      "name": "interceptions",
+      "label": "Interceptions thrown",
+      "displayValue": "1"
+     },
+     {
+      "name": "defensiveTouchdowns",
+      "label": "Defensive / Special Teams TDs",
+      "displayValue": "0"
+     },
+     {
+      "name": "possessionTime",
+      "label": "Possession",
+      "displayValue": "24:44"
+     }
+    ]
+   }
+  ],
+  "players": [
+   {
+    "team": {
+     "id": "16",
+     "abbreviation": "MIN",
+     "displayName": "Minnesota Vikings",
+     "shortDisplayName": "Vikings",
+     "name": "Vikings",
+     "location": "Minnesota",
+     "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/min.png"
+    },
+    "statistics": [
+     {
+      "name": "passing",
+      "text": "Minnesota Passing",
+      "labels": [
+       "C/ATT",
+       "YDS",
+       "AVG",
+       "TD",
+       "INT",
+       "SACKS",
+       "QBR",
+       "RTG"
+      ],
+      "totals": [
+       "21/31",
+       "183",
+       "6.7",
+       "2",
+       "1",
+       "3-24",
+       "--",
+       "94.4"
+      ],
+      "athletes": [
+       {
+        "stats": [
+         "21/31",
+         "207",
+         "6.7",
+         "2",
+         "1",
+         "3-24",
+         "73.1",
+         "94.4"
+        ],
+        "athlete": {
+         "id": "14880",
+         "displayName": "Kirk Cousins"
+        }
+       }
+      ]
+     },
+     {
+      "name": "rushing",
+      "text": "Minnesota Rushing",
+      "labels": [
+       "CAR",
+       "YDS",
+       "AVG",
+       "TD",
+       "LONG"
+      ],
+      "totals": [
+       "31",
+       "129",
+       "4.2",
+       "1",
+       "19"
+      ],
+      "athletes": [
+       {
+        "stats": [
+         "16",
+         "59",
+         "3.7",
+         "0",
+         "8"
+        ],
+        "athlete": {
+         "id": "4360569",
+         "displayName": "Jordan Mason"
+        }
+       },
+       {
+        "stats": [
+         "11",
+         "47",
+         "4.3",
+         "1",
+         "19"
+        ],
+        "athlete": {
+         "id": "3042519",
+         "displayName": "Aaron Jones Sr."
+        }
+       },
+       {
+        "stats": [
+         "1",
+         "12",
+         "12.0",
+         "0",
+         "12"
+        ],
+        "athlete": {
+         "id": "4430656",
+         "displayName": "Myles Price"
+        }
+       },
+       {
+        "stats": [
+         "3",
+         "11",
+         "3.7",
+         "0",
+         "8"
+        ],
+        "athlete": {
+         "id": "14880",
+         "displayName": "Kirk Cousins"
+        }
+       }
+      ]
+     },
+     {
+      "name": "receiving",
+      "text": "Minnesota Receiving",
+      "labels": [
+       "REC",
+       "YDS",
+       "AVG",
+       "TD",
+       "LONG",
+       "TGTS"
+      ],
+      "totals": [
+       "21",
+       "207",
+       "9.9",
+       "2",
+       "38",
+       "30"
+      ],
+      "athletes": [
+       {
+        "stats": [
+         "9",
+         "74",
+         "8.2",
+         "0",
+         "17",
+         "13"
+        ],
+        "athlete": {
+         "id": "4262921",
+         "displayName": "Justin Jefferson"
+        }
+       },
+       {
+        "stats": [
+         "4",
+         "49",
+         "12.3",
+         "1",
+         "38",
+         "4"
+        ],
+        "athlete": {
+         "id": "4430656",
+         "displayName": "Myles Price"
+        }
+       },
+       {
+        "stats": [
+         "3",
+         "36",
+         "12.0",
+         "1",
+         "20",
+         "4"
+        ],
+        "athlete": {
+         "id": "4708049",
+         "displayName": "Gavin Bartholomew"
+        }
+       },
+       {
+        "stats": [
+         "3",
+         "33",
+         "11.0",
+         "0",
+         "24",
+         "5"
+        ],
+        "athlete": {
+         "id": "4565185",
+         "displayName": "Tai Felton"
+        }
+       },
+       {
+        "stats": [
+         "1",
+         "8",
+         "8.0",
+         "0",
+         "8",
+         "1"
+        ],
+        "athlete": {
+         "id": "3042519",
+         "displayName": "Aaron Jones Sr."
+        }
+       }
+      ]
+     },
+     {
+      "name": "fumbles",
+      "text": "Minnesota Fumbles",
+      "labels": [
+       "FUM",
+       "LOST",
+       "REC"
+      ],
+      "totals": [
+       "0",
+       "0",
+       "3"
+      ],
+      "athletes": [
+       {
+        "stats": [
+         "0",
+         "0",
+         "1"
+        ],
+        "athlete": {
+         "id": "3133487",
+         "displayName": "Andrew Van Ginkel"
+        }
+       },
+       {
+        "stats": [
+         "0",
+         "0",
+         "1"
+        ],
+        "athlete": {
+         "id": "4565190",
+         "displayName": "Dallas Turner"
+        }
+       },
+       {
+        "stats": [
+         "0",
+         "0",
+         "1"
+        ],
+        "athlete": {
+         "id": "4877652",
+         "displayName": "Jake Golday"
+        }
+       }
+      ]
+     },
+     {
+      "name": "defensive",
+      "text": "Minnesota Defense",
+      "labels": [
+       "TOT",
+       "SOLO",
+       "SACKS",
+       "TFL",
+       "PD",
+       "QB HTS",
+       "TD"
+      ],
+      "totals": [
+       "56",
+       "39",
+       "8",
+       "10",
+       "7",
+       "12",
+       "0"
+      ],
+      "athletes": [
+       {
+        "stats": [
+         "7",
+         "6",
+         "1",
+         "2",
+         "0",
+         "1",
+         "0"
+        ],
+        "athlete": {
+         "id": "3056916",
+         "displayName": "Eric Wilson"
+        }
+       },
+       {
+        "stats": [
+         "5",
+         "4",
+         "1",
+         "2",
+         "0",
+         "1",
+         "0"
+        ],
+        "athlete": {
+         "id": "4696782",
+         "displayName": "Elijah Williams"
+        }
+       },
+       {
+        "stats": [
+         "5",
+         "3",
+         "0",
+         "0",
+         "0",
+         "0",
+         "0"
+        ],
+        "athlete": {
+         "id": "4046537",
+         "displayName": "Joshua Metellus"
+        }
+       },
+       {
+        "stats": [
+         "5",
+         "3",
+         "0",
+         "0",
+         "0",
+         "0",
+         "0"
+        ],
+        "athlete": {
+         "id": "4877652",
+         "displayName": "Jake Golday"
+        }
+       },
+       {
+        "stats": [
+         "4",
+         "2",
+         "0",
+         "0",
+         "0",
+         "0",
+         "0"
+        ],
+        "athlete": {
+         "id": "4242436",
+         "displayName": "Theo Jackson"
+        }
+       }
+      ]
+     },
+     {
+      "name": "interceptions",
+      "text": "Minnesota Interceptions",
+      "labels": [
+       "INT",
+       "YDS",
+       "TD"
+      ],
+      "totals": [
+       "1",
+       "0",
+       "0"
+      ],
+      "athletes": [
+       {
+        "stats": [
+         "1",
+         "0",
+         "0"
+        ],
+        "athlete": {
+         "id": "14945",
+         "displayName": "Harrison Smith"
+        }
+       }
+      ]
+     },
+     {
+      "name": "kickReturns",
+      "text": "Minnesota Kick Returns",
+      "labels": [
+       "NO",
+       "YDS",
+       "AVG",
+       "LONG",
+       "TD"
+      ],
+      "totals": [
+       "3",
+       "70",
+       "23.3",
+       "30",
+       "0"
+      ],
+      "athletes": [
+       {
+        "stats": [
+         "3",
+         "70",
+         "23.3",
+         "30",
+         "0"
+        ],
+        "athlete": {
+         "id": "4430656",
+         "displayName": "Myles Price"
+        }
+       }
+      ]
+     },
+     {
+      "name": "puntReturns",
+      "text": "Minnesota Punt Returns",
+      "labels": [
+       "NO",
+       "YDS",
+       "AVG",
+       "LONG",
+       "TD"
+      ],
+      "totals": [],
+      "athletes": []
+     },
+     {
+      "name": "kicking",
+      "text": "Minnesota Kicking",
+      "labels": [
+       "FG",
+       "PCT",
+       "LONG",
+       "XP",
+       "PTS"
+      ],
+      "totals": [
+       "3/3",
+       "100.0",
+       "34",
+       "3/3",
+       "12"
+      ],
+      "athletes": [
+       {
+        "stats": [
+         "3/3",
+         "100.0",
+         "34",
+         "3/3",
+         "12"
+        ],
+        "athlete": {
+         "id": "4567104",
+         "displayName": "Will Reichard"
+        }
+       }
+      ]
+     },
+     {
+      "name": "punting",
+      "text": "Minnesota Punting",
+      "labels": [
+       "NO",
+       "YDS",
+       "AVG",
+       "TB",
+       "In 20",
+       "LONG"
+      ],
+      "totals": [
+       "3",
+       "177",
+       "59.0",
+       "0",
+       "2",
+       "64"
+      ],
+      "athletes": [
+       {
+        "stats": [
+         "3",
+         "177",
+         "59.0",
+         "0",
+         "2",
+         "64"
+        ],
+        "athlete": {
+         "id": "4799994",
+         "displayName": "Brett Thorson"
+        }
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "team": {
+     "id": "9",
+     "abbreviation": "GB",
+     "displayName": "Green Bay Packers",
+     "shortDisplayName": "Packers",
+     "name": "Packers",
+     "location": "Green Bay",
+     "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/gb.png"
+    },
+    "statistics": [
+     {
+      "name": "passing",
+      "text": "Green Bay Passing",
+      "labels": [
+       "C/ATT",
+       "YDS",
+       "AVG",
+       "TD",
+       "INT",
+       "SACKS",
+       "QBR",
+       "RTG"
+      ],
+      "totals": [
+       "18/29",
+       "164",
+       "7.7",
+       "1",
+       "1",
+       "8-59",
+       "--",
+       "83.0"
+      ],
+      "athletes": [
+       {
+        "stats": [
+         "17/27",
+         "220",
+         "8.1",
+         "1",
+         "1",
+         "8-59",
+         "47.4",
+         "85.4"
+        ],
+        "athlete": {
+         "id": "4036378",
+         "displayName": "Jordan Love"
+        }
+       },
+       {
+        "stats": [
+         "1/2",
+         "3",
+         "1.5",
+         "0",
+         "0",
+         "0-0",
+         "14.1",
+         "56.2"
+        ],
+        "athlete": {
+         "id": "14163",
+         "displayName": "Tyrod Taylor"
+        }
+       }
+      ]
+     },
+     {
+      "name": "rushing",
+      "text": "Green Bay Rushing",
+      "labels": [
+       "CAR",
+       "YDS",
+       "AVG",
+       "TD",
+       "LONG"
+      ],
+      "totals": [
+       "17",
+       "56",
+       "3.3",
+       "0",
+       "11"
+      ],
+      "athletes": [
+       {
+        "stats": [
+         "10",
+         "42",
+         "4.2",
+         "0",
+         "9"
+        ],
+        "athlete": {
+         "id": "4819231",
+         "displayName": "Kaleb Johnson"
+        }
+       },
+       {
+        "stats": [
+         "4",
+         "13",
+         "3.3",
+         "0",
+         "11"
+        ],
+        "athlete": {
+         "id": "4429023",
+         "displayName": "MarShawn Lloyd"
+        }
+       },
+       {
+        "stats": [
+         "2",
+         "1",
+         "0.5",
+         "0",
+         "1"
+        ],
+        "athlete": {
+         "id": "3149687",
+         "displayName": "Chris Brooks"
+        }
+       },
+       {
+        "stats": [
+         "1",
+         "0",
+         "0.0",
+         "0",
+         "0"
+        ],
+        "athlete": {
+         "id": "4036378",
+         "displayName": "Jordan Love"
+        }
+       }
+      ]
+     },
+     {
+      "name": "receiving",
+      "text": "Green Bay Receiving",
+      "labels": [
+       "REC",
+       "YDS",
+       "AVG",
+       "TD",
+       "LONG",
+       "TGTS"
+      ],
+      "totals": [
+       "18",
+       "223",
+       "12.4",
+       "1",
+       "32",
+       "29"
+      ],
+      "athletes": [
+       {
+        "stats": [
+         "5",
+         "70",
+         "14.0",
+         "0",
+         "20",
+         "9"
+        ],
+        "athlete": {
+         "id": "4701936",
+         "displayName": "Matthew Golden"
+        }
+       },
+       {
+        "stats": [
+         "2",
+         "37",
+         "18.5",
+         "1",
+         "32",
+         "4"
+        ],
+        "athlete": {
+         "id": "4635009",
+         "displayName": "J. Michael Sturdivant"
+        }
+       },
+       {
+        "stats": [
+         "3",
+         "37",
+         "12.3",
+         "0",
+         "15",
+         "5"
+        ],
+        "athlete": {
+         "id": "4248528",
+         "displayName": "Christian Watson"
+        }
+       },
+       {
+        "stats": [
+         "2",
+         "27",
+         "13.5",
+         "0",
+         "24",
+         "2"
+        ],
+        "athlete": {
+         "id": "4431487",
+         "displayName": "Savion Williams"
+        }
+       },
+       {
+        "stats": [
+         "3",
+         "26",
+         "8.7",
+         "0",
+         "15",
+         "3"
+        ],
+        "athlete": {
+         "id": "4429023",
+         "displayName": "MarShawn Lloyd"
+        }
+       }
+      ]
+     },
+     {
+      "name": "fumbles",
+      "text": "Green Bay Fumbles",
+      "labels": [
+       "FUM",
+       "LOST",
+       "REC"
+      ],
+      "totals": [
+       "3",
+       "3",
+       "0"
+      ],
+      "athletes": [
+       {
+        "stats": [
+         "1",
+         "1",
+         "0"
+        ],
+        "athlete": {
+         "id": "2312707",
+         "displayName": "John Williams"
+        }
+       },
+       {
+        "stats": [
+         "1",
+         "1",
+         "0"
+        ],
+        "athlete": {
+         "id": "4431346",
+         "displayName": "Mark Redman"
+        }
+       },
+       {
+        "stats": [
+         "1",
+         "1",
+         "0"
+        ],
+        "athlete": {
+         "id": "4635009",
+         "displayName": "J. Michael Sturdivant"
+        }
+       }
+      ]
+     },
+     {
+      "name": "defensive",
+      "text": "Green Bay Defense",
+      "labels": [
+       "TOT",
+       "SOLO",
+       "SACKS",
+       "TFL",
+       "PD",
+       "QB HTS",
+       "TD"
+      ],
+      "totals": [
+       "75",
+       "32",
+       "3",
+       "5",
+       "6",
+       "5",
+       "0"
+      ],
+      "athletes": [
+       {
+        "stats": [
+         "9",
+         "3",
+         "0",
+         "0",
+         "0",
+         "0",
+         "0"
+        ],
+        "athlete": {
+         "id": "4239947",
+         "displayName": "Isaiah McDuffie"
+        }
+       },
+       {
+        "stats": [
+         "8",
+         "2",
+         "0",
+         "0",
+         "1",
+         "0",
+         "0"
+        ],
+        "athlete": {
+         "id": "4428863",
+         "displayName": "Evan Williams"
+        }
+       },
+       {
+        "stats": [
+         "7",
+         "5",
+         "0",
+         "0",
+         "1",
+         "0",
+         "0"
+        ],
+        "athlete": {
+         "id": "4430965",
+         "displayName": "Carrington Valentine"
+        }
+       },
+       {
+        "stats": [
+         "7",
+         "3",
+         "0",
+         "0",
+         "1",
+         "0",
+         "0"
+        ],
+        "athlete": {
+         "id": "4567406",
+         "displayName": "Ty'Ron Hopper"
+        }
+       },
+       {
+        "stats": [
+         "6",
+         "3",
+         "0",
+         "1",
+         "1",
+         "0",
+         "0"
+        ],
+        "athlete": {
+         "id": "4241470",
+         "displayName": "Xavier McKinney"
+        }
+       }
+      ]
+     },
+     {
+      "name": "interceptions",
+      "text": "Green Bay Interceptions",
+      "labels": [
+       "INT",
+       "YDS",
+       "TD"
+      ],
+      "totals": [
+       "1",
+       "0",
+       "0"
+      ],
+      "athletes": [
+       {
+        "stats": [
+         "1",
+         "0",
+         "0"
+        ],
+        "athlete": {
+         "id": "4241470",
+         "displayName": "Xavier McKinney"
+        }
+       }
+      ]
+     },
+     {
+      "name": "kickReturns",
+      "text": "Green Bay Kick Returns",
+      "labels": [
+       "NO",
+       "YDS",
+       "AVG",
+       "LONG",
+       "TD"
+      ],
+      "totals": [
+       "6",
+       "151",
+       "25.2",
+       "28",
+       "0"
+      ],
+      "athletes": [
+       {
+        "stats": [
+         "2",
+         "51",
+         "25.5",
+         "26",
+         "0"
+        ],
+        "athlete": {
+         "id": "4430191",
+         "displayName": "Skyy Moore"
+        }
+       },
+       {
+        "stats": [
+         "2",
+         "50",
+         "25.0",
+         "26",
+         "0"
+        ],
+        "athlete": {
+         "id": "4635009",
+         "displayName": "J. Michael Sturdivant"
+        }
+       },
+       {
+        "stats": [
+         "1",
+         "28",
+         "28.0",
+         "28",
+         "0"
+        ],
+        "athlete": {
+         "id": "4259305",
+         "displayName": "Bo Melton"
+        }
+       },
+       {
+        "stats": [
+         "1",
+         "22",
+         "22.0",
+         "22",
+         "0"
+        ],
+        "athlete": {
+         "id": "4431487",
+         "displayName": "Savion Williams"
+        }
+       }
+      ]
+     },
+     {
+      "name": "puntReturns",
+      "text": "Green Bay Punt Returns",
+      "labels": [
+       "NO",
+       "YDS",
+       "AVG",
+       "LONG",
+       "TD"
+      ],
+      "totals": [
+       "2",
+       "18",
+       "9.0",
+       "13",
+       "0"
+      ],
+      "athletes": [
+       {
+        "stats": [
+         "1",
+         "13",
+         "13.0",
+         "13",
+         "0"
+        ],
+        "athlete": {
+         "id": "4701936",
+         "displayName": "Matthew Golden"
+        }
+       },
+       {
+        "stats": [
+         "1",
+         "5",
+         "5.0",
+         "5",
+         "0"
+        ],
+        "athlete": {
+         "id": "4430191",
+         "displayName": "Skyy Moore"
+        }
+       }
+      ]
+     },
+     {
+      "name": "kicking",
+      "text": "Green Bay Kicking",
+      "labels": [
+       "FG",
+       "PCT",
+       "LONG",
+       "XP",
+       "PTS"
+      ],
+      "totals": [
+       "1/2",
+       "50.0",
+       "40",
+       "1/1",
+       "4"
+      ],
+      "athletes": [
+       {
+        "stats": [
+         "1/2",
+         "50.0",
+         "40",
+         "1/1",
+         "4"
+        ],
+        "athlete": {
+         "id": "4869461",
+         "displayName": "Trey Smack"
+        }
+       }
+      ]
+     },
+     {
+      "name": "punting",
+      "text": "Green Bay Punting",
+      "labels": [
+       "NO",
+       "YDS",
+       "AVG",
+       "TB",
+       "In 20",
+       "LONG"
+      ],
+      "totals": [
+       "4",
+       "202",
+       "50.5",
+       "1",
+       "0",
+       "65"
+      ],
+      "athletes": [
+       {
+        "stats": [
+         "4",
+         "202",
+         "50.5",
+         "1",
+         "0",
+         "65"
+        ],
+        "athlete": {
+         "id": "4248789",
+         "displayName": "Daniel Whelan"
+        }
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ "leaders": [
+  {
+   "team": {
+    "id": "9",
+    "abbreviation": "GB",
+    "displayName": "Green Bay Packers"
+   },
+   "leaders": [
+    {
+     "name": "passingYards",
+     "displayName": "Passing Yards",
+     "leaders": [
+      {
+       "displayValue": "17/27, 220 YDS, 1 TD, 1 INT",
+       "mainStat": {
+        "value": "220",
+        "label": "YDS"
+       },
+       "athlete": {
+        "id": "4036378",
+        "displayName": "Jordan Love",
+        "shortName": "J. Love"
+       }
+      }
+     ]
+    },
+    {
+     "name": "rushingYards",
+     "displayName": "Rushing Yards",
+     "leaders": [
+      {
+       "displayValue": "10 CAR, 42 YDS",
+       "mainStat": {
+        "value": "42",
+        "label": "YDS"
+       },
+       "athlete": {
+        "id": "4819231",
+        "displayName": "Kaleb Johnson",
+        "shortName": "K. Johnson"
+       }
+      }
+     ]
+    },
+    {
+     "name": "receivingYards",
+     "displayName": "Receiving Yards",
+     "leaders": [
+      {
+       "displayValue": "5 REC, 70 YDS",
+       "mainStat": {
+        "value": "70",
+        "label": "YDS"
+       },
+       "athlete": {
+        "id": "4701936",
+        "displayName": "Matthew Golden",
+        "shortName": "M. Golden"
+       }
+      }
+     ]
+    },
+    {
+     "name": "sacks",
+     "displayName": "Sacks",
+     "leaders": [
+      {
+       "displayValue": "1.5",
+       "mainStat": {
+        "value": "1.5",
+        "label": "SACKS"
+       },
+       "athlete": {
+        "id": "4686906",
+        "displayName": "Lukas Van Ness",
+        "shortName": "L. Van Ness"
+       }
+      }
+     ]
+    },
+    {
+     "name": "totalTackles",
+     "displayName": "Tackles",
+     "leaders": [
+      {
+       "displayValue": "9",
+       "mainStat": {
+        "value": "9",
+        "label": "TOT"
+       },
+       "athlete": {
+        "id": "4239947",
+        "displayName": "Isaiah McDuffie",
+        "shortName": "I. McDuffie"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "team": {
+    "id": "16",
+    "abbreviation": "MIN",
+    "displayName": "Minnesota Vikings"
+   },
+   "leaders": [
+    {
+     "name": "passingYards",
+     "displayName": "Passing Yards",
+     "leaders": [
+      {
+       "displayValue": "21/31, 207 YDS, 2 TD, 1 INT",
+       "mainStat": {
+        "value": "207",
+        "label": "YDS"
+       },
+       "athlete": {
+        "id": "14880",
+        "displayName": "Kirk Cousins",
+        "shortName": "K. Cousins"
+       }
+      }
+     ]
+    },
+    {
+     "name": "rushingYards",
+     "displayName": "Rushing Yards",
+     "leaders": [
+      {
+       "displayValue": "16 CAR, 59 YDS",
+       "mainStat": {
+        "value": "59",
+        "label": "YDS"
+       },
+       "athlete": {
+        "id": "4360569",
+        "displayName": "Jordan Mason",
+        "shortName": "J. Mason"
+       }
+      }
+     ]
+    },
+    {
+     "name": "receivingYards",
+     "displayName": "Receiving Yards",
+     "leaders": [
+      {
+       "displayValue": "9 REC, 74 YDS",
+       "mainStat": {
+        "value": "74",
+        "label": "YDS"
+       },
+       "athlete": {
+        "id": "4262921",
+        "displayName": "Justin Jefferson",
+        "shortName": "J. Jefferson"
+       }
+      }
+     ]
+    },
+    {
+     "name": "sacks",
+     "displayName": "Sacks",
+     "leaders": [
+      {
+       "displayValue": "2",
+       "mainStat": {
+        "value": "2",
+        "label": "SACKS"
+       },
+       "athlete": {
+        "id": "5093973",
+        "displayName": "Levi Drake Rodriguez",
+        "shortName": "L. Rodriguez"
+       }
+      }
+     ]
+    },
+    {
+     "name": "totalTackles",
+     "displayName": "Tackles",
+     "leaders": [
+      {
+       "displayValue": "7",
+       "mainStat": {
+        "value": "7",
+        "label": "TOT"
+       },
+       "athlete": {
+        "id": "3056916",
+        "displayName": "Eric Wilson",
+        "shortName": "E. Wilson"
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "standings": {
+  "header": "2026 Standings",
+  "groups": [
+   {
+    "header": "2026 NFC North Standings",
+    "standings": {
+     "entries": [
+      {
+       "team": "Detroit",
+       "id": "8",
+       "stats": [
+        {
+         "name": "losses",
+         "abbreviation": "L",
+         "displayValue": "2"
+        },
+        {
+         "name": "pointsAgainst",
+         "abbreviation": "PA",
+         "displayValue": "199"
+        },
+        {
+         "name": "pointsFor",
+         "abbreviation": "PF",
+         "displayValue": "257"
+        },
+        {
+         "name": "ties",
+         "abbreviation": "T",
+         "displayValue": "0"
+        },
+        {
+         "name": "winPercent",
+         "abbreviation": "PCT",
+         "displayValue": ".778"
+        },
+        {
+         "name": "wins",
+         "abbreviation": "W",
+         "displayValue": "7"
+        },
+        {
+         "name": "overall",
+         "abbreviation": "Any",
+         "displayValue": "7-2"
+        }
+       ]
+      },
+      {
+       "team": "Minnesota",
+       "id": "16",
+       "stats": [
+        {
+         "name": "losses",
+         "abbreviation": "L",
+         "displayValue": "2"
+        },
+        {
+         "name": "pointsAgainst",
+         "abbreviation": "PA",
+         "displayValue": "126"
+        },
+        {
+         "name": "pointsFor",
+         "abbreviation": "PF",
+         "displayValue": "176"
+        },
+        {
+         "name": "ties",
+         "abbreviation": "T",
+         "displayValue": "0"
+        },
+        {
+         "name": "winPercent",
+         "abbreviation": "PCT",
+         "displayValue": ".778"
+        },
+        {
+         "name": "wins",
+         "abbreviation": "W",
+         "displayValue": "7"
+        },
+        {
+         "name": "overall",
+         "abbreviation": "Any",
+         "displayValue": "7-2"
+        }
+       ]
+      },
+      {
+       "team": "Chicago",
+       "id": "3",
+       "stats": [
+        {
+         "name": "losses",
+         "abbreviation": "L",
+         "displayValue": "2"
+        },
+        {
+         "name": "pointsAgainst",
+         "abbreviation": "PA",
+         "displayValue": "184"
+        },
+        {
+         "name": "pointsFor",
+         "abbreviation": "PF",
+         "displayValue": "241"
+        },
+        {
+         "name": "ties",
+         "abbreviation": "T",
+         "displayValue": "0"
+        },
+        {
+         "name": "winPercent",
+         "abbreviation": "PCT",
+         "displayValue": ".778"
+        },
+        {
+         "name": "wins",
+         "abbreviation": "W",
+         "displayValue": "7"
+        },
+        {
+         "name": "overall",
+         "abbreviation": "Any",
+         "displayValue": "7-2"
+        }
+       ]
+      },
+      {
+       "team": "Green Bay",
+       "id": "9",
+       "stats": [
+        {
+         "name": "losses",
+         "abbreviation": "L",
+         "displayValue": "4"
+        },
+        {
+         "name": "pointsAgainst",
+         "abbreviation": "PA",
+         "displayValue": "221"
+        },
+        {
+         "name": "pointsFor",
+         "abbreviation": "PF",
+         "displayValue": "226"
+        },
+        {
+         "name": "ties",
+         "abbreviation": "T",
+         "displayValue": "0"
+        },
+        {
+         "name": "winPercent",
+         "abbreviation": "PCT",
+         "displayValue": ".600"
+        },
+        {
+         "name": "wins",
+         "abbreviation": "W",
+         "displayValue": "6"
+        },
+        {
+         "name": "overall",
+         "abbreviation": "Any",
+         "displayValue": "6-4"
+        }
+       ]
+      }
+     ]
+    }
+   }
+  ]
+ },
+ "videos": [
+  {
+   "id": 50493633,
+   "headline": "Minnesota Vikings vs. Green Bay Packers: Game Highlights",
+   "thumbnail": "https://espnmedia-cdn.akamaized.net/espn/media/common/wsc/2026/1115/fa789622-2990-4433-9aad-0937c75ad25e/fa789622-2990-4433-9aad-0937c75ad25e.jpg",
+   "duration": 63
+  },
+  {
+   "id": 50491682,
+   "headline": "Kirk Cousins gets Vikings return going early with TD pass to Myles Price",
+   "thumbnail": "https://espnmedia-cdn.akamaized.net/espn/media/common/2026/1115/2b6ce43e155244c4a693c0cf4aeadef1948/2b6ce43e155244c4a693c0cf4aeadef1948.jpg",
+   "duration": 20
+  },
+  {
+   "id": 50492104,
+   "headline": "Aaron Jones Sr. does Lambeau Leap after scoring a Vikings TD",
+   "thumbnail": "https://espnmedia-cdn.akamaized.net/espn/media/common/2026/1115/0ab1fd130dee43b0ac0c5bcc9ea407f7950/0ab1fd130dee43b0ac0c5bcc9ea407f7950.jpg",
+   "duration": 16
+  }
+ ]
+}

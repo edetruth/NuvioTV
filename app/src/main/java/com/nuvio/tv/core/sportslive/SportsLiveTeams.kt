@@ -1,7 +1,9 @@
 package com.nuvio.tv.core.sportslive
 
+import com.nuvio.tv.core.sportslive.scores.EspnLeagueMap
 import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveItem
+import java.util.concurrent.ConcurrentHashMap
 
 /** Display names of the two sides of a game, rankings removed. */
 data class TeamPair(val home: String, val away: String)
@@ -133,14 +135,28 @@ object SportsLiveTeams {
 
     /**
      * True when [team] is the side [side] of [item], under the same sport rule as [follows]: the
-     * stored sport and the item's [knownSport] are compared only when both are known.
+     * stored sport and the item's [knownSport] are compared only when both are known, and agree when
+     * they are the same word or name the same ESPN sport ("Basketball" and "NBA"; a team followed from
+     * ESPN results is stored with such a sport word).
      */
     fun followsSide(team: FollowedTeam, side: String, item: SportsLiveItem): Boolean {
         val teamSport = team.sport?.takeUnless(::isGenericSport)
         val itemSport = if (item.isChannel) null else knownSport(item)
-        val sportsAgree = teamSport == null || itemSport == null || teamSport.equals(itemSport, ignoreCase = true)
+        val sportsAgree = teamSport == null || itemSport == null || sameSport(teamSport, itemSport)
         return sportsAgree && matches(team.name, side)
     }
+
+    private fun sameSport(a: String, b: String): Boolean {
+        if (a.equals(b, ignoreCase = true)) return true
+        val sportsA = espnSports(a)
+        return sportsA.isNotEmpty() && espnSports(b).any { it in sportsA }
+    }
+
+    // Sport words are few and repeat on every card: their ESPN sports are worked out once each.
+    private val espnSportsByWord = ConcurrentHashMap<String, Set<String>>()
+
+    private fun espnSports(sport: String): Set<String> =
+        espnSportsByWord.getOrPut(sport.lowercase()) { EspnLeagueMap.espnSportsOf(sport).orEmpty() }
 
     /** [followsSide] for a merged card: true when [team] is [side] in the card or any of its alternates. */
     fun followsSideOfAnySource(team: FollowedTeam, side: String, item: SportsLiveItem): Boolean =

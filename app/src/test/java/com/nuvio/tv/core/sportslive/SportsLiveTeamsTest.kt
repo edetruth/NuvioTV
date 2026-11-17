@@ -203,7 +203,8 @@ class SportsLiveTeamsTest {
 
     @Test
     fun `a merged card follows a side when any of its sources does`() {
-        val primary = game("Celtics vs 76ers", "Basketball").withGenres("Basketball")
+        // Hockey is not the followed team's sport ("Basketball" would agree with "NBA" as an ESPN sport).
+        val primary = game("Celtics vs 76ers", "Hockey").withGenres("Hockey")
         // The alternate's addon has no genres: its sport is unknown.
         val alternate = game("Boston Celtics vs Philadelphia 76ers", "Live")
         val merged = primary.copy(alternates = listOf(alternate))
