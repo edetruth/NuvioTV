@@ -43,11 +43,22 @@ internal fun HomeViewModel.startLiveNowZapSession(item: SportsLiveItem) {
     if (session != null) SportsLiveZapSessions.start(session) else SportsLiveZapSessions.clear()
 }
 
-/** New score labels for the Live now cards; the rows are rebuilt only when they change. */
+/**
+ * New score labels for the Live now cards. Only the Live now row is replaced (the other rows keep their
+ * identity), so a clock tick never rebuilds Home or moves its focus and scroll; the next full rebuild
+ * reads [HomeViewModel.liveNowScoreLabels] too.
+ */
 internal fun HomeViewModel.setLiveNowScoreLabels(labels: Map<String, String>) {
     if (labels == liveNowScoreLabels) return
     liveNowScoreLabels = labels
-    if (addonsCache.isNotEmpty() && _uiState.value.liveNowItems.isNotEmpty()) scheduleUpdateCatalogRows()
+    _uiState.update { state ->
+        val index = state.homeRows.indexOfFirst { it is HomeRow.Catalog && SportsLiveHomeRow.isLiveNowRow(it.row.addonBaseUrl) }
+        if (index < 0 || state.liveNowItems.isEmpty()) return@update state
+        val old = (state.homeRows[index] as HomeRow.Catalog).row
+        val rows = state.homeRows.toMutableList()
+        rows[index] = HomeRow.Catalog(SportsLiveHomeRow.build(state.liveNowItems, old.catalogName, labels))
+        state.copy(homeRows = rows)
+    }
 }
 
 /** Feeds the Live now row. Before the catalogs load, the next catalog update picks the items up. */

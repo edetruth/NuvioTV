@@ -38,7 +38,8 @@ data class GameArt(
             val event = snapshot?.takeIf { firstIsHome != null }
             val firstTeam = event?.let { if (firstIsHome == true) it.home else it.away }
             val secondTeam = event?.let { if (firstIsHome == true) it.away else it.home }
-            val eventStart = event?.startMs
+            // ESPN's own time beats an addon's, unless ESPN has none yet (TBD).
+            val eventStart = event?.takeIf { it.timeValid }?.startMs
             return GameArt(
                 first = team(first, firstTeam),
                 second = team(second, secondTeam),

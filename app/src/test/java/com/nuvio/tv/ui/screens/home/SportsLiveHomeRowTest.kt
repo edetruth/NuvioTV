@@ -73,12 +73,29 @@ class SportsLiveHomeRowTest {
         val scores = mapOf(game.streamKey to event)
         fun labels(mode: ScoresMode) = SportsLiveHomeRow.scoreLabels(listOf(game, unmatched), scores, mode, strings, "● %1\$s")
 
-        assertEquals(mapOf("g" to "● Q3 4:12 · 80–88"), labels(ScoresMode.SHOW))
-        assertEquals(mapOf("g" to "● Score hidden"), labels(ScoresMode.HIDE_UNTIL_FOCUSED))
+        assertEquals(mapOf(game.streamKey to "● Q3 4:12 · 80–88"), labels(ScoresMode.SHOW))
+        // No focus reveal on Home: Hide until focused shows nothing there (and nothing is polled for it).
+        assertEquals(emptyMap<String, String>(), labels(ScoresMode.HIDE_UNTIL_FOCUSED))
         assertEquals(emptyMap<String, String>(), labels(ScoresMode.OFF))
 
         val row = SportsLiveHomeRow.build(listOf(game, unmatched), "Live now", labels(ScoresMode.SHOW))
         assertEquals(listOf("● Q3 4:12 · 80–88", null), row.items.map { it.releaseInfo })
+    }
+
+    @Test
+    fun `two addons sharing an item id keep their own score labels`() {
+        val event = EspnFixtures.events(EspnFixtures.NBA_20261115, EspnLeagueMap.NBA).first { it.eventId == "401909985" }
+        fun game(addon: String) = item("same").let {
+            it.copy(addonId = addon, meta = it.meta.copy(name = "Pacers at 76ers"), teams = SportsLiveTeams.parse("Pacers at 76ers"))
+        }
+        val first = game("addon.one")
+        val second = game("addon.two")
+        val strings = ScoreChipStrings("%1\$d–%2\$d", "%1\$s · %2\$s", "%1\$s %2\$s", "Final", "Postponed", "Score hidden")
+        // Only the first addon's card is matched.
+        val labels = SportsLiveHomeRow.scoreLabels(listOf(first, second), mapOf(first.streamKey to event), ScoresMode.SHOW, strings, "● %1\$s")
+        assertEquals(mapOf(first.streamKey to "Final 124–131"), labels)
+        val row = SportsLiveHomeRow.build(listOf(first, second), "Live now", labels)
+        assertEquals(listOf("Final 124–131", null), row.items.map { it.releaseInfo })
     }
 
     companion object {

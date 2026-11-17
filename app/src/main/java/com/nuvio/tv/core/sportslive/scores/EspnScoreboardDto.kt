@@ -42,6 +42,8 @@ data class EspnCompetitionDto(
     val competitors: List<EspnCompetitorDto>? = null,
     /** "UEFA Nations League, Group A2", "Men's International Friendly": the competition, then the stage. */
     val altGameNote: String? = null,
+    /** False when the start time is not set yet (ESPN "TBD"); the date still is. */
+    val timeValid: Boolean? = null,
     val details: List<EspnDetailDto>? = null
 )
 

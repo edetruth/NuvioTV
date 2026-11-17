@@ -35,14 +35,32 @@ object SportsLiveTeams {
     fun parseBracketed(channelName: String): TeamPair? =
         BRACKET_GROUP.findAll(channelName).firstNotNullOfOrNull { parse(it.groupValues[1]) }
 
-    fun parse(name: String): TeamPair? {
+    fun parse(name: String): TeamPair? = parseWritten(name)?.let { (first, second, awayFirst) ->
+        if (awayFirst) TeamPair(home = second, away = first) else TeamPair(first, second)
+    }
+
+    /**
+     * The game's two sides in the order [name] writes them, as [parse] reads it ("Castilla at Real Madrid":
+     * Castilla, then Real Madrid); for a channel, the bracketed game's. Null when it names no game.
+     */
+    fun writtenOrder(name: String, bracketed: Boolean = false): Pair<String, String>? {
+        val written = if (bracketed) {
+            BRACKET_GROUP.findAll(name).firstNotNullOfOrNull { parseWritten(it.groupValues[1]) }
+        } else {
+            parseWritten(name)
+        }
+        return written?.let { it.first to it.second }
+    }
+
+    /** First side, second side, and whether the separator puts the away side first (" at ", " @ "). */
+    private fun parseWritten(name: String): Triple<String, String, Boolean>? {
         for (separator in SEPARATORS) {
             val index = name.indexOf(separator, ignoreCase = true)
             if (index < 0) continue
             val first = display(name.substring(0, index))
             val second = display(name.substring(index + separator.length))
             if (first.isEmpty() || second.isEmpty()) continue
-            return if (separator in AWAY_FIRST) TeamPair(home = second, away = first) else TeamPair(first, second)
+            return Triple(first, second, separator in AWAY_FIRST)
         }
         return null
     }

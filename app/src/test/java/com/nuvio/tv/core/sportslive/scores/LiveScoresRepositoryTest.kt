@@ -594,4 +594,45 @@ class LiveScoresRepositoryTest {
         runCurrent()
         assertEquals(setOf(palace.streamKey), repo.scores.value.keys)
     }
+
+    @Test
+    fun `after a pause no old score shows until a fresh fetch`() = runTest {
+        provider.respond = { ScoreboardResult(listOf(game(ScoreState.IN, 50, 48, "Q2 5:00"))) }
+        val repo = repository("2026-11-15T19:00:00Z")
+        val collector = collect(repo)
+        repo.track(SECTION, listOf(pacersCard))
+        runCurrent()
+        assertEquals(1, repo.scores.value.size)
+        // The player opens: no one collects; the shown scores are dropped.
+        collector.cancel()
+        runCurrent()
+        assertTrue(repo.scores.value.isEmpty())
+        advanceTimeBy(10 * 60_000L); runCurrent()
+        // Back: the refetch is held, and the 10-minute-old score must not come back meanwhile.
+        val gate = CompletableDeferred<Unit>()
+        provider.gate = gate
+        provider.respond = { ScoreboardResult(listOf(game(ScoreState.IN, 70, 66, "Q3 1:00"))) }
+        collect(repo)
+        runCurrent()
+        assertTrue(repo.scores.value.isEmpty())
+        gate.complete(Unit)
+        runCurrent()
+        assertEquals(70, repo.scores.value.getValue(pacersCard.streamKey).homeScore)
+    }
+
+    @Test
+    fun `a parked out-of-scope card is scored once its team is followed`() = runTest {
+        val eng1 = EspnFixtures.events(EspnFixtures.ENG1_20261108, EspnFixtures.ENG1)
+        provider.respond = { feed -> if (feed.league == EspnFixtures.ENG1) ScoreboardResult(eng1) else ScoreboardResult(emptyList()) }
+        mySports.value = MySports(mapOf(MySport.SOCCER to setOf(MyLeague.LA_LIGA)))
+        val repo = repository("2026-11-08T15:00:00Z")
+        collect(repo)
+        val palace = item("Crystal Palace vs Liverpool", "Soccer", "2026-11-08T14:00:00Z", genres = listOf("Premier League"))
+        repo.track(SECTION, listOf(palace))
+        runCurrent()
+        assertTrue(repo.scores.value.isEmpty())
+        repo.track(SECTION, listOf(palace.copy(followed = true)))
+        runCurrent()
+        assertEquals(setOf(palace.streamKey), repo.scores.value.keys)
+    }
 }

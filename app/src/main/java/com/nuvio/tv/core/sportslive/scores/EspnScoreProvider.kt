@@ -171,6 +171,7 @@ class EspnScoreProvider internal constructor(
                 leagueName = leagueNames[leagueSlug] ?: competitionName(competition.altGameNote),
                 competitionId = event.uid?.let { LEAGUE_IN_UID.find(it)?.groupValues?.get(1) },
                 startMs = event.date?.let(::parseDate),
+                timeValid = competition.timeValid != false,
                 state = state,
                 clockText = type?.shortDetail?.takeIf { it.isNotBlank() },
                 isFinal = state != ScoreState.OFF && type?.completed == true,

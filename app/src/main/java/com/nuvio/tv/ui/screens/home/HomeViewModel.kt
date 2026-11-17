@@ -238,7 +238,7 @@ class HomeViewModel @Inject constructor(
     internal var disabledHomeCatalogKeys: Set<String> = emptySet()
     /** Catalogs the Sports & Live section claims; they are left out of the Home rows. */
     internal var sportsLiveClaimedKeys: Set<String> = emptySet()
-    /** The Live now cards' score labels by item id (see [SportsLiveHomeRow.scoreLabels]). */
+    /** The Live now cards' score labels by item streamKey (see [SportsLiveHomeRow.scoreLabels]). */
     internal var liveNowScoreLabels: Map<String, String> = emptyMap()
     internal var followAddonsOrderEnabled: Boolean = false
     internal var customCatalogTitles: Map<String, String> = emptyMap()

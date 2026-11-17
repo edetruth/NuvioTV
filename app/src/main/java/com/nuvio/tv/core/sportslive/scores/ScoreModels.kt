@@ -55,6 +55,8 @@ data class ScoreSnapshot(
     val competitionId: String? = null,
     /** Scheduled start in epoch millis (UTC); null when the feed's date was missing or unreadable. */
     val startMs: Long?,
+    /** False when ESPN has no kick-off time yet ("TBD"): [startMs] then holds only the date. */
+    val timeValid: Boolean = true,
     val state: ScoreState,
     /** ESPN `status.type.shortDetail`: "Q3 4:12", "67'", "Final/OT", "FT". */
     val clockText: String?,

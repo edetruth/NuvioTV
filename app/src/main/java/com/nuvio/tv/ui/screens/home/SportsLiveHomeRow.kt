@@ -16,7 +16,7 @@ object SportsLiveHomeRow {
     const val CATALOG_ID = "live_now"
 
     /**
-     * [scoreLabels] (item id → score chip text) replace a card's label line (its release info), so a
+     * [scoreLabels] (item streamKey → score chip text) replace a card's label line (its release info), so a
      * live game shows its clock and score under its title.
      */
     fun build(items: List<SportsLiveItem>, title: String, scoreLabels: Map<String, String> = emptyMap()): CatalogRow = CatalogRow(
@@ -27,16 +27,16 @@ object SportsLiveHomeRow {
         catalogName = title,
         type = ContentType.UNKNOWN,
         rawType = "sport",
-        items = items.map { item -> scoreLabels[item.id]?.let { item.meta.copy(releaseInfo = it) } ?: item.meta },
+        items = items.map { item -> scoreLabels[item.streamKey]?.let { item.meta.copy(releaseInfo = it) } ?: item.meta },
         isLoading = false,
         hasMore = false,
         supportsSkip = false
     )
 
     /**
-     * The Live now cards' score labels, by item id: the chip text ("● Q3 4:12 · 88–80"), with [liveFormat]
-     * ("● %1$s") marking a live one. Home has no focus reveal, so Hide until focused shows "Score hidden";
-     * Off (or no strict match) shows nothing.
+     * The Live now cards' score labels, by item streamKey (two addons may share an item id): the chip
+     * text ("● Q3 4:12 · 88–80"), with [liveFormat] ("● %1$s") marking a live one. Only under Show: Home
+     * has no focus reveal, so Hide until focused (and Off, or no strict match) shows nothing there.
      */
     fun scoreLabels(
         items: List<SportsLiveItem>,
@@ -44,11 +44,11 @@ object SportsLiveHomeRow {
         mode: ScoresMode?,
         strings: ScoreChipStrings,
         liveFormat: String
-    ): Map<String, String> = items.mapNotNull { item ->
+    ): Map<String, String> = if (mode != ScoresMode.SHOW) emptyMap() else items.mapNotNull { item ->
         val chip = ScoreChips.of(item, scores[item.streamKey], mode, revealed = false) ?: return@mapNotNull null
         val text = ScoreChips.text(chip, strings)
         val live = chip is ScoreChip.Live || (chip is ScoreChip.Hidden && chip.live)
-        item.id to if (live) String.format(liveFormat, text) else text
+        item.streamKey to if (live) String.format(liveFormat, text) else text
     }.toMap()
 
     fun isLiveNowRow(addonBaseUrl: String): Boolean = addonBaseUrl == BASE_URL

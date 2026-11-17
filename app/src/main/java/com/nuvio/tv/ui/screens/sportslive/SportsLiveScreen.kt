@@ -119,10 +119,25 @@ fun SportsLiveScreen(
         enabled = scoresMode != null && scoresMode != ScoresMode.OFF,
         tracking = scoresViewModel.tracking
     )
-    val chipOf: (SportsLiveItem) -> ScoreChip? = { item ->
-        if (scoredTab) ScoreChips.of(item, scores[item.streamKey], scoresMode, item.streamKey in revealed) else null
+    // Worked out once per card for each scores update (or setting / reveal change), not per recomposition.
+    val chipOf: (SportsLiveItem) -> ScoreChip? = remember(scores, scoresMode, revealed, scoredTab) {
+        val cache = HashMap<SportsLiveItem, ScoreChip?>()
+        val chip: (SportsLiveItem) -> ScoreChip? = { item ->
+            if (!scoredTab) {
+                null
+            } else {
+                cache.getOrPut(item) {
+                    ScoreChips.of(item, scores[item.streamKey], scoresMode, item.streamKey in revealed)
+                }
+            }
+        }
+        chip
     }
-    val artOf: (SportsLiveItem) -> GameArt? = { item -> GameArt.of(item, scores[item.streamKey]) }
+    val artOf: (SportsLiveItem) -> GameArt? = remember(scores) {
+        val cache = HashMap<SportsLiveItem, GameArt?>()
+        val art: (SportsLiveItem) -> GameArt? = { item -> cache.getOrPut(item) { GameArt.of(item, scores[item.streamKey]) } }
+        art
+    }
 
     // Results loads only while its tab is selected; Scores Off hides the tab (and requests nothing).
     LaunchedEffect(uiState.selectedTab) { resultsViewModel.setActive(uiState.selectedTab == SportsLiveTab.RESULTS) }

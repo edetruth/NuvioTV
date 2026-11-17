@@ -38,6 +38,7 @@ import com.nuvio.tv.core.sportslive.scores.ScoreChip
 import com.nuvio.tv.core.sportslive.scores.ScoreChipStrings
 import com.nuvio.tv.core.sportslive.scores.ScoreChips
 import com.nuvio.tv.ui.theme.NuvioTheme
+import java.time.LocalDate
 import java.time.ZoneId
 import java.util.Locale
 
@@ -89,7 +90,9 @@ internal fun SportsLiveScoreChip(chip: ScoreChip, modifier: Modifier = Modifier)
 @Composable
 private fun kickoffText(art: GameArt): String? {
     val tomorrow = stringResource(R.string.sports_live_tomorrow)
-    return remember(art.startMs, art.hasTimeOfDay, tomorrow) {
+    // Keyed by today's date, so "Today" / "Tomorrow" move on at midnight (the lists recompose on refresh).
+    val today = LocalDate.now()
+    return remember(art.startMs, art.hasTimeOfDay, tomorrow, today) {
         when (val pill = GameArt.kickoff(art, System.currentTimeMillis(), ZoneId.systemDefault(), Locale.getDefault())) {
             is SportsLivePillTime.Today -> pill.time
             is SportsLivePillTime.Tomorrow -> String.format(tomorrow, pill.time)
@@ -118,9 +121,13 @@ internal fun SportsLiveGameArt(art: GameArt, compact: Boolean, modifier: Modifie
                 CompactTeam(art.first, art.hasLogos)
                 CompactTeam(art.second, art.hasLogos)
                 Spacer(modifier = Modifier.weight(1f))
-                listOfNotNull(kickoff, art.league).takeIf { it.isNotEmpty() }?.let { parts ->
+                val footer = when {
+                    kickoff != null && art.league != null -> stringResource(R.string.sports_live_art_footer, kickoff, art.league)
+                    else -> kickoff ?: art.league
+                }
+                footer?.let { text ->
                     Text(
-                        text = parts.joinToString(" · "),
+                        text = text,
                         style = TextStyle(fontSize = 10.sp, fontFeatureSettings = "tnum"),
                         color = ArtColors.Muted,
                         maxLines = 1,

@@ -1,5 +1,6 @@
 package com.nuvio.tv.core.sportslive.scores
 
+import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.domain.model.SportsLiveItem
 
 /** A score in the card's own team order: [first] is the team its title names first. */
@@ -86,9 +87,13 @@ object ScoreChips {
      */
     fun orderedSides(item: SportsLiveItem): Pair<String, String>? {
         val teams = ScoreCard.from(item)?.teams ?: return null
-        val title = item.meta.name
-        fun at(side: String) = title.indexOf(side, ignoreCase = true).let { if (it < 0) Int.MAX_VALUE else it }
-        return if (at(teams.away) < at(teams.home)) teams.away to teams.home else teams.home to teams.away
+        // From the separator the title was parsed by, never by searching names (one can contain the other).
+        val written = SportsLiveTeams.writtenOrder(item.meta.name, bracketed = item.isChannel)
+        return when {
+            written == null -> teams.home to teams.away
+            written == teams.away to teams.home -> teams.away to teams.home
+            else -> teams.home to teams.away
+        }
     }
 
     private fun scoreOf(snapshot: ScoreSnapshot, firstIsHome: Boolean): ChipScore? {

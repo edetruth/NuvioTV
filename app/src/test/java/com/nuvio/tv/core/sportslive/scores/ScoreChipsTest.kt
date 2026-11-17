@@ -133,6 +133,14 @@ class ScoreChipsTest {
     }
 
     @Test
+    fun `side order comes from the separator, not from searching names`() {
+        val castilla = item("Real Madrid Castilla at Real Madrid")
+        assertEquals("Real Madrid Castilla" to "Real Madrid", ScoreChips.orderedSides(castilla))
+        assertEquals("Real Madrid" to "Real Madrid Castilla", ScoreChips.orderedSides(item("Real Madrid vs Real Madrid Castilla")))
+        assertEquals("Pacers" to "76ers", ScoreChips.orderedSides(item("US| NBA 01 [Pacers @ 76ers]", isChannel = true)))
+    }
+
+    @Test
     fun `a youth card never takes a senior event's score`() {
         assertNull(chipText(item("Crystal Palace U21 vs Liverpool U21"), palace))
     }

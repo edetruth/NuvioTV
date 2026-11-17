@@ -86,6 +86,10 @@ class LiveScoresRepository internal constructor(
         var events: List<ScoreSnapshot> = emptyList()
         var fetched = false
         var lastAttemptAt: Long? = null
+        /** When the last successful fetch landed. */
+        var lastSuccessAt: Long? = null
+        /** The polling interval last worked out for the feed; null once it stopped (all final, past day). */
+        var intervalMs: Long? = null
         var jitterMs = 0L
         var failures = 0
         var retryAfterMs: Long? = null
@@ -116,7 +120,17 @@ class LiveScoresRepository internal constructor(
     init {
         scope.launch {
             output.subscriptionCount.map { it > 0 }.distinctUntilChanged().collectLatest { active ->
-                if (active) run()
+                if (active) {
+                    run()
+                } else {
+                    // No one looks: drop the shown scores, so a screen coming back never shows the
+                    // score from when polling stopped (fresh fetches bring them back).
+                    lock.withLock {
+                        raw = emptyMap()
+                        nextRelease.value = null
+                        output.value = emptyMap()
+                    }
+                }
             }
         }
     }
@@ -212,6 +226,7 @@ class LiveScoresRepository internal constructor(
             state.retryAfterMs = null
             state.events = result.events
             state.fetched = true
+            state.lastSuccessAt = state.lastAttemptAt
         }
     }
 
@@ -228,7 +243,9 @@ class LiveScoresRepository internal constructor(
             retryAfterMs = state.retryAfterMs,
             today = today(),
             nowMs = now()
-        ) ?: return null
+        )
+        state.intervalMs = interval
+        if (interval == null) return null
         return (last + interval + state.jitterMs - now()).coerceAtLeast(0L)
     }
 
@@ -244,7 +261,7 @@ class LiveScoresRepository internal constructor(
         val matched = HashMap<String, ScoreSnapshot>()
         for (entry in trackedUnion()) {
             val card = entry.card
-            if (card.key in outOfScope) continue
+            if (card.key in outOfScope && !entry.followed) continue
             val dates = datesFor(card, today)
             val leagues = remembered[card.key]?.let(::listOf)
                 ?: if (entry.followed) entry.leagues else entry.leagues.filter(::inMySports)
@@ -323,8 +340,21 @@ class LiveScoresRepository internal constructor(
     }
 
     private fun matchOn(card: ScoreCard, cardFeeds: List<ScoreFeed>): ScoreSnapshot? {
-        val events = cardFeeds.flatMap { feeds[it]?.events.orEmpty() }.distinctBy { it.eventId }
+        val nowMs = now()
+        val events = cardFeeds.flatMap { feed -> feeds[feed]?.takeIf { it.isFresh(nowMs) }?.events.orEmpty() }
+            .distinctBy { it.eventId }
         return if (events.isEmpty()) null else matcher.match(card, events, now())
+    }
+
+    /**
+     * True when the feed's events may be shown: fetched no longer ago than twice its polling interval
+     * (plus jitter). A feed that stopped polling (all final, a past day) keeps its events. After a pause
+     * (the player, Home) a live feed is stale until it is fetched again, so no old score shows meanwhile.
+     */
+    private fun FeedState.isFresh(nowMs: Long): Boolean {
+        val success = lastSuccessAt ?: return false
+        val interval = intervalMs ?: return true
+        return nowMs - success <= 2 * interval + ScoreCadence.JITTER_MS
     }
 
     private fun publishLocked(off: Boolean = false) {

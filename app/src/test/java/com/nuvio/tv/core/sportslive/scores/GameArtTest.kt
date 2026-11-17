@@ -63,6 +63,14 @@ class GameArtTest {
     }
 
     @Test
+    fun `an ESPN start without a time (TBD) keeps the card's own start`() {
+        val tbd = pacers.copy(startMs = ms("2026-11-15T05:00:00Z"), timeValid = false)
+        val art = GameArt.of(item("Pacers at 76ers", start = "2026-11-15T18:00:00Z"), tbd)!!
+        assertEquals(ms("2026-11-15T18:00:00Z"), art.startMs)
+        assertTrue(art.hasLogos)
+    }
+
+    @Test
     fun `an unmatched game still gets a card from its own names and start, without logos`() {
         val art = GameArt.of(item("NBA: Boston Celtics vs New York Knicks", start = "2026-11-15T23:30:00Z"), null)!!
         assertEquals(GameArtTeam("Boston Celtics", "Boston Celtics", null), art.first)

@@ -104,13 +104,14 @@ fun HomeScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    // Live now cards get a score label, polled only while Home is started and Scores is not Off.
+    // Live now cards get a score label under Show only (Home has no focus reveal), polled only while
+    // Home is started.
     val liveScores by liveScoresViewModel.scores.collectAsStateWithLifecycle()
     val liveScoresMode by liveScoresViewModel.mode.collectAsStateWithLifecycle()
     TrackLiveScores(
         screenId = LiveScoresRepository.SCREEN_HOME,
         cards = uiState.liveNowItems,
-        enabled = liveScoresMode != null && liveScoresMode != ScoresMode.OFF,
+        enabled = liveScoresMode == ScoresMode.SHOW,
         tracking = liveScoresViewModel.tracking
     )
     val scoreChipStrings = rememberScoreChipStrings()
