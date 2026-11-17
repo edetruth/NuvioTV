@@ -865,52 +865,6 @@ private fun PlaybackNavHost(
                             popUpTo(Screen.Stream.route) { inclusive = true }
                         }
                     }
-                },
-                onAutoPlayResolved = { playbackInfo ->
-                    val autoPlayUrl = playbackInfo.url
-                        ?: if (playbackInfo.isTorrent) "torrent://${playbackInfo.infoHash}" else null
-                    autoPlayUrl?.let { url ->
-                        navController.navigate(
-                            Screen.Player.createRoute(
-                                streamUrl = url,
-                                title = playbackInfo.title,
-                                streamName = playbackInfo.streamName,
-                                year = playbackInfo.year,
-                                headers = playbackInfo.headers,
-                                contentId = playbackInfo.contentId,
-                                contentType = playbackInfo.contentType,
-                                contentName = playbackInfo.contentName,
-                                poster = playbackInfo.poster,
-                                backdrop = playbackInfo.backdrop,
-                                logo = playbackInfo.logo,
-                                videoId = playbackInfo.videoId,
-                                season = playbackInfo.season,
-                                episode = playbackInfo.episode,
-                                episodeTitle = playbackInfo.episodeTitle,
-                                bingeGroup = playbackInfo.bingeGroup,
-                                autoPlayNav = true,
-                                returnToDetailOnBack = returnToDetailOnBack,
-                                returnToHomeOnBack = returnToHomeOnBack,
-                                filename = playbackInfo.filename,
-                                videoHash = playbackInfo.videoHash,
-                                videoSize = playbackInfo.videoSize,
-                                startFromBeginning = startFromBeginning,
-                                addonName = playbackInfo.addonName,
-                                addonLogo = playbackInfo.addonLogo,
-                                streamDescription = playbackInfo.streamDescription,
-                                infoHash = playbackInfo.infoHash,
-                                fileIdx = playbackInfo.fileIdx,
-                                sources = playbackInfo.sources,
-                                contentLanguage = playbackInfo.contentLanguage,
-                                profileId = playbackInfo.profileId,
-                                audioDelayMs = playbackInfo.audioDelayMs,
-                                audioDelayLanguage = playbackInfo.audioDelayLanguage,
-                                fromLinkCache = playbackInfo.fromLinkCache
-                            )
-                        ) {
-                            popUpTo(Screen.Stream.route) { inclusive = true }
-                        }
-                    }
                 }
             )
         }
