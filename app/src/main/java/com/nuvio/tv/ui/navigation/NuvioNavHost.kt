@@ -72,7 +72,9 @@ import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapSessions
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapTarget
 import com.nuvio.tv.ui.screens.sportslive.streamRouteFor
 import com.nuvio.tv.ui.screens.sportslive.dual.LocalOpenSportsLiveDual
+import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualPopTarget
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualScreen
+import com.nuvio.tv.ui.screens.sportslive.dual.sportsLiveDualEntryPopTarget
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniPlayers
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniStop
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLivePip
@@ -200,23 +202,30 @@ private fun navigateToSportsLiveZapTarget(navController: NavHostController, targ
 /**
  * Leaves the playing Player for dual screen, on the session already in SportsLiveDualSessions. The
  * player (and its Stream screen when below it, as a zap pops it) goes, so it never plays alongside the
- * two panes and Back from dual screen returns to where the game was started from. Like Back from the
- * player, its zap session and the other addons' streams registered for it end.
+ * two panes; with the section on the stack everything above it goes, so Back from dual screen returns
+ * to the section (see sportsLiveDualEntryPopTarget). Like Back from the player, its zap session and
+ * the other addons' streams registered for it end.
  */
 private fun openSportsLiveDualFromPlayer(navController: NavHostController) {
     val playerEntry = navController.currentBackStackEntry
         ?.takeIf { it.destination.route == Screen.Player.route } ?: return
     SportsLiveZapSessions.clear()
     SportsLiveExtraSources.clear(playerEntry.arguments?.getString("contentId"))
-    // A player opened from dual screen replaces that dual screen rather than stacking a second one.
-    val dualBelow = navController.currentBackStack.value.any { it.destination.route == Screen.SportsLiveDual.route }
-    val popUpToRoute = when {
-        dualBelow -> Screen.SportsLiveDual.route
-        navController.previousIsStreamScreen() -> Screen.Stream.route
-        else -> Screen.Player.route
+    val stackRoutes = navController.currentBackStack.value.map { it.destination.route }
+    val target = sportsLiveDualEntryPopTarget(
+        sectionOnStack = Screen.SportsLive.route in stackRoutes,
+        // A player opened from dual screen replaces that dual screen rather than stacking a second one.
+        dualOnStack = Screen.SportsLiveDual.route in stackRoutes,
+        previousIsStreamScreen = navController.previousIsStreamScreen()
+    )
+    val popUpToRoute = when (target) {
+        SportsLiveDualPopTarget.ABOVE_SECTION -> Screen.SportsLive.route
+        SportsLiveDualPopTarget.DUAL -> Screen.SportsLiveDual.route
+        SportsLiveDualPopTarget.STREAM -> Screen.Stream.route
+        SportsLiveDualPopTarget.PLAYER -> Screen.Player.route
     }
     navController.navigate(Screen.SportsLiveDual.route) {
-        popUpTo(popUpToRoute) { inclusive = true }
+        popUpTo(popUpToRoute) { inclusive = target != SportsLiveDualPopTarget.ABOVE_SECTION }
     }
 }
 
@@ -1486,10 +1495,17 @@ private fun PlaybackNavHost(
                     // Once only: a second Back during the exit transition must not also pop the screen below.
                     if (navController.currentDestination?.route == Screen.SportsLiveDual.route) navController.popBackStack()
                 },
-                // OK plays the highlighted game as the section does; Back from it returns here.
-                onOpenStreamScreen = { item -> navController.navigate(streamRouteFor(item, returnToHomeOnBack = false)) },
+                // OK plays the highlighted game full screen in place of dual screen, so Back from it
+                // returns to where dual was opened from (the section), not to dual.
+                onOpenStreamScreen = { item ->
+                    navController.navigate(streamRouteFor(item, returnToHomeOnBack = false)) {
+                        popUpTo(Screen.SportsLiveDual.route) { inclusive = true }
+                    }
+                },
                 onPlayTarget = { target ->
-                    navController.navigate(sportsLivePlayerRoute(target) ?: streamRouteFor(target.item, returnToHomeOnBack = false))
+                    navController.navigate(sportsLivePlayerRoute(target) ?: streamRouteFor(target.item, returnToHomeOnBack = false)) {
+                        popUpTo(Screen.SportsLiveDual.route) { inclusive = true }
+                    }
                 }
             )
         }
