@@ -1,0 +1,1179 @@
+{
+ "leagues": [
+  {
+   "id": "8315",
+   "uid": "s:600~l:8315",
+   "name": "Africa Cup of Nations Qualifying",
+   "abbreviation": "AFCON Qualifying",
+   "slug": "caf.nations_qual"
+  }
+ ],
+ "events": [
+  {
+   "id": "401927170",
+   "uid": "s:600~l:8315~e:401927170",
+   "date": "2026-11-16T13:00Z",
+   "name": "Cameroon at Namibia",
+   "shortName": "CMR @ NAM",
+   "status": {
+    "clock": 5400,
+    "displayClock": "90'+4'",
+    "period": 2,
+    "type": {
+     "id": "28",
+     "name": "STATUS_FULL_TIME",
+     "state": "post",
+     "completed": true,
+     "description": "Full Time",
+     "detail": "FT",
+     "shortDetail": "FT"
+    }
+   },
+   "competitions": [
+    {
+     "id": "401927170",
+     "date": "2026-11-16T13:00Z",
+     "startDate": "2026-11-16T13:00Z",
+     "competitors": [
+      {
+       "id": "6725",
+       "homeAway": "home",
+       "winner": false,
+       "score": "0",
+       "team": {
+        "id": "6725",
+        "abbreviation": "NAM",
+        "displayName": "Namibia",
+        "shortDisplayName": "Namibia",
+        "name": "Namibia",
+        "location": "Namibia",
+        "logo": "https://a.espncdn.com/i/teamlogos/countries/500/nam.png"
+       }
+      },
+      {
+       "id": "656",
+       "homeAway": "away",
+       "winner": true,
+       "score": "3",
+       "team": {
+        "id": "656",
+        "abbreviation": "CMR",
+        "displayName": "Cameroon",
+        "shortDisplayName": "Cameroon",
+        "name": "Cameroon",
+        "location": "Cameroon",
+        "logo": "https://a.espncdn.com/i/teamlogos/countries/500/crm.png"
+       }
+      }
+     ],
+     "details": [
+      {
+       "type": {
+        "id": "70",
+        "text": "Goal"
+       },
+       "clock": {
+        "value": 664,
+        "displayValue": "12'"
+       },
+       "team": {
+        "id": "656"
+       },
+       "scoreValue": 1,
+       "scoringPlay": true,
+       "redCard": false,
+       "yellowCard": false,
+       "penaltyKick": false,
+       "ownGoal": false,
+       "shootout": false,
+       "athletesInvolved": [
+        {
+         "id": "372260",
+         "displayName": "Mahamadou Nagida",
+         "shortName": "M. Nagida"
+        }
+       ]
+      },
+      {
+       "type": {
+        "id": "94",
+        "text": "Yellow Card"
+       },
+       "clock": {
+        "value": 3073,
+        "displayValue": "52'"
+       },
+       "team": {
+        "id": "656"
+       },
+       "scoreValue": 0,
+       "scoringPlay": false,
+       "redCard": false,
+       "yellowCard": true,
+       "penaltyKick": false,
+       "ownGoal": false,
+       "shootout": false,
+       "athletesInvolved": [
+        {
+         "id": "337021",
+         "displayName": "Samuel Junior Kotto",
+         "shortName": "S. Kotto"
+        }
+       ]
+      },
+      {
+       "type": {
+        "id": "70",
+        "text": "Goal"
+       },
+       "clock": {
+        "value": 3466,
+        "displayValue": "58'"
+       },
+       "team": {
+        "id": "656"
+       },
+       "scoreValue": 1,
+       "scoringPlay": true,
+       "redCard": false,
+       "yellowCard": false,
+       "penaltyKick": false,
+       "ownGoal": false,
+       "shootout": false,
+       "athletesInvolved": [
+        {
+         "id": "345794",
+         "displayName": "Ryan Fosso",
+         "shortName": "R. Fosso"
+        }
+       ]
+      },
+      {
+       "type": {
+        "id": "94",
+        "text": "Yellow Card"
+       },
+       "clock": {
+        "value": 3928,
+        "displayValue": "66'"
+       },
+       "team": {
+        "id": "6725"
+       },
+       "scoreValue": 0,
+       "scoringPlay": false,
+       "redCard": false,
+       "yellowCard": true,
+       "penaltyKick": false,
+       "ownGoal": false,
+       "shootout": false,
+       "athletesInvolved": [
+        {
+         "id": "345383",
+         "displayName": "Ngero Katua",
+         "shortName": "N. Katua"
+        }
+       ]
+      },
+      {
+       "type": {
+        "id": "70",
+        "text": "Goal"
+       },
+       "clock": {
+        "value": 4222,
+        "displayValue": "71'"
+       },
+       "team": {
+        "id": "656"
+       },
+       "scoreValue": 1,
+       "scoringPlay": true,
+       "redCard": false,
+       "yellowCard": false,
+       "penaltyKick": false,
+       "ownGoal": false,
+       "shootout": false,
+       "athletesInvolved": [
+        {
+         "id": "297099",
+         "displayName": "Saidou Alioum Moubarak",
+         "shortName": "S. Alioum Moubarak"
+        }
+       ]
+      },
+      {
+       "type": {
+        "id": "94",
+        "text": "Yellow Card"
+       },
+       "clock": {
+        "value": 5154,
+        "displayValue": "86'"
+       },
+       "team": {
+        "id": "6725"
+       },
+       "scoreValue": 0,
+       "scoringPlay": false,
+       "redCard": false,
+       "yellowCard": true,
+       "penaltyKick": false,
+       "ownGoal": false,
+       "shootout": false,
+       "athletesInvolved": [
+        {
+         "id": "288816",
+         "displayName": "Ivan Kamberipa",
+         "shortName": "I. Kamberipa"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401927135",
+   "uid": "s:600~l:8315~e:401927135",
+   "date": "2026-11-16T13:00Z",
+   "name": "Senegal at Sudan",
+   "shortName": "SEN @ SUD",
+   "status": {
+    "clock": 5400,
+    "displayClock": "90'+6'",
+    "period": 2,
+    "type": {
+     "id": "28",
+     "name": "STATUS_FULL_TIME",
+     "state": "post",
+     "completed": true,
+     "description": "Full Time",
+     "detail": "FT",
+     "shortDetail": "FT"
+    }
+   },
+   "competitions": [
+    {
+     "id": "401927135",
+     "date": "2026-11-16T13:00Z",
+     "startDate": "2026-11-16T13:00Z",
+     "competitors": [
+      {
+       "id": "4319",
+       "homeAway": "home",
+       "winner": false,
+       "score": "2",
+       "team": {
+        "id": "4319",
+        "abbreviation": "SUD",
+        "displayName": "Sudan",
+        "shortDisplayName": "Sudan",
+        "name": "Sudan",
+        "location": "Sudan",
+        "logo": "https://a.espncdn.com/i/teamlogos/countries/500/sud.png"
+       }
+      },
+      {
+       "id": "654",
+       "homeAway": "away",
+       "winner": true,
+       "score": "4",
+       "team": {
+        "id": "654",
+        "abbreviation": "SEN",
+        "displayName": "Senegal",
+        "shortDisplayName": "Senegal",
+        "name": "Senegal",
+        "location": "Senegal",
+        "logo": "https://a.espncdn.com/i/teamlogos/countries/500/sen.png"
+       }
+      }
+     ],
+     "details": [
+      {
+       "type": {
+        "id": "70",
+        "text": "Goal"
+       },
+       "clock": {
+        "value": 214,
+        "displayValue": "4'"
+       },
+       "team": {
+        "id": "654"
+       },
+       "scoreValue": 1,
+       "scoringPlay": true,
+       "redCard": false,
+       "yellowCard": false,
+       "penaltyKick": false,
+       "ownGoal": false,
+       "shootout": false,
+       "athletesInvolved": [
+        {
+         "id": "308524",
+         "displayName": "Nicolas Jackson",
+         "shortName": "N. Jackson"
+        }
+       ]
+      },
+      {
+       "type": {
+        "id": "70",
+        "text": "Goal"
+       },
+       "clock": {
+        "value": 1296,
+        "displayValue": "22'"
+       },
+       "team": {
+        "id": "654"
+       },
+       "scoreValue": 1,
+       "scoringPlay": true,
+       "redCard": false,
+       "yellowCard": false,
+       "penaltyKick": false,
+       "ownGoal": false,
+       "shootout": false,
+       "athletesInvolved": [
+        {
+         "id": "359796",
+         "displayName": "El Hadji Malick Diouf",
+         "shortName": "E. Diouf"
+        }
+       ]
+      },
+      {
+       "type": {
+        "id": "94",
+        "text": "Yellow Card"
+       },
+       "clock": {
+        "value": 2786,
+        "displayValue": "47'"
+       },
+       "team": {
+        "id": "4319"
+       },
+       "scoreValue": 0,
+       "scoringPlay": false,
+       "redCard": false,
+       "yellowCard": true,
+       "penaltyKick": false,
+       "ownGoal": false,
+       "shootout": false,
+       "athletesInvolved": [
+        {
+         "id": "377235",
+         "displayName": "Yaser Awad Boshara",
+         "shortName": "Y. Awad Boshara"
+        }
+       ]
+      },
+      {
+       "type": {
+        "id": "70",
+        "text": "Goal"
+       },
+       "clock": {
+        "value": 3076,
+        "displayValue": "52'"
+       },
+       "team": {
+        "id": "4319"
+       },
+       "scoreValue": 1,
+       "scoringPlay": true,
+       "redCard": false,
+       "yellowCard": false,
+       "penaltyKick": false,
+       "ownGoal": false,
+       "shootout": false,
+       "athletesInvolved": [
+        {
+         "id": "314493",
+         "displayName": "Al-Gozoli Nooh",
+         "shortName": "A. Nooh"
+        }
+       ]
+      },
+      {
+       "type": {
+        "id": "94",
+        "text": "Yellow Card"
+       },
+       "clock": {
+        "value": 3166,
+        "displayValue": "53'"
+       },
+       "team": {
+        "id": "4319"
+       },
+       "scoreValue": 0,
+       "scoringPlay": false,
+       "redCard": false,
+       "yellowCard": true,
+       "penaltyKick": false,
+       "ownGoal": false,
+       "shootout": false,
+       "athletesInvolved": [
+        {
+         "id": "396129",
+         "displayName": "Musa Hussien",
+         "shortName": "Musa Hussien"
+        }
+       ]
+      },
+      {
+       "type": {
+        "id": "94",
+        "text": "Yellow Card"
+       },
+       "clock": {
+        "value": 3316,
+        "displayValue": "56'"
+       },
+       "team": {
+        "id": "654"
+       },
+       "scoreValue": 0,
+       "scoringPlay": false,
+       "redCard": false,
+       "yellowCard": true,
+       "penaltyKick": false,
+       "ownGoal": false,
+       "shootout": false,
+       "athletesInvolved": [
+        {
+         "id": "297337",
+         "displayName": "Pape Matar Sarr",
+         "shortName": "P. Sarr"
+        }
+       ]
+      },
+      {
+       "type": {
+        "id": "94",
+        "text": "Yellow Card"
+       },
+       "clock": {
+        "value": 3856,
+        "displayValue": "65'"
+       },
+       "team": {
+        "id": "654"
+       },
+       "scoreValue": 0,
+       "scoringPlay": false,
+       "redCard": false,
+       "yellowCard": true,
+       "penaltyKick": false,
+       "ownGoal": false,
+       "shootout": false,
+       "athletesInvolved": [
+        {
+         "id": "255889",
+         "displayName": "Pape Gueye",
+         "shortName": "P. Gueye"
+        }
+       ]
+      },
+      {
+       "type": {
+        "id": "70",
+        "text": "Goal"
+       },
+       "clock": {
+        "value": 4496,
+        "displayValue": "75'"
+       },
+       "team": {
+        "id": "4319"
+       },
+       "scoreValue": 1,
+       "scoringPlay": true,
+       "redCard": false,
+       "yellowCard": false,
+       "penaltyKick": false,
+       "ownGoal": false,
+       "shootout": false,
+       "athletesInvolved": [
+        {
+         "id": "292376",
+         "displayName": "Salaheldin Adil",
+         "shortName": "Salaheldin Adil"
+        }
+       ]
+      },
+      {
+       "type": {
+        "id": "70",
+        "text": "Goal"
+       },
+       "clock": {
+        "value": 5194,
+        "displayValue": "87'"
+       },
+       "team": {
+        "id": "654"
+       },
+       "scoreValue": 1,
+       "scoringPlay": true,
+       "redCard": false,
+       "yellowCard": false,
+       "penaltyKick": false,
+       "ownGoal": false,
+       "shootout": false,
+       "athletesInvolved": [
+        {
+         "id": "365783",
+         "displayName": "Pathé Mboup",
+         "shortName": "P. Mboup"
+        }
+       ]
+      },
+      {
+       "type": {
+        "id": "94",
+        "text": "Yellow Card"
+       },
+       "clock": {
+        "value": 5384,
+        "displayValue": "90'"
+       },
+       "team": {
+        "id": "654"
+       },
+       "scoreValue": 0,
+       "scoringPlay": false,
+       "redCard": false,
+       "yellowCard": true,
+       "penaltyKick": false,
+       "ownGoal": false,
+       "shootout": false,
+       "athletesInvolved": [
+        {
+         "id": "418819",
+         "displayName": "Paul Mendy",
+         "shortName": "P. Mendy"
+        }
+       ]
+      },
+      {
+       "type": {
+        "id": "70",
+        "text": "Goal"
+       },
+       "clock": {
+        "value": 5400,
+        "displayValue": "90'+1'"
+       },
+       "team": {
+        "id": "654"
+       },
+       "scoreValue": 1,
+       "scoringPlay": true,
+       "redCard": false,
+       "yellowCard": false,
+       "penaltyKick": false,
+       "ownGoal": false,
+       "shootout": false,
+       "athletesInvolved": [
+        {
+         "id": "418819",
+         "displayName": "Paul Mendy",
+         "shortName": "P. Mendy"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401927173",
+   "uid": "s:600~l:8315~e:401927173",
+   "date": "2026-11-16T14:00Z",
+   "name": "Equatorial Guinea at Zimbabwe",
+   "shortName": "EQG @ ZIM",
+   "status": {
+    "clock": 5400,
+    "displayClock": "90'+6'",
+    "period": 2,
+    "type": {
+     "id": "28",
+     "name": "STATUS_FULL_TIME",
+     "state": "post",
+     "completed": true,
+     "description": "Full Time",
+     "detail": "FT",
+     "shortDetail": "FT"
+    }
+   },
+   "competitions": [
+    {
+     "id": "401927173",
+     "date": "2026-11-16T14:00Z",
+     "startDate": "2026-11-16T14:00Z",
+     "competitors": [
+      {
+       "id": "4214",
+       "homeAway": "home",
+       "winner": true,
+       "score": "3",
+       "team": {
+        "id": "4214",
+        "abbreviation": "ZIM",
+        "displayName": "Zimbabwe",
+        "shortDisplayName": "Zimbabwe",
+        "name": "Zimbabwe",
+        "location": "Zimbabwe",
+        "logo": "https://a.espncdn.com/i/teamlogos/soccer/500/4214.png"
+       }
+      },
+      {
+       "id": "8938",
+       "homeAway": "away",
+       "winner": false,
+       "score": "0",
+       "team": {
+        "id": "8938",
+        "abbreviation": "EQG",
+        "displayName": "Equatorial Guinea",
+        "shortDisplayName": "Eq. Guinea",
+        "name": "Equatorial Guinea",
+        "location": "Equatorial Guinea",
+        "logo": "https://a.espncdn.com/i/teamlogos/countries/500/eqg.png"
+       }
+      }
+     ],
+     "details": [
+      {
+       "type": {
+        "id": "70",
+        "text": "Goal"
+       },
+       "clock": {
+        "value": 207,
+        "displayValue": "4'"
+       },
+       "team": {
+        "id": "4214"
+       },
+       "scoreValue": 1,
+       "scoringPlay": true,
+       "redCard": false,
+       "yellowCard": false,
+       "penaltyKick": false,
+       "ownGoal": false,
+       "shootout": false,
+       "athletesInvolved": [
+        {
+         "id": "404936",
+         "displayName": "Thandolwenkosi Ngwenya",
+         "shortName": "T. Ngwenya"
+        }
+       ]
+      },
+      {
+       "type": {
+        "id": "94",
+        "text": "Yellow Card"
+       },
+       "clock": {
+        "value": 640,
+        "displayValue": "11'"
+       },
+       "team": {
+        "id": "4214"
+       },
+       "scoreValue": 0,
+       "scoringPlay": false,
+       "redCard": false,
+       "yellowCard": true,
+       "penaltyKick": false,
+       "ownGoal": false,
+       "shootout": false,
+       "athletesInvolved": [
+        {
+         "id": "232781",
+         "displayName": "Tino Kadewere",
+         "shortName": "T. Kadewere"
+        }
+       ]
+      },
+      {
+       "type": {
+        "id": "94",
+        "text": "Yellow Card"
+       },
+       "clock": {
+        "value": 775,
+        "displayValue": "13'"
+       },
+       "team": {
+        "id": "4214"
+       },
+       "scoreValue": 0,
+       "scoringPlay": false,
+       "redCard": false,
+       "yellowCard": true,
+       "penaltyKick": false,
+       "ownGoal": false,
+       "shootout": false,
+       "athletesInvolved": [
+        {
+         "id": "298938",
+         "displayName": "Tawanda Chirewa",
+         "shortName": "T. Chirewa"
+        }
+       ]
+      },
+      {
+       "type": {
+        "id": "94",
+        "text": "Yellow Card"
+       },
+       "clock": {
+        "value": 1362,
+        "displayValue": "23'"
+       },
+       "team": {
+        "id": "8938"
+       },
+       "scoreValue": 0,
+       "scoringPlay": false,
+       "redCard": false,
+       "yellowCard": true,
+       "penaltyKick": false,
+       "ownGoal": false,
+       "shootout": false,
+       "athletesInvolved": [
+        {
+         "id": "274258",
+         "displayName": "Saúl Coco",
+         "shortName": "S. Coco"
+        }
+       ]
+      },
+      {
+       "type": {
+        "id": "94",
+        "text": "Yellow Card"
+       },
+       "clock": {
+        "value": 2919,
+        "displayValue": "49'"
+       },
+       "team": {
+        "id": "8938"
+       },
+       "scoreValue": 0,
+       "scoringPlay": false,
+       "redCard": false,
+       "yellowCard": true,
+       "penaltyKick": false,
+       "ownGoal": false,
+       "shootout": false,
+       "athletesInvolved": [
+        {
+         "id": "248002",
+         "displayName": "Basilio Ndong",
+         "shortName": "B. Ndong"
+        }
+       ]
+      },
+      {
+       "type": {
+        "id": "94",
+        "text": "Yellow Card"
+       },
+       "clock": {
+        "value": 2993,
+        "displayValue": "50'"
+       },
+       "team": {
+        "id": "8938"
+       },
+       "scoreValue": 0,
+       "scoringPlay": false,
+       "redCard": false,
+       "yellowCard": true,
+       "penaltyKick": false,
+       "ownGoal": false,
+       "shootout": false,
+       "athletesInvolved": [
+        {
+         "id": "332009",
+         "displayName": "Álex Balboa",
+         "shortName": "Á. Balboa"
+        }
+       ]
+      },
+      {
+       "type": {
+        "id": "94",
+        "text": "Yellow Card"
+       },
+       "clock": {
+        "value": 3975,
+        "displayValue": "67'"
+       },
+       "team": {
+        "id": "4214"
+       },
+       "scoreValue": 0,
+       "scoringPlay": false,
+       "redCard": false,
+       "yellowCard": true,
+       "penaltyKick": false,
+       "ownGoal": false,
+       "shootout": false,
+       "athletesInvolved": [
+        {
+         "id": "3123645",
+         "displayName": "Tinotenda Peter Muringai",
+         "shortName": "T. Muringai"
+        }
+       ]
+      },
+      {
+       "type": {
+        "id": "94",
+        "text": "Yellow Card"
+       },
+       "clock": {
+        "value": 4160,
+        "displayValue": "70'"
+       },
+       "team": {
+        "id": "8938"
+       },
+       "scoreValue": 0,
+       "scoringPlay": false,
+       "redCard": false,
+       "yellowCard": true,
+       "penaltyKick": false,
+       "ownGoal": false,
+       "shootout": false,
+       "athletesInvolved": [
+        {
+         "id": "230188",
+         "displayName": "Josete Miranda",
+         "shortName": "J. Miranda"
+        }
+       ]
+      },
+      {
+       "type": {
+        "id": "70",
+        "text": "Goal"
+       },
+       "clock": {
+        "value": 4246,
+        "displayValue": "71'"
+       },
+       "team": {
+        "id": "4214"
+       },
+       "scoreValue": 1,
+       "scoringPlay": true,
+       "redCard": false,
+       "yellowCard": false,
+       "penaltyKick": false,
+       "ownGoal": false,
+       "shootout": false,
+       "athletesInvolved": [
+        {
+         "id": "298938",
+         "displayName": "Tawanda Chirewa",
+         "shortName": "T. Chirewa"
+        }
+       ]
+      },
+      {
+       "type": {
+        "id": "70",
+        "text": "Goal"
+       },
+       "clock": {
+        "value": 4669,
+        "displayValue": "78'"
+       },
+       "team": {
+        "id": "4214"
+       },
+       "scoreValue": 1,
+       "scoringPlay": true,
+       "redCard": false,
+       "yellowCard": false,
+       "penaltyKick": false,
+       "ownGoal": false,
+       "shootout": false,
+       "athletesInvolved": [
+        {
+         "id": "307108",
+         "displayName": "Tawanda Maswanhise",
+         "shortName": "T. Maswanhise"
+        }
+       ]
+      },
+      {
+       "type": {
+        "id": "94",
+        "text": "Yellow Card"
+       },
+       "clock": {
+        "value": 5165,
+        "displayValue": "87'"
+       },
+       "team": {
+        "id": "4214"
+       },
+       "scoreValue": 0,
+       "scoringPlay": false,
+       "redCard": false,
+       "yellowCard": true,
+       "penaltyKick": false,
+       "ownGoal": false,
+       "shootout": false,
+       "athletesInvolved": [
+        {
+         "id": "284606",
+         "displayName": "Kevin Moyo",
+         "shortName": "K. Moyo"
+        }
+       ]
+      },
+      {
+       "type": {
+        "id": "94",
+        "text": "Yellow Card"
+       },
+       "clock": {
+        "value": 5178,
+        "displayValue": "87'"
+       },
+       "team": {
+        "id": "8938"
+       },
+       "scoreValue": 0,
+       "scoringPlay": false,
+       "redCard": false,
+       "yellowCard": true,
+       "penaltyKick": false,
+       "ownGoal": false,
+       "shootout": false,
+       "athletesInvolved": [
+        {
+         "id": "378500",
+         "displayName": "Jose Nabil",
+         "shortName": "J. Nabil"
+        }
+       ]
+      },
+      {
+       "type": {
+        "id": "93",
+        "text": "Red Card"
+       },
+       "clock": {
+        "value": 5316,
+        "displayValue": "89'"
+       },
+       "team": {
+        "id": "8938"
+       },
+       "scoreValue": 0,
+       "scoringPlay": false,
+       "redCard": true,
+       "yellowCard": false,
+       "penaltyKick": false,
+       "ownGoal": false,
+       "shootout": false,
+       "athletesInvolved": [
+        {
+         "id": "274258",
+         "displayName": "Saúl Coco",
+         "shortName": "S. Coco"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401927177",
+   "uid": "s:600~l:8315~e:401927177",
+   "date": "2026-11-16T15:00Z",
+   "name": "Ghana at Somalia",
+   "shortName": "GHA @ SOM",
+   "status": {
+    "clock": 5400,
+    "displayClock": "90'+6'",
+    "period": 2,
+    "type": {
+     "id": "28",
+     "name": "STATUS_FULL_TIME",
+     "state": "post",
+     "completed": true,
+     "description": "Full Time",
+     "detail": "FT",
+     "shortDetail": "FT"
+    }
+   },
+   "competitions": [
+    {
+     "id": "401927177",
+     "date": "2026-11-16T15:00Z",
+     "startDate": "2026-11-16T15:00Z",
+     "competitors": [
+      {
+       "id": "5776",
+       "homeAway": "home",
+       "winner": false,
+       "score": "0",
+       "team": {
+        "id": "5776",
+        "abbreviation": "SOM",
+        "displayName": "Somalia",
+        "shortDisplayName": "Somalia",
+        "name": "Somalia",
+        "location": "Somalia",
+        "logo": "https://a.espncdn.com/i/teamlogos/countries/500/som.png"
+       }
+      },
+      {
+       "id": "4469",
+       "homeAway": "away",
+       "winner": true,
+       "score": "1",
+       "team": {
+        "id": "4469",
+        "abbreviation": "GHA",
+        "displayName": "Ghana",
+        "shortDisplayName": "Ghana",
+        "name": "Ghana",
+        "location": "Ghana",
+        "logo": "https://a.espncdn.com/i/teamlogos/countries/500/gha.png"
+       }
+      }
+     ],
+     "details": [
+      {
+       "type": {
+        "id": "94",
+        "text": "Yellow Card"
+       },
+       "clock": {
+        "value": 1194,
+        "displayValue": "20'"
+       },
+       "team": {
+        "id": "4469"
+       },
+       "scoreValue": 0,
+       "scoringPlay": false,
+       "redCard": false,
+       "yellowCard": true,
+       "penaltyKick": false,
+       "ownGoal": false,
+       "shootout": false,
+       "athletesInvolved": [
+        {
+         "id": "347018",
+         "displayName": "Sulemana",
+         "shortName": "Sulemana"
+        }
+       ]
+      },
+      {
+       "type": {
+        "id": "98",
+        "text": "Penalty - Scored"
+       },
+       "clock": {
+        "value": 2159,
+        "displayValue": "36'"
+       },
+       "team": {
+        "id": "4469"
+       },
+       "scoreValue": 1,
+       "scoringPlay": true,
+       "redCard": false,
+       "yellowCard": false,
+       "penaltyKick": true,
+       "ownGoal": false,
+       "shootout": false,
+       "athletesInvolved": [
+        {
+         "id": "123518",
+         "displayName": "Jordan Ayew",
+         "shortName": "J. Ayew"
+        }
+       ]
+      },
+      {
+       "type": {
+        "id": "94",
+        "text": "Yellow Card"
+       },
+       "clock": {
+        "value": 2989,
+        "displayValue": "50'"
+       },
+       "team": {
+        "id": "4469"
+       },
+       "scoreValue": 0,
+       "scoringPlay": false,
+       "redCard": false,
+       "yellowCard": true,
+       "penaltyKick": false,
+       "ownGoal": false,
+       "shootout": false,
+       "athletesInvolved": [
+        {
+         "id": "240495",
+         "displayName": "Brandon Thomas-Asante",
+         "shortName": "B. Thomas-Asante"
+        }
+       ]
+      },
+      {
+       "type": {
+        "id": "94",
+        "text": "Yellow Card"
+       },
+       "clock": {
+        "value": 4903,
+        "displayValue": "82'"
+       },
+       "team": {
+        "id": "4469"
+       },
+       "scoreValue": 0,
+       "scoringPlay": false,
+       "redCard": false,
+       "yellowCard": true,
+       "penaltyKick": false,
+       "ownGoal": false,
+       "shootout": false,
+       "athletesInvolved": [
+        {
+         "id": "219562",
+         "displayName": "Lawrence Ati Zigi",
+         "shortName": "L. Zigi"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

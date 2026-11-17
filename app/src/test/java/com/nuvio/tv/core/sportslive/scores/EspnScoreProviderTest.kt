@@ -1,0 +1,151 @@
+package com.nuvio.tv.core.sportslive.scores
+
+import kotlinx.coroutines.test.runTest
+import okhttp3.Interceptor
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Protocol
+import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import java.io.IOException
+import java.time.Instant
+import java.time.LocalDate
+
+class EspnScoreProviderTest {
+
+    private val requested = mutableListOf<String>()
+
+    private fun provider(interceptor: Interceptor) = EspnScoreProvider(
+        OkHttpClient.Builder().addInterceptor(interceptor).build(),
+        EspnFixtures.moshi,
+        "https://example.invalid/apis/site/v2/sports/"
+    )
+
+    private fun respond(code: Int, body: String) = Interceptor { chain ->
+        requested += chain.request().url.toString()
+        Response.Builder()
+            .request(chain.request())
+            .protocol(Protocol.HTTP_1_1)
+            .code(code)
+            .message("fake")
+            .body(body.toResponseBody("application/json".toMediaType()))
+            .build()
+    }
+
+    private val day = LocalDate.of(2026, 11, 15)
+
+    @Test
+    fun `parses an NBA scoreboard and asks only for league and date`() = runTest {
+        val result = provider(respond(200, EspnFixtures.json(EspnFixtures.NBA_20261115)))
+            .scoreboard(EspnLeagueMap.NBA, day)
+
+        assertEquals(listOf("https://example.invalid/apis/site/v2/sports/basketball/nba/scoreboard?dates=20261115"), requested)
+        assertFalse(result.failed)
+        assertEquals(5, result.events.size)
+        val game = result.events.first { it.eventId == "401909985" }
+        assertEquals("PHI", game.homeAbbr)
+        assertEquals("IND", game.awayAbbr)
+        assertEquals("Philadelphia 76ers", game.homeName)
+        assertEquals(131, game.homeScore)
+        assertEquals(124, game.awayScore)
+        assertEquals(listOf(29, 29, 39, 34), game.home.linescores)
+        assertEquals(ScoreState.POST, game.state)
+        assertTrue(game.isFinal)
+        assertEquals("Final", game.clockText)
+        assertEquals(Instant.parse("2026-11-15T18:00:00Z").toEpochMilli(), game.startMs)
+        assertTrue(game.homeLogo!!.startsWith("https://a.espncdn.com/"))
+        assertEquals(EspnLeagueMap.NBA, game.league)
+
+        val overtime = result.events.first { it.eventId == "401909990" }
+        assertEquals("Final/OT", overtime.clockText)
+        assertEquals(5, overtime.away.linescores.size)
+    }
+
+    @Test
+    fun `parses an NFL scoreboard`() {
+        val game = EspnFixtures.events(EspnFixtures.NFL_20261115, EspnLeagueMap.NFL).first { it.eventId == "401873062" }
+        assertEquals("LV", game.homeAbbr)
+        assertEquals("SEA", game.awayAbbr)
+        assertEquals(13, game.homeScore)
+        assertEquals(21, game.awayScore)
+        assertEquals(4, game.home.linescores.size)
+    }
+
+    @Test
+    fun `parses soccer goal scorers by side`() {
+        val events = EspnFixtures.events(EspnFixtures.CAF_QUAL_20261116, EspnFixtures.CAF_QUAL)
+        val game = events.first { it.eventId == "401927170" }
+        assertEquals("NAM", game.homeAbbr)
+        assertEquals("CMR", game.awayAbbr)
+        assertEquals(0, game.homeScore)
+        assertEquals(3, game.awayScore)
+        assertEquals("FT", game.clockText)
+        assertTrue(game.home.linescores.isEmpty())
+        assertEquals(listOf("M. Nagida", "R. Fosso", "S. Alioum Moubarak"), game.scorers.map { it.name })
+        assertTrue(game.scorers.all { it.side == ScoreSide.AWAY })
+        assertEquals("12'", game.scorers.first().clock)
+
+        val penalty = events.first { it.eventId == "401927177" }.scorers.single()
+        assertTrue(penalty.penalty)
+        assertEquals(ScoreSide.AWAY, penalty.side)
+
+        val liverpool = EspnFixtures.events(EspnFixtures.ENG1_20261108, EspnFixtures.ENG1).first { it.eventId == "401879243" }
+        assertEquals(listOf(ScoreSide.AWAY, ScoreSide.AWAY, ScoreSide.AWAY, ScoreSide.HOME), liverpool.scorers.map { it.side })
+    }
+
+    @Test
+    fun `tolerates missing and malformed fields`() = runTest {
+        val json = """
+            {"events":[
+              {"id":"1","competitions":[{"competitors":[
+                {"homeAway":"home","team":{"abbreviation":"AAA"}},
+                {"homeAway":"away","team":{"displayName":"Bbb"}}]}]},
+              {"id":"2"},
+              {},
+              {"id":"3","date":"not a date","status":{"type":{"state":"in"}},"competitions":[{"competitors":[
+                {"homeAway":"home","score":"x","team":{"name":"C"},"linescores":[{}]},
+                {"homeAway":"away","team":{"name":"D"}}],"details":[{"scoringPlay":true}]}]},
+              {"id":"4","competitions":[{"competitors":[{"homeAway":"home","team":{}},{"homeAway":"away","team":{"name":"E"}}]}]}
+            ],"unknown":{"x":1}}
+        """.trimIndent()
+        val result = provider(respond(200, json)).scoreboard(EspnLeagueMap.NBA, day)
+
+        assertFalse(result.failed)
+        assertEquals(listOf("1", "3"), result.events.map { it.eventId })
+        val first = result.events[0]
+        assertNull(first.startMs)
+        assertEquals(ScoreState.UNKNOWN, first.state)
+        assertNull(first.homeScore)
+        assertNull(first.clockText)
+        assertFalse(first.isFinal)
+        val third = result.events[1]
+        assertEquals(ScoreState.IN, third.state)
+        assertNull(third.homeScore)
+        assertTrue(third.home.linescores.isEmpty())
+        assertTrue(third.scorers.isEmpty())
+
+        assertEquals(ScoreboardResult(emptyList()), provider(respond(200, "{}")).scoreboard(EspnLeagueMap.NBA, day))
+    }
+
+    @Test
+    fun `any failure is an empty failed result, never a throw`() = runTest {
+        val failures = listOf(
+            respond(500, "oops"),
+            respond(429, ""),
+            respond(404, "{}"),
+            respond(200, "not json"),
+            respond(200, "[]"),
+            respond(200, """{"events":"nope"}"""),
+            Interceptor { throw IOException("offline") },
+            Interceptor { throw IllegalStateException("bug") }
+        )
+        for (failure in failures) {
+            assertEquals(ScoreboardResult.FAILED, provider(failure).scoreboard(EspnLeagueMap.NBA, day))
+        }
+    }
+}
