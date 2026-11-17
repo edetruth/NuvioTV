@@ -116,8 +116,9 @@ internal fun SportsLiveResultsView(
         focusedKey = null
         listState.scrollToItem(0)
     }
-    // Back from a replay: focus returns to the row that opened it, once its day has loaded.
-    var restored by rememberSaveable { mutableStateOf(false) }
+    // Back from a replay: focus returns to the row that opened it, once its day has loaded. Once per
+    // entry (not saved), so every return restores, like the section's cards.
+    var restored by remember { mutableStateOf(false) }
     LaunchedEffect(rows) {
         if (restored) return@LaunchedEffect
         val key = focusedKey ?: return@LaunchedEffect
@@ -127,6 +128,16 @@ internal fun SportsLiveResultsView(
         listState.scrollToItem(index)
         repeat(2) { withFrameNanos { } }
         runCatching { rowFocusRequesters[key]?.requestFocus() }
+    }
+    // A reload can drop the filter row while a chip holds focus: focus goes to the date chips instead
+    // of being lost. Losing focus because the row is being removed does not clear the flag.
+    var filterRowHasFocus by remember { mutableStateOf(false) }
+    val currentShowFilterRow by rememberUpdatedState(showFilterRow)
+    LaunchedEffect(showFilterRow) {
+        if (showFilterRow || !filterRowHasFocus) return@LaunchedEffect
+        filterRowHasFocus = false
+        withFrameNanos { }
+        runCatching { dateFocusRequester.requestFocus() }
     }
     BackHandler(enabled = listHasFocus) {
         runCatching { tabFocusRequester.requestFocus() }
@@ -150,7 +161,11 @@ internal fun SportsLiveResultsView(
                 downFocusRequester = entryRowFocusRequester,
                 onSelectFilter = onSelectFilter,
                 onOpen = openList,
-                modifier = Modifier.padding(top = NuvioTheme.spacing.xs)
+                modifier = Modifier
+                    .padding(top = NuvioTheme.spacing.xs)
+                    .onFocusChanged { focus ->
+                        if (focus.hasFocus) filterRowHasFocus = true else if (currentShowFilterRow) filterRowHasFocus = false
+                    }
             )
         }
         Spacer(modifier = Modifier.height(NuvioTheme.spacing.lg))
@@ -221,10 +236,12 @@ private fun ResultsDateRow(
     val yesterday = stringResource(R.string.sports_live_results_yesterday)
     val dayFormat = remember { DateTimeFormatter.ofPattern("EEE d", Locale.getDefault()) }
     ResultsChipRow(focusRequester = dateFocusRequester, modifier = modifier) {
-        state.dates.forEach { (days, date) ->
+        state.dates.forEach { day ->
+            val days = day.daysAgo
             val isSelected = days == state.daysAgo
             SourceStatusFilterChip(
-                name = if (days == 1) yesterday else date.dayLabel(dayFormat),
+                // "Yesterday" only when the ESPN (US Eastern) day is also the device's yesterday.
+                name = if (day.isDeviceYesterday) yesterday else day.date.dayLabel(dayFormat),
                 isSelected = isSelected,
                 outlined = true,
                 onFocusSelect = { onSelectDay(days) },

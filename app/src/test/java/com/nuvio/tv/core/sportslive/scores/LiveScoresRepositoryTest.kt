@@ -512,4 +512,25 @@ class LiveScoresRepositoryTest {
         runCurrent()
         assertEquals(setOf(pacersCard.streamKey), repo.scores.value.keys)
     }
+
+    @Test
+    fun `an untracked screen stops polling its feeds and leaves the other screen's`() = runTest {
+        provider.respond = { ScoreboardResult(listOf(game(ScoreState.IN, 50, 48))) }
+        val repo = repository("2026-11-15T19:00:00Z")
+        collect(repo)
+        repo.track(HOME, listOf(pacersCard))
+        runCurrent()
+        assertEquals(1, provider.calls.size)
+        repo.untrack(HOME)
+        runCurrent()
+        assertTrue(repo.scores.value.isEmpty())
+        advanceTimeBy(10 * 60_000L); runCurrent()
+        assertEquals(1, provider.calls.size)
+        // Untracking a screen that tracks nothing changes nothing for the others.
+        repo.track(SECTION, listOf(pacersCard))
+        runCurrent()
+        repo.untrack(HOME)
+        runCurrent()
+        assertEquals(setOf(pacersCard.streamKey), repo.scores.value.keys)
+    }
 }

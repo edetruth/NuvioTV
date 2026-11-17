@@ -1,9 +1,11 @@
 package com.nuvio.tv.core.sportslive.scores
 
-import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveItem
+import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
+import java.time.ZoneOffset
 
 /** How a final ended, for the Results row's note: full time, overtime, shootout, extra time, penalties. */
 enum class FinalNote { FT, OT, SO, AET, PENS }
@@ -34,25 +36,30 @@ object SportsResults {
     val DAYS_AGO = 1..7
 
     /**
-     * [current] (league path → last seen ms) with [seen] stamped at [nowMs], expired entries dropped and
-     * the most recent [MAX_RECENT] kept; null when nothing changed enough to be worth saving.
+     * [current] (league path → last seen ms) with [seen] stamped at [nowMs]; null when there is nothing
+     * to save. Leagues already stored keep their slot and are re-stamped at most every [RESTAMP_MS] (so
+     * a league watched daily never expires); expired leagues free their slot; new leagues fill free
+     * slots only, in path order, up to [MAX_RECENT]. A full set is never reshuffled by what is on screen.
      * `soccer/all` is never recorded: it names every soccer game in the world, not a league.
      */
     fun recordSeen(current: Map<String, Long>, seen: Collection<EspnLeague>, nowMs: Long): Map<String, Long>? {
-        val live = current.filterValues { nowMs - it <= RECENT_TTL_MS }
-        val next = live.toMutableMap()
-        var changed = live.size != current.size
-        for (league in seen) {
-            if (league == EspnLeagueMap.SOCCER_ALL) continue
-            val last = next[league.path]
-            if (last == null || nowMs - last >= RESTAMP_MS) {
-                next[league.path] = nowMs
-                changed = true
+        val next = current.filterValues { nowMs - it <= RECENT_TTL_MS }.toMutableMap()
+        var changed = next.size != current.size
+        val paths = seen.asSequence().filter { it != EspnLeagueMap.SOCCER_ALL }.map { it.path }.distinct().sorted()
+        for (path in paths) {
+            val last = next[path]
+            when {
+                last != null -> if (nowMs - last >= RESTAMP_MS) {
+                    next[path] = nowMs
+                    changed = true
+                }
+                next.size < MAX_RECENT -> {
+                    next[path] = nowMs
+                    changed = true
+                }
             }
         }
-        val capped = next.entries.sortedByDescending { it.value }.take(MAX_RECENT).associate { it.key to it.value }
-        if (capped.size != next.size) changed = true
-        return if (changed) capped else null
+        return if (changed) next else null
     }
 
     /** The leagues [items] route to (their first source with a feed), for [recordSeen]. */
@@ -112,16 +119,14 @@ object SportsResults {
             .toList()
 
     /**
-     * True when [team] played in [event]: its name matches either side ([SportsLiveTeams.matches], as on
-     * cards) and, when its sport routes to a specific ESPN feed, the event is in that sport. "Football"
+     * True when [team] played in [event]: its name is either side by strong equality with the same
+     * (W)/U21 qualifier ([ScoreMatcher.isStrongSide]; never a city or suffix match), and, when its sport routes to a specific ESPN feed, the event is in that sport. "Football"
      * routes to `soccer/all` but may be American football on an addon, so it does not rule a sport out.
      */
     fun follows(team: FollowedTeam, event: ScoreSnapshot): Boolean {
         val sports = leaguesOfTeam(team).filter { it != EspnLeagueMap.SOCCER_ALL }.mapTo(HashSet()) { it.sport }
         if (sports.isNotEmpty() && event.league.sport !in sports) return false
-        return listOf(event.home, event.away).any { side ->
-            listOfNotNull(side.displayName, side.shortDisplayName).any { SportsLiveTeams.matches(team.name, it) }
-        }
+        return listOf(event.home, event.away).any { side -> ScoreMatcher.isStrongSide(team.name, side, event.leagueSlug) }
     }
 
     private val OVERTIME = Regex("""\b\d*OT\b""", RegexOption.IGNORE_CASE)
@@ -140,21 +145,28 @@ object SportsResults {
     }
 
     /**
-     * The replay each result opens, by event id: a replay whose teams AND date match the result through
-     * the strict [ScoreMatcher] (both sides, ±3 h or the same day, a tie between two events gives none),
-     * matched against all of [events] so a replay of another game never lands on this one. Replays with
-     * no date, channels and team folders (no "A vs B" name) never match. A wrong replay is worse than none.
+     * The replay each result of ESPN day [date] opens, by event id: a replay whose BOTH teams match by
+     * strong equality ([ScoreMatcher.BOTH_STRONG]) and whose date matches, through [ScoreMatcher] against
+     * all of [events] (a tie between two events gives none). A timed replay must start within ±3 h of
+     * the game; a bare-date replay must be dated [date] itself, never the day after (a back-to-back
+     * series' game 2 must not open game 1). Days are ESPN's (US Eastern). Replays with no date,
+     * channels and team folders never match. A wrong replay is worse than none.
      */
-    fun replaysByEvent(events: List<ScoreSnapshot>, replays: List<SportsLiveItem>, zone: ZoneId, nowMs: Long): Map<String, SportsLiveItem> {
+    fun replaysByEvent(events: List<ScoreSnapshot>, date: LocalDate, replays: List<SportsLiveItem>, nowMs: Long): Map<String, SportsLiveItem> {
         if (events.isEmpty() || replays.isEmpty()) return emptyMap()
-        val matcher = ScoreMatcher { zone }
+        val matcher = ScoreMatcher(zone = { EASTERN }, minScore = ScoreMatcher.BOTH_STRONG, previousDayFallback = false)
         val found = LinkedHashMap<String, SportsLiveItem>()
         for (replay in replays) {
-            if (replay.isChannel || replay.startMs == null) continue
+            val start = replay.startMs ?: continue
+            if (replay.isChannel) continue
+            if (!replay.startHasTimeOfDay && Instant.ofEpochMilli(start).atZone(ZoneOffset.UTC).toLocalDate() != date) continue
             val card = ScoreCard.from(replay) ?: continue
             val event = matcher.match(card, events, nowMs) ?: continue
             found.putIfAbsent(event.eventId, replay)
         }
         return found
     }
+
+    /** ESPN files games under their US Eastern date. */
+    val EASTERN: ZoneId = ZoneId.of("America/New_York")
 }

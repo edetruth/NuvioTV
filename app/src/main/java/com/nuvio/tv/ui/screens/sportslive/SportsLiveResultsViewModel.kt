@@ -2,6 +2,7 @@ package com.nuvio.tv.ui.screens.sportslive
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.nuvio.tv.core.sportslive.scores.ResultDay
 import com.nuvio.tv.core.sportslive.scores.ResultRow
 import com.nuvio.tv.core.sportslive.scores.ResultsLoad
 import com.nuvio.tv.core.sportslive.scores.ResultsRepository
@@ -26,8 +27,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.time.LocalDate
-import java.time.ZoneId
 import javax.inject.Inject
 
 /** What the Results view shows below its date chips. */
@@ -36,8 +35,8 @@ enum class ResultsStatus { LOADING, OFF, NO_LEAGUES, FAILED, READY }
 data class SportsLiveResultsUiState(
     /** 1 = yesterday … 7. */
     val daysAgo: Int = 1,
-    /** The date chips: days ago → the device date it names. */
-    val dates: List<Pair<Int, LocalDate>> = emptyList(),
+    /** The date chips (ESPN days, counted back from today in US Eastern time). */
+    val dates: List<ResultDay> = emptyList(),
     val status: ResultsStatus = ResultsStatus.LOADING,
     /** [SportsLiveUiState.MY_TEAMS_FILTER] when a followed team played, then the ESPN sports present. */
     val filters: List<String> = emptyList(),
@@ -45,6 +44,8 @@ data class SportsLiveResultsUiState(
     /** The day's rows under [selectedFilter], followed teams' games first. */
     val rows: List<ResultRow> = emptyList(),
     val mode: ScoresMode = ScoresMode.SHOW,
+    /** False until the Scores setting has been read: the Results tab stays hidden until then. */
+    val modeKnown: Boolean = false,
     /** Rows (event ids) focused long enough to reveal their score under Hide until focused. */
     val revealed: Set<String> = emptySet(),
     /** The replay each result opens, by event id. */
@@ -69,7 +70,7 @@ class SportsLiveResultsViewModel @Inject constructor(
 
     private val replayIndex = combine(load, replayItems) { load, replays ->
         val loaded = load as? ResultsLoad.Loaded ?: return@combine emptyMap()
-        SportsResults.replaysByEvent(loaded.events, replays, ZoneId.systemDefault(), System.currentTimeMillis())
+        SportsResults.replaysByEvent(loaded.events, loaded.date, replays, System.currentTimeMillis())
     }.flowOn(Dispatchers.Default)
 
     val uiState: StateFlow<SportsLiveResultsUiState> = combine(
@@ -83,12 +84,13 @@ class SportsLiveResultsViewModel @Inject constructor(
         val applied = selectedFilter?.takeIf { it in filters }
         SportsLiveResultsUiState(
             daysAgo = days,
-            dates = SportsResults.DAYS_AGO.map { it to results.dateFor(it) },
+            dates = results.days(),
             status = if (mode == ScoresMode.OFF) ResultsStatus.OFF else statusOf(load),
             filters = filters,
             selectedFilter = applied,
             rows = filterResults(rows, applied),
             mode = mode,
+            modeKnown = true,
             revealed = revealed,
             replays = replays
         )

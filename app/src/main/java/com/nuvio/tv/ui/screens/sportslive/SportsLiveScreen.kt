@@ -103,7 +103,7 @@ fun SportsLiveScreen(
     // Results loads only while its tab is selected; Scores Off hides the tab (and requests nothing).
     LaunchedEffect(uiState.selectedTab) { resultsViewModel.setActive(uiState.selectedTab == SportsLiveTab.RESULTS) }
     LaunchedEffect(resultsState.mode, uiState.selectedTab) {
-        if (resultsState.mode == ScoresMode.OFF && uiState.selectedTab == SportsLiveTab.RESULTS) {
+        if (resultsState.modeKnown && resultsState.mode == ScoresMode.OFF && uiState.selectedTab == SportsLiveTab.RESULTS) {
             viewModel.selectTab(SportsLiveTab.LIVE_NOW)
         }
     }
@@ -308,7 +308,8 @@ private fun SportsLiveContent(
     val resultsDateFocusRequester = remember { FocusRequester() }
     val showingResults = uiState.selectedTab == SportsLiveTab.RESULTS
     // Scores Off: no Results tab at all.
-    val shownTabs = SportsLiveTab.entries.filter { it != SportsLiveTab.RESULTS || results.mode != ScoresMode.OFF }
+    // Shown only once the setting is read, so a Scores-Off user never sees it flash in.
+    val shownTabs = SportsLiveTab.entries.filter { it != SportsLiveTab.RESULTS || (results.modeKnown && results.mode != ScoresMode.OFF) }
     // A refresh can drop the filter row while a chip holds focus; focus then goes to the active tab
     // instead of being lost. Losing focus because the row is being removed does not clear the flag.
     var filterRowHasFocus by remember { mutableStateOf(false) }

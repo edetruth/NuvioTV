@@ -14,6 +14,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.ZoneOffset
 
 class ResultsRepositoryTest {
@@ -37,14 +38,16 @@ class ResultsRepositoryTest {
     private val nba = EspnFixtures.events(EspnFixtures.NBA_20261115, EspnLeagueMap.NBA)
     private val nov15 = LocalDate.of(2026, 11, 15)
 
-    private fun repository() = ResultsRepository(
+    private var saves = 0
+
+    private fun repository(zone: ZoneId = ZoneOffset.UTC) = ResultsRepository(
         provider = provider,
         settings = settings,
         followedTeams = followed,
         recentLeagues = recent,
-        saveRecentLeagues = { recent.value = it },
+        saveRecentLeagues = { saves++; recent.value = it },
         now = { clock },
-        zone = { ZoneOffset.UTC }
+        zone = { zone }
     )
 
     private fun card(name: String, genre: String) = SportsLiveItem(
@@ -118,5 +121,31 @@ class ResultsRepositoryTest {
         val repo = repository()
         repo.noteSeen(listOf(card("Lakers vs Celtics", "Basketball"), card("Rangers vs Bruins", "Hockey")))
         assertEquals(mapOf("basketball/nba" to clock, "hockey/nhl" to clock), recent.value)
+    }
+
+    @Test
+    fun `a repeated noteSeen writes nothing`() = runTest {
+        val repo = repository()
+        val cards = listOf(card("Lakers vs Celtics", "Basketball"))
+        repo.noteSeen(cards)
+        repo.noteSeen(cards)
+        clock += 60 * 60_000L
+        repo.noteSeen(cards)
+        assertEquals(1, saves)
+    }
+
+    @Test
+    fun `days are whole ESPN days counted in US Eastern time, Yesterday only when it is the device's yesterday`() = runTest {
+        // 20:00Z: 15:00 in New York (the 16th), 05:00 the 17th in Tokyo.
+        clock = Instant.parse("2026-11-16T20:00:00Z").toEpochMilli()
+        val tokyo = repository(ZoneId.of("Asia/Tokyo")).days()
+        assertEquals((1..7).map { LocalDate.of(2026, 11, 16).minusDays(it.toLong()) }, tokyo.map { it.date })
+        assertTrue(tokyo.none { it.isDeviceYesterday })
+        recent.value = mapOf("basketball/nba" to clock)
+        repository(ZoneId.of("Asia/Tokyo")).load(1)
+        assertEquals(ScoreFeed(EspnLeagueMap.NBA, LocalDate.of(2026, 11, 15)), provider.calls.single())
+        // In New York (or UTC at that hour) the first chip is Yesterday.
+        assertTrue(repository(ZoneId.of("America/New_York")).days().first().isDeviceYesterday)
+        assertEquals(listOf(true) + List(6) { false }, repository(ZoneOffset.UTC).days().map { it.isDeviceYesterday })
     }
 }

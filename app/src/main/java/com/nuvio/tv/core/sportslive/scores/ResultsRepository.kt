@@ -33,6 +33,9 @@ sealed interface ResultsLoad {
     data class Loaded(val date: LocalDate, val rows: List<ResultRow>, val events: List<ScoreSnapshot>) : ResultsLoad
 }
 
+/** A Results date chip: [daysAgo] → ESPN [date]; [isDeviceYesterday] picks the "Yesterday" label. */
+data class ResultDay(val daysAgo: Int, val date: LocalDate, val isDeviceYesterday: Boolean)
+
 /**
  * Past days' finals (Yesterday … 7 days ago) for the Results view: one scoreboard request per relevant
  * league per day ([SportsResults.relevantLeagues]), past days served from the provider's disk cache and
@@ -76,11 +79,24 @@ class ResultsRepository internal constructor(
         }
     }
 
-    /** The device's date [daysAgo] days back (1 = yesterday). */
-    fun dateFor(daysAgo: Int): LocalDate = Instant.ofEpochMilli(now()).atZone(zone()).toLocalDate().minusDays(daysAgo.toLong())
+    /**
+     * ESPN's scoreboard date [daysAgo] days back (1 = yesterday), counted from today in US Eastern time,
+     * so every day offered is a whole ESPN day (ESPN files games under their Eastern date).
+     */
+    fun dateFor(daysAgo: Int): LocalDate =
+        Instant.ofEpochMilli(now()).atZone(SportsResults.EASTERN).toLocalDate().minusDays(daysAgo.toLong())
+
+    /** The date chips: each day offered, labelled "Yesterday" only when it is also the device's yesterday. */
+    fun days(): List<ResultDay> {
+        val deviceYesterday = Instant.ofEpochMilli(now()).atZone(zone()).toLocalDate().minusDays(1)
+        return SportsResults.DAYS_AGO.map { days ->
+            val date = dateFor(days)
+            ResultDay(days, date, isDeviceYesterday = date == deviceYesterday)
+        }
+    }
 
     /**
-     * The finals of [daysAgo] (1..7): ESPN's scoreboard date, as ESPN files games (by US Eastern day).
+     * The finals of [daysAgo] (1..7): ESPN's scoreboard date [dateFor], as ESPN files games (by US Eastern day).
      * Any failure is [ResultsLoad.Failed] only when every league failed; otherwise what loaded is listed.
      */
     suspend fun load(daysAgo: Int): ResultsLoad {

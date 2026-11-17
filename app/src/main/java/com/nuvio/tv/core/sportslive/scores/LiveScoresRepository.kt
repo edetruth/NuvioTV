@@ -127,6 +127,14 @@ class LiveScoresRepository internal constructor(
         tracked.update { current -> if (entries.isEmpty()) current - screenId else current + (screenId to entries) }
     }
 
+    /**
+     * Stops tracking for [screenId]: call it when the screen is disposed (S4: from a DisposableEffect's
+     * onDispose), so a closed screen's cards never keep a feed polling. The other screens are unaffected.
+     */
+    fun untrack(screenId: String) {
+        tracked.update { it - screenId }
+    }
+
     /** Every screen's tracked cards, one entry per card key (the same card on two screens is one). */
     private fun trackedUnion(): List<TrackedCard> = tracked.value.values.flatten().distinctBy { it.card.key }
 

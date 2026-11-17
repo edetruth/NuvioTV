@@ -55,7 +55,13 @@ data class ScoreCard(
  * A match is cached per card per day, so a later poll finds the event by id. A miss returns null and is
  * not cached, so the next refresh retries.
  */
-class ScoreMatcher(private val zone: () -> ZoneId = { ZoneId.systemDefault() }) {
+class ScoreMatcher(
+    private val zone: () -> ZoneId = { ZoneId.systemDefault() },
+    /** The least total for a match: 5 (one side STRONG) for cards; 6 (both STRONG) for stricter uses. */
+    private val minScore: Int = MIN_TOTAL,
+    /** False: a bare-date or undated card is matched on its own day only, never the day before. */
+    private val previousDayFallback: Boolean = true
+) {
 
     private data class Cached(val day: LocalDate, val eventId: String)
 
@@ -80,7 +86,8 @@ class ScoreMatcher(private val zone: () -> ZoneId = { ZoneId.systemDefault() }) 
         val pick = if (timed) {
             best(home, away, events, (start!! - WINDOW_MS)..(start + WINDOW_MS), reference = start)
         } else {
-            bestOnDay(home, away, events, day, zoneId) ?: bestOnDay(home, away, events, day.minusDays(1), zoneId)
+            bestOnDay(home, away, events, day, zoneId)
+                ?: if (previousDayFallback) bestOnDay(home, away, events, day.minusDays(1), zoneId) else null
         }
         val best = pick?.event
         if (best == null) {
@@ -126,10 +133,7 @@ class ScoreMatcher(private val zone: () -> ZoneId = { ZoneId.systemDefault() }) 
     /** A card side: its base name (qualifier removed) for the suffix rule, equality keys and qualifier. */
     private class Side(val base: String, val keys: Set<String>, val qualifier: String?)
 
-    private fun side(name: String): Side {
-        val (base, qualifier) = splitQualifier(fold(name))
-        return Side(base, setOf(SportsLiveTeams.normalise(base), SportsLiveTeams.canonicalise(base)) - "", qualifier)
-    }
+    private fun side(name: String): Side = sideOf(name)
 
     /** Best total over both orientations, or null unless both sides match and the total is at least 5. */
     private fun score(home: Side, away: Side, event: ScoreSnapshot): Int? {
@@ -143,7 +147,7 @@ class ScoreMatcher(private val zone: () -> ZoneId = { ZoneId.systemDefault() }) 
     }
 
     private fun pairScore(first: Int, second: Int): Int? =
-        if (first > 0 && second > 0 && first + second >= MIN_TOTAL) first + second else null
+        if (first > 0 && second > 0 && first + second >= minScore) first + second else null
 
     /** A competitor's names, qualifiers removed: STRONG keys, the WEAK location key, suffix-rule names. */
     private class Competitor(team: ScoreTeam, slugQualifier: String?) {
@@ -179,20 +183,23 @@ class ScoreMatcher(private val zone: () -> ZoneId = { ZoneId.systemDefault() }) 
         }
     }
 
-    private companion object {
-        const val TAG = "ScoreMatcher"
-        const val WINDOW_MS = 3 * 60 * 60 * 1000L
-        const val STRONG = 3
-        const val WEAK = 2
-        const val MIN_TOTAL = 5
-        const val MAX_CACHED = 2_000
+    companion object {
+        /** Both sides matched by strong (name or abbreviation) equality. */
+        const val BOTH_STRONG = 6
 
-        val MARKS = Regex("""\p{Mn}+""")
+        private const val TAG = "ScoreMatcher"
+        private const val WINDOW_MS = 3 * 60 * 60 * 1000L
+        private const val STRONG = 3
+        private const val WEAK = 2
+        private const val MIN_TOTAL = 5
+        private const val MAX_CACHED = 2_000
+
+        private val MARKS = Regex("""\p{Mn}+""")
 
         // Trailing qualifiers that tell a team apart: "(W)", "Women", "Women's", " W"; "U21", "(U21)", "[U21]".
-        val WOMEN = Regex("""\s*(\((w|women)\)|\bwomen'?s?|\s+w)\s*$""", RegexOption.IGNORE_CASE)
+        private val WOMEN = Regex("""\s*(\((w|women)\)|\bwomen'?s?|\s+w)\s*$""", RegexOption.IGNORE_CASE)
         // "U21", "U-21", "Under 21", "Under-21", "U21s", bracketed or not.
-        val YOUTH = Regex(
+        private val YOUTH = Regex(
             """\s*([\[(](?:u|under)[- ]?(\d{1,2})s?[\])]|\b(?:u|under)[- ]?(\d{1,2})s?)\s*$""",
             RegexOption.IGNORE_CASE
         )
@@ -202,15 +209,29 @@ class ScoreMatcher(private val zone: () -> ZoneId = { ZoneId.systemDefault() }) 
         // "uefa.wnations", "fifa.wworld.u17", "fifa.wworldq.uefa", "esp.copa_de_la_reina",
         // "conmebol.america.femenina", "fifa.shebelieves". Not
         // "fifa.world" or "fifa.worldq.*" (men's), nor "wal.1" (Wales).
-        val WOMEN_SLUG = Regex("""(^|\.)w(\.|$)|wchampions|\.wwc|nwsl|\.weuro|\.wnations|\.wworld|copa_de_la_reina|women|femenin|feminin|shebelieves""")
+        private val WOMEN_SLUG = Regex("""(^|\.)w(\.|$)|wchampions|\.wwc|nwsl|\.weuro|\.wnations|\.wworld|copa_de_la_reina|women|femenin|feminin|shebelieves""")
         // Youth: "fifa.friendly_u21", "uefa.euro_u21_qual", "fifa.world.u17".
-        val YOUTH_SLUG = Regex("""(?<![a-z])u(\d{1,2})(?!\d)""")
+        private val YOUTH_SLUG = Regex("""(?<![a-z])u(\d{1,2})(?!\d)""")
 
-        fun fold(text: String): String =
+        private fun sideOf(name: String): Side {
+            val (base, qualifier) = splitQualifier(fold(name))
+            return Side(base, setOf(SportsLiveTeams.normalise(base), SportsLiveTeams.canonicalise(base)) - "", qualifier)
+        }
+
+        /**
+         * True when [name] is [team] by STRONG equality (abbreviation, displayName, shortDisplayName, name,
+         * location+name; never the city alone or the suffix rule) with the same (W)/U21 qualifier, the
+         * event's [leagueSlug] standing in when the team's names carry none. "Arsenal" is not "Arsenal
+         * Women", "Lakers" alone is not "Los Angeles Lakers".
+         */
+        fun isStrongSide(name: String, team: ScoreTeam, leagueSlug: String): Boolean =
+            Competitor(team, slugQualifier(leagueSlug)).score(sideOf(name)) == STRONG
+
+        private fun fold(text: String): String =
             Normalizer.normalize(text.replace('’', '\''), Normalizer.Form.NFD).replace(MARKS, "").trim()
 
         /** "Namibia (W)" → ("Namibia", "w"); "England U21" → ("England", "u21"); "Arsenal" → ("Arsenal", null). */
-        fun splitQualifier(name: String): Pair<String, String?> {
+        private fun splitQualifier(name: String): Pair<String, String?> {
             WOMEN.find(name)?.let { return name.substring(0, it.range.first).trim() to "w" }
             YOUTH.find(name)?.let { m ->
                 val age = m.groupValues[2].ifEmpty { m.groupValues[3] }
@@ -219,7 +240,7 @@ class ScoreMatcher(private val zone: () -> ZoneId = { ZoneId.systemDefault() }) 
             return name to null
         }
 
-        fun slugQualifier(slug: String): String? = when {
+        private fun slugQualifier(slug: String): String? = when {
             WOMEN_SLUG.containsMatchIn(slug) -> "w"
             // UEFA Youth League ("uefa.youth", "uefa.youth_league") is an under-19 competition.
             "youth" in slug -> YOUTH_SLUG.find(slug)?.let { "u${it.groupValues[1]}" } ?: "u19"

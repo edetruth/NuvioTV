@@ -13,13 +13,14 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.Instant
-import java.time.ZoneOffset
+import java.time.LocalDate
 
 class SportsResultsTest {
 
     private fun ms(iso: String) = Instant.parse(iso).toEpochMilli()
     private val day = 24 * 60 * 60 * 1000L
     private val now = ms("2026-11-17T12:00:00Z")
+    private val nov15 = LocalDate.of(2026, 11, 15)
 
     private val nba = EspnFixtures.events(EspnFixtures.NBA_20261115, EspnLeagueMap.NBA)
     private val soccerAll = EspnFixtures.events(EspnFixtures.SOCCER_ALL_20261116, EspnLeagueMap.SOCCER_ALL)
@@ -83,11 +84,16 @@ class SportsResultsTest {
     }
 
     @Test
-    fun `recent leagues keep only the most recently seen`() {
-        val many = (1..20).associate { "soccer/l$it" to now - it * 60_000L }
-        val next = SportsResults.recordSeen(many, emptySet(), now)!!
+    fun `a full set keeps its leagues and new ones only fill expired slots, in path order`() {
+        val full = (1..SportsResults.MAX_RECENT).associate { "soccer/l%02d".format(it) to now - it * 60_000L }
+        // Full: a new league on screen changes nothing, so nothing is written.
+        assertNull(SportsResults.recordSeen(full, setOf(EspnLeagueMap.NBA, EspnLeagueMap.NHL), now))
+        // One slot expires: the first new league by path takes it.
+        val oneExpired = full + ("soccer/l01" to now - 8 * day)
+        val next = SportsResults.recordSeen(oneExpired, setOf(EspnLeagueMap.NHL, EspnLeagueMap.NBA), now)!!
         assertEquals(SportsResults.MAX_RECENT, next.size)
-        assertTrue("soccer/l1" in next && "soccer/l20" !in next)
+        assertEquals(now, next["basketball/nba"])
+        assertTrue("hockey/nhl" !in next && "soccer/l01" !in next)
     }
 
     @Test
@@ -122,6 +128,19 @@ class SportsResultsTest {
         assertTrue(rows.first().followed)
         assertTrue(rows.drop(1).none { it.followed })
         assertEquals(listOf("401909985", "401909986", "401909987", "401909989"), rows.drop(1).map { it.event.eventId })
+    }
+
+    @Test
+    fun `the star needs a strong name match with the same qualifier`() {
+        val women = nba[0].copy(
+            league = EspnLeague("soccer", "eng.w.1"), leagueSlug = "eng.w.1",
+            home = nba[0].home.copy(displayName = "Arsenal", shortDisplayName = "Arsenal", name = "Arsenal", location = "Arsenal", abbreviation = "ARS")
+        )
+        assertFalse(SportsResults.follows(FollowedTeam("Arsenal", "Soccer"), women))
+        assertTrue(SportsResults.follows(FollowedTeam("Arsenal Women", "Soccer"), women))
+        // A city alone (no sport to scope it) is not a team.
+        assertFalse(SportsResults.follows(FollowedTeam("Indiana"), nba.first { it.eventId == "401909985" }))
+        assertTrue(SportsResults.follows(FollowedTeam("Pacers"), nba.first { it.eventId == "401909985" }))
     }
 
     @Test
@@ -166,14 +185,21 @@ class SportsResultsTest {
     @Test
     fun `a replay with both teams and the date opens its result`() {
         val replay = item("Indiana Pacers vs Philadelphia 76ers", "2026-11-15T18:30:00Z")
-        val found = SportsResults.replaysByEvent(nba, listOf(replay), ZoneOffset.UTC, now)
+        val found = SportsResults.replaysByEvent(nba, nov15, listOf(replay), now)
         assertEquals(mapOf("401909985" to replay), found)
     }
 
     @Test
     fun `a bare-date replay matches on its day`() {
-        val replay = item("New York Knicks vs Raptors", "2026-11-15T00:00:00Z", timed = false)
-        assertEquals(setOf("401909990"), SportsResults.replaysByEvent(nba, listOf(replay), ZoneOffset.UTC, now).keys)
+        val replay = item("New York Knicks vs Toronto Raptors", "2026-11-15T00:00:00Z", timed = false)
+        assertEquals(setOf("401909990"), SportsResults.replaysByEvent(nba, nov15, listOf(replay), now).keys)
+    }
+
+    @Test
+    fun `a bare-date replay of the next day never opens this day's game`() {
+        // A back-to-back series: game 2 the day after must not open game 1.
+        val nextDay = item("New York Knicks vs Toronto Raptors", "2026-11-16T00:00:00Z", timed = false)
+        assertTrue(SportsResults.replaysByEvent(nba, nov15, listOf(nextDay), now).isEmpty())
     }
 
     @Test
@@ -182,9 +208,10 @@ class SportsResultsTest {
             item("Indiana Pacers vs Boston Celtics", "2026-11-15T18:00:00Z"), // one side only
             item("Indiana Pacers vs Philadelphia 76ers", "2026-11-12T18:00:00Z"), // another day
             item("Indiana Pacers vs Philadelphia 76ers", null), // no date
+            item("New York Knicks vs Toronto", "2026-11-15T23:00:00Z"), // one side by city only (weak)
             item("Lakers", "2026-11-15T21:00:00Z"), // a team folder
             item("NBA TV [Lakers vs Suns]", "2026-11-15T21:00:00Z", isChannel = true, kind = SportsLiveKind.CHANNELS)
         )
-        assertTrue(SportsResults.replaysByEvent(nba, replays, ZoneOffset.UTC, now).isEmpty())
+        assertTrue(SportsResults.replaysByEvent(nba, nov15, replays, now).isEmpty())
     }
 }
