@@ -500,6 +500,10 @@
     <string name="sports_live_setting_reset_stream_memory_subtitle">Forget which stream sources worked on this device, so every source is tried fresh</string>
     <string name="sports_live_setting_reset_stream_memory_done">Cleared</string>
     <string name="sports_live_setting_data_saver_subtitle">For limited or metered providers: turns off hover previews and background checks so streams load only when you play or flip to them</string>
+    <string name="sports_live_setting_open_game">When I open a game</string>
+    <string name="sports_live_setting_open_game_subtitle">OK on a live game or channel. Choose stream in the long-press menu always lets you pick.</string>
+    <string name="sports_live_open_game_play_best">Play best stream</string>
+    <string name="sports_live_open_game_let_me_choose">Let me choose</string>
     <string name="sports_live_setting_catalogs">Catalogs</string>
     <string name="sports_live_override_auto_in">Auto · in Sports &amp; Live</string>
     <string name="sports_live_override_auto_out">Auto · on Home</string>
@@ -3644,6 +3648,10 @@
     <string name="sports_live_watch">Watch</string>
     <string name="sports_live_no_streams_now">No streams right now</string>
     <string name="sports_live_details">Details</string>
+    <string name="sports_live_choose_stream">Choose stream</string>
+    <string name="sports_live_choose_stream_menu">Choose stream…</string>
+    <string name="sports_live_open_choose_stream">No stream played automatically. Choose one.</string>
+    <string name="sports_live_playing_from">Playing from %1$s</string>
     <string name="sports_live_follow">Follow %1$s</string>
     <string name="sports_live_unfollow">Unfollow %1$s</string>
     <string name="sports_live_my_teams_title">My teams</string>

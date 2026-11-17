@@ -452,7 +452,9 @@ private fun PlaybackNavHost(
             val sportsLivePlayViewModel: SportsLivePlayViewModel = androidx.hilt.navigation.compose.hiltViewModel()
             SportsLivePlayHost(
                 playViewModel = sportsLivePlayViewModel,
-                onOpenStreamScreen = { item -> navController.navigate(streamRouteFor(item, returnToHomeOnBack = true)) },
+                onOpenStreamScreen = { item, manual ->
+                    navController.navigate(streamRouteFor(item, returnToHomeOnBack = true, manualSelection = manual))
+                },
                 onPlayTarget = { target ->
                     navController.navigate(sportsLivePlayerRoute(target) ?: streamRouteFor(target.item, returnToHomeOnBack = true))
                 }
@@ -503,13 +505,8 @@ private fun PlaybackNavHost(
                 onNavigateToSportsLive = {
                     navController.navigate(Screen.SportsLive.route) { launchSingleTop = true }
                 },
-                onLiveNowItemClick = { item ->
-                    if (item.alternates.isEmpty()) {
-                        navController.navigate(streamRouteFor(item, returnToHomeOnBack = true))
-                    } else {
-                        sportsLivePlayViewModel.play(item, returnToHomeOnBack = true)
-                    }
-                }
+                // As in the section: a live game plays its best stream (or opens its Stream screen, per setting).
+                onLiveNowItemClick = { item -> sportsLivePlayViewModel.play(item, returnToHomeOnBack = true) }
             )
         }
 
@@ -1471,7 +1468,9 @@ private fun PlaybackNavHost(
 
         rootComposable(Screen.SportsLive.route) {
             SportsLiveScreen(
-                onPlay = { item -> navController.navigate(streamRouteFor(item, returnToHomeOnBack = false)) },
+                onPlay = { item, manual ->
+                    navController.navigate(streamRouteFor(item, returnToHomeOnBack = false, manualSelection = manual))
+                },
                 // A merged game's stream, picked across its sources, plays straight from the section.
                 onPlayTarget = { target ->
                     navController.navigate(sportsLivePlayerRoute(target) ?: streamRouteFor(target.item, returnToHomeOnBack = false))
@@ -1504,8 +1503,8 @@ private fun PlaybackNavHost(
                 // OK plays the highlighted game full screen in place of dual screen (whatever opened
                 // dual, Home included), so Back from it returns to what was below dual, never to dual
                 // (see sportsLiveStackAfterDualHandOff).
-                onOpenStreamScreen = { item ->
-                    navController.navigate(streamRouteFor(item, returnToHomeOnBack = false)) {
+                onOpenStreamScreen = { item, manual ->
+                    navController.navigate(streamRouteFor(item, returnToHomeOnBack = false, manualSelection = manual)) {
                         popUpTo(Screen.SportsLiveDual.route) { inclusive = true }
                     }
                 },

@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.nuvio.tv.core.profile.ProfileManager
+import com.nuvio.tv.core.sportslive.SportsLiveOpenGame
 import com.nuvio.tv.core.sportslive.scores.MySports
 import com.nuvio.tv.core.sportslive.scores.ScoreDelayChoices
 import com.nuvio.tv.core.sportslive.scores.ScoreSettings
@@ -56,6 +57,7 @@ class SportsLivePreferencesDataStore @Inject constructor(
     // Leagues seen on cards (scores S3), no longer used: cleared on the next My sports save.
     private val recentScoreLeaguesKey = stringPreferencesKey("sports_live_recent_score_leagues")
     private val mySportsKey = stringSetPreferencesKey("sports_live_my_sports")
+    private val openGameKey = stringPreferencesKey("sports_live_open_game")
 
     val showSection: Flow<Boolean> = profileManager.activeProfileId.flatMapLatest { pid ->
         factory.get(pid, FEATURE).data.map { it[showSectionKey] ?: true }
@@ -114,6 +116,17 @@ class SportsLivePreferencesDataStore @Inject constructor(
     /** My sports (#55): the sports and leagues picked; unset is every supported sport. */
     val mySports: Flow<MySports> = profileManager.activeProfileId.flatMapLatest { pid ->
         factory.get(pid, FEATURE).data.map { MySports.decode(it[mySportsKey]) }
+    }
+
+    /** "When I open a game" (#56): Play best stream (default) / Let me choose. */
+    val openGame: Flow<SportsLiveOpenGame> = profileManager.activeProfileId.flatMapLatest { pid ->
+        factory.get(pid, FEATURE).data.map { prefs ->
+            SportsLiveOpenGame.entries.firstOrNull { it.name == prefs[openGameKey] } ?: SportsLiveOpenGame.PLAY_BEST
+        }
+    }
+
+    suspend fun setOpenGame(openGame: SportsLiveOpenGame) {
+        store().edit { it[openGameKey] = openGame.name }
     }
 
     /** Saves [change] of the stored My sports in one edit; the default (nothing picked) clears the key. */

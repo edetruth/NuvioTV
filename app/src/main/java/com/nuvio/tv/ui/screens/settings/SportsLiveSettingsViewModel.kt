@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nuvio.tv.core.sportslive.SportsLiveCatalogOptions
 import com.nuvio.tv.core.sportslive.SportsLiveCatalogPolicy
+import com.nuvio.tv.core.sportslive.SportsLiveOpenGame
 import com.nuvio.tv.core.sportslive.SportsLiveSourceReliability
 import com.nuvio.tv.core.sportslive.scores.MyLeague
 import com.nuvio.tv.core.sportslive.scores.MySport
@@ -61,7 +62,9 @@ data class SportsLiveSettingsUiState(
     /** Scores (Show / Hide until focused / Off) and the score delay. */
     val scores: ScoreSettings = ScoreSettings(),
     /** My sports as picked (followed teams' sports are added where it is used, not here). */
-    val mySports: MySports = MySports.DEFAULT
+    val mySports: MySports = MySports.DEFAULT,
+    /** "When I open a game": Play best stream (default) / Let me choose. */
+    val openGame: SportsLiveOpenGame = SportsLiveOpenGame.PLAY_BEST
 )
 
 @HiltViewModel
@@ -81,9 +84,9 @@ class SportsLiveSettingsViewModel @Inject constructor(
         combine(prefs.overrides, prefs.catalogOptions, prefs.followedTeams, ::Triple),
         prefs.showSection,
         combine(prefs.showHomeRow, prefs.hoverPreview, prefs.dataSaver, ::Triple),
-        combine(claimedStats, prefs.pipEnabled, combine(prefs.scoreSettings, prefs.mySports, ::Pair), ::Triple)
+        combine(claimedStats, prefs.pipEnabled, combine(prefs.scoreSettings, prefs.mySports, prefs.openGame, ::Triple), ::Triple)
     ) { addons, (overrides, options, followedTeams), showSection, (showHomeRow, hoverPreview, dataSaver), (stats, pipEnabled, scoreAndSports) ->
-        val (scores, mySports) = scoreAndSports
+        val (scores, mySports, openGame) = scoreAndSports
         val catalogs = addons.enabledAddons().flatMap { addon ->
             addon.catalogs.filter(SportsLiveCatalogPolicy::isClaimable).map { catalog ->
                 val key = SportsLiveCatalogPolicy.keyFor(addon, catalog)
@@ -106,7 +109,7 @@ class SportsLiveSettingsViewModel @Inject constructor(
                 )
             }
         }
-        SportsLiveSettingsUiState(showSection, showHomeRow, hoverPreview, dataSaver, pipEnabled, catalogs, followedTeams, scores, mySports)
+        SportsLiveSettingsUiState(showSection, showHomeRow, hoverPreview, dataSaver, pipEnabled, catalogs, followedTeams, scores, mySports, openGame)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SportsLiveSettingsUiState())
 
     fun setShowSection(show: Boolean) {
@@ -123,6 +126,10 @@ class SportsLiveSettingsViewModel @Inject constructor(
 
     fun setDataSaver(enabled: Boolean) {
         viewModelScope.launch { prefs.setDataSaver(enabled) }
+    }
+
+    fun setOpenGame(openGame: SportsLiveOpenGame) {
+        viewModelScope.launch { prefs.setOpenGame(openGame) }
     }
 
     fun setPipEnabled(enabled: Boolean) {

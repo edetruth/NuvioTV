@@ -18,12 +18,13 @@ import com.nuvio.tv.domain.model.SportsLiveItem
 /**
  * Runs [playViewModel] for a screen that plays Sports & Live cards (the section, Home's Live now
  * row): its events navigate while the screen is started, its lookup and picker show as dialogs,
- * and leaving the screen cancels a lookup so it does not navigate on return.
+ * and leaving the screen cancels a lookup so it does not navigate on return. [onOpenStreamScreen]
+ * gets whether the Stream screen opens for the user to pick (no autoplay there).
  */
 @Composable
 fun SportsLivePlayHost(
     playViewModel: SportsLivePlayViewModel,
-    onOpenStreamScreen: (SportsLiveItem) -> Unit,
+    onOpenStreamScreen: (item: SportsLiveItem, manualSelection: Boolean) -> Unit,
     onPlayTarget: (SportsLiveZapTarget) -> Unit
 ) {
     val context = LocalContext.current
@@ -35,8 +36,19 @@ fun SportsLivePlayHost(
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
             playViewModel.events.collect { event ->
                 when (event) {
-                    is SportsLivePlayEvent.OpenStreamScreen -> currentOnOpenStreamScreen(event.item)
-                    is SportsLivePlayEvent.Play -> currentOnPlayTarget(event.target)
+                    is SportsLivePlayEvent.OpenStreamScreen -> {
+                        if (event.noStreamFound) {
+                            Toast.makeText(context, context.getString(R.string.sports_live_open_choose_stream), Toast.LENGTH_SHORT).show()
+                        }
+                        currentOnOpenStreamScreen(event.item, event.manualSelection)
+                    }
+                    is SportsLivePlayEvent.Play -> {
+                        currentOnPlayTarget(event.target)
+                        // Shown over the player for a few seconds: where the auto-picked stream comes from.
+                        event.source?.let { source ->
+                            Toast.makeText(context, context.getString(R.string.sports_live_playing_from, source), Toast.LENGTH_LONG).show()
+                        }
+                    }
                     is SportsLivePlayEvent.NoStream -> Toast.makeText(
                         context,
                         context.getString(R.string.sports_live_zap_no_stream, event.name),

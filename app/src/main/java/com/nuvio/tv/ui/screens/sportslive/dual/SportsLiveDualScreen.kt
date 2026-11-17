@@ -100,7 +100,7 @@ val LocalOpenSportsLiveDual = staticCompositionLocalOf<(() -> Unit)?> { null }
 @Composable
 fun SportsLiveDualScreen(
     onBack: () -> Unit,
-    onOpenStreamScreen: (SportsLiveItem) -> Unit,
+    onOpenStreamScreen: (item: SportsLiveItem, manualSelection: Boolean) -> Unit,
     onPlayTarget: (SportsLiveZapTarget) -> Unit,
     viewModel: SportsLiveDualViewModel = hiltViewModel(),
     playViewModel: SportsLivePlayViewModel = hiltViewModel()
@@ -166,10 +166,10 @@ fun SportsLiveDualScreen(
     // player (or Stream screen) opens, and the zap session runs over the dual list.
     SportsLivePlayHost(
         playViewModel = playViewModel,
-        onOpenStreamScreen = { item ->
+        onOpenStreamScreen = { item, manual ->
             releasePlayers()
             viewModel.startZapSession(item)
-            onOpenStreamScreen(item)
+            onOpenStreamScreen(item, manual)
         },
         onPlayTarget = { target ->
             releasePlayers()

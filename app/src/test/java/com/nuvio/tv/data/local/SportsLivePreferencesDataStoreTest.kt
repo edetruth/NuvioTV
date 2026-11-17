@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.nuvio.tv.TestPreferencesStore
 import com.nuvio.tv.core.profile.ProfileManager
+import com.nuvio.tv.core.sportslive.SportsLiveOpenGame
 import com.nuvio.tv.core.sportslive.scores.MyLeague
 import com.nuvio.tv.core.sportslive.scores.MySport
 import com.nuvio.tv.core.sportslive.scores.MySports
@@ -44,6 +45,28 @@ class SportsLivePreferencesDataStoreTest {
         assertTrue(store.showHomeRow.first())
         assertTrue(store.hoverPreview.first())
         assertEquals(emptyMap<String, SportsLiveOverride>(), store.overrides.first())
+    }
+
+    @Test
+    fun `when I open a game defaults to Play best stream and is stored per profile`() = runTest {
+        val store = SportsLivePreferencesDataStore(factory, profiles)
+        assertEquals(SportsLiveOpenGame.PLAY_BEST, store.openGame.first())
+
+        store.setOpenGame(SportsLiveOpenGame.LET_ME_CHOOSE)
+        assertEquals(SportsLiveOpenGame.LET_ME_CHOOSE, store.openGame.first())
+        assertEquals("LET_ME_CHOOSE", profile1Store.data.first()[stringPreferencesKey("sports_live_open_game")])
+
+        activeProfile.value = 2
+        assertEquals(SportsLiveOpenGame.PLAY_BEST, store.openGame.first())
+        activeProfile.value = 1
+        assertEquals(SportsLiveOpenGame.LET_ME_CHOOSE, store.openGame.first())
+    }
+
+    @Test
+    fun `an unknown stored open-game value reads as Play best stream`() = runTest {
+        profile1Store.updateData { mutablePreferencesOf(stringPreferencesKey("sports_live_open_game") to "SOMETHING_ELSE") }
+        val store = SportsLivePreferencesDataStore(factory, profiles)
+        assertEquals(SportsLiveOpenGame.PLAY_BEST, store.openGame.first())
     }
 
     @Test

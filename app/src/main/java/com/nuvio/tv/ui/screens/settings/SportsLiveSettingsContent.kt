@@ -33,6 +33,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.nuvio.tv.R
+import com.nuvio.tv.core.sportslive.SportsLiveOpenGame
 import com.nuvio.tv.core.sportslive.scores.MyLeague
 import com.nuvio.tv.core.sportslive.scores.MySport
 import com.nuvio.tv.core.sportslive.scores.MySports
@@ -109,6 +110,13 @@ internal fun SportsLiveSettingsContent(
                     subtitle = stringResource(R.string.sports_live_setting_data_saver_subtitle),
                     checked = state.dataSaver,
                     onToggle = { viewModel.setDataSaver(!state.dataSaver) },
+                    enabled = state.showSection
+                )
+                SettingsActionRow(
+                    title = stringResource(R.string.sports_live_setting_open_game),
+                    subtitle = stringResource(R.string.sports_live_setting_open_game_subtitle),
+                    value = openGameLabel(state.openGame),
+                    onClick = { scorePicker = ScorePicker.OPEN_GAME },
                     enabled = state.showSection
                 )
                 var streamMemoryReset by remember { mutableStateOf(false) }
@@ -243,6 +251,17 @@ internal fun SportsLiveSettingsContent(
             },
             onDismiss = { scorePicker = null }
         )
+        ScorePicker.OPEN_GAME -> SettingsSingleChoiceDialog(
+            title = stringResource(R.string.sports_live_setting_open_game),
+            subtitle = stringResource(R.string.sports_live_setting_open_game_subtitle),
+            options = SportsLiveOpenGame.entries.map { SettingsPickerOption(it, openGameLabel(it)) },
+            selectedValue = state.openGame,
+            onOptionSelected = { openGame ->
+                scorePicker = null
+                viewModel.setOpenGame(openGame)
+            },
+            onDismiss = { scorePicker = null }
+        )
         null -> Unit
     }
 
@@ -264,7 +283,8 @@ internal fun SportsLiveSettingsContent(
     }
 }
 
-private enum class ScorePicker { MODE, DELAY }
+/** The single-choice dialog open: scores mode, score delay, or "When I open a game". */
+private enum class ScorePicker { MODE, DELAY, OPEN_GAME }
 
 /**
  * My sports (#55): a switch per sport, in order; a sport with several leagues has a Leagues row below
@@ -348,6 +368,14 @@ private fun scoresModeLabel(mode: ScoresMode): String = stringResource(
         ScoresMode.SHOW -> R.string.sports_live_scores_show
         ScoresMode.HIDE_UNTIL_FOCUSED -> R.string.sports_live_scores_hide_until_focused
         ScoresMode.OFF -> R.string.sports_live_scores_off
+    }
+)
+
+@Composable
+private fun openGameLabel(openGame: SportsLiveOpenGame): String = stringResource(
+    when (openGame) {
+        SportsLiveOpenGame.PLAY_BEST -> R.string.sports_live_open_game_play_best
+        SportsLiveOpenGame.LET_ME_CHOOSE -> R.string.sports_live_open_game_let_me_choose
     }
 )
 

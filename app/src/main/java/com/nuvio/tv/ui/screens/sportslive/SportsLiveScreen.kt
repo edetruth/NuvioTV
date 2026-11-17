@@ -93,7 +93,8 @@ fun SportsLiveScreen(
     playViewModel: SportsLivePlayViewModel = hiltViewModel(),
     resultsViewModel: SportsLiveResultsViewModel = hiltViewModel(),
     scoresViewModel: SportsLiveScoresViewModel = hiltViewModel(),
-    onPlay: (SportsLiveItem) -> Unit,
+    /** Opens the item's Stream screen; the Boolean: the user picks there (no autoplay). */
+    onPlay: (SportsLiveItem, Boolean) -> Unit,
     onPlayTarget: (SportsLiveZapTarget) -> Unit,
     onOpenDetail: (SportsLiveItem) -> Unit,
     onOpenAddons: () -> Unit,
@@ -169,12 +170,12 @@ fun SportsLiveScreen(
         if (playing == null) previewPlayer.release() else previewPlayer.play(playing.item, playing.stream)
     }
 
-    // A merged game plays across its sources; every other card opens its Stream screen as before.
+    // A live game or channel plays its best stream (#56); other cards keep their behaviour.
     SportsLivePlayHost(
         playViewModel = playViewModel,
-        onOpenStreamScreen = { item ->
+        onOpenStreamScreen = { item, manual ->
             viewModel.startZapSession(item)
-            onPlay(item)
+            onPlay(item, manual)
         },
         onPlayTarget = { target ->
             previewPlayer.release()
@@ -228,8 +229,9 @@ fun SportsLiveScreen(
             onSelectItem = viewModel::selectItem,
             onRefresh = { viewModel.refresh() },
             onPlay = { item ->
-                // OK on a playing preview: its stream plays full screen at once; otherwise as before.
-                val previewed = viewModel.takeOverPreview(item)
+                // OK on a playing preview: its stream plays full screen at once (unless the user
+                // chooses streams); otherwise the best stream is looked up.
+                val previewed = if (playViewModel.userChooses(item)) null else viewModel.takeOverPreview(item)
                 if (previewed == null) {
                     playViewModel.play(item)
                 } else {
@@ -238,6 +240,7 @@ fun SportsLiveScreen(
                     playViewModel.playResolved(item, previewed.stream)
                 }
             },
+            onChooseStream = { item -> playViewModel.chooseStream(item) },
             preview = playing,
             noStreamKey = (preview as? SportsLivePreviewState.NoStream)?.item?.listKey,
             previewPlayer = previewPlayer,
@@ -307,6 +310,8 @@ private fun SportsLiveContent(
     onSelectItem: (String?) -> Unit,
     onRefresh: () -> Unit,
     onPlay: (SportsLiveItem) -> Unit,
+    /** "Choose stream": the card's streams to pick from, whatever "When I open a game" says. */
+    onChooseStream: (SportsLiveItem) -> Unit,
     preview: SportsLivePreviewState.Playing?,
     /** The card whose stream lookup found nothing to play. */
     noStreamKey: String?,
@@ -445,6 +450,14 @@ private fun SportsLiveContent(
                 {
                     menuCardKey = null
                     pickFirst = item
+                }
+            } else {
+                null
+            },
+            onChooseStream = if (sportsLiveAutoPlayEligible(item)) {
+                {
+                    menuCardKey = null
+                    onChooseStream(item)
                 }
             } else {
                 null
@@ -726,6 +739,11 @@ private fun SportsLiveContent(
                 stateLabel = stateLabelOf(selected),
                 onWatch = { open(selected) },
                 onDetails = { onOpenDetail(selected) },
+                onChooseStream = if (sportsLiveAutoPlayEligible(selected)) {
+                    { onChooseStream(selected) }
+                } else {
+                    null
+                },
                 preview = if (selectedPreview != null) {
                     { SportsLivePreviewVideo(previewPlayer) }
                 } else {

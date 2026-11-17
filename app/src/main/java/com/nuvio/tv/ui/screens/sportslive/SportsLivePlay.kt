@@ -4,9 +4,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nuvio.tv.core.debrid.DirectDebridResolver
 import com.nuvio.tv.core.profile.ProfileManager
+import com.nuvio.tv.core.sportslive.SportsLiveOpenGame
 import com.nuvio.tv.data.local.PlayerSettingsDataStore
+import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import com.nuvio.tv.data.local.StreamAutoPlayMode
 import com.nuvio.tv.domain.model.SportsLiveItem
+import com.nuvio.tv.domain.model.SportsLiveKind
 import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.ui.screens.player.SportsLiveLaunchHeaders
 import com.nuvio.tv.ui.screens.stream.streamPlaybackInfoFor
@@ -15,29 +18,54 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /** What OK on a Sports & Live card does. */
 enum class SportsLivePlayAction {
-    /** A single-source card: the item's Stream screen, as upstream. */
+    /** The item's Stream screen, as upstream (a single-source card the user picks for, or one not live). */
     STREAM_SCREEN,
 
-    /** A merged card with autoplay: the best stream across its sources plays at once. */
+    /** The best stream (across a merged card's sources) plays at once, as a zap picks it. */
     PLAY_BEST,
 
-    /** A merged card in MANUAL mode: the user picks from every source's streams. */
+    /** A merged card the user picks for: every source's streams. */
     PICK
 }
 
-fun sportsLivePlayAction(item: SportsLiveItem, mode: StreamAutoPlayMode): SportsLivePlayAction = when {
-    item.alternates.isEmpty() -> SportsLivePlayAction.STREAM_SCREEN
-    mode == StreamAutoPlayMode.MANUAL -> SportsLivePlayAction.PICK
-    else -> SportsLivePlayAction.PLAY_BEST
+/**
+ * Whether OK on [item] may play its best stream at once (#56): a live game or a channel. Replays
+ * and games not started yet keep their behaviour.
+ */
+fun sportsLiveAutoPlayEligible(item: SportsLiveItem): Boolean =
+    item.kind != SportsLiveKind.REPLAY && (item.isLive || item.isChannel)
+
+/**
+ * What OK on [item] does. A live game or channel follows [openGame] ("When I open a game"), unless
+ * the user asked to [choose] ("Choose stream"); any other card keeps its pre-#56 behaviour, where a
+ * merged card follows the player's autoplay [mode].
+ */
+fun sportsLivePlayAction(
+    item: SportsLiveItem,
+    mode: StreamAutoPlayMode,
+    openGame: SportsLiveOpenGame = SportsLiveOpenGame.PLAY_BEST,
+    choose: Boolean = false
+): SportsLivePlayAction {
+    val eligible = sportsLiveAutoPlayEligible(item)
+    val userPicks = choose || (eligible && openGame == SportsLiveOpenGame.LET_ME_CHOOSE)
+    return when {
+        userPicks -> if (item.alternates.isEmpty()) SportsLivePlayAction.STREAM_SCREEN else SportsLivePlayAction.PICK
+        eligible -> SportsLivePlayAction.PLAY_BEST
+        item.alternates.isEmpty() -> SportsLivePlayAction.STREAM_SCREEN
+        mode == StreamAutoPlayMode.MANUAL -> SportsLivePlayAction.PICK
+        else -> SportsLivePlayAction.PLAY_BEST
+    }
 }
 
 /** True when [stream] needs the Stream screen's preparation (server, YouTube or debrid resolve). */
@@ -97,21 +125,34 @@ sealed interface SportsLivePlayState {
 }
 
 sealed interface SportsLivePlayEvent {
-    data class OpenStreamScreen(val item: SportsLiveItem) : SportsLivePlayEvent
-    data class Play(val target: SportsLiveZapTarget) : SportsLivePlayEvent
+    /**
+     * [item]'s Stream screen. [manualSelection]: the user picks there (no autoplay), as asked or as
+     * the fallback; [noStreamFound]: the best-stream lookup found nothing, so a short message shows.
+     */
+    data class OpenStreamScreen(
+        val item: SportsLiveItem,
+        val manualSelection: Boolean = false,
+        val noStreamFound: Boolean = false
+    ) : SportsLivePlayEvent
+
+    /** [source]: the provider an auto-picked stream plays from, announced briefly; null announces nothing. */
+    data class Play(val target: SportsLiveZapTarget, val source: String? = null) : SportsLivePlayEvent
     data class NoStream(val name: String) : SportsLivePlayEvent
 }
 
 /**
- * OK on a section card or a Home Live now card: single-source cards open the Stream screen; merged
- * cards play across sources. The screen shows [state] and runs [events] with [SportsLivePlayHost].
+ * OK on a section card or a Home Live now card ([sportsLivePlayAction]): a live game or channel
+ * plays its best stream at once through the zap resolver (one lookup, cached), unless the user
+ * chooses; other cards keep their behaviour. The screen shows [state] and runs [events] with
+ * [SportsLivePlayHost].
  */
 @HiltViewModel
 class SportsLivePlayViewModel @Inject constructor(
     private val resolver: SportsLiveZapResolver,
     private val playerSettingsDataStore: PlayerSettingsDataStore,
     private val directDebridResolver: DirectDebridResolver,
-    private val profileManager: ProfileManager
+    private val profileManager: ProfileManager,
+    private val sportsLivePreferences: SportsLivePreferencesDataStore
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<SportsLivePlayState>(SportsLivePlayState.Idle)
@@ -125,27 +166,49 @@ class SportsLivePlayViewModel @Inject constructor(
     /** Whether Back from the played stream returns to Home (the Home Live now row) rather than the section. */
     private var returnToHomeOnBack = false
 
-    fun play(item: SportsLiveItem, returnToHomeOnBack: Boolean = false) {
-        if (item.alternates.isEmpty()) {
-            // Single-addon card: the Stream screen plays it, but mark it sports so its full player
-            // still auto-fails over across the addon's multiple links and shows the recovery overlay.
-            SportsLiveExtraSources.markSportsPlayback(item.id, item)
-            _events.trySend(SportsLivePlayEvent.OpenStreamScreen(item))
-            return
-        }
+    /** "When I open a game", kept current so the screen can tell at once whether OK takes over the preview. */
+    private val openGame: StateFlow<SportsLiveOpenGame> = sportsLivePreferences.openGame
+        .stateIn(viewModelScope, SharingStarted.Eagerly, SportsLiveOpenGame.PLAY_BEST)
+
+    /** True when OK on [item] lets the user choose ("Let me choose" on a live card): a playing preview is not taken over. */
+    fun userChooses(item: SportsLiveItem): Boolean =
+        sportsLiveAutoPlayEligible(item) && openGame.value == SportsLiveOpenGame.LET_ME_CHOOSE
+
+    /** OK on [item]: see [sportsLivePlayAction]. */
+    fun play(item: SportsLiveItem, returnToHomeOnBack: Boolean = false) = start(item, returnToHomeOnBack, choose = false)
+
+    /** "Choose stream" on [item]: its streams to pick from (the Stream screen, or a merged card's picker). */
+    fun chooseStream(item: SportsLiveItem, returnToHomeOnBack: Boolean = false) = start(item, returnToHomeOnBack, choose = true)
+
+    private fun start(item: SportsLiveItem, returnToHomeOnBack: Boolean, choose: Boolean) {
         job?.cancel()
         this.returnToHomeOnBack = returnToHomeOnBack
-        _state.value = SportsLivePlayState.Resolving(item)
+        _state.value = SportsLivePlayState.Idle
+        val eligible = sportsLiveAutoPlayEligible(item)
+        if (item.alternates.isEmpty() && (choose || !eligible)) {
+            // Nothing to read or look up: the Stream screen opens at once, as before.
+            openStreamScreen(item, manualSelection = choose)
+            return
+        }
         job = viewModelScope.launch {
+            val openGame = sportsLivePreferences.openGame.first()
             val mode = playerSettingsDataStore.playerSettings.first().streamAutoPlayMode
-            // STREAM_SCREEN is only for single-source cards, handled above.
-            when (sportsLivePlayAction(item, mode)) {
-                SportsLivePlayAction.STREAM_SCREEN, SportsLivePlayAction.PLAY_BEST -> {
+            when (sportsLivePlayAction(item, mode, openGame, choose)) {
+                SportsLivePlayAction.STREAM_SCREEN -> openStreamScreen(item, manualSelection = true)
+                SportsLivePlayAction.PLAY_BEST -> {
+                    _state.value = SportsLivePlayState.Resolving(item)
+                    // The zap's lookup: reliability order, the user's filters, junk dropped, cached.
                     val stream = resolver.resolve(item)
                     _state.value = SportsLivePlayState.Idle
-                    if (stream == null) noStream(item) else playStream(item, stream, autoPicked = true)
+                    when {
+                        stream != null -> playStream(item, stream, autoPicked = item.alternates.isNotEmpty(), announce = eligible)
+                        // Nothing playable: the user picks on the Stream screen, which joins the search just run.
+                        eligible -> openStreamScreen(item, manualSelection = true, noStreamFound = true)
+                        else -> noStream(item)
+                    }
                 }
                 SportsLivePlayAction.PICK -> {
+                    _state.value = SportsLivePlayState.Resolving(item)
                     val streams = resolver.resolveAll(item)
                     if (streams.isEmpty()) {
                         _state.value = SportsLivePlayState.Idle
@@ -166,7 +229,9 @@ class SportsLivePlayViewModel @Inject constructor(
         job?.cancel()
         returnToHomeOnBack = false
         _state.value = SportsLivePlayState.Idle
-        job = viewModelScope.launch { playStream(item, stream, autoPicked = item.alternates.isNotEmpty()) }
+        job = viewModelScope.launch {
+            playStream(item, stream, autoPicked = item.alternates.isNotEmpty(), announce = sportsLiveAutoPlayEligible(item))
+        }
     }
 
     /** A stream picked in the picker plays. */
@@ -186,7 +251,22 @@ class SportsLivePlayViewModel @Inject constructor(
         while (_events.tryReceive().isSuccess) Unit
     }
 
-    private suspend fun playStream(item: SportsLiveItem, stream: Stream, autoPicked: Boolean = false) {
+    /**
+     * [item]'s Stream screen, marked sports so its full player still auto-fails over across the
+     * addon's links (and a merged card's other sources) and shows the recovery overlay.
+     */
+    private fun openStreamScreen(item: SportsLiveItem, manualSelection: Boolean, noStreamFound: Boolean = false) {
+        SportsLiveExtraSources.markSportsPlayback(item.id, item)
+        if (item.alternates.isNotEmpty()) SportsLiveExtraSources.register(item.id, item)
+        _events.trySend(SportsLivePlayEvent.OpenStreamScreen(item, manualSelection, noStreamFound))
+    }
+
+    private suspend fun playStream(
+        item: SportsLiveItem,
+        stream: Stream,
+        autoPicked: Boolean = false,
+        announce: Boolean = false
+    ) {
         val target = sportsLiveZapTarget(
             item = item,
             stream = stream,
@@ -197,7 +277,9 @@ class SportsLivePlayViewModel @Inject constructor(
         )
         // The player (or the primary's Stream screen) gets the other addons' streams for fallback and Sources.
         SportsLiveExtraSources.register(item.id, item)
-        _events.send(SportsLivePlayEvent.Play(target))
+        // A stream that opens the Stream screen for preparation is not announced: it is not playing yet.
+        val source = stream.addonName.takeIf { announce && target.playback != null && it.isNotBlank() }
+        _events.send(SportsLivePlayEvent.Play(target, source))
     }
 
     private suspend fun noStream(item: SportsLiveItem) {

@@ -4,6 +4,7 @@ import com.nuvio.tv.MainDispatcherRule
 import com.nuvio.tv.TestPreferencesStore
 import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.core.sportslive.SportsLiveCatalogPolicy
+import com.nuvio.tv.core.sportslive.SportsLiveOpenGame
 import com.nuvio.tv.core.sportslive.scores.MyLeague
 import com.nuvio.tv.core.sportslive.scores.MySport
 import com.nuvio.tv.core.sportslive.scores.MySports
@@ -209,6 +210,19 @@ class SportsLiveSettingsViewModelTest {
         assertFalse(prefs.showSection.first())
         assertFalse(prefs.showHomeRow.first())
         assertFalse(prefs.hoverPreview.first())
+    }
+
+    @Test
+    fun `when I open a game is Play best stream by default and the choice is stored`() = runTest {
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+        assertEquals(SportsLiveOpenGame.PLAY_BEST, viewModel.uiState.value.openGame)
+
+        viewModel.setOpenGame(SportsLiveOpenGame.LET_ME_CHOOSE)
+        advanceUntilIdle()
+
+        assertEquals(SportsLiveOpenGame.LET_ME_CHOOSE, viewModel.uiState.value.openGame)
+        assertEquals(SportsLiveOpenGame.LET_ME_CHOOSE, prefs.openGame.first())
     }
 
     @Test

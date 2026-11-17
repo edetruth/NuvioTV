@@ -258,6 +258,8 @@ internal fun SportsLiveDetailsPane(
     onDetails: () -> Unit,
     modifier: Modifier = Modifier,
     watchModifier: Modifier = Modifier,
+    /** "Choose stream" beside Watch (live games and channels); null hides it. */
+    onChooseStream: (() -> Unit)? = null,
     /** The hover preview's video, composed under the art while a preview plays; null when none does. */
     preview: (@Composable () -> Unit)? = null,
     /** The preview's first frame is on screen: the art gives way to the video, and the state line gets a label. */
@@ -370,6 +372,11 @@ internal fun SportsLiveDetailsPane(
                 Spacer(modifier = Modifier.width(NuvioTheme.spacing.xs))
                 Text(stringResource(R.string.sports_live_watch))
             }
+            if (onChooseStream != null) {
+                SportsLivePaneButton(onClick = onChooseStream) {
+                    Text(stringResource(R.string.sports_live_choose_stream))
+                }
+            }
             SportsLivePaneButton(onClick = onDetails) {
                 Text(stringResource(R.string.sports_live_details))
             }
@@ -390,10 +397,15 @@ internal fun SportsLiveCardMenu(
     onDetails: () -> Unit,
     onDismiss: () -> Unit,
     /** "Watch with another game"; null hides it (only live game cards offer it). */
-    onWatchWith: (() -> Unit)? = null
+    onWatchWith: (() -> Unit)? = null,
+    /** "Choose stream": the card's streams to pick from; null hides it (live games and channels offer it). */
+    onChooseStream: (() -> Unit)? = null
 ) {
     val firstFocusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { firstFocusRequester.requestFocus() } }
+    // The first button shown takes the first focus.
+    val chooseFirst = onWatchWith == null
+    val sidesFirst = chooseFirst && onChooseStream == null
 
     NuvioDialog(onDismiss = onDismiss, title = title) {
         if (onWatchWith != null) {
@@ -403,17 +415,24 @@ internal fun SportsLiveCardMenu(
                 modifier = Modifier.focusRequester(firstFocusRequester)
             )
         }
+        if (onChooseStream != null) {
+            SportsLiveMenuButton(
+                text = stringResource(R.string.sports_live_choose_stream_menu),
+                onClick = onChooseStream,
+                modifier = if (chooseFirst) Modifier.focusRequester(firstFocusRequester) else Modifier
+            )
+        }
         sides.forEachIndexed { index, (side, followed) ->
             SportsLiveMenuButton(
                 text = stringResource(if (followed) R.string.sports_live_unfollow else R.string.sports_live_follow, side),
                 onClick = { onToggleFollow(side) },
-                modifier = if (index == 0 && onWatchWith == null) Modifier.focusRequester(firstFocusRequester) else Modifier
+                modifier = if (index == 0 && sidesFirst) Modifier.focusRequester(firstFocusRequester) else Modifier
             )
         }
         SportsLiveMenuButton(
             text = stringResource(R.string.sports_live_details),
             onClick = onDetails,
-            modifier = if (sides.isEmpty() && onWatchWith == null) Modifier.focusRequester(firstFocusRequester) else Modifier
+            modifier = if (sides.isEmpty() && sidesFirst) Modifier.focusRequester(firstFocusRequester) else Modifier
         )
     }
 }
