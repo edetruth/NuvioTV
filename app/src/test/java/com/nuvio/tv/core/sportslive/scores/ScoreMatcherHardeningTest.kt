@@ -24,7 +24,8 @@ class ScoreMatcherHardeningTest {
     fun `a men's card never matches a game in a women's league`() {
         val women = listOf(
             "eng.w.1", "esp.w.1", "can.w.nsl", "usa.w.usl.1", "usa.nwsl", "uefa.wchampions", "fifa.wwc",
-            "uefa.weuro", "uefa.wnations", "fifa.wworld.u17", "fifa.wworldq.uefa", "esp.copa_de_la_reina"
+            "uefa.weuro", "uefa.wnations", "fifa.wworld.u17", "fifa.wworldq.uefa", "esp.copa_de_la_reina",
+            "conmebol.america.femenina", "fifa.shebelieves"
         )
         for (slug in women) {
             assertNull(slug, match("Germany vs Netherlands", "2026-11-16T19:45:00Z", listOf(germany.copy(leagueSlug = slug))))
@@ -78,5 +79,20 @@ class ScoreMatcherHardeningTest {
         val game = clubGame("Brighton & Hove Albion", "St. Louis City SC")
         assertEquals("club", match("Brighton and Hove Albion vs St Louis City", "2026-11-16T19:45:00Z", listOf(game)))
         assertEquals("club", match("Brighton & Hove Albion ᴴᴰ vs St. Louis City ᴸᴵⱽᴱ", "2026-11-16T19:45:00Z", listOf(game)))
+    }
+
+    @Test
+    fun `UEFA Youth League games are under-19`() {
+        val youth = clubGame("Real Madrid", "Bayern Munich").copy(leagueSlug = "uefa.youth")
+        assertEquals("club", match("Real Madrid U19 vs Bayern Munich U19", "2026-11-16T19:45:00Z", listOf(youth)))
+        assertNull(match("Real Madrid vs Bayern Munich", "2026-11-16T19:45:00Z", listOf(youth)))
+    }
+
+    @Test
+    fun `reserve sides never take the senior score`() {
+        val senior = clubGame("Real Madrid", "Barcelona")
+        assertNull(match("Real Madrid B vs Barcelona B", "2026-11-16T19:45:00Z", listOf(senior)))
+        assertNull(match("Real Madrid Castilla vs Barcelona Atletic", "2026-11-16T19:45:00Z", listOf(senior)))
+        assertNull(match("Castilla vs Barcelona", "2026-11-16T19:45:00Z", listOf(senior)))
     }
 }

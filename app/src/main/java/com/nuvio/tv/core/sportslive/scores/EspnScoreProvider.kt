@@ -91,6 +91,7 @@ class EspnScoreProvider internal constructor(
         // STATUS_SUSPENDED, STATUS_DELAYED, STATUS_FORFEIT, STATUS_ABANDONED. Adapted from OFF_STATUS
         // in SportsFeeds of homelessbrian/NuvioPlusIPTV (GPL-3.0, as this project).
         private val OFF_STATUS = Regex("POSTPONED|CANCEL|SUSPENDED|DELAYED|FORFEIT|ABANDON")
+        private val RESUMABLE = Regex("SUSPENDED|DELAYED")
 
         /** Retry-After in seconds (the HTTP-date form is ignored), capped at 15 minutes. */
         internal fun retryAfterMs(header: String?): Long? =
@@ -135,8 +136,8 @@ class EspnScoreProvider internal constructor(
                 type?.state == "post" -> ScoreState.POST
                 else -> ScoreState.UNKNOWN
             }
-            // Before kick-off ESPN sends "0": no score then, nor for a game that is off.
-            val scored = state != ScoreState.PRE && state != ScoreState.OFF
+            // Before kick-off ESPN sends "0": a score shows only once a game is in play or over.
+            val scored = state == ScoreState.IN || state == ScoreState.POST
             return ScoreSnapshot(
                 eventId = id,
                 league = league,
@@ -149,7 +150,10 @@ class EspnScoreProvider internal constructor(
                 isFinal = state != ScoreState.OFF && type?.completed == true,
                 home = if (scored) homeTeam else homeTeam.copy(score = null, linescores = emptyList()),
                 away = if (scored) awayTeam else awayTeam.copy(score = null, linescores = emptyList()),
-                scorers = if (scored) scorers(competition.details.orEmpty(), homeTeam.id, awayTeam.id) else emptyList()
+                scorers = if (scored) scorers(competition.details.orEmpty(), homeTeam.id, awayTeam.id) else emptyList(),
+                // Suspended or delayed and not over: play may resume. Postponed/cancelled will not.
+                mayResume = state == ScoreState.OFF && type?.state != "post" && type?.completed != true &&
+                    type?.name?.let { RESUMABLE.containsMatchIn(it.uppercase()) } == true
             )
         }
 

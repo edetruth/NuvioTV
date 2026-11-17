@@ -43,11 +43,14 @@ class ScoreCadenceTest {
     }
 
     @Test
-    fun `a game that is off is checked at the upcoming pace, and done games stop`() {
-        val off = game.copy(state = ScoreState.OFF)
-        assertEquals(300_000L, interval(EspnLeagueMap.NBA, listOf(off)))
-        assertEquals(300_000L, interval(EspnLeagueMap.NBA, listOf(off, game)))
-        assertEquals(30_000L, interval(EspnLeagueMap.NBA, listOf(off, live)))
+    fun `a suspended game is checked at the upcoming pace, postponed and done games stop`() {
+        val suspended = game.copy(state = ScoreState.OFF, mayResume = true)
+        val postponed = game.copy(state = ScoreState.OFF, mayResume = false)
+        assertEquals(300_000L, interval(EspnLeagueMap.NBA, listOf(suspended)))
+        assertEquals(300_000L, interval(EspnLeagueMap.NBA, listOf(suspended, game)))
+        assertEquals(30_000L, interval(EspnLeagueMap.NBA, listOf(suspended, live)))
+        assertNull(interval(EspnLeagueMap.NBA, listOf(postponed)))
+        assertNull(interval(EspnLeagueMap.NBA, listOf(postponed, game)))
         assertNull(interval(EspnLeagueMap.NBA, listOf(game)))
     }
 }

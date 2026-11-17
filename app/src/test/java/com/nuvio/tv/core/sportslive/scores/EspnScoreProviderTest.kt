@@ -213,7 +213,8 @@ class EspnScoreProviderTest {
             ${game("su", "STATUS_SUSPENDED", "in", false, "2", "1")},
             ${game("dl", "STATUS_DELAYED", "in", false, "3", "3")},
             ${game("pre", "STATUS_SCHEDULED", "pre", false, "0", "0")},
-            ${game("live", "STATUS_IN_PROGRESS", "in", false, "2", "1")}
+            ${game("live", "STATUS_IN_PROGRESS", "in", false, "2", "1")},
+            ${game("unk", "STATUS_SOMETHING", "odd", false, "4", "4")}
         ]}"""
         val events = provider(respond(200, body)).scoreboard(EspnLeagueMap.NBA, day).events.associateBy { it.eventId }
         for (id in listOf("pp", "cx", "su", "dl")) {
@@ -224,10 +225,16 @@ class EspnScoreProviderTest {
             assertFalse(id, game.isFinal)
             assertTrue(id, game.home.linescores.isEmpty())
         }
+        // Only a suspended or delayed game that is not over may resume.
+        assertEquals(listOf("su", "dl"), listOf("pp", "cx", "su", "dl").filter { events.getValue(it).mayResume })
         events.getValue("pre").let {
             assertEquals(ScoreState.PRE, it.state)
             assertNull(it.homeScore)
             assertNull(it.awayScore)
+        }
+        events.getValue("unk").let {
+            assertEquals(ScoreState.UNKNOWN, it.state)
+            assertNull(it.homeScore)
         }
         events.getValue("live").let {
             assertEquals(ScoreState.IN, it.state)

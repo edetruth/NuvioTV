@@ -199,9 +199,10 @@ class ScoreMatcher(private val zone: () -> ZoneId = { ZoneId.systemDefault() }) 
 
         // League slugs of women's competitions, an explicit list checked against ESPN: "eng.w.1",
         // "can.w.nsl", "usa.w.usl.1", "usa.nwsl", "uefa.wchampions", "fifa.wwc", "uefa.weuro",
-        // "uefa.wnations", "fifa.wworld.u17", "fifa.wworldq.uefa", "esp.copa_de_la_reina". Not
+        // "uefa.wnations", "fifa.wworld.u17", "fifa.wworldq.uefa", "esp.copa_de_la_reina",
+        // "conmebol.america.femenina", "fifa.shebelieves". Not
         // "fifa.world" or "fifa.worldq.*" (men's), nor "wal.1" (Wales).
-        val WOMEN_SLUG = Regex("""(^|\.)w(\.|$)|wchampions|\.wwc|nwsl|\.weuro|\.wnations|\.wworld|copa_de_la_reina|women""")
+        val WOMEN_SLUG = Regex("""(^|\.)w(\.|$)|wchampions|\.wwc|nwsl|\.weuro|\.wnations|\.wworld|copa_de_la_reina|women|femenin|feminin|shebelieves""")
         // Youth: "fifa.friendly_u21", "uefa.euro_u21_qual", "fifa.world.u17".
         val YOUTH_SLUG = Regex("""(?<![a-z])u(\d{1,2})(?!\d)""")
 
@@ -220,6 +221,8 @@ class ScoreMatcher(private val zone: () -> ZoneId = { ZoneId.systemDefault() }) 
 
         fun slugQualifier(slug: String): String? = when {
             WOMEN_SLUG.containsMatchIn(slug) -> "w"
+            // UEFA Youth League ("uefa.youth", "uefa.youth_league") is an under-19 competition.
+            "youth" in slug -> YOUTH_SLUG.find(slug)?.let { "u${it.groupValues[1]}" } ?: "u19"
             else -> YOUTH_SLUG.find(slug)?.let { "u${it.groupValues[1]}" }
         }
     }

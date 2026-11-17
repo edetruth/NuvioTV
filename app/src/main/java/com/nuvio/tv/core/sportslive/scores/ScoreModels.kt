@@ -54,7 +54,9 @@ data class ScoreSnapshot(
     val isFinal: Boolean,
     val home: ScoreTeam,
     val away: ScoreTeam,
-    val scorers: List<ScoreScorer> = emptyList()
+    val scorers: List<ScoreScorer> = emptyList(),
+    /** For an [ScoreState.OFF] game: true when it is suspended or delayed and may resume. */
+    val mayResume: Boolean = false
 ) {
     val homeAbbr: String? get() = home.abbreviation
     val awayAbbr: String? get() = away.abbreviation

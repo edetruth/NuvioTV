@@ -79,6 +79,8 @@ class LiveScoresRepository internal constructor(
         var jitterMs = 0L
         var failures = 0
         var retryAfterMs: Long? = null
+        /** When no card needed it any more; it is kept a while so a re-track waits out its interval. */
+        var retiredAt: Long? = null
         val paused: Boolean get() = failures >= ScoreCadence.PAUSE_AFTER_FAILURES
     }
 
@@ -219,8 +221,16 @@ class LiveScoresRepository internal constructor(
                 cardFeeds += feedsOf(listOf(EspnLeagueMap.SOCCER_ALL), dates)
                 match = matchOn(card, cardFeeds)
             }
-            needed += cardFeeds
-            if (match == null) continue
+            if (match == null) {
+                needed += cardFeeds
+                continue
+            }
+            // Matched: only the feeds holding the game (and any not fetched yet) keep polling, so a
+            // late game does not also poll the next Eastern day all night.
+            needed += cardFeeds.filter { feed ->
+                val state = feeds[feed]
+                state == null || !state.fetched || state.events.any { it.eventId == match.eventId }
+            }
             matched[card.key] = match
             if (match.league == EspnLeagueMap.SOCCER_ALL && match.leagueSlug != EspnLeagueMap.SOCCER_ALL.league &&
                 SLUG.matches(match.leagueSlug) && card.key !in remembered
@@ -234,16 +244,20 @@ class LiveScoresRepository internal constructor(
         }
         raw = matched
 
-        // Feeds no card needs: stop and forget.
+        // Feeds no card needs: stop polling, but keep their state (last fetch, failures, Retry-After)
+        // for a while, so switching between Home and the section does not refetch at once.
+        val nowMs = now()
         (feeds.keys - needed).forEach { feed ->
-            feeds.remove(feed)
             pollers.remove(feed)?.cancel()
+            feeds.getValue(feed).let { if (it.retiredAt == null) it.retiredAt = nowMs }
         }
+        feeds.values.removeAll { state -> state.retiredAt?.let { nowMs - it > RETAIN_RETIRED_MS } == true }
         for (feed in needed) {
-            val isNew = feed !in feeds
-            if (isNew) feeds[feed] = FeedState()
+            val state = feeds[feed]
+            val revived = state?.retiredAt != null
+            if (state == null) feeds[feed] = FeedState() else state.retiredAt = null
             if (pollers[feed]?.isActive == true) continue
-            if (isNew || restartStopped) pollers[feed] = pollerScope.launch { poll(feed, pollerScope) }
+            if (state == null || revived || restartStopped) pollers[feed] = pollerScope.launch { poll(feed, pollerScope) }
         }
         publishLocked()
     }
@@ -291,6 +305,7 @@ class LiveScoresRepository internal constructor(
     private companion object {
         const val WINDOW_MS = 3 * 60 * 60 * 1000L
         const val MAX_REMEMBERED = 2_000
+        const val RETAIN_RETIRED_MS = 10 * 60_000L
         val SLUG = Regex("""[a-z0-9._-]+""")
         val EASTERN: ZoneId = ZoneId.of("America/New_York")
     }

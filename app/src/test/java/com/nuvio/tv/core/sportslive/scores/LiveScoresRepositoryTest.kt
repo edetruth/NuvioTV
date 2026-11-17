@@ -6,6 +6,7 @@ import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.domain.model.PosterShape
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveKind
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
@@ -28,9 +29,12 @@ class LiveScoresRepositoryTest {
     private class FakeProvider : ScoreProvider {
         val calls = mutableListOf<ScoreFeed>()
         var respond: (ScoreFeed) -> ScoreboardResult = { ScoreboardResult(emptyList()) }
+        /** When set, a request waits for it: an in-flight request. */
+        var gate: CompletableDeferred<Unit>? = null
         override suspend fun scoreboard(league: EspnLeague, date: LocalDate): ScoreboardResult {
             val feed = ScoreFeed(league, date)
             calls += feed
+            gate?.await()
             return respond(feed)
         }
     }
@@ -257,9 +261,14 @@ class LiveScoresRepositoryTest {
         repo.track(listOf(pacersCard))
         runCurrent()
         val key = pacersCard.streamKey
-        assertEquals(50, repo.scores.value.getValue(key).homeScore) // first seen: shown as is
+        // First seen live: shown without a score until the delay has passed.
+        repo.scores.value.getValue(key).let {
+            assertEquals(ScoreState.IN, it.state)
+            assertNull(it.homeScore)
+            assertNull(it.clockText)
+        }
         latest = game(ScoreState.IN, 53, 48, "Q2 4:40").let { it.copy(home = it.home.copy(displayName = "Sixers")) }
-        advanceTimeBy(30_000); runCurrent() // fetched at 30 s
+        advanceTimeBy(30_000); runCurrent() // fetched at 30 s; the first version is now due
         repo.scores.value.getValue(key).let {
             assertEquals(50, it.homeScore)
             assertEquals("Q2 5:00", it.clockText)
@@ -270,6 +279,44 @@ class LiveScoresRepositoryTest {
         advanceTimeBy(1_000); runCurrent() // released 30 s after it arrived
         assertEquals(53, repo.scores.value.getValue(key).homeScore)
         assertEquals("Q2 4:40", repo.scores.value.getValue(key).clockText)
+    }
+
+    @Test
+    fun `turning the delay on mid-game shows no score until the delay has passed`() = runTest {
+        provider.respond = { ScoreboardResult(listOf(game(ScoreState.IN, 50, 48, "Q2 5:00"))) }
+        val repo = repository("2026-11-15T19:00:00Z")
+        collect(repo)
+        repo.track(listOf(pacersCard))
+        runCurrent()
+        val key = pacersCard.streamKey
+        assertEquals(50, repo.scores.value.getValue(key).homeScore)
+        settings.value = ScoreSettings(delaySeconds = 60)
+        advanceTimeBy(1_000); runCurrent()
+        assertNull(repo.scores.value.getValue(key).homeScore)
+        advanceTimeBy(58_000); runCurrent()
+        assertNull(repo.scores.value.getValue(key).homeScore)
+        advanceTimeBy(1_000); runCurrent()
+        assertEquals(50, repo.scores.value.getValue(key).homeScore)
+    }
+
+    @Test
+    fun `a game that leaves and comes back keeps its delay history`() = runTest {
+        settings.value = ScoreSettings(delaySeconds = 30)
+        var latest = game(ScoreState.IN, 50, 48)
+        provider.respond = { ScoreboardResult(listOf(latest)) }
+        val repo = repository("2026-11-15T19:00:00Z")
+        collect(repo)
+        val other = item("Los Angeles Lakers at Phoenix Suns", "Basketball", "2026-11-15T20:30:00Z")
+        repo.track(listOf(pacersCard))
+        runCurrent()
+        advanceTimeBy(30_000); runCurrent()
+        assertEquals(50, repo.scores.value.getValue(pacersCard.streamKey).homeScore)
+        latest = game(ScoreState.IN, 53, 48)
+        repo.track(listOf(other)) // the card leaves the screen...
+        runCurrent()
+        repo.track(listOf(pacersCard, other)) // ...and comes back with a newer score fetched since
+        advanceTimeBy(30_000); runCurrent()
+        assertEquals(50, repo.scores.value.getValue(pacersCard.streamKey).homeScore)
     }
 
     @Test
@@ -337,5 +384,93 @@ class LiveScoresRepositoryTest {
         assertEquals(setOf(LocalDate.of(2026, 11, 15)), dates("A vs B", "2026-11-15T18:00:00Z"))
         assertEquals(setOf(LocalDate.of(2026, 11, 14)), dates("A vs B", "2026-11-14T00:00:00Z", timed = false))
         assertEquals(setOf(today, LocalDate.of(2026, 11, 15)), dates("A vs B", null))
+    }
+
+    @Test
+    fun `re-tracking within the interval does not refetch`() = runTest {
+        provider.respond = { ScoreboardResult(listOf(game(ScoreState.IN, 50, 48))) }
+        val repo = repository("2026-11-15T19:00:00Z")
+        collect(repo)
+        val hockey = item("Bruins vs Rangers", "Hockey", "2026-11-15T18:00:00Z")
+        repo.track(listOf(pacersCard))
+        runCurrent()
+        advanceTimeBy(5_000); repo.track(listOf(hockey)); runCurrent()
+        advanceTimeBy(5_000); repo.track(listOf(pacersCard)); runCurrent()
+        assertEquals(1, provider.calls.count { it == nba15 })
+        assertEquals(50, repo.scores.value.getValue(pacersCard.streamKey).homeScore)
+        advanceTimeBy(20_000); runCurrent() // 30 s after the first fetch
+        assertEquals(2, provider.calls.count { it == nba15 })
+    }
+
+    @Test
+    fun `an in-flight request is shared across a poller restart`() = runTest {
+        provider.respond = { ScoreboardResult(listOf(game(ScoreState.IN, 50, 48))) }
+        val gate = CompletableDeferred<Unit>()
+        provider.gate = gate
+        val repo = repository("2026-11-15T19:00:00Z")
+        collect(repo)
+        repo.track(listOf(pacersCard))
+        runCurrent()
+        settings.value = ScoreSettings(delaySeconds = 15) // restarts the pollers
+        runCurrent()
+        assertEquals(1, provider.calls.size)
+        gate.complete(Unit)
+        runCurrent()
+        assertEquals(1, provider.calls.size)
+        assertEquals(1, repo.scores.value.size)
+    }
+
+    @Test
+    fun `Retry-After stretches the backoff and three failures still pause the feed`() = runTest {
+        var calls = 0
+        provider.respond = {
+            if (calls++ == 0) ScoreboardResult(listOf(game(ScoreState.IN, 1, 0)))
+            else ScoreboardResult.FAILED.copy(retryAfterMs = 120_000)
+        }
+        val repo = repository("2026-11-15T19:00:00Z")
+        collect(repo)
+        repo.track(listOf(pacersCard))
+        runCurrent()
+        advanceTimeBy(30_000); runCurrent() // failure 1
+        advanceTimeBy(120_000); runCurrent() // failure 2 (Retry-After 120 s > 30 s)
+        assertEquals(3, provider.calls.size)
+        assertEquals(1, repo.scores.value.size)
+        advanceTimeBy(119_000); runCurrent()
+        assertEquals(3, provider.calls.size)
+        advanceTimeBy(1_000); runCurrent() // failure 3: paused, scores hidden
+        assertEquals(4, provider.calls.size)
+        assertTrue(repo.scores.value.isEmpty())
+    }
+
+    @Test
+    fun `soccer all is polled no more than every 60 s even while live`() = runTest {
+        val all = EspnFixtures.events(EspnFixtures.SOCCER_ALL_20261116, EspnLeagueMap.SOCCER_ALL)
+        // No league link of its own (slug "all"), so the card stays on soccer/all.
+        val live = all.first { it.eventId == "401861185" }.copy(state = ScoreState.IN, isFinal = false, leagueSlug = "all")
+        provider.respond = { ScoreboardResult(listOf(live)) }
+        val repo = repository("2026-11-16T20:00:00Z")
+        collect(repo)
+        repo.track(listOf(item("Germany vs Netherlands", "Soccer", "2026-11-16T19:45:00Z")))
+        runCurrent()
+        assertEquals(1, provider.calls.size)
+        assertEquals(EspnLeagueMap.SOCCER_ALL, provider.calls.single().league)
+        advanceTimeBy(59_000); runCurrent()
+        assertEquals(1, provider.calls.size)
+        advanceTimeBy(1_000); runCurrent()
+        assertEquals(2, provider.calls.size)
+    }
+
+    @Test
+    fun `once matched, a late game stops polling the next Eastern day`() = runTest {
+        val late = game(ScoreState.IN, 10, 8).copy(startMs = ms("2026-11-16T04:00:00Z")) // 23:00 Eastern
+        val nextDay = ScoreFeed(EspnLeagueMap.NBA, LocalDate.of(2026, 11, 16))
+        provider.respond = { feed -> if (feed == nba15) ScoreboardResult(listOf(late)) else ScoreboardResult(emptyList()) }
+        val repo = repository("2026-11-16T04:30:00Z")
+        collect(repo)
+        repo.track(listOf(item("Indiana Pacers at Philadelphia 76ers", "Basketball", "2026-11-16T04:00:00Z")))
+        runCurrent()
+        advanceTimeBy(10 * 60_000L); runCurrent()
+        assertEquals(1, provider.calls.count { it == nextDay })
+        assertEquals(21, provider.calls.count { it == nba15 })
     }
 }
