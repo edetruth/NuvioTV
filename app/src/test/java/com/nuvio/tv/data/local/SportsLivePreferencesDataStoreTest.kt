@@ -212,4 +212,19 @@ class SportsLivePreferencesDataStoreTest {
         activeProfile.value = 1
         assertEquals(ScoresMode.HIDE_UNTIL_FOCUSED, store.scoreSettings.first().mode)
     }
+
+    @Test
+    fun `recent score leagues round trip per profile and unreadable JSON reads as none`() = runTest {
+        val store = SportsLivePreferencesDataStore(factory, profiles)
+        assertEquals(emptyMap<String, Long>(), store.recentScoreLeagues.first())
+        val seen = mapOf("basketball/nba" to 1_763_000_000_000L, "soccer/eng.1" to 1_763_100_000_000L)
+        store.setRecentScoreLeagues(seen)
+        assertEquals(seen, store.recentScoreLeagues.first())
+        activeProfile.value = 2
+        assertEquals(emptyMap<String, Long>(), store.recentScoreLeagues.first())
+        profile2Store.updateData {
+            mutablePreferencesOf(stringPreferencesKey("sports_live_recent_score_leagues") to "{not json")
+        }
+        assertEquals(emptyMap<String, Long>(), store.recentScoreLeagues.first())
+    }
 }

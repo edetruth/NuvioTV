@@ -117,10 +117,17 @@ class EspnScoreProvider internal constructor(
             .build()
 
         /** Maps a parsed scoreboard to snapshots; an event without an id or two named sides is skipped. */
-        internal fun toSnapshots(dto: EspnScoreboardDto, league: EspnLeague): List<ScoreSnapshot> =
-            dto.events.orEmpty().mapNotNull { event -> toSnapshot(event, league) }
+        internal fun toSnapshots(dto: EspnScoreboardDto, league: EspnLeague): List<ScoreSnapshot> {
+            // The feed's own league names ("NBA", "Premier League"); soccer/all lists none.
+            val names = dto.leagues.orEmpty().mapNotNull { dtoLeague ->
+                val slug = dtoLeague.slug?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                val name = (dtoLeague.abbreviation ?: dtoLeague.name)?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                slug to name
+            }.toMap()
+            return dto.events.orEmpty().mapNotNull { event -> toSnapshot(event, league, names) }
+        }
 
-        private fun toSnapshot(event: EspnEventDto, league: EspnLeague): ScoreSnapshot? {
+        private fun toSnapshot(event: EspnEventDto, league: EspnLeague, leagueNames: Map<String, String>): ScoreSnapshot? {
             val id = event.id?.takeIf { it.isNotBlank() } ?: return null
             val competition = event.competitions?.firstOrNull() ?: return null
             val competitors = competition.competitors.orEmpty()
@@ -138,12 +145,14 @@ class EspnScoreProvider internal constructor(
             }
             // Before kick-off ESPN sends "0": a score shows only once a game is in play or over.
             val scored = state == ScoreState.IN || state == ScoreState.POST
+            val leagueSlug = event.links.orEmpty().firstNotNullOfOrNull { link ->
+                link.href?.let { LEAGUE_IN_LINK.find(it)?.groupValues?.get(1) }
+            } ?: league.league
             return ScoreSnapshot(
                 eventId = id,
                 league = league,
-                leagueSlug = event.links.orEmpty().firstNotNullOfOrNull { link ->
-                    link.href?.let { LEAGUE_IN_LINK.find(it)?.groupValues?.get(1) }
-                } ?: league.league,
+                leagueSlug = leagueSlug,
+                leagueName = leagueNames[leagueSlug],
                 startMs = event.date?.let(::parseDate),
                 state = state,
                 clockText = type?.shortDetail?.takeIf { it.isNotBlank() },

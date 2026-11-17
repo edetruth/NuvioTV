@@ -5,7 +5,11 @@ import com.squareup.moshi.JsonClass
 // Tolerant DTOs for ESPN's site API scoreboard: only the fields scores v1 reads, every one optional.
 
 @JsonClass(generateAdapter = true)
-data class EspnScoreboardDto(val events: List<EspnEventDto>? = null)
+data class EspnScoreboardDto(val events: List<EspnEventDto>? = null, val leagues: List<EspnLeagueDto>? = null)
+
+/** A feed's league: `nba` / "NBA" / "National Basketball Association". Empty on `soccer/all`. */
+@JsonClass(generateAdapter = true)
+data class EspnLeagueDto(val slug: String? = null, val abbreviation: String? = null, val name: String? = null)
 
 @JsonClass(generateAdapter = true)
 data class EspnEventDto(

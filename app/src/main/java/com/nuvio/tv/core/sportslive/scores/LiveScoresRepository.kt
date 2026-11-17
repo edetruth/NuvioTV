@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -33,7 +34,9 @@ import kotlin.random.Random
  * Live and final scores for the cards on screen, keyed by card key (a merged card's PRIMARY
  * [SportsLiveItem.streamKey]; its alternates share that score).
  *
- * - Surfaces call [track] with the cards they show, and collect [scores]. Nothing is fetched while
+ * - Each surface calls [track] with its own screen id and the cards it shows, and collects [scores].
+ *   The repository polls the union of every surface's cards, so Home and the section never replace
+ *   each other's set. Nothing is fetched while
  *   no one collects [scores] (collect it with the lifecycle, e.g. `collectAsStateWithLifecycle`), or
  *   while the Scores setting is Off.
  * - Cards are routed to ESPN feeds by [EspnLeagueMap] and grouped by (league, date): one poller per
@@ -84,7 +87,8 @@ class LiveScoresRepository internal constructor(
         val paused: Boolean get() = failures >= ScoreCadence.PAUSE_AFTER_FAILURES
     }
 
-    private val tracked = MutableStateFlow<List<TrackedCard>>(emptyList())
+    /** Each surface's tracked cards, by screen id; the pollers serve their union. */
+    private val tracked = MutableStateFlow<Map<String, List<TrackedCard>>>(emptyMap())
 
     // Guarded by [lock].
     private val lock = Mutex()
@@ -108,17 +112,23 @@ class LiveScoresRepository internal constructor(
     }
 
     /**
-     * The cards now on screen; replaces the previous set. Non-game cards and cards no feed covers are
-     * ignored. A merged card is tracked by its primary and routed by the first source with a feed.
+     * The cards now on [screenId] (e.g. [SCREEN_HOME], [SCREEN_SECTION]); replaces that screen's
+     * previous set only. An empty list stops tracking for the screen. Non-game cards and cards no feed
+     * covers are ignored. A merged card is tracked by its primary and routed by the first source with
+     * a feed.
      */
-    fun track(cards: List<SportsLiveItem>) {
-        tracked.value = cards.mapNotNull { item ->
+    fun track(screenId: String, cards: List<SportsLiveItem>) {
+        val entries = cards.mapNotNull { item ->
             val card = ScoreCard.from(item) ?: return@mapNotNull null
             val leagues = (listOf(item) + item.alternates).asSequence()
                 .map(EspnLeagueMap::leaguesFor).firstOrNull { it.isNotEmpty() } ?: return@mapNotNull null
             TrackedCard(card, leagues)
         }.distinctBy { it.card.key }
+        tracked.update { current -> if (entries.isEmpty()) current - screenId else current + (screenId to entries) }
     }
+
+    /** Every screen's tracked cards, one entry per card key (the same card on two screens is one). */
+    private fun trackedUnion(): List<TrackedCard> = tracked.value.values.flatten().distinctBy { it.card.key }
 
     // While someone collects [scores]: settings, then the tracked cards, drive the pollers.
     private suspend fun run() {
@@ -204,7 +214,7 @@ class LiveScoresRepository internal constructor(
         val today = today()
         val needed = HashSet<ScoreFeed>()
         val matched = HashMap<String, ScoreSnapshot>()
-        for (entry in tracked.value) {
+        for (entry in trackedUnion()) {
             val card = entry.card
             val dates = datesFor(card, today)
             val leagues = remembered[card.key]?.let(::listOf) ?: entry.leagues
@@ -302,11 +312,15 @@ class LiveScoresRepository internal constructor(
     private fun feedsOf(leagues: List<EspnLeague>, dates: List<LocalDate>): List<ScoreFeed> =
         leagues.flatMap { league -> dates.map { ScoreFeed(league, it) } }
 
-    private companion object {
-        const val WINDOW_MS = 3 * 60 * 60 * 1000L
-        const val MAX_REMEMBERED = 2_000
-        const val RETAIN_RETIRED_MS = 10 * 60_000L
-        val SLUG = Regex("""[a-z0-9._-]+""")
-        val EASTERN: ZoneId = ZoneId.of("America/New_York")
+    companion object {
+        /** [track] screen ids. */
+        const val SCREEN_HOME = "home"
+        const val SCREEN_SECTION = "sports_live"
+
+        private const val WINDOW_MS = 3 * 60 * 60 * 1000L
+        private const val MAX_REMEMBERED = 2_000
+        private const val RETAIN_RETIRED_MS = 10 * 60_000L
+        private val SLUG = Regex("""[a-z0-9._-]+""")
+        private val EASTERN: ZoneId = ZoneId.of("America/New_York")
     }
 }

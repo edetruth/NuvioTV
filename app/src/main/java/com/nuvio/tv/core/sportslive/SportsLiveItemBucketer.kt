@@ -278,6 +278,8 @@ object SportsLiveItemBucketer {
             // replay rather than dropped; rule-claimed catalogs keep the 4-hour cut-off.
             SportsLiveTab.REPLAYS -> replay ||
                 (item.viaOverride && item.kind == SportsLiveKind.EVENTS && !item.isLive && !isUpcoming(item, nowMs))
+            // Results come from the score feed, never from addon items.
+            SportsLiveTab.RESULTS -> false
         }
     }
 

@@ -75,6 +75,9 @@ class LiveScoresRepositoryTest {
         startHasTimeOfDay = timed, teams = SportsLiveTeams.parse(name), alternates = alternates
     )
 
+    private val SECTION = LiveScoresRepository.SCREEN_SECTION
+    private val HOME = LiveScoresRepository.SCREEN_HOME
+
     private val pacersCard = item("Indiana Pacers at Philadelphia 76ers", "Basketball", "2026-11-15T18:00:00Z")
 
     private fun TestScope.repository(start: String, zone: ZoneId = ZoneOffset.UTC): LiveScoresRepository {
@@ -96,7 +99,7 @@ class LiveScoresRepositoryTest {
         provider.respond = { ScoreboardResult(nbaFixture) }
         val repo = repository("2026-11-16T12:00:00Z")
         collect(repo)
-        repo.track(listOf(pacersCard, item("Los Angeles Lakers at Phoenix Suns", "Basketball", "2026-11-15T20:30:00Z")))
+        repo.track(SECTION, listOf(pacersCard, item("Los Angeles Lakers at Phoenix Suns", "Basketball", "2026-11-15T20:30:00Z")))
         runCurrent()
         assertEquals(listOf(nba15), provider.calls)
         assertEquals(setOf("a|Indiana Pacers at Philadelphia 76ers", "a|Los Angeles Lakers at Phoenix Suns"), repo.scores.value.keys)
@@ -108,7 +111,7 @@ class LiveScoresRepositoryTest {
         provider.respond = { ScoreboardResult(listOf(game(ScoreState.IN, 50, 48))) }
         val repo = repository("2026-11-15T19:00:00Z")
         collect(repo)
-        repo.track(listOf(pacersCard))
+        repo.track(SECTION, listOf(pacersCard))
         runCurrent()
         assertEquals(1, provider.calls.size)
         advanceTimeBy(29_000); runCurrent()
@@ -124,7 +127,7 @@ class LiveScoresRepositoryTest {
         provider.respond = { ScoreboardResult(listOf(game(ScoreState.PRE))) }
         val repo = repository("2026-11-15T17:40:00Z")
         collect(repo)
-        repo.track(listOf(pacersCard))
+        repo.track(SECTION, listOf(pacersCard))
         runCurrent()
         assertEquals(1, provider.calls.size)
         advanceTimeBy(5 * 60_000L); runCurrent() // 17:45
@@ -144,7 +147,7 @@ class LiveScoresRepositoryTest {
         provider.respond = { ScoreboardResult(listOf(game(ScoreState.POST, 131, 124, "Final"))) }
         val repo = repository("2026-11-15T21:00:00Z")
         collect(repo)
-        repo.track(listOf(pacersCard))
+        repo.track(SECTION, listOf(pacersCard))
         runCurrent()
         advanceTimeBy(3 * 60 * 60_000L); runCurrent()
         assertEquals(1, provider.calls.size)
@@ -156,7 +159,7 @@ class LiveScoresRepositoryTest {
         provider.respond = { ScoreboardResult(EspnFixtures.events(EspnFixtures.ENG1_20261108, EspnFixtures.ENG1)) }
         val repo = repository("2026-11-16T12:00:00Z")
         collect(repo)
-        repo.track(listOf(item("Man Utd vs Aston Villa", "Soccer", "2026-11-08T00:00:00Z", timed = false, genres = listOf("Premier League"))))
+        repo.track(SECTION, listOf(item("Man Utd vs Aston Villa", "Soccer", "2026-11-08T00:00:00Z", timed = false, genres = listOf("Premier League"))))
         runCurrent()
         advanceTimeBy(60 * 60_000L); runCurrent()
         assertEquals(listOf(ScoreFeed(EspnFixtures.ENG1, LocalDate.of(2026, 11, 8))), provider.calls)
@@ -169,7 +172,7 @@ class LiveScoresRepositoryTest {
         provider.respond = { if (fail) ScoreboardResult.FAILED else ScoreboardResult(listOf(game(ScoreState.IN, 50, 48))) }
         val repo = repository("2026-11-15T19:00:00Z")
         collect(repo)
-        repo.track(listOf(pacersCard))
+        repo.track(SECTION, listOf(pacersCard))
         runCurrent()
         assertEquals(1, repo.scores.value.size)
         fail = true
@@ -200,7 +203,7 @@ class LiveScoresRepositoryTest {
         }
         val repo = repository("2026-11-15T19:00:00Z")
         collect(repo)
-        repo.track(listOf(pacersCard))
+        repo.track(SECTION, listOf(pacersCard))
         runCurrent()
         advanceTimeBy(30_000); runCurrent() // failure with Retry-After 120 s
         advanceTimeBy(119_000); runCurrent()
@@ -213,7 +216,7 @@ class LiveScoresRepositoryTest {
     fun `nothing is fetched while no one collects`() = runTest {
         provider.respond = { ScoreboardResult(listOf(game(ScoreState.IN, 50, 48))) }
         val repo = repository("2026-11-15T19:00:00Z")
-        repo.track(listOf(pacersCard))
+        repo.track(SECTION, listOf(pacersCard))
         runCurrent()
         advanceTimeBy(10 * 60_000L); runCurrent()
         assertTrue(provider.calls.isEmpty())
@@ -235,7 +238,7 @@ class LiveScoresRepositoryTest {
         provider.respond = { ScoreboardResult(listOf(game(ScoreState.IN, 50, 48))) }
         val repo = repository("2026-11-15T19:00:00Z")
         collect(repo)
-        repo.track(listOf(pacersCard))
+        repo.track(SECTION, listOf(pacersCard))
         runCurrent()
         advanceTimeBy(10 * 60_000L); runCurrent()
         assertTrue(provider.calls.isEmpty())
@@ -258,7 +261,7 @@ class LiveScoresRepositoryTest {
         provider.respond = { ScoreboardResult(listOf(latest)) }
         val repo = repository("2026-11-15T19:00:00Z")
         collect(repo)
-        repo.track(listOf(pacersCard))
+        repo.track(SECTION, listOf(pacersCard))
         runCurrent()
         val key = pacersCard.streamKey
         // First seen live: shown without a score until the delay has passed.
@@ -286,7 +289,7 @@ class LiveScoresRepositoryTest {
         provider.respond = { ScoreboardResult(listOf(game(ScoreState.IN, 50, 48, "Q2 5:00"))) }
         val repo = repository("2026-11-15T19:00:00Z")
         collect(repo)
-        repo.track(listOf(pacersCard))
+        repo.track(SECTION, listOf(pacersCard))
         runCurrent()
         val key = pacersCard.streamKey
         assertEquals(50, repo.scores.value.getValue(key).homeScore)
@@ -307,14 +310,14 @@ class LiveScoresRepositoryTest {
         val repo = repository("2026-11-15T19:00:00Z")
         collect(repo)
         val other = item("Los Angeles Lakers at Phoenix Suns", "Basketball", "2026-11-15T20:30:00Z")
-        repo.track(listOf(pacersCard))
+        repo.track(SECTION, listOf(pacersCard))
         runCurrent()
         advanceTimeBy(30_000); runCurrent()
         assertEquals(50, repo.scores.value.getValue(pacersCard.streamKey).homeScore)
         latest = game(ScoreState.IN, 53, 48)
-        repo.track(listOf(other)) // the card leaves the screen...
+        repo.track(SECTION, listOf(other)) // the card leaves the screen...
         runCurrent()
-        repo.track(listOf(pacersCard, other)) // ...and comes back with a newer score fetched since
+        repo.track(SECTION, listOf(pacersCard, other)) // ...and comes back with a newer score fetched since
         advanceTimeBy(30_000); runCurrent()
         assertEquals(50, repo.scores.value.getValue(pacersCard.streamKey).homeScore)
     }
@@ -325,7 +328,7 @@ class LiveScoresRepositoryTest {
         provider.respond = { ScoreboardResult(listOf(latest)) }
         val repo = repository("2026-11-15T19:00:00Z")
         collect(repo)
-        repo.track(listOf(pacersCard))
+        repo.track(SECTION, listOf(pacersCard))
         runCurrent()
         latest = game(ScoreState.IN, 53, 48)
         advanceTimeBy(30_000); runCurrent()
@@ -339,7 +342,7 @@ class LiveScoresRepositoryTest {
         collect(repo)
         val alternate = item("Pacers vs 76ers", "Basketball", "2026-11-15T18:00:00Z", addon = "b")
         val primary = item("Indiana Pacers at Philadelphia 76ers", null, "2026-11-15T18:00:00Z", alternates = listOf(alternate))
-        repo.track(listOf(primary))
+        repo.track(SECTION, listOf(primary))
         runCurrent()
         assertEquals(setOf(primary.streamKey), repo.scores.value.keys)
         assertNull(repo.scores.value[alternate.streamKey])
@@ -360,7 +363,7 @@ class LiveScoresRepositoryTest {
         val repo = repository("2026-11-16T22:00:00Z")
         collect(repo)
         val card = item("Germany vs Netherlands", "Soccer", "2026-11-16T19:45:00Z", genres = listOf("Premier League"))
-        repo.track(listOf(card))
+        repo.track(SECTION, listOf(card))
         runCurrent()
         val day = LocalDate.of(2026, 11, 16)
         assertEquals(
@@ -392,10 +395,10 @@ class LiveScoresRepositoryTest {
         val repo = repository("2026-11-15T19:00:00Z")
         collect(repo)
         val hockey = item("Bruins vs Rangers", "Hockey", "2026-11-15T18:00:00Z")
-        repo.track(listOf(pacersCard))
+        repo.track(SECTION, listOf(pacersCard))
         runCurrent()
-        advanceTimeBy(5_000); repo.track(listOf(hockey)); runCurrent()
-        advanceTimeBy(5_000); repo.track(listOf(pacersCard)); runCurrent()
+        advanceTimeBy(5_000); repo.track(SECTION, listOf(hockey)); runCurrent()
+        advanceTimeBy(5_000); repo.track(SECTION, listOf(pacersCard)); runCurrent()
         assertEquals(1, provider.calls.count { it == nba15 })
         assertEquals(50, repo.scores.value.getValue(pacersCard.streamKey).homeScore)
         advanceTimeBy(20_000); runCurrent() // 30 s after the first fetch
@@ -409,7 +412,7 @@ class LiveScoresRepositoryTest {
         provider.gate = gate
         val repo = repository("2026-11-15T19:00:00Z")
         collect(repo)
-        repo.track(listOf(pacersCard))
+        repo.track(SECTION, listOf(pacersCard))
         runCurrent()
         settings.value = ScoreSettings(delaySeconds = 15) // restarts the pollers
         runCurrent()
@@ -429,7 +432,7 @@ class LiveScoresRepositoryTest {
         }
         val repo = repository("2026-11-15T19:00:00Z")
         collect(repo)
-        repo.track(listOf(pacersCard))
+        repo.track(SECTION, listOf(pacersCard))
         runCurrent()
         advanceTimeBy(30_000); runCurrent() // failure 1
         advanceTimeBy(120_000); runCurrent() // failure 2 (Retry-After 120 s > 30 s)
@@ -450,7 +453,7 @@ class LiveScoresRepositoryTest {
         provider.respond = { ScoreboardResult(listOf(live)) }
         val repo = repository("2026-11-16T20:00:00Z")
         collect(repo)
-        repo.track(listOf(item("Germany vs Netherlands", "Soccer", "2026-11-16T19:45:00Z")))
+        repo.track(SECTION, listOf(item("Germany vs Netherlands", "Soccer", "2026-11-16T19:45:00Z")))
         runCurrent()
         assertEquals(1, provider.calls.size)
         assertEquals(EspnLeagueMap.SOCCER_ALL, provider.calls.single().league)
@@ -467,10 +470,46 @@ class LiveScoresRepositoryTest {
         provider.respond = { feed -> if (feed == nba15) ScoreboardResult(listOf(late)) else ScoreboardResult(emptyList()) }
         val repo = repository("2026-11-16T04:30:00Z")
         collect(repo)
-        repo.track(listOf(item("Indiana Pacers at Philadelphia 76ers", "Basketball", "2026-11-16T04:00:00Z")))
+        repo.track(SECTION, listOf(item("Indiana Pacers at Philadelphia 76ers", "Basketball", "2026-11-16T04:00:00Z")))
         runCurrent()
         advanceTimeBy(10 * 60_000L); runCurrent()
         assertEquals(1, provider.calls.count { it == nextDay })
         assertEquals(21, provider.calls.count { it == nba15 })
+    }
+
+    @Test
+    fun `each screen tracks its own cards and the repository polls their union`() = runTest {
+        provider.respond = { ScoreboardResult(nbaFixture) }
+        val repo = repository("2026-11-16T12:00:00Z")
+        collect(repo)
+        val lakers = item("Los Angeles Lakers at Phoenix Suns", "Basketball", "2026-11-15T20:30:00Z")
+        repo.track(HOME, listOf(pacersCard))
+        repo.track(SECTION, listOf(lakers))
+        runCurrent()
+        // Neither screen replaced the other's cards.
+        assertEquals(setOf(pacersCard.streamKey, lakers.streamKey), repo.scores.value.keys)
+        // A screen's new set replaces only its own.
+        repo.track(SECTION, emptyList())
+        runCurrent()
+        assertEquals(setOf(pacersCard.streamKey), repo.scores.value.keys)
+        repo.track(HOME, emptyList())
+        runCurrent()
+        assertTrue(repo.scores.value.isEmpty())
+    }
+
+    @Test
+    fun `the same card on two screens is one card on one feed request`() = runTest {
+        provider.respond = { ScoreboardResult(nbaFixture) }
+        val repo = repository("2026-11-16T12:00:00Z")
+        collect(repo)
+        repo.track(HOME, listOf(pacersCard))
+        repo.track(SECTION, listOf(pacersCard))
+        runCurrent()
+        assertEquals(listOf(nba15), provider.calls)
+        assertEquals(setOf(pacersCard.streamKey), repo.scores.value.keys)
+        // Leaving one screen keeps the card scored for the other.
+        repo.track(HOME, emptyList())
+        runCurrent()
+        assertEquals(setOf(pacersCard.streamKey), repo.scores.value.keys)
     }
 }

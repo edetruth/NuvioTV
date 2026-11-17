@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -54,6 +55,8 @@ import androidx.tv.material3.Text
 import com.nuvio.tv.R
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.TeamPair
+import com.nuvio.tv.core.sportslive.scores.ResultRow
+import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveKind
@@ -82,6 +85,7 @@ import kotlinx.coroutines.delay
 fun SportsLiveScreen(
     viewModel: SportsLiveViewModel = hiltViewModel(),
     playViewModel: SportsLivePlayViewModel = hiltViewModel(),
+    resultsViewModel: SportsLiveResultsViewModel = hiltViewModel(),
     onPlay: (SportsLiveItem) -> Unit,
     onPlayTarget: (SportsLiveZapTarget) -> Unit,
     onOpenDetail: (SportsLiveItem) -> Unit,
@@ -93,7 +97,23 @@ fun SportsLiveScreen(
     val followedTeams by viewModel.followedTeams.collectAsStateWithLifecycle()
     val preview by viewModel.preview.collectAsStateWithLifecycle()
     val playState by playViewModel.state.collectAsStateWithLifecycle()
+    val resultsState by resultsViewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+
+    // Results loads only while its tab is selected; Scores Off hides the tab (and requests nothing).
+    LaunchedEffect(uiState.selectedTab) { resultsViewModel.setActive(uiState.selectedTab == SportsLiveTab.RESULTS) }
+    LaunchedEffect(resultsState.mode, uiState.selectedTab) {
+        if (resultsState.mode == ScoresMode.OFF && uiState.selectedTab == SportsLiveTab.RESULTS) {
+            viewModel.selectTab(SportsLiveTab.LIVE_NOW)
+        }
+    }
+    // The leagues of the games shown count as seen (for Results); Replays are what a result opens.
+    LaunchedEffect(uiState.tabs) {
+        resultsViewModel.setReplays(uiState.tabs[SportsLiveTab.REPLAYS].orEmpty())
+        resultsViewModel.noteSeen(
+            listOf(SportsLiveTab.LIVE_NOW, SportsLiveTab.UPCOMING, SportsLiveTab.REPLAYS).flatMap { uiState.tabs[it].orEmpty() }
+        )
+    }
 
     // The hover preview's one player: it plays while the preview does, and is freed the moment the
     // screen pauses or leaves, or OK hands its stream to the full player.
@@ -180,6 +200,21 @@ fun SportsLiveScreen(
             onOpenDual = { session ->
                 SportsLiveDualSessions.start(session)
                 onOpenDual()
+            },
+            results = resultsState,
+            onSelectResultsDay = resultsViewModel::selectDay,
+            onSelectResultsFilter = resultsViewModel::selectFilter,
+            onResultFocus = resultsViewModel::onRowFocus,
+            onOpenResult = { row ->
+                // The game's replay when an addon lists it (strict match), else a short note.
+                val replay = resultsState.replays[row.key]
+                if (replay == null) {
+                    Toast.makeText(context, R.string.sports_live_results_no_replay, Toast.LENGTH_SHORT).show()
+                } else if (replay.apiType == "series") {
+                    onOpenDetail(replay)
+                } else {
+                    playViewModel.play(replay)
+                }
             }
         )
     }
@@ -222,7 +257,12 @@ private fun SportsLiveContent(
     onPreviewFocus: (SportsLiveItem?) -> Unit,
     onOpenDetail: (SportsLiveItem) -> Unit,
     onToggleFollow: (SportsLiveItem, String) -> Unit,
-    onOpenDual: (SportsLiveDualSession) -> Unit
+    onOpenDual: (SportsLiveDualSession) -> Unit,
+    results: SportsLiveResultsUiState,
+    onSelectResultsDay: (Int) -> Unit,
+    onSelectResultsFilter: (String?) -> Unit,
+    onResultFocus: (String?) -> Unit,
+    onOpenResult: (ResultRow) -> Unit
 ) {
     val tabFocusRequesters = remember { SportsLiveTab.entries.associateWith { FocusRequester() } }
     val activeTabFocusRequester = tabFocusRequesters.getValue(uiState.selectedTab)
@@ -264,6 +304,11 @@ private fun SportsLiveContent(
     val filterFocusRequester = remember { FocusRequester() }
     val showFilterRow = uiState.filters.size >= 2
     val aboveListFocusRequester = if (showFilterRow) filterFocusRequester else activeTabFocusRequester
+    // On the Results tab, the selected date chip (the tab row's Down).
+    val resultsDateFocusRequester = remember { FocusRequester() }
+    val showingResults = uiState.selectedTab == SportsLiveTab.RESULTS
+    // Scores Off: no Results tab at all.
+    val shownTabs = SportsLiveTab.entries.filter { it != SportsLiveTab.RESULTS || results.mode != ScoresMode.OFF }
     // A refresh can drop the filter row while a chip holds focus; focus then goes to the active tab
     // instead of being lost. Losing focus because the row is being removed does not clear the flag.
     var filterRowHasFocus by remember { mutableStateOf(false) }
@@ -462,13 +507,30 @@ private fun SportsLiveContent(
         }
         SportsLiveTabRow(
             uiState = uiState,
+            tabs = shownTabs,
             tabFocusRequesters = tabFocusRequesters,
-            downFocusRequester = if (showFilterRow) filterFocusRequester else entryCardFocusRequester,
+            downFocusRequester = when {
+                showingResults -> resultsDateFocusRequester
+                showFilterRow -> filterFocusRequester
+                else -> entryCardFocusRequester
+            },
             onSelectTab = onSelectTab,
             onOpenTab = openList,
             onRefresh = onRefresh,
             modifier = Modifier.onFocusChanged { if (it.hasFocus) followedCardKey = null }
         )
+        if (showingResults) {
+            SportsLiveResultsView(
+                state = results,
+                tabFocusRequester = activeTabFocusRequester,
+                dateFocusRequester = resultsDateFocusRequester,
+                onSelectDay = onSelectResultsDay,
+                onSelectFilter = onSelectResultsFilter,
+                onRowFocus = onResultFocus,
+                onOpen = onOpenResult
+            )
+            return@Column
+        }
         if (showFilterRow) {
             SportsLiveFilterRow(
                 uiState = uiState,
@@ -614,6 +676,7 @@ private fun SportsLiveContent(
 @Composable
 private fun SportsLiveTabRow(
     uiState: SportsLiveUiState,
+    tabs: List<SportsLiveTab>,
     tabFocusRequesters: Map<SportsLiveTab, FocusRequester>,
     downFocusRequester: FocusRequester?,
     onSelectTab: (SportsLiveTab) -> Unit,
@@ -638,7 +701,7 @@ private fun SportsLiveTabRow(
         horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        SportsLiveTab.entries.forEach { tab ->
+        tabs.forEach { tab ->
             val label = stringResource(tab.labelRes())
             val count = uiState.tabs[tab].orEmpty().size
             SourceStatusFilterChip(
@@ -719,4 +782,5 @@ private fun SportsLiveTab.labelRes(): Int = when (this) {
     SportsLiveTab.UPCOMING -> R.string.sports_live_tab_upcoming
     SportsLiveTab.CHANNELS -> R.string.sports_live_tab_channels
     SportsLiveTab.REPLAYS -> R.string.sports_live_tab_replays
+    SportsLiveTab.RESULTS -> R.string.sports_live_tab_results
 }

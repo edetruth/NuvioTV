@@ -26,7 +26,8 @@ data class FollowedTeam(val name: String, val sport: String? = null)
 /** A pinned catalog extra value, e.g. `genre` = "United States". */
 data class CatalogOption(val extra: String, val value: String)
 
-enum class SportsLiveTab { LIVE_NOW, UPCOMING, CHANNELS, REPLAYS }
+/** [RESULTS] lists past days' finals from the score feed (no addon items; empty in a load's tabs). */
+enum class SportsLiveTab { LIVE_NOW, UPCOMING, CHANNELS, REPLAYS, RESULTS }
 
 /**
  * How a catalog's items were recognised in a load. Each item that is not finished counts once, in the
