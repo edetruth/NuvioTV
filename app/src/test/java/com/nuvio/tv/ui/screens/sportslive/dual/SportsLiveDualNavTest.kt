@@ -23,4 +23,17 @@ class SportsLiveDualNavTest {
         assertEquals(SportsLiveDualPopTarget.STREAM, sportsLiveDualEntryPopTarget(false, dualOnStack = false, previousIsStreamScreen = true))
         assertEquals(SportsLiveDualPopTarget.PLAYER, sportsLiveDualEntryPopTarget(false, dualOnStack = false, previousIsStreamScreen = false))
     }
+
+    @Test
+    fun `full screen from a dual pane leaves dual behind, whatever opened it`() {
+        // Opened from the section: Back from full screen returns to the section.
+        assertEquals(
+            listOf("home", "section", "player"),
+            sportsLiveStackAfterDualHandOff(listOf("home", "section", "dual"), "dual", "player")
+        )
+        // Opened from Home's Live now row (intentional): Back from full screen returns to Home, not dual.
+        assertEquals(listOf("home", "player"), sportsLiveStackAfterDualHandOff(listOf("home", "dual"), "dual", "player"))
+        // A pane needing the Stream screen: that screen replaces dual the same way.
+        assertEquals(listOf("home", "stream"), sportsLiveStackAfterDualHandOff(listOf("home", "dual"), "dual", "stream"))
+    }
 }

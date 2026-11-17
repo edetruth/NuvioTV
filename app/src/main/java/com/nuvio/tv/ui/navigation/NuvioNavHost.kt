@@ -1495,8 +1495,9 @@ private fun PlaybackNavHost(
                     // Once only: a second Back during the exit transition must not also pop the screen below.
                     if (navController.currentDestination?.route == Screen.SportsLiveDual.route) navController.popBackStack()
                 },
-                // OK plays the highlighted game full screen in place of dual screen, so Back from it
-                // returns to where dual was opened from (the section), not to dual.
+                // OK plays the highlighted game full screen in place of dual screen (whatever opened
+                // dual, Home included), so Back from it returns to what was below dual, never to dual
+                // (see sportsLiveStackAfterDualHandOff).
                 onOpenStreamScreen = { item ->
                     navController.navigate(streamRouteFor(item, returnToHomeOnBack = false)) {
                         popUpTo(Screen.SportsLiveDual.route) { inclusive = true }

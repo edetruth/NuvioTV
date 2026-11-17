@@ -31,3 +31,15 @@ fun sportsLiveDualEntryPopTarget(
     previousIsStreamScreen -> SportsLiveDualPopTarget.STREAM
     else -> SportsLiveDualPopTarget.PLAYER
 }
+
+/**
+ * The back stack after OK hands a dual pane off to full screen ([targetRoute], the player or a
+ * Stream screen): dual and anything above it go, whatever opened dual (the section, a player, or
+ * Home's Live now row), so full screen leaves dual behind and Back from it returns to what was
+ * below dual: the section, or Home when dual was opened from Home. NuvioNavHost does this with
+ * `popUpTo(dual) { inclusive = true }`.
+ */
+fun sportsLiveStackAfterDualHandOff(stack: List<String>, dualRoute: String, targetRoute: String): List<String> {
+    val dual = stack.lastIndexOf(dualRoute)
+    return (if (dual < 0) stack else stack.subList(0, dual)) + targetRoute
+}
