@@ -17,7 +17,7 @@ import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -25,6 +25,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -231,7 +232,10 @@ private fun SportsLiveContent(
     var paneHasFocus by remember { mutableStateOf(false) }
     // Saved with the back stack entry, so returning from the stream or detail page refocuses this card.
     var focusedCardKey by rememberSaveable { mutableStateOf<String?>(null) }
-    val listState = rememberLazyListState()
+    // One scroll position per tab and filter: switching opens the list at the top, while coming back
+    // from a game, Details or the player restores the position saved with the back stack entry.
+    val filterKey = "${uiState.selectedTab.name}|${uiState.selectedFilter.orEmpty()}"
+    val listState = rememberSaveable(filterKey, saver = LazyListState.Saver) { LazyListState() }
     val stateLabelOf = rememberSportsLiveStateLabeler(uiState.selectedTab)
 
     val items = uiState.visibleItems
@@ -376,7 +380,6 @@ private fun SportsLiveContent(
     }
 
     // Only a real tab or filter change scrolls to the top; the saved value survives navigation.
-    val filterKey = "${uiState.selectedTab.name}|${uiState.selectedFilter.orEmpty()}"
     var listedFilterKey by rememberSaveable { mutableStateOf(filterKey) }
     LaunchedEffect(filterKey) {
         if (filterKey == listedFilterKey) return@LaunchedEffect
@@ -385,6 +388,8 @@ private fun SportsLiveContent(
         // "★ My teams"), not from a chip, so focus goes to the new list's first card.
         val refocus = followedCardKey != null
         followedCardKey = null
+        // The new list starts at its first card: nothing restores the old list's card or scroll.
+        focusedCardKey = null
         listState.scrollToItem(0)
         if (refocus) {
             repeat(2) { withFrameNanos { } }
@@ -487,6 +492,8 @@ private fun SportsLiveContent(
             modifier = Modifier.fillMaxSize(),
             horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xl)
         ) {
+            // Recreated per tab and filter, so its focus restorer never brings back another list's card.
+            key(filterKey) {
             LazyColumn(
                 state = listState,
                 modifier = Modifier
@@ -545,6 +552,7 @@ private fun SportsLiveContent(
                             }
                     )
                 }
+            }
             }
             val selectedPreview = preview?.takeIf { it.item.listKey == selected.listKey }
             SportsLiveDetailsPane(
