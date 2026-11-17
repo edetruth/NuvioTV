@@ -51,6 +51,10 @@ object SportsLiveExtraSources {
         // The labels of the alternates still being fetched for the Sources panel, best first.
         @Volatile
         var pending: List<String> = emptyList()
+
+        // The alternates' streams of a running (or incomplete) lookup that have answered so far.
+        @Volatile
+        var partial: List<Stream>? = null
     }
 
     // The alternates' streams the play path already fetched, per card content id, so the Sources panel
@@ -219,9 +223,11 @@ object SportsLiveExtraSources {
     /**
      * [groups] (the Sources panel's, in the player's order) with a Sports & Live card's source groups
      * ordered by reliability, best first; the primary's group keeps a small edge. Unchanged for content
-     * that is not a Sports & Live playback, or with fewer than two of the card's groups.
+     * that is not a Sports & Live playback, or with fewer than two of the card's groups. Groups already
+     * [shown] (the panel's previous group names) keep their places; groups that arrive later go below them,
+     * so rows do not move under the user as sources answer.
      */
-    fun orderGroups(contentId: String?, groups: List<AddonStreams>): List<AddonStreams> {
+    fun orderGroups(contentId: String?, groups: List<AddonStreams>, shown: List<String> = emptyList()): List<AddonStreams> {
         if (!isSportsPlayback(contentId) || groups.size < 2) return groups
         val names = synchronized(sourceNames) { sourceNames[contentId] } ?: return groups
         // Only the card's own groups move, among the places they hold; any other group stays put.
@@ -233,8 +239,12 @@ object SportsLiveExtraSources {
             scoreOf = { SportsLiveSourceReliability.scoreOf(names.byName[it.addonName]) },
             primaryIndex = cardGroups.indexOfFirst { names.byName[it.addonName] == names.primaryKey }
         )
+        // Shown groups first, in the order they are shown; then the newcomers, best first.
+        val shownAt = shown.withIndex().associate { (i, name) -> name to i }
+        val (kept, added) = ranked.partition { it.addonName in shownAt }
+        val placed = kept.sortedBy { shownAt.getValue(it.addonName) } + added
         val ordered = groups.toMutableList()
-        slots.forEachIndexed { i, slot -> ordered[slot] = ranked[i] }
+        slots.forEachIndexed { i, slot -> ordered[slot] = placed[i] }
         return ordered
     }
 
@@ -252,6 +262,13 @@ object SportsLiveExtraSources {
 
     /** The extra streams resolved and cached for [contentId]; empty when not registered or not resolved yet. */
     fun cachedStreamsFor(contentId: String?): List<Stream> = entry(contentId)?.streams.orEmpty()
+
+    /**
+     * The extra streams known for [contentId]: the cached ones, else those of a running (or incomplete)
+     * lookup that have answered so far, so the failover treats them as extras before every source is in.
+     */
+    fun availableStreamsFor(contentId: String?): List<Stream> =
+        entry(contentId)?.let { it.streams ?: it.partial }.orEmpty()
 
     /** The alternates' streams of the game registered for [contentId], all at once; see [extraStreamsProgress]. */
     suspend fun extraStreamsFor(contentId: String?, refresh: Boolean = false): List<Stream> =
@@ -271,6 +288,7 @@ object SportsLiveExtraSources {
         val fetch = fetcher
         if (refresh && entry != null) {
             entry.streams = null
+            entry.partial = null
             synchronized(seeds) { seeds.remove(contentId) }
         }
         if (entry == null || fetch == null) {
@@ -290,6 +308,7 @@ object SportsLiveExtraSources {
             )
             val answered = Channel<Pair<SportsLiveItem, SportsLiveExtraLookup>>(Channel.UNLIMITED)
             entry.pending = sources.map(::labelOf)
+            entry.partial = null
             try {
                 // Nothing yet: lets the panel show the sources' "loading" rows straight away.
                 send(SportsLiveExtrasProgress(emptyList(), done = false))
@@ -299,6 +318,7 @@ object SportsLiveExtraSources {
                 repeat(sources.size) { index ->
                     val (source, lookup) = answered.receive()
                     found += lookup.streams
+                    entry.partial = found.toList()
                     complete = complete && lookup.complete
                     entry.pending = entry.pending - labelOf(source)
                     send(SportsLiveExtrasProgress(found.toList(), done = index == sources.lastIndex))

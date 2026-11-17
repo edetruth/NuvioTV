@@ -98,7 +98,7 @@ internal fun PlayerRuntimeController.trySportsLiveFailoverAfterError(
                 (sources.sourceAllStreams.isNotEmpty() || sources.sourceStreamsError != null)
             val next = sportsLiveFallbackCandidate(
                 streams = sources.sourceAllStreams,
-                extras = SportsLiveExtraSources.cachedStreamsFor(contentId),
+                extras = SportsLiveExtraSources.availableStreamsFor(contentId),
                 extrasAllowed = searchDone || polls >= SPORTS_FAILOVER_POLL_COUNT,
                 settings = settings,
                 installedAddonNames = installedAddonNames,

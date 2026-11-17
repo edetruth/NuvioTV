@@ -1,6 +1,9 @@
 package com.nuvio.tv.ui.screens.sportslive
 
 import com.nuvio.tv.core.network.NetworkResult
+import com.nuvio.tv.core.sportslive.SportsLiveSourceReliability
+import com.nuvio.tv.data.local.PlayerSettings
+import com.nuvio.tv.data.local.StreamAutoPlayMode
 import com.nuvio.tv.domain.model.AddonStreams
 import com.nuvio.tv.domain.model.ContentType
 import com.nuvio.tv.domain.model.MetaPreview
@@ -16,6 +19,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import com.nuvio.tv.ui.screens.player.sourceFallbackKey
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
@@ -43,7 +47,10 @@ class SportsLiveSourcesPanelProgressTest {
     }
 
     @After
-    fun tearDown() = SportsLiveExtraSources.reset()
+    fun tearDown() {
+        SportsLiveExtraSources.reset()
+        SportsLiveSourceReliability.reset()
+    }
 
     @Test
     fun `a seed from the play path fills the panel, so opening it fetches nothing`() = runTest {
@@ -150,6 +157,75 @@ class SportsLiveSourcesPanelProgressTest {
         assertTrue(SportsLiveExtraSources.pendingSourcesFor("movie").isEmpty())
         assertEquals(listOf(true), SportsLiveExtraSources.extraStreamsProgress("movie").toList().map { it.done })
         assertTrue(fetched.isEmpty())
+    }
+
+
+    @Test
+    fun `two sources sharing one label (blank sub-catalogs of one addon) give one loading row`() = runTest {
+        val shared = CARD.copy(
+            alternates = listOf(
+                item("fast", "Shared").copy(catalogName = ""),
+                item("slow", "Shared").copy(catalogName = "")
+            )
+        )
+        SportsLiveExtraSources.register(shared.id, shared)
+        val job = launch { SportsLiveExtraSources.extraStreamsProgress(shared.id).collect {} }
+
+        runCurrent()
+        assertEquals(listOf("Shared", "Shared"), SportsLiveExtraSources.pendingSourcesFor(shared.id))
+        // Unique lazy-list keys: one row for the label.
+        assertEquals(listOf("Shared"), sportsLiveLoadingRowLabels(SportsLiveExtraSources.pendingSourcesFor(shared.id), null))
+        advanceTimeBy(1_001)
+        // One of them still fetching: the row stays.
+        assertEquals(listOf("Shared"), sportsLiveLoadingRowLabels(SportsLiveExtraSources.pendingSourcesFor(shared.id), null))
+        assertTrue(sportsLiveLoadingRowLabels(listOf("Shared"), "Primary").isEmpty())
+        job.join()
+        assertTrue(sportsLiveLoadingRowLabels(SportsLiveExtraSources.pendingSourcesFor(shared.id), null).isEmpty())
+    }
+
+    @Test
+    fun `a failover while a source is still fetching treats the answered ones as extras`() = runTest {
+        SportsLiveExtraSources.register(CARD.id, CARD)
+        val job = launch { SportsLiveExtraSources.extraStreamsProgress(CARD.id).collect {} }
+        advanceTimeBy(1_001)
+
+        // Not cached yet (Slow still fetching), but Fast's streams are known as extras.
+        assertTrue(SportsLiveExtraSources.cachedStreamsFor(CARD.id).isEmpty())
+        val extras = SportsLiveExtraSources.availableStreamsFor(CARD.id)
+        assertEquals(listOf(FAST_STREAM), extras)
+        val primary2 = stream("p2", "primary", "Primary")
+        val next = sportsLiveFallbackCandidate(
+            streams = listOf(PRIMARY_STREAM, primary2, FAST_STREAM),
+            extras = extras,
+            extrasAllowed = true,
+            settings = PlayerSettings(streamAutoPlayFallbackOnFailure = true, streamAutoPlayMode = StreamAutoPlayMode.FIRST_STREAM),
+            installedAddonNames = setOf("Primary"),
+            triedKeys = setOf(PRIMARY_STREAM.sourceFallbackKey()),
+            failedAddonName = "Primary",
+            failedInfoHash = null,
+            sourceScore = { if (it.addonName == "Fast") 1.0 else 0.0 }
+        )
+        // Ranked as its own, more reliable source (not as one of the primary's streams).
+        assertEquals(FAST_STREAM, next)
+        job.join()
+        assertEquals(listOf(FAST_STREAM, SLOW_STREAM), SportsLiveExtraSources.availableStreamsFor(CARD.id))
+    }
+
+    @Test
+    fun `a source that answers later goes below the groups already shown`() {
+        SportsLiveExtraSources.register(CARD.id, CARD)
+        SportsLiveExtraSources.markSportsPlayback(CARD.id, CARD)
+        repeat(3) { SportsLiveSourceReliability.record(SportsLiveSourceReliability.keyOf(CARD.alternates[0]), SportsLiveSourceReliability.Outcome.SUCCESS) }
+        fun group(name: String) = AddonStreams(name, null, emptyList())
+        val groups = listOf(group("Primary"), group("Fast"), group("Slow"))
+
+        // First emission: #40 order (Slow is the most reliable).
+        assertEquals("Slow", SportsLiveExtraSources.orderGroups(CARD.id, groups).first().addonName)
+        // Primary and Fast already shown: Slow arrives below them.
+        assertEquals(
+            listOf("Primary", "Fast", "Slow"),
+            SportsLiveExtraSources.orderGroups(CARD.id, groups, shown = listOf("Primary", "Fast")).map { it.addonName }
+        )
     }
 
     private companion object {

@@ -19,8 +19,9 @@ import com.nuvio.tv.ui.theme.NuvioTheme
  * Shown under "All" only ([selectedAddonFilter] null); no rows at all when [providers] is empty.
  */
 internal fun LazyListScope.sportsLiveSourceLoadingRows(providers: List<String>, selectedAddonFilter: String?) {
-    if (selectedAddonFilter != null || providers.isEmpty()) return
-    items(providers, key = { "sports-live-loading-$it" }) { provider ->
+    // One row per label: two sources can share one (a shared addon's blank or same-named sub-catalogs),
+    // and a lazy list's keys must be unique.
+    items(sportsLiveLoadingRowLabels(providers, selectedAddonFilter), key = { "sports-live-loading-$it" }) { provider ->
         Text(
             text = stringResource(R.string.sports_live_source_loading, provider),
             style = MaterialTheme.typography.bodyMedium,
@@ -33,3 +34,7 @@ internal fun LazyListScope.sportsLiveSourceLoadingRows(providers: List<String>, 
         )
     }
 }
+
+/** The labels of [sportsLiveSourceLoadingRows]: none under a provider filter, else each label once, in order. */
+internal fun sportsLiveLoadingRowLabels(providers: List<String>, selectedAddonFilter: String?): List<String> =
+    if (selectedAddonFilter != null) emptyList() else providers.distinct()

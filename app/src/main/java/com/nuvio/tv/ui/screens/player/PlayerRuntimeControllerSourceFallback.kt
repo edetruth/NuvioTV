@@ -112,7 +112,7 @@ internal fun PlayerRuntimeController.tryFallbackToNextSourceAfterError(errorMess
             // A merged Sports & Live game's other addons' streams come after these; none for other content.
             val next = sportsLiveFallbackCandidate(
                 streams = sources.sourceAllStreams,
-                extras = SportsLiveExtraSources.cachedStreamsFor(contentId),
+                extras = SportsLiveExtraSources.availableStreamsFor(contentId),
                 extrasAllowed = searchDone || polls >= SOURCE_FALLBACK_POLL_COUNT,
                 settings = settings,
                 installedAddonNames = installedAddonNames,

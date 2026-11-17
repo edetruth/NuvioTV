@@ -232,7 +232,7 @@ internal fun PlayerRuntimeController.loadSourceStreams(forceRefresh: Boolean) {
         val installedAddonNames = installedAddonOrder.toSet()
         val preferredServerNames = serverStreams.preferredSourceNames(type, vid)
         var debridPreparationLaunched = false
-        var sportsLiveExtrasPrepared = false
+        val sportsLiveExtrasPrepared = HashSet<Stream>()
 
         // On resume, skip chip reset — keep existing chip statuses
         if (!isResume) {
@@ -252,7 +252,8 @@ internal fun PlayerRuntimeController.loadSourceStreams(forceRefresh: Boolean) {
                     // A Sports & Live card's sources are listed most reliable first (no-op otherwise).
                     val addonStreams = SportsLiveExtraSources.orderGroups(
                         contentId,
-                        StreamAutoPlaySelector.orderAddonStreams(result.data, installedAddonOrder, preferredServerNames)
+                        StreamAutoPlaySelector.orderAddonStreams(result.data, installedAddonOrder, preferredServerNames),
+                        shown = _uiState.value.sourceAvailableAddons
                     )
                     val allStreams = addonStreams.flatMap { it.streams }
                     val availableAddons = addonStreams.map { it.addonName }
@@ -306,10 +307,11 @@ internal fun PlayerRuntimeController.loadSourceStreams(forceRefresh: Boolean) {
                             sourceSportsLiveLoading = SportsLiveExtraSources.pendingSourcesFor(contentId)
                         )
                     }
-                    // A merged Sports & Live game's other addons' streams arrive later: prepared once too.
-                    val sportsLiveExtras = SportsLiveExtraSources.cachedStreamsFor(contentId).filter { it in allStreams }
-                    if (sportsLiveExtras.isNotEmpty() && !sportsLiveExtrasPrepared) {
-                        sportsLiveExtrasPrepared = true
+                    // A merged Sports & Live game's other addons' streams arrive later, source by source: each prepared once too.
+                    val sportsLiveExtras = SportsLiveExtraSources.availableStreamsFor(contentId)
+                        .filter { it in allStreams && it !in sportsLiveExtrasPrepared }
+                    if (sportsLiveExtras.isNotEmpty()) {
+                        sportsLiveExtrasPrepared += sportsLiveExtras
                         if (debridPreparationLaunched) {
                             launchSourceDebridPreparationIfNeeded(false, sportsLiveExtras, seasonArg, episodeArg, installedAddonNames) {}
                         }
