@@ -5,7 +5,7 @@ Approved by the user ("I love the designs"). Three alternative views of the same
 - Source of truth for layout: the `.dc.html` files in this folder (1920×1080 TV frames; static HTML with inline styles — open in a browser). `canvas.json` is the canvas index.
 - Online canvas (private to the user): https://claude.ai/artifact/83uJQ6VNpczeeMhEvQhL8p
 - All data in the mockups is placeholder sample data.
-- **Aligned 2026-11-17** with what is built (scores v1 S1–S5, Results v2 R1, release live.9) and the queued decisions (#56, #18, #54, #55 part 2). Where this file and the app disagree, the app's behavior and labels win; see "Built components" below and "Decisions to confirm" at the end.
+- **Aligned 2026-11-17** with what is built (scores v1 S1–S5, Results v2 R1, release live.9) and the queued decisions (#56, #18, #54, #55 part 2). Where this file and the app disagree, the app's behavior and labels win; see "Built components" below and "Decisions" at the end.
 
 ## Shared visual language
 - Dark broadcast look. Background `#0A0D12`; panels `#121821` / `#0E131A`; row lines `#1E2632`.
@@ -96,12 +96,12 @@ Reuse these in the views instead of drawing new ones.
 - OK on a game plays the best stream; manual choice in the menu and a setting (#56, queued).
 - Results OK moves from "play the replay" to "open the Game page", which carries Watch replay (#18, queued).
 
-## Decisions to confirm with the user
-1. **Finals in the views show their score by default** (Scores = Show), not "score hidden by default" as first drawn. Keep, or make Hide until focused the default for finals only?
-2. **Results right panel vs Game page.** The app has no panel; #18 makes OK open a Game page that already has Watch replay and Follow. Drop the panel (simpler, recommended) or build both?
-3. **How the views are reached.** Today the section is tabs (Live Now · Upcoming · Channels · Replays · Results). Timeline/Scoreboard as a layout switch inside Live Now + Upcoming, or replace those tabs?
-4. **Scoreboard situation line** ("SEA ball · 2nd & 6") was dropped: worth reading ESPN's `situation` for it?
-5. **Game page under Scores = Off**: keep the score behind Reveal (as drawn) or show nothing at all?
+## Decisions (confirmed by the user 2026-11-17)
+1. **Finals keep their score by default** (Scores = Show). No finals-only hiding.
+2. **Results drops the right panel; OK on a row opens the Game page** (#18), which carries Watch replay, Game stats and Follow (#54).
+3. **Timeline and Scoreboard are a layout switch** (Cards · Scoreboard · Timeline) inside Live Now and Upcoming — same games, different layout. Channels guide (#25) stays its own tab.
+4. **Situation line: yes, later** — parse ESPN's `situation` (down & distance, baserunners, power play) when building the Scoreboard (#23); same feed, no extra requests.
+5. Open: Game page under Scores = Off — keep score behind Reveal (as drawn) or show nothing. Default until decided: behind Reveal.
 
 ## We could also
 - **★ Recommended — Scoreboard first, from the in-player panel.** The panel's Live now / Starting soon / More games grouping, chips and spoiler rule are exactly the Scoreboard's left column; building #23 as a full-screen version of that panel (plus the details-pane score block on the right) reuses almost everything and gives one rule for "what's on" everywhere.
