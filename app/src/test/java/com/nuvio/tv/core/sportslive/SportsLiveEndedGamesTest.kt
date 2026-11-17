@@ -116,7 +116,7 @@ class SportsLiveEndedGamesTest {
         val card = item()
         // App opened long after: dated at start + 3 h (basketball), so it is gone, not given a fresh half hour.
         val verdict = games.verdict(card, pacersFinal, START + 5 * HOUR)!!
-        assertEquals(START + SportsLiveGameLength.BASKETBALL_MS, verdict.endedAtMs)
+        assertEquals(START + BASKETBALL, verdict.endedAtMs)
         val split = games.split(listOf(card), mapOf(card.streamKey to pacersFinal), START + 5 * HOUR)
         assertTrue(split.live.isEmpty() && split.justEnded.isEmpty())
         // An early final (before the estimate) is dated when seen.
@@ -155,7 +155,7 @@ class SportsLiveEndedGamesTest {
         val past = START + 4 * HOUR
         val verdict = games.verdict(item(), null, past)!!
         assertEquals(EndedSignal.ESTIMATE, verdict.signal)
-        assertEquals(START + SportsLiveGameLength.BASKETBALL_MS, verdict.endedAtMs)
+        assertEquals(START + BASKETBALL, verdict.endedAtMs)
         assertEquals(verdict.endedAtMs, verdict.movesAtMs)
         assertNull(verdict.event)
         assertNull(games.verdict(item(), null, START + 2 * HOUR))
@@ -181,21 +181,73 @@ class SportsLiveEndedGamesTest {
         val primary = item(id = "p", startMs = START)
         val merged = primary.copy(alternates = listOf(item(id = "alt", startMs = START + 20 * MINUTE)))
         val verdict = SportsLiveEndedGames().verdict(merged, null, START + 4 * HOUR)!!
-        assertEquals(START + 20 * MINUTE + SportsLiveGameLength.BASKETBALL_MS, verdict.endedAtMs)
+        assertEquals(START + 20 * MINUTE + BASKETBALL, verdict.endedAtMs)
     }
 
     // --- dropping ---
 
     @Test
-    fun `ended cards drop out of Live now 30 minutes after they ended`() {
+    fun `ESPN finals drop out of Live now 30 minutes after they ended`() {
         val games = SportsLiveEndedGames()
         val card = item()
-        val end = START + SportsLiveGameLength.BASKETBALL_MS
-        assertEquals(listOf(card), games.split(listOf(card), emptyMap(), end + 29 * MINUTE).justEnded)
-        val gone = games.split(listOf(card), emptyMap(), end + 30 * MINUTE)
+        val scores = mapOf(card.streamKey to pacersFinal)
+        games.verdict(card, live(pacersFinal), START + HOUR)
+        val end = START + 2 * HOUR
+        games.verdict(card, pacersFinal, end)
+        assertEquals(listOf(card), games.split(listOf(card), scores, end + 29 * MINUTE).justEnded)
+        val gone = games.split(listOf(card), scores, end + 30 * MINUTE)
         assertTrue(gone.live.isEmpty() && gone.justEnded.isEmpty() && gone.ended.isEmpty())
-        // Unless links were found for it lately: an estimate can be wrong, so it stays in the strip.
-        assertEquals(listOf(card), games.split(listOf(card), emptyMap(), end + 30 * MINUTE, keepLinked = { true }).justEnded)
+    }
+
+    @Test
+    fun `an estimate never hides a game - it stays in the strip until six hours past its estimated end`() {
+        val games = SportsLiveEndedGames()
+        val card = item()
+        val end = START + BASKETBALL
+        assertEquals(listOf(card), games.split(listOf(card), emptyMap(), end + 30 * MINUTE).justEnded)
+        assertEquals(listOf(card), games.split(listOf(card), emptyMap(), end + 6 * HOUR - 1).justEnded)
+        assertTrue(games.split(listOf(card), emptyMap(), end + 6 * HOUR).justEnded.isEmpty())
+    }
+
+    @Test
+    fun `a card ESPN saw in play is never estimated, even once it is no longer tracked`() {
+        val games = SportsLiveEndedGames()
+        val card = item()
+        games.verdict(card, live(pacersFinal), START + 2 * HOUR)
+        assertNull(games.verdict(card, null, START + 6 * HOUR))
+    }
+
+    @Test
+    fun `no estimate while the gate holds a coverable card (its feed has not answered yet)`() {
+        val games = SportsLiveEndedGames()
+        val nbaCard = item()
+        val rugby = item(name = "Leinster vs Munster", sport = "Rugby")
+        val past = START + 5 * HOUR
+        assertNull(games.verdict(nbaCard, null, past, canEstimate = false))
+        val waiting = SportsLiveEndedGames.estimateGate(scoresOff = false, unmatched = emptySet())
+        assertTrue(!waiting(nbaCard))
+        // No feed covers rugby: estimated at once.
+        assertTrue(waiting(rugby))
+        assertTrue(SportsLiveEndedGames.estimateGate(scoresOff = false, unmatched = setOf(nbaCard.streamKey))(nbaCard))
+        assertTrue(SportsLiveEndedGames.estimateGate(scoresOff = true, unmatched = emptySet())(nbaCard))
+        val split = games.split(listOf(nbaCard, rugby), emptyMap(), past, waiting)
+        assertEquals(listOf(nbaCard), split.live)
+        assertEquals(listOf(rugby), split.justEnded)
+    }
+
+    @Test
+    fun `Home drops only ESPN-confirmed finals past the grace, never an estimate`() {
+        val games = SportsLiveEndedGames()
+        val card = item()
+        val overdue = item(name = "Team A vs Team B", sport = "Soccer", id = "o", startMs = START - 10 * HOUR)
+        // No score data (Hide until focused, Off): nothing is dropped, however overdue.
+        assertTrue(games.confirmedEndedKeys(listOf(card, overdue), emptyMap(), START + 8 * HOUR).isEmpty())
+        games.verdict(card, live(pacersFinal), START + HOUR)
+        val end = START + 2 * HOUR
+        val scores = mapOf(card.streamKey to pacersFinal)
+        games.verdict(card, pacersFinal, end)
+        assertTrue(games.confirmedEndedKeys(listOf(card), scores, end + 9 * MINUTE).isEmpty())
+        assertEquals(setOf(card.streamKey), games.confirmedEndedKeys(listOf(card, overdue), scores, end + 10 * MINUTE))
     }
 
     @Test
@@ -203,17 +255,16 @@ class SportsLiveEndedGamesTest {
         val games = SportsLiveEndedGames()
         val ended = item(name = "Ended A vs B", id = "e", startMs = START)
         val running = item(name = "Running C vs D", id = "r", startMs = START + 3 * HOUR)
-        val split = games.split(listOf(ended, running), emptyMap(), START + 3 * HOUR + 10 * MINUTE)
+        val split = games.split(listOf(ended, running), emptyMap(), START + 3 * HOUR + 30 * MINUTE)
         assertEquals(listOf(running), split.live)
         assertEquals(listOf(ended), split.justEnded)
-        assertEquals(setOf(ended.streamKey), games.endedKeys(listOf(ended, running), emptyMap(), START + 3 * HOUR + 10 * MINUTE))
     }
 
     // --- lengths ---
 
     @Test
     fun `the length table`() {
-        fun length(name: String, sport: String?) = SportsLiveGameLength.of(item(name = name, sport = sport))
+        fun length(name: String, sport: String?) = SportsLiveGameLength.of(item(name = name, sport = sport))?.minus(LATE)
         assertEquals(SportsLiveGameLength.SOCCER_MS, length("Arsenal vs Chelsea", "Soccer"))
         assertEquals(SportsLiveGameLength.SOCCER_MS, length("Arsenal vs Chelsea", "Premier League"))
         assertEquals(SportsLiveGameLength.BASKETBALL_MS, length("Lakers vs Celtics", "NBA"))
@@ -226,6 +277,12 @@ class SportsLiveEndedGamesTest {
         assertEquals(SportsLiveGameLength.FOOTBALL_MS, length("Arsenal vs Chelsea", "Football"))
         assertNull(length("Sinner vs Alcaraz", "Tennis"))
         assertNull(length("India vs Australia", "Cricket"))
+        assertNull(length("24 Hours of Le Mans", "Motorsport"))
+        assertNull(length("Le Mans", null))
+        assertNull(length("Tour de France Stage 4", null))
+        assertEquals(175 * MINUTE, SportsLiveGameLength.SOCCER_MS)
+        assertEquals(270 * MINUTE, SportsLiveGameLength.BASEBALL_MS)
+        assertEquals(20 * MINUTE, LATE)
     }
 
     @Test
@@ -240,5 +297,8 @@ class SportsLiveEndedGamesTest {
         const val HOUR = 60 * MINUTE
         // 2026-11-16T00:00Z: 19:00 US Eastern on 2026-11-15.
         const val START = 1_794_787_200_000L
+        const val LATE = SportsLiveGameLength.LATE_START_MS
+        /** Basketball's estimated length with the late-start allowance. */
+        const val BASKETBALL = SportsLiveGameLength.BASKETBALL_MS + LATE
     }
 }

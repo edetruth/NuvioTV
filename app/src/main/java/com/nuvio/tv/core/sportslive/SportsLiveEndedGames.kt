@@ -1,5 +1,6 @@
 package com.nuvio.tv.core.sportslive
 
+import com.nuvio.tv.core.sportslive.scores.EspnLeagueMap
 import com.nuvio.tv.core.sportslive.scores.ScoreChips
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.ScoreState
@@ -22,9 +23,22 @@ data class EndedGame(val signal: EndedSignal, val endedAtMs: Long, val event: Sc
     /** When the card leaves the main list for Just ended: after the postgame grace for an ESPN final. */
     val movesAtMs: Long get() = endedAtMs + if (signal == EndedSignal.FINAL) SportsLiveEndedGames.GRACE_MS else 0L
 
-    /** When the card leaves Live now altogether. */
-    val dropsAtMs: Long get() = endedAtMs + SportsLiveEndedGames.LINGER_MS
+    /**
+     * When the card leaves Live now altogether: half an hour after an ESPN final. An estimate never hides
+     * a game: it stays in the strip (playable) until its addon drops it, or [SportsLiveEndedGames.ESTIMATE_LINGER_MS].
+     */
+    val dropsAtMs: Long
+        get() = endedAtMs + if (signal == EndedSignal.FINAL) SportsLiveEndedGames.LINGER_MS else SportsLiveEndedGames.ESTIMATE_LINGER_MS
 }
+
+/**
+ * What the ended verdicts need from the score feed: the delayed [scores] by card key, and which cards
+ * may be estimated ([SportsLiveEndedGames.estimateGate]).
+ */
+data class EndedInputs(
+    val scores: Map<String, ScoreSnapshot> = emptyMap(),
+    val canEstimate: (SportsLiveItem) -> Boolean = { true }
+)
 
 /** Live now cut in three: still [live], [justEnded] (the dimmed strip, in list order) and the [ended] verdicts of those. */
 data class LiveNowSplit(
@@ -42,9 +56,11 @@ data class LiveNowSplit(
  *    with both scores out (a final the delay still withholds does not count). It moves after
  *    [GRACE_MS] (postgame). Postponed, cancelled, suspended games never count. A strict match decides
  *    alone: live, scheduled or anything else short of final means not ended, never estimated.
- * 2. No snapshot for the card: an estimate from its timed start (a merged card: the latest of its
- *    sources) plus [SportsLiveGameLength]. Never for channels, cards without a time of day, or sports
- *    with no length.
+ * 2. No snapshot for the card, and the caller allows an estimate (Scores Off, no feed covers it, or
+ *    its feeds answered without it: [LiveScoresRepository.unmatched], see [estimateGate]): its timed
+ *    start (a merged card: the latest of its sources) plus [SportsLiveGameLength]. Never for channels,
+ *    cards without a time of day, sports with no length, or a card ESPN was ever seen playing. An
+ *    estimate only moves a card to the strip; it never hides it.
  *
  * Remembers when each card's final was first seen, so the grace and the drop count from then even
  * after the card stops being tracked for scores (Home and the section share the [shared] instance).
@@ -61,7 +77,7 @@ class SportsLiveEndedGames {
 
     /** [item]'s verdict at [nowMs] given its delayed [snapshot] (null: none); null while not ended. */
     @Synchronized
-    fun verdict(item: SportsLiveItem, snapshot: ScoreSnapshot?, nowMs: Long): EndedGame? {
+    fun verdict(item: SportsLiveItem, snapshot: ScoreSnapshot?, nowMs: Long, canEstimate: Boolean = true): EndedGame? {
         // A channel (24/7) is never moved, whatever its bracketed game did.
         if (item.isChannel) return null
         val key = item.streamKey
@@ -90,28 +106,30 @@ class SportsLiveEndedGames {
             }
         }
         finals[key]?.let { return it.toEnded() }
+        // ESPN saw it in play: only ESPN may end it, even once it is no longer tracked.
+        if (key in seenUnfinished || !canEstimate) return null
         return estimate(item, nowMs)
     }
 
     /**
      * Splits Live now [items] (in order) by their verdicts at [nowMs]; [scores] are the delayed
-     * snapshots by card key. A card whose drop time has passed is in neither list, unless [keepLinked]
-     * says its links were found lately and it was only estimated: it then stays in Just ended.
+     * snapshots by card key, [canEstimate] which cards may be estimated. A card whose drop time has
+     * passed is in neither list.
      */
     fun split(
         items: List<SportsLiveItem>,
         scores: Map<String, ScoreSnapshot>,
         nowMs: Long,
-        keepLinked: (SportsLiveItem) -> Boolean = { false }
+        canEstimate: (SportsLiveItem) -> Boolean = { true }
     ): LiveNowSplit {
         val live = ArrayList<SportsLiveItem>(items.size)
         val justEnded = ArrayList<SportsLiveItem>()
         val ended = HashMap<String, EndedGame>()
         for (item in items) {
-            val verdict = verdict(item, scores[item.streamKey], nowMs)
+            val verdict = verdict(item, scores[item.streamKey], nowMs, canEstimate(item))
             when {
                 verdict == null || nowMs < verdict.movesAtMs -> live += item
-                nowMs < verdict.dropsAtMs || (verdict.signal == EndedSignal.ESTIMATE && keepLinked(item)) -> {
+                nowMs < verdict.dropsAtMs -> {
                     justEnded += item
                     ended[item.streamKey] = verdict
                 }
@@ -121,10 +139,14 @@ class SportsLiveEndedGames {
         return LiveNowSplit(live, justEnded, ended)
     }
 
-    /** The card keys of [items] that have moved out of the live list at [nowMs] (Home drops them). */
-    fun endedKeys(items: List<SportsLiveItem>, scores: Map<String, ScoreSnapshot>, nowMs: Long): Set<String> =
+    /**
+     * The card keys of [items] ESPN confirmed final, past the grace, at [nowMs]: what Home drops. Never
+     * an estimate, so with no scores (Hide until focused, Off) Home drops only finals already seen.
+     */
+    fun confirmedEndedKeys(items: List<SportsLiveItem>, scores: Map<String, ScoreSnapshot>, nowMs: Long): Set<String> =
         items.mapNotNullTo(HashSet()) { item ->
-            item.streamKey.takeIf { verdict(item, scores[item.streamKey], nowMs)?.let { nowMs >= it.movesAtMs } == true }
+            val verdict = verdict(item, scores[item.streamKey], nowMs, canEstimate = false)
+            item.streamKey.takeIf { verdict?.signal == EndedSignal.FINAL && nowMs >= verdict.movesAtMs }
         }
 
     private fun SeenFinal.toEnded() = EndedGame(EndedSignal.FINAL, atMs, event)
@@ -153,14 +175,27 @@ class SportsLiveEndedGames {
         /** After ESPN's final, the card stays in the main list this long (postgame). */
         const val GRACE_MS = 10 * 60_000L
 
-        /** After it ended, the card leaves Live now. */
+        /** After an ESPN final, the card leaves Live now. */
         const val LINGER_MS = 30 * 60_000L
+
+        /** An estimated card stays in the strip at most this long after its estimated end. */
+        const val ESTIMATE_LINGER_MS = 6 * 60 * 60_000L
 
         private const val FORGET_AFTER_MS = 6 * 60 * 60_000L
         private const val MAX_REMEMBERED = 2_000
 
         /** What every surface uses, so Home, the section and the player panel agree. */
         val shared = SportsLiveEndedGames()
+
+        /**
+         * Which cards may be estimated: all while Scores is Off ([scoresOff]); otherwise a card no ESPN
+         * feed covers, or one the score repository confirmed [unmatched]. A coverable card waits for
+         * its feeds' first answer, so it never flickers into the strip and back.
+         */
+        fun estimateGate(scoresOff: Boolean, unmatched: Set<String>): (SportsLiveItem) -> Boolean = { item ->
+            scoresOff || item.streamKey in unmatched ||
+                (listOf(item) + item.alternates).all { EspnLeagueMap.leaguesFor(it).isEmpty() }
+        }
 
         fun isFinalWithScore(event: ScoreSnapshot): Boolean =
             event.state == ScoreState.POST && event.isFinal && event.homeScore != null && event.awayScore != null

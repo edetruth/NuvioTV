@@ -125,7 +125,13 @@ fun SportsLiveScreen(
     val scoredTab = uiState.selectedTab == SportsLiveTab.LIVE_NOW || uiState.selectedTab == SportsLiveTab.UPCOMING
     TrackLiveScores(
         screenId = LiveScoresRepository.SCREEN_SECTION,
-        cards = if (scoredTab) uiState.visibleItems else emptyList(),
+        // Live now tracks the whole tab (every filter), so each game's feed answers before it may be
+        // estimated as ended (#60) and the tab count does not change with the filter.
+        cards = when (uiState.selectedTab) {
+            SportsLiveTab.LIVE_NOW -> uiState.tabs[SportsLiveTab.LIVE_NOW].orEmpty()
+            SportsLiveTab.UPCOMING -> uiState.visibleItems
+            else -> emptyList()
+        },
         enabled = scoresMode != null && scoresMode != ScoresMode.OFF,
         tracking = scoresViewModel.tracking
     )
@@ -572,7 +578,18 @@ private fun SportsLiveContent(
         // A tab or filter change is not a removal; a follow refocus handles its own card.
         if (shownFilterKey != filterKey || followedCardKey != null) return@LaunchedEffect
         val key = focusedCardKey ?: return@LaunchedEffect
-        if (key in itemKeys) return@LaunchedEffect
+        if (key in itemKeys) {
+            // Moved (into the Just ended strip, #60): keep the focused card in view.
+            val index = itemKeys.indexOf(key)
+            if (listFocusedAtChange && shownKeys.indexOf(key) != index &&
+                listState.layoutInfo.visibleItemsInfo.none { it.index == index }
+            ) {
+                listState.scrollToItem(index)
+                repeat(2) { withFrameNanos { } }
+                runCatching { cardFocusRequesters[key]?.requestFocus() }
+            }
+            return@LaunchedEffect
+        }
         val nextKey = sportsLiveKeyAfterRemoval(shownKeys, itemKeys, key)
         val next = items.firstOrNull { it.listKey == nextKey }
         focusedCardKey = nextKey

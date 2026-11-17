@@ -111,6 +111,27 @@ class LiveScoresRepositoryTest {
     }
 
     @Test
+    fun `a card is confirmed unmatched only once its feed has answered without its game (#60)`() = runTest {
+        provider.respond = { ScoreboardResult(nbaFixture) }
+        val gate = CompletableDeferred<Unit>()
+        provider.gate = gate
+        val repo = repository("2026-11-16T12:00:00Z")
+        collect(repo)
+        val heat = item("Miami Heat at Chicago Bulls", "Basketball", "2026-11-15T18:00:00Z")
+        repo.track(SECTION, listOf(pacersCard, heat))
+        runCurrent()
+        // The feed has not answered yet: nothing may be estimated.
+        assertTrue(repo.unmatched.value.isEmpty())
+        gate.complete(Unit)
+        runCurrent()
+        assertEquals(setOf(heat.streamKey), repo.unmatched.value)
+        // Still known once the card is no longer tracked.
+        repo.untrack(SECTION)
+        runCurrent()
+        assertEquals(setOf(heat.streamKey), repo.unmatched.value)
+    }
+
+    @Test
     fun `a live game polls every 30 s`() = runTest {
         provider.respond = { ScoreboardResult(listOf(game(ScoreState.IN, 50, 48))) }
         val repo = repository("2026-11-15T19:00:00Z")

@@ -80,6 +80,16 @@ class LiveScoresRepository internal constructor(
     /** Delayed scores of the tracked cards that matched a game, by card key. Empty when Scores is Off. */
     val scores: StateFlow<Map<String, ScoreSnapshot>> = output.asStateFlow()
 
+    private val unmatchedOutput = MutableStateFlow<Set<String>>(emptySet())
+
+    /**
+     * Card keys confirmed to get no score (#60): every feed they route to has answered (or is paused)
+     * without their game, their game is outside My sports, or they route to no feed in scope. Remembered
+     * while the card is not tracked; a card that later matches leaves it. Only these cards (and cards
+     * no feed covers, or every card while Scores is Off) may be estimated as ended.
+     */
+    val unmatched: StateFlow<Set<String>> = unmatchedOutput.asStateFlow()
+
     private class TrackedCard(val card: ScoreCard, val leagues: List<EspnLeague>, val followed: Boolean)
 
     private class FeedState {
@@ -113,6 +123,8 @@ class LiveScoresRepository internal constructor(
     private var sports: MySports = MySports.DEFAULT
     /** Matched cards whose game is outside My sports: skipped (no feeds) until My sports changes. */
     private val outOfScope = HashSet<String>()
+    /** See [unmatched]. */
+    private val unmatchedKeys = HashSet<String>()
     private val matcher = ScoreMatcher(zone)
     private val scoreDelay = ScoreDelay()
     private val nextRelease = MutableStateFlow<Long?>(null)
@@ -177,7 +189,10 @@ class LiveScoresRepository internal constructor(
                 val pollerScope = this
                 lock.withLock {
                     delayMs = current.delaySeconds * 1_000L
-                    if (picked != sports) outOfScope.clear()
+                    if (picked != sports) {
+                        outOfScope.clear()
+                        unmatchedKeys.clear()
+                    }
                     sports = picked
                 }
                 launch {
@@ -260,11 +275,17 @@ class LiveScoresRepository internal constructor(
         val matched = HashMap<String, ScoreSnapshot>()
         for (entry in trackedUnion()) {
             val card = entry.card
-            if (card.key in outOfScope && !entry.followed) continue
+            if (card.key in outOfScope && !entry.followed) {
+                markUnmatched(card.key)
+                continue
+            }
             val dates = datesFor(card)
             val leagues = remembered[card.key]?.let(::listOf)
                 ?: if (entry.followed) entry.leagues else entry.leagues.filter(::inMySports)
-            if (leagues.isEmpty()) continue
+            if (leagues.isEmpty()) {
+                markUnmatched(card.key)
+                continue
+            }
             val cardFeeds = feedsOf(leagues, dates).toMutableList()
             // A remembered league keeps soccer/all until its own feed has data.
             if (card.key in remembered && cardFeeds.any { feeds[it]?.fetched != true }) {
@@ -285,14 +306,18 @@ class LiveScoresRepository internal constructor(
             }
             if (match == null) {
                 needed += cardFeeds
+                // Unmatched only once every feed it routes to has answered (or is paused).
+                if (cardFeeds.all { feed -> feeds[feed]?.let { it.fetched || it.paused } == true }) markUnmatched(card.key)
                 continue
             }
             // A game outside My sports (a soccer competition not picked) shows no score and stops polling.
             if (!entry.followed && !sports.includes(match)) {
                 if (outOfScope.size >= MAX_REMEMBERED) outOfScope.clear()
                 outOfScope += card.key
+                markUnmatched(card.key)
                 continue
             }
+            unmatchedKeys -= card.key
             // Matched: only the feeds holding the game (and any not fetched yet) keep polling, so a
             // late game does not also poll the next Eastern day all night.
             needed += cardFeeds.filter { feed ->
@@ -311,6 +336,7 @@ class LiveScoresRepository internal constructor(
             }
         }
         raw = matched
+        unmatchedOutput.value = unmatchedKeys.toSet()
 
         // Feeds no card needs: stop polling, but keep their state (last fetch, failures, Retry-After)
         // for a while, so switching between Home and the section does not refetch at once.
@@ -328,6 +354,11 @@ class LiveScoresRepository internal constructor(
             if (state == null || revived || restartStopped) pollers[feed] = pollerScope.launch { poll(feed, pollerScope) }
         }
         publishLocked()
+    }
+
+    private fun markUnmatched(key: String) {
+        if (unmatchedKeys.size >= MAX_REMEMBERED) unmatchedKeys.clear()
+        unmatchedKeys += key
     }
 
     /** True when [league]'s games can be in My sports: its sport is in, and (beyond soccer) the league too. */

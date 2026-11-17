@@ -39,6 +39,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
@@ -154,10 +155,13 @@ class SportsLiveZapViewModel @Inject constructor(
             // The mode is null until read: no chips and nothing tracked before it is known.
             val mode = liveScores.mode.map<ScoresMode, ScoresMode?> { it }.onStart { emit(null) }
             // Grouped off the main thread; the tracker is updated back on it.
-            combine(items, liveScores.scores, mode, reveal.revealed) { list, scores, scoresMode, revealed ->
+            // Ticks while the panel is open, so a grace or an estimate running out regroups its games.
+            val ticking = combine(items, panelTicks()) { list, _ -> list }
+            combine(ticking, liveScores.scores, mode, reveal.revealed, liveScores.unmatched) { list, scores, scoresMode, revealed, unmatched ->
                 val nowMs = System.currentTimeMillis()
-                // Ended games (#60) go to the last group; those over for half an hour leave the panel.
-                val split = SportsLiveEndedGames.shared.split(list, scores, nowMs)
+                // Ended games (#60) go to the last group; ESPN finals leave the panel half an hour on.
+                val canEstimate = SportsLiveEndedGames.estimateGate(scoresMode == ScoresMode.OFF, unmatched)
+                val split = SportsLiveEndedGames.shared.split(list, scores, nowMs, canEstimate)
                 val state = SportsLiveZapPanelState(
                     rows = groupPanelRows(split.live + split.justEnded, scores, scoresMode, revealed, nowMs, split.ended),
                     currentKey = session.current.streamKey
@@ -352,3 +356,13 @@ fun rememberSportsLiveZapKeyHandler(
     }
     return remember(viewModel) { viewModel::onKey }
 }
+
+/** A tick every [PANEL_TICK_MS] while collected (the open live games panel). */
+private fun panelTicks(): Flow<Unit> = flow {
+    while (true) {
+        emit(Unit)
+        delay(PANEL_TICK_MS)
+    }
+}
+
+private const val PANEL_TICK_MS = 30_000L

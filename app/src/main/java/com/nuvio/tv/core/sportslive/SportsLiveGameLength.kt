@@ -14,13 +14,17 @@ import java.text.Normalizer
 object SportsLiveGameLength {
     private const val MINUTE_MS = 60_000L
 
-    const val SOCCER_MS = 135 * MINUTE_MS
+    /** Covers extra time and penalties. */
+    const val SOCCER_MS = 175 * MINUTE_MS
     const val BASKETBALL_MS = 180 * MINUTE_MS
     const val HOCKEY_MS = 180 * MINUTE_MS
     const val FOOTBALL_MS = 225 * MINUTE_MS
-    const val BASEBALL_MS = 225 * MINUTE_MS
+    const val BASEBALL_MS = 270 * MINUTE_MS
     /** A sport not recognised (or none). */
     const val UNKNOWN_MS = 240 * MINUTE_MS
+
+    /** Added to every length: a listed start is often earlier than the real kick-off. */
+    const val LATE_START_MS = 20 * MINUTE_MS
 
     /** By ESPN sport (what [EspnLeagueMap] routes a card to). */
     private val byEspnSport = mapOf(
@@ -35,14 +39,14 @@ object SportsLiveGameLength {
     private val LONG_SESSIONS = Regex(
         """\b(tennis|atp|wta|golf|pga|cricket|icc|t20|odi|ipl|test match|f1|formula 1|formula one|grand prix|motogp|""" +
             """nascar|indycar|motorsport|racing|ufc|mma|boxing|fight|fights|bellator|wwe|aew|wrestling|darts|snooker|""" +
-            """cycling|tour de france|olympics|olympic|marathon)\b"""
+            """cycling|tour de france|giro|vuelta|olympics|olympic|marathon|le mans|24 hours|24h|endurance|rally)\b"""
     )
     private val SOCCER_WORD = Regex("""\bsoccer\b""")
     private val FOOTBALL_WORD = Regex("""\bfootball\b""")
 
     /**
-     * The estimated length of [item]'s game (a merged card: all its sources), or null when it gets no
-     * estimate (a long-session sport). A bare "Football" may be either code: the longer American
+     * The estimated length of [item]'s game (a merged card: all its sources) plus [LATE_START_MS], or null
+     * when it gets no estimate (a long-session sport). A bare "Football" may be either code: the longer American
      * football length applies unless the card also says soccer or names a soccer competition.
      */
     fun of(item: SportsLiveItem): Long? {
@@ -51,13 +55,13 @@ object SportsLiveGameLength {
         val own = sources.flatMap { listOfNotNull(it.sport) + it.meta.name + it.meta.genres }.map(::fold)
         if (own.any { LONG_SESSIONS.containsMatchIn(it) }) return null
         val leagues = sources.flatMap(EspnLeagueMap::leaguesFor).distinct()
-        if (leagues.isEmpty()) return UNKNOWN_MS
+        if (leagues.isEmpty()) return UNKNOWN_MS + LATE_START_MS
         val texts = own + sources.map { fold(it.catalogName) }
         val ambiguousFootball = leagues.all { it == EspnLeagueMap.SOCCER_ALL } &&
             texts.any { FOOTBALL_WORD.containsMatchIn(it) } && texts.none { SOCCER_WORD.containsMatchIn(it) }
         val lengths = leagues.map { byEspnSport[it.sport] ?: UNKNOWN_MS } +
             listOfNotNull(FOOTBALL_MS.takeIf { ambiguousFootball })
-        return lengths.max()
+        return lengths.max() + LATE_START_MS
     }
 
     private val MARKS = Regex("""\p{Mn}+""")

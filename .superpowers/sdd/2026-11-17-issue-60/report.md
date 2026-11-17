@@ -40,3 +40,13 @@ Changed: SportsLiveViewModel (scores flow + 30 s clock, split), SportsLiveUiStat
 - A real game: final -> 10 min -> strip -> 30 min -> gone, with and without Score delay; OK opens the Game page.
 - Home row shrink when a game ends (row rebuild, focus).
 - Player panel Just ended header.
+
+## Review fixes (commit after 30053de7c)
+Principle: an estimate never hides a game; only an ESPN-confirmed final (after the grace) removes one.
+1. Home drops only ESPN-confirmed finals past the grace (SportsLiveEndedGames.confirmedEndedKeys); with no scores (Hide/Off) nothing is dropped on an estimate.
+2. Section/panel: estimated games stay in the strip (playable) until the addon drops them or 6 h past the estimated end (EndedGame.dropsAtMs); finals still drop at 30 min. The older overdue rule (SportsLiveLiveDuration) now moves a game to the strip as "Probably ended" instead of hiding it (still skipped when links were found lately or ESPN shows it in play).
+3. Lengths: soccer 2h55, baseball 4h30, + 20 min late-start allowance on every estimate (SportsLiveGameLength.LATE_START_MS). Long-session list adds Le Mans, 24 Hours/24h, endurance, rally, Giro, Vuelta.
+4. No estimate for a card ESPN was ever seen playing (seenUnfinished), tracked or not. Estimate gate (estimateGate): Scores Off, no ESPN feed covers the card, or LiveScoresRepository.unmatched (new: every routed feed answered/paused without the game, out of My sports, or no feed in scope; remembered while untracked, cleared on My sports change). The section now tracks the whole Live Now tab (every filter) so every card's feed answers.
+5. Panel: 30 s tick while open (grace/drop updates) and the same gate. Section: a focused card that moves into the strip is scrolled back into view and refocused.
+Tests: SportsLiveEndedGamesTest (estimate stays 6 h, finals drop at 30 min, seen-in-play never estimated, gate, Home confirmed-only, lengths), SportsLiveHomeEndedTest (final dropped; Hide/Off overdue not dropped), SportsLiveViewModelTest (gate holds a coverable NFL card past its estimate; overdue moves to strip), LiveScoresRepositoryTest (unmatched only after the feed answers, kept when untracked).
+Builds: (a) 1480/1480, (b) OK, (c) OK, pre-push hook 0. Also fixed: unknown-sport estimate lacked the late-start allowance.

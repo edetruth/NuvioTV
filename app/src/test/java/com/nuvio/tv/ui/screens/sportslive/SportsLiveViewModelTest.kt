@@ -1,6 +1,7 @@
 package com.nuvio.tv.ui.screens.sportslive
 
 import com.nuvio.tv.MainDispatcherRule
+import com.nuvio.tv.core.sportslive.EndedInputs
 import com.nuvio.tv.core.sportslive.EndedSignal
 import com.nuvio.tv.core.sportslive.SportsLiveEndedGames
 import com.nuvio.tv.core.sportslive.SportsLiveItemBucketer
@@ -100,8 +101,11 @@ class SportsLiveViewModelTest {
     }
 
     /** Collects [SportsLiveViewModel.uiState] in the background, as the screen would, so WhileSubscribed stays active. */
-    private fun TestScope.newViewModel(scores: Map<String, ScoreSnapshot> = emptyMap()): SportsLiveViewModel {
-        val viewModel = SportsLiveViewModel(repo, scores = flowOf(scores), endedGames = SportsLiveEndedGames())
+    private fun TestScope.newViewModel(
+        scores: Map<String, ScoreSnapshot> = emptyMap(),
+        canEstimate: (SportsLiveItem) -> Boolean = { true }
+    ): SportsLiveViewModel {
+        val viewModel = SportsLiveViewModel(repo, endedInputs = flowOf(EndedInputs(scores, canEstimate)), endedGames = SportsLiveEndedGames())
         viewModel.nowMs = { NOW }
         backgroundScope.launch { viewModel.uiState.collect {} }
         return viewModel
@@ -137,9 +141,10 @@ class SportsLiveViewModelTest {
     fun `ended games sit at the end of Live now as Just ended, and the tab counts only the live ones`() = runTest {
         nextLoad = load(
             listOf(
-                // Soccer runs about 2h15: ended 15 min ago (Just ended), and ended 45 min ago (gone).
-                item("ended", isLive = true, sport = "Soccer", name = "Ended", startMs = NOW - 2 * HOUR - 30 * MINUTE),
-                item("gone", isLive = true, sport = "Soccer", name = "Gone", startMs = NOW - 3 * HOUR),
+                // Soccer is estimated at 3h15 with the late start: ended 15 min ago (Just ended), and
+                // more than six hours past its estimate (gone).
+                item("ended", isLive = true, sport = "Soccer", name = "Ended", startMs = NOW - 3 * HOUR - 30 * MINUTE),
+                item("gone", isLive = true, sport = "Soccer", name = "Gone", startMs = NOW - 10 * HOUR),
                 item("on", isLive = true, sport = "Soccer", name = "On", startMs = NOW - HOUR),
                 item("untimed", isLive = true, sport = "Soccer", name = "Untimed")
             )
@@ -173,7 +178,22 @@ class SportsLiveViewModelTest {
     }
 
     @Test
-    fun `a game live far longer than its sport runs leaves Live now without a request`() = runTest {
+    fun `a coverable game whose feed has not answered is not estimated, so it stays in the main list`() = runTest {
+        // NFL: estimated at 4h05 with the late start, overdue only after 4h30.
+        val game = item("g", isLive = true, sport = "NFL", name = "New England Patriots at New York Jets", startMs = NOW - 4 * HOUR - 10 * MINUTE)
+        nextLoad = load(listOf(game))
+        val waiting = newViewModel(canEstimate = { false })
+        advanceUntilIdle()
+        assertTrue(waiting.uiState.value.justEnded.isEmpty())
+        assertEquals(listOf("g"), waiting.uiState.value.visibleItems.map { it.id })
+
+        val answered = newViewModel(canEstimate = { true })
+        advanceUntilIdle()
+        assertEquals(EndedSignal.ESTIMATE, answered.uiState.value.justEnded.values.single().signal)
+    }
+
+    @Test
+    fun `a game live far longer than its sport runs moves to Just ended without a request, never hidden`() = runTest {
         nextLoad = load(
             listOf(
                 item("over", isLive = true, sport = "Soccer", name = "Over", startMs = NOW - 4 * HOUR),
@@ -184,7 +204,10 @@ class SportsLiveViewModelTest {
         val viewModel = newViewModel()
         advanceUntilIdle()
 
-        assertEquals(listOf("on", "untimed"), viewModel.uiState.value.visibleItems.map { it.id }.sorted())
+        val state = viewModel.uiState.value
+        assertEquals(listOf("on", "untimed", "over"), state.visibleItems.map { it.id })
+        assertEquals(EndedSignal.ESTIMATE, state.endedOf(state.visibleItems.last())?.signal)
+        assertEquals(2, state.countOf(SportsLiveTab.LIVE_NOW))
         verify(exactly = 0) { repo.reprobeIfStale(any()) }
     }
 

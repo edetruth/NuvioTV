@@ -122,10 +122,10 @@ fun HomeScreen(
         SportsLiveHomeRow.scoreLabels(uiState.liveNowItems, liveScores, liveScoresMode, scoreChipStrings, liveScoreFormat)
     }
     LaunchedEffect(liveNowScoreLabels) { viewModel.setLiveNowScoreLabels(liveNowScoreLabels) }
-    // Games found over (#60) leave the row: no Just ended strip on Home.
+    // Games ESPN confirmed final (#60, past the grace) leave the row; an estimate never drops one.
     val liveClockMs by rememberSportsLiveClockMs()
     val liveNowEnded = remember(uiState.liveNowItems, liveScores, liveClockMs) {
-        SportsLiveEndedGames.shared.endedKeys(uiState.liveNowItems, liveScores, liveClockMs)
+        SportsLiveEndedGames.shared.confirmedEndedKeys(uiState.liveNowItems, liveScores, liveClockMs)
     }
     LaunchedEffect(liveNowEnded) { viewModel.setLiveNowEnded(liveNowEnded) }
 
