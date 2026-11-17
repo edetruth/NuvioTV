@@ -28,12 +28,14 @@ internal fun rememberScoreDetailsStrings(): ScoreDetailsStrings {
     val ot = stringResource(R.string.sports_live_details_period_ot)
     val otN = stringResource(R.string.sports_live_details_period_ot_n)
     val et = stringResource(R.string.sports_live_details_period_et)
+    val so = stringResource(R.string.sports_live_details_period_so)
+    val empty = stringResource(R.string.sports_live_details_period_empty)
     val scorer = stringResource(R.string.sports_live_details_scorer)
     val pen = stringResource(R.string.sports_live_details_scorer_pen)
     val og = stringResource(R.string.sports_live_details_scorer_og)
     val separator = stringResource(R.string.sports_live_details_separator)
-    return remember(scoreline, sides, ot, otN, et, scorer, pen, og, separator) {
-        ScoreDetailsStrings(scoreline, sides, ot, otN, et, scorer, pen, og, separator)
+    return remember(scoreline, sides, ot, otN, et, so, empty, scorer, pen, og, separator) {
+        ScoreDetailsStrings(scoreline, sides, ot, otN, et, so, empty, scorer, pen, og, separator)
     }
 }
 
@@ -69,8 +71,10 @@ internal fun SportsLiveScoreDetails(details: ScoreDetails, modifier: Modifier = 
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Text(
-                    text = details.status ?: chipStrings.finalNote,
+                // A live game with no clock from ESPN shows no status (never "Final").
+                val status = details.status ?: chipStrings.finalNote.takeUnless { details.live }
+                if (status != null) Text(
+                    text = status,
                     style = MaterialTheme.typography.titleMedium.copy(fontFeatureSettings = "tnum"),
                     color = if (details.live) NuvioTheme.colors.Error else NuvioTheme.colors.TextSecondary,
                     maxLines = 1,
@@ -123,7 +127,7 @@ private fun LinescoreTable(details: ScoreDetails.Shown, strings: ScoreDetailsStr
             }
         }
     }
-    fun cells(side: ScoreDetailsSide) = side.linescores.map { it?.toString().orEmpty() }
+    fun cells(side: ScoreDetailsSide) = side.linescores.map { it?.toString() ?: strings.emptyPeriod }
     Column {
         line("", heads, total, header = true)
         line(details.first.short, cells(details.first), details.first.score?.toString().orEmpty(), header = false)

@@ -71,6 +71,9 @@ internal fun SportsLiveZapSession.banner(switching: Boolean): SportsLiveZapBanne
     )
 }
 
+/** How far ahead a game counts as starting soon in the live games panel. */
+internal const val SOON_WINDOW_MS = 3 * 60 * 60 * 1000L
+
 /** The live games panel's groups, in the order they are listed. */
 enum class ZapPanelGroup { LIVE_NOW, STARTING_SOON, OTHER }
 
@@ -87,8 +90,9 @@ data class ZapPanelRow(
 
 /**
  * The panel's [items] grouped by game state (#17): **Live now** first, the game furthest in (earliest
- * start) on top and games with no start after them, then **Starting soon**, soonest first, then the
- * rest (channels, finished or postponed games). Followed teams' games stay first inside each group. A game's state comes
+ * start) on top and games with no start after them, then **Starting soon** (within [SOON_WINDOW_MS]),
+ * soonest first, then the rest (channels, later games, finished or postponed ones; under Hide until
+ * focused a finished game keeps its place by start time). Followed teams' games stay first inside each group. A game's state comes
  * from its matched score event only when the card's sides sit on it one way round (the chip's rule);
  * otherwise from its start time. [scores] is ignored while Scores is Off.
  */
@@ -106,14 +110,18 @@ internal fun groupPanelRows(
         val event = snapshot?.takeIf { sides != null && ScoreMatcher.firstIsHome(sides.first, sides.second, it) != null }
         val eventStart = event?.takeIf { it.timeValid }?.startMs
         val start = eventStart ?: item.startMs?.takeIf { item.startHasTimeOfDay }
-        val group = when (event?.state) {
+        val soon = start != null && start <= nowMs + SOON_WINDOW_MS
+        // Under Hide until focused a finished game is grouped by its start like an unmatched one, so its
+        // place in the list never gives the result away.
+        val state = event?.state?.takeUnless { it == ScoreState.POST && mode == ScoresMode.HIDE_UNTIL_FOCUSED }
+        val group = when (state) {
             ScoreState.IN -> ZapPanelGroup.LIVE_NOW
-            ScoreState.PRE -> ZapPanelGroup.STARTING_SOON
+            ScoreState.PRE -> if (soon) ZapPanelGroup.STARTING_SOON else ZapPanelGroup.OTHER
             ScoreState.POST, ScoreState.OFF -> ZapPanelGroup.OTHER
             // Unmatched: every panel game is one its addon marks live; a later start says it has not begun.
             ScoreState.UNKNOWN, null -> when {
                 item.isChannel -> ZapPanelGroup.OTHER
-                start != null && start > nowMs -> ZapPanelGroup.STARTING_SOON
+                start != null && start > nowMs -> if (soon) ZapPanelGroup.STARTING_SOON else ZapPanelGroup.OTHER
                 else -> ZapPanelGroup.LIVE_NOW
             }
         }

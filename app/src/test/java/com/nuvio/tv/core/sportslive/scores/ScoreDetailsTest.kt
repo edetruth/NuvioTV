@@ -19,6 +19,8 @@ class ScoreDetailsTest {
         overtime = "OT",
         overtimeN = "%1\$dOT",
         extraTime = "ET%1\$d",
+        shootout = "SO",
+        emptyPeriod = "–",
         scorer = "%1\$s %2\$s",
         penalty = "%1\$s (pen)",
         ownGoal = "%1\$s (OG)",
@@ -81,6 +83,31 @@ class ScoreDetailsTest {
         assertEquals(listOf("1", "2", "3", "OT"), labels("hockey", "nhl", 4))
         assertEquals(listOf("1", "2", "ET1", "ET2"), labels("soccer", "eng.1", 4))
         assertEquals((1..11).map { it.toString() }, labels("baseball", "mlb", 11))
+        assertEquals(
+            listOf("1", "2", "3", "OT", "SO"),
+            ScoreDetailsBuilder.periodLabels(EspnLeague("hockey", "nhl"), 5, shootout = true).map { ScoreDetailsBuilder.periodText(it, strings) }
+        )
+    }
+
+    @Test
+    fun `a hockey game decided in a shootout labels its last column SO, a playoff double overtime does not`() {
+        val nhl = EspnLeague("hockey", "nhl")
+        fun game(clock: String) = pacers.copy(
+            league = nhl, leagueSlug = "nhl", clockText = clock,
+            home = pacers.home.copy(linescores = listOf(1, 1, 0, 0, 1)),
+            away = pacers.away.copy(linescores = listOf(0, 2, 0, 0, 0))
+        )
+        fun heads(clock: String) = shown(item("Pacers @ 76ers", "Hockey"), game(clock)).periods.map { ScoreDetailsBuilder.periodText(it, strings) }
+        assertEquals(listOf("1", "2", "3", "OT", "SO"), heads("Final/SO"))
+        assertEquals(listOf("1", "2", "3", "OT", "2OT"), heads("Final/2OT"))
+    }
+
+    @Test
+    fun `a live game without a clock has no status`() {
+        val live = pacers.copy(state = ScoreState.IN, isFinal = false, clockText = null)
+        val details = shown(item("Pacers @ 76ers"), live)
+        assertEquals(true, details.live)
+        assertNull(details.status)
     }
 
     @Test

@@ -3583,6 +3583,8 @@
     <string name="sports_live_details_period_ot_n">%1$dOT</string>
     <string name="sports_live_details_period_et">ET%1$d</string>
     <string name="sports_live_details_period_total">T</string>
+    <string name="sports_live_details_period_so">SO</string>
+    <string name="sports_live_details_period_empty">–</string>
     <string name="sports_live_details_scorer">%1$s %2$s</string>
     <string name="sports_live_details_scorer_pen">%1$s (pen)</string>
     <string name="sports_live_details_scorer_og">%1$s (OG)</string>

@@ -12,6 +12,9 @@ sealed interface PeriodLabel {
 
     /** Soccer's [n]th extra-time period: "ET1", "ET2". */
     data class ExtraTime(val n: Int) : PeriodLabel
+
+    /** A hockey shootout: "SO". */
+    object Shootout : PeriodLabel
 }
 
 /** One side of the details pane's score, in the card's team order. */
@@ -59,6 +62,10 @@ data class ScoreDetailsStrings(
     val overtimeN: String,
     /** "ET%1$d" */
     val extraTime: String,
+    /** "SO" */
+    val shootout: String,
+    /** "–": a period a side has not played yet. */
+    val emptyPeriod: String,
     /** "%1$s %2$s": scorer name, minutes. */
     val scorer: String,
     /** "%1$s (pen)" */
@@ -112,17 +119,21 @@ object ScoreDetailsBuilder {
             second = side(secondTeam, art?.second?.short ?: second, secondSide),
             status = status,
             live = live,
-            periods = if (hasRow) periodLabels(event.league, periods) else emptyList(),
+            periods = if (hasRow) periodLabels(event.league, periods, shootout = isShootout(event)) else emptyList(),
             soccer = soccer
         )
     }
 
-    /** The headings of [count] linescore columns for [league]'s sport. */
-    fun periodLabels(league: EspnLeague, count: Int): List<PeriodLabel> {
+    /**
+     * The headings of [count] linescore columns for [league]'s sport. [shootout]: the game went to a
+     * shootout (hockey), so its last column past regulation is "SO".
+     */
+    fun periodLabels(league: EspnLeague, count: Int, shootout: Boolean = false): List<PeriodLabel> {
         val regulation = regulationPeriods(league)
         return List(count) { index ->
             val n = index + 1
             when {
+                shootout && league.sport == HOCKEY && regulation != null && n > regulation && n == count -> PeriodLabel.Shootout
                 regulation == null || n <= regulation -> PeriodLabel.Number(n)
                 league.sport == SOCCER -> PeriodLabel.ExtraTime(n - regulation)
                 else -> PeriodLabel.Overtime(n - regulation)
@@ -135,7 +146,7 @@ object ScoreDetailsBuilder {
         // Men's college basketball plays two halves; the women's game and the pros play quarters.
         "basketball" -> if (league.league == "mens-college-basketball") 2 else 4
         "football" -> 4
-        "hockey" -> 3
+        HOCKEY -> 3
         SOCCER -> 2
         else -> null
     }
@@ -144,7 +155,14 @@ object ScoreDetailsBuilder {
         is PeriodLabel.Number -> label.n.toString()
         is PeriodLabel.Overtime -> if (label.n == 1) strings.overtime else String.format(strings.overtimeN, label.n)
         is PeriodLabel.ExtraTime -> String.format(strings.extraTime, label.n)
+        PeriodLabel.Shootout -> strings.shootout
     }
+
+    // ESPN's shortDetail names a shootout ("Final/SO", "SO").
+    private fun isShootout(event: ScoreSnapshot): Boolean =
+        event.league.sport == HOCKEY && event.clockText?.let { SHOOTOUT.containsMatchIn(it) } == true
+
+    private val SHOOTOUT = Regex("""\bSO\b""")
 
     /** "ARS 2–1 CHE", or "ARS – CHE" while a live game has no score yet. */
     fun scorelineText(details: ScoreDetails.Shown, strings: ScoreDetailsStrings): String {
@@ -177,4 +195,5 @@ object ScoreDetailsBuilder {
     }
 
     private const val SOCCER = "soccer"
+    private const val HOCKEY = "hockey"
 }

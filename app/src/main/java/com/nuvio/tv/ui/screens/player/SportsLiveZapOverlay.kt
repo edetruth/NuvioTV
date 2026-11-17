@@ -52,6 +52,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -156,7 +157,8 @@ internal fun BoxScope.SportsLiveZapOverlay(
             .zIndex(3.2f)
     ) {
         panel?.let { state ->
-            val canWatchWith = remember(state) { openDual != null && viewModel.dualPick() != null }
+            // Depends on the session only, not on score updates.
+            val canWatchWith = remember(state.currentKey, openDual) { openDual != null && viewModel.dualPick() != null }
             LiveGamesPanel(
                 state = state,
                 onPick = viewModel::onPanelPick,
@@ -174,6 +176,7 @@ internal fun BoxScope.SportsLiveZapOverlay(
                 },
                 onClose = { viewModel.closePanel() },
                 onRowFocus = viewModel::onPanelRowFocus,
+                onKey = viewModel::onPanelKey,
                 onWatchWith = if (canWatchWith) {
                     {
                         dualPick = viewModel.dualPick()
@@ -282,15 +285,16 @@ private fun LiveGamesPanel(
     /** "Watch with another game" for the game playing, above the list; null hides it. */
     onWatchWith: (() -> Unit)?,
     /** A game row took focus (Hide until focused reveals its score after a second). */
-    onRowFocus: (String?) -> Unit
+    onRowFocus: (String?) -> Unit,
+    /** Any key pressed inside the panel (Hide until focused reveals only after one). */
+    onKey: () -> Unit
 ) {
     val listState = rememberLazyListState()
     val focusRequester = remember { FocusRequester() }
     val emptyFocusRequester = remember { FocusRequester() }
-    // Fixed once the list is non-empty: where focus starts, not a live highlight.
-    val startIndex = remember(state.items.isEmpty()) {
-        state.items.indexOfFirst { it.streamKey == state.currentKey }.coerceAtLeast(0)
-    }
+    // Focus starts on the game playing, found by key so a regroup (scores arriving) never moves it to
+    // another row; the first row when the game playing is not listed.
+    val startKey = state.items.firstOrNull { it.streamKey == state.currentKey }?.streamKey ?: state.items.firstOrNull()?.streamKey
 
     LaunchedEffect(state.items.isEmpty()) {
         runCatching {
@@ -298,6 +302,7 @@ private fun LiveGamesPanel(
                 emptyFocusRequester.requestFocus()
             } else {
                 // The list also holds a header above each group.
+                val startIndex = state.items.indexOfFirst { it.streamKey == startKey }.coerceAtLeast(0)
                 val headersAbove = state.rows.take(startIndex + 1).map { it.group }.distinct().size
                 listState.scrollToItem((startIndex + headersAbove - 2).coerceAtLeast(0))
                 delay(32)
@@ -313,6 +318,10 @@ private fun LiveGamesPanel(
             .clip(RoundedCornerShape(topEnd = NuvioTheme.spacing.lg, bottomEnd = NuvioTheme.spacing.lg))
             .background(NuvioTheme.colors.BackgroundElevated)
             .focusProperties { onExit = { cancelFocusChange() } }
+            .onPreviewKeyEvent {
+                if (it.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) onKey()
+                false
+            }
             .focusGroup()
             .onKeyEvent { event ->
                 when (event.nativeKeyEvent.keyCode) {
@@ -381,7 +390,7 @@ private fun LiveGamesPanel(
                             LiveGameItem(
                                 row = row,
                                 isCurrent = item.streamKey == state.currentKey,
-                                modifier = if (state.items.getOrNull(startIndex) === item) {
+                                modifier = if (item.streamKey == startKey) {
                                     Modifier.focusRequester(focusRequester)
                                 } else {
                                     Modifier

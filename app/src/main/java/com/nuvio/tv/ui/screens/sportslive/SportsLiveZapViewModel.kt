@@ -152,18 +152,40 @@ class SportsLiveZapViewModel @Inject constructor(
             }.flowOn(Dispatchers.Default)
             // The mode is null until read: no chips and nothing tracked before it is known.
             val mode = liveScores.mode.map<ScoresMode, ScoresMode?> { it }.onStart { emit(null) }
+            // Grouped off the main thread; the tracker is updated back on it.
             combine(items, liveScores.scores, mode, reveal.revealed) { list, scores, scoresMode, revealed ->
-                scoreTracker.update(list, enabled = scoresMode != null && scoresMode != ScoresMode.OFF)
-                SportsLiveZapPanelState(
+                val state = SportsLiveZapPanelState(
                     rows = groupPanelRows(list, scores, scoresMode, revealed, System.currentTimeMillis()),
                     currentKey = session.current.streamKey
                 )
+                Triple(list, scoresMode, state)
+            }.flowOn(Dispatchers.Default).map { (list, scoresMode, state) ->
+                scoreTracker.update(list, enabled = scoresMode != null && scoresMode != ScoresMode.OFF)
+                state
             }
         }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
+    // Hide until focused: rows reveal only once the user has pressed a key in the panel, so opening it
+    // (focus lands on the game playing) never reveals a score by itself.
+    private var panelKeyPressed = false
+    private var focusedRowKey: String? = null
+
     /** The focused panel row's stream key, or null when no row is focused (Hide until focused reveal). */
-    fun onPanelRowFocus(key: String?) = reveal.onFocus(key)
+    fun onPanelRowFocus(key: String?) {
+        focusedRowKey = key
+        if (panelKeyPressed) reveal.onFocus(key)
+    }
+
+    /** Panel rows revealed under Hide until focused (for tests). */
+    internal val revealedRows: Set<String> get() = reveal.revealed.value
+
+    /** A key was pressed inside the panel: from now on a row focused for a second reveals its score. */
+    fun onPanelKey() {
+        if (panelKeyPressed) return
+        panelKeyPressed = true
+        reveal.onFocus(focusedRowKey)
+    }
 
     private val shortPressKeys = SportsLiveShortPressKeys()
 
@@ -197,6 +219,8 @@ class SportsLiveZapViewModel @Inject constructor(
     internal fun openPanel() {
         val session = controller.session(contentId) ?: return
         scoreTracker.onStart()
+        panelKeyPressed = false
+        focusedRowKey = null
         panelSession.value = session
         _panelOpen.value = true
         viewModelScope.launch {
@@ -218,6 +242,8 @@ class SportsLiveZapViewModel @Inject constructor(
         // Untracked now, and the next open starts from no cards rather than this list.
         scoreTracker.update(emptyList(), enabled = false)
         scoreTracker.onStop()
+        panelKeyPressed = false
+        focusedRowKey = null
         reveal.onFocus(null)
         return true
     }
