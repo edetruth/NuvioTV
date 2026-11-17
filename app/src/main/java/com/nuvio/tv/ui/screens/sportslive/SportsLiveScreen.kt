@@ -1,6 +1,5 @@
 package com.nuvio.tv.ui.screens.sportslive
 
-import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -55,6 +54,7 @@ import androidx.tv.material3.Text
 import com.nuvio.tv.R
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.TeamPair
+import com.nuvio.tv.core.sportslive.scores.MySport
 import com.nuvio.tv.core.sportslive.scores.ResultRow
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.domain.model.FollowedTeam
@@ -203,13 +203,15 @@ fun SportsLiveScreen(
             },
             results = resultsState,
             onSelectResultsDay = resultsViewModel::selectDay,
-            onSelectResultsFilter = resultsViewModel::selectFilter,
+            onSelectResultsSport = resultsViewModel::selectSport,
+            onSelectResultsLeague = resultsViewModel::selectLeague,
+            onExpandResultsGroup = resultsViewModel::expandGroup,
             onResultFocus = resultsViewModel::onRowFocus,
             onOpenResult = { row ->
-                // The game's replay when an addon lists it (strict match), else a short note.
+                // The game's replay when an addon lists it (strict match); a row without one does nothing (#51).
                 val replay = resultsState.replays[row.key]
                 if (replay == null) {
-                    Toast.makeText(context, R.string.sports_live_results_no_replay, Toast.LENGTH_SHORT).show()
+                    // No replay: nothing happens; the Game page (R3) will take OK over.
                 } else if (replay.apiType == "series") {
                     onOpenDetail(replay)
                 } else {
@@ -260,7 +262,9 @@ private fun SportsLiveContent(
     onOpenDual: (SportsLiveDualSession) -> Unit,
     results: SportsLiveResultsUiState,
     onSelectResultsDay: (Int) -> Unit,
-    onSelectResultsFilter: (String?) -> Unit,
+    onSelectResultsSport: (MySport?) -> Unit,
+    onSelectResultsLeague: (String?) -> Unit,
+    onExpandResultsGroup: (String) -> Unit,
     onResultFocus: (String?) -> Unit,
     onOpenResult: (ResultRow) -> Unit
 ) {
@@ -526,7 +530,9 @@ private fun SportsLiveContent(
                 tabFocusRequester = activeTabFocusRequester,
                 dateFocusRequester = resultsDateFocusRequester,
                 onSelectDay = onSelectResultsDay,
-                onSelectFilter = onSelectResultsFilter,
+                onSelectSport = onSelectResultsSport,
+                onSelectLeague = onSelectResultsLeague,
+                onExpandGroup = onExpandResultsGroup,
                 onRowFocus = onResultFocus,
                 onOpen = onOpenResult
             )

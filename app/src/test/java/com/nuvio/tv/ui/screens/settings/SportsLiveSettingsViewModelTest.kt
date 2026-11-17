@@ -4,6 +4,9 @@ import com.nuvio.tv.MainDispatcherRule
 import com.nuvio.tv.TestPreferencesStore
 import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.core.sportslive.SportsLiveCatalogPolicy
+import com.nuvio.tv.core.sportslive.scores.MyLeague
+import com.nuvio.tv.core.sportslive.scores.MySport
+import com.nuvio.tv.core.sportslive.scores.MySports
 import com.nuvio.tv.core.sportslive.scores.ScoreSettings
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.data.local.ProfileDataStoreFactory
@@ -80,6 +83,25 @@ class SportsLiveSettingsViewModelTest {
         viewModel.setScoreDelaySeconds(90)
         advanceUntilIdle()
         assertEquals(ScoreSettings(ScoresMode.HIDE_UNTIL_FOCUSED, 90), viewModel.uiState.value.scores)
+    }
+
+    @Test
+    fun `my sports start at every sport and the picker saves sports and leagues`() = runTest {
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+        assertEquals(MySports.DEFAULT, viewModel.uiState.value.mySports)
+        viewModel.toggleMySport(MySport.HOCKEY)
+        viewModel.toggleMyLeague(MyLeague.COLLEGE_FOOTBALL)
+        viewModel.toggleMyLeague(MyLeague.PREMIER_LEAGUE)
+        advanceUntilIdle()
+        val picked = viewModel.uiState.value.mySports
+        assertEquals(listOf(MySport.BASKETBALL, MySport.FOOTBALL, MySport.BASEBALL, MySport.SOCCER), picked.effectiveSports)
+        assertEquals(setOf(MyLeague.NFL, MyLeague.COLLEGE_FOOTBALL), picked.leaguesOf(MySport.FOOTBALL))
+        assertEquals(setOf(MyLeague.PREMIER_LEAGUE), picked.namedLeagues(MySport.SOCCER))
+        assertEquals(picked, prefs.mySports.first())
+        viewModel.allSoccerCompetitions()
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.mySports.namedLeagues(MySport.SOCCER).isEmpty())
     }
 
     @Test

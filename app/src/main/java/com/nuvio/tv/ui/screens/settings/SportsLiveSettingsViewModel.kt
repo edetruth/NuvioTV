@@ -5,6 +5,9 @@ import androidx.lifecycle.viewModelScope
 import com.nuvio.tv.core.sportslive.SportsLiveCatalogOptions
 import com.nuvio.tv.core.sportslive.SportsLiveCatalogPolicy
 import com.nuvio.tv.core.sportslive.SportsLiveSourceReliability
+import com.nuvio.tv.core.sportslive.scores.MyLeague
+import com.nuvio.tv.core.sportslive.scores.MySport
+import com.nuvio.tv.core.sportslive.scores.MySports
 import com.nuvio.tv.core.sportslive.scores.ScoreSettings
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
@@ -56,7 +59,9 @@ data class SportsLiveSettingsUiState(
     /** The active profile's followed teams, in follow order. */
     val followedTeams: List<FollowedTeam> = emptyList(),
     /** Scores (Show / Hide until focused / Off) and the score delay. */
-    val scores: ScoreSettings = ScoreSettings()
+    val scores: ScoreSettings = ScoreSettings(),
+    /** My sports as picked (followed teams' sports are added where it is used, not here). */
+    val mySports: MySports = MySports.DEFAULT
 )
 
 @HiltViewModel
@@ -76,8 +81,9 @@ class SportsLiveSettingsViewModel @Inject constructor(
         combine(prefs.overrides, prefs.catalogOptions, prefs.followedTeams, ::Triple),
         prefs.showSection,
         combine(prefs.showHomeRow, prefs.hoverPreview, prefs.dataSaver, ::Triple),
-        combine(claimedStats, prefs.pipEnabled, prefs.scoreSettings, ::Triple)
-    ) { addons, (overrides, options, followedTeams), showSection, (showHomeRow, hoverPreview, dataSaver), (stats, pipEnabled, scores) ->
+        combine(claimedStats, prefs.pipEnabled, combine(prefs.scoreSettings, prefs.mySports, ::Pair), ::Triple)
+    ) { addons, (overrides, options, followedTeams), showSection, (showHomeRow, hoverPreview, dataSaver), (stats, pipEnabled, scoreAndSports) ->
+        val (scores, mySports) = scoreAndSports
         val catalogs = addons.enabledAddons().flatMap { addon ->
             addon.catalogs.filter(SportsLiveCatalogPolicy::isClaimable).map { catalog ->
                 val key = SportsLiveCatalogPolicy.keyFor(addon, catalog)
@@ -100,7 +106,7 @@ class SportsLiveSettingsViewModel @Inject constructor(
                 )
             }
         }
-        SportsLiveSettingsUiState(showSection, showHomeRow, hoverPreview, dataSaver, pipEnabled, catalogs, followedTeams, scores)
+        SportsLiveSettingsUiState(showSection, showHomeRow, hoverPreview, dataSaver, pipEnabled, catalogs, followedTeams, scores, mySports)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SportsLiveSettingsUiState())
 
     fun setShowSection(show: Boolean) {
@@ -129,6 +135,19 @@ class SportsLiveSettingsViewModel @Inject constructor(
 
     fun setScoreDelaySeconds(seconds: Int) {
         viewModelScope.launch { prefs.setScoreDelaySeconds(seconds) }
+    }
+
+    /** My sports: [sport] on or off (the last sport stays on). */
+    fun toggleMySport(sport: MySport) = updateMySports { it.toggleSport(sport) }
+
+    /** My sports: [league] on or off within its sport. */
+    fun toggleMyLeague(league: MyLeague) = updateMySports { it.toggleLeague(league) }
+
+    /** My sports: soccer back to every competition. */
+    fun allSoccerCompetitions() = updateMySports { it.allSoccerCompetitions() }
+
+    private fun updateMySports(change: (MySports) -> MySports) {
+        viewModelScope.launch { prefs.updateMySports(change) }
     }
 
     /** Forgets which stream sources worked (#40); every source starts neutral again. */

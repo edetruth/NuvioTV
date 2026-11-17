@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -31,12 +33,17 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.nuvio.tv.R
+import com.nuvio.tv.core.sportslive.scores.MyLeague
+import com.nuvio.tv.core.sportslive.scores.MySport
+import com.nuvio.tv.core.sportslive.scores.MySports
 import com.nuvio.tv.core.sportslive.scores.ScoreDelayChoices
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.domain.model.CatalogStats
 import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveOverride
 import com.nuvio.tv.ui.screens.sportslive.mini.SPORTS_LIVE_PIP_SETTINGS_ACTION
+import com.nuvio.tv.ui.screens.sportslive.myLeagueLabel
+import com.nuvio.tv.ui.screens.sportslive.mySportLabel
 import com.nuvio.tv.ui.screens.sportslive.mini.sportsLivePipSupported
 import com.nuvio.tv.ui.theme.NuvioTheme
 
@@ -144,6 +151,15 @@ internal fun SportsLiveSettingsContent(
                 )
             }
         }
+        item(key = "my_sports") {
+            MySportsSettings(
+                mySports = state.mySports,
+                enabled = state.showSection,
+                onToggleSport = viewModel::toggleMySport,
+                onToggleLeague = viewModel::toggleMyLeague,
+                onAllSoccerCompetitions = viewModel::allSoccerCompetitions
+            )
+        }
         item(key = "my_teams") {
             SettingsGroupCard(
                 modifier = Modifier.fillMaxWidth(),
@@ -249,6 +265,79 @@ internal fun SportsLiveSettingsContent(
 }
 
 private enum class ScorePicker { MODE, DELAY }
+
+/**
+ * My sports (#55): a switch per sport, in order; a sport with several leagues has a Leagues row below
+ * it that opens (OK) its league switches right under it, so the D-pad walks sports, then leagues.
+ */
+@Composable
+private fun MySportsSettings(
+    mySports: MySports,
+    enabled: Boolean,
+    onToggleSport: (MySport) -> Unit,
+    onToggleLeague: (MyLeague) -> Unit,
+    onAllSoccerCompetitions: () -> Unit
+) {
+    var expanded by remember { mutableStateOf<MySport?>(null) }
+    val allCompetitions = stringResource(R.string.sports_live_my_sports_all_competitions)
+    val leagueIndent = Modifier.padding(start = NuvioTheme.spacing.lg)
+    SettingsGroupCard(
+        modifier = Modifier.fillMaxWidth(),
+        title = stringResource(R.string.sports_live_my_sports_title),
+        subtitle = stringResource(R.string.sports_live_my_sports_subtitle)
+    ) {
+        MySport.entries.forEach { sport ->
+            val on = sport in mySports.effectiveSports
+            SettingsToggleRow(
+                title = mySportLabel(sport),
+                subtitle = null,
+                checked = on,
+                onToggle = { onToggleSport(sport) },
+                enabled = enabled
+            )
+            if (!on || sport.leagues.size < 2) return@forEach
+            val isSoccer = sport == MySport.SOCCER
+            val named = mySports.namedLeagues(sport)
+            val summary = if (isSoccer && named.isEmpty()) {
+                allCompetitions
+            } else {
+                mySports.leaguesOf(sport).sortedBy { it.ordinal }.map { myLeagueLabel(it) }.joinToString(", ")
+            }
+            val isExpanded = expanded == sport
+            SettingsActionRow(
+                title = stringResource(R.string.sports_live_my_sports_leagues),
+                subtitle = null,
+                value = summary,
+                onClick = { expanded = if (isExpanded) null else sport },
+                enabled = enabled,
+                trailingIcon = if (isExpanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                modifier = leagueIndent
+            )
+            if (!isExpanded) return@forEach
+            if (isSoccer) {
+                SettingsToggleRow(
+                    title = allCompetitions,
+                    subtitle = null,
+                    checked = named.isEmpty(),
+                    onToggle = onAllSoccerCompetitions,
+                    enabled = enabled,
+                    modifier = leagueIndent
+                )
+            }
+            val inEffect = if (isSoccer) named else mySports.leaguesOf(sport)
+            sport.leagues.forEach { league ->
+                SettingsToggleRow(
+                    title = myLeagueLabel(league),
+                    subtitle = null,
+                    checked = league in inEffect,
+                    onToggle = { onToggleLeague(league) },
+                    enabled = enabled,
+                    modifier = leagueIndent
+                )
+            }
+        }
+    }
+}
 
 @Composable
 private fun scoresModeLabel(mode: ScoresMode): String = stringResource(
