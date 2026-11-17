@@ -28,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.KeyEventType
@@ -181,13 +182,16 @@ class SportsLiveMiniPlayerViewModel @Inject constructor(
  * screen's initial focus never lands on it, and only a D-pad move (Down/Right) with nothing else
  * that way reaches it (a list scrolls its items in before focus leaves it). Focused, it shows a
  * ring and "OK to expand · Back to close": OK expands, Back stops it and focus goes back up to the
- * content, and Up/Left move focus back as usual.
+ * content, and any arrow hands focus back to [contentFocusRequester] (the content, which restores
+ * its last focused element) while the mini player plays on.
  */
 @OptIn(UnstableApi::class)
 @Composable
 fun SportsLiveMiniPlayerHost(
     onExpand: (SportsLiveZapTarget) -> Unit,
     modifier: Modifier = Modifier,
+    /** The app content under the mini player; requesting it gives focus back where it last was. */
+    contentFocusRequester: FocusRequester? = null,
     viewModel: SportsLiveMiniPlayerViewModel = hiltViewModel()
 ) {
     val controller = SportsLiveMiniPlayers.controller
@@ -261,6 +265,11 @@ fun SportsLiveMiniPlayerHost(
                                     focusManager.clearFocus()
                                 }
                                 controller.stop(SportsLiveMiniStop.USER_STOP)
+                            }
+                            SportsLiveMiniKey.RELEASE -> {
+                                val restored = contentFocusRequester != null &&
+                                    runCatching { contentFocusRequester.requestFocus() }.isSuccess
+                                if (!restored) focusManager.clearFocus()
                             }
                             SportsLiveMiniKey.CONSUME -> Unit
                         }

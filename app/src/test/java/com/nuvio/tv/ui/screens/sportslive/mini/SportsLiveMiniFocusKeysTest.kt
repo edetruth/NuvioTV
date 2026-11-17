@@ -23,16 +23,22 @@ class SportsLiveMiniFocusKeysTest {
     }
 
     @Test
-    fun `D-pad moves and other keys keep their normal handling`() {
+    fun `every arrow hands focus back to the content, held or not`() {
         for (key in listOf(
             KeyEvent.KEYCODE_DPAD_UP,
             KeyEvent.KEYCODE_DPAD_LEFT,
             KeyEvent.KEYCODE_DPAD_DOWN,
-            KeyEvent.KEYCODE_DPAD_RIGHT,
-            KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
+            KeyEvent.KEYCODE_DPAD_RIGHT
         )) {
-            assertNull(sportsLiveMiniKey(key, down = true, repeatCount = 0))
+            assertEquals(SportsLiveMiniKey.RELEASE, sportsLiveMiniKey(key, down = true, repeatCount = 0))
+            assertEquals(SportsLiveMiniKey.RELEASE, sportsLiveMiniKey(key, down = true, repeatCount = 3))
             assertNull(sportsLiveMiniKey(key, down = false, repeatCount = 0))
         }
+    }
+
+    @Test
+    fun `other keys keep their normal handling`() {
+        assertNull(sportsLiveMiniKey(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, down = true, repeatCount = 0))
+        assertNull(sportsLiveMiniKey(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, down = false, repeatCount = 0))
     }
 }

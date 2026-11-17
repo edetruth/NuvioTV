@@ -75,10 +75,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.foundation.focusGroup
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.BlendMode
@@ -1265,7 +1267,16 @@ open class MainActivity : ComponentActivity() {
                             focusedSplashTheme = null
                             hasSelectedProfileThisSession = false
                         }
+                        // Sports & Live: arrows on the mini player give focus back to the content, where it last was.
+                        val sportsLiveContentFocus = remember { FocusRequester() }
                         Box(modifier = Modifier.fillMaxSize()) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .focusRequester(sportsLiveContentFocus)
+                                    .focusRestorer()
+                                    .focusGroup()
+                            ) {
                             CompositionLocalProvider(LocalNavViewModelStoreOwner provides navViewModelStoreOwner) {
                                 if (modernSidebarEnabled) {
                                     ModernSidebarScaffold(
@@ -1310,9 +1321,12 @@ open class MainActivity : ComponentActivity() {
                                 }
                             }
 
+                            }
+
                             // The Sports & Live mini player, above the NavHost; focus reaches it only by a D-pad move.
                             SportsLiveMiniPlayerHost(
-                                onExpand = { target -> navController.navigate(sportsLiveTargetRoute(target)) }
+                                onExpand = { target -> navController.navigate(sportsLiveTargetRoute(target)) },
+                                contentFocusRequester = sportsLiveContentFocus
                             )
 
                             val autoNextOverlay by externalPlaybackTracker.autoNextOverlay.collectAsState()
