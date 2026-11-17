@@ -1,5 +1,11 @@
 package com.nuvio.tv.ui.screens.home
 
+import com.nuvio.tv.core.sportslive.SportsLiveTeams
+import com.nuvio.tv.core.sportslive.scores.EspnFixtures
+import com.nuvio.tv.core.sportslive.scores.EspnLeagueMap
+import com.nuvio.tv.core.sportslive.scores.ScoreChipStrings
+import com.nuvio.tv.core.sportslive.scores.ScoreState
+import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.domain.model.ContentType
 import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.domain.model.PosterShape
@@ -55,6 +61,24 @@ class SportsLiveHomeRowTest {
         assertFalse(catalogRowShowsSeeAllByDefault(shortRow))
         assertTrue(catalogRowShowsSeeAllByDefault(shortRow.copy(hasMore = true)))
         assertTrue(catalogRowShowsSeeAllByDefault(longRow))
+    }
+
+    @Test
+    fun `live now cards carry their score chip as the label line, spoiler setting applied`() {
+        val event = EspnFixtures.events(EspnFixtures.NBA_20261115, EspnLeagueMap.NBA).first { it.eventId == "401909985" }
+            .let { it.copy(state = ScoreState.IN, isFinal = false, clockText = "Q3 4:12", home = it.home.copy(score = 88), away = it.away.copy(score = 80)) }
+        val game = item("g").let { it.copy(meta = it.meta.copy(name = "Pacers at 76ers", releaseInfo = "2026"), teams = SportsLiveTeams.parse("Pacers at 76ers")) }
+        val unmatched = item("u")
+        val strings = ScoreChipStrings("%1\$d–%2\$d", "%1\$s · %2\$s", "%1\$s %2\$s", "Final", "Postponed", "Score hidden")
+        val scores = mapOf(game.streamKey to event)
+        fun labels(mode: ScoresMode) = SportsLiveHomeRow.scoreLabels(listOf(game, unmatched), scores, mode, strings, "● %1\$s")
+
+        assertEquals(mapOf("g" to "● Q3 4:12 · 80–88"), labels(ScoresMode.SHOW))
+        assertEquals(mapOf("g" to "● Score hidden"), labels(ScoresMode.HIDE_UNTIL_FOCUSED))
+        assertEquals(emptyMap<String, String>(), labels(ScoresMode.OFF))
+
+        val row = SportsLiveHomeRow.build(listOf(game, unmatched), "Live now", labels(ScoresMode.SHOW))
+        assertEquals(listOf("● Q3 4:12 · 80–88", null), row.items.map { it.releaseInfo })
     }
 
     companion object {

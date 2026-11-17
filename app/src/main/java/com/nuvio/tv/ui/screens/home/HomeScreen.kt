@@ -45,6 +45,11 @@ import com.nuvio.tv.domain.model.LibraryListTab
 import com.nuvio.tv.domain.model.LibrarySourceMode
 import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.domain.model.SportsLiveItem
+import com.nuvio.tv.core.sportslive.scores.LiveScoresRepository
+import com.nuvio.tv.core.sportslive.scores.ScoresMode
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveScoresViewModel
+import com.nuvio.tv.ui.screens.sportslive.TrackLiveScores
+import com.nuvio.tv.ui.screens.sportslive.rememberScoreChipStrings
 import com.nuvio.tv.domain.model.isSeriesLikeType
 import com.nuvio.tv.ui.components.ErrorState
 import com.nuvio.tv.ui.components.LoadingIndicator
@@ -94,9 +99,26 @@ fun HomeScreen(
     onNavigateToCatalogSeeAll: (String, String, String) -> Unit = { _, _, _ -> },
     onNavigateToFolderDetail: (String, String) -> Unit = { _, _ -> },
     onNavigateToSportsLive: () -> Unit = {},
-    onLiveNowItemClick: (SportsLiveItem) -> Unit = {}
+    onLiveNowItemClick: (SportsLiveItem) -> Unit = {},
+    liveScoresViewModel: SportsLiveScoresViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    // Live now cards get a score label, polled only while Home is started and Scores is not Off.
+    val liveScores by liveScoresViewModel.scores.collectAsStateWithLifecycle()
+    val liveScoresMode by liveScoresViewModel.mode.collectAsStateWithLifecycle()
+    TrackLiveScores(
+        screenId = LiveScoresRepository.SCREEN_HOME,
+        cards = uiState.liveNowItems,
+        enabled = liveScoresMode != null && liveScoresMode != ScoresMode.OFF,
+        tracking = liveScoresViewModel.tracking
+    )
+    val scoreChipStrings = rememberScoreChipStrings()
+    val liveScoreFormat = stringResource(R.string.sports_live_chip_home_live)
+    val liveNowScoreLabels = remember(uiState.liveNowItems, liveScores, liveScoresMode, scoreChipStrings, liveScoreFormat) {
+        SportsLiveHomeRow.scoreLabels(uiState.liveNowItems, liveScores, liveScoresMode, scoreChipStrings, liveScoreFormat)
+    }
+    LaunchedEffect(liveNowScoreLabels) { viewModel.setLiveNowScoreLabels(liveNowScoreLabels) }
 
     // Home was the only major screen without a lifecycle observer, so nothing ever told it to
     // look at its catalogs again.

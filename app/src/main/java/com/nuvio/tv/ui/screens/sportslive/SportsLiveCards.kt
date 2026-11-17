@@ -49,6 +49,8 @@ import coil3.compose.AsyncImage
 import com.nuvio.tv.R
 import com.nuvio.tv.core.sportslive.SportsLiveLocalTime
 import com.nuvio.tv.core.sportslive.SportsLivePillTime
+import com.nuvio.tv.core.sportslive.scores.GameArt
+import com.nuvio.tv.core.sportslive.scores.ScoreChip
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveTab
 import com.nuvio.tv.ui.components.LightweightCard
@@ -121,7 +123,11 @@ internal fun SportsLiveListCard(
     modifier: Modifier = Modifier,
     menuOpen: Boolean = false,
     /** The first game of the section's pick-second mode: a "1" badge before the title. */
-    pickedFirst: Boolean = false
+    pickedFirst: Boolean = false,
+    /** A game's drawn card, in place of the addon's poster; null keeps the addon's art (channels). */
+    art: GameArt? = null,
+    /** The live / final score chip, beside the state pill; null shows none. */
+    chip: ScoreChip? = null
 ) {
     val shape = RoundedCornerShape(NuvioTheme.radii.md)
     var longPressTriggered by remember { mutableStateOf(false) }
@@ -168,19 +174,29 @@ internal fun SportsLiveListCard(
             horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            AsyncImage(
-                model = item.meta.poster ?: item.meta.backdropUrl,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .width(144.dp)
-                    .aspectRatio(16f / 9f)
-                    .clip(RoundedCornerShape(NuvioTheme.radii.sm))
-                    .background(NuvioTheme.colors.PosterFallback)
-            )
+            val thumbnail = Modifier
+                .width(144.dp)
+                .aspectRatio(16f / 9f)
+                .clip(RoundedCornerShape(NuvioTheme.radii.sm))
+            if (art != null) {
+                SportsLiveGameArt(art = art, compact = true, modifier = thumbnail)
+            } else {
+                AsyncImage(
+                    model = item.meta.poster ?: item.meta.backdropUrl,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = thumbnail.background(NuvioTheme.colors.PosterFallback)
+                )
+            }
             Column(verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs)) {
-                if (stateLabel != null) {
-                    SportsLiveStatePill(label = stateLabel, isLive = item.isLive)
+                if (stateLabel != null || chip != null) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (stateLabel != null) SportsLiveStatePill(label = stateLabel, isLive = item.isLive)
+                        if (chip != null) SportsLiveScoreChip(chip)
+                    }
                 }
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs),
@@ -246,7 +262,11 @@ internal fun SportsLiveDetailsPane(
     /** The preview's first frame is on screen: the art gives way to the video, and the state line gets a label. */
     previewShowing: Boolean = false,
     /** The lookup for this card found nothing to play: "No streams right now" shows and Watch is dimmed. */
-    noStream: Boolean = false
+    noStream: Boolean = false,
+    /** A game's drawn card, in place of the addon's backdrop; null keeps the addon's art. */
+    art: GameArt? = null,
+    /** The score chip drawn on [art]. */
+    chip: ScoreChip? = null
 ) {
     Column(
         modifier = modifier,
@@ -262,12 +282,16 @@ internal fun SportsLiveDetailsPane(
         ) {
             preview?.invoke()
             if (!previewShowing) {
-                AsyncImage(
-                    model = item.meta.backdropUrl,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
+                if (art != null) {
+                    SportsLiveGameArt(art = art, compact = false, chip = chip, modifier = Modifier.fillMaxSize())
+                } else {
+                    AsyncImage(
+                        model = item.meta.backdropUrl,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
             }
         }
         Text(

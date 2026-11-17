@@ -227,6 +227,27 @@ class ScoreMatcher(
         fun isStrongSide(name: String, team: ScoreTeam, leagueSlug: String, leagueName: String? = null): Boolean =
             Competitor(team, leagueQualifier(leagueSlug, leagueName)).score(sideOf(name)) == STRONG
 
+        /**
+         * Which way a matched card's sides sit on [event]: true when [first] is its home team and [second]
+         * its away team, false the other way round, null when neither way reaches the match total or both
+         * fit equally well. A card shows a score only when this is known, so a score is never put on the
+         * wrong team.
+         */
+        fun firstIsHome(first: String, second: String, event: ScoreSnapshot): Boolean? {
+            val qualifier = leagueQualifier(event.leagueSlug, event.leagueName)
+            val home = Competitor(event.home, qualifier)
+            val away = Competitor(event.away, qualifier)
+            val firstSide = sideOf(first)
+            val secondSide = sideOf(second)
+            fun total(a: Int, b: Int) = if (a > 0 && b > 0) a + b else 0
+            val asHome = total(home.score(firstSide), away.score(secondSide))
+            val asAway = total(away.score(firstSide), home.score(secondSide))
+            return when {
+                maxOf(asHome, asAway) < MIN_TOTAL || asHome == asAway -> null
+                else -> asHome > asAway
+            }
+        }
+
         private fun fold(text: String): String =
             Normalizer.normalize(text.replace('’', '\''), Normalizer.Form.NFD).replace(MARKS, "").trim()
 

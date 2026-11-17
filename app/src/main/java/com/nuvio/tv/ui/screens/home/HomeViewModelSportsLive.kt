@@ -43,6 +43,13 @@ internal fun HomeViewModel.startLiveNowZapSession(item: SportsLiveItem) {
     if (session != null) SportsLiveZapSessions.start(session) else SportsLiveZapSessions.clear()
 }
 
+/** New score labels for the Live now cards; the rows are rebuilt only when they change. */
+internal fun HomeViewModel.setLiveNowScoreLabels(labels: Map<String, String>) {
+    if (labels == liveNowScoreLabels) return
+    liveNowScoreLabels = labels
+    if (addonsCache.isNotEmpty() && _uiState.value.liveNowItems.isNotEmpty()) scheduleUpdateCatalogRows()
+}
+
 /** Feeds the Live now row. Before the catalogs load, the next catalog update picks the items up. */
 internal fun HomeViewModel.observeLiveNowPipeline() {
     viewModelScope.launch {

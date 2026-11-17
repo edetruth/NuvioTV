@@ -63,7 +63,8 @@ class LiveScoresRepositoryTest {
         timed: Boolean = true,
         addon: String = "a",
         genres: List<String> = emptyList(),
-        alternates: List<SportsLiveItem> = emptyList()
+        alternates: List<SportsLiveItem> = emptyList(),
+        followed: Boolean = false
     ) = SportsLiveItem(
         meta = MetaPreview(
             id = name, type = ContentType.UNKNOWN, rawType = "sport", name = name, poster = null,
@@ -72,7 +73,7 @@ class LiveScoresRepositoryTest {
         ),
         addonId = addon, addonName = addon, addonBaseUrl = "https://example.invalid", catalogKey = "k", catalogName = "Live",
         kind = SportsLiveKind.EVENTS, isLive = true, isChannel = false, startMs = start?.let(::ms), sport = sport,
-        startHasTimeOfDay = timed, teams = SportsLiveTeams.parse(name), alternates = alternates
+        startHasTimeOfDay = timed, teams = SportsLiveTeams.parse(name), alternates = alternates, followed = followed
     )
 
     private val SECTION = LiveScoresRepository.SCREEN_SECTION
@@ -80,11 +81,14 @@ class LiveScoresRepositoryTest {
 
     private val pacersCard = item("Indiana Pacers at Philadelphia 76ers", "Basketball", "2026-11-15T18:00:00Z")
 
+    private val mySports = MutableStateFlow(MySports.DEFAULT)
+
     private fun TestScope.repository(start: String, zone: ZoneId = ZoneOffset.UTC): LiveScoresRepository {
         val base = ms(start)
         return LiveScoresRepository(
             provider = provider,
             settings = settings,
+            mySports = mySports,
             scope = backgroundScope,
             now = { base + testScheduler.currentTime },
             zone = { zone },
@@ -532,5 +536,62 @@ class LiveScoresRepositoryTest {
         repo.untrack(HOME)
         runCurrent()
         assertEquals(setOf(pacersCard.streamKey), repo.scores.value.keys)
+    }
+
+    @Test
+    fun `over the feed budget, followed teams' games poll first`() = runTest {
+        provider.respond = { ScoreboardResult(emptyList()) }
+        val repo = repository("2026-11-01T12:00:00Z")
+        collect(repo)
+        // One NBA game a day, each on its own feed (league + date); the followed one is listed last.
+        val days = (1..LiveScoresRepository.MAX_FEEDS + 2).map { LocalDate.of(2026, 11, it) }
+        val others = days.dropLast(1).map { item("Team$it A vs Team$it B", "Basketball", "${it}T18:00:00Z") }
+        val followed = item("Indiana Pacers at Philadelphia 76ers", "Basketball", "${days.last()}T18:00:00Z", followed = true)
+        repo.track(SECTION, others + followed)
+        runCurrent()
+        assertEquals(LiveScoresRepository.MAX_FEEDS, provider.calls.distinct().size)
+        assertTrue(ScoreFeed(EspnLeagueMap.NBA, days.last()) in provider.calls)
+        // The cards past the budget are not polled at all.
+        assertTrue(ScoreFeed(EspnLeagueMap.NBA, days[days.size - 2]) !in provider.calls)
+    }
+
+    @Test
+    fun `a league outside My sports is not polled unless a followed team plays`() = runTest {
+        provider.respond = { feed -> if (feed == nba15) ScoreboardResult(listOf(game(ScoreState.IN, 50, 48))) else ScoreboardResult(emptyList()) }
+        mySports.value = MySports(mapOf(MySport.HOCKEY to emptySet()))
+        val repo = repository("2026-11-15T19:00:00Z")
+        collect(repo)
+        repo.track(SECTION, listOf(pacersCard))
+        runCurrent()
+        assertTrue(provider.calls.isEmpty())
+        assertTrue(repo.scores.value.isEmpty())
+        // My Teams first: a followed team's game is scored whatever My sports says.
+        val followedCard = pacersCard.copy(followed = true)
+        repo.track(SECTION, listOf(followedCard))
+        runCurrent()
+        assertEquals(listOf(nba15), provider.calls)
+        assertEquals(setOf(followedCard.streamKey), repo.scores.value.keys)
+    }
+
+    @Test
+    fun `a soccer competition not picked in My sports shows no score and stops polling`() = runTest {
+        val eng1 = EspnFixtures.events(EspnFixtures.ENG1_20261108, EspnFixtures.ENG1)
+        provider.respond = { feed -> if (feed.league == EspnFixtures.ENG1) ScoreboardResult(eng1) else ScoreboardResult(emptyList()) }
+        // Soccer with only LaLiga named.
+        mySports.value = MySports(mapOf(MySport.SOCCER to setOf(MyLeague.LA_LIGA)))
+        val repo = repository("2026-11-08T15:00:00Z")
+        collect(repo)
+        val palace = item("Crystal Palace vs Liverpool", "Soccer", "2026-11-08T14:00:00Z", genres = listOf("Premier League"))
+        repo.track(SECTION, listOf(palace))
+        runCurrent()
+        val first = provider.calls.size
+        assertTrue(first > 0)
+        assertTrue(repo.scores.value.isEmpty())
+        advanceTimeBy(30 * 60_000L); runCurrent()
+        assertEquals(first, provider.calls.size)
+        // Picking the Premier League brings the score.
+        mySports.value = MySports(mapOf(MySport.SOCCER to setOf(MyLeague.LA_LIGA, MyLeague.PREMIER_LEAGUE)))
+        runCurrent()
+        assertEquals(setOf(palace.streamKey), repo.scores.value.keys)
     }
 }

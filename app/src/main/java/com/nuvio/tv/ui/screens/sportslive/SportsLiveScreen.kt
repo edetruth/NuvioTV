@@ -54,8 +54,12 @@ import androidx.tv.material3.Text
 import com.nuvio.tv.R
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.TeamPair
+import com.nuvio.tv.core.sportslive.scores.GameArt
+import com.nuvio.tv.core.sportslive.scores.LiveScoresRepository
 import com.nuvio.tv.core.sportslive.scores.MySport
 import com.nuvio.tv.core.sportslive.scores.ResultRow
+import com.nuvio.tv.core.sportslive.scores.ScoreChip
+import com.nuvio.tv.core.sportslive.scores.ScoreChips
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveItem
@@ -86,6 +90,7 @@ fun SportsLiveScreen(
     viewModel: SportsLiveViewModel = hiltViewModel(),
     playViewModel: SportsLivePlayViewModel = hiltViewModel(),
     resultsViewModel: SportsLiveResultsViewModel = hiltViewModel(),
+    scoresViewModel: SportsLiveScoresViewModel = hiltViewModel(),
     onPlay: (SportsLiveItem) -> Unit,
     onPlayTarget: (SportsLiveZapTarget) -> Unit,
     onOpenDetail: (SportsLiveItem) -> Unit,
@@ -101,6 +106,23 @@ fun SportsLiveScreen(
     val playState by playViewModel.state.collectAsStateWithLifecycle()
     val resultsState by resultsViewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+
+    // Live scores for the Live now and Upcoming cards on screen, polled only while the screen is
+    // started and Scores is not Off. Followed teams' games come first in these lists.
+    val scores by scoresViewModel.scores.collectAsStateWithLifecycle()
+    val scoresMode by scoresViewModel.mode.collectAsStateWithLifecycle()
+    val revealed by scoresViewModel.revealed.collectAsStateWithLifecycle()
+    val scoredTab = uiState.selectedTab == SportsLiveTab.LIVE_NOW || uiState.selectedTab == SportsLiveTab.UPCOMING
+    TrackLiveScores(
+        screenId = LiveScoresRepository.SCREEN_SECTION,
+        cards = if (scoredTab) uiState.visibleItems else emptyList(),
+        enabled = scoresMode != null && scoresMode != ScoresMode.OFF,
+        tracking = scoresViewModel.tracking
+    )
+    val chipOf: (SportsLiveItem) -> ScoreChip? = { item ->
+        if (scoredTab) ScoreChips.of(item, scores[item.streamKey], scoresMode, item.streamKey in revealed) else null
+    }
+    val artOf: (SportsLiveItem) -> GameArt? = { item -> GameArt.of(item, scores[item.streamKey]) }
 
     // Results loads only while its tab is selected; Scores Off hides the tab (and requests nothing).
     LaunchedEffect(uiState.selectedTab) { resultsViewModel.setActive(uiState.selectedTab == SportsLiveTab.RESULTS) }
@@ -174,6 +196,9 @@ fun SportsLiveScreen(
         else -> SportsLiveContent(
             uiState = uiState,
             followedTeams = followedTeams,
+            chipOf = chipOf,
+            artOf = artOf,
+            onCardFocus = scoresViewModel::onCardFocus,
             onSelectTab = viewModel::selectTab,
             onSelectFilter = viewModel::selectFilter,
             onSelectItem = viewModel::selectItem,
@@ -245,6 +270,12 @@ private fun NoAddonsState(onOpenAddons: () -> Unit) {
 private fun SportsLiveContent(
     uiState: SportsLiveUiState,
     followedTeams: List<FollowedTeam>,
+    /** A card's score chip (Live now / Upcoming only, spoiler setting applied). */
+    chipOf: (SportsLiveItem) -> ScoreChip?,
+    /** A game's drawn card; null keeps the addon's art. */
+    artOf: (SportsLiveItem) -> GameArt?,
+    /** The focused card's key (null: none), for Hide until focused. */
+    onCardFocus: (String?) -> Unit,
     onSelectTab: (SportsLiveTab) -> Unit,
     onSelectFilter: (String?) -> Unit,
     onSelectItem: (String?) -> Unit,
@@ -602,7 +633,10 @@ private fun SportsLiveContent(
                 modifier = Modifier
                     .weight(0.45f)
                     .fillMaxHeight()
-                    .onFocusChanged { listHasFocus = it.hasFocus }
+                    .onFocusChanged {
+                        listHasFocus = it.hasFocus
+                        if (!it.hasFocus) onCardFocus(null)
+                    }
                     .focusRestorer(entryCardFocusRequester ?: selectedCardFocusRequester)
                     .dpadRepeatThrottle(),
                 verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)
@@ -642,7 +676,10 @@ private fun SportsLiveContent(
                         },
                         menuOpen = item.listKey == menuCardKey,
                         pickedFirst = item.listKey == pickFirst?.listKey,
+                        art = artOf(item),
+                        chip = chipOf(item),
                         onFocus = {
+                            onCardFocus(item.streamKey)
                             if (item.listKey != followedCardKey) followedCardKey = null
                             focusedCardKey = item.listKey
                             onSelectItem(item.id)
@@ -670,6 +707,8 @@ private fun SportsLiveContent(
                 },
                 previewShowing = selectedPreview?.rendering == true,
                 noStream = noStreamKey == selected.listKey,
+                art = artOf(selected),
+                chip = chipOf(selected),
                 modifier = Modifier
                     .weight(0.55f)
                     .fillMaxHeight()

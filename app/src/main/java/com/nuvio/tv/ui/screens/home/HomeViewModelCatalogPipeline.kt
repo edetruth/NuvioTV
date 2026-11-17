@@ -730,7 +730,7 @@ internal suspend fun HomeViewModel.updateCatalogRowsPipeline() {
             }
             val addedCollectionIds = mutableSetOf<String>()
             if (liveNowItems.isNotEmpty()) {
-                add(HomeRow.Catalog(SportsLiveHomeRow.build(liveNowItems, liveNowTitle)))
+                add(HomeRow.Catalog(SportsLiveHomeRow.build(liveNowItems, liveNowTitle, liveNowScoreLabels)))
             }
             collectionsCache.forEach { collection ->
                 val key = "collection_${collection.id}"

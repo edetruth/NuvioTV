@@ -3568,6 +3568,15 @@
     <string name="sports_live_tab_results">Results</string>
     <string name="sports_live_results_yesterday">Yesterday</string>
     <string name="sports_live_results_score_hidden">Score hidden</string>
+    <!-- Score chip on game cards: clock · score, e.g. "Q3 4:12 · 88–80"; final "FT 3–1". -->
+    <string name="sports_live_chip_score">%1$d–%2$d</string>
+    <string name="sports_live_chip_live">%1$s · %2$s</string>
+    <string name="sports_live_chip_final">%1$s %2$s</string>
+    <string name="sports_live_chip_final_note">Final</string>
+    <string name="sports_live_chip_postponed">Postponed</string>
+    <!-- Home Live now card label with a live score. -->
+    <string name="sports_live_chip_home_live">● %1$s</string>
+    <string name="sports_live_art_vs">vs</string>
     <string name="sports_live_results_no_leagues">Pick sports under Settings, Sports &amp; Live, My sports</string>
     <string name="sports_live_results_unavailable">Results unavailable</string>
     <string name="sports_live_results_empty_day">No results for this day</string>

@@ -16,7 +16,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -43,6 +45,8 @@ import kotlin.random.Random
  *   feed, shared by all its cards, at the [ScoreCadence] rules, with in-flight requests coalesced.
  * - The [ScoreDelay] is applied here, once, so every surface gets the delayed view.
  * - Failure-silent: a feed failing three times in a row is paused and its scores hidden until a success.
+ * - Scope: followed teams' games always; other games only when their league is in My sports (#55).
+ *   At most [MAX_FEEDS] feeds poll at once, followed teams' games claiming theirs first.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @Singleton
@@ -51,14 +55,17 @@ class LiveScoresRepository internal constructor(
     /** The active profile's score settings. */
     val settings: Flow<ScoreSettings>,
     private val scope: CoroutineScope,
+    /** My sports (#55) with followed teams' sports added: which leagues' games get scores. */
+    private val mySports: Flow<MySports> = flowOf(MySports.DEFAULT),
     private val now: () -> Long,
     private val zone: () -> ZoneId,
     private val jitter: () -> Long
-) {
+) : LiveScoreTracking {
     @Inject
     constructor(provider: ScoreProvider, prefs: SportsLivePreferencesDataStore) : this(
         provider = provider,
         settings = prefs.scoreSettings,
+        mySports = combine(prefs.mySports, prefs.followedTeams) { sports, followed -> sports.withFollowed(followed) },
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
         now = System::currentTimeMillis,
         zone = ZoneId::systemDefault,
@@ -73,7 +80,7 @@ class LiveScoresRepository internal constructor(
     /** Delayed scores of the tracked cards that matched a game, by card key. Empty when Scores is Off. */
     val scores: StateFlow<Map<String, ScoreSnapshot>> = output.asStateFlow()
 
-    private class TrackedCard(val card: ScoreCard, val leagues: List<EspnLeague>)
+    private class TrackedCard(val card: ScoreCard, val leagues: List<EspnLeague>, val followed: Boolean)
 
     private class FeedState {
         var events: List<ScoreSnapshot> = emptyList()
@@ -99,6 +106,9 @@ class LiveScoresRepository internal constructor(
     private val remembered = HashMap<String, EspnLeague>()
     private var raw: Map<String, ScoreSnapshot> = emptyMap()
     private var delayMs = 0L
+    private var sports: MySports = MySports.DEFAULT
+    /** Matched cards whose game is outside My sports: skipped (no feeds) until My sports changes. */
+    private val outOfScope = HashSet<String>()
     private val matcher = ScoreMatcher(zone)
     private val scoreDelay = ScoreDelay()
     private val nextRelease = MutableStateFlow<Long?>(null)
@@ -117,12 +127,12 @@ class LiveScoresRepository internal constructor(
      * covers are ignored. A merged card is tracked by its primary and routed by the first source with
      * a feed.
      */
-    fun track(screenId: String, cards: List<SportsLiveItem>) {
+    override fun track(screenId: String, cards: List<SportsLiveItem>) {
         val entries = cards.mapNotNull { item ->
             val card = ScoreCard.from(item) ?: return@mapNotNull null
             val leagues = (listOf(item) + item.alternates).asSequence()
                 .map(EspnLeagueMap::leaguesFor).firstOrNull { it.isNotEmpty() } ?: return@mapNotNull null
-            TrackedCard(card, leagues)
+            TrackedCard(card, leagues, item.followed)
         }.distinctBy { it.card.key }
         tracked.update { current -> if (entries.isEmpty()) current - screenId else current + (screenId to entries) }
     }
@@ -131,23 +141,31 @@ class LiveScoresRepository internal constructor(
      * Stops tracking for [screenId]: call it when the screen is disposed (S4: from a DisposableEffect's
      * onDispose), so a closed screen's cards never keep a feed polling. The other screens are unaffected.
      */
-    fun untrack(screenId: String) {
+    override fun untrack(screenId: String) {
         tracked.update { it - screenId }
     }
 
-    /** Every screen's tracked cards, one entry per card key (the same card on two screens is one). */
-    private fun trackedUnion(): List<TrackedCard> = tracked.value.values.flatten().distinctBy { it.card.key }
+    /**
+     * Every screen's tracked cards, one entry per card key (the same card on two screens is one),
+     * followed teams' games first: they claim the feed budget before the rest.
+     */
+    private fun trackedUnion(): List<TrackedCard> =
+        tracked.value.values.flatten().distinctBy { it.card.key }.sortedByDescending { it.followed }
 
     // While someone collects [scores]: settings, then the tracked cards, drive the pollers.
     private suspend fun run() {
-        settings.distinctUntilChanged().collectLatest { current ->
+        combine(settings.distinctUntilChanged(), mySports.distinctUntilChanged(), ::Pair).collectLatest { (current, picked) ->
             if (current.mode == ScoresMode.OFF) {
                 lock.withLock { publishLocked(off = true) }
                 return@collectLatest
             }
             coroutineScope {
                 val pollerScope = this
-                lock.withLock { delayMs = current.delaySeconds * 1_000L }
+                lock.withLock {
+                    delayMs = current.delaySeconds * 1_000L
+                    if (picked != sports) outOfScope.clear()
+                    sports = picked
+                }
                 launch {
                     nextRelease.collectLatest { at ->
                         if (at == null) return@collectLatest
@@ -220,27 +238,43 @@ class LiveScoresRepository internal constructor(
      */
     private fun refreshLocked(pollerScope: CoroutineScope, restartStopped: Boolean) {
         val today = today()
-        val needed = HashSet<ScoreFeed>()
+        // In card order (followed first), so the budget goes to followed teams' feeds first.
+        val needed = LinkedHashSet<ScoreFeed>()
+        fun fits(extra: Collection<ScoreFeed>) = needed.size + extra.count { it !in needed } <= MAX_FEEDS
         val matched = HashMap<String, ScoreSnapshot>()
         for (entry in trackedUnion()) {
             val card = entry.card
+            if (card.key in outOfScope) continue
             val dates = datesFor(card, today)
-            val leagues = remembered[card.key]?.let(::listOf) ?: entry.leagues
+            val leagues = remembered[card.key]?.let(::listOf)
+                ?: if (entry.followed) entry.leagues else entry.leagues.filter(::inMySports)
+            if (leagues.isEmpty()) continue
             val cardFeeds = feedsOf(leagues, dates).toMutableList()
             // A remembered league keeps soccer/all until its own feed has data.
             if (card.key in remembered && cardFeeds.any { feeds[it]?.fetched != true }) {
                 cardFeeds += feedsOf(listOf(EspnLeagueMap.SOCCER_ALL), dates)
             }
+            // Over the budget: a card whose feeds are not polled already gets no score (never a stale one).
+            if (!fits(cardFeeds)) continue
             var match = matchOn(card, cardFeeds)
             // A soccer competition feed without the game: try soccer/all (shared, at its own cadence).
             if (match == null && leagues.all { it.sport == "soccer" && it != EspnLeagueMap.SOCCER_ALL } &&
                 cardFeeds.all { feed -> feeds[feed]?.let { it.fetched && !it.paused } == true }
             ) {
-                cardFeeds += feedsOf(listOf(EspnLeagueMap.SOCCER_ALL), dates)
-                match = matchOn(card, cardFeeds)
+                val fallback = feedsOf(listOf(EspnLeagueMap.SOCCER_ALL), dates)
+                if (fits(cardFeeds + fallback)) {
+                    cardFeeds += fallback
+                    match = matchOn(card, cardFeeds)
+                }
             }
             if (match == null) {
                 needed += cardFeeds
+                continue
+            }
+            // A game outside My sports (a soccer competition not picked) shows no score and stops polling.
+            if (!entry.followed && !sports.includes(match)) {
+                if (outOfScope.size >= MAX_REMEMBERED) outOfScope.clear()
+                outOfScope += card.key
                 continue
             }
             // Matched: only the feeds holding the game (and any not fetched yet) keep polling, so a
@@ -256,8 +290,8 @@ class LiveScoresRepository internal constructor(
                 if (remembered.size >= MAX_REMEMBERED) remembered.clear()
                 val own = EspnLeague("soccer", match.leagueSlug)
                 remembered[card.key] = own
-                // Its own feed starts now; soccer/all stays for this card until that feed has data.
-                needed += feedsOf(listOf(own), dates)
+                // Its own feed starts now (budget allowing); soccer/all stays for this card until that feed has data.
+                feedsOf(listOf(own), dates).let { if (fits(it)) needed += it }
             }
         }
         raw = matched
@@ -278,6 +312,14 @@ class LiveScoresRepository internal constructor(
             if (state == null || revived || restartStopped) pollers[feed] = pollerScope.launch { poll(feed, pollerScope) }
         }
         publishLocked()
+    }
+
+    /** True when [league]'s games can be in My sports: its sport is in, and (beyond soccer) the league too. */
+    private fun inMySports(league: EspnLeague): Boolean {
+        val sport = MySport.ofEspn(league.sport) ?: return false
+        if (sport !in sports.effectiveSports) return false
+        if (sport == MySport.SOCCER) return true
+        return MyLeague.ofFeed(league)?.let { it in sports.leaguesOf(sport) } ?: false
     }
 
     private fun matchOn(card: ScoreCard, cardFeeds: List<ScoreFeed>): ScoreSnapshot? {
@@ -327,8 +369,16 @@ class LiveScoresRepository internal constructor(
 
         private const val WINDOW_MS = 3 * 60 * 60 * 1000L
         private const val MAX_REMEMBERED = 2_000
+        /** Feeds polled at once, at most; followed teams' games claim theirs first. */
+        internal const val MAX_FEEDS = 16
         private const val RETAIN_RETIRED_MS = 10 * 60_000L
         private val SLUG = Regex("""[a-z0-9._-]+""")
         private val EASTERN: ZoneId = ZoneId.of("America/New_York")
     }
+}
+
+/** What a screen calls to have its cards scored: [track] the cards it shows, [untrack] when it leaves. */
+interface LiveScoreTracking {
+    fun track(screenId: String, cards: List<SportsLiveItem>)
+    fun untrack(screenId: String)
 }
