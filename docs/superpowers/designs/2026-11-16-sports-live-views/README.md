@@ -36,6 +36,23 @@ Approved by the user ("I love the designs"). Three alternative views of the same
 - Group chips: UK / US / Favourites. Focused row = white border.
 - Now/Next listings source is open: candidate is TheSportsDB TV listings (see #25 comment; prior art NuvioPlusIPTV `SportsTvListings.kt`).
 
+## 4 · Results (`Results.dc.html`, #51 #52 #53 #54 #55)
+Added 2026-11-17 after the user tested the first Results tab (live.8).
+- Header "Results", sub-line "Finals from the last 7 days · days follow US Eastern time"; view pill gains **Results**.
+- **Date rail:** Yesterday (active) · Sat 15 · Fri 14 … (7 ESPN/US-Eastern days).
+- **Chip row:** gold **★ My sports** first, then the user's sports (Basketball, Football, Soccer, Tennis, F1); after a divider, **league chips for the chosen sport** (NBA / College) (#52); "Edit my sports" link on the right (#55).
+- **List (1150px):** sections with league headers — **YOUR TEAMS** first (gold header), then NBA, WORLD CUP QUALIFIERS · UEFA (#53), TENNIS · ATP FINALS (individual-sport row: players + set scores, #55)…; long tails collapse into a dashed "+ 48 college basketball games" row.
+- **Row:** league tag · two team lines (winner bold) · stacked scores · status ("Final"/"FT") and a green **Replay** pill when a replay exists (#51). Spoiler-hidden rows show an eye-off icon "Hidden · Rest to reveal".
+- **Right panel (focused result):** league · date · Final, team logo circles with abbreviations, big score, a "Top" performers line, buttons **Watch replay** (only when available), **Game stats**, **Follow ‹Team A›** / **Follow ‹Team B›** (#54).
+- Remote: ↑ ↓ results, ← → days and chips, OK game page, hold OK to follow.
+
+## 5 · Game page (`GamePage.dc.html`, #18)
+- Header panel: both teams (logo circle, name, record), big final score, "Final · date · venue", buttons **Watch replay** and **Follow…**.
+- Section pill: **Game · Box Score · Standings · Highlights** (empty sections hidden).
+- Game tab: linescore table (periods + T), **Top performers** 2×2 cards (team, player, stat line), **Team stats** comparison bars (FG%, 3P%, rebounds, assists, turnovers; the better side highlighted `#9AC2FF`, the other `#4B5A6E`).
+- Spoilers: when on, score/stats sit behind a Reveal. Data from ESPN `summary` (cached per game).
+- Remote: ← → sections, ↑ ↓ scroll, OK select, Back to Results.
+
 ## Related decisions
 - Our own drawn game cards (team names, local time, league, logos, score chip) replace addon posters for games; channels keep addon art (#17 comment).
 - In-player games panel: rows show score/clock, grouped Live now (by elapsed) → Starting soon → rest (#17 comments).
