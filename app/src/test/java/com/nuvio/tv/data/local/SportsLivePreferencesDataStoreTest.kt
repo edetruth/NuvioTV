@@ -219,30 +219,19 @@ class SportsLivePreferencesDataStoreTest {
     }
 
     @Test
-    fun `recent score leagues round trip per profile and unreadable JSON reads as none`() = runTest {
-        val store = SportsLivePreferencesDataStore(factory, profiles)
-        assertEquals(emptyMap<String, Long>(), store.recentScoreLeagues.first())
-        val seen = mapOf("basketball/nba" to 1_763_000_000_000L, "soccer/eng.1" to 1_763_100_000_000L)
-        store.setRecentScoreLeagues(seen)
-        assertEquals(seen, store.recentScoreLeagues.first())
-        activeProfile.value = 2
-        assertEquals(emptyMap<String, Long>(), store.recentScoreLeagues.first())
-        profile2Store.updateData {
-            mutablePreferencesOf(stringPreferencesKey("sports_live_recent_score_leagues") to "{not json")
-        }
-        assertEquals(emptyMap<String, Long>(), store.recentScoreLeagues.first())
-    }
-
-    @Test
     fun `my sports default to every sport, round trip per profile, and the default clears the key`() = runTest {
         val store = SportsLivePreferencesDataStore(factory, profiles)
         val key = stringSetPreferencesKey("sports_live_my_sports")
         assertEquals(MySports.DEFAULT, store.mySports.first())
+        // The unused recent-leagues entry of scores S3 is cleared by the first save.
+        val recentKey = stringPreferencesKey("sports_live_recent_score_leagues")
+        profile1Store.updateData { mutablePreferencesOf(recentKey to "{\"basketball/nba\":1}") }
         store.updateMySports { it.toggleSport(MySport.SOCCER).toggleLeague(MyLeague.COLLEGE_BASKETBALL) }
         val saved = store.mySports.first()
         assertEquals(listOf(MySport.BASKETBALL, MySport.FOOTBALL, MySport.HOCKEY, MySport.BASEBALL), saved.effectiveSports)
         assertEquals(setOf(MyLeague.NBA, MyLeague.COLLEGE_BASKETBALL), saved.leaguesOf(MySport.BASKETBALL))
         assertTrue("basketball/college-basketball" in profile1Store.data.first()[key].orEmpty())
+        assertNull(profile1Store.data.first()[recentKey])
         activeProfile.value = 2
         assertEquals(MySports.DEFAULT, store.mySports.first())
         activeProfile.value = 1

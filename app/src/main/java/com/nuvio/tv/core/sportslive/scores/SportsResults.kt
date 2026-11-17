@@ -26,54 +26,8 @@ data class ResultGroup(val key: String, val sport: String, val name: String?, va
  * order, and which replay a result opens.
  */
 object SportsResults {
-    /** Leagues seen on cards are relevant for 7 days after they were last seen. */
-    const val RECENT_TTL_MS = 7 * 24 * 60 * 60 * 1000L
-
-    /** At most this many recent leagues are kept (the most recently seen). */
-    const val MAX_RECENT = 12
-
-    /** A league seen again is re-stamped at most this often, so a load every minute does not write prefs. */
-    const val RESTAMP_MS = 6 * 60 * 60 * 1000L
-
     /** The past days Results offers: 1 (yesterday) to 7. */
     val DAYS_AGO = 1..7
-
-    /**
-     * [current] (league path → last seen ms) with [seen] stamped at [nowMs]; null when there is nothing
-     * to save. Leagues already stored keep their slot and are re-stamped at most every [RESTAMP_MS] (so
-     * a league watched daily never expires); expired leagues free their slot; new leagues fill free
-     * slots only, in path order, up to [MAX_RECENT]. A full set is never reshuffled by what is on screen.
-     * `soccer/all` is never recorded: it names every soccer game in the world, not a league.
-     */
-    fun recordSeen(current: Map<String, Long>, seen: Collection<EspnLeague>, nowMs: Long): Map<String, Long>? {
-        val next = current.filterValues { nowMs - it <= RECENT_TTL_MS }.toMutableMap()
-        var changed = next.size != current.size
-        val paths = seen.asSequence().filter { it != EspnLeagueMap.SOCCER_ALL }.map { it.path }.distinct().sorted()
-        for (path in paths) {
-            val last = next[path]
-            when {
-                last != null -> if (nowMs - last >= RESTAMP_MS) {
-                    next[path] = nowMs
-                    changed = true
-                }
-                next.size < MAX_RECENT -> {
-                    next[path] = nowMs
-                    changed = true
-                }
-            }
-        }
-        return if (changed) next else null
-    }
-
-    /** The leagues [items] route to (their first source with a feed), for [recordSeen]. */
-    fun leaguesOf(items: List<SportsLiveItem>): Set<EspnLeague> =
-        items.asSequence()
-            .filter { !it.isChannel }
-            .mapNotNull { item ->
-                (listOf(item) + item.alternates).asSequence().map(EspnLeagueMap::leaguesFor).firstOrNull { it.isNotEmpty() }
-            }
-            .flatten()
-            .toSet()
 
     /**
      * The feeds of [mySports] with followed teams' sports added ([MySports.withFollowed]): one
@@ -86,13 +40,6 @@ object SportsResults {
 
     private fun leaguesOfTeam(team: FollowedTeam): List<EspnLeague> =
         team.sport?.let { EspnLeagueMap.leaguesFor(sport = it, hints = emptyList()) }.orEmpty()
-
-    /** "basketball/nba" → that league; null for anything else. */
-    fun leagueOf(path: String): EspnLeague? {
-        val slash = path.indexOf('/')
-        if (slash <= 0 || slash == path.lastIndex) return null
-        return EspnLeague(path.substring(0, slash), path.substring(slash + 1))
-    }
 
     /**
      * The rows for one day: finished games only (completed `post`; postponed, cancelled, live and
@@ -115,13 +62,31 @@ object SportsResults {
 
     /**
      * True when [team] played in [event]: its name is either side by strong equality with the same
-     * (W)/U21 qualifier ([ScoreMatcher.isStrongSide]; never a city or suffix match), and, when its sport routes to a specific ESPN feed, the event is in that sport. "Football"
-     * routes to `soccer/all` but may be American football on an addon, so it does not rule a sport out.
+     * (W)/U21 qualifier ([ScoreMatcher.isStrongSide]; never a city or suffix match; the competition
+     * name stands in for an unknown slug), and the event is in one of the team's sports
+     * ([sportsOf]). A followed soccer "Rangers" never stars the NHL or MLB Rangers.
      */
     fun follows(team: FollowedTeam, event: ScoreSnapshot): Boolean {
-        val sports = leaguesOfTeam(team).filter { it != EspnLeagueMap.SOCCER_ALL }.mapTo(HashSet()) { it.sport }
-        if (sports.isNotEmpty() && event.league.sport !in sports) return false
-        return listOf(event.home, event.away).any { side -> ScoreMatcher.isStrongSide(team.name, side, event.leagueSlug) }
+        val sports = sportsOf(team)
+        if (sports != null && event.league.sport !in sports) return false
+        return listOf(event.home, event.away).any { side ->
+            ScoreMatcher.isStrongSide(team.name, side, event.leagueSlug, event.leagueName)
+        }
+    }
+
+    /**
+     * The ESPN sports [team] can play: those of the feeds its sport routes to. A team routed only to
+     * `soccer/all` plays soccer, or soccer and American football when its sport says "Football" (an
+     * addon's "Football" may be either). Null when its sport routes nowhere (no sport given).
+     */
+    internal fun sportsOf(team: FollowedTeam): Set<String>? {
+        val leagues = leaguesOfTeam(team)
+        if (leagues.isEmpty()) return null
+        val sports = leagues.mapTo(HashSet()) { it.sport }
+        if (leagues.all { it == EspnLeagueMap.SOCCER_ALL } && team.sport.orEmpty().contains("football", ignoreCase = true)) {
+            sports += EspnLeagueMap.NFL.sport
+        }
+        return sports
     }
 
     /**
@@ -138,14 +103,16 @@ object SportsResults {
         rows.groupBy { groupKey(it.event) }
             .map { (key, groupRows) ->
                 val first = groupRows.first().event
-                ResultGroup(key, first.league.sport, groupRows.firstNotNullOfOrNull { it.event.leagueName }, groupRows)
+                val group = ResultGroup(key, first.league.sport, groupRows.firstNotNullOfOrNull { it.event.leagueName }, groupRows)
+                // Sort keys computed once per section, not in the comparator.
+                val sportRank = MySport.ofEspn(group.sport)?.ordinal ?: Int.MAX_VALUE
+                val leagueRank = MyLeague.entries.indexOfFirst { it.covers(first) }.let { if (it < 0) Int.MAX_VALUE else it }
+                GroupSort(group, sportRank, leagueRank, group.name?.lowercase() ?: "\uffff")
             }
-            .sortedWith(
-                compareBy<ResultGroup> { group -> MySport.ofEspn(group.sport)?.ordinal ?: Int.MAX_VALUE }
-                    .thenBy { group -> MyLeague.entries.indexOfFirst { it.covers(group.rows.first().event) }.let { if (it < 0) Int.MAX_VALUE else it } }
-                    .thenBy { it.name?.lowercase() ?: "￿" }
-                    .thenBy { it.key }
-            )
+            .sortedWith(compareBy<GroupSort>({ it.sportRank }, { it.leagueRank }, { it.name }, { it.group.key }))
+            .map { it.group }
+
+    private class GroupSort(val group: ResultGroup, val sportRank: Int, val leagueRank: Int, val name: String)
 
     private val OVERTIME = Regex("""\b\d*OT\b""", RegexOption.IGNORE_CASE)
     private val SHOOTOUT = Regex("""\bSO\b""", RegexOption.IGNORE_CASE)

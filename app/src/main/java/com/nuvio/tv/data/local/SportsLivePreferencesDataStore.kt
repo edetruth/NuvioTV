@@ -37,9 +37,6 @@ class SportsLivePreferencesDataStore @Inject constructor(
     // catalogKey -> {"extra": name, "value": value}; plain maps, so release minification cannot rename fields.
     private val optionsType = object : TypeToken<Map<String, Map<String, String>>>() {}.type
 
-    // ESPN league path ("basketball/nba") -> last seen epoch ms.
-    private val recentLeaguesType = object : TypeToken<Map<String, Long>>() {}.type
-
     // [{"name": name, "sport": sport or null}]; plain maps, like the options.
     private val followedType = object : TypeToken<List<Map<String, String?>>>() {}.type
 
@@ -56,6 +53,7 @@ class SportsLivePreferencesDataStore @Inject constructor(
     private val dualHintShownKey = intPreferencesKey("sports_live_dual_hint_shown")
     private val scoresModeKey = stringPreferencesKey("sports_live_scores_mode")
     private val scoreDelayKey = intPreferencesKey("sports_live_score_delay_seconds")
+    // Leagues seen on cards (scores S3), no longer used: cleared on the next My sports save.
     private val recentScoreLeaguesKey = stringPreferencesKey("sports_live_recent_score_leagues")
     private val mySportsKey = stringSetPreferencesKey("sports_live_my_sports")
 
@@ -113,15 +111,6 @@ class SportsLivePreferencesDataStore @Inject constructor(
         }
     }
 
-    /** Leagues seen on Sports & Live cards (ESPN path → last seen ms), for the Results view. */
-    val recentScoreLeagues: Flow<Map<String, Long>> = profileManager.activeProfileId.flatMapLatest { pid ->
-        factory.get(pid, FEATURE).data.map { decodeRecentLeagues(it[recentScoreLeaguesKey]) }
-    }
-
-    suspend fun setRecentScoreLeagues(leagues: Map<String, Long>) {
-        store().edit { it[recentScoreLeaguesKey] = gson.toJson(leagues) }
-    }
-
     /** My sports (#55): the sports and leagues picked; unset is every supported sport. */
     val mySports: Flow<MySports> = profileManager.activeProfileId.flatMapLatest { pid ->
         factory.get(pid, FEATURE).data.map { MySports.decode(it[mySportsKey]) }
@@ -130,6 +119,7 @@ class SportsLivePreferencesDataStore @Inject constructor(
     /** Saves [change] of the stored My sports in one edit; the default (nothing picked) clears the key. */
     suspend fun updateMySports(change: (MySports) -> MySports) {
         store().edit { prefs ->
+            prefs.remove(recentScoreLeaguesKey)
             val sports = change(MySports.decode(prefs[mySportsKey]))
             if (sports.isDefault) prefs.remove(mySportsKey) else prefs[mySportsKey] = sports.encode()
         }
@@ -227,15 +217,6 @@ class SportsLivePreferencesDataStore @Inject constructor(
                 FollowedTeam(name, stored["sport"]?.takeIf { it.isNotBlank() })
             }
         }.getOrDefault(emptyList())
-    }
-
-    private fun decodeRecentLeagues(json: String?): Map<String, Long> {
-        if (json.isNullOrBlank()) return emptyMap()
-        return runCatching {
-            gson.fromJson<Map<String, Long?>?>(json, recentLeaguesType).orEmpty()
-                .mapNotNull { (path, seen) -> seen?.let { path to it } }
-                .toMap()
-        }.getOrDefault(emptyMap())
     }
 
     private fun decodeOptions(json: String?): Map<String, CatalogOption> {

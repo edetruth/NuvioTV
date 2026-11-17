@@ -78,44 +78,6 @@ class SportsResultsTest {
     }
 
     @Test
-    fun `recording seen leagues stamps new ones, expires old ones and never records soccer all`() {
-        val current = mapOf("hockey/nhl" to now - 8 * day, "basketball/nba" to now - day)
-        val next = SportsResults.recordSeen(current, setOf(EspnLeagueMap.NFL, EspnLeagueMap.SOCCER_ALL), now)!!
-        assertEquals(mapOf("basketball/nba" to now - day, "football/nfl" to now), next)
-        // Seen again within the re-stamp interval: nothing to save.
-        assertNull(SportsResults.recordSeen(next, setOf(EspnLeagueMap.NFL), now + 60_000))
-        // After it: re-stamped.
-        assertEquals(now + SportsResults.RESTAMP_MS, SportsResults.recordSeen(next, setOf(EspnLeagueMap.NFL), now + SportsResults.RESTAMP_MS)!!["football/nfl"])
-    }
-
-    @Test
-    fun `a full set keeps its leagues and new ones only fill expired slots, in path order`() {
-        val full = (1..SportsResults.MAX_RECENT).associate { "soccer/l%02d".format(it) to now - it * 60_000L }
-        // Full: a new league on screen changes nothing, so nothing is written.
-        assertNull(SportsResults.recordSeen(full, setOf(EspnLeagueMap.NBA, EspnLeagueMap.NHL), now))
-        // One slot expires: the first new league by path takes it.
-        val oneExpired = full + ("soccer/l01" to now - 8 * day)
-        val next = SportsResults.recordSeen(oneExpired, setOf(EspnLeagueMap.NHL, EspnLeagueMap.NBA), now)!!
-        assertEquals(SportsResults.MAX_RECENT, next.size)
-        assertEquals(now, next["basketball/nba"])
-        assertTrue("hockey/nhl" !in next && "soccer/l01" !in next)
-    }
-
-    @Test
-    fun `leagues of cards come from their routing, channels excluded`() {
-        val leagues = SportsResults.leaguesOf(
-            listOf(
-                item("Lakers vs Celtics", null, kind = SportsLiveKind.EVENTS),
-                item("Arsenal vs Chelsea", null, sport = "Soccer", genres = listOf("Premier League"), kind = SportsLiveKind.EVENTS),
-                item("ESPN [Rangers vs Bruins]", null, sport = "Hockey", kind = SportsLiveKind.CHANNELS, isChannel = true)
-            )
-        )
-        assertEquals(setOf(EspnLeagueMap.NBA, EspnLeague("soccer", "eng.1")), leagues)
-    }
-
-    // --- Rows ---
-
-    @Test
     fun `only finished games are listed, postponed and cancelled are not`() {
         val live = nba[0].copy(eventId = "live", state = ScoreState.IN, isFinal = false)
         val upcoming = nba[0].copy(eventId = "pre", state = ScoreState.PRE, isFinal = false)
@@ -146,6 +108,42 @@ class SportsResultsTest {
         // A city alone (no sport to scope it) is not a team.
         assertFalse(SportsResults.follows(FollowedTeam("Indiana"), nba.first { it.eventId == "401909985" }))
         assertTrue(SportsResults.follows(FollowedTeam("Pacers"), nba.first { it.eventId == "401909985" }))
+    }
+
+    @Test
+    fun `a followed soccer team never stars another sport's namesake`() {
+        fun game(sport: String, league: String) = nba.first().copy(
+            league = EspnLeague(sport, league), leagueSlug = league,
+            home = nba.first().home.copy(displayName = "Rangers", shortDisplayName = "Rangers", name = "Rangers", location = null, abbreviation = null)
+        )
+        val soccer = FollowedTeam("Rangers", "Soccer")
+        assertTrue(SportsResults.follows(soccer, game("soccer", "sco.1")))
+        assertFalse(SportsResults.follows(soccer, game("hockey", "nhl")))
+        assertFalse(SportsResults.follows(soccer, game("baseball", "mlb")))
+        // "Football" may be American football on an addon: soccer and the NFL, nothing else.
+        val football = FollowedTeam("Rangers", "Football")
+        assertTrue(SportsResults.follows(football, game("football", "nfl")))
+        assertFalse(SportsResults.follows(football, game("hockey", "nhl")))
+        // No sport given: no sport check (as before).
+        assertTrue(SportsResults.follows(FollowedTeam("Rangers"), game("hockey", "nhl")))
+    }
+
+    @Test
+    fun `an unresolved soccer all slug takes the women's or youth qualifier from the competition name`() {
+        val women = EspnFixtures.events(EspnFixtures.SOCCER_ALL_WOMEN_20261108, EspnLeagueMap.SOCCER_ALL)
+        // NCAAW Soccer: no league link on any of its games, so the slug stays "all".
+        val temple = women.first { it.eventId == "401929870" }
+        assertEquals("all", temple.leagueSlug)
+        assertFalse(SportsResults.follows(FollowedTeam("Temple", "Soccer"), temple))
+        // A lone friendly whose slug is unknown: the name says women's or U-21.
+        val germany = soccerAll.first { it.eventId == "401861185" }.copy(leagueSlug = "all", competitionId = null)
+        assertTrue(SportsResults.follows(FollowedTeam("Germany", "Soccer"), germany.copy(leagueName = "Men's International Friendly")))
+        assertFalse(SportsResults.follows(FollowedTeam("Germany", "Soccer"), germany.copy(leagueName = "Women's International Friendly")))
+        assertFalse(SportsResults.follows(FollowedTeam("Germany", "Soccer"), germany.copy(leagueName = "Men's U-21 Friendly")))
+        assertTrue(SportsResults.follows(FollowedTeam("Germany U21", "Soccer"), germany.copy(leagueName = "Men's U-21 Friendly")))
+        assertEquals("w", ScoreMatcher.leagueQualifier("all", "NCAAW Soccer"))
+        assertEquals("u21", ScoreMatcher.leagueQualifier("all", "EURO U-21 Qualifying"))
+        assertEquals(null, ScoreMatcher.leagueQualifier("all", "UEFA Nations League"))
     }
 
     @Test

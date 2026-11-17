@@ -2,7 +2,6 @@ package com.nuvio.tv.core.sportslive.scores
 
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import com.nuvio.tv.domain.model.FollowedTeam
-import com.nuvio.tv.domain.model.SportsLiveItem
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -57,8 +56,6 @@ class ResultsRepository internal constructor(
     private val settings: Flow<ScoreSettings>,
     private val followedTeams: Flow<List<FollowedTeam>>,
     private val mySports: Flow<MySports>,
-    private val recentLeagues: Flow<Map<String, Long>>,
-    private val saveRecentLeagues: suspend (Map<String, Long>) -> Unit,
     private val now: () -> Long,
     private val zone: () -> ZoneId
 ) {
@@ -68,8 +65,6 @@ class ResultsRepository internal constructor(
         settings = prefs.scoreSettings,
         followedTeams = prefs.followedTeams,
         mySports = prefs.mySports,
-        recentLeagues = prefs.recentScoreLeagues,
-        saveRecentLeagues = prefs::setRecentScoreLeagues,
         now = System::currentTimeMillis,
         zone = ZoneId::systemDefault
     )
@@ -78,17 +73,7 @@ class ResultsRepository internal constructor(
 
     private val lock = Mutex()
     private val cache = HashMap<ScoreFeed, Cached>()
-    private val recordLock = Mutex()
     private val requests = Semaphore(MAX_PARALLEL)
-
-    /** Records the leagues of [items] (cards on screen) as seen now ([SportsResults.recordSeen]). */
-    suspend fun noteSeen(items: List<SportsLiveItem>) {
-        val leagues = SportsResults.leaguesOf(items)
-        recordLock.withLock {
-            val next = SportsResults.recordSeen(recentLeagues.first(), leagues, now()) ?: return
-            saveRecentLeagues(next)
-        }
-    }
 
     /**
      * ESPN's scoreboard date [daysAgo] days back (1 = yesterday), counted from today in US Eastern time,

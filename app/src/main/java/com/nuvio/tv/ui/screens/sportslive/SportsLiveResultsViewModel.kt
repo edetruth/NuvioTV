@@ -104,12 +104,17 @@ class SportsLiveResultsViewModel @Inject constructor(
         SportsResults.replaysByEvent(loaded.events, loaded.date, replays, System.currentTimeMillis())
     }.flowOn(Dispatchers.Default)
 
-    val uiState: StateFlow<SportsLiveResultsUiState> = combine(
-        combine(daysAgo, load, selection, ::Triple),
-        mode,
-        reveal.revealed,
-        replayIndex
-    ) { (days, load, selected), mode, revealed, replays ->
+    /** The chips and the list: built off the main thread, and only when the day, selection or replays change. */
+    private class Listing(
+        val sports: List<MySport>,
+        val sport: MySport?,
+        val leagues: List<ResultLeagueChip>,
+        val league: String?,
+        val items: List<ResultListItem>,
+        val replays: Map<String, SportsLiveItem>
+    )
+
+    private val listing = combine(load, selection, replayIndex) { load, selected, replays ->
         val loaded = load as? ResultsLoad.Loaded
         val rows = loaded?.rows.orEmpty()
         val mySports = loaded?.mySports ?: MySports.DEFAULT
@@ -117,19 +122,28 @@ class SportsLiveResultsViewModel @Inject constructor(
         val sport = selected.sport?.takeIf { it in sports }
         val leagues = resultLeagueChips(rows, sport)
         val league = selected.league?.takeIf { key -> leagues.any { it.key == key } }
+        Listing(sports, sport, leagues, league, resultListItems(rows, mySports, sport, league, selected.expanded, replays.keys), replays)
+    }.flowOn(Dispatchers.Default)
+
+    val uiState: StateFlow<SportsLiveResultsUiState> = combine(
+        combine(daysAgo, load, ::Pair),
+        mode,
+        reveal.revealed,
+        listing
+    ) { (days, load), mode, revealed, listing ->
         SportsLiveResultsUiState(
             daysAgo = days,
             dates = results.days(),
             status = if (mode == ScoresMode.OFF) ResultsStatus.OFF else statusOf(load),
-            sports = sports,
-            selectedSport = sport,
-            leagues = leagues,
-            selectedLeague = league,
-            items = resultListItems(rows, mySports, sport, league, selected.expanded, replays.keys),
+            sports = listing.sports,
+            selectedSport = listing.sport,
+            leagues = listing.leagues,
+            selectedLeague = listing.league,
+            items = listing.items,
             mode = mode,
             modeKnown = true,
             revealed = revealed,
-            replays = replays
+            replays = listing.replays
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SportsLiveResultsUiState())
 
@@ -183,12 +197,6 @@ class SportsLiveResultsViewModel @Inject constructor(
     /** The section's Replays tab items, for opening a result's replay. */
     fun setReplays(items: List<SportsLiveItem>) {
         replayItems.value = items
-    }
-
-    /** Cards the section shows: their leagues count as seen for 7 days. */
-    fun noteSeen(items: List<SportsLiveItem>) {
-        if (items.isEmpty()) return
-        viewModelScope.launch(Dispatchers.Default) { runCatching { results.noteSeen(items) } }
     }
 
     private fun statusOf(load: ResultsLoad?): ResultsStatus = when (load) {

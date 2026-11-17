@@ -90,6 +90,8 @@ fun SportsLiveScreen(
     onPlayTarget: (SportsLiveZapTarget) -> Unit,
     onOpenDetail: (SportsLiveItem) -> Unit,
     onOpenAddons: () -> Unit,
+    /** Opens Settings → Sports & Live → My sports (Results' "Edit my sports"). */
+    onOpenMySports: () -> Unit = {},
     /** Opens dual screen on the session just put in [SportsLiveDualSessions]. */
     onOpenDual: () -> Unit
 ) {
@@ -107,12 +109,9 @@ fun SportsLiveScreen(
             viewModel.selectTab(SportsLiveTab.LIVE_NOW)
         }
     }
-    // The leagues of the games shown count as seen (for Results); Replays are what a result opens.
+    // Replays are what a result opens.
     LaunchedEffect(uiState.tabs) {
         resultsViewModel.setReplays(uiState.tabs[SportsLiveTab.REPLAYS].orEmpty())
-        resultsViewModel.noteSeen(
-            listOf(SportsLiveTab.LIVE_NOW, SportsLiveTab.UPCOMING, SportsLiveTab.REPLAYS).flatMap { uiState.tabs[it].orEmpty() }
-        )
     }
 
     // The hover preview's one player: it plays while the preview does, and is freed the moment the
@@ -206,6 +205,7 @@ fun SportsLiveScreen(
             onSelectResultsSport = resultsViewModel::selectSport,
             onSelectResultsLeague = resultsViewModel::selectLeague,
             onExpandResultsGroup = resultsViewModel::expandGroup,
+            onEditMySports = onOpenMySports,
             onResultFocus = resultsViewModel::onRowFocus,
             onOpenResult = { row ->
                 // The game's replay when an addon lists it (strict match); a row without one does nothing (#51).
@@ -265,6 +265,7 @@ private fun SportsLiveContent(
     onSelectResultsSport: (MySport?) -> Unit,
     onSelectResultsLeague: (String?) -> Unit,
     onExpandResultsGroup: (String) -> Unit,
+    onEditMySports: () -> Unit,
     onResultFocus: (String?) -> Unit,
     onOpenResult: (ResultRow) -> Unit
 ) {
@@ -533,6 +534,7 @@ private fun SportsLiveContent(
                 onSelectSport = onSelectResultsSport,
                 onSelectLeague = onSelectResultsLeague,
                 onExpandGroup = onExpandResultsGroup,
+                onEditMySports = onEditMySports,
                 onRowFocus = onResultFocus,
                 onOpen = onOpenResult
             )

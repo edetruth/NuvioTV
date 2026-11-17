@@ -137,7 +137,7 @@ class ScoreMatcher(
 
     /** Best total over both orientations, or null unless both sides match and the total is at least 5. */
     private fun score(home: Side, away: Side, event: ScoreSnapshot): Int? {
-        val slugQualifier = slugQualifier(event.leagueSlug)
+        val slugQualifier = leagueQualifier(event.leagueSlug, event.leagueName)
         val eventHome = Competitor(event.home, slugQualifier)
         val eventAway = Competitor(event.away, slugQualifier)
         return listOfNotNull(
@@ -221,11 +221,11 @@ class ScoreMatcher(
         /**
          * True when [name] is [team] by STRONG equality (abbreviation, displayName, shortDisplayName, name,
          * location+name; never the city alone or the suffix rule) with the same (W)/U21 qualifier, the
-         * event's [leagueSlug] standing in when the team's names carry none. "Arsenal" is not "Arsenal
-         * Women", "Lakers" alone is not "Los Angeles Lakers".
+         * event's [leagueSlug] (else its competition [leagueName]) standing in when the team's names carry
+         * none. "Arsenal" is not "Arsenal Women", "Lakers" alone is not "Los Angeles Lakers".
          */
-        fun isStrongSide(name: String, team: ScoreTeam, leagueSlug: String): Boolean =
-            Competitor(team, slugQualifier(leagueSlug)).score(sideOf(name)) == STRONG
+        fun isStrongSide(name: String, team: ScoreTeam, leagueSlug: String, leagueName: String? = null): Boolean =
+            Competitor(team, leagueQualifier(leagueSlug, leagueName)).score(sideOf(name)) == STRONG
 
         private fun fold(text: String): String =
             Normalizer.normalize(text.replace('’', '\''), Normalizer.Form.NFD).replace(MARKS, "").trim()
@@ -239,6 +239,20 @@ class ScoreMatcher(
             }
             return name to null
         }
+
+        // Competition names of women's and youth games, for a soccer/all event whose slug is unknown:
+        // "Women's International Friendly", "NCAAW Soccer", "Men's U-21 Friendly", "EURO U-21 Qualifying".
+        private val WOMEN_NAME = Regex("""\bwomen'?s?\b|\bncaaw\b|femenin|feminin""", RegexOption.IGNORE_CASE)
+        private val YOUTH_NAME = Regex("""\b(?:u|under)[- ]?(\d{1,2})\b""", RegexOption.IGNORE_CASE)
+
+        /** The women's / youth qualifier of an event's league: from its slug, else its competition name. */
+        internal fun leagueQualifier(slug: String, name: String?): String? =
+            slugQualifier(slug) ?: name?.let { competition ->
+                when {
+                    WOMEN_NAME.containsMatchIn(competition) -> "w"
+                    else -> YOUTH_NAME.find(competition)?.let { "u${it.groupValues[1]}" }
+                }
+            }
 
         private fun slugQualifier(slug: String): String? = when {
             WOMEN_SLUG.containsMatchIn(slug) -> "w"

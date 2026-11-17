@@ -162,6 +162,10 @@ data class MySports(val sports: Map<MySport, Set<MyLeague>>) {
      * With followed teams' sports added (#55: following a team brings its sport): a team routed to a
      * league ([EspnLeagueMap]) adds that league to its sport; a soccer team adds soccer (every
      * competition when soccer was off). A team with no routed sport adds nothing.
+     *
+     * Note for R3 (follow from Results): a team saved with sport "Football" routes to soccer
+     * ([EspnLeagueMap] reads "Football" as soccer), never the NFL; following from an ESPN result
+     * should save the ESPN sport ("American Football" for the NFL) so the right sport is added.
      */
     fun withFollowed(teams: List<FollowedTeam>): MySports {
         if (teams.isEmpty()) return this
