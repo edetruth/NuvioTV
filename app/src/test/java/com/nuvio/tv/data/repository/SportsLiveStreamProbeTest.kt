@@ -139,17 +139,65 @@ class SportsLiveStreamProbeTest {
     }
 
     @Test
-    fun `an ended game stays hidden after its background re-checks run out`() = runTest {
+    fun `after its background re-checks run out an ended verdict lapses without a request`() = runTest {
         streams.responses["x"] = { flowOf(NetworkResult.Success(emptyList())) }
         val probe = newProbe()
         probe.reprobeIfStale(item("x"))
         runCurrent()
 
-        advanceTimeBy(10 * SportsLiveStreamProbe.ENDED_TTL_MS)
+        // Two re-checks, three minutes apart, both still empty.
+        advanceTimeBy(SportsLiveStreamProbe.MAX_ENDED_RECHECKS * SportsLiveStreamProbe.ENDED_TTL_MS)
         runCurrent()
-
+        val lastVerdictAt = testScheduler.currentTime
         assertEquals(1 + SportsLiveStreamProbe.MAX_ENDED_RECHECKS, streams.calls.size)
         assertEquals(setOf("sports|x"), probe.ended.value)
+
+        advanceTimeBy(SportsLiveStreamProbe.ENDED_FINAL_TTL_MS - 1)
+        runCurrent()
+        assertEquals(setOf("sports|x"), probe.ended.value)
+        advanceTimeBy(1)
+        runCurrent()
+        assertEquals(emptySet<String>(), probe.ended.value)
+        assertEquals("no request for the lapse", 1 + SportsLiveStreamProbe.MAX_ENDED_RECHECKS, streams.calls.size)
+        assertTrue(testScheduler.currentTime >= lastVerdictAt + SportsLiveStreamProbe.ENDED_FINAL_TTL_MS)
+
+        // The next focus re-checks it without the stream cache.
+        probe.reprobeIfStale(item("x"))
+        runCurrent()
+        assertEquals(true, streams.forceRefreshes.last())
+    }
+
+    @Test
+    fun `a manual refresh clears every ended verdict and pending re-checks do nothing`() = runTest {
+        streams.responses["x"] = { flowOf(NetworkResult.Success(emptyList())) }
+        val probe = newProbe()
+        probe.reprobeIfStale(item("x"))
+        runCurrent()
+        assertEquals(setOf("sports|x"), probe.ended.value)
+
+        probe.clearEnded()
+        assertEquals(emptySet<String>(), probe.ended.value)
+
+        advanceTimeBy(SportsLiveStreamProbe.ENDED_TTL_MS + 1)
+        runCurrent()
+        assertEquals(1, streams.calls.size)
+    }
+
+    @Test
+    fun `links found lately count as recent for fifteen minutes`() = runTest {
+        streams.responses["ok"] = { result(PLAYABLE) }
+        streams.responses["gone"] = { flowOf(NetworkResult.Success(emptyList())) }
+        val probe = newProbe()
+        probe.reprobeIfStale(item("ok"))
+        probe.reprobeIfStale(item("gone"))
+        runCurrent()
+
+        assertTrue(probe.hasRecentLinks(item("ok")))
+        assertEquals(false, probe.hasRecentLinks(item("gone")))
+        assertEquals(false, probe.hasRecentLinks(item("never")))
+
+        advanceTimeBy(SportsLiveStreamProbe.RECENT_LINKS_MS)
+        assertEquals(false, probe.hasRecentLinks(item("ok")))
     }
 
     @Test

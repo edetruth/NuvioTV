@@ -69,6 +69,8 @@ class SportsLiveViewModelTest {
     private val followedFlow = MutableStateFlow<List<FollowedTeam>>(emptyList())
     private var nextLoad = load(emptyList())
     private val forcedFlags = mutableListOf<Boolean>()
+    private val recentlyAlive = mutableSetOf<String>()
+    private var clearedEnded = 0
     private val includeChannelsFlags = mutableListOf<Boolean>()
 
     private val repo = mockk<SportsLiveRepository> {
@@ -77,6 +79,8 @@ class SportsLiveViewModelTest {
         every { endedKeys } returns endedFlow
         every { followedTeams } returns followedFlow
         every { reprobeIfStale(any()) } just runs
+        every { hasRecentLinks(any()) } answers { firstArg<SportsLiveItem>().id in recentlyAlive }
+        every { clearEnded() } answers { clearedEnded++; Unit }
         // Stubbed here, before setUp mocks Dispatchers statically (stubbing after that fails).
         coEvery { follow(any()) } coAnswers { followedFlow.value = followedFlow.value + firstArg<FollowedTeam>() }
         coEvery { unfollow(any()) } coAnswers { followedFlow.value = followedFlow.value - firstArg<FollowedTeam>() }
@@ -136,6 +140,27 @@ class SportsLiveViewModelTest {
 
         assertEquals(listOf("on", "untimed"), viewModel.uiState.value.visibleItems.map { it.id }.sorted())
         verify(exactly = 0) { repo.reprobeIfStale(any()) }
+    }
+
+    @Test
+    fun `a game past its limit stays while links were found for it lately`() = runTest {
+        recentlyAlive += "over"
+        nextLoad = load(listOf(item("over", isLive = true, sport = "Soccer", name = "Over", startMs = NOW - 5 * HOUR)))
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+
+        assertEquals(listOf("over"), viewModel.uiState.value.visibleItems.map { it.id })
+    }
+
+    @Test
+    fun `only a manual refresh forgets ended verdicts`() = runTest {
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+        assertEquals("initial load", 0, clearedEnded)
+
+        viewModel.refresh()
+        advanceUntilIdle()
+        assertEquals(1, clearedEnded)
     }
 
     @Test

@@ -58,6 +58,12 @@ interface SportsLiveRepository {
     /** Re-probes a focused Live now [item] in the background when its probe result is over 2 minutes old. */
     fun reprobeIfStale(item: SportsLiveItem)
 
+    /** True when links were found recently for [item] or one of its alternates (a probe, preview or play). */
+    fun hasRecentLinks(item: SportsLiveItem): Boolean
+
+    /** Forgets every ended verdict (a manual refresh), so those games show and are checked again on focus. */
+    fun clearEnded()
+
     /** The active profile's followed teams; their games are pinned first in Live Now, Upcoming and Replays. */
     val followedTeams: Flow<List<FollowedTeam>>
 

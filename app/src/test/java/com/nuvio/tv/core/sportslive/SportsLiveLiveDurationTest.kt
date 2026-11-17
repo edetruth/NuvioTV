@@ -27,10 +27,15 @@ class SportsLiveLiveDurationTest {
 
     @Test
     fun `known sports get their own limit`() {
-        assertEquals(2 * HOUR + 45 * MINUTE, SportsLiveLiveDuration.maxLiveMs("Soccer"))
+        assertEquals(3 * HOUR + 15 * MINUTE, SportsLiveLiveDuration.maxLiveMs("Soccer"))
         assertEquals(3 * HOUR, SportsLiveLiveDuration.maxLiveMs("NBA"))
+        assertEquals(4 * HOUR + 30 * MINUTE, SportsLiveLiveDuration.maxLiveMs("NFL"))
+        assertEquals(4 * HOUR + 30 * MINUTE, SportsLiveLiveDuration.maxLiveMs("NCAAF"))
+        assertEquals(8 * HOUR, SportsLiveLiveDuration.maxLiveMs("Tennis"))
         assertEquals(9 * HOUR, SportsLiveLiveDuration.maxLiveMs("Cricket"))
-        assertTrue(SportsLiveLiveDuration.isOverdue(game("s", 3 * HOUR, sport = "Soccer"), now))
+        assertEquals(12 * HOUR, SportsLiveLiveDuration.maxLiveMs("Golf"))
+        assertFalse(SportsLiveLiveDuration.isOverdue(game("s", 3 * HOUR, sport = "Soccer"), now))
+        assertTrue(SportsLiveLiveDuration.isOverdue(game("s", 3 * HOUR + 20 * MINUTE, sport = "Soccer"), now))
         assertFalse(SportsLiveLiveDuration.isOverdue(game("c", 5 * HOUR, sport = "Cricket"), now))
     }
 

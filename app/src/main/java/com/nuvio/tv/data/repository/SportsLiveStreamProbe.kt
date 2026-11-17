@@ -35,7 +35,9 @@ import javax.inject.Singleton
  * often posted after it. An ended verdict is sticky: it is never dropped on a timer (a quick tab
  * round trip must not bring the game back). Instead, [ENDED_TTL_MS] after it the item is re-probed
  * once in the background, at most [MAX_ENDED_RECHECKS] times in a row (see [shouldRecheckEnded]);
- * only a probe or fetch that finds links shows it again.
+ * only a probe or fetch that finds links shows it again. After the last re-check the verdict is
+ * dropped, with no request, [ENDED_FINAL_TTL_MS] later (links posted late still surface the same
+ * day), and [clearEnded] (a manual refresh) drops every verdict at once.
  */
 @Singleton
 class SportsLiveStreamProbe @Inject constructor(
@@ -49,7 +51,13 @@ class SportsLiveStreamProbe @Inject constructor(
         const val KICKOFF_GRACE_MS = 30 * 60 * 1000L
         const val REPROBE_AFTER_MS = 120_000L
 
-        /** Background re-checks of a game still found ended, before it simply stays hidden. */
+        /** After the last background re-check, how long a still-ended verdict lasts before it is dropped. */
+        const val ENDED_FINAL_TTL_MS = 30 * 60_000L
+
+        /** How long links found for an item count as recent ([hasRecentLinks]). */
+        const val RECENT_LINKS_MS = 15 * 60_000L
+
+        /** Background re-checks of a game still found ended, before its verdict just times out. */
         const val MAX_ENDED_RECHECKS = 2
 
         /** Whether an ended verdict reached after [recheckCount] background re-checks gets another one. */
@@ -64,8 +72,16 @@ class SportsLiveStreamProbe @Inject constructor(
     @VisibleForTesting
     internal var dispatcher: CoroutineDispatcher = Dispatchers.IO
 
-    /** [rechecks]: background re-checks in a row that found the item still ended. */
-    private data class Entry(val ended: Boolean, val probedAtMs: Long, val rechecks: Int = 0)
+    /**
+     * [rechecks]: background re-checks in a row that found the item still ended. [linksAtMs]: when a
+     * result last found links (null: never, as far as this entry knows).
+     */
+    private data class Entry(
+        val ended: Boolean,
+        val probedAtMs: Long,
+        val rechecks: Int = 0,
+        val linksAtMs: Long? = null
+    )
 
     private val entries = ConcurrentHashMap<String, Entry>()
     private val inFlight = ConcurrentHashMap.newKeySet<String>()
@@ -98,6 +114,22 @@ class SportsLiveStreamProbe @Inject constructor(
         }
     }
 
+    /** True when a result found links for [item] (or a fresh resolve holds one) within [RECENT_LINKS_MS]. */
+    fun hasRecentLinks(item: SportsLiveItem): Boolean {
+        val key = item.streamKey
+        if (resolveCache.isFresh(key)) return true
+        val linksAt = entries[key]?.linksAtMs ?: return false
+        return nowMs() - linksAt < RECENT_LINKS_MS
+    }
+
+    /** Drops every ended verdict (a manual refresh); the next probe of each bypasses the stream cache. */
+    fun clearEnded() {
+        synchronized(lock) {
+            entries.replaceAll { _, entry -> if (entry.ended) Entry(ended = false, probedAtMs = 0L) else entry }
+            _ended.value = emptySet()
+        }
+    }
+
     /** Records the outcome of a stream fetch made elsewhere (zap, merged cards) for [item]. */
     fun recordResult(item: SportsLiveItem, result: NetworkResult<List<AddonStreams>>) {
         record(item, verdictOf(result))
@@ -116,22 +148,40 @@ class SportsLiveStreamProbe @Inject constructor(
         // Atomic so a probe and a recordResult racing on one key cannot leave the key in [ended]
         // while its entry says alive (or the reverse).
         val entry = synchronized(lock) {
-            Entry(verdict ?: entries[key]?.ended ?: false, now, rechecks).also { entry ->
+            val previous = entries[key]
+            val linksAt = if (ended == false) now else previous?.linksAtMs
+            Entry(verdict ?: previous?.ended ?: false, now, rechecks, linksAt).also { entry ->
                 entries[key] = entry
                 _ended.update { if (entry.ended) it + key else it - key }
             }
         }
-        if (entry.ended && shouldRecheckEnded(entry.rechecks)) {
+        if (!entry.ended) return
+        if (!shouldRecheckEnded(entry.rechecks)) {
             scope.launch {
-                delay(ENDED_TTL_MS)
-                // Only if no newer result replaced this one, and no probe of it is running.
-                if (entries[key] !== entry || !inFlight.add(key)) return@launch
-                try {
-                    // Bypasses the stream session cache, which would replay the old empty answer.
-                    permits.withPermit { record(item, search(item, forceRefresh = true), entry.rechecks + 1) }
-                } finally {
-                    inFlight.remove(key)
+                delay(ENDED_FINAL_TTL_MS)
+                // No request: the verdict just lapses, unless a newer result replaced it. A stale
+                // alive entry (not none) stays so the next probe bypasses the stream cache.
+                synchronized(lock) {
+                    if (entries[key] === entry) {
+                        entries[key] = Entry(ended = false, probedAtMs = 0L, linksAtMs = entry.linksAtMs)
+                        _ended.update { it - key }
+                    }
                 }
+            }
+            return
+        }
+        scope.launch {
+            delay(ENDED_TTL_MS)
+            // Only if no newer result replaced this one, and no probe of it is running; checked
+            // and marked together so a racing probe cannot slip in between.
+            synchronized(lock) {
+                if (entries[key] !== entry || !inFlight.add(key)) return@launch
+            }
+            try {
+                // Bypasses the stream session cache, which would replay the old empty answer.
+                permits.withPermit { record(item, search(item, forceRefresh = true), entry.rechecks + 1) }
+            } finally {
+                inFlight.remove(key)
             }
         }
     }

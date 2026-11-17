@@ -243,6 +243,8 @@ class SportsLiveViewModel internal constructor(
     }
 
     fun refresh(force: Boolean = true) {
+        // A manual refresh also forgets ended verdicts: those games show and are re-checked on focus.
+        if (force) repo.clearEnded()
         // Set before launching so the first frame already shows loading rather than an empty section.
         selectionState.update { it.copy(isRefreshing = true) }
         viewModelScope.launch { load(force) }
@@ -292,11 +294,14 @@ class SportsLiveViewModel internal constructor(
     ): SportsLiveUiState {
         val hasClaimed = bucketed.hasClaimed
         // Live items whose streams are gone have ended, as have games live far longer than their
-        // sport runs (no request needed); the other tabs are left as they are.
+        // sport runs (no request needed) unless links were found for them lately; the other tabs are
+        // left as they are.
         val now = nowMs()
         val tabs = bucketed.tabs.mapValues { (tab, tabItems) ->
             if (tab == SportsLiveTab.LIVE_NOW) {
-                tabItems.filterNot { it.hasEnded(endedKeys) || SportsLiveLiveDuration.isOverdue(it, now) }
+                tabItems.filterNot {
+                    it.hasEnded(endedKeys) || (SportsLiveLiveDuration.isOverdue(it, now) && !repo.hasRecentLinks(it))
+                }
             } else {
                 tabItems
             }

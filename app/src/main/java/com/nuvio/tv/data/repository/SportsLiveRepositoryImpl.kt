@@ -209,6 +209,11 @@ class SportsLiveRepositoryImpl @Inject constructor(
     override suspend fun unfollow(team: FollowedTeam) = prefs.unfollow(team)
 
     // A merged game ends only when every source has, so each source is probed.
+    override fun hasRecentLinks(item: SportsLiveItem): Boolean =
+        (listOf(item) + item.alternates).any(streamProbe::hasRecentLinks)
+
+    override fun clearEnded() = streamProbe.clearEnded()
+
     override fun reprobeIfStale(item: SportsLiveItem) {
         streamProbe.reprobeIfStale(item)
         item.alternates.forEach(streamProbe::reprobeIfStale)
