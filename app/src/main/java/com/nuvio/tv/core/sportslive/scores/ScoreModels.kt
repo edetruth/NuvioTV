@@ -63,8 +63,15 @@ data class ScoreSnapshot(
     val awayLogo: String? get() = away.logo
 }
 
-/** A scoreboard fetch: [failed] is true on any HTTP or parse failure, with no events. */
-data class ScoreboardResult(val events: List<ScoreSnapshot>, val failed: Boolean = false) {
+/**
+ * A scoreboard fetch: [failed] is true on any HTTP or parse failure, with no events. [retryAfterMs] is
+ * the server's Retry-After on a failure, when it sent one.
+ */
+data class ScoreboardResult(
+    val events: List<ScoreSnapshot>,
+    val failed: Boolean = false,
+    val retryAfterMs: Long? = null
+) {
     companion object {
         val FAILED = ScoreboardResult(emptyList(), failed = true)
     }

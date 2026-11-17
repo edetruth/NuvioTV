@@ -6,6 +6,7 @@ import com.squareup.moshi.Moshi
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.CacheControl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.time.LocalDate
@@ -39,14 +40,19 @@ class EspnScoreProvider internal constructor(
             try {
                 val request = Request.Builder().url(url).apply {
                     // Yesterday's late games and today's can still change: revalidate rather than reuse
-                    // the HTTP cache. Older days are final and may be served from it.
-                    if (!date.isBefore(today().minusDays(1))) header("Cache-Control", "no-cache")
+                    // the HTTP cache. Older days are final: a cached copy up to 7 days old is used as is
+                    // (ESPN sends max-age of seconds), so a past day already cached is not fetched again.
+                    if (!date.isBefore(today().minusDays(1))) {
+                        header("Cache-Control", "no-cache")
+                    } else {
+                        cacheControl(CacheControl.Builder().maxStale(PAST_DAY_MAX_STALE_DAYS, TimeUnit.DAYS).build())
+                    }
                 }.build()
                 client.newCall(request).execute().use { response ->
                     val body = response.body?.string()
                     if (!response.isSuccessful || body == null) {
                         debugLog("${league.path} $date: HTTP ${response.code}")
-                        ScoreboardResult.FAILED
+                        ScoreboardResult.FAILED.copy(retryAfterMs = retryAfterMs(response.header("Retry-After")))
                     } else {
                         val dto = adapter.fromJson(body)
                         if (dto == null) ScoreboardResult.FAILED else ScoreboardResult(toSnapshots(dto, league))
@@ -65,6 +71,12 @@ class EspnScoreProvider internal constructor(
         internal const val BASE_URL = "https://site.api.espn.com/apis/site/v2/sports/"
         // ".../gameId/401930175/league/fifa.friendly_u21"
         private val LEAGUE_IN_LINK = Regex("""/league/([a-z0-9._-]+)""")
+        private const val PAST_DAY_MAX_STALE_DAYS = 7
+
+        /** Retry-After in seconds (the HTTP-date form is ignored), capped at 15 minutes. */
+        internal fun retryAfterMs(header: String?): Long? =
+            header?.trim()?.toLongOrNull()?.takeIf { it > 0 }?.coerceAtMost(15 * 60L)?.times(1_000L)
+
         internal const val USER_AGENT = "Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko)"
 
         /**

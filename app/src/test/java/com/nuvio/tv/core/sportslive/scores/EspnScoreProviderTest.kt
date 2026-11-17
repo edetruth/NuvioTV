@@ -70,13 +70,21 @@ class EspnScoreProviderTest {
     }
 
     @Test
-    fun `live days skip the HTTP cache, past days may use it`() = runTest {
+    fun `live days skip the HTTP cache, past days use a copy up to 7 days stale`() = runTest {
         val p = provider(respond(200, "{}"))
         p.scoreboard(EspnLeagueMap.NBA, LocalDate.of(2026, 11, 17))
         p.scoreboard(EspnLeagueMap.NBA, LocalDate.of(2026, 11, 16))
         p.scoreboard(EspnLeagueMap.NBA, LocalDate.of(2026, 11, 15))
         p.scoreboard(EspnLeagueMap.NBA, LocalDate.of(2026, 11, 14))
-        assertEquals(listOf("no-cache", "no-cache", "no-cache", null), cacheControl)
+        assertEquals(listOf("no-cache", "no-cache", "no-cache", "max-stale=604800"), cacheControl)
+    }
+
+    @Test
+    fun `Retry-After in seconds is kept on a failure`() {
+        assertEquals(120_000L, EspnScoreProvider.retryAfterMs("120"))
+        assertEquals(900_000L, EspnScoreProvider.retryAfterMs("99999"))
+        assertEquals(null, EspnScoreProvider.retryAfterMs("Wed, 21 Oct 2026 07:28:00 GMT"))
+        assertEquals(null, EspnScoreProvider.retryAfterMs(null))
     }
 
     @Test

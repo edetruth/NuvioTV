@@ -481,6 +481,16 @@
     <string name="sports_live_setting_home_row">Show \"Live now\" row on Home</string>
     <string name="sports_live_setting_hover_preview">Preview games on hover</string>
     <string name="sports_live_setting_data_saver">Data saver</string>
+    <string name="sports_live_scores_title">Scores</string>
+    <string name="sports_live_setting_scores">Scores</string>
+    <string name="sports_live_setting_scores_subtitle">Live and final scores on game cards. Off stops all score checks.</string>
+    <string name="sports_live_scores_show">Show</string>
+    <string name="sports_live_scores_hide_until_focused">Hide until focused</string>
+    <string name="sports_live_scores_off">Off</string>
+    <string name="sports_live_setting_score_delay">Score delay</string>
+    <string name="sports_live_setting_score_delay_subtitle">Holds back score changes so they do not spoil a stream that runs behind the broadcast</string>
+    <string name="sports_live_score_delay_off">Off</string>
+    <string name="sports_live_score_delay_seconds">%1$d seconds</string>
     <string name="sports_live_setting_pip">Picture-in-picture</string>
     <string name="sports_live_setting_pip_subtitle">Home while a game plays keeps it in a small window over other apps. Off, or where unsupported, the in-app mini player is used.</string>
     <string name="sports_live_setting_pip_supported">Picture-in-picture: supported on this device</string>

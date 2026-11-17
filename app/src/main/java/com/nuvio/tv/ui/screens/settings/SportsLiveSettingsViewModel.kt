@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.nuvio.tv.core.sportslive.SportsLiveCatalogOptions
 import com.nuvio.tv.core.sportslive.SportsLiveCatalogPolicy
 import com.nuvio.tv.core.sportslive.SportsLiveSourceReliability
+import com.nuvio.tv.core.sportslive.scores.ScoreSettings
+import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import com.nuvio.tv.domain.model.CatalogOption
 import com.nuvio.tv.domain.model.CatalogStats
@@ -52,7 +54,9 @@ data class SportsLiveSettingsUiState(
     val pipEnabled: Boolean = true,
     val catalogs: List<SportsLiveCatalogSetting> = emptyList(),
     /** The active profile's followed teams, in follow order. */
-    val followedTeams: List<FollowedTeam> = emptyList()
+    val followedTeams: List<FollowedTeam> = emptyList(),
+    /** Scores (Show / Hide until focused / Off) and the score delay. */
+    val scores: ScoreSettings = ScoreSettings()
 )
 
 @HiltViewModel
@@ -72,8 +76,8 @@ class SportsLiveSettingsViewModel @Inject constructor(
         combine(prefs.overrides, prefs.catalogOptions, prefs.followedTeams, ::Triple),
         prefs.showSection,
         combine(prefs.showHomeRow, prefs.hoverPreview, prefs.dataSaver, ::Triple),
-        combine(claimedStats, prefs.pipEnabled, ::Pair)
-    ) { addons, (overrides, options, followedTeams), showSection, (showHomeRow, hoverPreview, dataSaver), (stats, pipEnabled) ->
+        combine(claimedStats, prefs.pipEnabled, prefs.scoreSettings, ::Triple)
+    ) { addons, (overrides, options, followedTeams), showSection, (showHomeRow, hoverPreview, dataSaver), (stats, pipEnabled, scores) ->
         val catalogs = addons.enabledAddons().flatMap { addon ->
             addon.catalogs.filter(SportsLiveCatalogPolicy::isClaimable).map { catalog ->
                 val key = SportsLiveCatalogPolicy.keyFor(addon, catalog)
@@ -96,7 +100,7 @@ class SportsLiveSettingsViewModel @Inject constructor(
                 )
             }
         }
-        SportsLiveSettingsUiState(showSection, showHomeRow, hoverPreview, dataSaver, pipEnabled, catalogs, followedTeams)
+        SportsLiveSettingsUiState(showSection, showHomeRow, hoverPreview, dataSaver, pipEnabled, catalogs, followedTeams, scores)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SportsLiveSettingsUiState())
 
     fun setShowSection(show: Boolean) {
@@ -117,6 +121,14 @@ class SportsLiveSettingsViewModel @Inject constructor(
 
     fun setPipEnabled(enabled: Boolean) {
         viewModelScope.launch { prefs.setPipEnabled(enabled) }
+    }
+
+    fun setScoresMode(mode: ScoresMode) {
+        viewModelScope.launch { prefs.setScoresMode(mode) }
+    }
+
+    fun setScoreDelaySeconds(seconds: Int) {
+        viewModelScope.launch { prefs.setScoreDelaySeconds(seconds) }
     }
 
     /** Forgets which stream sources worked (#40); every source starts neutral again. */

@@ -31,6 +31,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.nuvio.tv.R
+import com.nuvio.tv.core.sportslive.scores.ScoreDelayChoices
+import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.domain.model.CatalogStats
 import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveOverride
@@ -45,6 +47,7 @@ internal fun SportsLiveSettingsContent(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var filterKey by remember { mutableStateOf<String?>(null) }
+    var scorePicker by remember { mutableStateOf<ScorePicker?>(null) }
     // After OK unfollows a team, focus goes to the row now in its place (the next team, else the
     // previous one); with no team left, to the nearest enabled switch above the card.
     val teamFocusRequesters = remember { mutableMapOf<FollowedTeam, FocusRequester>() }
@@ -120,6 +123,27 @@ internal fun SportsLiveSettingsContent(
                 onToggle = { viewModel.setPipEnabled(!state.pipEnabled) }
             )
         }
+        item(key = "scores") {
+            SettingsGroupCard(
+                modifier = Modifier.fillMaxWidth(),
+                title = stringResource(R.string.sports_live_scores_title)
+            ) {
+                SettingsActionRow(
+                    title = stringResource(R.string.sports_live_setting_scores),
+                    subtitle = stringResource(R.string.sports_live_setting_scores_subtitle),
+                    value = scoresModeLabel(state.scores.mode),
+                    onClick = { scorePicker = ScorePicker.MODE },
+                    enabled = state.showSection
+                )
+                SettingsActionRow(
+                    title = stringResource(R.string.sports_live_setting_score_delay),
+                    subtitle = stringResource(R.string.sports_live_setting_score_delay_subtitle),
+                    value = scoreDelayLabel(state.scores.delaySeconds),
+                    onClick = { scorePicker = ScorePicker.DELAY },
+                    enabled = state.showSection && state.scores.mode != ScoresMode.OFF
+                )
+            }
+        }
         item(key = "my_teams") {
             SettingsGroupCard(
                 modifier = Modifier.fillMaxWidth(),
@@ -181,6 +205,31 @@ internal fun SportsLiveSettingsContent(
         }
     }
 
+    when (scorePicker) {
+        ScorePicker.MODE -> SettingsSingleChoiceDialog(
+            title = stringResource(R.string.sports_live_setting_scores),
+            options = ScoresMode.entries.map { SettingsPickerOption(it, scoresModeLabel(it)) },
+            selectedValue = state.scores.mode,
+            onOptionSelected = { mode ->
+                scorePicker = null
+                viewModel.setScoresMode(mode)
+            },
+            onDismiss = { scorePicker = null }
+        )
+        ScorePicker.DELAY -> SettingsSingleChoiceDialog(
+            title = stringResource(R.string.sports_live_setting_score_delay),
+            subtitle = stringResource(R.string.sports_live_setting_score_delay_subtitle),
+            options = ScoreDelayChoices.SECONDS.map { SettingsPickerOption(it, scoreDelayLabel(it)) },
+            selectedValue = state.scores.delaySeconds,
+            onOptionSelected = { seconds ->
+                scorePicker = null
+                viewModel.setScoreDelaySeconds(seconds)
+            },
+            onDismiss = { scorePicker = null }
+        )
+        null -> Unit
+    }
+
     state.catalogs.firstOrNull { it.key == filterKey }?.let { catalog ->
         val extra = catalog.filterExtra ?: return@let
         SettingsSingleChoiceDialog(
@@ -198,6 +247,22 @@ internal fun SportsLiveSettingsContent(
         )
     }
 }
+
+private enum class ScorePicker { MODE, DELAY }
+
+@Composable
+private fun scoresModeLabel(mode: ScoresMode): String = stringResource(
+    when (mode) {
+        ScoresMode.SHOW -> R.string.sports_live_scores_show
+        ScoresMode.HIDE_UNTIL_FOCUSED -> R.string.sports_live_scores_hide_until_focused
+        ScoresMode.OFF -> R.string.sports_live_scores_off
+    }
+)
+
+@Composable
+private fun scoreDelayLabel(seconds: Int): String =
+    if (seconds <= 0) stringResource(R.string.sports_live_score_delay_off)
+    else stringResource(R.string.sports_live_score_delay_seconds, seconds)
 
 @Composable
 private fun catalogStatus(catalog: SportsLiveCatalogSetting): String = when (catalog.override) {

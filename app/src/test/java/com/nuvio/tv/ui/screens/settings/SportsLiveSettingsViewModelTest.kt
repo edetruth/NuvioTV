@@ -4,6 +4,8 @@ import com.nuvio.tv.MainDispatcherRule
 import com.nuvio.tv.TestPreferencesStore
 import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.core.sportslive.SportsLiveCatalogPolicy
+import com.nuvio.tv.core.sportslive.scores.ScoreSettings
+import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.data.local.ProfileDataStoreFactory
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import com.nuvio.tv.domain.model.Addon
@@ -67,6 +69,17 @@ class SportsLiveSettingsViewModelTest {
         val viewModel = SportsLiveSettingsViewModel(prefs, addonRepository, sportsLiveRepository)
         backgroundScope.launch { viewModel.uiState.collect {} }
         return viewModel
+    }
+
+    @Test
+    fun `scores and score delay settings are shown and saved`() = runTest {
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+        assertEquals(ScoreSettings(), viewModel.uiState.value.scores)
+        viewModel.setScoresMode(ScoresMode.HIDE_UNTIL_FOCUSED)
+        viewModel.setScoreDelaySeconds(90)
+        advanceUntilIdle()
+        assertEquals(ScoreSettings(ScoresMode.HIDE_UNTIL_FOCUSED, 90), viewModel.uiState.value.scores)
     }
 
     @Test

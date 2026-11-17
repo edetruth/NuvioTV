@@ -6,6 +6,8 @@ import androidx.datastore.preferences.core.mutablePreferencesOf
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.nuvio.tv.TestPreferencesStore
 import com.nuvio.tv.core.profile.ProfileManager
+import com.nuvio.tv.core.sportslive.scores.ScoreSettings
+import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.domain.model.CatalogOption
 import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveOverride
@@ -192,5 +194,22 @@ class SportsLivePreferencesDataStoreTest {
         assertEquals(3, profile1Store.data.first()[intPreferencesKey("sports_live_dual_hint_shown")])
         activeProfile.value = 2
         assertTrue(store.claimDualKeysHint())
+    }
+
+    @Test
+    fun `score settings default to Show with no delay and are per profile`() = runTest {
+        val store = SportsLivePreferencesDataStore(factory, profiles)
+        assertEquals(ScoreSettings(ScoresMode.SHOW, 0), store.scoreSettings.first())
+        store.setScoresMode(ScoresMode.HIDE_UNTIL_FOCUSED)
+        store.setScoreDelaySeconds(60)
+        assertEquals(ScoreSettings(ScoresMode.HIDE_UNTIL_FOCUSED, 60), store.scoreSettings.first())
+        store.setScoreDelaySeconds(45) // not a choice: Off
+        assertEquals(0, store.scoreSettings.first().delaySeconds)
+        activeProfile.value = 2
+        assertEquals(ScoreSettings(), store.scoreSettings.first())
+        store.setScoresMode(ScoresMode.OFF)
+        assertEquals(ScoresMode.OFF, store.scoreSettings.first().mode)
+        activeProfile.value = 1
+        assertEquals(ScoresMode.HIDE_UNTIL_FOCUSED, store.scoreSettings.first().mode)
     }
 }

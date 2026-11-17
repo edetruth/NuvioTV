@@ -7,6 +7,9 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.nuvio.tv.core.profile.ProfileManager
+import com.nuvio.tv.core.sportslive.scores.ScoreDelayChoices
+import com.nuvio.tv.core.sportslive.scores.ScoreSettings
+import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.domain.model.CatalogOption
 import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveOverride
@@ -46,6 +49,8 @@ class SportsLivePreferencesDataStore @Inject constructor(
     private val catalogOptionsKey = stringPreferencesKey("sports_live_catalog_options")
     private val followedTeamsKey = stringPreferencesKey("sports_live_followed_teams")
     private val dualHintShownKey = intPreferencesKey("sports_live_dual_hint_shown")
+    private val scoresModeKey = stringPreferencesKey("sports_live_scores_mode")
+    private val scoreDelayKey = intPreferencesKey("sports_live_score_delay_seconds")
 
     val showSection: Flow<Boolean> = profileManager.activeProfileId.flatMapLatest { pid ->
         factory.get(pid, FEATURE).data.map { it[showSectionKey] ?: true }
@@ -89,6 +94,24 @@ class SportsLivePreferencesDataStore @Inject constructor(
     /** Followed teams of the active profile, in the order they were followed. */
     val followedTeams: Flow<List<FollowedTeam>> = profileManager.activeProfileId.flatMapLatest { pid ->
         factory.get(pid, FEATURE).data.map { decodeFollowed(it[followedTeamsKey]) }
+    }
+
+    /** Scores: Show (default) / Hide until focused / Off; and the score delay in seconds (Off = 0). */
+    val scoreSettings: Flow<ScoreSettings> = profileManager.activeProfileId.flatMapLatest { pid ->
+        factory.get(pid, FEATURE).data.map { prefs ->
+            ScoreSettings(
+                mode = ScoresMode.entries.firstOrNull { it.name == prefs[scoresModeKey] } ?: ScoresMode.SHOW,
+                delaySeconds = ScoreDelayChoices.coerce(prefs[scoreDelayKey])
+            )
+        }
+    }
+
+    suspend fun setScoresMode(mode: ScoresMode) {
+        store().edit { it[scoresModeKey] = mode.name }
+    }
+
+    suspend fun setScoreDelaySeconds(seconds: Int) {
+        store().edit { it[scoreDelayKey] = ScoreDelayChoices.coerce(seconds) }
     }
 
     /** Adds [team] unless the same name and sport are already followed (ignoring case). */
