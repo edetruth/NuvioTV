@@ -30,6 +30,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -69,6 +70,7 @@ import com.nuvio.tv.ui.components.LoadingIndicator
 import com.nuvio.tv.ui.components.SourceStatusFilterChip
 import com.nuvio.tv.ui.theme.NuvioTheme
 import com.nuvio.tv.ui.util.dpadRepeatThrottle
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -90,6 +92,8 @@ internal fun SportsLiveResultsView(
     onSelectSport: (MySport?) -> Unit,
     onSelectLeague: (String?) -> Unit,
     onExpandGroup: (String) -> Unit,
+    /** "Edit my sports": Settings → Sports & Live → My sports. */
+    onEditMySports: () -> Unit,
     onRowFocus: (String?) -> Unit,
     onOpen: (ResultRow) -> Unit,
     modifier: Modifier = Modifier
@@ -100,6 +104,7 @@ internal fun SportsLiveResultsView(
     val showSportRow = ready && state.sports.isNotEmpty()
     val showLeagueRow = showSportRow && state.selectedSport != null && state.leagues.isNotEmpty()
     val itemFocusRequesters = remember { mutableMapOf<String, FocusRequester>() }
+    val scope = rememberCoroutineScope()
     fun itemFocusRequester(key: String) = itemFocusRequesters.getOrPut(key) { FocusRequester() }
 
     // Saved with the back stack entry, so returning from a replay refocuses its row.
@@ -199,6 +204,7 @@ internal fun SportsLiveResultsView(
                 upFocusRequester = dateFocusRequester,
                 downFocusRequester = if (showLeagueRow) leagueFocusRequester else entryFocusRequester,
                 onSelectSport = onSelectSport,
+                onEditMySports = onEditMySports,
                 onOpen = openList,
                 modifier = Modifier
                     .padding(top = NuvioTheme.spacing.xs)
@@ -236,6 +242,9 @@ internal fun SportsLiveResultsView(
                 color = NuvioTheme.colors.TextTertiary,
                 modifier = Modifier.padding(horizontal = NuvioTheme.spacing.sm)
             )
+            // ★ My sports has nothing that day but other sports do: point at their chips.
+            firstFocusableKey == null && state.selectedSport == null && state.sports.isNotEmpty() ->
+                EmptyScreenState(title = stringResource(R.string.sports_live_results_my_sports_empty))
             firstFocusableKey == null -> EmptyScreenState(title = stringResource(R.string.sports_live_results_empty_day))
             else -> androidx.compose.runtime.key(listKey) {
                 LazyColumn(
@@ -270,6 +279,8 @@ internal fun SportsLiveResultsView(
                                 onFocus = {
                                     focusedKey = item.key
                                     onRowFocus(item.key)
+                                    // The first row shows its section header too (Up from it leaves the list).
+                                    if (item.key == firstFocusableKey) scope.launch { listState.scrollToItem(0) }
                                 },
                                 modifier = focusModifier
                             )
@@ -364,6 +375,7 @@ private fun ResultsSportRow(
     upFocusRequester: FocusRequester,
     downFocusRequester: FocusRequester?,
     onSelectSport: (MySport?) -> Unit,
+    onEditMySports: () -> Unit,
     onOpen: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -388,6 +400,17 @@ private fun ResultsSportRow(
                 onOpen = onOpen
             )
         }
+        // A link, not a filter: focus does not select it; OK opens My sports in Settings.
+        Spacer(modifier = Modifier.width(NuvioTheme.spacing.lg))
+        SourceStatusFilterChip(
+            name = stringResource(R.string.sports_live_results_edit_my_sports),
+            isSelected = false,
+            onClick = onEditMySports,
+            modifier = Modifier.focusProperties {
+                up = upFocusRequester
+                down = downFocusRequester ?: FocusRequester.Cancel
+            }
+        )
     }
 }
 

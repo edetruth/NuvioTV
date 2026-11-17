@@ -271,12 +271,14 @@ private enum class ScorePicker { MODE, DELAY }
  * it that opens (OK) its league switches right under it, so the D-pad walks sports, then leagues.
  */
 @Composable
-private fun MySportsSettings(
+internal fun MySportsSettings(
     mySports: MySports,
     enabled: Boolean,
     onToggleSport: (MySport) -> Unit,
     onToggleLeague: (MyLeague) -> Unit,
-    onAllSoccerCompetitions: () -> Unit
+    onAllSoccerCompetitions: () -> Unit,
+    /** On the first sport's switch, when a screen opens on this card. */
+    firstFocusRequester: FocusRequester? = null
 ) {
     var expanded by remember { mutableStateOf<MySport?>(null) }
     val allCompetitions = stringResource(R.string.sports_live_my_sports_all_competitions)
@@ -293,7 +295,8 @@ private fun MySportsSettings(
                 subtitle = null,
                 checked = on,
                 onToggle = { onToggleSport(sport) },
-                enabled = enabled
+                enabled = enabled,
+                modifier = if (sport.ordinal == 0 && firstFocusRequester != null) Modifier.focusRequester(firstFocusRequester) else Modifier
             )
             if (!on || sport.leagues.size < 2) return@forEach
             val isSoccer = sport == MySport.SOCCER

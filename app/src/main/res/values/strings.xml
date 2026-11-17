@@ -3586,6 +3586,8 @@
     <string name="sports_live_filter_my_teams">★ My teams</string>
     <string name="sports_live_results_my_sports">★ My sports</string>
     <string name="sports_live_results_your_teams">Your teams</string>
+    <string name="sports_live_results_my_sports_empty">Nothing from My sports this day. Pick a sport above to see its games.</string>
+    <string name="sports_live_results_edit_my_sports">Edit my sports</string>
     <plurals name="sports_live_results_more">
         <item quantity="one">+ %1$d more %2$s game</item>
         <item quantity="other">+ %1$d more %2$s games</item>

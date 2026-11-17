@@ -57,6 +57,7 @@ import com.nuvio.tv.ui.screens.search.DiscoverScreen
 import com.nuvio.tv.ui.screens.search.SearchScreen
 import com.nuvio.tv.ui.screens.settings.AboutScreen
 import com.nuvio.tv.ui.screens.settings.LayoutSettingsScreen
+import com.nuvio.tv.ui.screens.settings.SportsLiveMySportsScreen
 import com.nuvio.tv.ui.screens.settings.LicensesAttributionsScreen
 import com.nuvio.tv.ui.screens.settings.PlaybackSettingsScreen
 import com.nuvio.tv.ui.screens.settings.SettingsScreen
@@ -1485,8 +1486,13 @@ private fun PlaybackNavHost(
                     )
                 },
                 onOpenAddons = { navController.navigate(Screen.AddonManager.route) },
+                onOpenMySports = { navController.navigate(Screen.SportsLiveMySports.route) },
                 onOpenDual = { navController.navigate(Screen.SportsLiveDual.route) }
             )
+        }
+
+        composable(Screen.SportsLiveMySports.route) {
+            SportsLiveMySportsScreen(onBackPress = { navController.popBackStack() })
         }
 
         composable(Screen.SportsLiveDual.route) {
