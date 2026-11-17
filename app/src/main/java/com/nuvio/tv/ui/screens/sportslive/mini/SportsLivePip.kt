@@ -6,10 +6,15 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
+/** Whether this device can show picture-in-picture at all: API 26+ with the system feature. */
+fun sportsLivePipSupported(sdkInt: Int, hasPipFeature: Boolean): Boolean =
+    sdkInt >= Build.VERSION_CODES.O && hasPipFeature
+
 /**
- * Whether leaving the app (Home) puts it in picture-in-picture: only on API 26+ with the system's
- * picture-in-picture feature, and only while Sports & Live plays (a full player with a zap session,
- * or the mini player). Anything else keeps upstream behavior.
+ * Whether leaving the app (Home) puts it in picture-in-picture: only where it is
+ * [sportsLivePipSupported], with the Sports & Live setting on, and only while Sports & Live plays
+ * (a full player with a zap session, or the mini player). Otherwise Home keeps upstream behavior
+ * (the in-app mini player just stops in the background), with no error.
  */
 fun sportsLivePipEligible(
     sdkInt: Int,
@@ -17,9 +22,14 @@ fun sportsLivePipEligible(
     sportsFullPlayerShowing: Boolean,
     miniPlayerActive: Boolean,
     /** The app itself is starting another activity (external player, browser): not the user leaving. */
-    ownLaunchInFlight: Boolean = false
-): Boolean = sdkInt >= Build.VERSION_CODES.O && hasPipFeature && !ownLaunchInFlight &&
+    ownLaunchInFlight: Boolean = false,
+    /** The user's Sports & Live picture-in-picture setting. */
+    pipEnabled: Boolean = true
+): Boolean = sportsLivePipSupported(sdkInt, hasPipFeature) && pipEnabled && !ownLaunchInFlight &&
     (sportsFullPlayerShowing || miniPlayerActive)
+
+/** The system screen with this app's picture-in-picture permission, on devices that have one. */
+const val SPORTS_LIVE_PIP_SETTINGS_ACTION = "android.settings.PICTURE_IN_PICTURE_SETTINGS"
 
 /**
  * The app's picture-in-picture state for Sports & Live. [inPip] makes the full player hide its
@@ -37,6 +47,10 @@ object SportsLivePip {
      */
     @Volatile
     var ownLaunchInFlight = false
+
+    /** The active profile's picture-in-picture setting, kept current for Home's synchronous check. */
+    @Volatile
+    var userEnabled = true
 
     private class FullPlayer(val contentId: String?, val close: () -> Unit)
 

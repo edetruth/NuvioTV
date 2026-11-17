@@ -32,6 +32,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -173,6 +174,19 @@ class SportsLiveSettingsViewModelTest {
         assertFalse(prefs.showSection.first())
         assertFalse(prefs.showHomeRow.first())
         assertFalse(prefs.hoverPreview.first())
+    }
+
+    @Test
+    fun `picture-in-picture is on by default and its switch is stored`() = runTest {
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.pipEnabled)
+
+        viewModel.setPipEnabled(false)
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.pipEnabled)
+        assertFalse(prefs.pipEnabled.first())
     }
 
     @Test

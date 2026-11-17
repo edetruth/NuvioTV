@@ -57,6 +57,7 @@ import androidx.tv.material3.Text
 import com.nuvio.tv.R
 import com.nuvio.tv.core.debrid.DirectDebridResolver
 import com.nuvio.tv.core.profile.ProfileManager
+import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.ui.screens.player.PlayerMediaSourceFactory
@@ -135,7 +136,8 @@ internal class SportsLiveMiniPlayback(context: Context, private val onError: (se
 class SportsLiveMiniPlayerViewModel @Inject constructor(
     resolver: SportsLiveZapResolver,
     private val directDebridResolver: DirectDebridResolver,
-    private val profileManager: ProfileManager
+    private val profileManager: ProfileManager,
+    prefs: SportsLivePreferencesDataStore
 ) : ViewModel() {
     private val controller = SportsLiveMiniPlayers.controller
 
@@ -164,6 +166,9 @@ class SportsLiveMiniPlayerViewModel @Inject constructor(
             profileManager.activeProfileId.drop(1).collect { controller.stop(SportsLiveMiniStop.PROFILE_SWITCH) }
         }
         viewModelScope.launch { controller.expandRequests.collect(expander::expand) }
+        // Home reads the picture-in-picture setting synchronously, so it is mirrored here (this
+        // view model lives as long as the activity).
+        viewModelScope.launch { prefs.pipEnabled.collect { SportsLivePip.userEnabled = it } }
         // A mini player stopped elsewhere ends its lookup and dialog.
         viewModelScope.launch {
             controller.state.collect { if (it !is SportsLiveMiniState.Playing) expander.cancel() }

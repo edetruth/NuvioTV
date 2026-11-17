@@ -47,6 +47,8 @@ data class SportsLiveSettingsUiState(
     val showHomeRow: Boolean = true,
     val hoverPreview: Boolean = true,
     val dataSaver: Boolean = false,
+    /** Our own picture-in-picture switch; the device's support is checked by the screen. */
+    val pipEnabled: Boolean = true,
     val catalogs: List<SportsLiveCatalogSetting> = emptyList(),
     /** The active profile's followed teams, in follow order. */
     val followedTeams: List<FollowedTeam> = emptyList()
@@ -69,8 +71,8 @@ class SportsLiveSettingsViewModel @Inject constructor(
         combine(prefs.overrides, prefs.catalogOptions, prefs.followedTeams, ::Triple),
         prefs.showSection,
         combine(prefs.showHomeRow, prefs.hoverPreview, prefs.dataSaver, ::Triple),
-        claimedStats
-    ) { addons, (overrides, options, followedTeams), showSection, (showHomeRow, hoverPreview, dataSaver), stats ->
+        combine(claimedStats, prefs.pipEnabled, ::Pair)
+    ) { addons, (overrides, options, followedTeams), showSection, (showHomeRow, hoverPreview, dataSaver), (stats, pipEnabled) ->
         val catalogs = addons.enabledAddons().flatMap { addon ->
             addon.catalogs.filter(SportsLiveCatalogPolicy::isClaimable).map { catalog ->
                 val key = SportsLiveCatalogPolicy.keyFor(addon, catalog)
@@ -93,7 +95,7 @@ class SportsLiveSettingsViewModel @Inject constructor(
                 )
             }
         }
-        SportsLiveSettingsUiState(showSection, showHomeRow, hoverPreview, dataSaver, catalogs, followedTeams)
+        SportsLiveSettingsUiState(showSection, showHomeRow, hoverPreview, dataSaver, pipEnabled, catalogs, followedTeams)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SportsLiveSettingsUiState())
 
     fun setShowSection(show: Boolean) {
@@ -110,6 +112,10 @@ class SportsLiveSettingsViewModel @Inject constructor(
 
     fun setDataSaver(enabled: Boolean) {
         viewModelScope.launch { prefs.setDataSaver(enabled) }
+    }
+
+    fun setPipEnabled(enabled: Boolean) {
+        viewModelScope.launch { prefs.setPipEnabled(enabled) }
     }
 
     fun unfollow(team: FollowedTeam) {

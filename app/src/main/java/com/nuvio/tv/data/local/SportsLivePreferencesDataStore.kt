@@ -41,6 +41,7 @@ class SportsLivePreferencesDataStore @Inject constructor(
     private val showHomeRowKey = booleanPreferencesKey("sports_live_show_home_row")
     private val hoverPreviewKey = booleanPreferencesKey("sports_live_hover_preview")
     private val dataSaverKey = booleanPreferencesKey("sports_live_data_saver")
+    private val pipEnabledKey = booleanPreferencesKey("sports_live_pip_enabled")
     private val overridesKey = stringPreferencesKey("sports_live_overrides")
     private val catalogOptionsKey = stringPreferencesKey("sports_live_catalog_options")
     private val followedTeamsKey = stringPreferencesKey("sports_live_followed_teams")
@@ -66,6 +67,14 @@ class SportsLivePreferencesDataStore @Inject constructor(
      */
     val dataSaver: Flow<Boolean> = profileManager.activeProfileId.flatMapLatest { pid ->
         factory.get(pid, FEATURE).data.map { it[dataSaverKey] ?: false }
+    }
+
+    /**
+     * Whether Home while Sports & Live plays may go picture-in-picture (where the device supports it);
+     * off keeps the in-app mini player only. On by default.
+     */
+    val pipEnabled: Flow<Boolean> = profileManager.activeProfileId.flatMapLatest { pid ->
+        factory.get(pid, FEATURE).data.map { it[pipEnabledKey] ?: true }
     }
 
     val overrides: Flow<Map<String, SportsLiveOverride>> = profileManager.activeProfileId.flatMapLatest { pid ->
@@ -129,6 +138,10 @@ class SportsLivePreferencesDataStore @Inject constructor(
 
     suspend fun setDataSaver(v: Boolean) {
         store().edit { it[dataSaverKey] = v }
+    }
+
+    suspend fun setPipEnabled(v: Boolean) {
+        store().edit { it[pipEnabledKey] = v }
     }
 
     suspend fun setOverride(catalogKey: String, override: SportsLiveOverride?) {

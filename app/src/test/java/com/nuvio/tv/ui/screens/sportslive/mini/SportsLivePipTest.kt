@@ -28,6 +28,23 @@ class SportsLivePipTest {
     }
 
     @Test
+    fun `supported only on API 26+ with the system feature`() {
+        assertTrue(sportsLivePipSupported(26, hasPipFeature = true))
+        assertFalse(sportsLivePipSupported(36, hasPipFeature = false))
+        assertFalse(sportsLivePipSupported(25, hasPipFeature = true))
+    }
+
+    @Test
+    fun `our own switch off keeps the in-app mini player only`() {
+        assertFalse(
+            sportsLivePipEligible(36, true, sportsFullPlayerShowing = true, miniPlayerActive = true, pipEnabled = false)
+        )
+        assertTrue(
+            sportsLivePipEligible(36, true, sportsFullPlayerShowing = false, miniPlayerActive = true, pipEnabled = true)
+        )
+    }
+
+    @Test
     fun `an in-app launch (external player, browser) is not Home`() {
         assertFalse(
             sportsLivePipEligible(36, true, sportsFullPlayerShowing = true, miniPlayerActive = true, ownLaunchInFlight = true)

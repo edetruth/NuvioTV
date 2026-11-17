@@ -1527,7 +1527,8 @@ open class MainActivity : ComponentActivity() {
             hasPipFeature = packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE),
             sportsFullPlayerShowing = SportsLivePip.sportsFullPlayerShowing(),
             miniPlayerActive = SportsLiveMiniPlayers.controller.isActive,
-            ownLaunchInFlight = SportsLivePip.ownLaunchInFlight
+            ownLaunchInFlight = SportsLivePip.ownLaunchInFlight,
+            pipEnabled = SportsLivePip.userEnabled
         )
         if (eligible && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             runCatching {

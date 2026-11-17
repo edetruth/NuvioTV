@@ -1,5 +1,10 @@
 package com.nuvio.tv.ui.screens.settings
 
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -17,6 +22,7 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -28,6 +34,8 @@ import com.nuvio.tv.R
 import com.nuvio.tv.domain.model.CatalogStats
 import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveOverride
+import com.nuvio.tv.ui.screens.sportslive.mini.SPORTS_LIVE_PIP_SETTINGS_ACTION
+import com.nuvio.tv.ui.screens.sportslive.mini.sportsLivePipSupported
 import com.nuvio.tv.ui.theme.NuvioTheme
 
 @Composable
@@ -94,6 +102,13 @@ internal fun SportsLiveSettingsContent(
                     enabled = state.showSection
                 )
             }
+        }
+        item(key = "pip") {
+            SportsLivePipSettings(
+                enabled = state.pipEnabled,
+                sectionShown = state.showSection,
+                onToggle = { viewModel.setPipEnabled(!state.pipEnabled) }
+            )
         }
         item(key = "my_teams") {
             SettingsGroupCard(
@@ -203,4 +218,54 @@ private fun catalogStats(stats: CatalogStats, filterValue: String?): String {
         filterValue != null -> stringResource(R.string.sports_live_stat_no_items_for, filterValue)
         else -> stringResource(R.string.sports_live_stat_empty)
     }
+}
+
+/**
+ * Picture-in-picture, which some TVs (onn boxes among them) lack or hide: whether this device
+ * supports it, our own switch (Home only goes picture-in-picture with it on), and the system's
+ * per-app setting when the device has a screen for it.
+ */
+@Composable
+private fun SportsLivePipSettings(enabled: Boolean, sectionShown: Boolean, onToggle: () -> Unit) {
+    val context = LocalContext.current
+    val supported = remember(context) {
+        sportsLivePipSupported(
+            sdkInt = Build.VERSION.SDK_INT,
+            hasPipFeature = context.packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
+        )
+    }
+    val systemSetting = remember(context) { pipSystemSettingIntent(context) }
+    SettingsGroupCard(modifier = Modifier.fillMaxWidth()) {
+        SettingsToggleRow(
+            title = stringResource(R.string.sports_live_setting_pip),
+            subtitle = stringResource(R.string.sports_live_setting_pip_subtitle),
+            checked = enabled && supported,
+            onToggle = onToggle,
+            enabled = sectionShown && supported
+        )
+        Text(
+            text = stringResource(
+                if (supported) R.string.sports_live_setting_pip_supported else R.string.sports_live_setting_pip_unsupported
+            ),
+            style = MaterialTheme.typography.bodyMedium,
+            color = NuvioTheme.colors.TextSecondary,
+            modifier = Modifier.padding(NuvioTheme.spacing.sm)
+        )
+        if (supported && systemSetting != null) {
+            SettingsActionRow(
+                title = stringResource(R.string.sports_live_setting_pip_system),
+                subtitle = null,
+                onClick = { runCatching { context.startActivity(systemSetting) } }
+            )
+        }
+    }
+}
+
+/** The system's picture-in-picture setting (this app's page when it has one); null when nothing handles it. */
+private fun pipSystemSettingIntent(context: Context): Intent? {
+    val pm = context.packageManager
+    return listOf(
+        Intent(SPORTS_LIVE_PIP_SETTINGS_ACTION, Uri.fromParts("package", context.packageName, null)),
+        Intent(SPORTS_LIVE_PIP_SETTINGS_ACTION)
+    ).firstOrNull { it.resolveActivity(pm) != null }?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 }

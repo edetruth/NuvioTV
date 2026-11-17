@@ -8,6 +8,14 @@
         <intent>
             <action android:name="android.speech.RecognitionService" />
         </intent>
+        <!-- Sports & Live: Settings shows a link to the system picture-in-picture setting only when it resolves. -->
+        <intent>
+            <action android:name="android.settings.PICTURE_IN_PICTURE_SETTINGS" />
+        </intent>
+        <intent>
+            <action android:name="android.settings.PICTURE_IN_PICTURE_SETTINGS" />
+            <data android:scheme="package" />
+        </intent>
     </queries>
 
     <uses-permission android:name="android.permission.INTERNET" />
