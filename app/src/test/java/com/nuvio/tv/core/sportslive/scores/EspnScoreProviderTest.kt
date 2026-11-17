@@ -19,15 +19,18 @@ import java.time.LocalDate
 class EspnScoreProviderTest {
 
     private val requested = mutableListOf<String>()
+    private val cacheControl = mutableListOf<String?>()
 
     private fun provider(interceptor: Interceptor) = EspnScoreProvider(
         OkHttpClient.Builder().addInterceptor(interceptor).build(),
         EspnFixtures.moshi,
-        "https://example.invalid/apis/site/v2/sports/"
+        "https://example.invalid/apis/site/v2/sports/",
+        today = { LocalDate.of(2026, 11, 16) }
     )
 
     private fun respond(code: Int, body: String) = Interceptor { chain ->
         requested += chain.request().url.toString()
+        cacheControl += chain.request().header("Cache-Control")
         Response.Builder()
             .request(chain.request())
             .protocol(Protocol.HTTP_1_1)
@@ -64,6 +67,27 @@ class EspnScoreProviderTest {
         val overtime = result.events.first { it.eventId == "401909990" }
         assertEquals("Final/OT", overtime.clockText)
         assertEquals(5, overtime.away.linescores.size)
+    }
+
+    @Test
+    fun `live days skip the HTTP cache, past days may use it`() = runTest {
+        val p = provider(respond(200, "{}"))
+        p.scoreboard(EspnLeagueMap.NBA, LocalDate.of(2026, 11, 17))
+        p.scoreboard(EspnLeagueMap.NBA, LocalDate.of(2026, 11, 16))
+        p.scoreboard(EspnLeagueMap.NBA, LocalDate.of(2026, 11, 15))
+        p.scoreboard(EspnLeagueMap.NBA, LocalDate.of(2026, 11, 14))
+        assertEquals(listOf("no-cache", "no-cache", "no-cache", null), cacheControl)
+    }
+
+    @Test
+    fun `keeps each event's own league slug`() {
+        val all = EspnFixtures.events(EspnFixtures.SOCCER_ALL_20261116, EspnLeagueMap.SOCCER_ALL)
+        assertEquals("fifa.friendly_u21", all.first { it.eventId == "401930175" }.leagueSlug)
+        assertEquals("uefa.nations", all.first { it.eventId == "401861185" }.leagueSlug)
+        assertEquals("caf.nations_qual", all.first { it.eventId == "401927170" }.leagueSlug)
+        // No league link: the feed's slug.
+        assertEquals("all", all.first { it.eventId == "401934216" }.leagueSlug)
+        assertEquals("nba", EspnFixtures.events(EspnFixtures.NBA_20261115, EspnLeagueMap.NBA).first().leagueSlug)
     }
 
     @Test

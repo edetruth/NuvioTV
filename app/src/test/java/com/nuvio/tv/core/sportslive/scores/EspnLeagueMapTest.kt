@@ -76,6 +76,40 @@ class EspnLeagueMapTest {
     }
 
     @Test
+    fun `women's and minor leagues never route to the pro feeds`() {
+        assertEquals(emptyList<String>(), slugs("WNBA", "Liberty vs Aces"))
+        assertEquals(emptyList<String>(), slugs("Basketball", "Liberty vs Aces", "WNBA"))
+        assertEquals(emptyList<String>(), slugs("Hockey", "Toronto vs Boston", "PWHL"))
+        assertEquals(emptyList<String>(), slugs("Hockey", "AHL: Toronto Marlies vs Belleville"))
+        assertEquals(emptyList<String>(), slugs("Ice Hockey", "ECHL"))
+        assertEquals(emptyList<String>(), slugs("Basketball", "NBA G League: Stockton vs Santa Cruz"))
+        assertEquals(emptyList<String>(), slugs("Basketball", "Women's Basketball: Lakers"))
+        assertEquals(emptyList<String>(), slugs("Soccer", "Womens Super League"))
+        assertEquals(listOf("hockey/nhl"), slugs("Hockey", "Maple Leafs vs Bruins"))
+    }
+
+    @Test
+    fun `college cards route only to college feeds`() {
+        assertEquals(listOf("football/college-football"), slugs("College American Football", "Alabama vs Auburn"))
+        assertEquals(listOf("football/college-football"), slugs("American Football", "NCAA Football: Alabama vs Auburn"))
+        assertEquals(emptyList<String>(), slugs("American Football", "Alabama vs Auburn", "NCAA"))
+        assertEquals(emptyList<String>(), slugs("Basketball", "College Hoops: Duke vs UNC", "NCAA"))
+    }
+
+    @Test
+    fun `a specific sport genre beats a generic Football sport`() {
+        assertEquals(listOf("football/nfl"), slugs("Football", "Chiefs vs Raiders", "American Football"))
+        assertEquals(emptyList<String>(), slugs("Football", "Alabama vs Auburn", "NCAA"))
+    }
+
+    @Test
+    fun `unsupported sports in any hint get no feed`() {
+        assertEquals(emptyList<String>(), slugs(null, "Rugby World Cup Final: NZ vs SA"))
+        assertEquals(emptyList<String>(), slugs(null, "ICC T20 World Cup: India vs Pakistan"))
+        assertEquals(emptyList<String>(), slugs("Soccer", "Arsenal vs Chelsea", "Tennis"))
+    }
+
+    @Test
     fun `unsupported or unknown sports get no feed`() {
         assertEquals(emptyList<String>(), slugs("Cricket", "Bangladesh Premier League: A vs B"))
         assertEquals(emptyList<String>(), slugs("Tennis", "Sinner vs Alcaraz"))

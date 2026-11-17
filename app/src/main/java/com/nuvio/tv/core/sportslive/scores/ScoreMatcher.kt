@@ -37,15 +37,21 @@ data class ScoreCard(
     }
 }
 
+
 /**
  * Finds the score-feed event for a card. Precision over recall (a wrong score is worse than none):
- * - **Both** sides must match a competitor: by alias equality (the competitor's abbreviation,
- *   displayName, shortDisplayName, name, location and location+name, normalised, diacritics stripped and
- *   folded through [SportsLiveTeams.canonicalise]), else by the [SportsLiveTeams.matches] suffix rule
- *   ("Raiders" ↔ "Las Vegas Raiders"). The card's order does not matter. (W)/U21 sides stay distinct.
- * - The event starts within ±3 h of the card's start; with no time of day, on the card's day (today when
- *   it has no start) or the day before, in the device time zone.
- * - Best score wins (equality 3 per side, suffix 2); a tie goes to the closest start.
+ * - **Both** sides must match distinct competitors, in either order. A side matches STRONG (3) by
+ *   equality with the competitor's abbreviation, displayName, shortDisplayName, name or location+name
+ *   (normalised, diacritics stripped, folded through [SportsLiveTeams.canonicalise]; the abbreviation
+ *   is only lowercased), or WEAK (2) by equality with its location alone or by the
+ *   [SportsLiveTeams.matches] suffix rule ("Raiders" ↔ "Las Vegas Raiders"). The total must be at least
+ *   5, so one side must match STRONG.
+ * - A (W)/Women or U21-style qualifier must agree: the card's against the competitor's names or, when
+ *   they carry none, the event's league slug (`eng.w.1`, `fifa.friendly_u21`).
+ * - Time: within ±3 h of a timed card's start. A card with a bare date, or none (today), is matched on
+ *   that day first, ranked by distance from mid-day, and on the day before only when that day has no
+ *   match, all in the device time zone.
+ * - Best score wins; a tie goes to the closest start.
  * A match is cached per card per day, so a later poll finds the event by id. A miss returns null and is
  * not cached, so the next refresh retries.
  */
@@ -57,20 +63,24 @@ class ScoreMatcher(private val zone: () -> ZoneId = { ZoneId.systemDefault() }) 
 
     fun match(card: ScoreCard, events: List<ScoreSnapshot>, nowMs: Long): ScoreSnapshot? {
         val zoneId = zone()
-        val day = Instant.ofEpochMilli(card.startMs ?: nowMs).atZone(zoneId).toLocalDate()
+        val start = card.startMs
+        val timed = start != null && card.hasTimeOfDay
+        val day = when {
+            timed -> Instant.ofEpochMilli(start!!).atZone(zoneId).toLocalDate()
+            // A bare date is midnight UTC of that date; no start means today.
+            start != null -> Instant.ofEpochMilli(start).atZone(ZoneOffset.UTC).toLocalDate()
+            else -> Instant.ofEpochMilli(nowMs).atZone(zoneId).toLocalDate()
+        }
         cache[card.key]?.takeIf { it.day == day }?.let { cached ->
             events.firstOrNull { it.eventId == cached.eventId }?.let { return it }
         }
-        val window = window(card, nowMs, zoneId)
-        val reference = card.startMs ?: nowMs
-        val home = sideKeys(card.teams.home)
-        val away = sideKeys(card.teams.away)
-        val best = events.asSequence()
-            .filter { event -> event.startMs != null && event.startMs in window }
-            .mapNotNull { event -> score(home, away, event)?.let { event to it } }
-            .sortedWith(compareByDescending<Pair<ScoreSnapshot, Int>> { it.second }
-                .thenBy { abs(it.first.startMs!! - reference) })
-            .firstOrNull()?.first
+        val home = side(card.teams.home)
+        val away = side(card.teams.away)
+        val best = if (timed) {
+            best(home, away, events, (start!! - WINDOW_MS)..(start + WINDOW_MS), reference = start)
+        } else {
+            bestOnDay(home, away, events, day, zoneId) ?: bestOnDay(home, away, events, day.minusDays(1), zoneId)
+        }
         if (best == null) {
             if (BuildConfig.DEBUG) Log.d(TAG, "no match: ${card.teams.home} / ${card.teams.away}")
             return null
@@ -80,62 +90,73 @@ class ScoreMatcher(private val zone: () -> ZoneId = { ZoneId.systemDefault() }) 
         return best
     }
 
-    private fun window(card: ScoreCard, nowMs: Long, zoneId: ZoneId): LongRange {
-        val start = card.startMs
-        if (start != null && card.hasTimeOfDay) return (start - WINDOW_MS)..(start + WINDOW_MS)
-        // A bare date is midnight UTC of that date; no start means today.
-        val anchor = if (start != null) {
-            Instant.ofEpochMilli(start).atZone(ZoneOffset.UTC).toLocalDate()
-        } else {
-            Instant.ofEpochMilli(nowMs).atZone(zoneId).toLocalDate()
-        }
-        val from = anchor.minusDays(1).atStartOfDay(zoneId).toInstant().toEpochMilli()
-        val until = anchor.plusDays(1).atStartOfDay(zoneId).toInstant().toEpochMilli()
-        return from until until
+    private fun bestOnDay(home: Side, away: Side, events: List<ScoreSnapshot>, day: LocalDate, zoneId: ZoneId): ScoreSnapshot? {
+        val from = day.atStartOfDay(zoneId).toInstant().toEpochMilli()
+        val until = day.plusDays(1).atStartOfDay(zoneId).toInstant().toEpochMilli()
+        val midDay = day.atTime(12, 0).atZone(zoneId).toInstant().toEpochMilli()
+        return best(home, away, events, from until until, reference = midDay)
     }
 
-    /** The card side's name as written ([raw], for the suffix rule) and its equality keys. */
-    private class SideKeys(val raw: String, val keys: Set<String>)
+    private fun best(home: Side, away: Side, events: List<ScoreSnapshot>, window: LongRange, reference: Long): ScoreSnapshot? =
+        events.asSequence()
+            .filter { event -> event.startMs != null && event.startMs in window }
+            .mapNotNull { event -> score(home, away, event)?.let { event to it } }
+            .sortedWith(compareByDescending<Pair<ScoreSnapshot, Int>> { it.second }
+                .thenBy { abs(it.first.startMs!! - reference) })
+            .firstOrNull()?.first
 
-    private fun sideKeys(name: String): SideKeys {
-        val folded = fold(name)
-        return SideKeys(folded, setOf(SportsLiveTeams.normalise(folded), SportsLiveTeams.canonicalise(folded)))
+    /** A card side: its base name (qualifier removed) for the suffix rule, equality keys and qualifier. */
+    private class Side(val base: String, val keys: Set<String>, val qualifier: String?)
+
+    private fun side(name: String): Side {
+        val (base, qualifier) = splitQualifier(fold(name))
+        return Side(base, setOf(SportsLiveTeams.normalise(base), SportsLiveTeams.canonicalise(base)) - "", qualifier)
     }
 
-    /** Best total over both orientations, or null unless both card sides match distinct competitors. */
-    private fun score(home: SideKeys, away: SideKeys, event: ScoreSnapshot): Int? {
-        val eventHome = Competitor(event.home)
-        val eventAway = Competitor(event.away)
+    /** Best total over both orientations, or null unless both sides match and the total is at least 5. */
+    private fun score(home: Side, away: Side, event: ScoreSnapshot): Int? {
+        val slugQualifier = slugQualifier(event.leagueSlug)
+        val eventHome = Competitor(event.home, slugQualifier)
+        val eventAway = Competitor(event.away, slugQualifier)
         return listOfNotNull(
             pairScore(eventHome.score(home), eventAway.score(away)),
             pairScore(eventAway.score(home), eventHome.score(away))
         ).maxOrNull()
     }
 
-    private fun pairScore(first: Int, second: Int): Int? = if (first > 0 && second > 0) first + second else null
+    private fun pairScore(first: Int, second: Int): Int? =
+        if (first > 0 && second > 0 && first + second >= MIN_TOTAL) first + second else null
 
-    /** A competitor's names: equality keys from all of them, suffix-rule names from the full ones. */
-    private class Competitor(team: ScoreTeam) {
-        private val fullNames: List<String> = listOfNotNull(
-            team.displayName,
-            team.shortDisplayName,
-            team.name,
-            if (team.location != null && team.name != null) "${team.location} ${team.name}" else null
-        ).map(::fold).distinct()
+    /** A competitor's names, qualifiers removed: STRONG keys, the WEAK location key, suffix-rule names. */
+    private class Competitor(team: ScoreTeam, slugQualifier: String?) {
+        private val names: List<Pair<String, String?>> =
+            listOfNotNull(team.displayName, team.shortDisplayName, team.name).map { splitQualifier(fold(it)) }
+
+        val qualifier: String? = names.firstNotNullOfOrNull { it.second } ?: slugQualifier
+
+        private val fullNames: List<String> = (names.map { it.first } + listOfNotNull(
+            if (team.location != null && team.name != null) splitQualifier(fold("${team.location} ${team.name}")).first else null
+        )).filter { it.isNotEmpty() }.distinct()
 
         // An abbreviation is only lowercased, not canonicalised: ESPN's "IND" is Indiana, not India.
-        private val keys: Set<String> = buildSet {
+        private val strongKeys: Set<String> = buildSet {
             team.abbreviation?.let { add(SportsLiveTeams.normalise(fold(it))) }
-            for (name in fullNames + listOfNotNull(team.location?.let(::fold))) {
+            for (name in fullNames) {
                 add(SportsLiveTeams.normalise(name))
                 add(SportsLiveTeams.canonicalise(name))
             }
             remove("")
         }
 
-        fun score(side: SideKeys): Int = when {
-            side.keys.any { it in keys } -> EQUALITY
-            fullNames.any { SportsLiveTeams.matches(side.raw, it) } -> SUFFIX
+        // A city alone ("Dallas", "Los Angeles") names more than one team.
+        private val locationKeys: Set<String> = team.location?.let { splitQualifier(fold(it)).first }
+            ?.let { setOf(SportsLiveTeams.normalise(it), SportsLiveTeams.canonicalise(it)) - "" }.orEmpty()
+
+        fun score(side: Side): Int = when {
+            side.qualifier != qualifier -> 0
+            side.keys.any { it in strongKeys } -> STRONG
+            side.keys.any { it in locationKeys } -> WEAK
+            fullNames.any { SportsLiveTeams.matches(side.base, it) } -> WEAK
             else -> 0
         }
     }
@@ -143,12 +164,37 @@ class ScoreMatcher(private val zone: () -> ZoneId = { ZoneId.systemDefault() }) 
     private companion object {
         const val TAG = "ScoreMatcher"
         const val WINDOW_MS = 3 * 60 * 60 * 1000L
-        const val EQUALITY = 3
-        const val SUFFIX = 2
+        const val STRONG = 3
+        const val WEAK = 2
+        const val MIN_TOTAL = 5
         const val MAX_CACHED = 2_000
 
         val MARKS = Regex("""\p{Mn}+""")
 
-        fun fold(text: String): String = Normalizer.normalize(text, Normalizer.Form.NFD).replace(MARKS, "")
+        // Trailing qualifiers that tell a team apart: "(W)", "Women", "Women's", " W"; "U21", "(U21)", "[U21]".
+        val WOMEN = Regex("""\s*(\((w|women)\)|\bwomen'?s?|\s+w)\s*$""", RegexOption.IGNORE_CASE)
+        val YOUTH = Regex("""\s*([\[(]u(\d{1,2})[\])]|\bu(\d{1,2}))\s*$""", RegexOption.IGNORE_CASE)
+
+        // League slugs of women's and youth competitions: "eng.w.1", "uefa.wchampions", "usa.nwsl",
+        // "fifa.wwc"; "fifa.friendly_u21", "uefa.euro_u21_qual".
+        val WOMEN_SLUG = Regex("""(^|\.)w(\.|$)|\.wchampions|\.wwc|nwsl|women""")
+        val YOUTH_SLUG = Regex("""(?<![a-z])u(\d{1,2})(?!\d)""")
+
+        fun fold(text: String): String = Normalizer.normalize(text, Normalizer.Form.NFD).replace(MARKS, "").trim()
+
+        /** "Namibia (W)" → ("Namibia", "w"); "England U21" → ("England", "u21"); "Arsenal" → ("Arsenal", null). */
+        fun splitQualifier(name: String): Pair<String, String?> {
+            WOMEN.find(name)?.let { return name.substring(0, it.range.first).trim() to "w" }
+            YOUTH.find(name)?.let { m ->
+                val age = m.groupValues[2].ifEmpty { m.groupValues[3] }
+                return name.substring(0, m.range.first).trim() to "u$age"
+            }
+            return name to null
+        }
+
+        fun slugQualifier(slug: String): String? = when {
+            WOMEN_SLUG.containsMatchIn(slug) -> "w"
+            else -> YOUTH_SLUG.find(slug)?.let { "u${it.groupValues[1]}" }
+        }
     }
 }

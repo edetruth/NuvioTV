@@ -20,6 +20,7 @@ class ScoreMatcherTest {
     private val nfl = EspnFixtures.events(EspnFixtures.NFL_20261115, EspnLeagueMap.NFL)
     private val eng1 = EspnFixtures.events(EspnFixtures.ENG1_20261108, EspnFixtures.ENG1)
     private val caf = EspnFixtures.events(EspnFixtures.CAF_QUAL_20261116, EspnFixtures.CAF_QUAL)
+    private val soccerAll = EspnFixtures.events(EspnFixtures.SOCCER_ALL_20261116, EspnLeagueMap.SOCCER_ALL)
 
     private val matcher = ScoreMatcher(zone = { ZoneOffset.UTC })
 
@@ -48,7 +49,7 @@ class ScoreMatcherTest {
         assertEquals("401909987", match("Los Angeles Clippers vs Charlotte Hornets", "2026-11-15T21:30:00Z", nba))
         assertEquals("401909990", match("Knicks vs Raptors", "2026-11-15T23:00:00Z", nba))
         assertEquals("401873062", match("Seattle Seahawks vs Las Vegas Raiders", "2026-11-15T21:05:00Z", nfl))
-        assertEquals("401873063", match("San Francisco vs Dallas", "2026-11-15T21:25:00Z", nfl))
+        assertEquals("401873063", match("San Francisco 49ers vs Dallas", "2026-11-15T21:25:00Z", nfl))
         assertEquals("401879240", match("Man Utd vs Aston Villa", "2026-11-08T16:30:00Z", eng1))
         assertEquals("401879240", match("Manchester United FC vs Villa", "2026-11-08T16:30:00Z", eng1))
         assertEquals("401879243", match("Crystal Palace vs Liverpool FC", "2026-11-08T14:00:00Z", eng1))
@@ -72,12 +73,53 @@ class ScoreMatcherTest {
     }
 
     @Test
+    fun `a city alone is weak, so two cities never match`() {
+        assertNull(match("San Francisco vs Dallas", "2026-11-15T21:25:00Z", nfl))
+        assertNull(match("Los Angeles vs Arizona", "2026-11-15T21:05:00Z", nfl))
+        assertNull(match("Indiana vs Philadelphia", "2026-11-15T18:00:00Z", nba))
+    }
+
+    @Test
     fun `women's and U21 games stay distinct`() {
         assertNull(match("Namibia (W) vs Cameroon (W)", "2026-11-16T13:00:00Z", caf))
         assertNull(match("NAM (W) vs CMR (W)", "2026-11-16T13:00:00Z", caf))
         assertNull(match("Namibia (U21) vs Cameroon (U21)", "2026-11-16T13:00:00Z", caf))
         assertNull(match("Namibia U21 vs Cameroon U21", "2026-11-16T13:00:00Z", caf))
         assertNull(match("Liverpool (W) vs Crystal Palace (W)", "2026-11-08T14:00:00Z", eng1))
+    }
+
+    @Test
+    fun `soccer all keeps senior and U21 games apart`() {
+        // Real soccer/all day: England U21 v France U21 (shortDisplayName "England", abbreviation "ENG").
+        assertNull(match("England vs France", "2026-11-16T19:30:00Z", soccerAll))
+        assertNull(match("ENG vs FRA", "2026-11-16T19:30:00Z", soccerAll))
+        assertEquals("401930175", match("England U21 vs France U21", "2026-11-16T19:30:00Z", soccerAll))
+        assertEquals("401930175", match("ENG (U21) vs FRA (U21)", "2026-11-16T19:30:00Z", soccerAll))
+        assertEquals("401861185", match("Germany vs Netherlands", "2026-11-16T19:45:00Z", soccerAll))
+        assertNull(match("Germany U21 vs Netherlands U21", "2026-11-16T19:45:00Z", soccerAll))
+    }
+
+    @Test
+    fun `a women's league slug needs a women's card`() {
+        val original = caf.first { it.eventId == "401927170" }
+        val womens = original.copy(eventId = "w", leagueSlug = "caf.w.nations")
+        assertNull(match("Namibia vs Cameroon", "2026-11-16T13:00:00Z", listOf(womens)))
+        assertEquals("w", match("Namibia (W) vs Cameroon (W)", "2026-11-16T13:00:00Z", listOf(womens)))
+        assertEquals("w", match("Namibia Women vs Cameroon Women", "2026-11-16T13:00:00Z", listOf(womens)))
+        assertNull(match("Namibia vs Cameroon", "2026-11-16T13:00:00Z", listOf(original.copy(eventId = "x", leagueSlug = "uefa.wchampions"))))
+        assertNull(match("Namibia vs Cameroon", "2026-11-16T13:00:00Z", listOf(original.copy(eventId = "y", leagueSlug = "usa.nwsl"))))
+        assertEquals("z", match("Namibia vs Cameroon", "2026-11-16T13:00:00Z", listOf(original.copy(eventId = "z", leagueSlug = "fifa.world"))))
+    }
+
+    @Test
+    fun `DR Congo matches Congo DR`() {
+        val original = caf.first { it.eventId == "401927170" }
+        val congo = original.copy(
+            eventId = "cod",
+            home = original.home.copy(abbreviation = "COD", displayName = "Congo DR", shortDisplayName = "Congo DR", name = "Congo DR", location = "Congo DR")
+        )
+        assertEquals("cod", match("DR Congo vs Cameroon", "2026-11-16T13:00:00Z", listOf(congo)))
+        assertEquals("cod", match("Congo DR vs Cameroon", "2026-11-16T13:00:00Z", listOf(congo)))
     }
 
     @Test
@@ -95,6 +137,19 @@ class ScoreMatcherTest {
         assertEquals("401927170", match("NAM vs CMR", null, caf, now = "2026-11-17T08:00:00Z"))
         assertNull(match("NAM vs CMR", null, caf, now = "2026-11-18T08:00:00Z"))
         assertNull(match("NAM vs CMR", null, caf, now = "2026-11-15T08:00:00Z"))
+    }
+
+    @Test
+    fun `with no start today's game beats yesterday's in a series`() {
+        // Same opponents on consecutive days (a baseball-style series).
+        val original = nba.first { it.eventId == "401909985" }
+        val yesterday = original.copy(eventId = "yesterday", startMs = ms("2026-11-15T23:00:00Z"))
+        val today = original.copy(eventId = "today", startMs = ms("2026-11-16T18:00:00Z"))
+        // Just after midnight yesterday's final is closer to now, but today's game is the card's.
+        assertEquals("today", match("Pacers @ 76ers", null, listOf(yesterday, today), now = "2026-11-16T01:00:00Z"))
+        assertEquals("yesterday", match("Pacers @ 76ers", null, listOf(yesterday), now = "2026-11-16T01:00:00Z"))
+        val bareDate = ScoreCard("bare", TeamPair("76ers", "Pacers"), ms("2026-11-16T00:00:00Z"), hasTimeOfDay = false)
+        assertEquals("today", matcher.match(bareDate, listOf(yesterday, today), ms("2026-11-20T00:00:00Z"))?.eventId)
     }
 
     @Test
@@ -116,16 +171,21 @@ class ScoreMatcherTest {
     }
 
     @Test
-    fun `an equality match beats a suffix match`() {
+    fun `suffix on both sides is not enough, and equality beats suffix`() {
         val original = caf.first { it.eventId == "401927170" }
-        // Same start, but its sides only match "Namibia"/"Cameroon" by the suffix rule.
+        val northNamibia = original.home.copy(abbreviation = null, displayName = "North Namibia", shortDisplayName = null, name = null, location = null)
+        // Both sides only match "Namibia"/"Cameroon" by the suffix rule: 2 + 2 is below 5.
         val suffixOnly = original.copy(
             eventId = "suffix",
-            home = original.home.copy(abbreviation = null, displayName = "North Namibia", shortDisplayName = null, name = null, location = null),
+            home = northNamibia,
             away = original.away.copy(abbreviation = null, displayName = "West Cameroon", shortDisplayName = null, name = null, location = null)
         )
-        assertEquals("401927170", match("Namibia vs Cameroon", "2026-11-16T13:00:00Z", listOf(suffixOnly) + caf))
-        assertEquals("suffix", match("Namibia vs Cameroon", "2026-11-16T13:00:00Z", listOf(suffixOnly)))
+        assertNull(match("Namibia vs Cameroon", "2026-11-16T13:00:00Z", listOf(suffixOnly)))
+        // One exact side plus one suffix side is enough, but the all-exact event wins.
+        val oneExact = original.copy(eventId = "one-exact", home = northNamibia)
+        assertEquals("one-exact", match("Namibia vs Cameroon", "2026-11-16T13:00:00Z", listOf(oneExact)))
+        val fresh = ScoreMatcher(zone = { ZoneOffset.UTC }) // the matcher above has cached "one-exact"
+        assertEquals("401927170", fresh.match(card("Namibia vs Cameroon", "2026-11-16T13:00:00Z"), listOf(oneExact) + caf, 0L)?.eventId)
     }
 
     @Test

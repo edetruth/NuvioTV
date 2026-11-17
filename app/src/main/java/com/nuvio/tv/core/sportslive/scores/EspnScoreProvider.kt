@@ -24,7 +24,8 @@ import javax.inject.Singleton
 class EspnScoreProvider internal constructor(
     private val client: OkHttpClient,
     moshi: Moshi,
-    private val baseUrl: String
+    private val baseUrl: String,
+    private val today: () -> LocalDate = { LocalDate.now() }
 ) : ScoreProvider {
 
     @Inject
@@ -36,7 +37,12 @@ class EspnScoreProvider internal constructor(
         withContext(Dispatchers.IO) {
             val url = "$baseUrl${league.path}/scoreboard?dates=${date.format(DateTimeFormatter.BASIC_ISO_DATE)}"
             try {
-                client.newCall(Request.Builder().url(url).build()).execute().use { response ->
+                val request = Request.Builder().url(url).apply {
+                    // Yesterday's late games and today's can still change: revalidate rather than reuse
+                    // the HTTP cache. Older days are final and may be served from it.
+                    if (!date.isBefore(today().minusDays(1))) header("Cache-Control", "no-cache")
+                }.build()
+                client.newCall(request).execute().use { response ->
                     val body = response.body?.string()
                     if (!response.isSuccessful || body == null) {
                         debugLog("${league.path} $date: HTTP ${response.code}")
@@ -57,6 +63,8 @@ class EspnScoreProvider internal constructor(
     companion object {
         private const val TAG = "EspnScoreProvider"
         internal const val BASE_URL = "https://site.api.espn.com/apis/site/v2/sports/"
+        // ".../gameId/401930175/league/fifa.friendly_u21"
+        private val LEAGUE_IN_LINK = Regex("""/league/([a-z0-9._-]+)""")
         internal const val USER_AGENT = "Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko)"
 
         /**
@@ -98,6 +106,9 @@ class EspnScoreProvider internal constructor(
             return ScoreSnapshot(
                 eventId = id,
                 league = league,
+                leagueSlug = event.links.orEmpty().firstNotNullOfOrNull { link ->
+                    link.href?.let { LEAGUE_IN_LINK.find(it)?.groupValues?.get(1) }
+                } ?: league.league,
                 startMs = event.date?.let(::parseDate),
                 state = state,
                 clockText = type?.shortDetail?.takeIf { it.isNotBlank() },

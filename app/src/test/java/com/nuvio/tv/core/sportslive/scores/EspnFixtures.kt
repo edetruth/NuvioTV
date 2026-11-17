@@ -11,6 +11,7 @@ internal object EspnFixtures {
     const val NFL_20261115 = "espn_nfl_20261115.json"
     const val ENG1_20261108 = "espn_eng1_20261108.json"
     const val CAF_QUAL_20261116 = "espn_caf_nations_qual_20261116.json"
+    const val SOCCER_ALL_20261116 = "espn_soccer_all_20261116.json"
 
     val CAF_QUAL = EspnLeague("soccer", "caf.nations_qual")
     val ENG1 = EspnLeague("soccer", "eng.1")

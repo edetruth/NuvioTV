@@ -12,8 +12,12 @@ data class EspnEventDto(
     val id: String? = null,
     val date: String? = null,
     val status: EspnStatusDto? = null,
-    val competitions: List<EspnCompetitionDto>? = null
+    val competitions: List<EspnCompetitionDto>? = null,
+    val links: List<EspnLinkDto>? = null
 )
+
+@JsonClass(generateAdapter = true)
+data class EspnLinkDto(val href: String? = null)
 
 @JsonClass(generateAdapter = true)
 data class EspnStatusDto(val type: EspnStatusTypeDto? = null)

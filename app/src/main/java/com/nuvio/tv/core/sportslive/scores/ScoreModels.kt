@@ -38,6 +38,11 @@ data class ScoreSnapshot(
     val eventId: String,
     /** The feed it came from (`eng.1`, `nba`, `all`). */
     val league: EspnLeague,
+    /**
+     * The event's own league slug: from its ESPN links when they name one (`soccer/all` mixes
+     * `caf.nations_qual`, `fifa.friendly_u21`, `eng.w.1`...), else the feed's [EspnLeague.league].
+     */
+    val leagueSlug: String = league.league,
     /** Scheduled start in epoch millis (UTC); null when the feed's date was missing or unreadable. */
     val startMs: Long?,
     val state: ScoreState,

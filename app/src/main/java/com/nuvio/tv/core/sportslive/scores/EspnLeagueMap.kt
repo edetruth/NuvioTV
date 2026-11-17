@@ -8,9 +8,8 @@ import java.text.Normalizer
  * Picks the ESPN scoreboard feed(s) for a card from its sport and the competition keywords in its title,
  * genres and catalog name. Data-driven: add a row to [COMPETITIONS] or [SPORTS] to extend.
  *
- * Routing only narrows which feeds are fetched; [ScoreMatcher] still requires both teams to match, so a
- * keyword that over-reaches ("Egyptian Premier League" is not routed, but "Premier League" is) costs a
- * request, never a wrong score.
+ * Routing narrows which feeds are fetched and keeps women's, minor-league and college cards away from
+ * the pro feeds whose teams share their names or cities; [ScoreMatcher] still requires both teams to match.
  */
 object EspnLeagueMap {
     val NBA = EspnLeague("basketball", "nba")
@@ -45,7 +44,7 @@ object EspnLeagueMap {
         Rule("""\bnfl\b""", listOf(NFL)),
         Rule("""\bnhl\b""", listOf(NHL)),
         Rule("""\bmlb\b""", listOf(MLB)),
-        Rule("""college football|\bncaaf\b|\bncaa football\b|\bcfb\b""", listOf(COLLEGE_FOOTBALL)),
+        Rule("""college (american )?football|\bncaaf\b|\bncaa (american )?football\b|\bcfb\b""", listOf(COLLEGE_FOOTBALL)),
         Rule("""college basketball|\bncaab\b|\bncaam\b|\bncaa (men'?s )?basketball\b""", listOf(COLLEGE_BASKETBALL)),
         Rule("""world cup qualif|\bwc qualif|\bwcq\b""") { hint ->
             val confederations = WORLD_CUP_QUALIFIERS.filter { (regex, _) -> regex.containsMatchIn(hint) }
@@ -67,7 +66,8 @@ object EspnLeagueMap {
         Rule("""\bfriendl(y|ies)\b""", soccer("fifa.friendly"))
     )
 
-    // The card's sport when no competition is named. "Football" is soccer; American football says so.
+    // The card's sport when no competition is named, checked rule by rule across all texts, so an
+    // "American Football" genre beats a "Football" sport. Soccer ("Football") is the last fallback.
     private val SPORTS: List<Rule> = listOf(
         Rule("""american football""", listOf(NFL)),
         Rule("""\bbasketball\b""", listOf(NBA)),
@@ -76,10 +76,16 @@ object EspnLeagueMap {
         Rule("""\bsoccer\b|\bfootball\b""", listOf(SOCCER_ALL))
     )
 
-    // Sports scores v1 does not cover: such a card gets no feed even when its title has a keyword.
-    private val UNSUPPORTED = Regex(
-        """\b(cricket|tennis|ufc|mma|boxing|golf|f1|formula 1|motogp|nascar|rugby|wwe|wrestling|darts|snooker)\b"""
+    // A card that mentions any of these anywhere gets no feed: sports scores v1 does not cover, and
+    // women's / minor leagues whose teams share names or cities with the pro feeds (WNBA, PWHL, AHL...).
+    private val EXCLUDED = Regex(
+        """\b(cricket|icc|t20|odi|ipl|tennis|ufc|mma|boxing|golf|f1|formula 1|motogp|nascar|rugby|wwe|wrestling|""" +
+            """darts|snooker|wnba|pwhl|ahl|echl|g[- ]?league|women'?s|womens)\b"""
     )
+
+    // A college card routes only to a college feed, never to the pro league of the same sport.
+    private val COLLEGE = Regex("""\bncaa\w*|\bcollege\b""")
+    private val COLLEGE_FEEDS = setOf(COLLEGE_FOOTBALL, COLLEGE_BASKETBALL)
 
     /** Feeds for [item]: its sport, title, genres and catalog name. Empty when none applies. */
     fun leaguesFor(item: SportsLiveItem): List<EspnLeague> =
@@ -91,18 +97,30 @@ object EspnLeagueMap {
     /**
      * Feeds for a card with [sport] (null when unknown) and text [hints] in priority order (title first).
      * A competition named in the sport or a hint wins; otherwise the sport word decides ("Basketball",
-     * "Football" = soccer); an unsupported sport gets none.
+     * "Football" = soccer). A card naming an excluded sport or league anywhere gets none, as does a
+     * college card without a college feed.
      */
     fun leaguesFor(sport: String?, hints: List<String>): List<EspnLeague> {
-        val sportText = sport?.let(::fold)
-        if (sportText != null && UNSUPPORTED.containsMatchIn(sportText)) return emptyList()
-        val texts = listOfNotNull(sportText) + hints.map(::fold).filter { it.isNotEmpty() }
-        return (firstRule(COMPETITIONS, texts) ?: firstRule(SPORTS, texts)).orEmpty()
+        val texts = (listOfNotNull(sport) + hints).map(::fold).filter { it.isNotEmpty() }
+        if (texts.any { EXCLUDED.containsMatchIn(it) }) return emptyList()
+        val leagues = (firstCompetition(texts) ?: firstSport(texts)).orEmpty()
+        val college = texts.any { COLLEGE.containsMatchIn(it) }
+        return if (college && leagues.none { it in COLLEGE_FEEDS }) emptyList() else leagues
     }
 
-    private fun firstRule(rules: List<Rule>, texts: List<String>): List<EspnLeague>? {
+    // Text by text (sport, title, genres, catalog): the first text naming a competition decides.
+    private fun firstCompetition(texts: List<String>): List<EspnLeague>? {
         for (text in texts) {
-            val rule = rules.firstOrNull { it.regex.containsMatchIn(text) } ?: continue
+            val rule = COMPETITIONS.firstOrNull { it.regex.containsMatchIn(text) } ?: continue
+            return rule.leagues(text)
+        }
+        return null
+    }
+
+    // Rule by rule: the first sport word found in any text decides, with soccer last.
+    private fun firstSport(texts: List<String>): List<EspnLeague>? {
+        for (rule in SPORTS) {
+            val text = texts.firstOrNull { rule.regex.containsMatchIn(it) } ?: continue
             return rule.leagues(text)
         }
         return null

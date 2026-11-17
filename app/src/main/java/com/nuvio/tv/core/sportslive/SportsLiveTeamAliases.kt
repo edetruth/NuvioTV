@@ -32,7 +32,7 @@ object SportsLiveTeamAliases {
         "namibia" to listOf("nam"),
         "cameroon" to listOf("cmr"),
         "cote d'ivoire" to listOf("civ", "ivory coast", "côte d'ivoire"),
-        "dr congo" to listOf("cod", "drc"),
+        "dr congo" to listOf("cod", "drc", "congo dr"),
         "nigeria" to listOf("nga", "ngr"),
         "egypt" to listOf("egy"),
         "morocco" to listOf("mar"),
