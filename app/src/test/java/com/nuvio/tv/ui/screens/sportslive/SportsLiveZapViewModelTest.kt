@@ -62,7 +62,7 @@ class SportsLiveZapViewModelTest {
         every { profiles.activeProfileId } returns MutableStateFlow(1)
         val repo = mockk<SportsLiveRepository>(relaxed = true)
         every { repo.endedKeys } returns MutableStateFlow(emptySet())
-        val viewModel = SportsLiveZapViewModel(SavedStateHandle(mapOf("contentId" to PLAYING.id)), resolver, debrid, profiles, repo)
+        val viewModel = SportsLiveZapViewModel(SavedStateHandle(mapOf("contentId" to PLAYING.id)), resolver, debrid, profiles, repo, mockk(relaxed = true))
         val events = mutableListOf<SportsLiveZapEvent>()
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.events.collect { events += it } }
 

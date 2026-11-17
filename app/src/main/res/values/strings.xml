@@ -3576,6 +3576,22 @@
     <string name="sports_live_chip_postponed">Postponed</string>
     <!-- Home Live now card label with a live score. -->
     <string name="sports_live_chip_home_live">● %1$s</string>
+    <!-- Details pane score block: "ARS 2–1 CHE", linescore headings, soccer scorers "Saka 23', 67' (pen)". -->
+    <string name="sports_live_details_scoreline">%1$s %2$d–%3$d %4$s</string>
+    <string name="sports_live_details_sides">%1$s – %2$s</string>
+    <string name="sports_live_details_period_ot">OT</string>
+    <string name="sports_live_details_period_ot_n">%1$dOT</string>
+    <string name="sports_live_details_period_et">ET%1$d</string>
+    <string name="sports_live_details_period_total">T</string>
+    <string name="sports_live_details_scorer">%1$s %2$s</string>
+    <string name="sports_live_details_scorer_pen">%1$s (pen)</string>
+    <string name="sports_live_details_scorer_og">%1$s (OG)</string>
+    <string name="sports_live_details_separator">", "</string>
+    <string name="sports_live_details_side_scorers">%1$s: %2$s</string>
+    <!-- Live games panel in the player: group headers. -->
+    <string name="sports_live_zap_group_live">Live now</string>
+    <string name="sports_live_zap_group_soon">Starting soon</string>
+    <string name="sports_live_zap_group_other">More games</string>
     <string name="sports_live_art_vs">vs</string>
     <!-- Drawn game card footer: kickoff · league. -->
     <string name="sports_live_art_footer">%1$s · %2$s</string>

@@ -88,7 +88,7 @@ internal fun SportsLiveScoreChip(chip: ScoreChip, modifier: Modifier = Modifier)
 
 /** The kickoff in local time: time only today, "Tomorrow <time>", weekday or date otherwise. */
 @Composable
-private fun kickoffText(art: GameArt): String? {
+internal fun kickoffText(art: GameArt): String? {
     val tomorrow = stringResource(R.string.sports_live_tomorrow)
     // Keyed by today's date, so "Today" / "Tomorrow" move on at midnight (the lists recompose on refresh).
     val today = LocalDate.now()

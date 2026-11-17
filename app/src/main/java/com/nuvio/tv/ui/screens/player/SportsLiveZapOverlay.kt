@@ -28,7 +28,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -37,6 +36,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -49,12 +49,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.tv.material3.Border
 import androidx.tv.material3.Card
 import androidx.tv.material3.CardDefaults
@@ -65,7 +69,11 @@ import com.nuvio.tv.ui.screens.sportslive.LiveWindow
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveRewind
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapBanner
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapPanelState
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveScoreChip
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapViewModel
+import com.nuvio.tv.ui.screens.sportslive.ZapPanelGroup
+import com.nuvio.tv.ui.screens.sportslive.ZapPanelRow
+import com.nuvio.tv.ui.screens.sportslive.kickoffText
 import com.nuvio.tv.ui.screens.sportslive.dual.LocalOpenSportsLiveDual
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualPick
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualPickerDialog
@@ -94,6 +102,15 @@ internal fun BoxScope.SportsLiveZapOverlay(
     val inPip by SportsLivePip.inPip.collectAsState()
     LaunchedEffect(inPip) { if (inPip) viewModel.closePanel() }
     if (inPip) return
+    // The panel's live scores poll while it is open; a stopped player (Home, screen off) closes it.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, viewModel) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) viewModel.closePanel()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     val banner by viewModel.banner.collectAsState()
     val panelOpen by viewModel.panelOpen.collectAsState()
     BehindLiveIndicator(liveWindow = liveWindow, engine = engine, covered = playerOverlayVisible || panelOpen)
@@ -156,6 +173,7 @@ internal fun BoxScope.SportsLiveZapOverlay(
                     null
                 },
                 onClose = { viewModel.closePanel() },
+                onRowFocus = viewModel::onPanelRowFocus,
                 onWatchWith = if (canWatchWith) {
                     {
                         dualPick = viewModel.dualPick()
@@ -262,7 +280,9 @@ private fun LiveGamesPanel(
     onLongPick: ((SportsLiveItem) -> Unit)?,
     onClose: () -> Unit,
     /** "Watch with another game" for the game playing, above the list; null hides it. */
-    onWatchWith: (() -> Unit)?
+    onWatchWith: (() -> Unit)?,
+    /** A game row took focus (Hide until focused reveals its score after a second). */
+    onRowFocus: (String?) -> Unit
 ) {
     val listState = rememberLazyListState()
     val focusRequester = remember { FocusRequester() }
@@ -277,7 +297,9 @@ private fun LiveGamesPanel(
             if (state.items.isEmpty()) {
                 emptyFocusRequester.requestFocus()
             } else {
-                listState.scrollToItem((startIndex - 2).coerceAtLeast(0))
+                // The list also holds a header above each group.
+                val headersAbove = state.rows.take(startIndex + 1).map { it.group }.distinct().size
+                listState.scrollToItem((startIndex + headersAbove - 2).coerceAtLeast(0))
                 delay(32)
                 focusRequester.requestFocus()
             }
@@ -350,18 +372,25 @@ private fun LiveGamesPanel(
                     contentPadding = PaddingValues(vertical = NuvioTheme.spacing.xs),
                     modifier = Modifier.fillMaxHeight()
                 ) {
-                    items(state.items, key = { it.streamKey }) { item ->
-                        LiveGameItem(
-                            item = item,
-                            isCurrent = item.streamKey == state.currentKey,
-                            modifier = if (state.items.getOrNull(startIndex) === item) {
-                                Modifier.focusRequester(focusRequester)
-                            } else {
-                                Modifier
-                            },
-                            onClick = { onPick(item) },
-                            onLongClick = onLongPick?.let { { it(item) } }
-                        )
+                    state.rows.forEachIndexed { index, row ->
+                        if (index == 0 || state.rows[index - 1].group != row.group) {
+                            item(key = "group_${row.group}") { GroupHeader(row.group) }
+                        }
+                        val item = row.item
+                        item(key = item.streamKey) {
+                            LiveGameItem(
+                                row = row,
+                                isCurrent = item.streamKey == state.currentKey,
+                                modifier = if (state.items.getOrNull(startIndex) === item) {
+                                    Modifier.focusRequester(focusRequester)
+                                } else {
+                                    Modifier
+                                },
+                                onClick = { onPick(item) },
+                                onLongClick = onLongPick?.let { { it(item) } },
+                                onFocus = { onRowFocus(item.streamKey) }
+                            )
+                        }
                     }
                 }
             }
@@ -369,15 +398,39 @@ private fun LiveGamesPanel(
     }
 }
 
+/** A small group heading in the live games panel: Live now, Starting soon, More games. */
+@Composable
+private fun GroupHeader(group: ZapPanelGroup) {
+    Text(
+        text = stringResource(
+            when (group) {
+                ZapPanelGroup.LIVE_NOW -> R.string.sports_live_zap_group_live
+                ZapPanelGroup.STARTING_SOON -> R.string.sports_live_zap_group_soon
+                ZapPanelGroup.OTHER -> R.string.sports_live_zap_group_other
+            }
+        ),
+        style = MaterialTheme.typography.labelMedium,
+        color = NuvioTheme.extendedColors.textSecondary,
+        maxLines = 1,
+        modifier = Modifier.padding(top = NuvioTheme.spacing.xs, start = NuvioTheme.spacing.xs)
+    )
+}
+
 @Composable
 private fun LiveGameItem(
-    item: SportsLiveItem,
+    row: ZapPanelRow,
     isCurrent: Boolean,
     modifier: Modifier,
     onClick: () -> Unit,
-    onLongClick: (() -> Unit)?
+    onLongClick: (() -> Unit)?,
+    onFocus: () -> Unit
 ) {
-    PanelCard(onClick = onClick, onLongClick = onLongClick, modifier = modifier.fillMaxWidth()) {
+    val item = row.item
+    PanelCard(
+        onClick = onClick,
+        onLongClick = onLongClick,
+        modifier = modifier.fillMaxWidth().onFocusChanged { if (it.isFocused) onFocus() }
+    ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -401,13 +454,17 @@ private fun LiveGameItem(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                // A game starting soon leads with its local kickoff.
+                val detail = "${item.sport ?: item.catalogName} · ${item.addonName}"
+                val kickoff = row.art?.let { kickoffText(it) }
                 Text(
-                    text = "${item.sport ?: item.catalogName} · ${item.addonName}",
+                    text = if (kickoff != null) stringResource(R.string.sports_live_art_footer, kickoff, detail) else detail,
                     style = MaterialTheme.typography.bodySmall,
                     color = NuvioTheme.extendedColors.textTertiary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                row.chip?.let { SportsLiveScoreChip(chip = it, modifier = Modifier.padding(top = NuvioTheme.spacing.xxs)) }
             }
         }
     }

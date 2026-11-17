@@ -60,6 +60,8 @@ import com.nuvio.tv.core.sportslive.scores.MySport
 import com.nuvio.tv.core.sportslive.scores.ResultRow
 import com.nuvio.tv.core.sportslive.scores.ScoreChip
 import com.nuvio.tv.core.sportslive.scores.ScoreChips
+import com.nuvio.tv.core.sportslive.scores.ScoreDetails
+import com.nuvio.tv.core.sportslive.scores.ScoreDetailsBuilder
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveItem
@@ -132,6 +134,12 @@ fun SportsLiveScreen(
             }
         }
         chip
+    }
+    // The pane's score block: the same match, side order and spoiler rule as the chip.
+    val detailsOf: (SportsLiveItem) -> ScoreDetails? = remember(scores, scoresMode, revealed, scoredTab) {
+        { item ->
+            if (scoredTab) ScoreDetailsBuilder.of(item, scores[item.streamKey], scoresMode, item.streamKey in revealed) else null
+        }
     }
     val artOf: (SportsLiveItem) -> GameArt? = remember(scores) {
         val cache = HashMap<SportsLiveItem, GameArt?>()
@@ -213,6 +221,7 @@ fun SportsLiveScreen(
             followedTeams = followedTeams,
             chipOf = chipOf,
             artOf = artOf,
+            detailsOf = detailsOf,
             onCardFocus = scoresViewModel::onCardFocus,
             onSelectTab = viewModel::selectTab,
             onSelectFilter = viewModel::selectFilter,
@@ -289,6 +298,8 @@ private fun SportsLiveContent(
     chipOf: (SportsLiveItem) -> ScoreChip?,
     /** A game's drawn card; null keeps the addon's art. */
     artOf: (SportsLiveItem) -> GameArt?,
+    /** A card's score block for the details pane (Live now / Upcoming only, spoiler setting applied). */
+    detailsOf: (SportsLiveItem) -> ScoreDetails?,
     /** The focused card's key (null: none), for Hide until focused. */
     onCardFocus: (String?) -> Unit,
     onSelectTab: (SportsLiveTab) -> Unit,
@@ -724,6 +735,7 @@ private fun SportsLiveContent(
                 noStream = noStreamKey == selected.listKey,
                 art = artOf(selected),
                 chip = chipOf(selected),
+                scoreDetails = detailsOf(selected),
                 modifier = Modifier
                     .weight(0.55f)
                     .fillMaxHeight()

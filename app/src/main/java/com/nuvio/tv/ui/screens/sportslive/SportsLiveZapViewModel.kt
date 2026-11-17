@@ -16,6 +16,8 @@ import androidx.lifecycle.viewModelScope
 import com.nuvio.tv.R
 import com.nuvio.tv.core.debrid.DirectDebridResolver
 import com.nuvio.tv.core.profile.ProfileManager
+import com.nuvio.tv.core.sportslive.scores.LiveScoresRepository
+import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.domain.repository.SportsLiveRepository
@@ -38,6 +40,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -69,7 +73,8 @@ class SportsLiveZapViewModel @Inject constructor(
     resolver: SportsLiveZapResolver,
     private val directDebridResolver: DirectDebridResolver,
     profileManager: ProfileManager,
-    private val repo: SportsLiveRepository
+    private val repo: SportsLiveRepository,
+    private val liveScores: LiveScoresRepository
 ) : ViewModel() {
 
     private val contentId: String? = savedStateHandle.get<String>("contentId").also { id ->
@@ -119,27 +124,46 @@ class SportsLiveZapViewModel @Inject constructor(
     private val _panelOpen = MutableStateFlow(false)
     val panelOpen: StateFlow<Boolean> = _panelOpen.asStateFlow()
 
-    /** The live games panel's list, kept current while the panel is open. */
+    // The panel's games are tracked for live scores only while it is open: the section stops its own
+    // tracking when the player covers it (ON_STOP), so the player has its own scope.
+    private val scoreTracker = LiveScoresTracker(LiveScoresRepository.SCREEN_PLAYER_PANEL, liveScores)
+
+    // Hide until focused: a row's score shows after it has been focused for a second.
+    private val reveal = ResultSpoilerReveal(viewModelScope)
+
+    /**
+     * The live games panel's list, kept current while the panel is open, grouped Live now → Starting
+     * soon → the rest, with score chips. Scores are collected (and so polled) only while it is open.
+     */
     val panel: StateFlow<SportsLiveZapPanelState?> = panelSession.flatMapLatest { session ->
         if (session == null) {
             flowOf(null)
         } else {
-            combine(repo.latest, repo.claimedCatalogs, repo.endedKeys, repo.followedTeams) { load, claimed, ended, followed ->
-                SportsLiveZapPanelState(
-                    items = liveGamesPanelItems(
-                        items = load?.items.orEmpty(),
-                        claimedKeys = claimed.mapTo(HashSet()) { it.key },
-                        endedKeys = ended,
-                        followed = followed,
-                        session = session,
-                        nowMs = System.currentTimeMillis(),
-                        addonOrder = claimed.map { it.addon.id }.distinct()
-                    ),
-                    currentKey = session.current.streamKey
+            val items = combine(repo.latest, repo.claimedCatalogs, repo.endedKeys, repo.followedTeams) { load, claimed, ended, followed ->
+                liveGamesPanelItems(
+                    items = load?.items.orEmpty(),
+                    claimedKeys = claimed.mapTo(HashSet()) { it.key },
+                    endedKeys = ended,
+                    followed = followed,
+                    session = session,
+                    nowMs = System.currentTimeMillis(),
+                    addonOrder = claimed.map { it.addon.id }.distinct()
                 )
             }.flowOn(Dispatchers.Default)
+            // The mode is null until read: no chips and nothing tracked before it is known.
+            val mode = liveScores.mode.map<ScoresMode, ScoresMode?> { it }.onStart { emit(null) }
+            combine(items, liveScores.scores, mode, reveal.revealed) { list, scores, scoresMode, revealed ->
+                scoreTracker.update(list, enabled = scoresMode != null && scoresMode != ScoresMode.OFF)
+                SportsLiveZapPanelState(
+                    rows = groupPanelRows(list, scores, scoresMode, revealed, System.currentTimeMillis()),
+                    currentKey = session.current.streamKey
+                )
+            }
         }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /** The focused panel row's stream key, or null when no row is focused (Hide until focused reveal). */
+    fun onPanelRowFocus(key: String?) = reveal.onFocus(key)
 
     private val shortPressKeys = SportsLiveShortPressKeys()
 
@@ -170,8 +194,9 @@ class SportsLiveZapViewModel @Inject constructor(
         return result
     }
 
-    private fun openPanel() {
+    internal fun openPanel() {
         val session = controller.session(contentId) ?: return
+        scoreTracker.onStart()
         panelSession.value = session
         _panelOpen.value = true
         viewModelScope.launch {
@@ -190,6 +215,10 @@ class SportsLiveZapViewModel @Inject constructor(
         if (!_panelOpen.value) return false
         _panelOpen.value = false
         panelSession.value = null
+        // Untracked now, and the next open starts from no cards rather than this list.
+        scoreTracker.update(emptyList(), enabled = false)
+        scoreTracker.onStop()
+        reveal.onFocus(null)
         return true
     }
 
@@ -241,6 +270,11 @@ class SportsLiveZapViewModel @Inject constructor(
         val items = panel.value?.items.orEmpty()
         closePanel()
         controller.pick(contentId, item, items)
+    }
+
+    override fun onCleared() {
+        scoreTracker.onStop()
+        super.onCleared()
     }
 
     private suspend fun targetFor(item: SportsLiveItem, stream: Stream): SportsLiveZapTarget =

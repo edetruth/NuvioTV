@@ -51,6 +51,7 @@ import com.nuvio.tv.core.sportslive.SportsLiveLocalTime
 import com.nuvio.tv.core.sportslive.SportsLivePillTime
 import com.nuvio.tv.core.sportslive.scores.GameArt
 import com.nuvio.tv.core.sportslive.scores.ScoreChip
+import com.nuvio.tv.core.sportslive.scores.ScoreDetails
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveTab
 import com.nuvio.tv.ui.components.LightweightCard
@@ -266,7 +267,9 @@ internal fun SportsLiveDetailsPane(
     /** A game's drawn card, in place of the addon's backdrop; null keeps the addon's art. */
     art: GameArt? = null,
     /** The score chip drawn on [art]. */
-    chip: ScoreChip? = null
+    chip: ScoreChip? = null,
+    /** A matched game's scoreline, linescore and scorers (spoiler setting applied); null shows none. */
+    scoreDetails: ScoreDetails? = null
 ) {
     Column(
         modifier = modifier,
@@ -323,6 +326,7 @@ internal fun SportsLiveDetailsPane(
                 overflow = TextOverflow.Ellipsis
             )
         }
+        scoreDetails?.let { SportsLiveScoreDetails(it) }
         val tomorrow = stringResource(R.string.sports_live_tomorrow)
         val description = remember(item.meta.id, item.meta.description, tomorrow) {
             item.meta.description?.let {

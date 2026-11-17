@@ -396,6 +396,8 @@ class LiveScoresRepository internal constructor(
         /** [track] screen ids. */
         const val SCREEN_HOME = "home"
         const val SCREEN_SECTION = "sports_live"
+        /** The player's live games panel, tracked only while it is open. */
+        const val SCREEN_PLAYER_PANEL = "player_panel"
 
         private const val WINDOW_MS = 3 * 60 * 60 * 1000L
         private const val MAX_REMEMBERED = 2_000
