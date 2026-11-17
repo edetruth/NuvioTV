@@ -32,7 +32,7 @@ class SportsLiveMiniFocusKeysTest {
         )) {
             assertEquals(SportsLiveMiniKey.RELEASE, sportsLiveMiniKey(key, down = true, repeatCount = 0))
             assertEquals(SportsLiveMiniKey.RELEASE, sportsLiveMiniKey(key, down = true, repeatCount = 3))
-            assertNull(sportsLiveMiniKey(key, down = false, repeatCount = 0))
+            assertEquals(SportsLiveMiniKey.CONSUME, sportsLiveMiniKey(key, down = false, repeatCount = 0))
         }
     }
 

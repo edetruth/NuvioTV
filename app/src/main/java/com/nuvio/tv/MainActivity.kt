@@ -80,7 +80,6 @@ import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.BlendMode
@@ -1274,7 +1273,9 @@ open class MainActivity : ComponentActivity() {
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .focusRequester(sportsLiveContentFocus)
-                                    .focusRestorer()
+                                    // Saved only for the mini player's arrows to restore; nothing
+                                    // else enters through this group, so screens keep their own focus.
+                                    .focusProperties { onExit = { sportsLiveContentFocus.saveFocusedChild() } }
                                     .focusGroup()
                             ) {
                             CompositionLocalProvider(LocalNavViewModelStoreOwner provides navViewModelStoreOwner) {

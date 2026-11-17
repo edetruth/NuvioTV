@@ -276,8 +276,12 @@ fun SportsLiveMiniPlayerHost(
                                 controller.stop(SportsLiveMiniStop.USER_STOP)
                             }
                             SportsLiveMiniKey.RELEASE -> {
-                                val restored = contentFocusRequester != null &&
-                                    runCatching { contentFocusRequester.requestFocus() }.isSuccess
+                                // The element the content last had focused (saved as focus left it), else
+                                // the content's default entry.
+                                val restored = contentFocusRequester != null && runCatching {
+                                    contentFocusRequester.restoreFocusedChild() ||
+                                        contentFocusRequester.requestFocus(FocusDirection.Enter)
+                                }.getOrDefault(false)
                                 if (!restored) focusManager.clearFocus()
                             }
                             SportsLiveMiniKey.CONSUME -> Unit

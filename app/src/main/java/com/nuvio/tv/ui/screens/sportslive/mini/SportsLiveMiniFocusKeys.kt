@@ -31,6 +31,7 @@ fun sportsLiveMiniKey(keyCode: Int, down: Boolean, repeatCount: Int): SportsLive
         if (down && repeatCount == 0) SportsLiveMiniKey.EXPAND else SportsLiveMiniKey.CONSUME
     KeyEvent.KEYCODE_BACK -> if (down) SportsLiveMiniKey.CONSUME else SportsLiveMiniKey.CLOSE
     KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT ->
-        if (down) SportsLiveMiniKey.RELEASE else null
+        // Its release is eaten too, so it never reaches the element that has just taken focus.
+        if (down) SportsLiveMiniKey.RELEASE else SportsLiveMiniKey.CONSUME
     else -> null
 }
