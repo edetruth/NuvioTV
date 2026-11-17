@@ -10,6 +10,7 @@ import com.nuvio.tv.core.sportslive.EndedInputs
 import com.nuvio.tv.core.sportslive.EndedSignal
 import com.nuvio.tv.core.sportslive.SportsLiveEndedGames
 import com.nuvio.tv.core.sportslive.SportsLiveItemBucketer
+import com.nuvio.tv.core.sportslive.SportsLiveLayout
 import com.nuvio.tv.core.sportslive.SportsLiveLiveDuration
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.scores.LiveScoresRepository
@@ -64,7 +65,10 @@ class SportsLiveViewModel internal constructor(
     endedInputs: Flow<EndedInputs> = flowOf(EndedInputs()),
     private val endedGames: SportsLiveEndedGames = SportsLiveEndedGames(),
     /** Ticks while the list is watched, so a game's grace or estimate running out moves its card. */
-    clock: Flow<Unit> = flowOf(Unit)
+    clock: Flow<Unit> = flowOf(Unit),
+    /** The stored Cards / Scoreboard choice per tab (#23), for the active profile. */
+    layouts: Flow<Map<SportsLiveTab, SportsLiveLayout>> = flowOf(emptyMap()),
+    private val saveLayout: suspend (SportsLiveTab, SportsLiveLayout) -> Unit = { _, _ -> }
 ) : ViewModel() {
 
     @Inject
@@ -100,7 +104,9 @@ class SportsLiveViewModel internal constructor(
                 emit(Unit)
                 delay(ENDED_TICK_MS)
             }
-        }
+        },
+        layouts = prefs.layouts,
+        saveLayout = prefs::setLayout
     )
 
     private data class Selection(
@@ -164,6 +170,18 @@ class SportsLiveViewModel internal constructor(
             buildState(pinned, endedKeys, selection, inputs)
         }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SportsLiveUiState())
+
+    /** The selected tab's layout: Cards unless the user picked another one the tab offers. */
+    val layout: StateFlow<SportsLiveLayout> =
+        combine(layouts, selectionState) { choices, selection -> SportsLiveLayout.of(choices, selection.tab) }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SportsLiveLayout.CARDS)
+
+    /** Remembers [layout] for the selected tab (per profile); a tab that does not offer it ignores it. */
+    fun selectLayout(layout: SportsLiveLayout) {
+        val tab = selectionState.value.tab
+        if (layout !in SportsLiveLayout.offeredFor(tab)) return
+        viewModelScope.launch { saveLayout(tab, layout) }
+    }
 
     /** The active profile's followed teams, for the card menu's Follow / Unfollow labels. */
     val followedTeams: StateFlow<List<FollowedTeam>> =

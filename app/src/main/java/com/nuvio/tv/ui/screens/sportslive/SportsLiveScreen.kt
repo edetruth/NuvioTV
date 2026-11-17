@@ -56,6 +56,8 @@ import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.TeamPair
 import com.nuvio.tv.core.sportslive.EndedSignal
 import com.nuvio.tv.core.sportslive.SportsLiveEndedGames
+import com.nuvio.tv.core.sportslive.SportsLiveLayout
+import com.nuvio.tv.core.sportslive.scores.GameSituations
 import com.nuvio.tv.core.sportslive.scores.GameArt
 import com.nuvio.tv.core.sportslive.scores.LiveScoresRepository
 import com.nuvio.tv.core.sportslive.scores.MySport
@@ -161,6 +163,32 @@ fun SportsLiveScreen(
     val gameOf: (SportsLiveItem) -> ScoreSnapshot? = remember(scores, scoredTab) {
         { item -> if (scoredTab) ScoreChips.matchedEvent(item, scores[item.streamKey]) else null }
     }
+    // The Scoreboard layout (#23): Live now and Upcoming only, remembered per tab.
+    val layout by viewModel.layout.collectAsStateWithLifecycle()
+    val scoreboardRowsOf: (List<SportsLiveItem>) -> List<ScoreboardRow> =
+        remember(scores, scoresMode, revealed, uiState.selectedTab, uiState.justEnded, followedTeams) {
+            { items ->
+                scoreboardRows(
+                    items = items,
+                    tab = uiState.selectedTab,
+                    scores = scores,
+                    mode = scoresMode,
+                    revealed = revealed,
+                    nowMs = System.currentTimeMillis(),
+                    ended = if (uiState.selectedTab == SportsLiveTab.LIVE_NOW) uiState.justEnded else emptyMap(),
+                    followsSide = { item, side -> followedTeams.any { SportsLiveTeams.followsSideOfAnySource(it, side, item) } }
+                )
+            }
+        }
+    // The situation line follows the score: only while the card would show its live score.
+    val situationStrings = rememberGameSituationStrings()
+    val situationOf: (SportsLiveItem) -> String = remember(scores, scoresMode, revealed, scoredTab, situationStrings) {
+        { item ->
+            val event = scores[item.streamKey]
+            val situation = if (scoredTab) GameSituations.of(item, event, scoresMode, item.streamKey in revealed) else null
+            if (situation != null && event != null) GameSituations.situationLine(situation, event, situationStrings) else ""
+        }
+    }
     val artOf: (SportsLiveItem) -> GameArt? = remember(scores) {
         val cache = HashMap<SportsLiveItem, GameArt?>()
         val art: (SportsLiveItem) -> GameArt? = { item -> cache.getOrPut(item) { GameArt.of(item, scores[item.streamKey]) } }
@@ -239,6 +267,10 @@ fun SportsLiveScreen(
         else -> SportsLiveContent(
             uiState = uiState,
             followedTeams = followedTeams,
+            layout = layout,
+            onSelectLayout = viewModel::selectLayout,
+            scoreboardRowsOf = scoreboardRowsOf,
+            situationOf = situationOf,
             chipOf = chipOf,
             artOf = artOf,
             detailsOf = detailsOf,
@@ -321,6 +353,13 @@ private fun NoAddonsState(onOpenAddons: () -> Unit) {
 private fun SportsLiveContent(
     uiState: SportsLiveUiState,
     followedTeams: List<FollowedTeam>,
+    /** The selected tab's layout: Cards, or the Scoreboard (#23). */
+    layout: SportsLiveLayout,
+    onSelectLayout: (SportsLiveLayout) -> Unit,
+    /** The Scoreboard's grouped rows for the tab's games as filtered. */
+    scoreboardRowsOf: (List<SportsLiveItem>) -> List<ScoreboardRow>,
+    /** A game's situation line ("" when none or hidden with the score). */
+    situationOf: (SportsLiveItem) -> String,
     /** A card's score chip (Live now / Upcoming only, spoiler setting applied). */
     chipOf: (SportsLiveItem) -> ScoreChip?,
     /** A game's drawn card; null keeps the addon's art. */
@@ -372,7 +411,10 @@ private fun SportsLiveContent(
     var focusedCardKey by rememberSaveable { mutableStateOf<String?>(null) }
     // One scroll position per tab and filter: switching opens the list at the top, while coming back
     // from a game, Details or the player restores the position saved with the back stack entry.
-    val filterKey = "${uiState.selectedTab.name}|${uiState.selectedFilter.orEmpty()}"
+    val layouts = SportsLiveLayout.offeredFor(uiState.selectedTab)
+    val scoreboard = layout == SportsLiveLayout.SCOREBOARD && layout in layouts
+    // A layout change is a new list, like a filter change.
+    val filterKey = "${uiState.selectedTab.name}|${uiState.selectedFilter.orEmpty()}|${if (scoreboard) layout.name else ""}"
     val listState = rememberSaveable(filterKey, saver = LazyListState.Saver) { LazyListState() }
     val baseStateLabelOf = rememberSportsLiveStateLabeler(uiState.selectedTab)
     val finalLabel = stringResource(R.string.sports_live_chip_final_note)
@@ -396,7 +438,10 @@ private fun SportsLiveContent(
         }.keys
     }
 
-    val items = uiState.visibleItems
+    // The Scoreboard lists the same games grouped LIVE → STARTING SOON → LATER → FINAL.
+    val boardRows = if (scoreboard) remember(uiState.visibleItems, scoreboardRowsOf) { scoreboardRowsOf(uiState.visibleItems) } else null
+    val boardRowOf = remember(boardRows) { boardRows?.associateBy { it.item.listKey }.orEmpty() }
+    val items = boardRows?.map { it.item } ?: uiState.visibleItems
     val selected = items.firstOrNull { it.listKey == focusedCardKey && it.id == uiState.selectedItemId }
         ?: items.firstOrNull { it.id == uiState.selectedItemId }
         ?: items.firstOrNull()
@@ -666,6 +711,9 @@ private fun SportsLiveContent(
             onSelectTab = onSelectTab,
             onOpenTab = openList,
             onRefresh = onRefresh,
+            layouts = layouts,
+            layout = layout,
+            onSelectLayout = onSelectLayout,
             modifier = Modifier.onFocusChanged { if (it.hasFocus) followedCardKey = null }
         )
         if (showingResults) {
@@ -758,6 +806,66 @@ private fun SportsLiveContent(
                 verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)
             ) {
                 itemsIndexed(items, key = { _, item -> item.listKey }) { index, item ->
+                    val boardRow = boardRowOf[item.listKey]
+                    val onCardClick: () -> Unit = {
+                        val first = pickFirst
+                        if (first == null) {
+                            openCard(item)
+                        } else {
+                            // Pick mode: OK pairs an eligible card (the list as shown is the dual
+                            // list); any other card, or a tab without dual screen, ignores it.
+                            sportsLivePickModeSession(
+                                chosen = first,
+                                item = item,
+                                tab = uiState.selectedTab,
+                                items = items,
+                                filter = uiState.selectedFilter
+                            )?.let { session ->
+                                pickFirst = null
+                                onOpenDual(session)
+                            }
+                        }
+                    }
+                    // A card naming a game, or a live game, opens the menu; other cards open Details directly.
+                    // Ignored in pick mode.
+                    val onCardLongClick: () -> Unit = {
+                        when {
+                            pickFirst != null -> Unit
+                            item.teams != null || canWatchWith(item) -> menuCardKey = item.listKey
+                            else -> onOpenDetail(item)
+                        }
+                    }
+                    val onCardFocused: () -> Unit = {
+                        onCardFocus(item.streamKey)
+                        if (item.listKey != followedCardKey) followedCardKey = null
+                        focusedCardKey = item.listKey
+                        onSelectItem(item.id)
+                    }
+                    val cardModifier = Modifier
+                        .focusRequester(cardFocusRequester(item))
+                        .focusProperties {
+                            right = watchFocusRequester
+                            if (index == 0) up = aboveListFocusRequester
+                        }
+                    if (boardRow != null) {
+                        // The group's heading rides on its first row, so list indices stay the rows' own.
+                        Column {
+                            if (index == 0 || boardRowOf[items[index - 1].listKey]?.group != boardRow.group) {
+                                SportsLiveScoreboardHeader(boardRow.group)
+                            }
+                            SportsLiveScoreboardRow(
+                                row = boardRow,
+                                selected = item.listKey == selected.listKey,
+                                onClick = onCardClick,
+                                onLongClick = onCardLongClick,
+                                onFocus = onCardFocused,
+                                menuOpen = item.listKey == menuCardKey,
+                                pickedFirst = item.listKey == pickFirst?.listKey,
+                                modifier = cardModifier
+                            )
+                        }
+                        return@itemsIndexed
+                    }
                     val ended = uiState.endedOf(item) != null
                     // The strip's heading rides on its first card, so list indices stay the cards' own.
                     Column {
@@ -776,56 +884,49 @@ private fun SportsLiveContent(
                         selected = item.listKey == selected.listKey,
                         ended = ended,
                         hasReplay = item.streamKey in replayKeys && ended,
-                        onClick = {
-                            val first = pickFirst
-                            if (first == null) {
-                                openCard(item)
-                            } else {
-                                // Pick mode: OK pairs an eligible card (the list as shown is the dual
-                                // list); any other card, or a tab without dual screen, ignores it.
-                                sportsLivePickModeSession(
-                                    chosen = first,
-                                    item = item,
-                                    tab = uiState.selectedTab,
-                                    items = items,
-                                    filter = uiState.selectedFilter
-                                )?.let { session ->
-                                    pickFirst = null
-                                    onOpenDual(session)
-                                }
-                            }
-                        },
-                        // A card naming a game, or a live game, opens the menu; other cards open Details directly.
-                        // Ignored in pick mode.
-                        onLongClick = {
-                            when {
-                                pickFirst != null -> Unit
-                                item.teams != null || canWatchWith(item) -> menuCardKey = item.listKey
-                                else -> onOpenDetail(item)
-                            }
-                        },
+                        onClick = onCardClick,
+                        onLongClick = onCardLongClick,
                         menuOpen = item.listKey == menuCardKey,
                         pickedFirst = item.listKey == pickFirst?.listKey,
                         art = artOf(item),
                         chip = chipOf(item),
-                        onFocus = {
-                            onCardFocus(item.streamKey)
-                            if (item.listKey != followedCardKey) followedCardKey = null
-                            focusedCardKey = item.listKey
-                            onSelectItem(item.id)
-                        },
-                        modifier = Modifier
-                            .focusRequester(cardFocusRequester(item))
-                            .focusProperties {
-                                right = watchFocusRequester
-                                if (index == 0) up = aboveListFocusRequester
-                            }
+                        onFocus = onCardFocused,
+                        modifier = cardModifier
                     )
                     }
                 }
             }
             }
             val selectedPreview = preview?.takeIf { it.item.listKey == selected.listKey }
+            val selectedRow = boardRowOf[selected.listKey]
+            if (selectedRow != null) {
+                val event = gameOf(selected)
+                SportsLiveScoreboardPane(
+                    row = selectedRow,
+                    onWatch = { open(selected) },
+                    buttons = scoreboardButtons(uiState.selectedTab, selectedRow, event),
+                    // The dual screen's pick mode, as from the card menu.
+                    onWatchWith = { pickFirst = selected },
+                    onGameStats = { event?.let { onOpenGame(selected, it) } },
+                    preview = if (selectedPreview != null) {
+                        { SportsLivePreviewVideo(previewPlayer) }
+                    } else {
+                        null
+                    },
+                    previewShowing = selectedPreview?.rendering == true,
+                    noStream = noStreamKey == selected.listKey,
+                    details = detailsOf(selected),
+                    situation = situationOf(selected),
+                    modifier = Modifier
+                        .weight(0.55f)
+                        .fillMaxHeight()
+                        .onFocusChanged { paneHasFocus = it.hasFocus },
+                    watchModifier = Modifier
+                        .focusRequester(watchFocusRequester)
+                        .focusProperties { left = entryCardFocusRequester ?: selectedCardFocusRequester }
+                )
+                return@Row
+            }
             SportsLiveDetailsPane(
                 item = selected,
                 stateLabel = stateLabelOf(selected),
@@ -868,6 +969,10 @@ private fun SportsLiveTabRow(
     onSelectTab: (SportsLiveTab) -> Unit,
     onOpenTab: () -> Unit,
     onRefresh: () -> Unit,
+    /** The tab's layouts (Cards · Scoreboard); empty shows no switch. */
+    layouts: List<SportsLiveLayout>,
+    layout: SportsLiveLayout,
+    onSelectLayout: (SportsLiveLayout) -> Unit,
     modifier: Modifier = Modifier
 ) {
     // Down goes to the selected filter chip (or card), never to whichever chip sits below, since filter chips select on focus.
@@ -903,6 +1008,10 @@ private fun SportsLiveTabRow(
         }
         Spacer(modifier = Modifier.width(NuvioTheme.spacing.md))
         RefreshFilterChip(onClick = onRefresh, isLoading = uiState.isLoading, modifier = downModifier)
+        if (layouts.size >= 2) {
+            Spacer(modifier = Modifier.width(NuvioTheme.spacing.md))
+            SportsLiveLayoutSwitch(layouts = layouts, selected = layout, onSelect = onSelectLayout, chipModifier = downModifier)
+        }
     }
 }
 

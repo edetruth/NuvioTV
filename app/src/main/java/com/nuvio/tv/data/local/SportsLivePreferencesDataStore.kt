@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.nuvio.tv.core.profile.ProfileManager
+import com.nuvio.tv.core.sportslive.SportsLiveLayout
 import com.nuvio.tv.core.sportslive.SportsLiveOpenGame
 import com.nuvio.tv.core.sportslive.scores.MySports
 import com.nuvio.tv.core.sportslive.scores.ScoreDelayChoices
@@ -16,6 +17,7 @@ import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.domain.model.CatalogOption
 import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveOverride
+import com.nuvio.tv.domain.model.SportsLiveTab
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flatMapLatest
@@ -58,6 +60,7 @@ class SportsLivePreferencesDataStore @Inject constructor(
     private val recentScoreLeaguesKey = stringPreferencesKey("sports_live_recent_score_leagues")
     private val mySportsKey = stringSetPreferencesKey("sports_live_my_sports")
     private val openGameKey = stringPreferencesKey("sports_live_open_game")
+    private val layoutsKey = stringPreferencesKey("sports_live_layouts")
 
     val showSection: Flow<Boolean> = profileManager.activeProfileId.flatMapLatest { pid ->
         factory.get(pid, FEATURE).data.map { it[showSectionKey] ?: true }
@@ -125,6 +128,17 @@ class SportsLivePreferencesDataStore @Inject constructor(
     val openGame: Flow<SportsLiveOpenGame?> = profileManager.activeProfileId.flatMapLatest { pid ->
         factory.get(pid, FEATURE).data.map { prefs ->
             SportsLiveOpenGame.entries.firstOrNull { it.name == prefs[openGameKey] }
+        }
+    }
+
+    /** Cards or Scoreboard (#23), per tab; a tab with no entry shows Cards. */
+    val layouts: Flow<Map<SportsLiveTab, SportsLiveLayout>> = profileManager.activeProfileId.flatMapLatest { pid ->
+        factory.get(pid, FEATURE).data.map { SportsLiveLayout.decode(it[layoutsKey]) }
+    }
+
+    suspend fun setLayout(tab: SportsLiveTab, layout: SportsLiveLayout) {
+        store().edit { prefs ->
+            prefs[layoutsKey] = SportsLiveLayout.encode(SportsLiveLayout.decode(prefs[layoutsKey]) + (tab to layout))
         }
     }
 

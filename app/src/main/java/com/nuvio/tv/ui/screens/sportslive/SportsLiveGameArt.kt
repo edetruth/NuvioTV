@@ -230,7 +230,7 @@ private fun LargeTeam(team: GameArtTeam, withLogo: Boolean, modifier: Modifier =
 }
 
 /** "Shared visual language" of the Sports & Live designs (dark broadcast look). */
-private object ArtColors {
+internal object ArtColors {
     val Background = Color(0xFF0A0D12)
     val Panel = Color(0xFF121821)
     val Text = Color(0xFFF2F4F7)

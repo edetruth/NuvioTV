@@ -3705,6 +3705,27 @@
     <!-- Live now games found over (#60): the strip at the end of the list, and its cards' pill. -->
     <string name="sports_live_just_ended">Just ended</string>
     <string name="sports_live_probably_ended">Probably ended</string>
+    <!-- Scoreboard layout (#23) -->
+    <string name="sports_live_layout_cards">Cards</string>
+    <string name="sports_live_layout_scoreboard">Scoreboard</string>
+    <string name="sports_live_scoreboard_live">LIVE</string>
+    <string name="sports_live_scoreboard_starting_soon">STARTING SOON</string>
+    <string name="sports_live_scoreboard_later">LATER</string>
+    <string name="sports_live_scoreboard_final">FINAL</string>
+    <string name="sports_live_scoreboard_in_hm">in %1$d h %2$d m</string>
+    <string name="sports_live_scoreboard_in_m">in %1$d m</string>
+    <string name="sports_live_scoreboard_preview_hint">Preview · muted · OK for full screen</string>
+    <string name="sports_live_situation_separator">" · "</string>
+    <string name="sports_live_situation_possession">%1$s ball</string>
+    <string name="sports_live_situation_red_zone">Red zone</string>
+    <string name="sports_live_situation_inning">%1$s %2$d</string>
+    <string name="sports_live_situation_outs">%1$d out</string>
+    <string name="sports_live_situation_runner_on">Runner on %1$s</string>
+    <string name="sports_live_situation_two_runners">%1$s &amp; %2$s</string>
+    <string name="sports_live_situation_bases_loaded">Bases loaded</string>
+    <string name="sports_live_situation_first">1st</string>
+    <string name="sports_live_situation_second">2nd</string>
+    <string name="sports_live_situation_third">3rd</string>
     <string name="sports_live_time_tba">Time TBA</string>
     <string name="sports_live_tomorrow">Tomorrow %1$s</string>
     <string name="sports_live_empty_tab">Nothing here right now</string>
