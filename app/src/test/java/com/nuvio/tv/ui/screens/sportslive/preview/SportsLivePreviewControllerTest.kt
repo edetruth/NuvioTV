@@ -30,7 +30,10 @@ class SportsLivePreviewControllerTest {
     private fun TestScope.controller(
         tab: SportsLiveTab = SportsLiveTab.LIVE_NOW,
         resolve: suspend (SportsLiveItem) -> Stream? = { item -> if (item.id == "a") streamA else streamB }
-    ) = SportsLivePreviewController(this, { item -> lookups += item.id; resolve(item) }).apply {
+    ) = SportsLivePreviewController(this, { item ->
+        lookups += item.id
+        resolve(item)?.let(SportsLivePreviewLookup::Found) ?: SportsLivePreviewLookup.NoStream
+    }).apply {
         onTab(tab)
         onEnabled(true)
         onVisible(true)
@@ -160,12 +163,27 @@ class SportsLivePreviewControllerTest {
     }
 
     @Test
-    fun `no stream keeps the art`() = runTest {
+    fun `no stream at all shows as no stream until the focus moves`() = runTest {
         val preview = controller(resolve = { null })
         preview.onFocus(a)
         advanceUntilIdle()
-        assertEquals(SportsLivePreviewState.Idle, preview.state.value)
+        assertEquals(SportsLivePreviewState.NoStream(a), preview.state.value)
         assertEquals(listOf("a"), lookups)
+
+        preview.onFocus(b)
+        assertEquals(SportsLivePreviewState.Idle, preview.state.value)
+    }
+
+    @Test
+    fun `a stream only the full player can play keeps the art`() = runTest {
+        val preview = SportsLivePreviewController(this, { SportsLivePreviewLookup.NotPreviewable }).apply {
+            onTab(SportsLiveTab.LIVE_NOW)
+            onEnabled(true)
+            onVisible(true)
+        }
+        preview.onFocus(a)
+        advanceUntilIdle()
+        assertEquals(SportsLivePreviewState.Idle, preview.state.value)
     }
 
     @Test

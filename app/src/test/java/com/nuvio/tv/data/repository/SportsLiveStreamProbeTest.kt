@@ -107,7 +107,7 @@ class SportsLiveStreamProbeTest {
     }
 
     @Test
-    fun `focus re-probes only after two minutes and an ended verdict expires after three`() = runTest {
+    fun `focus re-probes only after two minutes and an ended verdict is re-checked rather than expired`() = runTest {
         streams.responses["x"] = { flowOf(NetworkResult.Success(emptyList())) }
         val probe = newProbe()
         probe.reprobeIfStale(item("x"))
@@ -127,29 +127,53 @@ class SportsLiveStreamProbeTest {
         assertEquals(listOf(false, true), streams.forceRefreshes)
         assertEquals(setOf("sports|x"), probe.ended.value)
 
-        // Three minutes after the latest verdict the item shows again.
+        // Three minutes after the latest verdict it is re-checked (no cache), and stays hidden
+        // while still empty.
         advanceTimeBy(SportsLiveStreamProbe.ENDED_TTL_MS - 1)
-        assertEquals(setOf("sports|x"), probe.ended.value)
+        assertEquals(2, streams.calls.size)
         advanceTimeBy(1)
         runCurrent()
-        assertEquals(emptySet<String>(), probe.ended.value)
+        assertEquals(3, streams.calls.size)
+        assertEquals(true, streams.forceRefreshes.last())
+        assertEquals(setOf("sports|x"), probe.ended.value)
     }
 
     @Test
-    fun `the first probe after an ended game reappears bypasses the stream cache`() = runTest {
+    fun `an ended game stays hidden after its background re-checks run out`() = runTest {
+        streams.responses["x"] = { flowOf(NetworkResult.Success(emptyList())) }
+        val probe = newProbe()
+        probe.reprobeIfStale(item("x"))
+        runCurrent()
+
+        advanceTimeBy(10 * SportsLiveStreamProbe.ENDED_TTL_MS)
+        runCurrent()
+
+        assertEquals(1 + SportsLiveStreamProbe.MAX_ENDED_RECHECKS, streams.calls.size)
+        assertEquals(setOf("sports|x"), probe.ended.value)
+    }
+
+    @Test
+    fun `background re-checks of an ended game are bounded`() {
+        assertEquals(true, SportsLiveStreamProbe.shouldRecheckEnded(0))
+        assertEquals(true, SportsLiveStreamProbe.shouldRecheckEnded(SportsLiveStreamProbe.MAX_ENDED_RECHECKS - 1))
+        assertEquals(false, SportsLiveStreamProbe.shouldRecheckEnded(SportsLiveStreamProbe.MAX_ENDED_RECHECKS))
+    }
+
+    @Test
+    fun `an ended game comes back only when its re-check finds links`() = runTest {
         streams.responses["x"] = { flowOf(NetworkResult.Success(emptyList())) }
         val probe = newProbe()
         probe.reprobeIfStale(item("x"))
         runCurrent()
         assertEquals(setOf("sports|x"), probe.ended.value)
 
-        advanceTimeBy(SportsLiveStreamProbe.ENDED_TTL_MS)
-        runCurrent()
-        assertEquals(emptySet<String>(), probe.ended.value)
+        // A quick tab round trip later the game is still gone: nothing expires on a timer.
+        advanceTimeBy(SportsLiveStreamProbe.ENDED_TTL_MS - 1)
+        assertEquals(setOf("sports|x"), probe.ended.value)
 
-        // Links were posted late: the forced re-check finds them and the game stays visible.
+        // Links were posted late: the forced re-check finds them and the game shows again.
         streams.responses["x"] = { result(PLAYABLE) }
-        probe.reprobeIfStale(item("x"))
+        advanceTimeBy(1)
         runCurrent()
 
         assertEquals(listOf(false, true), streams.forceRefreshes)

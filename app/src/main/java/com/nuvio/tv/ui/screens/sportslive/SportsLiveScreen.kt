@@ -171,6 +171,7 @@ fun SportsLiveScreen(
                 }
             },
             preview = playing,
+            noStreamKey = (preview as? SportsLivePreviewState.NoStream)?.item?.listKey,
             previewPlayer = previewPlayer,
             dialogOpen = playState != SportsLivePlayState.Idle,
             onPreviewFocus = viewModel::setPreviewFocus,
@@ -213,6 +214,8 @@ private fun SportsLiveContent(
     onRefresh: () -> Unit,
     onPlay: (SportsLiveItem) -> Unit,
     preview: SportsLivePreviewState.Playing?,
+    /** The card whose stream lookup found nothing to play. */
+    noStreamKey: String?,
     previewPlayer: SportsLivePreviewPlayer,
     /** OK's stream lookup or picker is open. */
     dialogOpen: Boolean,
@@ -377,6 +380,35 @@ private fun SportsLiveContent(
         listState.scrollToItem(index)
         repeat(2) { withFrameNanos { } }
         runCatching { cardFocusRequesters[key]?.requestFocus() }
+    }
+
+    // A refresh or an ended verdict can drop the focused card. The selection (and with it the pane
+    // and preview) moves to the card that took its place, never staying on a card no longer listed,
+    // and focus follows when it was in the list, instead of falling onto the filter chips.
+    val itemKeys = remember(items) { items.map { it.listKey } }
+    var shownListing by remember { mutableStateOf(filterKey to itemKeys) }
+    // Read while composing the change, before the removed card's focus is gone.
+    val listFocusedAtChange = remember(itemKeys) { listHasFocus }
+    LaunchedEffect(filterKey, itemKeys) {
+        val (shownFilterKey, shownKeys) = shownListing
+        shownListing = filterKey to itemKeys
+        // A tab or filter change is not a removal; a follow refocus handles its own card.
+        if (shownFilterKey != filterKey || followedCardKey != null) return@LaunchedEffect
+        val key = focusedCardKey ?: return@LaunchedEffect
+        if (key in itemKeys) return@LaunchedEffect
+        val nextKey = sportsLiveKeyAfterRemoval(shownKeys, itemKeys, key)
+        val next = items.firstOrNull { it.listKey == nextKey }
+        focusedCardKey = nextKey
+        onSelectItem(next?.id)
+        if (!listFocusedAtChange) return@LaunchedEffect
+        if (next == null) {
+            runCatching { activeTabFocusRequester.requestFocus() }
+            return@LaunchedEffect
+        }
+        val index = items.indexOf(next)
+        if (listState.layoutInfo.visibleItemsInfo.none { it.index == index }) listState.scrollToItem(index)
+        repeat(2) { withFrameNanos { } }
+        runCatching { cardFocusRequester(next).requestFocus() }
     }
 
     // Only a real tab or filter change scrolls to the top; the saved value survives navigation.
@@ -566,6 +598,7 @@ private fun SportsLiveContent(
                     null
                 },
                 previewShowing = selectedPreview?.rendering == true,
+                noStream = noStreamKey == selected.listKey,
                 modifier = Modifier
                     .weight(0.55f)
                     .fillMaxHeight()

@@ -32,8 +32,10 @@ import javax.inject.Singleton
  * fetches made elsewhere can report their result through [recordResult].
  * Only a finished search with nothing playable marks an item ended; rate limits, errors and
  * timeouts never do, nor does anything within [KICKOFF_GRACE_MS] of a known kickoff, since links are
- * often posted after it. An ended verdict expires after [ENDED_TTL_MS], so the item shows again and
- * the next focus re-checks it.
+ * often posted after it. An ended verdict is sticky: it is never dropped on a timer (a quick tab
+ * round trip must not bring the game back). Instead, [ENDED_TTL_MS] after it the item is re-probed
+ * once in the background, at most [MAX_ENDED_RECHECKS] times in a row (see [shouldRecheckEnded]);
+ * only a probe or fetch that finds links shows it again.
  */
 @Singleton
 class SportsLiveStreamProbe @Inject constructor(
@@ -47,6 +49,12 @@ class SportsLiveStreamProbe @Inject constructor(
         const val KICKOFF_GRACE_MS = 30 * 60 * 1000L
         const val REPROBE_AFTER_MS = 120_000L
 
+        /** Background re-checks of a game still found ended, before it simply stays hidden. */
+        const val MAX_ENDED_RECHECKS = 2
+
+        /** Whether an ended verdict reached after [recheckCount] background re-checks gets another one. */
+        fun shouldRecheckEnded(recheckCount: Int): Boolean = recheckCount < MAX_ENDED_RECHECKS
+
         private val rateLimitWords = listOf("rate limit", "too many")
     }
 
@@ -56,7 +64,8 @@ class SportsLiveStreamProbe @Inject constructor(
     @VisibleForTesting
     internal var dispatcher: CoroutineDispatcher = Dispatchers.IO
 
-    private data class Entry(val ended: Boolean, val probedAtMs: Long)
+    /** [rechecks]: background re-checks in a row that found the item still ended. */
+    private data class Entry(val ended: Boolean, val probedAtMs: Long, val rechecks: Int = 0)
 
     private val entries = ConcurrentHashMap<String, Entry>()
     private val inFlight = ConcurrentHashMap.newKeySet<String>()
@@ -94,8 +103,11 @@ class SportsLiveStreamProbe @Inject constructor(
         record(item, verdictOf(result))
     }
 
-    /** [ended] null means inconclusive: the previous verdict stands, but the entry is stamped. */
-    private fun record(item: SportsLiveItem, ended: Boolean?) {
+    /**
+     * [ended] null means inconclusive: the previous verdict stands, but the entry is stamped.
+     * [rechecks] counts the background re-checks behind this result (0 for any other probe or fetch).
+     */
+    private fun record(item: SportsLiveItem, ended: Boolean?, rechecks: Int = 0) {
         val key = item.streamKey
         val now = nowMs()
         val start = item.startMs?.takeIf { item.startHasTimeOfDay }
@@ -104,21 +116,21 @@ class SportsLiveStreamProbe @Inject constructor(
         // Atomic so a probe and a recordResult racing on one key cannot leave the key in [ended]
         // while its entry says alive (or the reverse).
         val entry = synchronized(lock) {
-            Entry(verdict ?: entries[key]?.ended ?: false, now).also { entry ->
+            Entry(verdict ?: entries[key]?.ended ?: false, now, rechecks).also { entry ->
                 entries[key] = entry
                 _ended.update { if (entry.ended) it + key else it - key }
             }
         }
-        if (entry.ended) {
+        if (entry.ended && shouldRecheckEnded(entry.rechecks)) {
             scope.launch {
                 delay(ENDED_TTL_MS)
-                // Expire only if no newer result replaced this one. A stale alive entry (not none)
-                // stays behind so the next probe forces a refresh instead of replaying the stream
-                // session cache's old empty answer.
-                synchronized(lock) {
-                    if (entries.replace(key, entry, Entry(ended = false, probedAtMs = 0L))) {
-                        _ended.update { it - key }
-                    }
+                // Only if no newer result replaced this one, and no probe of it is running.
+                if (entries[key] !== entry || !inFlight.add(key)) return@launch
+                try {
+                    // Bypasses the stream session cache, which would replay the old empty answer.
+                    permits.withPermit { record(item, search(item, forceRefresh = true), entry.rechecks + 1) }
+                } finally {
+                    inFlight.remove(key)
                 }
             }
         }

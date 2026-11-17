@@ -26,6 +26,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -243,7 +244,9 @@ internal fun SportsLiveDetailsPane(
     /** The hover preview's video, composed under the art while a preview plays; null when none does. */
     preview: (@Composable () -> Unit)? = null,
     /** The preview's first frame is on screen: the art gives way to the video, and the state line gets a label. */
-    previewShowing: Boolean = false
+    previewShowing: Boolean = false,
+    /** The lookup for this card found nothing to play: "No streams right now" shows and Watch is dimmed. */
+    noStream: Boolean = false
 ) {
     Column(
         modifier = modifier,
@@ -316,8 +319,21 @@ internal fun SportsLiveDetailsPane(
                 overflow = TextOverflow.Ellipsis
             )
         }
+        if (noStream) {
+            Text(
+                text = stringResource(R.string.sports_live_no_streams_now),
+                style = MaterialTheme.typography.bodyMedium,
+                color = NuvioTheme.colors.TextPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md)) {
-            SportsLivePaneButton(onClick = onWatch, modifier = watchModifier) {
+            // Still focusable and pressable when dimmed: OK looks the streams up again.
+            SportsLivePaneButton(
+                onClick = onWatch,
+                modifier = watchModifier.then(if (noStream) Modifier.alpha(0.5f) else Modifier)
+            ) {
                 Icon(
                     imageVector = Icons.Rounded.PlayArrow,
                     contentDescription = null,

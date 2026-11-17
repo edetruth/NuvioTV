@@ -17,6 +17,7 @@ import com.nuvio.tv.domain.repository.SportsLiveFailure
 import com.nuvio.tv.domain.repository.SportsLiveLoad
 import com.nuvio.tv.domain.repository.SportsLiveRepository
 import com.nuvio.tv.ui.screens.sportslive.dual.dualStream
+import com.nuvio.tv.ui.screens.sportslive.preview.SportsLivePreviewLookup
 import com.nuvio.tv.ui.screens.sportslive.preview.SportsLivePreviewState
 import io.mockk.coEvery
 import io.mockk.every
@@ -119,6 +120,22 @@ class SportsLiveViewModelTest {
         assertEquals("a", state.selectedItemId)
         assertEquals(NOW, state.lastRefreshedMs)
         assertEquals(listOf(false), forcedFlags)
+    }
+
+    @Test
+    fun `a game live far longer than its sport runs leaves Live now without a request`() = runTest {
+        nextLoad = load(
+            listOf(
+                item("over", isLive = true, sport = "Soccer", name = "Over", startMs = NOW - 3 * HOUR),
+                item("on", isLive = true, sport = "Soccer", name = "On", startMs = NOW - HOUR),
+                item("untimed", isLive = true, sport = "Soccer", name = "Untimed")
+            )
+        )
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+
+        assertEquals(listOf("on", "untimed"), viewModel.uiState.value.visibleItems.map { it.id }.sorted())
+        verify(exactly = 0) { repo.reprobeIfStale(any()) }
     }
 
     @Test
@@ -581,7 +598,7 @@ class SportsLiveViewModelTest {
         nextLoad = load(listOf(item("a", isLive = true, sport = "Soccer"), item("b", isLive = true, sport = "Tennis")))
         val enabled = MutableStateFlow(false)
         val stream = dualStream("a")
-        val viewModel = SportsLiveViewModel(repo, previewResolve = { stream }, hoverPreviewEnabled = enabled)
+        val viewModel = SportsLiveViewModel(repo, previewResolve = { SportsLivePreviewLookup.Found(stream) }, hoverPreviewEnabled = enabled)
         viewModel.nowMs = { NOW }
         backgroundScope.launch { viewModel.uiState.collect {} }
         val a = item("a", isLive = true, sport = "Soccer")
@@ -636,7 +653,7 @@ class SportsLiveViewModelTest {
         val stream = dualStream("a")
         val viewModel = SportsLiveViewModel(
             repo,
-            previewResolve = { stream },
+            previewResolve = { SportsLivePreviewLookup.Found(stream) },
             hoverPreviewEnabled = MutableStateFlow(true),
             miniPlayerActive = mini
         )

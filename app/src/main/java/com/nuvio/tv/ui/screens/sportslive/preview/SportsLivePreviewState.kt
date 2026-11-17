@@ -27,6 +27,21 @@ sealed interface SportsLivePreviewState {
         val stream: Stream,
         val rendering: Boolean = false
     ) : SportsLivePreviewState
+
+    /** The lookup found nothing to play: the pane says so at once, instead of a lingering wait. */
+    data class NoStream(val item: SportsLiveItem) : SportsLivePreviewState
+}
+
+/** What the preview's lookup found for a card. */
+sealed interface SportsLivePreviewLookup {
+    /** A stream the light preview player can play. */
+    data class Found(val stream: Stream) : SportsLivePreviewLookup
+
+    /** A stream exists, but only the full player can play it (it needs preparation): no preview. */
+    data object NotPreviewable : SportsLivePreviewLookup
+
+    /** Nothing playable came back. */
+    data object NoStream : SportsLivePreviewLookup
 }
 
 /** Upcoming has nothing to play and Replays would spoil results, so only these tabs preview. */
@@ -38,12 +53,13 @@ fun SportsLiveTab.offersPreview(): Boolean = this == SportsLiveTab.LIVE_NOW || t
  * [resolve]; a stream plays (muted) until its first frame, which must come within
  * [firstFrameTimeoutMs]. Any change of input (focus, tab, setting, visibility) drops the preview
  * at once and starts a fresh settle when the new inputs allow one, so scrolling past cards never
- * looks anything up. No stream, an error or a missed first frame leave the art in place, silently,
- * until the focus moves.
+ * looks anything up. A stream only the full player can play, an error or a missed first frame
+ * leave the art in place, silently, until the focus moves; no stream at all shows as [NoStream]
+ * until then.
  */
 class SportsLivePreviewController(
     private val scope: CoroutineScope,
-    private val resolve: suspend (SportsLiveItem) -> Stream?,
+    private val resolve: suspend (SportsLiveItem) -> SportsLivePreviewLookup,
     private val settleMs: Long = SETTLE_MS,
     private val firstFrameTimeoutMs: Long = FIRST_FRAME_TIMEOUT_MS
 ) {
@@ -128,11 +144,18 @@ class SportsLivePreviewController(
         job = scope.launch {
             delay(settleMs)
             _state.value = SportsLivePreviewState.Resolving(item)
-            val stream = resolve(item)
+            val lookup = resolve(item)
             if (current != generation) return@launch
-            if (stream == null) {
-                _state.value = SportsLivePreviewState.Idle
-                return@launch
+            val stream = when (lookup) {
+                is SportsLivePreviewLookup.Found -> lookup.stream
+                SportsLivePreviewLookup.NotPreviewable -> {
+                    _state.value = SportsLivePreviewState.Idle
+                    return@launch
+                }
+                SportsLivePreviewLookup.NoStream -> {
+                    _state.value = SportsLivePreviewState.NoStream(item)
+                    return@launch
+                }
             }
             _state.value = SportsLivePreviewState.Playing(item, stream)
             delay(firstFrameTimeoutMs)

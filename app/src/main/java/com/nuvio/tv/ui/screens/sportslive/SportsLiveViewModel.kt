@@ -6,15 +6,16 @@ import androidx.lifecycle.viewModelScope
 import com.nuvio.tv.core.debrid.DirectDebridResolver
 import com.nuvio.tv.core.sportslive.SportsLiveDataSaver
 import com.nuvio.tv.core.sportslive.SportsLiveItemBucketer
+import com.nuvio.tv.core.sportslive.SportsLiveLiveDuration
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveTab
-import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.domain.repository.SportsLiveFailure
 import com.nuvio.tv.domain.repository.SportsLiveRepository
 import com.nuvio.tv.ui.screens.sportslive.preview.SportsLivePreviewController
+import com.nuvio.tv.ui.screens.sportslive.preview.SportsLivePreviewLookup
 import com.nuvio.tv.ui.screens.sportslive.preview.SportsLivePreviewState
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniPlayers
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniState
@@ -41,8 +42,8 @@ import javax.inject.Inject
 @HiltViewModel
 class SportsLiveViewModel internal constructor(
     private val repo: SportsLiveRepository,
-    /** The hover preview's stream for an item: one a light player can play as it is, else null. */
-    previewResolve: suspend (SportsLiveItem) -> Stream? = { null },
+    /** The hover preview's lookup for an item: a stream a light player can play as it is, or why not. */
+    previewResolve: suspend (SportsLiveItem) -> SportsLivePreviewLookup = { SportsLivePreviewLookup.NotPreviewable },
     hoverPreviewEnabled: Flow<Boolean> = flowOf(false),
     /** The mini player plays: it takes priority, so no preview starts meanwhile. */
     miniPlayerActive: Flow<Boolean> = flowOf(false),
@@ -62,7 +63,12 @@ class SportsLiveViewModel internal constructor(
         repo = repo,
         // The zap's pick, which joins the stream search the ended-games probe started on settle.
         previewResolve = { item ->
-            resolver.resolve(item)?.takeIf { stream -> sportsLiveLightPlayable(stream, directDebridResolver) }
+            val stream = resolver.resolve(item)
+            when {
+                stream == null -> SportsLivePreviewLookup.NoStream
+                sportsLiveLightPlayable(stream, directDebridResolver) -> SportsLivePreviewLookup.Found(stream)
+                else -> SportsLivePreviewLookup.NotPreviewable
+            }
         },
         hoverPreviewEnabled = combine(prefs.hoverPreview, prefs.dataSaver) { hover, saver ->
             SportsLiveDataSaver.hoverPreviewAllowed(hover, saver)
@@ -285,10 +291,12 @@ class SportsLiveViewModel internal constructor(
         selection: Selection
     ): SportsLiveUiState {
         val hasClaimed = bucketed.hasClaimed
-        // Live items whose streams are gone have ended; the other tabs are left as they are.
+        // Live items whose streams are gone have ended, as have games live far longer than their
+        // sport runs (no request needed); the other tabs are left as they are.
+        val now = nowMs()
         val tabs = bucketed.tabs.mapValues { (tab, tabItems) ->
             if (tab == SportsLiveTab.LIVE_NOW) {
-                tabItems.filterNot { it.hasEnded(endedKeys) }
+                tabItems.filterNot { it.hasEnded(endedKeys) || SportsLiveLiveDuration.isOverdue(it, now) }
             } else {
                 tabItems
             }
