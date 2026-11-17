@@ -4,8 +4,12 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.mutablePreferencesOf
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.nuvio.tv.TestPreferencesStore
 import com.nuvio.tv.core.profile.ProfileManager
+import com.nuvio.tv.core.sportslive.scores.MyLeague
+import com.nuvio.tv.core.sportslive.scores.MySport
+import com.nuvio.tv.core.sportslive.scores.MySports
 import com.nuvio.tv.core.sportslive.scores.ScoreSettings
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.domain.model.CatalogOption
@@ -17,6 +21,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -226,5 +231,26 @@ class SportsLivePreferencesDataStoreTest {
             mutablePreferencesOf(stringPreferencesKey("sports_live_recent_score_leagues") to "{not json")
         }
         assertEquals(emptyMap<String, Long>(), store.recentScoreLeagues.first())
+    }
+
+    @Test
+    fun `my sports default to every sport, round trip per profile, and the default clears the key`() = runTest {
+        val store = SportsLivePreferencesDataStore(factory, profiles)
+        val key = stringSetPreferencesKey("sports_live_my_sports")
+        assertEquals(MySports.DEFAULT, store.mySports.first())
+        store.updateMySports { it.toggleSport(MySport.SOCCER).toggleLeague(MyLeague.COLLEGE_BASKETBALL) }
+        val saved = store.mySports.first()
+        assertEquals(listOf(MySport.BASKETBALL, MySport.FOOTBALL, MySport.HOCKEY, MySport.BASEBALL), saved.effectiveSports)
+        assertEquals(setOf(MyLeague.NBA, MyLeague.COLLEGE_BASKETBALL), saved.leaguesOf(MySport.BASKETBALL))
+        assertTrue("basketball/college-basketball" in profile1Store.data.first()[key].orEmpty())
+        activeProfile.value = 2
+        assertEquals(MySports.DEFAULT, store.mySports.first())
+        activeProfile.value = 1
+        store.updateMySports { MySports.DEFAULT }
+        assertNull(profile1Store.data.first()[key])
+        // Tokens of a later version (an individual sport) are skipped, not an error.
+        profile2Store.updateData { mutablePreferencesOf(key to setOf("tennis", "tennis/atp", "hockey")) }
+        activeProfile.value = 2
+        assertEquals(listOf(MySport.HOCKEY), store.mySports.first().effectiveSports)
     }
 }

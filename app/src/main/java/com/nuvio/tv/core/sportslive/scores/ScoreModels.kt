@@ -46,8 +46,13 @@ data class ScoreSnapshot(
      * `caf.nations_qual`, `fifa.friendly_u21`, `eng.w.1`...), else the feed's [EspnLeague.league].
      */
     val leagueSlug: String = league.league,
-    /** The league's short name from the feed ("NBA", "Premier League"); null when it gave none (soccer/all). */
+    /**
+     * The competition's name: the feed's short league name ("NBA", "NCAAM"), else, on `soccer/all`, the
+     * event's competition ("UEFA Nations League", "Men's International Friendly"); null when neither is given.
+     */
     val leagueName: String? = null,
+    /** ESPN's league id from the event uid ("2395" for the UEFA Nations League); null when absent. */
+    val competitionId: String? = null,
     /** Scheduled start in epoch millis (UTC); null when the feed's date was missing or unreadable. */
     val startMs: Long?,
     val state: ScoreState,

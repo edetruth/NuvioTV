@@ -4,9 +4,11 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.nuvio.tv.core.profile.ProfileManager
+import com.nuvio.tv.core.sportslive.scores.MySports
 import com.nuvio.tv.core.sportslive.scores.ScoreDelayChoices
 import com.nuvio.tv.core.sportslive.scores.ScoreSettings
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
@@ -55,6 +57,7 @@ class SportsLivePreferencesDataStore @Inject constructor(
     private val scoresModeKey = stringPreferencesKey("sports_live_scores_mode")
     private val scoreDelayKey = intPreferencesKey("sports_live_score_delay_seconds")
     private val recentScoreLeaguesKey = stringPreferencesKey("sports_live_recent_score_leagues")
+    private val mySportsKey = stringSetPreferencesKey("sports_live_my_sports")
 
     val showSection: Flow<Boolean> = profileManager.activeProfileId.flatMapLatest { pid ->
         factory.get(pid, FEATURE).data.map { it[showSectionKey] ?: true }
@@ -117,6 +120,19 @@ class SportsLivePreferencesDataStore @Inject constructor(
 
     suspend fun setRecentScoreLeagues(leagues: Map<String, Long>) {
         store().edit { it[recentScoreLeaguesKey] = gson.toJson(leagues) }
+    }
+
+    /** My sports (#55): the sports and leagues picked; unset is every supported sport. */
+    val mySports: Flow<MySports> = profileManager.activeProfileId.flatMapLatest { pid ->
+        factory.get(pid, FEATURE).data.map { MySports.decode(it[mySportsKey]) }
+    }
+
+    /** Saves [change] of the stored My sports in one edit; the default (nothing picked) clears the key. */
+    suspend fun updateMySports(change: (MySports) -> MySports) {
+        store().edit { prefs ->
+            val sports = change(MySports.decode(prefs[mySportsKey]))
+            if (sports.isDefault) prefs.remove(mySportsKey) else prefs[mySportsKey] = sports.encode()
+        }
     }
 
     suspend fun setScoresMode(mode: ScoresMode) {

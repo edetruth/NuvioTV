@@ -33,6 +33,8 @@ class ResultsRepositoryTest {
     private val settings = MutableStateFlow(ScoreSettings())
     private val followed = MutableStateFlow<List<FollowedTeam>>(emptyList())
     private val recent = MutableStateFlow<Map<String, Long>>(emptyMap())
+    private val mySports = MutableStateFlow(MySports.DEFAULT)
+    private val basketballOnly = MySports.decode(setOf("basketball"))
     private var clock = Instant.parse("2026-11-16T12:00:00Z").toEpochMilli()
 
     private val nba = EspnFixtures.events(EspnFixtures.NBA_20261115, EspnLeagueMap.NBA)
@@ -44,6 +46,7 @@ class ResultsRepositoryTest {
         provider = provider,
         settings = settings,
         followedTeams = followed,
+        mySports = mySports,
         recentLeagues = recent,
         saveRecentLeagues = { saves++; recent.value = it },
         now = { clock },
@@ -71,15 +74,40 @@ class ResultsRepositoryTest {
     }
 
     @Test
-    fun `no relevant league is its own state, with no request`() = runTest {
-        assertEquals(ResultsLoad.NoLeagues, repository().load(1))
-        assertTrue(provider.calls.isEmpty())
+    fun `by default a day fetches soccer all once plus NBA NFL NHL MLB, and nothing more`() = runTest {
+        val repo = repository()
+        repo.load(1)
+        assertEquals(
+            listOf(EspnLeagueMap.SOCCER_ALL, EspnLeagueMap.NBA, EspnLeagueMap.NFL, EspnLeagueMap.NHL, EspnLeagueMap.MLB).map { ScoreFeed(it, nov15) }.toSet(),
+            provider.calls.toSet()
+        )
+        assertEquals(5, provider.calls.size)
+        // Leagues seen on cards no longer add requests.
+        recent.value = mapOf("soccer/eng.1" to clock, "basketball/mens-college-basketball" to clock)
+        repo.load(2)
+        assertEquals(10, provider.calls.size)
+        assertTrue(provider.calls.none { it.league.league == "eng.1" || it.league == EspnLeagueMap.COLLEGE_BASKETBALL })
+    }
+
+    @Test
+    fun `soccer all lists internationals under their competition`() = runTest {
+        clock = Instant.parse("2026-11-17T12:00:00Z").toEpochMilli()
+        mySports.value = MySports.decode(setOf("soccer"))
+        val all = EspnFixtures.events(EspnFixtures.SOCCER_ALL_FULL_20261116, EspnLeagueMap.SOCCER_ALL)
+        provider.respond = { ScoreboardResult(all) }
+        val load = repository().load(1) as ResultsLoad.Loaded
+        assertEquals(listOf(ScoreFeed(EspnLeagueMap.SOCCER_ALL, LocalDate.of(2026, 11, 16))), provider.calls)
+        val germany = load.rows.single { it.event.eventId == "401861185" }
+        assertEquals("UEFA Nations League", germany.event.leagueName)
+        val nations = SportsResults.groups(load.rows).single { it.name == "UEFA Nations League" }
+        assertTrue(germany in nations.rows)
+        assertEquals(10, nations.rows.size)
     }
 
     @Test
     fun `a day fetches each relevant league once and lists its finals, followed first`() = runTest {
         followed.value = listOf(FollowedTeam("Knicks", "Basketball"))
-        recent.value = mapOf("hockey/nhl" to clock - 60_000)
+        mySports.value = MySports.decode(setOf("hockey"))
         provider.respond = { feed -> if (feed.league == EspnLeagueMap.NBA) ScoreboardResult(nba) else ScoreboardResult(emptyList()) }
         val repo = repository()
         val load = repo.load(1) as ResultsLoad.Loaded
@@ -92,7 +120,7 @@ class ResultsRepositoryTest {
 
     @Test
     fun `past days are not polled and a day shown again comes from memory`() = runTest {
-        recent.value = mapOf("basketball/nba" to clock)
+        mySports.value = basketballOnly
         provider.respond = { ScoreboardResult(nba) }
         val repo = repository()
         repo.load(3)
@@ -108,7 +136,7 @@ class ResultsRepositoryTest {
 
     @Test
     fun `every league failing is Failed, one failing still lists the others`() = runTest {
-        recent.value = mapOf("basketball/nba" to clock, "hockey/nhl" to clock)
+        mySports.value = MySports.decode(setOf("basketball", "hockey"))
         provider.respond = { ScoreboardResult.FAILED }
         val repo = repository()
         assertEquals(ResultsLoad.Failed, repo.load(1))
@@ -141,7 +169,7 @@ class ResultsRepositoryTest {
         val tokyo = repository(ZoneId.of("Asia/Tokyo")).days()
         assertEquals((1..7).map { LocalDate.of(2026, 11, 16).minusDays(it.toLong()) }, tokyo.map { it.date })
         assertTrue(tokyo.none { it.isDeviceYesterday })
-        recent.value = mapOf("basketball/nba" to clock)
+        mySports.value = basketballOnly
         repository(ZoneId.of("Asia/Tokyo")).load(1)
         assertEquals(ScoreFeed(EspnLeagueMap.NBA, LocalDate.of(2026, 11, 15)), provider.calls.single())
         // In New York (or UTC at that hour) the first chip is Yesterday.

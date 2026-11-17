@@ -47,29 +47,34 @@ class SportsResultsTest {
     // --- Relevant leagues ---
 
     @Test
-    fun `relevant leagues are followed teams' leagues plus leagues seen in the last 7 days`() {
-        val recent = mapOf(
-            "hockey/nhl" to now - 2 * day,
-            "soccer/eng.1" to now - 6 * day,
-            "baseball/mlb" to now - 8 * day // expired
+    fun `relevant leagues come from My sports, default soccer all once plus NBA NFL NHL MLB`() {
+        val relevant = SportsResults.relevantLeagues(MySports.DEFAULT, emptyList())
+        assertEquals(
+            listOf(EspnLeagueMap.SOCCER_ALL, EspnLeagueMap.NBA, EspnLeagueMap.NFL, EspnLeagueMap.NHL, EspnLeagueMap.MLB),
+            relevant.leagues
         )
-        val relevant = SportsResults.relevantLeagues(listOf(FollowedTeam("Lakers", "Basketball")), recent, now)
-        assertEquals(listOf(EspnLeagueMap.NHL, EspnLeague("soccer", "eng.1"), EspnLeagueMap.NBA), relevant.leagues)
-        assertTrue(relevant.followedOnly.isEmpty())
     }
 
     @Test
-    fun `nothing followed and nothing seen lately is no relevant league`() {
-        assertTrue(SportsResults.relevantLeagues(emptyList(), mapOf("hockey/nhl" to now - 8 * day), now).isEmpty)
-        // A followed team without a sport routes nowhere by itself (its games' leagues are recorded as seen).
-        assertTrue(SportsResults.relevantLeagues(listOf(FollowedTeam("Lakers")), emptyMap(), now).isEmpty)
+    fun `college is fetched only when picked, and soccer leagues never add a request`() {
+        val picked = MySports.decode(setOf("basketball", "basketball/nba", "basketball/college-basketball", "soccer", "soccer/eng.1"))
+        assertEquals(
+            listOf(EspnLeagueMap.SOCCER_ALL, EspnLeagueMap.NBA, EspnLeagueMap.COLLEGE_BASKETBALL),
+            SportsResults.relevantLeagues(picked, emptyList()).leagues
+        )
+        val hockeyOnly = MySports.decode(setOf("hockey"))
+        assertEquals(listOf(EspnLeagueMap.NHL), SportsResults.relevantLeagues(hockeyOnly, emptyList()).leagues)
     }
 
     @Test
-    fun `a followed soccer team brings soccer all, listed for followed games only`() {
-        val relevant = SportsResults.relevantLeagues(listOf(FollowedTeam("Germany", "Soccer")), emptyMap(), now)
-        assertEquals(listOf(EspnLeagueMap.SOCCER_ALL), relevant.leagues)
-        assertEquals(setOf(EspnLeagueMap.SOCCER_ALL), relevant.followedOnly)
+    fun `a followed team adds its sport and league`() {
+        val hockeyOnly = MySports.decode(setOf("hockey"))
+        val relevant = SportsResults.relevantLeagues(
+            hockeyOnly,
+            listOf(FollowedTeam("Duke", "College Basketball"), FollowedTeam("Germany", "Soccer"), FollowedTeam("Lakers"))
+        )
+        assertEquals(listOf(EspnLeagueMap.SOCCER_ALL, EspnLeagueMap.COLLEGE_BASKETBALL, EspnLeagueMap.NHL), relevant.leagues)
+        assertEquals(listOf(MySport.BASKETBALL, MySport.HOCKEY, MySport.SOCCER), relevant.mySports.effectiveSports)
     }
 
     @Test
@@ -150,15 +155,12 @@ class SportsResultsTest {
     }
 
     @Test
-    fun `soccer all lists only followed teams' games and a competition feed's copy wins`() {
+    fun `soccer all lists every competition's finals and a competition feed's copy wins`() {
         val nations = soccerAll.first { it.eventId == "401861185" }.copy(league = EspnLeague("soccer", "uefa.nations"))
-        val rows = SportsResults.rows(
-            soccerAll + nations,
-            listOf(FollowedTeam("Germany", "Soccer")),
-            followedOnly = setOf(EspnLeagueMap.SOCCER_ALL)
-        )
-        assertEquals(listOf("401861185"), rows.map { it.event.eventId })
-        assertEquals(EspnLeague("soccer", "uefa.nations"), rows.single().event.league)
+        val rows = SportsResults.rows(soccerAll + nations, emptyList())
+        assertTrue(rows.any { it.event.eventId == "401861185" })
+        assertEquals(EspnLeague("soccer", "uefa.nations"), rows.first { it.event.eventId == "401861185" }.event.league)
+        assertEquals(rows.size, rows.map { it.event.eventId }.distinct().size)
     }
 
     @Test
@@ -177,6 +179,7 @@ class SportsResultsTest {
     @Test
     fun `the feed's league name is carried on its events`() {
         assertEquals("NBA", nba.first().leagueName)
+        // This trimmed soccer/all fixture has no competition note.
         assertNull(soccerAll.first().leagueName)
     }
 

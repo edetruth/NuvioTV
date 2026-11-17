@@ -12,6 +12,12 @@ internal object EspnFixtures {
     const val ENG1_20261108 = "espn_eng1_20261108.json"
     const val CAF_QUAL_20261116 = "espn_caf_nations_qual_20261116.json"
     const val SOCCER_ALL_20261116 = "espn_soccer_all_20261116.json"
+    /** Every event of soccer/all on 2026-11-16 (competition notes and uids kept, goal details dropped). */
+    const val SOCCER_ALL_FULL_20261116 = "espn_soccer_all_full_20261116.json"
+    /** soccer/all on 2026-11-08: Premier League, WSL, Liga F (one event without a league link), NWSL, NCAAM/NCAAW soccer. */
+    const val SOCCER_ALL_WOMEN_20261108 = "espn_soccer_all_women_20261108.json"
+    /** Division I men's college basketball, 2026-11-15 (44 games). */
+    const val CBB_20261115 = "espn_cbb_20261115.json"
 
     val CAF_QUAL = EspnLeague("soccer", "caf.nations_qual")
     val ENG1 = EspnLeague("soccer", "eng.1")

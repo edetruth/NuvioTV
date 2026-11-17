@@ -124,8 +124,24 @@ class EspnScoreProvider internal constructor(
                 val name = (dtoLeague.abbreviation ?: dtoLeague.name)?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
                 slug to name
             }.toMap()
-            return dto.events.orEmpty().mapNotNull { event -> toSnapshot(event, league, names) }
+            val snapshots = dto.events.orEmpty().mapNotNull { event -> toSnapshot(event, league, names) }
+            // Some soccer/all events carry no league link; a sibling of the same ESPN league names the
+            // slug, so a women's or youth game without a link keeps its qualifier ("Liga F" → esp.w.1).
+            val slugs = snapshots.asSequence()
+                .filter { it.competitionId != null && it.leagueSlug != league.league }
+                .associate { it.competitionId to it.leagueSlug }
+            return snapshots.map { snapshot ->
+                val slug = snapshot.competitionId?.let(slugs::get)
+                if (snapshot.leagueSlug == league.league && slug != null) snapshot.copy(leagueSlug = slug) else snapshot
+            }
         }
+
+        // "s:600~l:2395~e:401861185" → "2395".
+        private val LEAGUE_IN_UID = Regex("""(?:^|~)l:(\d+)""")
+
+        /** "UEFA Nations League, Group A2" → "UEFA Nations League": the competition before its stage. */
+        internal fun competitionName(altGameNote: String?): String? =
+            altGameNote?.substringBefore(',')?.trim()?.takeIf { it.isNotEmpty() }
 
         private fun toSnapshot(event: EspnEventDto, league: EspnLeague, leagueNames: Map<String, String>): ScoreSnapshot? {
             val id = event.id?.takeIf { it.isNotBlank() } ?: return null
@@ -152,7 +168,8 @@ class EspnScoreProvider internal constructor(
                 eventId = id,
                 league = league,
                 leagueSlug = leagueSlug,
-                leagueName = leagueNames[leagueSlug],
+                leagueName = leagueNames[leagueSlug] ?: competitionName(competition.altGameNote),
+                competitionId = event.uid?.let { LEAGUE_IN_UID.find(it)?.groupValues?.get(1) },
                 startMs = event.date?.let(::parseDate),
                 state = state,
                 clockText = type?.shortDetail?.takeIf { it.isNotBlank() },

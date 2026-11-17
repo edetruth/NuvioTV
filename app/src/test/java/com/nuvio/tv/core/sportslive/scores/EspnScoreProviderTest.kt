@@ -93,8 +93,8 @@ class EspnScoreProviderTest {
         assertEquals("fifa.friendly_u21", all.first { it.eventId == "401930175" }.leagueSlug)
         assertEquals("uefa.nations", all.first { it.eventId == "401861185" }.leagueSlug)
         assertEquals("caf.nations_qual", all.first { it.eventId == "401927170" }.leagueSlug)
-        // No league link: the feed's slug.
-        assertEquals("all", all.first { it.eventId == "401934216" }.leagueSlug)
+        // No league link: a sibling of the same ESPN league (l:20132) names it.
+        assertEquals("fifa.friendly_u21", all.first { it.eventId == "401934216" }.leagueSlug)
         assertEquals("nba", EspnFixtures.events(EspnFixtures.NBA_20261115, EspnLeagueMap.NBA).first().leagueSlug)
     }
 

@@ -14,6 +14,8 @@ data class EspnLeagueDto(val slug: String? = null, val abbreviation: String? = n
 @JsonClass(generateAdapter = true)
 data class EspnEventDto(
     val id: String? = null,
+    /** "s:600~l:2395~e:401861185": sport, ESPN league id and event id. */
+    val uid: String? = null,
     val date: String? = null,
     val status: EspnStatusDto? = null,
     val competitions: List<EspnCompetitionDto>? = null,
@@ -38,6 +40,8 @@ data class EspnStatusTypeDto(
 @JsonClass(generateAdapter = true)
 data class EspnCompetitionDto(
     val competitors: List<EspnCompetitorDto>? = null,
+    /** "UEFA Nations League, Group A2", "Men's International Friendly": the competition, then the stage. */
+    val altGameNote: String? = null,
     val details: List<EspnDetailDto>? = null
 )
 

@@ -23,22 +23,31 @@ sealed interface ResultsLoad {
     /** Scores are Off: nothing is shown and nothing was requested. */
     data object Off : ResultsLoad
 
-    /** No followed team routes to a league and no league was seen on cards in the last 7 days. */
+    /** My sports (with followed teams' sports) gives no feed to fetch. */
     data object NoLeagues : ResultsLoad
 
     /** Every league's request failed. */
     data object Failed : ResultsLoad
 
-    /** [rows] to list; [events] are all the day's events fetched, for matching replays. */
-    data class Loaded(val date: LocalDate, val rows: List<ResultRow>, val events: List<ScoreSnapshot>) : ResultsLoad
+    /**
+     * [rows] to list; [events] are all the day's events fetched, for matching replays; [mySports] is
+     * My sports with followed teams' sports, for the ★ My sports view and the sport chips.
+     */
+    data class Loaded(
+        val date: LocalDate,
+        val rows: List<ResultRow>,
+        val events: List<ScoreSnapshot>,
+        val mySports: MySports = MySports.DEFAULT
+    ) : ResultsLoad
 }
 
 /** A Results date chip: [daysAgo] → ESPN [date]; [isDeviceYesterday] picks the "Yesterday" label. */
 data class ResultDay(val daysAgo: Int, val date: LocalDate, val isDeviceYesterday: Boolean)
 
 /**
- * Past days' finals (Yesterday … 7 days ago) for the Results view: one scoreboard request per relevant
- * league per day ([SportsResults.relevantLeagues]), past days served from the provider's disk cache and
+ * Past days' finals (Yesterday … 7 days ago) for the Results view. Per day: one `soccer/all` request
+ * (limit 1000: every soccer competition) when soccer is in My sports, plus one per non-soccer league in
+ * effect ([SportsResults.relevantLeagues]); past days served from the provider's disk cache and
  * kept in memory for the session (yesterday for [YESTERDAY_TTL_MS], as late games may still finish).
  * No polling: a day is fetched when it is shown. Scores Off: no requests at all.
  */
@@ -47,6 +56,7 @@ class ResultsRepository internal constructor(
     private val provider: ScoreProvider,
     private val settings: Flow<ScoreSettings>,
     private val followedTeams: Flow<List<FollowedTeam>>,
+    private val mySports: Flow<MySports>,
     private val recentLeagues: Flow<Map<String, Long>>,
     private val saveRecentLeagues: suspend (Map<String, Long>) -> Unit,
     private val now: () -> Long,
@@ -57,6 +67,7 @@ class ResultsRepository internal constructor(
         provider = provider,
         settings = prefs.scoreSettings,
         followedTeams = prefs.followedTeams,
+        mySports = prefs.mySports,
         recentLeagues = prefs.recentScoreLeagues,
         saveRecentLeagues = prefs::setRecentScoreLeagues,
         now = System::currentTimeMillis,
@@ -70,7 +81,7 @@ class ResultsRepository internal constructor(
     private val recordLock = Mutex()
     private val requests = Semaphore(MAX_PARALLEL)
 
-    /** Records the leagues of [items] (cards on screen) as seen now, for [SportsResults.relevantLeagues]. */
+    /** Records the leagues of [items] (cards on screen) as seen now ([SportsResults.recordSeen]). */
     suspend fun noteSeen(items: List<SportsLiveItem>) {
         val leagues = SportsResults.leaguesOf(items)
         recordLock.withLock {
@@ -103,7 +114,7 @@ class ResultsRepository internal constructor(
         val settings = settings.first()
         if (settings.mode == ScoresMode.OFF) return ResultsLoad.Off
         val followed = followedTeams.first()
-        val relevant = SportsResults.relevantLeagues(followed, recentLeagues.first(), now())
+        val relevant = SportsResults.relevantLeagues(mySports.first(), followed)
         if (relevant.isEmpty) return ResultsLoad.NoLeagues
         val date = dateFor(daysAgo.coerceIn(SportsResults.DAYS_AGO))
         val results = coroutineScope {
@@ -111,7 +122,7 @@ class ResultsRepository internal constructor(
         }
         if (results.all { it == null }) return ResultsLoad.Failed
         val events = results.filterNotNull().flatten()
-        return ResultsLoad.Loaded(date, SportsResults.rows(events, followed, relevant.followedOnly), events)
+        return ResultsLoad.Loaded(date, SportsResults.rows(events, followed), events, relevant.mySports)
     }
 
     /** [feed]'s events from memory when still good, else from the provider (its disk cache first); null on failure. */

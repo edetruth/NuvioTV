@@ -13,10 +13,13 @@ enum class FinalNote { FT, OT, SO, AET, PENS }
 /** One finished game on the Results view; [followed] when a followed team played in it. */
 data class ResultRow(val event: ScoreSnapshot, val followed: Boolean, val note: FinalNote)
 
-/** The leagues Results fetches, and those whose games are listed only when a followed team played. */
-data class RelevantLeagues(val leagues: List<EspnLeague>, val followedOnly: Set<EspnLeague>) {
+/** The feeds a Results day fetches, and the My sports (with followed teams' sports) they come from. */
+data class RelevantLeagues(val leagues: List<EspnLeague>, val mySports: MySports) {
     val isEmpty: Boolean get() = leagues.isEmpty()
 }
+
+/** A league section of a Results day: its rows under the competition's [name] (null: none given). */
+data class ResultGroup(val key: String, val sport: String, val name: String?, val rows: List<ResultRow>)
 
 /**
  * The pure rules of the Results view: which leagues are relevant, which events are listed and in what
@@ -26,7 +29,7 @@ object SportsResults {
     /** Leagues seen on cards are relevant for 7 days after they were last seen. */
     const val RECENT_TTL_MS = 7 * 24 * 60 * 60 * 1000L
 
-    /** At most this many recent leagues are kept (the most recently seen), bounding Results' requests. */
+    /** At most this many recent leagues are kept (the most recently seen). */
     const val MAX_RECENT = 12
 
     /** A league seen again is re-stamped at most this often, so a load every minute does not write prefs. */
@@ -73,18 +76,12 @@ object SportsResults {
             .toSet()
 
     /**
-     * Followed teams' leagues (by their sport, through [EspnLeagueMap]) and leagues seen on cards in the
-     * last 7 days. A followed soccer team maps to `soccer/all`, whose games are listed only when a
-     * followed team played ([RelevantLeagues.followedOnly]).
+     * The feeds of [mySports] with followed teams' sports added ([MySports.withFollowed]): one
+     * `soccer/all` (every soccer competition) and each non-soccer league in effect.
      */
-    fun relevantLeagues(followed: List<FollowedTeam>, recent: Map<String, Long>, nowMs: Long): RelevantLeagues {
-        val fromRecent = recent.entries
-            .filter { nowMs - it.value <= RECENT_TTL_MS }
-            .sortedByDescending { it.value }
-            .mapNotNull { leagueOf(it.key) }
-        val fromFollowed = followed.flatMap(::leaguesOfTeam)
-        val leagues = (fromRecent + fromFollowed).distinct()
-        return RelevantLeagues(leagues, followedOnly = leagues.filter { it == EspnLeagueMap.SOCCER_ALL }.toSet())
+    fun relevantLeagues(mySports: MySports, followed: List<FollowedTeam>): RelevantLeagues {
+        val effective = mySports.withFollowed(followed)
+        return RelevantLeagues(effective.feeds().distinct(), effective)
     }
 
     private fun leaguesOfTeam(team: FollowedTeam): List<EspnLeague> =
@@ -99,17 +96,15 @@ object SportsResults {
 
     /**
      * The rows for one day: finished games only (completed `post`; postponed, cancelled, live and
-     * upcoming games are left out), each event once (a competition feed's copy before `soccer/all`'s),
-     * games of [followedOnly] leagues only when a followed team played; followed teams' games first,
-     * then by league and start.
+     * upcoming games are left out), each event once (a competition feed's copy before `soccer/all`'s);
+     * followed teams' games first, then by league and start.
      */
-    fun rows(events: List<ScoreSnapshot>, followed: List<FollowedTeam>, followedOnly: Set<EspnLeague> = emptySet()): List<ResultRow> =
+    fun rows(events: List<ScoreSnapshot>, followed: List<FollowedTeam>): List<ResultRow> =
         events.asSequence()
             .filter { it.state == ScoreState.POST && it.isFinal }
             .sortedBy { if (it.league == EspnLeagueMap.SOCCER_ALL) 1 else 0 }
             .distinctBy { it.eventId }
             .map { ResultRow(it, followed = followed.any { team -> follows(team, it) }, note = finalNote(it)) }
-            .filter { it.followed || it.event.league !in followedOnly }
             .sortedWith(
                 compareByDescending<ResultRow> { it.followed }
                     .thenBy { it.event.leagueSlug }
@@ -128,6 +123,29 @@ object SportsResults {
         if (sports.isNotEmpty() && event.league.sport !in sports) return false
         return listOf(event.home, event.away).any { side -> ScoreMatcher.isStrongSide(team.name, side, event.leagueSlug) }
     }
+
+    /**
+     * A row's league section: the ESPN league id (one per competition, so men's, women's and youth
+     * competitions never share one), else its league slug.
+     */
+    fun groupKey(event: ScoreSnapshot): String = "${event.league.sport}:${event.competitionId ?: event.leagueSlug}"
+
+    /**
+     * [rows] in league sections: by sport ([MySport] order), then the picker's league order (NBA before
+     * college, internationals and the big soccer leagues before the rest), then name. Rows keep their order.
+     */
+    fun groups(rows: List<ResultRow>): List<ResultGroup> =
+        rows.groupBy { groupKey(it.event) }
+            .map { (key, groupRows) ->
+                val first = groupRows.first().event
+                ResultGroup(key, first.league.sport, groupRows.firstNotNullOfOrNull { it.event.leagueName }, groupRows)
+            }
+            .sortedWith(
+                compareBy<ResultGroup> { group -> MySport.ofEspn(group.sport)?.ordinal ?: Int.MAX_VALUE }
+                    .thenBy { group -> MyLeague.entries.indexOfFirst { it.covers(group.rows.first().event) }.let { if (it < 0) Int.MAX_VALUE else it } }
+                    .thenBy { it.name?.lowercase() ?: "￿" }
+                    .thenBy { it.key }
+            )
 
     private val OVERTIME = Regex("""\b\d*OT\b""", RegexOption.IGNORE_CASE)
     private val SHOOTOUT = Regex("""\bSO\b""", RegexOption.IGNORE_CASE)
