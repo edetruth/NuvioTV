@@ -27,7 +27,10 @@ object SportsLiveSourceReliability {
     /** Prior weight: how many outcomes the neutral prior counts as. */
     private const val PRIOR_WEIGHT = 1.0
 
-    /** A stall counts as this much of a failure (the source did start). */
+    /**
+     * A stalled attempt counts as this much of a failure (the source did start). A stall follows
+     * that attempt's first frame, so recording it also takes back the success, and each attempt counts once.
+     */
     private const val STALL_WEIGHT = 0.5
 
     /** Starts slower than this begin to cost score, up to [MAX_SLOW_PENALTY] at [VERY_SLOW_START_MS]. */
@@ -79,7 +82,7 @@ object SportsLiveSourceReliability {
                 }
             )
             Outcome.FAILURE -> base.copy(failures = base.failures + 1)
-            Outcome.STALL -> base.copy(stalls = base.stalls + 1)
+            Outcome.STALL -> base.copy(successes = maxOf(0.0, base.successes - 1), stalls = base.stalls + 1)
         }
     }
 
@@ -90,7 +93,9 @@ object SportsLiveSourceReliability {
         val rate = (r.successes + NEUTRAL * PRIOR_WEIGHT) /
             (r.successes + r.failures + STALL_WEIGHT * r.stalls + PRIOR_WEIGHT)
         val slowness = if (r.ttffMs < 0) 0.0 else ((r.ttffMs - SLOW_START_MS) / (VERY_SLOW_START_MS - SLOW_START_MS)).coerceIn(0.0, 1.0)
-        return (rate - slowness * MAX_SLOW_PENALTY).coerceIn(0.0, 1.0)
+        // Scaled by the (decaying) evidence of starts, so an old slow start fades with it.
+        val evidence = r.successes / (r.successes + 1)
+        return (rate - slowness * MAX_SLOW_PENALTY * evidence).coerceIn(0.0, 1.0)
     }
 
     /**
@@ -112,6 +117,24 @@ object SportsLiveSourceReliability {
                 .thenBy { it.index }
         )
         return (ranked + rest).map { it.value }
+    }
+
+    /**
+     * [a] and [b] (one source's evidence from two books) as one record: both decayed to the later
+     * update and summed; the time to first frame of the later one that has it.
+     */
+    fun merge(a: Record, b: Record): Record {
+        val at = maxOf(a.atMs, b.atMs)
+        val x = a.decayedTo(at)
+        val y = b.decayedTo(at)
+        val (older, newer) = if (a.atMs <= b.atMs) x to y else y to x
+        return Record(
+            successes = x.successes + y.successes,
+            failures = x.failures + y.failures,
+            stalls = x.stalls + y.stalls,
+            ttffMs = if (newer.ttffMs >= 0) newer.ttffMs else older.ttffMs,
+            atMs = at
+        )
     }
 
     /** [records] cut to the [max] most recently updated (least recently used dropped first). */
@@ -146,26 +169,35 @@ object SportsLiveSourceReliability {
     @Volatile
     private var records: Map<String, Record> = emptyMap()
 
+    /** Must not block: it runs under the book's lock (the store only hands the snapshot to its writer). */
     @Volatile
     private var persist: ((Map<String, Record>) -> Unit)? = null
 
     @VisibleForTesting
     internal var nowMs: () -> Long = { System.currentTimeMillis() }
 
-    /** Loads the stored [stored] records (merged under any recorded since start) and sets how changes are saved. */
+    /**
+     * Loads the [stored] records, merged with any recorded since start (a source's stored history is
+     * kept, not replaced), and sets how changes are saved.
+     */
     fun install(stored: Map<String, Record>, save: (Map<String, Record>) -> Unit) {
-        synchronized(this) { records = capped(stored + records) }
-        persist = save
+        synchronized(this) {
+            val merged = stored.toMutableMap()
+            records.forEach { (key, recent) -> merged[key] = merged[key]?.let { merge(it, recent) } ?: recent }
+            records = capped(merged)
+            persist = save
+            save(records)
+        }
     }
 
     /** Records one play attempt's [outcome] for source [key]; [ttffMs] is a success's time to first frame. */
     fun record(key: String?, outcome: Outcome, ttffMs: Long? = null) {
         if (key.isNullOrBlank()) return
-        val snapshot = synchronized(this) {
+        // Saved under the lock, so saves are in the same order as changes (a clear is never undone).
+        synchronized(this) {
             records = capped(records + (key to update(records[key], outcome, nowMs(), ttffMs)))
-            records
+            persist?.invoke(records)
         }
-        persist?.invoke(snapshot)
     }
 
     /** The current score of source [key]; [NEUTRAL] when unknown or null. */
@@ -173,8 +205,10 @@ object SportsLiveSourceReliability {
 
     /** Forgets everything recorded (Settings → Sports & Live → Reset stream memory). */
     fun clear() {
-        synchronized(this) { records = emptyMap() }
-        persist?.invoke(emptyMap())
+        synchronized(this) {
+            records = emptyMap()
+            persist?.invoke(records)
+        }
     }
 
     @VisibleForTesting

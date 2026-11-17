@@ -52,17 +52,24 @@ private fun PlayerRuntimeController.currentSportsSourceKey(): String? =
  * Auto-fails over to the next untried sports source after [errorMessage], or shows the recovery
  * overlay when the cap is reached or nothing untried remains. Returns true when sports handled the
  * error (so the generic error chain stops); false for non-sports playback. The failed source is
- * remembered as a failure, or a stall when [stalled] (the stall watchdog fired).
+ * remembered as a failure, or a stall when [stalled] (the stall watchdog fired); a [decoderInit]
+ * failure (the device's fault, not the source's) is not held against it.
  */
-internal fun PlayerRuntimeController.trySportsLiveFailoverAfterError(errorMessage: String, stalled: Boolean = false): Boolean {
+internal fun PlayerRuntimeController.trySportsLiveFailoverAfterError(
+    errorMessage: String,
+    stalled: Boolean = false,
+    decoderInit: Boolean = false
+): Boolean {
     if (!SportsLiveExtraSources.isSportsPlayback(contentId)) return false
     // The source that just failed must not be re-served from the resolve cache next time.
     SportsLiveExtraSources.invalidateResolve(contentId)
     if (sourceFallbackJob?.isActive == true) return true
-    SportsLiveSourceReliability.record(
-        currentSportsSourceKey(),
-        if (stalled) SportsLiveSourceReliability.Outcome.STALL else SportsLiveSourceReliability.Outcome.FAILURE
-    )
+    if (!decoderInit) {
+        SportsLiveSourceReliability.record(
+            currentSportsSourceKey(),
+            if (stalled) SportsLiveSourceReliability.Outcome.STALL else SportsLiveSourceReliability.Outcome.FAILURE
+        )
+    }
     cancelSportsStallWatchdog()
 
     val failedUrl = currentStreamUrl

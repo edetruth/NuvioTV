@@ -62,13 +62,22 @@ class SportsLiveSourceReliabilityTest {
     }
 
     @Test
-    fun `a stall costs less than a failure`() {
+    fun `a stalled attempt costs less than a failed one`() {
+        // A stall follows the attempt's first frame: start then stall is one attempt.
         val stalled = reliability.score(recordOf(Outcome.SUCCESS, Outcome.STALL), t0)
-        val failed = reliability.score(recordOf(Outcome.SUCCESS, Outcome.FAILURE), t0)
-        val clean = reliability.score(recordOf(Outcome.SUCCESS), t0)
+        val failed = reliability.score(recordOf(Outcome.FAILURE), t0)
 
-        assertTrue(stalled < clean)
         assertTrue(failed < stalled)
+    }
+
+    @Test
+    fun `a start that then stalls scores below neutral, and a source that always stalls sinks`() {
+        val once = recordOf(Outcome.SUCCESS, Outcome.STALL)
+        val always = recordOf(*Array(5) { listOf(Outcome.SUCCESS, Outcome.STALL) }.flatMap { it }.toTypedArray())
+
+        assertTrue(reliability.score(once, t0) < NEUTRAL)
+        assertEquals(0.0, always.successes, 1e-9)
+        assertTrue(reliability.score(always, t0) < reliability.score(once, t0))
     }
 
     @Test
@@ -80,6 +89,11 @@ class SportsLiveSourceReliabilityTest {
         assertEquals(unknown, fast, 1e-9)
         assertTrue(slow < fast)
         assertTrue("the slow penalty is small", fast - slow <= 0.1 + 1e-9)
+        // The penalty fades as the evidence of slow starts decays.
+        val slowRecord = recordOf(Outcome.SUCCESS, ttffMs = 20_000)
+        val fastRecord = recordOf(Outcome.SUCCESS, ttffMs = 1_500)
+        val later = t0 + 10 * HALF_LIFE_MS
+        assertEquals(reliability.score(fastRecord, later), reliability.score(slowRecord, later), 0.001)
         // A slow but working source still beats one that fails.
         assertTrue(slow > reliability.score(recordOf(Outcome.FAILURE), t0))
     }
@@ -210,7 +224,38 @@ class SportsLiveSourceReliabilityTest {
         reliability.record("a", Outcome.SUCCESS)
 
         assertTrue(reliability.scoreOf("p") < NEUTRAL)
-        assertEquals(setOf("p", "a"), saves.single().keys)
+        assertEquals(setOf("p", "a"), saves.last().keys)
+    }
+
+    @Test
+    fun `an outcome recorded before the stored book loads is merged into that source's history`() {
+        reliability.nowMs = { t0 }
+        reliability.record("p", Outcome.SUCCESS)
+        val stored = mapOf("p" to recordOf(Outcome.FAILURE, Outcome.FAILURE, Outcome.FAILURE))
+
+        reliability.install(stored) {}
+
+        val merged = reliability.snapshot().getValue("p")
+        assertEquals(1.0, merged.successes, 1e-9)
+        assertEquals(3.0, merged.failures, 1e-9)
+    }
+
+    @Test
+    fun `a record racing a clear never saves pre-clear data after the clear`() {
+        repeat(20) { round ->
+            reliability.reset()
+            val saves = java.util.Collections.synchronizedList(mutableListOf<Map<String, Record>>())
+            reliability.install(emptyMap()) { saves += it }
+            val writers = (1..4).map { w ->
+                Thread { repeat(200) { reliability.record("s$w-$it", Outcome.SUCCESS) } }
+            }
+            writers.forEach(Thread::start)
+            reliability.clear()
+            writers.forEach(Thread::join)
+
+            // The last save is always the book as it stands: a clear is never undone by a late save.
+            assertEquals("round $round", reliability.snapshot(), saves.last())
+        }
     }
 
     @Test

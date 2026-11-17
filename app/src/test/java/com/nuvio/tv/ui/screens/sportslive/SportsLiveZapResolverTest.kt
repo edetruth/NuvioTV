@@ -208,11 +208,27 @@ class SportsLiveZapResolverTest {
     @Test
     fun `a merged game plays the primary's best stream when it has one`() = runTest {
         settings = PlayerSettings(streamAutoPlayMode = StreamAutoPlayMode.REGEX_MATCH, streamAutoPlayRegex = "1080")
+        streams.responses["game"] = { flowOf(success(SD, HD)) }
+        streams.responses["alt1"] = { flowOf(success(OTHER_HD, addon = "Other")) }
+        streams.responses["alt2"] = { flowOf(success(addon = "Third")) }
+
+        assertEquals(HD, newResolver().resolve(MERGED))
+    }
+
+    @Test
+    fun `a merged game never plays a stream the user's regex rules out`() = runTest {
+        settings = PlayerSettings(streamAutoPlayMode = StreamAutoPlayMode.REGEX_MATCH, streamAutoPlayRegex = "1080")
+        // The most reliable source has only a 720p stream; the regex wants 1080p.
+        SportsLiveSourceReliability.record(SportsLiveSourceReliability.keyOf(MERGED), SportsLiveSourceReliability.Outcome.SUCCESS)
         streams.responses["game"] = { flowOf(success(SD)) }
         streams.responses["alt1"] = { flowOf(success(HD, addon = "Other")) }
         streams.responses["alt2"] = { flowOf(success(addon = "Third")) }
 
-        assertEquals(SD, newResolver().resolve(MERGED))
+        assertEquals(HD, newResolver().resolve(MERGED))
+
+        // Nothing matches anywhere: nothing plays rather than a stream the regex excludes.
+        streams.responses["alt1"] = { flowOf(success(addon = "Other")) }
+        assertNull(newResolver().resolve(MERGED))
     }
 
     @Test

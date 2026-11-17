@@ -17,6 +17,7 @@ import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.ui.screens.player.PlayerMediaSourceFactory
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveExtraSources
 import com.nuvio.tv.ui.screens.sportslive.buildSportsLiveLightPlayer
+import com.nuvio.tv.ui.screens.sportslive.isDecoderInitFailure
 import com.nuvio.tv.ui.screens.sportslive.playSportsLiveStream
 
 /**
@@ -91,7 +92,8 @@ internal class SportsLivePreviewPlayer(
 
                 override fun onPlayerError(error: PlaybackException) {
                     if (player !== this@apply) return
-                    SportsLiveSourceReliability.record(sourceKey, Outcome.FAILURE)
+                    // A missing decoder is the device's fault, not the source's.
+                    if (!error.isDecoderInitFailure()) SportsLiveSourceReliability.record(sourceKey, Outcome.FAILURE)
                     onError(item)
                 }
             })

@@ -136,7 +136,7 @@ class SportsLiveZapResolver @Inject constructor(
             val fetched = coroutineScope {
                 item.alternates
                     .map { source ->
-                        async { fetchSource(source, installedOrder, dropPreparation = false) to labels[source.streamKey] }
+                        async { fetchSource(item, source, installedOrder, dropPreparation = false) to labels[source.streamKey] }
                     }
                     .awaitAll()
             }
@@ -164,14 +164,17 @@ class SportsLiveZapResolver @Inject constructor(
         val installedOrder = installedOrder()
         // The most reliable source first; its best stream plays as soon as it is known.
         val fetches = rankedSources(item, settings).map { source ->
-            fetchScope.async { fetch(source, installedOrder, dropPreparation = source !== item) }
+            fetchScope.async { fetch(item, source, installedOrder, dropPreparation = source !== item) }
         }
         val previous = synchronized(this) {
             backgroundFetches.also { backgroundFetches = item.streamKey to fetches }
         }
         // Finished fetches have recorded their results already; only running ones are cancelled.
         if (previous != null && previous.first != item.streamKey) previous.second.forEach { it.cancel() }
-        return fetches.firstNotNullOfOrNull { fetch ->
+        // First the user's choice across every source, in rank order, so a reliable source with
+        // nothing the user's regex or chosen addons allow never plays a stream they rule out.
+        val fetched = mutableListOf<List<Stream>>()
+        for (fetch in fetches) {
             val streams = try {
                 fetch.await()
             } catch (e: CancellationException) {
@@ -179,9 +182,12 @@ class SportsLiveZapResolver @Inject constructor(
                 currentCoroutineContext().ensureActive()
                 emptyList()
             }
-            preferredStream(streams, settings, installedOrder.toSet())
-                ?: streams.firstOrNull(StreamAutoPlaySelector::isPlayable)
+            preferredStream(streams, settings, installedOrder.toSet())?.let { return it }
+            fetched += streams
         }
+        // Then, only when the user's settings do not narrow what may play, the first playable stream.
+        if (honoursAutoPlayFilters(settings)) return null
+        return fetched.firstNotNullOfOrNull { streams -> streams.firstOrNull(StreamAutoPlaySelector::isPlayable) }
     }
 
     /**
@@ -206,12 +212,12 @@ class SportsLiveZapResolver @Inject constructor(
     ): List<List<Stream>> =
         coroutineScope {
             sources
-                .map { source -> async { fetch(source, installedOrder, dropPreparation = source !== item) } }
+                .map { source -> async { fetch(item, source, installedOrder, dropPreparation = source !== item) } }
                 .awaitAll()
         }
 
-    private suspend fun fetch(source: SportsLiveItem, installedOrder: List<String>, dropPreparation: Boolean): List<Stream> =
-        fetchSource(source, installedOrder, dropPreparation).streams
+    private suspend fun fetch(card: SportsLiveItem, source: SportsLiveItem, installedOrder: List<String>, dropPreparation: Boolean): List<Stream> =
+        fetchSource(card, source, installedOrder, dropPreparation).streams
 
     private class Fetched(val streams: List<Stream>, val finished: Boolean)
 
@@ -222,7 +228,12 @@ class SportsLiveZapResolver @Inject constructor(
      * preparation are dropped: that screen opens for the primary, which does not list them.
      * Any failure, the preparation check included, gives no streams rather than failing the caller.
      */
-    private suspend fun fetchSource(source: SportsLiveItem, installedOrder: List<String>, dropPreparation: Boolean): Fetched =
+    private suspend fun fetchSource(
+        card: SportsLiveItem,
+        source: SportsLiveItem,
+        installedOrder: List<String>,
+        dropPreparation: Boolean
+    ): Fetched =
         try {
             var last: NetworkResult<List<AddonStreams>>? = null
             val finished = withTimeoutOrNull(timeoutMs) {
@@ -238,7 +249,7 @@ class SportsLiveZapResolver @Inject constructor(
                 .filterNot(UnplayableStreamFilter::isUnplayableJunk)
                 .filterNot { dropPreparation && sportsLiveNeedsPreparation(it, directDebridResolver) }
             // Remember where each stream came from, so its plays are credited to this source.
-            streams.forEach { SportsLiveExtraSources.noteStreamSource(it, source) }
+            streams.forEach { SportsLiveExtraSources.noteStreamSource(card.id, it, source) }
             Fetched(streams, finished)
         } catch (e: CancellationException) {
             throw e

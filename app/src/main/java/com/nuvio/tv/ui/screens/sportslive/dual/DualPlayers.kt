@@ -11,7 +11,6 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.mediacodec.MediaCodecRenderer
 import com.nuvio.tv.core.sportslive.SportsLiveSourceReliability
 import com.nuvio.tv.core.sportslive.SportsLiveSourceReliability.Outcome
 import com.nuvio.tv.domain.model.SportsLiveItem
@@ -19,6 +18,7 @@ import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.ui.screens.player.PlayerMediaSourceFactory
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveExtraSources
 import com.nuvio.tv.ui.screens.sportslive.buildSportsLiveLightPlayer
+import com.nuvio.tv.ui.screens.sportslive.isDecoderInitFailure
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniPlayers
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniStop
 import com.nuvio.tv.ui.screens.sportslive.playSportsLiveStream
@@ -198,14 +198,3 @@ private val MEDIA_AUDIO: AudioAttributes = AudioAttributes.Builder()
 private fun DualPane.playable(): Pair<SportsLiveItem, Stream>? =
     stream?.takeIf { status == PaneStatus.Loading || status == PaneStatus.Playing }?.let { item to it }
 
-private fun PlaybackException.isDecoderInitFailure(): Boolean {
-    if (errorCode == PlaybackException.ERROR_CODE_DECODER_INIT_FAILED ||
-        errorCode == PlaybackException.ERROR_CODE_DECODER_QUERY_FAILED
-    ) return true
-    var cause: Throwable? = cause
-    while (cause != null) {
-        if (cause is MediaCodecRenderer.DecoderInitializationException) return true
-        cause = cause.cause
-    }
-    return false
-}

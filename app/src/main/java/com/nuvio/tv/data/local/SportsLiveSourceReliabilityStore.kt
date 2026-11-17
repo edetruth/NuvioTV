@@ -1,6 +1,7 @@
 package com.nuvio.tv.data.local
 
 import android.content.Context
+import android.util.Log
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
@@ -35,6 +36,10 @@ private val Context.sportsLiveReliabilityDataStore: DataStore<Preferences> by pr
 class SportsLiveSourceReliabilityStore @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
+    private companion object {
+        const val TAG = "SportsLiveReliability"
+    }
+
     private val key = stringPreferencesKey("records")
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val pending = Channel<Map<String, SportsLiveSourceReliability.Record>>(Channel.CONFLATED)
@@ -42,10 +47,18 @@ class SportsLiveSourceReliabilityStore @Inject constructor(
     /** Loads the stored book into [SportsLiveSourceReliability] and saves its changes from then on. */
     fun start() {
         scope.launch {
-            val stored = SportsLiveSourceReliability.decode(context.sportsLiveReliabilityDataStore.data.first()[key])
+            // A failed read or write only loses stream memory; it must never crash the app.
+            val stored = runCatching {
+                SportsLiveSourceReliability.decode(context.sportsLiveReliabilityDataStore.data.first()[key])
+            }.getOrElse {
+                Log.w(TAG, "Could not read stream memory", it)
+                emptyMap()
+            }
             SportsLiveSourceReliability.install(stored) { records -> pending.trySend(records) }
             pending.receiveAsFlow().collect { records ->
-                context.sportsLiveReliabilityDataStore.edit { it[key] = SportsLiveSourceReliability.encode(records) }
+                runCatching {
+                    context.sportsLiveReliabilityDataStore.edit { it[key] = SportsLiveSourceReliability.encode(records) }
+                }.onFailure { Log.w(TAG, "Could not save stream memory", it) }
             }
         }
     }

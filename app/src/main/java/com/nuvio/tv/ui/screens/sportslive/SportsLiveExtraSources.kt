@@ -54,8 +54,8 @@ object SportsLiveExtraSources {
 
     private class SourceNames(val primaryKey: String, val byName: Map<String, String>)
 
-    // Stream url -> the reliability key of the source it was resolved from (the resolver notes it),
-    // so a stream picked across a merged card's sources is credited to the right one.
+    // (card content id, stream url) -> the reliability key of the source it was resolved from (the
+    // resolver notes it), so a stream picked across a merged card's sources is credited to the right one.
     private val streamSources = LinkedHashMap<String, String>()
     private const val MAX_STREAM_SOURCES = 256
 
@@ -127,19 +127,23 @@ object SportsLiveExtraSources {
         return SourceNames(SportsLiveSourceReliability.keyOf(item), byName)
     }
 
-    /** Notes that [stream] was resolved from [source], so its plays are credited to that source. */
-    fun noteStreamSource(stream: Stream, source: SportsLiveItem) {
+    /** Notes that [stream] was resolved from [source] for the card played as [contentId], so its plays credit that source. */
+    fun noteStreamSource(contentId: String, stream: Stream, source: SportsLiveItem) {
         val url = stream.getStreamUrl() ?: return
+        val key = streamSourceKey(contentId, url)
         synchronized(streamSources) {
-            streamSources.remove(url)
-            streamSources[url] = SportsLiveSourceReliability.keyOf(source)
+            streamSources.remove(key)
+            streamSources[key] = SportsLiveSourceReliability.keyOf(source)
             while (streamSources.size > MAX_STREAM_SOURCES) streamSources.remove(streamSources.keys.first())
         }
     }
 
-    /** The reliability key of the source [url] was resolved from, or null when not noted. */
-    private fun sourceOfUrl(url: String?): String? =
-        if (url.isNullOrBlank()) null else synchronized(streamSources) { streamSources[url] }
+    private fun streamSourceKey(contentId: String, url: String) = "$contentId $url"
+
+    /** The reliability key of the source [url] was resolved from for card [contentId], or null when not noted. */
+    private fun sourceOfUrl(contentId: String?, url: String?): String? =
+        if (contentId == null || url.isNullOrBlank()) null
+        else synchronized(streamSources) { streamSources[streamSourceKey(contentId, url)] }
 
     /**
      * The reliability key of the source the player for [contentId] plays: by its [url] when the
@@ -147,14 +151,14 @@ object SportsLiveExtraSources {
      */
     fun sourceKeyFor(contentId: String?, url: String?, addonName: String?): String? {
         if (!isSportsPlayback(contentId)) return null
-        sourceOfUrl(url)?.let { return it }
+        sourceOfUrl(contentId, url)?.let { return it }
         if (addonName == null) return null
         return synchronized(sourceNames) { sourceNames[contentId]?.byName?.get(addonName) }
     }
 
     /** The reliability key of [stream] played for [item] on a light player: the source it came from, else [item]'s. */
     fun sourceKeyFor(item: SportsLiveItem, stream: Stream): String =
-        sourceOfUrl(stream.getStreamUrl()) ?: SportsLiveSourceReliability.keyOf(item)
+        sourceOfUrl(item.id, stream.getStreamUrl()) ?: SportsLiveSourceReliability.keyOf(item)
 
     /** The reliability score of [stream] in the player for [contentId]; neutral when its source is unknown. */
     fun reliabilityOf(contentId: String?, stream: Stream): Double =
@@ -367,7 +371,7 @@ internal fun sportsLiveFallbackCandidate(
 }
 
 /** True when the user's autoplay settings narrow which streams may play (a regex, or chosen sources). */
-private fun honoursAutoPlayFilters(settings: PlayerSettings): Boolean =
+internal fun honoursAutoPlayFilters(settings: PlayerSettings): Boolean =
     settings.streamAutoPlayMode == StreamAutoPlayMode.REGEX_MATCH ||
         settings.streamAutoPlaySource != StreamAutoPlaySource.ALL_SOURCES ||
         settings.streamAutoPlaySelectedAddons.isNotEmpty() ||

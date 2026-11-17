@@ -3,9 +3,11 @@ package com.nuvio.tv.ui.screens.sportslive
 import android.content.Context
 import androidx.annotation.OptIn
 import androidx.media3.common.C
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.mediacodec.MediaCodecRenderer
 import com.nuvio.tv.core.debrid.DirectDebridResolver
 import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.ui.screens.player.PlayerMediaSourceFactory
@@ -86,3 +88,20 @@ internal fun ExoPlayer.playSportsLiveStream(
 internal suspend fun sportsLiveLightPlayable(stream: Stream, directDebridResolver: DirectDebridResolver): Boolean =
     !stream.isExternal() && !stream.isTorrent() && stream.getStreamUrl() != null &&
         !sportsLiveNeedsPreparation(stream, directDebridResolver)
+
+/**
+ * Whether this error is the device failing to get a decoder: the device's fault, not the stream
+ * source's, so it is not held against the source's reliability.
+ */
+@OptIn(UnstableApi::class)
+internal fun PlaybackException.isDecoderInitFailure(): Boolean {
+    if (errorCode == PlaybackException.ERROR_CODE_DECODER_INIT_FAILED ||
+        errorCode == PlaybackException.ERROR_CODE_DECODER_QUERY_FAILED
+    ) return true
+    var cause: Throwable? = cause
+    while (cause != null) {
+        if (cause is MediaCodecRenderer.DecoderInitializationException) return true
+        cause = cause.cause
+    }
+    return false
+}

@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.player
 
+import com.nuvio.tv.ui.screens.sportslive.isDecoderInitFailure
 import android.content.Context
 import android.content.res.Resources
 import android.graphics.RectF
@@ -1662,7 +1663,7 @@ internal fun PlayerRuntimeController.initializePlayer(
                         }
                         // Sports & Live: auto-fail over to the next untried source (capped), or show the
                         // standalone recovery overlay. Scoped to sports; returns false for movies/shows.
-                        if (trySportsLiveFailoverAfterError(detailedError)) {
+                        if (trySportsLiveFailoverAfterError(detailedError, decoderInit = error.isDecoderInitFailure())) {
                             return
                         }
                         if (tryFallbackToNextSourceAfterError(detailedError)) {

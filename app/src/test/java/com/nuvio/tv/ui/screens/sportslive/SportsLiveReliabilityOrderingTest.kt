@@ -49,7 +49,7 @@ class SportsLiveReliabilityOrderingTest {
     fun `the player credits a stream to its source by url, else by its Sources panel name`() {
         SportsLiveExtraSources.register("game", CARD)
         val fromAlt = stream("x", "https://two.example.invalid/x.m3u8", "Two")
-        SportsLiveExtraSources.noteStreamSource(fromAlt, ALT)
+        SportsLiveExtraSources.noteStreamSource("game", fromAlt, ALT)
 
         assertEquals("two|two_live", SportsLiveExtraSources.sourceKeyFor("game", fromAlt.url, "anything"))
         assertEquals("one|one_live", SportsLiveExtraSources.sourceKeyFor("game", "https://unknown.example.invalid/", "One"))
@@ -73,10 +73,21 @@ class SportsLiveReliabilityOrderingTest {
     @Test
     fun `a light player credits the source the resolver found the stream on, else the card's`() {
         val fromAlt = stream("x", "https://two.example.invalid/x.m3u8", "Two")
-        SportsLiveExtraSources.noteStreamSource(fromAlt, ALT)
+        SportsLiveExtraSources.noteStreamSource(CARD.id, fromAlt, ALT)
 
         assertEquals("two|two_live", SportsLiveExtraSources.sourceKeyFor(CARD, fromAlt))
         assertEquals("one|one_live", SportsLiveExtraSources.sourceKeyFor(CARD, stream("y", "https://one.example.invalid/y.m3u8", "One")))
+    }
+
+    @Test
+    fun `the same url found for two cards is credited per card`() {
+        val shared = stream("x", "https://shared.example.invalid/x.m3u8", "Two")
+        val other = item("other-game", "Three")
+        SportsLiveExtraSources.noteStreamSource(CARD.id, shared, ALT)
+        SportsLiveExtraSources.noteStreamSource(other.id, shared, other)
+
+        assertEquals("two|two_live", SportsLiveExtraSources.sourceKeyFor(CARD, shared))
+        assertEquals("three|three_live", SportsLiveExtraSources.sourceKeyFor(other, shared))
     }
 
     // --- Sources panel ---
