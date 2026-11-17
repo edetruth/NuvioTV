@@ -3,6 +3,8 @@ package com.nuvio.tv.ui.screens.sportslive
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.State
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -18,6 +20,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.delay
 import javax.inject.Inject
 
 /**
@@ -104,3 +107,13 @@ internal fun TrackLiveScores(screenId: String, cards: List<SportsLiveItem>, enab
         }
     }
 }
+
+/** The wall clock, updated every [stepMs] while composed: moves Live now cards whose game ended (#60). */
+@Composable
+internal fun rememberSportsLiveClockMs(stepMs: Long = 30_000L): State<Long> =
+    produceState(System.currentTimeMillis(), stepMs) {
+        while (true) {
+            delay(stepMs)
+            value = System.currentTimeMillis()
+        }
+    }

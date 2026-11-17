@@ -16,6 +16,7 @@ import androidx.lifecycle.viewModelScope
 import com.nuvio.tv.R
 import com.nuvio.tv.core.debrid.DirectDebridResolver
 import com.nuvio.tv.core.profile.ProfileManager
+import com.nuvio.tv.core.sportslive.SportsLiveEndedGames
 import com.nuvio.tv.core.sportslive.scores.LiveScoresRepository
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.domain.model.SportsLiveItem
@@ -154,8 +155,11 @@ class SportsLiveZapViewModel @Inject constructor(
             val mode = liveScores.mode.map<ScoresMode, ScoresMode?> { it }.onStart { emit(null) }
             // Grouped off the main thread; the tracker is updated back on it.
             combine(items, liveScores.scores, mode, reveal.revealed) { list, scores, scoresMode, revealed ->
+                val nowMs = System.currentTimeMillis()
+                // Ended games (#60) go to the last group; those over for half an hour leave the panel.
+                val split = SportsLiveEndedGames.shared.split(list, scores, nowMs)
                 val state = SportsLiveZapPanelState(
-                    rows = groupPanelRows(list, scores, scoresMode, revealed, System.currentTimeMillis()),
+                    rows = groupPanelRows(split.live + split.justEnded, scores, scoresMode, revealed, nowMs, split.ended),
                     currentKey = session.current.streamKey
                 )
                 Triple(list, scoresMode, state)

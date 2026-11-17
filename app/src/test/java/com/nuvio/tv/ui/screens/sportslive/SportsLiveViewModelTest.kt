@@ -1,7 +1,13 @@
 package com.nuvio.tv.ui.screens.sportslive
 
 import com.nuvio.tv.MainDispatcherRule
+import com.nuvio.tv.core.sportslive.EndedSignal
+import com.nuvio.tv.core.sportslive.SportsLiveEndedGames
 import com.nuvio.tv.core.sportslive.SportsLiveItemBucketer
+import com.nuvio.tv.core.sportslive.scores.EspnFixtures
+import com.nuvio.tv.core.sportslive.scores.EspnLeagueMap
+import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
+import com.nuvio.tv.core.sportslive.scores.ScoreState
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.domain.model.Addon
 import com.nuvio.tv.domain.model.CatalogDescriptor
@@ -30,6 +36,7 @@ import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
@@ -93,8 +100,8 @@ class SportsLiveViewModelTest {
     }
 
     /** Collects [SportsLiveViewModel.uiState] in the background, as the screen would, so WhileSubscribed stays active. */
-    private fun TestScope.newViewModel(): SportsLiveViewModel {
-        val viewModel = SportsLiveViewModel(repo)
+    private fun TestScope.newViewModel(scores: Map<String, ScoreSnapshot> = emptyMap()): SportsLiveViewModel {
+        val viewModel = SportsLiveViewModel(repo, scores = flowOf(scores), endedGames = SportsLiveEndedGames())
         viewModel.nowMs = { NOW }
         backgroundScope.launch { viewModel.uiState.collect {} }
         return viewModel
@@ -124,6 +131,45 @@ class SportsLiveViewModelTest {
         assertEquals("a", state.selectedItemId)
         assertEquals(NOW, state.lastRefreshedMs)
         assertEquals(listOf(false), forcedFlags)
+    }
+
+    @Test
+    fun `ended games sit at the end of Live now as Just ended, and the tab counts only the live ones`() = runTest {
+        nextLoad = load(
+            listOf(
+                // Soccer runs about 2h15: ended 15 min ago (Just ended), and ended 45 min ago (gone).
+                item("ended", isLive = true, sport = "Soccer", name = "Ended", startMs = NOW - 2 * HOUR - 30 * MINUTE),
+                item("gone", isLive = true, sport = "Soccer", name = "Gone", startMs = NOW - 3 * HOUR),
+                item("on", isLive = true, sport = "Soccer", name = "On", startMs = NOW - HOUR),
+                item("untimed", isLive = true, sport = "Soccer", name = "Untimed")
+            )
+        )
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(listOf("on", "untimed", "ended"), state.visibleItems.map { it.id })
+        assertEquals(setOf("ended"), state.justEnded.keys.map { it.substringAfter('|') }.toSet())
+        assertEquals(EndedSignal.ESTIMATE, state.endedOf(state.visibleItems.last())?.signal)
+        assertNull(state.endedOf(state.visibleItems.first()))
+        assertEquals(2, state.countOf(SportsLiveTab.LIVE_NOW))
+    }
+
+    @Test
+    fun `a game ESPN shows live stays in the main list past its estimate`() = runTest {
+        val pacers = EspnFixtures.events(EspnFixtures.NBA_20261115, EspnLeagueMap.NBA).first { it.eventId == "401909985" }
+        val inPlay = pacers.copy(
+            state = ScoreState.IN, isFinal = false, clockText = "OT 1:00",
+            home = pacers.home.copy(score = 130), away = pacers.away.copy(score = 129)
+        )
+        val game = item("g", isLive = true, sport = "Basketball", name = "Indiana Pacers at Philadelphia 76ers", startMs = NOW - 3 * HOUR - 20 * MINUTE)
+        nextLoad = load(listOf(game))
+        val viewModel = newViewModel(scores = mapOf(game.streamKey to inPlay))
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(listOf("g"), state.visibleItems.map { it.id })
+        assertTrue(state.justEnded.isEmpty())
     }
 
     @Test
@@ -754,6 +800,7 @@ class SportsLiveViewModelTest {
     private companion object {
         const val NOW = 1_700_000_000_000L
         const val HOUR = 60 * 60 * 1000L
+        const val MINUTE = 60 * 1000L
 
         val CLAIMED: ClaimedCatalog = run {
             val catalog = CatalogDescriptor(type = ContentType.fromString("tv"), rawType = "tv", id = "events", name = "Events")

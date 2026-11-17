@@ -45,11 +45,13 @@ import com.nuvio.tv.domain.model.LibraryListTab
 import com.nuvio.tv.domain.model.LibrarySourceMode
 import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.domain.model.SportsLiveItem
+import com.nuvio.tv.core.sportslive.SportsLiveEndedGames
 import com.nuvio.tv.core.sportslive.scores.LiveScoresRepository
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveScoresViewModel
 import com.nuvio.tv.ui.screens.sportslive.TrackLiveScores
 import com.nuvio.tv.ui.screens.sportslive.rememberScoreChipStrings
+import com.nuvio.tv.ui.screens.sportslive.rememberSportsLiveClockMs
 import com.nuvio.tv.domain.model.isSeriesLikeType
 import com.nuvio.tv.ui.components.ErrorState
 import com.nuvio.tv.ui.components.LoadingIndicator
@@ -120,6 +122,12 @@ fun HomeScreen(
         SportsLiveHomeRow.scoreLabels(uiState.liveNowItems, liveScores, liveScoresMode, scoreChipStrings, liveScoreFormat)
     }
     LaunchedEffect(liveNowScoreLabels) { viewModel.setLiveNowScoreLabels(liveNowScoreLabels) }
+    // Games found over (#60) leave the row: no Just ended strip on Home.
+    val liveClockMs by rememberSportsLiveClockMs()
+    val liveNowEnded = remember(uiState.liveNowItems, liveScores, liveClockMs) {
+        SportsLiveEndedGames.shared.endedKeys(uiState.liveNowItems, liveScores, liveClockMs)
+    }
+    LaunchedEffect(liveNowEnded) { viewModel.setLiveNowEnded(liveNowEnded) }
 
     // Home was the only major screen without a lifecycle observer, so nothing ever told it to
     // look at its catalogs again.

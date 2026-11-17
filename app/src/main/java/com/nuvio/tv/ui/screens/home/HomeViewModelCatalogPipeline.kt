@@ -582,7 +582,7 @@ internal suspend fun HomeViewModel.updateCatalogRowsPipeline() {
     val heroSectionEnabled = _uiState.value.heroSectionEnabled
     val hideUnreleased = _uiState.value.hideUnreleasedContent
     val titlesSnapshot = customCatalogTitles
-    val liveNowItems = _uiState.value.liveNowItems
+    val liveNowItems = _uiState.value.liveNowShown
     val liveNowTitle = if (liveNowItems.isNotEmpty()) appContext.getString(R.string.sports_live_home_row_title) else ""
 
     val (displayRows, baseHeroItems, baseGridItems, fullRowsFiltered) = withContext(Dispatchers.Default) {

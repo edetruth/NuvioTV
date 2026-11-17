@@ -54,6 +54,8 @@ import androidx.tv.material3.Text
 import com.nuvio.tv.R
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.TeamPair
+import com.nuvio.tv.core.sportslive.EndedSignal
+import com.nuvio.tv.core.sportslive.SportsLiveEndedGames
 import com.nuvio.tv.core.sportslive.scores.GameArt
 import com.nuvio.tv.core.sportslive.scores.LiveScoresRepository
 import com.nuvio.tv.core.sportslive.scores.MySport
@@ -128,14 +130,16 @@ fun SportsLiveScreen(
         tracking = scoresViewModel.tracking
     )
     // Worked out once per card for each scores update (or setting / reveal change), not per recomposition.
-    val chipOf: (SportsLiveItem) -> ScoreChip? = remember(scores, scoresMode, revealed, scoredTab) {
+    val chipOf: (SportsLiveItem) -> ScoreChip? = remember(scores, scoresMode, revealed, scoredTab, uiState.justEnded) {
         val cache = HashMap<SportsLiveItem, ScoreChip?>()
         val chip: (SportsLiveItem) -> ScoreChip? = { item ->
             if (!scoredTab) {
                 null
             } else {
                 cache.getOrPut(item) {
-                    ScoreChips.of(item, scores[item.streamKey], scoresMode, item.streamKey in revealed)
+                    // A Just ended card keeps the final it was moved on, whatever is tracked now.
+                    val snapshot = scores[item.streamKey] ?: uiState.endedOf(item)?.event
+                    ScoreChips.of(item, snapshot, scoresMode, item.streamKey in revealed)
                 }
             }
         }
@@ -234,8 +238,12 @@ fun SportsLiveScreen(
             detailsOf = detailsOf,
             gameOf = gameOf,
             onOpenGame = { item, event ->
+                // A finished game carries its strict replay match (Watch replay), as from Results.
+                val replay = event.takeIf(SportsLiveEndedGames::isFinalWithScore)?.let {
+                    SportsLiveEndedGames.replayFor(it, uiState.tabs[SportsLiveTab.REPLAYS].orEmpty(), System.currentTimeMillis())
+                }
                 SportsLiveGameRequests.open(
-                    SportsLiveGameRequest(event, revealed = scoresMode == ScoresMode.SHOW || item.streamKey in revealed)
+                    SportsLiveGameRequest(event, replay = replay, revealed = scoresMode == ScoresMode.SHOW || item.streamKey in revealed)
                 )
                 onOpenGame()
             },
@@ -360,7 +368,27 @@ private fun SportsLiveContent(
     // from a game, Details or the player restores the position saved with the back stack entry.
     val filterKey = "${uiState.selectedTab.name}|${uiState.selectedFilter.orEmpty()}"
     val listState = rememberSaveable(filterKey, saver = LazyListState.Saver) { LazyListState() }
-    val stateLabelOf = rememberSportsLiveStateLabeler(uiState.selectedTab)
+    val baseStateLabelOf = rememberSportsLiveStateLabeler(uiState.selectedTab)
+    val finalLabel = stringResource(R.string.sports_live_chip_final_note)
+    val probablyEndedLabel = stringResource(R.string.sports_live_probably_ended)
+    // A Just ended card (#60): "Final" (left to the chip when it already says it) or "Probably ended".
+    val stateLabelOf: (SportsLiveItem) -> String? = { item ->
+        val ended = uiState.endedOf(item)
+        when {
+            ended == null -> baseStateLabelOf(item)
+            ended.signal == EndedSignal.ESTIMATE -> probablyEndedLabel
+            chipOf(item) is ScoreChip.Final -> null
+            else -> finalLabel
+        }
+    }
+    // Just ended cards with a strict replay match carry the Replay tag.
+    val replaysTab = uiState.tabs[SportsLiveTab.REPLAYS].orEmpty()
+    val replayKeys = remember(uiState.justEnded, replaysTab) {
+        val nowMs = System.currentTimeMillis()
+        uiState.justEnded.filterValues { ended ->
+            ended.event?.let { SportsLiveEndedGames.replayFor(it, replaysTab, nowMs) } != null
+        }.keys
+    }
 
     val items = uiState.visibleItems
     val selected = items.firstOrNull { it.listKey == focusedCardKey && it.id == uiState.selectedItemId }
@@ -405,6 +433,14 @@ private fun SportsLiveContent(
     // Replay "series" items are team folders; the detail page lists their videos.
     val open: (SportsLiveItem) -> Unit = { item ->
         if (item.kind == SportsLiveKind.REPLAY && item.apiType == "series") onOpenDetail(item) else onPlay(item)
+    }
+    // OK on a card: an ESPN-ended game in Just ended opens its Game page; every other card (an estimate
+    // too: its stream may still work) opens as usual. Hold OK keeps Choose stream.
+    val openCard: (SportsLiveItem) -> Unit = { item ->
+        when (val ok = sportsLiveCardOk(uiState.endedOf(item))) {
+            is SportsLiveCardOk.OpenGame -> onOpenGame(item, ok.event)
+            SportsLiveCardOk.Play -> open(item)
+        }
     }
 
     // The card whose long-press menu is open; the menu closes if a refresh drops the card.
@@ -705,14 +741,28 @@ private fun SportsLiveContent(
                 verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)
             ) {
                 itemsIndexed(items, key = { _, item -> item.listKey }) { index, item ->
+                    val ended = uiState.endedOf(item) != null
+                    // The strip's heading rides on its first card, so list indices stay the cards' own.
+                    Column {
+                    if (ended && (index == 0 || uiState.endedOf(items[index - 1]) == null)) {
+                        Text(
+                            text = stringResource(R.string.sports_live_just_ended),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = NuvioTheme.colors.TextSecondary,
+                            maxLines = 1,
+                            modifier = Modifier.padding(top = NuvioTheme.spacing.md, bottom = NuvioTheme.spacing.sm)
+                        )
+                    }
                     SportsLiveListCard(
                         item = item,
                         stateLabel = stateLabelOf(item),
                         selected = item.listKey == selected.listKey,
+                        ended = ended,
+                        hasReplay = item.streamKey in replayKeys && ended,
                         onClick = {
                             val first = pickFirst
                             if (first == null) {
-                                open(item)
+                                openCard(item)
                             } else {
                                 // Pick mode: OK pairs an eligible card (the list as shown is the dual
                                 // list); any other card, or a tab without dual screen, ignores it.
@@ -754,6 +804,7 @@ private fun SportsLiveContent(
                                 if (index == 0) up = aboveListFocusRequester
                             }
                     )
+                    }
                 }
             }
             }
@@ -821,7 +872,7 @@ private fun SportsLiveTabRow(
     ) {
         tabs.forEach { tab ->
             val label = stringResource(tab.labelRes())
-            val count = uiState.tabs[tab].orEmpty().size
+            val count = uiState.countOf(tab)
             SourceStatusFilterChip(
                 name = if (count > 0) "$label $count" else label,
                 isSelected = tab == uiState.selectedTab,

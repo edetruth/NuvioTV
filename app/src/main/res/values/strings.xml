@@ -3702,6 +3702,9 @@
     <string name="sports_live_stat_fouls">Fouls</string>
     <string name="sports_live_refresh">Refresh</string>
     <string name="sports_live_live_pill">LIVE</string>
+    <!-- Live now games found over (#60): the strip at the end of the list, and its cards' pill. -->
+    <string name="sports_live_just_ended">Just ended</string>
+    <string name="sports_live_probably_ended">Probably ended</string>
     <string name="sports_live_time_tba">Time TBA</string>
     <string name="sports_live_tomorrow">Tomorrow %1$s</string>
     <string name="sports_live_empty_tab">Nothing here right now</string>

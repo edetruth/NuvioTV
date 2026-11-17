@@ -34,7 +34,7 @@ internal fun HomeViewModel.observeSportsLiveClaimedKeysPipeline() {
  */
 internal fun HomeViewModel.startLiveNowZapSession(item: SportsLiveItem) {
     val session = SportsLiveZapSession.of(
-        items = _uiState.value.liveNowItems,
+        items = _uiState.value.liveNowShown,
         itemKey = item.streamKey,
         tab = SportsLiveTab.LIVE_NOW,
         filter = null,
@@ -53,12 +53,22 @@ internal fun HomeViewModel.setLiveNowScoreLabels(labels: Map<String, String>) {
     liveNowScoreLabels = labels
     _uiState.update { state ->
         val index = state.homeRows.indexOfFirst { it is HomeRow.Catalog && SportsLiveHomeRow.isLiveNowRow(it.row.addonBaseUrl) }
-        if (index < 0 || state.liveNowItems.isEmpty()) return@update state
+        if (index < 0 || state.liveNowShown.isEmpty()) return@update state
         val old = (state.homeRows[index] as HomeRow.Catalog).row
         val rows = state.homeRows.toMutableList()
-        rows[index] = HomeRow.Catalog(SportsLiveHomeRow.build(state.liveNowItems, old.catalogName, labels))
+        rows[index] = HomeRow.Catalog(SportsLiveHomeRow.build(state.liveNowShown, old.catalogName, labels))
         state.copy(homeRows = rows)
     }
+}
+
+/**
+ * The Live now cards whose game is over (#60, worked out by Home's screen from the live scores and the
+ * clock): they leave the row. The rows are rebuilt only when the set changes.
+ */
+internal fun HomeViewModel.setLiveNowEnded(keys: Set<String>) {
+    if (keys == _uiState.value.liveNowEnded) return
+    _uiState.update { it.copy(liveNowEnded = keys) }
+    if (addonsCache.isNotEmpty()) scheduleUpdateCatalogRows()
 }
 
 /** Feeds the Live now row. Before the catalogs load, the next catalog update picks the items up. */

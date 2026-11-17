@@ -648,7 +648,7 @@ private fun ResultRowCard(
 
 /** The green "Replay" tag of a result with a replay. */
 @Composable
-private fun ReplayPill() {
+internal fun ReplayPill() {
     Text(
         text = stringResource(R.string.sports_live_results_replay),
         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),

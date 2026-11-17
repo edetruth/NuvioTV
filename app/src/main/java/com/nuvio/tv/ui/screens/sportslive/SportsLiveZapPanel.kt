@@ -1,5 +1,7 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import com.nuvio.tv.core.sportslive.EndedGame
+import com.nuvio.tv.core.sportslive.SportsLiveEndedGames
 import com.nuvio.tv.core.sportslive.SportsLiveItemBucketer
 import com.nuvio.tv.core.sportslive.scores.GameArt
 import com.nuvio.tv.core.sportslive.scores.ScoreChip
@@ -75,7 +77,7 @@ internal fun SportsLiveZapSession.banner(switching: Boolean): SportsLiveZapBanne
 internal const val SOON_WINDOW_MS = 3 * 60 * 60 * 1000L
 
 /** The live games panel's groups, in the order they are listed. */
-enum class ZapPanelGroup { LIVE_NOW, STARTING_SOON, OTHER }
+enum class ZapPanelGroup { LIVE_NOW, STARTING_SOON, OTHER, JUST_ENDED }
 
 /**
  * A row of the live games panel: its [group], the S4 score [chip] (null when the game is unmatched,
@@ -94,18 +96,22 @@ data class ZapPanelRow(
  * soonest first, then the rest (channels, later games, finished or postponed ones; under Hide until
  * focused a finished game keeps its place by start time). Followed teams' games stay first inside each group. A game's state comes
  * from its matched score event only when the card's sides sit on it one way round (the chip's rule);
- * otherwise from its start time. [scores] is ignored while Scores is Off.
+ * otherwise from its start time. [scores] is ignored while Scores is Off. Games found over (#60, [ended]
+ * by card key: the Just ended verdicts of [SportsLiveEndedGames.split]) form a last **Just ended** group.
  */
 internal fun groupPanelRows(
     items: List<SportsLiveItem>,
     scores: Map<String, ScoreSnapshot>,
     mode: ScoresMode?,
     revealed: Set<String>,
-    nowMs: Long
+    nowMs: Long,
+    ended: Map<String, EndedGame> = emptyMap()
 ): List<ZapPanelRow> {
     class Entry(val row: ZapPanelRow, val startMs: Long?, val index: Int)
     val entries = items.mapIndexed { index, item ->
-        val snapshot = scores[item.streamKey].takeIf { mode != null && mode != ScoresMode.OFF }
+        val endedGame = ended[item.streamKey]
+        // A Just ended game keeps the final it was moved on, whatever is tracked now.
+        val snapshot = (scores[item.streamKey] ?: endedGame?.event).takeIf { mode != null && mode != ScoresMode.OFF }
         val sides = ScoreChips.orderedSides(item)
         val event = snapshot?.takeIf { sides != null && ScoreMatcher.firstIsHome(sides.first, sides.second, it) != null }
         val eventStart = event?.takeIf { it.timeValid }?.startMs
@@ -114,7 +120,7 @@ internal fun groupPanelRows(
         // Under Hide until focused a finished game is grouped by its start like an unmatched one, so its
         // place in the list never gives the result away.
         val state = event?.state?.takeUnless { it == ScoreState.POST && mode == ScoresMode.HIDE_UNTIL_FOCUSED }
-        val group = when (state) {
+        val group = if (endedGame != null) ZapPanelGroup.JUST_ENDED else when (state) {
             ScoreState.IN -> ZapPanelGroup.LIVE_NOW
             ScoreState.PRE -> if (soon) ZapPanelGroup.STARTING_SOON else ZapPanelGroup.OTHER
             ScoreState.POST, ScoreState.OFF -> ZapPanelGroup.OTHER
@@ -131,7 +137,7 @@ internal fun groupPanelRows(
     }
     val order = compareBy<Entry> { it.row.group.ordinal }
         .thenByDescending { it.row.item.followed }
-        .thenBy { if (it.row.group == ZapPanelGroup.OTHER) 0L else it.startMs ?: Long.MAX_VALUE }
+        .thenBy { if (it.row.group >= ZapPanelGroup.OTHER) 0L else it.startMs ?: Long.MAX_VALUE }
         .thenBy { it.index }
     return entries.sortedWith(order).map { it.row }
 }

@@ -80,8 +80,14 @@ data class HomeUiState(
         com.nuvio.tv.core.poster.CustomPosterScreen.ALL,
     val mdbListShowOnHero: Boolean = false,
     val mdbListRatingOrder: List<String> = com.nuvio.tv.domain.model.MDBListSettings.DEFAULT_RATING_ORDER,
-    val liveNowItems: List<SportsLiveItem> = emptyList()
-)
+    val liveNowItems: List<SportsLiveItem> = emptyList(),
+    /** Card keys of [liveNowItems] whose game is over (#60): Home drops them (no Just ended strip there). */
+    val liveNowEnded: Set<String> = emptySet()
+) {
+    /** The Live now row's cards: [liveNowItems] without the ended games. */
+    val liveNowShown: List<SportsLiveItem>
+        get() = if (liveNowEnded.isEmpty()) liveNowItems else liveNowItems.filterNot { it.streamKey in liveNowEnded }
+}
 
 @Immutable
 sealed class ContinueWatchingItem {

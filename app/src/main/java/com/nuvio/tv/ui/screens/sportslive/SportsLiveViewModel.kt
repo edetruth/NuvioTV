@@ -5,9 +5,15 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nuvio.tv.core.debrid.DirectDebridResolver
 import com.nuvio.tv.core.sportslive.SportsLiveDataSaver
+import com.nuvio.tv.core.sportslive.EndedGame
+import com.nuvio.tv.core.sportslive.SportsLiveEndedGames
 import com.nuvio.tv.core.sportslive.SportsLiveItemBucketer
 import com.nuvio.tv.core.sportslive.SportsLiveLiveDuration
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
+import com.nuvio.tv.core.sportslive.scores.LiveScoresRepository
+import com.nuvio.tv.core.sportslive.scores.ScoreChips
+import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
+import com.nuvio.tv.core.sportslive.scores.ScoreState
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveItem
@@ -30,6 +36,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
@@ -50,7 +57,12 @@ class SportsLiveViewModel internal constructor(
     /** Data saver: when on, the on-focus ended-probe is skipped (hover preview is already gated off). */
     dataSaver: Flow<Boolean> = flowOf(false),
     /** Drops [item]'s cached resolve after its preview failed, so the next play/preview re-resolves. */
-    private val onResolveFailed: (SportsLiveItem) -> Unit = {}
+    private val onResolveFailed: (SportsLiveItem) -> Unit = {},
+    /** The delayed live scores by card key, for ended games (#60); empty while Scores is Off. */
+    scores: Flow<Map<String, ScoreSnapshot>> = flowOf(emptyMap()),
+    private val endedGames: SportsLiveEndedGames = SportsLiveEndedGames(),
+    /** Ticks while the list is watched, so a game's grace or estimate running out moves its card. */
+    clock: Flow<Unit> = flowOf(Unit)
 ) : ViewModel() {
 
     @Inject
@@ -58,7 +70,8 @@ class SportsLiveViewModel internal constructor(
         repo: SportsLiveRepository,
         resolver: SportsLiveZapResolver,
         directDebridResolver: DirectDebridResolver,
-        prefs: SportsLivePreferencesDataStore
+        prefs: SportsLivePreferencesDataStore,
+        liveScores: LiveScoresRepository
     ) : this(
         repo = repo,
         // The zap's pick, which joins the stream search the ended-games probe started on settle.
@@ -75,7 +88,15 @@ class SportsLiveViewModel internal constructor(
         },
         miniPlayerActive = SportsLiveMiniPlayers.controller.state.map { it is SportsLiveMiniState.Playing },
         dataSaver = prefs.dataSaver,
-        onResolveFailed = resolver::invalidate
+        onResolveFailed = resolver::invalidate,
+        scores = liveScores.scores,
+        endedGames = SportsLiveEndedGames.shared,
+        clock = flow {
+            while (true) {
+                emit(Unit)
+                delay(ENDED_TICK_MS)
+            }
+        }
     )
 
     private data class Selection(
@@ -135,7 +156,9 @@ class SportsLiveViewModel internal constructor(
     }.flowOn(Dispatchers.Default)
 
     val uiState: StateFlow<SportsLiveUiState> =
-        combine(pinned, repo.endedKeys, selectionState, ::buildState)
+        combine(pinned, repo.endedKeys, selectionState, scores, clock) { pinned, endedKeys, selection, scores, _ ->
+            buildState(pinned, endedKeys, selection, scores)
+        }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SportsLiveUiState())
 
     /** The active profile's followed teams, for the card menu's Follow / Unfollow labels. */
@@ -290,18 +313,26 @@ class SportsLiveViewModel internal constructor(
     private fun buildState(
         bucketed: Bucketed,
         endedKeys: Set<String>,
-        selection: Selection
+        selection: Selection,
+        scores: Map<String, ScoreSnapshot>
     ): SportsLiveUiState {
         val hasClaimed = bucketed.hasClaimed
         // Live items whose streams are gone have ended, as have games live far longer than their
         // sport runs (no request needed) unless links were found for them lately; the other tabs are
         // left as they are.
+        // Games found over by ESPN or by the clock (#60) move to the Just ended strip at the end, and
+        // leave half an hour after they ended; the overdue cut applies to the games still live only.
         val now = nowMs()
+        var justEnded = emptyMap<String, EndedGame>()
         val tabs = bucketed.tabs.mapValues { (tab, tabItems) ->
             if (tab == SportsLiveTab.LIVE_NOW) {
-                tabItems.filterNot {
-                    it.hasEnded(endedKeys) || (SportsLiveLiveDuration.isOverdue(it, now) && !repo.hasRecentLinks(it))
-                }
+                val split = endedGames.split(tabItems.filterNot { it.hasEnded(endedKeys) }, scores, now, repo::hasRecentLinks)
+                justEnded = split.ended
+                // A game ESPN shows in play is never cut as overdue (overtime, delays).
+                split.live.filterNot {
+                    SportsLiveLiveDuration.isOverdue(it, now) && !repo.hasRecentLinks(it) &&
+                        ScoreChips.matchedEvent(it, scores[it.streamKey])?.state != ScoreState.IN
+                } + split.justEnded
             } else {
                 tabItems
             }
@@ -341,12 +372,14 @@ class SportsLiveViewModel internal constructor(
             visibleItems = visible,
             selectedItemId = selectedId,
             failures = selection.failures,
-            lastRefreshedMs = selection.lastRefreshedMs
+            lastRefreshedMs = selection.lastRefreshedMs,
+            justEnded = justEnded
         )
     }
 
     private companion object {
         const val AUTO_REFRESH_MS = 60_000L
         const val FOCUS_PROBE_DELAY_MS = 700L
+        const val ENDED_TICK_MS = 30_000L
     }
 }

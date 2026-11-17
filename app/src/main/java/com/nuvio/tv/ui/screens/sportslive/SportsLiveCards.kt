@@ -129,10 +129,15 @@ internal fun SportsLiveListCard(
     /** A game's drawn card, in place of the addon's poster; null keeps the addon's art (channels). */
     art: GameArt? = null,
     /** The live / final score chip, beside the state pill; null shows none. */
-    chip: ScoreChip? = null
+    chip: ScoreChip? = null,
+    /** In the Just ended strip (#60): dimmed, and its pill never red. */
+    ended: Boolean = false,
+    /** A strict replay match exists: the Replay tag beside the chip. */
+    hasReplay: Boolean = false
 ) {
     val shape = RoundedCornerShape(NuvioTheme.radii.md)
     var longPressTriggered by remember { mutableStateOf(false) }
+    var focused by remember { mutableStateOf(false) }
     val longPressKeyTracker = rememberLongPressKeyTracker()
     // The menu takes the key-up of the long press, so the flag would swallow the next short OK.
     LaunchedEffect(menuOpen) { longPressTriggered = false }
@@ -143,7 +148,12 @@ internal fun SportsLiveListCard(
         },
         modifier = modifier
             .fillMaxWidth()
-            .onFocusChanged { if (it.isFocused) onFocus() else longPressTriggered = false }
+            // Dimmed until focused, so the focus ring stays clear.
+            .then(if (ended && !focused) Modifier.alpha(ENDED_CARD_ALPHA) else Modifier)
+            .onFocusChanged {
+                focused = it.isFocused
+                if (it.isFocused) onFocus() else longPressTriggered = false
+            }
             .onPreviewKeyEvent { event ->
                 val native = event.nativeKeyEvent
                 if (native.action == AndroidKeyEvent.ACTION_DOWN && native.keyCode == AndroidKeyEvent.KEYCODE_MENU) {
@@ -191,13 +201,14 @@ internal fun SportsLiveListCard(
                 )
             }
             Column(verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs)) {
-                if (stateLabel != null || chip != null) {
+                if (stateLabel != null || chip != null || hasReplay) {
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        if (stateLabel != null) SportsLiveStatePill(label = stateLabel, isLive = item.isLive)
+                        if (stateLabel != null) SportsLiveStatePill(label = stateLabel, isLive = item.isLive && !ended)
                         if (chip != null) SportsLiveScoreChip(chip)
+                        if (hasReplay) ReplayPill()
                     }
                 }
                 Row(
@@ -507,6 +518,9 @@ internal fun SportsLivePaneButton(
 }
 
 private val FOLLOWED_STAR_COLOR = Color(0xFFFFC107)
+
+/** How a Just ended card (#60) is dimmed. */
+private const val ENDED_CARD_ALPHA = 0.55f
 
 private const val MENU_WATCH_WITH = 0
 private const val MENU_CHOOSE_STREAM = 1

@@ -416,6 +416,7 @@ private fun GroupHeader(group: ZapPanelGroup) {
                 ZapPanelGroup.LIVE_NOW -> R.string.sports_live_zap_group_live
                 ZapPanelGroup.STARTING_SOON -> R.string.sports_live_zap_group_soon
                 ZapPanelGroup.OTHER -> R.string.sports_live_zap_group_other
+                ZapPanelGroup.JUST_ENDED -> R.string.sports_live_just_ended
             }
         ),
         style = MaterialTheme.typography.labelMedium,
