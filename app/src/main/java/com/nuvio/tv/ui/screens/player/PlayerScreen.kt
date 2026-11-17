@@ -2829,6 +2829,574 @@ private fun PlayerView.setAssOverlayVisibility(visibility: Int) {
 }
 
 @Composable
+private fun MpvPlayerSurface(
+    viewModel: PlayerViewModel,
+    isPlaying: Boolean,
+    isBuffering: Boolean,
+    aspectMode: AspectMode,
+    subtitleStyle: SubtitleStyleSettings,
+    subtitleLiftPx: Float,
+    subtitleTrackKey: Any?,
+    onSubtitleTextMetricsChanged: (SubtitleTextMetrics?) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val latestAspectMode by rememberUpdatedState(aspectMode)
+    val latestSubtitleStyle by rememberUpdatedState(subtitleStyle)
+    val latestMetricsCallback by rememberUpdatedState(onSubtitleTextMetricsChanged)
+    val mpvView = remember(context) {
+        NuvioMpvSurfaceView(context).apply {
+            isFocusable = false
+            isFocusableInTouchMode = false
+        }
+    }
+
+    AndroidView(
+        factory = { mpvView },
+        modifier = modifier.focusProperties { canFocus = false }
+    )
+
+    DisposableEffect(viewModel, mpvView) {
+        viewModel.attachMpvView(mpvView)
+        onDispose {
+            viewModel.attachMpvView(null)
+        }
+    }
+
+    DisposableEffect(mpvView) {
+        val listener = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            mpvView.applyAspectMode(latestAspectMode)
+            latestMetricsCallback(mpvView.subtitleTextMetrics(latestSubtitleStyle))
+        }
+        mpvView.addOnLayoutChangeListener(listener)
+        onDispose {
+            mpvView.removeOnLayoutChangeListener(listener)
+        }
+    }
+
+    LaunchedEffect(mpvView, isPlaying, isBuffering) {
+        val shouldKeepScreenOn = isPlaying || isBuffering
+        if (mpvView.keepScreenOn != shouldKeepScreenOn) {
+            mpvView.keepScreenOn = shouldKeepScreenOn
+        }
+    }
+
+    LaunchedEffect(mpvView, aspectMode) {
+        mpvView.applyAspectMode(aspectMode)
+    }
+
+    LaunchedEffect(mpvView, subtitleStyle, subtitleLiftPx) {
+        val height = mpvView.height
+        mpvView.subtitleLiftFraction = if (subtitleLiftPx > 0f && height > 0) {
+            (subtitleLiftPx / height).toDouble()
+        } else {
+            0.0
+        }
+        mpvView.applySubtitleStyle(subtitleStyle)
+    }
+
+    LaunchedEffect(mpvView, subtitleStyle, subtitleTrackKey) {
+        latestMetricsCallback(mpvView.subtitleTextMetrics(subtitleStyle))
+    }
+}
+
+@Composable
+private fun ExoPlayerSurface(
+    player: ExoPlayer,
+    controller: PlayerRuntimeController,
+    isPlaying: Boolean,
+    isBuffering: Boolean,
+    aspectMode: AspectMode,
+    tunnelingEnabled: Boolean,
+    tunneledSurfaceFill: Boolean,
+    useLibass: Boolean,
+    libassRenderMode: LibassRenderMode,
+    letterboxMaskEnabled: Boolean,
+    subtitleStyle: SubtitleStyleSettings,
+    subtitleLiftPx: Float,
+    onBindSubtitleView: (androidx.media3.ui.SubtitleView?) -> Unit = {},
+    onSubtitleTextMetricsChanged: (SubtitleTextMetrics?) -> Unit = {},
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val latestAspectMode by rememberUpdatedState(aspectMode)
+    val latestTunnelingEnabled by rememberUpdatedState(tunnelingEnabled)
+    val latestTunneledSurfaceFill by rememberUpdatedState(tunneledSurfaceFill)
+    val latestBindSubtitleView by rememberUpdatedState(onBindSubtitleView)
+    val latestSubtitleStyle by rememberUpdatedState(subtitleStyle)
+    val latestSubtitleLiftPx by rememberUpdatedState(subtitleLiftPx)
+    val latestMetricsCallback by rememberUpdatedState(onSubtitleTextMetricsChanged)
+    val playerView = remember(context, player) {
+        PlayerView(context).apply {
+            useController = false
+            isFocusable = false
+            isFocusableInTouchMode = false
+            descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+            keepScreenOn = false
+            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+            setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
+            enableComposeSurfaceSyncWorkaroundIfAvailable()
+            this.player = player
+        }
+    }
+
+    AndroidView(
+        factory = { playerView },
+        modifier = modifier.focusProperties { canFocus = false },
+        update = {
+            it.syncLibassOverlay(
+                player = player,
+                enabled = useLibass,
+                renderMode = libassRenderMode
+            )
+            it.syncLetterboxMask(
+                letterboxMaskEnabled && useLibass && libassRenderMode == LibassRenderMode.OVERLAY
+            )
+            latestBindSubtitleView(it.subtitleView)
+        }
+    )
+
+    DisposableEffect(playerView, player) {
+        if (playerView.player !== player) {
+            playerView.player = player
+        }
+        latestBindSubtitleView(playerView.subtitleView)
+        onDispose {
+            latestBindSubtitleView(null)
+            if (playerView.player === player) {
+                playerView.player = null
+            }
+        }
+    }
+
+    DisposableEffect(playerView) {
+        controller.exoPlayerView = playerView
+        onDispose {
+            if (controller.exoPlayerView === playerView) {
+                controller.exoPlayerView = null
+            }
+        }
+    }
+
+    DisposableEffect(player, playerView) {
+        val listener = object : androidx.media3.common.Player.Listener {
+            override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
+                controller.videoAspectRatio = if (videoSize.width > 0 && videoSize.height > 0) {
+                    videoSize.width.toFloat() * videoSize.pixelWidthHeightRatio / videoSize.height.toFloat()
+                } else {
+                    0f
+                }
+                playerView.post {
+                    playerView.syncExoSurfaceLayout(
+                        tunnelingEnabled = latestTunnelingEnabled,
+                        tunneledSurfaceFill = latestTunneledSurfaceFill,
+                        aspectMode = latestAspectMode
+                    )
+                }
+            }
+
+            override fun onRenderedFirstFrame() {
+                playerView.post {
+                    playerView.syncExoSurfaceLayout(
+                        tunnelingEnabled = latestTunnelingEnabled,
+                        tunneledSurfaceFill = latestTunneledSurfaceFill,
+                        aspectMode = latestAspectMode
+                    )
+                }
+            }
+
+            override fun onTracksChanged(tracks: Tracks) {
+                // Re-apply subtitle style when tracks change so style is applied
+                // even when subtitles are enabled after initial player setup.
+                playerView.post {
+                    playerView.applySubtitleStyleIfNeeded(latestSubtitleStyle, latestSubtitleLiftPx, force = true)
+                }
+            }
+        }
+        player.addListener(listener)
+        playerView.post {
+            playerView.syncExoSurfaceLayout(
+                tunnelingEnabled = latestTunnelingEnabled,
+                tunneledSurfaceFill = latestTunneledSurfaceFill,
+                aspectMode = latestAspectMode
+            )
+        }
+        onDispose {
+            player.removeListener(listener)
+        }
+    }
+
+    DisposableEffect(playerView) {
+        val listener = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            playerView.post {
+                playerView.syncExoSurfaceLayout(
+                    tunnelingEnabled = latestTunnelingEnabled,
+                    tunneledSurfaceFill = latestTunneledSurfaceFill,
+                    aspectMode = latestAspectMode
+                )
+            }
+        }
+        val removeListener = addExoAspectLayoutChangeListener(playerView, listener)
+        onDispose {
+            removeListener()
+        }
+    }
+
+    LaunchedEffect(playerView, isPlaying, isBuffering) {
+        val shouldKeepScreenOn = isPlaying || isBuffering
+        if (playerView.keepScreenOn != shouldKeepScreenOn) {
+            playerView.keepScreenOn = shouldKeepScreenOn
+        }
+    }
+
+    LaunchedEffect(playerView, aspectMode, tunnelingEnabled, tunneledSurfaceFill) {
+        playerView.syncExoSurfaceLayout(
+            tunnelingEnabled = tunnelingEnabled,
+            tunneledSurfaceFill = tunneledSurfaceFill,
+            aspectMode = aspectMode
+        )
+    }
+
+    LaunchedEffect(playerView, player, useLibass, libassRenderMode) {
+        playerView.syncLibassOverlay(
+            player = player,
+            enabled = useLibass,
+            renderMode = libassRenderMode
+        )
+    }
+
+    DisposableEffect(playerView) {
+        val callback: (SubtitleTextMetrics?) -> Unit = { latestMetricsCallback(it) }
+        playerView.setTag(R.id.player_view_subtitle_metrics_callback_tag, callback)
+        onDispose {
+            playerView.setTag(R.id.player_view_subtitle_metrics_callback_tag, null)
+        }
+    }
+
+    LaunchedEffect(playerView, subtitleStyle, subtitleLiftPx) {
+        playerView.applySubtitleStyleIfNeeded(subtitleStyle, subtitleLiftPx)
+    }
+}
+
+private fun PlayerView.enableComposeSurfaceSyncWorkaroundIfAvailable() {
+    runCatching {
+        javaClass
+            .getMethod("setEnableComposeSurfaceSyncWorkaround", java.lang.Boolean.TYPE)
+            .invoke(this, false)
+    }
+}
+
+private fun PlayerView.applyExoAspectMode(mode: AspectMode) {
+    setTag(R.id.player_view_aspect_mode_tag, mode)
+    applyExoAspectMode(this, mode)
+}
+
+private fun PlayerView.syncExoSurfaceLayout(
+    tunnelingEnabled: Boolean,
+    tunneledSurfaceFill: Boolean,
+    aspectMode: AspectMode
+) {
+    val targetResizeMode = PlayerDisplayModeUtils.exoSurfaceResizeMode(
+        tunnelingEnabled = tunnelingEnabled,
+        tunneledSurfaceFill = tunneledSurfaceFill
+    )
+    if (resizeMode != targetResizeMode) {
+        resizeMode = targetResizeMode
+    }
+    val appliedAspectMode = aspectModeAppliedToExoSurface(tunnelingEnabled, aspectMode)
+    applyExoAspectMode(appliedAspectMode)
+    setTag(
+        R.id.player_view_libass_geometry_context_tag,
+        LibassOverlayGeometryContext(
+            requestedAspectMode = aspectMode,
+            appliedAspectMode = appliedAspectMode,
+            tunnelingEnabled = tunnelingEnabled,
+            tunneledSurfaceFill = tunneledSurfaceFill
+        )
+    )
+    syncLibassOverlayGeometry()
+    reportSubtitleTextMetrics()
+}
+
+private data class LibassOverlayGeometryContext(
+    val requestedAspectMode: AspectMode,
+    val appliedAspectMode: AspectMode,
+    val tunnelingEnabled: Boolean,
+    val tunneledSurfaceFill: Boolean
+)
+
+private const val LIBASS_OVERLAY_GEOMETRY_TAG = "LibassOverlayGeometry"
+
+private fun PlayerView.syncLibassOverlayGeometry() {
+    val overlay = findViewById<android.widget.FrameLayout>(R.id.libass_overlay_container_gl)
+    val assOverlayView = overlay?.findAssOverlayChild()
+    val contentFrame = findViewById<AspectRatioFrameLayout>(androidx.media3.ui.R.id.exo_content_frame)
+    val exoPlayer = player as? ExoPlayer
+    val assHandler = exoPlayer?.getAssHandlerCompat()
+    val context = getTag(R.id.player_view_libass_geometry_context_tag) as? LibassOverlayGeometryContext
+    val videoSize = exoPlayer?.videoSize
+    val overlayWidth = overlay?.width ?: 0
+    val overlayHeight = overlay?.height ?: 0
+    val videoBounds = contentFrame?.let(::transformedChildBoundsInParent)
+    val margins = videoBounds?.let { libassOverlayMargins(overlayWidth, overlayHeight, it) }
+
+    if (assOverlayView == null || assHandler == null || margins == null) {
+        logLibassOverlayGeometry(
+            "event=skip overlay=${overlayWidth}x${overlayHeight} hasOverlay=${assOverlayView != null} " +
+                "handler=${assHandler != null} videoBounds=$videoBounds"
+        )
+        return
+    }
+
+    assHandler.setMargins(margins.top, margins.bottom, margins.left, margins.right)
+    assHandler.setUseMargins(false)
+    assOverlayView.invalidateSubtitles()
+    logLibassOverlayGeometry(
+        "event=apply requested=${context?.requestedAspectMode} applied=${context?.appliedAspectMode} " +
+            "tunneling=${context?.tunnelingEnabled} tunneledFill=${context?.tunneledSurfaceFill} " +
+            "overlay=${overlayWidth}x${overlayHeight} video=${videoSize?.width}x${videoSize?.height} " +
+            "par=${videoSize?.pixelWidthHeightRatio} content=${describeRect(videoBounds)} " +
+            "margins=top:${margins.top},bottom:${margins.bottom},left:${margins.left},right:${margins.right}"
+    )
+}
+
+private fun PlayerView.logLibassOverlayGeometry(message: String) {
+    if (!BuildConfig.IS_DEBUG_BUILD) return
+    if (getTag(R.id.player_view_libass_geometry_snapshot_tag) == message) return
+    setTag(R.id.player_view_libass_geometry_snapshot_tag, message)
+    Log.d(LIBASS_OVERLAY_GEOMETRY_TAG, message)
+}
+
+private fun describeRect(rect: RectF?): String =
+    rect?.let { "${it.left},${it.top},${it.right},${it.bottom}" } ?: "null"
+
+private data class SubtitleAppliedConfig(
+    val style: SubtitleStyleSettings,
+    val isAss: Boolean,
+    val liftPx: Float
+)
+
+private val SUBTITLE_CONTROLS_LIFT = 130.dp
+private val SUBTITLE_CONTROLS_GAP = 8.dp
+private val SUBTITLE_TITLE_MARGIN = 16.dp
+private const val EXO_SUBTITLE_INNER_PADDING_RATIO = 0.125f
+
+@Composable
+private fun Modifier.reportRightEdge(key: String, rights: MutableMap<String, Float>): Modifier {
+    DisposableEffect(key, rights) {
+        onDispose { rights.remove(key) }
+    }
+    return onGloballyPositioned { rights[key] = it.boundsInWindow().right }
+}
+
+private fun Modifier.reportSubtitleClearance(gapPx: Float, onClearance: (Float) -> Unit): Modifier =
+    onGloballyPositioned { coordinates ->
+        val rootHeight = coordinates.findRootCoordinates().size.height
+        if (rootHeight > 0 && coordinates.size.height > 0) {
+            onClearance((rootHeight - coordinates.boundsInRoot().top + gapPx).coerceAtLeast(0f))
+        }
+    }
+
+private fun PlayerView.isAssOrSsaSubtitleSelected(): Boolean =
+    PlayerSubtitleUtils.isAssOrSsaSelected(
+        tracks = player?.currentTracks,
+        sidecarKey = subtitleView?.getTag(R.id.player_view_sidecar_generation_tag) as? String
+    )
+
+private fun PlayerView.applySubtitleStyleIfNeeded(
+    subtitleStyle: SubtitleStyleSettings,
+    liftPx: Float,
+    force: Boolean = false
+) {
+    val isAss = isAssOrSsaSubtitleSelected()
+    val config = SubtitleAppliedConfig(subtitleStyle, isAss, liftPx)
+    if (!force && getTag(R.id.player_view_subtitle_style_tag) == config) {
+        return
+    }
+    val subView = subtitleView
+    if (subView == null) {
+        // SubtitleView not yet available (no track selected yet). Don't set the
+        // tag so that when subtitles become active the style is re-applied.
+        return
+    }
+    setTag(R.id.player_view_subtitle_style_tag, config)
+    subView.apply {
+        val scaledFontSize = SUBTITLE_BASE_TEXT_SP * (subtitleStyle.size / 100f)
+        setFixedTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, scaledFontSize)
+        setApplyEmbeddedFontSizes(false)
+
+        val typeface = if (subtitleStyle.bold) {
+            android.graphics.Typeface.DEFAULT_BOLD
+        } else {
+            android.graphics.Typeface.DEFAULT
+        }
+
+        val edgeType = if (subtitleStyle.outlineEnabled) {
+            androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_OUTLINE
+        } else {
+            androidx.media3.ui.CaptionStyleCompat.EDGE_TYPE_NONE
+        }
+
+        setStyle(
+            androidx.media3.ui.CaptionStyleCompat(
+                subtitleStyle.textColor,
+                subtitleStyle.backgroundColor,
+                android.graphics.Color.TRANSPARENT,
+                edgeType,
+                subtitleStyle.outlineColor,
+                typeface
+            )
+        )
+
+        setApplyEmbeddedStyles(!isAss)
+
+        val applyPosition = {
+            val placement = subtitleBottomPlacement(height, subtitleStyle.verticalOffset, liftPx)
+            setPadding(paddingLeft, paddingTop, paddingRight, placement.paddingPx)
+            setBottomPaddingFraction(placement.fraction)
+        }
+        if (height > 0) applyPosition() else post { applyPosition() }
+    }
+    if (subView.width > 0) reportSubtitleTextMetrics() else post { reportSubtitleTextMetrics() }
+}
+
+private fun PlayerView.reportSubtitleTextMetrics() {
+    @Suppress("UNCHECKED_CAST")
+    val callback = getTag(R.id.player_view_subtitle_metrics_callback_tag) as? (SubtitleTextMetrics?) -> Unit ?: return
+    callback(exoSubtitleTextMetrics())
+}
+
+private fun PlayerView.exoSubtitleTextMetrics(): SubtitleTextMetrics? {
+    val applied = getTag(R.id.player_view_subtitle_style_tag) as? SubtitleAppliedConfig ?: return null
+    if (applied.isAss) return null
+    val subView = subtitleView ?: return null
+    if (subView.width <= 0) return null
+    val textSizePx = android.util.TypedValue.applyDimension(
+        android.util.TypedValue.COMPLEX_UNIT_SP,
+        SUBTITLE_BASE_TEXT_SP * (applied.style.size / 100f),
+        resources.displayMetrics
+    )
+    val innerPaddingPx = textSizePx * EXO_SUBTITLE_INNER_PADDING_RATIO
+    val location = IntArray(2)
+    subView.getLocationInWindow(location)
+    return SubtitleTextMetrics(
+        textSizePx = textSizePx,
+        bold = applied.style.bold,
+        scaleX = 1f,
+        innerPaddingPx = innerPaddingPx,
+        wrapWidthPx = (subView.width - subView.paddingLeft - subView.paddingRight - innerPaddingPx * 2f).coerceAtLeast(0f),
+        centerXPx = location[0] + subView.width / 2f
+    )
+}
+
+private fun measureSubtitleBlockPx(
+    paint: android.graphics.Paint,
+    text: String,
+    metrics: SubtitleTextMetrics
+): Float {
+    paint.textSize = metrics.textSizePx
+    paint.typeface = android.graphics.Typeface.create(
+        metrics.typeface ?: android.graphics.Typeface.DEFAULT,
+        if (metrics.bold) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL
+    )
+    return subtitleBlockWidthPx(text, metrics) { paint.measureText(it) }
+}
+
+private fun PlayerView.syncLibassOverlay(
+    player: ExoPlayer,
+    enabled: Boolean,
+    renderMode: LibassRenderMode = LibassRenderMode.VIDEO_EFFECT
+) {
+    val containerId = R.id.libass_overlay_container_gl
+    val overlayContainer = findViewById<android.widget.FrameLayout>(containerId) ?: return
+    // Overlay is needed when libass is enabled AND the user chose OVERLAY mode.
+    // OVERLAY mode skips setVideoEffects entirely so HDR passthrough is preserved.
+    // VIDEO_EFFECT (default) draws subtitles onto the video frame - no overlay needed.
+    val needsOverlay = enabled && renderMode == LibassRenderMode.OVERLAY
+    val boundPlayer = getTag(R.id.libass_overlay_bound_player) as? ExoPlayer
+    val hasOverlayChild = overlayContainer.hasAssOverlayChild()
+
+    if (!needsOverlay) {
+        if (hasOverlayChild) {
+            overlayContainer.removeAssOverlayChildren()
+        }
+        if (boundPlayer != null) {
+            boundPlayer.getAssHandlerCompat()?.videoFrameCallback = null
+            setTag(R.id.libass_overlay_bound_player, null)
+        }
+        return
+    }
+
+    val assHandler = player.getAssHandlerCompat() ?: return
+    if (boundPlayer === player && hasOverlayChild) {
+        return
+    }
+
+    overlayContainer.removeAssOverlayChildren()
+    // SurfaceView with atlas GL pipeline for best performance.
+    // AssPositionRenderer provides position updates when VideoFrameMetadataListener
+    // is not active (tunneled playback).
+    val surfaceView = AssSubtitleSurfaceView(overlayContainer.context, assHandler)
+    assHandler.videoFrameCallback = { presentationTimeUs, releaseTimeNs ->
+        surfaceView.requestRender(presentationTimeUs, releaseTimeNs)
+    }
+    overlayContainer.addView(
+        surfaceView,
+        android.widget.FrameLayout.LayoutParams(
+            android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+            android.view.ViewGroup.LayoutParams.MATCH_PARENT
+        )
+    )
+    setTag(R.id.libass_overlay_bound_player, player)
+    post { syncLibassOverlayGeometry() }
+}
+
+private fun android.widget.FrameLayout.hasAssOverlayChild(): Boolean {
+    for (index in 0 until childCount) {
+        val child = getChildAt(index)
+        if (child is AssSubtitleSurfaceView) {
+            return true
+        }
+    }
+    return false
+}
+
+private fun android.widget.FrameLayout.findAssOverlayChild(): AssSubtitleSurfaceView? {
+    for (index in 0 until childCount) {
+        val child = getChildAt(index)
+        if (child is AssSubtitleSurfaceView) {
+            return child
+        }
+    }
+    return null
+}
+
+private fun android.widget.FrameLayout.removeAssOverlayChildren() {
+    for (index in childCount - 1 downTo 0) {
+        val child = getChildAt(index)
+        if (child is AssSubtitleSurfaceView) {
+            removeViewAt(index)
+        }
+    }
+}
+
+/**
+ * Remove ASS overlay views when hiding so the libass render thread stops.
+ * [syncLibassOverlay] re-creates them on the next Compose update cycle.
+ */
+private fun PlayerView.setAssOverlayVisibility(visibility: Int) {
+    if (visibility == android.view.View.GONE) {
+        for (containerId in intArrayOf(R.id.libass_overlay_container_gl)) {
+            val container = findViewById<android.widget.FrameLayout>(containerId) ?: continue
+            container.removeAssOverlayChildren()
+        }
+        setTag(R.id.libass_overlay_bound_player, null)
+        val player = player as? ExoPlayer ?: return
+        player.getAssHandlerCompat()?.videoFrameCallback = null
+    }
+}
+
+@Composable
 private fun PlayerControlsOverlay(
     uiState: PlayerUiState,
     playerBadges: List<StreamBadge>,

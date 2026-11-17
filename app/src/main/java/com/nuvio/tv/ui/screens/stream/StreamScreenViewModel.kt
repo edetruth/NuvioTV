@@ -25,7 +25,6 @@ import com.nuvio.tv.core.tracking.TrackingScrobbleEvent
 import com.nuvio.tv.core.tracking.buildTrackingMediaReference
 import com.nuvio.tv.core.util.parseRuntimeMinutes
 import com.nuvio.tv.core.streams.StreamBadgePresentation
-import com.nuvio.tv.core.streams.UnplayableStreamFilter
 import com.nuvio.tv.core.streams.YouTubeStreamResolver
 import com.nuvio.tv.data.local.PlayerPreference
 import com.nuvio.tv.data.local.PlayerSettings
@@ -1206,14 +1205,13 @@ class StreamScreenViewModel @Inject constructor(
         val video = meta.videos.firstOrNull { it.id == videoId } ?: return null
         if (video.streams.isEmpty()) return null
 
-        val streams = video.streams.filterNot(UnplayableStreamFilter::isUnplayableJunk).map { stream ->
+        val streams = video.streams.map { stream ->
             stream.copy(
                 name = stream.name ?: stream.title ?: stream.description ?: embeddedStreamFallbackName,
                 addonName = embeddedStreamGroupName,
                 addonLogo = null
             )
         }
-        if (streams.isEmpty()) return null
 
         return AddonStreams(
             addonName = embeddedStreamGroupName,

@@ -29,7 +29,6 @@ import com.nuvio.tv.domain.model.ScraperInfo
 import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.domain.model.StreamBehaviorHints
 import com.nuvio.tv.core.streams.supportsStreamResource
-import com.nuvio.tv.core.streams.UnplayableStreamFilter
 import com.nuvio.tv.domain.model.enabledAddons
 import com.nuvio.tv.domain.repository.AddonRepository
 import com.nuvio.tv.domain.repository.StreamRepository
@@ -721,7 +720,7 @@ class StreamRepositoryImpl @Inject constructor(
             is NetworkResult.Success -> {
                 val streams = result.data.streams?.map { 
                     it.toDomain(addonName, addonLogo) 
-                }?.filterNot(UnplayableStreamFilter::isUnplayableJunk) ?: emptyList()
+                } ?: emptyList()
                 Log.d(TAG, "Streams success addon=$addonName count=${streams.size} url=$streamUrl")
                 NetworkResult.Success(streams)
             }
@@ -786,7 +785,6 @@ class StreamRepositoryImpl @Inject constructor(
                     val matchingVideo = metaDto.videos?.firstOrNull { it.id == videoId }
                     val streams = matchingVideo?.streams
                         ?.mapNotNull { it.toDomain(addon.displayName, addon.logo) }
-                        ?.filterNot(UnplayableStreamFilter::isUnplayableJunk)
                         ?: emptyList()
                     Log.d(TAG, "Inline streams from meta: addon=${addon.displayName} videoId=$videoId found=${streams.size}")
                     streams
