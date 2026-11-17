@@ -47,7 +47,7 @@ object SportsLiveHomeRow {
     ): Map<String, String> = if (mode != ScoresMode.SHOW) emptyMap() else items.mapNotNull { item ->
         val chip = ScoreChips.of(item, scores[item.streamKey], mode, revealed = false) ?: return@mapNotNull null
         val text = ScoreChips.text(chip, strings)
-        val live = chip is ScoreChip.Live || (chip is ScoreChip.Hidden && chip.live)
+        val live = chip is ScoreChip.Live
         item.streamKey to if (live) String.format(liveFormat, text) else text
     }.toMap()
 

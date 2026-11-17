@@ -157,7 +157,14 @@ class SportsLiveResultsViewModel @Inject constructor(
                     if (days == null) return@collectLatest
                     load.value = null
                     delay(DAY_SETTLE_MS)
-                    load.value = results.load(days)
+                    var loaded = results.load(days)
+                    load.value = loaded
+                    // Finals the score delay holds back: the day loads again (from memory) once they are due.
+                    while (loaded is ResultsLoad.Loaded && loaded.heldUntil != null) {
+                        delay((loaded.heldUntil - System.currentTimeMillis()).coerceAtLeast(0))
+                        loaded = results.load(days)
+                        load.value = loaded
+                    }
                 }
         }
     }

@@ -30,8 +30,8 @@ data class ScoreDetailsSide(
 
 /** What the details pane shows of a matched game's score; no block at all is null. */
 sealed interface ScoreDetails {
-    /** Hide until focused, before the card's reveal: "Score hidden". */
-    data class Hidden(val live: Boolean) : ScoreDetails
+    /** Hide until focused, before the card's reveal: "Score hidden", the same whatever the game's state. */
+    data object Hidden : ScoreDetails
 
     /** Postponed, cancelled, suspended or delayed: the status only, never a score. */
     data class Status(val text: String?) : ScoreDetails
@@ -89,7 +89,7 @@ object ScoreDetailsBuilder {
         val chip = ScoreChips.of(item, snapshot, mode, revealed) ?: return null
         val event = snapshot ?: return null
         return when (chip) {
-            is ScoreChip.Hidden -> ScoreDetails.Hidden(chip.live)
+            is ScoreChip.Hidden -> ScoreDetails.Hidden
             is ScoreChip.Status -> ScoreDetails.Status(chip.text)
             is ScoreChip.Live -> shown(item, event, chip.clock, live = true)
             is ScoreChip.Final -> shown(item, event, chip.note, live = false)

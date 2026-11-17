@@ -289,6 +289,60 @@ class LiveScoresRepositoryTest {
     }
 
     @Test
+    fun `a game first seen already final is held for the delay when it may have just ended`() = runTest {
+        settings.value = ScoreSettings(delaySeconds = 30)
+        provider.respond = { ScoreboardResult(listOf(game(ScoreState.POST, 110, 100, "Final"))) }
+        // Three hours after the start: ESPN gives no end time, so it may have ended a moment ago.
+        val repo = repository("2026-11-15T21:00:00Z")
+        collect(repo)
+        repo.track(SECTION, listOf(pacersCard))
+        runCurrent()
+        val key = pacersCard.streamKey
+        assertNull(repo.scores.value.getValue(key).homeScore)
+        advanceTimeBy(29_000); runCurrent()
+        assertNull(repo.scores.value.getValue(key).homeScore)
+        advanceTimeBy(1_000); runCurrent()
+        assertEquals(110, repo.scores.value.getValue(key).homeScore)
+    }
+
+    @Test
+    fun `a final long over shows at once with the delay on`() = runTest {
+        settings.value = ScoreSettings(delaySeconds = 30)
+        provider.respond = { ScoreboardResult(listOf(game(ScoreState.POST, 110, 100, "Final"))) }
+        val repo = repository("2026-11-16T12:00:00Z") // 18 h after the start
+        collect(repo)
+        repo.track(SECTION, listOf(pacersCard))
+        runCurrent()
+        assertEquals(110, repo.scores.value.getValue(pacersCard.streamKey).homeScore)
+    }
+
+    @Test
+    fun `a card with no start shows no final from yesterday while today's feed has not loaded`() = runTest {
+        val easternToday = ScoreFeed(EspnLeagueMap.NBA, LocalDate.of(2026, 11, 16))
+        // Yesterday's (Eastern) final; tonight's meeting of the same pair is on today's feed.
+        val yesterdayFinal = game(ScoreState.POST, 110, 100, "Final").copy(eventId = "yesterday", startMs = ms("2026-11-16T00:10:00Z"))
+        val tonight = game(ScoreState.PRE).copy(eventId = "tonight", startMs = ms("2026-11-17T00:10:00Z"))
+        var todayFails = true
+        provider.respond = { feed ->
+            when {
+                feed != easternToday -> ScoreboardResult(listOf(yesterdayFinal))
+                todayFails -> ScoreboardResult.FAILED
+                else -> ScoreboardResult(listOf(tonight))
+            }
+        }
+        // 22:00 in Berlin, 16:00 Eastern.
+        val repo = repository("2026-11-16T21:00:00Z", zone = ZoneId.of("Europe/Berlin"))
+        collect(repo)
+        val channel = item("[Pacers vs 76ers]", "Basketball", null).copy(isChannel = true)
+        repo.track(SECTION, listOf(channel))
+        runCurrent()
+        assertTrue(repo.scores.value.isEmpty())
+        todayFails = false
+        advanceTimeBy(5 * 60_000L); runCurrent()
+        assertEquals("tonight", repo.scores.value.getValue(channel.streamKey).eventId)
+    }
+
+    @Test
     fun `turning the delay on mid-game shows no score until the delay has passed`() = runTest {
         provider.respond = { ScoreboardResult(listOf(game(ScoreState.IN, 50, 48, "Q2 5:00"))) }
         val repo = repository("2026-11-15T19:00:00Z")
@@ -383,7 +437,7 @@ class LiveScoresRepositoryTest {
         val repo = repository("2026-11-16T12:00:00Z", zone = ZoneId.of("Europe/London"))
         val today = LocalDate.of(2026, 11, 16)
         fun dates(name: String, start: String?, timed: Boolean = true) =
-            repo.datesFor(ScoreCard.from(item(name, "Basketball", start, timed))!!, today).toSet()
+            repo.datesFor(ScoreCard.from(item(name, "Basketball", start, timed))!!).toSet()
         // 23:00 Eastern on the 15th (04:00 UTC on the 16th): the 15th and, within 3 h, the 16th.
         assertEquals(setOf(LocalDate.of(2026, 11, 15), today), dates("A vs B", "2026-11-16T04:00:00Z"))
         // 20:00 Eastern on the 15th is 01:00 UTC on the 16th, but ESPN files it on the 15th only.
@@ -391,6 +445,16 @@ class LiveScoresRepositoryTest {
         assertEquals(setOf(LocalDate.of(2026, 11, 15)), dates("A vs B", "2026-11-15T18:00:00Z"))
         assertEquals(setOf(LocalDate.of(2026, 11, 14)), dates("A vs B", "2026-11-14T00:00:00Z", timed = false))
         assertEquals(setOf(today, LocalDate.of(2026, 11, 15)), dates("A vs B", null))
+    }
+
+    @Test
+    fun `a card with no start asks for Eastern today and yesterday, not the device's days`() = runTest {
+        // 08:00 in Tokyo on the 18th is 18:00 Eastern on the 17th: the device's 18th is no ESPN day yet.
+        val repo = repository("2026-11-17T23:00:00Z", zone = ZoneId.of("Asia/Tokyo"))
+        assertEquals(
+            listOf(LocalDate.of(2026, 11, 17), LocalDate.of(2026, 11, 16)),
+            repo.datesFor(ScoreCard.from(item("A vs B", "Basketball", null))!!)
+        )
     }
 
     @Test

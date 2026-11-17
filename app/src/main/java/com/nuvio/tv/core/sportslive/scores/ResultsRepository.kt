@@ -30,13 +30,15 @@ sealed interface ResultsLoad {
 
     /**
      * [rows] to list; [events] are all the day's events fetched, for matching replays; [mySports] is
-     * My sports with followed teams' sports, for the ★ My sports view and the sport chips.
+     * My sports with followed teams' sports, for the ★ My sports view and the sport chips. [heldUntil]:
+     * when finals the score delay holds back are due (null: none held); load the day again then.
      */
     data class Loaded(
         val date: LocalDate,
         val rows: List<ResultRow>,
         val events: List<ScoreSnapshot>,
-        val mySports: MySports = MySports.DEFAULT
+        val mySports: MySports = MySports.DEFAULT,
+        val heldUntil: Long? = null
     ) : ResultsLoad
 }
 
@@ -49,6 +51,8 @@ data class ResultDay(val daysAgo: Int, val date: LocalDate, val isDeviceYesterda
  * effect ([SportsResults.relevantLeagues]); past days served from the provider's disk cache and
  * kept in memory for the session (yesterday for [YESTERDAY_TTL_MS], as late games may still finish).
  * No polling: a day is fetched when it is shown. Scores Off: no requests at all.
+ * The score delay applies as on the cards ([ScoreDelay]): a final that may have just ended
+ * ([ScoreDelay.mayHaveJustEnded]) is left out until the delay has passed since it was first seen.
  */
 @Singleton
 class ResultsRepository internal constructor(
@@ -74,6 +78,8 @@ class ResultsRepository internal constructor(
     private val lock = Mutex()
     private val cache = HashMap<ScoreFeed, Cached>()
     private val requests = Semaphore(MAX_PARALLEL)
+    /** Event id → when it was first seen final, for finals that may have just ended. Guarded by [lock]. */
+    private val firstSeenFinal = HashMap<String, Long>()
 
     /**
      * ESPN's scoreboard date [daysAgo] days back (1 = yesterday), counted from today in US Eastern time,
@@ -107,7 +113,21 @@ class ResultsRepository internal constructor(
         }
         if (results.all { it == null }) return ResultsLoad.Failed
         val events = results.filterNotNull().flatten()
-        return ResultsLoad.Loaded(date, SportsResults.rows(events, followed), events, relevant.mySports)
+        val held = held(events, settings.delaySeconds * 1_000L)
+        val shown = if (held.isEmpty()) events else events.filter { it.eventId !in held }
+        return ResultsLoad.Loaded(date, SportsResults.rows(shown, followed), events, relevant.mySports, held.values.minOrNull())
+    }
+
+    /** The finals of [events] the score delay still holds back: event id → when each is due. */
+    private suspend fun held(events: List<ScoreSnapshot>, delayMs: Long): Map<String, Long> {
+        if (delayMs <= 0) return emptyMap()
+        val nowMs = now()
+        return lock.withLock {
+            if (firstSeenFinal.size >= MAX_CACHED * 10) firstSeenFinal.clear()
+            events.filter { ScoreDelay.mayHaveJustEnded(it, nowMs) }
+                .associate { it.eventId to firstSeenFinal.getOrPut(it.eventId) { nowMs } + delayMs }
+                .filterValues { due -> due > nowMs }
+        }
     }
 
     /** [feed]'s events from memory when still good, else from the provider (its disk cache first); null on failure. */

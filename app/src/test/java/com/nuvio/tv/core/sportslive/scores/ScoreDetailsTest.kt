@@ -166,10 +166,10 @@ class ScoreDetailsTest {
     @Test
     fun `hide until focused shows no score until revealed, Off shows nothing`() {
         val game = item("Crystal Palace vs Liverpool", "Soccer")
-        assertEquals(ScoreDetails.Hidden(live = false), ScoreDetailsBuilder.of(game, palace, ScoresMode.HIDE_UNTIL_FOCUSED, revealed = false))
+        assertEquals(ScoreDetails.Hidden, ScoreDetailsBuilder.of(game, palace, ScoresMode.HIDE_UNTIL_FOCUSED, revealed = false))
         assertTrue(ScoreDetailsBuilder.of(game, palace, ScoresMode.HIDE_UNTIL_FOCUSED, revealed = true) is ScoreDetails.Shown)
         val live = palace.copy(state = ScoreState.IN, isFinal = false, clockText = "67'")
-        assertEquals(ScoreDetails.Hidden(live = true), ScoreDetailsBuilder.of(game, live, ScoresMode.HIDE_UNTIL_FOCUSED, revealed = false))
+        assertEquals(ScoreDetails.Hidden, ScoreDetailsBuilder.of(game, live, ScoresMode.HIDE_UNTIL_FOCUSED, revealed = false))
         assertNull(ScoreDetailsBuilder.of(game, palace, ScoresMode.OFF, revealed = true))
         assertNull(ScoreDetailsBuilder.of(game, palace, null, revealed = true))
     }

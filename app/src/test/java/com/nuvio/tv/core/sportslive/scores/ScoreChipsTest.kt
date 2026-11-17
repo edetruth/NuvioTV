@@ -94,11 +94,23 @@ class ScoreChipsTest {
     }
 
     @Test
+    fun `the hidden chip is the same for scheduled, live and finished games`() {
+        val scheduled = pacers.copy(state = ScoreState.PRE, isFinal = false, clockText = "7:00 PM", home = pacers.home.copy(score = null), away = pacers.away.copy(score = null))
+        // A live game whose score is still held back by the delay hides the same way.
+        val withheld = scheduled.copy(state = ScoreState.IN, clockText = null)
+        val chips = listOf(scheduled, withheld, live(pacers, "Q3 4:12", 88, 80), pacers)
+            .map { ScoreChips.of(item("76ers vs Pacers"), it, ScoresMode.HIDE_UNTIL_FOCUSED, false) }
+        assertEquals(List(4) { ScoreChip.Hidden }, chips)
+        // Revealed, a scheduled game still has no chip.
+        assertNull(ScoreChips.of(item("76ers vs Pacers"), scheduled, ScoresMode.HIDE_UNTIL_FOCUSED, true))
+    }
+
+    @Test
     fun `hide until focused shows Score hidden until the card is revealed`() {
         val game = live(pacers, "Q3 4:12", 88, 80)
-        assertEquals(ScoreChip.Hidden(live = true), ScoreChips.of(item("76ers vs Pacers"), game, ScoresMode.HIDE_UNTIL_FOCUSED, false))
+        assertEquals(ScoreChip.Hidden, ScoreChips.of(item("76ers vs Pacers"), game, ScoresMode.HIDE_UNTIL_FOCUSED, false))
         assertEquals("Score hidden", chipText(item("76ers vs Pacers"), pacers, ScoresMode.HIDE_UNTIL_FOCUSED))
-        assertEquals(ScoreChip.Hidden(live = false), ScoreChips.of(item("76ers vs Pacers"), pacers, ScoresMode.HIDE_UNTIL_FOCUSED, false))
+        assertEquals(ScoreChip.Hidden, ScoreChips.of(item("76ers vs Pacers"), pacers, ScoresMode.HIDE_UNTIL_FOCUSED, false))
         assertEquals("Q3 4:12 · 88–80", chipText(item("76ers vs Pacers"), game, ScoresMode.HIDE_UNTIL_FOCUSED, revealed = true))
     }
 

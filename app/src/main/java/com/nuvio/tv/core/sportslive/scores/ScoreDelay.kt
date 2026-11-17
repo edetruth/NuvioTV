@@ -6,7 +6,9 @@ package com.nuvio.tv.core.sportslive.scores
  * arrived, and the version from the delay ago is shown. Everything else (names, logos, start time,
  * league) is always the newest. A game first seen while live shows with its score, clock and scorers
  * withheld until the delay has passed (enabling the delay, app start, first visit, a re-track), so the
- * newest score never leaks; one first seen before or after play shows as it is.
+ * newest score never leaks. So is a game first seen already final that may have just ended: ESPN's
+ * scoreboard gives no end time, so a final whose start is within [RECENT_START_MS] is held for the
+ * delay too ([mayHaveJustEnded]). One first seen before play, or long over, shows as it is.
  *
  * Adapted from SportsScoreDelay in homelessbrian/NuvioPlusIPTV (GPL-3.0, as this project).
  */
@@ -59,8 +61,9 @@ internal class ScoreDelay {
             entry.lastSeen = now
             val versions = entry.versions
             val last = versions.lastOrNull()
-            if (last == null && snapshot.state == ScoreState.IN) {
-                // First seen live: nothing is known from [delayMs] ago, so the score waits that long.
+            if (last == null && (snapshot.state == ScoreState.IN || mayHaveJustEnded(snapshot, now))) {
+                // First seen live, or final but maybe only just: nothing is known from [delayMs] ago,
+                // so the score waits that long.
                 versions.addLast(Version(now, withheld(snapshot)))
             }
             if (last == null || live(last.snapshot) != live(snapshot)) versions.addLast(Version(now, snapshot))
@@ -85,8 +88,18 @@ internal class ScoreDelay {
         scorers = emptyList()
     )
 
-    private companion object {
-        const val FORGET_AFTER_MS = 10 * 60_000L
+    companion object {
+        private const val FORGET_AFTER_MS = 10 * 60_000L
+
+        /** A game that started longer ago than this has not just ended (ESPN gives no end time). */
+        private const val RECENT_START_MS = 12 * 60 * 60_000L
+
+        /**
+         * True when [s] is a final that may have ended within a score delay: ESPN gives no end or
+         * last-update time, so any final that started within [RECENT_START_MS] (or at an unknown time).
+         */
+        fun mayHaveJustEnded(s: ScoreSnapshot, now: Long): Boolean =
+            s.state == ScoreState.POST && s.isFinal && (s.startMs == null || now - s.startMs < RECENT_START_MS)
     }
 
     private fun withLive(newest: ScoreSnapshot, shown: ScoreSnapshot): ScoreSnapshot =

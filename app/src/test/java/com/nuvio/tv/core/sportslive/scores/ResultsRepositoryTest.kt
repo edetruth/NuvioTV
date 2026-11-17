@@ -63,6 +63,30 @@ class ResultsRepositoryTest {
     }
 
     @Test
+    fun `the score delay holds back a final that may have just ended, as on the cards`() = runTest {
+        settings.value = ScoreSettings(delaySeconds = 30)
+        mySports.value = basketballOnly
+        val final = nba.first { it.state == ScoreState.POST && it.isFinal }
+        // ESPN gives no end time: a final that started within 12 h may have ended a moment ago.
+        val finals = listOf(
+            final.copy(eventId = "long-over", startMs = clock - 20 * 60 * 60_000L),
+            final.copy(eventId = "recent", startMs = clock - 3 * 60 * 60_000L)
+        )
+        val recent = setOf("recent")
+        provider.respond = { feed -> ScoreboardResult(if (feed.league == EspnLeagueMap.NBA) finals else emptyList()) }
+        val repo = repository()
+        val first = repo.load(1) as ResultsLoad.Loaded
+        assertEquals(listOf("long-over"), first.rows.map { it.event.eventId })
+        assertEquals(clock + 30_000, first.heldUntil)
+        clock += 29_000
+        assertTrue((repo.load(1) as ResultsLoad.Loaded).rows.none { it.event.eventId in recent })
+        clock += 1_000
+        val due = repo.load(1) as ResultsLoad.Loaded
+        assertEquals(finals.map { it.eventId }.toSet(), due.rows.map { it.event.eventId }.toSet())
+        assertEquals(null, due.heldUntil)
+    }
+
+    @Test
     fun `soccer all lists internationals under their competition`() = runTest {
         clock = Instant.parse("2026-11-17T12:00:00Z").toEpochMilli()
         mySports.value = MySports.decode(setOf("soccer"))

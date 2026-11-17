@@ -127,7 +127,7 @@ class ZapPanelScoresTest {
         // Both in Live now, ordered by ESPN's start (the Pacers tipped off first), not by the result.
         assertEquals(listOf(live, finished), hidden.map { it.item })
         assertEquals(listOf(ZapPanelGroup.LIVE_NOW, ZapPanelGroup.LIVE_NOW), hidden.map { it.group })
-        assertEquals(ScoreChip.Hidden(live = false), hidden.first { it.item == finished }.chip)
+        assertEquals(ScoreChip.Hidden, hidden.first { it.item == finished }.chip)
         // Shown, the final drops to the rest.
         assertEquals(ZapPanelGroup.OTHER, groupPanelRows(listOf(finished), scores, ScoresMode.SHOW, emptySet(), at).single().group)
     }
@@ -172,7 +172,7 @@ class ZapPanelScoresTest {
     fun `spoiler setting applies to panel chips`() {
         val card = item("Indiana Pacers at Philadelphia 76ers", now - HOUR)
         val scores = mapOf(card.streamKey to live(pacersEvent, "Q3 4:12", 88, 80))
-        assertEquals(ScoreChip.Hidden(live = true), groupPanelRows(listOf(card), scores, ScoresMode.HIDE_UNTIL_FOCUSED, emptySet(), now).single().chip)
+        assertEquals(ScoreChip.Hidden, groupPanelRows(listOf(card), scores, ScoresMode.HIDE_UNTIL_FOCUSED, emptySet(), now).single().chip)
         assertTrue(groupPanelRows(listOf(card), scores, ScoresMode.HIDE_UNTIL_FOCUSED, setOf(card.streamKey), now).single().chip is ScoreChip.Live)
         val off = groupPanelRows(listOf(card), scores, ScoresMode.OFF, setOf(card.streamKey), now).single()
         assertNull(off.chip)
@@ -251,7 +251,7 @@ class ZapPanelScoresTest {
         val (viewModel, playing) = panelViewModel(scores)
         viewModel.openPanel()
         val state = viewModel.panel.first { panel -> panel?.rows?.any { it.chip != null } == true }!!
-        assertEquals(ScoreChip.Hidden(live = true), state.rows.first { it.item == playing }.chip)
+        assertEquals(ScoreChip.Hidden, state.rows.first { it.item == playing }.chip)
 
         // Opening focuses the game playing: it stays hidden however long it sits there.
         viewModel.onPanelRowFocus(playing.streamKey)

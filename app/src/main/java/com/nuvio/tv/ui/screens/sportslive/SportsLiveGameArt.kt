@@ -60,7 +60,7 @@ internal fun rememberScoreChipStrings(): ScoreChipStrings {
 @Composable
 internal fun SportsLiveScoreChip(chip: ScoreChip, modifier: Modifier = Modifier) {
     val text = ScoreChips.text(chip, rememberScoreChipStrings())
-    val live = chip is ScoreChip.Live || (chip is ScoreChip.Hidden && chip.live)
+    val live = chip is ScoreChip.Live
     Row(
         modifier = modifier
             .clip(RoundedCornerShape(NuvioTheme.radii.sm))

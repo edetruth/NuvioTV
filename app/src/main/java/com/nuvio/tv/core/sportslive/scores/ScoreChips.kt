@@ -17,8 +17,11 @@ sealed interface ScoreChip {
     /** Postponed, cancelled, suspended or delayed: ESPN's status text (null → "Postponed"), never a score. */
     data class Status(val text: String?) : ScoreChip
 
-    /** Hide until focused, before the reveal: "Score hidden"; [live] keeps the live dot. */
-    data class Hidden(val live: Boolean) : ScoreChip
+    /**
+     * Hide until focused, before the reveal: "Score hidden". The same for a scheduled, live or finished
+     * game (no live dot), so the chip never tells whether a game has started or ended.
+     */
+    data object Hidden : ScoreChip
 }
 
 /** The chip's words, from string resources (tests pass the English ones). */
@@ -45,22 +48,23 @@ data class ScoreChipStrings(
  */
 object ScoreChips {
 
+    private val HIDDEN_STATES = setOf(ScoreState.PRE, ScoreState.IN, ScoreState.POST)
+
     fun of(item: SportsLiveItem, snapshot: ScoreSnapshot?, mode: ScoresMode?, revealed: Boolean): ScoreChip? {
         if (mode == null || mode == ScoresMode.OFF || snapshot == null) return null
         val (first, second) = orderedSides(item) ?: return null
         val firstIsHome = ScoreMatcher.firstIsHome(first, second, snapshot) ?: return null
         val score = scoreOf(snapshot, firstIsHome)
-        val hidden = mode == ScoresMode.HIDE_UNTIL_FOCUSED && !revealed
+        // Hidden: one chip for scheduled, live and finished games alike, whatever the feed has yet.
+        if (mode == ScoresMode.HIDE_UNTIL_FOCUSED && !revealed && snapshot.state in HIDDEN_STATES) return ScoreChip.Hidden
         return when (snapshot.state) {
             ScoreState.OFF -> ScoreChip.Status(snapshot.clockText?.takeIf { it.isNotBlank() })
             ScoreState.IN -> when {
                 snapshot.clockText.isNullOrBlank() && score == null -> null
-                hidden -> ScoreChip.Hidden(live = true)
                 else -> ScoreChip.Live(snapshot.clockText?.takeIf { it.isNotBlank() }, score)
             }
             ScoreState.POST -> when {
                 !snapshot.isFinal || score == null -> null
-                hidden -> ScoreChip.Hidden(live = false)
                 else -> ScoreChip.Final(snapshot.clockText?.takeIf { it.isNotBlank() }, score)
             }
             ScoreState.PRE, ScoreState.UNKNOWN -> null

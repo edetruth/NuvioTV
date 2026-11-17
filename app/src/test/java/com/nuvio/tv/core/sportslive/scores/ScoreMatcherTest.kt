@@ -12,6 +12,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Test
 import java.time.Instant
+import java.time.ZoneId
 import java.time.ZoneOffset
 
 class ScoreMatcherTest {
@@ -140,16 +141,80 @@ class ScoreMatcherTest {
     }
 
     @Test
-    fun `with no start today's game beats yesterday's in a series`() {
-        // Same opponents on consecutive days (a baseball-style series).
+    fun `with no start a bare date still prefers its own day in a series`() {
         val original = nba.first { it.eventId == "401909985" }
         val yesterday = original.copy(eventId = "yesterday", startMs = ms("2026-11-15T23:00:00Z"))
         val today = original.copy(eventId = "today", startMs = ms("2026-11-16T18:00:00Z"))
-        // Just after midnight yesterday's final is closer to now, but today's game is the card's.
-        assertEquals("today", match("Pacers @ 76ers", null, listOf(yesterday, today), now = "2026-11-16T01:00:00Z"))
-        assertEquals("yesterday", match("Pacers @ 76ers", null, listOf(yesterday), now = "2026-11-16T01:00:00Z"))
         val bareDate = ScoreCard("bare", TeamPair("76ers", "Pacers"), ms("2026-11-16T00:00:00Z"), hasTimeOfDay = false)
         assertEquals("today", matcher.match(bareDate, listOf(yesterday, today), ms("2026-11-20T00:00:00Z"))?.eventId)
+    }
+
+    // A card with no start (a channel's "[Pacers vs 76ers]") is matched on ESPN's US Eastern days, in
+    // every device zone. Pacers/76ers stand in for an MLB series and an NHL home-and-home.
+    private val zones = listOf("Europe/London", "Europe/Berlin", "Asia/Tokyo", "America/Los_Angeles", "UTC").map(ZoneId::of)
+    private val base = nba.first { it.eventId == "401909985" }
+
+    private fun meeting(id: String, start: String, state: ScoreState, swapped: Boolean = false) = base.copy(
+        eventId = id,
+        startMs = ms(start),
+        state = state,
+        isFinal = state == ScoreState.POST,
+        home = if (swapped) base.away else base.home,
+        away = if (swapped) base.home else base.away
+    )
+
+    private fun undated(zone: ZoneId, events: List<ScoreSnapshot>, now: String, matcher: ScoreMatcher = ScoreMatcher(zone = { zone })) =
+        matcher.match(ScoreCard("channel", TeamPair("Pacers", "76ers"), null, hasTimeOfDay = false), events, ms(now))?.eventId
+
+    @Test
+    fun `with no start a series shows tonight's game, never yesterday's final, in every zone`() {
+        // 19:10 Eastern on the 15th (final) and on the 16th: 00:10 UTC on the 16th and on the 17th.
+        val yesterdayFinal = meeting("yesterday", "2026-11-16T00:10:00Z", ScoreState.POST)
+        for (zone in zones) {
+            // 16:00 Eastern on the 16th: 21:00 London, 22:00 Berlin, 06:00 Tokyo (17th), 13:00 Los Angeles.
+            // Berlin's own day (the 16th) holds yesterday's Eastern game but not tonight's.
+            val scheduled = meeting("today", "2026-11-17T00:10:00Z", ScoreState.PRE)
+            assertEquals("$zone", "today", undated(zone, listOf(yesterdayFinal, scheduled), now = "2026-11-16T21:00:00Z"))
+            // 20:00 Eastern: tonight's game is live.
+            val live = meeting("today", "2026-11-17T00:10:00Z", ScoreState.IN)
+            assertEquals("$zone", "today", undated(zone, listOf(yesterdayFinal, live), now = "2026-11-17T01:00:00Z"))
+            // 23:00 Eastern: both are finals, so neither can be told for tonight's: no score.
+            val tonightFinal = meeting("today", "2026-11-17T00:10:00Z", ScoreState.POST)
+            assertNull("$zone", undated(zone, listOf(yesterdayFinal, tonightFinal), now = "2026-11-17T04:00:00Z"))
+            // Two live meetings (a doubleheader) are ambiguous too.
+            val other = meeting("other", "2026-11-16T17:05:00Z", ScoreState.IN)
+            assertNull("$zone", undated(zone, listOf(other, live), now = "2026-11-17T01:00:00Z"))
+            // A game still listed as scheduled on yesterday's Eastern day is not today's.
+            val stale = meeting("stale", "2026-11-15T18:00:00Z", ScoreState.PRE)
+            assertNull("$zone", undated(zone, listOf(yesterdayFinal, stale), now = "2026-11-16T21:00:00Z"))
+        }
+    }
+
+    @Test
+    fun `with no start an NHL home-and-home shows tonight's game in every zone`() {
+        // Yesterday at one rink, tonight at the other: the sides swap.
+        val yesterdayFinal = meeting("yesterday", "2026-11-16T00:00:00Z", ScoreState.POST)
+        for (zone in zones) {
+            val tonight = meeting("tonight", "2026-11-17T00:00:00Z", ScoreState.PRE, swapped = true)
+            assertEquals("$zone", "tonight", undated(zone, listOf(yesterdayFinal, tonight), now = "2026-11-16T22:30:00Z"))
+            val live = tonight.copy(state = ScoreState.IN)
+            assertEquals("$zone", "tonight", undated(zone, listOf(yesterdayFinal, live), now = "2026-11-17T01:30:00Z"))
+        }
+    }
+
+    @Test
+    fun `with no start a lone meeting matches and is not cached over a later one`() {
+        val yesterdayFinal = meeting("yesterday", "2026-11-16T00:10:00Z", ScoreState.POST)
+        val tonight = meeting("today", "2026-11-17T00:10:00Z", ScoreState.PRE)
+        for (zone in zones) {
+            val matcher = ScoreMatcher(zone = { zone })
+            // Only yesterday's meeting is in the feeds: it is the pair's only game.
+            assertEquals("$zone", "yesterday", undated(zone, listOf(yesterdayFinal), "2026-11-16T21:00:00Z", matcher))
+            // Tonight's arrives with the next poll: it replaces yesterday's, never held by a cache.
+            assertEquals("$zone", "today", undated(zone, listOf(yesterdayFinal, tonight), "2026-11-16T21:00:00Z", matcher))
+            // Two Eastern days back is out of reach.
+            assertNull("$zone", undated(zone, listOf(yesterdayFinal), "2026-11-18T12:00:00Z", matcher))
+        }
     }
 
     @Test

@@ -254,7 +254,6 @@ class LiveScoresRepository internal constructor(
      * restart, re-evaluates stopped ones), cancels pollers no card needs, and publishes.
      */
     private fun refreshLocked(pollerScope: CoroutineScope, restartStopped: Boolean) {
-        val today = today()
         // In card order (followed first), so the budget goes to followed teams' feeds first.
         val needed = LinkedHashSet<ScoreFeed>()
         fun fits(extra: Collection<ScoreFeed>) = needed.size + extra.count { it !in needed } <= MAX_FEEDS
@@ -262,7 +261,7 @@ class LiveScoresRepository internal constructor(
         for (entry in trackedUnion()) {
             val card = entry.card
             if (card.key in outOfScope && !entry.followed) continue
-            val dates = datesFor(card, today)
+            val dates = datesFor(card)
             val leagues = remembered[card.key]?.let(::listOf)
                 ?: if (entry.followed) entry.leagues else entry.leagues.filter(::inMySports)
             if (leagues.isEmpty()) continue
@@ -341,7 +340,12 @@ class LiveScoresRepository internal constructor(
 
     private fun matchOn(card: ScoreCard, cardFeeds: List<ScoreFeed>): ScoreSnapshot? {
         val nowMs = now()
-        val events = cardFeeds.flatMap { feed -> feeds[feed]?.takeIf { it.isFresh(nowMs) }?.events.orEmpty() }
+        // A card with no start is matched across ESPN's days: a league counts only once all its days are
+        // in, so yesterday's final never stands alone while today's feed is loading, failing or paused.
+        val usable = if (card.startMs != null) cardFeeds else cardFeeds.groupBy { it.league }.values
+            .filter { days -> days.all { feed -> feeds[feed]?.let { it.isFresh(nowMs) && !it.paused } == true } }
+            .flatten()
+        val events = usable.flatMap { feed -> feeds[feed]?.takeIf { it.isFresh(nowMs) }?.events.orEmpty() }
             .distinctBy { it.eventId }
         return if (events.isEmpty()) null else matcher.match(card, events, now())
     }
@@ -373,14 +377,15 @@ class LiveScoresRepository internal constructor(
     /**
      * The scoreboard dates for [card]. ESPN files games under their US Eastern date, so a timed card
      * asks for the Eastern dates within ±3 h of its start (the neighbouring one near Eastern midnight).
-     * A bare date asks for that date; no start: today and yesterday, by the device's and by Eastern days.
+     * A bare date asks for that date; no start: Eastern today and yesterday (the device's day plays no
+     * part, see [ScoreMatcher]).
      * ESPN rejects `dates=A-B` ranges (HTTP 400, checked 2026-11-17), so each date is its own request.
      */
-    internal fun datesFor(card: ScoreCard, today: LocalDate): List<LocalDate> {
+    internal fun datesFor(card: ScoreCard): List<LocalDate> {
         val start = card.startMs
         if (start == null) {
             val easternToday = Instant.ofEpochMilli(now()).atZone(EASTERN).toLocalDate()
-            return listOf(today, today.minusDays(1), easternToday, easternToday.minusDays(1)).distinct()
+            return listOf(easternToday, easternToday.minusDays(1))
         }
         if (!card.hasTimeOfDay) return listOf(Instant.ofEpochMilli(start).atZone(ZoneOffset.UTC).toLocalDate())
         return listOf(

@@ -48,12 +48,16 @@ data class ScoreCard(
  *   5, so one side must match STRONG.
  * - A (W)/Women or U21-style qualifier must agree: the card's against the competitor's names or, when
  *   they carry none, the event's league slug (`eng.w.1`, `fifa.friendly_u21`).
- * - Time: within ±3 h of a timed card's start. A card with a bare date, or none (today), is matched on
- *   that day first, ranked by distance from mid-day, and on the day before only when that day has no
- *   match, all in the device time zone.
+ * - Time: within ±3 h of a timed card's start. A card with a bare date is matched on that day first,
+ *   ranked by distance from mid-day, and on the day before only when that day has no match, in the
+ *   device time zone.
+ * - A card with no start (chiefly a channel's "[A vs B]") is matched on ESPN's days, US Eastern: today
+ *   and yesterday, whatever the device's zone. One meeting of the pair is the match; when there are
+ *   more (a series, a home-and-home), only the one live game, or else the one scheduled for today, is,
+ *   so yesterday's final never lands on tonight's card. See [undated].
  * - Best score wins; two different events tied for the best score give no match (ambiguous).
- * A match is cached per card per day, so a later poll finds the event by id. A miss returns null and is
- * not cached, so the next refresh retries.
+ * A dated card's match is cached per card per day, so a later poll finds the event by id. A miss
+ * returns null and is not cached, so the next refresh retries.
  */
 class ScoreMatcher(
     private val zone: () -> ZoneId = { ZoneId.systemDefault() },
@@ -71,20 +75,21 @@ class ScoreMatcher(
         val zoneId = zone()
         val start = card.startMs
         val timed = start != null && card.hasTimeOfDay
+        val home = side(card.teams.home)
+        val away = side(card.teams.away)
+        // No start: never cached, so a later poll that brings today's meeting replaces yesterday's.
+        if (start == null) return undated(home, away, events, Instant.ofEpochMilli(nowMs).atZone(EASTERN).toLocalDate())
         val day = when {
-            timed -> Instant.ofEpochMilli(start!!).atZone(zoneId).toLocalDate()
-            // A bare date is midnight UTC of that date; no start means today.
-            start != null -> Instant.ofEpochMilli(start).atZone(ZoneOffset.UTC).toLocalDate()
-            else -> Instant.ofEpochMilli(nowMs).atZone(zoneId).toLocalDate()
+            timed -> Instant.ofEpochMilli(start).atZone(zoneId).toLocalDate()
+            // A bare date is midnight UTC of that date.
+            else -> Instant.ofEpochMilli(start).atZone(ZoneOffset.UTC).toLocalDate()
         }
         cache[card.key]?.takeIf { it.day == day }?.let { cached ->
             events.firstOrNull { it.eventId == cached.eventId }?.let { return it }
         }
-        val home = side(card.teams.home)
-        val away = side(card.teams.away)
         // The day before is tried only when the day has no candidate at all, not when it is ambiguous.
         val pick = if (timed) {
-            best(home, away, events, (start!! - WINDOW_MS)..(start + WINDOW_MS), reference = start)
+            best(home, away, events, (start - WINDOW_MS)..(start + WINDOW_MS), reference = start)
         } else {
             bestOnDay(home, away, events, day, zoneId)
                 ?: if (previousDayFallback) bestOnDay(home, away, events, day.minusDays(1), zoneId) else null
@@ -97,6 +102,31 @@ class ScoreMatcher(
         if (cache.size >= MAX_CACHED) cache.clear()
         cache[card.key] = Cached(day, best.eventId)
         return best
+    }
+
+    /**
+     * A card with no start, on ESPN's (US Eastern) [today] and, with [previousDayFallback], yesterday:
+     * the pair's only meeting there; with more than one, the one live, else the one scheduled for
+     * [today]; anything else (two live, two scheduled, only finals) gives none.
+     */
+    private fun undated(home: Side, away: Side, events: List<ScoreSnapshot>, today: LocalDate): ScoreSnapshot? {
+        val first = if (previousDayFallback) today.minusDays(1) else today
+        val from = first.atStartOfDay(EASTERN).toInstant().toEpochMilli()
+        val until = today.plusDays(1).atStartOfDay(EASTERN).toInstant().toEpochMilli()
+        val candidates = events
+            .filter { event -> event.startMs != null && event.startMs in from until until && score(home, away, event) != null }
+            .distinctBy { it.eventId }
+        if (candidates.size <= 1) return candidates.firstOrNull()
+        val live = candidates.filter { it.state == ScoreState.IN }
+        val pick = if (live.isNotEmpty()) {
+            live.singleOrNull()
+        } else {
+            candidates.singleOrNull { event ->
+                event.state == ScoreState.PRE && Instant.ofEpochMilli(event.startMs!!).atZone(EASTERN).toLocalDate() == today
+            }
+        }
+        if (pick == null && BuildConfig.DEBUG) Log.d(TAG, "ambiguous: ${candidates.size} meetings for ${home.base} / ${away.base}")
+        return pick
     }
 
     private fun bestOnDay(home: Side, away: Side, events: List<ScoreSnapshot>, day: LocalDate, zoneId: ZoneId): Pick? {
@@ -193,6 +223,9 @@ class ScoreMatcher(
         private const val WEAK = 2
         private const val MIN_TOTAL = 5
         private const val MAX_CACHED = 2_000
+
+        /** ESPN files games under their US Eastern date. */
+        private val EASTERN: ZoneId = ZoneId.of("America/New_York")
 
         private val MARKS = Regex("""\p{Mn}+""")
 
