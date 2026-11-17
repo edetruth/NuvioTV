@@ -60,6 +60,7 @@ import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.ui.screens.player.PlayerMediaSourceFactory
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveKeepScreenOn
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveResolvingDialog
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapResolver
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapTarget
@@ -230,6 +231,9 @@ fun SportsLiveMiniPlayerHost(
 
     val expanding by viewModel.expanding.collectAsStateWithLifecycle()
     expanding?.let { SportsLiveResolvingDialog(it, onDismiss = viewModel::cancelExpand) }
+
+    // The TV's screensaver must not start while the mini player plays.
+    SportsLiveKeepScreenOn(playing != null)
 
     if (playing == null) return
     // In picture-in-picture only the video shows, filling the window.
