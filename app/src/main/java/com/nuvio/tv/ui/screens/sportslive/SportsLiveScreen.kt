@@ -164,9 +164,11 @@ fun SportsLiveScreen(
         { item -> if (scoredTab) ScoreChips.matchedEvent(item, scores[item.streamKey]) else null }
     }
     // The Scoreboard layout (#23): Live now and Upcoming only, remembered per tab.
-    val layout by viewModel.layout.collectAsStateWithLifecycle()
+    val layouts by viewModel.layouts.collectAsStateWithLifecycle()
+    val layout = SportsLiveLayout.of(layouts, uiState.selectedTab)
+    // Regrouped on the view model's clock, so Starting soon and its countdowns move on as time passes.
     val scoreboardRowsOf: (List<SportsLiveItem>) -> List<ScoreboardRow> =
-        remember(scores, scoresMode, revealed, uiState.selectedTab, uiState.justEnded, followedTeams) {
+        remember(scores, scoresMode, revealed, uiState.selectedTab, uiState.justEnded, followedTeams, uiState.nowMs) {
             { items ->
                 scoreboardRows(
                     items = items,
@@ -174,7 +176,7 @@ fun SportsLiveScreen(
                     scores = scores,
                     mode = scoresMode,
                     revealed = revealed,
-                    nowMs = System.currentTimeMillis(),
+                    nowMs = uiState.nowMs,
                     ended = if (uiState.selectedTab == SportsLiveTab.LIVE_NOW) uiState.justEnded else emptyMap(),
                     followsSide = { item, side -> followedTeams.any { SportsLiveTeams.followsSideOfAnySource(it, side, item) } }
                 )
@@ -268,7 +270,7 @@ fun SportsLiveScreen(
             uiState = uiState,
             followedTeams = followedTeams,
             layout = layout,
-            onSelectLayout = viewModel::selectLayout,
+            onSelectLayout = { viewModel.selectLayout(uiState.selectedTab, it) },
             scoreboardRowsOf = scoreboardRowsOf,
             situationOf = situationOf,
             chipOf = chipOf,
@@ -441,7 +443,7 @@ private fun SportsLiveContent(
     // The Scoreboard lists the same games grouped LIVE → STARTING SOON → LATER → FINAL.
     val boardRows = if (scoreboard) remember(uiState.visibleItems, scoreboardRowsOf) { scoreboardRowsOf(uiState.visibleItems) } else null
     val boardRowOf = remember(boardRows) { boardRows?.associateBy { it.item.listKey }.orEmpty() }
-    val items = boardRows?.map { it.item } ?: uiState.visibleItems
+    val items = remember(boardRows, uiState.visibleItems) { boardRows?.map { it.item } ?: uiState.visibleItems }
     val selected = items.firstOrNull { it.listKey == focusedCardKey && it.id == uiState.selectedItemId }
         ?: items.firstOrNull { it.id == uiState.selectedItemId }
         ?: items.firstOrNull()
@@ -921,6 +923,7 @@ private fun SportsLiveContent(
                         .weight(0.55f)
                         .fillMaxHeight()
                         .onFocusChanged { paneHasFocus = it.hasFocus },
+                    watchFocusRequester = watchFocusRequester,
                     watchModifier = Modifier
                         .focusRequester(watchFocusRequester)
                         .focusProperties { left = entryCardFocusRequester ?: selectedCardFocusRequester }

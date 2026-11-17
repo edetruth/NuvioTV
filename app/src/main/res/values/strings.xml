@@ -3710,7 +3710,7 @@
     <string name="sports_live_layout_scoreboard">Scoreboard</string>
     <string name="sports_live_scoreboard_live">LIVE</string>
     <string name="sports_live_scoreboard_starting_soon">STARTING SOON</string>
-    <string name="sports_live_scoreboard_later">LATER</string>
+    <string name="sports_live_scoreboard_more_games">MORE GAMES</string>
     <string name="sports_live_scoreboard_final">FINAL</string>
     <string name="sports_live_scoreboard_in_hm">in %1$d h %2$d m</string>
     <string name="sports_live_scoreboard_in_m">in %1$d m</string>

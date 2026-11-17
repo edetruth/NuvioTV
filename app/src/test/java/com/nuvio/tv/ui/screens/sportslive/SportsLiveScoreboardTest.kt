@@ -24,7 +24,11 @@ import com.nuvio.tv.domain.repository.SportsLiveRepository
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkStatic
+import io.mockk.unmockkStatic
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
@@ -111,48 +115,72 @@ class SportsLiveScoreboardTest {
         assertTrue(SportsLiveLayout.decode(null).isEmpty())
     }
 
+    private fun repo() = mockk<SportsLiveRepository>(relaxed = true) {
+        every { claimedCatalogs } returns flowOf(emptyList())
+        every { latest } returns MutableStateFlow<SportsLiveLoad?>(null)
+        every { endedKeys } returns MutableStateFlow<Set<String>>(emptySet())
+        every { followedTeams } returns flowOf(emptyList<FollowedTeam>())
+        every { hasRecentLinks(any()) } returns false
+        coEvery { load(any(), any()) } returns SportsLiveLoad(emptyList(), emptyList(), 0L, emptySet())
+    }
+
     @Test
     fun `the view model remembers the layout per tab`() = runTest {
         val stored = MutableStateFlow<Map<SportsLiveTab, SportsLiveLayout>>(emptyMap())
-        val repo = mockk<SportsLiveRepository>(relaxed = true) {
-            every { claimedCatalogs } returns flowOf(emptyList())
-            every { latest } returns MutableStateFlow<SportsLiveLoad?>(null)
-            every { endedKeys } returns MutableStateFlow<Set<String>>(emptySet())
-            every { followedTeams } returns flowOf(emptyList<FollowedTeam>())
-            coEvery { load(any(), any()) } returns SportsLiveLoad(emptyList(), emptyList(), 0L, emptySet())
-        }
-        val viewModel = SportsLiveViewModel(repo, layouts = stored, saveLayout = { tab, layout -> stored.value = stored.value + (tab to layout) })
-        backgroundScope.launch { viewModel.layout.collect {} }
+        val viewModel = SportsLiveViewModel(repo(), layouts = stored, saveLayout = { tab, layout -> stored.value = stored.value + (tab to layout) })
         runCurrent()
-        assertEquals(SportsLiveLayout.CARDS, viewModel.layout.value)
+        // The screen reads the selected tab's entry from the map, in the same frame as the tab.
+        fun shown(tab: SportsLiveTab) = SportsLiveLayout.of(viewModel.layouts.value, tab)
+        assertEquals(SportsLiveLayout.CARDS, shown(SportsLiveTab.LIVE_NOW))
 
-        viewModel.selectLayout(SportsLiveLayout.SCOREBOARD)
+        viewModel.selectLayout(SportsLiveTab.LIVE_NOW, SportsLiveLayout.SCOREBOARD)
         runCurrent()
-        assertEquals(SportsLiveLayout.SCOREBOARD, viewModel.layout.value)
+        assertEquals(SportsLiveLayout.SCOREBOARD, shown(SportsLiveTab.LIVE_NOW))
         assertEquals(mapOf(SportsLiveTab.LIVE_NOW to SportsLiveLayout.SCOREBOARD), stored.value)
-
-        // Upcoming keeps its own choice (Cards); coming back to Live now restores the Scoreboard.
-        viewModel.selectTab(SportsLiveTab.UPCOMING)
+        // Upcoming keeps its own choice (Cards).
+        assertEquals(SportsLiveLayout.CARDS, shown(SportsLiveTab.UPCOMING))
+        viewModel.selectLayout(SportsLiveTab.UPCOMING, SportsLiveLayout.SCOREBOARD)
+        viewModel.selectLayout(SportsLiveTab.LIVE_NOW, SportsLiveLayout.CARDS)
         runCurrent()
-        assertEquals(SportsLiveLayout.CARDS, viewModel.layout.value)
-        viewModel.selectTab(SportsLiveTab.LIVE_NOW)
-        runCurrent()
-        assertEquals(SportsLiveLayout.SCOREBOARD, viewModel.layout.value)
+        assertEquals(SportsLiveLayout.SCOREBOARD, shown(SportsLiveTab.UPCOMING))
+        assertEquals(SportsLiveLayout.CARDS, shown(SportsLiveTab.LIVE_NOW))
 
         // Channels has no switch: a pick there is ignored.
-        viewModel.selectTab(SportsLiveTab.CHANNELS)
-        viewModel.selectLayout(SportsLiveLayout.SCOREBOARD)
+        viewModel.selectLayout(SportsLiveTab.CHANNELS, SportsLiveLayout.SCOREBOARD)
         runCurrent()
-        assertEquals(SportsLiveLayout.CARDS, viewModel.layout.value)
+        assertEquals(SportsLiveLayout.CARDS, shown(SportsLiveTab.CHANNELS))
         assertFalse(SportsLiveTab.CHANNELS in stored.value)
     }
 
     @Test
-    fun `rows are grouped live, starting soon, later, then final`() {
+    fun `the state carries the view model clock, which ticks`() = runTest {
+        // Stubbed before Dispatchers is mocked statically (stubbing after that fails).
+        val repo = repo()
+        mockkStatic(Dispatchers::class)
+        every { Dispatchers.Default } returns mainDispatcherRule.dispatcher
+        try {
+            val ticks = MutableSharedFlow<Unit>(replay = 1).apply { tryEmit(Unit) }
+            val viewModel = SportsLiveViewModel(repo, clock = ticks)
+            var now = NOW
+            viewModel.nowMs = { now }
+            backgroundScope.launch { viewModel.uiState.collect {} }
+            runCurrent()
+            assertEquals(NOW, viewModel.uiState.value.nowMs)
+            now = NOW + 30_000L
+            ticks.emit(Unit)
+            runCurrent()
+            assertEquals(NOW + 30_000L, viewModel.uiState.value.nowMs)
+        } finally {
+            unmockkStatic(Dispatchers::class)
+        }
+    }
+
+    @Test
+    fun `rows are grouped live, starting soon, more games, then final`() {
         val rows = rows()
         assertEquals(listOf(pacers, soon, later, lakers, estimated), rows.map { it.item })
         assertEquals(
-            listOf(ScoreboardGroup.LIVE, ScoreboardGroup.STARTING_SOON, ScoreboardGroup.LATER, ScoreboardGroup.FINAL, ScoreboardGroup.FINAL),
+            listOf(ScoreboardGroup.LIVE, ScoreboardGroup.STARTING_SOON, ScoreboardGroup.MORE_GAMES, ScoreboardGroup.FINAL, ScoreboardGroup.FINAL),
             rows.map { it.group }
         )
         // Scores in the card's order (Pacers first), ESPN's clock.
@@ -178,7 +206,7 @@ class SportsLiveScoreboardTest {
         val rows = rows(items = listOf(later, soon, started, pacers), tab = SportsLiveTab.UPCOMING)
         assertEquals(listOf(pacers, started, soon, later), rows.map { it.item })
         assertEquals(
-            listOf(ScoreboardGroup.LIVE, ScoreboardGroup.STARTING_SOON, ScoreboardGroup.STARTING_SOON, ScoreboardGroup.LATER),
+            listOf(ScoreboardGroup.LIVE, ScoreboardGroup.STARTING_SOON, ScoreboardGroup.STARTING_SOON, ScoreboardGroup.MORE_GAMES),
             rows.map { it.group }
         )
         assertTrue(rows.none { it.group == ScoreboardGroup.FINAL })
@@ -212,6 +240,30 @@ class SportsLiveScoreboardTest {
         assertEquals(ScoreboardButtons(watchWith = false, gameStats = false), scoreboardButtons(SportsLiveTab.UPCOMING, upcoming, null))
         // Another game's event on the card is no strict match: no Game stats.
         assertNull(ScoreChips.matchedEvent(item("Celtics @ Knicks", NOW), pacersEvent))
+    }
+
+    @Test
+    fun `a date with no time of day goes to more games, with no countdown`() {
+        val dateOnly = item("Hawks @ Spurs", NOW + HOUR, isLive = false).copy(startHasTimeOfDay = false)
+        val upcoming = rows(items = listOf(dateOnly, soon), tab = SportsLiveTab.UPCOMING)
+        val row = upcoming.first { it.item == dateOnly }
+        assertEquals(ScoreboardGroup.MORE_GAMES, row.group)
+        assertNull(row.startsIn)
+        // A timed one an hour away counts down.
+        assertEquals(1 to 0, upcoming.first { it.item == soon }.startsIn)
+    }
+
+    @Test
+    fun `starting soon regroups and counts down as the clock moves`() {
+        fun at(nowMs: Long) = scoreboardRows(listOf(later), SportsLiveTab.UPCOMING, emptyMap(), ScoresMode.SHOW, emptySet(), nowMs).single()
+        // Five hours out: more games, no countdown.
+        assertEquals(ScoreboardGroup.MORE_GAMES, at(NOW).group)
+        assertNull(at(NOW).startsIn)
+        // Two and a half hours later it starts within three hours.
+        val soonAfter = at(NOW + 150 * 60_000L)
+        assertEquals(ScoreboardGroup.STARTING_SOON, soonAfter.group)
+        assertEquals(2 to 30, soonAfter.startsIn)
+        assertEquals(0 to 10, at(NOW + 5 * HOUR - 10 * 60_000L).startsIn)
     }
 
     @Test

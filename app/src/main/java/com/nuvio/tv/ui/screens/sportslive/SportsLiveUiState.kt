@@ -28,7 +28,9 @@ data class SportsLiveUiState(
      * Live now games that are over (#60), by card key: they sit at the end of the Live now list, after
      * the games still live, as the dimmed Just ended strip.
      */
-    val justEnded: Map<String, EndedGame> = emptyMap()
+    val justEnded: Map<String, EndedGame> = emptyMap(),
+    /** The view model's clock when this state was built (it ticks while the list is watched). */
+    val nowMs: Long = 0L
 ) {
     /** [item]'s ended verdict when it sits in the Just ended strip (Live now only), else null. */
     fun endedOf(item: SportsLiveItem): EndedGame? =

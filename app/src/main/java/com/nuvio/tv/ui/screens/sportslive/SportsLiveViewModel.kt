@@ -171,14 +171,16 @@ class SportsLiveViewModel internal constructor(
         }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SportsLiveUiState())
 
-    /** The selected tab's layout: Cards unless the user picked another one the tab offers. */
-    val layout: StateFlow<SportsLiveLayout> =
-        combine(layouts, selectionState) { choices, selection -> SportsLiveLayout.of(choices, selection.tab) }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SportsLiveLayout.CARDS)
+    /**
+     * The stored layout per tab; the screen reads its selected tab's entry ([SportsLiveLayout.of]) in the
+     * same frame as the tab, so a tab switch never shows another tab's layout. Read from creation, so the
+     * stored choice is in before the first list shows.
+     */
+    val layouts: StateFlow<Map<SportsLiveTab, SportsLiveLayout>> =
+        layouts.stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
 
-    /** Remembers [layout] for the selected tab (per profile); a tab that does not offer it ignores it. */
-    fun selectLayout(layout: SportsLiveLayout) {
-        val tab = selectionState.value.tab
+    /** Remembers [layout] for [tab] (per profile); a tab that does not offer it ignores it. */
+    fun selectLayout(tab: SportsLiveTab, layout: SportsLiveLayout) {
         if (layout !in SportsLiveLayout.offeredFor(tab)) return
         viewModelScope.launch { saveLayout(tab, layout) }
     }
@@ -401,7 +403,8 @@ class SportsLiveViewModel internal constructor(
             selectedItemId = selectedId,
             failures = selection.failures,
             lastRefreshedMs = selection.lastRefreshedMs,
-            justEnded = justEnded
+            justEnded = justEnded,
+            nowMs = now
         )
     }
 

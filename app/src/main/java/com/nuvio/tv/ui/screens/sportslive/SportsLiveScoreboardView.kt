@@ -18,14 +18,18 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -102,7 +106,7 @@ internal fun SportsLiveScoreboardHeader(group: ScoreboardGroup, modifier: Modifi
             when (group) {
                 ScoreboardGroup.LIVE -> R.string.sports_live_scoreboard_live
                 ScoreboardGroup.STARTING_SOON -> R.string.sports_live_scoreboard_starting_soon
-                ScoreboardGroup.LATER -> R.string.sports_live_scoreboard_later
+                ScoreboardGroup.MORE_GAMES -> R.string.sports_live_scoreboard_more_games
                 ScoreboardGroup.FINAL -> R.string.sports_live_scoreboard_final
             }
         ),
@@ -250,12 +254,9 @@ private fun RowStatus(row: ScoreboardRow, modifier: Modifier = Modifier) {
         else -> null
     }
     val kickoff = if (text == null) row.art?.let { kickoffText(it) } else null
-    val countdown = if (text == null && row.group == ScoreboardGroup.STARTING_SOON) {
-        scoreboardStartsIn(row.art?.startMs ?: row.item.startMs, System.currentTimeMillis())?.let { (h, m) ->
-            if (h > 0) stringResource(R.string.sports_live_scoreboard_in_hm, h, m) else stringResource(R.string.sports_live_scoreboard_in_m, m)
-        }
-    } else {
-        null
+    // Worked out with the rows, on the view model's clock: nothing here reads the time.
+    val countdown = row.startsIn?.takeIf { text == null }?.let { (h, m) ->
+        if (h > 0) stringResource(R.string.sports_live_scoreboard_in_hm, h, m) else stringResource(R.string.sports_live_scoreboard_in_m, m)
     }
     Column(modifier = modifier, horizontalAlignment = Alignment.End) {
         Row(horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs), verticalAlignment = Alignment.CenterVertically) {
@@ -292,11 +293,27 @@ internal fun SportsLiveScoreboardPane(
     noStream: Boolean,
     details: ScoreDetails?,
     situation: String,
+    /** Watch's requester: focus goes back there when the focused button is taken away. */
+    watchFocusRequester: FocusRequester,
     modifier: Modifier = Modifier,
     watchModifier: Modifier = Modifier
 ) {
     val item = row.item
     val chipStrings = rememberScoreChipStrings()
+    // A refresh can take Watch with another game or Game stats away while focused (the game ended, the
+    // match was lost); focus then goes to Watch instead of being lost.
+    var watchWithFocused by remember { mutableStateOf(false) }
+    var gameStatsFocused by remember { mutableStateOf(false) }
+    // Read in the focus callbacks: losing focus because the button is being removed keeps the flag.
+    val currentButtons by rememberUpdatedState(buttons)
+    LaunchedEffect(buttons.watchWith, buttons.gameStats) {
+        val lost = (!buttons.watchWith && watchWithFocused) || (!buttons.gameStats && gameStatsFocused)
+        if (!buttons.watchWith) watchWithFocused = false
+        if (!buttons.gameStats) gameStatsFocused = false
+        if (!lost) return@LaunchedEffect
+        withFrameNanos { }
+        runCatching { watchFocusRequester.requestFocus() }
+    }
     val detailStrings = rememberScoreDetailsStrings()
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md)) {
         Box(
@@ -398,10 +415,16 @@ internal fun SportsLiveScoreboardPane(
                 Text(stringResource(R.string.sports_live_watch))
             }
             if (buttons.watchWith) {
-                SportsLivePaneButton(onClick = onWatchWith) { Text(stringResource(R.string.sports_live_dual_watch_with)) }
+                SportsLivePaneButton(
+                    onClick = onWatchWith,
+                    modifier = Modifier.onFocusChanged { if (it.isFocused || currentButtons.watchWith) watchWithFocused = it.isFocused }
+                ) { Text(stringResource(R.string.sports_live_dual_watch_with)) }
             }
             if (buttons.gameStats) {
-                SportsLivePaneButton(onClick = onGameStats) { Text(stringResource(R.string.sports_live_game_stats)) }
+                SportsLivePaneButton(
+                    onClick = onGameStats,
+                    modifier = Modifier.onFocusChanged { if (it.isFocused || currentButtons.gameStats) gameStatsFocused = it.isFocused }
+                ) { Text(stringResource(R.string.sports_live_game_stats)) }
             }
         }
     }
