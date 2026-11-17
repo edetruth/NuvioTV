@@ -4,7 +4,8 @@ package com.nuvio.tv.core.sportslive.scores
  * Score delay (#41): IPTV streams run behind the broadcast, so a live score could show a goal before
  * it happens on screen. Every change to a game's score, clock or state is kept with the time it
  * arrived, and the version from the delay ago is shown. Everything else (names, logos, start time,
- * league) is always the newest. A game first seen while live shows with its score, clock and scorers
+ * league) is always the newest. The game situation (down and distance, count, runners, last play)
+ * is held back with the score. A game first seen while live shows with its score, clock and scorers
  * withheld until the delay has passed (enabling the delay, app start, first visit, a re-track), so the
  * newest score never leaks. So is a game first seen already final that may have just ended: ESPN's
  * scoreboard gives no end time, so a final whose start is within [RECENT_START_MS] is held for the
@@ -25,11 +26,12 @@ internal class ScoreDelay {
         val awayScore: Int?,
         val homeLines: List<Int>,
         val awayLines: List<Int>,
-        val scorers: List<ScoreScorer>
+        val scorers: List<ScoreScorer>,
+        val situation: GameSituation?
     )
 
     private fun live(s: ScoreSnapshot) =
-        Live(s.state, s.clockText, s.isFinal, s.home.score, s.away.score, s.home.linescores, s.away.linescores, s.scorers)
+        Live(s.state, s.clockText, s.isFinal, s.home.score, s.away.score, s.home.linescores, s.away.linescores, s.scorers, s.situation)
 
     private class History(val versions: ArrayDeque<Version> = ArrayDeque(), var lastSeen: Long = 0L)
 
@@ -85,7 +87,8 @@ internal class ScoreDelay {
         clockText = null,
         home = s.home.copy(score = null, linescores = emptyList()),
         away = s.away.copy(score = null, linescores = emptyList()),
-        scorers = emptyList()
+        scorers = emptyList(),
+        situation = null
     )
 
     companion object {
@@ -112,7 +115,8 @@ internal class ScoreDelay {
                 isFinal = shown.isFinal,
                 home = newest.home.copy(score = shown.home.score, linescores = shown.home.linescores),
                 away = newest.away.copy(score = shown.away.score, linescores = shown.away.linescores),
-                scorers = shown.scorers
+                scorers = shown.scorers,
+                situation = shown.situation
             )
         }
 }

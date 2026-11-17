@@ -1,0 +1,87 @@
+{
+ "leagues": [
+  {
+   "slug": "mens-college-basketball",
+   "abbreviation": "NCAAM",
+   "name": "NCAA Men's Basketball"
+  }
+ ],
+ "events": [
+  {
+   "id": "401920511",
+   "uid": "s:40~l:41~e:401920511",
+   "date": "2026-11-17T19:00Z",
+   "status": {
+    "type": {
+     "name": "STATUS_IN_PROGRESS",
+     "state": "in",
+     "completed": false,
+     "shortDetail": "5:22 - 1st"
+    }
+   },
+   "competitions": [
+    {
+     "competitors": [
+      {
+       "homeAway": "home",
+       "score": "32",
+       "team": {
+        "id": "248",
+        "abbreviation": "HOU",
+        "displayName": "Houston Cougars",
+        "shortDisplayName": "Houston",
+        "name": "Cougars",
+        "location": "Houston"
+       },
+       "linescores": [
+        {
+         "value": 32.0,
+         "displayValue": "32",
+         "period": 1
+        }
+       ]
+      },
+      {
+       "homeAway": "away",
+       "score": "17",
+       "team": {
+        "id": "164",
+        "abbreviation": "RUTG",
+        "displayName": "Rutgers Scarlet Knights",
+        "shortDisplayName": "Rutgers",
+        "name": "Scarlet Knights",
+        "location": "Rutgers"
+       },
+       "linescores": [
+        {
+         "value": 17.0,
+         "displayValue": "17",
+         "period": 1
+        }
+       ]
+      }
+     ],
+     "situation": {
+      "lastPlay": {
+       "id": "401920511121480194",
+       "type": {
+        "id": "586",
+        "text": "Offensive Rebound"
+       },
+       "text": "Rutgers Offensive Rebound.",
+       "scoreValue": 0,
+       "team": {
+        "id": "164"
+       },
+       "probability": {
+        "tiePercentage": 0.0,
+        "homeWinPercentage": 0.979,
+        "awayWinPercentage": 0.02100000000000002
+       }
+      }
+     }
+    }
+   ]
+  }
+ ]
+}

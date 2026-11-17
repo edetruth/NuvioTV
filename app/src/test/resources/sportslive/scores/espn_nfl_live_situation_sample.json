@@ -1,0 +1,64 @@
+{
+ "_sample": "HAND-TRIMMED SAMPLE, not a captured response: ESPN football/nfl scoreboard shape with a live competitions[].situation. No NFL game was live when SB1 was written (2026-11-17).",
+ "leagues": [{"slug": "nfl", "abbreviation": "NFL", "name": "National Football League"}],
+ "events": [
+  {
+   "id": "401873101",
+   "uid": "s:20~l:28~e:401873101",
+   "date": "2026-11-22T21:25Z",
+   "status": {"type": {"name": "STATUS_IN_PROGRESS", "state": "in", "completed": false, "shortDetail": "8:42 - 3rd"}},
+   "competitions": [
+    {
+     "competitors": [
+      {"homeAway": "home", "score": "13", "team": {"id": "13", "abbreviation": "LV", "displayName": "Las Vegas Raiders", "shortDisplayName": "Raiders", "name": "Raiders", "location": "Las Vegas"}, "linescores": [{"value": 3.0}, {"value": 10.0}, {"value": 0.0}]},
+      {"homeAway": "away", "score": "17", "team": {"id": "26", "abbreviation": "SEA", "displayName": "Seattle Seahawks", "shortDisplayName": "Seahawks", "name": "Seahawks", "location": "Seattle"}, "linescores": [{"value": 7.0}, {"value": 3.0}, {"value": 7.0}]}
+     ],
+     "situation": {
+      "$ref": "http://sports.core.api.espn.com/v2/sports/football/leagues/nfl/events/401873101/competitions/401873101/situation",
+      "lastPlay": {
+       "id": "4018731011234",
+       "type": {"id": "24", "text": "Pass Reception", "abbreviation": "REC"},
+       "text": "(Shotgun) S.Darnold pass short right to J.Smith-Njigba to LV 34 for 12 yards (M.Crosby). PENALTY on LV-M.Crosby, Defensive Holding, declined.",
+       "scoreValue": 0,
+       "team": {"id": "26"},
+       "statYardage": 12
+      },
+      "down": 2,
+      "yardLine": 66,
+      "distance": 6,
+      "downDistanceText": "2nd & 6 at LV 34",
+      "shortDownDistanceText": "2nd & 6",
+      "possessionText": "LV 34",
+      "isRedZone": false,
+      "homeTimeouts": 3,
+      "awayTimeouts": 2,
+      "possession": "26"
+     }
+    }
+   ]
+  },
+  {
+   "id": "401873102",
+   "uid": "s:20~l:28~e:401873102",
+   "date": "2026-11-22T18:00Z",
+   "status": {"type": {"name": "STATUS_IN_PROGRESS", "state": "in", "completed": false, "shortDetail": "2:10 - 4th"}},
+   "competitions": [
+    {
+     "competitors": [
+      {"homeAway": "home", "score": "20", "team": {"id": "2", "abbreviation": "BUF", "displayName": "Buffalo Bills", "shortDisplayName": "Bills", "name": "Bills", "location": "Buffalo"}},
+      {"homeAway": "away", "score": "24", "team": {"id": "17", "abbreviation": "NE", "displayName": "New England Patriots", "shortDisplayName": "Patriots", "name": "Patriots", "location": "New England"}}
+     ],
+     "situation": {
+      "down": 1,
+      "yardLine": 8,
+      "distance": 8,
+      "downDistanceText": "1st & Goal at NE 8",
+      "possessionText": "NE 8",
+      "isRedZone": true,
+      "possession": "2"
+     }
+    }
+   ]
+  }
+ ]
+}

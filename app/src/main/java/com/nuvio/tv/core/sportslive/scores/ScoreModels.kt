@@ -65,7 +65,9 @@ data class ScoreSnapshot(
     val away: ScoreTeam,
     val scorers: List<ScoreScorer> = emptyList(),
     /** For an [ScoreState.OFF] game: true when it is suspended or delayed and may resume. */
-    val mayResume: Boolean = false
+    val mayResume: Boolean = false,
+    /** What is happening now in a live game (ESPN `situation`); null unless live and given. */
+    val situation: GameSituation? = null
 ) {
     val homeAbbr: String? get() = home.abbreviation
     val awayAbbr: String? get() = away.abbreviation
@@ -76,6 +78,28 @@ data class ScoreSnapshot(
     val homeLogo: String? get() = home.logo
     val awayLogo: String? get() = away.logo
 }
+
+/**
+ * A live game's situation from ESPN's scoreboard, sport by sport; every part may be missing.
+ * Football: [possession], [downDistance] ("2nd & 6"), [yardLine] ("LV 34"), [redZone].
+ * Baseball: [balls], [strikes], [outs], runners, [batter], [pitcher].
+ * Any sport: [lastPlay], already cut short. ESPN gives none for soccer and nothing usable for hockey.
+ */
+data class GameSituation(
+    val possession: ScoreSide? = null,
+    val downDistance: String? = null,
+    val yardLine: String? = null,
+    val redZone: Boolean = false,
+    val balls: Int? = null,
+    val strikes: Int? = null,
+    val outs: Int? = null,
+    val onFirst: Boolean = false,
+    val onSecond: Boolean = false,
+    val onThird: Boolean = false,
+    val batter: String? = null,
+    val pitcher: String? = null,
+    val lastPlay: String? = null
+)
 
 /**
  * A scoreboard fetch: [failed] is true on any HTTP or parse failure, with no events. [retryAfterMs] is

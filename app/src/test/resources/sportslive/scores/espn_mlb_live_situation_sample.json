@@ -1,0 +1,47 @@
+{
+ "_sample": "HAND-TRIMMED SAMPLE, not a captured response: ESPN baseball/mlb scoreboard shape with a live competitions[].situation. No MLB game was live when SB1 was written (2026-11-17, off-season).",
+ "leagues": [{"slug": "mlb", "abbreviation": "MLB", "name": "Major League Baseball"}],
+ "events": [
+  {
+   "id": "401809101",
+   "uid": "s:1~l:10~e:401809101",
+   "date": "2026-07-14T23:05Z",
+   "status": {"type": {"name": "STATUS_IN_PROGRESS", "state": "in", "completed": false, "shortDetail": "Bot 7th"}},
+   "competitions": [
+    {
+     "competitors": [
+      {"homeAway": "home", "score": "4", "team": {"id": "10", "abbreviation": "NYY", "displayName": "New York Yankees", "shortDisplayName": "Yankees", "name": "Yankees", "location": "New York"}},
+      {"homeAway": "away", "score": "3", "team": {"id": "2", "abbreviation": "BOS", "displayName": "Boston Red Sox", "shortDisplayName": "Red Sox", "name": "Red Sox", "location": "Boston"}}
+     ],
+     "situation": {
+      "$ref": "http://sports.core.api.espn.com/v2/sports/baseball/leagues/mlb/events/401809101/competitions/401809101/situation",
+      "lastPlay": {"id": "4018091010701", "type": {"id": "59", "text": "Single"}, "text": "Volpe singled to left, Judge to third.", "team": {"id": "10"}},
+      "balls": 1,
+      "strikes": 2,
+      "outs": 2,
+      "pitcher": {"playerId": 33192, "period": 7, "athlete": {"id": "33192", "fullName": "Garrett Whitlock", "displayName": "Garrett Whitlock", "shortName": "G. Whitlock", "team": {"id": "2"}, "position": "RP"}, "summary": "0.2 IP, 1 H"},
+      "batter": {"playerId": 42403, "period": 7, "athlete": {"id": "42403", "fullName": "Jazz Chisholm Jr.", "displayName": "Jazz Chisholm Jr.", "shortName": "J. Chisholm Jr.", "team": {"id": "10"}, "position": "2B"}, "summary": "1-3"},
+      "onFirst": true,
+      "onSecond": false,
+      "onThird": true
+     }
+    }
+   ]
+  },
+  {
+   "id": "401809102",
+   "uid": "s:1~l:10~e:401809102",
+   "date": "2026-07-14T23:10Z",
+   "status": {"type": {"name": "STATUS_IN_PROGRESS", "state": "in", "completed": false, "shortDetail": "Top 3rd"}},
+   "competitions": [
+    {
+     "competitors": [
+      {"homeAway": "home", "score": "0", "team": {"id": "30", "abbreviation": "TB", "displayName": "Tampa Bay Rays", "shortDisplayName": "Rays", "name": "Rays", "location": "Tampa Bay"}},
+      {"homeAway": "away", "score": "1", "team": {"id": "14", "abbreviation": "TOR", "displayName": "Toronto Blue Jays", "shortDisplayName": "Blue Jays", "name": "Blue Jays", "location": "Toronto"}}
+     ],
+     "situation": {"balls": 0, "strikes": 0, "outs": 0, "onFirst": false, "onSecond": {"playerId": 1}, "onThird": false}
+    }
+   ]
+  }
+ ]
+}

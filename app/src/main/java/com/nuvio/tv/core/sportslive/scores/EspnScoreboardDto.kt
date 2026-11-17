@@ -44,7 +44,9 @@ data class EspnCompetitionDto(
     val altGameNote: String? = null,
     /** False when the start time is not set yet (ESPN "TBD"); the date still is. */
     val timeValid: Boolean? = null,
-    val details: List<EspnDetailDto>? = null
+    val details: List<EspnDetailDto>? = null,
+    /** What is happening now in a live game (Scoreboard SB1); absent before and mostly after play. */
+    val situation: EspnSituationDto? = null
 )
 
 @JsonClass(generateAdapter = true)
@@ -88,3 +90,36 @@ data class EspnDetailTeamDto(val id: String? = null)
 
 @JsonClass(generateAdapter = true)
 data class EspnAthleteDto(val displayName: String? = null, val shortName: String? = null)
+
+/**
+ * ESPN's live `situation`. Football: possession (team id), down and distance, yard line, red zone.
+ * Baseball: count, outs, runners, batter and pitcher. Basketball and others: usually `lastPlay` only.
+ */
+@JsonClass(generateAdapter = true)
+data class EspnSituationDto(
+    val lastPlay: EspnLastPlayDto? = null,
+    /** The id of the team with the ball. */
+    val possession: String? = null,
+    /** "2nd & 6" */
+    val shortDownDistanceText: String? = null,
+    /** "2nd & 6 at LV 34" */
+    val downDistanceText: String? = null,
+    /** "LV 34" */
+    val possessionText: String? = null,
+    val isRedZone: Boolean? = null,
+    val balls: Int? = null,
+    val strikes: Int? = null,
+    val outs: Int? = null,
+    /** A boolean on the scoreboard; read loosely so a runner object also counts as occupied. */
+    val onFirst: Any? = null,
+    val onSecond: Any? = null,
+    val onThird: Any? = null,
+    val batter: EspnSituationPlayerDto? = null,
+    val pitcher: EspnSituationPlayerDto? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class EspnLastPlayDto(val text: String? = null)
+
+@JsonClass(generateAdapter = true)
+data class EspnSituationPlayerDto(val athlete: EspnAthleteDto? = null)

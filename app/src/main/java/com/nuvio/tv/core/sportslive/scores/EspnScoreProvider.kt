@@ -202,9 +202,64 @@ class EspnScoreProvider internal constructor(
                 scorers = if (scored) scorers(competition.details.orEmpty(), homeTeam.id, awayTeam.id) else emptyList(),
                 // Suspended or delayed and not over: play may resume. Postponed/cancelled will not.
                 mayResume = state == ScoreState.OFF && type?.state != "post" && type?.completed != true &&
-                    type?.name?.let { RESUMABLE.containsMatchIn(it.uppercase()) } == true
+                    type?.name?.let { RESUMABLE.containsMatchIn(it.uppercase()) } == true,
+                // Only while in play: a final's leftover last play is not a situation.
+                situation = if (state == ScoreState.IN) situation(competition.situation, homeTeam.id, awayTeam.id) else null
             )
         }
+
+        private const val LAST_PLAY_MAX = 80
+
+        /** ESPN's `situation` as a [GameSituation]; null when it carries nothing this app shows. */
+        internal fun situation(dto: EspnSituationDto?, homeId: String?, awayId: String?): GameSituation? {
+            dto ?: return null
+            val possession = dto.possession?.trim()?.takeIf { it.isNotEmpty() }?.let { id ->
+                when (id) {
+                    homeId -> ScoreSide.HOME
+                    awayId -> ScoreSide.AWAY
+                    else -> null
+                }
+            }
+            val situation = GameSituation(
+                possession = possession,
+                downDistance = (dto.shortDownDistanceText ?: dto.downDistanceText)?.trim()?.takeIf { it.isNotEmpty() },
+                yardLine = dto.possessionText?.trim()?.takeIf { it.isNotEmpty() },
+                redZone = dto.isRedZone == true,
+                balls = dto.balls?.takeIf { it in 0..4 },
+                strikes = dto.strikes?.takeIf { it in 0..3 },
+                outs = dto.outs?.takeIf { it in 0..3 },
+                onFirst = occupied(dto.onFirst),
+                onSecond = occupied(dto.onSecond),
+                onThird = occupied(dto.onThird),
+                batter = playerName(dto.batter),
+                pitcher = playerName(dto.pitcher),
+                lastPlay = dto.lastPlay?.text?.let(::shortText)
+            )
+            return situation.takeIf { it != GameSituation() }
+        }
+
+        // A base is `true`/`false` on the scoreboard; a runner object (or id) also means occupied.
+        private fun occupied(base: Any?): Boolean = when (base) {
+            null -> false
+            is Boolean -> base
+            is String -> base.isNotBlank() && base != "false"
+            else -> true
+        }
+
+        private fun playerName(player: EspnSituationPlayerDto?): String? =
+            player?.athlete?.let { it.shortName ?: it.displayName }?.trim()?.takeIf { it.isNotEmpty() }
+
+        /** [text] on one line, cut at a word to at most [LAST_PLAY_MAX] characters with "…". */
+        internal fun shortText(text: String): String? {
+            val line = text.replace(WHITESPACE, " ").trim()
+            if (line.isEmpty()) return null
+            if (line.length <= LAST_PLAY_MAX) return line
+            val cut = line.substring(0, LAST_PLAY_MAX - 1)
+            val atWord = cut.substringBeforeLast(' ').takeIf { it.length >= LAST_PLAY_MAX / 2 } ?: cut
+            return atWord.trimEnd(' ', ',', ';', '(') + "…"
+        }
+
+        private val WHITESPACE = Regex("""\s+""")
 
         private fun toTeam(competitor: EspnCompetitorDto): ScoreTeam? {
             val team = competitor.team ?: return null
