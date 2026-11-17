@@ -10,9 +10,12 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
+import com.nuvio.tv.core.sportslive.SportsLiveSourceReliability
+import com.nuvio.tv.core.sportslive.SportsLiveSourceReliability.Outcome
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.ui.screens.player.PlayerMediaSourceFactory
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveExtraSources
 import com.nuvio.tv.ui.screens.sportslive.buildSportsLiveLightPlayer
 import com.nuvio.tv.ui.screens.sportslive.playSportsLiveStream
 
@@ -23,7 +26,8 @@ import com.nuvio.tv.ui.screens.sportslive.playSportsLiveStream
  * stream is prepared (volume 0 alone does not mute AC3/EAC3 passthrough, and a disabled track uses
  * no audio decoder), and it never asks for audio focus. While [suspended] (the screen is paused) [play]
  * does nothing, so a late call cannot build a player after the pause released it. A stream that
- * buffers for [STALL_TIMEOUT_MS] after its first frame counts as an error.
+ * buffers for [STALL_TIMEOUT_MS] after its first frame counts as an error. Each load's first frame,
+ * error or stall is remembered for its source ([SportsLiveSourceReliability]).
  */
 @OptIn(UnstableApi::class)
 internal class SportsLivePreviewPlayer(
@@ -54,6 +58,8 @@ internal class SportsLivePreviewPlayer(
         release()
         val url = stream.getStreamUrl() ?: return onError(item)
         var rendered = false
+        val sourceKey = SportsLiveExtraSources.sourceKeyFor(item, stream)
+        val startedAtMs = System.currentTimeMillis()
         val built = buildSportsLiveLightPlayer(appContext).apply {
             volume = 0f
             trackSelectionParameters = trackSelectionParameters.buildUpon()
@@ -62,6 +68,9 @@ internal class SportsLivePreviewPlayer(
             addListener(object : Player.Listener {
                 override fun onRenderedFirstFrame() {
                     if (player !== this@apply) return
+                    if (!rendered) {
+                        SportsLiveSourceReliability.record(sourceKey, Outcome.SUCCESS, System.currentTimeMillis() - startedAtMs)
+                    }
                     rendered = true
                     onFirstFrame(item)
                 }
@@ -72,13 +81,18 @@ internal class SportsLivePreviewPlayer(
                     if (playbackState == Player.STATE_BUFFERING && rendered) {
                         val stalled = this@apply
                         stallCheck = Runnable {
-                            if (player === stalled && stalled.playbackState == Player.STATE_BUFFERING) onError(item)
+                            if (player === stalled && stalled.playbackState == Player.STATE_BUFFERING) {
+                                SportsLiveSourceReliability.record(sourceKey, Outcome.STALL)
+                                onError(item)
+                            }
                         }.also { handler.postDelayed(it, STALL_TIMEOUT_MS) }
                     }
                 }
 
                 override fun onPlayerError(error: PlaybackException) {
-                    if (player === this@apply) onError(item)
+                    if (player !== this@apply) return
+                    SportsLiveSourceReliability.record(sourceKey, Outcome.FAILURE)
+                    onError(item)
                 }
             })
         }

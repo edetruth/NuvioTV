@@ -36,7 +36,9 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.After
 import org.junit.Test
+import com.nuvio.tv.core.sportslive.SportsLiveSourceReliability
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SportsLiveZapResolverTest {
@@ -61,6 +63,39 @@ class SportsLiveZapResolverTest {
         val addons = mockk<AddonRepository>()
         every { addons.getInstalledAddons() } returns flowOf(listOf(addon("Sports"), addon("Off", enabled = false)))
         return SportsLiveZapResolver(streams, dataStore, addons, probe, debrid, resolveCache).also { it.fetchScope = backgroundScope }
+    }
+
+    @After
+    fun tearDown() {
+        SportsLiveSourceReliability.reset()
+        SportsLiveExtraSources.reset()
+    }
+
+    @Test
+    fun `a merged game tries its most reliable source first`() = runTest {
+        SportsLiveSourceReliability.record(SportsLiveSourceReliability.keyOf(MERGED), SportsLiveSourceReliability.Outcome.FAILURE)
+        SportsLiveSourceReliability.record(SportsLiveSourceReliability.keyOf(ALT2), SportsLiveSourceReliability.Outcome.SUCCESS)
+        streams.responses["game"] = { flowOf(success(SD)) }
+        streams.responses["alt1"] = { flowOf(success(HD, addon = "Other")) }
+        streams.responses["alt2"] = { flowOf(success(OTHER_HD, addon = "Third")) }
+
+        assertEquals(OTHER_HD, newResolver().resolve(MERGED))
+        assertEquals(listOf(OTHER_HD, HD, SD), newResolver().resolveAll(MERGED))
+        // The stream is credited to the source it came from, for the player's outcome.
+        assertEquals(SportsLiveSourceReliability.keyOf(ALT2), SportsLiveExtraSources.sourceKeyFor(MERGED, OTHER_HD))
+    }
+
+    @Test
+    fun `reliability never puts an addon the user did not choose ahead of a chosen one`() = runTest {
+        settings = PlayerSettings(streamAutoPlaySelectedAddons = setOf("Sports", "Other"))
+        SportsLiveSourceReliability.record(SportsLiveSourceReliability.keyOf(ALT2), SportsLiveSourceReliability.Outcome.SUCCESS)
+        SportsLiveSourceReliability.record(SportsLiveSourceReliability.keyOf(MERGED), SportsLiveSourceReliability.Outcome.FAILURE)
+        streams.responses["game"] = { flowOf(success(SD)) }
+        streams.responses["alt1"] = { flowOf(success(HD, addon = "Other")) }
+        streams.responses["alt2"] = { flowOf(success(OTHER_HD, addon = "Third")) }
+
+        // Among the chosen, the failing primary drops behind; the unchosen, reliable one stays last.
+        assertEquals(listOf(HD, SD, OTHER_HD), newResolver().resolveAll(MERGED))
     }
 
     @Test

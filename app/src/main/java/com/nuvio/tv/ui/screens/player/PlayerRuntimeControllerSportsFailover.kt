@@ -5,6 +5,7 @@ import androidx.media3.common.Player
 import com.nuvio.tv.R
 import com.nuvio.tv.core.debrid.DirectDebridPlayableResult
 import com.nuvio.tv.core.sportslive.SportsLiveFailover
+import com.nuvio.tv.core.sportslive.SportsLiveSourceReliability
 import com.nuvio.tv.core.sportslive.SportsLiveStallWatchdog
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveExtraSources
 import com.nuvio.tv.ui.screens.sportslive.sportsLiveFallbackCandidate
@@ -31,15 +32,37 @@ private const val SPORTS_FAILOVER_POLL_INTERVAL_MS = 500L
 private const val SPORTS_STALL_POLL_INTERVAL_MS = 2_000L
 
 /**
+ * Remembers ([SportsLiveSourceReliability]) that the sports source playing reached its first frame,
+ * with its time to first frame. A manual pick in the Sources panel that plays counts too. Sports only.
+ */
+internal fun PlayerRuntimeController.recordSportsSourceFirstFrame() {
+    val key = currentSportsSourceKey() ?: return
+    SportsLiveSourceReliability.record(
+        key,
+        SportsLiveSourceReliability.Outcome.SUCCESS,
+        ttffMs = System.currentTimeMillis() - sportsAttemptStartedAtMs
+    )
+}
+
+/** The reliability key of the sports source playing; null for movies/shows or an unknown source. */
+private fun PlayerRuntimeController.currentSportsSourceKey(): String? =
+    SportsLiveExtraSources.sourceKeyFor(contentId, currentStreamUrl, currentAddonName)
+
+/**
  * Auto-fails over to the next untried sports source after [errorMessage], or shows the recovery
  * overlay when the cap is reached or nothing untried remains. Returns true when sports handled the
- * error (so the generic error chain stops); false for non-sports playback.
+ * error (so the generic error chain stops); false for non-sports playback. The failed source is
+ * remembered as a failure, or a stall when [stalled] (the stall watchdog fired).
  */
-internal fun PlayerRuntimeController.trySportsLiveFailoverAfterError(errorMessage: String): Boolean {
+internal fun PlayerRuntimeController.trySportsLiveFailoverAfterError(errorMessage: String, stalled: Boolean = false): Boolean {
     if (!SportsLiveExtraSources.isSportsPlayback(contentId)) return false
     // The source that just failed must not be re-served from the resolve cache next time.
     SportsLiveExtraSources.invalidateResolve(contentId)
     if (sourceFallbackJob?.isActive == true) return true
+    SportsLiveSourceReliability.record(
+        currentSportsSourceKey(),
+        if (stalled) SportsLiveSourceReliability.Outcome.STALL else SportsLiveSourceReliability.Outcome.FAILURE
+    )
     cancelSportsStallWatchdog()
 
     val failedUrl = currentStreamUrl
@@ -74,7 +97,8 @@ internal fun PlayerRuntimeController.trySportsLiveFailoverAfterError(errorMessag
                 installedAddonNames = installedAddonNames,
                 triedKeys = sportsFailoverTriedKeys,
                 failedAddonName = failedAddonName,
-                failedInfoHash = failedInfoHash
+                failedInfoHash = failedInfoHash,
+                sourceScore = { SportsLiveExtraSources.reliabilityOf(contentId, it) }
             )
             if (next == null) {
                 if (searchDone || polls >= SPORTS_FAILOVER_POLL_COUNT) break
@@ -151,7 +175,7 @@ internal fun PlayerRuntimeController.scheduleSportsStallWatchdog() {
             if (buffering && SportsLiveStallWatchdog.isStalled(hasStartedPlaying = true, stalledForMs = stalledForMs)) {
                 Log.w(PlayerRuntimeController.TAG, "Sports source stalled ${stalledForMs}ms after start, failing over")
                 val message = context.getString(R.string.player_error_source_stalled)
-                trySportsLiveFailoverAfterError(message)
+                trySportsLiveFailoverAfterError(message, stalled = true)
                 return@launch
             }
         }

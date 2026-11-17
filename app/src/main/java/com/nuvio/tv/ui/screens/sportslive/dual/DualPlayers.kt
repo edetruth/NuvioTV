@@ -12,9 +12,12 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.mediacodec.MediaCodecRenderer
+import com.nuvio.tv.core.sportslive.SportsLiveSourceReliability
+import com.nuvio.tv.core.sportslive.SportsLiveSourceReliability.Outcome
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.ui.screens.player.PlayerMediaSourceFactory
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveExtraSources
 import com.nuvio.tv.ui.screens.sportslive.buildSportsLiveLightPlayer
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniPlayers
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniStop
@@ -65,18 +68,33 @@ internal class DualPlayers(
         private var loads = 0
         private var listener: Player.Listener? = null
 
-        /** Replaces the listener with one that reports [item]'s events for this load only. */
-        private fun listenToLoad(item: SportsLiveItem) {
+        /**
+         * Replaces the listener with one that reports [item]'s events for this load only; the load's
+         * first frame or error is remembered for [stream]'s source ([SportsLiveSourceReliability]).
+         */
+        private fun listenToLoad(item: SportsLiveItem, stream: Stream) {
             val load = ++loads
             isPlaying = false
+            val sourceKey = SportsLiveExtraSources.sourceKeyFor(item, stream)
+            val startedAtMs = System.currentTimeMillis()
+            var rendered = false
             listener?.let(player::removeListener)
             listener = object : Player.Listener {
                 override fun onRenderedFirstFrame() {
-                    if (load == loads) onFirstFrame(item)
+                    if (load != loads) return
+                    if (!rendered) {
+                        rendered = true
+                        SportsLiveSourceReliability.record(sourceKey, Outcome.SUCCESS, System.currentTimeMillis() - startedAtMs)
+                    }
+                    onFirstFrame(item)
                 }
 
                 override fun onPlayerError(error: PlaybackException) {
-                    if (load == loads) onError(item, error.isDecoderInitFailure())
+                    if (load != loads) return
+                    // A missing decoder is the device's fault, not the source's.
+                    val decoderInit = error.isDecoderInitFailure()
+                    if (!decoderInit) SportsLiveSourceReliability.record(sourceKey, Outcome.FAILURE)
+                    onError(item, decoderInit)
                 }
 
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -122,7 +140,7 @@ internal class DualPlayers(
                 return
             }
             loaded = wanted
-            listenToLoad(wanted.first)
+            listenToLoad(wanted.first, wanted.second)
             player.playSportsLiveStream(appContext, mediaSourceFactory, wanted.second, url)
         }
     }

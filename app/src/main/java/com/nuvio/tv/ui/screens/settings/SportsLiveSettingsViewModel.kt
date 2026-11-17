@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nuvio.tv.core.sportslive.SportsLiveCatalogOptions
 import com.nuvio.tv.core.sportslive.SportsLiveCatalogPolicy
+import com.nuvio.tv.core.sportslive.SportsLiveSourceReliability
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import com.nuvio.tv.domain.model.CatalogOption
 import com.nuvio.tv.domain.model.CatalogStats
@@ -116,6 +117,11 @@ class SportsLiveSettingsViewModel @Inject constructor(
 
     fun setPipEnabled(enabled: Boolean) {
         viewModelScope.launch { prefs.setPipEnabled(enabled) }
+    }
+
+    /** Forgets which stream sources worked (#40); every source starts neutral again. */
+    fun resetStreamMemory() {
+        SportsLiveSourceReliability.clear()
     }
 
     fun unfollow(team: FollowedTeam) {

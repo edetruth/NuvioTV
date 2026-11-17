@@ -36,6 +36,7 @@ import com.nuvio.tv.data.mediaserver.silo.SiloArtworkInterceptor
 import com.nuvio.tv.data.mediaserver.silo.SiloArtworkRefresher
 import com.nuvio.tv.data.simkl.SimklAnimeIdPreferenceHolder
 import com.nuvio.tv.ui.screens.settings.MemoryBudget
+import com.nuvio.tv.data.local.SportsLiveSourceReliabilityStore
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveExtraSources
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapResolver
 import dagger.hilt.android.HiltAndroidApp
@@ -58,6 +59,7 @@ class NuvioApplication : Application(), SingletonImageLoader.Factory {
     @Inject lateinit var serverUserStateProjection: ServerUserStateProjection
     // Lazy: the resolver is built only when a merged Sports & Live game's extra streams are first needed.
     @Inject lateinit var sportsLiveZapResolver: dagger.Lazy<SportsLiveZapResolver>
+    @Inject lateinit var sportsLiveSourceReliabilityStore: SportsLiveSourceReliabilityStore
     @Inject lateinit var plexArtworkSigner: PlexArtworkSigner
     @Inject lateinit var siloArtworkRefresher: SiloArtworkRefresher
 
@@ -104,6 +106,7 @@ class NuvioApplication : Application(), SingletonImageLoader.Factory {
         SportsLiveExtraSources.installResolveInvalidator { contentId ->
             sportsLiveZapResolver.get().invalidateByContentId(contentId)
         }
+        sportsLiveSourceReliabilityStore.start()
         // Load locale synchronously so it's available before Activity.attachBaseContext.
         // SharedPreferences reads are fast (cached in memory after first access).
         val tag = getSharedPreferences("app_locale", Context.MODE_PRIVATE)

@@ -81,7 +81,7 @@ internal suspend fun sportsLiveZapTarget(
         ).takeIf { it.url != null || it.isTorrent }
     }
     // Scope the full player's auto-failover and recovery overlay to this sports game/channel.
-    SportsLiveExtraSources.markSportsPlayback(item.id)
+    SportsLiveExtraSources.markSportsPlayback(item.id, item)
     // The full-player launch carries only request headers; stash the response headers so the player
     // seeds them at init and plays with the same proxy headers as the details -> play / preview paths.
     playback?.url?.let { url ->
@@ -129,7 +129,7 @@ class SportsLivePlayViewModel @Inject constructor(
         if (item.alternates.isEmpty()) {
             // Single-addon card: the Stream screen plays it, but mark it sports so its full player
             // still auto-fails over across the addon's multiple links and shows the recovery overlay.
-            SportsLiveExtraSources.markSportsPlayback(item.id)
+            SportsLiveExtraSources.markSportsPlayback(item.id, item)
             _events.trySend(SportsLivePlayEvent.OpenStreamScreen(item))
             return
         }

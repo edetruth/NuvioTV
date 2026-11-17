@@ -5,6 +5,7 @@ import com.nuvio.tv.core.debrid.DirectDebridResolver
 import com.nuvio.tv.core.network.NetworkResult
 import com.nuvio.tv.core.player.StreamAutoPlaySelector
 import com.nuvio.tv.core.sportslive.SportsLiveSourceLabels
+import com.nuvio.tv.core.sportslive.SportsLiveSourceReliability
 import com.nuvio.tv.core.streams.UnplayableStreamFilter
 import com.nuvio.tv.data.local.PlayerSettings
 import com.nuvio.tv.data.local.PlayerSettingsDataStore
@@ -105,11 +106,13 @@ class SportsLiveZapResolver @Inject constructor(
 
     /**
      * Every stream of [item] and its alternates, fetched in parallel (each within [timeoutMs]):
-     * the primary's first, then each alternate's in its order (addon order). Empty when none came back.
+     * source by source in [rankedSources] order (the most reliable first; with no evidence, the
+     * primary's first, then each alternate's in addon order). Empty when none came back.
      */
     suspend fun resolveAll(item: SportsLiveItem): List<Stream> =
         try {
-            fetchSources(item, installedOrder()).flatten()
+            val settings = playerSettingsDataStore.playerSettings.first()
+            fetchSources(item, rankedSources(item, settings), installedOrder()).flatten()
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
@@ -159,8 +162,9 @@ class SportsLiveZapResolver @Inject constructor(
     private suspend fun bestAcrossSources(item: SportsLiveItem): Stream? {
         val settings = playerSettingsDataStore.playerSettings.first()
         val installedOrder = installedOrder()
-        val fetches = sources(item).mapIndexed { index, source ->
-            fetchScope.async { fetch(source, installedOrder, dropPreparation = index > 0) }
+        // The most reliable source first; its best stream plays as soon as it is known.
+        val fetches = rankedSources(item, settings).map { source ->
+            fetchScope.async { fetch(source, installedOrder, dropPreparation = source !== item) }
         }
         val previous = synchronized(this) {
             backgroundFetches.also { backgroundFetches = item.streamKey to fetches }
@@ -180,13 +184,29 @@ class SportsLiveZapResolver @Inject constructor(
         }
     }
 
-    private fun sources(item: SportsLiveItem): List<SportsLiveItem> = listOf(item) + item.alternates
+    /**
+     * [item]'s sources (the primary, then its alternates) ordered by remembered reliability, best
+     * first ([SportsLiveSourceReliability.rank]): the primary keeps a small edge, and sources of addons
+     * the user's autoplay settings leave out stay behind the chosen ones, in their order.
+     */
+    private fun rankedSources(item: SportsLiveItem, settings: PlayerSettings): List<SportsLiveItem> {
+        val chosen = settings.streamAutoPlaySelectedAddons
+        return SportsLiveSourceReliability.rank(
+            candidates = listOf(item) + item.alternates,
+            scoreOf = { SportsLiveSourceReliability.scoreOf(SportsLiveSourceReliability.keyOf(it)) },
+            allowed = { chosen.isEmpty() || it.addonName in chosen }
+        )
+    }
 
-    /** One list per source: the primary's, then each alternate's in order. */
-    private suspend fun fetchSources(item: SportsLiveItem, installedOrder: List<String>): List<List<Stream>> =
+    /** One list per source of [sources] ([item]'s, in that order); only [item]'s own keep streams that need preparation. */
+    private suspend fun fetchSources(
+        item: SportsLiveItem,
+        sources: List<SportsLiveItem>,
+        installedOrder: List<String>
+    ): List<List<Stream>> =
         coroutineScope {
-            sources(item)
-                .mapIndexed { index, source -> async { fetch(source, installedOrder, dropPreparation = index > 0) } }
+            sources
+                .map { source -> async { fetch(source, installedOrder, dropPreparation = source !== item) } }
                 .awaitAll()
         }
 
@@ -217,6 +237,8 @@ class SportsLiveZapResolver @Inject constructor(
             ).flatMap { it.streams }
                 .filterNot(UnplayableStreamFilter::isUnplayableJunk)
                 .filterNot { dropPreparation && sportsLiveNeedsPreparation(it, directDebridResolver) }
+            // Remember where each stream came from, so its plays are credited to this source.
+            streams.forEach { SportsLiveExtraSources.noteStreamSource(it, source) }
             Fetched(streams, finished)
         } catch (e: CancellationException) {
             throw e

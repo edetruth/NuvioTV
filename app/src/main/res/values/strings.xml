@@ -486,6 +486,9 @@
     <string name="sports_live_setting_pip_supported">Picture-in-picture: supported on this device</string>
     <string name="sports_live_setting_pip_unsupported">Picture-in-picture: not supported on this device</string>
     <string name="sports_live_setting_pip_system">Open system picture-in-picture setting</string>
+    <string name="sports_live_setting_reset_stream_memory">Reset stream memory</string>
+    <string name="sports_live_setting_reset_stream_memory_subtitle">Forget which stream sources worked on this device, so every source is tried fresh</string>
+    <string name="sports_live_setting_reset_stream_memory_done">Cleared</string>
     <string name="sports_live_setting_data_saver_subtitle">For limited or metered providers: turns off hover previews and background checks so streams load only when you play or flip to them</string>
     <string name="sports_live_setting_catalogs">Catalogs</string>
     <string name="sports_live_override_auto_in">Auto · in Sports &amp; Live</string>

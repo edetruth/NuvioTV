@@ -1471,7 +1471,9 @@ internal fun PlayerRuntimeController.initializePlayer(
                         }
                         refreshStableProgressResetGate()
                         cancelFirstFrameWatchdog()
-                        // Playback has started: begin the sports stall watchdog (sports-only, guarded).
+                        // Playback has started: begin the sports stall watchdog (sports-only, guarded),
+                        // and remember that this sports source works.
+                        if (isFirstFrame) recordSportsSourceFirstFrame()
                         scheduleSportsStallWatchdog()
                         _uiState.update {
                             it.copy(
@@ -2131,6 +2133,7 @@ internal fun PlayerRuntimeController.resetLoadingOverlayForNewStream() {
         progress = null
     )
     hasRenderedFirstFrame = false
+    sportsAttemptStartedAtMs = System.currentTimeMillis()
     endDetectionArmed = false
     mpvEofSeenClear = false
     exoEndOverrunHandled = false

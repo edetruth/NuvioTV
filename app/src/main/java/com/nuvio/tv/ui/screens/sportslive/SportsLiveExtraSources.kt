@@ -4,6 +4,7 @@ import androidx.annotation.VisibleForTesting
 import com.nuvio.tv.core.network.NetworkResult
 import com.nuvio.tv.core.player.StreamAutoPlaySelector
 import com.nuvio.tv.core.sportslive.SportsLiveSourceLabels
+import com.nuvio.tv.core.sportslive.SportsLiveSourceReliability
 import com.nuvio.tv.data.local.PlayerSettings
 import com.nuvio.tv.data.local.StreamAutoPlayMode
 import com.nuvio.tv.data.local.StreamAutoPlaySource
@@ -47,6 +48,17 @@ object SportsLiveExtraSources {
     // player can scope auto-failover and the error overlay to sports only. Bounded like [entries].
     private val sportsPlaybackIds = LinkedHashSet<String>()
 
+    // Per played content id: each source's Sources-panel name (its label, and the primary's addon name)
+    // to its reliability key, so the full player can credit the source it plays. Bounded like [entries].
+    private val sourceNames = LinkedHashMap<String, SourceNames>()
+
+    private class SourceNames(val primaryKey: String, val byName: Map<String, String>)
+
+    // Stream url -> the reliability key of the source it was resolved from (the resolver notes it),
+    // so a stream picked across a merged card's sources is credited to the right one.
+    private val streamSources = LinkedHashMap<String, String>()
+    private const val MAX_STREAM_SOURCES = 256
+
     @Volatile
     private var fetcher: (suspend (SportsLiveItem) -> SportsLiveExtraLookup)? = null
 
@@ -74,7 +86,7 @@ object SportsLiveExtraSources {
 
     /** Registers merged [item] for the player showing [contentId]; a single-source item only clears it. */
     fun register(contentId: String, item: SportsLiveItem) {
-        markSportsPlayback(contentId)
+        markSportsPlayback(contentId, item)
         synchronized(entries) {
             entries.remove(contentId)
             if (item.alternates.isEmpty()) return
@@ -87,13 +99,87 @@ object SportsLiveExtraSources {
      * Marks [contentId] as a Sports & Live playback (merged or single-addon) so the full player
      * scopes auto-failover and the recovery overlay to sports. Set before the player opens.
      */
-    fun markSportsPlayback(contentId: String?) {
+    fun markSportsPlayback(contentId: String?, item: SportsLiveItem? = null) {
         if (contentId == null) return
         synchronized(sportsPlaybackIds) {
             sportsPlaybackIds.remove(contentId)
             sportsPlaybackIds.add(contentId)
             while (sportsPlaybackIds.size > MAX_ENTRIES) sportsPlaybackIds.remove(sportsPlaybackIds.first())
         }
+        if (item != null) {
+            synchronized(sourceNames) {
+                sourceNames.remove(contentId)
+                sourceNames[contentId] = sourceNamesOf(item)
+                while (sourceNames.size > MAX_ENTRIES) sourceNames.remove(sourceNames.keys.first())
+            }
+        }
+    }
+
+    /** Each of [item]'s sources' names (provider label; the primary's addon name too) to its reliability key. */
+    private fun sourceNamesOf(item: SportsLiveItem): SourceNames {
+        val labels = SportsLiveSourceLabels.of(item)
+        val byName = LinkedHashMap<String, String>()
+        (listOf(item) + item.alternates).forEach { source ->
+            labels[source.streamKey]?.let { byName.putIfAbsent(it, SportsLiveSourceReliability.keyOf(source)) }
+        }
+        // The primary's streams come from the player's own search, under its addon name.
+        byName.putIfAbsent(item.addonName, SportsLiveSourceReliability.keyOf(item))
+        return SourceNames(SportsLiveSourceReliability.keyOf(item), byName)
+    }
+
+    /** Notes that [stream] was resolved from [source], so its plays are credited to that source. */
+    fun noteStreamSource(stream: Stream, source: SportsLiveItem) {
+        val url = stream.getStreamUrl() ?: return
+        synchronized(streamSources) {
+            streamSources.remove(url)
+            streamSources[url] = SportsLiveSourceReliability.keyOf(source)
+            while (streamSources.size > MAX_STREAM_SOURCES) streamSources.remove(streamSources.keys.first())
+        }
+    }
+
+    /** The reliability key of the source [url] was resolved from, or null when not noted. */
+    private fun sourceOfUrl(url: String?): String? =
+        if (url.isNullOrBlank()) null else synchronized(streamSources) { streamSources[url] }
+
+    /**
+     * The reliability key of the source the player for [contentId] plays: by its [url] when the
+     * resolver noted it, else by its Sources-panel [addonName]; null outside Sports & Live.
+     */
+    fun sourceKeyFor(contentId: String?, url: String?, addonName: String?): String? {
+        if (!isSportsPlayback(contentId)) return null
+        sourceOfUrl(url)?.let { return it }
+        if (addonName == null) return null
+        return synchronized(sourceNames) { sourceNames[contentId]?.byName?.get(addonName) }
+    }
+
+    /** The reliability key of [stream] played for [item] on a light player: the source it came from, else [item]'s. */
+    fun sourceKeyFor(item: SportsLiveItem, stream: Stream): String =
+        sourceOfUrl(stream.getStreamUrl()) ?: SportsLiveSourceReliability.keyOf(item)
+
+    /** The reliability score of [stream] in the player for [contentId]; neutral when its source is unknown. */
+    fun reliabilityOf(contentId: String?, stream: Stream): Double =
+        SportsLiveSourceReliability.scoreOf(sourceKeyFor(contentId, stream.getStreamUrl(), stream.addonName))
+
+    /**
+     * [groups] (the Sources panel's, in the player's order) with a Sports & Live card's source groups
+     * ordered by reliability, best first; the primary's group keeps a small edge. Unchanged for content
+     * that is not a Sports & Live playback, or with fewer than two of the card's groups.
+     */
+    fun orderGroups(contentId: String?, groups: List<AddonStreams>): List<AddonStreams> {
+        if (!isSportsPlayback(contentId) || groups.size < 2) return groups
+        val names = synchronized(sourceNames) { sourceNames[contentId] } ?: return groups
+        // Only the card's own groups move, among the places they hold; any other group stays put.
+        val slots = groups.indices.filter { names.byName[groups[it].addonName] != null }
+        if (slots.size < 2) return groups
+        val cardGroups = slots.map { groups[it] }
+        val ranked = SportsLiveSourceReliability.rank(
+            candidates = cardGroups,
+            scoreOf = { SportsLiveSourceReliability.scoreOf(names.byName[it.addonName]) },
+            primaryIndex = cardGroups.indexOfFirst { names.byName[it.addonName] == names.primaryKey }
+        )
+        val ordered = groups.toMutableList()
+        slots.forEachIndexed { i, slot -> ordered[slot] = ranked[i] }
+        return ordered
     }
 
     /** Whether the player for [contentId] is playing a Sports & Live game/channel. */
@@ -150,6 +236,8 @@ object SportsLiveExtraSources {
     internal fun reset() {
         synchronized(entries) { entries.clear() }
         synchronized(sportsPlaybackIds) { sportsPlaybackIds.clear() }
+        synchronized(sourceNames) { sourceNames.clear() }
+        synchronized(streamSources) { streamSources.clear() }
         fetcher = null
         resolveInvalidator = null
     }
@@ -222,11 +310,13 @@ private fun appendExtraGroups(
 }
 
 /**
- * The source fallback's next candidate when [extras] (a merged game's other addons' streams) exist:
- * the primary's streams first, as [nextSourceFallbackCandidate] picks them, then, once the primary's
- * search is done ([extrasAllowed]), the best untried extra stream. Extras that need server or
- * YouTube preparation are left out, since the fallback only prepares debrid links. With no extras,
- * exactly [nextSourceFallbackCandidate].
+ * The source fallback's next candidate when [extras] (a merged game's other addons' streams) exist.
+ * The card's sources (the primary's streams, and the extras grouped by addon/provider name) are
+ * tried in reliability order ([sourceScore], see [SportsLiveSourceReliability.rank]; the primary
+ * keeps a small edge, so with no evidence it goes first as before). Within a source, the stream is
+ * the one [nextSourceFallbackCandidate] picks. Extras ranked below the primary wait until its search
+ * is done ([extrasAllowed]). Extras that need server or YouTube preparation are left out, since the
+ * fallback only prepares debrid links. With no extras, exactly [nextSourceFallbackCandidate].
  */
 internal fun sportsLiveFallbackCandidate(
     streams: List<Stream>,
@@ -236,7 +326,8 @@ internal fun sportsLiveFallbackCandidate(
     installedAddonNames: Set<String>,
     triedKeys: Set<String>,
     failedAddonName: String?,
-    failedInfoHash: String?
+    failedInfoHash: String?,
+    sourceScore: (Stream) -> Double = { SportsLiveSourceReliability.NEUTRAL }
 ): Stream? {
     fun pick(from: List<Stream>) = nextSourceFallbackCandidate(
         streams = from,
@@ -247,10 +338,9 @@ internal fun sportsLiveFallbackCandidate(
         failedInfoHash = failedInfoHash
     )
     if (extras.isEmpty()) return pick(streams)
-    // The Sources panel's list holds the extras too; they are tried only after the primary's streams.
+    // The Sources panel's list holds the extras too; they are tried as their own sources.
     val extraKeys = extras.mapTo(HashSet()) { it.sourceFallbackKey() }
-    pick(streams.filterNot { it.sourceFallbackKey() in extraKeys })?.let { return it }
-    if (!extrasAllowed) return null
+    val primary = streams.filterNot { it.sourceFallbackKey() in extraKeys }
     val untried = extras.filterNot { stream ->
         stream.sourceFallbackKey() in triedKeys ||
             stream.serverTarget != null ||
@@ -258,10 +348,22 @@ internal fun sportsLiveFallbackCandidate(
             (failedInfoHash != null && stream.addonName == failedAddonName &&
                 stream.getEffectiveInfoHash().equals(failedInfoHash, ignoreCase = true))
     }
+    // Index 0 is the primary's group; each extra source is a group of its own.
+    val groups = listOf(primary) + untried.groupBy { it.addonName }.values
+    val ranked = SportsLiveSourceReliability.rank(
+        candidates = groups.indices.toList(),
+        scoreOf = { index -> groups[index].firstOrNull()?.let(sourceScore) ?: SportsLiveSourceReliability.NEUTRAL },
+        primaryIndex = 0
+    )
+    // Extras ranked ahead of the primary may go first; the rest wait for the primary's search.
+    val eligible = if (extrasAllowed) ranked else ranked.takeWhile { it != 0 } + 0
     // As on the play path: the user's autoplay choice, else the first playable stream, unless the
     // user's regex or source/addon choice rules streams out (then only a stream it picks is tried).
-    pick(untried)?.let { return it }
-    return if (honoursAutoPlayFilters(settings)) null else untried.firstOrNull(StreamAutoPlaySelector::isPlayable)
+    eligible.forEach { index -> pick(groups[index])?.let { return it } }
+    if (!extrasAllowed || honoursAutoPlayFilters(settings)) return null
+    return ranked.filter { it != 0 }.firstNotNullOfOrNull { index ->
+        groups[index].firstOrNull(StreamAutoPlaySelector::isPlayable)
+    }
 }
 
 /** True when the user's autoplay settings narrow which streams may play (a regex, or chosen sources). */

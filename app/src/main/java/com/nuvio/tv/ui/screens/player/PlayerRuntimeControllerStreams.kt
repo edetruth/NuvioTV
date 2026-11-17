@@ -248,7 +248,11 @@ internal fun PlayerRuntimeController.loadSourceStreams(forceRefresh: Boolean) {
         ).withSportsLiveExtras(contentId, refresh = forceRefresh).collect { result ->
             when (result) {
                 is NetworkResult.Success -> {
-                    val addonStreams = StreamAutoPlaySelector.orderAddonStreams(result.data, installedAddonOrder, preferredServerNames)
+                    // A Sports & Live card's sources are listed most reliable first (no-op otherwise).
+                    val addonStreams = SportsLiveExtraSources.orderGroups(
+                        contentId,
+                        StreamAutoPlaySelector.orderAddonStreams(result.data, installedAddonOrder, preferredServerNames)
+                    )
                     val allStreams = addonStreams.flatMap { it.streams }
                     val availableAddons = addonStreams.map { it.addonName }
                     _uiState.update {

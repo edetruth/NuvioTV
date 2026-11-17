@@ -290,6 +290,9 @@ class PlayerRuntimeController(
     internal val sportsFailoverTriedKeys = mutableSetOf<String>()
     internal var sportsStallWatchdogJob: Job? = null
 
+    /** When the current stream started loading, for its source's time to first frame (#40). */
+    internal var sportsAttemptStartedAtMs = System.currentTimeMillis()
+
     fun getCurrentStreamUrl(): String = currentStreamUrl
     fun getCurrentHeaders(): Map<String, String> = currentHeaders
 

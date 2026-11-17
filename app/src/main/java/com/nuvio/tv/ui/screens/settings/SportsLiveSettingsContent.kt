@@ -101,6 +101,16 @@ internal fun SportsLiveSettingsContent(
                     onToggle = { viewModel.setDataSaver(!state.dataSaver) },
                     enabled = state.showSection
                 )
+                var streamMemoryReset by remember { mutableStateOf(false) }
+                SettingsActionRow(
+                    title = stringResource(R.string.sports_live_setting_reset_stream_memory),
+                    subtitle = stringResource(R.string.sports_live_setting_reset_stream_memory_subtitle),
+                    value = if (streamMemoryReset) stringResource(R.string.sports_live_setting_reset_stream_memory_done) else null,
+                    onClick = {
+                        viewModel.resetStreamMemory()
+                        streamMemoryReset = true
+                    }
+                )
             }
         }
         item(key = "pip") {
