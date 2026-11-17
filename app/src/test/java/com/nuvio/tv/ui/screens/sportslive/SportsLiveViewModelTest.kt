@@ -130,7 +130,7 @@ class SportsLiveViewModelTest {
     fun `a game live far longer than its sport runs leaves Live now without a request`() = runTest {
         nextLoad = load(
             listOf(
-                item("over", isLive = true, sport = "Soccer", name = "Over", startMs = NOW - 3 * HOUR),
+                item("over", isLive = true, sport = "Soccer", name = "Over", startMs = NOW - 4 * HOUR),
                 item("on", isLive = true, sport = "Soccer", name = "On", startMs = NOW - HOUR),
                 item("untimed", isLive = true, sport = "Soccer", name = "Untimed")
             )
