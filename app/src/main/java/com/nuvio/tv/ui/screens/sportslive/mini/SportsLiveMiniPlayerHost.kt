@@ -87,6 +87,10 @@ internal class SportsLiveMiniPlayback(context: Context, private val onError: (se
     private var view: PlayerView? = null
     private var loadedSessionId: Long? = null
 
+    /** [Player.isPlaying] of the current player, as Compose state; false while none plays. */
+    var isPlaying by mutableStateOf(false)
+        private set
+
     fun attach(view: PlayerView?) {
         if (this.view !== view) this.view?.player = null
         this.view = view
@@ -104,6 +108,10 @@ internal class SportsLiveMiniPlayback(context: Context, private val onError: (se
                     // Only this load's errors count: a released or replaced player is ignored.
                     if (player === this@apply) onError(sessionId)
                 }
+
+                override fun onIsPlayingChanged(isPlaying: Boolean) {
+                    if (player === this@apply) this@SportsLiveMiniPlayback.isPlaying = isPlaying
+                }
             })
         }
         player = built
@@ -116,6 +124,7 @@ internal class SportsLiveMiniPlayback(context: Context, private val onError: (se
         val current = player ?: return
         player = null
         loadedSessionId = null
+        isPlaying = false
         view?.player = null
         current.release()
     }
@@ -237,8 +246,8 @@ fun SportsLiveMiniPlayerHost(
     val expanding by viewModel.expanding.collectAsStateWithLifecycle()
     expanding?.let { SportsLiveResolvingDialog(it, onDismiss = viewModel::cancelExpand) }
 
-    // The TV's screensaver must not start while the mini player plays.
-    SportsLiveKeepScreenOn(playing != null)
+    // The TV's screensaver must not start while the mini player's video actually plays.
+    SportsLiveKeepScreenOn(playing != null && playback.isPlaying)
 
     if (playing == null) return
     // In picture-in-picture only the video shows, filling the window.
