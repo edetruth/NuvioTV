@@ -97,6 +97,42 @@ internal fun SportsLiveLayoutSwitch(
     segmentModifier: Modifier = Modifier,
     lastSegmentModifier: Modifier = Modifier
 ) {
+    SportsLiveSegmentedSwitch(
+        options = layouts,
+        selected = selected,
+        onSelect = onSelect,
+        selectedFocusRequester = selectedFocusRequester,
+        label = { layout ->
+            stringResource(
+                when (layout) {
+                    SportsLiveLayout.CARDS -> R.string.sports_live_layout_cards
+                    SportsLiveLayout.SCOREBOARD -> R.string.sports_live_layout_scoreboard
+                    SportsLiveLayout.TIMELINE -> R.string.sports_live_layout_timeline
+                }
+            )
+        },
+        modifier = modifier,
+        segmentModifier = segmentModifier,
+        lastSegmentModifier = lastSegmentModifier
+    )
+}
+
+/**
+ * The segmented control behind the layout switch and Live now's sort (#43): OK picks an option, focus
+ * alone does not; entering it lands on the selected one.
+ */
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+internal fun <T> SportsLiveSegmentedSwitch(
+    options: List<T>,
+    selected: T,
+    onSelect: (T) -> Unit,
+    selectedFocusRequester: FocusRequester,
+    label: @Composable (T) -> String,
+    modifier: Modifier = Modifier,
+    segmentModifier: Modifier = Modifier,
+    lastSegmentModifier: Modifier = Modifier
+) {
     val outer = RoundedCornerShape(20.dp)
     val inner = RoundedCornerShape(16.dp)
     Row(
@@ -108,12 +144,12 @@ internal fun SportsLiveLayoutSwitch(
         horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xxs),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        layouts.forEachIndexed { index, layout ->
-            val isSelected = layout == selected
+        options.forEachIndexed { index, option ->
+            val isSelected = option == selected
             Surface(
-                onClick = { onSelect(layout) },
+                onClick = { onSelect(option) },
                 modifier = segmentModifier
-                    .then(if (index == layouts.lastIndex) lastSegmentModifier else Modifier)
+                    .then(if (index == options.lastIndex) lastSegmentModifier else Modifier)
                     .then(if (isSelected) Modifier.focusRequester(selectedFocusRequester) else Modifier),
                 colors = ClickableSurfaceDefaults.colors(
                     containerColor = if (isSelected) NuvioTheme.colors.Secondary else Color.Transparent,
@@ -128,13 +164,7 @@ internal fun SportsLiveLayoutSwitch(
                 scale = ClickableSurfaceDefaults.scale(focusedScale = 1f)
             ) {
                 Text(
-                    text = stringResource(
-                        when (layout) {
-                            SportsLiveLayout.CARDS -> R.string.sports_live_layout_cards
-                            SportsLiveLayout.SCOREBOARD -> R.string.sports_live_layout_scoreboard
-                            SportsLiveLayout.TIMELINE -> R.string.sports_live_layout_timeline
-                        }
-                    ),
+                    text = label(option),
                     style = MaterialTheme.typography.labelLarge,
                     maxLines = 1,
                     modifier = Modifier.padding(horizontal = NuvioTheme.spacing.md, vertical = NuvioTheme.spacing.xs)

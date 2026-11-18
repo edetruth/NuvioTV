@@ -2,6 +2,7 @@ package com.nuvio.tv.ui.screens.sportslive
 
 import android.view.KeyEvent as AndroidKeyEvent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -55,6 +56,8 @@ import com.nuvio.tv.core.sportslive.SportsLivePillTime
 import com.nuvio.tv.core.sportslive.scores.GameArt
 import com.nuvio.tv.core.sportslive.scores.ScoreChip
 import com.nuvio.tv.core.sportslive.scores.ScoreDetails
+import com.nuvio.tv.core.sportslive.scores.WhyKind
+import com.nuvio.tv.core.sportslive.scores.WhyTag
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveTab
 import com.nuvio.tv.ui.components.LightweightCard
@@ -137,7 +140,9 @@ internal fun SportsLiveListCard(
     /** ESPN says the game is over (C3), in the postgame grace too: its pill is never red. */
     final: Boolean = false,
     /** A strict replay match exists: the Replay tag beside the chip. */
-    hasReplay: Boolean = false
+    hasReplay: Boolean = false,
+    /** Most exciting (#43): why the game ranks high ("Close · 2 min left", "OT"); null shows none. */
+    whyTag: String? = null
 ) {
     val shape = RoundedCornerShape(NuvioTheme.radii.md)
     var longPressTriggered by remember { mutableStateOf(false) }
@@ -205,7 +210,7 @@ internal fun SportsLiveListCard(
                 )
             }
             Column(verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs)) {
-                if (stateLabel != null || chip != null || hasReplay) {
+                if (stateLabel != null || chip != null || hasReplay || whyTag != null) {
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs),
                         verticalAlignment = Alignment.CenterVertically
@@ -213,6 +218,7 @@ internal fun SportsLiveListCard(
                         if (stateLabel != null) SportsLiveStatePill(label = stateLabel, isLive = item.isLive && !ended && !final)
                         if (chip != null) SportsLiveScoreChip(chip)
                         if (hasReplay) ReplayPill()
+                        if (whyTag != null) WhyTagPill(whyTag)
                     }
                 }
                 Row(
@@ -544,6 +550,45 @@ internal fun withoutLiveMarkers(description: String): String =
 
 /** The gold star of a followed team's game (cards, the player's live games panel). */
 internal val FOLLOWED_STAR_COLOR = Color(0xFFFFC107)
+
+/** A Most exciting card's why tag (#43): blue, so it never reads as live (red) or followed (gold). */
+@Composable
+private fun WhyTagPill(text: String) {
+    val shape = RoundedCornerShape(50)
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+        color = WHY_TAG_TEXT,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier
+            .clip(shape)
+            .background(WHY_TAG_BACKGROUND)
+            .border(1.dp, WHY_TAG_BORDER, shape)
+            .padding(horizontal = NuvioTheme.spacing.sm, vertical = 2.dp)
+    )
+}
+
+/** [tag]'s words: "Close · 2 min left", "OT", "Lead change"... */
+@Composable
+internal fun whyTagText(tag: WhyTag): String = when (tag.kind) {
+    WhyKind.PENALTIES -> stringResource(R.string.sports_live_why_penalties)
+    WhyKind.OVERTIME -> stringResource(R.string.sports_live_why_overtime)
+    WhyKind.EXTRA_TIME -> stringResource(R.string.sports_live_why_extra_time)
+    WhyKind.EXTRA_INNINGS -> stringResource(R.string.sports_live_why_extra_innings)
+    WhyKind.CLOSE_LATE -> tag.minutesLeft?.let { stringResource(R.string.sports_live_why_close_minutes, it) }
+        ?: stringResource(R.string.sports_live_why_close_late)
+    WhyKind.LEAD_CHANGE -> stringResource(R.string.sports_live_why_lead_change)
+    WhyKind.JUST_SCORED -> stringResource(R.string.sports_live_why_just_scored)
+    WhyKind.RED_ZONE -> stringResource(R.string.sports_live_why_red_zone)
+    WhyKind.BASES_LOADED -> stringResource(R.string.sports_live_why_bases_loaded)
+    WhyKind.SCORING_POSITION -> stringResource(R.string.sports_live_why_scoring_position)
+    WhyKind.CLOSE -> stringResource(R.string.sports_live_why_close)
+}
+
+private val WHY_TAG_TEXT = Color(0xFFCFE1FF)
+private val WHY_TAG_BACKGROUND = Color(0xFF13233A)
+private val WHY_TAG_BORDER = Color(0xFF2B4A75)
 
 /** How a Just ended card (#60) is dimmed. */
 private const val ENDED_CARD_ALPHA = 0.55f

@@ -3,6 +3,7 @@ package com.nuvio.tv.ui.screens.sportslive
 import androidx.annotation.VisibleForTesting
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.nuvio.tv.core.sportslive.LiveNowSort
 import com.nuvio.tv.core.sportslive.SportsLiveDataSaver
 import com.nuvio.tv.core.sportslive.EndedGame
 import com.nuvio.tv.core.sportslive.EndedInputs
@@ -12,10 +13,12 @@ import com.nuvio.tv.core.sportslive.SportsLiveItemBucketer
 import com.nuvio.tv.core.sportslive.SportsLiveLayout
 import com.nuvio.tv.core.sportslive.SportsLiveLiveDuration
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
+import com.nuvio.tv.core.sportslive.scores.ExcitementHistory
 import com.nuvio.tv.core.sportslive.scores.LiveScoresRepository
 import com.nuvio.tv.core.sportslive.scores.ScoreChips
 import com.nuvio.tv.core.sportslive.scores.ScoreState
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
+import com.nuvio.tv.core.sportslive.scores.WhyTag
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveItem
@@ -69,6 +72,11 @@ class SportsLiveViewModel internal constructor(
     /** The stored Cards / Scoreboard choice per tab (#23), for the active profile. */
     layouts: Flow<Map<SportsLiveTab, SportsLiveLayout>> = flowOf(emptyMap()),
     private val saveLayout: suspend (SportsLiveTab, SportsLiveLayout) -> Unit = { _, _ -> },
+    /** Live now's stored sort (#43), for the active profile. */
+    liveSort: Flow<LiveNowSort> = flowOf(LiveNowSort.START_TIME),
+    private val saveLiveSort: suspend (LiveNowSort) -> Unit = {},
+    /** The Scores setting (null until read): Off hides the sort, Hide until focused hides its why tags. */
+    scoresMode: Flow<ScoresMode?> = flowOf(null),
     // Where the list is bucketed and pinned; tests pass their dispatcher, so it runs in virtual time.
     computeDispatcher: CoroutineDispatcher
 ) : ViewModel() {
@@ -102,6 +110,9 @@ class SportsLiveViewModel internal constructor(
         },
         layouts = prefs.layouts,
         saveLayout = prefs::setLayout,
+        liveSort = prefs.liveNowSort,
+        saveLiveSort = prefs::setLiveNowSort,
+        scoresMode = liveScores.mode,
         computeDispatcher = Dispatchers.Default
     )
 
@@ -121,6 +132,13 @@ class SportsLiveViewModel internal constructor(
         val tabs: Map<SportsLiveTab, List<SportsLiveItem>>
     )
 
+    /** Live now's sort inputs (#43): the stored sort, the Scores setting and Live now's layout. */
+    private data class SortInputs(
+        val stored: LiveNowSort = LiveNowSort.START_TIME,
+        val mode: ScoresMode? = null,
+        val layout: SportsLiveLayout = SportsLiveLayout.CARDS
+    )
+
     @VisibleForTesting
     internal var nowMs: () -> Long = { System.currentTimeMillis() }
 
@@ -129,6 +147,17 @@ class SportsLiveViewModel internal constructor(
         SportsLiveItemBucketer::bucket
 
     private val selectionState = MutableStateFlow(Selection())
+    private val sortInputs = combine(liveSort, scoresMode, layouts) { stored, mode, choices ->
+        SortInputs(stored, mode, SportsLiveLayout.of(choices, SportsLiveTab.LIVE_NOW))
+    }
+
+    // Most exciting (#43): what changed lately in each game, and the order last shown with the minute it
+    // was taken in, so cards keep their place under a focused card until the next minute (as the panel, I3).
+    private val excitementHistory = ExcitementHistory()
+    private var shownLiveOrder: List<String>? = null
+    private var shownLiveMinute: Long? = null
+    @Volatile
+    private var focusedLiveCard: String? = null
     private var autoRefreshJob: Job? = null
     private var focusProbeJob: Job? = null
 
@@ -162,8 +191,8 @@ class SportsLiveViewModel internal constructor(
     }.flowOn(computeDispatcher)
 
     val uiState: StateFlow<SportsLiveUiState> =
-        combine(pinned, repo.endedKeys, selectionState, endedInputs, clock) { pinned, endedKeys, selection, inputs, _ ->
-            buildState(pinned, endedKeys, selection, inputs)
+        combine(pinned, repo.endedKeys, combine(selectionState, sortInputs) { selection, sort -> selection to sort }, endedInputs, clock) { pinned, endedKeys, (selection, sort), inputs, _ ->
+            buildState(pinned, endedKeys, selection, inputs, sort)
         }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SportsLiveUiState())
 
@@ -179,6 +208,16 @@ class SportsLiveViewModel internal constructor(
     fun selectLayout(tab: SportsLiveTab, layout: SportsLiveLayout) {
         if (layout !in SportsLiveLayout.offeredFor(tab)) return
         viewModelScope.launch { saveLayout(tab, layout) }
+    }
+
+    /** Remembers Live now's [sort] (per profile). */
+    fun selectLiveSort(sort: LiveNowSort) {
+        viewModelScope.launch { saveLiveSort(sort) }
+    }
+
+    /** The focused Live now card's key, or null when no card is focused: Most exciting re-ranks only then, or each new minute. */
+    fun onLiveCardFocus(key: String?) {
+        focusedLiveCard = key
     }
 
     /** The active profile's followed teams, for the card menu's Follow / Unfollow labels. */
@@ -335,7 +374,8 @@ class SportsLiveViewModel internal constructor(
         bucketed: Bucketed,
         endedKeys: Set<String>,
         selection: Selection,
-        inputs: EndedInputs
+        inputs: EndedInputs,
+        sort: SortInputs = SortInputs()
     ): SportsLiveUiState {
         val hasClaimed = bucketed.hasClaimed
         // Live items whose streams are gone have ended; the other tabs are left as they are. Games found
@@ -343,6 +383,10 @@ class SportsLiveViewModel internal constructor(
         // ended, estimated ones stay (playable) until their addon drops them or six hours pass.
         val now = nowMs()
         var justEnded = emptyMap<String, EndedGame>()
+        val liveSort = LiveNowSort.effective(sort.stored, sort.mode, sort.layout)
+        excitementHistory.observe(inputs.scores.values, now)
+        var liveRank = emptyMap<String, Int>()
+        var whyTags = emptyMap<String, WhyTag>()
         val tabs = bucketed.tabs.mapValues { (tab, tabItems) ->
             if (tab == SportsLiveTab.LIVE_NOW) {
                 val scores = inputs.scores
@@ -359,7 +403,27 @@ class SportsLiveViewModel internal constructor(
                     (item to ended).takeIf { now < ended.dropsAtMs }
                 }
                 justEnded = split.ended + overdueEnded.associate { (item, ended) -> item.streamKey to ended }
-                live + split.justEnded + overdueEnded.map { it.first }
+                val ordered = if (liveSort == LiveNowSort.MOST_EXCITING) {
+                    val ratings = live.associateWith { excitementOf(it, scores[it.streamKey], excitementHistory, now) }
+                    val fresh = excitingOrder(live) { ratings[it] }
+                    val order = if (panelMayReorder(focusedLiveCard, now, shownLiveMinute)) {
+                        shownLiveMinute = now / PANEL_REORDER_MS
+                        fresh
+                    } else {
+                        stabilizeOrder(fresh, shownLiveOrder)
+                    }
+                    shownLiveOrder = order.map { it.streamKey }
+                    liveRank = buildMap { order.forEachIndexed { index, item -> putIfAbsent(item.streamKey, index) } }
+                    if (LiveNowSort.showsWhyTags(sort.mode)) {
+                        whyTags = buildMap { ratings.forEach { (item, rating) -> rating?.tag?.let { put(item.streamKey, it) } } }
+                    }
+                    order
+                } else {
+                    shownLiveOrder = null
+                    shownLiveMinute = null
+                    live
+                }
+                ordered + split.justEnded + overdueEnded.map { it.first }
             } else {
                 tabItems
             }
@@ -401,7 +465,11 @@ class SportsLiveViewModel internal constructor(
             failures = selection.failures,
             lastRefreshedMs = selection.lastRefreshedMs,
             justEnded = justEnded,
-            nowMs = now
+            nowMs = now,
+            liveSortOffered = selection.tab == SportsLiveTab.LIVE_NOW && LiveNowSort.offered(sort.mode, sort.layout),
+            liveSort = liveSort,
+            liveRank = liveRank,
+            whyTags = whyTags
         )
     }
 

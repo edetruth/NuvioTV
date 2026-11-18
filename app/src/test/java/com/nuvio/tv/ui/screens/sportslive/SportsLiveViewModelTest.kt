@@ -3,13 +3,18 @@ package com.nuvio.tv.ui.screens.sportslive
 import com.nuvio.tv.MainDispatcherRule
 import com.nuvio.tv.core.sportslive.EndedInputs
 import com.nuvio.tv.core.sportslive.EndedSignal
+import com.nuvio.tv.core.sportslive.LiveNowSort
 import com.nuvio.tv.core.sportslive.SportsLiveEndedGames
 import com.nuvio.tv.core.sportslive.SportsLiveItemBucketer
+import com.nuvio.tv.core.sportslive.SportsLiveLayout
 import com.nuvio.tv.core.sportslive.scores.EspnFixtures
 import com.nuvio.tv.core.sportslive.scores.EspnLeagueMap
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.ScoreState
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
+import com.nuvio.tv.core.sportslive.scores.ScoresMode
+import com.nuvio.tv.core.sportslive.scores.WhyKind
+import com.nuvio.tv.core.sportslive.scores.WhyTag
 import com.nuvio.tv.domain.model.Addon
 import com.nuvio.tv.domain.model.CatalogDescriptor
 import com.nuvio.tv.domain.model.ClaimedCatalog
@@ -33,6 +38,8 @@ import io.mockk.mockk
 import io.mockk.runs
 import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
@@ -803,6 +810,128 @@ class SportsLiveViewModelTest {
 
     private fun channel(id: String, group: String, isLive: Boolean = false, sport: String? = null) =
         item(id, isLive = isLive, sport = sport, name = "Channel $id").copy(isChannel = true, group = group)
+
+    // Most exciting (#43): basketball games from the ESPN fixture, put in play.
+    private val nbaGames = EspnFixtures.events(EspnFixtures.NBA_20261115, EspnLeagueMap.NBA)
+
+    private fun inPlay(eventId: String, home: Int, away: Int, clock: String): ScoreSnapshot =
+        nbaGames.first { it.eventId == eventId }.let { event ->
+            event.copy(
+                state = ScoreState.IN, isFinal = false, clockText = clock,
+                home = event.home.copy(score = home), away = event.away.copy(score = away)
+            )
+        }
+
+    private val pacersGame = item("pacers", isLive = true, sport = "Basketball", name = "Indiana Pacers at Philadelphia 76ers", startMs = NOW - 2 * HOUR)
+    private val hornetsGame = item("hornets", isLive = true, sport = "Basketball", name = "Charlotte Hornets at LA Clippers", startMs = NOW - 90 * MINUTE)
+    private val lakersGame = item("lakers", isLive = true, sport = "Basketball", name = "Los Angeles Lakers at Phoenix Suns", startMs = NOW - HOUR)
+    private val celticsGame = item("celtics", isLive = true, sport = "Basketball", name = "Dallas Mavericks at Boston Celtics", startMs = NOW - 30 * MINUTE)
+
+    private fun TestScope.sortedViewModel(
+        sort: LiveNowSort,
+        mode: ScoresMode?,
+        inputs: Flow<EndedInputs>,
+        layout: SportsLiveLayout = SportsLiveLayout.CARDS,
+        clock: Flow<Unit> = flowOf(Unit),
+        now: () -> Long = { NOW }
+    ): SportsLiveViewModel {
+        val viewModel = SportsLiveViewModel(
+            repo,
+            endedInputs = inputs,
+            endedGames = SportsLiveEndedGames(),
+            clock = clock,
+            layouts = flowOf(mapOf(SportsLiveTab.LIVE_NOW to layout)),
+            liveSort = flowOf(sort),
+            scoresMode = flowOf(mode),
+            computeDispatcher = compute
+        )
+        viewModel.nowMs = now
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        return viewModel
+    }
+
+    @Test
+    fun `Most exciting ranks live games, followed first and unmatched last, tagged only while scores show`() = runTest {
+        followedFlow.value = listOf(FollowedTeam("Celtics", "Basketball"))
+        nextLoad = load(listOf(pacersGame, hornetsGame, lakersGame, celticsGame))
+        val inputs = flowOf(
+            EndedInputs(
+                mapOf(
+                    pacersGame.streamKey to inPlay("401909985", 60, 40, "5:00 - 2nd"),
+                    lakersGame.streamKey to inPlay("401909986", 100, 99, "1:00 - 4th"),
+                    celticsGame.streamKey to inPlay("401909989", 10, 30, "8:00 - 1st")
+                )
+            )
+        )
+        fun TestScope.state(sort: LiveNowSort, mode: ScoresMode?, layout: SportsLiveLayout = SportsLiveLayout.CARDS): SportsLiveUiState {
+            val viewModel = sortedViewModel(sort, mode, inputs, layout)
+            advanceUntilIdle()
+            return viewModel.uiState.value
+        }
+
+        val byStart = state(LiveNowSort.START_TIME, ScoresMode.SHOW)
+        val startOrder = byStart.visibleItems.map { it.id }
+        assertEquals("celtics", startOrder.first())
+        assertTrue(byStart.liveSortOffered)
+        assertTrue(byStart.whyTags.isEmpty())
+        assertTrue(byStart.liveRank.isEmpty())
+
+        val exciting = state(LiveNowSort.MOST_EXCITING, ScoresMode.SHOW)
+        // Followed pinned, the close game in its final minute, the blowout, then the unmatched game.
+        assertEquals(listOf("celtics", "lakers", "pacers", "hornets"), exciting.visibleItems.map { it.id })
+        assertEquals(LiveNowSort.MOST_EXCITING, exciting.liveSort)
+        assertEquals(mapOf(lakersGame.streamKey to WhyTag(WhyKind.CLOSE_LATE, 1)), exciting.whyTags)
+        assertEquals(1, exciting.liveRank[lakersGame.streamKey])
+
+        // Hide until focused (decision 1): the same order, no why tags.
+        val hidden = state(LiveNowSort.MOST_EXCITING, ScoresMode.HIDE_UNTIL_FOCUSED)
+        assertEquals(exciting.visibleItems, hidden.visibleItems)
+        assertTrue(hidden.whyTags.isEmpty())
+
+        // Off: no sort control, start order, no tags.
+        val off = state(LiveNowSort.MOST_EXCITING, ScoresMode.OFF)
+        assertFalse(off.liveSortOffered)
+        assertEquals(LiveNowSort.START_TIME, off.liveSort)
+        assertEquals(startOrder, off.visibleItems.map { it.id })
+        assertTrue(off.whyTags.isEmpty())
+
+        // The Timeline stays by time.
+        val timeline = state(LiveNowSort.MOST_EXCITING, ScoresMode.SHOW, SportsLiveLayout.TIMELINE)
+        assertFalse(timeline.liveSortOffered)
+        assertEquals(startOrder, timeline.visibleItems.map { it.id })
+    }
+
+    @Test
+    fun `Most exciting keeps cards in place under a focused card until the next minute`() = runTest {
+        nextLoad = load(listOf(pacersGame, lakersGame))
+        val closeLakers = lakersGame.streamKey to inPlay("401909986", 100, 99, "1:00 - 4th")
+        val inputs = MutableStateFlow(EndedInputs(mapOf(pacersGame.streamKey to inPlay("401909985", 60, 40, "5:00 - 2nd"), closeLakers)))
+        val ticks = MutableSharedFlow<Unit>(replay = 1).apply { tryEmit(Unit) }
+        var now = NOW
+        val viewModel = sortedViewModel(LiveNowSort.MOST_EXCITING, ScoresMode.SHOW, inputs, clock = ticks, now = { now })
+        advanceUntilIdle()
+        fun order() = viewModel.uiState.value.visibleItems.map { it.id }
+        assertEquals(listOf("lakers", "pacers"), order())
+
+        // The Pacers game goes to overtime while the Lakers card is focused: nothing moves.
+        viewModel.onLiveCardFocus(lakersGame.streamKey)
+        inputs.value = EndedInputs(mapOf(pacersGame.streamKey to inPlay("401909985", 110, 110, "2:00 - OT"), closeLakers))
+        runCurrent()
+        assertEquals(listOf("lakers", "pacers"), order())
+        assertEquals(WhyTag(WhyKind.OVERTIME), viewModel.uiState.value.whyTags[pacersGame.streamKey])
+
+        // A new minute re-ranks, focus or not.
+        now += 60_000L
+        ticks.emit(Unit)
+        runCurrent()
+        assertEquals(listOf("pacers", "lakers"), order())
+
+        // With no card focused, a change re-ranks at once.
+        viewModel.onLiveCardFocus(null)
+        inputs.value = EndedInputs(mapOf(pacersGame.streamKey to inPlay("401909985", 60, 40, "5:00 - 2nd"), closeLakers))
+        runCurrent()
+        assertEquals(listOf("lakers", "pacers"), order())
+    }
 
     private fun load(items: List<SportsLiveItem>, failures: List<SportsLiveFailure> = emptyList()) =
         SportsLiveLoad(items = items, failures = failures, loadedAtMs = NOW, claimedKeys = setOf(CLAIMED.key))

@@ -3776,6 +3776,21 @@
     <string name="sports_live_timeline_no_time">No time</string>
     <string name="sports_live_timeline_live_clock">LIVE · %1$s</string>
     <string name="sports_live_timeline_matchup">%1$s v %2$s</string>
+    <!-- Live now sort (#43): the control and the why tags on Most exciting cards. -->
+    <string name="sports_live_sort_start_time">Start time</string>
+    <string name="sports_live_sort_most_exciting">Most exciting</string>
+    <string name="sports_live_why_penalties">Penalties</string>
+    <string name="sports_live_why_overtime">OT</string>
+    <string name="sports_live_why_extra_time">Extra time</string>
+    <string name="sports_live_why_extra_innings">Extra innings</string>
+    <string name="sports_live_why_close_minutes">Close · %1$d min left</string>
+    <string name="sports_live_why_close_late">Close · late</string>
+    <string name="sports_live_why_lead_change">Lead change</string>
+    <string name="sports_live_why_just_scored">Just scored</string>
+    <string name="sports_live_why_red_zone">Red zone</string>
+    <string name="sports_live_why_bases_loaded">Bases loaded</string>
+    <string name="sports_live_why_scoring_position">Runners in scoring position</string>
+    <string name="sports_live_why_close">Close game</string>
     <string name="sports_live_situation_separator">" · "</string>
     <string name="sports_live_situation_possession">%1$s ball</string>
     <string name="sports_live_situation_red_zone">Red zone</string>

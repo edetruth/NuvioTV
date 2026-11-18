@@ -61,6 +61,7 @@ import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.TeamPair
 import com.nuvio.tv.core.sportslive.EndedSignal
 import com.nuvio.tv.core.sportslive.SportsLiveEndedGames
+import com.nuvio.tv.core.sportslive.LiveNowSort
 import com.nuvio.tv.core.sportslive.SportsLiveLayout
 import com.nuvio.tv.core.sportslive.scores.GameSituations
 import com.nuvio.tv.core.sportslive.scores.GameArt
@@ -178,7 +179,7 @@ fun SportsLiveScreen(
     // on the whole minute: every state emission (a selection change too) carries a fresh nowMs.
     val clockMs = uiState.nowMs / MINUTE_MS * MINUTE_MS
     val scoreboardRowsOf: (List<SportsLiveItem>) -> List<ScoreboardRow> =
-        remember(scores, scoresMode, revealed, uiState.selectedTab, uiState.justEnded, followedTeams, clockMs) {
+        remember(scores, scoresMode, revealed, uiState.selectedTab, uiState.justEnded, followedTeams, clockMs, uiState.liveRank) {
             { items ->
                 scoreboardRows(
                     items = items,
@@ -188,7 +189,9 @@ fun SportsLiveScreen(
                     revealed = revealed,
                     nowMs = clockMs,
                     ended = if (uiState.selectedTab == SportsLiveTab.LIVE_NOW) uiState.justEnded else emptyMap(),
-                    followsSide = { item, side -> followedTeams.any { SportsLiveTeams.followsSideOfAnySource(it, side, item) } }
+                    followsSide = { item, side -> followedTeams.any { SportsLiveTeams.followsSideOfAnySource(it, side, item) } },
+                    // Most exciting (#43): the LIVE group in Live now's order.
+                    liveRank = if (uiState.selectedTab == SportsLiveTab.LIVE_NOW) uiState.liveRank else emptyMap()
                 )
             }
         }
@@ -288,6 +291,7 @@ fun SportsLiveScreen(
             followedTeams = followedTeams,
             layout = layout,
             onSelectLayout = { viewModel.selectLayout(uiState.selectedTab, it) },
+            onSelectSort = viewModel::selectLiveSort,
             scoreboardRowsOf = scoreboardRowsOf,
             situationOf = situationOf,
             chipOf = chipOf,
@@ -304,7 +308,11 @@ fun SportsLiveScreen(
                 )
                 onOpenGame()
             },
-            onCardFocus = scoresViewModel::onCardFocus,
+            onCardFocus = { key ->
+                scoresViewModel.onCardFocus(key)
+                // Most exciting keeps the cards in place while one is focused (#43).
+                viewModel.onLiveCardFocus(key)
+            },
             onSelectTab = viewModel::selectTab,
             onSelectFilter = viewModel::selectFilter,
             onSelectItem = viewModel::selectItem,
@@ -376,6 +384,8 @@ private fun SportsLiveContent(
     /** The selected tab's layout: Cards, or the Scoreboard (#23). */
     layout: SportsLiveLayout,
     onSelectLayout: (SportsLiveLayout) -> Unit,
+    /** Live now's sort (#43): Start time or Most exciting. */
+    onSelectSort: (LiveNowSort) -> Unit,
     /** The Scoreboard's grouped rows for the tab's games as filtered. */
     scoreboardRowsOf: (List<SportsLiveItem>) -> List<ScoreboardRow>,
     /** A game's situation line ("" when none or hidden with the score). */
@@ -524,12 +534,15 @@ private fun SportsLiveContent(
     val filterFocusRequester = remember { FocusRequester() }
     // The layout switch's selected segment (C2): it leads the filter row on Live now and Upcoming.
     val layoutFocusRequester = remember { FocusRequester() }
-    val header = SportsLiveHeaderFocus.of(uiState.selectedTab, uiState.filters.size)
+    // Live now's sort control (#43), at the end of the row.
+    val sortFocusRequester = remember { FocusRequester() }
+    val header = SportsLiveHeaderFocus.of(uiState.selectedTab, uiState.filters.size, uiState.liveSortOffered)
     val showFilterRow = header.rowShown
     fun headerRequester(stop: SportsLiveHeaderFocus.Stop): FocusRequester? = when (stop) {
         SportsLiveHeaderFocus.Stop.TABS -> activeTabFocusRequester
         SportsLiveHeaderFocus.Stop.SWITCH -> layoutFocusRequester
         SportsLiveHeaderFocus.Stop.CHIPS -> filterFocusRequester
+        SportsLiveHeaderFocus.Stop.SORT -> sortFocusRequester
         SportsLiveHeaderFocus.Stop.CONTENT -> entryCardFocusRequester
     }
     val aboveListFocusRequester = headerRequester(header.contentUp) ?: activeTabFocusRequester
@@ -852,6 +865,8 @@ private fun SportsLiveContent(
                 layout = layout,
                 layoutFocusRequester = layoutFocusRequester,
                 onSelectLayout = onSelectLayout,
+                sortFocusRequester = sortFocusRequester,
+                onSelectSort = onSelectSort,
                 modifier = Modifier
                     .padding(top = NuvioTheme.spacing.xs)
                     .onFocusChanged { state ->
@@ -1018,6 +1033,7 @@ private fun SportsLiveContent(
                         ended = ended,
                         final = espnFinalOf(item),
                         hasReplay = item.streamKey in replayKeys && ended,
+                        whyTag = uiState.whyTags[item.streamKey]?.let { whyTagText(it) },
                         onClick = onCardClick,
                         onLongClick = onCardLongClick,
                         menuOpen = item.listKey == menuCardKey,
@@ -1157,6 +1173,8 @@ private fun SportsLiveFilterRow(
     layout: SportsLiveLayout,
     layoutFocusRequester: FocusRequester,
     onSelectLayout: (SportsLiveLayout) -> Unit,
+    sortFocusRequester: FocusRequester,
+    onSelectSort: (LiveNowSort) -> Unit,
     modifier: Modifier = Modifier
 ) {
     @Composable
@@ -1196,7 +1214,11 @@ private fun SportsLiveFilterRow(
                 },
                 lastSegmentModifier = Modifier.focusProperties {
                     // No chips beside it: Right stays on the switch rather than wandering off.
-                    right = if (header.switchRight != null) filterFocusRequester else FocusRequester.Cancel
+                    right = when (header.switchRight) {
+                        SportsLiveHeaderFocus.Stop.CHIPS -> filterFocusRequester
+                        SportsLiveHeaderFocus.Stop.SORT -> sortFocusRequester
+                        else -> FocusRequester.Cancel
+                    }
                 }
             )
         }
@@ -1219,6 +1241,30 @@ private fun SportsLiveFilterRow(
                     FilterRowChip(name = name, value = filter)
                 }
             }
+        } else if (header.sortShown) {
+            Spacer(modifier = Modifier.weight(1f))
+        }
+        if (header.sortShown) {
+            SportsLiveSegmentedSwitch(
+                options = LiveNowSort.entries,
+                selected = uiState.liveSort,
+                onSelect = onSelectSort,
+                selectedFocusRequester = sortFocusRequester,
+                label = { sort ->
+                    stringResource(
+                        when (sort) {
+                            LiveNowSort.START_TIME -> R.string.sports_live_sort_start_time
+                            LiveNowSort.MOST_EXCITING -> R.string.sports_live_sort_most_exciting
+                        }
+                    )
+                },
+                modifier = Modifier.padding(end = NuvioTheme.spacing.sm, top = NuvioTheme.spacing.xs, bottom = NuvioTheme.spacing.xs),
+                segmentModifier = Modifier.focusProperties {
+                    up = upFocusRequester
+                    downFocusRequester?.let { down = it }
+                },
+                lastSegmentModifier = Modifier.focusProperties { right = FocusRequester.Cancel }
+            )
         }
     }
 }

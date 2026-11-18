@@ -2,7 +2,9 @@ package com.nuvio.tv.ui.screens.sportslive
 
 import com.nuvio.tv.core.sportslive.EndedGame
 import com.nuvio.tv.core.sportslive.EndedSignal
+import com.nuvio.tv.core.sportslive.LiveNowSort
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
+import com.nuvio.tv.core.sportslive.scores.WhyTag
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveTab
 import com.nuvio.tv.domain.repository.SportsLiveFailure
@@ -30,7 +32,18 @@ data class SportsLiveUiState(
      */
     val justEnded: Map<String, EndedGame> = emptyMap(),
     /** The view model's clock when this state was built (it ticks while the list is watched). */
-    val nowMs: Long = 0L
+    val nowMs: Long = 0L,
+    /** Live now shows its sort control (#43): scores on, not the Timeline. */
+    val liveSortOffered: Boolean = false,
+    /** Live now's sort in force: Start time while the control is hidden. */
+    val liveSort: LiveNowSort = LiveNowSort.START_TIME,
+    /**
+     * Most exciting: each live game's place (by card key) in the order shown, for the Scoreboard's LIVE
+     * group; empty under Start time.
+     */
+    val liveRank: Map<String, Int> = emptyMap(),
+    /** Most exciting with scores shown: a ranked card's why tag, by card key; empty otherwise. */
+    val whyTags: Map<String, WhyTag> = emptyMap()
 ) {
     /** [item]'s ended verdict when it sits in the Just ended strip (Live now only), else null. */
     fun endedOf(item: SportsLiveItem): EndedGame? =

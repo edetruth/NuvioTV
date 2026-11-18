@@ -41,7 +41,8 @@ data class ScoreboardRow(
  * first in each group, finished games kept in place by start under Hide until focused), with its
  * Just ended group as **FINAL** ([ended], #60). On Upcoming a game is LIVE only when ESPN says it is in
  * play; otherwise it belongs with the games starting soon. [followsSide] tells whether a followed team
- * is a card's side (by the side's card name).
+ * is a card's side (by the side's card name). [liveRank] (Most exciting, #43) orders the LIVE group by
+ * each game's place in Live now's order; games not in it follow in their usual order.
  */
 internal fun scoreboardRows(
     items: List<SportsLiveItem>,
@@ -51,7 +52,8 @@ internal fun scoreboardRows(
     revealed: Set<String>,
     nowMs: Long,
     ended: Map<String, EndedGame> = emptyMap(),
-    followsSide: (SportsLiveItem, String) -> Boolean = { _, _ -> false }
+    followsSide: (SportsLiveItem, String) -> Boolean = { _, _ -> false },
+    liveRank: Map<String, Int> = emptyMap()
 ): List<ScoreboardRow> {
     val scoresOn = mode != null && mode != ScoresMode.OFF
     return groupPanelRows(items, scores, mode, revealed, nowMs, ended).map { row ->
@@ -83,7 +85,10 @@ internal fun scoreboardRows(
             probablyEnded = estimate,
             startsIn = if (group == ScoreboardGroup.STARTING_SOON) scoreboardStartsIn(timedStart, nowMs) else null
         )
-    }.sortedBy { it.group.ordinal }
+    }.sortedWith(
+        compareBy<ScoreboardRow> { it.group.ordinal }
+            .thenBy { if (it.group == ScoreboardGroup.LIVE) liveRank[it.item.streamKey] ?: Int.MAX_VALUE else 0 }
+    )
 }
 
 /** Which buttons the Scoreboard's focused game offers beside Watch (always shown). */

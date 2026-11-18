@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.nuvio.tv.core.profile.ProfileManager
+import com.nuvio.tv.core.sportslive.LiveNowSort
 import com.nuvio.tv.core.sportslive.SportsLiveLayout
 import com.nuvio.tv.core.sportslive.SportsLiveOpenGame
 import com.nuvio.tv.core.sportslive.scores.MySports
@@ -63,6 +64,7 @@ class SportsLivePreferencesDataStore @Inject constructor(
     private val mySportsKey = stringSetPreferencesKey("sports_live_my_sports")
     private val openGameKey = stringPreferencesKey("sports_live_open_game")
     private val layoutsKey = stringPreferencesKey("sports_live_layouts")
+    private val liveNowSortKey = stringPreferencesKey("sports_live_live_now_sort")
 
     val showSection: Flow<Boolean> = profileManager.activeProfileId.flatMapLatest { pid ->
         factory.get(pid, FEATURE).data.map { it[showSectionKey] ?: true }
@@ -142,6 +144,15 @@ class SportsLivePreferencesDataStore @Inject constructor(
         store().edit { prefs ->
             prefs[layoutsKey] = SportsLiveLayout.encode(SportsLiveLayout.decode(prefs[layoutsKey]) + (tab to layout))
         }
+    }
+
+    /** Live now's sort (#43): Start time (default) or Most exciting. */
+    val liveNowSort: Flow<LiveNowSort> = profileManager.activeProfileId.flatMapLatest { pid ->
+        factory.get(pid, FEATURE).data.map { LiveNowSort.decode(it[liveNowSortKey]) }
+    }
+
+    suspend fun setLiveNowSort(sort: LiveNowSort) {
+        store().edit { it[liveNowSortKey] = sort.name }
     }
 
     suspend fun setOpenGame(openGame: SportsLiveOpenGame) {
