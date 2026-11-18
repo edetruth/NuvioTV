@@ -275,4 +275,30 @@ class SportsLiveAlertEngineTest {
         val rematch = item(startMs = START + 2 * 24 * 60 * MINUTE)
         assertTrue(SportsLiveAlertEngine.gameKey(card) != SportsLiveAlertEngine.gameKey(rematch))
     }
+
+    // One full-time toast per game (#60 with #42)
+
+    @Test
+    fun `a full-time toast shows only when its game's full time was not announced yet`() {
+        com.nuvio.tv.core.sportslive.SportsLiveFullTimeAnnouncements.clear()
+        try {
+            step(START, live(50, 48), reminded = false)
+            val fullTime = step(START + 120 * MINUTE, final(101, 99), reminded = false).single() as SportsLiveAlert.FullTime
+            // The toast for the game playing claimed it first (the player switched to it meanwhile).
+            assertTrue(com.nuvio.tv.core.sportslive.SportsLiveFullTimeAnnouncements.claim(fullTime.snapshot.eventId))
+            org.junit.Assert.assertFalse(SportsLiveAlertEngine.claimToShow(fullTime))
+
+            // Not claimed yet: it shows, once, and the player's toast then stays quiet.
+            com.nuvio.tv.core.sportslive.SportsLiveFullTimeAnnouncements.clear()
+            assertTrue(SportsLiveAlertEngine.claimToShow(fullTime))
+            org.junit.Assert.assertFalse(SportsLiveAlertEngine.claimToShow(fullTime))
+            org.junit.Assert.assertFalse(com.nuvio.tv.core.sportslive.SportsLiveFullTimeAnnouncements.claim(fullTime.snapshot.eventId))
+
+            // Other alerts are never held back.
+            val score = SportsLiveAlert.ScoreChange(card, live(52, 48), ScoreSide.HOME)
+            assertTrue(SportsLiveAlertEngine.claimToShow(score))
+        } finally {
+            com.nuvio.tv.core.sportslive.SportsLiveFullTimeAnnouncements.clear()
+        }
+    }
 }

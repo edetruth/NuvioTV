@@ -226,6 +226,8 @@ class SportsLiveAlerts @Inject constructor(
                 if (next is SportsLiveAlert.Kickoff) engine.answered(next.item)
                 continue
             }
+            // Its game's full time already announced (the toast for the game playing, #60): dropped.
+            if (!SportsLiveAlertEngine.claimToShow(next)) continue
             currentFlow.value = next
             return
         }

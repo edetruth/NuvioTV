@@ -217,6 +217,81 @@ class ZapPanelScoresTest {
         assertNull(viewModel.panel.value)
     }
 
+    // The game playing is polled for its full-time toast (#60)
+
+    /** Requests [scores]' provider makes while the player of [panelViewModel]'s game runs for 30 minutes. */
+    private fun kotlinx.coroutines.test.TestScope.playerNowRequests(mode: ScoresMode, alsoTrackedElsewhere: Boolean): Pair<Int, SportsLiveZapViewModel> {
+        val requests = mutableListOf<LocalDate>()
+        val provider = object : ScoreProvider {
+            override suspend fun scoreboard(league: EspnLeague, date: LocalDate): ScoreboardResult {
+                requests += date
+                return ScoreboardResult(if (league == EspnLeagueMap.NBA) listOf(live(pacersEvent, "Q3 4:12", 88, 80)) else emptyList())
+            }
+        }
+        val scores = LiveScoresRepository(
+            provider = provider, settings = MutableStateFlow(ScoreSettings(mode = mode)), scope = backgroundScope,
+            now = { now + testScheduler.currentTime }, zone = { ZoneOffset.UTC }, jitter = { 0L }
+        )
+        val (viewModel, playing) = panelViewModel(scores)
+        // The section (or Home) tracks the same game: the feed is one poller, whoever asks.
+        if (alsoTrackedElsewhere) scores.track(LiveScoresRepository.SCREEN_SECTION, listOf(playing))
+        viewModel.onPlayerStarted(true)
+        runCurrent()
+        advanceTimeBy(30 * 60_000L); runCurrent()
+        return requests.size to viewModel
+    }
+
+    @Test
+    fun `the game playing is polled under Scores, never under Off, through the shared feeds`() = runTest(mainDispatcherRule.dispatcher) {
+        // Off: no request at all, and no toast.
+        val (offRequests, offViewModel) = playerNowRequests(ScoresMode.OFF, alsoTrackedElsewhere = false)
+        assertEquals(0, offRequests)
+        assertNull(offViewModel.fullTime.value)
+        offViewModel.onPlayerStarted(false)
+
+        // Show: its league is polled while the player runs.
+        val (alone, aloneViewModel) = playerNowRequests(ScoresMode.SHOW, alsoTrackedElsewhere = false)
+        assertTrue(alone > 0)
+        aloneViewModel.onPlayerStarted(false)
+
+        // Tracked by the section too: still one poller per league and date, so no more requests.
+        val (shared, sharedViewModel) = playerNowRequests(ScoresMode.SHOW, alsoTrackedElsewhere = true)
+        assertEquals(alone, shared)
+        sharedViewModel.onPlayerStarted(false)
+    }
+
+    @Test
+    fun `the game playing stops being polled when the player stops`() = runTest(mainDispatcherRule.dispatcher) {
+        val requests = mutableListOf<LocalDate>()
+        val provider = object : ScoreProvider {
+            override suspend fun scoreboard(league: EspnLeague, date: LocalDate): ScoreboardResult {
+                requests += date
+                return ScoreboardResult(emptyList())
+            }
+        }
+        val scores = LiveScoresRepository(
+            provider = provider, settings = MutableStateFlow(ScoreSettings()), scope = backgroundScope,
+            now = { now + testScheduler.currentTime }, zone = { ZoneOffset.UTC }, jitter = { 0L }
+        )
+        val (viewModel, _) = panelViewModel(scores)
+        // Not started (or stopped): nothing.
+        runCurrent()
+        advanceTimeBy(10 * 60_000L); runCurrent()
+        assertTrue(requests.isEmpty())
+
+        viewModel.onPlayerStarted(true)
+        runCurrent()
+        advanceTimeBy(10 * 60_000L); runCurrent()
+        assertTrue(requests.isNotEmpty())
+
+        // The player closed (ON_STOP, or the overlay gone): no more requests, however long.
+        viewModel.onPlayerStarted(false)
+        runCurrent()
+        val fetched = requests.size
+        advanceTimeBy(60 * 60_000L); runCurrent()
+        assertEquals(fetched, requests.size)
+    }
+
     private fun panelViewModel(
         scores: LiveScoresRepository,
         logos: TeamLogoBook = TeamLogoBook.shared

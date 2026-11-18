@@ -1,5 +1,6 @@
 package com.nuvio.tv.core.sportslive.alerts
 
+import com.nuvio.tv.core.sportslive.SportsLiveFullTimeAnnouncements
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.scores.ScoreSide
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
@@ -269,6 +270,14 @@ class SportsLiveAlertEngine {
                 else -> alert
             }
         }
+
+        /**
+         * Whether [alert] may show now, claiming its game's full time when it is a full-time toast: one
+         * game's end is announced once, by this toast or by the one for the game playing (#60), whichever
+         * claims its ESPN event id first ([SportsLiveFullTimeAnnouncements]). Other alerts always may.
+         */
+        fun claimToShow(alert: SportsLiveAlert): Boolean =
+            alert !is SportsLiveAlert.FullTime || SportsLiveFullTimeAnnouncements.claim(alert.snapshot.eventId)
 
         /** True when [item] (or one of its sources) is what plays now. */
         fun isPlaying(item: SportsLiveItem, watching: SportsLiveWatching): Boolean =
