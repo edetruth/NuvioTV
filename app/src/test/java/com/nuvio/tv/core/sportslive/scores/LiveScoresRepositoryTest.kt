@@ -1108,4 +1108,86 @@ class LiveScoresRepositoryTest {
         advanceTimeBy(10 * 60_000L); runCurrent()
         assertTrue(provider.calls.count { it == cbb15 } > 2)
     }
+
+    // --- #81: live scores refresh while the screen stays open ---
+
+    private val nba14 = ScoreFeed(EspnLeagueMap.NBA, LocalDate.of(2026, 11, 14))
+
+    /** An undated card whose today's feed (the live game) answers before yesterday's, as on a TV often. */
+    private fun TestScope.undatedLiveGame(homeScore: () -> Int, delaySeconds: Int = 0): Pair<LiveScoresRepository, String> {
+        settings.value = ScoreSettings(delaySeconds = delaySeconds)
+        provider.respond = { feed -> ScoreboardResult(if (feed == nba15) listOf(game(ScoreState.IN, homeScore(), 48)) else emptyList()) }
+        val yesterday = CompletableDeferred<Unit>()
+        provider.gateFor = mapOf(nba14 to yesterday)
+        val repo = repository("2026-11-15T19:00:00Z")
+        collect(repo)
+        val undated = item("Indiana Pacers vs Philadelphia 76ers", "Basketball", null)
+        repo.track(SECTION, listOf(undated))
+        runCurrent()
+        // Today's feed has answered; the card waits for yesterday's (a league counts once all its days are in).
+        assertTrue(undated.streamKey !in repo.scores.value)
+        yesterday.complete(Unit)
+        provider.gateFor = emptyMap()
+        runCurrent()
+        return repo to undated.streamKey
+    }
+
+    @Test
+    fun `an undated live game matched after its other day lands keeps polling every 30 s on screen (#81)`() = runTest {
+        var score = 50
+        val (repo, key) = undatedLiveGame({ score })
+        assertEquals(50, repo.scores.value.getValue(key).homeScore)
+        score = 53
+        advanceTimeBy(30_000); runCurrent()
+        assertEquals(53, repo.scores.value.getValue(key).homeScore)
+        score = 55
+        advanceTimeBy(30_000); runCurrent()
+        assertEquals(55, repo.scores.value.getValue(key).homeScore)
+        // Today's feed at the live pace, never more often.
+        assertEquals(3, provider.calls.count { it == nba15 })
+    }
+
+    @Test
+    fun `with a score delay each poll is released the delay after it arrived, without leaving the screen (#81)`() = runTest {
+        var score = 50
+        val (repo, key) = undatedLiveGame({ score }, delaySeconds = 30)
+        // First seen live: withheld for the delay.
+        assertNull(repo.scores.value.getValue(key).homeScore)
+        score = 53
+        advanceTimeBy(30_000); runCurrent()
+        assertEquals(50, repo.scores.value.getValue(key).homeScore)
+        score = 55
+        advanceTimeBy(30_000); runCurrent()
+        assertEquals(53, repo.scores.value.getValue(key).homeScore)
+        advanceTimeBy(30_000); runCurrent()
+        assertEquals(55, repo.scores.value.getValue(key).homeScore)
+    }
+
+    @Test
+    fun `a live card tracked onto a feed waiting at the upcoming pace is polled at the live pace (#81)`() = runTest {
+        var score = 50
+        // LAL @ PHX at 21:00Z: upcoming at 19:00Z.
+        val lakersEvent = nbaFixture.first { it.eventId == "401909986" }.let {
+            it.copy(state = ScoreState.PRE, isFinal = false, clockText = null, home = it.home.copy(score = null), away = it.away.copy(score = null))
+        }
+        provider.respond = { ScoreboardResult(listOf(game(ScoreState.IN, score, 48), lakersEvent)) }
+        val repo = repository("2026-11-15T19:00:00Z")
+        collect(repo)
+        // Home tracks only the upcoming game: the feed waits 5 minutes.
+        repo.track(HOME, listOf(item("Los Angeles Lakers at Phoenix Suns", "Basketball", "2026-11-15T20:30:00Z")))
+        runCurrent()
+        assertEquals(1, provider.calls.size)
+        // A minute on, the section shows the live game on the same feed.
+        advanceTimeBy(60_000); runCurrent()
+        score = 53
+        repo.track(SECTION, listOf(pacersCard))
+        runCurrent()
+        // Its last fetch is over 30 s old: fetched at once.
+        assertEquals(2, provider.calls.size)
+        assertEquals(53, repo.scores.value.getValue(pacersCard.streamKey).homeScore)
+        score = 55
+        advanceTimeBy(30_000); runCurrent()
+        assertEquals(3, provider.calls.size)
+        assertEquals(55, repo.scores.value.getValue(pacersCard.streamKey).homeScore)
+    }
 }

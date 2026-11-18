@@ -31,6 +31,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import java.time.Instant
 import java.time.LocalDate
@@ -201,6 +202,13 @@ class LiveScoresRepository internal constructor(
     private var logosDirty = false
     private val scoreDelay = ScoreDelay()
     private val nextRelease = MutableStateFlow<Long?>(null)
+    /**
+     * The matched games' states by event id, as of the last refresh: what a feed's polling pace hangs on.
+     * A poller waiting out its interval is woken when it changes, so a game matched live after the feed's
+     * own fetch (an undated card's other day landing, a live card tracked onto a feed at the upcoming
+     * pace) is polled at the live pace at once, not after the 5-minute wait (#81).
+     */
+    private val matchedStates = MutableStateFlow<Map<String, ScoreState>>(emptyMap())
     private val outage = ScoresOutageNotice(health)
     /** The running pollers' scope while someone collects [scores] and Scores is not Off. */
     @Volatile
@@ -321,8 +329,9 @@ class LiveScoresRepository internal constructor(
     private suspend fun poll(feed: ScoreFeed, pollerScope: CoroutineScope) {
         warmStart(feed, pollerScope)
         while (true) {
-            val wait = lock.withLock { waitLocked(feed) } ?: return
-            if (wait > 0) delay(wait)
+            val (wait, seen) = lock.withLock { waitLocked(feed)?.let { it to matchedStates.value } } ?: return
+            // Woken when the matched games change: the wait is worked out again from the last fetch (#81).
+            if (wait > 0 && withTimeoutOrNull(wait) { matchedStates.first { it != seen } } != null) continue
             val request = lock.withLock { fetchLocked(feed) }
             request.await()
             lock.withLock { refreshLocked(pollerScope, restartStopped = false) }
@@ -552,6 +561,7 @@ class LiveScoresRepository internal constructor(
             settle(wait.entry, wait.dates, wait.cardFeeds + college, match)
         }
         raw = matched
+        matchedStates.value = matched.values.associate { it.eventId to it.state }
         unmatchedOutput.value = unmatchedKeys.toSet()
         if (logos.revision.value != learnedBefore) saveLogos()
         prefetchLogos(matched.values)
