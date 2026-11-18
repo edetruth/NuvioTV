@@ -259,6 +259,9 @@ jobs:
         run: |
           upstream_ref="upstream/${UPSTREAM_BRANCH}"
           last_tag="$(git describe --tags --abbrev=0 --match 'v*live*' "${BEFORE_MERGE}" 2>/dev/null || true)"
+          # Rollback link: the newest published release before this one (none on the first release).
+          prev_tag="$(gh release list --repo "${GITHUB_REPOSITORY}" --exclude-drafts --limit 1 \
+            --json tagName --jq '.[0].tagName // empty' 2>/dev/null || true)"
           {
             echo "Nuvio Live ${VERSION_NAME}: the Nuvio Android TV app with the Sports & Live section, built from \`${LIVE_BRANCH}\`."
             echo
@@ -277,6 +280,11 @@ jobs:
               git log --no-merges --format='- %s (%h)' "${BEFORE_MERGE}" "^${upstream_ref}" | head -n 60 > fork.txt
             fi
             if [[ -s fork.txt ]]; then cat fork.txt; else echo "- none"; fi
+            if [[ -n "${prev_tag}" ]]; then
+              prev_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases"
+              echo
+              echo "Previous version: [${prev_tag}](${prev_url}/tag/${prev_tag}) ([universal APK](${prev_url}/download/${prev_tag}/app-full-universal-release.apk))"
+            fi
           } > release-notes.md
           cat release-notes.md >> "${GITHUB_STEP_SUMMARY}"
 
