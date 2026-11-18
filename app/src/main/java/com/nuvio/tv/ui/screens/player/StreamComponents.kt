@@ -6,9 +6,7 @@
 package com.nuvio.tv.ui.screens.player
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -32,7 +30,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
@@ -81,6 +78,7 @@ internal fun StreamItem(
     focusRequester: FocusRequester? = null,
     requestInitialFocus: Boolean = true,
     isCurrentStream: Boolean = false,
+    nowPlayingAnimates: Boolean = false,
     showFileSizeBadges: Boolean = true,
     showAddonLogo: Boolean = true,
     badgePlacement: StreamBadgePlacement = StreamBadgePlacement.BOTTOM,
@@ -133,7 +131,7 @@ internal fun StreamItem(
             border = Border(
                 border = BorderStroke(
                     NuvioTheme.spacing.hairline,
-                    if (isCurrentStream) NuvioTheme.colors.Primary.copy(alpha = 0.65f) else Color.Transparent
+                    Color.Transparent
                 ),
                 shape = RoundedCornerShape(NuvioTheme.radii.md)
             ),
@@ -147,6 +145,7 @@ internal fun StreamItem(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .then(if (isCurrentStream) Modifier.nowPlayingAccentBar(NuvioTheme.colors.Primary) else Modifier)
                 .padding(NuvioTheme.spacing.lg),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.lg)
@@ -170,6 +169,7 @@ internal fun StreamItem(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)
                     ) {
+                        if (isCurrentStream) NowPlayingMarker(animate = nowPlayingAnimates)
                         Text(
                             text = streamName,
                             style = MaterialTheme.typography.titleMedium.copy(
@@ -177,21 +177,6 @@ internal fun StreamItem(
                             ),
                             color = NuvioTheme.colors.TextPrimary
                         )
-
-                        if (isCurrentStream) {
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(999.dp))
-                                    .background(NuvioTheme.colors.Primary.copy(alpha = 0.2f))
-                                    .padding(horizontal = NuvioTheme.spacing.sm, vertical = NuvioTheme.spacing.xs)
-                            ) {
-                                Text(
-                                    text = stringResource(R.string.sources_playing),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = NuvioTheme.colors.Primary
-                                )
-                            }
-                        }
                     }
                 }
 

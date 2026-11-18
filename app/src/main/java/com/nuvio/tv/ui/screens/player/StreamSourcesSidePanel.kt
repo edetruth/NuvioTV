@@ -110,7 +110,31 @@ internal fun StreamSourcesSidePanel(
     }
 
     // Sports & Live (N2): a source's notices sit after its streams, as info rows nobody can focus or play.
-    val shownStreams = remember(uiState.sourceFilteredStreams) { sportsLiveNoticesLast(uiState.sourceFilteredStreams, isNotice) }
+    val orderedStreams = remember(uiState.sourceFilteredStreams) { sportsLiveNoticesLast(uiState.sourceFilteredStreams, isNotice) }
+    val playingIndex = remember(
+        orderedStreams,
+        uiState.currentStreamInfoHash,
+        uiState.currentStreamFileIdx,
+        uiState.currentStreamAddonName,
+        uiState.currentStreamUrl,
+        uiState.currentStreamName,
+        uiState.currentStreamDescription,
+        currentFilename
+    ) {
+        findCurrentStreamIndex(
+            streams = orderedStreams,
+            currentStreamInfoHash = uiState.currentStreamInfoHash,
+            currentStreamFileIdx = uiState.currentStreamFileIdx,
+            currentStreamAddonName = uiState.currentStreamAddonName,
+            currentStreamUrl = uiState.currentStreamUrl,
+            currentStreamName = uiState.currentStreamName,
+            currentStreamDescription = uiState.currentStreamDescription,
+            currentFilename = currentFilename
+        ).takeIf { it >= 0 && !isNotice(orderedStreams[it]) } ?: -1
+    }
+    // #131: the playing source is pinned first, under a "Now playing" header.
+    val shownStreams = remember(orderedStreams, playingIndex) { pinPlayingFirst(orderedStreams, playingIndex) }
+    val currentStreamIndex = if (playingIndex >= 0) 0 else -1
     val noticeIndices = remember(shownStreams) { shownStreams.indices.filter { isNotice(shownStreams[it]) }.toSet() }
     val streamKeys = remember(shownStreams) {
         val seen = mutableMapOf<String, Int>()
@@ -122,27 +146,6 @@ internal fun StreamSourcesSidePanel(
         }
     }
     val firstStreamKey = streamKeys.indices.firstOrNull { it !in noticeIndices }?.let(streamKeys::get)
-    val currentStreamIndex = remember(
-        shownStreams,
-        uiState.currentStreamInfoHash,
-        uiState.currentStreamFileIdx,
-        uiState.currentStreamAddonName,
-        uiState.currentStreamUrl,
-        uiState.currentStreamName,
-        uiState.currentStreamDescription,
-        currentFilename
-    ) {
-        findCurrentStreamIndex(
-            streams = shownStreams,
-            currentStreamInfoHash = uiState.currentStreamInfoHash,
-            currentStreamFileIdx = uiState.currentStreamFileIdx,
-            currentStreamAddonName = uiState.currentStreamAddonName,
-            currentStreamUrl = uiState.currentStreamUrl,
-            currentStreamName = uiState.currentStreamName,
-            currentStreamDescription = uiState.currentStreamDescription,
-            currentFilename = currentFilename
-        )
-    }
     // The panel opens on the stream playing now, falling back to the first result; never on a notice (N2).
     val currentStreamKey = streamKeys.getOrNull(currentStreamIndex)?.takeIf { currentStreamIndex !in noticeIndices }
     val streamFocusRequesters = remember { mutableMapOf<String, FocusRequester>() }
@@ -505,6 +508,7 @@ internal fun StreamSourcesSidePanel(
                                 return@itemsIndexed
                             }
                             Column {
+                                if (index == currentStreamIndex) NowPlayingHeader()
                                 StreamItem(
                                     stream = stream,
                                     focusRequester = if (index == 0) {
@@ -513,6 +517,7 @@ internal fun StreamSourcesSidePanel(
                                         streamFocusRequesters.getValue(streamKeys[index])
                                     },
                                     isCurrentStream = index == currentStreamIndex,
+                                    nowPlayingAnimates = nowPlayingBarsAnimate(uiState.isPlaying, uiState.isBuffering),
                                     showFileSizeBadges = uiState.showFileSizeBadges,
                                     showAddonLogo = uiState.showAddonLogo,
                                     badgePlacement = uiState.streamBadgePlacement,
