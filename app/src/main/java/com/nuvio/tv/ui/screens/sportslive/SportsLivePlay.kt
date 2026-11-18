@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.nuvio.tv.core.debrid.DirectDebridResolver
 import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.core.sportslive.SportsLiveOpenGame
+import com.nuvio.tv.core.sportslive.SportsLiveWorkingLinks
 import com.nuvio.tv.data.local.PlayerSettingsDataStore
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import com.nuvio.tv.data.local.StreamAutoPlayMode
@@ -108,6 +109,8 @@ internal suspend fun sportsLiveZapTarget(
     }
     // Scope the full player's auto-failover and recovery overlay to this sports game/channel.
     SportsLiveExtraSources.markSportsPlayback(item.id, item)
+    // The player finds this exact stream again once it plays, for dual screen to take over (#65).
+    SportsLiveWorkingLinks.shared.noteLaunch(item.id, stream)
     // The full-player launch carries only request headers; stash the response headers so the player
     // seeds them at init and plays with the same proxy headers as the details -> play / preview paths.
     playback?.url?.let { url ->

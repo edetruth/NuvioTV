@@ -39,6 +39,7 @@ import org.junit.Assert.assertTrue
 import org.junit.After
 import org.junit.Test
 import com.nuvio.tv.core.sportslive.SportsLiveSourceReliability
+import com.nuvio.tv.core.sportslive.SportsLiveWorkingLinks
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SportsLiveZapResolverTest {
@@ -48,6 +49,7 @@ class SportsLiveZapResolverTest {
     private val probe = mockk<SportsLiveStreamProbe>(relaxed = true)
     private var settings = PlayerSettings()
     private var preparationCheckThrows = false
+    private val links = SportsLiveWorkingLinks(nowMs = { 0L })
     private val debrid = mockk<DirectDebridResolver>().also {
         coEvery { it.shouldResolveToPlayableStream(any()) } answers {
             if (preparationCheckThrows && firstArg<Stream>() == PREPARE_ALT) error("debrid check failed")
@@ -62,7 +64,10 @@ class SportsLiveZapResolverTest {
         every { dataStore.playerSettings } answers { flowOf(settings) }
         val addons = mockk<AddonRepository>()
         every { addons.getInstalledAddons() } returns flowOf(listOf(addon("Sports"), addon("Off", enabled = false)))
-        return SportsLiveZapResolver(streams, dataStore, addons, probe, debrid, resolveCache).also { it.fetchScope = backgroundScope }
+        return SportsLiveZapResolver(streams, dataStore, addons, probe, debrid, resolveCache).also {
+            it.fetchScope = backgroundScope
+            it.workingLinks = links
+        }
     }
 
     @After
@@ -492,6 +497,62 @@ class SportsLiveZapResolverTest {
         resolver.invalidateByContentId(ITEM.id)
         resolver.resolve(ITEM)
         assertEquals(2, streams.calls.size)
+    }
+
+    @Test
+    fun `a quarantined link is skipped for the game`() = runTest {
+        streams.response = { result(SD, HD) }
+        links.quarantine(ITEM.id, SD.url)
+
+        assertEquals(HD, newResolver().resolve(ITEM))
+    }
+
+    @Test
+    fun `a link known to work for the game is preferred`() = runTest {
+        streams.response = { result(SD, HD) }
+        links.markGood(ITEM.id, HD.url)
+
+        assertEquals(HD, newResolver().resolve(ITEM))
+    }
+
+    @Test
+    fun `with every link quarantined the usual pick still plays`() = runTest {
+        streams.response = { result(SD, HD) }
+        links.quarantine(ITEM.id, SD.url)
+        links.quarantine(ITEM.id, HD.url)
+
+        assertEquals(SD, newResolver().resolve(ITEM))
+    }
+
+    @Test
+    fun `a cached link quarantined since is looked up again`() = runTest {
+        streams.response = { result(SD, HD) }
+        val resolver = newResolver()
+        assertEquals(SD, resolver.resolve(ITEM))
+        links.quarantine(ITEM.id, SD.url)
+
+        assertEquals(HD, resolver.resolve(ITEM))
+        assertEquals(2, streams.calls.size)
+    }
+
+    @Test
+    fun `a merged game skips the primary's quarantined link for another source's`() = runTest {
+        streams.responses["game"] = { flowOf(success(SD)) }
+        streams.responses["alt1"] = { flowOf(success(HD, addon = "Other")) }
+        streams.responses["alt2"] = { flowOf(success()) }
+        links.quarantine(MERGED.id, SD.url)
+
+        assertEquals(HD, newResolver().resolve(MERGED))
+    }
+
+    @Test
+    fun `a merged game with only quarantined links plays one of them`() = runTest {
+        streams.responses["game"] = { flowOf(success(SD)) }
+        streams.responses["alt1"] = { flowOf(success()) }
+        streams.responses["alt2"] = { flowOf(success()) }
+        links.quarantine(MERGED.id, SD.url)
+
+        assertEquals(SD, newResolver().resolve(MERGED))
     }
 
     private class FakeStreamRepository : StreamRepository {

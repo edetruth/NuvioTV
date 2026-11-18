@@ -17,6 +17,7 @@ import com.nuvio.tv.R
 import com.nuvio.tv.core.debrid.DirectDebridResolver
 import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.core.sportslive.SportsLiveEndedGames
+import com.nuvio.tv.core.sportslive.SportsLiveWorkingLinks
 import com.nuvio.tv.core.sportslive.scores.LiveScoresRepository
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.domain.model.SportsLiveItem
@@ -79,7 +80,9 @@ class SportsLiveZapViewModel internal constructor(
     private val repo: SportsLiveRepository,
     private val liveScores: LiveScoresRepository,
     // Where the panel's list is built and grouped; tests pass their dispatcher, so it runs in virtual time.
-    computeDispatcher: CoroutineDispatcher
+    computeDispatcher: CoroutineDispatcher,
+    // The stream this player plays, handed to dual screen (#65).
+    private val workingLinks: SportsLiveWorkingLinks = SportsLiveWorkingLinks.shared
 ) : ViewModel() {
 
     @Inject constructor(
@@ -303,7 +306,9 @@ class SportsLiveZapViewModel internal constructor(
             items = items(session),
             filter = session.filter,
             tab = session.tab,
-            endedKeys = repo.endedKeys.value
+            endedKeys = repo.endedKeys.value,
+            // The game playing keeps its working stream in dual screen, with no new lookup (#65).
+            chosenStream = workingLinks.playing(session.current.id)
         )
     }
 

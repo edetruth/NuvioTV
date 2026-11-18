@@ -7,6 +7,10 @@ import com.nuvio.tv.core.debrid.DirectDebridPlayableResult
 import com.nuvio.tv.core.sportslive.SportsLiveFailover
 import com.nuvio.tv.core.sportslive.SportsLiveSourceReliability
 import com.nuvio.tv.core.sportslive.SportsLiveStallWatchdog
+import com.nuvio.tv.core.sportslive.SportsLiveWorkingLinks
+import com.nuvio.tv.domain.model.ProxyHeaders
+import com.nuvio.tv.domain.model.Stream
+import com.nuvio.tv.domain.model.StreamBehaviorHints
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveExtraSources
 import com.nuvio.tv.ui.screens.sportslive.sportsLiveFallbackCandidate
 import kotlinx.coroutines.delay
@@ -36,11 +40,50 @@ private const val SPORTS_STALL_POLL_INTERVAL_MS = 2_000L
  * with its time to first frame. A manual pick in the Sources panel that plays counts too. Sports only.
  */
 internal fun PlayerRuntimeController.recordSportsSourceFirstFrame() {
+    // The stream playing now, for dual screen to take over as is (#65).
+    if (SportsLiveExtraSources.isSportsPlayback(contentId)) {
+        currentSportsStream()?.let { SportsLiveWorkingLinks.shared.startedPlaying(contentId.orEmpty(), it) }
+    }
     val key = currentSportsSourceKey() ?: return
     SportsLiveSourceReliability.record(
         key,
         SportsLiveSourceReliability.Outcome.SUCCESS,
         ttffMs = System.currentTimeMillis() - sportsAttemptStartedAtMs
+    )
+}
+
+/**
+ * The stream the sports player plays (#65): the one launched for this game when its url is the one
+ * playing (with every header and hint), else one built from what the player plays. Null without a url.
+ */
+private fun PlayerRuntimeController.currentSportsStream(): Stream? {
+    val gameKey = contentId ?: return null
+    val url = currentStreamUrl.takeIf { it.isNotBlank() } ?: return null
+    val launched = SportsLiveWorkingLinks.shared.launched(gameKey)
+    val launchedUrl = launched?.getStreamUrl()
+    if (launched != null && launchedUrl != null && (launchedUrl == url ||
+            PlayerMediaSourceFactory.normalizePlaybackRequest(launchedUrl, launched.behaviorHints?.proxyHeaders?.request).url == url)
+    ) {
+        return launched
+    }
+    return Stream(
+        name = _uiState.value.currentStreamName,
+        title = null,
+        description = currentStreamDescription,
+        url = url,
+        ytId = null,
+        infoHash = null,
+        fileIdx = null,
+        externalUrl = null,
+        behaviorHints = StreamBehaviorHints(
+            notWebReady = null,
+            bingeGroup = null,
+            countryWhitelist = null,
+            proxyHeaders = ProxyHeaders(request = currentHeaders, response = currentStreamResponseHeaders),
+            filename = currentFilename
+        ),
+        addonName = currentAddonName.orEmpty(),
+        addonLogo = currentAddonLogo
     )
 }
 
@@ -69,6 +112,8 @@ internal fun PlayerRuntimeController.trySportsLiveFailoverAfterError(
             currentSportsSourceKey(),
             if (stalled) SportsLiveSourceReliability.Outcome.STALL else SportsLiveSourceReliability.Outcome.FAILURE
         )
+        // A link that failed to start or hit a fatal error is skipped for this game for a while (#65).
+        if (!stalled) SportsLiveWorkingLinks.shared.quarantine(contentId.orEmpty(), currentSportsStream()?.getStreamUrl())
     }
     cancelSportsStallWatchdog()
 
@@ -96,9 +141,10 @@ internal fun PlayerRuntimeController.trySportsLiveFailoverAfterError(
             val sources = _uiState.value
             val searchDone = !sources.isLoadingSourceStreams &&
                 (sources.sourceAllStreams.isNotEmpty() || sources.sourceStreamsError != null)
+            // Links known to work for this game first, quarantined ones last (#65).
             val next = sportsLiveFallbackCandidate(
-                streams = sources.sourceAllStreams,
-                extras = SportsLiveExtraSources.availableStreamsFor(contentId),
+                streams = SportsLiveWorkingLinks.shared.order(contentId.orEmpty(), sources.sourceAllStreams),
+                extras = SportsLiveWorkingLinks.shared.order(contentId.orEmpty(), SportsLiveExtraSources.availableStreamsFor(contentId)),
                 extrasAllowed = searchDone || polls >= SPORTS_FAILOVER_POLL_COUNT,
                 settings = settings,
                 installedAddonNames = installedAddonNames,
@@ -127,6 +173,7 @@ internal fun PlayerRuntimeController.trySportsLiveFailoverAfterError(
                 "Sports source failed, auto-failing over to ${playable.name ?: playable.addonName} " +
                     "(${sportsFailoverAttempts}/$SPORTS_FAILOVER_MAX_SOURCES)"
             )
+            SportsLiveWorkingLinks.shared.noteLaunch(contentId.orEmpty(), playable)
             switchToSourceStream(playable)
             sportsFailoverTriedKeys += "url:$currentStreamUrl"
             return@launch
@@ -161,8 +208,13 @@ internal fun PlayerRuntimeController.scheduleSportsStallWatchdog() {
     sportsStallWatchdogJob = scope.launch {
         var lastPosition = currentPlaybackPositionMs() ?: 0L
         var lastProgressAtMs = System.currentTimeMillis()
+        var markedGood = false
         while (true) {
             delay(SPORTS_STALL_POLL_INTERVAL_MS)
+            // A link that keeps playing for 30 s is remembered as working for this game (#65).
+            if (!markedGood && _uiState.value.error == null && !isInBackground && hasRenderedFirstFrame) {
+                markedGood = SportsLiveWorkingLinks.shared.notePlaying(contentId.orEmpty())
+            }
             if (_uiState.value.error != null || isInBackground || !hasRenderedFirstFrame) {
                 lastProgressAtMs = System.currentTimeMillis()
                 continue

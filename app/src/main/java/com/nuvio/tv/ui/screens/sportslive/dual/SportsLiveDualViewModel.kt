@@ -3,6 +3,7 @@ package com.nuvio.tv.ui.screens.sportslive.dual
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nuvio.tv.core.debrid.DirectDebridResolver
+import com.nuvio.tv.core.sportslive.SportsLiveWorkingLinks
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveTab
@@ -30,7 +31,9 @@ data class SportsLiveDualSession(
     /** The filter (sport, or channel group) [items] were listed under, kept by the zap session OK starts. */
     val filter: String?,
     /** The tab [items] come from (Live now or Channels), kept by the zap session OK starts. */
-    val tab: SportsLiveTab
+    val tab: SportsLiveTab,
+    /** The stream the full player was playing for [left] (#65): the left pane plays it as is, with no lookup. */
+    val leftStream: Stream? = null
 )
 
 /**
@@ -42,7 +45,9 @@ data class SportsLiveDualPick(
     val items: List<SportsLiveItem>,
     val filter: String?,
     val tab: SportsLiveTab,
-    val endedKeys: Set<String> = emptySet()
+    val endedKeys: Set<String> = emptySet(),
+    /** The stream the full player plays for [chosen], handed to its pane (#65); null from the section. */
+    val chosenStream: Stream? = null
 ) {
     /** The other games of the list that are not known to have ended; never [chosen] or one of its sources. */
     val candidates: List<SportsLiveItem> by lazy { items.filter(::isCandidate) }
@@ -51,7 +56,14 @@ data class SportsLiveDualPick(
     private val chosenKeys: Set<String> by lazy { chosen.sourceKeys() }
 
     fun session(second: SportsLiveItem): SportsLiveDualSession =
-        SportsLiveDualSession(left = chosen, right = second, items = items.toList(), filter = filter, tab = tab)
+        SportsLiveDualSession(
+            left = chosen,
+            right = second,
+            items = items.toList(),
+            filter = filter,
+            tab = tab,
+            leftStream = chosenStream
+        )
 
     /** The session pairing [chosen] with [second]; null when [second] is [chosen], shares a source with it, or has ended. */
     fun pairWith(second: SportsLiveItem): SportsLiveDualSession? = if (isCandidate(second)) session(second) else null
@@ -120,7 +132,11 @@ class SportsLiveDualViewModel internal constructor(
     private val endedKeys: () -> Set<String>,
     session: SportsLiveDualSession?,
     /** Counts this entry for the keys hint; true when the hint shows (see [keysHint]). */
-    claimKeysHint: suspend () -> Boolean = { false }
+    claimKeysHint: suspend () -> Boolean = { false },
+    /** Whether a pane can play the full player's stream as is (a plain url); else the pane looks one up. */
+    private val handOffPlayable: suspend (Stream) -> Boolean = { true },
+    /** Which links work for each game (#65): the panes' outcomes are remembered here. */
+    private val workingLinks: SportsLiveWorkingLinks = SportsLiveWorkingLinks.shared
 ) : ViewModel() {
 
     @Inject
@@ -136,7 +152,8 @@ class SportsLiveDualViewModel internal constructor(
         },
         endedKeys = { repo.endedKeys.value },
         session = SportsLiveDualSessions.take(),
-        claimKeysHint = preferences::claimDualKeysHint
+        claimKeysHint = preferences::claimDualKeysHint,
+        handOffPlayable = { stream -> sportsLiveLightPlayable(stream, directDebridResolver) }
     )
 
     private val items: List<SportsLiveItem> = session?.items.orEmpty()
@@ -158,7 +175,17 @@ class SportsLiveDualViewModel internal constructor(
     /** Stream keys of the games whose decoder failure has had its one retry. */
     private val deviceLimitRetried = mutableSetOf<String>()
 
+    /**
+     * Streams handed over by the full player (#65), by game stream key: such a game's pane plays it
+     * with no lookup, on entry and whenever it loads again, until it fails there.
+     */
+    private val handOffs = mutableMapOf<String, Stream>()
+
+    /** When each pane's game (by stream key) showed its first frame, and with which stream. */
+    private val playingSince = mutableMapOf<String, Pair<Stream, Long>>()
+
     init {
+        session?.let { s -> s.leftStream?.let { handOffs[s.left.streamKey] = it } }
         session?.let {
             load(Side.LEFT, it.left)
             load(Side.RIGHT, it.right)
@@ -192,6 +219,7 @@ class SportsLiveDualViewModel internal constructor(
         val state = _state.value ?: return false
         val side = state.highlighted
         val target = zapTarget(state.pane(side).item, state.pane(side.other).item, forward) ?: return false
+        settle(state.pane(side).item)
         load(side, target)
         return true
     }
@@ -216,9 +244,11 @@ class SportsLiveDualViewModel internal constructor(
         dispatch(DualAction.FirstFrame(item))
         // Playing now: the pane's first-frame timeout is no longer needed, and a later decoder
         // failure gets its retry again.
-        if (_state.value?.pane(side)?.status == PaneStatus.Playing) {
+        val pane = _state.value?.pane(side)
+        if (pane?.status == PaneStatus.Playing) {
             jobs.remove(side)?.cancel()
             deviceLimitRetried.remove(item.streamKey)
+            pane.stream?.let { stream -> playingSince.getOrPut(item.streamKey) { stream to workingLinks.nowMs() } }
         }
     }
 
@@ -230,6 +260,8 @@ class SportsLiveDualViewModel internal constructor(
         val other = state.pane(side.other)
         val otherActive = other.stream != null &&
             (other.status == PaneStatus.Loading || other.status == PaneStatus.Playing)
+        // A missing decoder is the device's fault, not the link's.
+        if (!decoderInit) linkFailed(item, state.pane(side).stream)
         if (!decoderInit || !otherActive) {
             dispatch(DualAction.Failed(item))
             return
@@ -253,10 +285,12 @@ class SportsLiveDualViewModel internal constructor(
             val pane = state.pane(side)
             if (pane.status != PaneStatus.Playing) continue
             jobs.remove(side)?.cancel()
+            // Played time restarts with the next first frame: how long the pane was away is unknown.
+            playingSince.remove(pane.item.streamKey)
             dispatch(DualAction.Restarted(pane.item))
             jobs[side] = viewModelScope.launch {
                 delay(FIRST_FRAME_TIMEOUT_MS)
-                dispatch(DualAction.TimedOut(pane.item))
+                timeOut(pane.item)
             }
         }
     }
@@ -285,13 +319,40 @@ class SportsLiveDualViewModel internal constructor(
         dispatch(DualAction.ZapRequested(side, item))
         jobs[side] = viewModelScope.launch {
             if (delayMs > 0) delay(delayMs)
-            val stream = resolve(item)
+            // The full player's stream for this game plays as is: no lookup (#65).
+            val stream = handOffs[item.streamKey]?.takeIf { handOffPlayable(it) } ?: resolve(item)
             dispatch(DualAction.Resolved(item, stream))
             if (stream != null) {
                 delay(FIRST_FRAME_TIMEOUT_MS)
-                dispatch(DualAction.TimedOut(item))
+                timeOut(item)
             }
         }
+    }
+
+    /** No first frame in time: the pane shows an error, and its link is quarantined for the game. */
+    private fun timeOut(item: SportsLiveItem) {
+        val pane = _state.value?.let { state -> state.sideOf(item)?.let(state::pane) }
+        if (pane?.status == PaneStatus.Loading) linkFailed(item, pane.stream)
+        dispatch(DualAction.TimedOut(item))
+    }
+
+    /** [stream] failed for [item]: quarantined, and not handed over again. */
+    private fun linkFailed(item: SportsLiveItem, stream: Stream?) {
+        val url = stream?.getStreamUrl() ?: return
+        playingSince.remove(item.streamKey)
+        if (handOffs[item.streamKey]?.getStreamUrl() == url) handOffs.remove(item.streamKey)
+        workingLinks.quarantine(item.id, url)
+    }
+
+    /** [item]'s pane stops playing it: a link that played long enough is remembered as good. */
+    private fun settle(item: SportsLiveItem) {
+        val (stream, sinceMs) = playingSince.remove(item.streamKey) ?: return
+        workingLinks.played(item.id, stream.getStreamUrl(), workingLinks.nowMs() - sinceMs)
+    }
+
+    override fun onCleared() {
+        _state.value?.let { state -> Side.entries.forEach { settle(state.pane(it).item) } }
+        super.onCleared()
     }
 
     private fun dispatch(action: DualAction) {

@@ -6,6 +6,7 @@ import com.nuvio.tv.core.network.NetworkResult
 import com.nuvio.tv.core.player.StreamAutoPlaySelector
 import com.nuvio.tv.core.sportslive.SportsLiveSourceLabels
 import com.nuvio.tv.core.sportslive.SportsLiveSourceReliability
+import com.nuvio.tv.core.sportslive.SportsLiveWorkingLinks
 import com.nuvio.tv.core.streams.UnplayableStreamFilter
 import com.nuvio.tv.data.local.PlayerSettings
 import com.nuvio.tv.data.local.PlayerSettingsDataStore
@@ -79,6 +80,10 @@ class SportsLiveZapResolver @Inject constructor(
     internal var timeoutMs = TIMEOUT_MS
 
     /** Runs a merged game's fetches, so alternates still finish (and are recorded) after the primary is played. */
+    /** Which links worked or failed for each game (#65): good ones are tried first, quarantined ones last. */
+    @VisibleForTesting
+    internal var workingLinks: SportsLiveWorkingLinks = SportsLiveWorkingLinks.shared
+
     @VisibleForTesting
     internal var fetchScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -114,7 +119,9 @@ class SportsLiveZapResolver @Inject constructor(
 
     suspend fun lookup(item: SportsLiveItem, forceRefresh: Boolean): SportsLiveLookup =
         try {
+            // A cached link that has since failed is not served again.
             val cached = if (forceRefresh) null else resolveCache.get(item.streamKey)
+                ?.takeUnless { workingLinks.isQuarantined(item.id, it) }
             if (cached != null) {
                 SportsLiveLookup.Found(cached)
             } else {
@@ -257,23 +264,32 @@ class SportsLiveZapResolver @Inject constructor(
         }
         // First the user's choice across every source, in rank order, so a reliable source with
         // nothing the user's regex or chosen addons allow never plays a stream they rule out.
+        // Within a source, links known to work for this game go first; quarantined ones are left
+        // for the end, across every source (#65).
         val fetched = mutableListOf<List<Stream>>()
         for ((source, fetch) in sources.zip(fetches)) {
             val streams = try {
-                playablePerSource(item, source, fetch.await().streams)
+                workingLinks.order(item.id, playablePerSource(item, source, fetch.await().streams))
             } catch (e: CancellationException) {
                 // A newer game cancelled this fetch: unless this lookup is cancelled too, it found nothing.
                 currentCoroutineContext().ensureActive()
                 emptyList()
             }
-            preferredStream(streams, settings, installedOrder.toSet())?.let { return SportsLiveLookup.Found(it) }
+            preferredStream(workingLinks.withoutQuarantined(item.id, streams), settings, installedOrder.toSet())
+                ?.let { return SportsLiveLookup.Found(it) }
             fetched += streams
         }
         // Then, only when the user's settings do not narrow what may play, the first playable stream.
-        if (!honoursAutoPlayFilters(settings)) {
-            fetched.firstNotNullOfOrNull { streams -> streams.firstOrNull(StreamAutoPlaySelector::isPlayable) }
-                ?.let { return SportsLiveLookup.Found(it) }
+        val firstPlayable = { lists: List<List<Stream>> ->
+            if (honoursAutoPlayFilters(settings)) null
+            else lists.firstNotNullOfOrNull { streams -> streams.firstOrNull(StreamAutoPlaySelector::isPlayable) }
         }
+        firstPlayable(fetched.map { workingLinks.withoutQuarantined(item.id, it) })
+            ?.let { return SportsLiveLookup.Found(it) }
+        // Nothing else is left: a quarantined link, picked the same way.
+        val quarantined = fetched.map { streams -> streams.filter { workingLinks.isQuarantined(item.id, it) } }
+        (preferredStream(quarantined.flatten(), settings, installedOrder.toSet()) ?: firstPlayable(quarantined))
+            ?.let { return SportsLiveLookup.Found(it) }
         val all = fetched.flatten()
         return if (all.isEmpty()) SportsLiveLookup.NothingFound else SportsLiveLookup.NonePlayable(all)
     }
@@ -348,13 +364,22 @@ class SportsLiveZapResolver @Inject constructor(
                     Event.EarlyPick -> earlyPickAllowed = true
                     Event.Finished -> finished = true
                 }
-                val ordered = StreamAutoPlaySelector.orderAddonStreams(
-                    (last as? NetworkResult.Success)?.data.orEmpty(),
-                    installedOrder
-                ).flatMap { it.streams }
-                val preferred = preferredStream(ordered, settings, installedOrder.toSet())
+                // Links known to work for this game first; quarantined ones only when nothing else plays (#65).
+                val ordered = workingLinks.order(
+                    item.id,
+                    StreamAutoPlaySelector.orderAddonStreams(
+                        (last as? NetworkResult.Success)?.data.orEmpty(),
+                        installedOrder
+                    ).flatMap { it.streams }
+                )
+                val fresh = workingLinks.withoutQuarantined(item.id, ordered)
+                val preferred = preferredStream(fresh, settings, installedOrder.toSet())
                 when {
-                    finished -> Decision(preferred ?: ordered.firstOrNull(StreamAutoPlaySelector::isPlayable))
+                    finished -> Decision(
+                        preferred ?: fresh.firstOrNull(StreamAutoPlaySelector::isPlayable)
+                            ?: preferredStream(ordered, settings, installedOrder.toSet())
+                            ?: ordered.firstOrNull(StreamAutoPlaySelector::isPlayable)
+                    )
                     earlyPickAllowed && preferred != null -> Decision(preferred)
                     else -> null
                 }
