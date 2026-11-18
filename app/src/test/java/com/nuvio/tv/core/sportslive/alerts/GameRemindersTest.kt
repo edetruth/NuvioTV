@@ -82,4 +82,25 @@ class GameRemindersTest {
         val state = GameReminders.toggle(RemindersState(reminders = listOf(old)), item(), START)
         assertEquals(listOf(GameReminders.of(item())!!), state.reminders)
     }
+
+    @Test
+    fun `an addon reusing an id for a later rematch is another game`() {
+        val reminder = GameReminders.of(item())!!
+        val rematch = item(startMs = START + 2 * 24 * 60 * MINUTE)
+        assertEquals(reminder.keys, GameReminders.of(rematch)!!.keys)
+        assertFalse(GameReminders.matches(reminder, rematch))
+        assertFalse(RemindersState(reminders = listOf(reminder), remindMyTeams = false).isReminded(rematch))
+        // Nor is the rematch opted out by the first game's opt-out.
+        assertTrue(RemindersState(optOuts = listOf(reminder)).isReminded(rematch.copy(followed = true)))
+        // A key match needs a start: an untimed card is never taken for the reminded game.
+        assertFalse(GameReminders.matches(reminder, item(startMs = null)))
+    }
+
+    @Test
+    fun `reminders and opt-outs of games started over six hours ago are dropped when read`() {
+        val recent = GameReminders.of(item())!!
+        val old = GameReminders.of(item(id = "old", name = "Bulls vs Bucks", startMs = START - 7 * 60 * MINUTE))!!
+        assertEquals(listOf(recent), GameReminders.current(listOf(old, recent), START + 5 * 60 * MINUTE))
+        assertEquals(emptyList<GameReminder>(), GameReminders.current(listOf(old, recent), START + 7 * 60 * MINUTE))
+    }
 }

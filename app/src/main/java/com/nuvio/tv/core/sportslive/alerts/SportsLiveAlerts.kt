@@ -5,6 +5,7 @@ import com.nuvio.tv.core.sportslive.scores.LiveScoresRepository
 import com.nuvio.tv.core.sportslive.scores.ScoreChips
 import com.nuvio.tv.core.sportslive.scores.ScoreSide
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
+import com.nuvio.tv.core.sportslive.scores.ScoreState
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.core.sportslive.scores.TeamFollows
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
@@ -28,7 +29,12 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -78,11 +84,30 @@ class SportsLiveAlerts @Inject constructor(
         watching.value = now
     }
 
+    /** The Scores setting and alert switches as last read: a queued toast is checked against them before it shows. */
+    @Volatile
+    private var lastMode: ScoresMode = ScoresMode.SHOW
+
+    @Volatile
+    private var lastSettings = SportsLiveAlertSettings()
+
+    /** Games ESPN said are over (by [SportsLiveAlertEngine.gameKey]): no longer tracked. Guarded by [lock]. */
+    private val endedGames = HashSet<String>()
+
+    /** A load asked for a due reminder this session (once). */
+    @Volatile
+    private var reminderLoadAsked = false
+
     /** Runs until cancelled (the app left the foreground): tracks, decides and queues alerts. */
     suspend fun runInForeground() = coroutineScope {
         val cards = combine(repo.latest, repo.claimedCatalogs, repo.followedTeams) { load, claimed, followed ->
             candidates(load, claimed, followed)
         }.flowOn(Dispatchers.Default)
+        val base = combine(cards, prefs.reminders, prefs.alertSettings, repo.followedTeams) { shown, reminded, settings, followed ->
+            Base(shown, reminded, settings, followed)
+        }.stateIn(this, SharingStarted.Eagerly, null)
+        // The 5 s clock runs only while there is something to time: a reminder, or a reminded or followed game.
+        val clock = base.map { it?.hasWork == true }.distinctUntilChanged().flatMapLatest { busy -> if (busy) ticks() else flowOf(Unit) }
         val tracked = MutableStateFlow<List<SportsLiveItem>>(emptyList())
         try {
             // The tracked cards are polled only while someone collects the scores: this, while any are tracked.
@@ -91,24 +116,54 @@ class SportsLiveAlerts @Inject constructor(
                     if (any) liveScores.scores.collect { }
                 }
             }
-            combine(
-                cards,
-                combine(prefs.reminders, prefs.alertSettings, repo.followedTeams, ::Triple),
-                liveScores.mode,
-                watching,
-                ticks()
-            ) { shown, (reminded, settings, followed), mode, now, _ -> Inputs(shown, reminded, settings, followed, mode, now) }
-                .collect { inputs ->
-                    val nowMs = System.currentTimeMillis()
-                    val toTrack = SportsLiveAlertScope.cardsToTrack(inputs.cards, inputs.followed, nowMs)
-                    if (toTrack != tracked.value) {
-                        tracked.value = toTrack
-                        liveScores.track(LiveScoresRepository.SCREEN_ALERTS, toTrack)
+            combine(base.filterNotNull(), liveScores.mode, watching, clock) { b, mode, now, _ ->
+                Inputs(b.cards, b.reminders, b.settings, b.followed, mode, now)
+            }.collect { inputs ->
+                val nowMs = System.currentTimeMillis()
+                lastMode = inputs.mode
+                lastSettings = inputs.settings
+                val scores = liveScores.scores.value
+                val ended = synchronized(lock) {
+                    inputs.cards.forEach { card ->
+                        val state = scores[card.streamKey]?.state
+                        if (state == ScoreState.POST) endedGames += SportsLiveAlertEngine.gameKey(card)
                     }
-                    evaluate(inputs, liveScores.scores.value, nowMs)
+                    if (endedGames.size > MAX_ENDED) endedGames.clear()
+                    endedGames.toSet()
                 }
+                val toTrack = SportsLiveAlertScope.cardsToTrack(inputs.cards, inputs.followed, nowMs, ended)
+                if (toTrack != tracked.value) {
+                    tracked.value = toTrack
+                    liveScores.track(LiveScoresRepository.SCREEN_ALERTS, toTrack)
+                }
+                // A reminder due with no load this session: Live now loads as on a normal open (once).
+                if (!reminderLoadAsked && SportsLiveAlertScope.needsLoad(inputs.reminders.reminders, repo.latest.value != null, nowMs)) {
+                    reminderLoadAsked = true
+                    launch { loadQuietly() }
+                }
+                evaluate(inputs, scores, nowMs)
+            }
         } finally {
             liveScores.untrack(LiveScoresRepository.SCREEN_ALERTS)
+        }
+    }
+
+    private class Base(
+        val cards: List<SportsLiveItem>,
+        val reminders: RemindersState,
+        val settings: SportsLiveAlertSettings,
+        val followed: List<FollowedTeam>
+    ) {
+        val hasWork: Boolean get() = reminders.reminders.isNotEmpty() || cards.any { it.followed || reminders.isReminded(it) }
+    }
+
+    /** The repository's normal load (a minute-old one is reused; channels carried over); a failure is ignored. */
+    private suspend fun loadQuietly() {
+        try {
+            repo.load(force = false, includeChannels = false)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
         }
     }
 
@@ -162,7 +217,9 @@ class SportsLiveAlerts @Inject constructor(
     private fun showNextLocked(nowMs: Long) {
         val now = watching.value
         while (queue.isNotEmpty()) {
-            val (next, raisedAt) = queue.removeAt(0)
+            val (queued, raisedAt) = queue.removeAt(0)
+            // The Scores setting or a switch may have changed while it waited.
+            val next = SportsLiveAlertEngine.stillShowable(queued, lastMode, lastSettings) ?: continue
             // A toast that waited too long is old news; nothing about the game now playing.
             if (next !is SportsLiveAlert.Kickoff && nowMs - raisedAt > TOAST_STALE_MS) continue
             if (SportsLiveAlertEngine.isPlaying(next.item, now)) {
@@ -208,6 +265,7 @@ class SportsLiveAlerts @Inject constructor(
 
         /** A score or full-time toast not shown within this long is dropped. */
         private const val TOAST_STALE_MS = 30_000L
+        private const val MAX_ENDED = 500
 
         /** The sides of [event] a followed team is, by ESPN data (strict). */
         fun followedSides(followed: List<FollowedTeam>, event: ScoreSnapshot): Set<ScoreSide> = buildSet {

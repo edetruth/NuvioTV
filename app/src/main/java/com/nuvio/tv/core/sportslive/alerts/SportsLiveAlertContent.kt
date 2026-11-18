@@ -105,17 +105,37 @@ object SportsLiveAlertScope {
             .any { it in leagues || (soccer && it.sport == SOCCER) }
     }
 
-    /** The cards to track for alerts, from [cards] (marked followed), soonest first. */
-    fun cardsToTrack(cards: List<SportsLiveItem>, followed: List<FollowedTeam>, nowMs: Long): List<SportsLiveItem> {
+    /**
+     * The cards to track for alerts, from [cards] (marked followed), soonest first; a game ESPN has
+     * said is over ([ended], by [SportsLiveAlertEngine.gameKey]) is not tracked any more.
+     */
+    fun cardsToTrack(
+        cards: List<SportsLiveItem>,
+        followed: List<FollowedTeam>,
+        nowMs: Long,
+        ended: Set<String> = emptySet()
+    ): List<SportsLiveItem> {
         val leagues = followedLeagues(followed)
         if (leagues.isEmpty()) return emptyList()
         return cards.asSequence()
             .filter { it.followed && !it.isChannel && isLiveOrKickingOff(it, nowMs) && inLeagues(it, leagues) }
+            .filter { SportsLiveAlertEngine.gameKey(it) !in ended }
             .distinctBy { it.streamKey }
             .sortedBy { it.startMs ?: Long.MIN_VALUE }
             .take(MAX_CARDS)
             .toList()
     }
+
+    /** A reminder's start this close ahead (or passed) asks for a load when this session has none. */
+    const val LOAD_LEAD_MS = 60_000L
+
+    /**
+     * True when a reminder is due ([reminders]: its start within [LOAD_LEAD_MS], not past the kickoff
+     * window) and no Sports & Live load has happened this session ([hasLoad]): its card is needed to
+     * prompt and to watch.
+     */
+    fun needsLoad(reminders: List<GameReminder>, hasLoad: Boolean, nowMs: Long): Boolean =
+        !hasLoad && reminders.any { nowMs >= it.startMs - LOAD_LEAD_MS && nowMs - it.startMs <= SportsLiveAlertEngine.KICKOFF_WINDOW_MS }
 
     private fun isLiveOrKickingOff(item: SportsLiveItem, nowMs: Long): Boolean {
         val start = item.startMs

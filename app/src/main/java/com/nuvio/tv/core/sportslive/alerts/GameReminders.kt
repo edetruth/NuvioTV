@@ -35,8 +35,8 @@ object GameReminders {
     /** A card copy listed again by an addon under another id still matches within this of the stored start. */
     private const val SAME_GAME_WINDOW_MS = 30 * 60_000L
 
-    /** Kept this long after the start, then dropped from storage. */
-    const val KEEP_AFTER_START_MS = 12 * 60 * 60_000L
+    /** Kept this long after the start: dropped when read, and from storage on the next change. */
+    const val KEEP_AFTER_START_MS = 6 * 60 * 60_000L
 
     /** Reminders are kept to this many (the soonest first); a long list is pruned on the next change. */
     private const val MAX_STORED = 200
@@ -63,17 +63,18 @@ object GameReminders {
     }
 
     /**
-     * True when [reminder] is [item]'s game: one of its sources' keys, or (an addon re-listed it under
-     * another id) the same two sides, either way round, starting within 30 minutes, as one-card-per-game
-     * merges copies.
+     * True when [reminder] is [item]'s game: it starts within 30 minutes of the stored start (an addon
+     * reusing an id for a later rematch is another game), and has one of the stored sources' keys or
+     * (an addon re-listed it under another id) the same two sides, either way round, as
+     * one-card-per-game merges copies.
      */
     fun matches(reminder: GameReminder, item: SportsLiveItem): Boolean {
+        val start = item.startMs ?: return false
+        if (abs(start - reminder.startMs) > SAME_GAME_WINDOW_MS) return false
         if (reminder.keys.isNotEmpty() && sourceKeys(item).any { it in reminder.keys }) return true
         val home = reminder.home ?: return false
         val away = reminder.away ?: return false
         val teams = item.teams ?: return false
-        val start = item.startMs ?: return false
-        if (abs(start - reminder.startMs) > SAME_GAME_WINDOW_MS) return false
         return (SportsLiveTeams.matches(home, teams.home) && SportsLiveTeams.matches(away, teams.away)) ||
             (SportsLiveTeams.matches(home, teams.away) && SportsLiveTeams.matches(away, teams.home))
     }
@@ -96,7 +97,11 @@ object GameReminders {
 
     /** [entries] without those started over [KEEP_AFTER_START_MS] ago, at most [MAX_STORED]. */
     fun prune(entries: List<GameReminder>, nowMs: Long): List<GameReminder> =
-        entries.filter { nowMs - it.startMs <= KEEP_AFTER_START_MS }.sortedBy { it.startMs }.take(MAX_STORED)
+        current(entries, nowMs).sortedBy { it.startMs }.take(MAX_STORED)
+
+    /** [entries] as read: those started over [KEEP_AFTER_START_MS] ago are gone, the rest keep their order. */
+    fun current(entries: List<GameReminder>, nowMs: Long): List<GameReminder> =
+        entries.filter { nowMs - it.startMs <= KEEP_AFTER_START_MS }
 
     private fun sourceKeys(item: SportsLiveItem): Set<String> =
         (listOf(item) + item.alternates).mapTo(LinkedHashSet()) { it.streamKey }

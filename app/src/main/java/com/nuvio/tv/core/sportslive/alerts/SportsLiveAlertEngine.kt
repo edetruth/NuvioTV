@@ -1,5 +1,6 @@
 package com.nuvio.tv.core.sportslive.alerts
 
+import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.scores.ScoreSide
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.ScoreState
@@ -22,6 +23,8 @@ data class SportsLiveWatching(
     val playingIds: Set<String> = emptySet(),
     /** The full player is on screen: the kickoff prompt is the small one, and score toasts may show. */
     val inPlayer: Boolean = false,
+    /** What the full player plays is Sports & Live content (a game or channel), not a movie or show. */
+    val sportsPlayback: Boolean = false,
     /** When the stream on screen started (null: none): nothing shows in its first 10 s. */
     val streamStartedAtMs: Long? = null,
     /** Dual screen is on: prompts wait, toasts are dropped. */
@@ -40,6 +43,18 @@ data class AlertGame(
     /** The sides of [snapshot] a followed team is, by ESPN data ([com.nuvio.tv.core.sportslive.scores.TeamFollows]). */
     val followedSides: Set<ScoreSide> = emptySet()
 )
+
+/** How a kickoff prompt shows, by what is on screen ([SportsLiveAlertEngine.kickoffStyle]). */
+enum class KickoffStyle {
+    /** Outside the player: the full prompt, focused, Watch / Later. */
+    FULL,
+
+    /** Over a Sports & Live stream: the small prompt, focused, Watch / Later. */
+    COMPACT,
+
+    /** Over a movie or show: a toast only. It never takes focus or Back, so OK can never replace that player. */
+    TOAST
+}
 
 /** One overlay to show. */
 sealed interface SportsLiveAlert {
@@ -75,7 +90,7 @@ class SportsLiveAlertEngine {
 
     private class Seen(val state: ScoreState, val home: Int?, val away: Int?)
 
-    /** By card key. */
+    /** By [gameKey], so a merged card whose primary source changes is still one game. */
     private val prompts = HashMap<String, Prompt>()
 
     /** By ESPN event id: what was last seen. */
@@ -94,7 +109,7 @@ class SportsLiveAlertEngine {
         trim()
         val settling = watching.streamStartedAtMs?.let { nowMs - it < STREAM_SETTLE_MS } == true
         val alerts = ArrayList<SportsLiveAlert>()
-        for (game in games.distinctBy { it.item.streamKey }) {
+        for (game in games.distinctBy { gameKey(it.item) }) {
             val playing = isPlaying(game.item, watching)
             if (game.reminded) kickoff(game, nowMs, playing, holding = settling || watching.dual)?.let(alerts::add)
             val event = game.snapshot ?: continue
@@ -110,7 +125,7 @@ class SportsLiveAlertEngine {
 
     /** Later (or the prompt closed by itself): asked once more after [LATER_MS]; the second time, done. */
     fun later(item: SportsLiveItem, nowMs: Long) {
-        val prompt = prompts.getOrPut(item.streamKey) { Prompt(shown = true) }
+        val prompt = prompts.getOrPut(gameKey(item)) { Prompt(shown = true) }
         if (prompt.laterUsed) {
             prompt.done = true
         } else {
@@ -121,11 +136,11 @@ class SportsLiveAlertEngine {
 
     /** Watch, or Back on the prompt: not asked again. */
     fun answered(item: SportsLiveItem) {
-        prompts.getOrPut(item.streamKey) { Prompt() }.done = true
+        prompts.getOrPut(gameKey(item)) { Prompt() }.done = true
     }
 
     private fun kickoff(game: AlertGame, nowMs: Long, playing: Boolean, holding: Boolean): SportsLiveAlert.Kickoff? {
-        val prompt = prompts.getOrPut(game.item.streamKey) { Prompt() }
+        val prompt = prompts.getOrPut(gameKey(game.item)) { Prompt() }
         if (prompt.done) return null
         val event = game.snapshot
         // Already watching it, or it is over: nothing to ask.
@@ -220,6 +235,40 @@ class SportsLiveAlertEngine {
         const val STREAM_SETTLE_MS = 10_000L
 
         private const val MAX_REMEMBERED = 500
+
+        private const val DAY_MS = 24 * 60 * 60_000L
+
+        /**
+         * One game, whichever addon lists it or leads a merged card: its two sides (canonical, sorted)
+         * and its start's UTC day; a card naming no game keeps its own key.
+         */
+        fun gameKey(item: SportsLiveItem): String {
+            val teams = item.teams ?: return item.streamKey
+            val sides = listOf(SportsLiveTeams.canonicalise(teams.home), SportsLiveTeams.canonicalise(teams.away)).sorted()
+            return "${sides[0]}|${sides[1]}|${item.startMs?.let { it / DAY_MS }}"
+        }
+
+        /** Full outside the player, small over a Sports & Live stream, a toast only over anything else. */
+        fun kickoffStyle(watching: SportsLiveWatching): KickoffStyle = when {
+            !watching.inPlayer -> KickoffStyle.FULL
+            watching.sportsPlayback -> KickoffStyle.COMPACT
+            else -> KickoffStyle.TOAST
+        }
+
+        /**
+         * [alert] as it may show now, under the current [mode] and [settings] (it may have waited in the
+         * queue while they changed): a score toast only under Show; a full-time toast names only under
+         * Hide until focused and none under Off; null when it may not show at all.
+         */
+        fun stillShowable(alert: SportsLiveAlert, mode: ScoresMode, settings: SportsLiveAlertSettings): SportsLiveAlert? = when (alert) {
+            is SportsLiveAlert.Kickoff -> alert
+            is SportsLiveAlert.ScoreChange -> alert.takeIf { settings.scoreAlerts && mode == ScoresMode.SHOW }
+            is SportsLiveAlert.FullTime -> when {
+                !settings.fullTimeAlerts || mode == ScoresMode.OFF -> null
+                mode == ScoresMode.HIDE_UNTIL_FOCUSED -> alert.copy(namesOnly = true)
+                else -> alert
+            }
+        }
 
         /** True when [item] (or one of its sources) is what plays now. */
         fun isPlaying(item: SportsLiveItem, watching: SportsLiveWatching): Boolean =

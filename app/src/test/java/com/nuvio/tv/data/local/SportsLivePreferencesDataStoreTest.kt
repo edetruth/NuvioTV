@@ -375,4 +375,16 @@ class SportsLivePreferencesDataStoreTest {
         activeProfile.value = 2
         assertEquals(SportsLiveAlertSettings(), store.alertSettings.first())
     }
+
+    @Test
+    fun `stored reminders of games started over six hours ago are dropped when read`() = runTest {
+        val store = SportsLivePreferencesDataStore(factory, profiles)
+        val start = 1_800_000_000_000L
+        val reminder = GameReminder(setOf("a|1"), "Pacers @ 76ers", home = "76ers", away = "Pacers", startMs = start)
+        store.updateReminders { it.copy(reminders = listOf(reminder), optOuts = listOf(reminder)) }
+        store.nowMs = { start + 5 * 60 * 60_000L }
+        assertEquals(listOf(reminder), store.reminders.first().reminders)
+        store.nowMs = { start + 7 * 60 * 60_000L }
+        assertEquals(RemindersState(), store.reminders.first())
+    }
 }

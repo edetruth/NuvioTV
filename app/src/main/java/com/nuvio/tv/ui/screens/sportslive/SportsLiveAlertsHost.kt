@@ -52,8 +52,10 @@ import com.nuvio.tv.R
 import com.nuvio.tv.core.sportslive.alerts.AlertAnswer
 import com.nuvio.tv.core.sportslive.alerts.AlertContent
 import com.nuvio.tv.core.sportslive.alerts.AlertSide
+import com.nuvio.tv.core.sportslive.alerts.KickoffStyle
 import com.nuvio.tv.core.sportslive.alerts.SportsLiveAlert
 import com.nuvio.tv.core.sportslive.alerts.SportsLiveAlertContent
+import com.nuvio.tv.core.sportslive.alerts.SportsLiveAlertEngine
 import com.nuvio.tv.core.sportslive.alerts.SportsLiveAlerts
 import com.nuvio.tv.core.sportslive.alerts.SportsLiveWatching
 import com.nuvio.tv.core.sportslive.scores.TeamLogoUrls
@@ -104,6 +106,8 @@ fun SportsLiveAlertsHost(
             SportsLiveWatching(
                 playingIds = setOfNotNull(playerContentId) + listOfNotNull(miniItem).flatMap { listOf(it) + it.alternates }.map { it.id },
                 inPlayer = inPlayer,
+                // A game or channel played from Sports & Live; anything else is a movie or show.
+                sportsPlayback = inPlayer && SportsLiveExtraSources.isSportsPlayback(playerContentId),
                 streamStartedAtMs = streamStartedAt,
                 dual = route == Screen.SportsLiveDual.route,
                 playingTitle = playerTitle
@@ -116,7 +120,9 @@ fun SportsLiveAlertsHost(
         playViewModel = playViewModel,
         onOpenStreamScreen = { item, manual -> navController.navigate(streamRouteFor(item, returnToHomeOnBack = false, manualSelection = manual)) },
         onPlayTarget = { target ->
-            if (navController.currentBackStackEntry?.destination?.route == Screen.Player.route) {
+            val playerEntry = navController.currentBackStackEntry?.takeIf { it.destination.route == Screen.Player.route }
+            // Only a Sports & Live stream is replaced; a movie or show player is never closed by Watch.
+            if (playerEntry != null && SportsLiveExtraSources.isSportsPlayback(playerEntry.arguments?.getString("contentId"))) {
                 navigateToSportsLiveZapTarget(navController, target)
             } else {
                 navController.navigate(sportsLiveTargetRoute(target))
@@ -126,6 +132,7 @@ fun SportsLiveAlertsHost(
     )
 
     val alert by alerts.current.collectAsState()
+    val watching by alerts.watchingNow.collectAsState()
     val current = alert ?: return
     val content = remember(current) { SportsLiveAlertContent.of(current) }
     if (content == null) {
@@ -139,10 +146,25 @@ fun SportsLiveAlertsHost(
     // Each alert is its own overlay: its countdown and first focus start afresh.
     key(current) {
     Box(modifier = Modifier.fillMaxSize()) {
-        when (current) {
-            is SportsLiveAlert.Kickoff -> KickoffPrompt(
+        val style = (current as? SportsLiveAlert.Kickoff)?.let { SportsLiveAlertEngine.kickoffStyle(watching) }
+        when {
+            // Over a movie or show: a toast that never takes focus or Back, so OK cannot replace that player.
+            current is SportsLiveAlert.Kickoff && style == KickoffStyle.TOAST -> {
+                LaunchedEffect(current) {
+                    delay(TOAST_MS)
+                    alerts.close(current, AlertAnswer.DISMISS)
+                }
+                AlertToast(
+                    content = content,
+                    followed = current.item.followed,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(horizontal = 48.dp, vertical = 40.dp)
+                )
+            }
+            current is SportsLiveAlert.Kickoff -> KickoffPrompt(
                 content = content as AlertContent.Kickoff,
-                compact = inPlayer,
+                compact = style == KickoffStyle.COMPACT,
                 watchingTitle = playerTitle,
                 kickoffLabel = rememberSportsLiveStateLabeler(SportsLiveTab.UPCOMING)(current.item.copy(isLive = false)),
                 onWatch = {
@@ -200,11 +222,17 @@ private fun KickoffPrompt(
     LaunchedEffect(Unit) {
         withFrameNanos { }
         runCatching { watchFocus.requestFocus() }
-        while (secondsLeft > 0) {
-            delay(1_000)
-            secondsLeft--
+    }
+    // The countdown runs only while the app is in the foreground; it resumes where it was.
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (secondsLeft > 0) {
+                delay(1_000)
+                secondsLeft--
+            }
+            onTimeout()
         }
-        onTimeout()
     }
     BackHandler(onBack = onBack)
     val shape = RoundedCornerShape(16.dp)
@@ -326,7 +354,20 @@ private fun AlertToast(content: AlertContent, followed: Boolean, modifier: Modif
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
-            is AlertContent.Kickoff -> Unit
+            // Over a movie or show ([KickoffStyle.TOAST]): no actions, so nothing to press by accident.
+            is AlertContent.Kickoff -> Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (followed) StarIcon()
+                Text(
+                    text = stringResource(
+                        R.string.sports_live_alert_starting_toast,
+                        stringResource(R.string.sports_live_alert_matchup, content.first.name, content.second.name)
+                    ),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = ArtColors.Text,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
     }
 }

@@ -238,4 +238,41 @@ class SportsLiveAlertEngineTest {
         assertEquals(1, step(START + 130 * MINUTE, final(101, 99), reminded = false).size)
         assertEquals(0, step(START + 131 * MINUTE, final(101, 99), reminded = false).size)
     }
+
+    // Review fixes
+
+    @Test
+    fun `over a movie or show the kickoff is a toast only, never a focused prompt`() {
+        assertEquals(KickoffStyle.FULL, SportsLiveAlertEngine.kickoffStyle(SportsLiveWatching()))
+        assertEquals(KickoffStyle.COMPACT, SportsLiveAlertEngine.kickoffStyle(SportsLiveWatching(inPlayer = true, sportsPlayback = true)))
+        assertEquals(KickoffStyle.TOAST, SportsLiveAlertEngine.kickoffStyle(SportsLiveWatching(inPlayer = true, sportsPlayback = false)))
+    }
+
+    @Test
+    fun `a queued toast is checked against the Scores setting and switches before it shows`() {
+        val score = SportsLiveAlert.ScoreChange(card, live(10, 11), ScoreSide.AWAY)
+        val fullTime = SportsLiveAlert.FullTime(card, final(101, 99), namesOnly = false)
+        val kickoff = SportsLiveAlert.Kickoff(card, null)
+        val on = SportsLiveAlertSettings()
+        assertEquals(score, SportsLiveAlertEngine.stillShowable(score, ScoresMode.SHOW, on))
+        assertEquals(null, SportsLiveAlertEngine.stillShowable(score, ScoresMode.HIDE_UNTIL_FOCUSED, on))
+        assertEquals(null, SportsLiveAlertEngine.stillShowable(score, ScoresMode.SHOW, SportsLiveAlertSettings(scoreAlerts = false)))
+        assertEquals(fullTime.copy(namesOnly = true), SportsLiveAlertEngine.stillShowable(fullTime, ScoresMode.HIDE_UNTIL_FOCUSED, on))
+        assertEquals(null, SportsLiveAlertEngine.stillShowable(fullTime, ScoresMode.OFF, on))
+        assertEquals(null, SportsLiveAlertEngine.stillShowable(fullTime, ScoresMode.SHOW, SportsLiveAlertSettings(fullTimeAlerts = false)))
+        assertEquals(kickoff, SportsLiveAlertEngine.stillShowable(kickoff, ScoresMode.OFF, on))
+    }
+
+    @Test
+    fun `prompt state belongs to the game, not the card's primary source`() {
+        step(START, null)
+        engine.answered(card)
+        // The same game listed by another addon (now the merged card's primary): not asked again.
+        val otherCopy = item(id = "x", addonId = "z", followed = true)
+        assertEquals(SportsLiveAlertEngine.gameKey(card), SportsLiveAlertEngine.gameKey(otherCopy))
+        assertEquals(emptyList<SportsLiveAlert>(), step(START + MINUTE, null, game = otherCopy))
+        // A rematch days later is another game.
+        val rematch = item(startMs = START + 2 * 24 * 60 * MINUTE)
+        assertTrue(SportsLiveAlertEngine.gameKey(card) != SportsLiveAlertEngine.gameKey(rematch))
+    }
 }

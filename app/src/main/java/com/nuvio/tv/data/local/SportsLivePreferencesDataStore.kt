@@ -13,6 +13,7 @@ import com.nuvio.tv.core.sportslive.LiveNowSort
 import com.nuvio.tv.core.sportslive.SportsLiveLayout
 import com.nuvio.tv.core.sportslive.SportsLiveOpenGame
 import com.nuvio.tv.core.sportslive.alerts.GameReminder
+import com.nuvio.tv.core.sportslive.alerts.GameReminders
 import com.nuvio.tv.core.sportslive.alerts.RemindersState
 import com.nuvio.tv.core.sportslive.alerts.SportsLiveAlertSettings
 import com.nuvio.tv.core.sportslive.scores.CatchUp
@@ -52,6 +53,9 @@ class SportsLivePreferencesDataStore @Inject constructor(
     private val followedType = object : TypeToken<List<Map<String, String?>>>() {}.type
 
     private fun store() = factory.get(profileManager.activeProfileId.value, FEATURE)
+
+    /** The clock reminders are read against (games started over 6 h ago are dropped); tests set it. */
+    internal var nowMs: () -> Long = System::currentTimeMillis
 
     private val showSectionKey = booleanPreferencesKey("sports_live_show_section")
     private val showHomeRowKey = booleanPreferencesKey("sports_live_show_home_row")
@@ -202,8 +206,8 @@ class SportsLivePreferencesDataStore @Inject constructor(
     val reminders: Flow<RemindersState> = profileManager.activeProfileId.flatMapLatest { pid ->
         factory.get(pid, FEATURE).data.map { prefs ->
             RemindersState(
-                reminders = decodeReminders(prefs[remindersKey]),
-                optOuts = decodeReminders(prefs[reminderOptOutsKey]),
+                reminders = GameReminders.current(decodeReminders(prefs[remindersKey]), nowMs()),
+                optOuts = GameReminders.current(decodeReminders(prefs[reminderOptOutsKey]), nowMs()),
                 remindMyTeams = prefs[remindMyTeamsKey] ?: true
             )
         }

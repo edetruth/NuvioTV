@@ -116,4 +116,22 @@ class SportsLiveAlertContentTest {
         val cards = (0 until 12).map { item(name = "Pacers @ Team$it", id = "g$it", followed = true, isLive = true) }
         assertEquals(SportsLiveAlertScope.MAX_CARDS, SportsLiveAlertScope.cardsToTrack(cards, followed, START).size)
     }
+
+    @Test
+    fun `a followed game ESPN has ended is no longer tracked`() {
+        val followed = listOf(FollowedTeam("Pacers", "Basketball"))
+        val live = item(followed = true, isLive = true)
+        assertEquals(listOf(live), SportsLiveAlertScope.cardsToTrack(listOf(live), followed, START))
+        assertEquals(emptyList<Any>(), SportsLiveAlertScope.cardsToTrack(listOf(live), followed, START, ended = setOf(SportsLiveAlertEngine.gameKey(live))))
+    }
+
+    @Test
+    fun `a due reminder asks for a load only when this session has none`() {
+        val reminder = GameReminders.of(item())!!
+        assertTrue(SportsLiveAlertScope.needsLoad(listOf(reminder), hasLoad = false, nowMs = START - 30_000))
+        assertEquals(false, SportsLiveAlertScope.needsLoad(listOf(reminder), hasLoad = true, nowMs = START))
+        assertEquals(false, SportsLiveAlertScope.needsLoad(listOf(reminder), hasLoad = false, nowMs = START - 10 * MINUTE))
+        assertEquals(false, SportsLiveAlertScope.needsLoad(listOf(reminder), hasLoad = false, nowMs = START + 30 * MINUTE))
+        assertEquals(false, SportsLiveAlertScope.needsLoad(emptyList(), hasLoad = false, nowMs = START))
+    }
 }
