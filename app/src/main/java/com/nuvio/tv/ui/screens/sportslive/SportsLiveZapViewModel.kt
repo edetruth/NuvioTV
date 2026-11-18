@@ -16,7 +16,10 @@ import androidx.lifecycle.viewModelScope
 import com.nuvio.tv.R
 import com.nuvio.tv.core.debrid.DirectDebridResolver
 import com.nuvio.tv.core.profile.ProfileManager
+import com.nuvio.tv.core.sportslive.FullTimeToast
 import com.nuvio.tv.core.sportslive.SportsLiveEndedGames
+import com.nuvio.tv.core.sportslive.SportsLiveFullTimeAnnouncements
+import com.nuvio.tv.core.sportslive.SportsLiveFullTimeToasts
 import com.nuvio.tv.core.sportslive.SportsLiveWorkingLinks
 import com.nuvio.tv.core.sportslive.scores.LiveScoresRepository
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
@@ -26,6 +29,7 @@ import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.domain.repository.SportsLiveRepository
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualPick
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualSession
+import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveSecondGame
 import com.nuvio.tv.ui.screens.sportslive.dual.offersDual
 import com.nuvio.tv.ui.screens.sportslive.dual.sourceKeys
 import com.nuvio.tv.ui.screens.stream.StreamPlaybackInfo
@@ -34,6 +38,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -260,6 +265,25 @@ class SportsLiveZapViewModel internal constructor(
 
     private val shortPressKeys = SportsLiveShortPressKeys()
 
+    // The game this player plays, for "Ended while you're watching" (#60).
+    private val nowPlaying: SportsLiveItem? = SportsLiveZapSessions.activeFor(contentId)?.current
+
+    // Only the game playing is scored for the toast, while the player is started and Scores is not Off.
+    private val nowTracker = LiveScoresTracker(LiveScoresRepository.SCREEN_PLAYER_NOW, liveScores)
+
+    // ESPN's delayed view showed the game playing in play: only then may it say it ended here.
+    private var nowSeenLive = false
+
+    private val _fullTime = MutableStateFlow<FullTimeToast?>(null)
+
+    /**
+     * "Full time · ‹score› · Stay for postgame / Next live game →" (#60) for [FULL_TIME_TOAST_MS] when
+     * ESPN's delayed view says the game playing is over; the score under Show only, nothing under Off.
+     * Announced once per game, whichever full-time toast claims it first ([SportsLiveFullTimeAnnouncements]).
+     */
+    val fullTime: StateFlow<FullTimeToast?> = _fullTime.asStateFlow()
+    private var fullTimeJob: Job? = null
+
     init {
         if (arrival.value != null) {
             viewModelScope.launch {
@@ -267,6 +291,51 @@ class SportsLiveZapViewModel internal constructor(
                 arrival.value = null
             }
         }
+        nowPlaying?.let { item ->
+            viewModelScope.launch {
+                combine(liveScores.scores, liveScores.mode) { scores, mode -> scores[item.streamKey] to mode }.collect { (snapshot, mode) ->
+                    nowTracker.update(listOf(item), enabled = mode != ScoresMode.OFF)
+                    if (SportsLiveFullTimeToasts.isLive(item, snapshot)) nowSeenLive = true
+                    val toast = SportsLiveFullTimeToasts.of(item, snapshot, mode, nowSeenLive) ?: return@collect
+                    if (SportsLiveFullTimeAnnouncements.claim(toast.eventId)) showFullTime(toast)
+                }
+            }
+        }
+    }
+
+    /** The player started (true) or stopped: the game playing is scored only meanwhile. */
+    fun onPlayerStarted(started: Boolean) {
+        if (started) nowTracker.onStart() else nowTracker.onStop()
+    }
+
+    private fun showFullTime(toast: FullTimeToast) {
+        fullTimeJob?.cancel()
+        _fullTime.value = toast
+        fullTimeJob = viewModelScope.launch {
+            delay(FULL_TIME_TOAST_MS)
+            _fullTime.value = null
+        }
+    }
+
+    /** Stay for postgame: the toast goes. */
+    fun dismissFullTime() {
+        fullTimeJob?.cancel()
+        _fullTime.value = null
+    }
+
+    /**
+     * Next live game → on the full-time toast: zaps to the game "Watch with another game" would pair
+     * with the one that ended (#57's pick, never a finished game). False when there is none.
+     */
+    internal fun nextLiveGame(): Boolean {
+        if (_fullTime.value == null) return false
+        val session = controller.session(contentId) ?: return false
+        val scores = liveScores.scores.value
+        val finished = repo.endedKeys.value + panelEndedKeys() +
+            SportsLiveEndedGames.shared.confirmedEndedSourceKeys(session.items, scores, System.currentTimeMillis())
+        val next = SportsLiveSecondGame.pick(session.current, session.items, scores, finished) ?: return false
+        dismissFullTime()
+        return controller.pick(contentId, next, session.items)
     }
 
     /**
@@ -291,6 +360,8 @@ class SportsLiveZapViewModel internal constructor(
         val active = !partyActive && controller.session(contentId) != null
         val result = shortPressKeys.onKey(event, active)
         if (result == SportsLiveShortPress.OPEN_PANEL) openPanel()
+        // The full-time toast's "Next live game →" (#60): a short Right moves on instead of showing the controls.
+        if (result == SportsLiveShortPress.SHOW_CONTROLS && nextLiveGame()) return SportsLiveShortPress.CONSUMED
         return result
     }
 
@@ -413,6 +484,7 @@ class SportsLiveZapViewModel internal constructor(
 
     override fun onCleared() {
         scoreTracker.onStop()
+        nowTracker.onStop()
         // This player left: its stream no longer plays, so dual screen cannot take it over (#65).
         contentId?.let(workingLinks::stoppedPlaying)
         super.onCleared()
@@ -430,6 +502,9 @@ class SportsLiveZapViewModel internal constructor(
 }
 
 private const val BANNER_MS = 3_000L
+
+/** How long the full-time toast stays (#60); doing nothing meanwhile stays for the postgame. */
+internal const val FULL_TIME_TOAST_MS = 10_000L
 
 /** The panel's games: [all] of them, and those [shown] under [chip]. */
 private data class PanelList(val all: List<SportsLiveItem>, val chip: String?, val shown: List<SportsLiveItem>)

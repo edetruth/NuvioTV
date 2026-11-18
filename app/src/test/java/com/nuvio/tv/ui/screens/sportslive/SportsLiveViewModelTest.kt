@@ -3,7 +3,12 @@ package com.nuvio.tv.ui.screens.sportslive
 import com.nuvio.tv.MainDispatcherRule
 import com.nuvio.tv.core.sportslive.EndedInputs
 import com.nuvio.tv.core.sportslive.EndedSignal
+import com.nuvio.tv.core.sportslive.LinkCheckRequest
 import com.nuvio.tv.core.sportslive.LiveNowSort
+import com.nuvio.tv.core.sportslive.ManifestResponse
+import com.nuvio.tv.core.sportslive.SportsLiveLinkChecker
+import com.nuvio.tv.core.sportslive.SportsLiveSourceCooldown
+import com.nuvio.tv.core.sportslive.SportsLiveSourceTrust
 import com.nuvio.tv.core.sportslive.SportsLiveEndedGames
 import com.nuvio.tv.core.sportslive.SportsLiveItemBucketer
 import com.nuvio.tv.core.sportslive.SportsLiveLayout
@@ -938,6 +943,105 @@ class SportsLiveViewModelTest {
         inputs.value = EndedInputs(mapOf(pacersGame.streamKey to inPlay("401909985", 60, 40, "5:00 - 2nd"), closeLakers))
         runCurrent()
         assertEquals(listOf("lakers", "pacers"), order())
+    }
+
+    // #60 phase 2: link checks confirm a game past its estimate is over
+
+    private val linkFetches = mutableListOf<String>()
+    private val linkTicks = MutableSharedFlow<Unit>(replay = 1).apply { tryEmit(Unit) }
+
+    /** No game may be estimated (its feed has not answered): only a link check can move it. */
+    private fun TestScope.linkCheckedViewModel(
+        scores: Map<String, ScoreSnapshot> = emptyMap(),
+        answer: ManifestResponse? = ManifestResponse(404, null)
+    ): SportsLiveViewModel {
+        val checker = SportsLiveLinkChecker(
+            fetch = { url, _ -> linkFetches += url; answer },
+            cooldown = SportsLiveSourceCooldown(nowMs = { NOW }),
+            trust = SportsLiveSourceTrust(),
+            nowMs = { NOW }
+        )
+        val viewModel = SportsLiveViewModel(
+            repo,
+            endedInputs = flowOf(EndedInputs(scores) { false }),
+            endedGames = SportsLiveEndedGames(),
+            clock = linkTicks,
+            linkChecker = checker,
+            linkCheckOf = { item ->
+                LinkCheckRequest(item.streamKey, "https://cdn.invalid/${item.id}.m3u8", emptyMap(), listOf(item.addonBaseUrl), item.addonName)
+            },
+            computeDispatcher = compute
+        )
+        viewModel.nowMs = { NOW }
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        return viewModel
+    }
+
+    private fun TestScope.tick() {
+        linkTicks.tryEmit(Unit)
+        runCurrent()
+    }
+
+    // NFL: estimated at 4h05 with the late start, overdue only after 4h30.
+    private val pastEstimate = item("g", isLive = true, sport = "NFL", name = "New England Patriots at New York Jets", startMs = NOW - 4 * HOUR - 10 * MINUTE)
+    private val stillOn = item("on", isLive = true, sport = "NFL", name = "Buffalo Bills at Miami Dolphins", startMs = NOW - HOUR)
+
+    @Test
+    fun `a game past its estimate with a dead link moves to Just ended as Probably ended, never hidden`() = runTest {
+        nextLoad = load(listOf(pastEstimate, stillOn))
+        val viewModel = linkCheckedViewModel()
+        runCurrent()
+        // Live now not on screen: nothing is checked.
+        tick()
+        assertTrue(linkFetches.isEmpty())
+
+        viewModel.onScreenVisible(true)
+        tick()
+        runCurrent()
+        // Only the game past its estimate, once.
+        assertEquals(listOf("https://cdn.invalid/g.m3u8"), linkFetches)
+        val state = viewModel.uiState.value
+        assertEquals(listOf("on", "g"), state.visibleItems.map { it.id })
+        assertEquals(EndedSignal.ESTIMATE, state.endedOf(state.visibleItems.last())?.signal)
+        assertEquals(1, state.countOf(SportsLiveTab.LIVE_NOW))
+        // Checked once only; it stays listed (and playable) in the strip.
+        tick()
+        assertEquals(1, linkFetches.size)
+        assertEquals(listOf("on", "g"), viewModel.uiState.value.visibleItems.map { it.id })
+        viewModel.onScreenVisible(false)
+    }
+
+    @Test
+    fun `an alive or unclear link, another tab, or a game ESPN follows moves nothing`() = runTest {
+        nextLoad = load(listOf(pastEstimate))
+        val alive = linkCheckedViewModel(answer = ManifestResponse(200, "#EXTM3U\n#EXTINF:6,\na.ts\n"))
+        alive.onScreenVisible(true)
+        tick()
+        runCurrent()
+        assertEquals(1, linkFetches.size)
+        assertTrue(alive.uiState.value.justEnded.isEmpty())
+        alive.onScreenVisible(false)
+
+        // Upcoming selected: Live now is not on screen.
+        linkFetches.clear()
+        val elsewhere = linkCheckedViewModel()
+        elsewhere.selectTab(SportsLiveTab.UPCOMING)
+        elsewhere.onScreenVisible(true)
+        tick()
+        assertTrue(linkFetches.isEmpty())
+        elsewhere.onScreenVisible(false)
+
+        // A strict ESPN match decides alone, whatever its state: no check.
+        val pacers = EspnFixtures.events(EspnFixtures.NBA_20261115, EspnLeagueMap.NBA).first { it.eventId == "401909985" }
+        val game = item("p", isLive = true, sport = "Basketball", name = "Indiana Pacers at Philadelphia 76ers", startMs = NOW - 4 * HOUR)
+        nextLoad = load(listOf(game))
+        val followed = linkCheckedViewModel(scores = mapOf(game.streamKey to pacers.copy(state = ScoreState.IN, isFinal = false)))
+        followed.onScreenVisible(true)
+        tick()
+        runCurrent()
+        assertTrue(linkFetches.isEmpty())
+        assertEquals(listOf("p"), followed.uiState.value.visibleItems.map { it.id })
+        followed.onScreenVisible(false)
     }
 
     private fun load(items: List<SportsLiveItem>, failures: List<SportsLiveFailure> = emptyList()) =

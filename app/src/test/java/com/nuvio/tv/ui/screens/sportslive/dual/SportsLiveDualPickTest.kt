@@ -71,30 +71,6 @@ class SportsLiveDualPickTest {
     }
 
     @Test
-    fun `pick mode OK on Live now or Channels pairs the first game with the card over the list shown`() {
-        val session = sportsLivePickModeSession(
-            chosen = a, item = c, tab = SportsLiveTab.LIVE_NOW, items = listOf(b, c), filter = "Soccer"
-        )
-        assertEquals(SportsLiveDualSession(a, c, listOf(b, c), "Soccer", SportsLiveTab.LIVE_NOW), session)
-        val channels = sportsLivePickModeSession(
-            chosen = a, item = b, tab = SportsLiveTab.CHANNELS, items = listOf(a, b), filter = null
-        )
-        assertEquals(SportsLiveDualSession(a, b, listOf(a, b), null, SportsLiveTab.CHANNELS), channels)
-    }
-
-    @Test
-    fun `pick mode OK on Upcoming or Replays, the first game or a card sharing its source does nothing`() {
-        for (tab in listOf(SportsLiveTab.UPCOMING, SportsLiveTab.REPLAYS)) {
-            assertNull(sportsLivePickModeSession(chosen = a, item = b, tab = tab, items = listOf(a, b), filter = null))
-        }
-        val first = dualItem("m").copy(alternates = listOf(dualItem("x").copy(addonId = "other")))
-        val sameGameElsewhere = dualItem("x").copy(addonId = "other")
-        val items = listOf(first, sameGameElsewhere, c)
-        assertNull(sportsLivePickModeSession(first, first, SportsLiveTab.LIVE_NOW, items, null))
-        assertNull(sportsLivePickModeSession(first, sameGameElsewhere, SportsLiveTab.LIVE_NOW, items, null))
-    }
-
-    @Test
     fun `OK from a Channels dual session keeps the Channels tab and its group filter`() {
         val viewModel = SportsLiveDualViewModel(
             resolve = { null },

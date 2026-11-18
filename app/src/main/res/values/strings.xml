@@ -3869,7 +3869,11 @@
     <string name="sports_live_now_playing">Now playing</string>
     <string name="sports_live_expand">Expand</string>
     <string name="sports_live_stop">Stop</string>
-    <string name="sports_live_dual_pick_banner">Pick another to watch · %1$s</string>
+    <string name="sports_live_dual_paired_hint">Paired with %1$s · ← to change</string>
+    <string name="sports_live_dual_no_pair">No other live game to watch with</string>
+    <string name="sports_live_full_time">Full time</string>
+    <string name="sports_live_full_time_score">Full time · %1$s</string>
+    <string name="sports_live_full_time_actions">Stay for postgame · Next live game →</string>
     <string name="sports_live_dual_hold_hint">Hold OK on a game to watch both</string>
     <string name="sports_live_dual_stream_error">Couldn\'t play this stream</string>
     <string name="sports_live_dual_stream_error_hint">Press OK to open it in the full player, which can prepare more kinds of streams</string>

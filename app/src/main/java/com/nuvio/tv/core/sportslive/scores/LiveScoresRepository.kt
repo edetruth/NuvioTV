@@ -697,6 +697,8 @@ class LiveScoresRepository internal constructor(
         const val SCREEN_PLAYER_PANEL = "player_panel"
         /** Followed teams' live games, tracked for alerts (#42) while the app is in the foreground. */
         const val SCREEN_ALERTS = "alerts"
+        /** The game a player plays, tracked while that player is started, for its full-time toast (#60). */
+        const val SCREEN_PLAYER_NOW = "player_now"
 
         private const val WINDOW_MS = 3 * 60 * 60 * 1000L
         private const val MAX_REMEMBERED = 2_000

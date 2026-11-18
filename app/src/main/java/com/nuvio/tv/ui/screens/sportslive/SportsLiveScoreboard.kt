@@ -12,7 +12,6 @@ import com.nuvio.tv.core.sportslive.scores.ScoreState
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveTab
-import com.nuvio.tv.ui.screens.sportslive.dual.offersDual
 
 /** The Scoreboard's groups, in the order they are listed. */
 enum class ScoreboardGroup { LIVE, STARTING_SOON, MORE_GAMES, FINAL }
@@ -110,12 +109,12 @@ internal fun scoreboardNameChoices(team: GameArtTeam): List<String> =
 data class ScoreboardButtons(val watchWith: Boolean, val gameStats: Boolean)
 
 /**
- * "Watch with another game" (the dual screen's pick mode): on a tab that offers dual screen, for a game
- * not over. "Game stats": only for a strict ESPN match ([matchedEvent] non-null).
+ * "Watch with another game" (straight into dual screen, #57): on Live now, for a game not over (never a
+ * channel). "Game stats": only for a strict ESPN match ([matchedEvent] non-null).
  */
 internal fun scoreboardButtons(tab: SportsLiveTab, row: ScoreboardRow, matchedEvent: ScoreSnapshot?): ScoreboardButtons =
     ScoreboardButtons(
-        watchWith = tab.offersDual() && row.group != ScoreboardGroup.FINAL,
+        watchWith = tab == SportsLiveTab.LIVE_NOW && row.group != ScoreboardGroup.FINAL && !row.item.isChannel,
         gameStats = matchedEvent != null
     )
 

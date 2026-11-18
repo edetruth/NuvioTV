@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,14 +13,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -37,7 +36,6 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
@@ -79,6 +77,7 @@ import com.nuvio.tv.core.sportslive.scores.ScoreDetailsBuilder
 import com.nuvio.tv.core.sportslive.scores.ScoreSide
 import com.nuvio.tv.core.sportslive.scores.CatchUpItem
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
+import com.nuvio.tv.core.sportslive.scores.ScoreState
 import com.nuvio.tv.core.sportslive.scores.TeamFollows
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.domain.model.FollowedTeam
@@ -91,7 +90,6 @@ import com.nuvio.tv.ui.components.RefreshFilterChip
 import com.nuvio.tv.ui.components.SourceStatusFilterChip
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualSession
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualSessions
-import com.nuvio.tv.ui.screens.sportslive.dual.offersDual
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniGeometry
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniPlacement
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniPlayers
@@ -99,7 +97,7 @@ import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniSpot
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniState
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniStop
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveNowPlayingCard
-import com.nuvio.tv.ui.screens.sportslive.dual.sportsLivePickModeSession
+import com.nuvio.tv.ui.screens.sportslive.dual.sportsLiveWatchWithSession
 import com.nuvio.tv.ui.screens.sportslive.preview.SportsLivePreviewPlayer
 import com.nuvio.tv.ui.screens.sportslive.preview.SportsLivePreviewState
 import com.nuvio.tv.ui.screens.sportslive.preview.SportsLivePreviewVideo
@@ -291,6 +289,20 @@ fun SportsLiveScreen(
         }
     }
 
+    // "Watch with another game" (#57): a live game on Live now goes straight into dual screen, in slot 1,
+    // beside a game picked for it (SportsLiveSecondGame), with no lookup until the panes start.
+    val canWatchWith: (SportsLiveItem) -> Boolean = { item -> uiState.offersWatchWith(item, scores[item.streamKey]) }
+    val watchWithSession: (SportsLiveItem) -> SportsLiveDualSession? = { item ->
+        sportsLiveWatchWithSession(
+            first = item,
+            items = uiState.visibleItems,
+            zapItems = uiState.zapItems,
+            filter = uiState.selectedFilter,
+            scores = scores,
+            finishedKeys = uiState.finishedKeys(scores)
+        )
+    }
+
     val showNoAddons = !uiState.hasClaimedCatalogs && !uiState.isLoading && uiState.lastRefreshedMs != null
     when {
         showNoAddons -> NoAddonsState(onOpenAddons)
@@ -324,7 +336,9 @@ fun SportsLiveScreen(
                         revealed = scoresMode == ScoresMode.SHOW || item.streamKey in revealed,
                         // The page names the teams in the card's order (N10).
                         homeFirst = sportsLiveGameHomeFirst(item, event),
-                        card = item
+                        card = item,
+                        // A live game's page offers "Watch with another game" (#57), paired now.
+                        watchWith = if (event.state == ScoreState.IN && canWatchWith(item)) watchWithSession(item) else null
                     )
                 )
                 onOpenGame()
@@ -357,9 +371,18 @@ fun SportsLiveScreen(
             onPreviewFocus = viewModel::setPreviewFocus,
             onOpenDetail = onOpenDetail,
             onToggleFollow = viewModel::toggleFollow,
-            onOpenDual = { session ->
-                SportsLiveDualSessions.start(session)
-                onOpenDual()
+            canWatchWith = canWatchWith,
+            onWatchWith = { item ->
+                val session = watchWithSession(item)
+                if (session == null) {
+                    Toast.makeText(context, context.getString(R.string.sports_live_dual_no_pair), Toast.LENGTH_SHORT).show()
+                } else {
+                    // Slot 1 keeps the stream its preview plays, with no lookup (#65); freed before dual starts.
+                    val handOff = viewModel.takeOverPreview(item)?.stream
+                    previewPlayer.release()
+                    SportsLiveDualSessions.start(session.copy(leftStream = handOff))
+                    onOpenDual()
+                }
             },
             results = resultsState,
             onSelectResultsDay = resultsViewModel::selectDay,
@@ -451,7 +474,10 @@ private fun SportsLiveContent(
     onPreviewFocus: (SportsLiveItem?) -> Unit,
     onOpenDetail: (SportsLiveItem) -> Unit,
     onToggleFollow: (SportsLiveItem, String) -> Unit,
-    onOpenDual: (SportsLiveDualSession) -> Unit,
+    /** "Watch with another game" is offered on a card (#57). */
+    canWatchWith: (SportsLiveItem) -> Boolean,
+    /** "Watch with another game": dual screen with the card in slot 1 and a game picked for it (#57). */
+    onWatchWith: (SportsLiveItem) -> Unit,
     results: SportsLiveResultsUiState,
     onSelectResultsDay: (Int) -> Unit,
     onToggleResultsEarlier: () -> Unit,
@@ -634,9 +660,6 @@ private fun SportsLiveContent(
 
     // The card whose long-press menu is open; the menu closes if a refresh drops the card.
     var menuCardKey by remember { mutableStateOf<String?>(null) }
-    // Pick-second mode: the first game, chosen in the menu; OK on another eligible card opens dual
-    // screen with both. Back leaves the mode; leaving the section drops it (not saved).
-    var pickFirst by remember { mutableStateOf<SportsLiveItem?>(null) }
     // A follow moves the card (to the top, or back down); focus and the scroll go with it. The
     // reorder lands a moment after the menu closes, so the card is followed for a short while, or
     // until focus lands anywhere else in the screen or the tab or filter changes.
@@ -666,37 +689,15 @@ private fun SportsLiveContent(
         // Cleared last: clearing restarts this effect, which would cancel the focus request above.
         if (gone) followedCardKey = null
     }
-    // "Watch with another game": any card on Live now or Channels (games and channels alike).
-    val canWatchWith: (SportsLiveItem) -> Boolean = { uiState.selectedTab.offersDual() }
     // OK on a card (list, Scoreboard row or Timeline block).
-    fun cardClick(item: SportsLiveItem) {
-        val first = pickFirst
-        if (first == null) {
-            openCard(item)
-        } else {
-            // Pick mode: OK pairs an eligible card (the list as shown is the dual
-            // list); any other card, or a tab without dual screen, ignores it.
-            sportsLivePickModeSession(
-                chosen = first,
-                item = item,
-                tab = uiState.selectedTab,
-                items = items,
-                filter = uiState.selectedFilter,
-                zapItems = uiState.zapItems
-            )?.let { session ->
-                pickFirst = null
-                onOpenDual(session)
-            }
-        }
-    }
+    fun cardClick(item: SportsLiveItem) = openCard(item)
     // "Remind me" (#44) on a game not started yet; the bell on its card while reminded.
     fun remindable(item: SportsLiveItem) = GameReminders.canRemind(item, uiState.nowMs)
     fun remindedCard(item: SportsLiveItem) = remindable(item) && reminders.isReminded(item)
     // A card naming a game, a live game or an upcoming game opens the menu; other cards open Details
-    // directly. Ignored in pick mode.
+    // directly.
     fun cardLongClick(item: SportsLiveItem) {
         when {
-            pickFirst != null -> Unit
             item.teams != null || canWatchWith(item) || remindable(item) -> menuCardKey = item.listKey
             else -> onOpenDetail(item)
         }
@@ -706,14 +707,6 @@ private fun SportsLiveContent(
         if (item.listKey != followedCardKey) followedCardKey = null
         focusedCardKey = item.listKey
         onSelectItem(item.id)
-    }
-    // Pick mode survives tab changes (tabs select on focus, so Live now → Channels passes Upcoming);
-    // OK on Upcoming/Replays cards is ignored while picking.
-    LaunchedEffect(pickFirst) {
-        val first = pickFirst ?: return@LaunchedEffect
-        // The menu has just closed: focus goes back to the first game's card.
-        repeat(2) { withFrameNanos { } }
-        runCatching { cardFocusRequesters[first.listKey]?.requestFocus() }
     }
     items.firstOrNull { it.listKey == menuCardKey }?.let { item ->
         val watchWith = canWatchWith(item)
@@ -728,7 +721,7 @@ private fun SportsLiveContent(
             onWatchWith = if (watchWith) {
                 {
                     menuCardKey = null
-                    pickFirst = item
+                    onWatchWith(item)
                 }
             } else {
                 null
@@ -773,15 +766,10 @@ private fun SportsLiveContent(
     BackHandler(enabled = listHasFocus) {
         runCatching { activeTabFocusRequester.requestFocus() }
     }
-    // Composed after the list's handler, so Back leaves pick mode first.
-    BackHandler(enabled = pickFirst != null) {
-        pickFirst = null
-    }
-
-    // The preview follows the focused card (in the list, or its pane's buttons) while no menu, pick
-    // mode or dialog is open; anything else stops it.
+    // The preview follows the focused card (in the list, or its pane's buttons) while no menu or
+    // dialog is open; anything else stops it.
     val previewItem = selected?.takeIf {
-        (listHasFocus || paneHasFocus) && menuCardKey == null && pickFirst == null && !dialogOpen
+        (listHasFocus || paneHasFocus) && menuCardKey == null && !dialogOpen
     }
     val currentOnPreviewFocus by rememberUpdatedState(onPreviewFocus)
     LaunchedEffect(previewItem?.listKey) { currentOnPreviewFocus(previewItem) }
@@ -964,20 +952,6 @@ private fun SportsLiveContent(
                 modifier = Modifier.padding(top = NuvioTheme.spacing.sm)
             )
         }
-        pickFirst?.let { first ->
-            Text(
-                text = stringResource(R.string.sports_live_dual_pick_banner, first.meta.name),
-                style = MaterialTheme.typography.titleMedium,
-                color = NuvioTheme.colors.TextPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .padding(top = NuvioTheme.spacing.sm)
-                    .clip(RoundedCornerShape(NuvioTheme.radii.md))
-                    .background(NuvioTheme.colors.FocusBackground)
-                    .padding(horizontal = NuvioTheme.spacing.md, vertical = NuvioTheme.spacing.xs)
-            )
-        }
         if (catchUpShown) {
             SportsLiveCatchUpStrip(
                 items = catchUpItems,
@@ -1010,7 +984,6 @@ private fun SportsLiveContent(
                 rowState = timelineRowState,
                 selectedKey = selected.listKey,
                 menuKey = menuCardKey,
-                pickedFirstKey = pickFirst?.listKey,
                 cardFocusRequester = ::cardFocusRequester,
                 upFocusRequester = aboveListFocusRequester,
                 watchFocusRequester = watchFocusRequester,
@@ -1044,8 +1017,8 @@ private fun SportsLiveContent(
                 row = selectedRow,
                 buttons = scoreboardButtons(uiState.selectedTab, selectedRow, event),
                 onWatch = { open(selected) },
-                // The dual screen's pick mode, as from the card menu.
-                onWatchWith = { pickFirst = selected },
+                // Straight into dual screen, as from the card menu (#57).
+                onWatchWith = { onWatchWith(selected) },
                 onGameStats = { event?.let { onOpenGame(selected, it) } },
                 preview = if (selectedPreview != null) {
                     { SportsLivePreviewVideo(previewPlayer) }
@@ -1112,7 +1085,6 @@ private fun SportsLiveContent(
                                 onLongClick = onCardLongClick,
                                 onFocus = onCardFocused,
                                 menuOpen = item.listKey == menuCardKey,
-                                pickedFirst = item.listKey == pickFirst?.listKey,
                                 reminded = remindedCard(item),
                                 modifier = cardModifier
                             )
@@ -1143,7 +1115,6 @@ private fun SportsLiveContent(
                         onClick = onCardClick,
                         onLongClick = onCardLongClick,
                         menuOpen = item.listKey == menuCardKey,
-                        pickedFirst = item.listKey == pickFirst?.listKey,
                         art = artOf(item),
                         chip = chipOf(item),
                         onFocus = onCardFocused,
@@ -1160,8 +1131,8 @@ private fun SportsLiveContent(
                     row = selectedRow,
                     onWatch = { open(selected) },
                     buttons = scoreboardButtons(uiState.selectedTab, selectedRow, event),
-                    // The dual screen's pick mode, as from the card menu.
-                    onWatchWith = { pickFirst = selected },
+                    // Straight into dual screen, as from the card menu (#57).
+                    onWatchWith = { onWatchWith(selected) },
                     onGameStats = { event?.let { onOpenGame(selected, it) } },
                     preview = if (selectedPreview != null) {
                         { SportsLivePreviewVideo(previewPlayer) }
@@ -1195,6 +1166,11 @@ private fun SportsLiveContent(
                     null
                 },
                 onGameStats = gameOf(selected)?.let { event -> { onOpenGame(selected, event) } },
+                onWatchWith = if (canWatchWith(selected)) {
+                    { onWatchWith(selected) }
+                } else {
+                    null
+                },
                 preview = if (selectedPreview != null) {
                     { SportsLivePreviewVideo(previewPlayer) }
                 } else {

@@ -91,6 +91,9 @@ import com.nuvio.tv.ui.screens.sportslive.ZapPanelRow
 import com.nuvio.tv.ui.screens.sportslive.ZapPanelStop
 import com.nuvio.tv.ui.screens.sportslive.panelListIndex
 import com.nuvio.tv.ui.screens.sportslive.zapPanelUpFrom
+import com.nuvio.tv.core.sportslive.FullTimeToast
+import com.nuvio.tv.core.sportslive.FullTimeToastStrings
+import com.nuvio.tv.core.sportslive.SportsLiveFullTimeToasts
 import com.nuvio.tv.core.sportslive.scores.TeamLogoUrls
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveTeamLogo
 import com.nuvio.tv.ui.screens.sportslive.kickoffText
@@ -126,10 +129,21 @@ internal fun BoxScope.SportsLiveZapOverlay(
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, viewModel) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_STOP) viewModel.closePanel()
+            when (event) {
+                // The game playing is scored for its full-time toast only while the player is started (#60).
+                Lifecycle.Event.ON_START -> viewModel.onPlayerStarted(true)
+                Lifecycle.Event.ON_STOP -> {
+                    viewModel.closePanel()
+                    viewModel.onPlayerStarted(false)
+                }
+                else -> Unit
+            }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            viewModel.onPlayerStarted(false)
+        }
     }
     val banner by viewModel.banner.collectAsState()
     val panelOpen by viewModel.panelOpen.collectAsState()
@@ -151,6 +165,22 @@ internal fun BoxScope.SportsLiveZapOverlay(
             .zIndex(3f)
     ) {
         (banner ?: lastBanner)?.let { ZapBanner(it) }
+    }
+
+    // "Ended while you're watching" (#60): over the video while nothing else is up; Right moves on.
+    val fullTime by viewModel.fullTime.collectAsState()
+    var lastFullTime by remember { mutableStateOf<FullTimeToast?>(null) }
+    LaunchedEffect(fullTime) { fullTime?.let { lastFullTime = it } }
+    AnimatedVisibility(
+        visible = fullTime != null && banner == null && !panelOpen && !playerOverlayVisible,
+        enter = fadeIn(tween(150)),
+        exit = fadeOut(tween(250)),
+        modifier = Modifier
+            .align(Alignment.TopCenter)
+            .padding(top = 32.dp)
+            .zIndex(3f)
+    ) {
+        (fullTime ?: lastFullTime)?.let { FullTimeToastCard(it) }
     }
 
     var wasOpen by remember { mutableStateOf(false) }
@@ -220,6 +250,38 @@ internal fun BoxScope.SportsLiveZapOverlay(
                 openDual?.invoke()
             },
             onDismiss = { dualPick = null }
+        )
+    }
+}
+
+/** "Full time · 2–1" (no score under Hide until focused), then "Stay for postgame · Next live game →". */
+@Composable
+private fun FullTimeToastCard(toast: FullTimeToast) {
+    val strings = FullTimeToastStrings(
+        title = stringResource(R.string.sports_live_full_time),
+        withScore = stringResource(R.string.sports_live_full_time_score),
+        score = stringResource(R.string.sports_live_chip_score)
+    )
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .widthIn(max = 720.dp)
+            .clip(RoundedCornerShape(NuvioTheme.radii.xl))
+            .background(NuvioTheme.colors.BackgroundElevated.copy(alpha = 0.92f))
+            .padding(horizontal = 28.dp, vertical = 14.dp)
+    ) {
+        Text(
+            text = SportsLiveFullTimeToasts.text(toast, strings),
+            style = MaterialTheme.typography.titleLarge,
+            color = NuvioTheme.colors.TextPrimary,
+            maxLines = 1
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = stringResource(R.string.sports_live_full_time_actions),
+            style = MaterialTheme.typography.labelLarge,
+            color = NuvioTheme.extendedColors.textSecondary,
+            maxLines = 1
         )
     }
 }

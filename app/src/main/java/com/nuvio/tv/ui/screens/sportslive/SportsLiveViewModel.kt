@@ -9,6 +9,10 @@ import com.nuvio.tv.core.sportslive.EndedGame
 import com.nuvio.tv.core.sportslive.EndedInputs
 import com.nuvio.tv.core.sportslive.EndedSignal
 import com.nuvio.tv.core.sportslive.SportsLiveEndedGames
+import com.nuvio.tv.core.sportslive.LinkCheckRequest
+import com.nuvio.tv.core.sportslive.SportsLiveLinkChecker
+import com.nuvio.tv.core.sportslive.SportsLiveManifestVerdict
+import com.nuvio.tv.core.sportslive.SportsLiveWorkingLinks
 import com.nuvio.tv.core.sportslive.SportsLiveItemBucketer
 import com.nuvio.tv.core.sportslive.SportsLiveLayout
 import com.nuvio.tv.core.sportslive.SportsLiveLiveDuration
@@ -20,6 +24,7 @@ import com.nuvio.tv.core.sportslive.scores.ScoreState
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.core.sportslive.scores.WhyTag
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
+import com.nuvio.tv.data.repository.SportsLiveManifestFetcher
 import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveTab
@@ -77,6 +82,10 @@ class SportsLiveViewModel internal constructor(
     private val saveLiveSort: suspend (LiveNowSort) -> Unit = {},
     /** The Scores setting (null until read): Off hides the sort, Hide until focused hides its why tags. */
     scoresMode: Flow<ScoresMode?> = flowOf(null),
+    /** Looks once at the resolved link of a game past its estimated end (#60 phase 2); null: no checks. */
+    private val linkChecker: SportsLiveLinkChecker? = null,
+    /** [item]'s check on its already-resolved link, or null (nothing resolved, not an HLS link). */
+    private val linkCheckOf: (SportsLiveItem) -> LinkCheckRequest? = { null },
     // Where the list is bucketed and pinned; tests pass their dispatcher, so it runs in virtual time.
     computeDispatcher: CoroutineDispatcher
 ) : ViewModel() {
@@ -86,7 +95,9 @@ class SportsLiveViewModel internal constructor(
         repo: SportsLiveRepository,
         resolver: SportsLiveZapResolver,
         prefs: SportsLivePreferencesDataStore,
-        liveScores: LiveScoresRepository
+        liveScores: LiveScoresRepository,
+        resolveCache: SportsLiveResolveCache,
+        manifestFetcher: SportsLiveManifestFetcher
     ) : this(
         repo = repo,
         // The zap's pick, which joins the stream search the ended-games probe started on settle; a
@@ -113,6 +124,14 @@ class SportsLiveViewModel internal constructor(
         liveSort = prefs.liveNowSort,
         saveLiveSort = prefs::setLiveNowSort,
         scoresMode = liveScores.mode,
+        linkChecker = SportsLiveLinkChecker(fetch = manifestFetcher::fetch),
+        // Only a link already resolved (the cache, else one that played): never a resolve just to test.
+        linkCheckOf = { item ->
+            SportsLiveManifestVerdict.requestFor(
+                item,
+                resolveCache.get(item.streamKey) ?: SportsLiveWorkingLinks.shared.goodStream(item.id)
+            )
+        },
         computeDispatcher = Dispatchers.Default
     )
 
@@ -159,6 +178,10 @@ class SportsLiveViewModel internal constructor(
     private var focusedLiveCard: String? = null
     private val reRank = MutableStateFlow(0)
     private var autoRefreshJob: Job? = null
+
+    // The section is on screen (resumed): only then are links checked (#60 phase 2).
+    @Volatile
+    private var screenVisible = false
     private var focusProbeJob: Job? = null
 
     // Latest Data saver value; the on-focus probe is skipped while it is on.
@@ -191,8 +214,14 @@ class SportsLiveViewModel internal constructor(
     }.flowOn(computeDispatcher)
 
     val uiState: StateFlow<SportsLiveUiState> =
-        combine(pinned, repo.endedKeys, combine(selectionState, sortInputs, reRank) { selection, sort, _ -> selection to sort }, endedInputs, clock) { pinned, endedKeys, (selection, sort), inputs, _ ->
-            buildState(pinned, endedKeys, selection, inputs, sort)
+        combine(
+            pinned,
+            repo.endedKeys,
+            combine(selectionState, sortInputs, reRank) { selection, sort, _ -> selection to sort },
+            combine(endedInputs, linkChecker?.dead ?: flowOf(emptyMap())) { inputs, linkDead -> inputs to linkDead },
+            clock
+        ) { pinned, endedKeys, (selection, sort), (inputs, linkDead), _ ->
+            buildState(pinned, endedKeys, selection, inputs, sort, linkDead)
         }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SportsLiveUiState())
 
@@ -347,6 +376,7 @@ class SportsLiveViewModel internal constructor(
     fun onScreenVisible(visible: Boolean) {
         // The preview stops while the screen is hidden; coming back, it waits for a fresh settle.
         previewController.onVisible(visible)
+        screenVisible = visible
         autoRefreshJob?.cancel()
         autoRefreshJob = if (visible) {
             viewModelScope.launch {
@@ -380,7 +410,9 @@ class SportsLiveViewModel internal constructor(
         endedKeys: Set<String>,
         selection: Selection,
         inputs: EndedInputs,
-        sort: SortInputs = SortInputs()
+        sort: SortInputs = SortInputs(),
+        /** Cards whose link check found them dead (#60 phase 2), with when. */
+        linkDead: Map<String, Long> = emptyMap()
     ): SportsLiveUiState {
         val hasClaimed = bucketed.hasClaimed
         // Live items whose streams are gone have ended; the other tabs are left as they are. Games found
@@ -398,7 +430,7 @@ class SportsLiveViewModel internal constructor(
                 val split = endedGames.split(tabItems.filterNot { it.hasEnded(endedKeys) }, scores, now, inputs.canEstimate)
                 // Live far longer than its sport runs: moved to the strip, never hidden (a time estimate
                 // never hides a game), unless links were found lately or ESPN shows it in play.
-                val (overdue, live) = split.live.partition {
+                val (overdue, notOverdue) = split.live.partition {
                     SportsLiveLiveDuration.isOverdue(it, now) && !repo.hasRecentLinks(it) &&
                         ScoreChips.matchedEvent(it, scores[it.streamKey])?.state != ScoreState.IN
                 }
@@ -407,7 +439,26 @@ class SportsLiveViewModel internal constructor(
                     val ended = EndedGame(EndedSignal.ESTIMATE, start + SportsLiveLiveDuration.maxLiveMs(item.sport))
                     (item to ended).takeIf { now < ended.dropsAtMs }
                 }
-                justEnded = split.ended + overdueEnded.associate { (item, ended) -> item.streamKey to ended }
+                // #60 phase 2: a game past its estimated end that ESPN does not decide has its already-resolved
+                // link looked at once, while Live now is on screen; a dead link moves it to the strip as
+                // "Probably ended" (playable, never hidden), and a game ESPN takes up again comes back.
+                val linkEnded = ArrayList<SportsLiveItem>()
+                val toCheck = ArrayList<LinkCheckRequest>()
+                val live = notOverdue.filter { item ->
+                    if (endedGames.linkCheckEnd(item, scores[item.streamKey], now) == null) return@filter true
+                    if (item.streamKey in linkDead) {
+                        linkEnded += item
+                        false
+                    } else {
+                        linkCheckOf(item)?.let(toCheck::add)
+                        true
+                    }
+                }
+                if (toCheck.isNotEmpty() && screenVisible && selection.tab == SportsLiveTab.LIVE_NOW) {
+                    linkChecker?.offer(toCheck, viewModelScope)
+                }
+                justEnded = split.ended + overdueEnded.associate { (item, ended) -> item.streamKey to ended } +
+                    linkEnded.associate { it.streamKey to SportsLiveEndedGames.linkDead(linkDead.getValue(it.streamKey)) }
                 val ordered = if (liveSort == LiveNowSort.MOST_EXCITING) {
                     val showTags = LiveNowSort.showsWhyTags(sort.mode)
                     val ratings = live.associateWith { excitementOf(it, scores[it.streamKey], excitementHistory, now, recentChanges = showTags) }
@@ -423,7 +474,7 @@ class SportsLiveViewModel internal constructor(
                     shownLiveOrder = null
                     live
                 }
-                ordered + split.justEnded + overdueEnded.map { it.first }
+                ordered + split.justEnded + overdueEnded.map { it.first } + linkEnded
             } else {
                 tabItems
             }

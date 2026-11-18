@@ -153,6 +153,21 @@ class SportsLiveEndedGames {
     }
 
     /**
+     * #60 phase 2: [item]'s estimated end when its link may be checked to confirm it is over: a game
+     * past its start plus its sport's length that ESPN does not decide. Null for a channel, a card with
+     * no timed start or no length, a strict ESPN match in [snapshot] (whatever its state: ESPN alone
+     * ends it), a card ESPN was ever seen playing, or a final already seen.
+     */
+    @Synchronized
+    fun linkCheckEnd(item: SportsLiveItem, snapshot: ScoreSnapshot?, nowMs: Long): Long? {
+        if (item.isChannel) return null
+        val key = item.streamKey
+        if (key in seenUnfinished || key in finals) return null
+        if (ScoreChips.matchedEvent(item, snapshot) != null) return null
+        return estimate(item, nowMs)?.endedAtMs
+    }
+
+    /**
      * Splits Live now [items] (in order) by their verdicts at [nowMs]; [scores] are the delayed
      * snapshots by card key, [canEstimate] which cards may be estimated. A card whose drop time has
      * passed is in neither list.
@@ -304,6 +319,12 @@ class SportsLiveEndedGames {
             val event = ScoreChips.matchedEvent(item, snapshot) ?: return false
             return isFinalWithScore(event)
         }
+
+        /**
+         * A card whose link check found it dead (#60 phase 2), at [deadAtMs]: "Probably ended", like an
+         * estimate, dated by the check so its six hours in the strip start then.
+         */
+        fun linkDead(deadAtMs: Long): EndedGame = EndedGame(EndedSignal.ESTIMATE, deadAtMs)
 
         /** One line per time: "atMs,g|n,eventId,key" (the key last, so it may hold commas). */
         fun encodeTimes(times: Map<String, FinalTime>): String =

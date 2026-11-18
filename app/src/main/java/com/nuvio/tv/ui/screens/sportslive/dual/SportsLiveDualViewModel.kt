@@ -38,7 +38,11 @@ data class SportsLiveDualSession(
     /** Every game of [tab] (on Live now, whatever [filter]), for the zap session OK starts (#68). */
     val zapItems: List<SportsLiveItem> = items,
     /** The game whose full player opened dual screen: Back plays it full screen again (M11); null from the section. */
-    val backTo: SportsLiveItem? = null
+    val backTo: SportsLiveItem? = null,
+    /** "Watch with another game" (#57) paired [right] by itself: "Paired with ‹game› · ← to change" shows. */
+    val pairedHint: Boolean = false,
+    /** Card keys of games known to be over when dual opened (Just ended, ESPN finals): never offered. */
+    val finishedKeys: Set<String> = emptySet()
 )
 
 /**
@@ -87,21 +91,6 @@ data class SportsLiveDualPick(
 
 /** Dual screen is offered on Live now and Channels only. */
 internal fun SportsLiveTab.offersDual(): Boolean = this == SportsLiveTab.LIVE_NOW || this == SportsLiveTab.CHANNELS
-
-/**
- * The section's pick-second mode: OK on [item], shown on [tab] in [items] under [filter], after
- * [chosen] was picked first ([zapItems]: every game of [tab]). The dual session, or null when OK does
- * nothing: a tab without dual screen, or an [item] that [SportsLiveDualPick.pairWith] refuses.
- */
-internal fun sportsLivePickModeSession(
-    chosen: SportsLiveItem,
-    item: SportsLiveItem,
-    tab: SportsLiveTab,
-    items: List<SportsLiveItem>,
-    filter: String?,
-    zapItems: List<SportsLiveItem> = items
-): SportsLiveDualSession? =
-    if (!tab.offersDual()) null else SportsLiveDualPick(chosen = chosen, items = items, filter = filter, tab = tab, zapItems = zapItems).pairWith(item)
 
 /**
  * True when this card and [other] play the same game from a common source: one of the two, or one of
@@ -175,6 +164,7 @@ class SportsLiveDualViewModel internal constructor(
     private val filter: String? = session?.filter
     private val tab: SportsLiveTab = session?.tab ?: SportsLiveTab.LIVE_NOW
     private val backTo: SportsLiveItem? = session?.backTo
+    private val finishedKeys: Set<String> = session?.finishedKeys.orEmpty()
 
     private val _state = MutableStateFlow(session?.let { DualState(DualPane(it.left), DualPane(it.right)) })
 
@@ -185,6 +175,16 @@ class SportsLiveDualViewModel internal constructor(
 
     /** The keys hint shows for [KEYS_HINT_MS] after the screen opens, on the profile's first entries. */
     val keysHint: StateFlow<Boolean> = _keysHint.asStateFlow()
+
+    private val _pairHint = MutableStateFlow<String?>(null)
+
+    /** "Paired with ‹game›" (#57): the auto-picked game's name, for [PAIR_HINT_MS] after the screen opens. */
+    val pairHint: StateFlow<String?> = _pairHint.asStateFlow()
+
+    private val _pairPicker = MutableStateFlow<List<SportsLiveItem>?>(null)
+
+    /** The games the right pane may change to (#57), while its picker is open; null when closed. */
+    val pairPicker: StateFlow<List<SportsLiveItem>?> = _pairPicker.asStateFlow()
 
     private val jobs = mutableMapOf<Side, Job>()
 
@@ -216,6 +216,13 @@ class SportsLiveDualViewModel internal constructor(
         session?.let {
             load(Side.LEFT, it.left)
             load(Side.RIGHT, it.right)
+            if (it.pairedHint) {
+                _pairHint.value = it.right.meta.name
+                viewModelScope.launch {
+                    delay(PAIR_HINT_MS)
+                    _pairHint.value = null
+                }
+            }
             viewModelScope.launch {
                 if (runCatching { claimKeysHint() }.getOrDefault(false)) {
                     _keysHint.value = true
@@ -227,6 +234,42 @@ class SportsLiveDualViewModel internal constructor(
     }
 
     fun highlight(side: Side) = dispatch(DualAction.Highlight(side))
+
+    /**
+     * Left (#57): on the left pane, already highlighted, it opens the right pane's picker ("← to change"
+     * in the pair hint); otherwise it highlights the left pane as before.
+     */
+    fun onLeft() {
+        val state = _state.value ?: return
+        if (state.highlighted == Side.LEFT) openPairPicker() else highlight(Side.LEFT)
+    }
+
+    /**
+     * Opens the right pane's picker: the list's games not known to be over, not already on screen and
+     * sharing no source with either pane. Nothing is looked up until one is picked.
+     */
+    fun openPairPicker() {
+        val state = _state.value ?: return
+        val ended = endedKeys()
+        val onScreen = state.left.item.sourceKeys() + state.right.item.sourceKeys()
+        _pairHint.value = null
+        _pairPicker.value = items.filter { item ->
+            !item.sharesSourceWith(onScreen) && !item.hasEnded(ended) && item.sourceKeys().none { it in finishedKeys }
+        }
+    }
+
+    fun closePairPicker() {
+        _pairPicker.value = null
+    }
+
+    /** [item] picked in the right pane's picker: that pane plays it (one lookup, the cache's when fresh). */
+    fun pickPair(item: SportsLiveItem) {
+        _pairPicker.value = null
+        val state = _state.value ?: return
+        if (item.sharesSourceWith(state.left.item) || item.sharesSourceWith(state.right.item)) return
+        settle(state.right.item)
+        load(Side.RIGHT, item)
+    }
 
     /** MENU: the panes trade places, each keeping its lookup. */
     fun swap() {
@@ -425,5 +468,8 @@ class SportsLiveDualViewModel internal constructor(
 
         /** How long the keys hint shows after the screen opens. */
         const val KEYS_HINT_MS = 4_000L
+
+        /** How long "Paired with ‹game› · ← to change" shows after "Watch with another game" (#57). */
+        const val PAIR_HINT_MS = 3_000L
     }
 }

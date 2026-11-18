@@ -19,6 +19,7 @@ import com.nuvio.tv.core.sportslive.scores.TeamFollows
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveItem
+import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualSession
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -48,7 +49,9 @@ data class SportsLiveGameRequest(
     val homeFirst: Boolean = false,
     /** The card the page was opened from (Game stats); an upcoming one offers Remind me (#44). */
     val card: SportsLiveItem? = null,
-    val spoilerSafe: Boolean = false
+    val spoilerSafe: Boolean = false,
+    /** Opened on a live Live now game: "Watch with another game" starts this dual session (#57). */
+    val watchWith: SportsLiveDualSession? = null
 )
 
 /** Whether [item]'s card names [event]'s home team first (N10); away first when that is not known. */
@@ -92,7 +95,9 @@ data class SportsLiveGameUiState(
     /** The card the page was opened from, when any. */
     val card: SportsLiveItem? = null,
     /** Opened from the Catch up row (#58): the score shows only once revealed, even under Show. */
-    val spoilerSafe: Boolean = false
+    val spoilerSafe: Boolean = false,
+    /** "Watch with another game" (#57): the dual session it starts, while the game is live; null hides it. */
+    val watchWith: SportsLiveDualSession? = null
 ) {
     /** Score, records and stats show: Scores Show (unless [spoilerSafe]), or revealed. */
     val showsScore: Boolean get() = (mode == ScoresMode.SHOW && !spoilerSafe) || revealed
@@ -163,7 +168,9 @@ class SportsLiveGameViewModel internal constructor(
             homeFollowed = event != null && TeamFollows.followersOf(followed, event, event.home).isNotEmpty(),
             homeFirst = request?.homeFirst == true,
             card = request?.card,
-            spoilerSafe = request?.spoilerSafe == true
+            spoilerSafe = request?.spoilerSafe == true,
+            // Live games only: gone once the page's summary says the game is over.
+            watchWith = request?.watchWith?.takeIf { (page.summary?.state ?: event?.state) == ScoreState.IN }
         )
     }.stateIn(
         viewModelScope,
@@ -174,7 +181,8 @@ class SportsLiveGameViewModel internal constructor(
             revealed = request?.revealed == true,
             homeFirst = request?.homeFirst == true,
             card = request?.card,
-            spoilerSafe = request?.spoilerSafe == true
+            spoilerSafe = request?.spoilerSafe == true,
+            watchWith = request?.watchWith?.takeIf { request.event.state == ScoreState.IN }
         )
     )
 

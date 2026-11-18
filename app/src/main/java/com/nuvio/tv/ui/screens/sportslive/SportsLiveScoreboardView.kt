@@ -219,7 +219,6 @@ internal fun SportsLiveScoreboardRow(
     onFocus: () -> Unit,
     modifier: Modifier = Modifier,
     menuOpen: Boolean = false,
-    pickedFirst: Boolean = false,
     /** An upcoming game with a reminder (#44): a bell before its status. */
     reminded: Boolean = false
 ) {
@@ -274,10 +273,10 @@ internal fun SportsLiveScoreboardRow(
                     var level by remember(firstChoices, secondChoices) { mutableIntStateOf(0) }
                     val maxLevel = maxOf(firstChoices.lastIndex, secondChoices.lastIndex)
                     val tooLong: () -> Unit = { if (level < maxLevel) level++ }
-                    TeamLine(firstChoices, level, art.first, art.hasLogos, row.firstFollowed, pickedFirst, tooLong)
-                    TeamLine(secondChoices, level, art.second, art.hasLogos, row.secondFollowed, false, tooLong)
+                    TeamLine(firstChoices, level, art.first, art.hasLogos, row.firstFollowed, tooLong)
+                    TeamLine(secondChoices, level, art.second, art.hasLogos, row.secondFollowed, tooLong)
                 } else {
-                    ItemLine(item.meta.name, item.followed, pickedFirst)
+                    ItemLine(item.meta.name, item.followed)
                 }
             }
             scoreOf(row.chip)?.let { score ->
@@ -292,20 +291,6 @@ internal fun SportsLiveScoreboardRow(
     }
 }
 
-/** The "1" badge on the game picked first for dual screen. */
-@Composable
-private fun PickedFirstBadge() {
-    Text(
-        text = "1",
-        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-        color = NuvioTheme.colors.OnPrimary,
-        modifier = Modifier
-            .clip(RoundedCornerShape(NuvioTheme.radii.sm))
-            .background(NuvioTheme.colors.Primary)
-            .padding(horizontal = NuvioTheme.spacing.sm)
-    )
-}
-
 /** One team: its logo (when both sides have one), ★ when followed, and [choices] at [level] or shorter. */
 @Composable
 private fun TeamLine(
@@ -314,11 +299,9 @@ private fun TeamLine(
     team: GameArtTeam,
     withLogo: Boolean,
     followed: Boolean,
-    pickedFirst: Boolean,
     onTooLong: () -> Unit
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs), verticalAlignment = Alignment.CenterVertically) {
-        if (pickedFirst) PickedFirstBadge()
         if (withLogo) {
             SportsLiveTeamLogo(team.logo, team.short, TeamLogoUrls.CARD_PX, Modifier.size(ROW_LOGO_SIZE), fontSize = 9.sp)
         }
@@ -341,9 +324,8 @@ private fun TeamLine(
 
 /** A row with no two sides (a channel, an unparsed title): its name, on up to two lines. */
 @Composable
-private fun ItemLine(name: String, followed: Boolean, pickedFirst: Boolean) {
+private fun ItemLine(name: String, followed: Boolean) {
     Row(horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs), verticalAlignment = Alignment.CenterVertically) {
-        if (pickedFirst) PickedFirstBadge()
         if (followed) {
             Icon(imageVector = Icons.Rounded.Star, contentDescription = null, tint = FOLLOWED_GOLD, modifier = Modifier.size(18.dp))
         }

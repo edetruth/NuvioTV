@@ -107,6 +107,8 @@ fun SportsLiveDualScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val keysHint by viewModel.keysHint.collectAsStateWithLifecycle()
+    val pairHint by viewModel.pairHint.collectAsStateWithLifecycle()
+    val pairPicker by viewModel.pairPicker.collectAsStateWithLifecycle()
     val currentOnBack by rememberUpdatedState(onBack)
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -196,8 +198,8 @@ fun SportsLiveDualScreen(
     // Focus starts on the screen and comes back to it when OK's lookup or stream picker closes.
     val focusRequester = remember { FocusRequester() }
     val playState by playViewModel.state.collectAsStateWithLifecycle()
-    LaunchedEffect(playState == SportsLivePlayState.Idle) {
-        if (playState == SportsLivePlayState.Idle) runCatching { focusRequester.requestFocus() }
+    LaunchedEffect(playState == SportsLivePlayState.Idle, pairPicker == null) {
+        if (playState == SportsLivePlayState.Idle && pairPicker == null) runCatching { focusRequester.requestFocus() }
     }
 
     Box(
@@ -210,7 +212,8 @@ fun SportsLiveDualScreen(
                 val native = event.nativeKeyEvent
                 if (native.action != KeyEvent.ACTION_DOWN) return@onKeyEvent false
                 when (native.keyCode) {
-                    KeyEvent.KEYCODE_DPAD_LEFT -> viewModel.highlight(Side.LEFT)
+                    // On the left pane already, Left opens the right pane's picker (#57).
+                    KeyEvent.KEYCODE_DPAD_LEFT -> if (native.repeatCount == 0) viewModel.onLeft()
                     KeyEvent.KEYCODE_DPAD_RIGHT -> viewModel.highlight(Side.RIGHT)
                     KeyEvent.KEYCODE_MENU -> if (native.repeatCount == 0) viewModel.swap()
                     KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER ->
@@ -268,6 +271,38 @@ fun SportsLiveDualScreen(
                     .padding(horizontal = 20.dp, vertical = 10.dp)
             )
         }
+        // "Watch with another game" paired the right pane by itself (#57); not focusable either. The
+        // last name stays while the hint fades out.
+        var lastPairHint by remember { mutableStateOf("") }
+        LaunchedEffect(pairHint) { pairHint?.let { lastPairHint = it } }
+        AnimatedVisibility(
+            visible = pairHint != null,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = 32.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.sports_live_dual_paired_hint, pairHint ?: lastPairHint),
+                style = MaterialTheme.typography.bodyMedium,
+                color = NuvioTheme.colors.TextPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .background(Color.Black.copy(alpha = 0.7f), RoundedCornerShape(50))
+                    .padding(horizontal = 20.dp, vertical = 10.dp)
+            )
+        }
+    }
+
+    pairPicker?.let { candidates ->
+        SportsLiveDualPickerDialog(
+            candidates = candidates,
+            rows = emptyMap(),
+            onPick = viewModel::pickPair,
+            onDismiss = viewModel::closePairPicker
+        )
     }
 }
 

@@ -3,9 +3,11 @@ package com.nuvio.tv.ui.screens.sportslive
 import com.nuvio.tv.core.sportslive.EndedGame
 import com.nuvio.tv.core.sportslive.EndedSignal
 import com.nuvio.tv.core.sportslive.LiveNowSort
+import com.nuvio.tv.core.sportslive.SportsLiveEndedGames
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.WhyTag
 import com.nuvio.tv.domain.model.SportsLiveItem
+import com.nuvio.tv.domain.model.SportsLiveKind
 import com.nuvio.tv.domain.model.SportsLiveTab
 import com.nuvio.tv.domain.repository.SportsLiveFailure
 
@@ -82,3 +84,20 @@ internal fun sportsLiveCardOk(ended: EndedGame?): SportsLiveCardOk {
     val event = ended?.takeIf { it.signal == EndedSignal.FINAL }?.event ?: return SportsLiveCardOk.Play
     return SportsLiveCardOk.OpenGame(event)
 }
+
+/**
+ * "Watch with another game" (#57) is offered on [item] ([snapshot]: its delayed score): a live game on
+ * Live now, not in Just ended and not an ESPN final (in the postgame grace either). Never a channel.
+ */
+internal fun SportsLiveUiState.offersWatchWith(item: SportsLiveItem, snapshot: ScoreSnapshot?): Boolean =
+    selectedTab == SportsLiveTab.LIVE_NOW && item.kind == SportsLiveKind.EVENTS && !item.isChannel &&
+        endedOf(item) == null && !SportsLiveEndedGames.isEspnFinal(item, snapshot)
+
+/**
+ * Every source key of the Live now games known to be over: the Just ended strip, and ESPN finals still
+ * in their postgame grace ([scores]: the delayed snapshots by card key). Dual screen never offers them.
+ */
+internal fun SportsLiveUiState.finishedKeys(scores: Map<String, ScoreSnapshot>): Set<String> =
+    tabs[SportsLiveTab.LIVE_NOW].orEmpty()
+        .filter { it.streamKey in justEnded || SportsLiveEndedGames.isEspnFinal(it, scores[it.streamKey]) }
+        .flatMapTo(HashSet()) { item -> (listOf(item) + item.alternates).map { it.streamKey } }

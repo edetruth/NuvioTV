@@ -1561,7 +1561,13 @@ private fun PlaybackNavHost(
                         )
                     )
                 },
-                onPlayHighlight = { clip -> navController.navigate(highlightPlayerRoute(clip, SystemClock.elapsedRealtime())) }
+                onPlayHighlight = { clip -> navController.navigate(highlightPlayerRoute(clip, SystemClock.elapsedRealtime())) },
+                // Dual screen replaces the Game page (#57): Back from it returns to the section.
+                onOpenDual = {
+                    navController.navigate(Screen.SportsLiveDual.route) {
+                        popUpTo(Screen.SportsLiveGame.route) { inclusive = true }
+                    }
+                }
             )
         }
 

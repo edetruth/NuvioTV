@@ -44,7 +44,7 @@ class SportsLiveDualBackTest {
         val fromPlayer = SportsLiveDualPick(chosen = a, items = items, filter = null, tab = SportsLiveTab.LIVE_NOW, chosenStream = playing, fromPlayer = true)
         assertEquals(a, fromPlayer.pairWith(b)!!.backTo)
         assertNull(fromPlayer.copy(fromPlayer = false).pairWith(b)!!.backTo)
-        assertNull(sportsLivePickModeSession(chosen = a, item = b, tab = SportsLiveTab.LIVE_NOW, items = items, filter = null)!!.backTo)
+        assertNull(sportsLiveWatchWithSession(a, items, items, null, emptyMap(), emptySet())!!.backTo)
     }
 
     @Test

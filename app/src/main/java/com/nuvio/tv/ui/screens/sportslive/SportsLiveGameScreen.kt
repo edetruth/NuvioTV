@@ -79,6 +79,7 @@ import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.ui.components.LightweightCard
 import com.nuvio.tv.ui.components.LoadingIndicator
 import com.nuvio.tv.ui.components.SourceStatusFilterChip
+import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualSessions
 import com.nuvio.tv.ui.theme.NuvioTheme
 import com.nuvio.tv.ui.util.dpadRepeatThrottle
 import java.time.Instant
@@ -105,7 +106,9 @@ fun SportsLiveGameScreen(
     onPlayTarget: (SportsLiveZapTarget) -> Unit,
     onOpenDetail: (SportsLiveItem) -> Unit,
     /** Plays the first clip of a highlights playlist just started (SportsLiveHighlights). */
-    onPlayHighlight: (HighlightClipPlay) -> Unit
+    onPlayHighlight: (HighlightClipPlay) -> Unit,
+    /** Opens dual screen on the session just put in [SportsLiveDualSessions] (#57). */
+    onOpenDual: () -> Unit = {}
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val currentOnBack by rememberUpdatedState(onBack)
@@ -149,7 +152,8 @@ fun SportsLiveGameScreen(
         showsScore = showsScore,
         hasReplay = state.replay != null,
         homeFirst = state.homeFirst,
-        canRemind = remindCard != null
+        canRemind = remindCard != null,
+        hasWatchWith = state.watchWith != null
     )
 
     // Back from highlights: focus returns to the card played, or to Watch all highlights.
@@ -207,6 +211,12 @@ fun SportsLiveGameScreen(
             },
             onWatchReplay = { replay ->
                 if (replay.apiType == "series") onOpenDetail(replay) else playViewModel.play(replay)
+            },
+            onWatchWith = {
+                state.watchWith?.let { session ->
+                    SportsLiveDualSessions.start(session)
+                    onOpenDual()
+                }
             },
             onToggleFollow = viewModel::toggleFollow,
             reminded = remindCard != null && reminders.isReminded(remindCard),
@@ -297,6 +307,7 @@ private fun GameHeader(
     focusRequesters: Map<GameHeaderButton, FocusRequester>,
     onReveal: () -> Unit,
     onWatchReplay: (SportsLiveItem) -> Unit,
+    onWatchWith: () -> Unit,
     onToggleFollow: (ScoreSide) -> Unit,
     reminded: Boolean = false,
     onToggleReminder: () -> Unit = {}
@@ -371,6 +382,9 @@ private fun GameHeader(
                                     Text(stringResource(R.string.sports_live_game_watch_replay), maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
                             }
+                            GameHeaderButton.WATCH_WITH -> SportsLivePaneButton(onClick = onWatchWith, modifier = modifier) {
+                                Text(stringResource(R.string.sports_live_dual_watch_with), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
                             GameHeaderButton.REMIND -> SportsLivePaneButton(onClick = onToggleReminder, modifier = modifier) {
                                 Icon(imageVector = Icons.Rounded.Notifications, contentDescription = null, modifier = Modifier.size(20.dp))
                                 Spacer(modifier = Modifier.width(NuvioTheme.spacing.xs))
@@ -401,21 +415,24 @@ private fun GameHeader(
 }
 
 /** A Game page header button. */
-internal enum class GameHeaderButton { REVEAL, REPLAY, REMIND, FOLLOW_AWAY, FOLLOW_HOME }
+internal enum class GameHeaderButton { REVEAL, REPLAY, WATCH_WITH, REMIND, FOLLOW_AWAY, FOLLOW_HOME }
 
 /**
  * The header's buttons, row by row: Reveal (only while the score is hidden), Watch replay (only with a
- * replay), Remind me (only for an upcoming game opened from its card, #44), then both Follow buttons
- * side by side, which every game has, in the header's team order.
+ * replay), Watch with another game (only for a live game opened from Live now, #57), Remind me (only
+ * for an upcoming game opened from its card, #44), then both Follow buttons side by side, which every
+ * game has, in the header's team order.
  */
 internal fun gameHeaderRows(
     showsScore: Boolean,
     hasReplay: Boolean,
     homeFirst: Boolean = false,
-    canRemind: Boolean = false
+    canRemind: Boolean = false,
+    hasWatchWith: Boolean = false
 ): List<List<GameHeaderButton>> = buildList {
     if (!showsScore) add(listOf(GameHeaderButton.REVEAL))
     if (hasReplay) add(listOf(GameHeaderButton.REPLAY))
+    if (hasWatchWith) add(listOf(GameHeaderButton.WATCH_WITH))
     if (canRemind) add(listOf(GameHeaderButton.REMIND))
     add(inCardOrder(GameHeaderButton.FOLLOW_AWAY, GameHeaderButton.FOLLOW_HOME, homeFirst).toList())
 }

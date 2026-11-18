@@ -110,7 +110,6 @@ internal fun SportsLiveTimelineView(
     rowState: LazyListState,
     selectedKey: String,
     menuKey: String?,
-    pickedFirstKey: String?,
     cardFocusRequester: (SportsLiveItem) -> FocusRequester,
     upFocusRequester: FocusRequester,
     watchFocusRequester: FocusRequester,
@@ -342,7 +341,6 @@ internal fun SportsLiveTimelineView(
                                         block = block,
                                         selected = block.key == selectedKey,
                                         menuOpen = block.key == menuKey,
-                                        pickedFirst = block.key == pickedFirstKey,
                                         wide = with(density) { widthPx.toDp() } >= WIDE_BLOCK,
                                         onClick = { onClick(item) },
                                         onLongClick = { onLongClick(item) },
@@ -460,7 +458,6 @@ private fun TimelineBlockCard(
     block: TimelineBlock,
     selected: Boolean,
     menuOpen: Boolean,
-    pickedFirst: Boolean,
     wide: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
@@ -539,17 +536,6 @@ private fun TimelineBlockCard(
         ) {
             Column(modifier = Modifier.weight(1f, fill = false)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xxs), verticalAlignment = Alignment.CenterVertically) {
-                    if (pickedFirst) {
-                        Text(
-                            text = "1",
-                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                            color = NuvioTheme.colors.OnPrimary,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(NuvioTheme.radii.sm))
-                                .background(NuvioTheme.colors.Primary)
-                                .padding(horizontal = NuvioTheme.spacing.xs)
-                        )
-                    }
                     if (row.firstFollowed || row.secondFollowed) {
                         Icon(imageVector = Icons.Rounded.Star, contentDescription = null, tint = FOLLOWED_GOLD, modifier = Modifier.size(14.dp))
                     }

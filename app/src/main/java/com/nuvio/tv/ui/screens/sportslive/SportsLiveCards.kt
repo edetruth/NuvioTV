@@ -130,8 +130,6 @@ internal fun SportsLiveListCard(
     onFocus: () -> Unit,
     modifier: Modifier = Modifier,
     menuOpen: Boolean = false,
-    /** The first game of the section's pick-second mode: a "1" badge before the title. */
-    pickedFirst: Boolean = false,
     /** A game's drawn card, in place of the addon's poster; null keeps the addon's art (channels). */
     art: GameArt? = null,
     /** The live / final score chip, beside the state pill; null shows none. */
@@ -229,18 +227,6 @@ internal fun SportsLiveListCard(
                     horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    if (pickedFirst) {
-                        Text(
-                            text = "1",
-                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                            color = NuvioTheme.colors.OnPrimary,
-                            maxLines = 1,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(NuvioTheme.radii.sm))
-                                .background(NuvioTheme.colors.Primary)
-                                .padding(horizontal = NuvioTheme.spacing.sm, vertical = NuvioTheme.spacing.xxs)
-                        )
-                    }
                     // A followed team plays (or is named on this channel).
                     if (item.followed) {
                         Icon(
@@ -288,6 +274,8 @@ internal fun SportsLiveDetailsPane(
     onChooseStream: (() -> Unit)? = null,
     /** "Game stats" beside Choose stream: the Game page, for a game with a strict ESPN match; null hides it. */
     onGameStats: (() -> Unit)? = null,
+    /** "Watch with another game" beside Watch (#57): live games on Live now; null hides it. */
+    onWatchWith: (() -> Unit)? = null,
     /** The hover preview's video, composed under the art while a preview plays; null when none does. */
     preview: (@Composable () -> Unit)? = null,
     /** The preview's first frame is on screen: the art gives way to the video, and the state line gets a label. */
@@ -409,6 +397,11 @@ internal fun SportsLiveDetailsPane(
                 )
                 Spacer(modifier = Modifier.width(NuvioTheme.spacing.xs))
                 PaneButtonLabel(stringResource(R.string.sports_live_watch))
+            }
+            if (onWatchWith != null) {
+                SportsLivePaneButton(onClick = onWatchWith, modifier = button) {
+                    PaneButtonLabel(stringResource(R.string.sports_live_dual_watch_with))
+                }
             }
             if (onChooseStream != null) {
                 SportsLivePaneButton(onClick = onChooseStream, modifier = button) {
