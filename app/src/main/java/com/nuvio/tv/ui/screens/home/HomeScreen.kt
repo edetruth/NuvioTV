@@ -247,6 +247,7 @@ fun HomeScreen(
                     onLiveNowItemClick(item)
                 }
             } else {
+                viewModel.beginTrailerHandoff(itemId)
                 onNavigateToDetail(itemId, itemType, addonBaseUrl)
             }
         }

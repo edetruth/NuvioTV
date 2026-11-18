@@ -139,7 +139,9 @@ class HomePosterWatchedTest {
                 every { claimedCatalogKeys } returns flowOf(emptySet())
                 every { liveNow(any()) } returns flowOf(emptyList())
                 every { enabled } returns flowOf(false)
-            }
+            },
+            trailerPlayerPool = mockk(relaxed = true),
+            backgroundTrailerController = mockk(relaxed = true)
         )
         viewModel.startupGracePeriodActive = false
         viewModel.currentTmdbSettings = TmdbSettings(enabled = false)

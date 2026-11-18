@@ -471,7 +471,9 @@ class HomeEnrichmentRetryTest {
                 every { claimedCatalogKeys } returns flowOf(emptySet())
                 every { liveNow(any()) } returns flowOf(emptyList())
                 every { enabled } returns flowOf(false)
-            }
+            },
+            trailerPlayerPool = mockk(relaxed = true),
+            backgroundTrailerController = mockk(relaxed = true)
         )
         // The pipeline defers everything while the startup grace period is active, and TMDB is
         // switched off so the external addon is the only enrichment source under test.

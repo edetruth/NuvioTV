@@ -206,7 +206,9 @@ class HomeSportsLiveExclusionTest {
             profileManager = profileManager,
             tvRecommendationManager = mockk(relaxed = true),
             serverCatalog = mockk(relaxed = true),
-            sportsLiveRepository = sportsLiveRepository
+            sportsLiveRepository = sportsLiveRepository,
+            trailerPlayerPool = mockk(relaxed = true),
+            backgroundTrailerController = mockk(relaxed = true)
         )
         viewModel.startupGracePeriodActive = false
         viewModel.currentTmdbSettings = TmdbSettings(enabled = false)
