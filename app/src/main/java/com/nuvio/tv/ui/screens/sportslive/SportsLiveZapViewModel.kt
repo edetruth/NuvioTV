@@ -20,6 +20,7 @@ import com.nuvio.tv.core.sportslive.SportsLiveEndedGames
 import com.nuvio.tv.core.sportslive.SportsLiveWorkingLinks
 import com.nuvio.tv.core.sportslive.scores.LiveScoresRepository
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
+import com.nuvio.tv.core.sportslive.scores.TeamLogoBook
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.domain.repository.SportsLiveRepository
@@ -82,7 +83,9 @@ class SportsLiveZapViewModel internal constructor(
     // Where the panel's list is built and grouped; tests pass their dispatcher, so it runs in virtual time.
     computeDispatcher: CoroutineDispatcher,
     // The stream this player plays, handed to dual screen (#65); cleared when the player leaves.
-    private val workingLinks: SportsLiveWorkingLinks = SportsLiveWorkingLinks.shared
+    private val workingLinks: SportsLiveWorkingLinks = SportsLiveWorkingLinks.shared,
+    // The persistent logo map the rows draw from; observed, so logos learned while the panel is open appear.
+    private val logos: TeamLogoBook = TeamLogoBook.shared
 ) : ViewModel() {
 
     @Inject constructor(
@@ -138,6 +141,9 @@ class SportsLiveZapViewModel internal constructor(
     // The session when the panel opened; null while it is closed.
     private val panelSession = MutableStateFlow<SportsLiveZapSession?>(null)
 
+    // The panel's chip (null is All): the session's picked chip, or All until one is picked (#68).
+    private val panelChip = MutableStateFlow<String?>(null)
+
     private val _panelOpen = MutableStateFlow(false)
     val panelOpen: StateFlow<Boolean> = _panelOpen.asStateFlow()
 
@@ -156,30 +162,36 @@ class SportsLiveZapViewModel internal constructor(
         if (session == null) {
             flowOf(null)
         } else {
-            val items = combine(repo.latest, repo.claimedCatalogs, repo.endedKeys, repo.followedTeams) { load, claimed, ended, followed ->
+            val all = combine(repo.latest, repo.claimedCatalogs, repo.endedKeys, repo.followedTeams) { load, claimed, ended, followed ->
                 liveGamesPanelItems(
                     items = load?.items.orEmpty(),
                     claimedKeys = claimed.mapTo(HashSet()) { it.key },
                     endedKeys = ended,
                     followed = followed,
-                    session = session,
                     nowMs = System.currentTimeMillis(),
                     addonOrder = claimed.map { it.addon.id }.distinct()
                 )
             }.flowOn(computeDispatcher)
+            // The games under the chip are the ones listed and tracked.
+            val items = combine(all, panelChip) { list, chip -> PanelList(list, chip, filterPanelItems(list, chip)) }
             // The mode is null until read: no chips and nothing tracked before it is known.
             val mode = liveScores.mode.map<ScoresMode, ScoresMode?> { it }.onStart { emit(null) }
             // Grouped off the main thread; the tracker is updated back on it.
             // Ticks while the panel is open, so a grace or an estimate running out regroups its games.
-            val ticking = combine(items, panelTicks()) { list, _ -> list }
-            combine(ticking, liveScores.scores, mode, reveal.revealed, liveScores.unmatched) { list, scores, scoresMode, revealed, unmatched ->
+            // A logo learned while open (a score feed answering, the map loading) redraws the rows.
+            val ticking = combine(items, panelTicks(), logos.revision) { panelList, _, _ -> panelList }
+            combine(ticking, liveScores.scores, mode, reveal.revealed, liveScores.unmatched) { panelList, scores, scoresMode, revealed, unmatched ->
+                val list = panelList.shown
                 val nowMs = System.currentTimeMillis()
                 // Ended games (#60) go to the last group; ESPN finals leave the panel half an hour on.
                 val canEstimate = SportsLiveEndedGames.estimateGate(scoresMode == ScoresMode.OFF, unmatched)
                 val split = SportsLiveEndedGames.shared.split(list, scores, nowMs, canEstimate)
                 val state = SportsLiveZapPanelState(
-                    rows = groupPanelRows(split.live + split.justEnded, scores, scoresMode, revealed, nowMs, split.ended),
-                    currentKey = session.current.streamKey
+                    rows = groupPanelRows(split.live + split.justEnded, scores, scoresMode, revealed, nowMs, split.ended, logos),
+                    currentKey = session.current.streamKey,
+                    chips = panelChips(panelList.all, panelList.chip),
+                    chip = panelList.chip,
+                    allItems = panelList.all
                 )
                 Triple(list, scoresMode, state)
             }.flowOn(computeDispatcher).map { (list, scoresMode, state) ->
@@ -248,6 +260,8 @@ class SportsLiveZapViewModel internal constructor(
         scoreTracker.onStart()
         panelKeyPressed = false
         focusedRowKey = null
+        // Opens on All, or on the chip picked earlier in this playback (#68).
+        panelChip.value = session.panelChip?.filter
         panelSession.value = session
         _panelOpen.value = true
         viewModelScope.launch {
@@ -296,14 +310,18 @@ class SportsLiveZapViewModel internal constructor(
      * "Watch with another game" in the live games panel, for the game playing: the second-game picker
      * over the session list. Null (no action) when the session is neither Live now nor Channels.
      */
-    fun dualPick(): SportsLiveDualPick? = dualPick { it.items }
+    fun dualPick(): SportsLiveDualPick? = dualPick({ it.items }, { it.items })
 
-    private inline fun dualPick(items: (SportsLiveZapSession) -> List<SportsLiveItem>): SportsLiveDualPick? {
+    private inline fun dualPick(
+        items: (SportsLiveZapSession) -> List<SportsLiveItem>,
+        zapItems: (SportsLiveZapSession) -> List<SportsLiveItem>
+    ): SportsLiveDualPick? {
         val session = panelSession.value ?: controller.session(contentId) ?: return null
         if (!session.tab.offersDual()) return null
         return SportsLiveDualPick(
             chosen = session.current,
             items = items(session),
+            zapItems = zapItems(session),
             filter = session.filter,
             tab = session.tab,
             endedKeys = repo.endedKeys.value,
@@ -318,11 +336,22 @@ class SportsLiveZapViewModel internal constructor(
      * [item] is the game playing, shares a source with it, or has ended.
      */
     fun dualSessionWith(item: SportsLiveItem): SportsLiveDualSession? =
-        dualPick { session -> panel.value?.items ?: session.items }?.pairWith(item)
+        dualPick({ session -> panel.value?.items ?: session.items }, { session -> panel.value?.allItems ?: session.items })
+            ?.pairWith(item)
+
+    /**
+     * A chip was picked in the live games panel (null is All): the rows are narrowed to it, and Up/Down
+     * follow it for the rest of this playback (#68).
+     */
+    fun onPanelChip(chip: String?) {
+        if (!_panelOpen.value || panelChip.value == chip) return
+        panelChip.value = chip
+        controller.pickChip(contentId, chip)
+    }
 
     /** [item] was picked in the live games panel: the panel closes and the player zaps to it. */
     fun onPanelPick(item: SportsLiveItem) {
-        val items = panel.value?.items.orEmpty()
+        val items = panel.value?.allItems.orEmpty()
         closePanel()
         controller.pick(contentId, item, items)
     }
@@ -346,6 +375,9 @@ class SportsLiveZapViewModel internal constructor(
 }
 
 private const val BANNER_MS = 3_000L
+
+/** The panel's games: [all] of them, and those [shown] under [chip]. */
+private data class PanelList(val all: List<SportsLiveItem>, val chip: String?, val shown: List<SportsLiveItem>)
 
 /** true = next game, false = previous game, null = not a zap key or a watch party is active. */
 internal fun zapDirection(keyCode: Int, partyActive: Boolean): Boolean? = if (partyActive) null else when (keyCode) {

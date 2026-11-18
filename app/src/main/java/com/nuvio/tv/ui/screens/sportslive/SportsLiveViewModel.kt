@@ -274,13 +274,14 @@ class SportsLiveViewModel internal constructor(
     }
 
     /**
-     * Before [item] is played: the player may zap through the list shown now (this tab and filter).
-     * With no session to start, any earlier one ends.
+     * Before [item] is played: the player may zap through this tab, the filter's games first. On Live
+     * now the session has every game of the tab, whatever the filter, so the player's panel opens on
+     * All (#68); other tabs keep the list shown. With no session to start, any earlier one ends.
      */
     fun startZapSession(item: SportsLiveItem) {
         val state = uiState.value
         val session = SportsLiveZapSession.of(
-            items = state.visibleItems,
+            items = state.zapItems,
             itemKey = item.streamKey,
             tab = state.selectedTab,
             filter = state.selectedFilter,

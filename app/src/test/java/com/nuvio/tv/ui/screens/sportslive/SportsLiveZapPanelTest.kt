@@ -28,39 +28,45 @@ class SportsLiveZapPanelTest {
 
     @Test
     fun `panel lists live games of claimed catalogs without ended ones`() {
-        val items = liveGamesPanelItems(all, setOf(CATALOG), setOf(football2.streamKey), emptyList(), session(SportsLiveTab.LIVE_NOW, null), NOW)
+        val items = liveGamesPanelItems(all, setOf(CATALOG), setOf(football2.streamKey), emptyList(), NOW)
 
         assertEquals(setOf("f1", "b1"), items.map { it.id }.toSet())
     }
 
     @Test
-    fun `panel keeps the session's sport filter only for a live now session`() {
-        val liveNow = liveGamesPanelItems(all, setOf(CATALOG), emptySet(), emptyList(), session(SportsLiveTab.LIVE_NOW, "Football"), NOW)
-        val channels = liveGamesPanelItems(all, setOf(CATALOG), emptySet(), emptyList(), session(SportsLiveTab.CHANNELS, "UK"), NOW)
-
-        assertEquals(setOf("f1", "f2"), liveNow.map { it.id }.toSet())
-        assertEquals(setOf("f1", "f2", "b1"), channels.map { it.id }.toSet())
-    }
-
-    @Test
-    fun `panel puts followed games first and keeps a my teams filter`() {
+    fun `panel lists every live game, followed ones first, whatever the session's filter (#68)`() {
         val celtics = item("c1", sport = "Basketball").let { it.copy(teams = SportsLiveTeams.parse("Celtics vs Heat")) }
         val items = listOf(football1, basketball, celtics)
         val followed = listOf(FollowedTeam("Celtics", null))
 
-        val all = liveGamesPanelItems(items, setOf(CATALOG), emptySet(), followed, session(SportsLiveTab.LIVE_NOW, null), NOW)
-        val mine = liveGamesPanelItems(
-            items, setOf(CATALOG), emptySet(), followed, session(SportsLiveTab.LIVE_NOW, SportsLiveUiState.MY_TEAMS_FILTER), NOW
-        )
+        val all = liveGamesPanelItems(items, setOf(CATALOG), emptySet(), followed, NOW)
 
         assertEquals("c1", all.first().id)
-        assertEquals(3, all.size)
-        assertEquals(listOf("c1"), mine.map { it.id })
+        assertTrue(all.first().followed)
+        assertEquals(setOf("c1", "f1", "b1"), all.map { it.id }.toSet())
+    }
+
+    @Test
+    fun `panel chips are my teams, all, then each sport, and narrow the games (#68)`() {
+        val mine = basketball.copy(followed = true)
+        val items = listOf(mine, football1, football2)
+        val my = SportsLiveUiState.MY_TEAMS_FILTER
+
+        assertEquals(listOf(my, null, "Basketball", "Football"), panelChips(items, null))
+        assertEquals(listOf(null, "Football"), panelChips(listOf(football1), null))
+        // A chip picked earlier stays listed when its games are gone.
+        assertEquals(listOf(null, "Football", "Tennis"), panelChips(listOf(football1), "Tennis"))
+        assertEquals(listOf(my, null, "Football"), panelChips(listOf(football1), my))
+
+        assertEquals(items, filterPanelItems(items, null))
+        assertEquals(listOf(mine), filterPanelItems(items, my))
+        assertEquals(listOf(football1, football2), filterPanelItems(items, "Football"))
+        assertTrue(filterPanelItems(items, "Tennis").isEmpty())
     }
 
     @Test
     fun `panel is empty without a load`() {
-        assertTrue(liveGamesPanelItems(emptyList(), setOf(CATALOG), emptySet(), emptyList(), session(SportsLiveTab.LIVE_NOW, null), NOW).isEmpty())
+        assertTrue(liveGamesPanelItems(emptyList(), setOf(CATALOG), emptySet(), emptyList(), NOW).isEmpty())
     }
 
     @Test
@@ -85,6 +91,9 @@ class SportsLiveZapPanelTest {
         assertNull(picked.filter)
         assertTrue(picked.returnToHomeOnBack)
         assertNull(start.pickFromPanel(other, listOf(football1)))
+        // The chip picked in the panel goes with it.
+        val chipped = start.copy(panelChip = ZapPanelChip("Tennis")).pickFromPanel(other, listOf(football1, other))!!
+        assertEquals(ZapPanelChip("Tennis"), chipped.panelChip)
     }
 
     @Test

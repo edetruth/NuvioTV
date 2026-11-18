@@ -84,6 +84,20 @@ class PlayerZapController(
         return zapTo(base.pickFromPanel(item, panelItems) ?: return false)
     }
 
+    /**
+     * A chip ([filter], null is All) was picked in the live games panel of the player showing
+     * [contentId]: from now on Up/Down follow it (#68). A running lookup is dropped, so the session
+     * is back on the game playing before it takes the chip.
+     */
+    fun pickChip(contentId: String?, filter: String?) {
+        if (job?.isActive == true) {
+            job?.cancel()
+            playing?.let(SportsLiveZapSessions::update)
+        }
+        val base = SportsLiveZapSessions.activeFor(contentId) ?: return
+        SportsLiveZapSessions.update(base.copy(panelChip = ZapPanelChip(filter)))
+    }
+
     private fun zapTo(target: SportsLiveZapSession): Boolean {
         val revertTo = playing ?: return false
         SportsLiveZapSessions.update(target)

@@ -217,7 +217,10 @@ class ZapPanelScoresTest {
         assertNull(viewModel.panel.value)
     }
 
-    private fun panelViewModel(scores: LiveScoresRepository): Pair<SportsLiveZapViewModel, SportsLiveItem> {
+    private fun panelViewModel(
+        scores: LiveScoresRepository,
+        logos: TeamLogoBook = TeamLogoBook.shared
+    ): Pair<SportsLiveZapViewModel, SportsLiveItem> {
         val playing = item("Indiana Pacers at Philadelphia 76ers", pacersEvent.startMs)
         val other = item("Los Angeles Lakers at Phoenix Suns", lakersEvent.startMs)
         SportsLiveZapSessions.start(
@@ -234,9 +237,34 @@ class ZapPanelScoresTest {
         every { profiles.activeProfileId } returns MutableStateFlow(1)
         val viewModel = SportsLiveZapViewModel(
             SavedStateHandle(mapOf("contentId" to playing.id)), mockk(relaxed = true), mockk<DirectDebridResolver>(relaxed = true),
-            profiles, repo, scores, mainDispatcherRule.dispatcher
+            profiles, repo, scores, mainDispatcherRule.dispatcher, logos = logos
         )
         return viewModel to playing
+    }
+
+    @Test
+    fun `logos learned while the panel is open appear on its rows`() = runTest(mainDispatcherRule.dispatcher) {
+        val provider = object : ScoreProvider {
+            override suspend fun scoreboard(league: EspnLeague, date: LocalDate) = ScoreboardResult(emptyList())
+        }
+        val scores = LiveScoresRepository(
+            provider = provider, settings = MutableStateFlow(ScoreSettings()), scope = backgroundScope,
+            now = { now + testScheduler.currentTime }, zone = { ZoneOffset.UTC }, jitter = { 0L }
+        )
+        val book = TeamLogoBook(active = true)
+        val (viewModel, playing) = panelViewModel(scores, book)
+
+        viewModel.openPanel()
+        val before = viewModel.panel.first { it != null }!!
+        assertNull(before.rows.first { it.item == playing }.teams!!.first.logo)
+
+        // The map learns the teams (a feed answering elsewhere): the open panel redraws with them.
+        book.learn(EspnLeagueMap.NBA, pacersEvent.away)
+        book.learn(EspnLeagueMap.NBA, pacersEvent.home)
+        val after = viewModel.panel.first { panel -> panel?.rows?.first { it.item == playing }?.teams?.first?.logo != null }!!
+        assertEquals(pacersEvent.away.logo, after.rows.first { it.item == playing }.teams!!.first.logo)
+
+        viewModel.closePanel()
     }
 
     @Test

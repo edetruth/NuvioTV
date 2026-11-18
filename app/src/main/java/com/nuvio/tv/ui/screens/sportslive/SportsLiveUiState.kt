@@ -36,6 +36,13 @@ data class SportsLiveUiState(
     fun endedOf(item: SportsLiveItem): EndedGame? =
         if (selectedTab == SportsLiveTab.LIVE_NOW) justEnded[item.streamKey] else null
 
+    /**
+     * The list a zap session started here carries: on Live now every game of the tab, whatever the
+     * filter (#68), elsewhere [visibleItems].
+     */
+    val zapItems: List<SportsLiveItem>
+        get() = if (selectedTab == SportsLiveTab.LIVE_NOW) tabs[SportsLiveTab.LIVE_NOW].orEmpty() else visibleItems
+
     /** How many cards [tab] counts: Live now leaves its Just ended strip out. */
     fun countOf(tab: SportsLiveTab): Int {
         val items = tabs[tab].orEmpty()

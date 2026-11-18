@@ -33,7 +33,9 @@ data class SportsLiveDualSession(
     /** The tab [items] come from (Live now or Channels), kept by the zap session OK starts. */
     val tab: SportsLiveTab,
     /** The stream the full player was playing for [left] (#65): the left pane plays it as is, with no lookup. */
-    val leftStream: Stream? = null
+    val leftStream: Stream? = null,
+    /** Every game of [tab] (on Live now, whatever [filter]), for the zap session OK starts (#68). */
+    val zapItems: List<SportsLiveItem> = items
 )
 
 /**
@@ -47,7 +49,9 @@ data class SportsLiveDualPick(
     val tab: SportsLiveTab,
     val endedKeys: Set<String> = emptySet(),
     /** The stream the full player plays for [chosen], handed to its pane (#65); null from the section. */
-    val chosenStream: Stream? = null
+    val chosenStream: Stream? = null,
+    /** Every game of [tab], kept by the session for the zap session OK starts (#68). */
+    val zapItems: List<SportsLiveItem> = items
 ) {
     /** The other games of the list that are not known to have ended; never [chosen] or one of its sources. */
     val candidates: List<SportsLiveItem> by lazy { items.filter(::isCandidate) }
@@ -62,7 +66,8 @@ data class SportsLiveDualPick(
             items = items.toList(),
             filter = filter,
             tab = tab,
-            leftStream = chosenStream
+            leftStream = chosenStream,
+            zapItems = zapItems.toList()
         )
 
     /** The session pairing [chosen] with [second]; null when [second] is [chosen], shares a source with it, or has ended. */
@@ -77,17 +82,18 @@ internal fun SportsLiveTab.offersDual(): Boolean = this == SportsLiveTab.LIVE_NO
 
 /**
  * The section's pick-second mode: OK on [item], shown on [tab] in [items] under [filter], after
- * [chosen] was picked first. The dual session, or null when OK does nothing: a tab without dual
- * screen, or an [item] that [SportsLiveDualPick.pairWith] refuses.
+ * [chosen] was picked first ([zapItems]: every game of [tab]). The dual session, or null when OK does
+ * nothing: a tab without dual screen, or an [item] that [SportsLiveDualPick.pairWith] refuses.
  */
 internal fun sportsLivePickModeSession(
     chosen: SportsLiveItem,
     item: SportsLiveItem,
     tab: SportsLiveTab,
     items: List<SportsLiveItem>,
-    filter: String?
+    filter: String?,
+    zapItems: List<SportsLiveItem> = items
 ): SportsLiveDualSession? =
-    if (!tab.offersDual()) null else SportsLiveDualPick(chosen = chosen, items = items, filter = filter, tab = tab).pairWith(item)
+    if (!tab.offersDual()) null else SportsLiveDualPick(chosen = chosen, items = items, filter = filter, tab = tab, zapItems = zapItems).pairWith(item)
 
 /**
  * True when this card and [other] play the same game from a common source: one of the two, or one of
@@ -157,6 +163,7 @@ class SportsLiveDualViewModel internal constructor(
     )
 
     private val items: List<SportsLiveItem> = session?.items.orEmpty()
+    private val zapItems: List<SportsLiveItem> = session?.zapItems.orEmpty()
     private val filter: String? = session?.filter
     private val tab: SportsLiveTab = session?.tab ?: SportsLiveTab.LIVE_NOW
 
@@ -240,8 +247,9 @@ class SportsLiveDualViewModel internal constructor(
      * from it returns here. With no session to start, any earlier one ends.
      */
     fun startZapSession(item: SportsLiveItem) {
+        // Every game of the tab, so the player's panel and zaps are not held to the filter (#68).
         val session = SportsLiveZapSession.of(
-            items = items,
+            items = zapItems,
             itemKey = item.streamKey,
             tab = tab,
             filter = filter,

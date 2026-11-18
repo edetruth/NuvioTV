@@ -10,8 +10,13 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -32,6 +37,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -71,6 +77,8 @@ import com.nuvio.tv.ui.screens.sportslive.SportsLiveRewind
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapBanner
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapPanelState
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveScoreChip
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveUiState
+import com.nuvio.tv.ui.screens.sportslive.FOLLOWED_STAR_COLOR
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapViewModel
 import com.nuvio.tv.ui.screens.sportslive.ZapPanelGroup
 import com.nuvio.tv.ui.screens.sportslive.ZapPanelRow
@@ -177,6 +185,7 @@ internal fun BoxScope.SportsLiveZapOverlay(
                     null
                 },
                 onClose = { viewModel.closePanel() },
+                onChip = viewModel::onPanelChip,
                 onRowFocus = viewModel::onPanelRowFocus,
                 onKey = viewModel::onPanelKey,
                 onWatchWith = if (canWatchWith) {
@@ -275,7 +284,8 @@ private fun ZapBanner(banner: SportsLiveZapBanner) {
 /**
  * The games live now, from the left edge. Focus opens on the game playing; Left or Right closes the
  * panel (Back is handled by the player), and Up/Down stay inside it. OK on a game zaps to it; a
- * long press calls [onLongPick] instead, when given.
+ * long press calls [onLongPick] instead, when given. Above the games, the filter chips (#68): on
+ * them Left and Right pick a chip instead of closing the panel.
  */
 @Composable
 private fun LiveGamesPanel(
@@ -284,6 +294,8 @@ private fun LiveGamesPanel(
     /** Long-press OK on a game (dual screen with the game playing); null leaves long presses alone. */
     onLongPick: ((SportsLiveItem) -> Unit)?,
     onClose: () -> Unit,
+    /** A filter chip was picked (null is All). */
+    onChip: (String?) -> Unit,
     /** "Watch with another game" for the game playing, above the list; null hides it. */
     onWatchWith: (() -> Unit)?,
     /** A game row took focus (Hide until focused reveals its score after a second). */
@@ -297,8 +309,11 @@ private fun LiveGamesPanel(
     // Focus starts on the game playing, found by key so a regroup (scores arriving) never moves it to
     // another row; the first row when the game playing is not listed.
     val startKey = state.items.firstOrNull { it.streamKey == state.currentKey }?.streamKey ?: state.items.firstOrNull()?.streamKey
+    // While the chips have focus, a chip that empties (or fills) the list leaves focus on them.
+    var chipsFocused by remember { mutableStateOf(false) }
 
     LaunchedEffect(state.items.isEmpty()) {
+        if (chipsFocused) return@LaunchedEffect
         runCatching {
             if (state.items.isEmpty()) {
                 emptyFocusRequester.requestFocus()
@@ -367,6 +382,17 @@ private fun LiveGamesPanel(
                 }
                 Spacer(modifier = Modifier.height(NuvioTheme.spacing.sm))
             }
+            PanelChipRow(
+                chips = state.chips,
+                selected = state.chip,
+                onChip = onChip,
+                onFocusChanged = { focused ->
+                    chipsFocused = focused
+                    // No game row is focused while the chips are: none is revealed meanwhile.
+                    if (focused) onRowFocus(null)
+                }
+            )
+            Spacer(modifier = Modifier.height(NuvioTheme.spacing.sm))
             if (state.items.isEmpty()) {
                 Text(
                     text = stringResource(R.string.sports_live_zap_panel_empty),
@@ -407,6 +433,78 @@ private fun LiveGamesPanel(
             }
         }
     }
+}
+
+/**
+ * The panel's filter chips (#68): ★ My teams, All, then each sport. One focus stop: Left and Right pick
+ * the chip beside the selected one, and Down moves into the games.
+ */
+@Composable
+private fun PanelChipRow(
+    chips: List<String?>,
+    selected: String?,
+    onChip: (String?) -> Unit,
+    onFocusChanged: (Boolean) -> Unit
+) {
+    var focused by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(NuvioTheme.radii.xl)
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs),
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .then(if (focused) Modifier.border(NuvioTheme.focusRing.border(NuvioTheme.spacing.xxs), shape) else Modifier)
+            .onFocusChanged {
+                focused = it.isFocused
+                onFocusChanged(it.isFocused)
+            }
+            .onKeyEvent { event ->
+                val step = when (event.nativeKeyEvent.keyCode) {
+                    KeyEvent.KEYCODE_DPAD_LEFT -> -1
+                    KeyEvent.KEYCODE_DPAD_RIGHT -> 1
+                    else -> return@onKeyEvent false
+                }
+                // Both the press and the release are used, so neither reaches the panel's close.
+                if (event.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
+                    val next = chips.indexOf(selected) + step
+                    if (next in chips.indices) onChip(chips[next])
+                }
+                true
+            }
+            .focusable()
+            .horizontalScroll(rememberScrollState())
+            .padding(NuvioTheme.spacing.xs)
+    ) {
+        chips.forEach { chip ->
+            PanelChip(
+                name = when (chip) {
+                    null -> stringResource(R.string.sports_live_filter_all)
+                    SportsLiveUiState.MY_TEAMS_FILTER -> stringResource(R.string.sports_live_filter_my_teams)
+                    else -> chip
+                },
+                selected = chip == selected
+            )
+        }
+    }
+}
+
+@Composable
+private fun PanelChip(name: String, selected: Boolean) {
+    // The selected chip scrolls into view as Left and Right move along a long row.
+    val bringIntoView = remember { BringIntoViewRequester() }
+    LaunchedEffect(selected) { if (selected) runCatching { bringIntoView.bringIntoView() } }
+    Text(
+        text = name,
+        style = MaterialTheme.typography.labelLarge,
+        color = if (selected) NuvioTheme.colors.OnPrimary else NuvioTheme.extendedColors.textSecondary,
+        maxLines = 1,
+        modifier = Modifier
+            .bringIntoViewRequester(bringIntoView)
+            .clip(RoundedCornerShape(NuvioTheme.radii.xl))
+            .background(if (selected) NuvioTheme.colors.Primary else NuvioTheme.colors.BackgroundCard)
+            .padding(horizontal = NuvioTheme.spacing.md, vertical = NuvioTheme.spacing.xs)
+    )
 }
 
 /** A small group heading in the live games panel: Live now, Starting soon, More games. */
@@ -466,13 +564,27 @@ private fun LiveGameItem(
                 }
             }
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = item.meta.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = NuvioTheme.colors.TextPrimary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs)
+                ) {
+                    // A followed team plays: the cards' gold star (#68).
+                    if (item.followed) {
+                        Icon(
+                            imageVector = Icons.Rounded.Star,
+                            contentDescription = null,
+                            tint = FOLLOWED_STAR_COLOR,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                    Text(
+                        text = item.meta.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = NuvioTheme.colors.TextPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
                 // A game starting soon leads with its local kickoff.
                 val detail = "${item.sport ?: item.catalogName} · ${item.addonName}"
                 val kickoff = row.art?.let { kickoffText(it) }

@@ -589,7 +589,8 @@ private fun SportsLiveContent(
                 item = item,
                 tab = uiState.selectedTab,
                 items = items,
-                filter = uiState.selectedFilter
+                filter = uiState.selectedFilter,
+                zapItems = uiState.zapItems
             )?.let { session ->
                 pickFirst = null
                 onOpenDual(session)

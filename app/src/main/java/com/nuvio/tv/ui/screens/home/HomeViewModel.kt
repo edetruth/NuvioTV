@@ -238,6 +238,8 @@ class HomeViewModel @Inject constructor(
     internal var disabledHomeCatalogKeys: Set<String> = emptySet()
     /** Catalogs the Sports & Live section claims; they are left out of the Home rows. */
     internal var sportsLiveClaimedKeys: Set<String> = emptySet()
+    /** Every Live now game, uncapped: the Live now row shows the first ones, a zap session has them all (#68). */
+    internal var liveNowAllItems: List<SportsLiveItem> = emptyList()
     /** The Live now cards' score labels by item streamKey (see [SportsLiveHomeRow.scoreLabels]). */
     internal var liveNowScoreLabels: Map<String, String> = emptyMap()
     internal var followAddonsOrderEnabled: Boolean = false

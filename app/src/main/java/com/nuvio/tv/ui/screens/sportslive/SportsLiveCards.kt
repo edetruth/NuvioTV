@@ -517,7 +517,8 @@ internal fun SportsLivePaneButton(
     )
 }
 
-private val FOLLOWED_STAR_COLOR = Color(0xFFFFC107)
+/** The gold star of a followed team's game (cards, the player's live games panel). */
+internal val FOLLOWED_STAR_COLOR = Color(0xFFFFC107)
 
 /** How a Just ended card (#60) is dimmed. */
 private const val ENDED_CARD_ALPHA = 0.55f

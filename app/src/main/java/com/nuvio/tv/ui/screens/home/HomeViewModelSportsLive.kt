@@ -29,12 +29,13 @@ internal fun HomeViewModel.observeSportsLiveClaimedKeysPipeline() {
 }
 
 /**
- * Before [item] of the Live now row is played: the player may zap through the row's items.
- * With no session to start, any earlier one ends.
+ * Before [item] of the Live now row is played: the player may zap through every Live now game, the
+ * row's first (#68: not only the ones the row has room for). With no session to start, any earlier one ends.
  */
 internal fun HomeViewModel.startLiveNowZapSession(item: SportsLiveItem) {
+    val ended = _uiState.value.liveNowEnded
     val session = SportsLiveZapSession.of(
-        items = _uiState.value.liveNowShown,
+        items = liveNowAllItems.filterNot { it.streamKey in ended },
         itemKey = item.streamKey,
         tab = SportsLiveTab.LIVE_NOW,
         filter = null,
@@ -71,16 +72,24 @@ internal fun HomeViewModel.setLiveNowEnded(keys: Set<String>) {
     if (addonsCache.isNotEmpty()) scheduleUpdateCatalogRows()
 }
 
-/** Feeds the Live now row. Before the catalogs load, the next catalog update picks the items up. */
+/**
+ * Feeds the Live now row (its first [LIVE_NOW_ROW_LIMIT] games; [HomeViewModel.liveNowAllItems] keeps
+ * them all). Before the catalogs load, the next catalog update picks the items up.
+ */
 internal fun HomeViewModel.observeLiveNowPipeline() {
     viewModelScope.launch {
-        sportsLiveRepository.liveNow().collect { items ->
+        sportsLiveRepository.liveNow(limit = Int.MAX_VALUE).collect { all ->
+            liveNowAllItems = all
+            val items = all.take(LIVE_NOW_ROW_LIMIT)
             if (items == _uiState.value.liveNowItems) return@collect
             _uiState.update { it.copy(liveNowItems = items) }
             if (addonsCache.isNotEmpty()) scheduleUpdateCatalogRows()
         }
     }
 }
+
+/** How many games the Home Live now row shows. */
+private const val LIVE_NOW_ROW_LIMIT = 20
 
 /**
  * Starts a Sports & Live load without waiting for it; a failure only leaves the Live now row empty.

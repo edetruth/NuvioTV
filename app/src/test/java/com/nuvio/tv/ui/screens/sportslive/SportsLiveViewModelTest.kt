@@ -625,6 +625,42 @@ class SportsLiveViewModelTest {
     }
 
     @Test
+    fun `a game started from my teams carries every live now game, followed ones first (#68)`() = runTest {
+        followedFlow.value = listOf(FollowedTeam("Celtics", null))
+        nextLoad = load(
+            listOf(
+                item("a", isLive = true, sport = "Basketball", name = "Bulls vs Heat"),
+                item("b", isLive = true, sport = "Basketball", name = "Knicks vs Celtics"),
+                item("s", isLive = true, sport = "Soccer", name = "Arsenal vs Chelsea")
+            )
+        )
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+        viewModel.selectFilter(SportsLiveUiState.MY_TEAMS_FILTER)
+        runCurrent()
+        val followed = viewModel.uiState.value.visibleItems.single()
+
+        try {
+            viewModel.startZapSession(followed)
+            val session = SportsLiveZapSessions.current()!!
+            assertEquals(setOf("a", "b", "s"), session.items.map { it.id }.toSet())
+            assertEquals("b", session.current.id)
+            assertEquals(SportsLiveUiState.MY_TEAMS_FILTER, session.filter)
+            assertNull(session.panelChip)
+            // Up/Down: the followed games first, then on through the rest.
+            assertEquals(3, session.zapOrder.size)
+            assertEquals("b", session.items[session.zapOrder.first()].id)
+
+            // Another tab keeps the list shown.
+            viewModel.selectTab(SportsLiveTab.UPCOMING)
+            runCurrent()
+            assertEquals(viewModel.uiState.value.visibleItems, viewModel.uiState.value.zapItems)
+        } finally {
+            SportsLiveZapSessions.clear()
+        }
+    }
+
+    @Test
     fun `toggleFollow follows a side with the item's sport, none for a channel, and unfollows every match`() = runTest {
         val game = item("g", isLive = true, sport = "American Football", name = "Jets vs New England Patriots")
             .copy(teams = teamsOf("Jets vs New England Patriots"))

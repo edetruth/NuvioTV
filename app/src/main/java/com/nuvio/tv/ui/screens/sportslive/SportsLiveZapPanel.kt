@@ -17,29 +17,41 @@ import com.nuvio.tv.domain.model.SportsLiveTab
 
 /**
  * The player's live games panel: the section's Live now list (claimed catalogs only, ended games left
- * out, [followed] teams' games first, merged games' primaries picked by [addonOrder]), narrowed to the session's filter (a sport or "★ My teams") when
- * the session was started from Live now.
+ * out, [followed] teams' games first, merged games' primaries picked by [addonOrder]). Every game,
+ * whatever filter the game playing was started under (#68); the panel's chips narrow it ([filterPanelItems]).
  */
 internal fun liveGamesPanelItems(
     items: List<SportsLiveItem>,
     claimedKeys: Set<String>,
     endedKeys: Set<String>,
     followed: List<FollowedTeam>,
-    session: SportsLiveZapSession,
     nowMs: Long,
     addonOrder: List<String> = emptyList()
-): List<SportsLiveItem> {
-    val live = SportsLiveItemBucketer.bucketTab(items.filter { it.catalogKey in claimedKeys }, SportsLiveTab.LIVE_NOW, nowMs, addonOrder)
+): List<SportsLiveItem> =
+    SportsLiveItemBucketer.bucketTab(items.filter { it.catalogKey in claimedKeys }, SportsLiveTab.LIVE_NOW, nowMs, addonOrder)
         .let { SportsLiveItemBucketer.pinFollowed(it, followed) }
         .filterNot { it.hasEnded(endedKeys) }
-    val filter = session.filter?.takeIf { session.tab == SportsLiveTab.LIVE_NOW } ?: return live
-    if (filter == SportsLiveUiState.MY_TEAMS_FILTER) return live.filter { it.followed }
-    return live.filter { it.sport == filter }
-}
 
 /**
- * The session after [item] is picked in the live games panel ([panelItems]): moved to it when the
- * session lists it, otherwise a new Live now session over the panel list; null when neither has it.
+ * The live games panel's chips over [items] (#68): "★ My teams" when a followed team plays, All (null),
+ * then each sport, A to Z. The [selected] chip stays listed when its games are gone, so it still shows.
+ */
+internal fun panelChips(items: List<SportsLiveItem>, selected: String?): List<String?> {
+    val sports = items.mapNotNull { it.sport }.toMutableSet()
+    if (selected != null && selected != SportsLiveUiState.MY_TEAMS_FILTER) sports += selected
+    val myTeams = items.any { it.followed } || selected == SportsLiveUiState.MY_TEAMS_FILTER
+    return listOfNotNull(SportsLiveUiState.MY_TEAMS_FILTER.takeIf { myTeams }) + null +
+        sports.sortedWith(String.CASE_INSENSITIVE_ORDER)
+}
+
+/** The panel games under [chip] (null is All, otherwise a sport or "★ My teams"). */
+internal fun filterPanelItems(items: List<SportsLiveItem>, chip: String?): List<SportsLiveItem> =
+    if (chip == null) items else items.filter { it.matchesZapFilter(chip, SportsLiveTab.LIVE_NOW) }
+
+/**
+ * The session after [item] is picked in the live games panel ([panelItems], every game it has): moved
+ * to it when the session lists it, otherwise a new Live now session over the panel list, keeping the
+ * chip picked; null when neither has it.
  */
 internal fun SportsLiveZapSession.pickFromPanel(
     item: SportsLiveItem,
@@ -51,7 +63,7 @@ internal fun SportsLiveZapSession.pickFromPanel(
         tab = SportsLiveTab.LIVE_NOW,
         filter = filter.takeIf { tab == SportsLiveTab.LIVE_NOW },
         returnToHomeOnBack = returnToHomeOnBack
-    )
+    )?.copy(panelChip = panelChip)
 
 /** What the zap banner shows; [switching] while the game's stream is being looked up. */
 data class SportsLiveZapBanner(
@@ -166,12 +178,16 @@ private object PanelArt {
 
 /**
  * The live games panel's content: its [rows], grouped and ordered by [groupPanelRows]; [currentKey] is
- * the playing game's stream key, highlighted. [items] are the rows' games in that order (a pick's zap
- * session follows the order shown).
+ * the playing game's stream key, highlighted. [items] are the rows' games in that order. [chips] are
+ * the filter chips over [allItems] (every game listed, whatever the chip), [chip] the selected one
+ * (null is All) that the rows are narrowed to.
  */
 data class SportsLiveZapPanelState(
     val rows: List<ZapPanelRow>,
-    val currentKey: String
+    val currentKey: String,
+    val chips: List<String?> = listOf(null),
+    val chip: String? = null,
+    val allItems: List<SportsLiveItem> = rows.map { it.item }
 ) {
     val items: List<SportsLiveItem> = rows.map { it.item }
 }

@@ -5,14 +5,20 @@ import com.nuvio.tv.domain.model.SportsLiveTab
 
 /**
  * The list a game was started from in Sports & Live, so the player can flip to the next or previous
- * game in that same list (same tab, same filter). The list is a snapshot taken at launch.
+ * game. The list is a snapshot taken at launch: on Live now every game of the tab, whatever the filter
+ * (#68), so the player's live games panel and its chips can reach them all.
+ *
+ * Zap order ([zapOrder]): once a chip is picked in the panel ([panelChip], Live now only), only that
+ * chip's games; before that, the games of the [filter] the game was started under first, then the rest.
  */
 data class SportsLiveZapSession(
     val items: List<SportsLiveItem>,
     val index: Int,
     val tab: SportsLiveTab,
     val filter: String?,
-    val returnToHomeOnBack: Boolean
+    val returnToHomeOnBack: Boolean,
+    /** The live games panel's chip picked during this playback (#68); null until one is picked. */
+    val panelChip: ZapPanelChip? = null
 ) {
     init {
         require(index in items.indices) { "index $index outside ${items.size} items" }
@@ -20,21 +26,41 @@ data class SportsLiveZapSession(
 
     val current: SportsLiveItem get() = items[index]
 
-    /** (1-based position, list size), for the "%1$d of %2$d" label. */
-    val positionLabelArgs: Pair<Int, Int> get() = (index + 1) to items.size
+    /** Indices of [items] in the order Up/Down zap through them. */
+    internal val zapOrder: List<Int> by lazy {
+        val chip = panelChip?.takeIf { tab == SportsLiveTab.LIVE_NOW }
+        if (chip != null) {
+            items.indices.filter { items[it].matchesZapFilter(chip.filter, tab) }
+        } else {
+            val (first, rest) = items.indices.partition { items[it].matchesZapFilter(filter, tab) }
+            first + rest
+        }
+    }
+
+    /** (1-based position, list size) in the zap order, for the "%1$d of %2$d" label. */
+    val positionLabelArgs: Pair<Int, Int>
+        get() {
+            val position = zapOrder.indexOf(index)
+            return if (position >= 0) (position + 1) to zapOrder.size else (index + 1) to items.size
+        }
 
     fun next(): SportsLiveZapSession = copy(index = (index + 1) % items.size)
 
     fun previous(): SportsLiveZapSession = copy(index = (index - 1 + items.size) % items.size)
 
     /**
-     * The next (or previous) game not known to have ended ([SportsLiveItem.hasEnded]);
-     * null when every other game of the list is known to have ended.
+     * The next (or previous) game of the zap order not known to have ended ([SportsLiveItem.hasEnded]);
+     * null when there is none. A game outside the order (a chip that leaves it out) zaps to the order's
+     * first (or last) game.
      */
     fun step(forward: Boolean, endedKeys: Set<String>): SportsLiveZapSession? {
-        var moved = this
-        repeat(items.size - 1) {
-            moved = if (forward) moved.next() else moved.previous()
+        val order = zapOrder
+        if (order.isEmpty()) return null
+        val start = order.indexOf(index)
+        var position = if (start >= 0) start else if (forward) -1 else order.size
+        repeat(if (start >= 0) order.size - 1 else order.size) {
+            position = Math.floorMod(position + if (forward) 1 else -1, order.size)
+            val moved = copy(index = order[position])
             if (!moved.current.hasEnded(endedKeys)) return moved
         }
         return null
@@ -63,6 +89,19 @@ data class SportsLiveZapSession(
             return SportsLiveZapSession(snapshot, 0, tab, filter, returnToHomeOnBack).moveTo(itemKey)
         }
     }
+}
+
+/** A chip of the player's live games panel (#68): [filter] is a sport or "★ My teams"; null is All. */
+data class ZapPanelChip(val filter: String?)
+
+/**
+ * True when this item is listed under [filter] on [tab]: null is All, [SportsLiveUiState.MY_TEAMS_FILTER]
+ * a followed team's game, otherwise a channel group on Channels and a sport on every other tab.
+ */
+internal fun SportsLiveItem.matchesZapFilter(filter: String?, tab: SportsLiveTab): Boolean = when (filter) {
+    null -> true
+    SportsLiveUiState.MY_TEAMS_FILTER -> followed
+    else -> if (tab == SportsLiveTab.CHANNELS) group == filter else sport == filter
 }
 
 /**
