@@ -70,6 +70,15 @@ object SportsLiveGameLength {
         return lengths.max() + LATE_START_MS
     }
 
+    /**
+     * [item]'s game length without the late-start buffer, only for a sport the table knows (#132): what a
+     * row's progress bar measures elapsed time against. Null for a long-session sport or an unknown one.
+     */
+    fun knownOf(item: SportsLiveItem): Long? {
+        val length = of(item) ?: return null
+        return if (length == UNKNOWN_MS + LATE_START_MS) null else length - LATE_START_MS
+    }
+
     private val MARKS = Regex("""\p{Mn}+""")
 
     private fun fold(text: String): String =

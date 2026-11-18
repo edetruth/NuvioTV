@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -104,9 +105,14 @@ internal fun SportsLiveScoreDetails(
     }
 }
 
+/** The linescore: a header of periods and T, then each side's row (the details pane, the Live Now stage at 26 px). */
 @Composable
-private fun LinescoreTable(details: ScoreDetails.Shown, strings: ScoreDetailsStrings) {
-    val cell = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum")
+internal fun LinescoreTable(
+    details: ScoreDetails.Shown,
+    strings: ScoreDetailsStrings,
+    style: TextStyle = MaterialTheme.typography.bodySmall
+) {
+    val cell = style.copy(fontFeatureSettings = "tnum")
     val heads = details.periods.map { ScoreDetailsBuilder.periodText(it, strings) }
     val total = stringResource(R.string.sports_live_details_period_total)
     @Composable

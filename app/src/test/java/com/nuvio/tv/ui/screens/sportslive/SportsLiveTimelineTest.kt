@@ -3,7 +3,6 @@ package com.nuvio.tv.ui.screens.sportslive
 import com.nuvio.tv.core.sportslive.EndedGame
 import com.nuvio.tv.core.sportslive.EndedSignal
 import com.nuvio.tv.core.sportslive.SportsLiveGameLength
-import com.nuvio.tv.core.sportslive.SportsLiveLayout
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.scores.EspnFixtures
 import com.nuvio.tv.core.sportslive.scores.EspnLeagueMap
@@ -92,8 +91,8 @@ class SportsLiveTimelineTest {
                 row(liveLong, ScoreboardGroup.LIVE),
                 row(liveNew, ScoreboardGroup.LIVE),
                 row(soon, ScoreboardGroup.STARTING_SOON),
-                row(final, ScoreboardGroup.FINAL, ScoreChip.Final("Final", com.nuvio.tv.core.sportslive.scores.ChipScore(1, 2))),
-                row(estimate, ScoreboardGroup.FINAL, probablyEnded = true)
+                row(final, ScoreboardGroup.JUST_ENDED, ScoreChip.Final("Final", com.nuvio.tv.core.sportslive.scores.ChipScore(1, 2))),
+                row(estimate, ScoreboardGroup.JUST_ENDED, probablyEnded = true)
             ),
             tab = SportsLiveTab.LIVE_NOW,
             nowMs = NOW,
@@ -135,7 +134,7 @@ class SportsLiveTimelineTest {
         val nfl = item("Raiders @ Seahawks", NOW + 2 * HOUR, sport = "NFL")
         val epl = item("Arsenal vs Chelsea", NOW - HOUR, sport = "Premier League")
         val nhl = item("Bruins @ Rangers", NOW + HOUR, sport = "NHL")
-        val followedMls = row(item("Galaxy vs LAFC", NOW + 6 * HOUR, sport = "MLS"), ScoreboardGroup.MORE_GAMES).copy(firstFollowed = true)
+        val followedMls = row(item("Galaxy vs LAFC", NOW + 6 * HOUR, sport = "MLS"), ScoreboardGroup.LATER).copy(firstFollowed = true)
         val model = SportsLiveTimeline.model(
             rows = listOf(
                 row(nfl, ScoreboardGroup.STARTING_SOON),
@@ -156,7 +155,7 @@ class SportsLiveTimelineTest {
         val dateOnly = item("Raiders @ Seahawks", NOW + 30 * HOUR, timed = false, isLive = false)
         val channel = item("Sky Sports Main Event", null, channel = true)
         val timed = item("Bulls @ Heat", NOW + 2 * HOUR, isLive = false)
-        val rows = listOf(row(dateOnly, ScoreboardGroup.MORE_GAMES), row(channel, ScoreboardGroup.MORE_GAMES), row(timed, ScoreboardGroup.STARTING_SOON))
+        val rows = listOf(row(dateOnly, ScoreboardGroup.LATER), row(channel, ScoreboardGroup.LATER), row(timed, ScoreboardGroup.STARTING_SOON))
         val model = SportsLiveTimeline.model(rows, SportsLiveTab.UPCOMING, NOW, utc)
         assertEquals(listOf(dateOnly, channel), model.untimed.map { it.item })
         assertEquals(setOf(timed.timelineKey), model.blocks.keys)
@@ -189,7 +188,7 @@ class SportsLiveTimelineTest {
         val later = item("Bulls @ Heat", at("2026-11-18T09:30:00Z"), isLive = false)
         val earlier = item("Pacers @ 76ers", at("2026-11-17T08:10:00Z"))
         val model = SportsLiveTimeline.model(
-            listOf(row(later, ScoreboardGroup.MORE_GAMES), row(earlier, ScoreboardGroup.LIVE)),
+            listOf(row(later, ScoreboardGroup.LATER), row(earlier, ScoreboardGroup.LIVE)),
             SportsLiveTab.UPCOMING, NOW_1416, utc
         )
         assertEquals(at("2026-11-17T08:00:00Z"), model.startMs)
@@ -251,7 +250,7 @@ class SportsLiveTimelineTest {
         val far = item("Bulls @ Heat", NOW + 20 * 24 * HOUR, isLive = false)
         val near = item("Celtics @ Knicks", NOW + HOUR, isLive = false)
         val model = SportsLiveTimeline.model(
-            listOf(row(far, ScoreboardGroup.MORE_GAMES), row(near, ScoreboardGroup.STARTING_SOON)),
+            listOf(row(far, ScoreboardGroup.LATER), row(near, ScoreboardGroup.STARTING_SOON)),
             SportsLiveTab.UPCOMING, NOW, utc
         )
         assertEquals(listOf(far), model.untimed.map { it.item })
@@ -307,7 +306,7 @@ class SportsLiveTimelineTest {
     fun `league rows are keyed by a stable id whatever their case`() {
         val a = item("Arsenal vs Chelsea", NOW, sport = "Premier League")
         val b = item("Spurs vs Fulham", NOW + 3 * HOUR, sport = "premier league")
-        val model = SportsLiveTimeline.model(listOf(row(a, ScoreboardGroup.LIVE), row(b, ScoreboardGroup.MORE_GAMES)), SportsLiveTab.LIVE_NOW, NOW, utc)
+        val model = SportsLiveTimeline.model(listOf(row(a, ScoreboardGroup.LIVE), row(b, ScoreboardGroup.LATER)), SportsLiveTab.LIVE_NOW, NOW, utc)
         assertEquals(listOf("premier league"), model.leagues.map { it.id })
         assertEquals("Premier League", model.leagues.single().name)
     }
@@ -355,16 +354,6 @@ class SportsLiveTimelineTest {
 
     // --- layout preference ---
 
-    @Test
-    fun `the layout switch offers Timeline and remembers it per tab`() {
-        assertTrue(SportsLiveLayout.TIMELINE in SportsLiveLayout.offeredFor(SportsLiveTab.LIVE_NOW))
-        assertTrue(SportsLiveLayout.TIMELINE in SportsLiveLayout.offeredFor(SportsLiveTab.UPCOMING))
-        val choices = mapOf(SportsLiveTab.LIVE_NOW to SportsLiveLayout.TIMELINE, SportsLiveTab.UPCOMING to SportsLiveLayout.SCOREBOARD)
-        val stored = SportsLiveLayout.decode(SportsLiveLayout.encode(choices))
-        assertEquals(SportsLiveLayout.TIMELINE, SportsLiveLayout.of(stored, SportsLiveTab.LIVE_NOW))
-        assertEquals(SportsLiveLayout.SCOREBOARD, SportsLiveLayout.of(stored, SportsLiveTab.UPCOMING))
-        assertEquals(SportsLiveLayout.CARDS, SportsLiveLayout.of(mapOf(SportsLiveTab.CHANNELS to SportsLiveLayout.TIMELINE), SportsLiveTab.CHANNELS))
-    }
 
     // --- remote ---
 
@@ -377,8 +366,8 @@ class SportsLiveTimelineTest {
         val channel = item("Sky Sports", null, channel = true)
         val model = SportsLiveTimeline.model(
             listOf(
-                row(a1, ScoreboardGroup.LIVE), row(a2, ScoreboardGroup.STARTING_SOON), row(a3, ScoreboardGroup.MORE_GAMES),
-                row(b1, ScoreboardGroup.LIVE), row(b2, ScoreboardGroup.MORE_GAMES), row(channel, ScoreboardGroup.MORE_GAMES)
+                row(a1, ScoreboardGroup.LIVE), row(a2, ScoreboardGroup.STARTING_SOON), row(a3, ScoreboardGroup.LATER),
+                row(b1, ScoreboardGroup.LIVE), row(b2, ScoreboardGroup.LATER), row(channel, ScoreboardGroup.LATER)
             ),
             SportsLiveTab.LIVE_NOW, NOW, utc
         )

@@ -13,11 +13,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -35,6 +38,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
@@ -253,21 +260,41 @@ fun SportsLiveMiniPlayerHost(
     if (playing == null) return
     // In picture-in-picture only the video shows, filling the window.
     val inPip by SportsLivePip.inPip.collectAsState()
-    // A little smaller beside the Timeline panel's buttons (N3), else the usual corner.
+    // In Live Now's stage media slot (V2, #132), where it takes the preview's place; else the usual corner.
     val spot by SportsLiveMiniPlacement.spot.collectAsState()
+    val slot by SportsLiveMiniPlacement.slot.collectAsState()
+    val stageSlot = slot?.takeIf { spot == SportsLiveMiniSpot.STAGE && !inPip }
+    // The host's own place in the window, so a slot (window pixels) is placed relative to it.
+    var hostX by remember { mutableIntStateOf(0) }
+    var hostY by remember { mutableIntStateOf(0) }
+    val density = LocalDensity.current
     BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
+            .onGloballyPositioned { coordinates ->
+                val origin = coordinates.positionInWindow()
+                hostX = origin.x.toInt()
+                hostY = origin.y.toInt()
+            }
             .then(if (inPip) Modifier.background(Color.Black) else Modifier)
     ) {
+        val placement = when {
+            inPip -> Modifier.fillMaxSize()
+            stageSlot != null -> with(density) {
+                Modifier
+                    .offset { IntOffset(stageSlot.x - hostX, stageSlot.y - hostY) }
+                    .size(stageSlot.width.toDp(), stageSlot.height.toDp())
+            }
+            else -> Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = SportsLiveMiniGeometry.EDGE_DP.dp, bottom = SportsLiveMiniGeometry.EDGE_DP.dp)
+                .width(maxWidth * SportsLiveMiniGeometry.CORNER_WIDTH_FRACTION)
+        }
         Column(
             modifier = if (inPip) {
-                Modifier.fillMaxSize()
+                placement
             } else {
-                Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = SportsLiveMiniGeometry.EDGE_DP.dp, bottom = SportsLiveMiniGeometry.EDGE_DP.dp)
-                    .width(maxWidth * SportsLiveMiniGeometry.widthFraction(spot))
+                placement
                     .onFocusChanged { focused = it.isFocused }
                     .onKeyEvent { event ->
                         val native = event.nativeKeyEvent
@@ -308,6 +335,13 @@ fun SportsLiveMiniPlayerHost(
             Box(
                 modifier = if (inPip) {
                     Modifier.fillMaxSize()
+                } else if (stageSlot != null) {
+                    // The stage's media box: the same size, no shadow over the page; the ring when focused.
+                    Modifier
+                        .fillMaxSize()
+                        .border(2.dp, if (focused) NuvioTheme.colors.FocusRing else Color.Transparent, shape)
+                        .clip(shape)
+                        .background(Color.Black)
                 } else {
                     Modifier
                         .aspectRatio(16f / 9f)
@@ -337,24 +371,42 @@ fun SportsLiveMiniPlayerHost(
                     onRelease = { playback.attach(null) },
                     modifier = Modifier.fillMaxSize()
                 )
+                // In the stage the caption sits inside the video, so it never covers the score block below.
+                if (stageSlot != null) {
+                    MiniCaption(
+                        text = stringResource(
+                            if (focused) R.string.sports_live_mini_ok_hint else R.string.sports_live_mini_hint,
+                            playing.item.displayName
+                        ),
+                        modifier = Modifier.align(Alignment.BottomStart).padding(6.dp)
+                    )
+                }
             }
-            if (!inPip) {
-                Text(
+            if (!inPip && stageSlot == null) {
+                MiniCaption(
                     text = stringResource(
                         if (focused) R.string.sports_live_mini_ok_hint else R.string.sports_live_mini_hint,
                         playing.item.displayName
                     ),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = NuvioTheme.colors.TextPrimary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .padding(top = 6.dp)
-                        .clip(RoundedCornerShape(NuvioTheme.radii.sm))
-                        .background(Color.Black.copy(alpha = 0.6f))
-                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                    modifier = Modifier.padding(top = 6.dp)
                 )
             }
         }
     }
+}
+
+/** The mini player's caption ("<game> · Play/Pause to expand"), on a dark chip. */
+@Composable
+private fun MiniCaption(text: String, modifier: Modifier = Modifier) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelMedium,
+        color = NuvioTheme.colors.TextPrimary,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = modifier
+            .clip(RoundedCornerShape(NuvioTheme.radii.sm))
+            .background(Color.Black.copy(alpha = 0.6f))
+            .padding(horizontal = 8.dp, vertical = 2.dp)
+    )
 }

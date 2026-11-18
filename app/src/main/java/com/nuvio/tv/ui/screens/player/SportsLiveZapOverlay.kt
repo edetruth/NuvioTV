@@ -93,14 +93,12 @@ import com.nuvio.tv.ui.screens.sportslive.SportsLiveGameArt
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveScoreboardRow
 import com.nuvio.tv.ui.screens.sportslive.ZapPanelBoard
 import com.nuvio.tv.ui.screens.sportslive.panelBoards
-import com.nuvio.tv.ui.screens.sportslive.rememberGameSituationStrings
 import com.nuvio.tv.ui.screens.sportslive.preview.SportsLivePanelPreviewViewModel
 import com.nuvio.tv.ui.screens.sportslive.preview.SportsLivePreviewLabel
 import com.nuvio.tv.ui.screens.sportslive.preview.SportsLivePreviewPlayer
 import com.nuvio.tv.ui.screens.sportslive.preview.SportsLivePreviewState
 import com.nuvio.tv.ui.screens.sportslive.preview.SportsLivePreviewVideo
 import com.nuvio.tv.ui.screens.sportslive.preview.previewKey
-import com.nuvio.tv.core.sportslive.scores.GameSituations
 import coil3.compose.AsyncImage
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapViewModel
 import com.nuvio.tv.ui.screens.sportslive.ZapPanelGroup
@@ -549,8 +547,12 @@ private fun LiveGamesPanel(
                 }
             }
     ) {
-        Column(modifier = Modifier.padding(NuvioTheme.spacing.xl)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md)) {
+        // F12: rows 336 dp wide, the preview corner inside that width.
+        Column(modifier = Modifier.padding(horizontal = PANEL_PADDING, vertical = NuvioTheme.spacing.xl)) {
+            Row(
+                modifier = Modifier.padding(horizontal = PANEL_ROW_ROOM),
+                horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md)
+            ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = stringResource(R.string.sports_live_zap_panel_title),
@@ -569,27 +571,6 @@ private fun LiveGamesPanel(
                             modifier = Modifier.padding(top = NuvioTheme.spacing.xs)
                         )
                     }
-                    Spacer(modifier = Modifier.height(NuvioTheme.spacing.lg))
-                    if (onWatchWith != null) {
-                        PanelCard(
-                            onClick = onWatchWith,
-                            modifier = Modifier.fillMaxWidth().onFocusChanged {
-                                if (it.isFocused) {
-                                    focusedKey = null
-                                    onRowFocus(null)
-                                }
-                            }
-                        ) {
-                            Text(
-                                text = stringResource(R.string.sports_live_dual_watch_with),
-                                style = MaterialTheme.typography.titleMedium,
-                                color = NuvioTheme.colors.TextPrimary,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
-                            )
-                        }
-                    }
                 }
                 // #83: the focused game (the one playing when none is) in the top-right corner.
                 val cornerKey = focusedKey ?: state.currentKey
@@ -598,6 +579,27 @@ private fun LiveGamesPanel(
                     preview = preview?.takeIf { it.item.streamKey == focusedKey },
                     player = previewPlayer
                 )
+            }
+            // F12: full width under the title and preview, so its label never truncates.
+            if (onWatchWith != null) {
+                PanelCard(
+                    onClick = onWatchWith,
+                    modifier = Modifier.padding(top = NuvioTheme.spacing.md, start = PANEL_ROW_ROOM, end = PANEL_ROW_ROOM).fillMaxWidth().onFocusChanged {
+                        if (it.isFocused) {
+                            focusedKey = null
+                            onRowFocus(null)
+                        }
+                    }
+                ) {
+                    Text(
+                        text = stringResource(R.string.sports_live_dual_watch_with),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = NuvioTheme.colors.TextPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
+                    )
+                }
             }
             Spacer(modifier = Modifier.height(NuvioTheme.spacing.sm))
             PanelChipRow(
@@ -629,7 +631,8 @@ private fun LiveGamesPanel(
                 LazyColumn(
                     state = listState,
                     verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm),
-                    contentPadding = PaddingValues(vertical = NuvioTheme.spacing.xs),
+                    // Room for the rows' focus ring and lift, so neither is clipped.
+                    contentPadding = PaddingValues(horizontal = PANEL_ROW_ROOM, vertical = NuvioTheme.spacing.xs),
                     modifier = Modifier.fillMaxHeight()
                 ) {
                     state.rows.forEachIndexed { index, row ->
@@ -719,7 +722,7 @@ private fun PanelChipRow(
                 name = when (chip) {
                     null -> stringResource(R.string.sports_live_filter_all)
                     SportsLiveUiState.MY_TEAMS_FILTER -> stringResource(R.string.sports_live_filter_my_teams)
-                    else -> chip
+                    else -> com.nuvio.tv.core.sportslive.SportsLiveDisplayText.label(chip) ?: chip
                 },
                 count = counts[chip] ?: 0,
                 icon = sportsLiveChipIconOf(chip),
@@ -799,9 +802,6 @@ private fun LiveGameItem(
     onLongClick: (() -> Unit)?,
     onFocus: () -> Unit
 ) {
-    val situationStrings = rememberGameSituationStrings()
-    val event = board?.event
-    val situation = if (event != null) board?.situation?.let { GameSituations.situationLine(it, event, situationStrings) } else null
     SportsLiveScoreboardRow(
         row = board?.board ?: panelBoards(listOf(row), emptyMap(), null, emptySet(), 0L).single().board,
         selected = isCurrent,
@@ -810,7 +810,6 @@ private fun LiveGameItem(
         onFocus = onFocus,
         modifier = modifier,
         nowPlaying = isCurrent,
-        situation = situation.orEmpty(),
         shortNames = true
     )
 }
@@ -895,11 +894,13 @@ private fun LazyListState.isFullyVisible(index: Int): Boolean {
     return info.offset >= layoutInfo.viewportStartOffset && info.offset + info.size <= layoutInfo.viewportEndOffset
 }
 
-/** The live games panel's width at 1080p (#83): Scoreboard-style rows. */
-private val PANEL_WIDTH = 680.dp
+/** The live games panel's width at 1080p (F12): Live Now's own rows, 336 dp, inside its padding. */
+private val PANEL_WIDTH = 360.dp
+private val PANEL_PADDING = 4.dp
+private val PANEL_ROW_ROOM = 8.dp
 
-/** The corner preview: 16:9 at this width (#83). */
-private val PANEL_PREVIEW_WIDTH = 240.dp
+/** The corner preview: 16:9 at this width (#83), beside the title, inside the panel's width (F12). */
+private val PANEL_PREVIEW_WIDTH = 150.dp
 
 /** Behind the panel (#83): about 85% black at the left edge, clear by the right, so the video stays visible. */
 private val PANEL_SCRIM = Brush.horizontalGradient(

@@ -120,7 +120,7 @@ class ZapPanelBoardsTest {
         val board = boards().first { it.board.item == estimated }.board
         assertTrue(board.probablyEnded)
         assertNull(board.chip)
-        assertEquals(ScoreboardGroup.FINAL, board.group)
+        assertEquals(ScoreboardGroup.JUST_ENDED, board.group)
     }
 
     private companion object {

@@ -4,17 +4,26 @@ import androidx.compose.runtime.Immutable
 import com.nuvio.tv.core.sportslive.EndedGame
 import com.nuvio.tv.core.sportslive.EndedSignal
 import com.nuvio.tv.core.sportslive.GameStatus
+import com.nuvio.tv.core.sportslive.GameStatusStrings
+import com.nuvio.tv.core.sportslive.GameStatusText
+import com.nuvio.tv.core.sportslive.SportsLiveProgress
+import com.nuvio.tv.core.sportslive.scores.ChipScore
 import com.nuvio.tv.core.sportslive.scores.GameArt
 import com.nuvio.tv.core.sportslive.scores.GameArtTeam
 import com.nuvio.tv.core.sportslive.scores.ScoreChip
 import com.nuvio.tv.core.sportslive.scores.ScoreChips
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
+import com.nuvio.tv.core.sportslive.scores.WhyTag
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveTab
 
-/** The Scoreboard's groups, in the order they are listed. */
-enum class ScoreboardGroup { LIVE, STARTING_SOON, MORE_GAMES, FINAL }
+/**
+ * The Scoreboard's groups (V2 Live Now, #132), in the order they are listed: games in play, games
+ * starting soon (with a countdown), [LATER] games (Upcoming only), [CHANNELS] (channels only, never mixed
+ * with games), then the dimmed [JUST_ENDED] games (#60).
+ */
+enum class ScoreboardGroup { LIVE, STARTING_SOON, LATER, CHANNELS, JUST_ENDED }
 
 /**
  * A Scoreboard row: its [group], the score [chip] (spoiler setting applied; null when unmatched,
@@ -34,17 +43,22 @@ data class ScoreboardRow(
     val probablyEnded: Boolean,
     val startsIn: Pair<Int, Int>? = null,
     /** Where the game stands ([GameStatus.of]): [group] and the status column are read from it. */
-    val status: GameStatus = GameStatus.Channel
-)
+    val status: GameStatus = GameStatus.Channel,
+    /** The share of regulation played (0..1) of a live game ([SportsLiveProgress]); null draws no bar. */
+    val progress: Float? = null,
+    /** The excitement badge under the period (#43, F2): "Close · 2 min left", "OT"; null for none. */
+    val excitement: WhyTag? = null
+) {
+    /** A followed team plays in it: the gold left bar. */
+    val followed: Boolean get() = firstFollowed || secondFollowed || item.followed
+}
 
 /**
- * The Scoreboard's rows for [items] (one tab, as filtered): the in-player panel's grouping
- * ([groupPanelRows]: live furthest-in first, starting soon within 3 h soonest first, followed teams
- * first in each group, finished games kept in place by start under Hide until focused), with its
- * Just ended group as **FINAL** ([ended], #60). On Upcoming a game is LIVE only when ESPN says it is in
- * play; otherwise it belongs with the games starting soon. [followsSide] tells whether a followed team
- * is a card's side (by the side's card name). [liveRank] (Most exciting, #43) orders the LIVE group by
- * each game's place in Live now's order; games not in it follow in their usual order.
+ * The Scoreboard's rows for [items] (one tab, as filtered): [groupPanelRows]' order (live furthest in
+ * first, starting soon soonest first, followed teams first in each group), regrouped by [scoreboardGroupOf]
+ * and listed group by group. On Upcoming a game is LIVE only when ESPN says it is in play. [followsSide]
+ * tells whether a followed team is a card's side (by the side's card name). [excitement] holds each live
+ * game's badge by card key (Live now, Scores shown); it never re-orders anything.
  */
 internal fun scoreboardRows(
     items: List<SportsLiveItem>,
@@ -55,17 +69,15 @@ internal fun scoreboardRows(
     nowMs: Long,
     ended: Map<String, EndedGame> = emptyMap(),
     followsSide: (SportsLiveItem, String) -> Boolean = { _, _ -> false },
-    liveRank: Map<String, Int> = emptyMap()
+    excitement: Map<String, WhyTag> = emptyMap()
 ): List<ScoreboardRow> {
     val scoresOn = mode != null && mode != ScoresMode.OFF
     return groupPanelRows(items, scores, mode, revealed, nowMs, ended, listedLive = tab != SportsLiveTab.UPCOMING).map { row ->
         val endedGame = ended[row.item.streamKey]
         val snapshot = (scores[row.item.streamKey] ?: endedGame?.event).takeIf { scoresOn }
-        scoreboardRowOf(row, snapshot, endedGame, nowMs, followsSide, GameArt.of(row.item, snapshot))
-    }.sortedWith(
-        compareBy<ScoreboardRow> { it.group.ordinal }
-            .thenBy { if (it.group == ScoreboardGroup.LIVE) liveRank[it.item.streamKey] ?: Int.MAX_VALUE else 0 }
-    )
+        scoreboardRowOf(row, snapshot, endedGame, nowMs, followsSide, GameArt.of(row.item, snapshot), tab)
+            .let { built -> excitement[row.item.streamKey]?.takeIf { built.group == ScoreboardGroup.LIVE }?.let { built.copy(excitement = it) } ?: built }
+    }.sortedBy { it.group.ordinal }
 }
 
 /**
@@ -79,12 +91,13 @@ internal fun scoreboardRowOf(
     endedGame: EndedGame?,
     nowMs: Long,
     followsSide: (SportsLiveItem, String) -> Boolean,
-    art: GameArt?
+    art: GameArt?,
+    tab: SportsLiveTab = SportsLiveTab.LIVE_NOW
 ): ScoreboardRow {
     val item = row.item
     // One status source (#102): the row's group is its game's status, as in the panel and the cards.
     val status = row.status
-    val group = scoreboardGroupOf(status)
+    val group = scoreboardGroupOf(status, item, tab)
     val estimate = endedGame?.signal == EndedSignal.ESTIMATE
     val sides = ScoreChips.orderedSides(item)
     return ScoreboardRow(
@@ -96,17 +109,35 @@ internal fun scoreboardRowOf(
         secondFollowed = sides != null && followsSide(item, sides.second),
         probablyEnded = estimate,
         startsIn = (status as? GameStatus.StartingSoon)?.let { GameStatus.startsIn(it.startMs, nowMs) },
-        status = status
+        status = status,
+        progress = if (group == ScoreboardGroup.LIVE && status is GameStatus.Live) {
+            SportsLiveProgress.share(item, status.event, nowMs)
+        } else {
+            null
+        }
     )
 }
 
-/** The Scoreboard group of a game's [status]. */
-internal fun scoreboardGroupOf(status: GameStatus): ScoreboardGroup = when (status) {
-    is GameStatus.Live -> ScoreboardGroup.LIVE
-    is GameStatus.StartingSoon -> ScoreboardGroup.STARTING_SOON
-    is GameStatus.Final, is GameStatus.JustEnded -> ScoreboardGroup.FINAL
-    is GameStatus.Upcoming, is GameStatus.Postponed, GameStatus.Channel -> ScoreboardGroup.MORE_GAMES
+/**
+ * The Scoreboard group of [item] with [status] on [tab]: a channel always sits under CHANNELS; on Live
+ * now (whose games are all listed live) a game ESPN still has as later counts as starting soon and a
+ * postponed one stays with the live games, as there is no LATER group there.
+ */
+internal fun scoreboardGroupOf(status: GameStatus, item: SportsLiveItem, tab: SportsLiveTab = SportsLiveTab.LIVE_NOW): ScoreboardGroup {
+    if (item.isChannel) return ScoreboardGroup.CHANNELS
+    val liveNow = tab != SportsLiveTab.UPCOMING
+    return when (status) {
+        is GameStatus.Live -> ScoreboardGroup.LIVE
+        is GameStatus.StartingSoon -> ScoreboardGroup.STARTING_SOON
+        is GameStatus.Final, is GameStatus.JustEnded -> ScoreboardGroup.JUST_ENDED
+        is GameStatus.Upcoming -> if (liveNow) ScoreboardGroup.STARTING_SOON else ScoreboardGroup.LATER
+        is GameStatus.Postponed -> if (liveNow) ScoreboardGroup.LIVE else ScoreboardGroup.LATER
+        GameStatus.Channel -> ScoreboardGroup.CHANNELS
+    }
 }
+
+/** A Just ended row is dimmed (60 %) until it has focus (#60). */
+internal fun ScoreboardRow.dimmed(focused: Boolean): Boolean = group == ScoreboardGroup.JUST_ENDED && !focused
 
 /**
  * The names a Scoreboard row may give [team], longest first (N1): the full name, ESPN's short name,
@@ -116,19 +147,160 @@ internal fun scoreboardNameChoices(team: GameArtTeam): List<String> =
     listOf(team.name, team.shortName, team.short).map { it.trim() }.filter { it.isNotEmpty() }.distinct()
         .ifEmpty { listOf(team.name) }
 
-/** Which buttons the Scoreboard's focused game offers beside Watch (always shown). */
-@Immutable
-data class ScoreboardButtons(val watchWith: Boolean, val gameStats: Boolean)
+/** What a row's scores column shows. */
+internal sealed interface ScoreboardScores {
+    /** Both scores, stacked; [leader] is 0 (first), 1 (second) or null (level), set semibold / white. */
+    data class Shown(val first: Int, val second: Int, val leader: Int?) : ScoreboardScores
+
+    /** Hide until focused (spoilers unchanged): the hidden-score mark, never a number. */
+    data object Hidden : ScoreboardScores
+
+    /** Nothing: not started, unmatched, a channel, Scores Off or an estimated end. */
+    data object None : ScoreboardScores
+}
+
+/** A row's scores column from its [chip] (spoiler setting already applied). */
+internal fun scoreboardScoresOf(chip: ScoreChip?): ScoreboardScores {
+    val score: ChipScore = when (chip) {
+        is ScoreChip.Live -> chip.score
+        is ScoreChip.Final -> chip.score
+        ScoreChip.Hidden -> return ScoreboardScores.Hidden
+        else -> null
+    } ?: return ScoreboardScores.None
+    val leader = when {
+        score.first > score.second -> 0
+        score.second > score.first -> 1
+        else -> null
+    }
+    return ScoreboardScores.Shown(score.first, score.second, leader)
+}
 
 /**
- * "Watch with another game" (straight into dual screen, #57): on Live now, for a game not over (never a
- * channel). "Game stats": only for a strict ESPN match ([matchedEvent] non-null).
+ * A row's status column (75 dp): [primary] on line 1 (the clock with a red dot when [live], the kickoff,
+ * the final word), [secondary] on line 2 (the period, the countdown). [urgent]: a countdown inside the last
+ * hour, drawn in a red outline.
  */
-internal fun scoreboardButtons(tab: SportsLiveTab, row: ScoreboardRow, matchedEvent: ScoreSnapshot?): ScoreboardButtons =
-    ScoreboardButtons(
-        watchWith = tab == SportsLiveTab.LIVE_NOW && row.group != ScoreboardGroup.FINAL && !row.item.isChannel,
-        gameStats = matchedEvent != null
-    )
+internal data class ScoreboardStatusLines(
+    val primary: String?,
+    val secondary: String? = null,
+    val live: Boolean = false,
+    val urgent: Boolean = false
+)
+
+/**
+ * [row]'s status column in the one status format (#102). [kickoff] words its start ("8:30 PM",
+ * "Tomorrow 6:30 PM"); null when it has none.
+ */
+internal fun scoreboardStatusLines(row: ScoreboardRow, strings: GameStatusStrings, kickoff: String?): ScoreboardStatusLines {
+    val chip = row.chip
+    val sport = GameStatusText.sportOf(row.status)
+    return when {
+        row.probablyEnded -> ScoreboardStatusLines(strings.probablyEnded)
+        // Spoilers unchanged: "Score hidden", no clock and no dot, whatever the game's state.
+        chip is ScoreChip.Hidden -> ScoreboardStatusLines(strings.chip.hidden)
+        chip is ScoreChip.Live -> {
+            val clock = chip.clock?.let { splitClock(it) }
+            ScoreboardStatusLines(clock?.first ?: strings.live, clock?.second, live = true)
+        }
+        chip is ScoreChip.Final -> ScoreboardStatusLines(chip.note ?: GameStatusText.finalWord(sport, strings))
+        chip is ScoreChip.Status -> ScoreboardStatusLines(chip.text ?: strings.postponed)
+        row.group == ScoreboardGroup.JUST_ENDED -> ScoreboardStatusLines(GameStatusText.finalWord(sport, strings))
+        row.group == ScoreboardGroup.LIVE && row.status is GameStatus.Live -> ScoreboardStatusLines(strings.live, live = true)
+        row.status is GameStatus.Postponed -> ScoreboardStatusLines((row.status as GameStatus.Postponed).text ?: strings.postponed)
+        row.group == ScoreboardGroup.CHANNELS -> ScoreboardStatusLines(null)
+        else -> {
+            val countdown = row.startsIn?.let { GameStatusText.countdown(it, strings) }
+            ScoreboardStatusLines(kickoff, countdown, urgent = row.startsIn?.first == 0)
+        }
+    }
+}
+
+/** ESPN's clock as (clock, period): "9:51 - 2nd Half" → ("9:51", "2nd half"), "Q4 4:12" → ("4:12", "Q4"); else whole on line 1. */
+internal fun splitClock(clockText: String): Pair<String, String?> {
+    val text = clockText.trim()
+    val parts = text.split(" - ", limit = 2).map { it.trim() }
+    if (parts.size == 2 && parts.all { it.isNotEmpty() }) {
+        val period = parts[1].let { if (it.first().isDigit()) it.lowercase() else it }
+        return parts[0] to period
+    }
+    QUARTER_CLOCK.matchEntire(text)?.let { return it.groupValues[2] to it.groupValues[1] }
+    return text to null
+}
+
+private val QUARTER_CLOCK = Regex("""^(Q\d|OT\d?)\s+(\d{1,2}:\d{2})$""", RegexOption.IGNORE_CASE)
+
+/** An entry of the More… menu (V2, #132), in the order it lists them. */
+internal enum class SportsLiveMoreEntry { WATCH_WITH, CHOOSE_STREAM, GAME_STATS, DETAILS, FOLLOW, REMIND }
+
+/**
+ * What More… (or Hold OK on a row) lists for one item: **Watch with another game** where dual screen is
+ * offered ([watchWith]: a live game on Live now, or a channel; it always opens the picker, F13), **Choose
+ * stream** for what plays live ([chooseStream]), **Game stats** only for a strict ESPN match ([strictMatch]),
+ * **Details** always (the raw addon text lives only there), **Follow ‹team›** once per side ([sides]),
+ * and **Remind me** only for a game not started ([remindable]).
+ */
+internal fun sportsLiveMoreEntries(
+    watchWith: Boolean,
+    chooseStream: Boolean,
+    strictMatch: Boolean,
+    sides: Int,
+    remindable: Boolean
+): List<SportsLiveMoreEntry> = buildList {
+    if (watchWith) add(SportsLiveMoreEntry.WATCH_WITH)
+    if (chooseStream) add(SportsLiveMoreEntry.CHOOSE_STREAM)
+    if (strictMatch) add(SportsLiveMoreEntry.GAME_STATS)
+    add(SportsLiveMoreEntry.DETAILS)
+    repeat(sides) { add(SportsLiveMoreEntry.FOLLOW) }
+    if (remindable) add(SportsLiveMoreEntry.REMIND)
+}
+
+/** The stage's buttons: always **Watch** (primary) and **More…** (outlined), one row, never wrapping. */
+internal enum class SportsLiveStageButton { WATCH, MORE }
+
+/**
+ * The stage's fixed layout (V2, F4): one size for every row, so nothing re-flows as focus moves and the
+ * buttons never leave the screen. Board px ÷ 2.
+ */
+internal object SportsLiveStageLayout {
+    const val WIDTH_DP = 360
+    const val MEDIA_HEIGHT_DP = 203
+    const val SCORE_BLOCK_HEIGHT_DP = 132
+    const val GAP_DP = 10
+    const val BUTTON_ROW_HEIGHT_DP = 40
+
+    /** The stage's whole height: media, score block, buttons and the gaps between. */
+    const val HEIGHT_DP = MEDIA_HEIGHT_DP + GAP_DP + SCORE_BLOCK_HEIGHT_DP + GAP_DP + BUTTON_ROW_HEIGHT_DP
+
+    /** The buttons of the stage, whatever is focused: the same two for a game, an upcoming game or a channel. */
+    fun buttons(@Suppress("UNUSED_PARAMETER") row: ScoreboardRow?): List<SportsLiveStageButton> =
+        listOf(SportsLiveStageButton.WATCH, SportsLiveStageButton.MORE)
+}
+
+/**
+ * Where Live Now's focus goes on return from another screen (F3): the list opens at its top, so the LIVE
+ * group shows; the card that had focus keeps it while it sits among the first [rowsOnScreen] rows, else
+ * the first row takes focus. Null when the list is empty.
+ */
+internal fun sportsLiveReturnFocusKey(keys: List<String>, focusedKey: String?, rowsOnScreen: Int): String? {
+    val index = focusedKey?.let(keys::indexOf) ?: -1
+    return if (index in 0 until rowsOnScreen) focusedKey else keys.firstOrNull()
+}
+
+/**
+ * How far a list scrolls to bring a focused row ([offset], [size] in px) into a viewport [containerSize]
+ * tall, keeping it [margin] px from either edge (about two rows, V2): 0 while it already is; a row taller
+ * than the room left aligns to the top margin.
+ */
+internal fun sportsLiveKeepFromEdge(offset: Float, size: Float, containerSize: Float, margin: Float): Float {
+    val room = containerSize - 2 * margin
+    if (size > room) return offset - margin
+    val end = offset + size
+    return when {
+        offset < margin -> offset - margin
+        end > containerSize - margin -> end - (containerSize - margin)
+        else -> 0f
+    }
+}
 
 /**
  * Time to kickoff for a Starting soon row as (hours, minutes), rounded up to the minute; null once

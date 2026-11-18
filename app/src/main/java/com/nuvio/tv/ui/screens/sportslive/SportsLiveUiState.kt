@@ -2,7 +2,6 @@ package com.nuvio.tv.ui.screens.sportslive
 
 import com.nuvio.tv.core.sportslive.EndedGame
 import com.nuvio.tv.core.sportslive.EndedSignal
-import com.nuvio.tv.core.sportslive.LiveNowSort
 import com.nuvio.tv.core.sportslive.SportsLiveEndedGames
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.WhyTag
@@ -44,16 +43,7 @@ data class SportsLiveUiState(
     val justEnded: Map<String, EndedGame> = emptyMap(),
     /** The view model's clock when this state was built (it ticks while the list is watched). */
     val nowMs: Long = 0L,
-    /** Live now shows its sort control (#43): scores on, not the Timeline. */
-    val liveSortOffered: Boolean = false,
-    /** Live now's sort in force: Start time while the control is hidden. */
-    val liveSort: LiveNowSort = LiveNowSort.START_TIME,
-    /**
-     * Most exciting: each live game's place (by card key) in the order shown, for the Scoreboard's LIVE
-     * group; empty under Start time.
-     */
-    val liveRank: Map<String, Int> = emptyMap(),
-    /** Most exciting with scores shown: a ranked card's why tag, by card key; empty otherwise. */
+    /** Live now's excitement badges (#43, V2) by card key, with scores shown only; empty otherwise. */
     val whyTags: Map<String, WhyTag> = emptyMap()
 ) {
     /** The selected chip has no games left (#79): it stays shown with 0 until the user moves, then All. */
@@ -117,31 +107,22 @@ internal fun SportsLiveUiState.offersWatchWith(item: SportsLiveItem, snapshot: S
             endedOf(item) == null && !SportsLiveEndedGames.isEspnFinal(item, snapshot)
     }
 
-/** What "Watch with another game" does on a card (#57). */
-internal sealed interface SportsLiveWatchWith {
-    /** A live game: dual screen at once, beside the game picked for it. */
-    data class Paired(val session: SportsLiveDualSession) : SportsLiveWatchWith
-
-    /** A channel: no game to pair it with by itself, so the picker lists what may go beside it. */
-    data class Pick(val pick: SportsLiveDualPick) : SportsLiveWatchWith
+/**
+ * "Watch with another game" on [item] from the More… menu ([scores]: the delayed snapshots by card key):
+ * always the picker (F13), for a game as for a channel, so the viewer sees what goes beside it; null when
+ * nothing may.
+ */
+internal fun SportsLiveUiState.watchWithFor(item: SportsLiveItem, scores: Map<String, ScoreSnapshot>): SportsLiveDualPick? {
+    val pick = SportsLiveDualPick(
+        chosen = item,
+        items = visibleItems,
+        filter = selectedFilter,
+        tab = selectedTab,
+        endedKeys = finishedKeys(scores),
+        zapItems = zapItems
+    )
+    return pick.takeIf { it.candidates.isNotEmpty() }
 }
-
-/** "Watch with another game" on [item] ([scores]: the delayed snapshots by card key); null: nothing to pair with. */
-internal fun SportsLiveUiState.watchWithFor(item: SportsLiveItem, scores: Map<String, ScoreSnapshot>): SportsLiveWatchWith? =
-    if (item.isChannel) {
-        SportsLiveWatchWith.Pick(
-            SportsLiveDualPick(
-                chosen = item,
-                items = visibleItems,
-                filter = selectedFilter,
-                tab = selectedTab,
-                endedKeys = finishedKeys(scores),
-                zapItems = zapItems
-            )
-        )
-    } else {
-        watchWithSession(item, scores)?.let(SportsLiveWatchWith::Paired)
-    }
 
 /**
  * The dual session "Watch with another game" starts on the live game [item]: the pick made now, over

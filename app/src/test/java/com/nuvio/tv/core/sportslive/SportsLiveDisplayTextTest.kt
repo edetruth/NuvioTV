@@ -135,4 +135,15 @@ class SportsLiveDisplayTextTest {
     fun `name is the clean name alone`() {
         assertEquals("Sports Channel 1 HQ", SportsLiveDisplayText.name("(FHD) : SPORTS CHANNEL 1 HQ"))
     }
+
+    @Test
+    fun `a round-the-clock channel marker goes, its language code kept as the region`() {
+        val title = SportsLiveDisplayText.of("24/7-EN - Game of Thrones")
+        assertEquals("Game of Thrones", title.name)
+        assertEquals("EN", title.region)
+        assertEquals("Classic Movies", SportsLiveDisplayText.name("24/7 | Classic Movies"))
+        assertEquals("UK News", SportsLiveDisplayText.name("24/7 - UK News"))
+        // A name that merely starts with digits stays.
+        assertEquals("24 Hours of Le Mans", SportsLiveDisplayText.name("24 Hours of Le Mans"))
+    }
 }

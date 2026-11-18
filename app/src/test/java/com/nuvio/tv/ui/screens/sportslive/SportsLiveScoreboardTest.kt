@@ -3,7 +3,6 @@ package com.nuvio.tv.ui.screens.sportslive
 import com.nuvio.tv.MainDispatcherRule
 import com.nuvio.tv.core.sportslive.EndedGame
 import com.nuvio.tv.core.sportslive.EndedSignal
-import com.nuvio.tv.core.sportslive.SportsLiveLayout
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.scores.EspnFixtures
 import com.nuvio.tv.core.sportslive.scores.EspnLeagueMap
@@ -86,35 +85,6 @@ class SportsLiveScoreboardTest {
         followsSide: (SportsLiveItem, String) -> Boolean = { _, _ -> false }
     ) = scoreboardRows(items, tab, scores, mode, revealed, NOW, if (tab == SportsLiveTab.LIVE_NOW) ended else emptyMap(), followsSide)
 
-    @Test
-    fun `layouts are offered on Live now and Upcoming only, Cards by default, per tab`() {
-        assertEquals(
-            listOf(SportsLiveLayout.CARDS, SportsLiveLayout.SCOREBOARD, SportsLiveLayout.TIMELINE),
-            SportsLiveLayout.offeredFor(SportsLiveTab.LIVE_NOW)
-        )
-        assertEquals(SportsLiveLayout.offeredFor(SportsLiveTab.LIVE_NOW), SportsLiveLayout.offeredFor(SportsLiveTab.UPCOMING))
-        listOf(SportsLiveTab.CHANNELS, SportsLiveTab.REPLAYS, SportsLiveTab.RESULTS).forEach {
-            assertTrue(SportsLiveLayout.offeredFor(it).isEmpty())
-        }
-        val choices = mapOf(SportsLiveTab.LIVE_NOW to SportsLiveLayout.SCOREBOARD, SportsLiveTab.CHANNELS to SportsLiveLayout.SCOREBOARD)
-        assertEquals(SportsLiveLayout.SCOREBOARD, SportsLiveLayout.of(choices, SportsLiveTab.LIVE_NOW))
-        assertEquals(SportsLiveLayout.CARDS, SportsLiveLayout.of(choices, SportsLiveTab.UPCOMING))
-        // A tab without a switch always shows its cards.
-        assertEquals(SportsLiveLayout.CARDS, SportsLiveLayout.of(choices, SportsLiveTab.CHANNELS))
-    }
-
-    @Test
-    fun `stored layouts round-trip and tolerate unknown entries`() {
-        val choices = mapOf(SportsLiveTab.UPCOMING to SportsLiveLayout.CARDS, SportsLiveTab.LIVE_NOW to SportsLiveLayout.SCOREBOARD)
-        assertEquals("LIVE_NOW=SCOREBOARD,UPCOMING=CARDS", SportsLiveLayout.encode(choices))
-        assertEquals(choices, SportsLiveLayout.decode(SportsLiveLayout.encode(choices)))
-        assertEquals(
-            mapOf(SportsLiveTab.LIVE_NOW to SportsLiveLayout.SCOREBOARD, SportsLiveTab.UPCOMING to SportsLiveLayout.TIMELINE),
-            SportsLiveLayout.decode("LIVE_NOW=SCOREBOARD,UPCOMING=TIMELINE,NOPE=CARDS,,=,REPLAYS=GRID")
-        )
-        assertTrue(SportsLiveLayout.decode(null).isEmpty())
-    }
-
     private fun repo() = mockk<SportsLiveRepository>(relaxed = true) {
         every { claimedCatalogs } returns flowOf(emptyList())
         every { latest } returns MutableStateFlow<SportsLiveLoad?>(null)
@@ -122,39 +92,6 @@ class SportsLiveScoreboardTest {
         every { followedTeams } returns flowOf(emptyList<FollowedTeam>())
         every { hasRecentLinks(any()) } returns false
         coEvery { load(any(), any(), any()) } returns SportsLiveLoad(emptyList(), emptyList(), 0L, emptySet())
-    }
-
-    @Test
-    fun `the view model remembers the layout per tab`() = runTest {
-        val stored = MutableStateFlow<Map<SportsLiveTab, SportsLiveLayout>>(emptyMap())
-        val viewModel = SportsLiveViewModel(
-            repo(),
-            layouts = stored,
-            saveLayout = { tab, layout -> stored.value = stored.value + (tab to layout) },
-            computeDispatcher = mainDispatcherRule.dispatcher
-        )
-        runCurrent()
-        // The screen reads the selected tab's entry from the map, in the same frame as the tab.
-        fun shown(tab: SportsLiveTab) = SportsLiveLayout.of(viewModel.layouts.value, tab)
-        assertEquals(SportsLiveLayout.CARDS, shown(SportsLiveTab.LIVE_NOW))
-
-        viewModel.selectLayout(SportsLiveTab.LIVE_NOW, SportsLiveLayout.SCOREBOARD)
-        runCurrent()
-        assertEquals(SportsLiveLayout.SCOREBOARD, shown(SportsLiveTab.LIVE_NOW))
-        assertEquals(mapOf(SportsLiveTab.LIVE_NOW to SportsLiveLayout.SCOREBOARD), stored.value)
-        // Upcoming keeps its own choice (Cards).
-        assertEquals(SportsLiveLayout.CARDS, shown(SportsLiveTab.UPCOMING))
-        viewModel.selectLayout(SportsLiveTab.UPCOMING, SportsLiveLayout.SCOREBOARD)
-        viewModel.selectLayout(SportsLiveTab.LIVE_NOW, SportsLiveLayout.CARDS)
-        runCurrent()
-        assertEquals(SportsLiveLayout.SCOREBOARD, shown(SportsLiveTab.UPCOMING))
-        assertEquals(SportsLiveLayout.CARDS, shown(SportsLiveTab.LIVE_NOW))
-
-        // Channels has no switch: a pick there is ignored.
-        viewModel.selectLayout(SportsLiveTab.CHANNELS, SportsLiveLayout.SCOREBOARD)
-        runCurrent()
-        assertEquals(SportsLiveLayout.CARDS, shown(SportsLiveTab.CHANNELS))
-        assertFalse(SportsLiveTab.CHANNELS in stored.value)
     }
 
     @Test
@@ -173,11 +110,15 @@ class SportsLiveScoreboardTest {
     }
 
     @Test
-    fun `rows are grouped live, starting soon, more games, then final`() {
+    fun `rows are grouped live, starting soon, then just ended, with no more games group`() {
         val rows = rows()
         assertEquals(listOf(pacers, soon, later, lakers, estimated), rows.map { it.item })
+        // Live Now has no MORE GAMES (V2): a game ESPN still has as later counts as starting soon.
         assertEquals(
-            listOf(ScoreboardGroup.LIVE, ScoreboardGroup.STARTING_SOON, ScoreboardGroup.MORE_GAMES, ScoreboardGroup.FINAL, ScoreboardGroup.FINAL),
+            listOf(
+                ScoreboardGroup.LIVE, ScoreboardGroup.STARTING_SOON, ScoreboardGroup.STARTING_SOON,
+                ScoreboardGroup.JUST_ENDED, ScoreboardGroup.JUST_ENDED
+            ),
             rows.map { it.group }
         )
         // Scores in the card's order (Pacers first), ESPN's clock.
@@ -203,10 +144,10 @@ class SportsLiveScoreboardTest {
         val rows = rows(items = listOf(later, soon, started, pacers), tab = SportsLiveTab.UPCOMING)
         assertEquals(listOf(pacers, started, soon, later), rows.map { it.item })
         assertEquals(
-            listOf(ScoreboardGroup.LIVE, ScoreboardGroup.STARTING_SOON, ScoreboardGroup.STARTING_SOON, ScoreboardGroup.MORE_GAMES),
+            listOf(ScoreboardGroup.LIVE, ScoreboardGroup.STARTING_SOON, ScoreboardGroup.STARTING_SOON, ScoreboardGroup.LATER),
             rows.map { it.group }
         )
-        assertTrue(rows.none { it.group == ScoreboardGroup.FINAL })
+        assertTrue(rows.none { it.group == ScoreboardGroup.JUST_ENDED })
     }
 
     @Test
@@ -224,27 +165,19 @@ class SportsLiveScoreboardTest {
     }
 
     @Test
-    fun `watch with another game only on Live now and not for a final, game stats only on a strict match`() {
-        val rows = rows()
-        val liveRow = rows.first { it.item == pacers }
-        val finalRow = rows.first { it.item == lakers }
+    fun `game stats needs a strict match`() {
         val pacersEvent = ScoreChips.matchedEvent(pacers, scores[pacers.streamKey])
-        assertEquals(ScoreboardButtons(watchWith = true, gameStats = true), scoreboardButtons(SportsLiveTab.LIVE_NOW, liveRow, pacersEvent))
-        assertEquals(ScoreboardButtons(watchWith = false, gameStats = true), scoreboardButtons(SportsLiveTab.LIVE_NOW, finalRow, lakersEvent))
-        val soonRow = rows.first { it.item == soon }
-        assertEquals(ScoreboardButtons(watchWith = true, gameStats = false), scoreboardButtons(SportsLiveTab.LIVE_NOW, soonRow, null))
-        val upcoming = rows(items = listOf(soon), tab = SportsLiveTab.UPCOMING).single()
-        assertEquals(ScoreboardButtons(watchWith = false, gameStats = false), scoreboardButtons(SportsLiveTab.UPCOMING, upcoming, null))
+        assertEquals(pacersEvent?.eventId, "401909985")
         // Another game's event on the card is no strict match: no Game stats.
         assertNull(ScoreChips.matchedEvent(item("Celtics @ Knicks", NOW), pacersEvent))
     }
 
     @Test
-    fun `a date with no time of day goes to more games, with no countdown`() {
+    fun `a date with no time of day goes to later games, with no countdown`() {
         val dateOnly = item("Hawks @ Spurs", NOW + HOUR, isLive = false).copy(startHasTimeOfDay = false)
         val upcoming = rows(items = listOf(dateOnly, soon), tab = SportsLiveTab.UPCOMING)
         val row = upcoming.first { it.item == dateOnly }
-        assertEquals(ScoreboardGroup.MORE_GAMES, row.group)
+        assertEquals(ScoreboardGroup.LATER, row.group)
         assertNull(row.startsIn)
         // A timed one an hour away counts down.
         assertEquals(1 to 0, upcoming.first { it.item == soon }.startsIn)
@@ -253,8 +186,8 @@ class SportsLiveScoreboardTest {
     @Test
     fun `starting soon regroups and counts down as the clock moves`() {
         fun at(nowMs: Long) = scoreboardRows(listOf(later), SportsLiveTab.UPCOMING, emptyMap(), ScoresMode.SHOW, emptySet(), nowMs).single()
-        // Five hours out: more games, no countdown.
-        assertEquals(ScoreboardGroup.MORE_GAMES, at(NOW).group)
+        // Five hours out: later, no countdown.
+        assertEquals(ScoreboardGroup.LATER, at(NOW).group)
         assertNull(at(NOW).startsIn)
         // Two and a half hours later it starts within three hours.
         val soonAfter = at(NOW + 150 * 60_000L)
@@ -264,18 +197,17 @@ class SportsLiveScoreboardTest {
     }
 
     @Test
-    fun `an ESPN final outside Just ended is a FINAL row and offers no Watch with another game`() {
+    fun `an ESPN final outside Just ended is a just ended row`() {
         // N5: after a restart the final is no Just ended game, yet ESPN says it is over.
         val row = scoreboardRows(listOf(lakers), SportsLiveTab.LIVE_NOW, scores, ScoresMode.SHOW, emptySet(), NOW).single()
-        assertEquals(ScoreboardGroup.FINAL, row.group)
-        assertFalse(scoreboardButtons(SportsLiveTab.LIVE_NOW, row, lakersEvent).watchWith)
+        assertEquals(ScoreboardGroup.JUST_ENDED, row.group)
         // Hidden scores keep the grouping (only the chip is hidden).
         val hidden = scoreboardRows(listOf(lakers), SportsLiveTab.LIVE_NOW, scores, ScoresMode.HIDE_UNTIL_FOCUSED, emptySet(), NOW).single()
-        assertEquals(ScoreboardGroup.FINAL, hidden.group)
+        assertEquals(ScoreboardGroup.JUST_ENDED, hidden.group)
         assertEquals(ScoreChip.Hidden, hidden.chip)
-        // A game with no ESPN state stays under more games, with the button.
-        val channelLike = scoreboardRows(listOf(later), SportsLiveTab.LIVE_NOW, emptyMap(), ScoresMode.SHOW, emptySet(), NOW).single()
-        assertTrue(scoreboardButtons(SportsLiveTab.LIVE_NOW, channelLike, null).watchWith)
+        // A Live Now game with no ESPN state and a start hours away waits under starting soon.
+        val unmatched = scoreboardRows(listOf(later), SportsLiveTab.LIVE_NOW, emptyMap(), ScoresMode.SHOW, emptySet(), NOW).single()
+        assertEquals(ScoreboardGroup.STARTING_SOON, unmatched.group)
     }
 
     @Test

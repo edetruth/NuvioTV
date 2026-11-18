@@ -4,14 +4,12 @@ import com.nuvio.tv.MainDispatcherRule
 import com.nuvio.tv.core.sportslive.EndedInputs
 import com.nuvio.tv.core.sportslive.EndedSignal
 import com.nuvio.tv.core.sportslive.LinkCheckRequest
-import com.nuvio.tv.core.sportslive.LiveNowSort
 import com.nuvio.tv.core.sportslive.ManifestResponse
 import com.nuvio.tv.core.sportslive.SportsLiveLinkChecker
 import com.nuvio.tv.core.sportslive.SportsLiveSourceCooldown
 import com.nuvio.tv.core.sportslive.SportsLiveSourceTrust
 import com.nuvio.tv.core.sportslive.SportsLiveEndedGames
 import com.nuvio.tv.core.sportslive.SportsLiveItemBucketer
-import com.nuvio.tv.core.sportslive.SportsLiveLayout
 import com.nuvio.tv.core.sportslive.scores.EspnFixtures
 import com.nuvio.tv.core.sportslive.scores.EspnLeagueMap
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
@@ -384,8 +382,7 @@ class SportsLiveViewModelTest {
     fun `boards are built on the compute dispatcher, and a focus move builds none`() = runTest {
         nextLoad = load(listOf(item("a", isLive = true, sport = "Soccer", name = "A"), item("b", isLive = true, sport = "Soccer", name = "B")))
         val boardDispatcher = StandardTestDispatcher(testScheduler, name = "compute")
-        val layoutChoices = MutableStateFlow(mapOf(SportsLiveTab.LIVE_NOW to SportsLiveLayout.CARDS))
-        val viewModel = SportsLiveViewModel(repo, layouts = layoutChoices, computeDispatcher = boardDispatcher)
+        val viewModel = SportsLiveViewModel(repo, computeDispatcher = boardDispatcher)
         viewModel.nowMs = { NOW }
         val ranOn = mutableListOf<ContinuationInterceptor?>()
         viewModel.buildBoard = { inputs ->
@@ -394,10 +391,10 @@ class SportsLiveViewModelTest {
         }
         backgroundScope.launch { viewModel.board.collect {} }
         advanceUntilIdle()
-        val cards = viewModel.board.value!!
-        assertEquals(SportsLiveLayout.CARDS, cards.layout)
-        assertEquals(listOf("a", "b"), cards.items.map { it.id })
-        assertNull(cards.rows)
+        // V2 (#132): Live Now is always the Scoreboard.
+        val board = viewModel.board.value!!
+        assertEquals(listOf("a", "b"), board.items.map { it.id })
+        assertEquals(listOf("a", "b"), board.rows!!.map { it.item.id })
         assertTrue(ranOn.isNotEmpty())
         assertTrue(ranOn.all { it === boardDispatcher })
 
@@ -406,11 +403,10 @@ class SportsLiveViewModelTest {
         advanceUntilIdle()
         assertEquals("a focus move builds nothing", built, ranOn.size)
 
-        layoutChoices.value = mapOf(SportsLiveTab.LIVE_NOW to SportsLiveLayout.TIMELINE)
+        // Channels lists cards: no Scoreboard rows.
+        viewModel.selectTab(SportsLiveTab.CHANNELS)
         advanceUntilIdle()
-        val timeline = viewModel.board.value!!
-        assertEquals(SportsLiveLayout.TIMELINE, timeline.layout)
-        assertTrue(timeline.rows != null && timeline.timeline != null)
+        assertNull(viewModel.board.value!!.rows)
         assertTrue(ranOn.all { it === boardDispatcher })
     }
 
@@ -983,7 +979,7 @@ class SportsLiveViewModelTest {
     private fun channel(id: String, group: String, isLive: Boolean = false, sport: String? = null) =
         item(id, isLive = isLive, sport = sport, name = "Channel $id").copy(isChannel = true, group = group)
 
-    // Most exciting (#43): basketball games from the ESPN fixture, put in play.
+    // The excitement badge (#43, V2): basketball games from the ESPN fixture, put in play.
     private val nbaGames = EspnFixtures.events(EspnFixtures.NBA_20261115, EspnLeagueMap.NBA)
 
     private fun inPlay(eventId: String, home: Int, away: Int, clock: String): ScoreSnapshot =
@@ -999,31 +995,8 @@ class SportsLiveViewModelTest {
     private val lakersGame = item("lakers", isLive = true, sport = "Basketball", name = "Los Angeles Lakers at Phoenix Suns", startMs = NOW - HOUR)
     private val celticsGame = item("celtics", isLive = true, sport = "Basketball", name = "Dallas Mavericks at Boston Celtics", startMs = NOW - 30 * MINUTE)
 
-    private fun TestScope.sortedViewModel(
-        sort: LiveNowSort,
-        mode: ScoresMode?,
-        inputs: Flow<EndedInputs>,
-        layout: SportsLiveLayout = SportsLiveLayout.CARDS,
-        clock: Flow<Unit> = flowOf(Unit),
-        now: () -> Long = { NOW }
-    ): SportsLiveViewModel {
-        val viewModel = SportsLiveViewModel(
-            repo,
-            endedInputs = inputs,
-            endedGames = SportsLiveEndedGames(),
-            clock = clock,
-            layouts = flowOf(mapOf(SportsLiveTab.LIVE_NOW to layout)),
-            liveSort = flowOf(sort),
-            scoresMode = flowOf(mode),
-            computeDispatcher = compute
-        )
-        viewModel.nowMs = now
-        backgroundScope.launch { viewModel.uiState.collect {} }
-        return viewModel
-    }
-
     @Test
-    fun `Most exciting ranks live games, followed first and unmatched last, tagged only while scores show`() = runTest {
+    fun `the excitement badge shows with scores shown only and never re-orders Live Now`() = runTest {
         followedFlow.value = listOf(FollowedTeam("Celtics", "Basketball"))
         nextLoad = load(listOf(pacersGame, hornetsGame, lakersGame, celticsGame))
         val inputs = flowOf(
@@ -1035,81 +1008,37 @@ class SportsLiveViewModelTest {
                 )
             )
         )
-        fun TestScope.state(sort: LiveNowSort, mode: ScoresMode?, layout: SportsLiveLayout = SportsLiveLayout.CARDS): SportsLiveUiState {
-            val viewModel = sortedViewModel(sort, mode, inputs, layout)
+        fun TestScope.state(mode: ScoresMode?): SportsLiveUiState {
+            val viewModel = SportsLiveViewModel(
+                repo,
+                endedInputs = inputs,
+                endedGames = SportsLiveEndedGames(),
+                scoresMode = flowOf(mode),
+                computeDispatcher = compute
+            )
+            viewModel.nowMs = { NOW }
+            backgroundScope.launch { viewModel.uiState.collect {} }
             advanceUntilIdle()
             return viewModel.uiState.value
         }
 
-        val byStart = state(LiveNowSort.START_TIME, ScoresMode.SHOW)
-        val startOrder = byStart.visibleItems.map { it.id }
-        assertEquals("celtics", startOrder.first())
-        assertTrue(byStart.liveSortOffered)
-        assertTrue(byStart.whyTags.isEmpty())
-        assertTrue(byStart.liveRank.isEmpty())
-
-        val exciting = state(LiveNowSort.MOST_EXCITING, ScoresMode.SHOW)
-        // Followed pinned, the close game in its final minute, the blowout, then the unmatched game.
-        assertEquals(listOf("celtics", "lakers", "pacers", "hornets"), exciting.visibleItems.map { it.id })
-        assertEquals(LiveNowSort.MOST_EXCITING, exciting.liveSort)
-        assertEquals(mapOf(lakersGame.streamKey to WhyTag(WhyKind.CLOSE_LATE, 1)), exciting.whyTags)
-        assertEquals(1, exciting.liveRank[lakersGame.streamKey])
-
-        // Hide until focused (decision 1): the same order, no why tags.
-        val hidden = state(LiveNowSort.MOST_EXCITING, ScoresMode.HIDE_UNTIL_FOCUSED)
-        assertEquals(exciting.visibleItems, hidden.visibleItems)
+        val shown = state(ScoresMode.SHOW)
+        // Start order, followed first: the close game is badged, not moved (F2: no sort, no why-tag circle).
+        assertEquals(listOf("celtics", "pacers", "hornets", "lakers"), shown.visibleItems.map { it.id })
+        assertEquals(mapOf(lakersGame.streamKey to WhyTag(WhyKind.CLOSE_LATE, 1)), shown.whyTags)
+        // Hide until focused and Off: the same order, no badges.
+        val hidden = state(ScoresMode.HIDE_UNTIL_FOCUSED)
+        assertEquals(shown.visibleItems, hidden.visibleItems)
         assertTrue(hidden.whyTags.isEmpty())
-
-        // Off: no sort control, start order, no tags.
-        val off = state(LiveNowSort.MOST_EXCITING, ScoresMode.OFF)
-        assertFalse(off.liveSortOffered)
-        assertEquals(LiveNowSort.START_TIME, off.liveSort)
-        assertEquals(startOrder, off.visibleItems.map { it.id })
-        assertTrue(off.whyTags.isEmpty())
-
-        // The Timeline stays by time.
-        val timeline = state(LiveNowSort.MOST_EXCITING, ScoresMode.SHOW, SportsLiveLayout.TIMELINE)
-        assertFalse(timeline.liveSortOffered)
-        assertEquals(startOrder, timeline.visibleItems.map { it.id })
+        assertTrue(state(ScoresMode.OFF).whyTags.isEmpty())
     }
 
     @Test
-    fun `Most exciting keeps cards in place while a card has focus, re-ranking when focus leaves`() = runTest {
-        nextLoad = load(listOf(pacersGame, lakersGame))
-        val closeLakers = lakersGame.streamKey to inPlay("401909986", 100, 99, "1:00 - 4th")
-        val inputs = MutableStateFlow(EndedInputs(mapOf(pacersGame.streamKey to inPlay("401909985", 60, 40, "5:00 - 2nd"), closeLakers)))
-        val ticks = MutableSharedFlow<Unit>(replay = 1).apply { tryEmit(Unit) }
-        var now = NOW
-        val viewModel = sortedViewModel(LiveNowSort.MOST_EXCITING, ScoresMode.SHOW, inputs, clock = ticks, now = { now })
+    fun `the retired View and Sort settings are dropped when the section opens`() = runTest {
+        var dropped = 0
+        SportsLiveViewModel(repo, dropRetiredPrefs = { dropped++ }, computeDispatcher = compute)
         advanceUntilIdle()
-        fun order() = viewModel.uiState.value.visibleItems.map { it.id }
-        assertEquals(listOf("lakers", "pacers"), order())
-
-        // The Pacers game goes to overtime while the Lakers card is focused: nothing moves.
-        viewModel.onLiveCardFocus(lakersGame.streamKey)
-        inputs.value = EndedInputs(mapOf(pacersGame.streamKey to inPlay("401909985", 110, 110, "2:00 - OT"), closeLakers))
-        runCurrent()
-        assertEquals(listOf("lakers", "pacers"), order())
-        assertEquals(WhyTag(WhyKind.OVERTIME), viewModel.uiState.value.whyTags[pacersGame.streamKey])
-
-        // Minute ticks and moving to another card change nothing either.
-        now += 60_000L
-        ticks.emit(Unit)
-        viewModel.onLiveCardFocus(pacersGame.streamKey)
-        now += 60_000L
-        ticks.emit(Unit)
-        runCurrent()
-        assertEquals(listOf("lakers", "pacers"), order())
-
-        // Focus leaving the list re-ranks at once.
-        viewModel.onLiveCardFocus(null)
-        runCurrent()
-        assertEquals(listOf("pacers", "lakers"), order())
-
-        // With no card focused, a change re-ranks at once.
-        inputs.value = EndedInputs(mapOf(pacersGame.streamKey to inPlay("401909985", 60, 40, "5:00 - 2nd"), closeLakers))
-        runCurrent()
-        assertEquals(listOf("lakers", "pacers"), order())
+        assertEquals(1, dropped)
     }
 
     // #60 phase 2: link checks confirm a game past its estimate is over

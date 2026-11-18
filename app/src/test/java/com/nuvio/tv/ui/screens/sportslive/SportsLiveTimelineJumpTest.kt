@@ -28,7 +28,7 @@ class SportsLiveTimelineJumpTest {
     )
 
     private fun block(name: String, start: Long, end: Long = start + 2 * HOUR, lane: Int = 0) = TimelineBlock(
-        row = ScoreboardRow(item(name), ScoreboardGroup.MORE_GAMES, null, null, false, false, false),
+        row = ScoreboardRow(item(name), ScoreboardGroup.LATER, null, null, false, false, false),
         kind = TimelineBlockKind.UPCOMING,
         startMs = start,
         endMs = end,
@@ -44,7 +44,7 @@ class SportsLiveTimelineJumpTest {
     private val nbaLater = block("E @ F", NOW + 3 * HOUR)
     private val nbaLate = block("G @ H", NOW + 7 * HOUR)
     private val nhl = block("I @ J", NOW + 3 * HOUR + 30 * MIN)
-    private val channel = ScoreboardRow(item("Sports Channel"), ScoreboardGroup.MORE_GAMES, null, null, false, false, false)
+    private val channel = ScoreboardRow(item("Sports Channel"), ScoreboardGroup.LATER, null, null, false, false, false)
     private val model = TimelineModel(
         leagues = listOf(league("nba", nbaNow, nbaSoon, nbaLater, nbaLate), league("nhl", nhl)),
         untimed = listOf(channel),

@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.LazyListState
@@ -62,7 +64,6 @@ import com.nuvio.tv.R
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.TeamPair
 import com.nuvio.tv.core.sportslive.SportsLiveEndedGames
-import com.nuvio.tv.core.sportslive.SportsLiveLayout
 import com.nuvio.tv.core.sportslive.alerts.GameReminders
 import com.nuvio.tv.core.sportslive.alerts.RemindersState
 import com.nuvio.tv.core.sportslive.scores.GameSituations
@@ -185,10 +186,7 @@ fun SportsLiveScreen(
     val gameOf: (SportsLiveItem) -> ScoreSnapshot? = remember(scores, scoredTab) {
         { item -> if (scoredTab) ScoreChips.matchedEvent(item, scores[item.streamKey]) else null }
     }
-    // The Scoreboard layout (#23): Live now and Upcoming only, remembered per tab.
-    val layouts by viewModel.layouts.collectAsStateWithLifecycle()
-    val layout = SportsLiveLayout.of(layouts, uiState.selectedTab)
-    // The list's model (#71): rows, Timeline and drawn cards, built by the view model off the main thread
+    // The list's model (#71): the Scoreboard's rows and the drawn cards, built by the view model off the main thread
     // from the scores shown here; the list draws the board once it is ready.
     LaunchedEffect(scores, scoresMode, revealed) {
         viewModel.setBoardScores(SportsLiveBoardScores(scores, scoresMode, revealed))
@@ -286,9 +284,8 @@ fun SportsLiveScreen(
         }
     }
 
-    // "Watch with another game" (#57): a live game on Live now goes straight into dual screen, in slot 1,
-    // beside a game picked for it (SportsLiveSecondGame), with no lookup until the panes start; a channel
-    // opens the picker ([dualPick]).
+    // "Watch with another game" (#57): the picker ([dualPick]) for a game or a channel (F13); the pick starts
+    // dual screen with the card in slot 1, with no lookup until the panes start.
     val canWatchWith: (SportsLiveItem) -> Boolean = { item -> uiState.offersWatchWith(item, scores[item.streamKey]) }
     var dualPick by remember { mutableStateOf<SportsLiveDualPick?>(null) }
     fun startDual(session: SportsLiveDualSession) {
@@ -322,7 +319,6 @@ fun SportsLiveScreen(
         else -> SportsLiveContent(
             uiState = uiState,
             followedTeams = followedTeams,
-            layout = layout,
             board = board,
             situationOf = situationOf,
             chipOf = chipOf,
@@ -352,11 +348,7 @@ fun SportsLiveScreen(
                 )
                 onOpenGame()
             },
-            onCardFocus = { key ->
-                scoresViewModel.onCardFocus(key)
-                // Most exciting keeps the cards in place while one is focused (#43).
-                viewModel.onLiveCardFocus(key)
-            },
+            onCardFocus = scoresViewModel::onCardFocus,
             onSelectTab = viewModel::selectTab,
             onSelectFilter = viewModel::selectFilter,
             onUserMoved = viewModel::onUserMoved,
@@ -383,10 +375,12 @@ fun SportsLiveScreen(
             onToggleFollow = viewModel::toggleFollow,
             canWatchWith = canWatchWith,
             onWatchWith = { item ->
-                when (val action = uiState.watchWithFor(item, scores)) {
-                    is SportsLiveWatchWith.Paired -> startDual(action.session)
-                    is SportsLiveWatchWith.Pick -> dualPick = action.pick
-                    null -> Toast.makeText(context, context.getString(R.string.sports_live_dual_no_pair), Toast.LENGTH_SHORT).show()
+                // Always the picker (F13): the viewer sees and picks what goes beside the game or channel.
+                val pick = uiState.watchWithFor(item, scores)
+                if (pick != null) {
+                    dualPick = pick
+                } else {
+                    Toast.makeText(context, context.getString(R.string.sports_live_dual_no_pair), Toast.LENGTH_SHORT).show()
                 }
             },
             results = resultsState,
@@ -447,8 +441,6 @@ private fun NoAddonsState(onOpenAddons: () -> Unit) {
 private fun SportsLiveContent(
     uiState: SportsLiveUiState,
     followedTeams: List<FollowedTeam>,
-    /** The selected tab's layout: the Scoreboard on Live now and Upcoming (V2), the list elsewhere. */
-    layout: SportsLiveLayout,
     /** The list's model, built off the main thread (#71); null or another tab's until ready. */
     board: SportsLiveBoard?,
     /** A game's situation line ("" when none or hidden with the score). */
@@ -521,20 +513,14 @@ private fun SportsLiveContent(
     var focusedCardKey by rememberSaveable { mutableStateOf<String?>(null) }
     // One scroll position per tab and filter: switching opens the list at the top, while coming back
     // from a game, Details or the player restores the position saved with the back stack entry.
-    // The board for this tab and filter (#71): until it is built, the list waits (a frame or two), and a
-    // layout switch keeps the layout shown until the new one is ready, never holding the main thread.
+    // The board for this tab and filter (#71): until it is built, the list waits (a frame or two), never
+    // holding the main thread.
     val shownBoard = board?.takeIf { it.shows(uiState.selectedTab, uiState.selectedFilter) }
     val boardPending = shownBoard == null
-    val shownLayout = shownBoard?.layout ?: layout
-    val layouts = SportsLiveLayout.offeredFor(uiState.selectedTab)
-    val scoreboard = shownLayout == SportsLiveLayout.SCOREBOARD && shownLayout in layouts
-    // The Matchday timeline (#24): the Scoreboard's rows placed on a time ruler.
-    val timeline = shownLayout == SportsLiveLayout.TIMELINE && shownLayout in layouts
-    // A layout change is a new list, like a filter change.
-    val filterKey = "${uiState.selectedTab.name}|${uiState.selectedFilter.orEmpty()}|${if (scoreboard || timeline) shownLayout.name else ""}"
+    // V2 (#132): Live now and Upcoming are the Scoreboard + stage; Channels and Replays list cards.
+    val scoreboard = shownBoard?.rows != null
+    val filterKey = "${uiState.selectedTab.name}|${uiState.selectedFilter.orEmpty()}"
     val listState = rememberSaveable(filterKey, saver = LazyListState.Saver) { LazyListState() }
-    // The Timeline's league rows (#24), saved like the list's position.
-    val timelineRowState = rememberSaveable(filterKey, saver = LazyListState.Saver) { LazyListState() }
     val baseStateLabelOf = rememberSportsLiveStateLabeler(uiState.selectedTab)
     val liveLabel = stringResource(R.string.sports_live_live_pill)
     val finalLabel = stringResource(R.string.sports_live_chip_final_note)
@@ -566,27 +552,19 @@ private fun SportsLiveContent(
         }.keys
     }
 
-    // The Scoreboard lists the same games grouped LIVE → STARTING SOON → LATER → FINAL; the Timeline places
-    // them on a time ruler. Both come ready from the view model (#71).
-    val boardRowOf = if (scoreboard || timeline) shownBoard?.rowOf.orEmpty() else emptyMap()
-    val timelineModel = if (timeline) shownBoard?.timeline else null
+    // The Scoreboard's rows come ready from the view model (#71), grouped LIVE → STARTING SOON → CHANNELS → JUST ENDED.
+    val boardRowOf = shownBoard?.rowOf.orEmpty()
     val items = shownBoard?.items.orEmpty()
-    // The Timeline opens on its first live game (else the next to start), not on its first row's first block.
-    val timelineEntryKey = timelineModel?.let { SportsLiveTimeline.entryKey(it, focusedCardKey) }
-    // Until a block is focused there, the Timeline's selection is its entry game, not the view model's
-    // default (the first card in addon order).
+    // Nothing focused yet: the list's first row (the first live game), not the first item in addon order.
     val selected = items.firstOrNull { it.listKey == focusedCardKey && it.id == uiState.selectedItemId }
-        ?: timelineEntryKey?.let { key -> items.firstOrNull { it.listKey == key } }
+        ?: (if (focusedCardKey == null) items.firstOrNull() else null)
         ?: items.firstOrNull { it.id == uiState.selectedItemId }
         ?: items.firstOrNull()
     val selectedCardFocusRequester = selected?.let(::cardFocusRequester)
-    // Brings the card [key] (at [index] in [items]) on screen: its list item, or on the Timeline its row.
-    suspend fun scrollToCard(key: String, index: Int, onlyIfHidden: Boolean = true) {
-        val model = timelineModel
-        val state = if (model != null) timelineRowState else listState
-        val target = model?.navRows?.indexOfFirst { key in it } ?: index
-        if (target < 0) return
-        if (!onlyIfHidden || state.layoutInfo.visibleItemsInfo.none { it.index == target }) state.scrollToItem(target)
+    // Brings the card [key] (at [index] in [items]) on screen.
+    suspend fun scrollToCard(@Suppress("UNUSED_PARAMETER") key: String, index: Int, onlyIfHidden: Boolean = true) {
+        if (index < 0) return
+        if (!onlyIfHidden || listState.layoutInfo.visibleItemsInfo.none { it.index == index }) listState.scrollToItem(index)
     }
     // Where a move into the list lands: the focused card while on screen, else the first card on
     // screen. Read from the layout, so Down never aims at a card scrolled away (which traps focus).
@@ -600,27 +578,7 @@ private fun SportsLiveContent(
             )
         }
     }
-    // On the Timeline, Down enters on the selected block only while its row is on screen (rows are lazy: a
-    // row scrolled away has no block to take focus), else on the first row on screen (QA pass 3).
-    val currentSelectedKey by rememberUpdatedState(selected?.listKey)
-    val currentTimelineModel by rememberUpdatedState(timelineModel)
-    val timelineEntryOnScreen by remember(timelineRowState) {
-        derivedStateOf {
-            currentTimelineModel?.let { model ->
-                SportsLiveTimeline.onScreenEntryKey(
-                    model = model,
-                    preferredKey = currentSelectedKey,
-                    visibleRows = timelineRowState.layoutInfo.visibleItemsInfo.map { it.index }
-                )
-            }
-        }
-    }
-    val entryCardFocusRequester = if (timelineModel != null) {
-        timelineEntryOnScreen?.let { key -> items.firstOrNull { it.listKey == key } }?.let(::cardFocusRequester)
-            ?: selectedCardFocusRequester
-    } else {
-        items.firstOrNull { it.listKey == entryKey }?.let(::cardFocusRequester) ?: selectedCardFocusRequester
-    }
+    val entryCardFocusRequester = items.firstOrNull { it.listKey == entryKey }?.let(::cardFocusRequester) ?: selectedCardFocusRequester
     // The Catch up strip (#58) sits between the header and Live Now's games: Down from the header lands
     // on it, Up from the first game goes back to it.
     val catchUpShown = uiState.selectedTab == SportsLiveTab.LIVE_NOW && catchUpItems.isNotEmpty()
@@ -704,18 +662,14 @@ private fun SportsLiveContent(
         // Cleared last: clearing restarts this effect, which would cancel the focus request above.
         if (gone) followedCardKey = null
     }
-    // OK on a card (list, Scoreboard row or Timeline block).
+    // OK on a card (list card or Scoreboard row).
     fun cardClick(item: SportsLiveItem) = openCard(item)
     // "Remind me" (#44) on a game not started yet; the bell on its card while reminded.
     fun remindable(item: SportsLiveItem) = GameReminders.canRemind(item, uiState.nowMs)
     fun remindedCard(item: SportsLiveItem) = remindable(item) && reminders.isReminded(item)
-    // A card naming a game, a live game or an upcoming game opens the menu; other cards open Details
-    // directly.
+    // Hold OK on a row opens the same menu as More… (V2): Details is always in it.
     fun cardLongClick(item: SportsLiveItem) {
-        when {
-            item.teams != null || canWatchWith(item) || remindable(item) -> menuCardKey = item.listKey
-            else -> onOpenDetail(item)
-        }
+        menuCardKey = item.listKey
     }
     fun cardFocused(item: SportsLiveItem) {
         onCardFocus(item.streamKey)
@@ -724,10 +678,16 @@ private fun SportsLiveContent(
         onSelectItem(item.id)
     }
     items.firstOrNull { it.listKey == menuCardKey }?.let { item ->
-        val watchWith = canWatchWith(item)
         val teams = item.teams
-        val canRemind = remindable(item)
-        if (teams == null && !watchWith && !canRemind) return@let
+        val entries = sportsLiveMoreEntries(
+            watchWith = canWatchWith(item),
+            chooseStream = sportsLiveAutoPlayEligible(item),
+            strictMatch = gameOf(item) != null,
+            sides = teams?.let { 2 } ?: 0,
+            remindable = remindable(item)
+        )
+        val watchWith = SportsLiveMoreEntry.WATCH_WITH in entries
+        val canRemind = SportsLiveMoreEntry.REMIND in entries
         SportsLiveCardMenu(
             title = item.displayName,
             sides = teams?.inTitleOrder(item.meta.name).orEmpty().map { side ->
@@ -741,7 +701,7 @@ private fun SportsLiveContent(
             } else {
                 null
             },
-            onChooseStream = if (sportsLiveAutoPlayEligible(item)) {
+            onChooseStream = if (SportsLiveMoreEntry.CHOOSE_STREAM in entries) {
                 {
                     menuCardKey = null
                     onChooseStream(item)
@@ -749,7 +709,7 @@ private fun SportsLiveContent(
             } else {
                 null
             },
-            onGameStats = gameOf(item)?.let { event ->
+            onGameStats = gameOf(item)?.takeIf { SportsLiveMoreEntry.GAME_STATS in entries }?.let { event ->
                 {
                     menuCardKey = null
                     onOpenGame(item, event)
@@ -801,17 +761,28 @@ private fun SportsLiveContent(
     LaunchedEffect(previewItem?.listKey) { currentOnPreviewFocus(previewItem) }
     DisposableEffect(Unit) { onDispose { currentOnPreviewFocus(null) } }
 
-    // Back from another screen: put the list back on the card that had focus. Runs once per entry.
-    LaunchedEffect(Unit) {
+    // Back from another screen: put the list back on the card that had focus, once its board is ready (it
+    // may be built again on return). Live Now opens at its top so the LIVE group shows (F3): the card keeps
+    // focus while it sits in the first screenful, else the first row takes it.
+    var returnHandled by remember { mutableStateOf(false) }
+    LaunchedEffect(boardPending) {
+        if (boardPending || returnHandled) return@LaunchedEffect
+        returnHandled = true
         val key = focusedCardKey ?: return@LaunchedEffect
-        val index = items.indexOfFirst { it.listKey == key }
-        if (index < 0) return@LaunchedEffect
-        scrollToCard(key, index, onlyIfHidden = false)
+        val liveNow = uiState.selectedTab == SportsLiveTab.LIVE_NOW && scoreboard
+        val target = if (liveNow) sportsLiveReturnFocusKey(items.map { it.listKey }, key, RETURN_ROWS_ON_SCREEN) else key
+        val index = items.indexOfFirst { it.listKey == target }
+        if (target == null || index < 0) return@LaunchedEffect
+        if (liveNow) listState.scrollToItem(0) else scrollToCard(target, index, onlyIfHidden = false)
+        if (target != key) {
+            focusedCardKey = target
+            onSelectItem(items[index].id)
+        }
         repeat(2) { withFrameNanos { } }
-        // Back from the player the card (a Timeline block too) gets focus, not the panel's Watch it
-        // was played from (N3): asked again for a few frames until the list holds it.
+        // Back from the player the card gets focus, not the stage's Watch it was played from (N3): asked
+        // again for a few frames until the list holds it.
         repeat(RETURN_FOCUS_FRAMES) {
-            runCatching { cardFocusRequesters[key]?.requestFocus() }
+            runCatching { cardFocusRequesters[target]?.requestFocus() }
             withFrameNanos { }
             if (listHasFocus) return@LaunchedEffect
         }
@@ -852,6 +823,14 @@ private fun SportsLiveContent(
         scrollToCard(next.listKey, items.indexOf(next))
         repeat(2) { withFrameNanos { } }
         runCatching { cardFocusRequester(next).requestFocus() }
+    }
+
+    // Rows that arrive while the list has no focus (a slower addon's games) land above the first row shown:
+    // the list keeps its top, so the LIVE group stays in view instead of anchoring on the old first row.
+    LaunchedEffect(itemKeys) {
+        if (scoreboard && !listHasFocus && !paneHasFocus && focusedCardKey == null && listState.firstVisibleItemIndex > 0) {
+            listState.scrollToItem(0)
+        }
     }
 
     // Only a real tab or filter change scrolls to the top; the saved value survives navigation.
@@ -902,7 +881,9 @@ private fun SportsLiveContent(
             withFrameNanos { }
             runCatching { activeTabFocusRequester.requestFocus() }
         }
-        if (nowPlaying != null) {
+        // On the Scoreboard the mini player sits in the stage (V2), so this card is not needed there.
+        val stageShown = scoreboard && !showingResults && selected != null && boardRowOf[selected.listKey] != null
+        if (nowPlaying != null && !stageShown) {
             SportsLiveNowPlayingCard(
                 name = nowPlaying.displayName,
                 onExpand = { miniPlayer.requestExpand() },
@@ -962,7 +943,8 @@ private fun SportsLiveContent(
             )
             return@Column
         }
-        if (catchUpShown) {
+        // With the stage shown the strip sits at the top of the list's column (the stage keeps its place).
+        if (catchUpShown && !stageShown) {
             SportsLiveCatchUpStrip(
                 items = catchUpItems,
                 firstFocusRequester = catchUpFocusRequester,
@@ -987,80 +969,108 @@ private fun SportsLiveContent(
         }
 
         val selectedPreview = preview?.takeIf { it.item.listKey == selected.listKey }
-        if (timelineModel != null) {
-            // Recreated per tab and filter, so its focus restorer never brings back another list's block.
-            key(filterKey) {
-            SportsLiveTimelineView(
-                model = timelineModel,
-                windowKey = filterKey,
-                rowState = timelineRowState,
-                selectedKey = selected.listKey,
-                menuKey = menuCardKey,
-                cardFocusRequester = ::cardFocusRequester,
-                upFocusRequester = aboveListFocusRequester,
-                watchFocusRequester = watchFocusRequester,
-                onClick = ::cardClick,
-                onLongClick = ::cardLongClick,
-                onFocus = ::cardFocused,
-                onFocusChanged = { focused ->
-                    listHasFocus = focused
-                    if (!focused) onCardFocus(null)
-                },
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-            )
+        val selectedRow = boardRowOf[selected.listKey]
+        if (scoreboard && selectedRow != null) {
+            // V2 Live Now (#132): the Scoreboard list (400 dp, faded edges) and the fixed 360 dp stage.
+            Row(modifier = Modifier.fillMaxSize()) {
+                Column(
+                    modifier = Modifier
+                        .width(SportsLiveTokens.Size.ListWidth + LIST_FOCUS_ROOM * 2)
+                        .offset(x = -LIST_FOCUS_ROOM)
+                        .fillMaxHeight()
+                ) {
+                    if (catchUpShown) {
+                        SportsLiveCatchUpStrip(
+                            items = catchUpItems,
+                            firstFocusRequester = catchUpFocusRequester,
+                            upFocusRequester = aboveContentFocusRequester,
+                            downFocusRequester = entryCardFocusRequester,
+                            onPlay = onPlayCatchUp,
+                            onOpenGame = onOpenCatchUpGame,
+                            onMarkWatched = onMarkCatchUpWatched,
+                            onHoldsFocus = { catchUpHoldsFocus = it },
+                            modifier = Modifier
+                                .padding(start = LIST_FOCUS_ROOM, bottom = NuvioTheme.spacing.xs)
+                                .onFocusChanged { if (it.hasFocus) followedCardKey = null }
+                        )
+                    }
+                    val groupCounts = remember(shownBoard) { shownBoard?.rows.orEmpty().groupingBy { it.group }.eachCount() }
+                    // Recreated per tab and filter, so its focus restorer never brings back another list's card.
+                    key(filterKey) {
+                        SportsLiveKeepFromEdge(margin = LIST_EDGE_KEEP) {
+                            LazyColumn(
+                                state = listState,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxWidth()
+                                    .sportsLiveFadingEdges(listState, LIST_FADE)
+                                    .onFocusChanged {
+                                        listHasFocus = it.hasFocus
+                                        if (!it.hasFocus) onCardFocus(null)
+                                    }
+                                    .focusRestorer(entryCardFocusRequester ?: selectedCardFocusRequester)
+                                    .dpadRepeatThrottle(),
+                                contentPadding = PaddingValues(horizontal = LIST_FOCUS_ROOM, vertical = LIST_FOCUS_ROOM),
+                                verticalArrangement = Arrangement.spacedBy(SportsLiveTokens.Size.RowGap)
+                            ) {
+                                itemsIndexed(items, key = { _, item -> item.listKey }) { index, item ->
+                                    val boardRow = boardRowOf[item.listKey] ?: return@itemsIndexed
+                                    // The group's heading rides on its first row, so list indices stay the rows' own.
+                                    Column {
+                                        if (index == 0 || boardRowOf[items[index - 1].listKey]?.group != boardRow.group) {
+                                            SportsLiveScoreboardHeader(boardRow.group, groupCounts[boardRow.group] ?: 0)
+                                        }
+                                        SportsLiveScoreboardRow(
+                                            row = boardRow,
+                                            // Focus in the stage: the selected row keeps a white left bar.
+                                            selected = paneHasFocus && item.listKey == selected.listKey,
+                                            onClick = { cardClick(item) },
+                                            onLongClick = { cardLongClick(item) },
+                                            onFocus = { cardFocused(item) },
+                                            menuOpen = item.listKey == menuCardKey,
+                                            reminded = remindedCard(item),
+                                            hasReplay = item.streamKey in replayKeys,
+                                            modifier = Modifier
+                                                .focusRequester(cardFocusRequester(item))
+                                                .focusProperties {
+                                                    right = watchFocusRequester
+                                                    if (index == 0) up = aboveListFocusRequester
+                                                }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.width(SportsLiveTokens.Size.StageGap - LIST_FOCUS_ROOM * 2))
+                SportsLiveStage(
+                    row = selectedRow,
+                    details = detailsOf(selected),
+                    situation = situationOf(selected),
+                    preview = if (selectedPreview != null) {
+                        { SportsLivePreviewVideo(previewPlayer) }
+                    } else {
+                        null
+                    },
+                    previewShowing = selectedPreview?.rendering == true,
+                    miniInStage = nowPlaying != null,
+                    noStream = noStreamKey == selected.listKey,
+                    onWatch = { open(selected) },
+                    onMore = { menuCardKey = selected.listKey },
+                    modifier = Modifier
+                        .padding(top = LIST_FOCUS_ROOM)
+                        .onFocusChanged { paneHasFocus = it.hasFocus },
+                    watchModifier = Modifier
+                        .focusRequester(watchFocusRequester)
+                        .focusProperties { left = entryCardFocusRequester ?: selectedCardFocusRequester }
+                )
             }
-            val selectedRow = boardRowOf[selected.listKey] ?: return@Column
-            val event = gameOf(selected)
-            // The mini player sits at the panel's right end, smaller, and the panel keeps that part
-            // free (N3): its buttons are never under the video.
-            DisposableEffect(Unit) {
-                val token = Any()
-                SportsLiveMiniPlacement.claim(token, SportsLiveMiniSpot.TIMELINE_PANEL)
-                onDispose { SportsLiveMiniPlacement.release(token) }
-            }
-            val windowWidthDp = LocalConfiguration.current.screenWidthDp.toFloat()
-            val miniReserve = if (nowPlaying == null) 0.dp else SportsLiveMiniGeometry.timelinePanelReserveDp(
-                windowWidthDp = windowWidthDp,
-                screenEndPaddingDp = NuvioTheme.spacing.screen.horizontal.value
-            ).dp
-            SportsLiveTimelinePanel(
-                row = selectedRow,
-                buttons = scoreboardButtons(uiState.selectedTab, selectedRow, event),
-                onWatch = { open(selected) },
-                // Straight into dual screen, as from the card menu (#57).
-                onWatchWith = { onWatchWith(selected) },
-                onGameStats = { event?.let { onOpenGame(selected, it) } },
-                preview = if (selectedPreview != null) {
-                    { SportsLivePreviewVideo(previewPlayer) }
-                } else {
-                    null
-                },
-                previewShowing = selectedPreview?.rendering == true,
-                noStream = noStreamKey == selected.listKey,
-                details = detailsOf(selected),
-                situation = situationOf(selected),
-                watchFocusRequester = watchFocusRequester,
-                blockFocusRequester = selectedCardFocusRequester,
-                miniPlayerBeside = nowPlaying != null,
-                onToggleReminder = if (remindable(selected)) {
-                    { onToggleReminder(selected) }
-                } else {
-                    null
-                },
-                reminded = remindedCard(selected),
-                modifier = Modifier
-                    .padding(top = NuvioTheme.spacing.sm, end = miniReserve)
-                    .fillMaxWidth()
-                    .height(TIMELINE_PANEL_HEIGHT)
-                    .onFocusChanged { paneHasFocus = it.hasFocus }
-            )
             return@Column
         }
 
-        // The mini player in its corner keeps the pane's lower buttons ("Watch with another game") clear
-        // (QA pass 3), as the Timeline panel does (N3): the pane ends above it.
+        // Channels and Replays (until their own V2 views): the card list and the details pane.
+        // The mini player in its corner keeps the pane's lower buttons clear (QA pass 3): the pane ends above it.
         val paneMiniReserve = if (nowPlaying == null) 0.dp else SportsLiveMiniGeometry.cornerReserveBottomDp(
             windowWidthDp = LocalConfiguration.current.screenWidthDp.toFloat(),
             screenBottomPaddingDp = NuvioTheme.spacing.screen.vertical.value
@@ -1074,8 +1084,7 @@ private fun SportsLiveContent(
             LazyColumn(
                 state = listState,
                 modifier = Modifier
-                    // The Scoreboard's rows carry two team lines, scores and a clock: half the width (N1).
-                    .weight(if (scoreboard) SCOREBOARD_LIST_WEIGHT else 0.45f)
+                    .weight(0.45f)
                     .fillMaxHeight()
                     .onFocusChanged {
                         listHasFocus = it.hasFocus
@@ -1086,98 +1095,29 @@ private fun SportsLiveContent(
                 verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)
             ) {
                 itemsIndexed(items, key = { _, item -> item.listKey }) { index, item ->
-                    val boardRow = boardRowOf[item.listKey]
-                    val onCardClick: () -> Unit = { cardClick(item) }
-                    val onCardLongClick: () -> Unit = { cardLongClick(item) }
-                    val onCardFocused: () -> Unit = { cardFocused(item) }
-                    val cardModifier = Modifier
-                        .focusRequester(cardFocusRequester(item))
-                        .focusProperties {
-                            right = watchFocusRequester
-                            if (index == 0) up = aboveListFocusRequester
-                        }
-                    if (boardRow != null) {
-                        // The group's heading rides on its first row, so list indices stay the rows' own.
-                        Column {
-                            if (index == 0 || boardRowOf[items[index - 1].listKey]?.group != boardRow.group) {
-                                SportsLiveScoreboardHeader(boardRow.group)
-                            }
-                            SportsLiveScoreboardRow(
-                                row = boardRow,
-                                selected = item.listKey == selected.listKey,
-                                onClick = onCardClick,
-                                onLongClick = onCardLongClick,
-                                onFocus = onCardFocused,
-                                menuOpen = item.listKey == menuCardKey,
-                                reminded = remindedCard(item),
-                                modifier = cardModifier
-                            )
-                        }
-                        return@itemsIndexed
-                    }
-                    val ended = uiState.endedOf(item) != null
-                    // The strip's heading rides on its first card, so list indices stay the cards' own.
-                    Column {
-                    if (ended && (index == 0 || uiState.endedOf(items[index - 1]) == null)) {
-                        Text(
-                            text = stringResource(R.string.sports_live_just_ended),
-                            style = MaterialTheme.typography.labelLarge,
-                            color = NuvioTheme.colors.TextSecondary,
-                            maxLines = 1,
-                            modifier = Modifier.padding(top = NuvioTheme.spacing.md, bottom = NuvioTheme.spacing.sm)
-                        )
-                    }
                     SportsLiveListCard(
                         item = item,
                         stateLabel = stateLabelOf(item),
                         selected = item.listKey == selected.listKey,
-                        ended = ended,
+                        ended = uiState.endedOf(item) != null,
                         final = espnFinalOf(item),
-                        hasReplay = item.streamKey in replayKeys && ended,
-                        whyTag = uiState.whyTags[item.streamKey]?.let { whyTagText(it) },
+                        hasReplay = false,
                         reminded = remindedCard(item),
-                        onClick = onCardClick,
-                        onLongClick = onCardLongClick,
+                        onClick = { cardClick(item) },
+                        onLongClick = { cardLongClick(item) },
                         menuOpen = item.listKey == menuCardKey,
                         art = artOf(item),
                         chip = chipOf(item),
-                        onFocus = onCardFocused,
-                        modifier = cardModifier
+                        onFocus = { cardFocused(item) },
+                        modifier = Modifier
+                            .focusRequester(cardFocusRequester(item))
+                            .focusProperties {
+                                right = watchFocusRequester
+                                if (index == 0) up = aboveListFocusRequester
+                            }
                     )
-                    }
                 }
             }
-            }
-            val selectedRow = boardRowOf[selected.listKey]
-            if (selectedRow != null) {
-                val event = gameOf(selected)
-                SportsLiveScoreboardPane(
-                    row = selectedRow,
-                    onWatch = { open(selected) },
-                    buttons = scoreboardButtons(uiState.selectedTab, selectedRow, event),
-                    // Straight into dual screen, as from the card menu (#57).
-                    onWatchWith = { onWatchWith(selected) },
-                    onGameStats = { event?.let { onOpenGame(selected, it) } },
-                    preview = if (selectedPreview != null) {
-                        { SportsLivePreviewVideo(previewPlayer) }
-                    } else {
-                        null
-                    },
-                    previewShowing = selectedPreview?.rendering == true,
-                    noStream = noStreamKey == selected.listKey,
-                    details = detailsOf(selected),
-                    situation = situationOf(selected),
-                    modifier = Modifier
-                        .weight(1f - SCOREBOARD_LIST_WEIGHT)
-                        .fillMaxHeight()
-                        .padding(bottom = paneMiniReserve)
-                        .onFocusChanged { paneHasFocus = it.hasFocus },
-                    watchFocusRequester = watchFocusRequester,
-                    watchModifier = Modifier
-                        .focusRequester(watchFocusRequester)
-                        .focusProperties { left = entryCardFocusRequester ?: selectedCardFocusRequester }
-                )
-                return@Row
             }
             SportsLiveDetailsPane(
                 item = selected,
@@ -1226,11 +1166,19 @@ private fun SportsLiveContent(
 }
 
 private const val FOLLOW_REFOCUS_WINDOW_MS = 1_500L
-private const val SCOREBOARD_LIST_WEIGHT = 0.5f
 private const val RETURN_FOCUS_FRAMES = 10
 
-/** The Timeline's bottom panel (preview, scoreline, linescore, buttons). */
-private val TIMELINE_PANEL_HEIGHT = 168.dp
+/** On return to Live Now the card that had focus keeps it while among this many first rows (F3). */
+private const val RETURN_ROWS_ON_SCREEN = 4
+
+/** Room round the list's rows for the focus ring and lift, so neither is clipped. */
+private val LIST_FOCUS_ROOM = 8.dp
+
+/** The list's scroll edges fade over 80 px (V2) instead of a hard cut. */
+private val LIST_FADE = 40.dp
+
+/** Focus keeps about two rows from the list's top and bottom edges (V2). */
+private val LIST_EDGE_KEEP = 100.dp
 
 /** The two sides in the order the title names them ("Patriots at Jets": Patriots, then Jets). */
 private fun TeamPair.inTitleOrder(title: String): List<String> =

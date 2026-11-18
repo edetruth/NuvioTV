@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import com.nuvio.tv.core.sportslive.SportsLiveDisplayText
 import android.view.KeyEvent as AndroidKeyEvent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -203,6 +204,6 @@ internal fun sportsLiveFilterOptions(filters: List<String>, myTeamsLabel: String
     return buildList {
         if (myTeams in filters) add(SportsLiveFilterOption(myTeams, myTeamsLabel, gold = true))
         add(SportsLiveFilterOption(null, allLabel))
-        filters.filter { it != myTeams }.forEach { add(SportsLiveFilterOption(it, it)) }
+        filters.filter { it != myTeams }.forEach { add(SportsLiveFilterOption(it, SportsLiveDisplayText.label(it) ?: it)) }
     }
 }

@@ -10,8 +10,6 @@ import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.nuvio.tv.core.profile.ProfileManager
-import com.nuvio.tv.core.sportslive.LiveNowSort
-import com.nuvio.tv.core.sportslive.SportsLiveLayout
 import com.nuvio.tv.core.sportslive.SportsLiveOpenGame
 import com.nuvio.tv.core.sportslive.alerts.GameReminder
 import com.nuvio.tv.core.sportslive.alerts.GameReminders
@@ -31,6 +29,7 @@ import com.nuvio.tv.domain.model.SportsLiveTab
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
@@ -75,8 +74,8 @@ class SportsLivePreferencesDataStore @Inject constructor(
     private val recentScoreLeaguesKey = stringPreferencesKey("sports_live_recent_score_leagues")
     private val mySportsKey = stringSetPreferencesKey("sports_live_my_sports")
     private val openGameKey = stringPreferencesKey("sports_live_open_game")
-    private val layoutsKey = stringPreferencesKey("sports_live_layouts")
-    private val liveNowSortKey = stringPreferencesKey("sports_live_live_now_sort")
+    // Retired with the View menu and Sort (V2, #132): removed by [dropRetiredKeys].
+    private val retiredKeys = listOf(stringPreferencesKey("sports_live_layouts"), stringPreferencesKey("sports_live_live_now_sort"))
     private val remindersKey = stringPreferencesKey("sports_live_reminders")
     private val reminderOptOutsKey = stringPreferencesKey("sports_live_reminder_opt_outs")
     private val remindMyTeamsKey = booleanPreferencesKey("sports_live_remind_my_teams")
@@ -162,24 +161,11 @@ class SportsLivePreferencesDataStore @Inject constructor(
         }
     }
 
-    /** Cards or Scoreboard (#23), per tab; a tab with no entry shows Cards. */
-    val layouts: Flow<Map<SportsLiveTab, SportsLiveLayout>> = profileManager.activeProfileId.flatMapLatest { pid ->
-        factory.get(pid, FEATURE).data.map { SportsLiveLayout.decode(it[layoutsKey]) }
-    }
-
-    suspend fun setLayout(tab: SportsLiveTab, layout: SportsLiveLayout) {
-        store().edit { prefs ->
-            prefs[layoutsKey] = SportsLiveLayout.encode(SportsLiveLayout.decode(prefs[layoutsKey]) + (tab to layout))
-        }
-    }
-
-    /** Live now's sort (#43): Start time (default) or Most exciting. */
-    val liveNowSort: Flow<LiveNowSort> = profileManager.activeProfileId.flatMapLatest { pid ->
-        factory.get(pid, FEATURE).data.map { LiveNowSort.decode(it[liveNowSortKey]) }
-    }
-
-    suspend fun setLiveNowSort(sort: LiveNowSort) {
-        store().edit { it[liveNowSortKey] = sort.name }
+    /** Removes the retired View and Sort choices (#132) from the active profile's settings; a no-op once gone. */
+    suspend fun dropRetiredKeys() {
+        val store = store()
+        if (retiredKeys.none { it in store.data.first() }) return
+        store.edit { prefs -> retiredKeys.forEach { prefs.remove(it) } }
     }
 
     /** Settings → Sports & Live → Alerts (#42, #44): each on by default. */

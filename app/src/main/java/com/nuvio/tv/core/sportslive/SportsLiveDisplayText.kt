@@ -47,6 +47,18 @@ object SportsLiveDisplayText {
             .ifEmpty { null }
     }
 
+    /**
+     * A sport, league or catalog label made fit for a tag or a status line (#132): bracketed parts
+     * ("(tv)"), emoji and symbols ("⚡") go; letters, digits and word separators stay. Null when nothing is left.
+     */
+    fun label(raw: String?): String? {
+        if (raw.isNullOrBlank()) return null
+        return collapse(LABEL_DECORATION.replace(LABEL_BRACKETED.replace(raw, " "), " ")).ifEmpty { null }
+    }
+
+    private val LABEL_BRACKETED = Regex("""[(\[{][^)\]}]*[)\]}]?""")
+    private val LABEL_DECORATION = Regex("""[^\p{L}\p{N}\s/\-&'.]""")
+
     private fun parse(raw: String): SportsLiveDisplayTitle {
         var text = collapse(raw)
         var quality: String? = null
@@ -57,6 +69,13 @@ object SportsLiveDisplayText {
             if (q != null) {
                 quality = quality ?: normalizeQuality(q.groupValues[1].ifEmpty { q.groupValues[2] })
                 text = text.substring(q.range.last + 1)
+                continue
+            }
+            // "24/7-EN - Name", "24/7 | Name": a round-the-clock channel marker, its language code kept as the region.
+            val m = ALWAYS_ON_PREFIX.find(text)
+            if (m != null) {
+                region = region ?: m.groupValues[1].takeIf { it.isNotEmpty() }?.uppercase(Locale.ROOT)
+                text = text.substring(m.range.last + 1)
                 continue
             }
             val r = REGION_PREFIX.find(text)
@@ -124,6 +143,10 @@ object SportsLiveDisplayText {
 
     /** "Name HD", "Name (FHD)", "Name [4K]", "Name - HD" at the end. */
     private val QUALITY_SUFFIX = Regex("""[\s:|\-–]+[(\[]?($QUALITY)[)\]]?\s*$""", RegexOption.IGNORE_CASE)
+
+    /** "24/7 -", "24/7-EN -", "24-7 EN |" at the start, before the name. */
+    private val ALWAYS_ON_PREFIX =
+        Regex("""^24\s*[/\-]\s*7(?:\s*[-:|]?\s*([A-Za-z]{2,3}))?\s*[-:|–—]\s*(?=\S)""", RegexOption.IGNORE_CASE)
 
     /** "US :", "UK|", "CA -" at the start: a two- or three-letter code and a separator. */
     private val REGION_PREFIX = Regex("""^([A-Za-z]{2,3})\s*[:|]\s*(?=\S)""")

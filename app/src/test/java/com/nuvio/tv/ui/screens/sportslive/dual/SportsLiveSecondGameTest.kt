@@ -225,7 +225,7 @@ class SportsLiveSecondGameTest {
     // Channels: no auto pair, the picker
 
     @Test
-    fun `Watch with another game on a channel opens the picker, on a live game it pairs at once`() {
+    fun `Watch with another game always opens the picker, for a channel and for a live game (F13)`() {
         val channel = later.copy(isChannel = true, kind = SportsLiveKind.CHANNELS, teams = null)
         val channels = com.nuvio.tv.ui.screens.sportslive.SportsLiveUiState(
             tabs = mapOf(SportsLiveTab.CHANNELS to listOf(channel, earlier), SportsLiveTab.LIVE_NOW to listOf(first, later)),
@@ -233,14 +233,19 @@ class SportsLiveSecondGameTest {
             visibleItems = listOf(channel, earlier)
         )
         assertTrue(channels.offersWatchWith(channel, null))
-        val pick = channels.watchWithFor(channel, emptyMap()) as com.nuvio.tv.ui.screens.sportslive.SportsLiveWatchWith.Pick
-        assertEquals(channel, pick.pick.chosen)
-        assertEquals(listOf(earlier), pick.pick.candidates)
-        assertEquals(SportsLiveTab.CHANNELS, pick.pick.session(earlier).tab)
+        val pick = channels.watchWithFor(channel, emptyMap())!!
+        assertEquals(channel, pick.chosen)
+        assertEquals(listOf(earlier), pick.candidates)
+        assertEquals(SportsLiveTab.CHANNELS, pick.session(earlier).tab)
 
+        // A live game from the More… menu: the picker too, never straight into dual screen.
         val liveNow = channels.copy(selectedTab = SportsLiveTab.LIVE_NOW, visibleItems = listOf(first, later))
-        val paired = liveNow.watchWithFor(first, emptyMap()) as com.nuvio.tv.ui.screens.sportslive.SportsLiveWatchWith.Paired
-        assertEquals(later, paired.session.right)
+        val gamePick = liveNow.watchWithFor(first, emptyMap())!!
+        assertEquals(first, gamePick.chosen)
+        assertEquals(listOf(later), gamePick.candidates)
+        assertEquals(later, gamePick.session(later).right)
+        // Nothing to go beside it: no picker.
+        assertNull(liveNow.copy(visibleItems = listOf(first)).watchWithFor(first, emptyMap()))
         // Upcoming and Replays offer nothing.
         assertFalse(channels.copy(selectedTab = SportsLiveTab.UPCOMING).offersWatchWith(channel, null))
     }

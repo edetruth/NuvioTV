@@ -75,6 +75,11 @@ data class TimelineModel(
 /** A remote move on the Timeline. */
 enum class TimelineMove { LEFT, RIGHT, UP, DOWN }
 
+/**
+ * The Matchday timeline's model (#24): Live now's or Upcoming's rows placed on a time ruler, with its D-pad
+ * moves. No longer a layout of either tab (V2, #132); kept, pure and tested, for a future full-screen Guide
+ * (#25), which will draw it.
+ */
 internal object SportsLiveTimeline {
     private const val HOUR_MS = 3_600_000L
     /** Live now opens on now − 1 h … now + 5 h. */
@@ -221,7 +226,7 @@ internal object SportsLiveTimeline {
                 continue
             }
             val kind = when {
-                row.chip is ScoreChip.Final || row.group == ScoreboardGroup.FINAL -> TimelineBlockKind.FINAL
+                row.chip is ScoreChip.Final || row.group == ScoreboardGroup.JUST_ENDED -> TimelineBlockKind.FINAL
                 row.group == ScoreboardGroup.LIVE -> TimelineBlockKind.LIVE
                 else -> TimelineBlockKind.UPCOMING
             }

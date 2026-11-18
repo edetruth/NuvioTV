@@ -3822,17 +3822,17 @@
     <!-- Live now games found over (#60): the strip at the end of the list, and its cards' pill. -->
     <string name="sports_live_just_ended">Just ended</string>
     <string name="sports_live_probably_ended">Probably ended</string>
-    <!-- Scoreboard layout (#23) -->
-    <string name="sports_live_scoreboard_live">LIVE</string>
-    <string name="sports_live_scoreboard_starting_soon">STARTING SOON</string>
-    <string name="sports_live_scoreboard_more_games">MORE GAMES</string>
-    <string name="sports_live_scoreboard_final">FINAL</string>
-    <string name="sports_live_scoreboard_preview_hint">Preview · muted · OK for full screen</string>
-    <string name="sports_live_timeline_no_time">No time</string>
-    <string name="sports_live_timeline_live_clock">LIVE · %1$s</string>
-    <string name="sports_live_timeline_matchup">%1$s v %2$s</string>
-    <!-- Live now sort (#43): the control and the why tags on Most exciting cards. -->
-    <!-- One View button for layout and sort (#79): "View · Scoreboard · Exciting". -->
+    <!-- Live Now, Scoreboard + Stage (V2, #132): group headings, channel rows and the stage. -->
+    <string name="sports_live_group_live">LIVE · %1$d</string>
+    <string name="sports_live_group_starting_soon">STARTING SOON</string>
+    <string name="sports_live_group_later">LATER</string>
+    <string name="sports_live_group_channels">CHANNELS · %1$d</string>
+    <string name="sports_live_group_just_ended">JUST ENDED</string>
+    <string name="sports_live_channel_now">Now: %1$s</string>
+    <string name="sports_live_matchup">%1$s vs %2$s</string>
+    <string name="sports_live_more">More…</string>
+    <string name="sports_live_preview_muted">Muted</string>
+    <!-- The excitement badge under a live row's period (#43). -->
     <string name="sports_live_why_penalties">Penalties</string>
     <string name="sports_live_why_shootout">Shootout</string>
     <string name="sports_live_why_overtime">OT</string>
@@ -3887,8 +3887,6 @@
     <string name="sports_live_why_bases_loaded">Bases loaded</string>
     <string name="sports_live_why_scoring_position">Runners in scoring position</string>
     <string name="sports_live_why_close">Close game</string>
-    <string name="sports_live_timeline_later">+%1$d later · %2$s →</string>
-    <string name="sports_live_timeline_earlier">← %1$d earlier · %2$s</string>
     <string name="sports_live_situation_separator">" · "</string>
     <string name="sports_live_situation_possession">%1$s ball</string>
     <string name="sports_live_situation_red_zone">Red zone</string>
