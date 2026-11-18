@@ -30,11 +30,8 @@ import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
-import io.mockk.mockkStatic
-import io.mockk.unmockkStatic
 import io.mockk.runs
 import io.mockk.verify
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
@@ -48,8 +45,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
-import org.junit.After
-import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 
@@ -59,17 +54,8 @@ class SportsLiveViewModelTest {
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
 
-    // The ViewModel buckets on Dispatchers.Default; the test dispatcher keeps that deterministic.
-    @Before
-    fun setUp() {
-        mockkStatic(Dispatchers::class)
-        every { Dispatchers.Default } returns mainDispatcherRule.dispatcher
-    }
-
-    @After
-    fun tearDown() {
-        unmockkStatic(Dispatchers::class)
-    }
+    // The ViewModel buckets on its compute dispatcher; the test dispatcher keeps that deterministic.
+    private val compute get() = mainDispatcherRule.dispatcher
 
     private val claimedFlow = MutableStateFlow(listOf(CLAIMED))
     private val latestFlow = MutableStateFlow<SportsLiveLoad?>(null)
@@ -89,7 +75,6 @@ class SportsLiveViewModelTest {
         every { reprobeIfStale(any()) } just runs
         every { hasRecentLinks(any()) } answers { firstArg<SportsLiveItem>().id in recentlyAlive }
         every { clearEnded() } answers { clearedEnded++; Unit }
-        // Stubbed here, before setUp mocks Dispatchers statically (stubbing after that fails).
         coEvery { follow(any()) } coAnswers { followedFlow.value = followedFlow.value + firstArg<FollowedTeam>() }
         coEvery { unfollow(any()) } coAnswers { followedFlow.value = followedFlow.value - firstArg<FollowedTeam>() }
         coEvery { load(any(), any()) } coAnswers {
@@ -105,7 +90,7 @@ class SportsLiveViewModelTest {
         scores: Map<String, ScoreSnapshot> = emptyMap(),
         canEstimate: (SportsLiveItem) -> Boolean = { true }
     ): SportsLiveViewModel {
-        val viewModel = SportsLiveViewModel(repo, endedInputs = flowOf(EndedInputs(scores, canEstimate)), endedGames = SportsLiveEndedGames())
+        val viewModel = SportsLiveViewModel(repo, endedInputs = flowOf(EndedInputs(scores, canEstimate)), endedGames = SportsLiveEndedGames(), computeDispatcher = compute)
         viewModel.nowMs = { NOW }
         backgroundScope.launch { viewModel.uiState.collect {} }
         return viewModel
@@ -522,7 +507,7 @@ class SportsLiveViewModelTest {
     fun `items are bucketed once per load, not on selection changes`() = runTest {
         nextLoad = load(listOf(channel("uk1", "UK"), channel("ca1", "CA"), item("a", isLive = true, sport = "Soccer")))
         var bucketCalls = 0
-        val viewModel = SportsLiveViewModel(repo)
+        val viewModel = SportsLiveViewModel(repo, computeDispatcher = compute)
         viewModel.nowMs = { NOW }
         viewModel.bucket = { items, now, order -> bucketCalls++; SportsLiveItemBucketer.bucket(items, now, order) }
         backgroundScope.launch { viewModel.uiState.collect {} }
@@ -728,7 +713,7 @@ class SportsLiveViewModelTest {
         nextLoad = load(listOf(item("a", isLive = true, sport = "Soccer"), item("b", isLive = true, sport = "Tennis")))
         val enabled = MutableStateFlow(false)
         val stream = dualStream("a")
-        val viewModel = SportsLiveViewModel(repo, previewResolve = { SportsLivePreviewLookup.Found(stream) }, hoverPreviewEnabled = enabled)
+        val viewModel = SportsLiveViewModel(repo, previewResolve = { SportsLivePreviewLookup.Found(stream) }, hoverPreviewEnabled = enabled, computeDispatcher = compute)
         viewModel.nowMs = { NOW }
         backgroundScope.launch { viewModel.uiState.collect {} }
         val a = item("a", isLive = true, sport = "Soccer")
@@ -785,7 +770,8 @@ class SportsLiveViewModelTest {
             repo,
             previewResolve = { SportsLivePreviewLookup.Found(stream) },
             hoverPreviewEnabled = MutableStateFlow(true),
-            miniPlayerActive = mini
+            miniPlayerActive = mini,
+            computeDispatcher = compute
         )
         viewModel.nowMs = { NOW }
         backgroundScope.launch { viewModel.uiState.collect {} }

@@ -80,7 +80,7 @@ class SportsLiveResultsTodayTest {
         }
     }
 
-    private fun TestScope.viewModel(repo: ResultsRepository = repository()) = SportsLiveResultsViewModel(repo, prefs)
+    private fun TestScope.viewModel(repo: ResultsRepository = repository()) = SportsLiveResultsViewModel(repo, prefs, mainDispatcherRule.dispatcher)
 
     private fun SportsLiveResultsViewModel.close() = viewModelScope.cancel()
 

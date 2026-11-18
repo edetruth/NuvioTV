@@ -15,6 +15,7 @@ import com.nuvio.tv.core.sportslive.scores.SportsResults
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import com.nuvio.tv.domain.model.SportsLiveItem
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -94,10 +95,17 @@ data class SportsLiveResultsUiState(
 }
 
 @HiltViewModel
-class SportsLiveResultsViewModel @Inject constructor(
+class SportsLiveResultsViewModel internal constructor(
     private val results: ResultsRepository,
-    private val prefs: SportsLivePreferencesDataStore
+    private val prefs: SportsLivePreferencesDataStore,
+    // Where the replays and the list are built; tests pass their dispatcher, so it runs in virtual time.
+    computeDispatcher: CoroutineDispatcher
 ) : ViewModel() {
+
+    @Inject constructor(
+        results: ResultsRepository,
+        prefs: SportsLivePreferencesDataStore
+    ) : this(results, prefs, Dispatchers.Default)
 
     /** Results is on screen, showing [days] (null: the opening day is still to be worked out). */
     private data class Shown(val days: Int?)
@@ -130,7 +138,7 @@ class SportsLiveResultsViewModel @Inject constructor(
     private val replayIndex = combine(load, replayItems) { load, replays ->
         val loaded = load as? ResultsLoad.Loaded ?: return@combine emptyMap()
         SportsResults.replaysByEvent(loaded.events, loaded.date, replays, System.currentTimeMillis())
-    }.flowOn(Dispatchers.Default)
+    }.flowOn(computeDispatcher)
 
     /** The chips and the list: built off the main thread, and only when the day, selection or replays change. */
     private class Listing(
@@ -151,7 +159,7 @@ class SportsLiveResultsViewModel @Inject constructor(
         val leagues = resultLeagueChips(rows, sport)
         val league = selected.league?.takeIf { key -> leagues.any { it.key == key } }
         Listing(sports, sport, leagues, league, resultListItems(rows, mySports, sport, league, selected.expanded, replays.keys), replays)
-    }.flowOn(Dispatchers.Default)
+    }.flowOn(computeDispatcher)
 
     val uiState: StateFlow<SportsLiveResultsUiState> = combine(
         combine(daysAgo, load, earlierOpen, ::Triple),

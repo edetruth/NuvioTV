@@ -24,10 +24,7 @@ import com.nuvio.tv.domain.repository.SportsLiveRepository
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.mockkStatic
-import io.mockk.unmockkStatic
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
@@ -130,7 +127,12 @@ class SportsLiveScoreboardTest {
     @Test
     fun `the view model remembers the layout per tab`() = runTest {
         val stored = MutableStateFlow<Map<SportsLiveTab, SportsLiveLayout>>(emptyMap())
-        val viewModel = SportsLiveViewModel(repo(), layouts = stored, saveLayout = { tab, layout -> stored.value = stored.value + (tab to layout) })
+        val viewModel = SportsLiveViewModel(
+            repo(),
+            layouts = stored,
+            saveLayout = { tab, layout -> stored.value = stored.value + (tab to layout) },
+            computeDispatcher = mainDispatcherRule.dispatcher
+        )
         runCurrent()
         // The screen reads the selected tab's entry from the map, in the same frame as the tab.
         fun shown(tab: SportsLiveTab) = SportsLiveLayout.of(viewModel.layouts.value, tab)
@@ -157,25 +159,17 @@ class SportsLiveScoreboardTest {
 
     @Test
     fun `the state carries the view model clock, which ticks`() = runTest {
-        // Stubbed before Dispatchers is mocked statically (stubbing after that fails).
-        val repo = repo()
-        mockkStatic(Dispatchers::class)
-        every { Dispatchers.Default } returns mainDispatcherRule.dispatcher
-        try {
-            val ticks = MutableSharedFlow<Unit>(replay = 1).apply { tryEmit(Unit) }
-            val viewModel = SportsLiveViewModel(repo, clock = ticks)
-            var now = NOW
-            viewModel.nowMs = { now }
-            backgroundScope.launch { viewModel.uiState.collect {} }
-            runCurrent()
-            assertEquals(NOW, viewModel.uiState.value.nowMs)
-            now = NOW + 30_000L
-            ticks.emit(Unit)
-            runCurrent()
-            assertEquals(NOW + 30_000L, viewModel.uiState.value.nowMs)
-        } finally {
-            unmockkStatic(Dispatchers::class)
-        }
+        val ticks = MutableSharedFlow<Unit>(replay = 1).apply { tryEmit(Unit) }
+        val viewModel = SportsLiveViewModel(repo(), clock = ticks, computeDispatcher = mainDispatcherRule.dispatcher)
+        var now = NOW
+        viewModel.nowMs = { now }
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        runCurrent()
+        assertEquals(NOW, viewModel.uiState.value.nowMs)
+        now = NOW + 30_000L
+        ticks.emit(Unit)
+        runCurrent()
+        assertEquals(NOW + 30_000L, viewModel.uiState.value.nowMs)
     }
 
     @Test

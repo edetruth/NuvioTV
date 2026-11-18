@@ -30,6 +30,7 @@ import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniPlayers
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -68,7 +69,9 @@ class SportsLiveViewModel internal constructor(
     clock: Flow<Unit> = flowOf(Unit),
     /** The stored Cards / Scoreboard choice per tab (#23), for the active profile. */
     layouts: Flow<Map<SportsLiveTab, SportsLiveLayout>> = flowOf(emptyMap()),
-    private val saveLayout: suspend (SportsLiveTab, SportsLiveLayout) -> Unit = { _, _ -> }
+    private val saveLayout: suspend (SportsLiveTab, SportsLiveLayout) -> Unit = { _, _ -> },
+    // Where the list is bucketed and pinned; tests pass their dispatcher, so it runs in virtual time.
+    computeDispatcher: CoroutineDispatcher
 ) : ViewModel() {
 
     @Inject
@@ -106,7 +109,8 @@ class SportsLiveViewModel internal constructor(
             }
         },
         layouts = prefs.layouts,
-        saveLayout = prefs::setLayout
+        saveLayout = prefs::setLayout,
+        computeDispatcher = Dispatchers.Default
     )
 
     private data class Selection(
@@ -149,7 +153,7 @@ class SportsLiveViewModel internal constructor(
         // Claimed catalogs come in the user's addon order, which picks a merged game's primary.
         val addonOrder = claimed.map { it.addon.id }.distinct()
         Bucketed(hasClaimed = claimed.isNotEmpty(), hasLoad = latest != null, tabs = bucket(items, nowMs(), addonOrder))
-    }.flowOn(Dispatchers.Default)
+    }.flowOn(computeDispatcher)
 
     // Followed teams' games first in every tab but Channels, where they are only marked (for the
     // card star); a follow change does not re-bucket.
@@ -163,7 +167,7 @@ class SportsLiveViewModel internal constructor(
                 }
             }
         )
-    }.flowOn(Dispatchers.Default)
+    }.flowOn(computeDispatcher)
 
     val uiState: StateFlow<SportsLiveUiState> =
         combine(pinned, repo.endedKeys, selectionState, endedInputs, clock) { pinned, endedKeys, selection, inputs, _ ->
