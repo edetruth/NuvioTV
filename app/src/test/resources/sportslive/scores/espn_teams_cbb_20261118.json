@@ -1,0 +1,353 @@
+{
+ "sports": [
+  {
+   "id": "40",
+   "slug": "basketball",
+   "leagues": [
+    {
+     "id": "41",
+     "slug": "mens-college-basketball",
+     "abbreviation": "NCAAM",
+     "teams": [
+      {
+       "team": {
+        "id": "2000",
+        "abbreviation": "ACU",
+        "displayName": "Abilene Christian Wildcats",
+        "shortDisplayName": "Abilene Chrstn",
+        "name": "Wildcats",
+        "nickname": "Abilene Chrstn",
+        "location": "Abilene Christian",
+        "isActive": true,
+        "logos": [
+         {
+          "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/2000.png",
+          "rel": [
+           "full",
+           "default"
+          ]
+         },
+         {
+          "href": "https://a.espncdn.com/i/teamlogos/ncaa/500-dark/2000.png",
+          "rel": [
+           "full",
+           "dark"
+          ]
+         }
+        ]
+       }
+      },
+      {
+       "team": {
+        "id": "12",
+        "abbreviation": "ARIZ",
+        "displayName": "Arizona Wildcats",
+        "shortDisplayName": "Arizona",
+        "name": "Wildcats",
+        "nickname": "Arizona",
+        "location": "Arizona",
+        "isActive": true,
+        "logos": [
+         {
+          "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/12.png",
+          "rel": [
+           "full",
+           "default"
+          ]
+         },
+         {
+          "href": "https://a.espncdn.com/i/teamlogos/ncaa/500-dark/12.png",
+          "rel": [
+           "full",
+           "dark"
+          ]
+         }
+        ]
+       }
+      },
+      {
+       "team": {
+        "id": "150",
+        "abbreviation": "DUKE",
+        "displayName": "Duke Blue Devils",
+        "shortDisplayName": "Duke",
+        "name": "Blue Devils",
+        "nickname": "Duke",
+        "location": "Duke",
+        "isActive": true,
+        "logos": [
+         {
+          "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/150.png",
+          "rel": [
+           "full",
+           "default"
+          ]
+         },
+         {
+          "href": "https://a.espncdn.com/i/teamlogos/ncaa/500-dark/150.png",
+          "rel": [
+           "full",
+           "dark"
+          ]
+         }
+        ]
+       }
+      },
+      {
+       "team": {
+        "id": "2250",
+        "abbreviation": "GONZ",
+        "displayName": "Gonzaga Bulldogs",
+        "shortDisplayName": "Gonzaga",
+        "name": "Bulldogs",
+        "nickname": "Gonzaga",
+        "location": "Gonzaga",
+        "isActive": true,
+        "logos": [
+         {
+          "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/2250.png",
+          "rel": [
+           "full",
+           "default"
+          ]
+         },
+         {
+          "href": "https://a.espncdn.com/i/teamlogos/ncaa/500-dark/2250.png",
+          "rel": [
+           "full",
+           "dark"
+          ]
+         }
+        ]
+       }
+      },
+      {
+       "team": {
+        "id": "2306",
+        "abbreviation": "KSU",
+        "displayName": "Kansas State Wildcats",
+        "shortDisplayName": "Kansas St",
+        "name": "Wildcats",
+        "nickname": "Kansas St",
+        "location": "Kansas State",
+        "isActive": true,
+        "logos": [
+         {
+          "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/2306.png",
+          "rel": [
+           "full",
+           "default"
+          ]
+         },
+         {
+          "href": "https://a.espncdn.com/i/teamlogos/ncaa/500-dark/2306.png",
+          "rel": [
+           "full",
+           "dark"
+          ]
+         }
+        ]
+       }
+      },
+      {
+       "team": {
+        "id": "96",
+        "abbreviation": "UK",
+        "displayName": "Kentucky Wildcats",
+        "shortDisplayName": "Kentucky",
+        "name": "Wildcats",
+        "nickname": "Kentucky",
+        "location": "Kentucky",
+        "isActive": true,
+        "logos": [
+         {
+          "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/96.png",
+          "rel": [
+           "full",
+           "default"
+          ]
+         },
+         {
+          "href": "https://a.espncdn.com/i/teamlogos/ncaa/500-dark/96.png",
+          "rel": [
+           "full",
+           "dark"
+          ]
+         }
+        ]
+       }
+      },
+      {
+       "team": {
+        "id": "193",
+        "abbreviation": "M-OH",
+        "displayName": "Miami (OH) RedHawks",
+        "shortDisplayName": "Miami OH",
+        "name": "RedHawks",
+        "nickname": "Miami OH",
+        "location": "Miami (OH)",
+        "isActive": true,
+        "logos": [
+         {
+          "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/193.png",
+          "rel": [
+           "full",
+           "default"
+          ]
+         },
+         {
+          "href": "https://a.espncdn.com/i/teamlogos/ncaa/500-dark/193.png",
+          "rel": [
+           "full",
+           "dark"
+          ]
+         }
+        ]
+       }
+      },
+      {
+       "team": {
+        "id": "2390",
+        "abbreviation": "MIA",
+        "displayName": "Miami Hurricanes",
+        "shortDisplayName": "Miami",
+        "name": "Hurricanes",
+        "nickname": "Miami",
+        "location": "Miami",
+        "isActive": true,
+        "logos": [
+         {
+          "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/2390.png",
+          "rel": [
+           "full",
+           "default"
+          ]
+         },
+         {
+          "href": "https://a.espncdn.com/i/teamlogos/ncaa/500-dark/2390.png",
+          "rel": [
+           "full",
+           "dark"
+          ]
+         }
+        ]
+       }
+      },
+      {
+       "team": {
+        "id": "153",
+        "abbreviation": "UNC",
+        "displayName": "North Carolina Tar Heels",
+        "shortDisplayName": "North Carolina",
+        "name": "Tar Heels",
+        "nickname": "North Carolina",
+        "location": "North Carolina",
+        "isActive": true,
+        "logos": [
+         {
+          "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/153.png",
+          "rel": [
+           "full",
+           "default"
+          ]
+         },
+         {
+          "href": "https://a.espncdn.com/i/teamlogos/ncaa/500-dark/153.png",
+          "rel": [
+           "full",
+           "dark"
+          ]
+         }
+        ]
+       }
+      },
+      {
+       "team": {
+        "id": "77",
+        "abbreviation": "NU",
+        "displayName": "Northwestern Wildcats",
+        "shortDisplayName": "Northwestern",
+        "name": "Wildcats",
+        "nickname": "Northwestern",
+        "location": "Northwestern",
+        "isActive": true,
+        "logos": [
+         {
+          "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/77.png",
+          "rel": [
+           "full",
+           "default"
+          ]
+         },
+         {
+          "href": "https://a.espncdn.com/i/teamlogos/ncaa/500-dark/77.png",
+          "rel": [
+           "full",
+           "dark"
+          ]
+         }
+        ]
+       }
+      },
+      {
+       "team": {
+        "id": "41",
+        "abbreviation": "CONN",
+        "displayName": "UConn Huskies",
+        "shortDisplayName": "UConn",
+        "name": "Huskies",
+        "nickname": "UConn",
+        "location": "UConn",
+        "isActive": true,
+        "logos": [
+         {
+          "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/41.png",
+          "rel": [
+           "full",
+           "default"
+          ]
+         },
+         {
+          "href": "https://a.espncdn.com/i/teamlogos/ncaa/500-dark/41.png",
+          "rel": [
+           "full",
+           "dark"
+          ]
+         }
+        ]
+       }
+      },
+      {
+       "team": {
+        "id": "222",
+        "abbreviation": "VILL",
+        "displayName": "Villanova Wildcats",
+        "shortDisplayName": "Villanova",
+        "name": "Wildcats",
+        "nickname": "Villanova",
+        "location": "Villanova",
+        "isActive": true,
+        "logos": [
+         {
+          "href": "https://a.espncdn.com/i/teamlogos/ncaa/500/222.png",
+          "rel": [
+           "full",
+           "default"
+          ]
+         },
+         {
+          "href": "https://a.espncdn.com/i/teamlogos/ncaa/500-dark/222.png",
+          "rel": [
+           "full",
+           "dark"
+          ]
+         }
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

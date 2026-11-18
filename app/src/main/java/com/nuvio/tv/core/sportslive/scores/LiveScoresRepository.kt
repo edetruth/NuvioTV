@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
@@ -64,6 +65,9 @@ import kotlin.random.Random
  *   it on the next launch before any feed answers, and tracked games' logos are prefetched.
  * - Warm start (#66): a feed's first fetch after a restart is preceded by the provider's copy of it
  *   from the last two minutes, if any ([ScoreProvider.recentScoreboard]); the network fetch follows at once.
+ * - Logo directory (#82): while Scores is not Off and someone collects [scores], the team lists of the
+ *   leagues on screen, in My sports and of followed teams are fetched in the background, one league at a
+ *   time after a short wait, at most weekly ([TeamDirectorySync]); never on the poll path or under its lock.
  * - Health (#70): after a failed fetch, if every ESPN feed in use has failed for 10 minutes while the
  *   section or the player panel is tracked, [notifyOutage] is called, once per app session.
  */
@@ -90,7 +94,11 @@ class LiveScoresRepository internal constructor(
     /** ESPN feed health (#70): read for the outage toast and "Retry now". */
     private val health: EspnFeedHealth = EspnFeedHealth(now),
     /** Shows the one-time "Live scores aren't available right now" toast. */
-    private val notifyOutage: () -> Unit = {}
+    private val notifyOutage: () -> Unit = {},
+    /** Where the logo directory's lists are kept (#82); null: memory only. */
+    directoryStore: TeamDirectoryStore? = null,
+    /** Followed teams' ESPN leagues ("soccer/eng.1"): their lists are kept too (#82). */
+    private val followedLeagues: Flow<List<EspnLeague>> = flowOf(emptyList())
 ) : LiveScoreTracking {
     @Inject
     constructor(
@@ -114,7 +122,9 @@ class LiveScoresRepository internal constructor(
             ContextCompat.getMainExecutor(context).execute {
                 Toast.makeText(context, R.string.sports_live_scores_outage_toast, Toast.LENGTH_LONG).show()
             }
-        }
+        },
+        directoryStore = TeamDirectoryStore(File(context.filesDir, "sportslive/team_directory")),
+        followedLeagues = prefs.followedTeams.map { teams -> teams.mapNotNull { leagueOfPath(it.league) } }
     )
 
     /** What the settings screen and surfaces read: Show / Hide until focused / Off. */
@@ -210,6 +220,7 @@ class LiveScoresRepository internal constructor(
      */
     private val matchedStates = MutableStateFlow<Map<String, ScoreState>>(emptyMap())
     private val outage = ScoresOutageNotice(health)
+    private val directorySync = TeamDirectorySync(logos.directory, provider::teamList, directoryStore, now)
     /** The running pollers' scope while someone collects [scores] and Scores is not Off. */
     @Volatile
     private var activePollerScope: CoroutineScope? = null
@@ -228,6 +239,8 @@ class LiveScoresRepository internal constructor(
                 }
             }
         }
+        // Reading the kept lists is no request: they show once Scores is known not to be Off.
+        scope.launch(io) { directorySync.load() }
         // No learned logo is drawn before the Scores setting is known, nor while it is Off.
         scope.launch { mode.collect { logos.active = it != ScoresMode.OFF } }
         scope.launch {
@@ -306,6 +319,14 @@ class LiveScoresRepository internal constructor(
                     activePollerScope = pollerScope
                 }
                 try {
+                    // The logo directory (#82): low priority, off the poll path, one league at a time.
+                    launch(io) {
+                        delay(DIRECTORY_START_DELAY_MS)
+                        combine(tracked, followedLeagues) { cards, followed -> directoryLeagues(cards, picked, followed) }
+                            .distinctUntilChanged()
+                            .conflate()
+                            .collect { directorySync.refresh(it) }
+                    }
                     launch {
                         nextRelease.collectLatest { at ->
                             if (at == null) return@collectLatest
@@ -583,6 +604,16 @@ class LiveScoresRepository internal constructor(
         publishLocked()
     }
 
+    /** The leagues whose team lists are kept: those of the cards on screen first, then My sports, then followed teams'. */
+    private fun directoryLeagues(
+        cards: Map<String, List<TrackedCard>>,
+        picked: MySports,
+        followed: List<EspnLeague>
+    ): List<EspnLeague> {
+        val onScreen = cards.values.flatten().flatMap { it.leagues + listOfNotNull(it.fallback) }
+        return (onScreen + picked.feeds() + followed).filter(TeamDirectory::covers).distinct()
+    }
+
     /** Both ESPN teams of a matched game: their logos, abbreviations and names, by ESPN identity. */
     private fun learnLogos(match: ScoreSnapshot) {
         logos.learn(match.league, match.home)
@@ -598,6 +629,7 @@ class LiveScoresRepository internal constructor(
             for (league in leagues) {
                 for (side in listOf(entry.card.teams.home, entry.card.teams.away)) {
                     logos.resolve(league, side)?.let { urls += TeamLogoUrls.scaled(it.logo) }
+                    logos.directory.resolve(league, side)?.let { urls += TeamLogoUrls.scaled(it.logo) }
                 }
             }
         }
@@ -717,10 +749,16 @@ class LiveScoresRepository internal constructor(
         private const val RETAIN_RETIRED_MS = 10 * 60_000L
         private const val LOGO_WRITE_DELAY_MS = 2_000L
         private const val COLLEGE_MAX_MISSES = 2
+        /** The logo directory waits this long after polling starts, so the first scoreboards go first. */
+        internal const val DIRECTORY_START_DELAY_MS = 2_000L
         /** "Retry now" at most this often, and never on a feed asked for within this long. */
         internal const val RETRY_MIN_INTERVAL_MS = 30_000L
         private val SLUG = Regex("""[a-z0-9._-]+""")
         private val EASTERN: ZoneId = ZoneId.of("America/New_York")
+
+        /** A followed team's stored "sport/league", as a league; null when it has none. */
+        internal fun leagueOfPath(path: String?): EspnLeague? =
+            path?.split('/')?.takeIf { it.size == 2 && it.all(String::isNotBlank) }?.let { EspnLeague(it[0], it[1]) }
     }
 }
 

@@ -17,7 +17,8 @@ data class GameArtTeam(val name: String, val short: String, val logo: String?, v
  * matches the viewer's zone): both teams in the title's order, the league and the kickoff, shown in
  * local time. Logos, ESPN names and abbreviations come from the matched score event; an unmatched game
  * keeps the card's own names and start, with the logos (and abbreviations) its sides matched before
- * ([TeamLogoBook], #66), if both are known, else none.
+ * ([TeamLogoBook], #66) or that its league's team list resolves to exactly one team each ([TeamDirectory],
+ * #82), if both are known, else none.
  */
 data class GameArt(
     val first: GameArtTeam,

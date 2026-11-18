@@ -44,6 +44,13 @@ class LiveScoresRepositoryTest {
             return respond(feed)
         }
         override suspend fun recentScoreboard(league: EspnLeague, date: LocalDate): ScoreboardResult? = recent(ScoreFeed(league, date))
+        /** Team list requests (#82). */
+        val teamCalls = mutableListOf<EspnLeague>()
+        var teams: suspend (EspnLeague) -> List<DirectoryTeam>? = { null }
+        override suspend fun teamList(league: EspnLeague): List<DirectoryTeam>? {
+            teamCalls += league
+            return teams(league)
+        }
     }
 
     private val provider = FakeProvider()
@@ -96,7 +103,9 @@ class LiveScoresRepositoryTest {
         logoFile: TeamLogoFile? = null,
         prefetch: (List<String>) -> Unit = {},
         health: EspnFeedHealth? = null,
-        notifyOutage: () -> Unit = {}
+        notifyOutage: () -> Unit = {},
+        logos: TeamLogoBook = TeamLogoBook(),
+        followedLeagues: kotlinx.coroutines.flow.Flow<List<EspnLeague>> = kotlinx.coroutines.flow.flowOf(emptyList())
     ): LiveScoresRepository {
         val base = ms(start)
         return LiveScoresRepository(
@@ -111,8 +120,84 @@ class LiveScoresRepositoryTest {
             prefetch = prefetch,
             io = EmptyCoroutineContext,
             health = health ?: EspnFeedHealth { base + testScheduler.currentTime },
-            notifyOutage = notifyOutage
+            notifyOutage = notifyOutage,
+            logos = logos,
+            followedLeagues = followedLeagues
         )
+    }
+
+    // --- Logo directory (#82) ---
+
+    private val nbaTeams = TeamDirectory.parse(EspnFixtures.json("espn_teams_nba_20261118.json"), EspnFixtures.moshi)!!
+    private val cbbTeams = TeamDirectory.parse(EspnFixtures.json("espn_teams_cbb_20261118.json"), EspnFixtures.moshi)!!
+
+    @Test
+    fun `Scores Off asks for no team list`() = runTest {
+        settings.value = ScoreSettings(mode = ScoresMode.OFF)
+        provider.teams = { nbaTeams }
+        val repo = repository("2026-11-15T19:00:00Z")
+        collect(repo)
+        repo.track(SECTION, listOf(pacersCard))
+        advanceTimeBy(30 * 60_000L); runCurrent()
+        assertTrue(provider.teamCalls.isEmpty())
+        assertTrue(provider.calls.isEmpty())
+        // Turned on: the card's league list follows.
+        settings.value = ScoreSettings(mode = ScoresMode.SHOW)
+        advanceTimeBy(LiveScoresRepository.DIRECTORY_START_DELAY_MS + 1); runCurrent()
+        assertEquals(EspnLeagueMap.NBA, provider.teamCalls.first())
+    }
+
+    @Test
+    fun `the team list waits behind the scoreboards and never holds them up`() = runTest {
+        val never = CompletableDeferred<Unit>()
+        provider.teams = { never.await(); nbaTeams }
+        provider.respond = { ScoreboardResult(listOf(game(ScoreState.IN, 50, 48, "Q3 4:12"))) }
+        val repo = repository("2026-11-15T19:00:00Z")
+        collect(repo)
+        repo.track(SECTION, listOf(pacersCard))
+        runCurrent()
+        assertTrue(provider.teamCalls.isEmpty())
+        assertEquals(50, repo.scores.value[pacersCard.streamKey]?.homeScore)
+        advanceTimeBy(LiveScoresRepository.DIRECTORY_START_DELAY_MS + 1); runCurrent()
+        // The card's league first; its request hangs, the scores keep polling.
+        assertEquals(EspnLeagueMap.NBA, provider.teamCalls.first())
+        val polled = provider.calls.size
+        advanceTimeBy(5 * 60_000L); runCurrent()
+        assertTrue(provider.calls.size > polled)
+    }
+
+    @Test
+    fun `a fetched list draws the card's logos before any match`() = runTest {
+        // A bare "Basketball" card: both its leagues' lists are needed (the college one has no Pacers).
+        provider.teams = { league ->
+            when (league) {
+                EspnLeagueMap.NBA -> nbaTeams
+                EspnLeagueMap.COLLEGE_BASKETBALL -> cbbTeams
+                else -> null
+            }
+        }
+        // Scoreboards fail: no match ever.
+        provider.respond = { ScoreboardResult.FAILED }
+        val book = TeamLogoBook()
+        val repo = repository("2026-11-15T19:00:00Z", logos = book)
+        collect(repo)
+        repo.track(SECTION, listOf(pacersCard))
+        advanceTimeBy(LiveScoresRepository.DIRECTORY_START_DELAY_MS + 1); runCurrent()
+        assertTrue(repo.scores.value.isEmpty())
+        val art = GameArt.of(pacersCard, snapshot = null, known = book)!!
+        assertEquals("https://a.espncdn.com/i/teamlogos/nba/500/ind.png", art.first.logo)
+        assertEquals("https://a.espncdn.com/i/teamlogos/nba/500/phi.png", art.second.logo)
+    }
+
+    @Test
+    fun `My sports and followed teams' leagues get their lists too`() = runTest {
+        val followed = MutableStateFlow(listOf(EspnLeague("soccer", "eng.1")))
+        val repo = repository("2026-11-15T19:00:00Z", followedLeagues = followed)
+        collect(repo)
+        advanceTimeBy(LiveScoresRepository.DIRECTORY_START_DELAY_MS + 1); runCurrent()
+        assertTrue(EspnLeague("soccer", "eng.1") in provider.teamCalls)
+        assertTrue(MySports.DEFAULT.feeds().filter(TeamDirectory::covers).all { it in provider.teamCalls })
+        assertTrue(EspnLeagueMap.SOCCER_ALL !in provider.teamCalls)
     }
 
     // --- Scores status (#70) ---

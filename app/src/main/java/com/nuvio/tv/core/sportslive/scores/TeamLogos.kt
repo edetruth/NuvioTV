@@ -20,7 +20,12 @@ data class KnownTeam(val logo: String, val abbreviation: String?)
  * the card's league answers to it ("Arsenal" with both an English and an Argentine Arsenal known:
  * none, the abbreviation circle shows). Least recently used teams go past [maxEntries].
  */
-class TeamLogoBook(private val maxEntries: Int = MAX_ENTRIES, active: Boolean = false) {
+class TeamLogoBook(
+    private val maxEntries: Int = MAX_ENTRIES,
+    active: Boolean = false,
+    /** Every team of the watched leagues (#82): a card none of whose sides was matched yet resolves there. */
+    val directory: TeamDirectory = TeamDirectory()
+) {
 
     private class Team(val known: KnownTeam, val names: Set<String>)
 
@@ -43,6 +48,10 @@ class TeamLogoBook(private val maxEntries: Int = MAX_ENTRIES, active: Boolean = 
         }
 
     val size: Int @Synchronized get() = entries.size
+
+    init {
+        directory.onChange = { revisionFlow.update { it + 1 } }
+    }
 
     /** Remembers [team] of [league] (its logo, abbreviation and names); true when that changed anything. */
     fun learn(league: EspnLeague, team: ScoreTeam): Boolean {
@@ -81,9 +90,14 @@ class TeamLogoBook(private val maxEntries: Int = MAX_ENTRIES, active: Boolean = 
     /**
      * Both sides' known teams for [item], whose sides are [first] and [second]: only when exactly one
      * of the leagues the card can be on ([EspnLeagueMap], with its college fallback) resolves both.
+     * Otherwise the [directory] (#82), under its own exactly-one rule, so logos never wait for a match.
      */
     fun forCard(item: SportsLiveItem, first: String, second: String): Pair<KnownTeam, KnownTeam>? {
         if (!active) return null
+        return learnedForCard(item, first, second) ?: directory.forCard(item, first, second)
+    }
+
+    private fun learnedForCard(item: SportsLiveItem, first: String, second: String): Pair<KnownTeam, KnownTeam>? {
         val source = (listOf(item) + item.alternates).firstOrNull { EspnLeagueMap.leaguesFor(it).isNotEmpty() } ?: return null
         val leagues = (EspnLeagueMap.leaguesFor(source) + listOfNotNull(EspnLeagueMap.collegeFallbackFor(source)))
             .distinctBy(::bookLeague)
@@ -133,7 +147,7 @@ class TeamLogoBook(private val maxEntries: Int = MAX_ENTRIES, active: Boolean = 
         const val MAX_ENTRIES = 2_000
 
         /** The app's book: filled by [LiveScoresRepository], read by [GameArt.of]. */
-        val shared = TeamLogoBook()
+        val shared = TeamLogoBook(directory = TeamDirectory.shared)
 
         private const val NAME_SEPARATOR = "\u001f"
         private val MARKS = Regex("""\p{Mn}+""")
@@ -154,7 +168,7 @@ class TeamLogoBook(private val maxEntries: Int = MAX_ENTRIES, active: Boolean = 
          * The names a card side may use for [team], as [ScoreMatcher] reads them: ESPN's names and
          * location + name (never the city alone); the abbreviation only lowercased ("IND" is not India).
          */
-        private fun namesOf(team: ScoreTeam): Set<String> {
+        internal fun namesOf(team: ScoreTeam): Set<String> {
             val names = listOfNotNull(team.displayName, team.shortDisplayName, team.name,
                 if (team.location != null && team.name != null) "${team.location} ${team.name}" else null)
             val keys = names.filter { it.isNotBlank() }.flatMapTo(LinkedHashSet(), ::keysOf)
@@ -162,7 +176,7 @@ class TeamLogoBook(private val maxEntries: Int = MAX_ENTRIES, active: Boolean = 
             return keys.filterTo(LinkedHashSet()) { it.isNotEmpty() && '\t' !in it && '\n' !in it && NAME_SEPARATOR !in it }
         }
 
-        private fun sideKeys(cardSide: String): Set<String> = keysOf(cardSide)
+        internal fun sideKeys(cardSide: String): Set<String> = keysOf(cardSide)
     }
 }
 

@@ -30,7 +30,7 @@ import javax.inject.Singleton
 @Singleton
 class EspnScoreProvider internal constructor(
     private val client: OkHttpClient,
-    moshi: Moshi,
+    private val moshi: Moshi,
     private val baseUrl: String,
     /** ESPN's day now (US Eastern): which scoreboards are still live and which are past. */
     private val today: () -> LocalDate = { LocalDate.now(SportsResults.EASTERN) },
@@ -197,6 +197,14 @@ class EspnScoreProvider internal constructor(
 
     override suspend fun teamSchedule(league: EspnLeague, teamId: String, fixtures: Boolean): String? =
         teamText("$baseUrl${league.path}/teams/$teamId/schedule" + if (fixtures) "?fixture=true" else "", "schedule $teamId")
+
+    /**
+     * [league]'s team list (#82): every team with its names and logo, for the logo directory. Kept out of
+     * the HTTP cache (a college list is ~1.5 MB; the directory keeps its own trimmed copy for a week).
+     */
+    override suspend fun teamList(league: EspnLeague): List<DirectoryTeam>? =
+        teamText("$baseUrl${league.path}/teams?limit=$LIMIT${groupsFor(league)}", "${league.path} teams")
+            ?.let { body -> withContext(Dispatchers.Default) { TeamDirectory.parse(body, moshi) } }
 
     /**
      * A Team page body (#62), as ESPN sent it; null on any failure. Kept out of the HTTP cache (an NBA

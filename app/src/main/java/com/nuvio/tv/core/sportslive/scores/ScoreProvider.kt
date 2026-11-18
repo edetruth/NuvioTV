@@ -12,6 +12,9 @@ interface ScoreProvider {
      */
     suspend fun recentScoreboard(league: EspnLeague, date: LocalDate): ScoreboardResult? = null
 
+    /** [league]'s teams for the logo directory (#82); null on any failure. */
+    suspend fun teamList(league: EspnLeague): List<DirectoryTeam>? = null
+
     companion object {
         /** How old a warm-start copy may be. */
         const val RECENT_MS = 2 * 60_000L
