@@ -64,9 +64,11 @@ import com.nuvio.tv.core.sportslive.scores.TeamLogoUrls
 import com.nuvio.tv.core.sportslive.scores.FinalNote
 import com.nuvio.tv.core.sportslive.scores.GolfResult
 import com.nuvio.tv.core.sportslive.scores.MySport
+import com.nuvio.tv.core.sportslive.scores.ResultDay
 import com.nuvio.tv.core.sportslive.scores.ResultRow
 import com.nuvio.tv.core.sportslive.scores.ScoreSide
 import com.nuvio.tv.core.sportslive.scores.ScoreTeam
+import com.nuvio.tv.core.sportslive.scores.SportsResults
 import com.nuvio.tv.ui.components.EmptyScreenState
 import com.nuvio.tv.ui.components.LightweightCard
 import com.nuvio.tv.ui.components.LoadingIndicator
@@ -79,9 +81,9 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 /**
- * The Results tab: date chips (Yesterday … 7 days ago), the ★ My sports / sport chips, the chosen
- * sport's league chips, and the day's finals under league headers (YOUR TEAMS first, long tails
- * collapsed). Chips select on focus like the section's tabs and filters; Down from a chip row lands on
+ * The Results tab: the date rail (Today · Yesterday · Earlier ▸, which opens the 5 older days), the
+ * ★ My sports / sport chips, the chosen sport's league chips, on Today a "N games live now →" line, and
+ * the day's finals under league headers (YOUR TEAMS first, long tails collapsed). Chips select on focus like the section's tabs and filters; Down from a chip row lands on
  * the active chip below or the list's entry row; a new day, sport or league opens the list at the top.
  */
 @Composable
@@ -92,6 +94,10 @@ internal fun SportsLiveResultsView(
     /** On the selected date chip: the tab row's Down. */
     dateFocusRequester: FocusRequester,
     onSelectDay: (Int) -> Unit,
+    /** OK on Earlier: opens or closes the older days. */
+    onToggleEarlier: () -> Unit,
+    /** OK on "N games live now →": the Live Now tab. */
+    onOpenLiveNow: () -> Unit,
     onSelectSport: (MySport?) -> Unit,
     onSelectLeague: (String?) -> Unit,
     onExpandGroup: (String) -> Unit,
@@ -108,9 +114,12 @@ internal fun SportsLiveResultsView(
 ) {
     val sportFocusRequester = remember { FocusRequester() }
     val leagueFocusRequester = remember { FocusRequester() }
+    val liveNowFocusRequester = remember { FocusRequester() }
     val ready = state.status == ResultsStatus.READY
     val showSportRow = ready && state.sports.isNotEmpty()
     val showLeagueRow = showSportRow && state.selectedSport != null && state.leagues.isNotEmpty()
+    // Today: games being played are not listed, only counted on a line that jumps to Live Now.
+    val showLiveNow = state.showsLiveNow
     val itemFocusRequesters = remember { mutableMapOf<String, FocusRequester>() }
     val scope = rememberCoroutineScope()
     fun itemFocusRequester(key: String) = itemFocusRequesters.getOrPut(key) { FocusRequester() }
@@ -136,11 +145,14 @@ internal fun SportsLiveResultsView(
     }
     val firstFocusableKey = items.firstOrNull { it.isFocusable }?.key
     val entryFocusRequester = entryKey?.let(::itemFocusRequester)
-    val aboveListFocusRequester = when {
+    val chipsAboveFocusRequester = when {
         showLeagueRow -> leagueFocusRequester
         showSportRow -> sportFocusRequester
         else -> dateFocusRequester
     }
+    val aboveListFocusRequester = if (showLiveNow) liveNowFocusRequester else chipsAboveFocusRequester
+    // Down from the lowest chip row: the live line when shown, else the list.
+    val belowChipsFocusRequester = if (showLiveNow) liveNowFocusRequester else entryFocusRequester
     val openList: () -> Unit = { runCatching { entryFocusRequester?.requestFocus() } }
 
     // A real day, sport or league change starts the new list at its top; the saved key survives navigation.
@@ -191,6 +203,15 @@ internal fun SportsLiveResultsView(
         withFrameNanos { }
         runCatching { (if (currentShowSportRow) sportFocusRequester else dateFocusRequester).requestFocus() }
     }
+    // A refresh with no game left live drops the live line: focus goes to the chip row above it.
+    var liveLineHasFocus by remember { mutableStateOf(false) }
+    val currentShowLiveNow by rememberUpdatedState(showLiveNow)
+    LaunchedEffect(showLiveNow) {
+        if (showLiveNow || !liveLineHasFocus) return@LaunchedEffect
+        liveLineHasFocus = false
+        withFrameNanos { }
+        runCatching { chipsAboveFocusRequester.requestFocus() }
+    }
     BackHandler(enabled = listHasFocus) {
         runCatching { tabFocusRequester.requestFocus() }
     }
@@ -222,8 +243,9 @@ internal fun SportsLiveResultsView(
             state = state,
             dateFocusRequester = dateFocusRequester,
             upFocusRequester = tabFocusRequester,
-            downFocusRequester = if (showSportRow) sportFocusRequester else entryFocusRequester,
+            downFocusRequester = if (showSportRow) sportFocusRequester else belowChipsFocusRequester,
             onSelectDay = onSelectDay,
+            onToggleEarlier = onToggleEarlier,
             onOpen = openList,
             modifier = Modifier.padding(top = NuvioTheme.spacing.xs)
         )
@@ -232,7 +254,7 @@ internal fun SportsLiveResultsView(
                 state = state,
                 sportFocusRequester = sportFocusRequester,
                 upFocusRequester = dateFocusRequester,
-                downFocusRequester = if (showLeagueRow) leagueFocusRequester else entryFocusRequester,
+                downFocusRequester = if (showLeagueRow) leagueFocusRequester else belowChipsFocusRequester,
                 onSelectSport = onSelectSport,
                 onEditMySports = onEditMySports,
                 onOpen = openList,
@@ -248,13 +270,31 @@ internal fun SportsLiveResultsView(
                 state = state,
                 leagueFocusRequester = leagueFocusRequester,
                 upFocusRequester = sportFocusRequester,
-                downFocusRequester = entryFocusRequester,
+                downFocusRequester = belowChipsFocusRequester,
                 onSelectLeague = onSelectLeague,
                 onOpen = openList,
                 modifier = Modifier
                     .padding(top = NuvioTheme.spacing.xs)
                     .onFocusChanged { focus ->
                         if (focus.hasFocus) leagueRowHasFocus = true else if (currentShowLeagueRow) leagueRowHasFocus = false
+                    }
+            )
+        }
+        if (showLiveNow) {
+            ResultsLiveNowLine(
+                count = state.liveNow,
+                onClick = onOpenLiveNow,
+                modifier = Modifier
+                    .padding(start = NuvioTheme.spacing.sm, top = NuvioTheme.spacing.sm)
+                    .onFocusChanged { focus ->
+                        if (focus.hasFocus) liveLineHasFocus = true else if (currentShowLiveNow) liveLineHasFocus = false
+                    }
+                    .focusRequester(liveNowFocusRequester)
+                    .focusProperties {
+                        up = chipsAboveFocusRequester
+                        down = entryFocusRequester ?: FocusRequester.Cancel
+                        left = FocusRequester.Cancel
+                        right = FocusRequester.Cancel
                     }
             )
         }
@@ -275,6 +315,9 @@ internal fun SportsLiveResultsView(
             // ★ My sports has nothing that day but other sports do: point at their chips.
             firstFocusableKey == null && state.selectedSport == null && state.sports.isNotEmpty() ->
                 EmptyScreenState(title = stringResource(R.string.sports_live_results_my_sports_empty))
+            // Today before its first final.
+            firstFocusableKey == null && state.daysAgo == SportsResults.TODAY ->
+                EmptyScreenState(title = stringResource(R.string.sports_live_results_no_finals_yet))
             firstFocusableKey == null -> EmptyScreenState(title = stringResource(R.string.sports_live_results_empty_day))
             else -> androidx.compose.runtime.key(listKey) {
                 LazyColumn(
@@ -367,32 +410,85 @@ private fun ResultsDateRow(
     upFocusRequester: FocusRequester,
     downFocusRequester: FocusRequester?,
     onSelectDay: (Int) -> Unit,
+    onToggleEarlier: () -> Unit,
     onOpen: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val today = stringResource(R.string.sports_live_results_today)
     val yesterday = stringResource(R.string.sports_live_results_yesterday)
     val dayFormat = remember { DateTimeFormatter.ofPattern("EEE d", Locale.getDefault()) }
+    // Until the opening day is worked out, Today holds the rail's focus.
+    val focusDay = state.daysAgo ?: SportsResults.TODAY
+    val dayChip: @Composable (ResultDay) -> Unit = { day ->
+        val days = day.daysAgo
+        SourceStatusFilterChip(
+            // Today is ESPN's current (US Eastern) day; "Yesterday" only when the ESPN day is also the
+            // device's yesterday.
+            name = when {
+                days == SportsResults.TODAY -> today
+                day.isDeviceYesterday -> yesterday
+                else -> day.date.dayLabel(dayFormat)
+            },
+            isSelected = days == state.daysAgo,
+            outlined = true,
+            onFocusSelect = { onSelectDay(days) },
+            onClick = onOpen,
+            modifier = Modifier
+                .then(if (days == focusDay) Modifier.focusRequester(dateFocusRequester) else Modifier)
+                .focusProperties {
+                    up = upFocusRequester
+                    down = downFocusRequester ?: FocusRequester.Cancel
+                }
+        )
+    }
     ResultsChipRow(focusRequester = dateFocusRequester, modifier = modifier) {
-        state.dates.forEach { day ->
-            val days = day.daysAgo
-            val isSelected = days == state.daysAgo
-            SourceStatusFilterChip(
-                // "Yesterday" only when the ESPN (US Eastern) day is also the device's yesterday.
-                name = if (day.isDeviceYesterday) yesterday else day.date.dayLabel(dayFormat),
-                isSelected = isSelected,
-                outlined = true,
-                onFocusSelect = { onSelectDay(days) },
-                onClick = onOpen,
-                modifier = Modifier
-                    .then(if (isSelected) Modifier.focusRequester(dateFocusRequester) else Modifier)
-                    .focusProperties {
-                        up = upFocusRequester
-                        down = downFocusRequester ?: FocusRequester.Cancel
-                    }
+        state.dates.filter { it.daysAgo !in SportsResults.EARLIER }.forEach { dayChip(it) }
+        // A toggle, not a day: focus does not select it; OK opens the older days after it, in place.
+        SourceStatusFilterChip(
+            name = stringResource(if (state.earlierOpen) R.string.sports_live_results_earlier_open else R.string.sports_live_results_earlier),
+            isSelected = false,
+            outlined = true,
+            onClick = onToggleEarlier,
+            modifier = Modifier.focusProperties {
+                up = upFocusRequester
+                down = downFocusRequester ?: FocusRequester.Cancel
+            }
+        )
+        state.dates.filter { it.daysAgo in SportsResults.EARLIER }.forEach { dayChip(it) }
+    }
+}
+
+/** "3 games live now →" above Today's results: OK opens the Live Now tab. */
+@Composable
+private fun ResultsLiveNowLine(count: Int, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val shape = RoundedCornerShape(NuvioTheme.radii.md)
+    LightweightCard(
+        onClick = onClick,
+        modifier = modifier,
+        shape = shape,
+        containerColor = LIVE_NOW_LINE_BACKGROUND,
+        focusedBorder = Border(border = NuvioTheme.focusRing.border(NuvioTheme.spacing.xxs), shape = shape)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm),
+            modifier = Modifier.padding(horizontal = NuvioTheme.spacing.md, vertical = NuvioTheme.spacing.sm)
+        ) {
+            Box(Modifier.size(10.dp).clip(CircleShape).background(LIVE_NOW_DOT))
+            Text(
+                text = pluralStringResource(R.plurals.sports_live_results_live_now, count, count),
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+                color = LIVE_NOW_TEXT,
+                maxLines = 1
             )
         }
     }
 }
+
+// The design's live line: dark red card, red dot, light red text.
+private val LIVE_NOW_LINE_BACKGROUND = Color(0xFF1A1012)
+private val LIVE_NOW_DOT = Color(0xFFFF4D57)
+private val LIVE_NOW_TEXT = Color(0xFFFFB3B8)
 
 /** A chip of a Results chip row: selects on focus, OK opens the list; the selected one takes [activeFocusRequester]. */
 @Composable

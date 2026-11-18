@@ -9,6 +9,7 @@ import kotlinx.coroutines.withContext
 import okhttp3.CacheControl
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import java.time.Instant
 import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
@@ -26,7 +27,8 @@ class EspnScoreProvider internal constructor(
     private val client: OkHttpClient,
     moshi: Moshi,
     private val baseUrl: String,
-    private val today: () -> LocalDate = { LocalDate.now() }
+    /** ESPN's day now (US Eastern): which scoreboards are still live and which are past. */
+    private val today: () -> LocalDate = { LocalDate.now(SportsResults.EASTERN) }
 ) : ScoreProvider, GameSummarySource {
 
     @Inject
@@ -73,17 +75,26 @@ class EspnScoreProvider internal constructor(
         withContext(Dispatchers.IO) {
             val url = scoreboardUrl(league, date)
             try {
+                val past = date.isBefore(today().minusDays(1))
                 val request = Request.Builder().url(url).apply {
                     // Yesterday's late games and today's can still change: revalidate rather than reuse
                     // the HTTP cache. Older days are final: a cached copy up to 7 days old is used as is
                     // (ESPN sends max-age of seconds), so a past day already cached is not fetched again.
-                    if (!date.isBefore(today().minusDays(1))) {
+                    if (!past) {
                         header("Cache-Control", "no-cache")
                     } else {
                         cacheControl(CacheControl.Builder().maxStale(PAST_DAY_MAX_STALE_DAYS, TimeUnit.DAYS).build())
                     }
                 }.build()
-                client.newCall(request).execute().use { response ->
+                var call = client.newCall(request).execute()
+                // A copy stored while its day was still live (today's or yesterday's scoreboard, games in
+                // progress) is never a final day (#67): the past day is fetched again.
+                val stored = call.cacheResponse
+                if (past && call.networkResponse == null && stored != null && !storedAsPast(date, stored.receivedResponseAtMillis)) {
+                    call.close()
+                    call = client.newCall(Request.Builder().url(url).header("Cache-Control", "no-cache").build()).execute()
+                }
+                call.use { response ->
                     val body = response.body?.string()
                     if (!response.isSuccessful || body == null) {
                         debugLog("${league.path} $date: HTTP ${response.code}")
@@ -139,6 +150,10 @@ class EspnScoreProvider internal constructor(
         // ".../gameId/401930175/league/fifa.friendly_u21"
         private val LEAGUE_IN_LINK = Regex("""/league/([a-z0-9._-]+)""")
         private const val PAST_DAY_MAX_STALE_DAYS = 7
+
+        /** True when ESPN day [date] was already past (before yesterday, US Eastern) at [receivedAtMs]. */
+        internal fun storedAsPast(date: LocalDate, receivedAtMs: Long): Boolean =
+            date.isBefore(Instant.ofEpochMilli(receivedAtMs).atZone(SportsResults.EASTERN).toLocalDate().minusDays(1))
 
         // Without a limit a busy soccer/all day can be cut short.
         private const val LIMIT = 1000

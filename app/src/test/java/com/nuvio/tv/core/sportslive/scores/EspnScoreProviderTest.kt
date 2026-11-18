@@ -1,18 +1,22 @@
 package com.nuvio.tv.core.sportslive.scores
 
 import kotlinx.coroutines.test.runTest
+import okhttp3.Cache
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.IOException
+import java.nio.file.Files
 import java.time.Instant
 import java.time.LocalDate
 
@@ -77,6 +81,35 @@ class EspnScoreProviderTest {
         p.scoreboard(EspnLeagueMap.NBA, LocalDate.of(2026, 11, 15))
         p.scoreboard(EspnLeagueMap.NBA, LocalDate.of(2026, 11, 14))
         assertEquals(listOf("no-cache", "no-cache", "no-cache", "max-stale=604800"), cacheControl)
+    }
+
+    @Test
+    fun `a past day stored while it was live is fetched again, one stored once over is reused (#67)`() = runTest {
+        val dir = Files.createTempDirectory("espn-cache").toFile()
+        try {
+            MockWebServer().use { server ->
+                repeat(3) {
+                    server.enqueue(MockResponse().setBody(EspnFixtures.json(EspnFixtures.NBA_20261115)).addHeader("Cache-Control", "max-age=1"))
+                }
+                val client = OkHttpClient.Builder().cache(Cache(dir, 1_000_000)).build()
+                val realToday = LocalDate.now(SportsResults.EASTERN)
+                var today = realToday
+                val p = EspnScoreProvider(client, EspnFixtures.moshi, server.url("/").toString(), today = { today })
+                // Today's scoreboard, stored while its games are being played.
+                assertFalse(p.scoreboard(EspnLeagueMap.NBA, realToday).failed)
+                // Days later it is a past day: that stored copy is not taken as its final scoreboard.
+                today = realToday.plusDays(3)
+                assertFalse(p.scoreboard(EspnLeagueMap.NBA, realToday).failed)
+                assertEquals(2, server.requestCount)
+                // A day already over when stored is served from the cache.
+                val over = realToday.minusDays(3)
+                p.scoreboard(EspnLeagueMap.NBA, over)
+                assertEquals(5, p.scoreboard(EspnLeagueMap.NBA, over).events.size)
+                assertEquals(3, server.requestCount)
+            }
+        } finally {
+            dir.deleteRecursively()
+        }
     }
 
     @Test

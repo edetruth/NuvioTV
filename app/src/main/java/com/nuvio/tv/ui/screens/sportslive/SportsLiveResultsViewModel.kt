@@ -60,10 +60,14 @@ sealed interface ResultListItem {
 }
 
 data class SportsLiveResultsUiState(
-    /** 1 = yesterday … 7. */
-    val daysAgo: Int = 1,
-    /** The date chips (ESPN days, counted back from today in US Eastern time). */
+    /** 0 = today, 1 = yesterday … 6; null until the opening day is worked out ([defaultResultsDay]). */
+    val daysAgo: Int? = null,
+    /** The date chips shown (ESPN days, counted back from today in US Eastern time): Today, Yesterday, and the older days while Earlier is open. */
     val dates: List<ResultDay> = emptyList(),
+    /** Earlier ▸ is open: the 5 older days follow it. */
+    val earlierOpen: Boolean = false,
+    /** Today: games of My sports and followed teams being played now ("N games live now →"). */
+    val liveNow: Int = 0,
     val status: ResultsStatus = ResultsStatus.LOADING,
     /** The sport chips after ★ My sports: the user's sports with results that day. */
     val sports: List<MySport> = emptyList(),
@@ -84,6 +88,9 @@ data class SportsLiveResultsUiState(
     val replays: Map<String, SportsLiveItem> = emptyMap()
 ) {
     fun showsScore(row: ResultRow): Boolean = ResultSpoilerReveal.showsScore(mode, revealed, row.event.eventId)
+
+    /** The "N games live now" line: on Today, once loaded, while a game is being played. */
+    val showsLiveNow: Boolean get() = daysAgo == SportsResults.TODAY && status == ResultsStatus.READY && liveNow > 0
 }
 
 @HiltViewModel
@@ -92,10 +99,23 @@ class SportsLiveResultsViewModel @Inject constructor(
     private val prefs: SportsLivePreferencesDataStore
 ) : ViewModel() {
 
+    /** Results is on screen, showing [days] (null: the opening day is still to be worked out). */
+    private data class Shown(val days: Int?)
+
     private data class Selection(val sport: MySport? = null, val league: String? = null, val expanded: Set<String> = emptySet())
 
     private val active = MutableStateFlow(false)
-    private val daysAgo = MutableStateFlow(1)
+    /** The day shown; null until worked out on first open, unless one was chosen earlier in this process. */
+    private val daysAgo = MutableStateFlow(results.chosenDay)
+    private val earlierOpen = MutableStateFlow(results.chosenDay?.let { it in SportsResults.EARLIER } ?: false)
+    /** Today's load made to work out the opening day, shown at once when Today is that day. */
+    private var openingLoad: ResultsLoad? = null
+
+    /** The day shown (null: being worked out). */
+    internal val selectedDay: StateFlow<Int?> = daysAgo.asStateFlow()
+
+    /** Earlier is open. */
+    internal val earlierShown: StateFlow<Boolean> = earlierOpen.asStateFlow()
     private val selection = MutableStateFlow(Selection())
     private val replayItems = MutableStateFlow<List<SportsLiveItem>>(emptyList())
     private val load = MutableStateFlow<ResultsLoad?>(null)
@@ -129,14 +149,16 @@ class SportsLiveResultsViewModel @Inject constructor(
     }.flowOn(Dispatchers.Default)
 
     val uiState: StateFlow<SportsLiveResultsUiState> = combine(
-        combine(daysAgo, load, ::Pair),
+        combine(daysAgo, load, earlierOpen, ::Triple),
         mode,
         reveal.revealed,
         listing
-    ) { (days, load), mode, revealed, listing ->
+    ) { (days, load, earlier), mode, revealed, listing ->
         SportsLiveResultsUiState(
             daysAgo = days,
-            dates = results.days(),
+            dates = resultRailDays(results.days(), earlier),
+            earlierOpen = earlier,
+            liveNow = (load as? ResultsLoad.Loaded)?.liveNow ?: 0,
             status = if (mode == ScoresMode.OFF) ResultsStatus.OFF else statusOf(load),
             sports = listing.sports,
             selectedSport = listing.sport,
@@ -151,20 +173,42 @@ class SportsLiveResultsViewModel @Inject constructor(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SportsLiveResultsUiState())
 
     init {
-        // A day loads while Results is the selected tab, after the date chip settles (chips select on
-        // focus, so moving across them does not request each day). Past days do not change: no polling.
+        // A day loads while Results is the selected tab and on screen, after the date chip settles (chips
+        // select on focus, so moving across them does not request each day). Past days do not change: no
+        // polling. Today refreshes at most every 2 min, only while shown (#67).
         viewModelScope.launch {
-            combine(active, daysAgo, mode, prefs.followedTeams, prefs.mySports) { isActive, days, _, _, _ -> if (isActive) days else null }
+            combine(active, daysAgo, mode, prefs.followedTeams, prefs.mySports) { isActive, days, _, _, _ ->
+                if (isActive) Shown(days) else null
+            }
                 .distinctUntilChanged()
-                .collectLatest { days ->
-                    if (days == null) return@collectLatest
-                    load.value = null
-                    delay(DAY_SETTLE_MS)
-                    var loaded = results.load(days)
+                .collectLatest { shown ->
+                    if (shown == null) return@collectLatest
+                    val days = shown.days
+                    if (days == null) {
+                        // First open: Today when it has a final, else Yesterday. Not remembered as chosen.
+                        load.value = null
+                        val today = results.load(SportsResults.TODAY)
+                        val opening = defaultResultsDay(today)
+                        if (opening == SportsResults.TODAY) openingLoad = today
+                        daysAgo.value = opening
+                        return@collectLatest
+                    }
+                    var loaded = openingLoad?.takeIf { days == SportsResults.TODAY }
+                    openingLoad = null
+                    if (loaded == null) {
+                        load.value = null
+                        delay(DAY_SETTLE_MS)
+                        loaded = results.load(days)
+                    }
                     load.value = loaded
-                    // Finals the score delay holds back: the day loads again (from memory) once they are due.
-                    while (loaded is ResultsLoad.Loaded && loaded.heldUntil != null) {
-                        delay((loaded.heldUntil - System.currentTimeMillis()).coerceAtLeast(0))
+                    // Finals the score delay holds back: the day loads again (from memory) once they are
+                    // due. Today: again every 2 min (the repository asks ESPN at most that often).
+                    while (loaded is ResultsLoad.Loaded) {
+                        val wait = listOfNotNull(
+                            loaded.heldUntil?.let { it - results.nowMs() },
+                            ResultsRepository.TODAY_TTL_MS.takeIf { days == SportsResults.TODAY }
+                        ).minOrNull() ?: break
+                        delay(wait.coerceAtLeast(0))
                         loaded = results.load(days)
                         load.value = loaded
                     }
@@ -178,12 +222,23 @@ class SportsLiveResultsViewModel @Inject constructor(
         if (!isActive) reveal.onFocus(null)
     }
 
-    /** A new day keeps the chosen sport and league (when that day has them); long tails collapse again. */
+    /**
+     * A new day keeps the chosen sport and league (when that day has them); long tails collapse again.
+     * The day is remembered while the app process lives.
+     */
     fun selectDay(days: Int) {
-        if (days == daysAgo.value) return
+        if (days !in SportsResults.DAYS_AGO || days == daysAgo.value) return
+        results.chosenDay = days
         daysAgo.value = days
         selection.update { it.copy(expanded = emptySet()) }
         reveal.onFocus(null)
+    }
+
+    /** OK on Earlier: opens the 5 older days after it, or closes them (an older day shown goes back to Yesterday). */
+    fun toggleEarlier() {
+        val open = !earlierOpen.value
+        earlierOpen.value = open
+        if (!open && daysAgo.value in SportsResults.EARLIER) selectDay(SportsResults.YESTERDAY)
     }
 
     /** ★ My sports (null) or a sport; its league chips start at All. */
@@ -239,6 +294,17 @@ class SportsLiveResultsViewModel @Inject constructor(
         const val DAY_SETTLE_MS = 300L
     }
 }
+
+/**
+ * The day Results opens on when none was chosen (#67): Today once ★ My sports has a final today, else
+ * Yesterday (Today then reads "No finals yet").
+ */
+internal fun defaultResultsDay(today: ResultsLoad): Int =
+    if ((today as? ResultsLoad.Loaded)?.hasMyFinals == true) SportsResults.TODAY else SportsResults.YESTERDAY
+
+/** The date rail's days: Today and Yesterday, then the older days while Earlier is open. */
+internal fun resultRailDays(days: List<ResultDay>, earlierOpen: Boolean): List<ResultDay> =
+    days.filter { earlierOpen || it.daysAgo !in SportsResults.EARLIER }
 
 /** A league section with more games than this collapses... */
 internal const val RESULTS_COLLAPSE_ABOVE = 8

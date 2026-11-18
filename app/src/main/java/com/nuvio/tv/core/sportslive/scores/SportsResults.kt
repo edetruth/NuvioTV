@@ -26,8 +26,17 @@ data class ResultGroup(val key: String, val sport: String, val name: String?, va
  * order, and which replay a result opens.
  */
 object SportsResults {
-    /** The past days Results offers: 1 (yesterday) to 7. */
-    val DAYS_AGO = 1..7
+    /** The days Results offers (#67): 0 (today, finals so far), 1 (yesterday) and the [EARLIER] days. */
+    val DAYS_AGO = 0..6
+
+    /** Today: its finals so far. */
+    const val TODAY = 0
+
+    /** Yesterday. */
+    const val YESTERDAY = 1
+
+    /** The older days behind "Earlier". */
+    val EARLIER = 2..6
 
     /**
      * The feeds of [mySports] with followed teams' sports added ([MySports.withFollowed]): one

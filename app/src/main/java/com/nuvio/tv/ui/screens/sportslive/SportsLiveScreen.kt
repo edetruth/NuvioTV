@@ -30,6 +30,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.withFrameNanos
@@ -51,6 +52,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.currentStateAsState
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.nuvio.tv.R
@@ -97,6 +99,7 @@ import com.nuvio.tv.ui.theme.NuvioTheme
 import com.nuvio.tv.ui.util.dpadRepeatThrottle
 import java.time.ZoneId
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @Composable
 fun SportsLiveScreen(
@@ -205,8 +208,13 @@ fun SportsLiveScreen(
         art
     }
 
-    // Results loads only while its tab is selected; Scores Off hides the tab (and requests nothing).
-    LaunchedEffect(uiState.selectedTab) { resultsViewModel.setActive(uiState.selectedTab == SportsLiveTab.RESULTS) }
+    // Results loads only while its tab is selected and the screen is started (Today refreshes then, never
+    // behind the player, the Game page or in the background); Scores Off hides the tab (and requests nothing).
+    val screenLifecycle by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
+    val screenStarted = screenLifecycle.isAtLeast(Lifecycle.State.STARTED)
+    LaunchedEffect(uiState.selectedTab, screenStarted) {
+        resultsViewModel.setActive(uiState.selectedTab == SportsLiveTab.RESULTS && screenStarted)
+    }
     LaunchedEffect(resultsState.mode, uiState.selectedTab) {
         if (resultsState.modeKnown && resultsState.mode == ScoresMode.OFF && uiState.selectedTab == SportsLiveTab.RESULTS) {
             viewModel.selectTab(SportsLiveTab.LIVE_NOW)
@@ -325,6 +333,7 @@ fun SportsLiveScreen(
             },
             results = resultsState,
             onSelectResultsDay = resultsViewModel::selectDay,
+            onToggleResultsEarlier = resultsViewModel::toggleEarlier,
             onSelectResultsSport = resultsViewModel::selectSport,
             onSelectResultsLeague = resultsViewModel::selectLeague,
             onExpandResultsGroup = resultsViewModel::expandGroup,
@@ -400,6 +409,7 @@ private fun SportsLiveContent(
     onOpenDual: (SportsLiveDualSession) -> Unit,
     results: SportsLiveResultsUiState,
     onSelectResultsDay: (Int) -> Unit,
+    onToggleResultsEarlier: () -> Unit,
     onSelectResultsSport: (MySport?) -> Unit,
     onSelectResultsLeague: (String?) -> Unit,
     onExpandResultsGroup: (String) -> Unit,
@@ -409,6 +419,7 @@ private fun SportsLiveContent(
     onToggleResultFollow: (ResultRow, ScoreSide) -> Unit
 ) {
     val tabFocusRequesters = remember { SportsLiveTab.entries.associateWith { FocusRequester() } }
+    val liveNowScope = rememberCoroutineScope()
     val activeTabFocusRequester = tabFocusRequesters.getValue(uiState.selectedTab)
     val watchFocusRequester = remember { FocusRequester() }
     // One requester per card, keyed like the LazyColumn: two addons can list the same meta id, and a
@@ -801,6 +812,15 @@ private fun SportsLiveContent(
                 tabFocusRequester = activeTabFocusRequester,
                 dateFocusRequester = resultsDateFocusRequester,
                 onSelectDay = onSelectResultsDay,
+                onToggleEarlier = onToggleResultsEarlier,
+                // Today's "N games live now →": the Live Now tab, focus on it.
+                onOpenLiveNow = {
+                    onSelectTab(SportsLiveTab.LIVE_NOW)
+                    liveNowScope.launch {
+                        withFrameNanos { }
+                        runCatching { tabFocusRequesters.getValue(SportsLiveTab.LIVE_NOW).requestFocus() }
+                    }
+                },
                 onSelectSport = onSelectResultsSport,
                 onSelectLeague = onSelectResultsLeague,
                 onExpandGroup = onExpandResultsGroup,

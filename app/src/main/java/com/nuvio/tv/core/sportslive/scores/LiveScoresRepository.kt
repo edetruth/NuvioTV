@@ -220,6 +220,17 @@ class LiveScoresRepository internal constructor(
     }
 
     /**
+     * [feed]'s events as last fetched, when that fetch answered within [maxAgeMs] and the feed is not
+     * paused; else null (#67: Results' Today reuses them instead of asking again). Never a request; a
+     * warm-start copy does not count.
+     */
+    suspend fun recentEvents(feed: ScoreFeed, maxAgeMs: Long): List<ScoreSnapshot>? = lock.withLock {
+        val state = feeds[feed] ?: return@withLock null
+        val at = state.lastSuccessAt
+        if (!state.fetched || state.paused || at == null || now() - at >= maxAgeMs) null else state.events
+    }
+
+    /**
      * Every screen's tracked cards, one entry per card key (the same card on two screens is one),
      * followed teams' games first, then games in My sports: they claim the feed budget before the rest.
      */

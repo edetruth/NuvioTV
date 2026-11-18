@@ -33,13 +33,32 @@ class ResultsRepositoryTest {
     private val nba = EspnFixtures.events(EspnFixtures.NBA_20261115, EspnLeagueMap.NBA)
     private val nov15 = LocalDate.of(2026, 11, 15)
 
+    /** The live scores' copies lent to Results, by feed, with when each was fetched. */
+    private val live = HashMap<ScoreFeed, Pair<List<ScoreSnapshot>, Long>>()
+    private val liveAsked = mutableListOf<ScoreFeed>()
+
     private fun repository(zone: ZoneId = ZoneOffset.UTC) = ResultsRepository(
         provider = provider,
         settings = settings,
         followedTeams = followed,
         mySports = mySports,
         now = { clock },
-        zone = { zone }
+        zone = { zone },
+        liveFeed = { feed, maxAge ->
+            liveAsked += feed
+            live[feed]?.takeIf { clock - it.second < maxAge }?.first
+        }
+    )
+
+    private val nov16 = LocalDate.of(2026, 11, 16)
+    private val nbaToday = ScoreFeed(EspnLeagueMap.NBA, nov16)
+    private val aFinal = nba.first { it.state == ScoreState.POST && it.isFinal }
+
+    private fun todayGame(id: String, state: ScoreState, startedAgoMs: Long = 20 * 60 * 60_000L) = aFinal.copy(
+        eventId = id,
+        state = state,
+        isFinal = state == ScoreState.POST,
+        startMs = clock - startedAgoMs
     )
 
     @Test
@@ -172,13 +191,117 @@ class ResultsRepositoryTest {
         // 20:00Z: 15:00 in New York (the 16th), 05:00 the 17th in Tokyo.
         clock = Instant.parse("2026-11-16T20:00:00Z").toEpochMilli()
         val tokyo = repository(ZoneId.of("Asia/Tokyo")).days()
-        assertEquals((1..7).map { LocalDate.of(2026, 11, 16).minusDays(it.toLong()) }, tokyo.map { it.date })
-        assertTrue(tokyo.none { it.isDeviceYesterday })
+        assertEquals((0..6).map { LocalDate.of(2026, 11, 16).minusDays(it.toLong()) }, tokyo.map { it.date })
+        // In Tokyo ESPN's today (the 16th) is the device's yesterday; ESPN's yesterday is not.
+        assertEquals(listOf(true) + List(6) { false }, tokyo.map { it.isDeviceYesterday })
         mySports.value = basketballOnly
         repository(ZoneId.of("Asia/Tokyo")).load(1)
         assertEquals(ScoreFeed(EspnLeagueMap.NBA, LocalDate.of(2026, 11, 15)), provider.calls.single())
-        // In New York (or UTC at that hour) the first chip is Yesterday.
-        assertTrue(repository(ZoneId.of("America/New_York")).days().first().isDeviceYesterday)
-        assertEquals(listOf(true) + List(6) { false }, repository(ZoneOffset.UTC).days().map { it.isDeviceYesterday })
+        // In New York (or UTC at that hour) the second chip is Yesterday.
+        assertTrue(repository(ZoneId.of("America/New_York")).days()[1].isDeviceYesterday)
+        assertEquals(listOf(false, true) + List(5) { false }, repository(ZoneOffset.UTC).days().map { it.isDeviceYesterday })
+    }
+
+    @Test
+    fun `Today lists finals only and counts the games being played in My sports (#67)`() = runTest {
+        mySports.value = basketballOnly
+        val games = listOf(
+            todayGame("final", ScoreState.POST),
+            todayGame("live-1", ScoreState.IN),
+            todayGame("live-2", ScoreState.IN),
+            todayGame("later", ScoreState.PRE)
+        )
+        provider.respond = { feed -> ScoreboardResult(if (feed == nbaToday) games else emptyList()) }
+        val today = repository().load(0) as ResultsLoad.Loaded
+        assertEquals(nov16, today.date)
+        assertEquals(listOf("final"), today.rows.map { it.event.eventId })
+        assertEquals(2, today.liveNow)
+        assertTrue(today.hasMyFinals)
+        // Past days count nothing live.
+        assertEquals(0, (repository().load(1) as ResultsLoad.Loaded).liveNow)
+    }
+
+    @Test
+    fun `the live count leaves out games outside My sports and followed teams`() = runTest {
+        mySports.value = MySports.decode(setOf("hockey"))
+        provider.respond = { ScoreboardResult(listOf(todayGame("nba-live", ScoreState.IN))) }
+        assertEquals(0, (repository().load(0) as ResultsLoad.Loaded).liveNow)
+        followed.value = listOf(FollowedTeam(aFinal.home.displayName!!, "Basketball"))
+        assertEquals(1, (repository().load(0) as ResultsLoad.Loaded).liveNow)
+    }
+
+    @Test
+    fun `Today reuses the live scores' fresh copy and makes no request (#67)`() = runTest {
+        mySports.value = basketballOnly
+        live[nbaToday] = listOf(todayGame("final", ScoreState.POST)) to clock - 60_000L
+        val repo = repository()
+        val today = repo.load(0) as ResultsLoad.Loaded
+        assertEquals(listOf("final"), today.rows.map { it.event.eventId })
+        assertTrue(provider.calls.isEmpty())
+        // Past days never ask the live scores.
+        repo.load(1)
+        assertEquals(listOf(nbaToday), liveAsked)
+        // A copy 2 min old is not fresh: Today is fetched.
+        clock += 60_000L
+        repo.load(0)
+        assertEquals(listOf(nbaToday), provider.calls.filter { it.date == nov16 })
+    }
+
+    @Test
+    fun `Today is fetched again at most every 2 min`() = runTest {
+        mySports.value = basketballOnly
+        val repo = repository()
+        repo.load(0)
+        clock += 119_000L
+        repo.load(0)
+        assertEquals(1, provider.calls.size)
+        clock += 1_000L
+        repo.load(0)
+        assertEquals(2, provider.calls.size)
+    }
+
+    @Test
+    fun `Today's copy is never kept as a final day`() = runTest {
+        mySports.value = basketballOnly
+        provider.respond = { ScoreboardResult(listOf(todayGame("live", ScoreState.IN))) }
+        val repo = repository()
+        repo.load(0)
+        // Two days on, the 16th is an older day: fetched again, not served from Today's copy.
+        clock += 2 * 24 * 60 * 60_000L
+        provider.respond = { ScoreboardResult(listOf(todayGame("live", ScoreState.POST))) }
+        val later = repo.load(2) as ResultsLoad.Loaded
+        assertEquals(nov16, later.date)
+        assertEquals(listOf(nbaToday, nbaToday), provider.calls)
+        assertEquals(listOf("live"), later.rows.map { it.event.eventId })
+        // Fetched once its day was over: kept for good.
+        clock += 24 * 60 * 60_000L
+        repo.load(3)
+        assertEquals(2, provider.calls.size)
+    }
+
+    @Test
+    fun `Scores Off asks nothing for Today, not even the live scores`() = runTest {
+        settings.value = ScoreSettings(mode = ScoresMode.OFF)
+        live[nbaToday] = listOf(todayGame("final", ScoreState.POST)) to clock
+        assertEquals(ResultsLoad.Off, repository().load(0))
+        assertTrue(provider.calls.isEmpty())
+        assertTrue(liveAsked.isEmpty())
+    }
+
+    @Test
+    fun `the score delay holds a new final of Today and counts it as live meanwhile`() = runTest {
+        settings.value = ScoreSettings(delaySeconds = 30)
+        mySports.value = basketballOnly
+        provider.respond = { ScoreboardResult(listOf(todayGame("just-ended", ScoreState.POST, startedAgoMs = 3 * 60 * 60_000L))) }
+        val repo = repository()
+        val first = repo.load(0) as ResultsLoad.Loaded
+        assertTrue(first.rows.isEmpty())
+        assertEquals(1, first.liveNow)
+        assertEquals(clock + 30_000, first.heldUntil)
+        assertTrue(!first.hasMyFinals)
+        clock += 30_000
+        val due = repo.load(0) as ResultsLoad.Loaded
+        assertEquals(listOf("just-ended"), due.rows.map { it.event.eventId })
+        assertEquals(0, due.liveNow)
     }
 }

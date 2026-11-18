@@ -207,6 +207,21 @@ class LiveScoresRepositoryTest {
     }
 
     @Test
+    fun `a feed's last fetch is lent to Results only while younger than asked, never by a request (#67)`() = runTest {
+        provider.respond = { ScoreboardResult(nbaFixture) }
+        val repo = repository("2026-11-16T12:00:00Z")
+        assertNull(repo.recentEvents(nba15, 120_000))
+        collect(repo)
+        repo.track(SECTION, listOf(pacersCard))
+        runCurrent()
+        assertEquals(nbaFixture.map { it.eventId }, repo.recentEvents(nba15, 120_000)?.map { it.eventId })
+        assertNull(repo.recentEvents(ScoreFeed(EspnLeagueMap.NHL, nba15.date), 120_000))
+        advanceTimeBy(120_000); runCurrent()
+        assertNull(repo.recentEvents(nba15, 120_000))
+        assertEquals(1, provider.calls.size)
+    }
+
+    @Test
     fun `failures back off, pause after three and resume on success`() = runTest {
         var fail = false
         provider.respond = { if (fail) ScoreboardResult.FAILED else ScoreboardResult(listOf(game(ScoreState.IN, 50, 48))) }

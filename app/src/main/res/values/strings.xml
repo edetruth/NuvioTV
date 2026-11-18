@@ -3571,6 +3571,16 @@
     <string name="sports_live_tab_replays">Replays</string>
     <string name="sports_live_tab_results">Results</string>
     <string name="sports_live_results_yesterday">Yesterday</string>
+    <string name="sports_live_results_today">Today</string>
+    <!-- Date rail chip that opens / closes the 5 older days (#67). -->
+    <string name="sports_live_results_earlier">Earlier ▸</string>
+    <string name="sports_live_results_earlier_open">Earlier ◂</string>
+    <string name="sports_live_results_no_finals_yet">No finals yet</string>
+    <!-- Above Today's results: OK jumps to the Live Now tab (#67). -->
+    <plurals name="sports_live_results_live_now">
+        <item quantity="one">%d game live now →</item>
+        <item quantity="other">%d games live now →</item>
+    </plurals>
     <string name="sports_live_results_score_hidden">Score hidden</string>
     <!-- Score chip on game cards: clock · score, e.g. "Q3 4:12 · 88–80"; final "FT 3–1". -->
     <string name="sports_live_chip_score">%1$d–%2$d</string>
