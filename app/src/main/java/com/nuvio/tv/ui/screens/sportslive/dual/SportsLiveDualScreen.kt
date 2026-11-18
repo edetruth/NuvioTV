@@ -87,7 +87,7 @@ val LocalOpenSportsLiveDual = staticCompositionLocalOf<(() -> Unit)?> { null }
  * Two Sports & Live games side by side; only the highlighted pane has sound. Left/Right highlight a
  * pane, Up/Down zap it, MENU swaps the panes, OK plays the highlighted game in the full player (its
  * playing stream as is; a pane not playing takes the section's path: Stream screen, or a merged
- * game's best stream) and Back leaves.
+ * game's best stream) and Back leaves, or returns to the full player dual screen was opened in.
  *
  * Each pane is a [PlayerView] with its default SurfaceView: two SurfaceViews are composited by the
  * display hardware directly, cheaper than TextureViews (no GPU copy per frame) and the right surface
@@ -179,7 +179,19 @@ fun SportsLiveDualScreen(
         }
     )
 
-    BackHandler { currentOnBack() }
+    // Back from dual screen opened in a full player plays that game full screen again (M11), in place
+    // of dual screen as OK does (#27); a second Back while it starts, or dual opened elsewhere, leaves.
+    var backPlayed by remember { mutableStateOf(false) }
+    BackHandler {
+        val back = viewModel.backToPlayer()?.takeUnless { backPlayed }
+        if (back == null) {
+            currentOnBack()
+        } else {
+            backPlayed = true
+            val (item, stream) = back
+            if (stream != null) playViewModel.playResolved(item, stream) else playViewModel.play(item)
+        }
+    }
 
     // Focus starts on the screen and comes back to it when OK's lookup or stream picker closes.
     val focusRequester = remember { FocusRequester() }

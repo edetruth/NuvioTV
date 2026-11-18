@@ -2,7 +2,10 @@ package com.nuvio.tv.ui.screens.sportslive.dual
 
 /** What opening dual screen from a full player pops off the back stack. */
 enum class SportsLiveDualPopTarget {
-    /** Everything above the Sports & Live section (kept): Back from dual returns to the section. */
+    /**
+     * Everything above the Sports & Live section (kept): Back from dual plays the game it was opened
+     * from full screen in its place (M11), and Back from that player returns to the section.
+     */
     ABOVE_SECTION,
 
     /** An older dual screen and everything above it: a player opened from dual replaces it. */

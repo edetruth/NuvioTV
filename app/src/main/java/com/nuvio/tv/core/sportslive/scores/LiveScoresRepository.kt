@@ -134,6 +134,14 @@ class LiveScoresRepository internal constructor(
      */
     val unmatched: StateFlow<Set<String>> = unmatchedOutput.asStateFlow()
 
+    private val logosLoadedFlow = MutableStateFlow(logoFile == null)
+
+    /**
+     * True once the kept logo map has been read into [logos] (at once with no file): the player panel
+     * waits for it, so its rows never draw letters for teams known from an earlier run (I3).
+     */
+    val logosLoaded: StateFlow<Boolean> = logosLoadedFlow.asStateFlow()
+
     /** A card waiting for its college fallback until every card's own feeds are budgeted. */
     private class Deferral(val entry: TrackedCard, val dates: List<LocalDate>, val cardFeeds: List<ScoreFeed>, val fallback: EspnLeague)
 
@@ -204,7 +212,13 @@ class LiveScoresRepository internal constructor(
 
     init {
         logoFile?.let { file ->
-            scope.launch(io) { file.read()?.let(logos::load) }
+            scope.launch(io) {
+                try {
+                    file.read()?.let(logos::load)
+                } finally {
+                    logosLoadedFlow.value = true
+                }
+            }
         }
         // No learned logo is drawn before the Scores setting is known, nor while it is Off.
         scope.launch { mode.collect { logos.active = it != ScoresMode.OFF } }

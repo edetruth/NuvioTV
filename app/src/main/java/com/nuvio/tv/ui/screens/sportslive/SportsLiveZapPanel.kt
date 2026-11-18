@@ -160,6 +160,47 @@ internal fun groupPanelRows(
     return entries.sortedWith(order).map { it.row }
 }
 
+/**
+ * [fresh] rows ([groupPanelRows] order) with each group kept in the order of [previous] (stream keys,
+ * as last shown): a row the user is on never moves within its group when a score or tick regroups the
+ * list (I3). A row may still change group (a game starting, a final), as its header must say so; rows
+ * new to the list follow the known ones of their group, in their fresh order. Null [previous]: as is.
+ */
+internal fun stabilizePanelRows(fresh: List<ZapPanelRow>, previous: List<String>?): List<ZapPanelRow> {
+    if (previous == null) return fresh
+    val rank = HashMap<String, Int>(previous.size * 2)
+    previous.forEachIndexed { index, key -> rank.putIfAbsent(key, index) }
+    // Stable: rows new to the list keep their fresh order after the known ones.
+    return fresh.sortedWith(compareBy<ZapPanelRow> { it.group.ordinal }.thenBy { rank[it.item.streamKey] ?: Int.MAX_VALUE })
+}
+
+/**
+ * Whether the panel may take the fresh order now (I3): when no game row has focus, or on a new minute
+ * since the order last shown was taken ([lastMinute], null when none was). Otherwise the rows keep
+ * their order under the user's focus ([stabilizePanelRows]).
+ */
+internal fun panelMayReorder(focusedKey: String?, nowMs: Long, lastMinute: Long?): Boolean =
+    focusedKey == null || lastMinute == null || nowMs / PANEL_REORDER_MS != lastMinute
+
+internal const val PANEL_REORDER_MS = 60_000L
+
+/** The index of [key]'s row in the panel's list, which has a header above each group; -1 when not listed. */
+internal fun panelListIndex(rows: List<ZapPanelRow>, key: String?): Int {
+    var index = 0
+    rows.forEachIndexed { i, row ->
+        if (i == 0 || rows[i - 1].group != row.group) index++
+        if (row.item.streamKey == key) return index
+        index++
+    }
+    return -1
+}
+
+/** A focus stop of the live games panel outside its list. */
+internal enum class ZapPanelStop { CHIPS }
+
+/** Where Up goes from the panel's game row at [rowIndex]: from the first one, the chips (I3); null is the default. */
+internal fun zapPanelUpFrom(rowIndex: Int): ZapPanelStop? = if (rowIndex == 0) ZapPanelStop.CHIPS else null
+
 /** The panel rows' drawn teams, kept per game, event and logo-map revision: the rows are regrouped on every tick and score (#66). */
 private object PanelArt {
     private val cache = HashMap<List<Any?>, GameArt?>()

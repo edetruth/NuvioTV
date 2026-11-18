@@ -27,6 +27,7 @@ import com.nuvio.tv.domain.repository.SportsLiveRepository
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualPick
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualSession
 import com.nuvio.tv.ui.screens.sportslive.dual.offersDual
+import com.nuvio.tv.ui.screens.sportslive.dual.sourceKeys
 import com.nuvio.tv.ui.screens.stream.StreamPlaybackInfo
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -41,12 +42,12 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -174,21 +175,32 @@ class SportsLiveZapViewModel internal constructor(
             }.flowOn(computeDispatcher)
             // The games under the chip are the ones listed and tracked.
             val items = combine(all, panelChip) { list, chip -> PanelList(list, chip, filterPanelItems(list, chip)) }
-            // The mode is null until read: no chips and nothing tracked before it is known.
-            val mode = liveScores.mode.map<ScoresMode, ScoresMode?> { it }.onStart { emit(null) }
             // Grouped off the main thread; the tracker is updated back on it.
             // Ticks while the panel is open, so a grace or an estimate running out regroups its games.
             // A logo learned while open (a score feed answering, the map loading) redraws the rows.
-            val ticking = combine(items, panelTicks(), logos.revision) { panelList, _, _ -> panelList }
-            combine(ticking, liveScores.scores, mode, reveal.revealed, liveScores.unmatched) { panelList, scores, scoresMode, revealed, unmatched ->
+            // Nothing is shown before the kept logo map is read (I3): known teams never show as letters
+            // first. Nor before the Scores setting is read (combine waits for it): no chips, nothing tracked.
+            val ticking = combine(items, panelTicks(), logos.revision, liveScores.logosLoaded) { panelList, _, _, loaded ->
+                panelList.takeIf { loaded }
+            }.filterNotNull()
+            combine(ticking, liveScores.scores, liveScores.mode, reveal.revealed, liveScores.unmatched) { panelList, scores, scoresMode, revealed, unmatched ->
                 val list = panelList.shown
                 val nowMs = System.currentTimeMillis()
                 // Ended games (#60) go to the last group; ESPN finals leave the panel half an hour on.
                 val canEstimate = SportsLiveEndedGames.estimateGate(scoresMode == ScoresMode.OFF, unmatched)
                 val split = SportsLiveEndedGames.shared.split(list, scores, nowMs, canEstimate)
+                // A final in its grace is grouped (and chipped) as the final it is, never as live (C3).
+                val fresh = groupPanelRows(split.live + split.justEnded, split.scoresWithFinals(scores), scoresMode, revealed, nowMs, split.ended, logos)
+                // The order stays put under a focused row, taking the fresh one each new minute (I3).
+                val rows = if (panelMayReorder(focusedRowKey, nowMs, shownMinute)) {
+                    shownMinute = nowMs / PANEL_REORDER_MS
+                    fresh
+                } else {
+                    stabilizePanelRows(fresh, shownOrder)
+                }
+                shownOrder = rows.map { it.item.streamKey }
                 val state = SportsLiveZapPanelState(
-                    // A final in its grace is grouped (and chipped) as the final it is, never as live (C3).
-                    rows = groupPanelRows(split.live + split.justEnded, split.scoresWithFinals(scores), scoresMode, revealed, nowMs, split.ended, logos),
+                    rows = rows,
                     currentKey = session.current.streamKey,
                     chips = panelChips(panelList.all, panelList.chip),
                     chip = panelList.chip,
@@ -199,7 +211,7 @@ class SportsLiveZapViewModel internal constructor(
                 // A list grouped before closePanel can arrive after it: it must not become the tracker's
                 // cards, or the next open would start tracking this session's list.
                 if (panelSession.value === session) {
-                    scoreTracker.update(list, enabled = scoresMode != null && scoresMode != ScoresMode.OFF)
+                    scoreTracker.update(list, enabled = scoresMode != ScoresMode.OFF)
                 }
                 state
             }
@@ -209,7 +221,15 @@ class SportsLiveZapViewModel internal constructor(
     // Hide until focused: rows reveal only once the user has pressed a key in the panel, so opening it
     // (focus lands on the game playing) never reveals a score by itself.
     private var panelKeyPressed = false
+    // Read where the rows are grouped, off the main thread.
+    @Volatile
     private var focusedRowKey: String? = null
+
+    // The row order last shown (stream keys) and the minute it was taken in (I3); reset on open.
+    @Volatile
+    private var shownOrder: List<String>? = null
+    @Volatile
+    private var shownMinute: Long? = null
 
     /** The focused panel row's stream key, or null when no row is focused (Hide until focused reveal). */
     fun onPanelRowFocus(key: String?) {
@@ -261,6 +281,8 @@ class SportsLiveZapViewModel internal constructor(
         scoreTracker.onStart()
         panelKeyPressed = false
         focusedRowKey = null
+        shownOrder = null
+        shownMinute = null
         // Opens on All, or on the chip picked earlier in this playback (#68).
         panelChip.value = session.panelChip?.filter
         panelSession.value = session
@@ -309,9 +331,14 @@ class SportsLiveZapViewModel internal constructor(
 
     /**
      * "Watch with another game" in the live games panel, for the game playing: the second-game picker
-     * over the session list. Null (no action) when the session is neither Live now nor Channels.
+     * over the panel's list (the session's before it is grouped), its finals left out (M11). Null (no
+     * action) when the session is neither Live now nor Channels.
      */
-    fun dualPick(): SportsLiveDualPick? = dualPick({ it.items }, { it.items })
+    fun dualPick(): SportsLiveDualPick? = dualPick({ session -> panel.value?.items ?: session.items }, { session -> panel.value?.allItems ?: session.items })
+
+    // The panel's Just ended games, with every source of each (M11): never offered for dual screen.
+    private fun panelEndedKeys(): Set<String> =
+        panel.value?.rows.orEmpty().filter { it.group == ZapPanelGroup.JUST_ENDED }.flatMapTo(HashSet()) { it.item.sourceKeys() }
 
     private inline fun dualPick(
         items: (SportsLiveZapSession) -> List<SportsLiveItem>,
@@ -326,10 +353,15 @@ class SportsLiveZapViewModel internal constructor(
             filter = session.filter,
             tab = session.tab,
             // ESPN finals past their grace are left out too (C3), as remembered across restarts.
-            endedKeys = repo.endedKeys.value +
+            // The panel's Just ended games (M11) are left out as well.
+            endedKeys = repo.endedKeys.value + panelEndedKeys() +
                 SportsLiveEndedGames.shared.confirmedEndedSourceKeys(items(session), liveScores.scores.value, System.currentTimeMillis()),
             // The game playing keeps its working stream in dual screen, with no new lookup (#65).
-            chosenStream = workingLinks.playing(session.current.id)
+            chosenStream = workingLinks.playing(session.current.id),
+            // The picker draws each game's logos and score chip as the panel row did (M11).
+            rows = panel.value?.rows?.associateBy { it.item.streamKey }.orEmpty(),
+            // Back from dual screen plays this game full screen again (M11).
+            fromPlayer = true
         )
     }
 

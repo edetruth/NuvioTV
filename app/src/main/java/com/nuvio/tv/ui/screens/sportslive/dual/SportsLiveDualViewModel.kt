@@ -12,6 +12,7 @@ import com.nuvio.tv.domain.repository.SportsLiveRepository
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapResolver
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapSession
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapSessions
+import com.nuvio.tv.ui.screens.sportslive.ZapPanelRow
 import com.nuvio.tv.ui.screens.sportslive.sportsLiveLightPlayable
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -35,7 +36,9 @@ data class SportsLiveDualSession(
     /** The stream the full player was playing for [left] (#65): the left pane plays it as is, with no lookup. */
     val leftStream: Stream? = null,
     /** Every game of [tab] (on Live now, whatever [filter]), for the zap session OK starts (#68). */
-    val zapItems: List<SportsLiveItem> = items
+    val zapItems: List<SportsLiveItem> = items,
+    /** The game whose full player opened dual screen: Back plays it full screen again (M11); null from the section. */
+    val backTo: SportsLiveItem? = null
 )
 
 /**
@@ -51,7 +54,11 @@ data class SportsLiveDualPick(
     /** The stream the full player plays for [chosen], handed to its pane (#65); null from the section. */
     val chosenStream: Stream? = null,
     /** Every game of [tab], kept by the session for the zap session OK starts (#68). */
-    val zapItems: List<SportsLiveItem> = items
+    val zapItems: List<SportsLiveItem> = items,
+    /** The player panel's rows by stream key: the picker draws logos and score chips from them (M11). */
+    val rows: Map<String, ZapPanelRow> = emptyMap(),
+    /** Picked in [chosen]'s full player: Back from dual screen returns to it (M11). */
+    val fromPlayer: Boolean = false
 ) {
     /** The other games of the list that are not known to have ended; never [chosen] or one of its sources. */
     val candidates: List<SportsLiveItem> by lazy { items.filter(::isCandidate) }
@@ -67,7 +74,8 @@ data class SportsLiveDualPick(
             filter = filter,
             tab = tab,
             leftStream = chosenStream,
-            zapItems = zapItems.toList()
+            zapItems = zapItems.toList(),
+            backTo = chosen.takeIf { fromPlayer }
         )
 
     /** The session pairing [chosen] with [second]; null when [second] is [chosen], shares a source with it, or has ended. */
@@ -166,6 +174,7 @@ class SportsLiveDualViewModel internal constructor(
     private val zapItems: List<SportsLiveItem> = session?.zapItems.orEmpty()
     private val filter: String? = session?.filter
     private val tab: SportsLiveTab = session?.tab ?: SportsLiveTab.LIVE_NOW
+    private val backTo: SportsLiveItem? = session?.backTo
 
     private val _state = MutableStateFlow(session?.let { DualState(DualPane(it.left), DualPane(it.right)) })
 
@@ -256,6 +265,18 @@ class SportsLiveDualViewModel internal constructor(
             returnToHomeOnBack = false
         )
         if (session != null) SportsLiveZapSessions.start(session) else SportsLiveZapSessions.clear()
+    }
+
+    /**
+     * Back (M11): when a full player opened dual screen, its game and the stream to play it on (the
+     * pane's playing stream, else the one the player handed over unless it failed; null takes the section's play path),
+     * so Back returns to that single player, which replaces dual screen as OK does (#27). Null when dual
+     * screen was opened elsewhere: Back leaves.
+     */
+    fun backToPlayer(): Pair<SportsLiveItem, Stream?>? {
+        val item = backTo ?: return null
+        val pane = _state.value?.let { state -> state.sideOf(item)?.let(state::pane) }
+        return item to (pane?.okStream ?: handOffs[item.streamKey])
     }
 
     fun onFirstFrame(item: SportsLiveItem) {

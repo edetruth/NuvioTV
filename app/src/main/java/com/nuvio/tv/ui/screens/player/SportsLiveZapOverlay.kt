@@ -32,7 +32,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -48,7 +50,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -62,6 +66,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -82,6 +87,9 @@ import com.nuvio.tv.ui.screens.sportslive.FOLLOWED_STAR_COLOR
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapViewModel
 import com.nuvio.tv.ui.screens.sportslive.ZapPanelGroup
 import com.nuvio.tv.ui.screens.sportslive.ZapPanelRow
+import com.nuvio.tv.ui.screens.sportslive.ZapPanelStop
+import com.nuvio.tv.ui.screens.sportslive.panelListIndex
+import com.nuvio.tv.ui.screens.sportslive.zapPanelUpFrom
 import com.nuvio.tv.core.sportslive.scores.TeamLogoUrls
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveTeamLogo
 import com.nuvio.tv.ui.screens.sportslive.kickoffText
@@ -204,6 +212,7 @@ internal fun BoxScope.SportsLiveZapOverlay(
     dualPick?.let { pick ->
         SportsLiveDualPickerDialog(
             candidates = pick.candidates,
+            rows = pick.rows,
             onPick = { second ->
                 dualPick = null
                 SportsLiveDualSessions.start(pick.session(second))
@@ -306,11 +315,15 @@ private fun LiveGamesPanel(
     val listState = rememberLazyListState()
     val focusRequester = remember { FocusRequester() }
     val emptyFocusRequester = remember { FocusRequester() }
+    val chipsFocusRequester = remember { FocusRequester() }
     // Focus starts on the game playing, found by key so a regroup (scores arriving) never moves it to
     // another row; the first row when the game playing is not listed.
     val startKey = state.items.firstOrNull { it.streamKey == state.currentKey }?.streamKey ?: state.items.firstOrNull()?.streamKey
     // While the chips have focus, a chip that empties (or fills) the list leaves focus on them.
     var chipsFocused by remember { mutableStateOf(false) }
+    // The game row with focus, by stream key (null on the chips or the button above them).
+    var focusedKey by remember { mutableStateOf<String?>(null) }
+    val currentRows by rememberUpdatedState(state.rows)
 
     LaunchedEffect(state.items.isEmpty()) {
         if (chipsFocused) return@LaunchedEffect
@@ -318,14 +331,19 @@ private fun LiveGamesPanel(
             if (state.items.isEmpty()) {
                 emptyFocusRequester.requestFocus()
             } else {
-                // The list also holds a header above each group.
-                val startIndex = state.items.indexOfFirst { it.streamKey == startKey }.coerceAtLeast(0)
-                val headersAbove = state.rows.take(startIndex + 1).map { it.group }.distinct().size
-                listState.scrollToItem((startIndex + headersAbove - 2).coerceAtLeast(0))
-                delay(32)
+                // I3: the game playing is scrolled to the middle of the list before focus lands on it.
+                listState.centerOn(panelListIndex(currentRows, startKey).coerceAtLeast(0))
                 focusRequester.requestFocus()
             }
         }
+    }
+    // I3: rows regrouped by a score or a tick keep focus on the same game (by key) and keep it in view;
+    // the list scrolls only when that row left the view, and only to it.
+    LaunchedEffect(state.rows) {
+        val index = panelListIndex(state.rows, focusedKey ?: return@LaunchedEffect)
+        if (index < 0) return@LaunchedEffect
+        withFrameNanos { }
+        if (!listState.isFullyVisible(index)) runCatching { listState.centerOn(index) }
     }
 
     Box(
@@ -370,7 +388,15 @@ private fun LiveGamesPanel(
             }
             Spacer(modifier = Modifier.height(NuvioTheme.spacing.lg))
             if (onWatchWith != null) {
-                PanelCard(onClick = onWatchWith, modifier = Modifier.fillMaxWidth()) {
+                PanelCard(
+                    onClick = onWatchWith,
+                    modifier = Modifier.fillMaxWidth().onFocusChanged {
+                        if (it.isFocused) {
+                            focusedKey = null
+                            onRowFocus(null)
+                        }
+                    }
+                ) {
                     Text(
                         text = stringResource(R.string.sports_live_dual_watch_with),
                         style = MaterialTheme.typography.titleMedium,
@@ -389,8 +415,12 @@ private fun LiveGamesPanel(
                 onFocusChanged = { focused ->
                     chipsFocused = focused
                     // No game row is focused while the chips are: none is revealed meanwhile.
-                    if (focused) onRowFocus(null)
-                }
+                    if (focused) {
+                        focusedKey = null
+                        onRowFocus(null)
+                    }
+                },
+                focusRequester = chipsFocusRequester
             )
             Spacer(modifier = Modifier.height(NuvioTheme.spacing.sm))
             if (state.items.isEmpty()) {
@@ -414,18 +444,20 @@ private fun LiveGamesPanel(
                             item(key = "group_${row.group}") { GroupHeader(row.group) }
                         }
                         val item = row.item
+                        // I3: Up from the first game reaches the chips, never past them.
+                        val upToChips = zapPanelUpFrom(index) == ZapPanelStop.CHIPS
                         item(key = item.streamKey) {
                             LiveGameItem(
                                 row = row,
                                 isCurrent = item.streamKey == state.currentKey,
-                                modifier = if (item.streamKey == startKey) {
-                                    Modifier.focusRequester(focusRequester)
-                                } else {
-                                    Modifier
-                                },
+                                modifier = (if (item.streamKey == startKey) Modifier.focusRequester(focusRequester) else Modifier)
+                                    .then(if (upToChips) Modifier.focusProperties { up = chipsFocusRequester } else Modifier),
                                 onClick = { onPick(item) },
                                 onLongClick = onLongPick?.let { { it(item) } },
-                                onFocus = { onRowFocus(item.streamKey) }
+                                onFocus = {
+                                    focusedKey = item.streamKey
+                                    onRowFocus(item.streamKey)
+                                }
                             )
                         }
                     }
@@ -444,7 +476,8 @@ private fun PanelChipRow(
     chips: List<String?>,
     selected: String?,
     onChip: (String?) -> Unit,
-    onFocusChanged: (Boolean) -> Unit
+    onFocusChanged: (Boolean) -> Unit,
+    focusRequester: FocusRequester
 ) {
     var focused by remember { mutableStateOf(false) }
     val shape = RoundedCornerShape(NuvioTheme.radii.xl)
@@ -472,6 +505,7 @@ private fun PanelChipRow(
                 }
                 true
             }
+            .focusRequester(focusRequester)
             .focusable()
             .horizontalScroll(rememberScrollState())
             .padding(NuvioTheme.spacing.xs)
@@ -483,17 +517,24 @@ private fun PanelChipRow(
                     SportsLiveUiState.MY_TEAMS_FILTER -> stringResource(R.string.sports_live_filter_my_teams)
                     else -> chip
                 },
-                selected = chip == selected
+                selected = chip == selected,
+                rowFocused = focused
             )
         }
     }
 }
 
 @Composable
-private fun PanelChip(name: String, selected: Boolean) {
-    // The selected chip scrolls into view as Left and Right move along a long row.
+private fun PanelChip(name: String, selected: Boolean, rowFocused: Boolean) {
+    // M6: the selected chip scrolls into view as Left and Right move along a long row, and again when
+    // the row takes focus, once laid out.
     val bringIntoView = remember { BringIntoViewRequester() }
-    LaunchedEffect(selected) { if (selected) runCatching { bringIntoView.bringIntoView() } }
+    LaunchedEffect(selected, rowFocused) {
+        if (selected) {
+            withFrameNanos { }
+            runCatching { bringIntoView.bringIntoView() }
+        }
+    }
     Text(
         text = name,
         style = MaterialTheme.typography.labelLarge,
@@ -503,7 +544,8 @@ private fun PanelChip(name: String, selected: Boolean) {
             .bringIntoViewRequester(bringIntoView)
             .clip(RoundedCornerShape(NuvioTheme.radii.xl))
             .background(if (selected) NuvioTheme.colors.Primary else NuvioTheme.colors.BackgroundCard)
-            .padding(horizontal = NuvioTheme.spacing.md, vertical = NuvioTheme.spacing.xs)
+            // M6: compact, so All and three sports fit the panel; a longer row scrolls.
+            .padding(horizontal = NuvioTheme.spacing.sm, vertical = NuvioTheme.spacing.xs)
     )
 }
 
@@ -564,6 +606,16 @@ private fun LiveGameItem(
                 }
             }
             Column(modifier = Modifier.weight(1f)) {
+                // M6: the game playing is labelled, as in the design.
+                if (isCurrent) {
+                    Text(
+                        text = stringResource(R.string.sports_live_now_playing).uppercase(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = NuvioTheme.colors.Primary,
+                        letterSpacing = 1.sp,
+                        maxLines = 1
+                    )
+                }
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs)
@@ -630,4 +682,19 @@ private fun PanelCard(
         shape = CardDefaults.shape(shape = RoundedCornerShape(NuvioTheme.radii.xl)),
         content = content
     )
+}
+
+/** Scrolls item [index] to the middle of the list (as near as the list's ends allow), once laid out. */
+private suspend fun LazyListState.centerOn(index: Int) {
+    scrollToItem(index)
+    withFrameNanos { }
+    val info = layoutInfo.visibleItemsInfo.firstOrNull { it.index == index } ?: return
+    val viewport = layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset
+    scrollBy((info.offset + info.size / 2 - viewport / 2).toFloat())
+}
+
+/** True when item [index] is laid out wholly inside the list's viewport. */
+private fun LazyListState.isFullyVisible(index: Int): Boolean {
+    val info = layoutInfo.visibleItemsInfo.firstOrNull { it.index == index } ?: return false
+    return info.offset >= layoutInfo.viewportStartOffset && info.offset + info.size <= layoutInfo.viewportEndOffset
 }

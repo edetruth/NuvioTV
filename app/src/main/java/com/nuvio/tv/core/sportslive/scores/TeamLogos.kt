@@ -30,9 +30,17 @@ class TeamLogoBook(private val maxEntries: Int = MAX_ENTRIES, active: Boolean = 
     /** Bumped when teams are loaded or learned: a drawn card re-reads its logos. */
     val revision: StateFlow<Int> = revisionFlow.asStateFlow()
 
-    /** False until the Scores setting is known, and while it is Off: no learned logo is drawn. */
+    /**
+     * False until the Scores setting is known, and while it is Off: no learned logo is drawn. A change
+     * bumps [revision], so rows drawn before the setting was read redraw with their logos (I3).
+     */
     @Volatile
     var active: Boolean = active
+        set(value) {
+            if (field == value) return
+            field = value
+            revisionFlow.update { it + 1 }
+        }
 
     val size: Int @Synchronized get() = entries.size
 
