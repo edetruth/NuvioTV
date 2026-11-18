@@ -143,9 +143,9 @@ class TeamPagesTest {
         val leaders = TeamPages.leaders(TeamFixtures.summary(TeamFixtures.NBA_NEXT_SUMMARY), "20")
         assertEquals(
             listOf(
-                TeamLeader("Points", "T. Maxey", "G", "26.5"),
-                TeamLeader("Assists", "L. James", "F", "6.9"),
-                TeamLeader("Rebounds", "J. Embiid", "C", "8.5")
+                TeamLeader("Points", "T. Maxey", "G", "26.5", athleteId = "4431678"),
+                TeamLeader("Assists", "L. James", "F", "6.9", athleteId = "1966"),
+                TeamLeader("Rebounds", "J. Embiid", "C", "8.5", athleteId = "3059318")
             ),
             leaders
         )

@@ -1,0 +1,239 @@
+{
+ "labels": [
+  "G",
+  "A",
+  "PTS",
+  "+/-",
+  "PIM",
+  "S",
+  "SPCT",
+  "PPG",
+  "PPA",
+  "SHG",
+  "SHA",
+  "GWG",
+  "TOI/G",
+  "PROD"
+ ],
+ "names": [
+  "goals",
+  "assists",
+  "points",
+  "plusMinus",
+  "penaltyMinutes",
+  "shotsTotal",
+  "shootingPct",
+  "powerPlayGoals",
+  "powerPlayAssists",
+  "shortHandedGoals",
+  "shortHandedAssists",
+  "gameWinningGoals",
+  "timeOnIcePerGame",
+  "production"
+ ],
+ "events": {
+  "401892730": {
+   "id": "401892730",
+   "atVs": "@",
+   "gameDate": "2026-11-18T00:00:00.000+00:00",
+   "score": "5-2",
+   "gameResult": "W",
+   "opponent": {
+    "id": "26",
+    "abbreviation": "FLA",
+    "displayName": "Florida Panthers",
+    "logo": "https://a.espncdn.com/i/teamlogos/nhl/500/fla.png"
+   }
+  },
+  "401892721": {
+   "id": "401892721",
+   "atVs": "@",
+   "gameDate": "2026-11-16T00:30:00.000+00:00",
+   "score": "5-2",
+   "gameResult": "W",
+   "opponent": {
+    "id": "15",
+    "abbreviation": "PHI",
+    "displayName": "Philadelphia Flyers",
+    "logo": "https://a.espncdn.com/i/teamlogos/nhl/500/phi.png"
+   }
+  },
+  "401892710": {
+   "id": "401892710",
+   "atVs": "@",
+   "gameDate": "2026-11-15T00:00:00.000+00:00",
+   "score": "1-0",
+   "gameResult": "W",
+   "opponent": {
+    "id": "21",
+    "abbreviation": "TOR",
+    "displayName": "Toronto Maple Leafs",
+    "logo": "https://a.espncdn.com/i/teamlogos/nhl/500/tor.png"
+   }
+  },
+  "401892692": {
+   "id": "401892692",
+   "atVs": "vs",
+   "gameDate": "2026-11-12T02:00:00.000+00:00",
+   "score": "3-2 OT",
+   "gameResult": "W",
+   "opponent": {
+    "id": "15",
+    "abbreviation": "PHI",
+    "displayName": "Philadelphia Flyers",
+    "logo": "https://a.espncdn.com/i/teamlogos/nhl/500/phi.png"
+   }
+  },
+  "401892680": {
+   "id": "401892680",
+   "atVs": "vs",
+   "gameDate": "2026-11-10T01:00:00.000+00:00",
+   "score": "3-1",
+   "gameResult": "W",
+   "opponent": {
+    "id": "13",
+    "abbreviation": "NYR",
+    "displayName": "New York Rangers",
+    "logo": "https://a.espncdn.com/i/teamlogos/nhl/500/nyr.png"
+   }
+  },
+  "401892673": {
+   "id": "401892673",
+   "atVs": "vs",
+   "gameDate": "2026-11-08T03:00:00.000+00:00",
+   "score": "4-2",
+   "gameResult": "W",
+   "opponent": {
+    "id": "22",
+    "abbreviation": "VAN",
+    "displayName": "Vancouver Canucks",
+    "logo": "https://a.espncdn.com/i/teamlogos/nhl/500/van.png"
+   }
+  }
+ },
+ "seasonTypes": [
+  {
+   "displayName": "2026-27 Regular Season",
+   "categories": [
+    {
+     "events": [
+      {
+       "eventId": "401892730",
+       "stats": [
+        "1",
+        "1",
+        "2",
+        "0",
+        "0",
+        "2",
+        "50.0",
+        "1",
+        "1",
+        "0",
+        "0",
+        "0",
+        "21:29",
+        "10:44"
+       ]
+      },
+      {
+       "eventId": "401892721",
+       "stats": [
+        "1",
+        "2",
+        "3",
+        "3",
+        "2",
+        "4",
+        "25.0",
+        "0",
+        "1",
+        "0",
+        "0",
+        "0",
+        "22:29",
+        "7:29"
+       ]
+      },
+      {
+       "eventId": "401892710",
+       "stats": [
+        "0",
+        "1",
+        "1",
+        "1",
+        "0",
+        "3",
+        "0.0",
+        "0",
+        "0",
+        "0",
+        "0",
+        "0",
+        "22:47",
+        "22:47"
+       ]
+      },
+      {
+       "eventId": "401892692",
+       "stats": [
+        "0",
+        "1",
+        "1",
+        "1",
+        "0",
+        "2",
+        "0.0",
+        "0",
+        "1",
+        "0",
+        "0",
+        "0",
+        "24:00",
+        "24:00"
+       ]
+      },
+      {
+       "eventId": "401892680",
+       "stats": [
+        "1",
+        "0",
+        "1",
+        "2",
+        "2",
+        "4",
+        "25.0",
+        "0",
+        "0",
+        "0",
+        "0",
+        "0",
+        "24:34",
+        "24:34"
+       ]
+      },
+      {
+       "eventId": "401892673",
+       "stats": [
+        "0",
+        "3",
+        "3",
+        "1",
+        "0",
+        "3",
+        "0.0",
+        "0",
+        "1",
+        "0",
+        "0",
+        "0",
+        "25:15",
+        "8:25"
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

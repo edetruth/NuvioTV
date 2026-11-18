@@ -3772,6 +3772,17 @@
     <string name="sports_live_team_leader_player">%1$s · %2$s</string>
     <string name="sports_live_team_keys">↑ ↓ sections · ← → games · OK open · Back to return</string>
     <string name="sports_live_game_keys">← → sections · ↑ ↓ scroll · Back to return</string>
+    <string name="sports_live_player_season">Season stats</string>
+    <string name="sports_live_player_last_games">Last 5 games</string>
+    <string name="sports_live_player_last_games_hidden">Results and stat lines are hidden</string>
+    <string name="sports_live_player_reveal_last_games">Reveal last games</string>
+    <string name="sports_live_player_hidden">Player stats are hidden</string>
+    <string name="sports_live_player_reveal_all">Reveal player stats</string>
+    <string name="sports_live_player_unavailable">Player stats are unavailable</string>
+    <string name="sports_live_player_no_games">No recent games</string>
+    <string name="sports_live_player_jersey">#%1$s</string>
+    <string name="sports_live_player_opponent">%1$s %2$s</string>
+    <string name="sports_live_player_keys">Back to return</string>
     <string name="sports_live_stat_fg_pct" formatted="false">Field goal %</string>
     <string name="sports_live_stat_three_pct" formatted="false">3-point %</string>
     <string name="sports_live_stat_rebounds">Rebounds</string>

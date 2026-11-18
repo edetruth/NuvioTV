@@ -55,6 +55,7 @@ import com.nuvio.tv.core.sportslive.alerts.RemindersState
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.ScoreState
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
+import com.nuvio.tv.core.sportslive.scores.PlayerCards
 import com.nuvio.tv.core.sportslive.scores.TeamLeader
 import com.nuvio.tv.core.sportslive.scores.TeamOutcome
 import com.nuvio.tv.core.sportslive.scores.TeamPages
@@ -84,7 +85,9 @@ fun SportsLiveTeamScreen(
     onPlay: (SportsLiveItem, Boolean) -> Unit,
     onPlayTarget: (SportsLiveZapTarget) -> Unit,
     /** Opens the Game page on the request just put in [SportsLiveGameRequests]. */
-    onOpenGame: () -> Unit
+    onOpenGame: () -> Unit,
+    /** Opens the Player card just put in [SportsLivePlayerCardRequests] (#63). */
+    onOpenPlayerCard: () -> Unit = {}
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val currentOnBack by rememberUpdatedState(onBack)
@@ -212,7 +215,18 @@ fun SportsLiveTeamScreen(
                         item(key = "leaders") {
                             TeamSection(stringResource(R.string.sports_live_team_leaders)) {
                                 LazyRow(horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md)) {
-                                    items(data.leaders, key = { it.category }) { LeaderTile(it) }
+                                    items(data.leaders, key = { it.category }) { leader ->
+                                        val target = PlayerCards.targetFor(leader, team)
+                                        LeaderTile(
+                                            leader = leader,
+                                            onClick = target?.let { open ->
+                                                {
+                                                    SportsLivePlayerCardRequests.open(SportsLivePlayerCardRequest(open))
+                                                    onOpenPlayerCard()
+                                                }
+                                            }
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -453,10 +467,10 @@ private fun ActionLine(icon: androidx.compose.ui.graphics.vector.ImageVector, te
     }
 }
 
-/** A leader: focusable so ↓ reaches the section; OK does nothing until the Player card (#63). */
+/** A leader: focusable so ↓ reaches the section; OK opens the Player card (#63) when there is one. */
 @Composable
-private fun LeaderTile(leader: TeamLeader) {
-    TeamTile(onClick = {}) {
+private fun LeaderTile(leader: TeamLeader, onClick: (() -> Unit)?) {
+    TeamTile(onClick = onClick ?: {}) {
         Text(leader.category.uppercase(Locale.getDefault()), style = MaterialTheme.typography.labelSmall, color = NuvioTheme.colors.TextSecondary, maxLines = 1)
         Text(leader.value, style = MaterialTheme.typography.headlineSmall.sportsLiveBold().copy(fontFeatureSettings = "tnum"), color = NuvioTheme.colors.TextPrimary, maxLines = 1)
         val player = leader.position?.let { stringResource(R.string.sports_live_team_leader_player, leader.player, it) } ?: leader.player

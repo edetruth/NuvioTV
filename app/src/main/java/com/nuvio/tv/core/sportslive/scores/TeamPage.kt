@@ -27,8 +27,14 @@ data class TeamHeader(
     val homeRecord: String?
 )
 
-/** A season leader: "Points" · "T. Maxey" · "G" · "26.5". */
-data class TeamLeader(val category: String, val player: String, val position: String?, val value: String)
+/** A season leader: "Points" · "T. Maxey" · "G" · "26.5"; [athleteId] opens the Player card (#63). */
+data class TeamLeader(
+    val category: String,
+    val player: String,
+    val position: String?,
+    val value: String,
+    val athleteId: String? = null
+)
 
 enum class TeamOutcome { WIN, LOSS, DRAW }
 
@@ -243,7 +249,13 @@ object TeamPages {
             val player = (leader.athlete?.shortName ?: leader.athlete?.displayName)?.trim()?.takeIf { it.isNotEmpty() }
                 ?: return@mapNotNull null
             val value = leader.displayValue?.trim()?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
-            TeamLeader(label.trim(), player, leader.athlete?.position?.abbreviation?.takeIf { it.isNotBlank() }, value)
+            TeamLeader(
+                category = label.trim(),
+                player = player,
+                position = leader.athlete?.position?.abbreviation?.takeIf { it.isNotBlank() },
+                value = value,
+                athleteId = leader.athlete?.id?.trim()?.takeIf { it.isNotEmpty() }
+            )
         }.take(LEADERS)
     }
 

@@ -70,8 +70,14 @@ data class StatComparison(
 /** A piece of a performer's line: "24" + "PTS", or a whole football line with no [label]. */
 data class PerformerStat(val value: String, val label: String?)
 
-/** A top performer card: the team, the player and the categories they led. */
-data class Performer(val side: ScoreSide, val team: String, val player: String, val stats: List<PerformerStat>)
+/** A top performer card: the team, the player and the categories they led; [athleteId] opens the Player card (#63). */
+data class Performer(
+    val side: ScoreSide,
+    val team: String,
+    val player: String,
+    val stats: List<PerformerStat>,
+    val athleteId: String? = null
+)
 
 data class BoxScoreRow(val player: String, val position: String?, val values: List<String>)
 
@@ -286,7 +292,7 @@ object GameSummaryParser {
             val entry = leaders.firstOrNull { it.team?.id != null && it.team.id == team.id }
                 ?: leaders.firstOrNull { it.team?.abbreviation != null && it.team.abbreviation == team.abbreviation }
                 ?: return emptyList()
-            val byPlayer = LinkedHashMap<String, Pair<String, MutableList<PerformerStat>>>()
+            val byPlayer = LinkedHashMap<String, Triple<String, String?, MutableList<PerformerStat>>>()
             for (category in entry.leaders.orEmpty()) {
                 val leader = category.leaders?.firstOrNull() ?: continue
                 val athlete = leader.athlete ?: continue
@@ -298,9 +304,9 @@ object GameSummaryParser {
                 } else {
                     PerformerStat(value, (leader.mainStat?.label ?: category.abbreviation ?: category.displayName)?.takeIf { it.isNotBlank() })
                 }
-                byPlayer.getOrPut(athlete.id ?: name) { name to mutableListOf() }.second += stat
+                byPlayer.getOrPut(athlete.id ?: name) { Triple(name, athlete.id, mutableListOf()) }.third += stat
             }
-            return byPlayer.values.take(2).map { (name, stats) -> Performer(side, team.short, name, stats) }
+            return byPlayer.values.take(2).map { (name, id, stats) -> Performer(side, team.short, name, stats, id) }
         }
         val awayPerformers = forSide(ScoreSide.AWAY, away)
         val homePerformers = forSide(ScoreSide.HOME, home)

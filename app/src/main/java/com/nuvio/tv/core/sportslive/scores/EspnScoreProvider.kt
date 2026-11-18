@@ -35,8 +35,10 @@ class EspnScoreProvider internal constructor(
     /** ESPN's day now (US Eastern): which scoreboards are still live and which are past. */
     private val today: () -> LocalDate = { LocalDate.now(SportsResults.EASTERN) },
     /** Where each request's outcome is recorded (#70). */
-    private val health: EspnFeedHealth = EspnFeedHealth()
-) : ScoreProvider, GameSummarySource, TeamPageSource {
+    private val health: EspnFeedHealth = EspnFeedHealth(),
+    /** ESPN's athlete API, a different host from the scoreboards (#63). */
+    private val athleteBaseUrl: String = ATHLETE_BASE_URL
+) : ScoreProvider, GameSummarySource, TeamPageSource, PlayerCardSource {
 
     @Inject
     constructor(okHttpClient: OkHttpClient, moshi: Moshi, health: EspnFeedHealth) :
@@ -182,6 +184,14 @@ class EspnScoreProvider internal constructor(
             }
         }
 
+    /** The athlete's bio and season summary (#63); like a team body, never stored in the HTTP cache. */
+    override suspend fun athlete(league: EspnLeague, athleteId: String): String? =
+        teamText("$athleteBaseUrl${league.path}/athletes/$athleteId", "athlete $athleteId")
+
+    /** The athlete's game log (#63). */
+    override suspend fun gameLog(league: EspnLeague, athleteId: String): String? =
+        teamText("$athleteBaseUrl${league.path}/athletes/$athleteId/gamelog", "gamelog $athleteId")
+
     override suspend fun team(league: EspnLeague, teamId: String): String? =
         teamText("$baseUrl${league.path}/teams/$teamId", "team $teamId")
 
@@ -218,6 +228,7 @@ class EspnScoreProvider internal constructor(
     companion object {
         private const val TAG = "EspnScoreProvider"
         internal const val BASE_URL = "https://site.api.espn.com/apis/site/v2/sports/"
+        internal const val ATHLETE_BASE_URL = "https://site.web.api.espn.com/apis/common/v3/sports/"
         // ".../gameId/401930175/league/fifa.friendly_u21"
         private val LEAGUE_IN_LINK = Regex("""/league/([a-z0-9._-]+)""")
         private const val PAST_DAY_MAX_STALE_DAYS = 7

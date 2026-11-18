@@ -146,6 +146,7 @@ sealed class Screen(val route: String) {
     data object SportsLiveDual : Screen("sports_live_dual")
     data object SportsLiveGame : Screen("sports_live_game")
     data object SportsLiveTeam : Screen("sports_live_team")
+    data object SportsLivePlayerCard : Screen("sports_live_player_card")
     data object Settings : Screen("settings")
     data object Tracking : Screen("trakt")
     data object WatchParty : Screen("watch_party?code={code}") {

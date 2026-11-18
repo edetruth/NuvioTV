@@ -4,6 +4,7 @@ import android.content.Context
 import com.nuvio.tv.core.sportslive.scores.EspnFeedHealth
 import com.nuvio.tv.core.sportslive.scores.EspnScoreProvider
 import com.nuvio.tv.core.sportslive.scores.GameSummarySource
+import com.nuvio.tv.core.sportslive.scores.PlayerCardSource
 import com.nuvio.tv.core.sportslive.scores.ScoreProvider
 import com.nuvio.tv.core.sportslive.scores.TeamPageSource
 import com.squareup.moshi.Moshi
@@ -49,4 +50,7 @@ object ScoresModule {
 
     @Provides
     fun provideTeamPageSource(espn: EspnScoreProvider): TeamPageSource = espn
+
+    @Provides
+    fun providePlayerCardSource(espn: EspnScoreProvider): PlayerCardSource = espn
 }

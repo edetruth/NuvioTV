@@ -1,0 +1,48 @@
+{
+ "athlete": {
+  "id": "219362",
+  "displayName": "Daichi Kamada",
+  "jersey": "18",
+  "displayHeight": "5' 11\"",
+  "displayWeight": "159 lbs",
+  "position": {
+   "displayName": "Midfielder",
+   "abbreviation": "M"
+  },
+  "team": {
+   "id": "384",
+   "abbreviation": "CRY",
+   "displayName": "Crystal Palace",
+   "logos": [
+    {
+     "href": "https://a.espncdn.com/i/teamlogos/soccer/500/384.png"
+    }
+   ]
+  },
+  "statsSummary": {
+   "displayName": "2026-27 Premier League Stats",
+   "statistics": [
+    {
+     "name": "starts-subIns",
+     "abbreviation": "START (SUB)",
+     "displayValue": "10 (0)"
+    },
+    {
+     "name": "totalGoals",
+     "abbreviation": "G",
+     "displayValue": "1"
+    },
+    {
+     "name": "goalAssists",
+     "abbreviation": "A",
+     "displayValue": "3"
+    },
+    {
+     "name": "totalShots",
+     "abbreviation": "SHOT",
+     "displayValue": "9"
+    }
+   ]
+  }
+ }
+}

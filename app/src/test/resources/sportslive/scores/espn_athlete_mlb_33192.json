@@ -1,0 +1,52 @@
+{
+ "athlete": {
+  "id": "33192",
+  "displayName": "Aaron Judge",
+  "jersey": "99",
+  "displayHeight": "6' 7\"",
+  "displayWeight": "282 lbs",
+  "displayExperience": "11th Season",
+  "headshot": {
+   "href": "https://a.espncdn.com/i/headshots/mlb/players/full/33192.png"
+  },
+  "position": {
+   "displayName": "Right Fielder",
+   "abbreviation": "RF"
+  },
+  "team": {
+   "id": "10",
+   "abbreviation": "NYY",
+   "displayName": "New York Yankees",
+   "logos": [
+    {
+     "href": "https://a.espncdn.com/i/teamlogos/mlb/500/nyy.png"
+    }
+   ]
+  },
+  "statsSummary": {
+   "displayName": "2026 season stats",
+   "statistics": [
+    {
+     "name": "avg",
+     "abbreviation": "AVG",
+     "displayValue": ".241"
+    },
+    {
+     "name": "homeRuns",
+     "abbreviation": "HR",
+     "displayValue": "18"
+    },
+    {
+     "name": "RBIs",
+     "abbreviation": "RBI",
+     "displayValue": "41"
+    },
+    {
+     "name": "OPS",
+     "abbreviation": "OPS",
+     "displayValue": ".871"
+    }
+   ]
+  }
+ }
+}

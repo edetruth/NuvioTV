@@ -70,6 +70,8 @@ import com.nuvio.tv.core.sportslive.scores.GameSection
 import com.nuvio.tv.core.sportslive.scores.GameStat
 import com.nuvio.tv.core.sportslive.scores.GameSummary
 import com.nuvio.tv.core.sportslive.scores.Performer
+import com.nuvio.tv.core.sportslive.scores.PlayerCardTarget
+import com.nuvio.tv.core.sportslive.scores.PlayerCards
 import com.nuvio.tv.core.sportslive.scores.ScoreSide
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.ScoreState
@@ -113,7 +115,9 @@ fun SportsLiveGameScreen(
     /** Opens dual screen on the session just put in [SportsLiveDualSessions] (#57). */
     onOpenDual: () -> Unit = {},
     /** Opens the Team page (#62) on the request just put in [SportsLiveTeamRequests]. */
-    onOpenTeam: () -> Unit = {}
+    onOpenTeam: () -> Unit = {},
+    /** Opens the Player card just put in [SportsLivePlayerCardRequests] (#63). */
+    onOpenPlayerCard: () -> Unit = {}
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -282,6 +286,10 @@ fun SportsLiveGameScreen(
                         returnHighlightId = clips.singleOrNull()?.id
                         onPlayHighlight(clip)
                     }
+                },
+                onOpenPlayer = { target ->
+                    SportsLivePlayerCardRequests.open(SportsLivePlayerCardRequest(target, spoilerSafe = state.spoilerSafe))
+                    onOpenPlayerCard()
                 }
             )
         }
@@ -655,7 +663,8 @@ private fun GameBody(
     upFocusRequester: FocusRequester,
     /** The card to focus on return from playing it, and its requester. */
     highlightFocus: Pair<String?, FocusRequester>,
-    onPlayHighlights: (List<GameHighlight>) -> Unit
+    onPlayHighlights: (List<GameHighlight>) -> Unit,
+    onOpenPlayer: (PlayerCardTarget) -> Unit
 ) {
     val summary = state.summary
     when {
@@ -681,7 +690,7 @@ private fun GameBody(
                     .focusRequester(entryFocusRequester)
                     .focusProperties { up = upFocusRequester }
                 when (section) {
-                    GameSection.GAME -> gameTab(summary, first, state.homeFirst)
+                    GameSection.GAME -> gameTab(summary, first, state.homeFirst, gamePlayerTarget(state), onOpenPlayer)
                     GameSection.BOX_SCORE -> boxScoreTab(summary.boxScore, first)
                     GameSection.STANDINGS -> standingsTab(summary.standings, first)
                     GameSection.HIGHLIGHTS -> highlightsTab(summary.highlights, first, highlightFocus, onPlayHighlights)
@@ -716,7 +725,21 @@ private fun GamePanel(
     }
 }
 
-private fun LazyListScope.gameTab(summary: GameSummary, first: Modifier, homeFirst: Boolean) {
+/** The Player card a top performer opens (#63), or null: pro leagues with an ESPN athlete id only. */
+internal fun gamePlayerTarget(state: SportsLiveGameUiState): (Performer) -> PlayerCardTarget? = { performer ->
+    state.summary?.let { summary ->
+        val team = if (performer.side == ScoreSide.HOME) summary.home else summary.away
+        PlayerCards.targetFor(performer, summary.league, state.event?.leagueSlug, team.fullName)
+    }
+}
+
+private fun LazyListScope.gameTab(
+    summary: GameSummary,
+    first: Modifier,
+    homeFirst: Boolean,
+    playerTarget: (Performer) -> PlayerCardTarget?,
+    onOpenPlayer: (PlayerCardTarget) -> Unit
+) {
     val details = summary.scoreDetails()?.takeIf { it.periods.isNotEmpty() || it.soccer }
     val performers = summary.performers
     val stats = summary.teamStats
@@ -736,7 +759,34 @@ private fun LazyListScope.gameTab(summary: GameSummary, first: Modifier, homeFir
                             SportsLiveScoreDetails(details, showScoreline = false)
                         }
                     }
-                    if (performers.isNotEmpty()) {
+                    val targets = performers.map(playerTarget)
+                    if (targets.any { it != null }) {
+                        // Each player with a card is its own focus stop: OK opens the Player card (#63).
+                        val firstOpenable = targets.indexOfFirst { it != null }
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(NuvioTheme.radii.md))
+                                .background(NuvioTheme.colors.BackgroundCard)
+                                .padding(NuvioTheme.spacing.lg),
+                            verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)
+                        ) {
+                            SectionTitle(stringResource(R.string.sports_live_game_top_performers))
+                            performers.indices.chunked(2).forEach { pair ->
+                                Row(horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md)) {
+                                    pair.forEach { index ->
+                                        val target = targets[index]
+                                        PerformerCard(
+                                            performer = performers[index],
+                                            modifier = Modifier.weight(1f).then(if (index == firstOpenable) focus(1) else Modifier),
+                                            onClick = target?.let { open -> { onOpenPlayer(open) } }
+                                        )
+                                    }
+                                    if (pair.size == 1) Spacer(Modifier.weight(1f))
+                                }
+                            }
+                        }
+                    } else if (performers.isNotEmpty()) {
                         GamePanel(modifier = focus(1)) {
                             SectionTitle(stringResource(R.string.sports_live_game_top_performers))
                             performers.chunked(2).forEach { pair ->
@@ -776,16 +826,35 @@ private fun SectionTitle(text: String) {
     )
 }
 
+/** A top performer; with [onClick] a focus stop whose OK opens the Player card (#63). */
 @Composable
-private fun PerformerCard(performer: Performer, modifier: Modifier) {
+private fun PerformerCard(performer: Performer, modifier: Modifier, onClick: (() -> Unit)? = null) {
+    if (onClick == null) {
+        Column(
+            modifier = modifier
+                .clip(RoundedCornerShape(NuvioTheme.radii.md))
+                .background(NuvioTheme.colors.SurfaceVariant)
+                .padding(horizontal = NuvioTheme.spacing.md, vertical = NuvioTheme.spacing.sm)
+        ) { PerformerText(performer) }
+        return
+    }
+    val shape = RoundedCornerShape(NuvioTheme.radii.md)
+    LightweightCard(
+        onClick = onClick,
+        modifier = modifier,
+        shape = shape,
+        containerColor = NuvioTheme.colors.SurfaceVariant,
+        focusedBorder = Border(border = NuvioTheme.focusRing.border(NuvioTheme.spacing.xxs), shape = shape)
+    ) {
+        Column(modifier = Modifier.padding(horizontal = NuvioTheme.spacing.md, vertical = NuvioTheme.spacing.sm)) { PerformerText(performer) }
+    }
+}
+
+@Composable
+private fun PerformerText(performer: Performer) {
     val separator = stringResource(R.string.sports_live_game_info_separator)
     val statFormat = stringResource(R.string.sports_live_game_performer_stat)
-    Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(NuvioTheme.radii.md))
-            .background(NuvioTheme.colors.SurfaceVariant)
-            .padding(horizontal = NuvioTheme.spacing.md, vertical = NuvioTheme.spacing.sm)
-    ) {
+    Column {
         Text(performer.team, style = MaterialTheme.typography.labelMedium, color = NuvioTheme.colors.TextTertiary, maxLines = 1)
         Text(
             performer.player,

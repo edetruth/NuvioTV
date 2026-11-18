@@ -1,0 +1,271 @@
+{
+ "labels": [
+  "MIN",
+  "FG",
+  "FG%",
+  "3PT",
+  "3P%",
+  "FT",
+  "FT%",
+  "REB",
+  "AST",
+  "BLK",
+  "STL",
+  "PF",
+  "TO",
+  "PTS"
+ ],
+ "names": [
+  "minutes",
+  "fieldGoalsMade-fieldGoalsAttempted",
+  "fieldGoalPct",
+  "threePointFieldGoalsMade-threePointFieldGoalsAttempted",
+  "threePointPct",
+  "freeThrowsMade-freeThrowsAttempted",
+  "freeThrowPct",
+  "totalRebounds",
+  "assists",
+  "blocks",
+  "steals",
+  "fouls",
+  "turnovers",
+  "points"
+ ],
+ "events": {
+  "401909997": {
+   "id": "401909997",
+   "atVs": "@",
+   "gameDate": "2026-11-17T00:30:00.000+00:00",
+   "score": "135-123",
+   "gameResult": "W",
+   "opponent": {
+    "id": "17",
+    "abbreviation": "BKN",
+    "displayName": "Brooklyn Nets",
+    "logo": "https://a.espncdn.com/i/teamlogos/nba/500/bkn.png"
+   }
+  },
+  "401909976": {
+   "id": "401909976",
+   "atVs": "vs",
+   "gameDate": "2026-11-13T00:00:00.000+00:00",
+   "score": "123-112",
+   "gameResult": "W",
+   "opponent": {
+    "id": "28",
+    "abbreviation": "TOR",
+    "displayName": "Toronto Raptors",
+    "logo": "https://a.espncdn.com/i/teamlogos/nba/500/tor.png"
+   }
+  },
+  "401909961": {
+   "id": "401909961",
+   "atVs": "vs",
+   "gameDate": "2026-11-11T01:00:00.000+00:00",
+   "score": "123-101",
+   "gameResult": "L",
+   "opponent": {
+    "id": "2",
+    "abbreviation": "BOS",
+    "displayName": "Boston Celtics",
+    "logo": "https://a.espncdn.com/i/teamlogos/nba/500/bos.png"
+   }
+  },
+  "401909945": {
+   "id": "401909945",
+   "atVs": "@",
+   "gameDate": "2026-11-08T20:30:00.000+00:00",
+   "score": "127-121",
+   "gameResult": "W",
+   "opponent": {
+    "id": "4",
+    "abbreviation": "CHI",
+    "displayName": "Chicago Bulls",
+    "logo": "https://a.espncdn.com/i/teamlogos/nba/500/chi.png"
+   }
+  },
+  "401909289": {
+   "id": "401909289",
+   "atVs": "@",
+   "gameDate": "2026-11-07T00:30:00.000+00:00",
+   "score": "119-95",
+   "gameResult": "L",
+   "opponent": {
+    "id": "5",
+    "abbreviation": "CLE",
+    "displayName": "Cleveland Cavaliers",
+    "logo": "https://a.espncdn.com/i/teamlogos/nba/500/cle.png"
+   }
+  },
+  "401909922": {
+   "id": "401909922",
+   "atVs": "@",
+   "gameDate": "2026-11-05T00:00:00.000+00:00",
+   "score": "112-106",
+   "gameResult": "W",
+   "opponent": {
+    "id": "8",
+    "abbreviation": "DET",
+    "displayName": "Detroit Pistons",
+    "logo": "https://a.espncdn.com/i/teamlogos/nba/500/det.png"
+   }
+  },
+  "401909912": {
+   "id": "401909912",
+   "atVs": "vs",
+   "gameDate": "2026-11-03T00:30:00.000+00:00",
+   "score": "126-107",
+   "gameResult": "W",
+   "opponent": {
+    "id": "4",
+    "abbreviation": "CHI",
+    "displayName": "Chicago Bulls",
+    "logo": "https://a.espncdn.com/i/teamlogos/nba/500/chi.png"
+   }
+  }
+ },
+ "seasonTypes": [
+  {
+   "displayName": "2026-27 Regular Season",
+   "categories": [
+    {
+     "events": [
+      {
+       "eventId": "401909997",
+       "stats": [
+        "32",
+        "13-22",
+        "59.1",
+        "2-4",
+        "50.0",
+        "9-10",
+        "90.0",
+        "5",
+        "1",
+        "2",
+        "1",
+        "5",
+        "3",
+        "37"
+       ]
+      },
+      {
+       "eventId": "401909976",
+       "stats": [
+        "28",
+        "7-17",
+        "41.2",
+        "0-3",
+        "0.0",
+        "6-7",
+        "85.7",
+        "4",
+        "3",
+        "1",
+        "1",
+        "3",
+        "2",
+        "20"
+       ]
+      },
+      {
+       "eventId": "401909961",
+       "stats": [
+        "31",
+        "2-9",
+        "22.2",
+        "1-3",
+        "33.3",
+        "11-13",
+        "84.6",
+        "6",
+        "1",
+        "0",
+        "0",
+        "1",
+        "2",
+        "16"
+       ]
+      },
+      {
+       "eventId": "401909945",
+       "stats": [
+        "29",
+        "7-19",
+        "36.8",
+        "0-2",
+        "0.0",
+        "4-4",
+        "100.0",
+        "10",
+        "5",
+        "0",
+        "2",
+        "2",
+        "2",
+        "18"
+       ]
+      },
+      {
+       "eventId": "401909289",
+       "stats": [
+        "25",
+        "0-9",
+        "0.0",
+        "0-2",
+        "0.0",
+        "6-6",
+        "100.0",
+        "7",
+        "1",
+        "2",
+        "0",
+        "2",
+        "2",
+        "6"
+       ]
+      },
+      {
+       "eventId": "401909922",
+       "stats": [
+        "33",
+        "8-18",
+        "44.4",
+        "0-3",
+        "0.0",
+        "10-10",
+        "100.0",
+        "15",
+        "2",
+        "0",
+        "1",
+        "0",
+        "4",
+        "26"
+       ]
+      },
+      {
+       "eventId": "401909912",
+       "stats": [
+        "25",
+        "5-11",
+        "45.5",
+        "0-2",
+        "0.0",
+        "5-6",
+        "83.3",
+        "8",
+        "3",
+        "0",
+        "0",
+        "1",
+        "3",
+        "15"
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

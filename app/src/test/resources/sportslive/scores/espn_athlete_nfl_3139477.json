@@ -1,0 +1,52 @@
+{
+ "athlete": {
+  "id": "3139477",
+  "displayName": "Patrick Mahomes",
+  "jersey": "15",
+  "displayHeight": "6' 2\"",
+  "displayWeight": "225 lbs",
+  "displayExperience": "10th Season",
+  "headshot": {
+   "href": "https://a.espncdn.com/i/headshots/nfl/players/full/3139477.png"
+  },
+  "position": {
+   "displayName": "Quarterback",
+   "abbreviation": "QB"
+  },
+  "team": {
+   "id": "12",
+   "abbreviation": "KC",
+   "displayName": "Kansas City Chiefs",
+   "logos": [
+    {
+     "href": "https://a.espncdn.com/i/teamlogos/nfl/500/kc.png"
+    }
+   ]
+  },
+  "statsSummary": {
+   "displayName": "2026 regular season stats",
+   "statistics": [
+    {
+     "name": "passingYards",
+     "abbreviation": "YDS",
+     "displayValue": "2,385"
+    },
+    {
+     "name": "passingTouchdowns",
+     "abbreviation": "TD",
+     "displayValue": "19"
+    },
+    {
+     "name": "interceptions",
+     "abbreviation": "INT",
+     "displayValue": "4"
+    },
+    {
+     "name": "adjQBR",
+     "abbreviation": "QBR",
+     "displayValue": "63.9"
+    }
+   ]
+  }
+ }
+}

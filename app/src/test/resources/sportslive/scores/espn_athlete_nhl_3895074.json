@@ -1,0 +1,52 @@
+{
+ "athlete": {
+  "id": "3895074",
+  "displayName": "Connor McDavid",
+  "jersey": "97",
+  "displayHeight": "6' 2\"",
+  "displayWeight": "190 lbs",
+  "displayExperience": "12th Season",
+  "headshot": {
+   "href": "https://a.espncdn.com/i/headshots/nhl/players/full/3895074.png"
+  },
+  "position": {
+   "displayName": "Center",
+   "abbreviation": "C"
+  },
+  "team": {
+   "id": "6",
+   "abbreviation": "EDM",
+   "displayName": "Edmonton Oilers",
+   "logos": [
+    {
+     "href": "https://a.espncdn.com/i/teamlogos/nhl/500/edm.png"
+    }
+   ]
+  },
+  "statsSummary": {
+   "displayName": "2026-27 regular season stats",
+   "statistics": [
+    {
+     "name": "goals",
+     "abbreviation": "G",
+     "displayValue": "13"
+    },
+    {
+     "name": "assists",
+     "abbreviation": "A",
+     "displayValue": "42"
+    },
+    {
+     "name": "points",
+     "abbreviation": "PTS",
+     "displayValue": "55"
+    },
+    {
+     "name": "plusMinus",
+     "abbreviation": "+/-",
+     "displayValue": "29"
+    }
+   ]
+  }
+ }
+}

@@ -1,0 +1,52 @@
+{
+ "athlete": {
+  "id": "3059318",
+  "displayName": "Joel Embiid",
+  "jersey": "21",
+  "displayHeight": "7' 0\"",
+  "displayWeight": "270 lbs",
+  "displayExperience": "11th Season",
+  "headshot": {
+   "href": "https://a.espncdn.com/i/headshots/nba/players/full/3059318.png"
+  },
+  "position": {
+   "displayName": "Center",
+   "abbreviation": "C"
+  },
+  "team": {
+   "id": "20",
+   "abbreviation": "PHI",
+   "displayName": "Philadelphia 76ers",
+   "logos": [
+    {
+     "href": "https://a.espncdn.com/i/teamlogos/nba/500/phi.png"
+    }
+   ]
+  },
+  "statsSummary": {
+   "displayName": "2026-27 regular season stats",
+   "statistics": [
+    {
+     "name": "avgPoints",
+     "abbreviation": "PTS",
+     "displayValue": "19.5"
+    },
+    {
+     "name": "avgRebounds",
+     "abbreviation": "REB",
+     "displayValue": "8.5"
+    },
+    {
+     "name": "avgAssists",
+     "abbreviation": "AST",
+     "displayValue": "3.5"
+    },
+    {
+     "name": "fieldGoalPct",
+     "abbreviation": "FG%",
+     "displayValue": "40.0"
+    }
+   ]
+  }
+ }
+}

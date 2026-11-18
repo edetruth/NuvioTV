@@ -69,6 +69,7 @@ import com.nuvio.tv.ui.screens.settings.TmdbSettingsScreen
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveScreen
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveGameScreen
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveTeamScreen
+import com.nuvio.tv.ui.screens.sportslive.SportsLivePlayerCardScreen
 import com.nuvio.tv.ui.screens.sportslive.HighlightStep
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveHighlights
 import com.nuvio.tv.ui.screens.sportslive.highlightPlayerRoute
@@ -1570,7 +1571,8 @@ private fun PlaybackNavHost(
                         popUpTo(Screen.SportsLiveGame.route) { inclusive = true }
                     }
                 },
-                onOpenTeam = { navController.navigate(Screen.SportsLiveTeam.route) }
+                onOpenTeam = { navController.navigate(Screen.SportsLiveTeam.route) },
+                onOpenPlayerCard = { navController.navigate(Screen.SportsLivePlayerCard.route) }
             )
         }
 
@@ -1586,7 +1588,17 @@ private fun PlaybackNavHost(
                 onPlayTarget = { target ->
                     navController.navigate(sportsLivePlayerRoute(target) ?: streamRouteFor(target.item, returnToHomeOnBack = false))
                 },
-                onOpenGame = { navController.navigate(Screen.SportsLiveGame.route) }
+                onOpenGame = { navController.navigate(Screen.SportsLiveGame.route) },
+                onOpenPlayerCard = { navController.navigate(Screen.SportsLivePlayerCard.route) }
+            )
+        }
+
+        composable(Screen.SportsLivePlayerCard.route) {
+            SportsLivePlayerCardScreen(
+                onBack = {
+                    // Once only, as the Game page: a second Back must not also pop the screen below.
+                    if (navController.currentDestination?.route == Screen.SportsLivePlayerCard.route) navController.popBackStack()
+                }
             )
         }
 

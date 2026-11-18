@@ -1,0 +1,255 @@
+{
+ "labels": [
+  "CMP",
+  "ATT",
+  "YDS",
+  "CMP%",
+  "AVG",
+  "TD",
+  "INT",
+  "LNG",
+  "SACK",
+  "RTG",
+  "QBR",
+  "CAR",
+  "YDS",
+  "AVG",
+  "TD",
+  "LNG"
+ ],
+ "names": [
+  "completions",
+  "passingAttempts",
+  "passingYards",
+  "completionPct",
+  "yardsPerPassAttempt",
+  "passingTouchdowns",
+  "interceptions",
+  "longPassing",
+  "sacks",
+  "QBRating",
+  "adjQBR",
+  "rushingAttempts",
+  "rushingYards",
+  "yardsPerRushAttempt",
+  "rushingTouchdowns",
+  "longRushing"
+ ],
+ "events": {
+  "401873058": {
+   "id": "401873058",
+   "atVs": "@",
+   "gameDate": "2026-11-15T18:00:00.000+00:00",
+   "score": "35-13",
+   "gameResult": "W",
+   "opponent": {
+    "id": "1",
+    "abbreviation": "ATL",
+    "displayName": "Atlanta Falcons",
+    "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/atl.png"
+   }
+  },
+  "401873045": {
+   "id": "401873045",
+   "atVs": "vs",
+   "gameDate": "2026-11-08T18:00:00.000+00:00",
+   "score": "35-12",
+   "gameResult": "W",
+   "opponent": {
+    "id": "20",
+    "abbreviation": "NYJ",
+    "displayName": "New York Jets",
+    "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/nyj.png"
+   }
+  },
+  "401873033": {
+   "id": "401873033",
+   "atVs": "@",
+   "gameDate": "2026-11-01T21:25:00.000+00:00",
+   "score": "28-24",
+   "gameResult": "L",
+   "opponent": {
+    "id": "7",
+    "abbreviation": "DEN",
+    "displayName": "Denver Broncos",
+    "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/den.png"
+   }
+  },
+  "401873022": {
+   "id": "401873022",
+   "atVs": "@",
+   "gameDate": "2026-10-26T00:20:00.000+00:00",
+   "score": "20-3",
+   "gameResult": "L",
+   "opponent": {
+    "id": "26",
+    "abbreviation": "SEA",
+    "displayName": "Seattle Seahawks",
+    "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/sea.png"
+   }
+  },
+  "401873006": {
+   "id": "401873006",
+   "atVs": "vs",
+   "gameDate": "2026-10-18T20:25:00.000+00:00",
+   "score": "22-6",
+   "gameResult": "W",
+   "opponent": {
+    "id": "24",
+    "abbreviation": "LAC",
+    "displayName": "Los Angeles Chargers",
+    "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/lac.png"
+   }
+  },
+  "401872976": {
+   "id": "401872976",
+   "atVs": "@",
+   "gameDate": "2026-10-04T20:25:00.000+00:00",
+   "score": "30-27",
+   "gameResult": "W",
+   "opponent": {
+    "id": "13",
+    "abbreviation": "LV",
+    "displayName": "Las Vegas Raiders",
+    "logo": "https://a.espncdn.com/i/teamlogos/nfl/500/lv.png"
+   }
+  }
+ },
+ "seasonTypes": [
+  {
+   "displayName": "2026 Regular Season",
+   "categories": [
+    {
+     "events": [
+      {
+       "eventId": "401873058",
+       "stats": [
+        "22",
+        "35",
+        "348",
+        "62.9",
+        "9.9",
+        "5",
+        "0",
+        "50",
+        "1",
+        "135.5",
+        "79.8",
+        "2",
+        "15",
+        "7.5",
+        "0",
+        "9"
+       ]
+      },
+      {
+       "eventId": "401873045",
+       "stats": [
+        "23",
+        "31",
+        "242",
+        "74.2",
+        "7.8",
+        "2",
+        "0",
+        "38",
+        "2",
+        "117.9",
+        "29.9",
+        "2",
+        "8",
+        "4.0",
+        "0",
+        "7"
+       ]
+      },
+      {
+       "eventId": "401873033",
+       "stats": [
+        "30",
+        "41",
+        "321",
+        "73.2",
+        "7.8",
+        "3",
+        "0",
+        "73",
+        "2",
+        "120.1",
+        "67.7",
+        "2",
+        "6",
+        "3.0",
+        "0",
+        "4"
+       ]
+      },
+      {
+       "eventId": "401873022",
+       "stats": [
+        "19",
+        "33",
+        "165",
+        "57.6",
+        "5.0",
+        "0",
+        "1",
+        "19",
+        "1",
+        "58.3",
+        "60.3",
+        "2",
+        "14",
+        "7.0",
+        "0",
+        "9"
+       ]
+      },
+      {
+       "eventId": "401873006",
+       "stats": [
+        "23",
+        "30",
+        "272",
+        "76.7",
+        "9.1",
+        "0",
+        "1",
+        "31",
+        "0",
+        "89.9",
+        "68.6",
+        "5",
+        "16",
+        "3.2",
+        "0",
+        "10"
+       ]
+      },
+      {
+       "eventId": "401872976",
+       "stats": [
+        "15",
+        "30",
+        "225",
+        "50.0",
+        "7.5",
+        "2",
+        "0",
+        "55",
+        "2",
+        "97.2",
+        "46.5",
+        "2",
+        "0",
+        "0.0",
+        "0",
+        "1"
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}
