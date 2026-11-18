@@ -24,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
@@ -60,6 +61,7 @@ import com.nuvio.tv.core.sportslive.SportsLiveEndedGames
 import com.nuvio.tv.core.sportslive.SportsLiveLayout
 import com.nuvio.tv.core.sportslive.scores.GameSituations
 import com.nuvio.tv.core.sportslive.scores.GameArt
+import com.nuvio.tv.core.sportslive.scores.TeamLogoBook
 import com.nuvio.tv.core.sportslive.scores.LiveScoresRepository
 import com.nuvio.tv.core.sportslive.scores.MySport
 import com.nuvio.tv.core.sportslive.scores.ResultRow
@@ -195,7 +197,9 @@ fun SportsLiveScreen(
             if (situation != null && event != null) GameSituations.situationLine(situation, event, situationStrings) else ""
         }
     }
-    val artOf: (SportsLiveItem) -> GameArt? = remember(scores) {
+    // Learned logos (#66) arriving from storage redraw the cards.
+    val logoRevision by TeamLogoBook.shared.revision.collectAsState()
+    val artOf: (SportsLiveItem) -> GameArt? = remember(scores, logoRevision) {
         val cache = HashMap<SportsLiveItem, GameArt?>()
         val art: (SportsLiveItem) -> GameArt? = { item -> cache.getOrPut(item) { GameArt.of(item, scores[item.streamKey]) } }
         art

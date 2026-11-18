@@ -7,6 +7,7 @@ import com.nuvio.tv.domain.model.PosterShape
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveKind
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class EspnLeagueMapTest {
@@ -165,4 +166,24 @@ class EspnLeagueMapTest {
     fun `a curly apostrophe still reads as women's`() {
         assertEquals(emptyList<String>(), slugs("Soccer", "Women’s Super League: Arsenal vs Chelsea"))
     }
+
+    @Test
+    fun `only a bare basketball or football card gets a college fallback (#66)`() {
+        fun fallback(sport: String?, vararg hints: String) = EspnLeagueMap.collegeFallbackFor(sport, hints.toList())?.path
+        assertEquals("basketball/mens-college-basketball", fallback("Basketball", "Duke vs North Carolina"))
+        assertEquals("football/college-football", fallback("American Football", "Alabama vs Auburn"))
+        assertEquals("football/college-football", fallback("Football", "Alabama vs Auburn"))
+        // A competition named: it decides, no fallback.
+        assertNull(fallback("Basketball", "NBA: Celtics vs Knicks"))
+        assertNull(fallback("Basketball", "College Basketball: Duke vs UNC"))
+        assertNull(fallback("Football", "Premier League: Arsenal vs Chelsea"))
+        // Soccer said outright, women's, youth-excluded and other sports: none.
+        assertNull(fallback("Soccer", "Arsenal vs Chelsea"))
+        assertNull(fallback("Football", "Arsenal vs Chelsea", "Soccer"))
+        assertNull(fallback("Women's Basketball", "UConn vs South Carolina"))
+        assertNull(fallback("Basketball", "WNBA: Aces vs Liberty"))
+        assertNull(fallback("Hockey", "Rangers vs Devils"))
+        assertNull(fallback(null, "Mystery Match"))
+    }
+
 }

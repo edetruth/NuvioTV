@@ -3,6 +3,7 @@ package com.nuvio.tv.ui.screens.sportslive
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,7 +14,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -30,6 +34,9 @@ import androidx.compose.ui.unit.sp
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
+import coil3.compose.LocalPlatformContext
+import coil3.request.ImageRequest
+import coil3.request.crossfade
 import com.nuvio.tv.R
 import com.nuvio.tv.core.sportslive.SportsLivePillTime
 import com.nuvio.tv.core.sportslive.scores.GameArt
@@ -37,6 +44,7 @@ import com.nuvio.tv.core.sportslive.scores.GameArtTeam
 import com.nuvio.tv.core.sportslive.scores.ScoreChip
 import com.nuvio.tv.core.sportslive.scores.ScoreChipStrings
 import com.nuvio.tv.core.sportslive.scores.ScoreChips
+import com.nuvio.tv.core.sportslive.scores.TeamLogoUrls
 import com.nuvio.tv.ui.theme.NuvioTheme
 import java.time.LocalDate
 import java.time.ZoneId
@@ -183,14 +191,7 @@ private fun CompactTeam(team: GameArtTeam, withLogo: Boolean) {
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        if (withLogo) {
-            AsyncImage(
-                model = team.logo,
-                contentDescription = null,
-                contentScale = ContentScale.Fit,
-                modifier = Modifier.size(18.dp)
-            )
-        }
+        if (withLogo) SportsLiveTeamLogo(team.logo, team.short, TeamLogoUrls.CARD_PX, Modifier.size(18.dp))
         Text(
             text = team.short,
             // Without logos the names carry the card, in larger type.
@@ -209,14 +210,7 @@ private fun LargeTeam(team: GameArtTeam, withLogo: Boolean, modifier: Modifier =
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)
     ) {
-        if (withLogo) {
-            AsyncImage(
-                model = team.logo,
-                contentDescription = null,
-                contentScale = ContentScale.Fit,
-                modifier = Modifier.size(72.dp)
-            )
-        }
+        if (withLogo) SportsLiveTeamLogo(team.logo, team.short, TeamLogoUrls.LARGE_PX, Modifier.size(72.dp))
         Text(
             text = team.name,
             style = (if (withLogo) MaterialTheme.typography.titleMedium else MaterialTheme.typography.headlineSmall)
@@ -229,6 +223,48 @@ private fun LargeTeam(team: GameArtTeam, withLogo: Boolean, modifier: Modifier =
     }
 }
 
+/**
+ * A team's logo, scaled by ESPN to [px] (#66). The abbreviation circle shows at once and stays while
+ * the logo loads (from the image disk cache, usually) or when it fails; the logo fades in over it.
+ */
+@Composable
+internal fun SportsLiveTeamLogo(logo: String?, short: String, px: Int, modifier: Modifier) {
+    var loaded by remember(logo) { mutableStateOf(false) }
+    BoxWithConstraints(modifier = modifier, contentAlignment = Alignment.Center) {
+        if (!loaded) {
+            // A small circle has room for one letter only.
+            val width = maxWidth
+            val letters = if (width < 32.dp) 1 else 3
+            Box(
+                modifier = Modifier.fillMaxSize().clip(CircleShape).background(ArtColors.LogoCircle),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = short.take(letters).uppercase(Locale.getDefault()),
+                    style = TextStyle(fontSize = (width.value * if (letters == 1) 0.5f else 0.28f).sp, fontWeight = FontWeight.Bold),
+                    color = ArtColors.Secondary,
+                    maxLines = 1
+                )
+            }
+        }
+        if (logo != null) {
+            val context = LocalPlatformContext.current
+            val request = remember(logo, px, context) {
+                ImageRequest.Builder(context).data(TeamLogoUrls.scaled(logo, px)).crossfade(LOGO_FADE_MS).build()
+            }
+            AsyncImage(
+                model = request,
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxSize(),
+                onSuccess = { loaded = true }
+            )
+        }
+    }
+}
+
+private const val LOGO_FADE_MS = 150
+
 /** "Shared visual language" of the Sports & Live designs (dark broadcast look). */
 internal object ArtColors {
     val Background = Color(0xFF0A0D12)
@@ -240,4 +276,5 @@ internal object ArtColors {
     val LiveBlock = Color(0xFF2A1416)
     val LiveText = Color(0xFFFFB3B8)
     val FinalBlock = Color(0xFF151B24)
+    val LogoCircle = Color(0xFF243041)
 }

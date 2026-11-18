@@ -18,6 +18,8 @@ internal object EspnFixtures {
     const val SOCCER_ALL_WOMEN_20261108 = "espn_soccer_all_women_20261108.json"
     /** Division I men's college basketball, 2026-11-15 (44 games). */
     const val CBB_20261115 = "espn_cbb_20261115.json"
+    /** soccer/all, 2026-11-17 (ET): the games live at capture, USA v Haiti among them (#66). */
+    const val SOCCER_ALL_LIVE_20261117 = "espn_soccer_all_live_20261117.json"
     /** Live Division I men's college basketball, 2026-11-17: a real `situation` (last play only). */
     const val CBB_LIVE_20261117 = "espn_cbb_live_20261117.json"
     /** Hand-trimmed SAMPLE (labelled in the file): live NFL `situation`s, no NFL game was live to capture. */

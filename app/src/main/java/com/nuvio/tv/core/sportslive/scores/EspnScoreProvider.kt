@@ -34,10 +34,39 @@ class EspnScoreProvider internal constructor(
 
     private val adapter = moshi.adapter(EspnScoreboardDto::class.java)
 
+    private fun scoreboardUrl(league: EspnLeague, date: LocalDate): String =
+        "$baseUrl${league.path}/scoreboard?dates=${date.format(DateTimeFormatter.BASIC_ISO_DATE)}" +
+            "&limit=$LIMIT${groupsFor(league)}"
+
+    /**
+     * The HTTP cache's copy of the scoreboard, when it was received less than [ScoreProvider.RECENT_MS]
+     * ago (ESPN's max-age is about a second, so max-stale carries the rest); never a request.
+     */
+    override suspend fun recentScoreboard(league: EspnLeague, date: LocalDate): ScoreboardResult? =
+        withContext(Dispatchers.IO) {
+            try {
+                val request = Request.Builder().url(scoreboardUrl(league, date))
+                    .cacheControl(
+                        CacheControl.Builder().onlyIfCached()
+                            .maxStale((ScoreProvider.RECENT_MS / 1_000L - 1).toInt(), TimeUnit.SECONDS).build()
+                    )
+                    .build()
+                client.newCall(request).execute().use { response ->
+                    val body = response.body?.string()
+                    if (!response.isSuccessful || response.cacheResponse == null || body == null) return@use null
+                    val dto = adapter.fromJson(body) ?: return@use null
+                    if (EspnIndividualResults.covers(league)) null else ScoreboardResult(toSnapshots(dto, league))
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                null
+            }
+        }
+
     override suspend fun scoreboard(league: EspnLeague, date: LocalDate): ScoreboardResult =
         withContext(Dispatchers.IO) {
-            val url = "$baseUrl${league.path}/scoreboard?dates=${date.format(DateTimeFormatter.BASIC_ISO_DATE)}" +
-                "&limit=$LIMIT${groupsFor(league)}"
+            val url = scoreboardUrl(league, date)
             try {
                 val request = Request.Builder().url(url).apply {
                     // Yesterday's late games and today's can still change: revalidate rather than reuse

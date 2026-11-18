@@ -1,0 +1,1699 @@
+{
+ "_note": "Trimmed real ESPN soccer/all scoreboard, 2026-11-17 (ET), games live at capture (#66).",
+ "leagues": [],
+ "events": [
+  {
+   "id": "401929765",
+   "uid": "s:600~l:19267~e:401929765",
+   "date": "2026-11-18T00:00Z",
+   "name": "St. Vincent and the Grenadines at French Guiana",
+   "status": {
+    "clock": 2940.0,
+    "displayClock": "49'",
+    "period": 2,
+    "type": {
+     "id": "26",
+     "name": "STATUS_SECOND_HALF",
+     "state": "in",
+     "completed": false,
+     "description": "Second Half",
+     "detail": "49'",
+     "shortDetail": "49'"
+    }
+   },
+   "links": [
+    {
+     "language": "en-US",
+     "rel": [
+      "live",
+      "desktop",
+      "event"
+     ],
+     "href": "https://www.espn.com/soccer/match/_/gameId/401929765",
+     "text": "Gamecast",
+     "shortText": "Live",
+     "isExternal": false,
+     "isPremium": false,
+     "isHidden": false
+    },
+    {
+     "language": "en-US",
+     "rel": [
+      "team-stats",
+      "desktop",
+      "event"
+     ],
+     "href": "https://www.espn.com/soccer/team-stats/_/gameId/401929765/league/concacaf.nations.league",
+     "text": "Team Stats",
+     "shortText": "Team Stats",
+     "isExternal": false,
+     "isPremium": false,
+     "isHidden": false
+    }
+   ],
+   "competitions": [
+    {
+     "id": "401929765",
+     "uid": "s:600~l:19267~e:401929765~c:401929765",
+     "date": "2026-11-18T00:00Z",
+     "startDate": "2026-11-18T00:00Z",
+     "attendance": 0,
+     "timeValid": true,
+     "recent": true,
+     "status": {
+      "clock": 2940.0,
+      "displayClock": "49'",
+      "period": 2,
+      "type": {
+       "id": "26",
+       "name": "STATUS_SECOND_HALF",
+       "state": "in",
+       "completed": false,
+       "description": "Second Half",
+       "detail": "49'",
+       "shortDetail": "49'"
+      }
+     },
+     "venue": {
+      "id": "4698",
+      "fullName": "Arnos Vale Stadium",
+      "address": {
+       "city": "Arnos Vale Stadium"
+      }
+     },
+     "format": {
+      "regulation": {
+       "periods": 2
+      }
+     },
+     "altGameNote": "Concacaf Nations League, League B, Group D",
+     "group": {
+      "groupId": "6",
+      "name": "League B, Group D",
+      "abbreviation": "League B, Group D"
+     },
+     "notes": [],
+     "broadcast": "",
+     "competitors": [
+      {
+       "id": "10532",
+       "uid": "s:600~t:10532",
+       "type": "team",
+       "order": 0,
+       "homeAway": "home",
+       "winner": false,
+       "form": "DWWWL",
+       "score": "1",
+       "team": {
+        "id": "10532",
+        "uid": "s:600~t:10532",
+        "abbreviation": "GUF",
+        "displayName": "French Guiana",
+        "shortDisplayName": "French Guiana",
+        "name": "French Guiana",
+        "location": "French Guiana",
+        "color": "D20300",
+        "alternateColor": "0033a0",
+        "isActive": true,
+        "logo": "https://a.espncdn.com/i/teamlogos/soccer/500/10532.png",
+        "links": [
+         {
+          "rel": [
+           "clubhouse",
+           "desktop",
+           "team"
+          ],
+          "href": "https://www.espn.com/soccer/club/_/id/10532/french-guiana",
+          "text": "Clubhouse",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "stats",
+           "desktop",
+           "team"
+          ],
+          "href": "https://www.espn.com/soccer/team/stats/_/id/10532/french-guiana",
+          "text": "Stats",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "stats",
+           "sportscenter",
+           "app",
+           "team"
+          ],
+          "href": "sportscenter://x-callback-url/showClubhouse?uid=s:600~t:10532&section=stats",
+          "text": "Stats",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "schedule",
+           "desktop",
+           "team"
+          ],
+          "href": "https://www.espn.com/soccer/team/fixtures/_/id/10532/french-guiana",
+          "text": "Fixtures",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "schedule",
+           "sportscenter",
+           "app",
+           "team"
+          ],
+          "href": "sportscenter://x-callback-url/showClubhouse?uid=s:600~t:10532&section=scores",
+          "text": "Fixtures",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "squad",
+           "desktop",
+           "team"
+          ],
+          "href": "https://www.espn.com/soccer/team/squad/_/id/10532/french-guiana",
+          "text": "Squad",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "squad",
+           "sportscenter",
+           "app",
+           "team"
+          ],
+          "href": "sportscenter://x-callback-url/showClubhouse?uid=s:600~t:10532&section=squad",
+          "text": "Squad",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         }
+        ]
+       }
+      },
+      {
+       "id": "13584",
+       "uid": "s:600~t:13584",
+       "type": "team",
+       "order": 1,
+       "homeAway": "away",
+       "winner": false,
+       "form": "WWWWW",
+       "score": "0",
+       "team": {
+        "id": "13584",
+        "uid": "s:600~t:13584",
+        "abbreviation": "VIN",
+        "displayName": "St. Vincent and the Grenadines",
+        "shortDisplayName": "St. Vincent ",
+        "name": "St. Vincent and the Grenadines",
+        "location": "St. Vincent and the Grenadines",
+        "color": "32ad42",
+        "alternateColor": "C60000",
+        "isActive": true,
+        "logo": "https://a.espncdn.com/i/teamlogos/countries/500/vin.png",
+        "links": [
+         {
+          "rel": [
+           "clubhouse",
+           "desktop",
+           "team"
+          ],
+          "href": "https://www.espn.com/soccer/team/_/id/13584/st-vincent-and-the-grenadines",
+          "text": "Clubhouse",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "stats",
+           "desktop",
+           "team"
+          ],
+          "href": "https://www.espn.com/soccer/team/stats/_/id/13584/st-vincent-and-the-grenadines",
+          "text": "Stats",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "stats",
+           "sportscenter",
+           "app",
+           "team"
+          ],
+          "href": "sportscenter://x-callback-url/showClubhouse?uid=s:600~t:13584&section=stats",
+          "text": "Stats",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "schedule",
+           "desktop",
+           "team"
+          ],
+          "href": "https://www.espn.com/soccer/team/fixtures/_/id/13584/st-vincent-and-the-grenadines",
+          "text": "Fixtures",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "schedule",
+           "sportscenter",
+           "app",
+           "team"
+          ],
+          "href": "sportscenter://x-callback-url/showClubhouse?uid=s:600~t:13584&section=scores",
+          "text": "Fixtures",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "squad",
+           "desktop",
+           "team"
+          ],
+          "href": "https://www.espn.com/soccer/team/squad/_/id/13584/st-vincent-and-the-grenadines",
+          "text": "Squad",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "squad",
+           "sportscenter",
+           "app",
+           "team"
+          ],
+          "href": "sportscenter://x-callback-url/showClubhouse?uid=s:600~t:13584&section=squad",
+          "text": "Squad",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         }
+        ],
+        "venue": {
+         "id": "7579"
+        }
+       }
+      }
+     ],
+     "wasSuspended": false,
+     "playByPlayAvailable": true,
+     "playByPlayAthletes": true
+    }
+   ]
+  },
+  {
+   "id": "401929766",
+   "uid": "s:600~l:19267~e:401929766",
+   "date": "2026-11-18T00:00Z",
+   "name": "Haiti at United States",
+   "status": {
+    "clock": 2700.0,
+    "displayClock": "45'+3'",
+    "period": 1,
+    "type": {
+     "id": "23",
+     "name": "STATUS_HALFTIME",
+     "state": "in",
+     "completed": false,
+     "description": "Halftime",
+     "detail": "HT",
+     "shortDetail": "HT"
+    }
+   },
+   "links": [
+    {
+     "language": "en-US",
+     "rel": [
+      "live",
+      "desktop",
+      "event"
+     ],
+     "href": "https://www.espn.com/soccer/match/_/gameId/401929766",
+     "text": "Gamecast",
+     "shortText": "Live",
+     "isExternal": false,
+     "isPremium": false,
+     "isHidden": false
+    },
+    {
+     "language": "en-US",
+     "rel": [
+      "team-stats",
+      "desktop",
+      "event"
+     ],
+     "href": "https://www.espn.com/soccer/team-stats/_/gameId/401929766/league/concacaf.nations.league",
+     "text": "Team Stats",
+     "shortText": "Team Stats",
+     "isExternal": false,
+     "isPremium": false,
+     "isHidden": false
+    }
+   ],
+   "competitions": [
+    {
+     "id": "401929766",
+     "uid": "s:600~l:19267~e:401929766~c:401929766",
+     "date": "2026-11-18T00:00Z",
+     "startDate": "2026-11-18T00:00Z",
+     "attendance": 0,
+     "timeValid": true,
+     "recent": true,
+     "status": {
+      "clock": 2700.0,
+      "displayClock": "45'+3'",
+      "period": 1,
+      "type": {
+       "id": "23",
+       "name": "STATUS_HALFTIME",
+       "state": "in",
+       "completed": false,
+       "description": "Halftime",
+       "detail": "HT",
+       "shortDetail": "HT"
+      }
+     },
+     "venue": {
+      "id": "8674",
+      "fullName": "TQL Stadium",
+      "address": {
+       "city": "Cincinnati, Ohio",
+       "country": "USA"
+      }
+     },
+     "tickets": [
+      {
+       "summary": "Tickets as low as $19",
+       "numberAvailable": 379,
+       "links": [
+        {
+         "href": "https://www.vividseats.com/concacaf-nations-league-tickets-tql-stadium-11-17-2026--sports-soccer/production/7558843?wsUser=717"
+        },
+        {
+         "href": "https://www.vividseats.com/venues/tql-stadium-tickets.html?wsUser=717"
+        }
+       ]
+      }
+     ],
+     "format": {
+      "regulation": {
+       "periods": 2
+      }
+     },
+     "leg": {
+      "value": 2,
+      "displayValue": "2nd Leg"
+     },
+     "series": {
+      "competitors": [
+       {
+        "id": "660",
+        "uid": "s:600~t:660",
+        "winner": false,
+        "aggregateScore": 8.0
+       },
+       {
+        "id": "2654",
+        "uid": "s:600~t:2654",
+        "winner": false,
+        "aggregateScore": 0.0
+       }
+      ],
+      "completed": false,
+      "title": "Quarterfinals",
+      "totalCompetitions": 2
+     },
+     "altGameNote": "Concacaf Nations League, Quarterfinals - 2nd Leg",
+     "notes": [
+      {
+       "text": "2nd Leg - United States lead 8-0 on aggregate",
+       "headline": "2nd Leg - United States lead 8-0 on aggregate",
+       "type": "event"
+      }
+     ],
+     "broadcast": "",
+     "competitors": [
+      {
+       "id": "660",
+       "uid": "s:600~t:660",
+       "type": "team",
+       "order": 0,
+       "homeAway": "home",
+       "winner": false,
+       "form": "WWWWW",
+       "score": "2",
+       "aggregateScore": 8.0,
+       "team": {
+        "id": "660",
+        "uid": "s:600~t:660",
+        "abbreviation": "USA",
+        "displayName": "United States",
+        "shortDisplayName": "USA",
+        "name": "United States",
+        "location": "United States",
+        "color": "213065",
+        "alternateColor": "d42339",
+        "isActive": true,
+        "logo": "https://a.espncdn.com/i/teamlogos/countries/500/usa.png",
+        "links": [
+         {
+          "rel": [
+           "clubhouse",
+           "desktop",
+           "team"
+          ],
+          "href": "https://www.espn.com/soccer/team/_/id/660/united-states",
+          "text": "Clubhouse",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "stats",
+           "desktop",
+           "team"
+          ],
+          "href": "https://www.espn.com/soccer/team/stats/_/id/660/united-states",
+          "text": "Stats",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "stats",
+           "sportscenter",
+           "app",
+           "team"
+          ],
+          "href": "sportscenter://x-callback-url/showClubhouse?uid=s:600~t:660&section=stats",
+          "text": "Stats",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "schedule",
+           "desktop",
+           "team"
+          ],
+          "href": "https://www.espn.com/soccer/team/fixtures/_/id/660/united-states",
+          "text": "Fixtures",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "schedule",
+           "sportscenter",
+           "app",
+           "team"
+          ],
+          "href": "sportscenter://x-callback-url/showClubhouse?uid=s:600~t:660&section=scores",
+          "text": "Fixtures",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "squad",
+           "desktop",
+           "team"
+          ],
+          "href": "https://www.espn.com/soccer/team/squad/_/id/660/united-states",
+          "text": "Squad",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "squad",
+           "sportscenter",
+           "app",
+           "team"
+          ],
+          "href": "sportscenter://x-callback-url/showClubhouse?uid=s:600~t:660&section=squad",
+          "text": "Squad",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         }
+        ],
+        "venue": {
+         "id": "1525"
+        }
+       }
+      },
+      {
+       "id": "2654",
+       "uid": "s:600~t:2654",
+       "type": "team",
+       "order": 1,
+       "homeAway": "away",
+       "winner": false,
+       "form": "LLWWW",
+       "score": "0",
+       "aggregateScore": 0.0,
+       "team": {
+        "id": "2654",
+        "uid": "s:600~t:2654",
+        "abbreviation": "HAI",
+        "displayName": "Haiti",
+        "shortDisplayName": "Haiti",
+        "name": "Haiti",
+        "location": "Haiti",
+        "color": "0033a0",
+        "alternateColor": "FFFFFF",
+        "isActive": true,
+        "logo": "https://a.espncdn.com/i/teamlogos/countries/500/hai.png",
+        "links": [
+         {
+          "rel": [
+           "clubhouse",
+           "desktop",
+           "team"
+          ],
+          "href": "https://www.espn.com/soccer/team/_/id/2654/haiti",
+          "text": "Clubhouse",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "stats",
+           "desktop",
+           "team"
+          ],
+          "href": "https://www.espn.com/soccer/team/stats/_/id/2654/haiti",
+          "text": "Stats",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "stats",
+           "sportscenter",
+           "app",
+           "team"
+          ],
+          "href": "sportscenter://x-callback-url/showClubhouse?uid=s:600~t:2654&section=stats",
+          "text": "Stats",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "schedule",
+           "desktop",
+           "team"
+          ],
+          "href": "https://www.espn.com/soccer/team/fixtures/_/id/2654/haiti",
+          "text": "Fixtures",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "schedule",
+           "sportscenter",
+           "app",
+           "team"
+          ],
+          "href": "sportscenter://x-callback-url/showClubhouse?uid=s:600~t:2654&section=scores",
+          "text": "Fixtures",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "squad",
+           "desktop",
+           "team"
+          ],
+          "href": "https://www.espn.com/soccer/team/squad/_/id/2654/haiti",
+          "text": "Squad",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "squad",
+           "sportscenter",
+           "app",
+           "team"
+          ],
+          "href": "sportscenter://x-callback-url/showClubhouse?uid=s:600~t:2654&section=squad",
+          "text": "Squad",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         }
+        ],
+        "venue": {
+         "id": "10143"
+        }
+       }
+      }
+     ],
+     "wasSuspended": false,
+     "playByPlayAvailable": true,
+     "playByPlayAthletes": true
+    }
+   ]
+  },
+  {
+   "id": "401930899",
+   "uid": "s:600~l:3922~e:401930899",
+   "date": "2026-11-17T23:30Z",
+   "name": "Bolivia at Ecuador",
+   "status": {
+    "clock": 3840.0,
+    "displayClock": "64'",
+    "period": 2,
+    "type": {
+     "id": "2",
+     "name": "STATUS_IN_PROGRESS",
+     "state": "in",
+     "completed": false,
+     "description": "In Progress",
+     "detail": "64'",
+     "shortDetail": "64'"
+    }
+   },
+   "links": [
+    {
+     "language": "en-US",
+     "rel": [
+      "live",
+      "desktop",
+      "event"
+     ],
+     "href": "https://www.espn.com/soccer/match/_/gameId/401930899",
+     "text": "Gamecast",
+     "shortText": "Live",
+     "isExternal": false,
+     "isPremium": false,
+     "isHidden": false
+    },
+    {
+     "language": "en-US",
+     "rel": [
+      "team-stats",
+      "desktop",
+      "event"
+     ],
+     "href": "https://www.espn.com/soccer/team-stats/_/gameId/401930899/league/fifa.friendly",
+     "text": "Team Stats",
+     "shortText": "Team Stats",
+     "isExternal": false,
+     "isPremium": false,
+     "isHidden": false
+    }
+   ],
+   "competitions": [
+    {
+     "id": "401930899",
+     "uid": "s:600~l:3922~e:401930899~c:401930899",
+     "date": "2026-11-17T23:30Z",
+     "startDate": "2026-11-17T23:30Z",
+     "attendance": 0,
+     "timeValid": true,
+     "recent": true,
+     "status": {
+      "clock": 3840.0,
+      "displayClock": "64'",
+      "period": 2,
+      "type": {
+       "id": "2",
+       "name": "STATUS_IN_PROGRESS",
+       "state": "in",
+       "completed": false,
+       "description": "In Progress",
+       "detail": "64'",
+       "shortDetail": "64'"
+      }
+     },
+     "venue": {
+      "id": "5294",
+      "fullName": "Estadio Banco Pichincha",
+      "address": {
+       "city": "Quito",
+       "country": "Ecuador"
+      }
+     },
+     "format": {
+      "regulation": {
+       "periods": 2
+      }
+     },
+     "altGameNote": "Men's International Friendly",
+     "notes": [],
+     "broadcast": "",
+     "competitors": [
+      {
+       "id": "209",
+       "uid": "s:600~t:209",
+       "type": "team",
+       "order": 0,
+       "homeAway": "home",
+       "winner": false,
+       "form": "WLLWD",
+       "score": "2",
+       "team": {
+        "id": "209",
+        "uid": "s:600~t:209",
+        "abbreviation": "ECU",
+        "displayName": "Ecuador",
+        "shortDisplayName": "Ecuador",
+        "name": "Ecuador",
+        "location": "Ecuador",
+        "color": "ffdd00",
+        "alternateColor": "034ea2",
+        "isActive": true,
+        "logo": "https://a.espncdn.com/i/teamlogos/countries/500/ecu.png",
+        "links": [
+         {
+          "rel": [
+           "clubhouse",
+           "desktop",
+           "team"
+          ],
+          "href": "https://www.espn.com/soccer/team/_/id/209/ecuador",
+          "text": "Clubhouse",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "stats",
+           "desktop",
+           "team"
+          ],
+          "href": "https://www.espn.com/soccer/team/stats/_/id/209/ecuador",
+          "text": "Stats",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "stats",
+           "sportscenter",
+           "app",
+           "team"
+          ],
+          "href": "sportscenter://x-callback-url/showClubhouse?uid=s:600~t:209&section=stats",
+          "text": "Stats",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "schedule",
+           "desktop",
+           "team"
+          ],
+          "href": "https://www.espn.com/soccer/team/fixtures/_/id/209/ecuador",
+          "text": "Fixtures",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "schedule",
+           "sportscenter",
+           "app",
+           "team"
+          ],
+          "href": "sportscenter://x-callback-url/showClubhouse?uid=s:600~t:209&section=scores",
+          "text": "Fixtures",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "squad",
+           "desktop",
+           "team"
+          ],
+          "href": "https://www.espn.com/soccer/team/squad/_/id/209/ecuador",
+          "text": "Squad",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "squad",
+           "sportscenter",
+           "app",
+           "team"
+          ],
+          "href": "sportscenter://x-callback-url/showClubhouse?uid=s:600~t:209&section=squad",
+          "text": "Squad",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         }
+        ],
+        "venue": {
+         "id": "5294"
+        }
+       }
+      },
+      {
+       "id": "204",
+       "uid": "s:600~t:204",
+       "type": "team",
+       "order": 1,
+       "homeAway": "away",
+       "winner": false,
+       "form": "LLLLL",
+       "score": "0",
+       "team": {
+        "id": "204",
+        "uid": "s:600~t:204",
+        "abbreviation": "BOL",
+        "displayName": "Bolivia",
+        "shortDisplayName": "Bolivia",
+        "name": "Bolivia",
+        "location": "Bolivia",
+        "color": "00843d",
+        "alternateColor": "ffffff",
+        "isActive": true,
+        "logo": "https://a.espncdn.com/i/teamlogos/countries/500/bol.png",
+        "links": [
+         {
+          "rel": [
+           "clubhouse",
+           "desktop",
+           "team"
+          ],
+          "href": "https://www.espn.com/soccer/team/_/id/204/bolivia",
+          "text": "Clubhouse",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "stats",
+           "desktop",
+           "team"
+          ],
+          "href": "https://www.espn.com/soccer/team/stats/_/id/204/bolivia",
+          "text": "Stats",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "stats",
+           "sportscenter",
+           "app",
+           "team"
+          ],
+          "href": "sportscenter://x-callback-url/showClubhouse?uid=s:600~t:204&section=stats",
+          "text": "Stats",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "schedule",
+           "desktop",
+           "team"
+          ],
+          "href": "https://www.espn.com/soccer/team/fixtures/_/id/204/bolivia",
+          "text": "Fixtures",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "schedule",
+           "sportscenter",
+           "app",
+           "team"
+          ],
+          "href": "sportscenter://x-callback-url/showClubhouse?uid=s:600~t:204&section=scores",
+          "text": "Fixtures",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "squad",
+           "desktop",
+           "team"
+          ],
+          "href": "https://www.espn.com/soccer/team/squad/_/id/204/bolivia",
+          "text": "Squad",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "squad",
+           "sportscenter",
+           "app",
+           "team"
+          ],
+          "href": "sportscenter://x-callback-url/showClubhouse?uid=s:600~t:204&section=squad",
+          "text": "Squad",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         }
+        ],
+        "venue": {
+         "id": "5108"
+        }
+       }
+      }
+     ],
+     "wasSuspended": false,
+     "playByPlayAvailable": true,
+     "playByPlayAthletes": true
+    }
+   ]
+  },
+  {
+   "id": "401932215",
+   "uid": "s:600~l:3922~e:401932215",
+   "date": "2026-11-17T23:30Z",
+   "name": "Dominican Republic at Uruguay",
+   "status": {
+    "clock": 4500.0,
+    "displayClock": "75'",
+    "period": 2,
+    "type": {
+     "id": "26",
+     "name": "STATUS_SECOND_HALF",
+     "state": "in",
+     "completed": false,
+     "description": "Second Half",
+     "detail": "75'",
+     "shortDetail": "75'"
+    }
+   },
+   "links": [
+    {
+     "language": "en-US",
+     "rel": [
+      "live",
+      "desktop",
+      "event"
+     ],
+     "href": "https://www.espn.com/soccer/match/_/gameId/401932215",
+     "text": "Gamecast",
+     "shortText": "Live",
+     "isExternal": false,
+     "isPremium": false,
+     "isHidden": false
+    },
+    {
+     "language": "en-US",
+     "rel": [
+      "team-stats",
+      "desktop",
+      "event"
+     ],
+     "href": "https://www.espn.com/soccer/team-stats/_/gameId/401932215/league/fifa.friendly",
+     "text": "Team Stats",
+     "shortText": "Team Stats",
+     "isExternal": false,
+     "isPremium": false,
+     "isHidden": false
+    }
+   ],
+   "competitions": [
+    {
+     "id": "401932215",
+     "uid": "s:600~l:3922~e:401932215~c:401932215",
+     "date": "2026-11-17T23:30Z",
+     "startDate": "2026-11-17T23:30Z",
+     "attendance": 0,
+     "timeValid": true,
+     "recent": true,
+     "status": {
+      "clock": 4500.0,
+      "displayClock": "75'",
+      "period": 2,
+      "type": {
+       "id": "26",
+       "name": "STATUS_SECOND_HALF",
+       "state": "in",
+       "completed": false,
+       "description": "Second Half",
+       "detail": "75'",
+       "shortDetail": "75'"
+      }
+     },
+     "venue": {
+      "id": "10995",
+      "fullName": "Estadio Domingo Burgueño Miguel",
+      "address": {
+       "city": "Maldonado",
+       "country": "Uruguay"
+      }
+     },
+     "format": {
+      "regulation": {
+       "periods": 2
+      }
+     },
+     "altGameNote": "Men's International Friendly",
+     "notes": [],
+     "broadcast": "",
+     "competitors": [
+      {
+       "id": "212",
+       "uid": "s:600~t:212",
+       "type": "team",
+       "order": 0,
+       "homeAway": "home",
+       "winner": false,
+       "form": "WWWLL",
+       "score": "2",
+       "team": {
+        "id": "212",
+        "uid": "s:600~t:212",
+        "abbreviation": "URU",
+        "displayName": "Uruguay",
+        "shortDisplayName": "Uruguay",
+        "name": "Uruguay",
+        "location": "Uruguay",
+        "color": "55B5E5",
+        "alternateColor": "000080",
+        "isActive": true,
+        "logo": "https://a.espncdn.com/i/teamlogos/countries/500/uru.png",
+        "links": [
+         {
+          "rel": [
+           "clubhouse",
+           "desktop",
+           "team"
+          ],
+          "href": "https://www.espn.com/soccer/team/_/id/212/uruguay",
+          "text": "Clubhouse",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "stats",
+           "desktop",
+           "team"
+          ],
+          "href": "https://www.espn.com/soccer/team/stats/_/id/212/uruguay",
+          "text": "Stats",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "stats",
+           "sportscenter",
+           "app",
+           "team"
+          ],
+          "href": "sportscenter://x-callback-url/showClubhouse?uid=s:600~t:212&section=stats",
+          "text": "Stats",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "schedule",
+           "desktop",
+           "team"
+          ],
+          "href": "https://www.espn.com/soccer/team/fixtures/_/id/212/uruguay",
+          "text": "Fixtures",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "schedule",
+           "sportscenter",
+           "app",
+           "team"
+          ],
+          "href": "sportscenter://x-callback-url/showClubhouse?uid=s:600~t:212&section=scores",
+          "text": "Fixtures",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "squad",
+           "desktop",
+           "team"
+          ],
+          "href": "https://www.espn.com/soccer/team/squad/_/id/212/uruguay",
+          "text": "Squad",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "squad",
+           "sportscenter",
+           "app",
+           "team"
+          ],
+          "href": "sportscenter://x-callback-url/showClubhouse?uid=s:600~t:212&section=squad",
+          "text": "Squad",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         }
+        ],
+        "venue": {
+         "id": "10995"
+        }
+       }
+      },
+      {
+       "id": "2649",
+       "uid": "s:600~t:2649",
+       "type": "team",
+       "order": 1,
+       "homeAway": "away",
+       "winner": false,
+       "form": "WLWWL",
+       "score": "0",
+       "team": {
+        "id": "2649",
+        "uid": "s:600~t:2649",
+        "abbreviation": "DOM",
+        "displayName": "Dominican Republic",
+        "shortDisplayName": "Dominican Rep",
+        "name": "Dominican Republic",
+        "location": "Dominican Republic",
+        "color": "002d62",
+        "alternateColor": "ce1127",
+        "isActive": true,
+        "logo": "https://a.espncdn.com/i/teamlogos/countries/500/dom.png",
+        "links": [
+         {
+          "rel": [
+           "clubhouse",
+           "desktop",
+           "team"
+          ],
+          "href": "https://www.espn.com/soccer/team/_/id/2649/dominican-republic",
+          "text": "Clubhouse",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "stats",
+           "desktop",
+           "team"
+          ],
+          "href": "https://www.espn.com/soccer/team/stats/_/id/2649/dominican-republic",
+          "text": "Stats",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "stats",
+           "sportscenter",
+           "app",
+           "team"
+          ],
+          "href": "sportscenter://x-callback-url/showClubhouse?uid=s:600~t:2649&section=stats",
+          "text": "Stats",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "schedule",
+           "desktop",
+           "team"
+          ],
+          "href": "https://www.espn.com/soccer/team/fixtures/_/id/2649/dominican-republic",
+          "text": "Fixtures",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "schedule",
+           "sportscenter",
+           "app",
+           "team"
+          ],
+          "href": "sportscenter://x-callback-url/showClubhouse?uid=s:600~t:2649&section=scores",
+          "text": "Fixtures",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "squad",
+           "desktop",
+           "team"
+          ],
+          "href": "https://www.espn.com/soccer/team/squad/_/id/2649/dominican-republic",
+          "text": "Squad",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "squad",
+           "sportscenter",
+           "app",
+           "team"
+          ],
+          "href": "sportscenter://x-callback-url/showClubhouse?uid=s:600~t:2649&section=squad",
+          "text": "Squad",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         }
+        ],
+        "venue": {
+         "id": "7579"
+        }
+       }
+      }
+     ],
+     "wasSuspended": false,
+     "playByPlayAvailable": true,
+     "playByPlayAthletes": true
+    }
+   ]
+  },
+  {
+   "id": "401933183",
+   "uid": "s:600~l:8313~e:401933183",
+   "date": "2026-11-17T23:30Z",
+   "name": "Once Caldas at Atlético Nacional",
+   "status": {
+    "clock": 4320.0,
+    "displayClock": "72'",
+    "period": 2,
+    "type": {
+     "id": "26",
+     "name": "STATUS_SECOND_HALF",
+     "state": "in",
+     "completed": false,
+     "description": "Second Half",
+     "detail": "72'",
+     "shortDetail": "72'"
+    }
+   },
+   "links": [
+    {
+     "language": "en-US",
+     "rel": [
+      "live",
+      "desktop",
+      "event"
+     ],
+     "href": "https://www.espn.com/soccer/match/_/gameId/401933183",
+     "text": "Gamecast",
+     "shortText": "Live",
+     "isExternal": false,
+     "isPremium": false,
+     "isHidden": false
+    }
+   ],
+   "competitions": [
+    {
+     "id": "401933183",
+     "uid": "s:600~l:8313~e:401933183~c:401933183",
+     "date": "2026-11-17T23:30Z",
+     "startDate": "2026-11-17T23:30Z",
+     "attendance": 0,
+     "timeValid": true,
+     "recent": true,
+     "status": {
+      "clock": 4320.0,
+      "displayClock": "72'",
+      "period": 2,
+      "type": {
+       "id": "26",
+       "name": "STATUS_SECOND_HALF",
+       "state": "in",
+       "completed": false,
+       "description": "Second Half",
+       "detail": "72'",
+       "shortDetail": "72'"
+      }
+     },
+     "venue": {
+      "id": "10593",
+      "fullName": "Atanasio Girardot",
+      "address": {
+       "city": "Medellin",
+       "country": "Colombia"
+      }
+     },
+     "format": {
+      "regulation": {
+       "periods": 2
+      }
+     },
+     "leg": {
+      "value": 2,
+      "displayValue": "2nd Leg"
+     },
+     "series": {
+      "competitors": [
+       {
+        "id": "5264",
+        "uid": "s:600~t:5264",
+        "winner": false,
+        "aggregateScore": 3.0
+       },
+       {
+        "id": "2919",
+        "uid": "s:600~t:2919",
+        "winner": false,
+        "aggregateScore": 3.0
+       }
+      ],
+      "completed": false,
+      "title": "Semifinals",
+      "totalCompetitions": 2
+     },
+     "altGameNote": "Copa Colombia, Semifinals - 2nd Leg",
+     "notes": [
+      {
+       "text": "2nd Leg - Tied on aggregate",
+       "headline": "2nd Leg - Tied on aggregate",
+       "type": "event"
+      }
+     ],
+     "broadcast": "",
+     "competitors": [
+      {
+       "id": "5264",
+       "uid": "s:600~t:5264",
+       "type": "team",
+       "order": 0,
+       "homeAway": "home",
+       "winner": false,
+       "form": "DDWDW",
+       "score": "2",
+       "aggregateScore": 3.0,
+       "team": {
+        "id": "5264",
+        "uid": "s:600~t:5264",
+        "abbreviation": "NAL",
+        "displayName": "Atlético Nacional",
+        "shortDisplayName": "Atl. Nacional",
+        "name": "Atlético Nacional",
+        "location": "Atlético Nacional",
+        "color": "06933c",
+        "alternateColor": "000000",
+        "isActive": true,
+        "logo": "https://a.espncdn.com/i/teamlogos/soccer/500/5264.png",
+        "links": [
+         {
+          "rel": [
+           "clubhouse",
+           "desktop",
+           "team"
+          ],
+          "href": "https://www.espn.com/soccer/club/_/id/5264/atletico-nacional",
+          "text": "Clubhouse",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "stats",
+           "desktop",
+           "team"
+          ],
+          "href": "https://www.espn.com/soccer/team/stats/_/id/5264/atletico-nacional",
+          "text": "Stats",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "stats",
+           "sportscenter",
+           "app",
+           "team"
+          ],
+          "href": "sportscenter://x-callback-url/showClubhouse?uid=s:600~t:5264&section=stats",
+          "text": "Stats",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "schedule",
+           "desktop",
+           "team"
+          ],
+          "href": "https://www.espn.com/soccer/team/fixtures/_/id/5264/atletico-nacional",
+          "text": "Fixtures",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "schedule",
+           "sportscenter",
+           "app",
+           "team"
+          ],
+          "href": "sportscenter://x-callback-url/showClubhouse?uid=s:600~t:5264&section=scores",
+          "text": "Fixtures",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "squad",
+           "desktop",
+           "team"
+          ],
+          "href": "https://www.espn.com/soccer/team/squad/_/id/5264/atletico-nacional",
+          "text": "Squad",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "squad",
+           "sportscenter",
+           "app",
+           "team"
+          ],
+          "href": "sportscenter://x-callback-url/showClubhouse?uid=s:600~t:5264&section=squad",
+          "text": "Squad",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         }
+        ],
+        "venue": {
+         "id": "10593"
+        }
+       }
+      },
+      {
+       "id": "2919",
+       "uid": "s:600~t:2919",
+       "type": "team",
+       "order": 1,
+       "homeAway": "away",
+       "winner": false,
+       "form": "DDWWW",
+       "score": "2",
+       "aggregateScore": 3.0,
+       "team": {
+        "id": "2919",
+        "uid": "s:600~t:2919",
+        "abbreviation": "CAL",
+        "displayName": "Once Caldas",
+        "shortDisplayName": "Once Caldas",
+        "name": "Once Caldas",
+        "location": "Once Caldas",
+        "color": "000000",
+        "alternateColor": "fafafc",
+        "isActive": true,
+        "logo": "https://a.espncdn.com/i/teamlogos/soccer/500/2919.png",
+        "links": [
+         {
+          "rel": [
+           "clubhouse",
+           "desktop",
+           "team"
+          ],
+          "href": "https://www.espn.com/soccer/club/_/id/2919/once-caldas",
+          "text": "Clubhouse",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "stats",
+           "desktop",
+           "team"
+          ],
+          "href": "https://www.espn.com/soccer/team/stats/_/id/2919/once-caldas",
+          "text": "Stats",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "stats",
+           "sportscenter",
+           "app",
+           "team"
+          ],
+          "href": "sportscenter://x-callback-url/showClubhouse?uid=s:600~t:2919&section=stats",
+          "text": "Stats",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "schedule",
+           "desktop",
+           "team"
+          ],
+          "href": "https://www.espn.com/soccer/team/fixtures/_/id/2919/once-caldas",
+          "text": "Fixtures",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "schedule",
+           "sportscenter",
+           "app",
+           "team"
+          ],
+          "href": "sportscenter://x-callback-url/showClubhouse?uid=s:600~t:2919&section=scores",
+          "text": "Fixtures",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "squad",
+           "desktop",
+           "team"
+          ],
+          "href": "https://www.espn.com/soccer/team/squad/_/id/2919/once-caldas",
+          "text": "Squad",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         },
+         {
+          "rel": [
+           "squad",
+           "sportscenter",
+           "app",
+           "team"
+          ],
+          "href": "sportscenter://x-callback-url/showClubhouse?uid=s:600~t:2919&section=squad",
+          "text": "Squad",
+          "isExternal": false,
+          "isPremium": false,
+          "isHidden": false
+         }
+        ],
+        "venue": {
+         "id": "10912"
+        }
+       }
+      }
+     ],
+     "wasSuspended": false,
+     "playByPlayAvailable": true,
+     "playByPlayAthletes": true
+    }
+   ]
+  }
+ ]
+}

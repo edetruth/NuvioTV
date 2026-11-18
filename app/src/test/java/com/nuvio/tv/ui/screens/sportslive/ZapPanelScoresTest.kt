@@ -16,6 +16,7 @@ import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.ScoreState
 import com.nuvio.tv.core.sportslive.scores.ScoreboardResult
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
+import com.nuvio.tv.core.sportslive.scores.TeamLogoBook
 import com.nuvio.tv.domain.model.ClaimedCatalog
 import com.nuvio.tv.domain.model.ContentType
 import com.nuvio.tv.domain.model.MetaPreview
@@ -274,6 +275,28 @@ class ZapPanelScoresTest {
 
         // An open panel ticks forever on the test scheduler; closed, the test can finish.
         viewModel.closePanel()
+    }
+
+    @Test
+    fun `panel rows carry both teams' logos with no score snapshot, channels none (#66)`() {
+        val book = TeamLogoBook()
+        book.learn(EspnLeagueMap.NBA, "Indiana Pacers", pacersEvent.away)
+        book.learn(EspnLeagueMap.NBA, "Philadelphia 76ers", pacersEvent.home)
+        val game = item("Indiana Pacers at Philadelphia 76ers", now - HOUR)
+        val unknown = item("Team A vs Team B", now - HOUR)
+        val channel = item("Sports Channel 1", null, isChannel = true)
+        val rows = groupPanelRows(listOf(game, unknown, channel), emptyMap(), ScoresMode.SHOW, emptySet(), now, known = book)
+        val teams = rows.first { it.item == game }.teams!!
+        assertEquals(pacersEvent.away.logo, teams.first.logo)
+        assertEquals("IND", teams.first.short)
+        assertEquals(pacersEvent.home.logo, teams.second.logo)
+        assertNull(rows.first { it.item == game }.chip)
+        // Two teams but none known: the abbreviation circles only.
+        assertNull(rows.first { it.item == unknown }.teams!!.first.logo)
+        assertNull(rows.first { it.item == channel }.teams)
+        // Scores Off: no learned logo either.
+        book.active = false
+        assertNull(groupPanelRows(listOf(game), emptyMap(), ScoresMode.OFF, emptySet(), now, known = book).single().teams!!.first.logo)
     }
 
     private companion object {

@@ -123,6 +123,34 @@ object EspnLeagueMap {
     }
 
     /**
+     * The college feed an ambiguous card may also be on (#66), tried only when its pro feed has no match:
+     * a card routed by a bare sport word, with no competition named. "Basketball" → men's college
+     * basketball; "American football" or a "Football" that never says soccer → college football. Women's
+     * and youth cards are excluded before this ([leaguesFor]), so they never reach a men's college feed.
+     */
+    fun collegeFallbackFor(item: SportsLiveItem): EspnLeague? =
+        collegeFallbackFor(
+            sport = SportsLiveTeams.knownSport(item),
+            hints = listOf(item.meta.name) + item.meta.genres,
+            routingHints = listOf(item.catalogName)
+        )
+
+    /** See [collegeFallbackFor]; the same texts as [leaguesFor]. */
+    fun collegeFallbackFor(sport: String?, hints: List<String>, routingHints: List<String> = emptyList()): EspnLeague? {
+        val own = (listOfNotNull(sport) + hints).map(::fold).filter { it.isNotEmpty() }
+        if (own.any { EXCLUDED.containsMatchIn(it) }) return null
+        val texts = own + routingHints.map(::fold).filter { it.isNotEmpty() }
+        if (firstCompetition(texts) != null || texts.any { SOCCER_WORD.containsMatchIn(it) }) return null
+        return when (firstSport(texts)) {
+            listOf(NBA) -> COLLEGE_BASKETBALL
+            listOf(NFL), listOf(SOCCER_ALL) -> COLLEGE_FOOTBALL
+            else -> null
+        }
+    }
+
+    private val SOCCER_WORD = Regex("""\bsoccer\b""")
+
+    /**
      * The ESPN sports a stored or addon [sport] word can mean: those of the feeds it routes to ("NBA" and
      * "Basketball" → basketball). A word routed only to `soccer/all` that says "Football" may also be
      * American football. Null when it routes nowhere (unknown or excluded).

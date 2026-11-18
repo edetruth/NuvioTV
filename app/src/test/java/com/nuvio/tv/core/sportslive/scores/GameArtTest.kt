@@ -124,4 +124,20 @@ class GameArtTest {
         assertTrue(GameArt.kickoff(bare, ms("2026-11-15T09:00:00Z"), ZoneOffset.UTC, Locale.US) is SportsLivePillTime.Other)
         assertNull(GameArt.kickoff(GameArt.of(item("Celtics vs Knicks", start = null), null)!!, 0L, ZoneOffset.UTC, Locale.US))
     }
+
+    @Test
+    fun `an unmatched card draws the logos its sides matched before, before any score (#66)`() {
+        val book = TeamLogoBook()
+        book.learn(EspnLeagueMap.NBA, "Pacers", pacers.away)
+        book.learn(EspnLeagueMap.NBA, "76ers", pacers.home)
+        val art = GameArt.of(item("Pacers at 76ers"), null, book)!!
+        assertTrue(art.hasLogos)
+        assertEquals(pacers.away.logo, art.first.logo)
+        assertEquals("IND", art.first.short)
+        // Names stay the card's own until the game is matched.
+        assertEquals("Pacers", art.first.name)
+        // One side unknown: no logos (both or none).
+        assertFalse(GameArt.of(item("Pacers at Knicks"), null, book)!!.hasLogos)
+    }
+
 }

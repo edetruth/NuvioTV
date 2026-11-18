@@ -10,6 +10,7 @@ import com.nuvio.tv.core.sportslive.scores.ScoreMatcher
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.ScoreState
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
+import com.nuvio.tv.core.sportslive.scores.TeamLogoBook
 import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveTab
@@ -81,13 +82,16 @@ enum class ZapPanelGroup { LIVE_NOW, STARTING_SOON, OTHER, JUST_ENDED }
 
 /**
  * A row of the live games panel: its [group], the S4 score [chip] (null when the game is unmatched,
- * upcoming or Scores is Off) and, for a game starting soon, its drawn card's [art] for the kickoff.
+ * upcoming or Scores is Off), for a game starting soon its drawn card's [art] for the kickoff, and for
+ * any row that names two teams their [teams] (logos and abbreviations, #66: never a score, so they
+ * show at once, from the logos learned before when the game is not matched yet).
  */
 data class ZapPanelRow(
     val item: SportsLiveItem,
     val group: ZapPanelGroup,
     val chip: ScoreChip?,
-    val art: GameArt?
+    val art: GameArt?,
+    val teams: GameArt? = null
 )
 
 /**
@@ -105,7 +109,8 @@ internal fun groupPanelRows(
     mode: ScoresMode?,
     revealed: Set<String>,
     nowMs: Long,
-    ended: Map<String, EndedGame> = emptyMap()
+    ended: Map<String, EndedGame> = emptyMap(),
+    known: TeamLogoBook = TeamLogoBook.shared
 ): List<ZapPanelRow> {
     class Entry(val row: ZapPanelRow, val startMs: Long?, val index: Int)
     val entries = items.mapIndexed { index, item ->
@@ -132,8 +137,9 @@ internal fun groupPanelRows(
             }
         }
         val chip = ScoreChips.of(item, event, mode, item.streamKey in revealed)
-        val art = if (group == ZapPanelGroup.STARTING_SOON) GameArt.of(item, event) else null
-        Entry(ZapPanelRow(item, group, chip, art), start, index)
+        val teams = GameArt.of(item, event, known)
+        val art = teams.takeIf { group == ZapPanelGroup.STARTING_SOON }
+        Entry(ZapPanelRow(item, group, chip, art, teams), start, index)
     }
     val order = compareBy<Entry> { it.row.group.ordinal }
         .thenByDescending { it.row.item.followed }

@@ -60,6 +60,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
 import com.nuvio.tv.R
+import com.nuvio.tv.core.sportslive.scores.TeamLogoUrls
 import com.nuvio.tv.core.sportslive.scores.FinalNote
 import com.nuvio.tv.core.sportslive.scores.GolfResult
 import com.nuvio.tv.core.sportslive.scores.MySport
@@ -694,7 +695,7 @@ private fun TeamLine(team: ScoreTeam, bold: Boolean) {
         val logo = team.logo
         if (logo != null) {
             AsyncImage(
-                model = logo,
+                model = TeamLogoUrls.scaled(logo),
                 contentDescription = null,
                 contentScale = ContentScale.Fit,
                 modifier = Modifier.size(24.dp)

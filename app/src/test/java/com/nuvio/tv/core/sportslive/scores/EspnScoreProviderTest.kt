@@ -242,4 +242,14 @@ class EspnScoreProviderTest {
             assertEquals(listOf(1), it.home.linescores)
         }
     }
+
+    @Test
+    fun `a warm start reads only the HTTP cache, up to two minutes old (#66)`() = runTest {
+        val p = provider(respond(200, EspnFixtures.json(EspnFixtures.NBA_20261115)))
+        // Served by the network (no cache response): not a warm copy.
+        assertNull(p.recentScoreboard(EspnLeagueMap.NBA, day))
+        assertEquals(listOf("max-stale=119, only-if-cached"), cacheControl)
+        assertEquals(listOf("https://example.invalid/apis/site/v2/sports/basketball/nba/scoreboard?dates=20261115&limit=1000"), requested)
+    }
+
 }

@@ -74,6 +74,8 @@ import com.nuvio.tv.ui.screens.sportslive.SportsLiveScoreChip
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapViewModel
 import com.nuvio.tv.ui.screens.sportslive.ZapPanelGroup
 import com.nuvio.tv.ui.screens.sportslive.ZapPanelRow
+import com.nuvio.tv.core.sportslive.scores.TeamLogoUrls
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveTeamLogo
 import com.nuvio.tv.ui.screens.sportslive.kickoffText
 import com.nuvio.tv.ui.screens.sportslive.dual.LocalOpenSportsLiveDual
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualPick
@@ -454,6 +456,13 @@ private fun LiveGameItem(
                         tint = NuvioTheme.colors.TextPrimary,
                         modifier = Modifier.size(20.dp)
                     )
+                }
+            }
+            // Both teams' logos (#66): from the logos learned before, so they never wait for a score.
+            row.teams?.let { teams ->
+                Row(horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs)) {
+                    SportsLiveTeamLogo(teams.first.logo, teams.first.short, TeamLogoUrls.CARD_PX, Modifier.size(28.dp))
+                    SportsLiveTeamLogo(teams.second.logo, teams.second.short, TeamLogoUrls.CARD_PX, Modifier.size(28.dp))
                 }
             }
             Column(modifier = Modifier.weight(1f)) {

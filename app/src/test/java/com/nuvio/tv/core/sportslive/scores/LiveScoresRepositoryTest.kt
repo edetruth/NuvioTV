@@ -22,6 +22,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZoneOffset
+import kotlin.coroutines.EmptyCoroutineContext
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class LiveScoresRepositoryTest {
@@ -31,12 +32,18 @@ class LiveScoresRepositoryTest {
         var respond: (ScoreFeed) -> ScoreboardResult = { ScoreboardResult(emptyList()) }
         /** When set, a request waits for it: an in-flight request. */
         var gate: CompletableDeferred<Unit>? = null
+        /** Per-feed gates. */
+        var gateFor: Map<ScoreFeed, CompletableDeferred<Unit>> = emptyMap()
+        /** The warm-start copies. */
+        var recent: (ScoreFeed) -> ScoreboardResult? = { null }
         override suspend fun scoreboard(league: EspnLeague, date: LocalDate): ScoreboardResult {
             val feed = ScoreFeed(league, date)
             calls += feed
             gate?.await()
+            gateFor[feed]?.await()
             return respond(feed)
         }
+        override suspend fun recentScoreboard(league: EspnLeague, date: LocalDate): ScoreboardResult? = recent(ScoreFeed(league, date))
     }
 
     private val provider = FakeProvider()
@@ -83,7 +90,12 @@ class LiveScoresRepositoryTest {
 
     private val mySports = MutableStateFlow(MySports.DEFAULT)
 
-    private fun TestScope.repository(start: String, zone: ZoneId = ZoneOffset.UTC): LiveScoresRepository {
+    private fun TestScope.repository(
+        start: String,
+        zone: ZoneId = ZoneOffset.UTC,
+        logoFile: TeamLogoFile? = null,
+        prefetch: (List<String>) -> Unit = {}
+    ): LiveScoresRepository {
         val base = ms(start)
         return LiveScoresRepository(
             provider = provider,
@@ -92,7 +104,10 @@ class LiveScoresRepositoryTest {
             scope = backgroundScope,
             now = { base + testScheduler.currentTime },
             zone = { zone },
-            jitter = { 0L }
+            jitter = { 0L },
+            logoFile = logoFile,
+            prefetch = prefetch,
+            io = EmptyCoroutineContext
         )
     }
 
@@ -641,46 +656,6 @@ class LiveScoresRepositoryTest {
     }
 
     @Test
-    fun `a league outside My sports is not polled unless a followed team plays`() = runTest {
-        provider.respond = { feed -> if (feed == nba15) ScoreboardResult(listOf(game(ScoreState.IN, 50, 48))) else ScoreboardResult(emptyList()) }
-        mySports.value = MySports(mapOf(MySport.HOCKEY to emptySet()))
-        val repo = repository("2026-11-15T19:00:00Z")
-        collect(repo)
-        repo.track(SECTION, listOf(pacersCard))
-        runCurrent()
-        assertTrue(provider.calls.isEmpty())
-        assertTrue(repo.scores.value.isEmpty())
-        // My Teams first: a followed team's game is scored whatever My sports says.
-        val followedCard = pacersCard.copy(followed = true)
-        repo.track(SECTION, listOf(followedCard))
-        runCurrent()
-        assertEquals(listOf(nba15), provider.calls)
-        assertEquals(setOf(followedCard.streamKey), repo.scores.value.keys)
-    }
-
-    @Test
-    fun `a soccer competition not picked in My sports shows no score and stops polling`() = runTest {
-        val eng1 = EspnFixtures.events(EspnFixtures.ENG1_20261108, EspnFixtures.ENG1)
-        provider.respond = { feed -> if (feed.league == EspnFixtures.ENG1) ScoreboardResult(eng1) else ScoreboardResult(emptyList()) }
-        // Soccer with only LaLiga named.
-        mySports.value = MySports(mapOf(MySport.SOCCER to setOf(MyLeague.LA_LIGA)))
-        val repo = repository("2026-11-08T15:00:00Z")
-        collect(repo)
-        val palace = item("Crystal Palace vs Liverpool", "Soccer", "2026-11-08T14:00:00Z", genres = listOf("Premier League"))
-        repo.track(SECTION, listOf(palace))
-        runCurrent()
-        val first = provider.calls.size
-        assertTrue(first > 0)
-        assertTrue(repo.scores.value.isEmpty())
-        advanceTimeBy(30 * 60_000L); runCurrent()
-        assertEquals(first, provider.calls.size)
-        // Picking the Premier League brings the score.
-        mySports.value = MySports(mapOf(MySport.SOCCER to setOf(MyLeague.LA_LIGA, MyLeague.PREMIER_LEAGUE)))
-        runCurrent()
-        assertEquals(setOf(palace.streamKey), repo.scores.value.keys)
-    }
-
-    @Test
     fun `after a pause no old score shows until a fresh fetch`() = runTest {
         provider.respond = { ScoreboardResult(listOf(game(ScoreState.IN, 50, 48, "Q2 5:00"))) }
         val repo = repository("2026-11-15T19:00:00Z")
@@ -705,8 +680,48 @@ class LiveScoresRepositoryTest {
         assertEquals(70, repo.scores.value.getValue(pacersCard.streamKey).homeScore)
     }
 
+    // --- #66: every game on screen, college fallback, logos, warm start, cold path ---
+
+    private val cbbFixture = EspnFixtures.events(EspnFixtures.CBB_20261115, EspnLeagueMap.COLLEGE_BASKETBALL)
+    private val cbb15 = ScoreFeed(EspnLeagueMap.COLLEGE_BASKETBALL, LocalDate.of(2026, 11, 15))
+    private val baylorCard = item("Baylor Bears at Texas Longhorns", "Basketball", "2026-11-15T20:00:00Z")
+
+    private fun nbaAndCollege(feed: ScoreFeed) = when (feed.league) {
+        EspnLeagueMap.NBA -> ScoreboardResult(nbaFixture)
+        EspnLeagueMap.COLLEGE_BASKETBALL -> ScoreboardResult(cbbFixture)
+        else -> ScoreboardResult(emptyList())
+    }
+
     @Test
-    fun `a parked out-of-scope card is scored once its team is followed`() = runTest {
+    fun `an on-screen college card is polled and matched when My sports leaves college out`() = runTest {
+        provider.respond = ::nbaAndCollege
+        mySports.value = MySports(mapOf(MySport.BASKETBALL to setOf(MyLeague.NBA)))
+        val repo = repository("2026-11-15T21:00:00Z")
+        collect(repo)
+        val named = item("Baylor Bears at Texas Longhorns", "Basketball", "2026-11-15T20:00:00Z", genres = listOf("College Basketball"))
+        repo.track(SECTION, listOf(named))
+        runCurrent()
+        assertEquals(listOf(cbb15), provider.calls)
+        assertEquals("401906866", repo.scores.value.getValue(named.streamKey).eventId)
+    }
+
+    @Test
+    fun `a league outside My sports is scored on screen, and unchosen leagues with no card are not polled`() = runTest {
+        provider.respond = { feed -> if (feed == nba15) ScoreboardResult(listOf(game(ScoreState.IN, 50, 48))) else ScoreboardResult(emptyList()) }
+        mySports.value = MySports(mapOf(MySport.HOCKEY to emptySet()))
+        val repo = repository("2026-11-15T19:00:00Z")
+        collect(repo)
+        repo.track(SECTION, listOf(pacersCard))
+        runCurrent()
+        // Only the card's own feed: no NHL (picked, but no card), no college (the card matched).
+        assertEquals(listOf(nba15), provider.calls)
+        assertEquals(setOf(pacersCard.streamKey), repo.scores.value.keys)
+        advanceTimeBy(30 * 60_000L); runCurrent()
+        assertTrue(provider.calls.all { it.league == EspnLeagueMap.NBA })
+    }
+
+    @Test
+    fun `a soccer competition not picked in My sports still shows the score of its card`() = runTest {
         val eng1 = EspnFixtures.events(EspnFixtures.ENG1_20261108, EspnFixtures.ENG1)
         provider.respond = { feed -> if (feed.league == EspnFixtures.ENG1) ScoreboardResult(eng1) else ScoreboardResult(emptyList()) }
         mySports.value = MySports(mapOf(MySport.SOCCER to setOf(MyLeague.LA_LIGA)))
@@ -715,9 +730,171 @@ class LiveScoresRepositoryTest {
         val palace = item("Crystal Palace vs Liverpool", "Soccer", "2026-11-08T14:00:00Z", genres = listOf("Premier League"))
         repo.track(SECTION, listOf(palace))
         runCurrent()
-        assertTrue(repo.scores.value.isEmpty())
-        repo.track(SECTION, listOf(palace.copy(followed = true)))
-        runCurrent()
         assertEquals(setOf(palace.streamKey), repo.scores.value.keys)
+    }
+
+    @Test
+    fun `a bare Basketball card missing from the NBA feed is matched on the college feed`() = runTest {
+        provider.respond = ::nbaAndCollege
+        val repo = repository("2026-11-15T21:00:00Z")
+        collect(repo)
+        repo.track(SECTION, listOf(baylorCard))
+        runCurrent()
+        assertEquals(listOf(nba15, cbb15), provider.calls)
+        assertEquals("401906866", repo.scores.value.getValue(baylorCard.streamKey).eventId)
+        assertTrue(baylorCard.streamKey !in repo.unmatched.value)
+        // From now on it is polled on its college feed alone.
+        provider.calls.clear()
+        advanceTimeBy(60 * 60_000L); runCurrent()
+        assertTrue(provider.calls.none { it.league == EspnLeagueMap.NBA })
+        assertEquals("401906866", repo.scores.value.getValue(baylorCard.streamKey).eventId)
+    }
+
+    @Test
+    fun `the college feed is tried only for an unmatched card with a bare sport`() = runTest {
+        provider.respond = ::nbaAndCollege
+        val repo = repository("2026-11-15T21:00:00Z")
+        collect(repo)
+        // Matched on the NBA feed: no college request.
+        repo.track(SECTION, listOf(pacersCard))
+        runCurrent()
+        assertEquals(listOf(nba15), provider.calls)
+        // Names the NBA: never the college feed, even unmatched.
+        val namedNba = item("Baylor Bears at Texas Longhorns", "NBA", "2026-11-15T20:00:00Z")
+        repo.track(SECTION, listOf(namedNba))
+        runCurrent()
+        assertTrue(cbb15 !in provider.calls)
+        assertTrue(namedNba.streamKey in repo.unmatched.value)
+        // A women's card is excluded from every feed: nothing is requested for it.
+        provider.calls.clear()
+        repo.track(SECTION, listOf(item("Baylor Bears at Texas Longhorns", "Women's Basketball", "2026-11-15T20:00:00Z")))
+        runCurrent()
+        assertTrue(provider.calls.isEmpty())
+    }
+
+    @Test
+    fun `an unmatched bare card is confirmed only once the college feed has answered too`() = runTest {
+        provider.respond = { ScoreboardResult(if (it.league == EspnLeagueMap.NBA) nbaFixture else emptyList()) }
+        val gate = CompletableDeferred<Unit>()
+        val repo = repository("2026-11-15T21:00:00Z")
+        collect(repo)
+        val unknown = item("Nowhere Owls at Somewhere Hawks", "Basketball", "2026-11-15T20:00:00Z")
+        repo.track(SECTION, listOf(unknown))
+        provider.gateFor = mapOf(cbb15 to gate)
+        runCurrent()
+        assertEquals(listOf(nba15, cbb15), provider.calls)
+        assertTrue(repo.unmatched.value.isEmpty())
+        gate.complete(Unit)
+        runCurrent()
+        assertEquals(setOf(unknown.streamKey), repo.unmatched.value)
+    }
+
+    @Test
+    fun `the first fetch fires at once and leagues are fetched in parallel`() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        provider.gate = gate
+        provider.respond = ::nbaAndCollege
+        val repo = repository("2026-11-15T21:00:00Z")
+        collect(repo)
+        val named = item("Baylor Bears at Texas Longhorns", "Basketball", "2026-11-15T20:00:00Z", genres = listOf("College Basketball"))
+        repo.track(SECTION, listOf(pacersCard, named))
+        runCurrent()
+        // No time has passed and neither request has answered: both are in flight together.
+        assertEquals(0L, testScheduler.currentTime)
+        assertEquals(setOf(nba15, cbb15), provider.calls.toSet())
+        gate.complete(Unit)
+        runCurrent()
+        assertEquals(setOf(pacersCard.streamKey, named.streamKey), repo.scores.value.keys)
+    }
+
+    @Test
+    fun `a dated card is matched as soon as its own day lands, whatever another card waits for`() = runTest {
+        provider.respond = { ScoreboardResult(listOf(game(ScoreState.IN, 50, 48))) }
+        val yesterday = CompletableDeferred<Unit>()
+        val repo = repository("2026-11-15T19:00:00Z")
+        collect(repo)
+        // An undated card asks for Eastern today and yesterday; yesterday's feed hangs.
+        provider.gateFor = mapOf(ScoreFeed(EspnLeagueMap.NBA, LocalDate.of(2026, 11, 14)) to yesterday)
+        val undated = item("Indiana Pacers vs Philadelphia 76ers", "Basketball", null, addon = "b")
+        repo.track(SECTION, listOf(pacersCard, undated))
+        runCurrent()
+        assertTrue(pacersCard.streamKey in repo.scores.value)
+        assertTrue(undated.streamKey !in repo.scores.value)
+        yesterday.complete(Unit)
+        runCurrent()
+        assertTrue(undated.streamKey in repo.scores.value)
+    }
+
+    @Test
+    fun `a warm copy shows at once and the network fetch follows immediately`() = runTest {
+        provider.recent = { feed -> if (feed == nba15) ScoreboardResult(listOf(game(ScoreState.IN, 40, 38))) else null }
+        provider.respond = { ScoreboardResult(listOf(game(ScoreState.IN, 50, 48))) }
+        val gate = CompletableDeferred<Unit>()
+        provider.gate = gate
+        val repo = repository("2026-11-15T19:00:00Z")
+        collect(repo)
+        val heat = item("Miami Heat at Chicago Bulls", "Basketball", "2026-11-15T18:00:00Z")
+        repo.track(SECTION, listOf(pacersCard, heat))
+        runCurrent()
+        assertEquals(40, repo.scores.value.getValue(pacersCard.streamKey).homeScore)
+        assertEquals(listOf(nba15), provider.calls)
+        // A warm copy never confirms a card unmatched.
+        assertTrue(repo.unmatched.value.isEmpty())
+        gate.complete(Unit)
+        runCurrent()
+        assertEquals(50, repo.scores.value.getValue(pacersCard.streamKey).homeScore)
+        assertEquals(setOf(heat.streamKey), repo.unmatched.value)
+    }
+
+    @Test
+    fun `a warm copy is held back by the score delay like any first-seen live game`() = runTest {
+        settings.value = ScoreSettings(delaySeconds = 30)
+        provider.recent = { ScoreboardResult(listOf(game(ScoreState.IN, 40, 38))) }
+        provider.gate = CompletableDeferred()
+        val repo = repository("2026-11-15T19:00:00Z")
+        collect(repo)
+        repo.track(SECTION, listOf(pacersCard))
+        runCurrent()
+        assertNull(repo.scores.value.getValue(pacersCard.streamKey).homeScore)
+    }
+
+    @Test
+    fun `matched sides' logos are learned, saved and prefetched scaled`() = runTest {
+        provider.respond = { ScoreboardResult(nbaFixture) }
+        val dir = java.nio.file.Files.createTempDirectory("logos").toFile()
+        val file = TeamLogoFile(java.io.File(dir, "team_logos.tsv"))
+        val prefetched = mutableListOf<String>()
+        val repo = repository("2026-11-16T12:00:00Z", logoFile = file, prefetch = { prefetched += it })
+        collect(repo)
+        val card = item("Pacers at 76ers", "Basketball", "2026-11-15T18:00:00Z")
+        repo.track(SECTION, listOf(card))
+        runCurrent()
+        val known = repo.logos.lookup(EspnLeagueMap.NBA, "Pacers")!!
+        assertEquals("IND", known.abbreviation)
+        assertEquals(pacers.away.logo, known.logo)
+        assertTrue(prefetched.isNotEmpty())
+        assertTrue(prefetched.all { it.startsWith("https://a.espncdn.com/combiner/i?img=/i/") && it.endsWith("&w=96&h=96") })
+        // Written a moment later, off the poll path; a new book reads it back.
+        assertNull(file.read())
+        advanceTimeBy(5_000L); runCurrent()
+        val reloaded = TeamLogoBook().apply { load(file.read()!!) }
+        assertEquals(known, reloaded.lookup(EspnLeagueMap.NBA, "Pacers"))
+        dir.deleteRecursively()
+    }
+
+    @Test
+    fun `USA vs Haiti is looked up on ESPN's Eastern day and matched on the live feed`() = runTest {
+        val live = EspnFixtures.events(EspnFixtures.SOCCER_ALL_LIVE_20261117, EspnLeagueMap.SOCCER_ALL)
+        provider.respond = { feed -> if (feed.league == EspnLeagueMap.SOCCER_ALL) ScoreboardResult(live) else ScoreboardResult(emptyList()) }
+        mySports.value = MySports(mapOf(MySport.SOCCER to setOf(MyLeague.PREMIER_LEAGUE)))
+        val repo = repository("2026-11-18T00:50:00Z", zone = ZoneId.of("Europe/London"))
+        collect(repo)
+        val card = item("USA vs Haiti", "Soccer", "2026-11-18T00:00:00Z", genres = listOf("CONCACAF Nations League"))
+        repo.track(SECTION, listOf(card))
+        runCurrent()
+        // Kicked off 19:00 ET on the 17th: ESPN's 17th, first on soccer/all, then on its own league's feed.
+        assertEquals(ScoreFeed(EspnLeagueMap.SOCCER_ALL, LocalDate.of(2026, 11, 17)), provider.calls.first())
+        assertTrue(provider.calls.all { it.date == LocalDate.of(2026, 11, 17) })
+        assertEquals("401929766", repo.scores.value.getValue(card.streamKey).eventId)
     }
 }

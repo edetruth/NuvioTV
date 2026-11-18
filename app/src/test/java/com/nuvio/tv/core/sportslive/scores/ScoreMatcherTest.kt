@@ -10,6 +10,7 @@ import com.nuvio.tv.domain.model.SportsLiveKind
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.Instant
 import java.time.ZoneId
@@ -316,4 +317,51 @@ class ScoreMatcherTest {
         kind = SportsLiveKind.EVENTS, isLive = true, isChannel = isChannel, startMs = null, sport = null,
         teams = teams ?: SportsLiveTeams.parse(name)
     )
+
+    private val liveSoccer = EspnFixtures.events(EspnFixtures.SOCCER_ALL_LIVE_20261117, EspnLeagueMap.SOCCER_ALL)
+
+    @Test
+    fun `USA v Haiti, live on 2026-11-17, matches in the forms addons write it (#66)`() {
+        val kickoff = "2026-11-18T00:00:00Z"
+        val now = "2026-11-18T00:50:00Z"
+        for (title in listOf("USA vs Haiti", "USA v Haiti", "United States vs Haiti", "USMNT vs Haiti", "Haiti @ USA", "US vs Haiti")) {
+            assertEquals(title, "401929766", match(title, kickoff, liveSoccer, now))
+        }
+        // No start (a channel's "[USA vs Haiti]"): ESPN's Eastern day.
+        assertEquals("401929766", match("USA vs Haiti", null, liveSoccer, now))
+        // The women's and youth teams never take the men's game.
+        for (title in listOf("USA (W) vs Haiti (W)", "USA Women vs Haiti Women", "USA U20 vs Haiti U20", "USWNT vs Haiti")) {
+            assertNull(title, match(title, kickoff, liveSoccer, now))
+        }
+    }
+
+    @Test
+    fun `the other live national and club games of 2026-11-17 match their usual titles (#66)`() {
+        val now = "2026-11-18T00:50:00Z"
+        val vincent = liveSoccer.first { it.away.displayName == "St. Vincent and the Grenadines" }.eventId
+        for (title in listOf("French Guiana vs St Vincent", "French Guiana vs Saint Vincent and the Grenadines", "French Guiana vs St. Vincent & the Grenadines")) {
+            assertEquals(title, vincent, match(title, "2026-11-18T00:00:00Z", liveSoccer, now))
+        }
+        assertEquals(liveSoccer.first { it.home.displayName == "Uruguay" }.eventId, match("Uruguay vs Dominican Rep.", "2026-11-17T23:30:00Z", liveSoccer, now))
+        assertEquals(liveSoccer.first { it.home.displayName == "Ecuador" }.eventId, match("Ecuador vs Bolivia", "2026-11-17T23:30:00Z", liveSoccer, now))
+        val nacional = liveSoccer.first { it.away.displayName == "Once Caldas" }.eventId
+        assertEquals(nacional, match("Atletico Nacional vs Once Caldas", "2026-11-17T23:30:00Z", liveSoccer, now))
+        assertEquals(nacional, match("Atlético Nacional v Once Caldas", "2026-11-17T23:30:00Z", liveSoccer, now))
+        assertEquals(nacional, match("Nacional vs Once Caldas", "2026-11-17T23:30:00Z", liveSoccer, now))
+    }
+
+    @Test
+    fun `national team aliases fold both ways and keep qualifiers (#66)`() {
+        fun same(a: String, b: String) = assertEquals("$a = $b", SportsLiveTeams.canonicalise(b), SportsLiveTeams.canonicalise(a))
+        same("USA", "United States"); same("USMNT", "United States"); same("UAE", "United Arab Emirates")
+        same("Korea Republic", "South Korea"); same("Ivory Coast", "Côte d'Ivoire"); same("Türkiye", "Turkey")
+        same("IR Iran", "Iran"); same("Czechia", "Czech Republic"); same("Bosnia-Herzegovina", "Bosnia and Herzegovina")
+        same("Bosnia & Herzegovina", "Bosnia"); same("Cabo Verde", "Cape Verde"); same("Congo DR", "DR Congo")
+        same("China PR", "China"); same("Holland", "Netherlands"); same("Republic of Ireland", "Ireland")
+        same("Man Utd", "Manchester Utd"); same("Nott'm Forest", "Nottingham Forest")
+        assertTrue(SportsLiveTeams.canonicalise("USA (W)") != SportsLiveTeams.canonicalise("United States"))
+        assertTrue(SportsLiveTeams.canonicalise("USWNT") != SportsLiveTeams.canonicalise("United States"))
+        assertTrue(SportsLiveTeams.canonicalise("Northern Ireland") != SportsLiveTeams.canonicalise("Ireland"))
+    }
+
 }

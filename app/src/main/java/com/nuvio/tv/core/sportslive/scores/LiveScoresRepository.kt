@@ -1,6 +1,8 @@
 package com.nuvio.tv.core.sportslive.scores
 
+import android.content.Context
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
+import dagger.hilt.android.qualifiers.ApplicationContext
 import com.nuvio.tv.domain.model.SportsLiveItem
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
@@ -24,12 +26,14 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.io.File
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZoneOffset
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.coroutines.CoroutineContext
 import kotlin.random.Random
 
 /**
@@ -45,8 +49,15 @@ import kotlin.random.Random
  *   feed, shared by all its cards, at the [ScoreCadence] rules, with in-flight requests coalesced.
  * - The [ScoreDelay] is applied here, once, so every surface gets the delayed view.
  * - Failure-silent: a feed failing three times in a row is paused and its scores hidden until a success.
- * - Scope: followed teams' games always; other games only when their league is in My sports (#55).
- *   At most [MAX_FEEDS] feeds poll at once, followed teams' games claiming theirs first.
+ * - Scope (#66): every tracked card on screen, whatever My sports says; My sports only orders the
+ *   feed budget. At most [MAX_FEEDS] feeds poll at once (in parallel): followed teams' games claim
+ *   theirs first, then games in My sports. A card routed by a bare "Basketball" / "Football" that its
+ *   pro feed does not list also tries the college feed ([EspnLeagueMap.collegeFallbackFor]), only while
+ *   it is tracked.
+ * - Logos (#66): each matched side's logo is learned into [logos] (kept in app storage) so cards draw
+ *   it on the next launch before any feed answers, and tracked games' logos are prefetched.
+ * - Warm start (#66): a feed's first fetch after a restart is preceded by the provider's copy of it
+ *   from the last two minutes, if any ([ScoreProvider.recentScoreboard]); the network fetch follows at once.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @Singleton
@@ -55,21 +66,32 @@ class LiveScoresRepository internal constructor(
     /** The active profile's score settings. */
     val settings: Flow<ScoreSettings>,
     private val scope: CoroutineScope,
-    /** My sports (#55) with followed teams' sports added: which leagues' games get scores. */
+    /** My sports (#55) with followed teams' sports added: which games claim the feed budget first. */
     private val mySports: Flow<MySports> = flowOf(MySports.DEFAULT),
     private val now: () -> Long,
     private val zone: () -> ZoneId,
-    private val jitter: () -> Long
+    private val jitter: () -> Long,
+    /** Team logos learned from matches (#66). */
+    val logos: TeamLogoBook = TeamLogoBook(),
+    /** Where [logos] is kept; null: memory only. */
+    private val logoFile: TeamLogoFile? = null,
+    /** Loads logo URLs into the image disk cache. */
+    private val prefetch: (List<String>) -> Unit = {},
+    /** Where the logo file is read and written. */
+    private val io: CoroutineContext = Dispatchers.IO
 ) : LiveScoreTracking {
     @Inject
-    constructor(provider: ScoreProvider, prefs: SportsLivePreferencesDataStore) : this(
+    constructor(provider: ScoreProvider, prefs: SportsLivePreferencesDataStore, @ApplicationContext context: Context) : this(
         provider = provider,
         settings = prefs.scoreSettings,
         mySports = combine(prefs.mySports, prefs.followedTeams) { sports, followed -> sports.withFollowed(followed) },
         scope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
         now = System::currentTimeMillis,
         zone = ZoneId::systemDefault,
-        jitter = { Random.nextLong(-ScoreCadence.JITTER_MS, ScoreCadence.JITTER_MS + 1) }
+        jitter = { Random.nextLong(-ScoreCadence.JITTER_MS, ScoreCadence.JITTER_MS + 1) },
+        logos = TeamLogoBook.shared,
+        logoFile = TeamLogoFile(File(context.filesDir, "sportslive/team_logos.tsv")),
+        prefetch = { urls -> TeamLogoPrefetch.enqueue(context, urls) }
     )
 
     /** What the settings screen and surfaces read: Show / Hide until focused / Off. */
@@ -84,13 +106,22 @@ class LiveScoresRepository internal constructor(
 
     /**
      * Card keys confirmed to get no score (#60): every feed they route to has answered (or is paused)
-     * without their game, their game is outside My sports, or they route to no feed in scope. Remembered
+     * without their game (its college feed too, for a bare "Basketball" / "Football" card). Remembered
      * while the card is not tracked; a card that later matches leaves it. Only these cards (and cards
      * no feed covers, or every card while Scores is Off) may be estimated as ended.
      */
     val unmatched: StateFlow<Set<String>> = unmatchedOutput.asStateFlow()
 
-    private class TrackedCard(val card: ScoreCard, val leagues: List<EspnLeague>, val followed: Boolean)
+    /** A card waiting for its college fallback until every card's own feeds are budgeted. */
+    private class Deferral(val entry: TrackedCard, val dates: List<LocalDate>, val cardFeeds: List<ScoreFeed>, val fallback: EspnLeague)
+
+    private class TrackedCard(
+        val card: ScoreCard,
+        val leagues: List<EspnLeague>,
+        val followed: Boolean,
+        /** The college feed to try when [leagues] answer without the game (#66); null for most cards. */
+        val fallback: EspnLeague?
+    )
 
     private class FeedState {
         var events: List<ScoreSnapshot> = emptyList()
@@ -105,6 +136,8 @@ class LiveScoresRepository internal constructor(
         var retryAfterMs: Long? = null
         /** When no card needed it any more; it is kept a while so a re-track waits out its interval. */
         var retiredAt: Long? = null
+        /** The warm-start copy was looked for (once per feed state). */
+        var warmTried = false
         val paused: Boolean get() = failures >= ScoreCadence.PAUSE_AFTER_FAILURES
     }
 
@@ -121,8 +154,9 @@ class LiveScoresRepository internal constructor(
     private var raw: Map<String, ScoreSnapshot> = emptyMap()
     private var delayMs = 0L
     private var sports: MySports = MySports.DEFAULT
-    /** Matched cards whose game is outside My sports: skipped (no feeds) until My sports changes. */
-    private val outOfScope = HashSet<String>()
+    /** Logo URLs already handed to [prefetch]. */
+    private val prefetched = HashSet<String>()
+    private var logoWrite: Job? = null
     /** See [unmatched]. */
     private val unmatchedKeys = HashSet<String>()
     private val matcher = ScoreMatcher(zone)
@@ -130,6 +164,9 @@ class LiveScoresRepository internal constructor(
     private val nextRelease = MutableStateFlow<Long?>(null)
 
     init {
+        logoFile?.let { file ->
+            scope.launch(io) { file.read()?.let(logos::load) }
+        }
         scope.launch {
             output.subscriptionCount.map { it > 0 }.distinctUntilChanged().collectLatest { active ->
                 if (active) {
@@ -156,9 +193,9 @@ class LiveScoresRepository internal constructor(
     override fun track(screenId: String, cards: List<SportsLiveItem>) {
         val entries = cards.mapNotNull { item ->
             val card = ScoreCard.from(item) ?: return@mapNotNull null
-            val leagues = (listOf(item) + item.alternates).asSequence()
-                .map(EspnLeagueMap::leaguesFor).firstOrNull { it.isNotEmpty() } ?: return@mapNotNull null
-            TrackedCard(card, leagues, item.followed)
+            val (source, leagues) = (listOf(item) + item.alternates).asSequence()
+                .map { it to EspnLeagueMap.leaguesFor(it) }.firstOrNull { it.second.isNotEmpty() } ?: return@mapNotNull null
+            TrackedCard(card, leagues, item.followed, EspnLeagueMap.collegeFallbackFor(source)?.takeIf { it !in leagues })
         }.distinctBy { it.card.key }
         tracked.update { current -> if (entries.isEmpty()) current - screenId else current + (screenId to entries) }
     }
@@ -173,14 +210,16 @@ class LiveScoresRepository internal constructor(
 
     /**
      * Every screen's tracked cards, one entry per card key (the same card on two screens is one),
-     * followed teams' games first: they claim the feed budget before the rest.
+     * followed teams' games first, then games in My sports: they claim the feed budget before the rest.
      */
     private fun trackedUnion(): List<TrackedCard> =
-        tracked.value.values.flatten().distinctBy { it.card.key }.sortedByDescending { it.followed }
+        tracked.value.values.flatten().distinctBy { it.card.key }
+            .sortedWith(compareByDescending<TrackedCard> { it.followed }.thenByDescending { entry -> entry.leagues.any(::inMySports) })
 
     // While someone collects [scores]: settings, then the tracked cards, drive the pollers.
     private suspend fun run() {
         combine(settings.distinctUntilChanged(), mySports.distinctUntilChanged(), ::Pair).collectLatest { (current, picked) ->
+            logos.active = current.mode != ScoresMode.OFF
             if (current.mode == ScoresMode.OFF) {
                 lock.withLock { publishLocked(off = true) }
                 return@collectLatest
@@ -189,10 +228,6 @@ class LiveScoresRepository internal constructor(
                 val pollerScope = this
                 lock.withLock {
                     delayMs = current.delaySeconds * 1_000L
-                    if (picked != sports) {
-                        outOfScope.clear()
-                        unmatchedKeys.clear()
-                    }
                     sports = picked
                 }
                 launch {
@@ -208,6 +243,7 @@ class LiveScoresRepository internal constructor(
     }
 
     private suspend fun poll(feed: ScoreFeed, pollerScope: CoroutineScope) {
+        warmStart(feed, pollerScope)
         while (true) {
             val wait = lock.withLock { waitLocked(feed) } ?: return
             if (wait > 0) delay(wait)
@@ -226,6 +262,31 @@ class LiveScoresRepository internal constructor(
             }
             request.await()
             lock.withLock { refreshLocked(pollerScope, restartStopped = false) }
+        }
+    }
+
+    /**
+     * A feed polled for the first time since the app started: the provider's copy from the last two
+     * minutes, if it has one, shows while the network fetch (which follows at once) is in flight. It
+     * never counts as an answer ([FeedState.fetched] stays false), so no card is confirmed unmatched
+     * and no fallback is tried on it. The score delay applies to it as to any fetch.
+     */
+    private suspend fun warmStart(feed: ScoreFeed, pollerScope: CoroutineScope) {
+        val first = lock.withLock {
+            val state = feeds[feed]
+            val untried = state != null && !state.warmTried && state.lastAttemptAt == null
+            if (untried) state!!.warmTried = true
+            untried
+        }
+        if (!first) return
+        val warm = provider.recentScoreboard(feed.league, feed.date) ?: return
+        if (warm.failed || warm.events.isEmpty()) return
+        lock.withLock {
+            val state = feeds[feed] ?: return
+            if (state.lastSuccessAt != null) return
+            state.events = warm.events
+            state.lastSuccessAt = now()
+            refreshLocked(pollerScope, restartStopped = false)
         }
     }
 
@@ -273,51 +334,21 @@ class LiveScoresRepository internal constructor(
         val needed = LinkedHashSet<ScoreFeed>()
         fun fits(extra: Collection<ScoreFeed>) = needed.size + extra.count { it !in needed } <= MAX_FEEDS
         val matched = HashMap<String, ScoreSnapshot>()
-        for (entry in trackedUnion()) {
+        val learnedBefore = logos.revision.value
+        val nowMs = now()
+        val deferred = ArrayList<Deferral>()
+
+        // A card's outcome: its feeds polled, and its match published, or it confirmed unmatched.
+        fun settle(entry: TrackedCard, dates: List<LocalDate>, cardFeeds: List<ScoreFeed>, match: ScoreSnapshot?) {
             val card = entry.card
-            if (card.key in outOfScope && !entry.followed) {
-                markUnmatched(card.key)
-                continue
-            }
-            val dates = datesFor(card)
-            val leagues = remembered[card.key]?.let(::listOf)
-                ?: if (entry.followed) entry.leagues else entry.leagues.filter(::inMySports)
-            if (leagues.isEmpty()) {
-                markUnmatched(card.key)
-                continue
-            }
-            val cardFeeds = feedsOf(leagues, dates).toMutableList()
-            // A remembered league keeps soccer/all until its own feed has data.
-            if (card.key in remembered && cardFeeds.any { feeds[it]?.fetched != true }) {
-                cardFeeds += feedsOf(listOf(EspnLeagueMap.SOCCER_ALL), dates)
-            }
-            // Over the budget: a card whose feeds are not polled already gets no score (never a stale one).
-            if (!fits(cardFeeds)) continue
-            var match = matchOn(card, cardFeeds)
-            // A soccer competition feed without the game: try soccer/all (shared, at its own cadence).
-            if (match == null && leagues.all { it.sport == "soccer" && it != EspnLeagueMap.SOCCER_ALL } &&
-                cardFeeds.all { feed -> feeds[feed]?.let { it.fetched && !it.paused } == true }
-            ) {
-                val fallback = feedsOf(listOf(EspnLeagueMap.SOCCER_ALL), dates)
-                if (fits(cardFeeds + fallback)) {
-                    cardFeeds += fallback
-                    match = matchOn(card, cardFeeds)
-                }
-            }
             if (match == null) {
                 needed += cardFeeds
                 // Unmatched only once every feed it routes to has answered (or is paused).
                 if (cardFeeds.all { feed -> feeds[feed]?.let { it.fetched || it.paused } == true }) markUnmatched(card.key)
-                continue
-            }
-            // A game outside My sports (a soccer competition not picked) shows no score and stops polling.
-            if (!entry.followed && !sports.includes(match)) {
-                if (outOfScope.size >= MAX_REMEMBERED) outOfScope.clear()
-                outOfScope += card.key
-                markUnmatched(card.key)
-                continue
+                return
             }
             unmatchedKeys -= card.key
+            learnLogos(card, match)
             // Matched: only the feeds holding the game (and any not fetched yet) keep polling, so a
             // late game does not also poll the next Eastern day all night.
             needed += cardFeeds.filter { feed ->
@@ -335,12 +366,61 @@ class LiveScoresRepository internal constructor(
                 feedsOf(listOf(own), dates).let { if (fits(it)) needed += it }
             }
         }
+
+        for (entry in trackedUnion()) {
+            val card = entry.card
+            val dates = datesFor(card)
+            val leagues = remembered[card.key]?.let(::listOf) ?: entry.leagues
+            val cardFeeds = feedsOf(leagues, dates).toMutableList()
+            // A remembered soccer league keeps soccer/all until its own feed has data.
+            if (card.key in remembered && leagues.single().sport == "soccer" && cardFeeds.any { feeds[it]?.fetched != true }) {
+                cardFeeds += feedsOf(listOf(EspnLeagueMap.SOCCER_ALL), dates)
+            }
+            // Over the budget: a card whose feeds are not polled already gets no score (never a stale one).
+            if (!fits(cardFeeds)) continue
+            var match = matchOn(card, cardFeeds)
+            // A soccer competition feed without the game: try soccer/all (shared, at its own cadence).
+            if (match == null && leagues.all { it.sport == "soccer" && it != EspnLeagueMap.SOCCER_ALL } &&
+                cardFeeds.all { feed -> feeds[feed]?.let { it.fetched && !it.paused } == true }
+            ) {
+                val fallback = feedsOf(listOf(EspnLeagueMap.SOCCER_ALL), dates)
+                if (fits(cardFeeds + fallback)) {
+                    cardFeeds += fallback
+                    match = matchOn(card, cardFeeds)
+                }
+            }
+            // A bare "Basketball" / "Football" card its pro feed has answered without: the college feed
+            // (#66), after every card's own feeds have their budget, while such a card is tracked.
+            val fallback = entry.fallback
+            if (match == null && fallback != null && card.key !in remembered &&
+                cardFeeds.all { feed -> feeds[feed]?.let { it.fetched && !it.paused && it.isFresh(nowMs) } == true }
+            ) {
+                needed += cardFeeds
+                deferred += Deferral(entry, dates, cardFeeds, fallback)
+                continue
+            }
+            settle(entry, dates, cardFeeds, match)
+        }
+        for (wait in deferred) {
+            val college = feedsOf(listOf(wait.fallback), wait.dates)
+            // No budget left: no score for it this time, and not confirmed unmatched either.
+            if (!fits(college)) continue
+            val cardFeeds = wait.cardFeeds + college
+            val match = matchOn(wait.entry.card, cardFeeds)
+            // Matched there: the card is polled on its college feed alone from now on.
+            if (match != null && match.league == wait.fallback) {
+                if (remembered.size >= MAX_REMEMBERED) remembered.clear()
+                remembered[wait.entry.card.key] = wait.fallback
+            }
+            settle(wait.entry, wait.dates, cardFeeds, match)
+        }
         raw = matched
         unmatchedOutput.value = unmatchedKeys.toSet()
+        if (logos.revision.value != learnedBefore) saveLogos()
+        prefetchLogos(matched.values)
 
         // Feeds no card needs: stop polling, but keep their state (last fetch, failures, Retry-After)
         // for a while, so switching between Home and the section does not refetch at once.
-        val nowMs = now()
         (feeds.keys - needed).forEach { feed ->
             pollers.remove(feed)?.cancel()
             feeds.getValue(feed).let { if (it.retiredAt == null) it.retiredAt = nowMs }
@@ -354,6 +434,42 @@ class LiveScoresRepository internal constructor(
             if (state == null || revived || restartStopped) pollers[feed] = pollerScope.launch { poll(feed, pollerScope) }
         }
         publishLocked()
+    }
+
+    /** Each side's logo, under the side's name as the card writes it (only when the sides sit one way round). */
+    private fun learnLogos(card: ScoreCard, match: ScoreSnapshot) {
+        val firstIsHome = ScoreMatcher.firstIsHome(card.teams.home, card.teams.away, match) ?: return
+        logos.learn(match.league, card.teams.home, if (firstIsHome) match.home else match.away)
+        logos.learn(match.league, card.teams.away, if (firstIsHome) match.away else match.home)
+    }
+
+    /** Matched games' logos and the known logos of tracked cards, each URL handed over once. */
+    private fun prefetchLogos(matched: Collection<ScoreSnapshot>) {
+        val urls = LinkedHashSet<String>()
+        matched.forEach { event -> listOfNotNull(event.home.logo, event.away.logo).forEach { urls += TeamLogoUrls.scaled(it) } }
+        for (entry in trackedUnion()) {
+            val leagues = remembered[entry.card.key]?.let(::listOf) ?: (entry.leagues + listOfNotNull(entry.fallback))
+            for (league in leagues) {
+                for (side in listOf(entry.card.teams.home, entry.card.teams.away)) {
+                    logos.lookup(league, side)?.let { urls += TeamLogoUrls.scaled(it.logo) }
+                }
+            }
+        }
+        val fresh = urls.filter { it !in prefetched }
+        if (fresh.isEmpty()) return
+        if (prefetched.size + fresh.size > MAX_REMEMBERED) prefetched.clear()
+        prefetched += fresh
+        prefetch(fresh)
+    }
+
+    /** Writes [logos] to its file a moment after the last change, off the poll path. */
+    private fun saveLogos() {
+        val file = logoFile ?: return
+        if (logoWrite?.isActive == true) return
+        logoWrite = scope.launch(io) {
+            delay(LOGO_WRITE_DELAY_MS)
+            file.write(logos.encode())
+        }
     }
 
     private fun markUnmatched(key: String) {
@@ -440,6 +556,7 @@ class LiveScoresRepository internal constructor(
         /** Feeds polled at once, at most; followed teams' games claim theirs first. */
         internal const val MAX_FEEDS = 16
         private const val RETAIN_RETIRED_MS = 10 * 60_000L
+        private const val LOGO_WRITE_DELAY_MS = 2_000L
         private val SLUG = Regex("""[a-z0-9._-]+""")
         private val EASTERN: ZoneId = ZoneId.of("America/New_York")
     }
