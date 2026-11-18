@@ -104,7 +104,7 @@ class SportsLiveSettingsViewModelTest {
         viewModel.toggleMyLeague(MyLeague.PREMIER_LEAGUE)
         advanceUntilIdle()
         val picked = viewModel.uiState.value.mySports
-        assertEquals(listOf(MySport.BASKETBALL, MySport.FOOTBALL, MySport.BASEBALL, MySport.SOCCER), picked.effectiveSports)
+        assertEquals(listOf(MySport.BASKETBALL, MySport.FOOTBALL, MySport.BASEBALL, MySport.SOCCER, MySport.TENNIS, MySport.MMA, MySport.MOTORSPORT, MySport.GOLF), picked.effectiveSports)
         assertEquals(setOf(MyLeague.NFL, MyLeague.COLLEGE_FOOTBALL), picked.leaguesOf(MySport.FOOTBALL))
         assertEquals(setOf(MyLeague.PREMIER_LEAGUE), picked.namedLeagues(MySport.SOCCER))
         assertEquals(picked, prefs.mySports.first())

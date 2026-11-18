@@ -265,7 +265,7 @@ class SportsLivePreferencesDataStoreTest {
         profile1Store.updateData { mutablePreferencesOf(recentKey to "{\"basketball/nba\":1}") }
         store.updateMySports { it.toggleSport(MySport.SOCCER).toggleLeague(MyLeague.COLLEGE_BASKETBALL) }
         val saved = store.mySports.first()
-        assertEquals(listOf(MySport.BASKETBALL, MySport.FOOTBALL, MySport.HOCKEY, MySport.BASEBALL), saved.effectiveSports)
+        assertEquals(listOf(MySport.BASKETBALL, MySport.FOOTBALL, MySport.HOCKEY, MySport.BASEBALL, MySport.TENNIS, MySport.MMA, MySport.MOTORSPORT, MySport.GOLF), saved.effectiveSports)
         assertEquals(setOf(MyLeague.NBA, MyLeague.COLLEGE_BASKETBALL), saved.leaguesOf(MySport.BASKETBALL))
         assertTrue("basketball/college-basketball" in profile1Store.data.first()[key].orEmpty())
         assertNull(profile1Store.data.first()[recentKey])
@@ -274,8 +274,8 @@ class SportsLivePreferencesDataStoreTest {
         activeProfile.value = 1
         store.updateMySports { MySports.DEFAULT }
         assertNull(profile1Store.data.first()[key])
-        // Tokens of a later version (an individual sport) are skipped, not an error.
-        profile2Store.updateData { mutablePreferencesOf(key to setOf("tennis", "tennis/atp", "hockey")) }
+        // Tokens of a later version (an unknown sport) are skipped, not an error.
+        profile2Store.updateData { mutablePreferencesOf(key to setOf("cricket", "cricket/ipl", "hockey")) }
         activeProfile.value = 2
         assertEquals(listOf(MySport.HOCKEY), store.mySports.first().effectiveSports)
     }
