@@ -326,6 +326,24 @@ internal object SportsLiveTimeline {
             ?: model.navRows.firstOrNull()?.firstOrNull()
     }
 
+    /**
+     * Where Down from the header enters the grid (QA pass 3): [preferredKey] while its row is among
+     * [visibleRows] (the rows laid out now), else the first row on screen's entry game: its first live game,
+     * else its next to start, else its first block. The rows are lazy, so a block in a row scrolled away has
+     * nothing to take focus. With no row laid out yet, [preferredKey].
+     */
+    fun onScreenEntryKey(model: TimelineModel, preferredKey: String?, visibleRows: List<Int>): String? {
+        val rows = model.navRows
+        val shown = visibleRows.filter { it in rows.indices }
+        if (shown.isEmpty()) return preferredKey
+        if (preferredKey != null && rows.indexOfFirst { preferredKey in it } in shown) return preferredKey
+        val keys = rows[shown.min()]
+        val blocks = keys.mapNotNull { model.blocks[it] }
+        return blocks.firstOrNull { it.kind == TimelineBlockKind.LIVE }?.key
+            ?: blocks.filter { it.kind == TimelineBlockKind.UPCOMING && it.startMs >= model.nowMs }.minByOrNull { it.startMs }?.key
+            ?: keys.firstOrNull()
+    }
+
     /** How far fast-forward / rewind (or holding ← →) moves the window (#77). */
     const val JUMP_MS = 3 * HOUR_MS
 
@@ -376,12 +394,14 @@ internal object SportsLiveTimeline {
     /**
      * Where the now tag's left edge sits (px in the ruler): [shiftPx] left of the now line at [nowX]
      * less [scroll], kept wholly inside a ruler [viewport] wide while the now line is in the window (N7).
+     * Once the line has left the window the tag goes wholly out of view with it, never a clipped sliver
+     * at the edge (QA pass 3).
      */
     fun nowTagLeft(nowX: Float, scroll: Float, shiftPx: Float, tagWidth: Float, viewport: Float): Float {
         val line = nowX - scroll
-        val left = line - shiftPx
-        if (line < 0f || line > viewport) return left
-        return left.coerceIn(0f, maxOf(0f, viewport - tagWidth))
+        if (line < 0f) return minOf(line - shiftPx, -tagWidth)
+        if (line > viewport) return maxOf(line - shiftPx, viewport)
+        return (line - shiftPx).coerceIn(0f, maxOf(0f, viewport - tagWidth))
     }
 
     /** Whether a span from [aLeft] of width [aWidth] comes within [gap] of one from [bLeft] of [bWidth]. */

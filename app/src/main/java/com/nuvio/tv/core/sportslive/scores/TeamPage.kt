@@ -96,6 +96,38 @@ object TeamPages {
         return TeamRef(league, id, event, side)
     }
 
+    /**
+     * Team pages for a card with no strict ESPN game (a game the scoreboard does not list yet, Decision 6),
+     * from the team directory (#82), in the card's order: only when every league the card can be on has a
+     * list, exactly one of them names both sides, and it is a pro league with team pages. The page opens on
+     * a stand-in game with the card's two teams (first away, second home) and its start.
+     */
+    fun refsForCard(item: SportsLiveItem, directory: TeamDirectory = TeamDirectory.shared): List<TeamRef> {
+        val (first, second) = ScoreChips.orderedSides(item) ?: return emptyList()
+        val leagues = TeamDirectory.leaguesFor(item)
+        if (leagues.isEmpty() || leagues.any { directory.fetchedAt(it) == null }) return emptyList()
+        val found = leagues.mapNotNull { league ->
+            val a = directory.resolve(league, first) ?: return@mapNotNull null
+            val b = directory.resolve(league, second) ?: return@mapNotNull null
+            if (a.id == b.id) null else Triple(league, a, b)
+        }
+        val (league, away, home) = found.singleOrNull() ?: return emptyList()
+        val event = ScoreSnapshot(
+            eventId = "",
+            league = league,
+            leagueName = PRO[league],
+            startMs = item.startMs,
+            timeValid = item.startHasTimeOfDay,
+            state = ScoreState.PRE,
+            clockText = null,
+            isFinal = false,
+            home = home.asScoreTeam(),
+            away = away.asScoreTeam()
+        )
+        if (leagueOf(event) == null) return emptyList()
+        return refsOf(event, homeFirst = false)
+    }
+
     /** Both sides' Team pages in the order shown ([homeFirst]: the card names the home team first); only those offered. */
     fun refsOf(event: ScoreSnapshot, homeFirst: Boolean): List<TeamRef> {
         val sides = if (homeFirst) listOf(ScoreSide.HOME, ScoreSide.AWAY) else listOf(ScoreSide.AWAY, ScoreSide.HOME)
@@ -104,6 +136,16 @@ object TeamPages {
 
     private fun leagueName(league: EspnLeague, event: EspnScheduleEventDto?): String? =
         PRO[league] ?: event?.league?.abbreviation?.takeIf { it.isNotBlank() } ?: event?.league?.name?.takeIf { it.isNotBlank() }
+
+    private val CONFERENCE_DIVISION = Regex("""\bConference\s+Division\b""", RegexOption.IGNORE_CASE)
+
+    /**
+     * ESPN's standing summary as the header shows it (QA pass 3): ESPN names a team's conference a division
+     * between seasons' realignments ("2nd in Western Conference Division"), which reads "2nd in Western
+     * Conference"; anything else is kept. Null when blank.
+     */
+    fun standingText(raw: String): String? =
+        raw.trim().replace(CONFERENCE_DIVISION, "Conference").replace(Regex("""\s+"""), " ").takeIf { it.isNotEmpty() }
 
     /** The header from the team endpoint, else from the schedule's team; null when neither names the team. */
     fun header(team: EspnTeamInfoDto?, scheduleTeam: EspnTeamInfoDto?): TeamHeader? {
@@ -116,7 +158,7 @@ object TeamPages {
             abbreviation = (team?.abbreviation ?: scheduleTeam?.abbreviation)?.takeIf { it.isNotBlank() },
             logo = logoOf(team) ?: logoOf(scheduleTeam),
             record = (total?.summary ?: scheduleTeam?.recordSummary)?.takeIf { it.isNotBlank() },
-            standing = (team?.standingSummary ?: scheduleTeam?.standingSummary)?.takeIf { it.isNotBlank() },
+            standing = (team?.standingSummary ?: scheduleTeam?.standingSummary)?.let(::standingText),
             streak = total?.stats.orEmpty().firstOrNull { it.name == "streak" }?.value?.toInt()?.takeIf { it != 0 },
             homeRecord = items.firstOrNull { it.type == "home" }?.summary?.takeIf { it.isNotBlank() }
         )

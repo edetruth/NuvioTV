@@ -96,7 +96,8 @@ class PlayerCardsTest {
         assertEquals(listOf(PlayerStat("AVG", ".241"), PlayerStat("HR", "18"), PlayerStat("RBI", "41"), PlayerStat("OPS", ".871")), card.season)
         val last = card.lastGames.first()
         assertEquals("L", last.result)
-        assertEquals("5–4 F/13", last.score)
+        // A loss: the player's team's score first, as on the Team page (QA pass 3).
+        assertEquals("4–5 F/13", last.score)
         assertEquals(listOf("0 H", "0 HR", "0 RBI"), line(last))
 
         val pitcher = PlayerCards.lastGames(log("mlb_32081"), "baseball").first()
@@ -115,6 +116,17 @@ class PlayerCardsTest {
         assertEquals("LIV", last.opponent)
         assertEquals(listOf("0 G", "0 A", "2 SHOT"), line(last))
         assertEquals(listOf("L", "L", "L", "L", "W"), card.lastGames.map { it.result })
+    }
+
+    @Test
+    fun `scores read own team first, as on the Team page`() {
+        assertEquals("93–105", PlayerCards.ownScoreFirst("L", "105-93"))
+        assertEquals("105–93", PlayerCards.ownScoreFirst("W", "105-93"))
+        assertEquals("105–93", PlayerCards.ownScoreFirst("W", "93-105"))
+        assertEquals("1–1", PlayerCards.ownScoreFirst("D", "1-1"))
+        assertEquals("4–5 F/13", PlayerCards.ownScoreFirst("L", "5-4 F/13"))
+        assertEquals("2–3", PlayerCards.ownScoreFirst(null, "2-3"))
+        assertEquals("Postponed", PlayerCards.ownScoreFirst("L", "Postponed"))
     }
 
     @Test

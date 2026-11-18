@@ -94,8 +94,12 @@ data class SportsLiveResultsUiState(
 ) {
     fun showsScore(row: ResultRow): Boolean = ResultSpoilerReveal.showsScore(mode, revealed, row.event.eventId)
 
-    /** The "N games live now" line: on Today, once loaded, while a game is being played. */
-    val showsLiveNow: Boolean get() = daysAgo == SportsResults.TODAY && status == ResultsStatus.READY && liveNow > 0
+    /**
+     * The "N games live now" line: on Today, once loaded, while [liveGames] (Live now's own live games,
+     * [SportsLiveUiState.liveGameCount]) are on. It counts what Live now shows, ended-games rules and delay
+     * applied, so following it never lands on a tab without that game (QA pass 3).
+     */
+    fun showsLiveNow(liveGames: Int): Boolean = daysAgo == SportsResults.TODAY && status == ResultsStatus.READY && liveGames > 0
 }
 
 @HiltViewModel

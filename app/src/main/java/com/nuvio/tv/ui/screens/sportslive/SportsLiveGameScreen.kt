@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -156,7 +157,6 @@ fun SportsLiveGameScreen(
     val showsScore = state.showsScore
     // Remind me (#44): an upcoming game opened from its card.
     val reminders by remindersViewModel.state.collectAsStateWithLifecycle()
-    SportsLiveReminderToasts(remindersViewModel)
     val remindCard = state.card?.takeIf { event.state == ScoreState.PRE && GameReminders.canRemind(it, System.currentTimeMillis()) }
     val headerRows = gameHeaderRows(
         showsScore = showsScore,
@@ -533,7 +533,7 @@ private fun HeaderTeam(side: HeaderSide, showRecord: Boolean, alignEnd: Boolean,
             contentAlignment = Alignment.Center
         ) {
             if (side.logo != null) {
-                AsyncImage(model = side.logo, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.size(HEADER_LOGO_SIZE * 0.68f))
+                AsyncImage(model = rememberSizedImage(side.logo, HEADER_LOGO_SIZE * 0.68f, HEADER_LOGO_SIZE * 0.68f), contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.size(HEADER_LOGO_SIZE * 0.68f))
             } else {
                 Text(side.short, style = MaterialTheme.typography.titleSmall.sportsLiveBold(), color = NuvioTheme.colors.TextPrimary, maxLines = 1)
             }
@@ -684,7 +684,9 @@ private fun GameBody(
                         onEnter = { if (requestedFocusDirection != FocusDirection.Enter) entryFocusRequester.requestFocus() }
                     }
                     .dpadRepeatThrottle(),
-                verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)
+                verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm),
+                // Room under the last panel, so its bottom edge and ring scroll fully on screen (N10).
+                contentPadding = PaddingValues(bottom = NuvioTheme.spacing.xl)
             ) {
                 val first = Modifier
                     .focusRequester(entryFocusRequester)
@@ -766,6 +768,8 @@ private fun LazyListScope.gameTab(
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                // A performer's focus shows the whole card, its bottom included (N10).
+                                .wholeInViewOnFocus()
                                 .clip(RoundedCornerShape(NuvioTheme.radii.md))
                                 .background(NuvioTheme.colors.BackgroundCard)
                                 .padding(NuvioTheme.spacing.lg),
@@ -1162,7 +1166,7 @@ private fun HighlightCard(highlight: GameHighlight, modifier: Modifier, onClick:
                     .clip(RoundedCornerShape(NuvioTheme.radii.sm))
                     .background(NuvioTheme.colors.PosterFallback)
             ) {
-                highlight.thumbnail?.let { AsyncImage(model = it, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
+                highlight.thumbnail?.let { AsyncImage(model = rememberSizedImage(it, 192.dp, 108.dp), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
                 Box(
                     modifier = Modifier
                         .align(Alignment.Center)

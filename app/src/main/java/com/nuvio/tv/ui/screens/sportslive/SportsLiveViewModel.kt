@@ -22,11 +22,13 @@ import com.nuvio.tv.core.sportslive.scores.LiveScoresRepository
 import com.nuvio.tv.core.sportslive.scores.ScoreChips
 import com.nuvio.tv.core.sportslive.scores.ScoreState
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
+import com.nuvio.tv.core.sportslive.scores.TeamLogoBook
 import com.nuvio.tv.core.sportslive.scores.WhyTag
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import com.nuvio.tv.data.repository.SportsLiveManifestFetcher
 import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveItem
+import com.nuvio.tv.domain.model.SportsLiveKind
 import com.nuvio.tv.domain.model.SportsLiveTab
 import com.nuvio.tv.domain.repository.SportsLiveFailure
 import com.nuvio.tv.domain.repository.SportsLiveRepository
@@ -38,6 +40,7 @@ import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -46,15 +49,18 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 @HiltViewModel
@@ -86,8 +92,12 @@ class SportsLiveViewModel internal constructor(
     private val linkChecker: SportsLiveLinkChecker? = null,
     /** [item]'s check on its already-resolved link, or null (nothing resolved, not an HLS link). */
     private val linkCheckOf: (SportsLiveItem) -> LinkCheckRequest? = { null },
-    // Where the list is bucketed and pinned; tests pass their dispatcher, so it runs in virtual time.
-    computeDispatcher: CoroutineDispatcher
+    /** Learned logos' revision (#66): the drawn cards are built again when it moves. */
+    logoRevision: Flow<Int> = flowOf(0),
+    /** The catalog refresh cadence's clock (#71), monotonic; tests pass virtual time. */
+    private val refreshClock: () -> Long = { System.nanoTime() / 1_000_000L },
+    // Where the list is bucketed and pinned, and the boards built; tests pass their dispatcher, so it runs in virtual time.
+    private val computeDispatcher: CoroutineDispatcher
 ) : ViewModel() {
 
     @Inject
@@ -132,6 +142,7 @@ class SportsLiveViewModel internal constructor(
                 SportsLiveManifestVerdict.requestFor(item, stream, resolvedAtMs)
             }
         },
+        logoRevision = TeamLogoBook.shared.revision,
         computeDispatcher = Dispatchers.Default
     )
 
@@ -180,6 +191,15 @@ class SportsLiveViewModel internal constructor(
     private var focusedLiveCard: String? = null
     private val reRank = MutableStateFlow(0)
     private var autoRefreshJob: Job? = null
+
+    // #71: when each kind of catalog was last fetched (refreshClock), so a tab refreshes only its own
+    // catalogs, on its own cadence, and never when the last fetch is fresher than that.
+    private val fetchedAtMs = HashMap<SportsLiveKind, Long>()
+    private var fullLoadJob: Job? = null
+
+    // Ambient mode, the screensaver or a dream is up: no preview and no catalog refresh meanwhile.
+    private var ambientShowing = false
+
 
     // The section is on screen (resumed): only then are links checked (#60 phase 2).
     @Volatile
@@ -235,6 +255,44 @@ class SportsLiveViewModel internal constructor(
     val layouts: StateFlow<Map<SportsLiveTab, SportsLiveLayout>> =
         layouts.stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
 
+    private val boardScores = MutableStateFlow(SportsLiveBoardScores())
+
+    /** The scores, Scores setting and reveals the screen shows: the Scoreboard, Timeline and drawn cards read them. */
+    fun setBoardScores(scores: SportsLiveBoardScores) {
+        boardScores.value = scores
+    }
+
+    /** Builds a board; tests swap it to see where it runs. */
+    @VisibleForTesting
+    internal var buildBoard: suspend (SportsLiveBoardInputs) -> SportsLiveBoard = { SportsLiveBoard.build(it) }
+
+    /**
+     * What the list draws (#71): the selected tab's items in the order shown, with the Scoreboard's rows,
+     * the Timeline's model and the cards' drawn art, built on the compute dispatcher and published ready.
+     * Only a change of what it shows builds again: a focus move does not. Null until the first one is built.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val board: StateFlow<SportsLiveBoard?> =
+        combine(uiState, boardScores, this.layouts, repo.followedTeams, logoRevision) { state, scores, choices, followed, revision ->
+            val tab = state.selectedTab
+            val live = tab == SportsLiveTab.LIVE_NOW
+            SportsLiveBoardInputs(
+                tab = tab,
+                filter = state.selectedFilter,
+                layout = SportsLiveLayout.of(choices, tab),
+                items = state.visibleItems,
+                scores = scores,
+                ended = if (live) state.justEnded else emptyMap(),
+                liveRank = if (live) state.liveRank else emptyMap(),
+                followed = followed,
+                clockMs = state.nowMs / MINUTE_MS * MINUTE_MS,
+                logoRevision = revision
+            )
+        }
+            .distinctUntilChanged()
+            .mapLatest { inputs -> withContext(computeDispatcher) { buildBoard(inputs) } }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
     /** Remembers [layout] for [tab] (per profile); a tab that does not offer it ignores it. */
     fun selectLayout(tab: SportsLiveTab, layout: SportsLiveLayout) {
         if (layout !in SportsLiveLayout.offeredFor(tab)) return
@@ -268,7 +326,7 @@ class SportsLiveViewModel internal constructor(
     val preview: StateFlow<SportsLivePreviewState> = previewController.state
 
     init {
-        refresh(force = false)
+        fullLoadJob = launchFullLoad(force = false)
         // An active mini player counts as the setting off; once it stops, a fresh settle starts.
         viewModelScope.launch {
             combine(hoverPreviewEnabled, miniPlayerActive) { enabled, mini -> enabled && !mini }
@@ -320,8 +378,11 @@ class SportsLiveViewModel internal constructor(
             val tabItems = uiState.value.tabs[tab].orEmpty()
             tabItems.any { it.matchesZapFilter(value, tab) }
         }
+        val changed = tab != selectionState.value.tab
         selectionState.update { it.copy(tab = tab, filter = remembered, itemId = null) }
         previewController.onTab(tab)
+        // The new tab's catalogs on its own cadence (#71).
+        if (changed) restartAutoRefresh()
     }
 
     /** [value] is a sport, a group on the Channels tab, or [SportsLiveUiState.MY_TEAMS_FILTER]; null means All. */
@@ -382,40 +443,85 @@ class SportsLiveViewModel internal constructor(
     fun refresh(force: Boolean = true) {
         // A manual refresh also forgets ended verdicts: those games show and are re-checked on focus.
         if (force) repo.clearEnded()
+        fullLoadJob = launchFullLoad(force)
+    }
+
+    /** Every claimed catalog (opening the section, a manual refresh); each kind counts as fetched now. */
+    private fun launchFullLoad(force: Boolean): Job {
         // Set before launching so the first frame already shows loading rather than an empty section.
         selectionState.update { it.copy(isRefreshing = true) }
-        viewModelScope.launch { load(force) }
+        return viewModelScope.launch {
+            SportsLiveKind.entries.forEach { fetchedAtMs[it] = refreshClock() }
+            load(force)
+        }
     }
 
     /**
-     * On becoming visible (including a resume), loads at once (served from the repository's cache
-     * when still fresh), then reloads every 60 s so the Live now tab stays current. These loads
-     * leave channels catalogs out (carried over from the last load); they reload on the first
-     * load and on a manual refresh.
+     * The section is on screen (resumed) or not. While it is, and no ambient mode or screensaver is up, the
+     * selected tab's catalogs refresh on that tab's cadence ([SportsLiveRefreshPlan], #71): only its own
+     * catalogs, and never while the last fetch is fresher than its interval. Hidden (the player, another
+     * screen, the background), nothing refreshes.
      */
     fun onScreenVisible(visible: Boolean) {
         // The preview stops while the screen is hidden; coming back, it waits for a fresh settle.
         previewController.onVisible(visible)
+        if (visible == screenVisible) return
         screenVisible = visible
+        restartAutoRefresh()
+    }
+
+    /** Ambient mode, the screensaver or a dream shows over the section (#71): no preview, no refresh. */
+    fun onAmbient(showing: Boolean) {
+        previewController.onAmbient(showing)
+        if (showing == ambientShowing) return
+        ambientShowing = showing
+        restartAutoRefresh()
+    }
+
+    private fun restartAutoRefresh() {
         autoRefreshJob?.cancel()
-        autoRefreshJob = if (visible) {
-            viewModelScope.launch {
-                load(force = false, includeChannels = false)
-                while (isActive) {
-                    delay(AUTO_REFRESH_MS)
-                    load(force = true, includeChannels = false)
+        autoRefreshJob = null
+        if (!screenVisible || ambientShowing) return
+        val plan = SportsLiveRefreshPlan.of(selectionState.value.tab) ?: return
+        autoRefreshJob = viewModelScope.launch {
+            // The section's opening load (or a manual refresh) first: it fetched this tab's catalogs too.
+            fullLoadJob?.join()
+            val every = plan.everyMs
+            if (every == null) {
+                // Opened, not on a timer: only when its last fetch is older than its openStaleMs.
+                if (ageOf(plan.kinds) >= plan.openStaleMs) refreshKinds(plan.kinds)
+                return@launch
+            }
+            while (isActive) {
+                val age = ageOf(plan.kinds)
+                if (age >= every) {
+                    refreshKinds(plan.kinds)
+                    delay(every)
+                } else {
+                    delay(every - age)
                 }
             }
-        } else {
-            null
         }
     }
 
+    /** How long ago the least recently fetched of [kinds] was fetched; never: as old as can be. */
+    private fun ageOf(kinds: Set<SportsLiveKind>): Long {
+        var oldest = Long.MAX_VALUE
+        for (kind in kinds) oldest = minOf(oldest, fetchedAtMs[kind] ?: return Long.MAX_VALUE)
+        return refreshClock() - oldest
+    }
+
+    private suspend fun refreshKinds(kinds: Set<SportsLiveKind>) {
+        // Stamped when asked, so a failing catalog is not asked again before its interval.
+        kinds.forEach { fetchedAtMs[it] = refreshClock() }
+        load(force = true, includeChannels = SportsLiveKind.CHANNELS in kinds, onlyKinds = kinds)
+    }
+
     /** A failed load keeps the previous failures and items. */
-    private suspend fun load(force: Boolean, includeChannels: Boolean = true) {
+    private suspend fun load(force: Boolean, includeChannels: Boolean = true, onlyKinds: Set<SportsLiveKind>? = null) {
         selectionState.update { it.copy(isRefreshing = true) }
         try {
-            val result = repo.load(force, includeChannels)
+            val result = repo.load(force, includeChannels, onlyKinds)
             selectionState.update { it.copy(failures = result.failures, lastRefreshedMs = result.loadedAtMs) }
         } catch (e: CancellationException) {
             throw e
@@ -545,8 +651,35 @@ class SportsLiveViewModel internal constructor(
     }
 
     private companion object {
-        const val AUTO_REFRESH_MS = 60_000L
+        const val MINUTE_MS = 60_000L
         const val FOCUS_PROBE_DELAY_MS = 700L
         const val ENDED_TICK_MS = 30_000L
+    }
+}
+
+/**
+ * How a tab's addon catalogs refresh while it is on screen (#71): Live now every 3 minutes and Upcoming every
+ * 10 (both from the events catalogs), Replays never on a timer (when opened, only if its last fetch is over
+ * 10 minutes old), Channels and Results never (Results reads ESPN; channels reload on a manual refresh).
+ * Scores keep their own cadence.
+ */
+internal data class SportsLiveRefreshPlan(
+    val kinds: Set<SportsLiveKind>,
+    /** The interval; null: no timer. */
+    val everyMs: Long?,
+    /** With no timer: opening the tab refreshes it when its last fetch is this old. */
+    val openStaleMs: Long = Long.MAX_VALUE
+) {
+    companion object {
+        const val LIVE_NOW_MS = 3 * 60_000L
+        const val UPCOMING_MS = 10 * 60_000L
+        const val REPLAYS_OPEN_STALE_MS = 10 * 60_000L
+
+        fun of(tab: SportsLiveTab): SportsLiveRefreshPlan? = when (tab) {
+            SportsLiveTab.LIVE_NOW -> SportsLiveRefreshPlan(setOf(SportsLiveKind.EVENTS), LIVE_NOW_MS)
+            SportsLiveTab.UPCOMING -> SportsLiveRefreshPlan(setOf(SportsLiveKind.EVENTS), UPCOMING_MS)
+            SportsLiveTab.REPLAYS -> SportsLiveRefreshPlan(setOf(SportsLiveKind.REPLAY), everyMs = null, openStaleMs = REPLAYS_OPEN_STALE_MS)
+            SportsLiveTab.CHANNELS, SportsLiveTab.RESULTS -> null
+        }
     }
 }

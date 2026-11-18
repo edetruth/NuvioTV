@@ -137,8 +137,8 @@ internal fun SportsLiveViewButton(menu: SportsLiveViewMenu, onClick: () -> Unit,
 }
 
 /**
- * The View menu (#79): Layout, then Sort where it applies. OK applies an entry and the menu stays open
- * (the other group may still be changed); Back closes it. Focus opens on the layout in force.
+ * The View menu (#79): Layout, then Sort where it applies. OK applies an entry and closes the menu (QA
+ * pass 3: one pick is the common case); Back closes it too. Focus opens on the layout in force.
  */
 @Composable
 internal fun SportsLiveViewMenuDialog(
@@ -163,7 +163,10 @@ internal fun SportsLiveViewMenuDialog(
                 SportsLiveViewMenuEntry(
                     text = label(option),
                     checked = checked,
-                    onClick = { menu.apply(option, onSelectLayout, onSelectSort) },
+                    onClick = {
+                        menu.apply(option, onSelectLayout, onSelectSort)
+                        onDismiss()
+                    },
                     modifier = if (checked && focusChecked) Modifier.focusRequester(checkedFocusRequester) else Modifier
                 )
             }

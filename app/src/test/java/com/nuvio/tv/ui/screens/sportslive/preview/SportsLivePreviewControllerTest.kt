@@ -16,7 +16,9 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
+import androidx.media3.common.TrackSelectionParameters
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SportsLivePreviewControllerTest {
@@ -54,8 +56,61 @@ class SportsLivePreviewControllerTest {
 
         preview.onFirstFrame(a)
         assertEquals(SportsLivePreviewState.Playing(a, streamA, rendering = true), preview.state.value)
-        advanceUntilIdle()
+        advanceTimeBy(10_000)
+        runCurrent()
         assertEquals(SportsLivePreviewState.Playing(a, streamA, rendering = true), preview.state.value)
+    }
+
+    @Test
+    fun `a preview stops after 20 s on the same card and does not start again until the focus moves`() = runTest {
+        val preview = controller()
+        preview.onFocus(a)
+        advanceTimeBy(2_001)
+        runCurrent()
+        preview.onFirstFrame(a)
+        advanceTimeBy(SportsLivePreviewController.MAX_PLAY_MS - 2)
+        runCurrent()
+        assertEquals(SportsLivePreviewState.Playing(a, streamA, rendering = true), preview.state.value)
+        advanceTimeBy(2)
+        runCurrent()
+        assertEquals(SportsLivePreviewState.Idle, preview.state.value)
+        // A refreshed copy of the card is the same card: nothing restarts.
+        preview.onFocus(a.copy(isLive = true))
+        advanceUntilIdle()
+        assertEquals(SportsLivePreviewState.Idle, preview.state.value)
+        assertEquals(listOf("a"), lookups)
+
+        preview.onFocus(b)
+        advanceTimeBy(2_001)
+        runCurrent()
+        assertEquals(SportsLivePreviewState.Playing(b, streamB), preview.state.value)
+    }
+
+    @Test
+    fun `ambient mode or a screensaver stops the preview, and none starts under it`() = runTest {
+        val preview = controller()
+        preview.onFocus(a)
+        advanceTimeBy(2_001)
+        runCurrent()
+        preview.onFirstFrame(a)
+        preview.onAmbient(true)
+        assertEquals(SportsLivePreviewState.Idle, preview.state.value)
+        advanceUntilIdle()
+        assertEquals("no settle under the slideshow", SportsLivePreviewState.Idle, preview.state.value)
+        assertEquals(listOf("a"), lookups)
+
+        preview.onAmbient(false)
+        advanceTimeBy(2_001)
+        runCurrent()
+        assertEquals(SportsLivePreviewState.Playing(a, streamA), preview.state.value)
+    }
+
+    @Test
+    fun `the preview player is capped at about 480p`() {
+        val capped = TrackSelectionParameters.Builder().build().capPreviewVideo()
+        assertEquals(480, capped.maxVideoHeight)
+        assertTrue(capped.maxVideoWidth <= 854)
+        assertTrue(capped.forceLowestBitrate)
     }
 
     @Test

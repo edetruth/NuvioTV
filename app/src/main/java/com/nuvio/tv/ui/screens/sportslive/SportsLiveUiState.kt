@@ -70,6 +70,13 @@ data class SportsLiveUiState(
     val zapItems: List<SportsLiveItem>
         get() = if (selectedTab == SportsLiveTab.LIVE_NOW) tabs[SportsLiveTab.LIVE_NOW].orEmpty() else visibleItems
 
+    /**
+     * The games (not channels) live on Live now, its Just ended strip left out: what Results' "N games live
+     * now" line counts, so both use one live definition (QA pass 3).
+     */
+    val liveGameCount: Int
+        get() = tabs[SportsLiveTab.LIVE_NOW].orEmpty().count { !it.isChannel && it.streamKey !in justEnded }
+
     /** How many cards [tab] counts: Live now leaves its Just ended strip out. */
     fun countOf(tab: SportsLiveTab): Int {
         val items = tabs[tab].orEmpty()

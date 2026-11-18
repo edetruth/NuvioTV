@@ -174,7 +174,7 @@ class HomeSportsLiveExclusionTest {
             every { claimedCatalogKeys } returns claimedKeys
             every { liveNow(any()) } returns liveNow
             every { enabled } returns flowOf(true)
-            coEvery { load(any(), any()) } returns SportsLiveLoad(emptyList(), emptyList(), 0L, emptySet())
+            coEvery { load(any(), any(), any()) } returns SportsLiveLoad(emptyList(), emptyList(), 0L, emptySet())
         }
         val appContext = mockk<Context>(relaxed = true) {
             every { getString(any()) } returns "Live now"

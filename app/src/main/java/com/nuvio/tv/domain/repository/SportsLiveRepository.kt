@@ -5,6 +5,7 @@ import com.nuvio.tv.domain.model.CatalogStats
 import com.nuvio.tv.domain.model.ClaimedCatalog
 import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveItem
+import com.nuvio.tv.domain.model.SportsLiveKind
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -39,9 +40,15 @@ interface SportsLiveRepository {
      * loaded. A catalog with a pinned option is asked only for items matching it.
      * Without [includeChannels], CHANNELS catalogs the previous load fetched with items, for the same
      * claimed catalogs, addon installs and pinned option, are not refetched; their items are carried
-     * over (they are large and rarely change).
+     * over (they are large and rarely change). With [onlyKinds] (#71), only catalogs of those kinds are
+     * fetched: the others are carried over the same way (a catalog the cached load has no items for is
+     * fetched), so a tab's refresh asks only for the catalogs it shows.
      */
-    suspend fun load(force: Boolean = false, includeChannels: Boolean = true): SportsLiveLoad
+    suspend fun load(
+        force: Boolean = false,
+        includeChannels: Boolean = true,
+        onlyKinds: Set<SportsLiveKind>? = null
+    ): SportsLiveLoad
 
     /** The most recent load, whether or not every catalog succeeded. */
     val latest: StateFlow<SportsLiveLoad?>

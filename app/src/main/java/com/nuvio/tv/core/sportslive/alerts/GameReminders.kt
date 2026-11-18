@@ -1,6 +1,9 @@
 package com.nuvio.tv.core.sportslive.alerts
 
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
+import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
+import com.nuvio.tv.core.sportslive.scores.ScoreState
+import com.nuvio.tv.core.sportslive.scores.ScoreTeam
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveKind
 import kotlin.math.abs
@@ -29,6 +32,9 @@ data class RemindersState(
     fun isReminded(item: SportsLiveItem): Boolean =
         reminders.any { GameReminders.matches(it, item) } ||
             (remindMyTeams && item.followed && optOuts.none { GameReminders.matches(it, item) })
+
+    /** Whether an ESPN game with no card (a Team page's next game) is reminded by hand. */
+    fun isReminded(event: ScoreSnapshot): Boolean = reminders.any { GameReminders.matches(it, event) }
 }
 
 object GameReminders {
@@ -94,6 +100,48 @@ object GameReminders {
             optOuts = prune(if (on) optOuts + reminder else optOuts, nowMs)
         )
     }
+
+    /**
+     * Whether "Remind me" is offered on an ESPN game no card plays yet (a Team page's next game): a team
+     * game ESPN has not started, with a kickoff time still ahead and both sides named. At kickoff the
+     * reminder matches whichever card then lists the game, by its two sides.
+     */
+    fun canRemind(event: ScoreSnapshot, nowMs: Long): Boolean {
+        val start = event.startMs ?: return false
+        return event.individual == null && event.timeValid && event.state == ScoreState.PRE && start > nowMs &&
+            sideName(event.home) != null && sideName(event.away) != null
+    }
+
+    /** What is stored for [event] (no source keys: it matches cards by its sides); null when it cannot be reminded. */
+    fun of(event: ScoreSnapshot): GameReminder? {
+        val start = event.startMs?.takeIf { event.timeValid } ?: return null
+        val home = sideName(event.home) ?: return null
+        val away = sideName(event.away) ?: return null
+        return GameReminder(keys = emptySet(), title = "$away at $home", home = home, away = away, startMs = start)
+    }
+
+    /** True when [reminder] is [event]'s game: the same start (within 30 minutes) and the same two sides, either way round. */
+    fun matches(reminder: GameReminder, event: ScoreSnapshot): Boolean {
+        val start = event.startMs ?: return false
+        if (abs(start - reminder.startMs) > SAME_GAME_WINDOW_MS) return false
+        val home = reminder.home ?: return false
+        val away = reminder.away ?: return false
+        val eventHome = sideName(event.home) ?: return false
+        val eventAway = sideName(event.away) ?: return false
+        return (SportsLiveTeams.matches(home, eventHome) && SportsLiveTeams.matches(away, eventAway)) ||
+            (SportsLiveTeams.matches(home, eventAway) && SportsLiveTeams.matches(away, eventHome))
+    }
+
+    /** [state] after the bell on [event] is pressed: reminded by hand, or its reminders gone. */
+    fun toggle(state: RemindersState, event: ScoreSnapshot, nowMs: Long): RemindersState {
+        val reminder = of(event) ?: return state
+        val on = state.isReminded(event)
+        val reminders = state.reminders.filterNot { matches(it, event) }
+        return state.copy(reminders = prune(if (on) reminders else reminders + reminder, nowMs))
+    }
+
+    private fun sideName(team: ScoreTeam): String? =
+        listOf(team.displayName, team.shortDisplayName, team.name).firstOrNull { !it.isNullOrBlank() }?.trim()
 
     /** [entries] without those started over [KEEP_AFTER_START_MS] ago, at most [MAX_STORED]. */
     fun prune(entries: List<GameReminder>, nowMs: Long): List<GameReminder> =

@@ -126,7 +126,7 @@ object PlayerCards {
                 atVs = event.atVs.clean(),
                 opponent = opponent,
                 result = event.gameResult.clean(),
-                score = event.score.clean()?.replace('-', '–'),
+                score = event.score.clean()?.let { ownScoreFirst(event.gameResult.clean(), it) },
                 line = columns.mapNotNull { index ->
                     val label = labels.getOrNull(index).clean() ?: return@mapNotNull null
                     val value = stats.getOrNull(index).clean() ?: return@mapNotNull null
@@ -170,6 +170,26 @@ object PlayerCards {
             .filter { it.isNotEmpty() }
         val group = groups.minByOrNull { it.min() }
         return group ?: names.indices.take(LINE_STATS).toList()
+    }
+
+    private val SCORE = Regex("""^(\d+)\s*-\s*(\d+)(.*)$""")
+
+    /**
+     * [score] with the player's team first, as the Team page shows it ("L 93–105", QA pass 3): ESPN's game log
+     * gives the winner's score first ("105-93" for a loss), so a loss is turned round. A draw, an unknown
+     * result or a score that is not two numbers is kept as given. Anything after the numbers ("F/13") stays.
+     */
+    internal fun ownScoreFirst(result: String?, score: String): String {
+        val match = SCORE.find(score.trim()) ?: return score.replace('-', '–')
+        val (a, b, rest) = match.destructured
+        val high = maxOf(a.toInt(), b.toInt())
+        val low = minOf(a.toInt(), b.toInt())
+        val (first, second) = when (result?.uppercase()) {
+            "W" -> high to low
+            "L" -> low to high
+            else -> a.toInt() to b.toInt()
+        }
+        return "$first–$second$rest"
     }
 
     private fun String?.clean(): String? = this?.trim()?.takeIf { it.isNotEmpty() }

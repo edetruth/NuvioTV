@@ -157,7 +157,7 @@ internal fun SportsLiveScoreboardRow(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = (row.art?.league ?: item.sport ?: item.catalogName).uppercase(),
+                text = scoreboardTag(row.art?.league ?: item.sport ?: item.catalogName),
                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                 color = ArtColors.Secondary,
                 maxLines = 1,
@@ -308,7 +308,8 @@ private fun RowStatus(row: ScoreboardRow, modifier: Modifier = Modifier) {
                 text = text ?: kickoff.orEmpty(),
                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum"),
                 color = if (live) ArtColors.LiveText else ArtColors.Secondary,
-                maxLines = 1,
+                // "Tomorrow 6:30 PM" wraps to the time's own line rather than lose it (QA pass 3).
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.End
             )
@@ -365,7 +366,7 @@ internal fun SportsLiveScoreboardPane(
                     SportsLiveGameArt(art = art, compact = false, chip = row.chip, modifier = Modifier.fillMaxSize())
                 } else {
                     AsyncImage(
-                        model = item.meta.backdropUrl,
+                        model = rememberSizedImage(item.meta.backdropUrl, SCOREBOARD_ART_WIDTH, SCOREBOARD_ART_WIDTH * 9f / 16f),
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
@@ -518,11 +519,26 @@ internal fun SportsLiveBoardButtons(
 
 private val FOLLOWED_GOLD = Color(0xFFFFC107)
 
-/** A row's league tag never takes more than this (N1); a long name ellipsizes. */
-private val ROW_TAG_MAX_WIDTH = 64.dp
+/** A row's league tag never takes more than this (N1); a long name is shortened first ([scoreboardTag]). */
+private val ROW_TAG_MAX_WIDTH = 88.dp
 
-/** A row's status column is only as wide as its text, up to this ("Probably ended"). */
-private val ROW_STATUS_MAX_WIDTH = 112.dp
+/** A row's status column is only as wide as its text, up to this ("Probably ended", "Tomorrow" over "6:30 PM"). */
+private val ROW_STATUS_MAX_WIDTH = 128.dp
+
+/**
+ * A row's league tag (QA pass 3): [name] in capitals while it is short ("NBA", "BASKETBALL"); a longer one
+ * by its words' initials ("Brazil Serie A" → "BSA"), never an ellipsis that leaves "BRAZIL …".
+ */
+internal fun scoreboardTag(name: String): String {
+    val upper = name.trim().uppercase()
+    if (upper.length <= TAG_MAX_CHARS) return upper
+    val words = upper.split(' ', '-', '/').filter { it.isNotBlank() }
+    if (words.size > 1) return words.take(TAG_MAX_WORDS).joinToString("") { if (it.all(Char::isDigit)) it else it.take(1) }
+    return upper.take(TAG_MAX_CHARS)
+}
+
+private const val TAG_MAX_CHARS = 10
+private const val TAG_MAX_WORDS = 4
 
 private val ROW_LOGO_SIZE = 22.dp
 

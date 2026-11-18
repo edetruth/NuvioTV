@@ -343,7 +343,8 @@ internal fun SportsLiveTeamLogo(
         if (logo != null) {
             val context = LocalPlatformContext.current
             val request = remember(logo, px, context) {
-                ImageRequest.Builder(context).data(TeamLogoUrls.scaled(logo, px)).crossfade(LOGO_FADE_MS).build()
+                // Decoded at the size fetched (#71), never larger.
+                ImageRequest.Builder(context).data(TeamLogoUrls.scaled(logo, px)).size(px, px).crossfade(LOGO_FADE_MS).build()
             }
             AsyncImage(
                 model = request,

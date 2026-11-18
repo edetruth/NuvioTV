@@ -197,14 +197,14 @@ internal fun SportsLiveListCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             val thumbnail = Modifier
-                .width(144.dp)
+                .width(LIST_THUMB_WIDTH)
                 .aspectRatio(16f / 9f)
                 .clip(RoundedCornerShape(NuvioTheme.radii.sm))
             if (art != null) {
                 SportsLiveGameArt(art = art, compact = true, modifier = thumbnail)
             } else {
                 AsyncImage(
-                    model = item.meta.poster ?: item.meta.backdropUrl,
+                    model = rememberSizedImage(item.meta.poster ?: item.meta.backdropUrl, LIST_THUMB_WIDTH, LIST_THUMB_HEIGHT),
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = thumbnail.background(NuvioTheme.colors.PosterFallback)
@@ -312,7 +312,7 @@ internal fun SportsLiveDetailsPane(
                     SportsLiveGameArt(art = art, compact = false, chip = chip, modifier = Modifier.fillMaxSize())
                 } else {
                     AsyncImage(
-                        model = item.meta.backdropUrl,
+                        model = rememberSizedImage(item.meta.backdropUrl, PANE_ART_WIDTH, PANE_ART_HEIGHT),
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
@@ -546,6 +546,14 @@ internal fun PaneButtonLabel(text: String) {
 }
 
 internal val PANE_BUTTON_MIN_WIDTH = 96.dp
+
+/** A list card's picture (#71: also the size its addon art is decoded at). */
+private val LIST_THUMB_WIDTH = 144.dp
+private val LIST_THUMB_HEIGHT = 81.dp
+
+/** The size the details pane's addon art is decoded at (#71): the pane's picture at its largest. */
+internal val PANE_ART_WIDTH = 480.dp
+internal val PANE_ART_HEIGHT = 270.dp
 
 /** Styled like the retry button in `ErrorState`; focused, the design's white fill with dark text. */
 @Composable

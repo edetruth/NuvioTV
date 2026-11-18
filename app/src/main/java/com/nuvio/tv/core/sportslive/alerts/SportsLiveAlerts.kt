@@ -5,6 +5,7 @@ import com.nuvio.tv.core.sportslive.scores.LiveScoresRepository
 import com.nuvio.tv.core.sportslive.scores.ScoreChips
 import com.nuvio.tv.core.sportslive.scores.ScoreSide
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
+import com.nuvio.tv.core.sportslive.scores.ScoreTeam
 import com.nuvio.tv.core.sportslive.scores.ScoreState
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.core.sportslive.scores.TeamFollows
@@ -79,6 +80,32 @@ class SportsLiveAlerts @Inject constructor(
     /** Bell on [item] pressed: reminded now? */
     suspend fun toggleReminder(item: SportsLiveItem): Boolean =
         prefs.updateReminders { GameReminders.toggle(it, item, System.currentTimeMillis()) }.isReminded(item)
+
+    /** Bell on an ESPN game with no card pressed (a Team page's next game): reminded now? */
+    suspend fun toggleReminder(event: ScoreSnapshot): Boolean =
+        prefs.updateReminders { GameReminders.toggle(it, event, System.currentTimeMillis()) }.isReminded(event)
+
+    private val reminderNoticeFlow = MutableStateFlow<ReminderNotice?>(null)
+    private var reminderNoticeCount = 0L
+
+    /** "Reminder set" / "Reminder removed" after the last bell press, as the app's toast card; null: none. */
+    val reminderNotice: StateFlow<ReminderNotice?> = reminderNoticeFlow.asStateFlow()
+
+    /** Shows "Reminder set" ([on]) or "Reminder removed" for [item]'s game. */
+    fun noticeReminder(item: SportsLiveItem, on: Boolean) {
+        reminderNoticeFlow.value = ReminderNotice(++reminderNoticeCount, on, item.startMs, title = item.meta.name, item = item)
+    }
+
+    /** Shows "Reminder set" ([on]) or "Reminder removed" for an ESPN game no card plays yet. */
+    fun noticeReminder(event: ScoreSnapshot, on: Boolean) {
+        fun name(team: ScoreTeam) = listOf(team.shortDisplayName, team.displayName, team.name, team.abbreviation).firstOrNull { !it.isNullOrBlank() }
+        reminderNoticeFlow.value = ReminderNotice(++reminderNoticeCount, on, event.startMs, away = name(event.away), home = name(event.home))
+    }
+
+    /** [notice] has been shown its time: it goes, unless a newer one took its place. */
+    fun closeReminderNotice(notice: ReminderNotice) {
+        reminderNoticeFlow.compareAndSet(notice, null)
+    }
 
     fun setWatching(now: SportsLiveWatching) {
         watching.value = now
@@ -292,3 +319,18 @@ class SportsLiveAlerts @Inject constructor(
         }
     }
 }
+
+/**
+ * The toast card after a bell press (#44, `Prompts.dc.html`): "Reminder set" ([on]) or "Reminder removed",
+ * the game (a card's [title], else ESPN's [away] at [home]) and its kickoff ([item]'s label when a card was
+ * pressed, else [startMs]). [id] tells two presses on the same game apart.
+ */
+data class ReminderNotice(
+    val id: Long,
+    val on: Boolean,
+    val startMs: Long?,
+    val title: String? = null,
+    val away: String? = null,
+    val home: String? = null,
+    val item: SportsLiveItem? = null
+)

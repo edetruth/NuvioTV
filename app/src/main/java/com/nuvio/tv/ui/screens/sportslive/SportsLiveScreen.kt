@@ -50,6 +50,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.nuvio.tv.ui.screens.ambient.LocalAmbientIdleController
+import kotlinx.coroutines.flow.MutableStateFlow
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -109,7 +111,6 @@ import com.nuvio.tv.ui.screens.sportslive.preview.SportsLivePreviewVideo
 import com.nuvio.tv.ui.screens.sportslive.preview.previewKey
 import com.nuvio.tv.ui.theme.NuvioTheme
 import com.nuvio.tv.ui.util.dpadRepeatThrottle
-import java.time.ZoneId
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -141,7 +142,6 @@ fun SportsLiveScreen(
     val playState by playViewModel.state.collectAsStateWithLifecycle()
     val resultsState by resultsViewModel.uiState.collectAsStateWithLifecycle()
     val reminders by remindersViewModel.state.collectAsStateWithLifecycle()
-    SportsLiveReminderToasts(remindersViewModel)
     // The Catch up strip (#58) at the top of Live Now: worked out when the screen resumes, never on a timer.
     val catchUpItems by catchUpViewModel.items.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -193,26 +193,12 @@ fun SportsLiveScreen(
     // The Scoreboard layout (#23): Live now and Upcoming only, remembered per tab.
     val layouts by viewModel.layouts.collectAsStateWithLifecycle()
     val layout = SportsLiveLayout.of(layouts, uiState.selectedTab)
-    // Regrouped on the view model's clock, so Starting soon and its countdowns move on as time passes. Keyed
-    // on the whole minute: every state emission (a selection change too) carries a fresh nowMs.
-    val clockMs = uiState.nowMs / MINUTE_MS * MINUTE_MS
-    val scoreboardRowsOf: (List<SportsLiveItem>) -> List<ScoreboardRow> =
-        remember(scores, scoresMode, revealed, uiState.selectedTab, uiState.justEnded, followedTeams, clockMs, uiState.liveRank) {
-            { items ->
-                scoreboardRows(
-                    items = items,
-                    tab = uiState.selectedTab,
-                    scores = scores,
-                    mode = scoresMode,
-                    revealed = revealed,
-                    nowMs = clockMs,
-                    ended = if (uiState.selectedTab == SportsLiveTab.LIVE_NOW) uiState.justEnded else emptyMap(),
-                    followsSide = { item, side -> followedTeams.any { SportsLiveTeams.followsSideOfAnySource(it, side, item) } },
-                    // Most exciting (#43): the LIVE group in Live now's order.
-                    liveRank = if (uiState.selectedTab == SportsLiveTab.LIVE_NOW) uiState.liveRank else emptyMap()
-                )
-            }
-        }
+    // The list's model (#71): rows, Timeline and drawn cards, built by the view model off the main thread
+    // from the scores shown here; the list draws the board once it is ready.
+    LaunchedEffect(scores, scoresMode, revealed) {
+        viewModel.setBoardScores(SportsLiveBoardScores(scores, scoresMode, revealed))
+    }
+    val board by viewModel.board.collectAsStateWithLifecycle()
     // The situation line follows the score: only while the card would show its live score.
     val situationStrings = rememberGameSituationStrings()
     val situationOf: (SportsLiveItem) -> String = remember(scores, scoresMode, revealed, scoredTab, situationStrings) {
@@ -222,13 +208,22 @@ fun SportsLiveScreen(
             if (situation != null && event != null) GameSituations.situationLine(situation, event, situationStrings) else ""
         }
     }
-    // Learned logos (#66) arriving from storage redraw the cards.
+    // The drawn cards come with the board (#71); a card it does not hold yet is drawn as before.
     val logoRevision by TeamLogoBook.shared.revision.collectAsState()
-    val artOf: (SportsLiveItem) -> GameArt? = remember(scores, logoRevision) {
+    val boardArts = board?.arts
+    val artOf: (SportsLiveItem) -> GameArt? = remember(scores, logoRevision, boardArts) {
         val cache = HashMap<SportsLiveItem, GameArt?>()
-        val art: (SportsLiveItem) -> GameArt? = { item -> cache.getOrPut(item) { GameArt.of(item, scores[item.streamKey]) } }
+        val art: (SportsLiveItem) -> GameArt? = { item ->
+            if (boardArts != null && item.streamKey in boardArts) boardArts[item.streamKey]
+            else cache.getOrPut(item) { GameArt.of(item, scores[item.streamKey]) }
+        }
         art
     }
+
+    // Ambient mode or the screensaver over the section (#71): no hover preview and no catalog refresh under it.
+    val ambientController = LocalAmbientIdleController.current
+    val ambientShowing by (ambientController?.isShowing ?: remember { MutableStateFlow(false) }).collectAsState()
+    LaunchedEffect(ambientShowing) { viewModel.onAmbient(ambientShowing) }
 
     // Results loads only while its tab is selected and the screen is started (Today refreshes then, never
     // behind the player, the Game page or in the background); Scores Off hides the tab (and requests nothing).
@@ -336,7 +331,7 @@ fun SportsLiveScreen(
             onSelectLayout = { viewModel.selectLayout(uiState.selectedTab, it) },
             onSelectSort = viewModel::selectLiveSort,
             scoresMode = scoresMode,
-            scoreboardRowsOf = scoreboardRowsOf,
+            board = board,
             situationOf = situationOf,
             chipOf = chipOf,
             artOf = artOf,
@@ -467,8 +462,8 @@ private fun SportsLiveContent(
     onSelectSort: (LiveNowSort) -> Unit,
     /** The Scores setting (null until read): the View menu offers the sort only while it is on (#79). */
     scoresMode: ScoresMode?,
-    /** The Scoreboard's grouped rows for the tab's games as filtered. */
-    scoreboardRowsOf: (List<SportsLiveItem>) -> List<ScoreboardRow>,
+    /** The list's model, built off the main thread (#71); null or another tab's until ready. */
+    board: SportsLiveBoard?,
     /** A game's situation line ("" when none or hidden with the score). */
     situationOf: (SportsLiveItem) -> String,
     /** A card's score chip (Live now / Upcoming only, spoiler setting applied). */
@@ -539,12 +534,17 @@ private fun SportsLiveContent(
     var focusedCardKey by rememberSaveable { mutableStateOf<String?>(null) }
     // One scroll position per tab and filter: switching opens the list at the top, while coming back
     // from a game, Details or the player restores the position saved with the back stack entry.
+    // The board for this tab and filter (#71): until it is built, the list waits (a frame or two), and a
+    // layout switch keeps the layout shown until the new one is ready, never holding the main thread.
+    val shownBoard = board?.takeIf { it.shows(uiState.selectedTab, uiState.selectedFilter) }
+    val boardPending = shownBoard == null
+    val shownLayout = shownBoard?.layout ?: layout
     val layouts = SportsLiveLayout.offeredFor(uiState.selectedTab)
-    val scoreboard = layout == SportsLiveLayout.SCOREBOARD && layout in layouts
+    val scoreboard = shownLayout == SportsLiveLayout.SCOREBOARD && shownLayout in layouts
     // The Matchday timeline (#24): the Scoreboard's rows placed on a time ruler.
-    val timeline = layout == SportsLiveLayout.TIMELINE && layout in layouts
+    val timeline = shownLayout == SportsLiveLayout.TIMELINE && shownLayout in layouts
     // A layout change is a new list, like a filter change.
-    val filterKey = "${uiState.selectedTab.name}|${uiState.selectedFilter.orEmpty()}|${if (scoreboard || timeline) layout.name else ""}"
+    val filterKey = "${uiState.selectedTab.name}|${uiState.selectedFilter.orEmpty()}|${if (scoreboard || timeline) shownLayout.name else ""}"
     val listState = rememberSaveable(filterKey, saver = LazyListState.Saver) { LazyListState() }
     // The Timeline's league rows (#24), saved like the list's position.
     val timelineRowState = rememberSaveable(filterKey, saver = LazyListState.Saver) { LazyListState() }
@@ -572,26 +572,11 @@ private fun SportsLiveContent(
         }.keys
     }
 
-    // The Scoreboard lists the same games grouped LIVE → STARTING SOON → LATER → FINAL.
-    val boardRows = if (scoreboard || timeline) remember(uiState.visibleItems, scoreboardRowsOf) { scoreboardRowsOf(uiState.visibleItems) } else null
-    val boardRowOf = remember(boardRows) { boardRows?.associateBy { it.item.listKey }.orEmpty() }
-    // Rebuilt with the rows (scores, settings, reveals) and on the view model's clock, never per frame.
-    val timelineModel = if (timeline && boardRows != null) {
-        remember(boardRows, uiState.selectedTab, uiState.nowMs / MINUTE_MS, uiState.justEnded) {
-            SportsLiveTimeline.model(
-                rows = boardRows,
-                tab = uiState.selectedTab,
-                nowMs = uiState.nowMs / MINUTE_MS * MINUTE_MS,
-                zone = ZoneId.systemDefault(),
-                ended = if (uiState.selectedTab == SportsLiveTab.LIVE_NOW) uiState.justEnded else emptyMap()
-            )
-        }
-    } else {
-        null
-    }
-    val items = remember(boardRows, timelineModel, uiState.visibleItems) {
-        timelineModel?.items ?: boardRows?.map { it.item } ?: uiState.visibleItems
-    }
+    // The Scoreboard lists the same games grouped LIVE → STARTING SOON → LATER → FINAL; the Timeline places
+    // them on a time ruler. Both come ready from the view model (#71).
+    val boardRowOf = if (scoreboard || timeline) shownBoard?.rowOf.orEmpty() else emptyMap()
+    val timelineModel = if (timeline) shownBoard?.timeline else null
+    val items = shownBoard?.items.orEmpty()
     // The Timeline opens on its first live game (else the next to start), not on its first row's first block.
     val timelineEntryKey = timelineModel?.let { SportsLiveTimeline.entryKey(it, focusedCardKey) }
     // Until a block is focused there, the Timeline's selection is its entry game, not the view model's
@@ -621,8 +606,24 @@ private fun SportsLiveContent(
             )
         }
     }
+    // On the Timeline, Down enters on the selected block only while its row is on screen (rows are lazy: a
+    // row scrolled away has no block to take focus), else on the first row on screen (QA pass 3).
+    val currentSelectedKey by rememberUpdatedState(selected?.listKey)
+    val currentTimelineModel by rememberUpdatedState(timelineModel)
+    val timelineEntryOnScreen by remember(timelineRowState) {
+        derivedStateOf {
+            currentTimelineModel?.let { model ->
+                SportsLiveTimeline.onScreenEntryKey(
+                    model = model,
+                    preferredKey = currentSelectedKey,
+                    visibleRows = timelineRowState.layoutInfo.visibleItemsInfo.map { it.index }
+                )
+            }
+        }
+    }
     val entryCardFocusRequester = if (timelineModel != null) {
-        selectedCardFocusRequester
+        timelineEntryOnScreen?.let { key -> items.firstOrNull { it.listKey == key } }?.let(::cardFocusRequester)
+            ?: selectedCardFocusRequester
     } else {
         items.firstOrNull { it.listKey == entryKey }?.let(::cardFocusRequester) ?: selectedCardFocusRequester
     }
@@ -787,14 +788,17 @@ private fun SportsLiveContent(
                 null
             },
             reminded = canRemind && reminders.isReminded(item),
-            teamPages = gameOf(item)?.let { event ->
-                TeamPages.refsOf(event, sportsLiveGameHomeFirst(item, event)).map { ref ->
+            // Team page ‹team› (Decision 6): from the strict ESPN game, else (no game listed yet) from the team
+            // directory, for pro leagues with ESPN's team id.
+            teamPages = (
+                gameOf(item)?.let { event -> TeamPages.refsOf(event, sportsLiveGameHomeFirst(item, event)) }
+                    ?: TeamPages.refsForCard(item)
+                ).map { ref ->
                     (ref.team.shortDisplayName ?: ref.name) to {
                         menuCardKey = null
                         onOpenTeam(ref)
                     }
                 }
-            }.orEmpty()
         )
     }
 
@@ -973,7 +977,8 @@ private fun SportsLiveContent(
                     TeamFollows.followersOf(followedTeams, row.event, if (side == ScoreSide.HOME) row.event.home else row.event.away).isNotEmpty()
                 },
                 onToggleFollow = onToggleResultFollow,
-                onOpenTeam = onOpenTeam
+                onOpenTeam = onOpenTeam,
+                liveGames = uiState.liveGameCount
             )
             return@Column
         }
@@ -1029,6 +1034,8 @@ private fun SportsLiveContent(
         }
         Spacer(modifier = Modifier.height(NuvioTheme.spacing.lg))
 
+        // The board is being built (#71): nothing to draw for a moment, and never "nothing here".
+        if (boardPending && uiState.visibleItems.isNotEmpty()) return@Column
         if (selected == null || selectedCardFocusRequester == null) {
             EmptyScreenState(title = stringResource(R.string.sports_live_empty_tab))
             return@Column
@@ -1092,6 +1099,12 @@ private fun SportsLiveContent(
                 watchFocusRequester = watchFocusRequester,
                 blockFocusRequester = selectedCardFocusRequester,
                 miniPlayerBeside = nowPlaying != null,
+                onToggleReminder = if (remindable(selected)) {
+                    { onToggleReminder(selected) }
+                } else {
+                    null
+                },
+                reminded = remindedCard(selected),
                 modifier = Modifier
                     .padding(top = NuvioTheme.spacing.sm, end = miniReserve)
                     .fillMaxWidth()
@@ -1101,6 +1114,12 @@ private fun SportsLiveContent(
             return@Column
         }
 
+        // The mini player in its corner keeps the pane's lower buttons ("Watch with another game") clear
+        // (QA pass 3), as the Timeline panel does (N3): the pane ends above it.
+        val paneMiniReserve = if (nowPlaying == null) 0.dp else SportsLiveMiniGeometry.cornerReserveBottomDp(
+            windowWidthDp = LocalConfiguration.current.screenWidthDp.toFloat(),
+            screenBottomPaddingDp = NuvioTheme.spacing.screen.vertical.value
+        ).dp
         Row(
             modifier = Modifier.fillMaxSize(),
             horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xl)
@@ -1206,6 +1225,7 @@ private fun SportsLiveContent(
                     modifier = Modifier
                         .weight(1f - SCOREBOARD_LIST_WEIGHT)
                         .fillMaxHeight()
+                        .padding(bottom = paneMiniReserve)
                         .onFocusChanged { paneHasFocus = it.hasFocus },
                     watchFocusRequester = watchFocusRequester,
                     watchModifier = Modifier
@@ -1250,6 +1270,7 @@ private fun SportsLiveContent(
                 modifier = Modifier
                     .weight(0.55f)
                     .fillMaxHeight()
+                    .padding(bottom = paneMiniReserve)
                     .onFocusChanged { paneHasFocus = it.hasFocus },
                 watchModifier = Modifier
                     .focusRequester(watchFocusRequester)
@@ -1352,9 +1373,9 @@ private fun SportsLiveFilterRow(
             SportsLiveViewButton(
                 menu = viewMenu,
                 onClick = onOpenViewMenu,
-                // Room for the focused button's border.
+                // Room for the focused button's border and focus scale, clear of the first chip (QA pass 3).
                 modifier = Modifier
-                    .padding(start = NuvioTheme.spacing.sm, top = NuvioTheme.spacing.xs, bottom = NuvioTheme.spacing.xs)
+                    .padding(start = NuvioTheme.spacing.sm, end = NuvioTheme.spacing.md, top = NuvioTheme.spacing.xs, bottom = NuvioTheme.spacing.xs)
                     .focusRequester(viewFocusRequester)
                     .focusProperties {
                         up = upFocusRequester
@@ -1373,7 +1394,8 @@ private fun SportsLiveFilterRow(
                     .focusGroup()
                     .horizontalScroll(rememberScrollState())
                     .padding(horizontal = NuvioTheme.spacing.sm, vertical = NuvioTheme.spacing.xs),
-                horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm),
+                // Wide enough that a focused chip's scale never reaches its neighbour's border.
+                horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // "★ My teams" leads, then All, then each value with games (#79: empty ones hidden).
@@ -1389,7 +1411,6 @@ private fun SportsLiveFilterRow(
 private const val FOLLOW_REFOCUS_WINDOW_MS = 1_500L
 private const val SCOREBOARD_LIST_WEIGHT = 0.5f
 private const val RETURN_FOCUS_FRAMES = 10
-private const val MINUTE_MS = 60_000L
 
 /** The Timeline's bottom panel (preview, scoreline, linescore, buttons). */
 private val TIMELINE_PANEL_HEIGHT = 168.dp

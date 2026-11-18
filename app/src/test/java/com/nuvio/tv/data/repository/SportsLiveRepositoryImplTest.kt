@@ -205,6 +205,28 @@ class SportsLiveRepositoryImplTest {
     }
 
     @Test
+    fun `a tab refresh fetches only its kinds of catalog and carries the others over`() = runTest {
+        catalogRepository.results["sports" to "live"] = success("sports", "live", meta("a", live = true))
+        catalogRepository.results["sports" to "upcoming"] = success("sports", "upcoming", meta("u"))
+        catalogRepository.results["generic" to "chan"] = success("generic", "chan", meta("ch1"))
+        val repository = newRepository()
+        repository.load()
+        assertEquals(3, catalogRepository.calls)
+
+        catalogRepository.results["sports" to "live"] = success("sports", "live", meta("a2", live = true))
+        catalogRepository.results["generic" to "chan"] = success("generic", "chan", meta("ch2"))
+        // Live now's refresh: the two events catalogs only.
+        val events = repository.load(force = true, includeChannels = false, onlyKinds = setOf(SportsLiveKind.EVENTS))
+        assertEquals(5, catalogRepository.calls)
+        assertEquals(setOf("a2", "u", "ch1"), events.items.map { it.id }.toSet())
+
+        // The channels catalog alone; the events catalogs keep this load's items.
+        val channels = repository.load(force = true, onlyKinds = setOf(SportsLiveKind.CHANNELS))
+        assertEquals(6, catalogRepository.calls)
+        assertEquals(setOf("a2", "u", "ch2"), channels.items.map { it.id }.toSet())
+    }
+
+    @Test
     fun `routine loads without channels fetch channels cold, then reuse them once the cache is stale`() = runTest {
         catalogRepository.results["generic" to "chan"] = success("generic", "chan", meta("ch1"))
         val repository = newRepository()

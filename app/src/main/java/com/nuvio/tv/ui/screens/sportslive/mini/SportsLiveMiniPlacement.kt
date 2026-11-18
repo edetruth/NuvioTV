@@ -63,4 +63,12 @@ object SportsLiveMiniGeometry {
      */
     fun timelinePanelReserveDp(windowWidthDp: Float, screenEndPaddingDp: Float): Float =
         (widthDp(SportsLiveMiniSpot.TIMELINE_PANEL, windowWidthDp) + EDGE_DP + GAP_DP - screenEndPaddingDp).coerceAtLeast(0f)
+
+    /**
+     * How much of its bottom a details pane leaves free while the mini player sits in its corner (QA pass
+     * 3), given the screen's own bottom padding [screenBottomPaddingDp]: the player's height, its edge
+     * distance and a gap, less that padding. Its buttons then never sit under the video.
+     */
+    fun cornerReserveBottomDp(windowWidthDp: Float, screenBottomPaddingDp: Float): Float =
+        (heightDp(SportsLiveMiniSpot.CORNER, windowWidthDp) + EDGE_DP + GAP_DP - screenBottomPaddingDp).coerceAtLeast(0f)
 }

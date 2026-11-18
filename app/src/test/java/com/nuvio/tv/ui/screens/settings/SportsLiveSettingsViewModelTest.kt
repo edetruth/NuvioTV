@@ -76,7 +76,7 @@ class SportsLiveSettingsViewModelTest {
     private val sportsLiveRepository = mockk<SportsLiveRepository> {
         every { claimedCatalogKeys } returns claimedKeys
         every { catalogStats } returns this@SportsLiveSettingsViewModelTest.catalogStats
-        coEvery { load(any(), any()) } returns SportsLiveLoad(emptyList(), emptyList(), 0L, emptySet())
+        coEvery { load(any(), any(), any()) } returns SportsLiveLoad(emptyList(), emptyList(), 0L, emptySet())
     }
 
     private val playerSettings = MutableStateFlow(PlayerSettings())
@@ -407,7 +407,7 @@ class SportsLiveSettingsViewModelTest {
 
     @Test
     fun `a failed reload after setting a filter keeps the pin`() = runTest {
-        coEvery { sportsLiveRepository.load(any(), any()) } throws IllegalStateException("offline")
+        coEvery { sportsLiveRepository.load(any(), any(), any()) } throws IllegalStateException("offline")
         addonsFlow.value = listOf(addon("tv", "TV", listOf(COUNTRY_TV)))
         val tvKey = SportsLiveCatalogPolicy.keyFor(addonsFlow.value[0], COUNTRY_TV)
         val viewModel = newViewModel()

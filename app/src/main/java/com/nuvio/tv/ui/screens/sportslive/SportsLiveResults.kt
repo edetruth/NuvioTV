@@ -58,6 +58,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Border
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
@@ -169,6 +170,8 @@ internal fun SportsLiveResultsView(
     onToggleFollow: (ResultRow, ScoreSide) -> Unit = { _, _ -> },
     /** Hold OK → Team page ‹team› (#62), for a pro team with ESPN's id. */
     onOpenTeam: (TeamRef) -> Unit = {},
+    /** Live now's live games ([SportsLiveUiState.liveGameCount]): the "N games live now →" line's count. */
+    liveGames: Int = 0,
     modifier: Modifier = Modifier
 ) {
     val sportFocusRequester = remember { FocusRequester() }
@@ -178,7 +181,7 @@ internal fun SportsLiveResultsView(
     val showSportRow = ready && state.sports.isNotEmpty()
     val showLeagueRow = showSportRow && state.selectedSport != null && state.leagues.isNotEmpty()
     // Today: games being played are not listed, only counted on a line that jumps to Live Now.
-    val showLiveNow = state.showsLiveNow
+    val showLiveNow = state.showsLiveNow(liveGames)
     val itemFocusRequesters = remember { mutableMapOf<String, FocusRequester>() }
     val scope = rememberCoroutineScope()
     fun itemFocusRequester(key: String) = itemFocusRequesters.getOrPut(key) { FocusRequester() }
@@ -363,7 +366,7 @@ internal fun SportsLiveResultsView(
         }
         if (showLiveNow) {
             ResultsLiveNowLine(
-                count = state.liveNow,
+                count = liveGames,
                 onClick = onOpenLiveNow,
                 modifier = Modifier
                     .padding(start = NuvioTheme.spacing.sm, top = NuvioTheme.spacing.sm)
@@ -819,46 +822,36 @@ private fun ResultRowCard(
         containerColor = NuvioTheme.colors.BackgroundCard,
         focusedBorder = Border(border = NuvioTheme.focusRing.border(NuvioTheme.spacing.xxs), shape = shape)
     ) {
+        // About 70 px at 1080p (ResultRowMetrics): the league is the section's header, so the row is the two
+        // teams and their scores, with the note and the Replay pill beside them (QA pass 3).
         Row(
-            modifier = Modifier.padding(horizontal = NuvioTheme.spacing.md, vertical = NuvioTheme.spacing.sm),
+            modifier = Modifier.padding(horizontal = NuvioTheme.spacing.md, vertical = ResultRowMetrics.PADDING_DP.dp),
             horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xxs)) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (row.followed) {
-                        Icon(
-                            imageVector = Icons.Rounded.Star,
-                            contentDescription = null,
-                            tint = RESULT_STAR_COLOR,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                    Text(
-                        text = event.leagueName ?: sportLabel(event.league.sport),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = NuvioTheme.colors.TextSecondary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
+            if (row.followed) {
+                Icon(
+                    imageVector = Icons.Rounded.Star,
+                    contentDescription = null,
+                    tint = RESULT_STAR_COLOR,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
                 // Away first, as ESPN and US scoreboards list them.
                 TeamLine(event.away, bold = awayWon)
                 TeamLine(event.home, bold = homeWon)
             }
-            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xxs)) {
+            Column(horizontalAlignment = Alignment.End) {
                 if (showScore) {
                     Text(
                         text = event.awayScore?.toString() ?: "–",
-                        style = MaterialTheme.typography.titleMedium.let { if (awayWon) it.sportsLiveBold() else it },
+                        style = resultLineStyle().let { if (awayWon) it.sportsLiveBold() else it },
                         color = NuvioTheme.colors.TextPrimary
                     )
                     Text(
                         text = event.homeScore?.toString() ?: "–",
-                        style = MaterialTheme.typography.titleMedium.let { if (homeWon) it.sportsLiveBold() else it },
+                        style = resultLineStyle().let { if (homeWon) it.sportsLiveBold() else it },
                         color = NuvioTheme.colors.TextPrimary
                     )
                 } else {
@@ -869,10 +862,10 @@ private fun ResultRowCard(
                     )
                 }
             }
-            Column(
-                modifier = Modifier.width(72.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xxs)
+            Row(
+                modifier = Modifier.width(RESULT_NOTE_WIDTH),
+                horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs, Alignment.End),
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 // The note ("AET", "Pens", "OT") tells how the game ended, so it hides with the score.
                 Text(
@@ -887,6 +880,26 @@ private fun ResultRowCard(
         }
     }
 }
+
+/**
+ * A Results row's size (QA pass 3, `Results.dc.html`): two team lines of [LINE_SP] and [PADDING_DP] above
+ * and below, about 70 px at 1080p (2 px a dp), so about nine rows fit as drawn.
+ */
+internal object ResultRowMetrics {
+    const val LINE_SP = 16
+    const val FONT_SP = 14
+    const val LOGO_DP = 16
+    const val PADDING_DP = 2
+
+    /** The row's height in dp. */
+    const val HEIGHT_DP = 2 * LINE_SP + 2 * PADDING_DP
+}
+
+@Composable
+private fun resultLineStyle() =
+    MaterialTheme.typography.titleSmall.copy(fontSize = ResultRowMetrics.FONT_SP.sp, lineHeight = ResultRowMetrics.LINE_SP.sp)
+
+private val RESULT_NOTE_WIDTH = 120.dp
 
 /** The green "Replay" tag of a result with a replay. */
 @Composable
@@ -912,22 +925,22 @@ private fun TeamLine(team: ScoreTeam, bold: Boolean) {
         val logo = team.logo
         if (logo != null) {
             AsyncImage(
-                model = TeamLogoUrls.scaled(logo),
+                model = rememberSizedImage(TeamLogoUrls.scaled(logo), ResultRowMetrics.LOGO_DP.dp, ResultRowMetrics.LOGO_DP.dp),
                 contentDescription = null,
                 contentScale = ContentScale.Fit,
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier.size(ResultRowMetrics.LOGO_DP.dp)
             )
         } else {
             Box(
                 modifier = Modifier
-                    .size(24.dp)
+                    .size(ResultRowMetrics.LOGO_DP.dp)
                     .clip(CircleShape)
                     .background(NuvioTheme.colors.PosterFallback)
             )
         }
         Text(
             text = team.listName,
-            style = MaterialTheme.typography.titleMedium.let { if (bold) it.sportsLiveBold() else it },
+            style = resultLineStyle().let { if (bold) it.sportsLiveBold() else it },
             color = NuvioTheme.colors.TextPrimary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis

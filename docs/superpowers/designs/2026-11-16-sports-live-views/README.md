@@ -30,7 +30,7 @@ Started as three "beyond cards" views (approved: "I love the designs"). This fol
 - New in this pass: **why tags** and **reminder** chips are blue (`#CFE1FF` on `#13233A`, border `#2B4A75`), so they never read as live (red) or followed (gold). "≈ Approximate" is amber (`#FFD58A` on `#2A2410`).
 - Focus = 3px white border/ring + shadow; upcoming = 2px `#2A3442` outline; finals = dimmed `#151B24`.
 - Fonts: Space Grotesk (titles, scores, tabular numerals), Inter (body). TV-size type (20–64px). 64px side padding.
-- **Header as built:** "Sports & Live", the tab row **Live Now · Upcoming · Channels · Replays · Results**, then **Refresh**, then on Live Now and Upcoming only the layout switch **Cards · Scoreboard · Timeline** (OK picks; remembered per tab per profile), then the filter chips (**★ My teams** in gold, **All**, then the sports present).
+- **Header as built:** "Sports & Live", the tab row **Live Now · Upcoming · Channels · Replays · Results**, then **Refresh**, then on Live Now and Upcoming only the **View** button ("View · Scoreboard · Exciting", #79): OK opens the View menu, **Layout** (Cards · Scoreboard · Timeline, remembered per tab per profile) and, on Live Now outside the Timeline, **Sort** (Start time · Most exciting); a pick applies and closes the menu. Then the filter chips with counts (**★ My teams** in gold, **All 60**, then the sports present; empty ones hidden; focus highlights, OK selects), with a clear gap after View so its focus ring never touches the first chip. `Components.dc.html` draws the View button, menu and chips.
 - Footer: remote keys, a **Components** link on new boards, and a **Scores:** legend naming the three spoiler states for that board (the drawn one is filled).
 - Score text is always the built chip format: live `Q3 8:42 · 17–13`, final `FT 2–1` / `Final 24–17` / `Final/OT 101–99`, postponed `Postponed`, hidden `Score hidden` (a live hidden chip keeps its red dot). Scores are in the **card's team order**; the Game page keeps the order of the card it was opened from (QA N10), and away–home when opened from Results.
 
@@ -45,7 +45,7 @@ Started as three "beyond cards" views (approved: "I love the designs"). This fol
 - Resting on a card or row for **2 s** starts the muted hover preview (setting "Preview games on hover"; off under Data saver).
 
 ## 1 · Timeline (`Main.dc.html`, #24) — **Built** (TL1)
-- Third entry of the layout switch on Live Now and Upcoming. Live Now opens on now − 1 h … now + 5 h; Upcoming on now … now + 12 h; ← → reach every game and the window follows focus.
+- Third layout of the View menu on Live Now and Upcoming. Live Now opens on now − 1 h … now + 5 h; Upcoming on now … now + 12 h; ← → reach every game and the window follows focus.
 - Ruler: local hours (device 12/24 h; a midnight tick shows the day), faint hour lines, red now line with a time tag.
 - Rows: one per league (ESPN league name, else the card's sport), 220px label column, ★ when a followed team plays. Order: followed rows, rows with a live game, then earliest start.
 - Blocks: placed by start; length = the `SportsLiveGameLength` estimate (live blocks run to max(now, estimate); finals end at ESPN's first-seen final; minimum 15 min). Overlaps stack into lanes; text slides to stay on screen.
@@ -64,10 +64,11 @@ Started as three "beyond cards" views (approved: "I love the designs"). This fol
 - Buttons **Watch** · **Watch with another game** (Live now, not FINAL) · **Game stats** (strict match). If a focused button disappears, focus moves to Watch.
 - Remote: ↑ ↓ rows, → to Watch, ← back. OK on an ESPN-final row opens its Game page.
 
-## 3 · Live Now cards (`LiveNow.dc.html`) — cards + Just ended **Built**; sort **In batch** (#43)
+## 3 · Live Now cards (`LiveNow.dc.html`) — cards + Just ended **Built**; sort **Built** (#43)
+- **Shape (decided 2026-11-18, QA pass 3):** a single-column **list** on the left (about 45%) with a **details pane** on the right (large drawn card or the muted preview, scoreline, situation line, then Watch · Watch with another game · Game stats · Choose stream · Details), not a grid. With the mini player playing, the pane ends above it, so no button sits under the video.
 - The Cards layout: drawn game cards (logos, abbreviations, footer "Q4 · NFL" / "6:00 PM · NBA"), title, state pill + score chip. Channels keep addon art. Unmatched games (tennis here) keep the card's names, no logos, no chip.
-- **Just ended strip (#60, built):** under the grid, dimmed until focused, left out of the tab count. ESPN finals: chip ("FT 2–1", the "Final" pill dropped when the chip already says it), Replay tag on a strict replay match, OK → Game page; they leave 30 min after the final. Estimates: pill "Probably ended", no score, OK plays; they stay up to 6 h.
-- **Sort (#43, new):** a control at the end of the filter row, **Start time** (default) · **Most exciting**. Most exciting ranks live games by closeness × time left, overtime, recent lead changes and late goals, from the delayed feed. Each ranked card carries one short **why tag** top-right: "Close · 2 min left", "OT", "Late equaliser", "Lead changes · 9". Upcoming, channels and unmatched games follow in start order.
+- **Just ended strip (#60, built):** at the end of the list, dimmed until focused, left out of the tab count. ESPN finals: chip ("FT 2–1", the "Final" pill dropped when the chip already says it), Replay tag on a strict replay match, OK → Game page; they leave 30 min after the final. Estimates: pill "Probably ended", no score, OK plays; they stay up to 6 h.
+- **Sort (#43, built):** in the View menu, **Start time** (default) · **Most exciting**. Most exciting ranks live games by closeness × time left, overtime, recent lead changes and late goals, from the delayed feed. Each ranked card carries one short **why tag** top-right: "Close · 2 min left", "OT", "Late equaliser", "Lead changes · 9". Upcoming, channels and unmatched games follow in start order.
 - Spoilers: Show = as drawn. Hide until focused = chips "Score hidden", **no why tags** and Most exciting falls back to start order (decision to confirm). Off = no chips, the sort is hidden.
 
 ## 4 · Channel guide (`Guide.dc.html`, #25) — **Deferred**
@@ -77,10 +78,10 @@ Deferred by the user (2026-11-18); not in the next batch. The board is unchanged
 The board shows **Hide until focused** with the Celtics row not yet focused.
 - **No right panel** (decided): OK on a row opens the Game page; hold OK / Menu = **Game stats** + **Follow / Following** per side.
 - **Date rail (#67, in batch):** **Today** (default once today's first game is final) · **Yesterday** · **Earlier ▸** (opens the 5 older US-Eastern days). Before today's first final: opens on Yesterday and Today reads "No finals yet". Built today: Yesterday · Sat 15 · Fri 14 … (7 days).
-- **"N games live now →"** (#67, in batch): a line above Today's list that jumps to Live Now; live games are not listed in Results.
+- **"N games live now →"** (#67, built): a line above Today's list that jumps to Live Now; live games are not listed in Results. It counts Live Now's own live games (ended-games rules and delay applied), so it never shows while Live Now has none.
 - **Sport row:** **★ My sports**, then the sports with results that day: Basketball · American Football · Hockey · Baseball · Soccer · Tennis · MMA · Motorsport · Golf; **Edit my sports** at the end. League row (NBA, NCAAM, …) only once a sport is picked.
 - **List** (880 dp): **YOUR TEAMS** first (gold), then sections by competition; long tails collapse into "+ 48 more NCAAM games".
-- **Team row:** star + league tag · two team lines (logo, ESPN full name, away first, winner bold) · stacked scores · note **FT / OT / SO / AET / Pens** · **Replay** pill (strict match; stays visible while a score is hidden).
+- **Team row (about 70 px at 1080p, QA pass 3):** star · two team lines (logo, ESPN full name, away first, winner bold) · stacked scores · note **FT / OT / SO / AET / Pens** · **Replay** pill (strict match; stays visible while a score is hidden). No league tag in the row: the section header names it. About nine rows fit.
 - **Individual-sport rows (R2, built):** tennis: two player lines (winner bold) + set columns, the set loser's tiebreak points small, "Ret."/"W/O"; UFC: "K. Duarte vs J. Hale" then "K. Duarte · KO/TKO R2 3:14" (decisions without round); F1: "1. Norris · 2. Verstappen · 3. Hadjar" (podium only); golf: winner + to par and "+ 4 more", OK toggles the top 5 (ties "T4"). Singles only, no replays, no Follow menu, OK does nothing on tennis/UFC/F1. Hidden: "Result hidden".
 
 ## 6 · Game page (`GamePage.dc.html`, #18, #54, #61) — **Built**; playable highlights **In batch**
@@ -92,6 +93,7 @@ The board shows **Hide until focused** with the Celtics row not yet focused.
 - With #62/#63: OK on a team logo opens the Team page; OK on a top performer opens the Player card.
 
 ## 7 · In-player Live now panel (`PlayerPanel.dc.html`, #66, #68, #83)
+- **Docks on the left** (decided 2026-11-18), about 680 px wide; the video stays visible on the right.
 - **Built:** groups **Live now** (furthest-in first) → **Starting soon** (row leads with the local kickoff) → **More games** → **Just ended**; followed teams first in each group; score chips; two **logo circles** per row from the saved team → logo map (#66), with the abbreviation circle as the instant fallback; scores fetched as soon as the panel opens.
 - **In batch (#68):** the panel opens on **All**, whatever filter the game was started from; a chip row **★ My teams · All · ‹sports present›** at the top (one focus stop, ← → pick, ↓ into the games); the chip also orders channel up/down for the rest of the playback session.
 - The playing game is marked "NOW PLAYING". Keys: ↑ ↓ games, OK switch, hold OK watch both, Back closes.
@@ -104,7 +106,7 @@ Overlays on video, drawn 1:1 on crops of the screen. One at a time; Back dismiss
 - **Kickoff "Watch now?"** (#44): LIVE tag, "KICKING OFF NOW", ★ when followed, both logos and the matchup, "NFL · 1:25 PM · you're watching Bucks @ Bulls", buttons **Watch** (focused) and **Later**; "Hold OK: watch both · closes in 15 s". In the background: a system notification with the same two actions.
 - **Full-time toast** (#42): Show → "FULL TIME", "LV 27–24 SEA", "Final/OT · OK for the Game page"; auto-hides after 8 s. Hide until focused → "GAME OVER", names only, "Score hidden · OK for the Game page (Reveal there)", no winner bold, no "OT". Off → no toast.
 - **Score-change toast** (#42 comment): followed teams only, while watching something else; "★ Raiders score", "LV 24–21 SEA", live clock; OK switch, hold OK both. Scores = Show only.
-- **Remind me** (#44): hold OK on an upcoming game → **Remind me**; toast "Reminder set · Pacers @ 76ers · today 6:00 PM · We'll ask 'Watch now?' at kickoff". The card then shows a blue bell chip with the time, and the menu offers **Cancel reminder**. Reminders are per profile.
+- **Remind me** (#44): hold OK on an upcoming game → **Remind me** (also a button in the Cards pane and the Timeline's bottom panel, and the action line of a Team page's next-game tile, with the bell state); toast "Reminder set · Pacers @ 76ers · today 6:00 PM · We'll ask 'Watch now?' at kickoff", or "Reminder removed · Pacers @ 76ers". It is the app's dark toast card with the bell, bottom left, never an Android system toast. The card then shows a blue bell chip with the time, and the menu offers **Cancel reminder**. Reminders are per profile.
 - Uses the existing score pollers for followed teams' leagues only; no new requests.
 
 ## 9 · Team page (`TeamPage.dc.html`, #62) — **Deferred**
@@ -126,6 +128,7 @@ Overlays on video, drawn 1:1 on crops of the screen. One at a time; Back dismiss
 
 ## Built components (reference) — see `Components.dc.html`
 Reuse these instead of drawing new ones.
+- **View button and menu** (`SportsLiveViewMenu.kt`, #79), replacing the old segmented layout switch and Sort control; **filter chips with counts**.
 - **Drawn game card** (`GameArt.kt`, `SportsLiveGameArt.kt`): both teams in title order, logos, ESPN names and abbreviations, league, kickoff in local time. States on the sheet: upcoming, upcoming with reminder (new), live, live hidden, final (+ Replay), just ended (dimmed), probably ended.
 - **Score chip** (`ScoreChips.kt`): strict match only. Live red dot + `#FFB3B8`; finals "FT 3–1" / "Final 24–17"; postponed muted; Home prefixes "● ".
 - **Details-pane score block** (`ScoreDetails.kt`, `SportsLiveScoreDetails.kt`): scoreline in abbreviations, linescore (OT/2OT, ET1/ET2, SO, "–" unplayed), soccer scorers.
@@ -139,7 +142,7 @@ Reuse these instead of drawing new ones.
 ## Decisions (confirmed by the user 2026-11-17)
 1. **Finals keep their score by default** (Scores = Show). No finals-only hiding.
 2. **Results drops the right panel; OK on a row opens the Game page** (#18). Built.
-3. **Timeline and Scoreboard are a layout switch** (Cards · Scoreboard · Timeline) inside Live Now and Upcoming. Built. Channels guide (#25) stays its own tab, now deferred.
+3. **Timeline and Scoreboard are layouts** (Cards · Scoreboard · Timeline) inside Live Now and Upcoming, picked in the View menu (#79). Built. Channels guide (#25) stays its own tab, now deferred.
 4. **Situation line: yes.** Built (SB1) for football and baseball; ESPN sends none for soccer or hockey power plays.
 5. Game page under Scores = Off: score behind **Reveal**, no request until then. Built that way.
 
@@ -153,6 +156,12 @@ Reuse these instead of drawing new ones.
 7. Replay jumps: always list OT; under Scores Off fetch play-by-play only after Mark tip-off.
 8. Player card: no "Follow player" yet.
 9. Watch all highlights: auto-play next clip; Back stops.
+
+## Decisions (user, 2026-11-18, after QA pass 3)
+1. **Live Now stays a list with a details pane** (not the grid the board first drew); the board now draws it.
+2. **The in-player panel stays docked on the left.**
+3. **Results rows are compact** (about 70 px at 1080p): no league tag in the row; Replay pill, winner bold, spoilers and individual-sport rows unchanged.
+4. **Remind me** also on the Team page's next-game tiles (a game no card plays yet too) and in the Timeline's bottom panel; "Reminder set" / "Reminder removed" is the app's toast card.
 
 ## Original open questions (superseded by the decisions above)
 1. **Most exciting (#43):** under Hide until focused, fall back to start order with no why tags (drawn), or keep the excitement order without tags? (The order alone hints that a game is close.) And should followed teams stay pinned first in this sort?

@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -20,6 +21,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Notifications
+import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.runtime.Composable
@@ -72,7 +74,8 @@ import java.util.Locale
 /**
  * The Team page (#62, `TeamPage.dc.html`): a header (logo, name, record, standing, Follow / ★ Following),
  * then Last 5 (OK opens the Game page; the Replay pill on a strict replay match), Next games (OK: Watch
- * when live, else Remind me / Cancel reminder, #44) and Leaders. ↑ ↓ move between sections, ← → within
+ * when live, else Remind me / Cancel reminder, #44, with the bell state on the tile, a game no card plays
+ * yet too) and Leaders. A section that takes focus scrolls wholly on screen, its heading included. ↑ ↓ move between sections, ← → within
  * one, Back returns. Scores: Show = all; Hide until focused = the last results wait for Reveal; Off =
  * nothing loads or shows until Reveal (decision 5).
  */
@@ -115,7 +118,6 @@ fun SportsLiveTeamScreen(
     }
     SportsLivePlayHost(playViewModel = playViewModel, onOpenStreamScreen = onPlay, onPlayTarget = onPlayTarget)
     val reminders by remindersViewModel.state.collectAsStateWithLifecycle()
-    SportsLiveReminderToasts(remindersViewModel)
 
     val firstFocus = remember { FocusRequester() }
     // First focus: Reveal under Off, else Follow. A Reveal goes away once pressed: focus moves to Follow.
@@ -157,14 +159,18 @@ fun SportsLiveTeamScreen(
                 waiting -> TeamMessage(stringResource(R.string.sports_live_team_hidden_off))
                 state.status == GameLoadStatus.FAILED -> TeamMessage(stringResource(R.string.sports_live_team_unavailable))
                 data == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { LoadingIndicator() }
-                else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.lg)) {
+                else -> LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.lg),
+                    // Room under the last section for its tiles' bottom edge and focus ring (QA pass 3).
+                    contentPadding = PaddingValues(bottom = NuvioTheme.spacing.lg)
+                ) {
                     if (state.stale) item(key = "stale") { TeamMessage(stringResource(R.string.sports_live_team_stale)) }
                     item(key = "recent") {
                         TeamSection(stringResource(R.string.sports_live_team_last, TeamPages.RECENT)) {
                             if (data.recent.isEmpty()) {
                                 TeamMessage(stringResource(R.string.sports_live_team_no_results))
                             } else {
-                                LazyRow(horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md)) {
+                                LazyRow(horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md), contentPadding = TILE_ROW_PADDING) {
                                     if (!state.showsResults) {
                                         item(key = "reveal") {
                                             SportsLivePaneButton(onClick = viewModel::reveal) {
@@ -190,7 +196,7 @@ fun SportsLiveTeamScreen(
                             if (data.upcoming.isEmpty()) {
                                 TeamMessage(stringResource(R.string.sports_live_team_no_games))
                             } else {
-                                LazyRow(horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md)) {
+                                LazyRow(horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md), contentPadding = TILE_ROW_PADDING) {
                                     items(data.upcoming, key = { it.eventId }) { event ->
                                         val card = state.cards[event.eventId]
                                         UpcomingTile(
@@ -201,7 +207,8 @@ fun SportsLiveTeamScreen(
                                             onClick = {
                                                 when (upcomingAction(event, card, System.currentTimeMillis())) {
                                                     UpcomingAction.WATCH -> card?.let { playViewModel.play(it) }
-                                                    UpcomingAction.REMIND -> card?.let(remindersViewModel::toggle)
+                                                    // A card's reminder, else the ESPN game's own (matched by its sides at kickoff).
+                                                    UpcomingAction.REMIND -> if (card != null) remindersViewModel.toggle(card) else remindersViewModel.toggle(event)
                                                     UpcomingAction.GAME_PAGE -> openGame(event, card)
                                                 }
                                             }
@@ -214,7 +221,7 @@ fun SportsLiveTeamScreen(
                     if (data.leaders.isNotEmpty()) {
                         item(key = "leaders") {
                             TeamSection(stringResource(R.string.sports_live_team_leaders)) {
-                                LazyRow(horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md)) {
+                                LazyRow(horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md), contentPadding = TILE_ROW_PADDING) {
                                     items(data.leaders, key = { it.category }) { leader ->
                                         val target = PlayerCards.targetFor(leader, team)
                                         LeaderTile(
@@ -246,9 +253,10 @@ fun SportsLiveTeamScreen(
 internal enum class UpcomingAction { WATCH, REMIND, GAME_PAGE }
 
 internal fun upcomingAction(event: ScoreSnapshot, card: SportsLiveItem?, nowMs: Long): UpcomingAction = when {
-    card == null -> UpcomingAction.GAME_PAGE
-    event.state == ScoreState.IN || card.isLive -> UpcomingAction.WATCH
-    GameReminders.canRemind(card, nowMs) -> UpcomingAction.REMIND
+    event.state == ScoreState.IN || card?.isLive == true -> if (card != null) UpcomingAction.WATCH else UpcomingAction.GAME_PAGE
+    card != null -> if (GameReminders.canRemind(card, nowMs)) UpcomingAction.REMIND else UpcomingAction.GAME_PAGE
+    // No card plays it yet: the ESPN game itself is reminded, and matched by its sides at kickoff.
+    GameReminders.canRemind(event, nowMs) -> UpcomingAction.REMIND
     else -> UpcomingAction.GAME_PAGE
 }
 
@@ -333,7 +341,9 @@ private fun TeamHeaderPanel(
 
 @Composable
 private fun TeamSection(title: String, content: @Composable () -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)) {
+    // A tile's focus brings the whole section on screen: its heading never slides under the header, and the
+    // tiles' bottom edge is never cut (QA pass 3).
+    Column(modifier = Modifier.wholeInViewOnFocus(), verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)) {
         Text(
             text = title.uppercase(Locale.getDefault()),
             style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
@@ -447,9 +457,9 @@ private fun UpcomingTile(event: ScoreSnapshot, teamId: String, card: SportsLiveI
         when (upcomingAction(event, card, System.currentTimeMillis())) {
             UpcomingAction.WATCH -> ActionLine(Icons.Rounded.PlayArrow, stringResource(R.string.sports_live_watch), REMINDER_TEXT)
             UpcomingAction.REMIND -> {
-                val reminded = card != null && reminders.isReminded(card)
+                val reminded = if (card != null) reminders.isReminded(card) else reminders.isReminded(event)
                 ActionLine(
-                    Icons.Rounded.Notifications,
+                    if (reminded) Icons.Rounded.NotificationsActive else Icons.Rounded.Notifications,
                     stringResource(if (reminded) R.string.sports_live_team_reminder_set else R.string.sports_live_remind_me),
                     if (reminded) REMINDER_TEXT else NuvioTheme.colors.TextSecondary
                 )
@@ -479,6 +489,9 @@ private fun LeaderTile(leader: TeamLeader, onClick: (() -> Unit)?) {
 }
 
 private val TILE_WIDTH = 200.dp
+
+/** Room around a row of tiles for the focused tile's ring. */
+private val TILE_ROW_PADDING = PaddingValues(vertical = 4.dp, horizontal = 4.dp)
 private val TILE_CONTENT_HEIGHT = 112.dp
 private val TEAM_STAR_COLOR = Color(0xFFFFC107)
 private val REMINDER_TEXT = Color(0xFFCFE1FF)

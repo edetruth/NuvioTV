@@ -121,7 +121,7 @@ class SportsLiveScoreboardTest {
         every { endedKeys } returns MutableStateFlow<Set<String>>(emptySet())
         every { followedTeams } returns flowOf(emptyList<FollowedTeam>())
         every { hasRecentLinks(any()) } returns false
-        coEvery { load(any(), any()) } returns SportsLiveLoad(emptyList(), emptyList(), 0L, emptySet())
+        coEvery { load(any(), any(), any()) } returns SportsLiveLoad(emptyList(), emptyList(), 0L, emptySet())
     }
 
     @Test

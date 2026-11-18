@@ -112,7 +112,7 @@ class SportsLiveRepositoryImpl @Inject constructor(
      * follow the active profile, the overrides and the pinned options) did not change while it was
      * fetching, so a load started for one profile never overwrites the cache after a switch to another.
      */
-    override suspend fun load(force: Boolean, includeChannels: Boolean): SportsLiveLoad = loadMutex.withLock {
+    override suspend fun load(force: Boolean, includeChannels: Boolean, onlyKinds: Set<SportsLiveKind>?): SportsLiveLoad = loadMutex.withLock {
         val claimed = claimedCatalogs.first()
         val claimedKeys = claimed.map { it.key }.toSet()
         val options = optionsOf(claimed)
@@ -126,12 +126,15 @@ class SportsLiveRepositoryImpl @Inject constructor(
         // load covered exactly the catalogs claimed now, loaded this one with the same pinned option, and
         // its items came from the same addon install: keys have no base URL, and two profiles can install
         // one addon under different manifest URLs.
+        // A tab's refresh (#71) carries over every catalog of another kind the same way.
+        fun carried(catalog: ClaimedCatalog): Boolean =
+            (onlyKinds != null && catalog.kind !in onlyKinds) || (!includeChannels && catalog.kind == SportsLiveKind.CHANNELS)
         val carriedItems: Map<String, List<SportsLiveItem>> =
-            if (includeChannels || cached == null || cached.claimedKeys != claimedKeys) {
+            if ((includeChannels && onlyKinds == null) || cached == null || cached.claimedKeys != claimedKeys) {
                 emptyMap()
             } else {
                 val cachedByKey = cached.items.groupBy { it.catalogKey }
-                claimed.filter { it.kind == SportsLiveKind.CHANNELS && cached.catalogOptions[it.key] == it.option }
+                claimed.filter { carried(it) && cached.catalogOptions[it.key] == it.option }
                     .mapNotNull { catalog ->
                         cachedByKey[catalog.key]
                             ?.takeIf { items -> items.all { it.addonBaseUrl == catalog.addon.baseUrl } }

@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.NotificationsActive
+import androidx.compose.material.icons.rounded.NotificationsOff
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.runtime.Composable
@@ -53,6 +55,7 @@ import com.nuvio.tv.core.sportslive.alerts.AlertAnswer
 import com.nuvio.tv.core.sportslive.alerts.AlertContent
 import com.nuvio.tv.core.sportslive.alerts.AlertSide
 import com.nuvio.tv.core.sportslive.alerts.KickoffStyle
+import com.nuvio.tv.core.sportslive.alerts.ReminderNotice
 import com.nuvio.tv.core.sportslive.alerts.SportsLiveAlert
 import com.nuvio.tv.core.sportslive.alerts.SportsLiveAlertContent
 import com.nuvio.tv.core.sportslive.alerts.SportsLiveAlertEngine
@@ -68,6 +71,10 @@ import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import android.text.format.DateFormat
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import javax.inject.Inject
 
 /** Hands the app-wide [SportsLiveAlerts] to the host. */
@@ -130,6 +137,25 @@ fun SportsLiveAlertsHost(
         },
         cooldownToasts = false
     )
+
+    // "Reminder set" / "Reminder removed" (#44): the app's dark toast card, bottom left, never taking focus.
+    val notice by alerts.reminderNotice.collectAsState()
+    notice?.let { shown ->
+        key(shown.id) {
+            LaunchedEffect(shown.id) {
+                delay(REMINDER_TOAST_MS)
+                alerts.closeReminderNotice(shown)
+            }
+            Box(modifier = Modifier.fillMaxSize()) {
+                ReminderToast(
+                    notice = shown,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(horizontal = 48.dp, vertical = 40.dp)
+                )
+            }
+        }
+    }
 
     val alert by alerts.current.collectAsState()
     val watching by alerts.watchingNow.collectAsState()
@@ -372,6 +398,53 @@ private fun AlertToast(content: AlertContent, followed: Boolean, modifier: Modif
     }
 }
 
+/** "Reminder set · ‹game› · ‹kickoff› / We'll ask …" or "Reminder removed · ‹game›", with the bell (`Prompts.dc.html`). */
+@Composable
+private fun ReminderToast(notice: ReminderNotice, modifier: Modifier) {
+    val shape = RoundedCornerShape(14.dp)
+    val labelOf = rememberSportsLiveStateLabeler(SportsLiveTab.UPCOMING)
+    val locale = Locale.getDefault()
+    val kickoff = notice.item?.let(labelOf) ?: notice.startMs?.let { start ->
+        remember(start, locale) {
+            SimpleDateFormat(DateFormat.getBestDateTimePattern(locale, "EEEjmm"), locale).format(Date(start))
+        }
+    }
+    val game = notice.title ?: stringResource(R.string.sports_live_results_menu_title, notice.away.orEmpty(), notice.home.orEmpty())
+    Row(
+        modifier = modifier
+            .widthIn(max = 520.dp)
+            .clip(shape)
+            .background(ArtColors.Panel.copy(alpha = 0.96f))
+            .border(1.dp, PANEL_BORDER, shape)
+            .padding(16.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = if (notice.on) Icons.Rounded.NotificationsActive else Icons.Rounded.NotificationsOff,
+            contentDescription = null,
+            tint = if (notice.on) FOLLOWED_STAR_COLOR else ArtColors.Muted,
+            modifier = Modifier.size(28.dp)
+        )
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                text = stringResource(if (notice.on) R.string.sports_live_reminder_toast_set else R.string.sports_live_reminder_toast_removed),
+                style = MaterialTheme.typography.titleMedium.sportsLiveBold(),
+                color = ArtColors.Text,
+                maxLines = 1
+            )
+            Text(
+                text = listOfNotNull(game, kickoff?.takeIf { notice.on }).joinToString(stringResource(R.string.sports_live_game_info_separator)),
+                style = MaterialTheme.typography.bodyMedium,
+                color = ArtColors.Text,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (notice.on) SmallLine(stringResource(R.string.sports_live_reminder_toast_ask), ArtColors.Secondary)
+        }
+    }
+}
+
 @Composable
 private fun ScoreLine(first: AlertSide, second: AlertSide) {
     val firstScore = first.score ?: return
@@ -414,6 +487,9 @@ private val PANEL_BORDER = Color(0xFF1E2632)
 
 /** Toasts hide after this long (the design's 8 s). */
 private const val TOAST_MS = 8_000L
+
+/** "Reminder set" / "Reminder removed" hides after this long. */
+private const val REMINDER_TOAST_MS = 5_000L
 
 /** The prompt closes by itself after this long, as Later (the design's 15 s). */
 private const val PROMPT_MS = 15_000L

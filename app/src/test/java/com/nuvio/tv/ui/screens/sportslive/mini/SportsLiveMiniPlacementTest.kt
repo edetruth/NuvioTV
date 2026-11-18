@@ -42,4 +42,14 @@ class SportsLiveMiniPlacementTest {
         // Elsewhere the corner size is kept.
         assertEquals(0.24f, SportsLiveMiniGeometry.widthFraction(SportsLiveMiniSpot.CORNER), 0f)
     }
+
+    @Test
+    fun `at 1080p the details pane ends above the corner mini player`() {
+        // 960 x 540 dp, the screen's 24 dp bottom padding: the pane's bottom must sit a gap above the video.
+        val window = 960f
+        val miniTop = 540f - SportsLiveMiniGeometry.EDGE_DP - SportsLiveMiniGeometry.heightDp(SportsLiveMiniSpot.CORNER, window)
+        val paneBottom = 540f - 24f - SportsLiveMiniGeometry.cornerReserveBottomDp(window, screenBottomPaddingDp = 24f)
+        assertTrue("pane ends at $paneBottom, mini starts at $miniTop", paneBottom + SportsLiveMiniGeometry.GAP_DP <= miniTop + 0.01f)
+        assertEquals(0f, SportsLiveMiniGeometry.cornerReserveBottomDp(10f, screenBottomPaddingDp = 500f), 0f)
+    }
 }

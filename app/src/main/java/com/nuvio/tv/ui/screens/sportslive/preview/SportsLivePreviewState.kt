@@ -51,21 +51,27 @@ fun SportsLiveTab.offersPreview(): Boolean = this == SportsLiveTab.LIVE_NOW || t
  * The hover preview: once the focused card has rested for [settleMs] on a tab that
  * [offersPreview], with the setting on and the screen visible, its stream is looked up with
  * [resolve]; a stream plays (muted) until its first frame, which must come within
- * [firstFrameTimeoutMs]. Any change of input (focus, tab, setting, visibility) drops the preview
+ * [firstFrameTimeoutMs], and for at most [maxPlayMs] in all (#71: a preview left on a card must not
+ * stream for hours). Ambient mode, the screensaver or a dream ([onAmbient]) and the screen leaving
+ * ([onVisible]) stop it like any other input. Any change of input (focus, tab, setting, visibility) drops the preview
  * at once and starts a fresh settle when the new inputs allow one, so scrolling past cards never
  * looks anything up. A stream only the full player can play, an error or a missed first frame
  * leave the art in place, silently, until the focus moves; no stream at all shows as [NoStream]
- * until then.
+ * until then. A preview that ran its [maxPlayMs] also leaves the art until the focus moves.
  */
 class SportsLivePreviewController(
     private val scope: CoroutineScope,
     private val resolve: suspend (SportsLiveItem) -> SportsLivePreviewLookup,
     private val settleMs: Long = SETTLE_MS,
-    private val firstFrameTimeoutMs: Long = FIRST_FRAME_TIMEOUT_MS
+    private val firstFrameTimeoutMs: Long = FIRST_FRAME_TIMEOUT_MS,
+    private val maxPlayMs: Long = MAX_PLAY_MS
 ) {
     companion object {
         const val SETTLE_MS = 2_000L
         const val FIRST_FRAME_TIMEOUT_MS = 10_000L
+
+        /** A preview plays this long on one card at most (from its stream loading), then the art comes back. */
+        const val MAX_PLAY_MS = 20_000L
     }
 
     private val _state = MutableStateFlow<SportsLivePreviewState>(SportsLivePreviewState.Idle)
@@ -75,6 +81,7 @@ class SportsLivePreviewController(
     private var tab: SportsLiveTab? = null
     private var enabled = false
     private var visible = false
+    private var ambient = false
     private var job: Job? = null
 
     /** Counts restarts; a lookup whose generation is no longer current is ignored. */
@@ -102,6 +109,13 @@ class SportsLivePreviewController(
     fun onVisible(visible: Boolean) {
         if (visible == this.visible) return
         this.visible = visible
+        restart()
+    }
+
+    /** Ambient mode, the screensaver or a dream is showing over the screen: no preview meanwhile. */
+    fun onAmbient(showing: Boolean) {
+        if (showing == ambient) return
+        ambient = showing
         restart()
     }
 
@@ -139,7 +153,7 @@ class SportsLivePreviewController(
     private fun restart() {
         stop()
         val item = focused ?: return
-        if (!enabled || !visible || tab?.offersPreview() != true) return
+        if (!enabled || !visible || ambient || tab?.offersPreview() != true) return
         val current = generation
         job = scope.launch {
             delay(settleMs)
@@ -158,11 +172,15 @@ class SportsLivePreviewController(
                 }
             }
             _state.value = SportsLivePreviewState.Playing(item, stream)
-            delay(firstFrameTimeoutMs)
+            delay(minOf(firstFrameTimeoutMs, maxPlayMs))
             if (current != generation) return@launch
             if ((_state.value as? SportsLivePreviewState.Playing)?.rendering != true) {
                 _state.value = SportsLivePreviewState.Idle
+                return@launch
             }
+            // Its time is up: back to the art, with no new settle until an input changes.
+            delay((maxPlayMs - firstFrameTimeoutMs).coerceAtLeast(0L))
+            if (current == generation) _state.value = SportsLivePreviewState.Idle
         }
     }
 }

@@ -239,11 +239,12 @@ class SportsLiveResultsTodayTest {
     }
 
     @Test
-    fun `the live line shows on Today only, once loaded, while games are live`() {
+    fun `the live line shows on Today only, once loaded, while Live now has live games`() {
         val ready = SportsLiveResultsUiState(daysAgo = SportsResults.TODAY, status = ResultsStatus.READY, liveNow = 3)
-        assertTrue(ready.showsLiveNow)
-        assertFalse(ready.copy(liveNow = 0).showsLiveNow)
-        assertFalse(ready.copy(daysAgo = SportsResults.YESTERDAY).showsLiveNow)
-        assertFalse(ready.copy(status = ResultsStatus.LOADING).showsLiveNow)
+        assertTrue(ready.showsLiveNow(liveGames = 2))
+        // ESPN counts a game live, but Live now has none: no line that would land on an empty tab (QA pass 3).
+        assertFalse(ready.showsLiveNow(liveGames = 0))
+        assertFalse(ready.copy(daysAgo = SportsResults.YESTERDAY).showsLiveNow(liveGames = 2))
+        assertFalse(ready.copy(status = ResultsStatus.LOADING).showsLiveNow(liveGames = 2))
     }
 }

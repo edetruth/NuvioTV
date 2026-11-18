@@ -3844,8 +3844,9 @@
     <string name="sports_live_remind_me">Remind me</string>
     <string name="sports_live_cancel_reminder">Cancel reminder</string>
     <string name="sports_live_reminder_on">Reminder on</string>
-    <string name="sports_live_reminder_set_toast">Reminder set · %1$s · %2$s\nWe\'ll ask \"Watch now?\" at kickoff</string>
-    <string name="sports_live_reminder_off_toast">Reminder off · %1$s</string>
+    <string name="sports_live_reminder_toast_set">Reminder set</string>
+    <string name="sports_live_reminder_toast_removed">Reminder removed</string>
+    <string name="sports_live_reminder_toast_ask">We\'ll ask \"Watch now?\" at kickoff</string>
     <string name="sports_live_alerts_title">Alerts</string>
     <string name="sports_live_setting_remind_my_teams">Remind me for my teams</string>
     <string name="sports_live_setting_remind_my_teams_subtitle">Ask \"Watch now?\" when a followed team\'s game kicks off. Cancel it for one game from its menu</string>

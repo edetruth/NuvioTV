@@ -19,8 +19,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -29,6 +31,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Event
 import androidx.compose.material.icons.rounded.LiveTv
+import androidx.compose.material.icons.rounded.Notifications
+import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -315,8 +319,19 @@ internal fun SportsLiveTimelineView(
                     verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs)
                 ) {
                     itemsIndexed(model.leagues, key = { _, league -> "league|${league.id}" }) { _, league ->
+                        val rowKey = "league|${league.id}"
                         Row(verticalAlignment = Alignment.Top) {
-                            LeagueLabel(league.name, league.followed)
+                            // Kept in view while a tall row's top is scrolled away (QA pass 3), within the row;
+                            // read at layout, so scrolling never recomposes it.
+                            LeagueLabel(
+                                name = league.name,
+                                followed = league.followed,
+                                modifier = Modifier.offset {
+                                    val info = rowState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == rowKey }
+                                    val room = (info?.size ?: 0) - (LANE_HEIGHT - BLOCK_GAP).roundToPx()
+                                    IntOffset(0, (-(info?.offset ?: 0)).coerceIn(0, maxOf(0, room)))
+                                }
+                            )
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
@@ -416,9 +431,9 @@ internal fun SportsLiveTimelineView(
 }
 
 @Composable
-private fun LeagueLabel(name: String, followed: Boolean) {
+private fun LeagueLabel(name: String, followed: Boolean, modifier: Modifier = Modifier) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .width(LABEL_WIDTH)
             .height(LANE_HEIGHT - BLOCK_GAP)
             .padding(end = NuvioTheme.spacing.sm),
@@ -694,7 +709,10 @@ internal fun SportsLiveTimelinePanel(
      * → from the buttons reaches the mini player beside the panel when it plays; with nothing there it
      * stays put rather than jump to whatever lies furthest that way (N3).
      */
-    miniPlayerBeside: Boolean = false
+    miniPlayerBeside: Boolean = false,
+    /** "Remind me" / "Cancel reminder" (#44) by [reminded]; null hides it (only upcoming games offer it). */
+    onToggleReminder: (() -> Unit)? = null,
+    reminded: Boolean = false
 ) {
     val item = row.item
     val chipStrings = rememberScoreChipStrings()
@@ -727,7 +745,7 @@ internal fun SportsLiveTimelinePanel(
                     SportsLiveGameArt(art = art, compact = true, chip = row.chip, modifier = Modifier.fillMaxSize())
                 } else {
                     AsyncImage(
-                        model = item.meta.backdropUrl,
+                        model = rememberSizedImage(item.meta.backdropUrl, PANE_ART_WIDTH / 2, PANE_ART_HEIGHT / 2),
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
@@ -812,6 +830,25 @@ internal fun SportsLiveTimelinePanel(
                     if (!miniPlayerBeside) right = FocusRequester.Cancel
                 }
             )
+            if (onToggleReminder != null) {
+                SportsLivePaneButton(
+                    onClick = onToggleReminder,
+                    modifier = Modifier
+                        .widthIn(min = PANE_BUTTON_MIN_WIDTH)
+                        .focusProperties {
+                            blockFocusRequester?.let { left = it }
+                            if (!miniPlayerBeside) right = FocusRequester.Cancel
+                        }
+                ) {
+                    Icon(
+                        imageVector = if (reminded) Icons.Rounded.NotificationsActive else Icons.Rounded.Notifications,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(NuvioTheme.spacing.xs))
+                    PaneButtonLabel(stringResource(if (reminded) R.string.sports_live_cancel_reminder else R.string.sports_live_remind_me))
+                }
+            }
         }
     }
 }

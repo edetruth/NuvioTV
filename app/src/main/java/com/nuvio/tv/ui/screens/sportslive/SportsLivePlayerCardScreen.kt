@@ -32,6 +32,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.tv.material3.Border
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
@@ -39,6 +43,7 @@ import com.nuvio.tv.R
 import com.nuvio.tv.core.sportslive.scores.PlayerCard
 import com.nuvio.tv.core.sportslive.scores.PlayerGame
 import com.nuvio.tv.core.sportslive.scores.PlayerStat
+import com.nuvio.tv.ui.components.LightweightCard
 import com.nuvio.tv.ui.components.LoadingIndicator
 import com.nuvio.tv.ui.theme.NuvioTheme
 import java.time.Instant
@@ -49,7 +54,9 @@ import java.util.Locale
 /**
  * The Player card (#63, `PlayerCard.dc.html`): headshot (letters until it loads), name, position and
  * number, team, bio line; the season's key stats as tiles; the last 5 games as short lines (date,
- * opponent, result, key stats), behind Reveal while scores are hidden. No tables. Back returns.
+ * opponent, result with the player's team's score first, key stats), behind Reveal while scores are hidden.
+ * No tables. The body scrolls: every game line and the Back button take focus, so ↑ ↓ reach all five
+ * (QA pass 3). Back returns.
  */
 @Composable
 fun SportsLivePlayerCardScreen(
@@ -67,10 +74,11 @@ fun SportsLivePlayerCardScreen(
     BackHandler { currentOnBack() }
 
     val revealFocus = remember { FocusRequester() }
+    val backFocus = remember { FocusRequester() }
+    // Reveal while it shows, else Back: something always holds focus, so the keys work from the start.
     LaunchedEffect(state.showsReveal) {
-        if (!state.showsReveal) return@LaunchedEffect
         withFrameNanos { }
-        runCatching { revealFocus.requestFocus() }
+        runCatching { (if (state.showsReveal) revealFocus else backFocus).requestFocus() }
     }
 
     val card = state.card
@@ -82,39 +90,55 @@ fun SportsLivePlayerCardScreen(
         verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xl)
     ) {
         PlayerHeader(card = card, fallbackName = target.name, fallbackTeam = target.team)
-        Column(modifier = Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xl)) {
+        LazyColumn(
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md),
+            // Room for the focused line's ring at both ends of the scroll.
+            contentPadding = PaddingValues(vertical = NuvioTheme.spacing.xs)
+        ) {
             when {
-                state.status == PlayerCardStatus.WAITING_REVEAL -> HiddenBlock(
-                    message = stringResource(R.string.sports_live_player_hidden),
-                    button = stringResource(R.string.sports_live_player_reveal_all),
-                    focusRequester = revealFocus,
-                    onReveal = viewModel::reveal
-                )
-                state.status == PlayerCardStatus.FAILED -> PlayerMessage(stringResource(R.string.sports_live_player_unavailable))
-                card == null -> Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { LoadingIndicator() }
+                state.status == PlayerCardStatus.WAITING_REVEAL -> item(key = "hidden") {
+                    HiddenBlock(
+                        message = stringResource(R.string.sports_live_player_hidden),
+                        button = stringResource(R.string.sports_live_player_reveal_all),
+                        focusRequester = revealFocus,
+                        onReveal = viewModel::reveal
+                    )
+                }
+                state.status == PlayerCardStatus.FAILED -> item(key = "failed") {
+                    PlayerMessage(stringResource(R.string.sports_live_player_unavailable))
+                }
+                card == null -> item(key = "loading") {
+                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { LoadingIndicator() }
+                }
                 else -> {
-                    SeasonStats(card)
-                    PlayerSectionTitle(stringResource(R.string.sports_live_player_last_games))
+                    item(key = "season") { SeasonStats(card) }
+                    item(key = "last_title") { PlayerSectionTitle(stringResource(R.string.sports_live_player_last_games)) }
                     when {
-                        !state.showsLastGames -> HiddenBlock(
-                            message = stringResource(R.string.sports_live_player_last_games_hidden),
-                            button = stringResource(R.string.sports_live_player_reveal_last_games),
-                            focusRequester = revealFocus,
-                            onReveal = viewModel::reveal
-                        )
-                        card.lastGames.isEmpty() -> PlayerMessage(stringResource(R.string.sports_live_player_no_games))
-                        else -> Column(verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)) {
-                            card.lastGames.forEach { GameLine(it) }
+                        !state.showsLastGames -> item(key = "last_hidden") {
+                            HiddenBlock(
+                                message = stringResource(R.string.sports_live_player_last_games_hidden),
+                                button = stringResource(R.string.sports_live_player_reveal_last_games),
+                                focusRequester = revealFocus,
+                                onReveal = viewModel::reveal
+                            )
                         }
+                        card.lastGames.isEmpty() -> item(key = "no_games") { PlayerMessage(stringResource(R.string.sports_live_player_no_games)) }
+                        else -> items(card.lastGames, key = { it.eventId }) { GameLine(it) }
                     }
                 }
             }
         }
-        Text(
-            text = stringResource(R.string.sports_live_player_keys),
-            style = MaterialTheme.typography.bodySmall,
-            color = NuvioTheme.colors.TextTertiary
-        )
+        Row(horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.lg), verticalAlignment = Alignment.CenterVertically) {
+            SportsLivePaneButton(onClick = { currentOnBack() }, modifier = Modifier.focusRequester(backFocus)) {
+                PaneButtonLabel(stringResource(R.string.action_back))
+            }
+            Text(
+                text = stringResource(R.string.sports_live_player_keys),
+                style = MaterialTheme.typography.bodySmall,
+                color = NuvioTheme.colors.TextTertiary
+            )
+        }
     }
 }
 
@@ -145,7 +169,7 @@ private fun PlayerHeader(card: PlayerCard?, fallbackName: String, fallbackTeam: 
                 color = NuvioTheme.colors.TextSecondary
             )
             bio?.headshot?.let { url ->
-                AsyncImage(model = url, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                AsyncImage(model = rememberSizedImage(url, HEADSHOT_SIZE, HEADSHOT_SIZE), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
             }
         }
         Column(verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xxs)) {
@@ -163,7 +187,7 @@ private fun PlayerHeader(card: PlayerCard?, fallbackName: String, fallbackTeam: 
             (bio?.team ?: fallbackTeam)?.let { team ->
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)) {
                     bio?.teamLogo?.let { logo ->
-                        AsyncImage(model = logo, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.size(28.dp))
+                        AsyncImage(model = rememberSizedImage(logo, 28.dp, 28.dp), contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.size(28.dp))
                     }
                     Text(team, style = MaterialTheme.typography.titleMedium, color = NuvioTheme.colors.TextPrimary, maxLines = 1)
                 }
@@ -211,45 +235,53 @@ private fun GameLine(game: PlayerGame) {
     val dayFormat = remember { DateTimeFormatter.ofPattern("EEE d", Locale.getDefault()) }
     val separator = stringResource(R.string.sports_live_game_info_separator)
     val statFormat = stringResource(R.string.sports_live_game_performer_stat)
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(NuvioTheme.radii.md))
-            .background(NuvioTheme.colors.BackgroundCard)
-            .padding(horizontal = NuvioTheme.spacing.lg, vertical = NuvioTheme.spacing.sm),
-        horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.lg),
-        verticalAlignment = Alignment.CenterVertically
+    val shape = RoundedCornerShape(NuvioTheme.radii.md)
+    // Focusable, so ↑ ↓ move through the lines and the list scrolls with them (QA pass 3).
+    LightweightCard(
+        onClick = {},
+        modifier = Modifier.fillMaxWidth(),
+        shape = shape,
+        containerColor = NuvioTheme.colors.BackgroundCard,
+        focusedBorder = Border(border = NuvioTheme.focusRing.border(NuvioTheme.spacing.xxs), shape = shape)
     ) {
-        Text(
-            game.startMs?.let { Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).format(dayFormat) }.orEmpty(),
-            style = MaterialTheme.typography.titleSmall,
-            color = NuvioTheme.colors.TextTertiary,
-            maxLines = 1,
-            modifier = Modifier.width(LINE_DATE_WIDTH)
-        )
-        Text(
-            game.atVs?.let { stringResource(R.string.sports_live_player_opponent, it, game.opponent) } ?: game.opponent,
-            style = MaterialTheme.typography.titleMedium,
-            color = NuvioTheme.colors.TextPrimary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.width(LINE_OPPONENT_WIDTH)
-        )
-        Text(
-            if (game.result != null && game.score != null) String.format(statFormat, game.result, game.score) else game.result ?: game.score.orEmpty(),
-            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum"),
-            color = NuvioTheme.colors.TextPrimary,
-            maxLines = 1,
-            modifier = Modifier.width(LINE_RESULT_WIDTH)
-        )
-        Text(
-            game.line.joinToString(separator) { String.format(statFormat, it.value, it.label) },
-            style = MaterialTheme.typography.titleMedium.copy(fontFeatureSettings = "tnum"),
-            color = NuvioTheme.colors.TextSecondary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f)
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = NuvioTheme.spacing.lg, vertical = NuvioTheme.spacing.sm),
+            horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.lg),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                game.startMs?.let { Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).format(dayFormat) }.orEmpty(),
+                style = MaterialTheme.typography.titleSmall,
+                color = NuvioTheme.colors.TextTertiary,
+                maxLines = 1,
+                modifier = Modifier.width(LINE_DATE_WIDTH)
+            )
+            Text(
+                game.atVs?.let { stringResource(R.string.sports_live_player_opponent, it, game.opponent) } ?: game.opponent,
+                style = MaterialTheme.typography.titleMedium,
+                color = NuvioTheme.colors.TextPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.width(LINE_OPPONENT_WIDTH)
+            )
+            Text(
+                if (game.result != null && game.score != null) String.format(statFormat, game.result, game.score) else game.result ?: game.score.orEmpty(),
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum"),
+                color = NuvioTheme.colors.TextPrimary,
+                maxLines = 1,
+                modifier = Modifier.width(LINE_RESULT_WIDTH)
+            )
+            Text(
+                game.line.joinToString(separator) { String.format(statFormat, it.value, it.label) },
+                style = MaterialTheme.typography.titleMedium.copy(fontFeatureSettings = "tnum"),
+                color = NuvioTheme.colors.TextSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+        }
     }
 }
 

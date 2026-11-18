@@ -47,7 +47,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.launch
+import kotlin.coroutines.ContinuationInterceptor
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -78,6 +81,7 @@ class SportsLiveViewModelTest {
     private val recentlyAlive = mutableSetOf<String>()
     private var clearedEnded = 0
     private val includeChannelsFlags = mutableListOf<Boolean>()
+    private val kindsAsked = mutableListOf<Set<SportsLiveKind>?>()
 
     private val repo = mockk<SportsLiveRepository> {
         every { claimedCatalogs } returns claimedFlow
@@ -89,9 +93,10 @@ class SportsLiveViewModelTest {
         every { clearEnded() } answers { clearedEnded++; Unit }
         coEvery { follow(any()) } coAnswers { followedFlow.value = followedFlow.value + firstArg<FollowedTeam>() }
         coEvery { unfollow(any()) } coAnswers { followedFlow.value = followedFlow.value - firstArg<FollowedTeam>() }
-        coEvery { load(any(), any()) } coAnswers {
+        coEvery { load(any(), any(), any()) } coAnswers {
             forcedFlags += firstArg<Boolean>()
             includeChannelsFlags += secondArg<Boolean>()
+            kindsAsked += thirdArg<Set<SportsLiveKind>?>()
             latestFlow.value = nextLoad
             nextLoad
         }
@@ -302,25 +307,111 @@ class SportsLiveViewModelTest {
     }
 
     @Test
-    fun `becoming visible loads at once then every 60 seconds only while visible`() = runTest {
+    fun `each tab refreshes only its own catalogs on its own cadence, and only while visible`() = runTest {
         nextLoad = load(listOf(item("a", isLive = true, sport = "Soccer")))
-        val viewModel = newViewModel()
+        val viewModel = SportsLiveViewModel(repo, refreshClock = { testScheduler.currentTime }, computeDispatcher = compute)
+        viewModel.nowMs = { NOW }
+        backgroundScope.launch { viewModel.uiState.collect {} }
         runCurrent()
-        assertEquals(listOf(false), forcedFlags)
+        // Opening the section loads every catalog once.
+        assertEquals(listOf<Set<SportsLiveKind>?>(null), kindsAsked)
 
         viewModel.onScreenVisible(true)
         viewModel.onScreenVisible(true) // a second call must not start a second loop
         runCurrent()
-        // The resume load is non-forced (served from the repository's cache when fresh).
-        assertEquals(listOf(false, false), forcedFlags)
-        advanceTimeBy(61_000)
-        assertEquals(listOf(false, false, true), forcedFlags)
-        // Only the first load includes channels catalogs; becoming visible and the 60 s reloads carry them over.
-        assertEquals(listOf(true, false, false), includeChannelsFlags)
+        assertEquals("fresher than Live now's 3 min: nothing", 1, kindsAsked.size)
+        advanceTimeBy(3 * MINUTE - 1)
+        runCurrent()
+        assertEquals(1, kindsAsked.size)
+        advanceTimeBy(1)
+        runCurrent()
+        assertEquals(listOf(null, EVENTS), kindsAsked)
+        assertEquals(listOf(false, true), forcedFlags)
+        assertEquals("channels are carried over", listOf(true, false), includeChannelsFlags)
+        advanceTimeBy(3 * MINUTE)
+        runCurrent()
+        assertEquals(3, kindsAsked.size)
 
+        // Upcoming: every 10 min, counted from the events catalogs' last fetch.
+        viewModel.selectTab(SportsLiveTab.UPCOMING)
+        runCurrent()
+        assertEquals(3, kindsAsked.size)
+        advanceTimeBy(10 * MINUTE - 1)
+        runCurrent()
+        assertEquals(3, kindsAsked.size)
+        advanceTimeBy(1)
+        runCurrent()
+        assertEquals(EVENTS, kindsAsked.last())
+        assertEquals(4, kindsAsked.size)
+
+        // Replays: refreshed on opening (its last fetch is 16 min old), never on a timer.
+        viewModel.selectTab(SportsLiveTab.REPLAYS)
+        runCurrent()
+        assertEquals(setOf(SportsLiveKind.REPLAY), kindsAsked.last())
+        advanceTimeBy(60 * MINUTE)
+        runCurrent()
+        assertEquals(5, kindsAsked.size)
+
+        // Results and Channels never refresh addon catalogs on their own.
+        viewModel.selectTab(SportsLiveTab.RESULTS)
+        viewModel.selectTab(SportsLiveTab.CHANNELS)
+        advanceTimeBy(60 * MINUTE)
+        runCurrent()
+        assertEquals(5, kindsAsked.size)
+
+        // Back on Live now an hour later: stale, so at once.
+        viewModel.selectTab(SportsLiveTab.LIVE_NOW)
+        runCurrent()
+        assertEquals(6, kindsAsked.size)
+
+        // The screensaver pauses it; coming back refreshes only when stale.
+        viewModel.onAmbient(true)
+        advanceTimeBy(30 * MINUTE)
+        runCurrent()
+        assertEquals(6, kindsAsked.size)
+        viewModel.onAmbient(false)
+        runCurrent()
+        assertEquals(7, kindsAsked.size)
+
+        // Hidden (the player is up): nothing.
         viewModel.onScreenVisible(false)
-        advanceTimeBy(120_000)
-        assertEquals(3, forcedFlags.size)
+        advanceTimeBy(30 * MINUTE)
+        runCurrent()
+        assertEquals(7, kindsAsked.size)
+    }
+
+    @Test
+    fun `boards are built on the compute dispatcher, and a focus move builds none`() = runTest {
+        nextLoad = load(listOf(item("a", isLive = true, sport = "Soccer", name = "A"), item("b", isLive = true, sport = "Soccer", name = "B")))
+        val boardDispatcher = StandardTestDispatcher(testScheduler, name = "compute")
+        val layoutChoices = MutableStateFlow(mapOf(SportsLiveTab.LIVE_NOW to SportsLiveLayout.CARDS))
+        val viewModel = SportsLiveViewModel(repo, layouts = layoutChoices, computeDispatcher = boardDispatcher)
+        viewModel.nowMs = { NOW }
+        val ranOn = mutableListOf<ContinuationInterceptor?>()
+        viewModel.buildBoard = { inputs ->
+            ranOn += currentCoroutineContext()[ContinuationInterceptor]
+            SportsLiveBoard.build(inputs)
+        }
+        backgroundScope.launch { viewModel.board.collect {} }
+        advanceUntilIdle()
+        val cards = viewModel.board.value!!
+        assertEquals(SportsLiveLayout.CARDS, cards.layout)
+        assertEquals(listOf("a", "b"), cards.items.map { it.id })
+        assertNull(cards.rows)
+        assertTrue(ranOn.isNotEmpty())
+        assertTrue(ranOn.all { it === boardDispatcher })
+
+        val built = ranOn.size
+        viewModel.selectItem("b")
+        advanceUntilIdle()
+        assertEquals("a focus move builds nothing", built, ranOn.size)
+
+        layoutChoices.value = mapOf(SportsLiveTab.LIVE_NOW to SportsLiveLayout.TIMELINE)
+        advanceUntilIdle()
+        val timeline = viewModel.board.value!!
+        assertEquals(SportsLiveLayout.TIMELINE, timeline.layout)
+        assertTrue(timeline.rows != null && timeline.timeline != null)
+        assertTrue(ranOn.all { it === boardDispatcher })
     }
 
     @Test
@@ -1194,6 +1285,7 @@ class SportsLiveViewModelTest {
         const val NOW = 1_700_000_000_000L
         const val HOUR = 60 * 60 * 1000L
         const val MINUTE = 60 * 1000L
+        val EVENTS = setOf(SportsLiveKind.EVENTS)
 
         val CLAIMED: ClaimedCatalog = run {
             val catalog = CatalogDescriptor(type = ContentType.fromString("tv"), rawType = "tv", id = "events", name = "Events")

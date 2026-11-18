@@ -26,7 +26,7 @@ import com.nuvio.tv.ui.screens.sportslive.playSportsLiveStream
  * plays: [play] releases any previous player before building the next, and [release] frees it, so
  * there is never more than one. It is muted for good: the audio track type is disabled before the
  * stream is prepared (volume 0 alone does not mute AC3/EAC3 passthrough, and a disabled track uses
- * no audio decoder), and it never asks for audio focus. While [suspended] (the screen is paused) [play]
+ * no audio decoder), and it never asks for audio focus. Video is capped at about 480p ([capPreviewVideo]) unless [lowBitrate] is turned off. While [suspended] (the screen is paused) [play]
  * does nothing, so a late call cannot build a player after the pause released it. A stream that
  * buffers for [STALL_TIMEOUT_MS] after its first frame counts as an error. Each load's first frame,
  * error or stall is remembered for its source ([SportsLiveSourceReliability]).
@@ -38,8 +38,8 @@ internal class SportsLivePreviewPlayer(
     private val onError: (SportsLiveItem) -> Unit,
     /** The device gave this player no decoder (another video holds it), before [onError]. */
     private val onDecoderInitFailure: () -> Unit = {},
-    /** Ask for the lowest bitrate, at most about 480p ([capPreviewVideo]): the in-player panel's preview (#83). */
-    private val lowBitrate: Boolean = false
+    /** Ask for the lowest bitrate, at most about 480p ([capPreviewVideo]): every preview by default (#71, #83). */
+    private val lowBitrate: Boolean = true
 ) {
     private val appContext = context.applicationContext
     private var player: ExoPlayer? = null
