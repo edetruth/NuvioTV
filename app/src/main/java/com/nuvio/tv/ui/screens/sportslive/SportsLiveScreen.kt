@@ -44,6 +44,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -865,7 +866,7 @@ private fun SportsLiveContent(
         }
         if (uiState.failures.isNotEmpty()) {
             Text(
-                text = stringResource(R.string.sports_live_partial_failure, uiState.failures.size),
+                text = pluralStringResource(R.plurals.sports_live_partial_failure, uiState.failures.size, uiState.failures.size),
                 style = MaterialTheme.typography.bodySmall,
                 color = NuvioTheme.colors.TextTertiary,
                 maxLines = 1,

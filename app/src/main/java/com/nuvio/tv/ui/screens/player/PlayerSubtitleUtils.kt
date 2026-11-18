@@ -256,6 +256,16 @@ internal object PlayerSubtitleUtils {
     }
 
     /**
+     * Sports highlight clips only (their embedded captions repeat each line on several rows): the
+     * same caption on screen more than once shows once, where its newest copy is (the last; a
+     * roll-up's bottom row). Every other playback keeps its cues as they come.
+     */
+    fun dedupeRepeatedCaptions(cues: List<Cue>): List<Cue> {
+        if (cues.size <= 1) return cues
+        return cues.asReversed().distinctBy { cue -> cue.bitmap ?: cue.text?.toString() }.asReversed()
+    }
+
+    /**
      * Merges simultaneously active unpositioned text cues into a single multi-line cue
      * to prevent Media3 SubtitlePainter from drawing colliding lines on top of each other.
      */

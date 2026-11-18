@@ -41,6 +41,43 @@ class PlayerSubtitleUtilsMergeTest {
     }
 
     @Test
+    fun `highlight clip - a caption repeated in three cues shows once`() {
+        val line = "Black open, no."
+        // Equal text in objects that never compare equal (as a decoder's styled text).
+        val cues = List(3) { Cue.Builder().setText(StringBuilder(line)).build() }
+
+        val merged = PlayerSubtitleUtils.mergeOverlappingCues(PlayerSubtitleUtils.dedupeRepeatedCaptions(cues)).single()
+
+        assertEquals(line, merged.text.toString())
+    }
+
+    @Test
+    fun `highlight clip - a roll-up caption resent on three rows keeps only its bottom row`() {
+        val shown = PlayerSubtitleUtils.dedupeRepeatedCaptions(rollUp)
+
+        assertEquals(1, shown.size)
+        assertEquals(15f, shown.single().line, 0f)
+    }
+
+    @Test
+    fun `highlight clip - different captions still all show`() {
+        val first = Cue.Builder().setText("First").build()
+        val second = Cue.Builder().setText("Second").build()
+
+        assertEquals(listOf(first, second), PlayerSubtitleUtils.dedupeRepeatedCaptions(listOf(first, second)))
+    }
+
+    @Test
+    fun `any other playback - merging leaves repeated captions as they come`() {
+        // Movies, shows and sports streams never go through the dedupe: their cues are untouched.
+        assertEquals(rollUp, PlayerSubtitleUtils.mergeOverlappingCues(rollUp))
+    }
+
+    private val rollUp = listOf(13f, 14f, 15f).map { row ->
+        Cue.Builder().setText("Black open, no.").setLine(row, Cue.LINE_TYPE_NUMBER).build()
+    }
+
+    @Test
     fun `a side cue shown alone keeps its side`() {
         assertEquals(listOf(bottomLeftSign), PlayerSubtitleUtils.mergeOverlappingCues(listOf(bottomLeftSign)))
     }

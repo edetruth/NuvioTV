@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -376,11 +378,16 @@ internal fun SportsLiveDetailsPane(
                 overflow = TextOverflow.Ellipsis
             )
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md)) {
+        // Each button keeps its label on one line at its own width: the row wraps rather than squeeze one.
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md),
+            verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)
+        ) {
+            val button = Modifier.widthIn(min = PANE_BUTTON_MIN_WIDTH)
             // Still focusable and pressable when dimmed: OK looks the streams up again.
             SportsLivePaneButton(
                 onClick = onWatch,
-                modifier = watchModifier.then(if (noStream) Modifier.alpha(0.5f) else Modifier)
+                modifier = watchModifier.then(button).then(if (noStream) Modifier.alpha(0.5f) else Modifier)
             ) {
                 Icon(
                     imageVector = Icons.Rounded.PlayArrow,
@@ -388,20 +395,20 @@ internal fun SportsLiveDetailsPane(
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(modifier = Modifier.width(NuvioTheme.spacing.xs))
-                Text(stringResource(R.string.sports_live_watch))
+                PaneButtonLabel(stringResource(R.string.sports_live_watch))
             }
             if (onChooseStream != null) {
-                SportsLivePaneButton(onClick = onChooseStream) {
-                    Text(stringResource(R.string.sports_live_choose_stream))
+                SportsLivePaneButton(onClick = onChooseStream, modifier = button) {
+                    PaneButtonLabel(stringResource(R.string.sports_live_choose_stream))
                 }
             }
             if (onGameStats != null) {
-                SportsLivePaneButton(onClick = onGameStats) {
-                    Text(stringResource(R.string.sports_live_game_stats))
+                SportsLivePaneButton(onClick = onGameStats, modifier = button) {
+                    PaneButtonLabel(stringResource(R.string.sports_live_game_stats))
                 }
             }
-            SportsLivePaneButton(onClick = onDetails) {
-                Text(stringResource(R.string.sports_live_details))
+            SportsLivePaneButton(onClick = onDetails, modifier = button) {
+                PaneButtonLabel(stringResource(R.string.sports_live_details))
             }
         }
     }
@@ -500,7 +507,15 @@ private fun SportsLiveMenuButton(text: String, onClick: () -> Unit, modifier: Mo
     }
 }
 
-/** Styled like the retry button in `ErrorState`. */
+/** A pane button's label: one line at its full width, never wrapped. */
+@Composable
+private fun PaneButtonLabel(text: String) {
+    Text(text, maxLines = 1, softWrap = false)
+}
+
+private val PANE_BUTTON_MIN_WIDTH = 96.dp
+
+/** Styled like the retry button in `ErrorState`; focused, the design's white fill with dark text. */
 @Composable
 internal fun SportsLivePaneButton(
     onClick: () -> Unit,
@@ -513,8 +528,8 @@ internal fun SportsLivePaneButton(
         colors = ButtonDefaults.colors(
             containerColor = NuvioTheme.colors.BackgroundCard,
             contentColor = NuvioTheme.colors.TextPrimary,
-            focusedContainerColor = NuvioTheme.colors.FocusBackground,
-            focusedContentColor = NuvioTheme.colors.Primary
+            focusedContainerColor = NuvioTheme.colors.TextPrimary,
+            focusedContentColor = NuvioTheme.colors.TextInverse
         ),
         shape = ButtonDefaults.shape(RoundedCornerShape(NuvioTheme.radii.md)),
         content = content

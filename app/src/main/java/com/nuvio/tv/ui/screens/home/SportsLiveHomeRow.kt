@@ -27,7 +27,13 @@ object SportsLiveHomeRow {
         catalogName = title,
         type = ContentType.UNKNOWN,
         rawType = "sport",
-        items = items.map { item -> scoreLabels[item.streamKey]?.let { item.meta.copy(releaseInfo = it) } ?: item.meta },
+        items = items.map { item ->
+            val meta = scoreLabels[item.streamKey]?.let { item.meta.copy(releaseInfo = it) } ?: item.meta
+            // The card's own art as its landscape poster: a channel's art carries its logo, so the focused
+            // card draws no title over it.
+            val art = meta.backdropUrl
+            if (meta.landscapePoster.isNullOrBlank() && !art.isNullOrBlank()) meta.copy(landscapePoster = art) else meta
+        },
         isLoading = false,
         hasMore = false,
         supportsSkip = false

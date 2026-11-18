@@ -108,6 +108,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import com.nuvio.tv.ui.screens.ambient.AmbientIdleController
 import com.nuvio.tv.ui.screens.ambient.AmbientModeHost
@@ -1794,10 +1795,17 @@ private fun LegacySidebarScaffold(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                         horizontalAlignment = Alignment.Start
                     ) {
+                        // One size for every label: a long one ("Sports & Live") shrinks them all
+                        // alike instead of sitting smaller than the rest.
+                        val labelStyle = com.nuvio.tv.ui.components.rememberSharedFitTextStyle(
+                            texts = drawerItems.map { it.label },
+                            maxWidth = openDrawerItemWidth - LEGACY_SIDEBAR_LABEL_START - LEGACY_SIDEBAR_LABEL_END
+                        )
                         drawerItems.forEach { item ->
                             key(item.route) {
                                 LegacySidebarButton(
                                     label = item.label,
+                                    labelStyle = labelStyle,
                                     iconRes = item.iconRes,
                                     icon = item.icon,
                                     selected = selectedDrawerRoute == item.route,
@@ -1901,9 +1909,13 @@ private fun LegacySidebarScaffold(
     }
 }
 
+private val LEGACY_SIDEBAR_LABEL_START = 54.dp
+private val LEGACY_SIDEBAR_LABEL_END = 14.dp
+
 @Composable
 private fun LegacySidebarButton(
     label: String,
+    labelStyle: TextStyle,
     iconRes: Int?,
     icon: ImageVector?,
     selected: Boolean,
@@ -1998,10 +2010,11 @@ private fun LegacySidebarButton(
             com.nuvio.tv.ui.components.AutoResizeText(
                 text = label,
                 color = contentColor,
+                style = labelStyle,
                 textAlign = TextAlign.Start,
                 modifier = Modifier
                     .align(Alignment.CenterStart)
-                    .padding(start = 54.dp, end = 14.dp)
+                    .padding(start = LEGACY_SIDEBAR_LABEL_START, end = LEGACY_SIDEBAR_LABEL_END)
             )
         }
     }

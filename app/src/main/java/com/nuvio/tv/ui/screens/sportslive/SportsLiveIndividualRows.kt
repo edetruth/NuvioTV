@@ -123,7 +123,7 @@ private fun TennisLines(match: TennisMatch, showScore: Boolean) {
         ) {
             Text(
                 text = player.name,
-                style = MaterialTheme.typography.titleMedium.let { if (showScore && player.winner) it.copy(fontWeight = FontWeight.Bold) else it },
+                style = MaterialTheme.typography.titleMedium.let { if (sportsLiveWinnerBold(showScore, player.winner)) it.sportsLiveBold() else it },
                 color = NuvioTheme.colors.TextPrimary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,

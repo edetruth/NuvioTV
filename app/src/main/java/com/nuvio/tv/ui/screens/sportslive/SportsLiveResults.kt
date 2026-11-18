@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import android.view.KeyEvent as AndroidKeyEvent
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
@@ -40,9 +41,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
@@ -348,6 +352,8 @@ internal fun SportsLiveResultsView(
                     itemsIndexed(items, key = { _, item -> item.key }) { index, item ->
                         val focusModifier = Modifier
                             .focusRequester(itemFocusRequester(item.key))
+                            // Up from the first row: the live line when shown, never past it; else the chips.
+                            .then(if (item.key == firstFocusableKey) Modifier.upTo(aboveListFocusRequester) else Modifier)
                             .focusProperties {
                                 if (item.key == firstFocusableKey) up = aboveListFocusRequester
                                 // No pane to the right: Left/Right stay on the row.
@@ -414,6 +420,14 @@ internal fun SportsLiveResultsView(
 }
 
 private val ResultListItem.isFocusable: Boolean get() = this !is ResultListItem.Header
+
+/** Up moves focus to [target] itself, before any focus search inside the list can pick another stop. */
+private fun Modifier.upTo(target: FocusRequester): Modifier = onPreviewKeyEvent { event ->
+    val native = event.nativeKeyEvent
+    if (native.keyCode != AndroidKeyEvent.KEYCODE_DPAD_UP) return@onPreviewKeyEvent false
+    if (native.action == AndroidKeyEvent.ACTION_DOWN) runCatching { target.requestFocus() }
+    true
+}
 
 /** OK on a golf row lists its top five, or folds it again; never while its result is hidden. */
 internal fun toggleGolf(expanded: Set<String>, key: String, showScore: Boolean): Set<String> = when {
@@ -546,37 +560,41 @@ private fun ResultsSportRow(
     onOpen: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    ResultsChipRow(focusRequester = sportFocusRequester, modifier = modifier) {
-        ResultsChip(
-            name = stringResource(R.string.sports_live_results_my_sports),
-            isSelected = state.selectedSport == null,
-            activeFocusRequester = sportFocusRequester,
-            upFocusRequester = upFocusRequester,
-            downFocusRequester = downFocusRequester,
-            onSelect = { onSelectSport(null) },
-            onOpen = onOpen
-        )
-        state.sports.forEach { sport ->
+    Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        ResultsChipRow(focusRequester = sportFocusRequester, modifier = Modifier.weight(1f)) {
             ResultsChip(
-                name = mySportLabel(sport),
-                isSelected = sport == state.selectedSport,
+                name = stringResource(R.string.sports_live_results_my_sports),
+                isSelected = state.selectedSport == null,
                 activeFocusRequester = sportFocusRequester,
                 upFocusRequester = upFocusRequester,
                 downFocusRequester = downFocusRequester,
-                onSelect = { onSelectSport(sport) },
+                onSelect = { onSelectSport(null) },
                 onOpen = onOpen
             )
+            state.sports.forEach { sport ->
+                ResultsChip(
+                    name = mySportLabel(sport),
+                    isSelected = sport == state.selectedSport,
+                    activeFocusRequester = sportFocusRequester,
+                    upFocusRequester = upFocusRequester,
+                    downFocusRequester = downFocusRequester,
+                    onSelect = { onSelectSport(sport) },
+                    onOpen = onOpen
+                )
+            }
         }
-        // A link, not a filter: focus does not select it; OK opens My sports in Settings.
-        Spacer(modifier = Modifier.width(NuvioTheme.spacing.lg))
+        // A link, not a filter: focus does not select it; OK opens My sports in Settings. Outside the
+        // scrolling chips, so its label always shows whole.
         SourceStatusFilterChip(
             name = stringResource(R.string.sports_live_results_edit_my_sports),
             isSelected = false,
             onClick = onEditMySports,
-            modifier = Modifier.focusProperties {
-                up = upFocusRequester
-                down = downFocusRequester ?: FocusRequester.Cancel
-            }
+            modifier = Modifier
+                .padding(start = NuvioTheme.spacing.sm, end = NuvioTheme.spacing.sm)
+                .focusProperties {
+                    up = upFocusRequester
+                    down = downFocusRequester ?: FocusRequester.Cancel
+                }
         )
     }
 }
@@ -654,10 +672,14 @@ private fun ResultsMoreRow(
             .fillMaxWidth()
             .onFocusChanged { if (it.isFocused) onFocus() }
             .drawBehind {
+                // Inset by half the stroke: a stroke on the bounds is half outside, clipped by the list.
+                val stroke = 1.dp.toPx()
                 drawRoundRect(
                     color = dashColor,
+                    topLeft = Offset(stroke / 2, stroke / 2),
+                    size = Size(size.width - stroke, size.height - stroke),
                     cornerRadius = CornerRadius(12.dp.toPx()),
-                    style = Stroke(width = 1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(8.dp.toPx(), 6.dp.toPx())))
+                    style = Stroke(width = stroke, pathEffect = PathEffect.dashPathEffect(floatArrayOf(8.dp.toPx(), 6.dp.toPx())))
                 )
             },
         shape = shape,
@@ -703,6 +725,9 @@ private fun ResultRowCard(
 ) {
     val shape = RoundedCornerShape(NuvioTheme.radii.md)
     val event = row.event
+    // The winner bold (name and score), never while the score is hidden.
+    val homeWon = sportsLiveWinnerBold(showScore, event.homeScore, event.awayScore)
+    val awayWon = sportsLiveWinnerBold(showScore, event.awayScore, event.homeScore)
     val (longPress, click) = rememberSportsLiveLongPress(menuOpen = menuOpen, onLongClick = onLongClick, onClick = onClick)
     LightweightCard(
         onClick = click,
@@ -740,8 +765,6 @@ private fun ResultRowCard(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                val homeWon = showScore && (event.homeScore ?: 0) > (event.awayScore ?: 0)
-                val awayWon = showScore && (event.awayScore ?: 0) > (event.homeScore ?: 0)
                 // Away first, as ESPN and US scoreboards list them.
                 TeamLine(event.away, bold = awayWon)
                 TeamLine(event.home, bold = homeWon)
@@ -750,12 +773,12 @@ private fun ResultRowCard(
                 if (showScore) {
                     Text(
                         text = event.awayScore?.toString() ?: "–",
-                        style = MaterialTheme.typography.titleMedium,
+                        style = MaterialTheme.typography.titleMedium.let { if (awayWon) it.sportsLiveBold() else it },
                         color = NuvioTheme.colors.TextPrimary
                     )
                     Text(
                         text = event.homeScore?.toString() ?: "–",
-                        style = MaterialTheme.typography.titleMedium,
+                        style = MaterialTheme.typography.titleMedium.let { if (homeWon) it.sportsLiveBold() else it },
                         color = NuvioTheme.colors.TextPrimary
                     )
                 } else {
@@ -824,7 +847,7 @@ private fun TeamLine(team: ScoreTeam, bold: Boolean) {
         }
         Text(
             text = team.listName,
-            style = MaterialTheme.typography.titleMedium.let { if (bold) it.copy(fontWeight = FontWeight.Bold) else it },
+            style = MaterialTheme.typography.titleMedium.let { if (bold) it.sportsLiveBold() else it },
             color = NuvioTheme.colors.TextPrimary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis

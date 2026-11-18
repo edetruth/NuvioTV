@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
@@ -38,6 +37,7 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
@@ -132,14 +132,13 @@ fun SportsLiveGameScreen(
     }
     SportsLivePlayHost(playViewModel = playViewModel, onOpenStreamScreen = onPlay, onPlayTarget = onPlayTarget)
 
-    val revealFocusRequester = remember { FocusRequester() }
-    val replayFocusRequester = remember { FocusRequester() }
-    val followFocusRequester = remember { FocusRequester() }
+    val headerFocusRequesters = remember { GameHeaderButton.entries.associateWith { FocusRequester() } }
     val sectionFocusRequester = remember { FocusRequester() }
     val bodyFocusRequester = remember { FocusRequester() }
     val sections = state.sections
     val section = state.section
     val showsScore = state.showsScore
+    val headerRows = gameHeaderRows(showsScore = showsScore, hasReplay = state.replay != null)
 
     // Back from highlights: focus returns to the card played, or to Watch all highlights.
     var returnToHighlights by rememberSaveable { mutableStateOf(false) }
@@ -155,12 +154,8 @@ fun SportsLiveGameScreen(
         // A card scrolled out of the list has no focus target: Watch all highlights instead.
         if (cardShown && runCatching { highlightFocusRequester.requestFocus() }.isSuccess) return@LaunchedEffect
         runCatching {
-            when {
-                highlightsShown -> bodyFocusRequester
-                !showsScore -> revealFocusRequester
-                state.replay != null -> replayFocusRequester
-                else -> followFocusRequester
-            }.requestFocus()
+            if (highlightsShown) bodyFocusRequester.requestFocus()
+            else headerFocusRequesters.getValue(gameHeaderFirstFocus(headerRows)).requestFocus()
         }
     }
     // Reveal goes away once pressed: focus moves to the next button.
@@ -169,7 +164,7 @@ fun SportsLiveGameScreen(
         if (!showsScore || !revealPressed) return@LaunchedEffect
         revealPressed = false
         withFrameNanos { }
-        runCatching { (if (state.replay != null) replayFocusRequester else followFocusRequester).requestFocus() }
+        runCatching { headerFocusRequesters.getValue(gameHeaderFirstFocus(headerRows)).requestFocus() }
     }
     // ← → in the body change section; focus then goes to the new section's first row.
     var refocusBody by remember { mutableStateOf(false) }
@@ -192,9 +187,8 @@ fun SportsLiveGameScreen(
             event = event,
             // No sections: nothing focusable below the header, so Down stays put.
             downFocusRequester = if (sections.isNotEmpty() && section != null) sectionFocusRequester else null,
-            revealFocusRequester = revealFocusRequester,
-            replayFocusRequester = replayFocusRequester,
-            followFocusRequester = followFocusRequester,
+            rows = headerRows,
+            focusRequesters = headerFocusRequesters,
             onReveal = {
                 revealPressed = true
                 viewModel.reveal()
@@ -209,7 +203,7 @@ fun SportsLiveGameScreen(
                 sections = sections,
                 selected = section,
                 focusRequester = sectionFocusRequester,
-                upFocusRequester = followFocusRequester,
+                upFocusRequester = headerFocusRequesters.getValue(headerRows.last().first()),
                 downFocusRequester = bodyFocusRequester,
                 onSelect = viewModel::selectSection
             )
@@ -264,9 +258,10 @@ private data class HeaderSide(val short: String, val name: String, val logo: Str
 
 private fun headerSides(summary: GameSummary?, event: ScoreSnapshot): Pair<HeaderSide, HeaderSide> {
     if (summary != null) {
-        fun side(team: com.nuvio.tv.core.sportslive.scores.GameTeam) =
-            HeaderSide(team.short, team.shortDisplayName ?: team.fullName, team.logo, team.record, team.score)
-        return side(summary.away) to side(summary.home)
+        // The short name ("Celtics", as the design): the summary's, else the scoreboard's for the same side.
+        fun side(team: com.nuvio.tv.core.sportslive.scores.GameTeam, listed: com.nuvio.tv.core.sportslive.scores.ScoreTeam) =
+            HeaderSide(team.short, team.shortDisplayName ?: listed.shortDisplayName ?: team.fullName, team.logo, team.record, team.score)
+        return side(summary.away, event.away) to side(summary.home, event.home)
     }
     fun side(team: com.nuvio.tv.core.sportslive.scores.ScoreTeam) = HeaderSide(
         short = team.abbreviation ?: team.shortDisplayName ?: team.displayName.orEmpty(),
@@ -283,9 +278,9 @@ private fun GameHeader(
     state: SportsLiveGameUiState,
     event: ScoreSnapshot,
     downFocusRequester: FocusRequester?,
-    revealFocusRequester: FocusRequester,
-    replayFocusRequester: FocusRequester,
-    followFocusRequester: FocusRequester,
+    /** The buttons as laid out ([gameHeaderRows]); only the last row's Down goes to the sections. */
+    rows: List<List<GameHeaderButton>>,
+    focusRequesters: Map<GameHeaderButton, FocusRequester>,
     onReveal: () -> Unit,
     onWatchReplay: (SportsLiveItem) -> Unit,
     onToggleFollow: (ScoreSide) -> Unit
@@ -295,20 +290,22 @@ private fun GameHeader(
     val (away, home) = headerSides(summary, event)
     val gameState = summary?.state ?: event.state
     val live = gameState == ScoreState.IN
+    // Middle and buttons have fixed widths, measured first: the teams share what is left, so a long
+    // name wraps or ends in "…" and never squeezes the score and status line out.
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(NuvioTheme.radii.lg))
             .background(NuvioTheme.colors.BackgroundCard)
-            .padding(horizontal = NuvioTheme.spacing.xxl, vertical = NuvioTheme.spacing.lg),
-        horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xl),
+            .padding(horizontal = NuvioTheme.spacing.lg, vertical = NuvioTheme.spacing.md),
+        horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.lg),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        HeaderTeam(away, showRecord = showsScore, alignEnd = false)
+        HeaderTeam(away, showRecord = showsScore, alignEnd = false, modifier = Modifier.weight(1f))
         Column(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.width(HEADER_MIDDLE_WIDTH),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs)
+            verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xxs)
         ) {
             val awayScore = away.score
             val homeScore = home.score
@@ -321,50 +318,85 @@ private fun GameHeader(
                     else -> stringResource(R.string.sports_live_art_vs)
                 },
                 style = if (showsScore) {
-                    MaterialTheme.typography.displayMedium.copy(fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum")
+                    MaterialTheme.typography.displayMedium.sportsLiveBold().copy(fontFeatureSettings = "tnum")
                 } else {
                     MaterialTheme.typography.headlineSmall
                 },
                 color = if (showsScore) NuvioTheme.colors.TextPrimary else NuvioTheme.colors.TextSecondary,
-                maxLines = 1
+                maxLines = 1,
+                softWrap = false
             )
             GameStatusLine(summary = summary, event = event, showsScore = showsScore, live = live)
         }
-        HeaderTeam(home, showRecord = showsScore, alignEnd = true)
+        HeaderTeam(home, showRecord = showsScore, alignEnd = true, modifier = Modifier.weight(1f))
+        // A grid as the design: Reveal and Watch replay each on a row, then Follow ‹away› · Follow ‹home›.
         Column(
-            modifier = Modifier.widthIn(min = 220.dp, max = 320.dp),
+            modifier = Modifier.width(HEADER_BUTTONS_WIDTH),
             verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)
         ) {
-            val buttonModifier = Modifier
-                .fillMaxWidth()
-                .focusProperties { down = downFocusRequester ?: FocusRequester.Cancel }
-            if (!showsScore) {
-                SportsLivePaneButton(onClick = onReveal, modifier = buttonModifier.focusRequester(revealFocusRequester)) {
-                    Text(stringResource(R.string.sports_live_game_reveal), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            rows.forEach { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)) {
+                    row.forEach { button ->
+                        val modifier = Modifier
+                            .weight(1f)
+                            .focusRequester(focusRequesters.getValue(button))
+                            // Down within the grid finds the row below; the last row's Down: the sections.
+                            .then(if (gameHeaderDownLeaves(rows, button)) Modifier.focusProperties { down = downFocusRequester ?: FocusRequester.Cancel } else Modifier)
+                        when (button) {
+                            GameHeaderButton.REVEAL -> SportsLivePaneButton(onClick = onReveal, modifier = modifier) {
+                                Text(stringResource(R.string.sports_live_game_reveal), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                            GameHeaderButton.REPLAY -> state.replay?.let { replay ->
+                                SportsLivePaneButton(onClick = { onWatchReplay(replay) }, modifier = modifier) {
+                                    Icon(imageVector = Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
+                                    Spacer(modifier = Modifier.width(NuvioTheme.spacing.xs))
+                                    Text(stringResource(R.string.sports_live_game_watch_replay), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
+                            }
+                            GameHeaderButton.FOLLOW_AWAY -> FollowButton(
+                                name = away.name,
+                                followed = state.awayFollowed,
+                                onClick = { onToggleFollow(ScoreSide.AWAY) },
+                                modifier = modifier
+                            )
+                            GameHeaderButton.FOLLOW_HOME -> FollowButton(
+                                name = home.name,
+                                followed = state.homeFollowed,
+                                onClick = { onToggleFollow(ScoreSide.HOME) },
+                                modifier = modifier
+                            )
+                        }
+                    }
                 }
             }
-            state.replay?.let { replay ->
-                SportsLivePaneButton(onClick = { onWatchReplay(replay) }, modifier = buttonModifier.focusRequester(replayFocusRequester)) {
-                    Icon(imageVector = Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
-                    Spacer(modifier = Modifier.width(NuvioTheme.spacing.xs))
-                    Text(stringResource(R.string.sports_live_game_watch_replay), maxLines = 1)
-                }
-            }
-            FollowButton(
-                name = away.name,
-                followed = state.awayFollowed,
-                onClick = { onToggleFollow(ScoreSide.AWAY) },
-                modifier = buttonModifier.focusRequester(followFocusRequester)
-            )
-            FollowButton(
-                name = home.name,
-                followed = state.homeFollowed,
-                onClick = { onToggleFollow(ScoreSide.HOME) },
-                modifier = buttonModifier
-            )
         }
     }
 }
+
+/** A Game page header button. */
+internal enum class GameHeaderButton { REVEAL, REPLAY, FOLLOW_AWAY, FOLLOW_HOME }
+
+/**
+ * The header's buttons, row by row: Reveal (only while the score is hidden), Watch replay (only with a
+ * replay), then both Follow buttons side by side, which every game has.
+ */
+internal fun gameHeaderRows(showsScore: Boolean, hasReplay: Boolean): List<List<GameHeaderButton>> = buildList {
+    if (!showsScore) add(listOf(GameHeaderButton.REVEAL))
+    if (hasReplay) add(listOf(GameHeaderButton.REPLAY))
+    add(listOf(GameHeaderButton.FOLLOW_AWAY, GameHeaderButton.FOLLOW_HOME))
+}
+
+/** The page's first focus: Reveal when shown, else Watch replay, else Follow ‹away›. */
+internal fun gameHeaderFirstFocus(rows: List<List<GameHeaderButton>>): GameHeaderButton = rows.first().first()
+
+/** Whether Down from [button] leaves the header for the sections (the last row only). */
+internal fun gameHeaderDownLeaves(rows: List<List<GameHeaderButton>>, button: GameHeaderButton): Boolean =
+    button in rows.last()
+
+// At 1080p (960 dp) the teams keep about 140 dp each beside these.
+private val HEADER_MIDDLE_WIDTH = 220.dp
+private val HEADER_BUTTONS_WIDTH = 280.dp
+private val HEADER_LOGO_SIZE = 56.dp
 
 @Composable
 private fun FollowButton(name: String, followed: Boolean, onClick: () -> Unit, modifier: Modifier) {
@@ -381,46 +413,52 @@ private fun FollowButton(name: String, followed: Boolean, onClick: () -> Unit, m
     }
 }
 
+/** A side of the header, as the design: logo circle, then the name (bold) over the record; the home side mirrored. */
 @Composable
-private fun HeaderTeam(side: HeaderSide, showRecord: Boolean, alignEnd: Boolean) {
-    Row(horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md), verticalAlignment = Alignment.CenterVertically) {
-        if (alignEnd) TeamNameBlock(side, showRecord, alignEnd = true)
+private fun HeaderTeam(side: HeaderSide, showRecord: Boolean, alignEnd: Boolean, modifier: Modifier) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md, if (alignEnd) Alignment.End else Alignment.Start),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (alignEnd) TeamNameBlock(side, showRecord, alignEnd = true, modifier = Modifier.weight(1f, fill = false))
         Box(
             modifier = Modifier
-                .size(88.dp)
+                .size(HEADER_LOGO_SIZE)
                 .clip(CircleShape)
                 .background(NuvioTheme.colors.SurfaceVariant),
             contentAlignment = Alignment.Center
         ) {
             if (side.logo != null) {
-                AsyncImage(model = side.logo, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.size(60.dp))
+                AsyncImage(model = side.logo, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.size(HEADER_LOGO_SIZE * 0.68f))
             } else {
-                Text(side.short, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = NuvioTheme.colors.TextPrimary)
+                Text(side.short, style = MaterialTheme.typography.titleSmall.sportsLiveBold(), color = NuvioTheme.colors.TextPrimary, maxLines = 1)
             }
         }
-        if (!alignEnd) TeamNameBlock(side, showRecord, alignEnd = false)
+        if (!alignEnd) TeamNameBlock(side, showRecord, alignEnd = false, modifier = Modifier.weight(1f, fill = false))
     }
 }
 
 @Composable
-private fun TeamNameBlock(side: HeaderSide, showRecord: Boolean, alignEnd: Boolean) {
-    Column(horizontalAlignment = if (alignEnd) Alignment.End else Alignment.Start, modifier = Modifier.widthIn(max = 240.dp)) {
-        Text(side.short, style = MaterialTheme.typography.labelLarge, color = NuvioTheme.colors.TextTertiary, maxLines = 1)
+private fun TeamNameBlock(side: HeaderSide, showRecord: Boolean, alignEnd: Boolean, modifier: Modifier) {
+    Column(horizontalAlignment = if (alignEnd) Alignment.End else Alignment.Start, modifier = modifier) {
+        // A long name (soccer) wraps to a second line, then ends in "…".
         Text(
             text = side.name,
-            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+            style = MaterialTheme.typography.titleMedium.sportsLiveBold(),
             color = NuvioTheme.colors.TextPrimary,
-            maxLines = 1,
+            textAlign = if (alignEnd) TextAlign.End else TextAlign.Start,
+            maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )
         // The record after the game would tell how it ended: hidden with the score.
         if (showRecord && side.record != null) {
-            Text(side.record, style = MaterialTheme.typography.bodyMedium, color = NuvioTheme.colors.TextSecondary, maxLines = 1)
+            Text(side.record, style = MaterialTheme.typography.bodySmall, color = NuvioTheme.colors.TextSecondary, maxLines = 1)
         }
     }
 }
 
-/** "Final · Sat 15 Nov · TD Garden", the live clock in red, or the local kickoff. The ending hides with the score. */
+/** "Final · Sat 15 Nov" over "TD Garden", the live clock in red, or the local kickoff. The ending hides with the score. */
 @Composable
 private fun GameStatusLine(summary: GameSummary?, event: ScoreSnapshot, showsScore: Boolean, live: Boolean) {
     val separator = stringResource(R.string.sports_live_game_info_separator)
@@ -444,11 +482,12 @@ private fun GameStatusLine(summary: GameSummary?, event: ScoreSnapshot, showsSco
         state == ScoreState.OFF -> clock ?: postponed
         else -> null
     }
+    // The venue on a line of its own, so a long one never pushes the status out of the middle column.
     Row(horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs), verticalAlignment = Alignment.CenterVertically) {
         if (status != null && live) {
             Text(status, style = MaterialTheme.typography.titleMedium, color = NuvioTheme.colors.Error, maxLines = 1)
         }
-        val rest = listOfNotNull(status.takeUnless { live }, date, summary?.venue)
+        val rest = listOfNotNull(status.takeUnless { live }, date)
         val prefix = if (status != null && live && rest.isNotEmpty()) separator else ""
         if (rest.isNotEmpty()) {
             Text(
@@ -459,6 +498,16 @@ private fun GameStatusLine(summary: GameSummary?, event: ScoreSnapshot, showsSco
                 overflow = TextOverflow.Ellipsis
             )
         }
+    }
+    summary?.venue?.let { venue ->
+        Text(
+            text = venue,
+            style = MaterialTheme.typography.bodySmall,
+            color = NuvioTheme.colors.TextSecondary,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
@@ -525,7 +574,11 @@ private fun GameBody(
                 state = listState,
                 modifier = Modifier
                     .fillMaxSize()
-                    .focusProperties { onEnter = { entryFocusRequester.requestFocus() } }
+                    // A D-pad move into the list lands on its first row; a focus request for a row (Back
+                    // from a clip, to its card) is let through, or it would land on Watch all highlights.
+                    .focusProperties {
+                        onEnter = { if (requestedFocusDirection != FocusDirection.Enter) entryFocusRequester.requestFocus() }
+                    }
                     .dpadRepeatThrottle(),
                 verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)
             ) {
@@ -742,16 +795,33 @@ private fun GameStat.labelRes(): Int = when (this) {
 
 private val NAME_COLUMN = 240.dp
 private val STAT_COLUMN = 72.dp
+private val COMPACT_STAT_COLUMN = 48.dp
 
 @Composable
-private fun TableLine(name: String, values: List<String>, header: Boolean, bold: Boolean = false) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
+private fun TableLine(name: String, values: List<String>, header: Boolean, bold: Boolean = false, compact: Boolean = false) {
+    // Compact: half the page wide (two standings side by side), the name takes what the stats leave.
+    Row(modifier = if (compact) Modifier.fillMaxWidth() else Modifier, verticalAlignment = Alignment.CenterVertically) {
         val style = (if (header) MaterialTheme.typography.labelMedium else MaterialTheme.typography.bodyMedium)
-            .copy(fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal, fontFeatureSettings = "tnum")
+            .copy(fontWeight = FontWeight.Normal, fontFeatureSettings = "tnum")
+            .let { if (bold) it.sportsLiveBold() else it }
         val color = if (header) NuvioTheme.colors.TextTertiary else NuvioTheme.colors.TextPrimary
-        Text(name, style = style, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.width(NAME_COLUMN))
+        Text(
+            name,
+            style = style,
+            color = color,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = if (compact) Modifier.weight(1f) else Modifier.width(NAME_COLUMN)
+        )
         values.forEach { value ->
-            Text(value, style = style, color = color, maxLines = 1, textAlign = TextAlign.Center, modifier = Modifier.width(STAT_COLUMN))
+            Text(
+                value,
+                style = style,
+                color = color,
+                maxLines = 1,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.width(if (compact) COMPACT_STAT_COLUMN else STAT_COLUMN)
+            )
         }
     }
 }
@@ -789,25 +859,78 @@ private fun LazyListScope.boxScoreTab(teams: List<BoxScoreTeam>, first: Modifier
     }
 }
 
+/**
+ * How the standings tables sit: two (each team's division or conference, when they differ) side by
+ * side, so both show without scrolling; one alone full width; more go two by two.
+ */
+internal fun standingsColumns(tables: List<StandingsTable>): List<List<StandingsTable>> = tables.chunked(2)
+
 private fun LazyListScope.standingsTab(tables: List<StandingsTable>, first: Modifier) {
     var firstUsed = false
-    tables.forEachIndexed { tableIndex, table ->
-        item(key = "h|$tableIndex") {
-            Column(modifier = Modifier.padding(top = NuvioTheme.spacing.sm)) {
-                table.title?.let { SectionTitle(it) }
-                Box(Modifier.padding(horizontal = NuvioTheme.spacing.md, vertical = NuvioTheme.spacing.xs)) {
-                    TableLine(stringResource(R.string.sports_live_game_team), table.columns, header = true)
+    standingsColumns(tables).forEachIndexed { groupIndex, group ->
+        if (group.size == 1) {
+            singleStandings(group.single(), groupIndex, if (firstUsed) Modifier else first.also { firstUsed = true })
+        } else {
+            pairedStandings(group, groupIndex, if (firstUsed) Modifier else first.also { firstUsed = true })
+        }
+    }
+}
+
+/** Two tables side by side, row by row; [first] goes on the left table's first row. */
+private fun LazyListScope.pairedStandings(tables: List<StandingsTable>, groupIndex: Int, first: Modifier) {
+    item(key = "ph|$groupIndex") {
+        Row(modifier = Modifier.padding(top = NuvioTheme.spacing.sm), horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xl)) {
+            tables.forEach { table ->
+                Column(modifier = Modifier.weight(1f)) {
+                    table.title?.let { SectionTitle(it) }
+                    Box(Modifier.padding(horizontal = NuvioTheme.spacing.md, vertical = NuvioTheme.spacing.xs)) {
+                        TableLine(stringResource(R.string.sports_live_game_team), table.columns, header = true, compact = true)
+                    }
                 }
             }
         }
-        table.rows.forEachIndexed { rowIndex, row ->
-            val modifier = if (firstUsed) Modifier else first.also { firstUsed = true }
-            item(key = "r|$tableIndex|$rowIndex") {
-                // The game's two teams stand out.
-                GamePanel(modifier = modifier, highlighted = row.inGame, padding = NuvioTheme.spacing.xs) {
-                    Box(Modifier.padding(horizontal = NuvioTheme.spacing.sm)) {
-                        TableLine(row.team, row.values, header = false, bold = row.inGame)
+    }
+    val rowCount = tables.maxOf { it.rows.size }
+    for (rowIndex in 0 until rowCount) {
+        item(key = "pr|$groupIndex|$rowIndex") {
+            Row(horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xl)) {
+                tables.forEachIndexed { tableIndex, table ->
+                    Box(modifier = Modifier.weight(1f)) {
+                        table.rows.getOrNull(rowIndex)?.let { row ->
+                            // The game's two teams stand out.
+                            GamePanel(
+                                modifier = if (tableIndex == 0 && rowIndex == 0) first else Modifier,
+                                highlighted = row.inGame,
+                                padding = NuvioTheme.spacing.xs
+                            ) {
+                                Box(Modifier.padding(horizontal = NuvioTheme.spacing.sm)) {
+                                    TableLine(row.team, row.values, header = false, bold = row.inGame, compact = true)
+                                }
+                            }
+                        }
                     }
+                }
+            }
+        }
+    }
+}
+
+private fun LazyListScope.singleStandings(table: StandingsTable, tableIndex: Int, first: Modifier) {
+    item(key = "h|$tableIndex") {
+        Column(modifier = Modifier.padding(top = NuvioTheme.spacing.sm)) {
+            table.title?.let { SectionTitle(it) }
+            Box(Modifier.padding(horizontal = NuvioTheme.spacing.md, vertical = NuvioTheme.spacing.xs)) {
+                TableLine(stringResource(R.string.sports_live_game_team), table.columns, header = true)
+            }
+        }
+    }
+    table.rows.forEachIndexed { rowIndex, row ->
+        val modifier = if (rowIndex == 0) first else Modifier
+        item(key = "r|$tableIndex|$rowIndex") {
+            // The game's two teams stand out.
+            GamePanel(modifier = modifier, highlighted = row.inGame, padding = NuvioTheme.spacing.xs) {
+                Box(Modifier.padding(horizontal = NuvioTheme.spacing.sm)) {
+                    TableLine(row.team, row.values, header = false, bold = row.inGame)
                 }
             }
         }

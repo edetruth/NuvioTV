@@ -37,6 +37,19 @@ class SportsLiveHomeRowTest {
     }
 
     @Test
+    fun `a card with art gets it as its landscape poster, so Home draws no title over its logo`() {
+        val channel = item("c").let { it.copy(meta = it.meta.copy(poster = "https://img.example/channel.png")) }
+        val own = item("o").let { it.copy(meta = it.meta.copy(poster = "https://img.example/p.png", landscapePoster = "https://img.example/l.png")) }
+
+        val row = SportsLiveHomeRow.build(listOf(channel, own, item("bare")), "Live now")
+
+        assertEquals(
+            listOf("https://img.example/channel.png", "https://img.example/l.png", null),
+            row.items.map { it.landscapePoster }
+        )
+    }
+
+    @Test
     fun `isLiveNowRow matches only the sentinel base url`() {
         assertTrue(SportsLiveHomeRow.isLiveNowRow("nuvio://sports-live"))
         assertFalse(SportsLiveHomeRow.isLiveNowRow("https://addon.example"))

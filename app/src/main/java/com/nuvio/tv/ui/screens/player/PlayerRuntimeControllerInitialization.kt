@@ -927,6 +927,8 @@ internal fun PlayerRuntimeController.initializePlayer(
                 isSidecarAddonSubtitleActiveProvider = {
                     isSidecarAddonSubtitleActive()
                 },
+                // Sports highlight clips only: their embedded captions repeat each line.
+                dedupeRepeatedCaptionsProvider = { isHighlightClip() },
                 videoBoundsFractionProvider = {
                     val pv = exoPlayerView
                     if (pv != null) pv.videoBoundsFraction(videoAspectRatio) else null
@@ -2203,6 +2205,7 @@ private class SubtitleOffsetRenderersFactory(
     private val shouldStripSdhProvider: () -> Boolean,
     private val isBuiltInSubtitleProvider: () -> Boolean,
     private val isSidecarAddonSubtitleActiveProvider: () -> Boolean = { false },
+    private val dedupeRepeatedCaptionsProvider: () -> Boolean = { false },
     private val videoBoundsFractionProvider: () -> RectF?,
     private val gainAudioProcessor: GainAudioProcessor,
     private val nightModeAudioProcessor: NightModeAudioProcessor,
@@ -2360,6 +2363,7 @@ private class SubtitleOffsetRenderersFactory(
             shouldNormalizeCuePositionProvider = shouldNormalizeCuePositionProvider,
             isBuiltInSubtitleProvider = isBuiltInSubtitleProvider,
             isSidecarAddonSubtitleActiveProvider = isSidecarAddonSubtitleActiveProvider,
+            dedupeRepeatedCaptionsProvider = dedupeRepeatedCaptionsProvider,
             videoBoundsFractionProvider = videoBoundsFractionProvider
         )
         val startIndex = out.size
@@ -2414,8 +2418,12 @@ private class CueNormalizingTextOutput(
     private val shouldNormalizeCuePositionProvider: () -> Boolean,
     private val isBuiltInSubtitleProvider: () -> Boolean,
     private val isSidecarAddonSubtitleActiveProvider: () -> Boolean,
+    private val dedupeRepeatedCaptionsProvider: () -> Boolean,
     private val videoBoundsFractionProvider: () -> RectF?
 ) : TextOutput {
+
+    private fun dedupedIfHighlight(cues: List<Cue>): List<Cue> =
+        if (dedupeRepeatedCaptionsProvider()) PlayerSubtitleUtils.dedupeRepeatedCaptions(cues) else cues
 
     override fun onCues(cueGroup: CueGroup) {
         if (isSidecarAddonSubtitleActiveProvider()) {
@@ -2444,7 +2452,7 @@ private class CueNormalizingTextOutput(
             }
         }
         val processedCues = modifiedList ?: cues
-        val mergedCues = PlayerSubtitleUtils.mergeOverlappingCues(processedCues)
+        val mergedCues = PlayerSubtitleUtils.mergeOverlappingCues(dedupedIfHighlight(processedCues))
         delegate.onCues(CueGroup(mergedCues, cueGroup.presentationTimeUs))
     }
 
@@ -2475,7 +2483,7 @@ private class CueNormalizingTextOutput(
             }
         }
         val processedCues = modifiedList ?: cues
-        val mergedCues = PlayerSubtitleUtils.mergeOverlappingCues(processedCues)
+        val mergedCues = PlayerSubtitleUtils.mergeOverlappingCues(dedupedIfHighlight(processedCues))
         delegate.onCues(mergedCues)
     }
 

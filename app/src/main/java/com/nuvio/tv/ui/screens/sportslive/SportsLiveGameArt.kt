@@ -3,6 +3,7 @@ package com.nuvio.tv.ui.screens.sportslive
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -28,6 +29,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -67,8 +69,14 @@ internal fun rememberScoreChipStrings(): ScoreChipStrings {
 /** A card's score chip: a red dot while live, then the clock and score ("Q3 4:12 · 88–80", "FT 3–1"). */
 @Composable
 internal fun SportsLiveScoreChip(chip: ScoreChip, modifier: Modifier = Modifier) {
-    val text = ScoreChips.text(chip, rememberScoreChipStrings())
+    val (lead, score) = scoreChipParts(chip, rememberScoreChipStrings())
     val live = chip is ScoreChip.Live
+    val color = when {
+        live -> ArtColors.LiveText
+        chip is ScoreChip.Status -> ArtColors.Muted
+        else -> ArtColors.Secondary
+    }
+    val style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum")
     Row(
         modifier = modifier
             .clip(RoundedCornerShape(NuvioTheme.radii.sm))
@@ -80,18 +88,37 @@ internal fun SportsLiveScoreChip(chip: ScoreChip, modifier: Modifier = Modifier)
         if (live) {
             Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(ArtColors.LiveRed))
         }
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum"),
-            color = when {
-                live -> ArtColors.LiveText
-                chip is ScoreChip.Status -> ArtColors.Muted
-                else -> ArtColors.Secondary
-            },
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
+        // Short of room, the clock or note gives way; the score never does.
+        if (lead.isNotEmpty()) {
+            Text(
+                text = lead,
+                style = style,
+                color = color,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false)
+            )
+        }
+        if (score != null) {
+            Text(text = score, style = style, color = color, maxLines = 1, softWrap = false)
+        }
     }
+}
+
+/**
+ * The chip's words split for layout: the lead (clock or note, with its separator) and the score, or
+ * null when the chip shows none ("Postponed", "Score hidden", a clock alone). The lead may be empty.
+ */
+internal fun scoreChipParts(chip: ScoreChip, strings: ScoreChipStrings): Pair<String, String?> {
+    val text = ScoreChips.text(chip, strings)
+    val score = when (chip) {
+        is ScoreChip.Live -> chip.score
+        is ScoreChip.Final -> chip.score
+        else -> null
+    }?.let { String.format(strings.score, it.first, it.second) }
+    if (score == null || !text.endsWith(score)) return text to null
+    // The trailing space goes (the row spaces the two); a separator ("·") stays with the lead.
+    return text.removeSuffix(score).trim() to score
 }
 
 /** The kickoff in local time: time only today, "Tomorrow <time>", weekday or date otherwise. */
@@ -143,7 +170,12 @@ internal fun SportsLiveGameArt(art: GameArt, compact: Boolean, modifier: Modifie
                     )
                 }
             }
-        } else {
+        } else BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            // The pane shrinks its art to the room left: below the full layout's height, the short one.
+            if (maxHeight < FULL_ART_MIN_HEIGHT) {
+                ShortArt(art, chip, kickoff, logoSize = (maxHeight * 0.32f).coerceIn(20.dp, 44.dp))
+                return@BoxWithConstraints
+            }
             Column(
                 modifier = Modifier.fillMaxSize().padding(NuvioTheme.spacing.lg),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -184,6 +216,62 @@ internal fun SportsLiveGameArt(art: GameArt, compact: Boolean, modifier: Modifie
         }
     }
 }
+
+/**
+ * The pane's art when it is short: both logos (or abbreviations) around the league, then the chip and
+ * the kickoff, each on its own line, so none is cut. The title under the art names the teams.
+ */
+@Composable
+private fun ShortArt(art: GameArt, chip: ScoreChip?, kickoff: String?, logoSize: Dp) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(horizontal = NuvioTheme.spacing.sm, vertical = NuvioTheme.spacing.xs),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xxs, Alignment.CenterVertically)
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            ShortTeam(art.first, art.hasLogos, logoSize)
+            Text(
+                text = art.league?.uppercase(Locale.getDefault()) ?: stringResource(R.string.sports_live_art_vs),
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                color = ArtColors.Muted,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false)
+            )
+            ShortTeam(art.second, art.hasLogos, logoSize)
+        }
+        chip?.let { SportsLiveScoreChip(it) }
+        kickoff?.let {
+            Text(
+                text = it,
+                style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"),
+                color = ArtColors.Secondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
+private fun ShortTeam(team: GameArtTeam, withLogo: Boolean, logoSize: Dp) {
+    if (withLogo) {
+        SportsLiveTeamLogo(team.logo, team.short, TeamLogoUrls.CARD_PX, Modifier.size(logoSize), letters = 3, fontSize = 9.sp)
+    } else {
+        Text(
+            text = team.short,
+            style = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.Bold),
+            color = ArtColors.Text,
+            maxLines = 1
+        )
+    }
+}
+
+/** Below this height the pane's art takes the short layout (the full one needs its logos, names and kickoff). */
+private val FULL_ART_MIN_HEIGHT = 240.dp
 
 @Composable
 private fun CompactTeam(team: GameArtTeam, withLogo: Boolean) {

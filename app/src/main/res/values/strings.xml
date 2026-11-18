@@ -3803,7 +3803,10 @@
         <item quantity="other">%1$d sources</item>
     </plurals>
     <string name="sports_live_rewind_behind">−%1$s · LIVE ▸</string>
-    <string name="sports_live_partial_failure">%1$d source(s) didn\'t respond</string>
+    <plurals name="sports_live_partial_failure">
+        <item quantity="one">%1$d source didn\'t respond</item>
+        <item quantity="other">%1$d sources didn\'t respond</item>
+    </plurals>
     <string name="sports_live_dual_watch_with">Watch with another game</string>
     <string name="sports_live_dual_pick">Pick another to watch</string>
     <string name="sports_live_preview_label">Preview</string>
