@@ -3780,6 +3780,7 @@
     <string name="sports_live_sort_start_time">Start time</string>
     <string name="sports_live_sort_most_exciting">Most exciting</string>
     <string name="sports_live_why_penalties">Penalties</string>
+    <string name="sports_live_why_shootout">Shootout</string>
     <string name="sports_live_why_overtime">OT</string>
     <string name="sports_live_why_extra_time">Extra time</string>
     <string name="sports_live_why_extra_innings">Extra innings</string>

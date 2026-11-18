@@ -50,6 +50,9 @@ class LiveExcitementTest {
         // Six points is not close in basketball; five is.
         assertEquals(WhyTag(WhyKind.CLOSE_LATE, 1), tag(game("basketball", 90, 85, "Q4 0:40")))
         assertNull(tag(game("basketball", 90, 84, "Q4 0:40")))
+        // Under a minute ESPN shows tenths.
+        assertEquals(WhyTag(WhyKind.CLOSE_LATE, 1), tag(game("basketball", 100, 99, "45.2 - 4th")))
+        assertEquals(WhyTag(WhyKind.CLOSE_LATE, 1), tag(game("hockey", 2, 2, "12.0 - 3rd")))
         // College halves.
         assertEquals(WhyTag(WhyKind.CLOSE_LATE, 3), tag(game("basketball", 60, 58, "2:30 - 2nd Half")))
     }
@@ -78,7 +81,8 @@ class LiveExcitementTest {
         assertEquals(WhyTag(WhyKind.PENALTIES), tag(pens))
         assertEquals(WhyTag(WhyKind.EXTRA_TIME), tag(extraTime))
         assertEquals(WhyTag(WhyKind.CLOSE_LATE, 2), tag(late))
-        assertEquals(WhyTag(WhyKind.CLOSE_LATE, 1), tag(stoppage))
+        // Stoppage time has no whole minutes left to count.
+        assertEquals(WhyTag(WhyKind.CLOSE_LATE, null), tag(stoppage))
         assertNull(tag(rout))
         assertEquals(WhyTag(WhyKind.CLOSE), tag(game("soccer", 0, 0, "HT")))
         assertNull(tag(game("soccer", 0, 2, "88'")))
@@ -91,7 +95,7 @@ class LiveExcitementTest {
         val closeLate = game("hockey", 2, 1, "3:00 - 3rd")
         val wide = game("hockey", 4, 1, "4:00 - 2nd")
         assertEquals(listOf(shootout, overtime, closeLate, wide), ranked(wide, closeLate, overtime, shootout))
-        assertEquals(WhyTag(WhyKind.PENALTIES), tag(shootout))
+        assertEquals(WhyTag(WhyKind.SHOOTOUT), tag(shootout))
         assertEquals(WhyTag(WhyKind.OVERTIME), tag(overtime))
         assertEquals(WhyTag(WhyKind.CLOSE_LATE, 3), tag(closeLate))
         assertNull(tag(wide))
@@ -166,6 +170,17 @@ class LiveExcitementTest {
     }
 
     @Test
+    fun `a snapshot briefly without a score keeps the history`() {
+        val history = ExcitementHistory()
+        val t0 = 1_000_000L
+        history.observe(listOf(game("soccer", 1, 0, "60'", id = "e1")), t0)
+        history.observe(listOf(game("soccer", null, null, "61'", id = "e1")), t0 + 30_000)
+        history.observe(listOf(game("soccer", null, null, "61'", id = "e1", state = ScoreState.UNKNOWN)), t0 + 45_000)
+        history.observe(listOf(game("soccer", 1, 1, "62'", id = "e1")), t0 + 60_000)
+        assertTrue(history.recent("e1", t0 + 60_000).scored)
+    }
+
+    @Test
     fun `history forgets games that leave play, and ignores finals and missing scores`() {
         val history = ExcitementHistory()
         val t0 = 1_000_000L
@@ -193,6 +208,10 @@ class LiveExcitementTest {
         assertNull(LiveExcitement.clockOf("football", "8:42 - 3rd").minutesLeft)
         assertTrue(LiveExcitement.clockOf("hockey", "1:00 - 2OT").overtime)
         assertFalse(LiveExcitement.clockOf("soccer", "90'+4'").overtime)
+        assertNull(LiveExcitement.clockOf("soccer", "90'+4'").minutesLeft)
+        assertEquals(0, LiveExcitement.clockOf("basketball", "0.4 - 4th").minutesLeft)
+        assertEquals(1, LiveExcitement.clockOf("football", "Q4 59.9").minutesLeft)
+        assertNull(LiveExcitement.clockOf("basketball", "45.2 - 2nd").minutesLeft)
         assertTrue(LiveExcitement.clockOf("baseball", "Top 11th").overtime)
     }
 }

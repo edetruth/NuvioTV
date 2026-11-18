@@ -8,7 +8,7 @@ import com.nuvio.tv.domain.model.SportsLiveTab
  * (Cards | Scoreboard | Timeline) leads the filter-chip row, so Down from the tabs reaches it without
  * crossing another tab (tabs select on focus). The switch: Up the tabs, Right the filter chips, Down
  * the content. Results has its own header; Channels and Replays show no switch. Live now's sort control
- * (#43) ends the row, right of the chips.
+ * (#43) sits between the switch and the chips: switch → Right → sort → Right → chips.
  */
 internal data class SportsLiveHeaderFocus(val switchShown: Boolean, val chipsShown: Boolean, val sortShown: Boolean = false) {
 
@@ -31,10 +31,13 @@ internal data class SportsLiveHeaderFocus(val switchShown: Boolean, val chipsSho
     /** Right from the switch's last segment; null when nothing follows it. */
     val switchRight: Stop?
         get() = when {
-            chipsShown -> Stop.CHIPS
             sortShown -> Stop.SORT
+            chipsShown -> Stop.CHIPS
             else -> null
         }
+
+    /** Right from the sort's last segment; null when no chips follow it. */
+    val sortRight: Stop? get() = Stop.CHIPS.takeIf { chipsShown }
 
     /** Up from the content's first row. */
     val contentUp: Stop

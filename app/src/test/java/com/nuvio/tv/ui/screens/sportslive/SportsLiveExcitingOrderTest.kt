@@ -85,6 +85,14 @@ class SportsLiveExcitingOrderTest {
         // Another game's snapshot under this card: no rating, so no tag.
         assertNull(excitementOf(pacers, live(lakersEvent, 100, 99, "1:00 - 4th"), history, NOW))
         assertNull(excitementOf(pacers, null, history, NOW))
+        // Hide until focused leaves recent changes out, so a goal never lifts a card on its own.
+        history.observe(listOf(live(pacersEvent, 60, 40, "5:00 - 2nd")), NOW)
+        val after = live(pacersEvent, 60, 43, "5:00 - 2nd")
+        history.observe(listOf(after), NOW + 1_000)
+        val shown = excitementOf(pacers, after, history, NOW + 1_000)!!
+        val hidden = excitementOf(pacers, after, history, NOW + 1_000, recentChanges = false)!!
+        assertTrue(shown.score > hidden.score)
+        assertNull(hidden.tag)
         // A card naming no game (a channel name) is never rated.
         assertNull(excitementOf(item("Sky Sports Main Event"), live(pacersEvent, 100, 99, "1:00 - 4th"), history, NOW))
     }
@@ -96,10 +104,6 @@ class SportsLiveExcitingOrderTest {
         val c = item("C")
         assertEquals(listOf(b, a, c), stabilizeOrder(listOf(c, a, b), listOf(b.streamKey, a.streamKey)))
         assertEquals(listOf(c, a, b), stabilizeOrder(listOf(c, a, b), null))
-        // The panel's rule: re-rank with no card focused, or on a new minute.
-        assertTrue(panelMayReorder(null, NOW, NOW / PANEL_REORDER_MS))
-        assertFalse(panelMayReorder("k", NOW, NOW / PANEL_REORDER_MS))
-        assertTrue(panelMayReorder("k", NOW + PANEL_REORDER_MS, NOW / PANEL_REORDER_MS))
     }
 
     @Test
@@ -131,12 +135,16 @@ class SportsLiveExcitingOrderTest {
     }
 
     @Test
-    fun `the sort ends Live now's header row, right of the switch when there are no chips`() {
+    fun `the sort sits between the switch and the chips, never reached across the chips`() {
         val noChips = SportsLiveHeaderFocus.of(SportsLiveTab.LIVE_NOW, filterCount = 1, sortOffered = true)
         assertTrue(noChips.sortShown)
         assertEquals(SportsLiveHeaderFocus.Stop.SORT, noChips.switchRight)
+        assertNull(noChips.sortRight)
         val chips = SportsLiveHeaderFocus.of(SportsLiveTab.LIVE_NOW, filterCount = 3, sortOffered = true)
-        assertEquals(SportsLiveHeaderFocus.Stop.CHIPS, chips.switchRight)
+        assertEquals(SportsLiveHeaderFocus.Stop.SORT, chips.switchRight)
+        assertEquals(SportsLiveHeaderFocus.Stop.CHIPS, chips.sortRight)
+        // Without the sort, the switch leads to the chips as before.
+        assertEquals(SportsLiveHeaderFocus.Stop.CHIPS, SportsLiveHeaderFocus.of(SportsLiveTab.LIVE_NOW, filterCount = 3).switchRight)
         assertFalse(SportsLiveHeaderFocus.of(SportsLiveTab.UPCOMING, filterCount = 3, sortOffered = true).sortShown)
         assertFalse(SportsLiveHeaderFocus.of(SportsLiveTab.LIVE_NOW, filterCount = 3).sortShown)
     }

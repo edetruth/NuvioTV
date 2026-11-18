@@ -1213,12 +1213,38 @@ private fun SportsLiveFilterRow(
                     downFocusRequester?.let { down = it }
                 },
                 lastSegmentModifier = Modifier.focusProperties {
-                    // No chips beside it: Right stays on the switch rather than wandering off.
+                    // Nothing beside it: Right stays on the switch rather than wandering off.
                     right = when (header.switchRight) {
                         SportsLiveHeaderFocus.Stop.CHIPS -> filterFocusRequester
                         SportsLiveHeaderFocus.Stop.SORT -> sortFocusRequester
                         else -> FocusRequester.Cancel
                     }
+                }
+            )
+        }
+        // Live now's sort (#43), right after the layout switch: its own stop, never across the chips.
+        if (header.sortShown) {
+            SportsLiveSegmentedSwitch(
+                options = LiveNowSort.entries,
+                selected = uiState.liveSort,
+                onSelect = onSelectSort,
+                selectedFocusRequester = sortFocusRequester,
+                label = { sort ->
+                    stringResource(
+                        when (sort) {
+                            LiveNowSort.START_TIME -> R.string.sports_live_sort_start_time
+                            LiveNowSort.MOST_EXCITING -> R.string.sports_live_sort_most_exciting
+                        }
+                    )
+                },
+                modifier = Modifier.padding(start = NuvioTheme.spacing.sm, top = NuvioTheme.spacing.xs, bottom = NuvioTheme.spacing.xs),
+                segmentModifier = Modifier.focusProperties {
+                    up = upFocusRequester
+                    downFocusRequester?.let { down = it }
+                },
+                // Right enters the chips on the selected one, so passing through never changes the filter.
+                lastSegmentModifier = Modifier.focusProperties {
+                    right = if (header.sortRight != null) filterFocusRequester else FocusRequester.Cancel
                 }
             )
         }
@@ -1241,30 +1267,6 @@ private fun SportsLiveFilterRow(
                     FilterRowChip(name = name, value = filter)
                 }
             }
-        } else if (header.sortShown) {
-            Spacer(modifier = Modifier.weight(1f))
-        }
-        if (header.sortShown) {
-            SportsLiveSegmentedSwitch(
-                options = LiveNowSort.entries,
-                selected = uiState.liveSort,
-                onSelect = onSelectSort,
-                selectedFocusRequester = sortFocusRequester,
-                label = { sort ->
-                    stringResource(
-                        when (sort) {
-                            LiveNowSort.START_TIME -> R.string.sports_live_sort_start_time
-                            LiveNowSort.MOST_EXCITING -> R.string.sports_live_sort_most_exciting
-                        }
-                    )
-                },
-                modifier = Modifier.padding(end = NuvioTheme.spacing.sm, top = NuvioTheme.spacing.xs, bottom = NuvioTheme.spacing.xs),
-                segmentModifier = Modifier.focusProperties {
-                    up = upFocusRequester
-                    downFocusRequester?.let { down = it }
-                },
-                lastSegmentModifier = Modifier.focusProperties { right = FocusRequester.Cancel }
-            )
         }
     }
 }

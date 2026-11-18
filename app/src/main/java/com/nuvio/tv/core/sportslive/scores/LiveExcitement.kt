@@ -4,7 +4,7 @@ import kotlin.math.abs
 import kotlin.math.sign
 
 /** Why a game ranks high in Live now's Most exciting sort (#43): one short tag per card. */
-enum class WhyKind { PENALTIES, OVERTIME, EXTRA_TIME, EXTRA_INNINGS, CLOSE_LATE, LEAD_CHANGE, JUST_SCORED, RED_ZONE, BASES_LOADED, SCORING_POSITION, CLOSE }
+enum class WhyKind { PENALTIES, SHOOTOUT, OVERTIME, EXTRA_TIME, EXTRA_INNINGS, CLOSE_LATE, LEAD_CHANGE, JUST_SCORED, RED_ZONE, BASES_LOADED, SCORING_POSITION, CLOSE }
 
 /** A card's why tag: [minutesLeft] goes with [WhyKind.CLOSE_LATE] ("Close · 2 min left"); null there reads "Close · late". */
 data class WhyTag(val kind: WhyKind, val minutesLeft: Int? = null)
@@ -58,7 +58,7 @@ object LiveExcitement {
         if (basesLoaded) score += 1.5 else if (scoringPosition) score += 0.75
 
         val tag = when {
-            clock.penalties -> WhyTag(WhyKind.PENALTIES)
+            clock.penalties -> WhyTag(if (sport == HOCKEY) WhyKind.SHOOTOUT else WhyKind.PENALTIES)
             clock.overtime -> WhyTag(
                 when (sport) {
                     SOCCER -> WhyKind.EXTRA_TIME
@@ -103,10 +103,11 @@ object LiveExcitement {
         }
     }
 
-    /** "8:42 - 3rd", "Q4 2:00", "2:00 - OT", "12:34 - 2nd Half", "Halftime", "End of 3rd", "SO". */
+    /** "8:42 - 3rd", "Q4 2:00", "45.2 - 4th" (under a minute), "2:00 - OT", "12:34 - 2nd Half", "Halftime", "End of 3rd", "SO". */
     private fun timed(text: String, periods: Periods): Clock {
         if (SHOOTOUT.containsMatchIn(text)) return Clock(progress = 1.0, late = true, overtime = true, penalties = true)
         val left = CLOCK.find(text)?.let { it.groupValues[1].toInt() * 60 + it.groupValues[2].toInt() }
+            ?: SECONDS.find(text)?.groupValues?.get(1)?.toInt()
         val minutesLeft = left?.let { (it + 59) / 60 }
         if (OVERTIME.containsMatchIn(text)) return Clock(progress = 1.0, minutesLeft = minutesLeft, late = true, overtime = true)
         if (HALFTIME.containsMatchIn(text)) return Clock(progress = 0.5)
@@ -132,15 +133,14 @@ object LiveExcitement {
     private fun soccer(text: String): Clock {
         if (PENS.containsMatchIn(text)) return Clock(progress = 1.0, late = true, overtime = true, penalties = true)
         if (text.equals("HT", ignoreCase = true)) return Clock(progress = 0.5)
+        // Stoppage time keeps the minute it was added to: "90'+4'" is 90.
         val minute = MINUTE.find(text)?.groupValues?.get(1)?.toInt()
-        val extraTime = (minute != null && minute > 90 && !text.startsWith("90")) ||
-            EXTRA_TIME.containsMatchIn(text)
-        if (extraTime) {
+        if ((minute != null && minute > 90) || EXTRA_TIME.containsMatchIn(text)) {
             return Clock(progress = 1.0, minutesLeft = minute?.let { (120 - it).coerceAtLeast(0) }, late = true, overtime = true)
         }
         minute ?: return Clock()
-        val capped = minute.coerceAtMost(90)
-        return Clock(progress = capped / 90.0, minutesLeft = 90 - capped, late = capped >= SOCCER_LATE_MINUTE)
+        // From the 90th minute on (stoppage time) there are no whole minutes left to count: "Close · late".
+        return Clock(progress = minute / 90.0, minutesLeft = (90 - minute).takeIf { it > 0 }, late = minute >= SOCCER_LATE_MINUTE)
     }
 
     /** "Top 9th", "Bot 7th", "Mid 5th", "End 8th"; the 10th on is extra innings. */
@@ -182,6 +182,8 @@ object LiveExcitement {
     private const val SOCCER_LATE_MINUTE = 80
 
     private val CLOCK = Regex("""(\d{1,2}):(\d{2})""")
+    // Under a minute ESPN shows seconds and tenths: "45.2 - 4th", "0.0 - 3rd".
+    private val SECONDS = Regex("""(?<![\d:.])(\d{1,2})\.\d(?!\d)""")
     private val QUARTER = Regex("""\bQ(\d)\b""", RegexOption.IGNORE_CASE)
     private val ORDINAL = Regex("""\b(\d)(?:st|nd|rd|th)\b""", RegexOption.IGNORE_CASE)
     private val OVERTIME = Regex("""\b\d*OT\b""", RegexOption.IGNORE_CASE)
@@ -196,8 +198,8 @@ object LiveExcitement {
 /**
  * What changed in each live game lately (#43), from the successive delayed snapshots this screen saw:
  * a score (the total went up) and a lead change (the leader flipped, a tie in between too), each
- * remembered for [windowMs]. In memory only; the first sight of a game records nothing, and games no
- * longer in play are forgotten.
+ * remembered for [windowMs]. In memory only; the first sight of a game records nothing, and games that
+ * finish or leave the feed are forgotten (a snapshot that briefly lacks a score is not).
  */
 class ExcitementHistory(private val windowMs: Long = RECENT_WINDOW_MS) {
 
@@ -209,10 +211,12 @@ class ExcitementHistory(private val windowMs: Long = RECENT_WINDOW_MS) {
     fun observe(events: Collection<ScoreSnapshot>, nowMs: Long) {
         val seen = HashSet<String>()
         for (event in events) {
+            if (event.state == ScoreState.POST || event.state == ScoreState.OFF) continue
+            // Still listed: a snapshot that briefly lacks a score (or state) keeps what was seen.
+            seen += event.eventId
             if (event.state != ScoreState.IN) continue
             val home = event.homeScore ?: continue
             val away = event.awayScore ?: continue
-            seen += event.eventId
             val lead = (home - away).sign
             val track = tracks[event.eventId]
             if (track == null) {

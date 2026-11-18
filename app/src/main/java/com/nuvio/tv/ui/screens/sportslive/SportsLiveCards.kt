@@ -573,6 +573,7 @@ private fun WhyTagPill(text: String) {
 @Composable
 internal fun whyTagText(tag: WhyTag): String = when (tag.kind) {
     WhyKind.PENALTIES -> stringResource(R.string.sports_live_why_penalties)
+    WhyKind.SHOOTOUT -> stringResource(R.string.sports_live_why_shootout)
     WhyKind.OVERTIME -> stringResource(R.string.sports_live_why_overtime)
     WhyKind.EXTRA_TIME -> stringResource(R.string.sports_live_why_extra_time)
     WhyKind.EXTRA_INNINGS -> stringResource(R.string.sports_live_why_extra_innings)

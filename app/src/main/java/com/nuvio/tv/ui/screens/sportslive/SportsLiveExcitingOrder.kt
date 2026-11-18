@@ -3,6 +3,7 @@ package com.nuvio.tv.ui.screens.sportslive
 import com.nuvio.tv.core.sportslive.scores.ExcitementHistory
 import com.nuvio.tv.core.sportslive.scores.ExcitementRating
 import com.nuvio.tv.core.sportslive.scores.LiveExcitement
+import com.nuvio.tv.core.sportslive.scores.RecentChange
 import com.nuvio.tv.core.sportslive.scores.ScoreChips
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.domain.model.SportsLiveItem
@@ -10,10 +11,19 @@ import com.nuvio.tv.domain.model.SportsLiveItem
 /**
  * [item]'s excitement (#43) from its delayed [snapshot]: only for a strict match with the card's sides on
  * it one way round (what a score chip needs), so a tag or rank never comes from an unmatched or wrong game.
+ * Without [recentChanges] (Hide until focused) a goal or lead change adds nothing, so a card never jumps
+ * just after a score.
  */
-internal fun excitementOf(item: SportsLiveItem, snapshot: ScoreSnapshot?, history: ExcitementHistory, nowMs: Long): ExcitementRating? {
+internal fun excitementOf(
+    item: SportsLiveItem,
+    snapshot: ScoreSnapshot?,
+    history: ExcitementHistory,
+    nowMs: Long,
+    recentChanges: Boolean = true
+): ExcitementRating? {
     val event = ScoreChips.matchedEvent(item, snapshot) ?: return null
-    return LiveExcitement.rate(event, history.recent(event.eventId, nowMs))
+    val recent = if (recentChanges) history.recent(event.eventId, nowMs) else RecentChange.NONE
+    return LiveExcitement.rate(event, recent)
 }
 
 /**
@@ -33,7 +43,7 @@ internal fun excitingOrder(items: List<SportsLiveItem>, ratingOf: (SportsLiveIte
 
 /**
  * [fresh] in the order of [previous] (stream keys as last shown), so a card never moves under the D-pad while
- * the list is focused (the in-player panel's I3 rule); cards new to the list follow, in their fresh order.
+ * a card has focus; cards new to the list follow, in their fresh order.
  */
 internal fun stabilizeOrder(fresh: List<SportsLiveItem>, previous: List<String>?): List<SportsLiveItem> {
     if (previous == null) return fresh

@@ -902,7 +902,7 @@ class SportsLiveViewModelTest {
     }
 
     @Test
-    fun `Most exciting keeps cards in place under a focused card until the next minute`() = runTest {
+    fun `Most exciting keeps cards in place while a card has focus, re-ranking when focus leaves`() = runTest {
         nextLoad = load(listOf(pacersGame, lakersGame))
         val closeLakers = lakersGame.streamKey to inPlay("401909986", 100, 99, "1:00 - 4th")
         val inputs = MutableStateFlow(EndedInputs(mapOf(pacersGame.streamKey to inPlay("401909985", 60, 40, "5:00 - 2nd"), closeLakers)))
@@ -920,14 +920,21 @@ class SportsLiveViewModelTest {
         assertEquals(listOf("lakers", "pacers"), order())
         assertEquals(WhyTag(WhyKind.OVERTIME), viewModel.uiState.value.whyTags[pacersGame.streamKey])
 
-        // A new minute re-ranks, focus or not.
+        // Minute ticks and moving to another card change nothing either.
         now += 60_000L
         ticks.emit(Unit)
+        viewModel.onLiveCardFocus(pacersGame.streamKey)
+        now += 60_000L
+        ticks.emit(Unit)
+        runCurrent()
+        assertEquals(listOf("lakers", "pacers"), order())
+
+        // Focus leaving the list re-ranks at once.
+        viewModel.onLiveCardFocus(null)
         runCurrent()
         assertEquals(listOf("pacers", "lakers"), order())
 
         // With no card focused, a change re-ranks at once.
-        viewModel.onLiveCardFocus(null)
         inputs.value = EndedInputs(mapOf(pacersGame.streamKey to inPlay("401909985", 60, 40, "5:00 - 2nd"), closeLakers))
         runCurrent()
         assertEquals(listOf("lakers", "pacers"), order())

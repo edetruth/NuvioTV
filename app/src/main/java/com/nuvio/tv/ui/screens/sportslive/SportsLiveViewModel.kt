@@ -151,13 +151,13 @@ class SportsLiveViewModel internal constructor(
         SortInputs(stored, mode, SportsLiveLayout.of(choices, SportsLiveTab.LIVE_NOW))
     }
 
-    // Most exciting (#43): what changed lately in each game, and the order last shown with the minute it
-    // was taken in, so cards keep their place under a focused card until the next minute (as the panel, I3).
+    // Most exciting (#43): what changed lately in each game, and the order last shown, which holds while a
+    // card has focus (minute ticks too); focus leaving the list re-ranks at once.
     private val excitementHistory = ExcitementHistory()
     private var shownLiveOrder: List<String>? = null
-    private var shownLiveMinute: Long? = null
     @Volatile
     private var focusedLiveCard: String? = null
+    private val reRank = MutableStateFlow(0)
     private var autoRefreshJob: Job? = null
     private var focusProbeJob: Job? = null
 
@@ -191,7 +191,7 @@ class SportsLiveViewModel internal constructor(
     }.flowOn(computeDispatcher)
 
     val uiState: StateFlow<SportsLiveUiState> =
-        combine(pinned, repo.endedKeys, combine(selectionState, sortInputs) { selection, sort -> selection to sort }, endedInputs, clock) { pinned, endedKeys, (selection, sort), inputs, _ ->
+        combine(pinned, repo.endedKeys, combine(selectionState, sortInputs, reRank) { selection, sort, _ -> selection to sort }, endedInputs, clock) { pinned, endedKeys, (selection, sort), inputs, _ ->
             buildState(pinned, endedKeys, selection, inputs, sort)
         }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SportsLiveUiState())
@@ -215,9 +215,14 @@ class SportsLiveViewModel internal constructor(
         viewModelScope.launch { saveLiveSort(sort) }
     }
 
-    /** The focused Live now card's key, or null when no card is focused: Most exciting re-ranks only then, or each new minute. */
+    /**
+     * The focused card's key, or null once focus leaves the list: Most exciting keeps its order while a card
+     * has focus and re-ranks when focus leaves.
+     */
     fun onLiveCardFocus(key: String?) {
+        val left = key == null && focusedLiveCard != null
         focusedLiveCard = key
+        if (left) reRank.update { it + 1 }
     }
 
     /** The active profile's followed teams, for the card menu's Follow / Unfollow labels. */
@@ -404,23 +409,18 @@ class SportsLiveViewModel internal constructor(
                 }
                 justEnded = split.ended + overdueEnded.associate { (item, ended) -> item.streamKey to ended }
                 val ordered = if (liveSort == LiveNowSort.MOST_EXCITING) {
-                    val ratings = live.associateWith { excitementOf(it, scores[it.streamKey], excitementHistory, now) }
+                    val showTags = LiveNowSort.showsWhyTags(sort.mode)
+                    val ratings = live.associateWith { excitementOf(it, scores[it.streamKey], excitementHistory, now, recentChanges = showTags) }
                     val fresh = excitingOrder(live) { ratings[it] }
-                    val order = if (panelMayReorder(focusedLiveCard, now, shownLiveMinute)) {
-                        shownLiveMinute = now / PANEL_REORDER_MS
-                        fresh
-                    } else {
-                        stabilizeOrder(fresh, shownLiveOrder)
-                    }
+                    val order = if (focusedLiveCard == null) fresh else stabilizeOrder(fresh, shownLiveOrder)
                     shownLiveOrder = order.map { it.streamKey }
                     liveRank = buildMap { order.forEachIndexed { index, item -> putIfAbsent(item.streamKey, index) } }
-                    if (LiveNowSort.showsWhyTags(sort.mode)) {
+                    if (showTags) {
                         whyTags = buildMap { ratings.forEach { (item, rating) -> rating?.tag?.let { put(item.streamKey, it) } } }
                     }
                     order
                 } else {
                     shownLiveOrder = null
-                    shownLiveMinute = null
                     live
                 }
                 ordered + split.justEnded + overdueEnded.map { it.first }
