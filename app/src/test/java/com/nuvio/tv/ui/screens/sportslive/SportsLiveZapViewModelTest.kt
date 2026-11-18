@@ -6,6 +6,7 @@ import com.nuvio.tv.MainDispatcherRule
 import com.nuvio.tv.core.debrid.DirectDebridResolver
 import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.core.sportslive.SportsLiveFullTimeAnnouncements
+import com.nuvio.tv.core.sportslive.SportsLiveLinkVerdicts
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.scores.ChipScore
 import com.nuvio.tv.core.sportslive.scores.EspnFixtures
@@ -80,7 +81,8 @@ class SportsLiveZapViewModelTest {
         scores: MutableStateFlow<Map<String, ScoreSnapshot>>,
         mode: ScoresMode,
         playing: SportsLiveItem,
-        others: List<SportsLiveItem>
+        others: List<SportsLiveItem>,
+        started: Boolean = true
     ): SportsLiveZapViewModel {
         SportsLiveZapSessions.start(
             SportsLiveZapSession.of(listOf(playing) + others, playing.streamKey, SportsLiveTab.LIVE_NOW, null, returnToHomeOnBack = false)!!
@@ -97,10 +99,11 @@ class SportsLiveZapViewModelTest {
         every { liveScores.scores } returns scores
         every { liveScores.mode } returns flowOf(mode)
         return SportsLiveZapViewModel(SavedStateHandle(mapOf("contentId" to playing.id)), resolver, debrid, profiles, repo, liveScores)
+            .also { it.onPlayerStarted(started) }
     }
 
     @Test
-    fun `the game playing ending shows the full-time toast for a while, the score per the Scores setting`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `the game playing ending shows the full-time toast once on screen, the score per the Scores setting`() = runTest(mainDispatcherRule.dispatcher) {
         val pacers = game("Indiana Pacers at Philadelphia 76ers")
         val scores = MutableStateFlow(mapOf(pacers.streamKey to inPlay))
         val viewModel = fullTimeViewModel(scores, ScoresMode.SHOW, pacers, emptyList())
@@ -109,6 +112,10 @@ class SportsLiveZapViewModelTest {
         scores.value = mapOf(pacers.streamKey to final)
         runCurrent()
         assertEquals(ChipScore(101, 99), viewModel.fullTime.value!!.score)
+        // Not on screen yet (the controls are up): not claimed.
+        assertFalse(SportsLiveFullTimeAnnouncements.isAnnounced(final.eventId))
+        viewModel.onFullTimeVisible(true)
+        assertTrue(SportsLiveFullTimeAnnouncements.isAnnounced(final.eventId))
         advanceTimeBy(FULL_TIME_TOAST_MS + 1)
         assertNull(viewModel.fullTime.value)
 
@@ -133,43 +140,105 @@ class SportsLiveZapViewModelTest {
     }
 
     @Test
-    fun `a full time already announced by the alerts is not shown again, nor a game opened already over`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `the toast claims its game only when shown, and goes if the alerts announced it meanwhile`() = runTest(mainDispatcherRule.dispatcher) {
         val pacers = game("Indiana Pacers at Philadelphia 76ers")
-        // The followed-team toast (#42) claimed this game's end first.
-        assertTrue(SportsLiveFullTimeAnnouncements.claim(final.eventId))
         val scores = MutableStateFlow(mapOf(pacers.streamKey to inPlay))
         val viewModel = fullTimeViewModel(scores, ScoresMode.SHOW, pacers, emptyList())
         runCurrent()
         scores.value = mapOf(pacers.streamKey to final)
         runCurrent()
+        assertTrue(viewModel.fullTime.value != null)
+        // The followed-team toast (#42) shows first, while this one waits behind the controls.
+        assertTrue(SportsLiveFullTimeAnnouncements.claim(final.eventId))
+        viewModel.onFullTimeVisible(true)
         assertNull(viewModel.fullTime.value)
 
+        // Already announced before it ended here: never raised.
         SportsLiveFullTimeAnnouncements.clear()
+        assertTrue(SportsLiveFullTimeAnnouncements.claim(final.eventId))
+        val laterScores = MutableStateFlow(mapOf(pacers.streamKey to inPlay))
+        val later = fullTimeViewModel(laterScores, ScoresMode.SHOW, pacers, emptyList())
+        runCurrent()
+        laterScores.value = mapOf(pacers.streamKey to final)
+        runCurrent()
+        assertNull(later.fullTime.value)
+
+        // Never shown (controls up the whole time): dropped, unclaimed.
+        SportsLiveFullTimeAnnouncements.clear()
+        val waitingScores = MutableStateFlow(mapOf(pacers.streamKey to inPlay))
+        val waiting = fullTimeViewModel(waitingScores, ScoresMode.SHOW, pacers, emptyList())
+        runCurrent()
+        waitingScores.value = mapOf(pacers.streamKey to final)
+        runCurrent()
+        advanceTimeBy(FULL_TIME_PENDING_MS + 1)
+        assertNull(waiting.fullTime.value)
+        assertFalse(SportsLiveFullTimeAnnouncements.isAnnounced(final.eventId))
+
+        // A game opened already over did not end while watching.
         val already = fullTimeViewModel(MutableStateFlow(mapOf(pacers.streamKey to final)), ScoresMode.SHOW, pacers, emptyList())
         runCurrent()
         assertNull(already.fullTime.value)
     }
 
     @Test
-    fun `Next live game moves to the pick of Watch with another game, never a finished one`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `nothing is scored or raised while the player is stopped`() = runTest(mainDispatcherRule.dispatcher) {
+        val pacers = game("Indiana Pacers at Philadelphia 76ers")
+        val scores = MutableStateFlow(mapOf(pacers.streamKey to inPlay))
+        val viewModel = fullTimeViewModel(scores, ScoresMode.SHOW, pacers, emptyList())
+        runCurrent()
+        // Home pressed: the game ends behind it.
+        viewModel.onPlayerStarted(false)
+        scores.value = mapOf(pacers.streamKey to final)
+        runCurrent()
+        assertNull(viewModel.fullTime.value)
+        // Back to the player: the toast is raised then.
+        viewModel.onPlayerStarted(true)
+        runCurrent()
+        assertTrue(viewModel.fullTime.value != null)
+
+        // Never started: never seen live, so nothing.
+        SportsLiveFullTimeAnnouncements.clear()
+        val stoppedScores = MutableStateFlow(mapOf(pacers.streamKey to inPlay))
+        val stopped = fullTimeViewModel(stoppedScores, ScoresMode.SHOW, pacers, emptyList(), started = false)
+        runCurrent()
+        stoppedScores.value = mapOf(pacers.streamKey to final)
+        runCurrent()
+        assertNull(stopped.fullTime.value)
+    }
+
+    @Test
+    fun `Next live game works only while the toast shows, and skips finished and dead-checked games`() = runTest(mainDispatcherRule.dispatcher) {
         val pacers = game("Indiana Pacers at Philadelphia 76ers")
         val lakers = game("Los Angeles Lakers at Phoenix Suns")
-        val celtics = game("Boston Celtics at New York Knicks")
+        val dead = game("Boston Celtics at New York Knicks")
+        val hawks = game("Atlanta Hawks at San Antonio Spurs")
         val lakersFinal = EspnFixtures.events(EspnFixtures.NBA_20261115, EspnLeagueMap.NBA).first { it.eventId == "401909986" }
             .let { it.copy(state = ScoreState.POST, isFinal = true, home = it.home.copy(score = 90), away = it.away.copy(score = 88)) }
-        val scores = MutableStateFlow(mapOf(pacers.streamKey to inPlay, lakers.streamKey to lakersFinal))
-        val viewModel = fullTimeViewModel(scores, ScoresMode.SHOW, pacers, listOf(lakers, celtics))
-        val events = mutableListOf<SportsLiveZapEvent>()
-        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.events.collect { events += it } }
-        // No toast: Next does nothing.
-        assertFalse(viewModel.nextLiveGame())
-        runCurrent()
-        scores.value = mapOf(pacers.streamKey to final, lakers.streamKey to lakersFinal)
-        runCurrent()
-        assertTrue(viewModel.nextLiveGame())
-        advanceUntilIdle()
-        assertNull(viewModel.fullTime.value)
-        assertEquals(celtics, (events.single() as SportsLiveZapEvent.Navigate).target.item)
+        SportsLiveLinkVerdicts.shared.markDead(dead.streamKey, SportsLiveLinkVerdicts.Dead(0L, 0L))
+        try {
+            val scores = MutableStateFlow(mapOf(pacers.streamKey to inPlay, lakers.streamKey to lakersFinal))
+            val viewModel = fullTimeViewModel(scores, ScoresMode.SHOW, pacers, listOf(lakers, dead, hawks))
+            val events = mutableListOf<SportsLiveZapEvent>()
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.events.collect { events += it } }
+            // No toast: Next does nothing.
+            assertFalse(viewModel.nextLiveGame())
+            runCurrent()
+            scores.value = mapOf(pacers.streamKey to final, lakers.streamKey to lakersFinal)
+            runCurrent()
+            // Raised but hidden (the controls are up): Right is left to the player.
+            assertFalse(viewModel.nextLiveGame())
+            viewModel.onFullTimeVisible(true)
+            viewModel.onFullTimeVisible(false)
+            assertFalse(viewModel.nextLiveGame())
+            // On screen: Right moves on, past the final and the dead-checked game.
+            viewModel.onFullTimeVisible(true)
+            assertTrue(viewModel.nextLiveGame())
+            advanceUntilIdle()
+            assertNull(viewModel.fullTime.value)
+            assertEquals(hawks, (events.single() as SportsLiveZapEvent.Navigate).target.item)
+        } finally {
+            SportsLiveLinkVerdicts.shared.clear(dead.streamKey)
+        }
     }
 
     @Test

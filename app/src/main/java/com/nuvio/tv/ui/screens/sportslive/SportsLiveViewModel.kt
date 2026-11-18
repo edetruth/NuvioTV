@@ -11,8 +11,8 @@ import com.nuvio.tv.core.sportslive.EndedSignal
 import com.nuvio.tv.core.sportslive.SportsLiveEndedGames
 import com.nuvio.tv.core.sportslive.LinkCheckRequest
 import com.nuvio.tv.core.sportslive.SportsLiveLinkChecker
+import com.nuvio.tv.core.sportslive.SportsLiveLinkVerdicts
 import com.nuvio.tv.core.sportslive.SportsLiveManifestVerdict
-import com.nuvio.tv.core.sportslive.SportsLiveWorkingLinks
 import com.nuvio.tv.core.sportslive.SportsLiveItemBucketer
 import com.nuvio.tv.core.sportslive.SportsLiveLayout
 import com.nuvio.tv.core.sportslive.SportsLiveLiveDuration
@@ -124,13 +124,13 @@ class SportsLiveViewModel internal constructor(
         liveSort = prefs.liveNowSort,
         saveLiveSort = prefs::setLiveNowSort,
         scoresMode = liveScores.mode,
-        linkChecker = SportsLiveLinkChecker(fetch = manifestFetcher::fetch),
-        // Only a link already resolved (the cache, else one that played): never a resolve just to test.
+        linkChecker = SportsLiveLinkChecker(fetch = manifestFetcher::fetch, verdicts = SportsLiveLinkVerdicts.shared),
+        // Only a fresh resolve (the resolve cache's, at most five minutes old): never an older link that
+        // once played, and never a resolve just to test.
         linkCheckOf = { item ->
-            SportsLiveManifestVerdict.requestFor(
-                item,
-                resolveCache.get(item.streamKey) ?: SportsLiveWorkingLinks.shared.goodStream(item.id)
-            )
+            resolveCache.getFresh(item.streamKey)?.let { (stream, resolvedAtMs) ->
+                SportsLiveManifestVerdict.requestFor(item, stream, resolvedAtMs)
+            }
         },
         computeDispatcher = Dispatchers.Default
     )
@@ -412,7 +412,7 @@ class SportsLiveViewModel internal constructor(
         inputs: EndedInputs,
         sort: SortInputs = SortInputs(),
         /** Cards whose link check found them dead (#60 phase 2), with when. */
-        linkDead: Map<String, Long> = emptyMap()
+        linkDead: Map<String, SportsLiveLinkVerdicts.Dead> = emptyMap()
     ): SportsLiveUiState {
         val hasClaimed = bucketed.hasClaimed
         // Live items whose streams are gone have ended; the other tabs are left as they are. Games found
@@ -439,18 +439,22 @@ class SportsLiveViewModel internal constructor(
                     val ended = EndedGame(EndedSignal.ESTIMATE, start + SportsLiveLiveDuration.maxLiveMs(item.sport))
                     (item to ended).takeIf { now < ended.dropsAtMs }
                 }
-                // #60 phase 2: a game past its estimated end that ESPN does not decide has its already-resolved
-                // link looked at once, while Live now is on screen; a dead link moves it to the strip as
-                // "Probably ended" (playable, never hidden), and a game ESPN takes up again comes back.
+                // #60 phase 2: a game past its estimated end that ESPN does not decide has its freshly resolved
+                // link looked at, while Live now is on screen; a dead link moves it to the strip as "Probably
+                // ended" (playable, never hidden). The verdict goes when fresh links come back (a later
+                // resolve) or a later check finds the link alive, and a game ESPN takes up again comes back.
+                // Checks go on under Scores Off: they make no ESPN request, only the stream host's.
                 val linkEnded = ArrayList<SportsLiveItem>()
                 val toCheck = ArrayList<LinkCheckRequest>()
                 val live = notOverdue.filter { item ->
                     if (endedGames.linkCheckEnd(item, scores[item.streamKey], now) == null) return@filter true
-                    if (item.streamKey in linkDead) {
+                    val request = linkCheckOf(item)
+                    val superseded = request != null && linkChecker?.clearIfSuperseded(request) == true
+                    if (item.streamKey in linkDead && !superseded) {
                         linkEnded += item
                         false
                     } else {
-                        linkCheckOf(item)?.let(toCheck::add)
+                        request?.let(toCheck::add)
                         true
                     }
                 }
@@ -458,7 +462,7 @@ class SportsLiveViewModel internal constructor(
                     linkChecker?.offer(toCheck, viewModelScope)
                 }
                 justEnded = split.ended + overdueEnded.associate { (item, ended) -> item.streamKey to ended } +
-                    linkEnded.associate { it.streamKey to SportsLiveEndedGames.linkDead(linkDead.getValue(it.streamKey)) }
+                    linkEnded.associate { it.streamKey to SportsLiveEndedGames.linkDead(linkDead.getValue(it.streamKey).atMs) }
                 val ordered = if (liveSort == LiveNowSort.MOST_EXCITING) {
                     val showTags = LiveNowSort.showsWhyTags(sort.mode)
                     val ratings = live.associateWith { excitementOf(it, scores[it.streamKey], excitementHistory, now, recentChanges = showTags) }

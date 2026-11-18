@@ -50,8 +50,8 @@ data class SportsLiveGameRequest(
     /** The card the page was opened from (Game stats); an upcoming one offers Remind me (#44). */
     val card: SportsLiveItem? = null,
     val spoilerSafe: Boolean = false,
-    /** Opened on a live Live now game: "Watch with another game" starts this dual session (#57). */
-    val watchWith: SportsLiveDualSession? = null
+    /** Opened on a live Live now game: "Watch with another game" pairs it when pressed (#57); null: not offered. */
+    val watchWith: (() -> SportsLiveDualSession?)? = null
 )
 
 /** Whether [item]'s card names [event]'s home team first (N10); away first when that is not known. */
@@ -96,8 +96,8 @@ data class SportsLiveGameUiState(
     val card: SportsLiveItem? = null,
     /** Opened from the Catch up row (#58): the score shows only once revealed, even under Show. */
     val spoilerSafe: Boolean = false,
-    /** "Watch with another game" (#57): the dual session it starts, while the game is live; null hides it. */
-    val watchWith: SportsLiveDualSession? = null
+    /** "Watch with another game" shows (#57): opened on a live Live now game, while it is live. */
+    val offersWatchWith: Boolean = false
 ) {
     /** Score, records and stats show: Scores Show (unless [spoilerSafe]), or revealed. */
     val showsScore: Boolean get() = (mode == ScoresMode.SHOW && !spoilerSafe) || revealed
@@ -170,7 +170,7 @@ class SportsLiveGameViewModel internal constructor(
             card = request?.card,
             spoilerSafe = request?.spoilerSafe == true,
             // Live games only: gone once the page's summary says the game is over.
-            watchWith = request?.watchWith?.takeIf { (page.summary?.state ?: event?.state) == ScoreState.IN }
+            offersWatchWith = request?.watchWith != null && (page.summary?.state ?: event?.state) == ScoreState.IN
         )
     }.stateIn(
         viewModelScope,
@@ -182,9 +182,12 @@ class SportsLiveGameViewModel internal constructor(
             homeFirst = request?.homeFirst == true,
             card = request?.card,
             spoilerSafe = request?.spoilerSafe == true,
-            watchWith = request?.watchWith?.takeIf { request.event.state == ScoreState.IN }
+            offersWatchWith = request?.watchWith != null && request.event.state == ScoreState.IN
         )
     )
+
+    /** "Watch with another game" pressed (#57): the pair is picked now, from the section's games; null: none. */
+    fun watchWithSession(): SportsLiveDualSession? = request?.watchWith?.invoke()
 
     // Summaries waiting out the score delay; kept across visibility changes.
     private val buffer = DelayedValues<GameSummary>()

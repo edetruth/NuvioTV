@@ -36,6 +36,15 @@ class SportsLiveResolveCache @Inject constructor() {
         return null
     }
 
+    /**
+     * The cached stream for [key] with when it was resolved, while within [TTL_MS] (#60 phase 2: a link
+     * check reads only such a fresh resolve); null when stale or absent.
+     */
+    fun getFresh(key: String): Pair<Stream, Long>? {
+        val entry = entries[key] ?: return null
+        return if (nowMs() - entry.atMs < TTL_MS) entry.stream to entry.atMs else null
+    }
+
     /** Whether a non-stale resolve is cached for [key] (the ended-probe uses it to skip a request). */
     fun isFresh(key: String): Boolean = get(key) != null
 

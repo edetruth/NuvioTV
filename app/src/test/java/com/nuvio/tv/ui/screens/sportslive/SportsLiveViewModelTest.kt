@@ -950,13 +950,16 @@ class SportsLiveViewModelTest {
     private val linkFetches = mutableListOf<String>()
     private val linkTicks = MutableSharedFlow<Unit>(replay = 1).apply { tryEmit(Unit) }
 
+    // When the card's link was last resolved (the resolve cache's entry); null: none fresh.
+    private var resolvedAt: Long? = 0L
+
     /** No game may be estimated (its feed has not answered): only a link check can move it. */
     private fun TestScope.linkCheckedViewModel(
         scores: Map<String, ScoreSnapshot> = emptyMap(),
-        answer: ManifestResponse? = ManifestResponse(404, null)
+        answer: () -> ManifestResponse? = { ManifestResponse(404, null) }
     ): SportsLiveViewModel {
         val checker = SportsLiveLinkChecker(
-            fetch = { url, _ -> linkFetches += url; answer },
+            fetch = { url, _ -> linkFetches += url; answer() },
             cooldown = SportsLiveSourceCooldown(nowMs = { NOW }),
             trust = SportsLiveSourceTrust(),
             nowMs = { NOW }
@@ -968,7 +971,9 @@ class SportsLiveViewModelTest {
             clock = linkTicks,
             linkChecker = checker,
             linkCheckOf = { item ->
-                LinkCheckRequest(item.streamKey, "https://cdn.invalid/${item.id}.m3u8", emptyMap(), listOf(item.addonBaseUrl), item.addonName)
+                resolvedAt?.let { at ->
+                    LinkCheckRequest(item.streamKey, "https://cdn.invalid/${item.id}.m3u8", emptyMap(), listOf(item.addonBaseUrl), item.addonName, at)
+                }
             },
             computeDispatcher = compute
         )
@@ -1012,9 +1017,36 @@ class SportsLiveViewModelTest {
     }
 
     @Test
+    fun `a Probably ended card whose links come back returns to live, and leaves the strip only while its verdict stands`() = runTest {
+        nextLoad = load(listOf(pastEstimate, stillOn))
+        var reply: ManifestResponse? = ManifestResponse(404, null)
+        val viewModel = linkCheckedViewModel(answer = { reply })
+        viewModel.onScreenVisible(true)
+        tick()
+        runCurrent()
+        assertEquals(setOf(pastEstimate.streamKey), viewModel.uiState.value.justEnded.keys)
+
+        // No fresh resolve any more (the cache's entry expired): no check, the verdict stands.
+        resolvedAt = null
+        tick()
+        assertEquals(setOf(pastEstimate.streamKey), viewModel.uiState.value.justEnded.keys)
+
+        // Fresh links: a later resolve. The card is live again at once; its new link is checked, and
+        // it answers.
+        resolvedAt = 5_000L
+        reply = ManifestResponse(200, "#EXTM3U\n#EXTINF:6,\na.ts\n")
+        tick()
+        runCurrent()
+        assertTrue(viewModel.uiState.value.justEnded.isEmpty())
+        assertEquals(2, viewModel.uiState.value.countOf(SportsLiveTab.LIVE_NOW))
+        assertEquals(2, linkFetches.size)
+        viewModel.onScreenVisible(false)
+    }
+
+    @Test
     fun `an alive or unclear link, another tab, or a game ESPN follows moves nothing`() = runTest {
         nextLoad = load(listOf(pastEstimate))
-        val alive = linkCheckedViewModel(answer = ManifestResponse(200, "#EXTM3U\n#EXTINF:6,\na.ts\n"))
+        val alive = linkCheckedViewModel(answer = { ManifestResponse(200, "#EXTM3U\n#EXTINF:6,\na.ts\n") })
         alive.onScreenVisible(true)
         tick()
         runCurrent()

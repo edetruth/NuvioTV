@@ -99,7 +99,8 @@ import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniSpot
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniState
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniStop
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveNowPlayingCard
-import com.nuvio.tv.ui.screens.sportslive.dual.sportsLiveWatchWithSession
+import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualPick
+import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualPickerDialog
 import com.nuvio.tv.ui.screens.sportslive.preview.SportsLivePreviewPlayer
 import com.nuvio.tv.ui.screens.sportslive.preview.SportsLivePreviewState
 import com.nuvio.tv.ui.screens.sportslive.preview.SportsLivePreviewVideo
@@ -294,16 +295,26 @@ fun SportsLiveScreen(
     }
 
     // "Watch with another game" (#57): a live game on Live now goes straight into dual screen, in slot 1,
-    // beside a game picked for it (SportsLiveSecondGame), with no lookup until the panes start.
+    // beside a game picked for it (SportsLiveSecondGame), with no lookup until the panes start; a channel
+    // opens the picker ([dualPick]).
     val canWatchWith: (SportsLiveItem) -> Boolean = { item -> uiState.offersWatchWith(item, scores[item.streamKey]) }
-    val watchWithSession: (SportsLiveItem) -> SportsLiveDualSession? = { item ->
-        sportsLiveWatchWithSession(
-            first = item,
-            items = uiState.visibleItems,
-            zapItems = uiState.zapItems,
-            filter = uiState.selectedFilter,
-            scores = scores,
-            finishedKeys = uiState.finishedKeys(scores)
+    var dualPick by remember { mutableStateOf<SportsLiveDualPick?>(null) }
+    fun startDual(session: SportsLiveDualSession) {
+        // Slot 1 keeps the stream its preview plays, with no lookup (#65); freed before dual starts.
+        val handOff = viewModel.takeOverPreview(session.left)?.stream
+        previewPlayer.release()
+        SportsLiveDualSessions.start(if (handOff != null) session.copy(leftStream = handOff) else session)
+        onOpenDual()
+    }
+    dualPick?.let { pick ->
+        SportsLiveDualPickerDialog(
+            candidates = pick.candidates,
+            rows = emptyMap(),
+            onPick = { second ->
+                dualPick = null
+                startDual(pick.session(second))
+            },
+            onDismiss = { dualPick = null }
         )
     }
 
@@ -341,8 +352,12 @@ fun SportsLiveScreen(
                         // The page names the teams in the card's order (N10).
                         homeFirst = sportsLiveGameHomeFirst(item, event),
                         card = item,
-                        // A live game's page offers "Watch with another game" (#57), paired now.
-                        watchWith = if (event.state == ScoreState.IN && canWatchWith(item)) watchWithSession(item) else null
+                        // A live game's page offers "Watch with another game" (#57), paired when pressed.
+                        watchWith = if (event.state == ScoreState.IN && !item.isChannel && canWatchWith(item)) {
+                            { viewModel.uiState.value.watchWithSession(item, scoresViewModel.scores.value) }
+                        } else {
+                            null
+                        }
                     )
                 )
                 onOpenGame()
@@ -371,21 +386,16 @@ fun SportsLiveScreen(
             preview = playing,
             noStreamKey = (preview as? SportsLivePreviewState.NoStream)?.item?.listKey,
             previewPlayer = previewPlayer,
-            dialogOpen = playState != SportsLivePlayState.Idle,
+            dialogOpen = playState != SportsLivePlayState.Idle || dualPick != null,
             onPreviewFocus = viewModel::setPreviewFocus,
             onOpenDetail = onOpenDetail,
             onToggleFollow = viewModel::toggleFollow,
             canWatchWith = canWatchWith,
             onWatchWith = { item ->
-                val session = watchWithSession(item)
-                if (session == null) {
-                    Toast.makeText(context, context.getString(R.string.sports_live_dual_no_pair), Toast.LENGTH_SHORT).show()
-                } else {
-                    // Slot 1 keeps the stream its preview plays, with no lookup (#65); freed before dual starts.
-                    val handOff = viewModel.takeOverPreview(item)?.stream
-                    previewPlayer.release()
-                    SportsLiveDualSessions.start(session.copy(leftStream = handOff))
-                    onOpenDual()
+                when (val action = uiState.watchWithFor(item, scores)) {
+                    is SportsLiveWatchWith.Paired -> startDual(action.session)
+                    is SportsLiveWatchWith.Pick -> dualPick = action.pick
+                    null -> Toast.makeText(context, context.getString(R.string.sports_live_dual_no_pair), Toast.LENGTH_SHORT).show()
                 }
             },
             results = resultsState,

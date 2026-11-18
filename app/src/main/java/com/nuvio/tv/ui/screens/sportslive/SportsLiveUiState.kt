@@ -10,6 +10,10 @@ import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveKind
 import com.nuvio.tv.domain.model.SportsLiveTab
 import com.nuvio.tv.domain.repository.SportsLiveFailure
+import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualPick
+import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualSession
+import com.nuvio.tv.ui.screens.sportslive.dual.offersDual
+import com.nuvio.tv.ui.screens.sportslive.dual.sportsLiveWatchWithSession
 
 data class SportsLiveUiState(
     val isLoading: Boolean = true,
@@ -87,11 +91,58 @@ internal fun sportsLiveCardOk(ended: EndedGame?): SportsLiveCardOk {
 
 /**
  * "Watch with another game" (#57) is offered on [item] ([snapshot]: its delayed score): a live game on
- * Live now, not in Just ended and not an ESPN final (in the postgame grace either). Never a channel.
+ * Live now, not in Just ended and not an ESPN final (in the postgame grace either); or a channel on a tab
+ * with dual screen (Live now, Channels), which opens the picker ([watchWithFor]).
  */
 internal fun SportsLiveUiState.offersWatchWith(item: SportsLiveItem, snapshot: ScoreSnapshot?): Boolean =
-    selectedTab == SportsLiveTab.LIVE_NOW && item.kind == SportsLiveKind.EVENTS && !item.isChannel &&
-        endedOf(item) == null && !SportsLiveEndedGames.isEspnFinal(item, snapshot)
+    if (item.isChannel) {
+        selectedTab.offersDual()
+    } else {
+        selectedTab == SportsLiveTab.LIVE_NOW && item.kind == SportsLiveKind.EVENTS &&
+            endedOf(item) == null && !SportsLiveEndedGames.isEspnFinal(item, snapshot)
+    }
+
+/** What "Watch with another game" does on a card (#57). */
+internal sealed interface SportsLiveWatchWith {
+    /** A live game: dual screen at once, beside the game picked for it. */
+    data class Paired(val session: SportsLiveDualSession) : SportsLiveWatchWith
+
+    /** A channel: no game to pair it with by itself, so the picker lists what may go beside it. */
+    data class Pick(val pick: SportsLiveDualPick) : SportsLiveWatchWith
+}
+
+/** "Watch with another game" on [item] ([scores]: the delayed snapshots by card key); null: nothing to pair with. */
+internal fun SportsLiveUiState.watchWithFor(item: SportsLiveItem, scores: Map<String, ScoreSnapshot>): SportsLiveWatchWith? =
+    if (item.isChannel) {
+        SportsLiveWatchWith.Pick(
+            SportsLiveDualPick(
+                chosen = item,
+                items = visibleItems,
+                filter = selectedFilter,
+                tab = selectedTab,
+                endedKeys = finishedKeys(scores),
+                zapItems = zapItems
+            )
+        )
+    } else {
+        watchWithSession(item, scores)?.let(SportsLiveWatchWith::Paired)
+    }
+
+/**
+ * The dual session "Watch with another game" starts on the live game [item]: the pick made now, over
+ * Live now's games (its list as shown while Live now is the tab).
+ */
+internal fun SportsLiveUiState.watchWithSession(item: SportsLiveItem, scores: Map<String, ScoreSnapshot>): SportsLiveDualSession? {
+    val liveNow = tabs[SportsLiveTab.LIVE_NOW].orEmpty()
+    return sportsLiveWatchWithSession(
+        first = item,
+        items = if (selectedTab == SportsLiveTab.LIVE_NOW) visibleItems else liveNow,
+        zapItems = liveNow,
+        filter = selectedFilter.takeIf { selectedTab == SportsLiveTab.LIVE_NOW },
+        scores = scores,
+        finishedKeys = finishedKeys(scores)
+    )
+}
 
 /**
  * Every source key of the Live now games known to be over: the Just ended strip, and ESPN finals still

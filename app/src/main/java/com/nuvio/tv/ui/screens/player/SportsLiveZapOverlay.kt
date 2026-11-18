@@ -171,8 +171,14 @@ internal fun BoxScope.SportsLiveZapOverlay(
     val fullTime by viewModel.fullTime.collectAsState()
     var lastFullTime by remember { mutableStateOf<FullTimeToast?>(null) }
     LaunchedEffect(fullTime) { fullTime?.let { lastFullTime = it } }
+    val fullTimeShown = fullTime != null && banner == null && !panelOpen && !playerOverlayVisible
+    // Claimed and timed only once on screen; Right moves on only while it is.
+    DisposableEffect(fullTimeShown, viewModel) {
+        viewModel.onFullTimeVisible(fullTimeShown)
+        onDispose { viewModel.onFullTimeVisible(false) }
+    }
     AnimatedVisibility(
-        visible = fullTime != null && banner == null && !panelOpen && !playerOverlayVisible,
+        visible = fullTimeShown,
         enter = fadeIn(tween(150)),
         exit = fadeOut(tween(250)),
         modifier = Modifier

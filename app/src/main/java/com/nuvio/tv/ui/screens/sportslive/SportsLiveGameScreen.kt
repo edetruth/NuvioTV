@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import android.widget.Toast
 import android.view.KeyEvent as AndroidKeyEvent
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -37,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
@@ -114,6 +116,7 @@ fun SportsLiveGameScreen(
     onOpenTeam: () -> Unit = {}
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     val currentOnBack by rememberUpdatedState(onBack)
     val event = state.event
     if (event == null) {
@@ -156,7 +159,7 @@ fun SportsLiveGameScreen(
         hasReplay = state.replay != null,
         homeFirst = state.homeFirst,
         canRemind = remindCard != null,
-        hasWatchWith = state.watchWith != null
+        hasWatchWith = state.offersWatchWith
     )
 
     // Back from highlights: focus returns to the card played, or to Watch all highlights.
@@ -216,7 +219,10 @@ fun SportsLiveGameScreen(
                 if (replay.apiType == "series") onOpenDetail(replay) else playViewModel.play(replay)
             },
             onWatchWith = {
-                state.watchWith?.let { session ->
+                val session = viewModel.watchWithSession()
+                if (session == null) {
+                    Toast.makeText(context, context.getString(R.string.sports_live_dual_no_pair), Toast.LENGTH_SHORT).show()
+                } else {
                     SportsLiveDualSessions.start(session)
                     onOpenDual()
                 }

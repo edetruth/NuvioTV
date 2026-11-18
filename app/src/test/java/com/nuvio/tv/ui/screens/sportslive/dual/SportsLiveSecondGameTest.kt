@@ -18,6 +18,9 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertFalse
+import com.nuvio.tv.ui.screens.sportslive.offersWatchWith
+import com.nuvio.tv.ui.screens.sportslive.watchWithFor
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -218,6 +221,29 @@ class SportsLiveSecondGameTest {
             assertEquals(Side.LEFT, viewModel.state.value!!.highlighted)
             assertEquals(listOf(earlier.id), resolved)
         }
+
+    // Channels: no auto pair, the picker
+
+    @Test
+    fun `Watch with another game on a channel opens the picker, on a live game it pairs at once`() {
+        val channel = later.copy(isChannel = true, kind = SportsLiveKind.CHANNELS, teams = null)
+        val channels = com.nuvio.tv.ui.screens.sportslive.SportsLiveUiState(
+            tabs = mapOf(SportsLiveTab.CHANNELS to listOf(channel, earlier), SportsLiveTab.LIVE_NOW to listOf(first, later)),
+            selectedTab = SportsLiveTab.CHANNELS,
+            visibleItems = listOf(channel, earlier)
+        )
+        assertTrue(channels.offersWatchWith(channel, null))
+        val pick = channels.watchWithFor(channel, emptyMap()) as com.nuvio.tv.ui.screens.sportslive.SportsLiveWatchWith.Pick
+        assertEquals(channel, pick.pick.chosen)
+        assertEquals(listOf(earlier), pick.pick.candidates)
+        assertEquals(SportsLiveTab.CHANNELS, pick.pick.session(earlier).tab)
+
+        val liveNow = channels.copy(selectedTab = SportsLiveTab.LIVE_NOW, visibleItems = listOf(first, later))
+        val paired = liveNow.watchWithFor(first, emptyMap()) as com.nuvio.tv.ui.screens.sportslive.SportsLiveWatchWith.Paired
+        assertEquals(later, paired.session.right)
+        // Upcoming and Replays offer nothing.
+        assertFalse(channels.copy(selectedTab = SportsLiveTab.UPCOMING).offersWatchWith(channel, null))
+    }
 
     private companion object {
         const val NOW = 1_763_240_000_000L

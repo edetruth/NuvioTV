@@ -30,6 +30,7 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
@@ -68,6 +69,29 @@ class SportsLiveGameViewModelTest {
         now = { testScheduler.currentTime },
         failedHighlights = failedHighlights
     ).also { vm -> backgroundScope.launch { vm.uiState.collect {} } }
+
+    @Test
+    fun `Watch with another game shows for a live game and pairs only when pressed`() = runTest(mainDispatcherRule.dispatcher) {
+        val first = com.nuvio.tv.ui.screens.sportslive.dual.dualItem("a")
+        val second = com.nuvio.tv.ui.screens.sportslive.dual.dualItem("b")
+        var paired = 0
+        val pair = {
+            paired++
+            com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualSession(first, second, listOf(first, second), null, com.nuvio.tv.domain.model.SportsLiveTab.LIVE_NOW)
+        }
+        val live = palaceGame.copy(state = com.nuvio.tv.core.sportslive.scores.ScoreState.IN, isFinal = false)
+        val vm = viewModel(SportsLiveGameRequest(live, watchWith = pair))
+        runCurrent()
+        assertTrue(vm.uiState.value.offersWatchWith)
+        // Nothing is picked until the button is pressed.
+        assertEquals(0, paired)
+        assertEquals(second, vm.watchWithSession()!!.right)
+        assertEquals(1, paired)
+
+        // A final, or a page opened elsewhere (no pairing), offers nothing.
+        assertFalse(viewModel(SportsLiveGameRequest(palaceGame, watchWith = pair)).uiState.value.offersWatchWith)
+        assertFalse(viewModel(SportsLiveGameRequest(live)).uiState.value.offersWatchWith)
+    }
 
     @Test
     fun `Scores Off - nothing is requested until Reveal, and nothing shows`() = runTest(mainDispatcherRule.dispatcher) {

@@ -20,6 +20,7 @@ import com.nuvio.tv.core.sportslive.FullTimeToast
 import com.nuvio.tv.core.sportslive.SportsLiveEndedGames
 import com.nuvio.tv.core.sportslive.SportsLiveFullTimeAnnouncements
 import com.nuvio.tv.core.sportslive.SportsLiveFullTimeToasts
+import com.nuvio.tv.core.sportslive.SportsLiveLinkVerdicts
 import com.nuvio.tv.core.sportslive.SportsLiveWorkingLinks
 import com.nuvio.tv.core.sportslive.scores.LiveScoresRepository
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
@@ -47,6 +48,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
@@ -92,7 +94,9 @@ class SportsLiveZapViewModel internal constructor(
     // The stream this player plays, handed to dual screen (#65); cleared when the player leaves.
     private val workingLinks: SportsLiveWorkingLinks = SportsLiveWorkingLinks.shared,
     // The persistent logo map the rows draw from; observed, so logos learned while the panel is open appear.
-    private val logos: TeamLogoBook = TeamLogoBook.shared
+    private val logos: TeamLogoBook = TeamLogoBook.shared,
+    // Games whose link check found them over (#60): "Next live game" never goes to one while that stands.
+    private val linkVerdicts: SportsLiveLinkVerdicts = SportsLiveLinkVerdicts.shared
 ) : ViewModel() {
 
     @Inject constructor(
@@ -277,12 +281,24 @@ class SportsLiveZapViewModel internal constructor(
     private val _fullTime = MutableStateFlow<FullTimeToast?>(null)
 
     /**
-     * "Full time · ‹score› · Stay for postgame / Next live game →" (#60) for [FULL_TIME_TOAST_MS] when
-     * ESPN's delayed view says the game playing is over; the score under Show only, nothing under Off.
-     * Announced once per game, whichever full-time toast claims it first ([SportsLiveFullTimeAnnouncements]).
+     * "Full time · ‹score› · Stay for postgame / Next live game →" (#60) when ESPN's delayed view says the
+     * game playing is over; the score under Show only, nothing under Off. The overlay shows it when
+     * nothing else is up and says so ([onFullTimeVisible]): only then is the game's full time claimed
+     * ([SportsLiveFullTimeAnnouncements], shared with the followed-team alerts, #42) and the toast stays
+     * [FULL_TIME_TOAST_MS]. One never shown within [FULL_TIME_PENDING_MS] is dropped unclaimed.
      */
     val fullTime: StateFlow<FullTimeToast?> = _fullTime.asStateFlow()
     private var fullTimeJob: Job? = null
+
+    // The player is started: only then is the game playing scored and its toast looked for.
+    private val playerStarted = MutableStateFlow(false)
+
+    // The toast's game's full time was claimed (it showed), and the toast is on screen now.
+    private var fullTimeClaimed = false
+    private var fullTimeVisible = false
+
+    // The event a toast was raised for: one toast per game per player.
+    private var fullTimeEventId: String? = null
 
     init {
         if (arrival.value != null) {
@@ -293,11 +309,14 @@ class SportsLiveZapViewModel internal constructor(
         }
         nowPlaying?.let { item ->
             viewModelScope.launch {
-                combine(liveScores.scores, liveScores.mode) { scores, mode -> scores[item.streamKey] to mode }.collect { (snapshot, mode) ->
+                // Paused while the player is stopped: nothing is scored or raised behind Home.
+                playerStarted.flatMapLatest { started ->
+                    if (started) combine(liveScores.scores, liveScores.mode) { scores, mode -> scores[item.streamKey] to mode } else emptyFlow()
+                }.collect { (snapshot, mode) ->
                     nowTracker.update(listOf(item), enabled = mode != ScoresMode.OFF)
                     if (SportsLiveFullTimeToasts.isLive(item, snapshot)) nowSeenLive = true
                     val toast = SportsLiveFullTimeToasts.of(item, snapshot, mode, nowSeenLive) ?: return@collect
-                    if (SportsLiveFullTimeAnnouncements.claim(toast.eventId)) showFullTime(toast)
+                    raiseFullTime(toast)
                 }
             }
         }
@@ -306,11 +325,38 @@ class SportsLiveZapViewModel internal constructor(
     /** The player started (true) or stopped: the game playing is scored only meanwhile. */
     fun onPlayerStarted(started: Boolean) {
         if (started) nowTracker.onStart() else nowTracker.onStop()
+        playerStarted.value = started
     }
 
-    private fun showFullTime(toast: FullTimeToast) {
-        fullTimeJob?.cancel()
+    /** [toast] is due: it waits for the overlay to show it, unclaimed; once per game, never one already announced. */
+    private fun raiseFullTime(toast: FullTimeToast) {
+        if (fullTimeEventId == toast.eventId || SportsLiveFullTimeAnnouncements.isAnnounced(toast.eventId)) return
+        fullTimeEventId = toast.eventId
+        fullTimeClaimed = false
         _fullTime.value = toast
+        fullTimeJob?.cancel()
+        fullTimeJob = viewModelScope.launch {
+            delay(FULL_TIME_PENDING_MS)
+            if (!fullTimeClaimed) _fullTime.value = null
+        }
+        if (fullTimeVisible) onFullTimeVisible(true)
+    }
+
+    /**
+     * The overlay shows the toast ([visible]) or not (controls, the panel or the zap banner are up, or the
+     * player left). The first time it shows, its game's full time is claimed; already announced by the
+     * alerts, it goes at once. Shown, it stays [FULL_TIME_TOAST_MS].
+     */
+    fun onFullTimeVisible(visible: Boolean) {
+        fullTimeVisible = visible
+        val toast = _fullTime.value ?: return
+        if (!visible || fullTimeClaimed) return
+        if (!SportsLiveFullTimeAnnouncements.claim(toast.eventId)) {
+            dismissFullTime()
+            return
+        }
+        fullTimeClaimed = true
+        fullTimeJob?.cancel()
         fullTimeJob = viewModelScope.launch {
             delay(FULL_TIME_TOAST_MS)
             _fullTime.value = null
@@ -328,10 +374,12 @@ class SportsLiveZapViewModel internal constructor(
      * with the one that ended (#57's pick, never a finished game). False when there is none.
      */
     internal fun nextLiveGame(): Boolean {
-        if (_fullTime.value == null) return false
+        // Only while the toast is on screen: Right does nothing for a toast that is not showing.
+        if (_fullTime.value == null || !fullTimeClaimed || !fullTimeVisible) return false
         val session = controller.session(contentId) ?: return false
         val scores = liveScores.scores.value
-        val finished = repo.endedKeys.value + panelEndedKeys() +
+        // Never a finished game: the probe's, the panel's Just ended, ESPN finals, and dead link checks.
+        val finished = repo.endedKeys.value + panelEndedKeys() + linkVerdicts.deadKeys +
             SportsLiveEndedGames.shared.confirmedEndedSourceKeys(session.items, scores, System.currentTimeMillis())
         val next = SportsLiveSecondGame.pick(session.current, session.items, scores, finished) ?: return false
         dismissFullTime()
@@ -505,6 +553,9 @@ private const val BANNER_MS = 3_000L
 
 /** How long the full-time toast stays (#60); doing nothing meanwhile stays for the postgame. */
 internal const val FULL_TIME_TOAST_MS = 10_000L
+
+/** A full-time toast the overlay could not show this long (controls or the panel up) is dropped. */
+internal const val FULL_TIME_PENDING_MS = 60_000L
 
 /** The panel's games: [all] of them, and those [shown] under [chip]. */
 private data class PanelList(val all: List<SportsLiveItem>, val chip: String?, val shown: List<SportsLiveItem>)

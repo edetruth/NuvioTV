@@ -12,6 +12,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -32,16 +33,20 @@ class SportsLiveLinkCheckTest {
         nowMs = { now }
     )
 
-    private fun request(key: String, base: String = "https://addon.invalid", source: String = "Addon A") =
-        LinkCheckRequest(key = key, url = "https://cdn.invalid/$key.m3u8", headers = emptyMap(), sourceBaseUrls = listOf(base), source = source)
+    private fun request(key: String, base: String = "https://addon.invalid", source: String = "Addon A", resolvedAtMs: Long = 0L) =
+        LinkCheckRequest(
+            key = key, url = "https://cdn.invalid/$key.m3u8", headers = emptyMap(), sourceBaseUrls = listOf(base),
+            source = source, resolvedAtMs = resolvedAtMs
+        )
 
     // Classification
 
     @Test
-    fun `403, 404, an empty manifest or an ended playlist are dead, a running playlist is alive`() {
+    fun `404, an empty manifest or an ended playlist are dead, a running playlist is alive, a 403 says nothing`() {
         fun classify(code: Int, body: String?) = SportsLiveManifestVerdict.classify(ManifestResponse(code, body))
         assertEquals(LinkCheckResult.DEAD, classify(404, null))
-        assertEquals(LinkCheckResult.DEAD, classify(403, "forbidden"))
+        // A geo block or an expired token, not an ended stream.
+        assertEquals(LinkCheckResult.UNKNOWN, classify(403, "forbidden"))
         assertEquals(LinkCheckResult.DEAD, classify(200, ""))
         assertEquals(LinkCheckResult.DEAD, classify(200, "  \n"))
         assertEquals(LinkCheckResult.DEAD, classify(200, "#EXTM3U\n#EXTINF:6,\nseg1.ts\n#EXT-X-ENDLIST\n"))
@@ -56,11 +61,12 @@ class SportsLiveLinkCheckTest {
     @Test
     fun `only an already-resolved plain HLS link is checked, with its request headers`() {
         val item = game("g")
-        assertNull("nothing resolved: never resolve just to test", SportsLiveManifestVerdict.requestFor(item, null))
-        assertNull(SportsLiveManifestVerdict.requestFor(item, stream("https://cdn.invalid/file.mp4")))
-        assertNull(SportsLiveManifestVerdict.requestFor(item, stream("magnet:?xt=urn:btih:abc")))
+        assertNull("nothing resolved: never resolve just to test", SportsLiveManifestVerdict.requestFor(item, null, 0L))
+        assertNull(SportsLiveManifestVerdict.requestFor(item, stream("https://cdn.invalid/file.mp4"), 0L))
+        assertNull(SportsLiveManifestVerdict.requestFor(item, stream("magnet:?xt=urn:btih:abc"), 0L))
         val headers = mapOf("Referer" to "https://site.invalid/")
-        val request = SportsLiveManifestVerdict.requestFor(item, stream("https://cdn.invalid/live/index.m3u8?token=1", headers))!!
+        val request = SportsLiveManifestVerdict.requestFor(item, stream("https://cdn.invalid/live/index.m3u8?token=1", headers), 42L)!!
+        assertEquals(42L, request.resolvedAtMs)
         assertEquals(item.streamKey, request.key)
         assertEquals(headers, request.headers)
         assertEquals(listOf(item.addonBaseUrl), request.sourceBaseUrls)
@@ -69,7 +75,7 @@ class SportsLiveLinkCheckTest {
     // Rate limits
 
     @Test
-    fun `each card is checked once, at most four a minute`() = runTest {
+    fun `each resolved link is checked once, at most four a minute`() = runTest {
         val started = checker.offer((1..6).map { request("k$it") }, this)
         runCurrent()
         assertEquals(listOf("k1", "k2", "k3", "k4"), started)
@@ -108,11 +114,39 @@ class SportsLiveLinkCheckTest {
         now = 1_000L
         checker.offer(listOf(request("dead"), request("alive", source = "Addon B"), request("silent", source = "Addon B")), this)
         runCurrent()
-        assertEquals(mapOf("dead" to 1_000L), checker.dead.value)
+        assertEquals(mapOf("dead" to SportsLiveLinkVerdicts.Dead(atMs = 1_000L, resolvedAtMs = 0L)), checker.dead.value)
         assertEquals(1.0, trust.deadShare("Addon A")!!, 0.0)
         // An unclear answer counts for nothing.
         assertEquals(0.0, trust.deadShare("Addon B")!!, 0.0)
         assertNull(trust.deadShare("Addon C"))
+    }
+
+    @Test
+    fun `a dead verdict goes when fresh links come back, or when a later check finds the link alive`() = runTest {
+        var reply: ManifestResponse? = ManifestResponse(404, null)
+        val verdicts = SportsLiveLinkVerdicts()
+        val checker = SportsLiveLinkChecker(fetch = { _, _ -> reply }, cooldown = cooldown, trust = trust, verdicts = verdicts, nowMs = { now })
+        checker.offer(listOf(request("k", resolvedAtMs = 100L)), this)
+        runCurrent()
+        assertEquals(setOf("k"), verdicts.deadKeys)
+        // The same resolve again: no new check, and the verdict stands.
+        assertFalse(checker.clearIfSuperseded(request("k", resolvedAtMs = 100L)))
+        assertEquals(emptyList<String>(), checker.offer(listOf(request("k", resolvedAtMs = 100L)), this))
+        assertEquals(setOf("k"), verdicts.deadKeys)
+
+        // A later resolve: fresh links, the verdict goes, and the new link is checked in its turn.
+        assertTrue(checker.clearIfSuperseded(request("k", resolvedAtMs = 200L)))
+        assertTrue(verdicts.deadKeys.isEmpty())
+        checker.offer(listOf(request("k", resolvedAtMs = 200L)), this)
+        runCurrent()
+        // Dead again on that link.
+        assertEquals(SportsLiveLinkVerdicts.Dead(now, 200L), verdicts.dead.value["k"])
+
+        // A later check that finds the link alive clears it.
+        reply = ManifestResponse(200, "#EXTM3U\n#EXTINF:6,\na.ts\n")
+        checker.offer(listOf(request("k", resolvedAtMs = 300L)), this)
+        runCurrent()
+        assertTrue(verdicts.deadKeys.isEmpty())
     }
 
     @Test
