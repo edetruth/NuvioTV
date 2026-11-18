@@ -1,0 +1,226 @@
+{
+ "_fixture": "Trimmed real ESPN soccer/eng.1/teams/359/schedule?fixture=true, 2026-11-18: next 3 fixtures",
+ "season": {
+  "year": 2026,
+  "type": 14308,
+  "name": "2026-27 English Premier League",
+  "displayName": "2026-27 English Premier League",
+  "half": 1
+ },
+ "team": {
+  "id": "359",
+  "abbreviation": "ARS",
+  "displayName": "Arsenal",
+  "location": "Arsenal",
+  "name": "Arsenal",
+  "standingSummary": "1st in English Premier League",
+  "recordSummary": "9-0-1",
+  "logo": "https://a.espncdn.com/i/teamlogos/soccer/500/359.png"
+ },
+ "events": [
+  {
+   "id": "401879232",
+   "date": "2026-11-21T17:30Z",
+   "name": "Arsenal at Newcastle United",
+   "shortName": "ARS @ NEW",
+   "timeValid": true,
+   "league": {
+    "slug": "eng.1",
+    "abbreviation": "Premier League",
+    "name": "English Premier League"
+   },
+   "links": [
+    {
+     "href": "https://www.espn.com/soccer/match/_/gameId/401879232/arsenal-newcastle-united"
+    }
+   ],
+   "competitions": [
+    {
+     "id": "401879232",
+     "date": "2026-11-21T17:30Z",
+     "timeValid": true,
+     "status": {
+      "type": {
+       "name": "STATUS_SCHEDULED",
+       "state": "pre",
+       "completed": false,
+       "shortDetail": "11/21 - 12:30 PM EST"
+      }
+     },
+     "competitors": [
+      {
+       "id": "361",
+       "homeAway": "home",
+       "winner": false,
+       "team": {
+        "id": "361",
+        "abbreviation": "NEW",
+        "displayName": "Newcastle United",
+        "shortDisplayName": "Newcastle",
+        "location": "Newcastle United",
+        "logos": [
+         {
+          "href": "https://a.espncdn.com/i/teamlogos/soccer/500/361.png"
+         }
+        ]
+       }
+      },
+      {
+       "id": "359",
+       "homeAway": "away",
+       "winner": false,
+       "team": {
+        "id": "359",
+        "abbreviation": "ARS",
+        "displayName": "Arsenal",
+        "shortDisplayName": "Arsenal",
+        "location": "Arsenal",
+        "logos": [
+         {
+          "href": "https://a.espncdn.com/i/teamlogos/soccer/500/359.png"
+         }
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401878753",
+   "date": "2026-11-29T16:30Z",
+   "name": "Manchester City at Arsenal",
+   "shortName": "MNC @ ARS",
+   "timeValid": true,
+   "league": {
+    "slug": "eng.1",
+    "abbreviation": "Premier League",
+    "name": "English Premier League"
+   },
+   "links": [
+    {
+     "href": "https://www.espn.com/soccer/match/_/gameId/401878753/manchester-city-arsenal"
+    }
+   ],
+   "competitions": [
+    {
+     "id": "401878753",
+     "date": "2026-11-29T16:30Z",
+     "timeValid": true,
+     "status": {
+      "type": {
+       "name": "STATUS_SCHEDULED",
+       "state": "pre",
+       "completed": false,
+       "shortDetail": "11/29 - 11:30 AM EST"
+      }
+     },
+     "competitors": [
+      {
+       "id": "359",
+       "homeAway": "home",
+       "winner": false,
+       "team": {
+        "id": "359",
+        "abbreviation": "ARS",
+        "displayName": "Arsenal",
+        "shortDisplayName": "Arsenal",
+        "location": "Arsenal",
+        "logos": [
+         {
+          "href": "https://a.espncdn.com/i/teamlogos/soccer/500/359.png"
+         }
+        ]
+       }
+      },
+      {
+       "id": "382",
+       "homeAway": "away",
+       "winner": false,
+       "team": {
+        "id": "382",
+        "abbreviation": "MNC",
+        "displayName": "Manchester City",
+        "shortDisplayName": "Man City",
+        "location": "Manchester City",
+        "logos": [
+         {
+          "href": "https://a.espncdn.com/i/teamlogos/soccer/500/382.png"
+         }
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401878750",
+   "date": "2026-12-02T20:15Z",
+   "name": "Arsenal at Brentford",
+   "shortName": "ARS @ BRE",
+   "timeValid": true,
+   "league": {
+    "slug": "eng.1",
+    "abbreviation": "Premier League",
+    "name": "English Premier League"
+   },
+   "links": [
+    {
+     "href": "https://www.espn.com/soccer/match/_/gameId/401878750/arsenal-brentford"
+    }
+   ],
+   "competitions": [
+    {
+     "id": "401878750",
+     "date": "2026-12-02T20:15Z",
+     "timeValid": true,
+     "status": {
+      "type": {
+       "name": "STATUS_SCHEDULED",
+       "state": "pre",
+       "completed": false,
+       "shortDetail": "12/2 - 3:15 PM EST"
+      }
+     },
+     "competitors": [
+      {
+       "id": "337",
+       "homeAway": "home",
+       "winner": false,
+       "team": {
+        "id": "337",
+        "abbreviation": "BRE",
+        "displayName": "Brentford",
+        "shortDisplayName": "Brentford",
+        "location": "Brentford",
+        "logos": [
+         {
+          "href": "https://a.espncdn.com/i/teamlogos/soccer/500/337.png"
+         }
+        ]
+       }
+      },
+      {
+       "id": "359",
+       "homeAway": "away",
+       "winner": false,
+       "team": {
+        "id": "359",
+        "abbreviation": "ARS",
+        "displayName": "Arsenal",
+        "shortDisplayName": "Arsenal",
+        "location": "Arsenal",
+        "logos": [
+         {
+          "href": "https://a.espncdn.com/i/teamlogos/soccer/500/359.png"
+         }
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

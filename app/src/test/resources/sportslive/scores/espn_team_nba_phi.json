@@ -1,0 +1,117 @@
+{
+ "_fixture": "Trimmed real ESPN basketball/nba/teams/20, 2026-11-18",
+ "team": {
+  "id": "20",
+  "abbreviation": "PHI",
+  "displayName": "Philadelphia 76ers",
+  "shortDisplayName": "76ers",
+  "location": "Philadelphia",
+  "name": "76ers",
+  "standingSummary": "1st in Atlantic Division",
+  "logos": [
+   {
+    "href": "https://a.espncdn.com/i/teamlogos/nba/500/phi.png",
+    "rel": [
+     "full",
+     "default"
+    ]
+   },
+   {
+    "href": "https://a.espncdn.com/i/teamlogos/nba/500-dark/phi.png",
+    "rel": [
+     "full",
+     "dark"
+    ]
+   }
+  ],
+  "record": {
+   "items": [
+    {
+     "description": "Overall Record",
+     "type": "total",
+     "summary": "12-3",
+     "stats": [
+      {
+       "name": "OTLosses",
+       "value": 0.0
+      },
+      {
+       "name": "gamesBehind",
+       "value": 0.0
+      },
+      {
+       "name": "losses",
+       "value": 3.0
+      },
+      {
+       "name": "playoffSeed",
+       "value": 1.0
+      },
+      {
+       "name": "points",
+       "value": 4.5
+      },
+      {
+       "name": "streak",
+       "value": 3.0
+      },
+      {
+       "name": "ties",
+       "value": 0.0
+      },
+      {
+       "name": "wins",
+       "value": 12.0
+      }
+     ]
+    },
+    {
+     "description": "Home Record",
+     "type": "home",
+     "summary": "6-2",
+     "stats": [
+      {
+       "name": "wins",
+       "value": 6.0
+      },
+      {
+       "name": "losses",
+       "value": 2.0
+      },
+      {
+       "name": "ties",
+       "value": 0.0
+      },
+      {
+       "name": "OTLosses",
+       "value": 0.0
+      }
+     ]
+    },
+    {
+     "description": "Away Record",
+     "type": "road",
+     "summary": "6-1",
+     "stats": [
+      {
+       "name": "wins",
+       "value": 6.0
+      },
+      {
+       "name": "losses",
+       "value": 1.0
+      },
+      {
+       "name": "ties",
+       "value": 0.0
+      },
+      {
+       "name": "OTLosses",
+       "value": 0.0
+      }
+     ]
+    }
+   ]
+  }
+ }
+}

@@ -451,7 +451,12 @@ internal fun SportsLiveCardMenu(
     followingLabel: Boolean = false,
     /** "Remind me" / "Cancel reminder" (#44) by [reminded]; null hides it (only upcoming games offer it). */
     onToggleReminder: (() -> Unit)? = null,
-    reminded: Boolean = false
+    reminded: Boolean = false,
+    /**
+     * "Team page ‹A›" / "Team page ‹B›" (#62): each team's name and its opener; only with [onGameStats]
+     * (a strict ESPN match) and a pro team with ESPN's id ([com.nuvio.tv.core.sportslive.scores.TeamPages.refsOf]).
+     */
+    teamPages: List<Pair<String, () -> Unit>> = emptyList()
 ) {
     val firstFocusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { firstFocusRequester.requestFocus() } }
@@ -487,6 +492,9 @@ internal fun SportsLiveCardMenu(
                 onClick = onGameStats,
                 modifier = first(MENU_GAME_STATS)
             )
+        }
+        teamPages.forEach { (name, open) ->
+            SportsLiveMenuButton(text = stringResource(R.string.sports_live_team_page, name), onClick = open)
         }
         if (onToggleReminder != null) {
             SportsLiveMenuButton(

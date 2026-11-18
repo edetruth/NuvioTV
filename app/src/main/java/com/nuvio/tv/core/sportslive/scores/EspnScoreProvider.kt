@@ -36,7 +36,7 @@ class EspnScoreProvider internal constructor(
     private val today: () -> LocalDate = { LocalDate.now(SportsResults.EASTERN) },
     /** Where each request's outcome is recorded (#70). */
     private val health: EspnFeedHealth = EspnFeedHealth()
-) : ScoreProvider, GameSummarySource {
+) : ScoreProvider, GameSummarySource, TeamPageSource {
 
     @Inject
     constructor(okHttpClient: OkHttpClient, moshi: Moshi, health: EspnFeedHealth) :
@@ -178,6 +178,39 @@ class EspnScoreProvider internal constructor(
             } catch (e: Exception) {
                 debugLog("${league.path} summary $eventId: ${e.javaClass.simpleName}")
                 health.recordFailure(EspnFeedKey.SUMMARY, FeedFailureKind.of(e))
+                null
+            }
+        }
+
+    override suspend fun team(league: EspnLeague, teamId: String): String? =
+        teamText("$baseUrl${league.path}/teams/$teamId", "team $teamId")
+
+    override suspend fun teamSchedule(league: EspnLeague, teamId: String, fixtures: Boolean): String? =
+        teamText("$baseUrl${league.path}/teams/$teamId/schedule" + if (fixtures) "?fixture=true" else "", "schedule $teamId")
+
+    /**
+     * A Team page body (#62), as ESPN sent it; null on any failure. Kept out of the HTTP cache (an NBA
+     * schedule is ~900 KB): the page has its own memory cache and a trimmed disk copy of the finals.
+     */
+    private suspend fun teamText(url: String, label: String): String? =
+        withContext(Dispatchers.IO) {
+            try {
+                val request = Request.Builder().url(url)
+                    .cacheControl(CacheControl.Builder().noCache().noStore().build())
+                    .build()
+                client.newCall(request).execute().use { response ->
+                    val body = response.body?.string()
+                    if (!response.isSuccessful || body == null) {
+                        debugLog("$label: HTTP ${response.code}")
+                        null
+                    } else {
+                        body
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                debugLog("$label: ${e.javaClass.simpleName}")
                 null
             }
         }

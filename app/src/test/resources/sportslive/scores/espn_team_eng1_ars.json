@@ -1,0 +1,59 @@
+{
+ "_fixture": "Trimmed real ESPN soccer/eng.1/teams/359, 2026-11-18",
+ "team": {
+  "id": "359",
+  "abbreviation": "ARS",
+  "displayName": "Arsenal",
+  "shortDisplayName": "Arsenal",
+  "location": "Arsenal",
+  "name": "Arsenal",
+  "standingSummary": "1st in English Premier League",
+  "logos": [
+   {
+    "href": "https://a.espncdn.com/i/teamlogos/soccer/500/359.png",
+    "rel": [
+     "full",
+     "default"
+    ]
+   },
+   {
+    "href": "https://a.espncdn.com/i/teamlogos/soccer/500-dark/359.png",
+    "rel": [
+     "full",
+     "dark"
+    ]
+   }
+  ],
+  "record": {
+   "items": [
+    {
+     "description": "Overall Record",
+     "type": "total",
+     "summary": "9-0-1",
+     "stats": [
+      {
+       "name": "losses",
+       "value": 1.0
+      },
+      {
+       "name": "points",
+       "value": 27.0
+      },
+      {
+       "name": "ties",
+       "value": 0.0
+      },
+      {
+       "name": "wins",
+       "value": 9.0
+      },
+      {
+       "name": "streak",
+       "value": 0.0
+      }
+     ]
+    }
+   ]
+  }
+ }
+}

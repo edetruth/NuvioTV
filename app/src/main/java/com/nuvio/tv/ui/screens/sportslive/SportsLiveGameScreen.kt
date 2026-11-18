@@ -74,6 +74,7 @@ import com.nuvio.tv.core.sportslive.scores.ScoreState
 import com.nuvio.tv.core.sportslive.alerts.GameReminders
 import com.nuvio.tv.core.sportslive.scores.StandingsTable
 import com.nuvio.tv.core.sportslive.scores.StatComparison
+import com.nuvio.tv.core.sportslive.scores.TeamPages
 import com.nuvio.tv.core.sportslive.scores.scoreDetails
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.ui.components.LightweightCard
@@ -108,7 +109,9 @@ fun SportsLiveGameScreen(
     /** Plays the first clip of a highlights playlist just started (SportsLiveHighlights). */
     onPlayHighlight: (HighlightClipPlay) -> Unit,
     /** Opens dual screen on the session just put in [SportsLiveDualSessions] (#57). */
-    onOpenDual: () -> Unit = {}
+    onOpenDual: () -> Unit = {},
+    /** Opens the Team page (#62) on the request just put in [SportsLiveTeamRequests]. */
+    onOpenTeam: () -> Unit = {}
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val currentOnBack by rememberUpdatedState(onBack)
@@ -220,7 +223,14 @@ fun SportsLiveGameScreen(
             },
             onToggleFollow = viewModel::toggleFollow,
             reminded = remindCard != null && reminders.isReminded(remindCard),
-            onToggleReminder = { remindCard?.let(remindersViewModel::toggle) }
+            onToggleReminder = { remindCard?.let(remindersViewModel::toggle) },
+            // OK on a team (logo and name): its Team page, for a pro league with ESPN's team id only.
+            onOpenTeam = { side ->
+                TeamPages.refOf(event, side)?.let { ref ->
+                    SportsLiveTeamRequests.open(SportsLiveTeamRequest(ref))
+                    onOpenTeam()
+                }
+            }
         )
         if (sections.isNotEmpty() && section != null) {
             GameSectionPill(
@@ -310,7 +320,8 @@ private fun GameHeader(
     onWatchWith: () -> Unit,
     onToggleFollow: (ScoreSide) -> Unit,
     reminded: Boolean = false,
-    onToggleReminder: () -> Unit = {}
+    onToggleReminder: () -> Unit = {},
+    onOpenTeam: (ScoreSide) -> Unit = {}
 ) {
     val summary = state.summary
     val showsScore = state.showsScore
@@ -330,7 +341,10 @@ private fun GameHeader(
         horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.lg),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        HeaderTeam(first, showRecord = showsScore, alignEnd = false, modifier = Modifier.weight(1f))
+        val (firstSide, secondSide) = inCardOrder(ScoreSide.AWAY, ScoreSide.HOME, state.homeFirst)
+        HeaderTeamSlot(TeamPages.refOf(event, firstSide) != null, { onOpenTeam(firstSide) }, Modifier.weight(1f)) {
+            HeaderTeam(first, showRecord = showsScore, alignEnd = false, modifier = Modifier.fillMaxWidth())
+        }
         Column(
             modifier = Modifier.width(HEADER_MIDDLE_WIDTH),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -357,7 +371,9 @@ private fun GameHeader(
             )
             GameStatusLine(summary = summary, event = event, showsScore = showsScore, live = live)
         }
-        HeaderTeam(second, showRecord = showsScore, alignEnd = true, modifier = Modifier.weight(1f))
+        HeaderTeamSlot(TeamPages.refOf(event, secondSide) != null, { onOpenTeam(secondSide) }, Modifier.weight(1f)) {
+            HeaderTeam(second, showRecord = showsScore, alignEnd = true, modifier = Modifier.fillMaxWidth())
+        }
         // A grid as the design: Reveal and Watch replay each on a row, then Follow ‹away› · Follow ‹home›.
         Column(
             modifier = Modifier.width(HEADER_BUTTONS_WIDTH),
@@ -411,6 +427,25 @@ private fun GameHeader(
                 }
             }
         }
+    }
+}
+
+/** A header team: focusable, OK opening its Team page (#62), when it has one; else plain. */
+@Composable
+private fun HeaderTeamSlot(hasTeamPage: Boolean, onOpen: () -> Unit, modifier: Modifier, content: @Composable () -> Unit) {
+    if (!hasTeamPage) {
+        Box(modifier = modifier) { content() }
+        return
+    }
+    val shape = RoundedCornerShape(NuvioTheme.radii.md)
+    LightweightCard(
+        onClick = onOpen,
+        modifier = modifier,
+        shape = shape,
+        containerColor = Color.Transparent,
+        focusedBorder = Border(border = NuvioTheme.focusRing.border(NuvioTheme.spacing.xxs), shape = shape)
+    ) {
+        Box(modifier = Modifier.padding(NuvioTheme.spacing.xs)) { content() }
     }
 }
 

@@ -1,0 +1,165 @@
+{
+ "_fixture": "Trimmed real ESPN basketball/nba/summary of PHI next game (pre), 2026-11-18: header and season leaders only",
+ "header": {
+  "id": "401910010",
+  "competitions": [
+   {
+    "date": "2026-11-19T00:00Z",
+    "status": {
+     "type": {
+      "name": "STATUS_SCHEDULED",
+      "state": "pre",
+      "completed": false,
+      "shortDetail": "11/18 - 7:00 PM EST"
+     }
+    },
+    "competitors": [
+     {
+      "homeAway": "home",
+      "team": {
+       "id": "19",
+       "abbreviation": "ORL",
+       "displayName": "Orlando Magic"
+      }
+     },
+     {
+      "homeAway": "away",
+      "team": {
+       "id": "20",
+       "abbreviation": "PHI",
+       "displayName": "Philadelphia 76ers"
+      }
+     }
+    ]
+   }
+  ]
+ },
+ "leaders": [
+  {
+   "team": {
+    "id": "19",
+    "abbreviation": "ORL",
+    "displayName": "Orlando Magic"
+   },
+   "leaders": [
+    {
+     "name": "pointsPerGame",
+     "displayName": "Points",
+     "abbreviation": null,
+     "leaders": [
+      {
+       "displayValue": "24.2",
+       "athlete": {
+        "id": "4566434",
+        "displayName": "Franz Wagner",
+        "shortName": "F. Wagner",
+        "position": {
+         "abbreviation": "F"
+        }
+       }
+      }
+     ]
+    },
+    {
+     "name": "assistsPerGame",
+     "displayName": "Assists",
+     "abbreviation": null,
+     "leaders": [
+      {
+       "displayValue": "8.3",
+       "athlete": {
+        "id": "4566434",
+        "displayName": "Franz Wagner",
+        "shortName": "F. Wagner",
+        "position": {
+         "abbreviation": "F"
+        }
+       }
+      }
+     ]
+    },
+    {
+     "name": "reboundsPerGame",
+     "displayName": "Rebounds",
+     "abbreviation": null,
+     "leaders": [
+      {
+       "displayValue": "8.8",
+       "athlete": {
+        "id": "4277847",
+        "displayName": "Wendell Carter Jr.",
+        "shortName": "W. Carter Jr.",
+        "position": {
+         "abbreviation": "C"
+        }
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "team": {
+    "id": "20",
+    "abbreviation": "PHI",
+    "displayName": "Philadelphia 76ers"
+   },
+   "leaders": [
+    {
+     "name": "pointsPerGame",
+     "displayName": "Points",
+     "abbreviation": null,
+     "leaders": [
+      {
+       "displayValue": "26.5",
+       "athlete": {
+        "id": "4431678",
+        "displayName": "Tyrese Maxey",
+        "shortName": "T. Maxey",
+        "position": {
+         "abbreviation": "G"
+        }
+       }
+      }
+     ]
+    },
+    {
+     "name": "assistsPerGame",
+     "displayName": "Assists",
+     "abbreviation": null,
+     "leaders": [
+      {
+       "displayValue": "6.9",
+       "athlete": {
+        "id": "1966",
+        "displayName": "LeBron James",
+        "shortName": "L. James",
+        "position": {
+         "abbreviation": "F"
+        }
+       }
+      }
+     ]
+    },
+    {
+     "name": "reboundsPerGame",
+     "displayName": "Rebounds",
+     "abbreviation": null,
+     "leaders": [
+      {
+       "displayValue": "8.5",
+       "athlete": {
+        "id": "3059318",
+        "displayName": "Joel Embiid",
+        "shortName": "J. Embiid",
+        "position": {
+         "abbreviation": "C"
+        }
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

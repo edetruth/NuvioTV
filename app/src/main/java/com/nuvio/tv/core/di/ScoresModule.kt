@@ -5,6 +5,7 @@ import com.nuvio.tv.core.sportslive.scores.EspnFeedHealth
 import com.nuvio.tv.core.sportslive.scores.EspnScoreProvider
 import com.nuvio.tv.core.sportslive.scores.GameSummarySource
 import com.nuvio.tv.core.sportslive.scores.ScoreProvider
+import com.nuvio.tv.core.sportslive.scores.TeamPageSource
 import com.squareup.moshi.Moshi
 import dagger.Module
 import dagger.Provides
@@ -45,4 +46,7 @@ object ScoresModule {
 
     @Provides
     fun provideGameSummarySource(espn: EspnScoreProvider): GameSummarySource = espn
+
+    @Provides
+    fun provideTeamPageSource(espn: EspnScoreProvider): TeamPageSource = espn
 }

@@ -1,0 +1,478 @@
+{
+ "_fixture": "Trimmed real ESPN soccer/eng.1/teams/359/schedule, 2026-11-18: last 6 results",
+ "season": {
+  "year": 2026,
+  "type": 14308,
+  "name": "2026-27 English Premier League",
+  "displayName": "2026-27 English Premier League",
+  "half": 1
+ },
+ "team": {
+  "id": "359",
+  "abbreviation": "ARS",
+  "displayName": "Arsenal",
+  "location": "Arsenal",
+  "name": "Arsenal",
+  "standingSummary": "1st in English Premier League",
+  "recordSummary": "9-0-1",
+  "logo": "https://a.espncdn.com/i/teamlogos/soccer/500/359.png"
+ },
+ "events": [
+  {
+   "id": "401879274",
+   "date": "2026-09-19T14:00Z",
+   "name": "Arsenal at Brighton & Hove Albion",
+   "shortName": "ARS @ BHA",
+   "timeValid": true,
+   "league": {
+    "slug": "eng.1",
+    "abbreviation": "Premier League",
+    "name": "English Premier League"
+   },
+   "links": [
+    {
+     "href": "https://www.espn.com/soccer/match/_/gameId/401879274/arsenal-brighton-hove-albion"
+    }
+   ],
+   "competitions": [
+    {
+     "id": "401879274",
+     "date": "2026-09-19T14:00Z",
+     "timeValid": true,
+     "status": {
+      "type": {
+       "name": "STATUS_FULL_TIME",
+       "state": "post",
+       "completed": true,
+       "shortDetail": "FT"
+      }
+     },
+     "competitors": [
+      {
+       "id": "331",
+       "homeAway": "home",
+       "winner": true,
+       "score": {
+        "value": 3.0,
+        "displayValue": "3"
+       },
+       "team": {
+        "id": "331",
+        "abbreviation": "BHA",
+        "displayName": "Brighton & Hove Albion",
+        "shortDisplayName": "Brighton",
+        "location": "Brighton & Hove Albion",
+        "logos": [
+         {
+          "href": "https://a.espncdn.com/i/teamlogos/soccer/500/331.png"
+         }
+        ]
+       }
+      },
+      {
+       "id": "359",
+       "homeAway": "away",
+       "winner": false,
+       "score": {
+        "value": 0.0,
+        "displayValue": "0"
+       },
+       "team": {
+        "id": "359",
+        "abbreviation": "ARS",
+        "displayName": "Arsenal",
+        "shortDisplayName": "Arsenal",
+        "location": "Arsenal",
+        "logos": [
+         {
+          "href": "https://a.espncdn.com/i/teamlogos/soccer/500/359.png"
+         }
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401879268",
+   "date": "2026-10-10T11:30Z",
+   "name": "Leeds United at Arsenal",
+   "shortName": "LEE @ ARS",
+   "timeValid": true,
+   "league": {
+    "slug": "eng.1",
+    "abbreviation": "Premier League",
+    "name": "English Premier League"
+   },
+   "links": [
+    {
+     "href": "https://www.espn.com/soccer/match/_/gameId/401879268/leeds-united-arsenal"
+    }
+   ],
+   "competitions": [
+    {
+     "id": "401879268",
+     "date": "2026-10-10T11:30Z",
+     "timeValid": true,
+     "status": {
+      "type": {
+       "name": "STATUS_FULL_TIME",
+       "state": "post",
+       "completed": true,
+       "shortDetail": "FT"
+      }
+     },
+     "competitors": [
+      {
+       "id": "359",
+       "homeAway": "home",
+       "winner": true,
+       "score": {
+        "value": 2.0,
+        "displayValue": "2"
+       },
+       "team": {
+        "id": "359",
+        "abbreviation": "ARS",
+        "displayName": "Arsenal",
+        "shortDisplayName": "Arsenal",
+        "location": "Arsenal",
+        "logos": [
+         {
+          "href": "https://a.espncdn.com/i/teamlogos/soccer/500/359.png"
+         }
+        ]
+       }
+      },
+      {
+       "id": "357",
+       "homeAway": "away",
+       "winner": false,
+       "score": {
+        "value": 1.0,
+        "displayValue": "1"
+       },
+       "team": {
+        "id": "357",
+        "abbreviation": "LEE",
+        "displayName": "Leeds United",
+        "shortDisplayName": "Leeds",
+        "location": "Leeds United",
+        "logos": [
+         {
+          "href": "https://a.espncdn.com/i/teamlogos/soccer/500/357.png"
+         }
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401878769",
+   "date": "2026-10-18T15:30Z",
+   "name": "Arsenal at Nottingham Forest",
+   "shortName": "ARS @ NFO",
+   "timeValid": true,
+   "league": {
+    "slug": "eng.1",
+    "abbreviation": "Premier League",
+    "name": "English Premier League"
+   },
+   "links": [
+    {
+     "href": "https://www.espn.com/soccer/match/_/gameId/401878769/arsenal-nottingham-forest"
+    }
+   ],
+   "competitions": [
+    {
+     "id": "401878769",
+     "date": "2026-10-18T15:30Z",
+     "timeValid": true,
+     "status": {
+      "type": {
+       "name": "STATUS_FULL_TIME",
+       "state": "post",
+       "completed": true,
+       "shortDetail": "FT"
+      }
+     },
+     "competitors": [
+      {
+       "id": "393",
+       "homeAway": "home",
+       "winner": false,
+       "score": {
+        "value": 0.0,
+        "displayValue": "0"
+       },
+       "team": {
+        "id": "393",
+        "abbreviation": "NFO",
+        "displayName": "Nottingham Forest",
+        "shortDisplayName": "Nottm Forest",
+        "location": "Nottingham Forest",
+        "logos": [
+         {
+          "href": "https://a.espncdn.com/i/teamlogos/soccer/500/393.png"
+         }
+        ]
+       }
+      },
+      {
+       "id": "359",
+       "homeAway": "away",
+       "winner": true,
+       "score": {
+        "value": 1.0,
+        "displayValue": "1"
+       },
+       "team": {
+        "id": "359",
+        "abbreviation": "ARS",
+        "displayName": "Arsenal",
+        "shortDisplayName": "Arsenal",
+        "location": "Arsenal",
+        "logos": [
+         {
+          "href": "https://a.espncdn.com/i/teamlogos/soccer/500/359.png"
+         }
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401878768",
+   "date": "2026-10-24T14:00Z",
+   "name": "Everton at Arsenal",
+   "shortName": "EVE @ ARS",
+   "timeValid": true,
+   "league": {
+    "slug": "eng.1",
+    "abbreviation": "Premier League",
+    "name": "English Premier League"
+   },
+   "links": [
+    {
+     "href": "https://www.espn.com/soccer/match/_/gameId/401878768/everton-arsenal"
+    }
+   ],
+   "competitions": [
+    {
+     "id": "401878768",
+     "date": "2026-10-24T14:00Z",
+     "timeValid": true,
+     "status": {
+      "type": {
+       "name": "STATUS_FULL_TIME",
+       "state": "post",
+       "completed": true,
+       "shortDetail": "FT"
+      }
+     },
+     "competitors": [
+      {
+       "id": "359",
+       "homeAway": "home",
+       "winner": true,
+       "score": {
+        "value": 2.0,
+        "displayValue": "2"
+       },
+       "team": {
+        "id": "359",
+        "abbreviation": "ARS",
+        "displayName": "Arsenal",
+        "shortDisplayName": "Arsenal",
+        "location": "Arsenal",
+        "logos": [
+         {
+          "href": "https://a.espncdn.com/i/teamlogos/soccer/500/359.png"
+         }
+        ]
+       }
+      },
+      {
+       "id": "368",
+       "homeAway": "away",
+       "winner": false,
+       "score": {
+        "value": 0.0,
+        "displayValue": "0"
+       },
+       "team": {
+        "id": "368",
+        "abbreviation": "EVE",
+        "displayName": "Everton",
+        "shortDisplayName": "Everton",
+        "location": "Everton",
+        "logos": [
+         {
+          "href": "https://a.espncdn.com/i/teamlogos/soccer/500/368.png"
+         }
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401879246",
+   "date": "2026-11-01T16:30Z",
+   "name": "Arsenal at Liverpool",
+   "shortName": "ARS @ LIV",
+   "timeValid": true,
+   "league": {
+    "slug": "eng.1",
+    "abbreviation": "Premier League",
+    "name": "English Premier League"
+   },
+   "links": [
+    {
+     "href": "https://www.espn.com/soccer/match/_/gameId/401879246/arsenal-liverpool"
+    }
+   ],
+   "competitions": [
+    {
+     "id": "401879246",
+     "date": "2026-11-01T16:30Z",
+     "timeValid": true,
+     "status": {
+      "type": {
+       "name": "STATUS_FULL_TIME",
+       "state": "post",
+       "completed": true,
+       "shortDetail": "FT"
+      }
+     },
+     "competitors": [
+      {
+       "id": "364",
+       "homeAway": "home",
+       "winner": false,
+       "score": {
+        "value": 0.0,
+        "displayValue": "0"
+       },
+       "team": {
+        "id": "364",
+        "abbreviation": "LIV",
+        "displayName": "Liverpool",
+        "shortDisplayName": "Liverpool",
+        "location": "Liverpool",
+        "logos": [
+         {
+          "href": "https://a.espncdn.com/i/teamlogos/soccer/500/364.png"
+         }
+        ]
+       }
+      },
+      {
+       "id": "359",
+       "homeAway": "away",
+       "winner": true,
+       "score": {
+        "value": 1.0,
+        "displayValue": "1"
+       },
+       "team": {
+        "id": "359",
+        "abbreviation": "ARS",
+        "displayName": "Arsenal",
+        "shortDisplayName": "Arsenal",
+        "location": "Arsenal",
+        "logos": [
+         {
+          "href": "https://a.espncdn.com/i/teamlogos/soccer/500/359.png"
+         }
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": "401878760",
+   "date": "2026-11-07T15:00Z",
+   "name": "Hull City at Arsenal",
+   "shortName": "HUL @ ARS",
+   "timeValid": true,
+   "league": {
+    "slug": "eng.1",
+    "abbreviation": "Premier League",
+    "name": "English Premier League"
+   },
+   "links": [
+    {
+     "href": "https://www.espn.com/soccer/match/_/gameId/401878760/hull-city-arsenal"
+    }
+   ],
+   "competitions": [
+    {
+     "id": "401878760",
+     "date": "2026-11-07T15:00Z",
+     "timeValid": true,
+     "status": {
+      "type": {
+       "name": "STATUS_FULL_TIME",
+       "state": "post",
+       "completed": true,
+       "shortDetail": "FT"
+      }
+     },
+     "competitors": [
+      {
+       "id": "359",
+       "homeAway": "home",
+       "winner": true,
+       "score": {
+        "value": 1.0,
+        "displayValue": "1"
+       },
+       "team": {
+        "id": "359",
+        "abbreviation": "ARS",
+        "displayName": "Arsenal",
+        "shortDisplayName": "Arsenal",
+        "location": "Arsenal",
+        "logos": [
+         {
+          "href": "https://a.espncdn.com/i/teamlogos/soccer/500/359.png"
+         }
+        ]
+       }
+      },
+      {
+       "id": "306",
+       "homeAway": "away",
+       "winner": false,
+       "score": {
+        "value": 0.0,
+        "displayValue": "0"
+       },
+       "team": {
+        "id": "306",
+        "abbreviation": "HUL",
+        "displayName": "Hull City",
+        "shortDisplayName": "Hull",
+        "location": "Hull City",
+        "logos": [
+         {
+          "href": "https://a.espncdn.com/i/teamlogos/soccer/500/306.png"
+         }
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

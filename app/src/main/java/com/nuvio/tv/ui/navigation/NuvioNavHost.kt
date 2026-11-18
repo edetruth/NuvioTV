@@ -68,6 +68,7 @@ import com.nuvio.tv.ui.screens.settings.TrackingSettingsScreen
 import com.nuvio.tv.ui.screens.settings.TmdbSettingsScreen
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveScreen
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveGameScreen
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveTeamScreen
 import com.nuvio.tv.ui.screens.sportslive.HighlightStep
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveHighlights
 import com.nuvio.tv.ui.screens.sportslive.highlightPlayerRoute
@@ -1536,7 +1537,8 @@ private fun PlaybackNavHost(
                 onOpenAddons = { navController.navigate(Screen.AddonManager.route) },
                 onOpenMySports = { navController.navigate(Screen.SportsLiveMySports.route) },
                 onOpenDual = { navController.navigate(Screen.SportsLiveDual.route) },
-                onOpenGame = { navController.navigate(Screen.SportsLiveGame.route) }
+                onOpenGame = { navController.navigate(Screen.SportsLiveGame.route) },
+                onOpenTeam = { navController.navigate(Screen.SportsLiveTeam.route) }
             )
         }
 
@@ -1567,7 +1569,24 @@ private fun PlaybackNavHost(
                     navController.navigate(Screen.SportsLiveDual.route) {
                         popUpTo(Screen.SportsLiveGame.route) { inclusive = true }
                     }
-                }
+                },
+                onOpenTeam = { navController.navigate(Screen.SportsLiveTeam.route) }
+            )
+        }
+
+        composable(Screen.SportsLiveTeam.route) {
+            SportsLiveTeamScreen(
+                onBack = {
+                    // Once only: a second Back during the exit transition must not also pop the screen below.
+                    if (navController.currentDestination?.route == Screen.SportsLiveTeam.route) navController.popBackStack()
+                },
+                onPlay = { item, manual ->
+                    navController.navigate(streamRouteFor(item, returnToHomeOnBack = false, manualSelection = manual))
+                },
+                onPlayTarget = { target ->
+                    navController.navigate(sportsLivePlayerRoute(target) ?: streamRouteFor(target.item, returnToHomeOnBack = false))
+                },
+                onOpenGame = { navController.navigate(Screen.SportsLiveGame.route) }
             )
         }
 

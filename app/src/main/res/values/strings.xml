@@ -3744,6 +3744,33 @@
     <string name="sports_live_game_watch_all_highlights">Watch all highlights</string>
     <string name="sports_live_game_espn_highlight">ESPN highlight</string>
     <string name="sports_live_game_highlight_skipped">Highlight unavailable, skipped</string>
+    <!-- Team page (#62) -->
+    <string name="sports_live_team_page">Team page %1$s</string>
+    <string name="sports_live_team_follow">Follow</string>
+    <string name="sports_live_team_following">Following</string>
+    <string name="sports_live_team_last">Last %1$d</string>
+    <string name="sports_live_team_next">Next games</string>
+    <string name="sports_live_team_leaders">Leaders</string>
+    <string name="sports_live_team_reveal_results">Reveal results</string>
+    <string name="sports_live_team_reveal_all">Reveal record and results</string>
+    <string name="sports_live_team_hidden_off">Scores are off · Reveal to load this team\'s record and games</string>
+    <string name="sports_live_team_unavailable">This team\'s page is unavailable right now</string>
+    <string name="sports_live_team_stale">Offline · results saved earlier</string>
+    <string name="sports_live_team_no_results">No results yet this season</string>
+    <string name="sports_live_team_no_games">No games scheduled</string>
+    <string name="sports_live_team_vs">vs %1$s</string>
+    <string name="sports_live_team_at">@ %1$s</string>
+    <string name="sports_live_team_win">W</string>
+    <string name="sports_live_team_loss">L</string>
+    <string name="sports_live_team_draw">D</string>
+    <string name="sports_live_team_result">%1$s %2$d–%3$d</string>
+    <string name="sports_live_team_streak_won">Won %1$d</string>
+    <string name="sports_live_team_streak_lost">Lost %1$d</string>
+    <string name="sports_live_team_home_record">Home %1$s</string>
+    <string name="sports_live_team_live">LIVE</string>
+    <string name="sports_live_team_reminder_set">Reminder set</string>
+    <string name="sports_live_team_leader_player">%1$s · %2$s</string>
+    <string name="sports_live_team_keys">↑ ↓ sections · ← → games · OK open · Back to return</string>
     <string name="sports_live_game_keys">← → sections · ↑ ↓ scroll · Back to return</string>
     <string name="sports_live_stat_fg_pct" formatted="false">Field goal %</string>
     <string name="sports_live_stat_three_pct" formatted="false">3-point %</string>

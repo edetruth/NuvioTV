@@ -73,6 +73,8 @@ import com.nuvio.tv.core.sportslive.scores.ResultRow
 import com.nuvio.tv.core.sportslive.scores.ScoreSide
 import com.nuvio.tv.core.sportslive.scores.ScoreTeam
 import com.nuvio.tv.core.sportslive.scores.SportsResults
+import com.nuvio.tv.core.sportslive.scores.TeamPages
+import com.nuvio.tv.core.sportslive.scores.TeamRef
 import com.nuvio.tv.ui.components.EmptyScreenState
 import com.nuvio.tv.ui.components.LightweightCard
 import com.nuvio.tv.ui.components.LoadingIndicator
@@ -165,6 +167,8 @@ internal fun SportsLiveResultsView(
     isFollowed: (ResultRow, ScoreSide) -> Boolean = { _, _ -> false },
     /** Hold OK → Follow / Following ‹team› (#54). */
     onToggleFollow: (ResultRow, ScoreSide) -> Unit = { _, _ -> },
+    /** Hold OK → Team page ‹team› (#62), for a pro team with ESPN's id. */
+    onOpenTeam: (TeamRef) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val sportFocusRequester = remember { FocusRequester() }
@@ -304,7 +308,14 @@ internal fun SportsLiveResultsView(
                 menuRowKey = null
                 onOpen(row)
             },
-            followingLabel = true
+            followingLabel = true,
+            // Away first, as the row lists them.
+            teamPages = TeamPages.refsOf(row.event, homeFirst = false).map { ref ->
+                ref.team.listName to {
+                    menuRowKey = null
+                    onOpenTeam(ref)
+                }
+            }
         )
     }
 

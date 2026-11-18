@@ -79,6 +79,8 @@ import com.nuvio.tv.core.sportslive.scores.CatchUpItem
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.ScoreState
 import com.nuvio.tv.core.sportslive.scores.TeamFollows
+import com.nuvio.tv.core.sportslive.scores.TeamPages
+import com.nuvio.tv.core.sportslive.scores.TeamRef
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveItem
@@ -126,7 +128,9 @@ fun SportsLiveScreen(
     /** Opens dual screen on the session just put in [SportsLiveDualSessions]. */
     onOpenDual: () -> Unit,
     /** Opens the Game page on the request just put in [SportsLiveGameRequests]. */
-    onOpenGame: () -> Unit = {}
+    onOpenGame: () -> Unit = {},
+    /** Opens the Team page (#62) on the request just put in [SportsLiveTeamRequests]. */
+    onOpenTeam: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val followedTeams by viewModel.followedTeams.collectAsStateWithLifecycle()
@@ -398,6 +402,10 @@ fun SportsLiveScreen(
                 onOpenGame()
             },
             onToggleResultFollow = resultsViewModel::toggleFollow,
+            onOpenTeam = { ref ->
+                SportsLiveTeamRequests.open(SportsLiveTeamRequest(ref))
+                onOpenTeam()
+            },
             reminders = reminders,
             onToggleReminder = remindersViewModel::toggle,
             catchUpItems = catchUpItems,
@@ -488,6 +496,8 @@ private fun SportsLiveContent(
     onResultFocus: (String?) -> Unit,
     onOpenResult: (ResultRow) -> Unit,
     onToggleResultFollow: (ResultRow, ScoreSide) -> Unit,
+    /** Hold OK → Team page ‹team› (#62) on a card or Results row with a strict ESPN match. */
+    onOpenTeam: (TeamRef) -> Unit = {},
     /** Reminders (#44): the bell on upcoming games, and Remind me / Cancel reminder. */
     reminders: RemindersState = RemindersState(),
     onToggleReminder: (SportsLiveItem) -> Unit = {},
@@ -759,7 +769,15 @@ private fun SportsLiveContent(
             } else {
                 null
             },
-            reminded = canRemind && reminders.isReminded(item)
+            reminded = canRemind && reminders.isReminded(item),
+            teamPages = gameOf(item)?.let { event ->
+                TeamPages.refsOf(event, sportsLiveGameHomeFirst(item, event)).map { ref ->
+                    (ref.team.shortDisplayName ?: ref.name) to {
+                        menuCardKey = null
+                        onOpenTeam(ref)
+                    }
+                }
+            }.orEmpty()
         )
     }
 
@@ -911,7 +929,8 @@ private fun SportsLiveContent(
                 isFollowed = { row, side ->
                     TeamFollows.followersOf(followedTeams, row.event, if (side == ScoreSide.HOME) row.event.home else row.event.away).isNotEmpty()
                 },
-                onToggleFollow = onToggleResultFollow
+                onToggleFollow = onToggleResultFollow,
+                onOpenTeam = onOpenTeam
             )
             return@Column
         }
