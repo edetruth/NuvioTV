@@ -125,7 +125,7 @@ enum class ZapPanelGroup { LIVE_NOW, STARTING_SOON, OTHER, JUST_ENDED }
 /**
  * A row of the live games panel: its [group], the S4 score [chip] (null when the game is unmatched,
  * upcoming or Scores is Off), for a game starting soon its drawn card's [art] for the kickoff, and for
- * any row that names two teams their [teams] (logos and abbreviations, #66: never a score, so they
+ * any row that names two teams their [teams] (logos when both have one, #130, and names, #66: never a score, so they
  * show at once, from the logos learned before when the game is not matched yet).
  */
 data class ZapPanelRow(

@@ -156,21 +156,14 @@ private fun PlayerHeader(card: PlayerCard?, fallbackName: String, fallbackTeam: 
         horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xl),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(
-            modifier = Modifier
-                .size(HEADSHOT_SIZE)
-                .clip(CircleShape)
-                .background(NuvioTheme.colors.SurfaceVariant),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = playerInitials(name),
-                style = MaterialTheme.typography.headlineMedium.sportsLiveBold(),
-                color = NuvioTheme.colors.TextSecondary
+        // The headshot when ESPN has one; else nothing, never initials (#130), and the name block moves left.
+        playerHeadshot(card)?.let { url ->
+            AsyncImage(
+                model = rememberSizedImage(url, HEADSHOT_SIZE, HEADSHOT_SIZE),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.size(HEADSHOT_SIZE).clip(CircleShape).background(NuvioTheme.colors.SurfaceVariant)
             )
-            bio?.headshot?.let { url ->
-                AsyncImage(model = rememberSizedImage(url, HEADSHOT_SIZE, HEADSHOT_SIZE), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-            }
         }
         Column(verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xxs)) {
             Text(
@@ -310,11 +303,8 @@ private fun PlayerSectionTitle(text: String) {
     )
 }
 
-/** "Joel Embiid" → "JE"; one name → its first letter. */
-internal fun playerInitials(name: String): String =
-    name.split(' ').filter { it.isNotBlank() }.let { parts ->
-        listOfNotNull(parts.firstOrNull(), parts.drop(1).lastOrNull()).joinToString("") { it.take(1).uppercase(Locale.getDefault()) }
-    }
+/** The Player card's headshot URL, or null when ESPN has none: the header then draws no circle (#130). */
+internal fun playerHeadshot(card: PlayerCard?): String? = card?.bio?.headshot?.trim()?.takeIf { it.isNotEmpty() }
 
 private val HEADSHOT_SIZE = 128.dp
 private val STAT_TILE_WIDTH = 150.dp

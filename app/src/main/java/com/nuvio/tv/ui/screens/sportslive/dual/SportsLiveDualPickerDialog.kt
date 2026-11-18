@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -28,11 +27,11 @@ import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.nuvio.tv.R
-import com.nuvio.tv.core.sportslive.scores.TeamLogoUrls
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.ui.components.NuvioDialog
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveScoreChip
-import com.nuvio.tv.ui.screens.sportslive.SportsLiveTeamLogo
+import com.nuvio.tv.ui.screens.sportslive.TeamLogoPairSlot
+import com.nuvio.tv.ui.screens.sportslive.rememberTeamLogoPair
 import com.nuvio.tv.ui.screens.sportslive.ZapPanelRow
 import com.nuvio.tv.ui.theme.NuvioTheme
 import kotlinx.coroutines.delay
@@ -98,12 +97,8 @@ internal fun SportsLiveDualPickerDialog(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md)
                     ) {
-                        row?.teams?.let { teams ->
-                            Row(horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs)) {
-                                SportsLiveTeamLogo(teams.first.logo, teams.first.short, TeamLogoUrls.CARD_PX, Modifier.size(28.dp))
-                                SportsLiveTeamLogo(teams.second.logo, teams.second.short, TeamLogoUrls.CARD_PX, Modifier.size(28.dp))
-                            }
-                        }
+                        // Logos only when both teams have one and both loaded (#130); never letters.
+                        rememberTeamLogoPair(row?.teams)?.let { logos -> TeamLogoPairSlot(logos, 28.dp, NuvioTheme.spacing.xs) }
                         Column(modifier = Modifier.weight(1f)) {
                             Text(item.meta.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text(

@@ -18,7 +18,7 @@ data class KnownTeam(val logo: String, val abbreviation: String?)
  * its ESPN id) with its logo, abbreviation and ESPN names; the addon's text is never stored. A card
  * side not matched yet finds its team only through those names, and only when exactly one team of
  * the card's league answers to it ("Arsenal" with both an English and an Argentine Arsenal known:
- * none, the abbreviation circle shows). Least recently used teams go past [maxEntries].
+ * none, and the card shows no logos). Least recently used teams go past [maxEntries].
  */
 class TeamLogoBook(
     private val maxEntries: Int = MAX_ENTRIES,
@@ -212,4 +212,25 @@ object TeamLogoUrls {
         val path = ESPN_IMAGE.matchEntire(url.trim())?.groupValues?.get(1) ?: return url
         return "https://a.espncdn.com/combiner/i?img=$path&w=$px&h=$px"
     }
+}
+
+/**
+ * When a team mark is drawn (#130): only from a real logo image, never letters. A game shows logos
+ * only when both its teams have one, and only once both have loaded (one failing hides both);
+ * otherwise it has no logo slots at all and the names take the room. A team alone (the Team page)
+ * shows its logo when it has one, else nothing.
+ */
+object TeamMarks {
+    /** A game's two logos, or null unless both teams have one. */
+    fun pair(first: String?, second: String?): Pair<String, String>? {
+        val a = single(first) ?: return null
+        val b = single(second) ?: return null
+        return a to b
+    }
+
+    /** A team's logo alone, or null when it has none. */
+    fun single(logo: String?): String? = logo?.trim()?.takeIf { it.isNotEmpty() }
+
+    /** A pair's logos are drawn only when both have loaded. */
+    fun pairShown(firstLoaded: Boolean, secondLoaded: Boolean): Boolean = firstLoaded && secondLoaded
 }

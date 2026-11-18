@@ -37,9 +37,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModel
@@ -61,7 +59,6 @@ import com.nuvio.tv.core.sportslive.alerts.SportsLiveAlertContent
 import com.nuvio.tv.core.sportslive.alerts.SportsLiveAlertEngine
 import com.nuvio.tv.core.sportslive.alerts.SportsLiveAlerts
 import com.nuvio.tv.core.sportslive.alerts.SportsLiveWatching
-import com.nuvio.tv.core.sportslive.scores.TeamLogoUrls
 import com.nuvio.tv.domain.model.SportsLiveTab
 import com.nuvio.tv.ui.navigation.Screen
 import com.nuvio.tv.ui.navigation.navigateToSportsLiveZapTarget
@@ -290,7 +287,8 @@ private fun KickoffPrompt(
             if (content.followed) StarIcon()
         }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            SideLogo(content.first, logoSize)
+            val logos = rememberTeamLogoPair(content.first.logo, content.second.logo)
+            logos?.let { TeamLogoSlot(it.first, it.shown, logoSize) }
             Text(
                 text = stringResource(R.string.sports_live_alert_matchup, content.first.name, content.second.name),
                 style = (if (compact) MaterialTheme.typography.titleMedium else MaterialTheme.typography.headlineSmall).sportsLiveBold(),
@@ -299,7 +297,7 @@ private fun KickoffPrompt(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f, fill = false)
             )
-            SideLogo(content.second, logoSize)
+            logos?.let { TeamLogoSlot(it.second, it.shown, logoSize) }
         }
         val details = listOfNotNull(
             content.league,
@@ -450,27 +448,17 @@ private fun ScoreLine(first: AlertSide, second: AlertSide) {
     val firstScore = first.score ?: return
     val secondScore = second.score ?: return
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-        SideLogo(first, 32.dp)
+        // Logos only when both teams have one and both loaded (#130); never letters.
+        val logos = rememberTeamLogoPair(first.logo, second.logo)
+        logos?.let { TeamLogoSlot(it.first, it.shown, 32.dp) }
         Text(
             text = stringResource(R.string.sports_live_alert_score_line, first.short, firstScore, secondScore, second.short),
             style = MaterialTheme.typography.headlineSmall.sportsLiveBold().copy(fontFeatureSettings = "tnum"),
             color = ArtColors.Text,
             maxLines = 1
         )
-        SideLogo(second, 32.dp)
+        logos?.let { TeamLogoSlot(it.second, it.shown, 32.dp) }
     }
-}
-
-@Composable
-private fun SideLogo(side: AlertSide, size: Dp) {
-    SportsLiveTeamLogo(
-        logo = side.logo,
-        short = side.short,
-        px = TeamLogoUrls.CARD_PX,
-        modifier = Modifier.size(size),
-        letters = 2,
-        fontSize = 12.sp
-    )
 }
 
 @Composable

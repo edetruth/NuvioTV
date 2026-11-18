@@ -27,8 +27,8 @@ data class GameArt(
     val startMs: Long?,
     val hasTimeOfDay: Boolean
 ) {
-    /** Logos are drawn only when both teams have one; otherwise the names are set in large type. */
-    val hasLogos: Boolean get() = first.logo != null && second.logo != null
+    /** Logos are drawn only when both teams have one (#130); otherwise the names are set in large type. */
+    val hasLogos: Boolean get() = TeamMarks.pair(first.logo, second.logo) != null
 
     companion object {
         /**

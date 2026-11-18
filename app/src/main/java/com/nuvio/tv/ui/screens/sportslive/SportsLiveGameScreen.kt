@@ -46,6 +46,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
@@ -302,17 +303,16 @@ fun SportsLiveGameScreen(
 }
 
 /** One side of the header: from the summary when loaded, else from the event as opened. */
-private data class HeaderSide(val short: String, val name: String, val logo: String?, val record: String?, val score: Int?)
+private data class HeaderSide(val name: String, val logo: String?, val record: String?, val score: Int?)
 
 private fun headerSides(summary: GameSummary?, event: ScoreSnapshot): Pair<HeaderSide, HeaderSide> {
     if (summary != null) {
         // The short name ("Celtics", as the design): the summary's, else the scoreboard's for the same side.
         fun side(team: com.nuvio.tv.core.sportslive.scores.GameTeam, listed: com.nuvio.tv.core.sportslive.scores.ScoreTeam) =
-            HeaderSide(team.short, team.shortDisplayName ?: listed.shortDisplayName ?: team.fullName, team.logo, team.record, team.score)
+            HeaderSide(team.shortDisplayName ?: listed.shortDisplayName ?: team.fullName, team.logo, team.record, team.score)
         return side(summary.away, event.away) to side(summary.home, event.home)
     }
     fun side(team: com.nuvio.tv.core.sportslive.scores.ScoreTeam) = HeaderSide(
-        short = team.abbreviation ?: team.shortDisplayName ?: team.displayName.orEmpty(),
         name = team.shortDisplayName ?: team.displayName ?: team.name ?: team.abbreviation.orEmpty(),
         logo = team.logo,
         record = null,
@@ -342,6 +342,7 @@ private fun GameHeader(
     val (away, home) = headerSides(summary, event)
     // In the order of the card the page came from (N10): away first unless the card named home first.
     val (first, second) = inCardOrder(away, home, state.homeFirst)
+    val logos = rememberTeamLogoPair(first.logo, second.logo)
     val gameState = summary?.state ?: event.state
     val live = gameState == ScoreState.IN
     // Middle and buttons have fixed widths, measured first: the teams share what is left, so a long
@@ -357,7 +358,7 @@ private fun GameHeader(
     ) {
         val (firstSide, secondSide) = inCardOrder(ScoreSide.AWAY, ScoreSide.HOME, state.homeFirst)
         HeaderTeamSlot(TeamPages.refOf(event, firstSide) != null, { onOpenTeam(firstSide) }, Modifier.weight(1f)) {
-            HeaderTeam(first, showRecord = showsScore, alignEnd = false, modifier = Modifier.fillMaxWidth())
+            HeaderTeam(first, logos?.first, logos?.shown == true, showRecord = showsScore, alignEnd = false, modifier = Modifier.fillMaxWidth())
         }
         Column(
             modifier = Modifier.width(HEADER_MIDDLE_WIDTH),
@@ -386,7 +387,7 @@ private fun GameHeader(
             GameStatusLine(summary = summary, event = event, showsScore = showsScore, live = live)
         }
         HeaderTeamSlot(TeamPages.refOf(event, secondSide) != null, { onOpenTeam(secondSide) }, Modifier.weight(1f)) {
-            HeaderTeam(second, showRecord = showsScore, alignEnd = true, modifier = Modifier.fillMaxWidth())
+            HeaderTeam(second, logos?.second, logos?.shown == true, showRecord = showsScore, alignEnd = true, modifier = Modifier.fillMaxWidth())
         }
         // A grid as the design: Reveal and Watch replay each on a row, then Follow ‹away› · Follow ‹home›.
         Column(
@@ -516,27 +517,25 @@ private fun FollowButton(name: String, followed: Boolean, onClick: () -> Unit, m
     }
 }
 
-/** A side of the header, as the design: logo circle, then the name (bold) over the record; the home side mirrored. */
+/**
+ * A side of the header, as the design: logo circle, then the name (bold) over the record; the home side
+ * mirrored. The logo shows only when both teams have one and both loaded ([logo], #130), never letters.
+ */
 @Composable
-private fun HeaderTeam(side: HeaderSide, showRecord: Boolean, alignEnd: Boolean, modifier: Modifier) {
+private fun HeaderTeam(side: HeaderSide, logo: Painter?, logoShown: Boolean, showRecord: Boolean, alignEnd: Boolean, modifier: Modifier) {
     Row(
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md, if (alignEnd) Alignment.End else Alignment.Start),
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (alignEnd) TeamNameBlock(side, showRecord, alignEnd = true, modifier = Modifier.weight(1f, fill = false))
-        Box(
-            modifier = Modifier
-                .size(HEADER_LOGO_SIZE)
-                .clip(CircleShape)
-                .background(NuvioTheme.colors.SurfaceVariant),
-            contentAlignment = Alignment.Center
-        ) {
-            if (side.logo != null) {
-                AsyncImage(model = rememberSizedImage(side.logo, HEADER_LOGO_SIZE * 0.68f, HEADER_LOGO_SIZE * 0.68f), contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.size(HEADER_LOGO_SIZE * 0.68f))
-            } else {
-                Text(side.short, style = MaterialTheme.typography.titleSmall.sportsLiveBold(), color = NuvioTheme.colors.TextPrimary, maxLines = 1)
-            }
+        if (logo != null) {
+            TeamLogoSlot(
+                painter = logo,
+                shown = logoShown,
+                size = HEADER_LOGO_SIZE,
+                modifier = Modifier.clip(CircleShape).background(NuvioTheme.colors.SurfaceVariant).padding(HEADER_LOGO_SIZE * 0.16f)
+            )
         }
         if (!alignEnd) TeamNameBlock(side, showRecord, alignEnd = false, modifier = Modifier.weight(1f, fill = false))
     }

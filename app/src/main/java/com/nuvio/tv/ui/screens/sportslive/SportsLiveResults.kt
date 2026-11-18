@@ -50,9 +50,9 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -63,9 +63,7 @@ import androidx.tv.material3.Border
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
-import coil3.compose.AsyncImage
 import com.nuvio.tv.R
-import com.nuvio.tv.core.sportslive.scores.TeamLogoUrls
 import com.nuvio.tv.core.sportslive.scores.FinalNote
 import com.nuvio.tv.core.sportslive.scores.GolfResult
 import com.nuvio.tv.core.sportslive.scores.MySport
@@ -839,8 +837,10 @@ private fun ResultRowCard(
             }
             Column(modifier = Modifier.weight(1f)) {
                 // Away first, as ESPN and US scoreboards list them.
-                TeamLine(event.away, bold = awayWon)
-                TeamLine(event.home, bold = homeWon)
+                // Logos only when both teams have one and both loaded (#130); never an empty circle.
+                val logos = rememberTeamLogoPair(event.away.logo, event.home.logo)
+                TeamLine(event.away, logos?.first, logos?.shown == true, bold = awayWon)
+                TeamLine(event.home, logos?.second, logos?.shown == true, bold = homeWon)
             }
             Column(horizontalAlignment = Alignment.End) {
                 if (showScore) {
@@ -917,27 +917,12 @@ internal fun ReplayPill() {
 }
 
 @Composable
-private fun TeamLine(team: ScoreTeam, bold: Boolean) {
+private fun TeamLine(team: ScoreTeam, logo: Painter?, logoShown: Boolean, bold: Boolean) {
     Row(
         horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        val logo = team.logo
-        if (logo != null) {
-            AsyncImage(
-                model = rememberSizedImage(TeamLogoUrls.scaled(logo), ResultRowMetrics.LOGO_DP.dp, ResultRowMetrics.LOGO_DP.dp),
-                contentDescription = null,
-                contentScale = ContentScale.Fit,
-                modifier = Modifier.size(ResultRowMetrics.LOGO_DP.dp)
-            )
-        } else {
-            Box(
-                modifier = Modifier
-                    .size(ResultRowMetrics.LOGO_DP.dp)
-                    .clip(CircleShape)
-                    .background(NuvioTheme.colors.PosterFallback)
-            )
-        }
+        if (logo != null) TeamLogoSlot(logo, logoShown, ResultRowMetrics.LOGO_DP.dp)
         Text(
             text = team.listName,
             style = resultLineStyle().let { if (bold) it.sportsLiveBold() else it },

@@ -37,6 +37,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -394,8 +395,9 @@ class ZapPanelScoresTest {
         assertEquals("IND", teams.first.short)
         assertEquals(pacersEvent.home.logo, teams.second.logo)
         assertNull(rows.first { it.item == game }.chip)
-        // Two teams but none known: the abbreviation circles only.
+        // Two teams but none known: no logos at all, only the names (#130).
         assertNull(rows.first { it.item == unknown }.teams!!.first.logo)
+        assertFalse(rows.first { it.item == unknown }.teams!!.hasLogos)
         assertNull(rows.first { it.item == channel }.teams)
         // Scores Off: no learned logo either.
         book.active = false

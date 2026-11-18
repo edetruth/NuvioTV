@@ -31,7 +31,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.gestures.scrollBy
@@ -112,8 +111,8 @@ import com.nuvio.tv.ui.screens.sportslive.zapPanelUpFrom
 import com.nuvio.tv.core.sportslive.FullTimeToast
 import com.nuvio.tv.core.sportslive.FullTimeToastStrings
 import com.nuvio.tv.core.sportslive.SportsLiveFullTimeToasts
-import com.nuvio.tv.core.sportslive.scores.TeamLogoUrls
-import com.nuvio.tv.ui.screens.sportslive.SportsLiveTeamLogo
+import com.nuvio.tv.ui.screens.sportslive.TeamLogoSlot
+import com.nuvio.tv.ui.screens.sportslive.rememberTeamLogoPair
 import com.nuvio.tv.ui.screens.sportslive.dual.LocalOpenSportsLiveDual
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualPick
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualPickerDialog
@@ -406,8 +405,9 @@ private fun ZapBanner(banner: SportsLiveZapBanner) {
             .padding(horizontal = 28.dp, vertical = 14.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            val art = banner.art?.takeIf { it.hasLogos }
-            if (art != null) SportsLiveTeamLogo(art.first.logo, art.first.short, TeamLogoUrls.CARD_PX, Modifier.size(36.dp))
+            // Logos only when both teams have one and both loaded (#130); never letters.
+            val logos = rememberTeamLogoPair(banner.art)
+            if (logos != null) TeamLogoSlot(logos.first, logos.shown, 36.dp)
             Text(
                 text = if (banner.switching) {
                     stringResource(R.string.sports_live_zap_switching, banner.name)
@@ -420,7 +420,7 @@ private fun ZapBanner(banner: SportsLiveZapBanner) {
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f, fill = false)
             )
-            if (art != null) SportsLiveTeamLogo(art.second.logo, art.second.short, TeamLogoUrls.CARD_PX, Modifier.size(36.dp))
+            if (logos != null) TeamLogoSlot(logos.second, logos.shown, 36.dp)
         }
         banner.chip?.let { chip ->
             Spacer(modifier = Modifier.height(4.dp))

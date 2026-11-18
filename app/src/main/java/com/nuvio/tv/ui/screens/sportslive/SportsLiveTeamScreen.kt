@@ -41,7 +41,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -280,14 +279,8 @@ private fun TeamHeaderPanel(
         horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.lg),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        SportsLiveTeamLogo(
-            logo = header?.logo ?: team.team.logo,
-            short = header?.abbreviation ?: team.team.abbreviation ?: name,
-            px = 192,
-            modifier = Modifier.size(88.dp),
-            letters = 3,
-            fontSize = 22.sp
-        )
+        // The logo when the team has one, else nothing (#130): the name block moves left.
+        rememberTeamLogo(header?.logo ?: team.team.logo, px = 192)?.let { TeamLogoSlot(it.painter, it.shown, 88.dp) }
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xxs)) {
             team.event.leagueName?.takeIf { it.isNotBlank() }?.let {
                 Text(it.uppercase(Locale.getDefault()), style = MaterialTheme.typography.labelSmall, color = NuvioTheme.colors.TextSecondary, maxLines = 1)
@@ -382,12 +375,7 @@ private fun OpponentLine(event: ScoreSnapshot, teamId: String) {
     val opponent = TeamPages.opponentOf(event, teamId)
     val name = opponent.shortDisplayName ?: opponent.displayName ?: opponent.abbreviation.orEmpty()
     Row(horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm), verticalAlignment = Alignment.CenterVertically) {
-        SportsLiveTeamLogo(
-            logo = opponent.logo,
-            short = opponent.abbreviation ?: name,
-            px = 64,
-            modifier = Modifier.size(28.dp)
-        )
+        rememberTeamLogo(opponent.logo, px = 64)?.let { TeamLogoSlot(it.painter, it.shown, 28.dp) }
         Text(
             text = stringResource(if (TeamPages.isHome(event, teamId)) R.string.sports_live_team_vs else R.string.sports_live_team_at, name),
             style = MaterialTheme.typography.titleSmall.sportsLiveBold(),

@@ -175,7 +175,7 @@ private fun CatchUpCard(
         containerColor = NuvioTheme.colors.BackgroundCard,
         focusedBorder = Border(border = NuvioTheme.focusRing.border(NuvioTheme.spacing.xxs), shape = shape)
     ) {
-        // The drawn art (logos, abbreviations, league), never the replay's poster.
+        // The drawn art (logos when both teams have one, else the names; the league), never the replay's poster.
         val art = remember(item.event) { GameArt.ofEvent(item.event) }
         SportsLiveGameArt(art, compact = true, modifier = Modifier.fillMaxWidth().height(CATCH_UP_ART_HEIGHT))
         Row(

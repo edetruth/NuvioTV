@@ -38,6 +38,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -53,12 +54,10 @@ import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
 import com.nuvio.tv.R
 import com.nuvio.tv.core.sportslive.scores.ChipScore
-import com.nuvio.tv.core.sportslive.scores.GameArtTeam
 import com.nuvio.tv.core.sportslive.scores.GameSituationStrings
 import com.nuvio.tv.core.sportslive.scores.ScoreChip
 import com.nuvio.tv.core.sportslive.scores.ScoreDetails
 import com.nuvio.tv.core.sportslive.scores.ScoreDetailsBuilder
-import com.nuvio.tv.core.sportslive.scores.TeamLogoUrls
 import com.nuvio.tv.ui.components.LightweightCard
 import com.nuvio.tv.ui.theme.NuvioTheme
 
@@ -187,8 +186,9 @@ internal fun SportsLiveScoreboardRow(
                     var level by remember(firstChoices, secondChoices, shortNames) { mutableIntStateOf(if (shortNames) 1 else 0) }
                     val maxLevel = maxOf(firstChoices.lastIndex, secondChoices.lastIndex)
                     val tooLong: () -> Unit = { if (level < maxLevel) level++ }
-                    TeamLine(firstChoices, level, art.first, art.hasLogos, row.firstFollowed, tooLong)
-                    TeamLine(secondChoices, level, art.second, art.hasLogos, row.secondFollowed, tooLong)
+                    val logos = rememberTeamLogoPair(art)
+                    TeamLine(firstChoices, level, logos?.first, logos?.shown == true, row.firstFollowed, tooLong)
+                    TeamLine(secondChoices, level, logos?.second, logos?.shown == true, row.secondFollowed, tooLong)
                 } else {
                     ItemLine(item.meta.name, item.followed)
                 }
@@ -214,20 +214,18 @@ internal fun SportsLiveScoreboardRow(
     }
 }
 
-/** One team: its logo (when both sides have one), ★ when followed, and [choices] at [level] or shorter. */
+/** One team: its logo (when both sides have one and both loaded, #130), ★ when followed, and [choices] at [level] or shorter. */
 @Composable
 private fun TeamLine(
     choices: List<String>,
     level: Int,
-    team: GameArtTeam,
-    withLogo: Boolean,
+    logo: Painter?,
+    logoShown: Boolean,
     followed: Boolean,
     onTooLong: () -> Unit
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs), verticalAlignment = Alignment.CenterVertically) {
-        if (withLogo) {
-            SportsLiveTeamLogo(team.logo, team.short, TeamLogoUrls.CARD_PX, Modifier.size(ROW_LOGO_SIZE), fontSize = 9.sp)
-        }
+        if (logo != null) TeamLogoSlot(logo, logoShown, ROW_LOGO_SIZE)
         if (followed) {
             Icon(imageVector = Icons.Rounded.Star, contentDescription = null, tint = FOLLOWED_GOLD, modifier = Modifier.size(18.dp))
         }
