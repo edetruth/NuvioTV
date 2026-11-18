@@ -6,6 +6,7 @@ import com.nuvio.tv.core.sportslive.SportsLiveCatalogOptions
 import com.nuvio.tv.core.sportslive.SportsLiveCatalogPolicy
 import com.nuvio.tv.core.sportslive.SportsLiveOpenGame
 import com.nuvio.tv.core.sportslive.SportsLiveSourceReliability
+import com.nuvio.tv.core.sportslive.alerts.SportsLiveAlertSettings
 import com.nuvio.tv.core.sportslive.scores.EspnFeedHealth
 import com.nuvio.tv.core.sportslive.scores.EspnFeedKey
 import com.nuvio.tv.core.sportslive.scores.FeedHealth
@@ -161,6 +162,22 @@ class SportsLiveSettingsViewModel @Inject constructor(
 
     fun setPipEnabled(enabled: Boolean) {
         viewModelScope.launch { prefs.setPipEnabled(enabled) }
+    }
+
+    /** Alerts (#42, #44): Remind me for my teams, Score alerts, Full-time alerts. */
+    val alertSettings: StateFlow<SportsLiveAlertSettings> =
+        prefs.alertSettings.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SportsLiveAlertSettings())
+
+    fun setRemindMyTeams(enabled: Boolean) {
+        viewModelScope.launch { prefs.setRemindMyTeams(enabled) }
+    }
+
+    fun setScoreAlerts(enabled: Boolean) {
+        viewModelScope.launch { prefs.setScoreAlerts(enabled) }
+    }
+
+    fun setFullTimeAlerts(enabled: Boolean) {
+        viewModelScope.launch { prefs.setFullTimeAlerts(enabled) }
     }
 
     fun setScoresMode(mode: ScoresMode) {

@@ -22,6 +22,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.runtime.Composable
@@ -70,6 +71,7 @@ import com.nuvio.tv.core.sportslive.scores.Performer
 import com.nuvio.tv.core.sportslive.scores.ScoreSide
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.ScoreState
+import com.nuvio.tv.core.sportslive.alerts.GameReminders
 import com.nuvio.tv.core.sportslive.scores.StandingsTable
 import com.nuvio.tv.core.sportslive.scores.StatComparison
 import com.nuvio.tv.core.sportslive.scores.scoreDetails
@@ -96,6 +98,7 @@ import java.util.Locale
 fun SportsLiveGameScreen(
     viewModel: SportsLiveGameViewModel = hiltViewModel(),
     playViewModel: SportsLivePlayViewModel = hiltViewModel(),
+    remindersViewModel: SportsLiveRemindersViewModel = hiltViewModel(),
     onBack: () -> Unit,
     /** Opens a replay's Stream screen; the Boolean: the user picks there (no autoplay). */
     onPlay: (SportsLiveItem, Boolean) -> Unit,
@@ -138,7 +141,16 @@ fun SportsLiveGameScreen(
     val sections = state.sections
     val section = state.section
     val showsScore = state.showsScore
-    val headerRows = gameHeaderRows(showsScore = showsScore, hasReplay = state.replay != null, homeFirst = state.homeFirst)
+    // Remind me (#44): an upcoming game opened from its card.
+    val reminders by remindersViewModel.state.collectAsStateWithLifecycle()
+    SportsLiveReminderToasts(remindersViewModel)
+    val remindCard = state.card?.takeIf { event.state == ScoreState.PRE && GameReminders.canRemind(it, System.currentTimeMillis()) }
+    val headerRows = gameHeaderRows(
+        showsScore = showsScore,
+        hasReplay = state.replay != null,
+        homeFirst = state.homeFirst,
+        canRemind = remindCard != null
+    )
 
     // Back from highlights: focus returns to the card played, or to Watch all highlights.
     var returnToHighlights by rememberSaveable { mutableStateOf(false) }
@@ -196,7 +208,9 @@ fun SportsLiveGameScreen(
             onWatchReplay = { replay ->
                 if (replay.apiType == "series") onOpenDetail(replay) else playViewModel.play(replay)
             },
-            onToggleFollow = viewModel::toggleFollow
+            onToggleFollow = viewModel::toggleFollow,
+            reminded = remindCard != null && reminders.isReminded(remindCard),
+            onToggleReminder = { remindCard?.let(remindersViewModel::toggle) }
         )
         if (sections.isNotEmpty() && section != null) {
             GameSectionPill(
@@ -283,7 +297,9 @@ private fun GameHeader(
     focusRequesters: Map<GameHeaderButton, FocusRequester>,
     onReveal: () -> Unit,
     onWatchReplay: (SportsLiveItem) -> Unit,
-    onToggleFollow: (ScoreSide) -> Unit
+    onToggleFollow: (ScoreSide) -> Unit,
+    reminded: Boolean = false,
+    onToggleReminder: () -> Unit = {}
 ) {
     val summary = state.summary
     val showsScore = state.showsScore
@@ -355,6 +371,15 @@ private fun GameHeader(
                                     Text(stringResource(R.string.sports_live_game_watch_replay), maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
                             }
+                            GameHeaderButton.REMIND -> SportsLivePaneButton(onClick = onToggleReminder, modifier = modifier) {
+                                Icon(imageVector = Icons.Rounded.Notifications, contentDescription = null, modifier = Modifier.size(20.dp))
+                                Spacer(modifier = Modifier.width(NuvioTheme.spacing.xs))
+                                Text(
+                                    stringResource(if (reminded) R.string.sports_live_cancel_reminder else R.string.sports_live_remind_me),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                             GameHeaderButton.FOLLOW_AWAY -> FollowButton(
                                 name = away.name,
                                 followed = state.awayFollowed,
@@ -376,15 +401,22 @@ private fun GameHeader(
 }
 
 /** A Game page header button. */
-internal enum class GameHeaderButton { REVEAL, REPLAY, FOLLOW_AWAY, FOLLOW_HOME }
+internal enum class GameHeaderButton { REVEAL, REPLAY, REMIND, FOLLOW_AWAY, FOLLOW_HOME }
 
 /**
  * The header's buttons, row by row: Reveal (only while the score is hidden), Watch replay (only with a
- * replay), then both Follow buttons side by side, which every game has, in the header's team order.
+ * replay), Remind me (only for an upcoming game opened from its card, #44), then both Follow buttons
+ * side by side, which every game has, in the header's team order.
  */
-internal fun gameHeaderRows(showsScore: Boolean, hasReplay: Boolean, homeFirst: Boolean = false): List<List<GameHeaderButton>> = buildList {
+internal fun gameHeaderRows(
+    showsScore: Boolean,
+    hasReplay: Boolean,
+    homeFirst: Boolean = false,
+    canRemind: Boolean = false
+): List<List<GameHeaderButton>> = buildList {
     if (!showsScore) add(listOf(GameHeaderButton.REVEAL))
     if (hasReplay) add(listOf(GameHeaderButton.REPLAY))
+    if (canRemind) add(listOf(GameHeaderButton.REMIND))
     add(inCardOrder(GameHeaderButton.FOLLOW_AWAY, GameHeaderButton.FOLLOW_HOME, homeFirst).toList())
 }
 

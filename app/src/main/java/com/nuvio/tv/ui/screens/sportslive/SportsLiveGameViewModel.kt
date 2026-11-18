@@ -44,7 +44,9 @@ data class SportsLiveGameRequest(
     val event: ScoreSnapshot,
     val replay: SportsLiveItem? = null,
     val revealed: Boolean = false,
-    val homeFirst: Boolean = false
+    val homeFirst: Boolean = false,
+    /** The card the page was opened from (Game stats); an upcoming one offers Remind me (#44). */
+    val card: SportsLiveItem? = null
 )
 
 /** Whether [item]'s card names [event]'s home team first (N10); away first when that is not known. */
@@ -84,7 +86,9 @@ data class SportsLiveGameUiState(
     val awayFollowed: Boolean = false,
     val homeFollowed: Boolean = false,
     /** The header and team stats name the home team first, as the card the page was opened from (N10). */
-    val homeFirst: Boolean = false
+    val homeFirst: Boolean = false,
+    /** The card the page was opened from, when any. */
+    val card: SportsLiveItem? = null
 ) {
     /** Score, records and stats show: Scores Show, or revealed (Hide until focused / Off). */
     val showsScore: Boolean get() = mode == ScoresMode.SHOW || revealed
@@ -153,7 +157,8 @@ class SportsLiveGameViewModel internal constructor(
             replay = request?.replay,
             awayFollowed = event != null && TeamFollows.followersOf(followed, event, event.away).isNotEmpty(),
             homeFollowed = event != null && TeamFollows.followersOf(followed, event, event.home).isNotEmpty(),
-            homeFirst = request?.homeFirst == true
+            homeFirst = request?.homeFirst == true,
+            card = request?.card
         )
     }.stateIn(
         viewModelScope,
@@ -162,7 +167,8 @@ class SportsLiveGameViewModel internal constructor(
             event = request?.event,
             replay = request?.replay,
             revealed = request?.revealed == true,
-            homeFirst = request?.homeFirst == true
+            homeFirst = request?.homeFirst == true,
+            card = request?.card
         )
     )
 

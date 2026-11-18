@@ -193,7 +193,7 @@ fun sportsLiveTargetRoute(target: SportsLiveZapTarget): String =
  * below the player) goes too, so Back from any zapped game returns once to where the session began.
  * A stream that needs the Stream screen's preparation opens the target's Stream screen instead.
  */
-private fun navigateToSportsLiveZapTarget(navController: NavHostController, target: SportsLiveZapTarget) {
+internal fun navigateToSportsLiveZapTarget(navController: NavHostController, target: SportsLiveZapTarget) {
     val playerRoute = sportsLivePlayerRoute(target)
     val route = playerRoute ?: streamRouteFor(target.item, target.returnToHomeOnBack)
     val popUpToRoute = if (navController.previousIsStreamScreen()) Screen.Stream.route else Screen.Player.route

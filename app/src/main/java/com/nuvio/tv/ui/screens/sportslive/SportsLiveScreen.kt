@@ -64,6 +64,8 @@ import com.nuvio.tv.core.sportslive.EndedSignal
 import com.nuvio.tv.core.sportslive.SportsLiveEndedGames
 import com.nuvio.tv.core.sportslive.LiveNowSort
 import com.nuvio.tv.core.sportslive.SportsLiveLayout
+import com.nuvio.tv.core.sportslive.alerts.GameReminders
+import com.nuvio.tv.core.sportslive.alerts.RemindersState
 import com.nuvio.tv.core.sportslive.scores.GameSituations
 import com.nuvio.tv.core.sportslive.scores.GameArt
 import com.nuvio.tv.core.sportslive.scores.TeamLogoBook
@@ -113,6 +115,7 @@ fun SportsLiveScreen(
     playViewModel: SportsLivePlayViewModel = hiltViewModel(),
     resultsViewModel: SportsLiveResultsViewModel = hiltViewModel(),
     scoresViewModel: SportsLiveScoresViewModel = hiltViewModel(),
+    remindersViewModel: SportsLiveRemindersViewModel = hiltViewModel(),
     /** Opens the item's Stream screen; the Boolean: the user picks there (no autoplay). */
     onPlay: (SportsLiveItem, Boolean) -> Unit,
     onPlayTarget: (SportsLiveZapTarget) -> Unit,
@@ -130,6 +133,8 @@ fun SportsLiveScreen(
     val preview by viewModel.preview.collectAsStateWithLifecycle()
     val playState by playViewModel.state.collectAsStateWithLifecycle()
     val resultsState by resultsViewModel.uiState.collectAsStateWithLifecycle()
+    val reminders by remindersViewModel.state.collectAsStateWithLifecycle()
+    SportsLiveReminderToasts(remindersViewModel)
     val context = LocalContext.current
 
     // Live scores for the Live now and Upcoming cards on screen, polled only while the screen is
@@ -313,7 +318,8 @@ fun SportsLiveScreen(
                         replay = replay,
                         revealed = scoresMode == ScoresMode.SHOW || item.streamKey in revealed,
                         // The page names the teams in the card's order (N10).
-                        homeFirst = sportsLiveGameHomeFirst(item, event)
+                        homeFirst = sportsLiveGameHomeFirst(item, event),
+                        card = item
                     )
                 )
                 onOpenGame()
@@ -363,7 +369,9 @@ fun SportsLiveScreen(
                 SportsLiveGameRequests.open(resultsState.gameRequestFor(row))
                 onOpenGame()
             },
-            onToggleResultFollow = resultsViewModel::toggleFollow
+            onToggleResultFollow = resultsViewModel::toggleFollow,
+            reminders = reminders,
+            onToggleReminder = remindersViewModel::toggle
         )
     }
 }
@@ -437,7 +445,10 @@ private fun SportsLiveContent(
     onEditMySports: () -> Unit,
     onResultFocus: (String?) -> Unit,
     onOpenResult: (ResultRow) -> Unit,
-    onToggleResultFollow: (ResultRow, ScoreSide) -> Unit
+    onToggleResultFollow: (ResultRow, ScoreSide) -> Unit,
+    /** Reminders (#44): the bell on upcoming games, and Remind me / Cancel reminder. */
+    reminders: RemindersState = RemindersState(),
+    onToggleReminder: (SportsLiveItem) -> Unit = {}
 ) {
     val tabFocusRequesters = remember { SportsLiveTab.entries.associateWith { FocusRequester() } }
     val liveNowScope = rememberCoroutineScope()
@@ -643,12 +654,15 @@ private fun SportsLiveContent(
             }
         }
     }
-    // A card naming a game, or a live game, opens the menu; other cards open Details directly.
-    // Ignored in pick mode.
+    // "Remind me" (#44) on a game not started yet; the bell on its card while reminded.
+    fun remindable(item: SportsLiveItem) = GameReminders.canRemind(item, uiState.nowMs)
+    fun remindedCard(item: SportsLiveItem) = remindable(item) && reminders.isReminded(item)
+    // A card naming a game, a live game or an upcoming game opens the menu; other cards open Details
+    // directly. Ignored in pick mode.
     fun cardLongClick(item: SportsLiveItem) {
         when {
             pickFirst != null -> Unit
-            item.teams != null || canWatchWith(item) -> menuCardKey = item.listKey
+            item.teams != null || canWatchWith(item) || remindable(item) -> menuCardKey = item.listKey
             else -> onOpenDetail(item)
         }
     }
@@ -669,7 +683,8 @@ private fun SportsLiveContent(
     items.firstOrNull { it.listKey == menuCardKey }?.let { item ->
         val watchWith = canWatchWith(item)
         val teams = item.teams
-        if (teams == null && !watchWith) return@let
+        val canRemind = remindable(item)
+        if (teams == null && !watchWith && !canRemind) return@let
         SportsLiveCardMenu(
             title = item.meta.name,
             sides = teams?.inTitleOrder(item.meta.name).orEmpty().map { side ->
@@ -707,7 +722,16 @@ private fun SportsLiveContent(
                 menuCardKey = null
                 onOpenDetail(item)
             },
-            onDismiss = { menuCardKey = null }
+            onDismiss = { menuCardKey = null },
+            onToggleReminder = if (canRemind) {
+                {
+                    menuCardKey = null
+                    onToggleReminder(item)
+                }
+            } else {
+                null
+            },
+            reminded = canRemind && reminders.isReminded(item)
         )
     }
 
@@ -1039,6 +1063,7 @@ private fun SportsLiveContent(
                                 onFocus = onCardFocused,
                                 menuOpen = item.listKey == menuCardKey,
                                 pickedFirst = item.listKey == pickFirst?.listKey,
+                                reminded = remindedCard(item),
                                 modifier = cardModifier
                             )
                         }
@@ -1064,6 +1089,7 @@ private fun SportsLiveContent(
                         final = espnFinalOf(item),
                         hasReplay = item.streamKey in replayKeys && ended,
                         whyTag = uiState.whyTags[item.streamKey]?.let { whyTagText(it) },
+                        reminded = remindedCard(item),
                         onClick = onCardClick,
                         onLongClick = onCardLongClick,
                         menuOpen = item.listKey == menuCardKey,
@@ -1129,6 +1155,12 @@ private fun SportsLiveContent(
                 art = artOf(selected),
                 chip = chipOf(selected),
                 scoreDetails = detailsOf(selected),
+                onToggleReminder = if (remindable(selected)) {
+                    { onToggleReminder(selected) }
+                } else {
+                    null
+                },
+                reminded = remindedCard(selected),
                 modifier = Modifier
                     .weight(0.55f)
                     .fillMaxHeight()

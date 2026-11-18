@@ -194,6 +194,7 @@ import com.nuvio.tv.ui.components.ProfileAvatarCircle
 import com.nuvio.tv.ui.navigation.LocalNavViewModelStoreOwner
 import com.nuvio.tv.ui.navigation.NuvioNavHost
 import com.nuvio.tv.ui.navigation.sportsLiveTargetRoute
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveAlertsHost
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniPlayerHost
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniPlayers
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniStop
@@ -1329,6 +1330,11 @@ open class MainActivity : ComponentActivity() {
                             // The Sports & Live mini player, above the NavHost; focus reaches it only by a D-pad move.
                             SportsLiveMiniPlayerHost(
                                 onExpand = { target -> navController.navigate(sportsLiveTargetRoute(target)) },
+                                contentFocusRequester = sportsLiveContentFocus
+                            )
+                            // Sports & Live reminders' "Watch now?" and followed teams' toasts (#42, #44).
+                            SportsLiveAlertsHost(
+                                navController = navController,
                                 contentFocusRequester = sportsLiveContentFocus
                             )
 

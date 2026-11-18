@@ -8,6 +8,9 @@ import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.nuvio.tv.TestPreferencesStore
 import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.core.sportslive.SportsLiveOpenGame
+import com.nuvio.tv.core.sportslive.alerts.GameReminder
+import com.nuvio.tv.core.sportslive.alerts.RemindersState
+import com.nuvio.tv.core.sportslive.alerts.SportsLiveAlertSettings
 import com.nuvio.tv.core.sportslive.scores.MyLeague
 import com.nuvio.tv.core.sportslive.scores.MySport
 import com.nuvio.tv.core.sportslive.scores.MySports
@@ -301,5 +304,43 @@ class SportsLivePreferencesDataStoreTest {
         profile2Store.updateData { mutablePreferencesOf(key to setOf("cricket", "cricket/ipl", "hockey")) }
         activeProfile.value = 2
         assertEquals(listOf(MySport.HOCKEY), store.mySports.first().effectiveSports)
+    }
+
+    @Test
+    fun `reminders and opt-outs round trip per profile`() = runTest {
+        val store = SportsLivePreferencesDataStore(factory, profiles)
+        assertEquals(RemindersState(), store.reminders.first())
+        val reminder = GameReminder(setOf("a|1", "b|2"), "Pacers @ 76ers", home = "76ers", away = "Pacers", startMs = 1_800_000_000_000L)
+        val optOut = GameReminder(setOf("c|3"), "Bulls vs Bucks", home = null, away = null, startMs = 1_800_000_100_000L)
+
+        val saved = store.updateReminders { it.copy(reminders = listOf(reminder), optOuts = listOf(optOut)) }
+        assertEquals(listOf(reminder), saved.reminders)
+        assertEquals(RemindersState(listOf(reminder), listOf(optOut)), store.reminders.first())
+
+        activeProfile.value = 2
+        assertEquals(RemindersState(), store.reminders.first())
+        activeProfile.value = 1
+        assertEquals(listOf(reminder), store.reminders.first().reminders)
+    }
+
+    @Test
+    fun `unreadable stored reminders read as none`() = runTest {
+        profile1Store.updateData { mutablePreferencesOf(stringPreferencesKey("sports_live_reminders") to "not json") }
+        val store = SportsLivePreferencesDataStore(factory, profiles)
+        assertEquals(emptyList<GameReminder>(), store.reminders.first().reminders)
+    }
+
+    @Test
+    fun `alert switches are on by default, per profile, and Remind me for my teams reaches the reminders`() = runTest {
+        val store = SportsLivePreferencesDataStore(factory, profiles)
+        assertEquals(SportsLiveAlertSettings(), store.alertSettings.first())
+        store.setRemindMyTeams(false)
+        store.setScoreAlerts(false)
+        store.setFullTimeAlerts(false)
+        assertEquals(SportsLiveAlertSettings(remindMyTeams = false, scoreAlerts = false, fullTimeAlerts = false), store.alertSettings.first())
+        assertEquals(false, store.reminders.first().remindMyTeams)
+
+        activeProfile.value = 2
+        assertEquals(SportsLiveAlertSettings(), store.alertSettings.first())
     }
 }

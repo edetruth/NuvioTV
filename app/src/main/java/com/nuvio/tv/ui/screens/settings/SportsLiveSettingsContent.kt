@@ -56,6 +56,7 @@ internal fun SportsLiveSettingsContent(
     viewModel: SportsLiveSettingsViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val alerts by viewModel.alertSettings.collectAsStateWithLifecycle()
     val newSportsHint by viewModel.newSportsHint.collectAsStateWithLifecycle()
     var filterKey by remember { mutableStateOf<String?>(null) }
     var scorePicker by remember { mutableStateOf<ScorePicker?>(null) }
@@ -172,6 +173,34 @@ internal fun SportsLiveSettingsContent(
                     value = scoresStatusText(scoresStatus),
                     onClick = { scorePicker = ScorePicker.STATUS },
                     enabled = state.showSection
+                )
+            }
+        }
+        item(key = "alerts") {
+            SettingsGroupCard(
+                modifier = Modifier.fillMaxWidth(),
+                title = stringResource(R.string.sports_live_alerts_title)
+            ) {
+                SettingsToggleRow(
+                    title = stringResource(R.string.sports_live_setting_remind_my_teams),
+                    subtitle = stringResource(R.string.sports_live_setting_remind_my_teams_subtitle),
+                    checked = alerts.remindMyTeams,
+                    onToggle = { viewModel.setRemindMyTeams(!alerts.remindMyTeams) },
+                    enabled = state.showSection
+                )
+                SettingsToggleRow(
+                    title = stringResource(R.string.sports_live_setting_score_alerts),
+                    subtitle = stringResource(R.string.sports_live_setting_score_alerts_subtitle),
+                    checked = alerts.scoreAlerts,
+                    onToggle = { viewModel.setScoreAlerts(!alerts.scoreAlerts) },
+                    enabled = state.showSection && state.scores.mode == ScoresMode.SHOW
+                )
+                SettingsToggleRow(
+                    title = stringResource(R.string.sports_live_setting_full_time_alerts),
+                    subtitle = stringResource(R.string.sports_live_setting_full_time_alerts_subtitle),
+                    checked = alerts.fullTimeAlerts,
+                    onToggle = { viewModel.setFullTimeAlerts(!alerts.fullTimeAlerts) },
+                    enabled = state.showSection && state.scores.mode != ScoresMode.OFF
                 )
             }
         }

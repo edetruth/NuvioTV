@@ -11,6 +11,9 @@ import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.core.sportslive.LiveNowSort
 import com.nuvio.tv.core.sportslive.SportsLiveLayout
 import com.nuvio.tv.core.sportslive.SportsLiveOpenGame
+import com.nuvio.tv.core.sportslive.alerts.GameReminder
+import com.nuvio.tv.core.sportslive.alerts.RemindersState
+import com.nuvio.tv.core.sportslive.alerts.SportsLiveAlertSettings
 import com.nuvio.tv.core.sportslive.scores.MySports
 import com.nuvio.tv.core.sportslive.scores.ScoreDelayChoices
 import com.nuvio.tv.core.sportslive.scores.ScoreSettings
@@ -65,6 +68,14 @@ class SportsLivePreferencesDataStore @Inject constructor(
     private val openGameKey = stringPreferencesKey("sports_live_open_game")
     private val layoutsKey = stringPreferencesKey("sports_live_layouts")
     private val liveNowSortKey = stringPreferencesKey("sports_live_live_now_sort")
+    private val remindersKey = stringPreferencesKey("sports_live_reminders")
+    private val reminderOptOutsKey = stringPreferencesKey("sports_live_reminder_opt_outs")
+    private val remindMyTeamsKey = booleanPreferencesKey("sports_live_remind_my_teams")
+    private val scoreAlertsKey = booleanPreferencesKey("sports_live_score_alerts")
+    private val fullTimeAlertsKey = booleanPreferencesKey("sports_live_full_time_alerts")
+
+    // [{"keys": source keys joined by REMINDER_KEY_SEPARATOR, "title": ..., "home": ..., "away": ..., "start": "epoch ms"}]; plain maps, like the follows.
+    private val remindersType = object : TypeToken<List<Map<String, String?>>>() {}.type
 
     val showSection: Flow<Boolean> = profileManager.activeProfileId.flatMapLatest { pid ->
         factory.get(pid, FEATURE).data.map { it[showSectionKey] ?: true }
@@ -153,6 +164,56 @@ class SportsLivePreferencesDataStore @Inject constructor(
 
     suspend fun setLiveNowSort(sort: LiveNowSort) {
         store().edit { it[liveNowSortKey] = sort.name }
+    }
+
+    /** Settings → Sports & Live → Alerts (#42, #44): each on by default. */
+    val alertSettings: Flow<SportsLiveAlertSettings> = profileManager.activeProfileId.flatMapLatest { pid ->
+        factory.get(pid, FEATURE).data.map { prefs ->
+            SportsLiveAlertSettings(
+                remindMyTeams = prefs[remindMyTeamsKey] ?: true,
+                scoreAlerts = prefs[scoreAlertsKey] ?: true,
+                fullTimeAlerts = prefs[fullTimeAlertsKey] ?: true
+            )
+        }
+    }
+
+    suspend fun setRemindMyTeams(v: Boolean) {
+        store().edit { it[remindMyTeamsKey] = v }
+    }
+
+    suspend fun setScoreAlerts(v: Boolean) {
+        store().edit { it[scoreAlertsKey] = v }
+    }
+
+    suspend fun setFullTimeAlerts(v: Boolean) {
+        store().edit { it[fullTimeAlertsKey] = v }
+    }
+
+    /** The active profile's reminders (#44), opt-outs from automatic ones, and "Remind me for my teams". */
+    val reminders: Flow<RemindersState> = profileManager.activeProfileId.flatMapLatest { pid ->
+        factory.get(pid, FEATURE).data.map { prefs ->
+            RemindersState(
+                reminders = decodeReminders(prefs[remindersKey]),
+                optOuts = decodeReminders(prefs[reminderOptOutsKey]),
+                remindMyTeams = prefs[remindMyTeamsKey] ?: true
+            )
+        }
+    }
+
+    /** Saves [change] of the stored reminders and opt-outs in one edit; returns the state saved. */
+    suspend fun updateReminders(change: (RemindersState) -> RemindersState): RemindersState {
+        var saved = RemindersState()
+        store().edit { prefs ->
+            val current = RemindersState(
+                reminders = decodeReminders(prefs[remindersKey]),
+                optOuts = decodeReminders(prefs[reminderOptOutsKey]),
+                remindMyTeams = prefs[remindMyTeamsKey] ?: true
+            )
+            saved = change(current)
+            prefs[remindersKey] = encodeReminders(saved.reminders)
+            prefs[reminderOptOutsKey] = encodeReminders(saved.optOuts)
+        }
+        return saved
     }
 
     suspend fun setOpenGame(openGame: SportsLiveOpenGame) {
@@ -286,6 +347,35 @@ class SportsLivePreferencesDataStore @Inject constructor(
         }.getOrDefault(emptyList())
     }
 
+    private fun encodeReminders(entries: List<GameReminder>): String =
+        gson.toJson(
+            entries.map {
+                mapOf(
+                    "keys" to it.keys.joinToString(REMINDER_KEY_SEPARATOR),
+                    "title" to it.title,
+                    "home" to it.home,
+                    "away" to it.away,
+                    "start" to it.startMs.toString()
+                )
+            }
+        )
+
+    private fun decodeReminders(json: String?): List<GameReminder> {
+        if (json.isNullOrBlank()) return emptyList()
+        return runCatching {
+            gson.fromJson<List<Map<String, String?>?>?>(json, remindersType).orEmpty().mapNotNull { stored ->
+                val start = stored?.get("start")?.toLongOrNull() ?: return@mapNotNull null
+                GameReminder(
+                    keys = stored["keys"].orEmpty().split(REMINDER_KEY_SEPARATOR).filter { it.isNotBlank() }.toSet(),
+                    title = stored["title"].orEmpty(),
+                    home = stored["home"]?.takeIf { it.isNotBlank() },
+                    away = stored["away"]?.takeIf { it.isNotBlank() },
+                    startMs = start
+                )
+            }
+        }.getOrDefault(emptyList())
+    }
+
     private fun decodeOptions(json: String?): Map<String, CatalogOption> {
         if (json.isNullOrBlank()) return emptyMap()
         return runCatching {
@@ -317,6 +407,9 @@ class SportsLivePreferencesDataStore @Inject constructor(
  */
 fun shouldShowNewSportsHint(savedTokens: Set<String>?): Boolean =
     !savedTokens.isNullOrEmpty() && MySports.decode(savedTokens).sports.keys.none { it.kind == SportKind.INDIVIDUAL }
+
+/** Between a stored reminder's source keys (a unit separator: never in an addon or item id). */
+private const val REMINDER_KEY_SEPARATOR = "\u001F"
 
 /** Dual screen entries that show the keys hint. */
 const val DUAL_KEYS_HINT_ENTRIES = 3

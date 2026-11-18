@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.runtime.Composable
@@ -142,7 +143,9 @@ internal fun SportsLiveListCard(
     /** A strict replay match exists: the Replay tag beside the chip. */
     hasReplay: Boolean = false,
     /** Most exciting (#43): why the game ranks high ("Close · 2 min left", "OT"); null shows none. */
-    whyTag: String? = null
+    whyTag: String? = null,
+    /** An upcoming game with a reminder (#44): the blue bell chip beside the start. */
+    reminded: Boolean = false
 ) {
     val shape = RoundedCornerShape(NuvioTheme.radii.md)
     var longPressTriggered by remember { mutableStateOf(false) }
@@ -210,7 +213,7 @@ internal fun SportsLiveListCard(
                 )
             }
             Column(verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs)) {
-                if (stateLabel != null || chip != null || hasReplay || whyTag != null) {
+                if (stateLabel != null || chip != null || hasReplay || whyTag != null || reminded) {
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs),
                         verticalAlignment = Alignment.CenterVertically
@@ -219,6 +222,7 @@ internal fun SportsLiveListCard(
                         if (chip != null) SportsLiveScoreChip(chip)
                         if (hasReplay) ReplayPill()
                         if (whyTag != null) WhyTagPill(whyTag)
+                        if (reminded) ReminderPill()
                     }
                 }
                 Row(
@@ -297,7 +301,10 @@ internal fun SportsLiveDetailsPane(
     /** A matched game's scoreline, linescore and scorers (spoiler setting applied); null shows none. */
     scoreDetails: ScoreDetails? = null,
     /** The game is over (Just ended, or an ESPN final): the addon's "LIVE NOW" line is left out (C3). */
-    over: Boolean = false
+    over: Boolean = false,
+    /** "Remind me" / "Cancel reminder" (#44) by [reminded]; null hides it (only upcoming games offer it). */
+    onToggleReminder: (() -> Unit)? = null,
+    reminded: Boolean = false
 ) {
     Column(
         modifier = modifier,
@@ -413,6 +420,13 @@ internal fun SportsLiveDetailsPane(
                     PaneButtonLabel(stringResource(R.string.sports_live_game_stats))
                 }
             }
+            if (onToggleReminder != null) {
+                SportsLivePaneButton(onClick = onToggleReminder, modifier = button) {
+                    Icon(imageVector = Icons.Rounded.Notifications, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(NuvioTheme.spacing.xs))
+                    PaneButtonLabel(stringResource(if (reminded) R.string.sports_live_cancel_reminder else R.string.sports_live_remind_me))
+                }
+            }
             SportsLivePaneButton(onClick = onDetails, modifier = button) {
                 PaneButtonLabel(stringResource(R.string.sports_live_details))
             }
@@ -441,7 +455,10 @@ internal fun SportsLiveCardMenu(
     /** "Game stats": the Game page (#18); null hides it (only a game with a strict ESPN match offers it). */
     onGameStats: (() -> Unit)? = null,
     /** "Following ‹team›" in place of "Unfollow ‹team›" (the Results / Game page wording). */
-    followingLabel: Boolean = false
+    followingLabel: Boolean = false,
+    /** "Remind me" / "Cancel reminder" (#44) by [reminded]; null hides it (only upcoming games offer it). */
+    onToggleReminder: (() -> Unit)? = null,
+    reminded: Boolean = false
 ) {
     val firstFocusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { firstFocusRequester.requestFocus() } }
@@ -450,6 +467,7 @@ internal fun SportsLiveCardMenu(
         onWatchWith != null -> MENU_WATCH_WITH
         onChooseStream != null -> MENU_CHOOSE_STREAM
         onGameStats != null -> MENU_GAME_STATS
+        onToggleReminder != null -> MENU_REMIND
         sides.isNotEmpty() -> MENU_FIRST_SIDE
         else -> MENU_DETAILS
     }
@@ -475,6 +493,13 @@ internal fun SportsLiveCardMenu(
                 text = stringResource(R.string.sports_live_game_stats),
                 onClick = onGameStats,
                 modifier = first(MENU_GAME_STATS)
+            )
+        }
+        if (onToggleReminder != null) {
+            SportsLiveMenuButton(
+                text = stringResource(if (reminded) R.string.sports_live_cancel_reminder else R.string.sports_live_remind_me),
+                onClick = onToggleReminder,
+                modifier = first(MENU_REMIND)
             )
         }
         sides.forEachIndexed { index, (side, followed) ->
@@ -569,6 +594,29 @@ private fun WhyTagPill(text: String) {
     )
 }
 
+/** The reminder chip (#44): a bell and "Reminder on", blue like the why tags so it never reads as live or followed. */
+@Composable
+internal fun ReminderPill() {
+    val shape = RoundedCornerShape(50)
+    Row(
+        modifier = Modifier
+            .clip(shape)
+            .background(WHY_TAG_BACKGROUND)
+            .border(1.dp, WHY_TAG_BORDER, shape)
+            .padding(horizontal = NuvioTheme.spacing.sm, vertical = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xxs),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(imageVector = Icons.Rounded.Notifications, contentDescription = null, tint = WHY_TAG_TEXT, modifier = Modifier.size(14.dp))
+        Text(
+            text = stringResource(R.string.sports_live_reminder_on),
+            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+            color = WHY_TAG_TEXT,
+            maxLines = 1
+        )
+    }
+}
+
 /** [tag]'s words: "Close · 2 min left", "OT", "Lead change"... */
 @Composable
 internal fun whyTagText(tag: WhyTag): String = when (tag.kind) {
@@ -599,6 +647,7 @@ private const val MENU_CHOOSE_STREAM = 1
 private const val MENU_GAME_STATS = 2
 private const val MENU_FIRST_SIDE = 3
 private const val MENU_DETAILS = 4
+private const val MENU_REMIND = 5
 
 /**
  * Hold OK (or press Menu) on a card that is not a [SportsLiveListCard] (a Results row): [onLongClick],

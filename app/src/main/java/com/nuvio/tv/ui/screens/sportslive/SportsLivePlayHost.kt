@@ -25,7 +25,9 @@ import com.nuvio.tv.domain.model.SportsLiveItem
 fun SportsLivePlayHost(
     playViewModel: SportsLivePlayViewModel,
     onOpenStreamScreen: (item: SportsLiveItem, manualSelection: Boolean) -> Unit,
-    onPlayTarget: (SportsLiveZapTarget) -> Unit
+    onPlayTarget: (SportsLiveZapTarget) -> Unit,
+    /** Announces sources on a cool-down; off for a second host on screen (the alerts', #44), so it shows once. */
+    cooldownToasts: Boolean = true
 ) {
     val context = LocalContext.current
     val playState by playViewModel.state.collectAsStateWithLifecycle()
@@ -33,7 +35,7 @@ fun SportsLivePlayHost(
     val currentOnPlayTarget by rememberUpdatedState(onPlayTarget)
     val lifecycleOwner = LocalLifecycleOwner.current
     // A source that answered with a rate-limit notice is announced once (C1).
-    SportsLiveCooldownToasts()
+    if (cooldownToasts) SportsLiveCooldownToasts()
     LaunchedEffect(playViewModel, lifecycleOwner) {
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
             playViewModel.events.collect { event ->

@@ -5,6 +5,7 @@ import com.nuvio.tv.TestPreferencesStore
 import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.core.sportslive.SportsLiveCatalogPolicy
 import com.nuvio.tv.core.sportslive.SportsLiveOpenGame
+import com.nuvio.tv.core.sportslive.alerts.SportsLiveAlertSettings
 import com.nuvio.tv.core.sportslive.scores.EspnFeedHealth
 import com.nuvio.tv.core.sportslive.scores.LiveScoresRepository
 import com.nuvio.tv.core.sportslive.scores.MyLeague
@@ -288,6 +289,26 @@ class SportsLiveSettingsViewModelTest {
 
         assertFalse(viewModel.uiState.value.pipEnabled)
         assertFalse(prefs.pipEnabled.first())
+    }
+
+    @Test
+    fun `alert switches are on by default and each is stored`() = runTest {
+        val viewModel = newViewModel()
+        backgroundScope.launch { viewModel.alertSettings.collect {} }
+        advanceUntilIdle()
+        assertEquals(SportsLiveAlertSettings(remindMyTeams = true, scoreAlerts = true, fullTimeAlerts = true), viewModel.alertSettings.value)
+
+        viewModel.setRemindMyTeams(false)
+        viewModel.setScoreAlerts(false)
+        advanceUntilIdle()
+        assertEquals(SportsLiveAlertSettings(remindMyTeams = false, scoreAlerts = false, fullTimeAlerts = true), viewModel.alertSettings.value)
+
+        viewModel.setFullTimeAlerts(false)
+        viewModel.setRemindMyTeams(true)
+        advanceUntilIdle()
+        assertEquals(SportsLiveAlertSettings(remindMyTeams = true, scoreAlerts = false, fullTimeAlerts = false), prefs.alertSettings.first())
+        // "Remind me for my teams" is what the reminders read.
+        assertTrue(prefs.reminders.first().remindMyTeams)
     }
 
     @Test

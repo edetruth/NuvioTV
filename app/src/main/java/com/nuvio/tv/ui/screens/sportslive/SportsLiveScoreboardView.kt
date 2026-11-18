@@ -219,7 +219,9 @@ internal fun SportsLiveScoreboardRow(
     onFocus: () -> Unit,
     modifier: Modifier = Modifier,
     menuOpen: Boolean = false,
-    pickedFirst: Boolean = false
+    pickedFirst: Boolean = false,
+    /** An upcoming game with a reminder (#44): a bell before its status. */
+    reminded: Boolean = false
 ) {
     val shape = RoundedCornerShape(NuvioTheme.radii.md)
     var focused by remember { mutableStateOf(false) }
@@ -284,6 +286,7 @@ internal fun SportsLiveScoreboardRow(
                     ScoreText(score.second)
                 }
             }
+            if (reminded) ReminderPill()
             RowStatus(row, modifier = Modifier.widthIn(max = ROW_STATUS_MAX_WIDTH))
         }
     }
