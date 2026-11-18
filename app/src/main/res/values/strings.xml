@@ -3651,8 +3651,8 @@
     <string name="sports_live_results_sport_baseball">Baseball</string>
     <string name="sports_live_results_sport_soccer">Soccer</string>
     <string name="sports_live_filter_all">All</string>
-    <string name="sports_live_filter_my_teams">★ My teams</string>
-    <string name="sports_live_results_my_sports">★ My sports</string>
+    <string name="sports_live_filter_my_teams">My teams</string>
+    <string name="sports_live_results_my_sports">My sports</string>
     <string name="sports_live_results_your_teams">Your teams</string>
     <string name="sports_live_results_my_sports_empty">Nothing from My sports this day. Pick a sport above to see its games.</string>
     <string name="sports_live_results_edit_my_sports">Edit my sports</string>
@@ -3825,6 +3825,13 @@
     <!-- Live now sort (#43): the control and the why tags on Most exciting cards. -->
     <string name="sports_live_sort_start_time">Start time</string>
     <string name="sports_live_sort_most_exciting">Most exciting</string>
+    <!-- One View button for layout and sort (#79): "View · Scoreboard · Exciting". -->
+    <string name="sports_live_view">View</string>
+    <string name="sports_live_view_layout">Layout</string>
+    <string name="sports_live_view_sort">Sort</string>
+    <string name="sports_live_view_sort_exciting">Exciting</string>
+    <string name="sports_live_view_label">View · %1$s</string>
+    <string name="sports_live_view_label_sort">View · %1$s · %2$s</string>
     <string name="sports_live_why_penalties">Penalties</string>
     <string name="sports_live_why_shootout">Shootout</string>
     <string name="sports_live_why_overtime">OT</string>

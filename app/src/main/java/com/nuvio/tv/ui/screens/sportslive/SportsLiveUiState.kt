@@ -27,6 +27,11 @@ data class SportsLiveUiState(
     val filters: List<String> = emptyList(),
     /** null means All. */
     val selectedFilter: String? = null,
+    /**
+     * Each chip's game count (#79): All (null), "★ My teams" and each value of [filters], over the tab's
+     * list (Live now leaves its Just ended strip out, as its tab count does); a chip missing here has none.
+     */
+    val filterCounts: Map<String?, Int> = emptyMap(),
     /** [selectedTab]'s items filtered by [selectedFilter]. */
     val visibleItems: List<SportsLiveItem> = emptyList(),
     val selectedItemId: String? = null,
@@ -51,6 +56,9 @@ data class SportsLiveUiState(
     /** Most exciting with scores shown: a ranked card's why tag, by card key; empty otherwise. */
     val whyTags: Map<String, WhyTag> = emptyMap()
 ) {
+    /** The selected chip has no games left (#79): it stays shown with 0 until the user moves, then All. */
+    val selectedFilterEmpty: Boolean get() = selectedFilter != null && (filterCounts[selectedFilter] ?: 0) == 0
+
     /** [item]'s ended verdict when it sits in the Just ended strip (Live now only), else null. */
     fun endedOf(item: SportsLiveItem): EndedGame? =
         if (selectedTab == SportsLiveTab.LIVE_NOW) justEnded[item.streamKey] else null

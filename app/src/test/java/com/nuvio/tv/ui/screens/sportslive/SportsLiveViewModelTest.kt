@@ -483,7 +483,7 @@ class SportsLiveViewModelTest {
     }
 
     @Test
-    fun `a filter that leaves the list is cleared and does not come back`() = runTest {
+    fun `a selected filter that loses its games stays at 0 until the user moves, then falls back to All (#79)`() = runTest {
         nextLoad = load(listOf(channel("uk1", "UK"), channel("ca1", "CA"), channel("us1", "US")))
         val viewModel = newViewModel()
         advanceUntilIdle()
@@ -491,16 +491,88 @@ class SportsLiveViewModelTest {
         viewModel.selectFilter("UK")
         runCurrent()
         assertEquals("UK", viewModel.uiState.value.selectedFilter)
+        assertFalse(viewModel.onUserMoved())
 
         latestFlow.value = load(listOf(channel("ca1", "CA"), channel("us1", "US")))
         runCurrent()
+        val emptied = viewModel.uiState.value
+        assertEquals("UK", emptied.selectedFilter)
+        assertEquals(listOf("CA", "UK", "US"), emptied.filters)
+        assertEquals(0, emptied.filterCounts["UK"] ?: 0)
+        assertTrue(emptied.selectedFilterEmpty)
+        assertTrue(emptied.visibleItems.isEmpty())
+
+        assertTrue(viewModel.onUserMoved())
+        runCurrent()
         assertNull(viewModel.uiState.value.selectedFilter)
+        assertEquals(listOf("CA", "US"), viewModel.uiState.value.filters)
         assertEquals(listOf("ca1", "us1"), viewModel.uiState.value.visibleItems.map { it.id })
 
+        // Gone back to All, it does not come back with its games.
         latestFlow.value = load(listOf(channel("uk1", "UK"), channel("ca1", "CA"), channel("us1", "US")))
         runCurrent()
         assertNull(viewModel.uiState.value.selectedFilter)
         assertEquals(3, viewModel.uiState.value.visibleItems.size)
+    }
+
+    @Test
+    fun `chips carry their game counts and chips with none hide (#79)`() = runTest {
+        nextLoad = load(
+            listOf(
+                item("a", isLive = true, sport = "Soccer", name = "A"),
+                item("b", isLive = true, sport = "Soccer", name = "B"),
+                item("c", isLive = true, sport = "Basketball", name = "C"),
+                item("u", isLive = false, sport = "Tennis", startMs = NOW + HOUR)
+            )
+        )
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(listOf("Basketball", "Soccer"), state.filters)
+        assertEquals(3, state.filterCounts[null])
+        assertEquals(2, state.filterCounts["Soccer"])
+        assertEquals(1, state.filterCounts["Basketball"])
+        assertNull(state.filterCounts["Tennis"])
+    }
+
+    @Test
+    fun `each tab reopens on its last chip while it still has games (#79)`() = runTest {
+        nextLoad = load(
+            listOf(
+                channel("uk1", "UK"),
+                channel("ca1", "CA"),
+                item("a", isLive = true, sport = "Soccer", name = "A"),
+                item("b", isLive = true, sport = "Tennis", name = "B")
+            )
+        )
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+        viewModel.selectFilter("Tennis")
+        viewModel.selectTab(SportsLiveTab.CHANNELS)
+        viewModel.selectFilter("UK")
+        runCurrent()
+
+        viewModel.selectTab(SportsLiveTab.LIVE_NOW)
+        runCurrent()
+        assertEquals("Tennis", viewModel.uiState.value.selectedFilter)
+        viewModel.selectTab(SportsLiveTab.CHANNELS)
+        runCurrent()
+        assertEquals("UK", viewModel.uiState.value.selectedFilter)
+
+        // All picked again: the tab reopens on All.
+        viewModel.selectFilter(null)
+        viewModel.selectTab(SportsLiveTab.LIVE_NOW)
+        viewModel.selectTab(SportsLiveTab.CHANNELS)
+        runCurrent()
+        assertNull(viewModel.uiState.value.selectedFilter)
+
+        // A remembered chip whose games have gone is not reopened.
+        latestFlow.value = load(listOf(channel("ca1", "CA"), item("a", isLive = true, sport = "Soccer", name = "A")))
+        runCurrent()
+        viewModel.selectTab(SportsLiveTab.LIVE_NOW)
+        runCurrent()
+        assertNull(viewModel.uiState.value.selectedFilter)
     }
 
     @Test
@@ -610,11 +682,15 @@ class SportsLiveViewModelTest {
         runCurrent()
         assertEquals(listOf("UK", "US"), viewModel.uiState.value.filters)
 
-        // Unfollowing while the filter is selected clears it.
+        // Unfollowing while the filter is selected keeps it at 0 until the user moves (#79), then All.
         viewModel.selectTab(SportsLiveTab.LIVE_NOW)
         viewModel.selectFilter(my)
         runCurrent()
         followedFlow.value = emptyList()
+        runCurrent()
+        assertEquals(my, viewModel.uiState.value.selectedFilter)
+        assertTrue(viewModel.uiState.value.selectedFilterEmpty)
+        assertTrue(viewModel.onUserMoved())
         runCurrent()
         assertNull(viewModel.uiState.value.selectedFilter)
         assertEquals(listOf("Basketball", "Soccer"), viewModel.uiState.value.filters)

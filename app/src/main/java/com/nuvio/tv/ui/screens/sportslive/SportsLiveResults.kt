@@ -140,7 +140,7 @@ private fun ResultsEmptyToday(
 /**
  * The Results tab: the date rail (Today · Yesterday · Earlier ▸, which opens the 5 older days), the
  * ★ My sports / sport chips, the chosen sport's league chips, on Today a "N games live now →" line, and
- * the day's finals under league headers (YOUR TEAMS first, long tails collapsed). Chips select on focus like the section's tabs and filters; Down from a chip row lands on
+ * the day's finals under league headers (YOUR TEAMS first, long tails collapsed). Focus only highlights a chip; OK picks it (#79), and OK on the picked one opens the list. Down from a chip row lands on
  * the active chip below or the list's entry row; a new day, sport or league opens the list at the top.
  */
 @Composable
@@ -524,17 +524,17 @@ private fun ResultsDateRow(
     val focusDay = state.daysAgo ?: SportsResults.TODAY
     val dayChip: @Composable (ResultDay) -> Unit = { day ->
         val days = day.daysAgo
-        SourceStatusFilterChip(
+        val isSelected = days == state.daysAgo
+        SportsLiveFilterChip(
             // "Today" / "Yesterday" only when the ESPN (US Eastern) day is also the device's; else its date.
             name = when {
                 day.isDeviceToday -> today
                 day.isDeviceYesterday -> yesterday
                 else -> day.date.dayLabel(dayFormat)
             },
-            isSelected = days == state.daysAgo,
-            outlined = true,
-            onFocusSelect = { onSelectDay(days) },
-            onClick = onOpen,
+            isSelected = isSelected,
+            // #79: focus only highlights; OK picks the day, OK on the picked one opens the list.
+            onClick = sportsLiveChipClick(isSelected, onSelect = { onSelectDay(days) }, onOpenList = onOpen),
             modifier = Modifier
                 .then(if (days == focusDay) Modifier.focusRequester(dateFocusRequester) else Modifier)
                 .focusProperties {
@@ -545,11 +545,10 @@ private fun ResultsDateRow(
     }
     ResultsChipRow(focusRequester = dateFocusRequester, modifier = modifier) {
         state.dates.filter { it.daysAgo !in SportsResults.EARLIER }.forEach { dayChip(it) }
-        // A toggle, not a day: focus does not select it; OK opens the older days after it, in place.
-        SourceStatusFilterChip(
+        // A toggle, not a day: OK opens the older days after it, in place.
+        SportsLiveFilterChip(
             name = stringResource(if (state.earlierOpen) R.string.sports_live_results_earlier_open else R.string.sports_live_results_earlier),
             isSelected = false,
-            outlined = true,
             onClick = onToggleEarlier,
             modifier = Modifier.focusProperties {
                 up = upFocusRequester
@@ -592,7 +591,10 @@ private val LIVE_NOW_LINE_BACKGROUND = Color(0xFF1A1012)
 private val LIVE_NOW_DOT = Color(0xFFFF4D57)
 private val LIVE_NOW_TEXT = Color(0xFFFFB3B8)
 
-/** A chip of a Results chip row: selects on focus, OK opens the list; the selected one takes [activeFocusRequester]. */
+/**
+ * A chip of a Results chip row (#79): focus only highlights it; OK selects it, and OK on the selected
+ * one opens the list. The selected one takes [activeFocusRequester]; [count] follows its name.
+ */
 @Composable
 private fun ResultsChip(
     name: String,
@@ -601,14 +603,16 @@ private fun ResultsChip(
     upFocusRequester: FocusRequester,
     downFocusRequester: FocusRequester?,
     onSelect: () -> Unit,
-    onOpen: () -> Unit
+    onOpen: () -> Unit,
+    count: Int? = null,
+    icon: SportsLiveChipIcon = SportsLiveChipIcon.NONE
 ) {
-    SourceStatusFilterChip(
+    SportsLiveFilterChip(
         name = name,
         isSelected = isSelected,
-        outlined = true,
-        onFocusSelect = onSelect,
-        onClick = onOpen,
+        count = count,
+        icon = icon,
+        onClick = sportsLiveChipClick(isSelected, onSelect = onSelect, onOpenList = onOpen),
         modifier = Modifier
             .then(if (isSelected) Modifier.focusRequester(activeFocusRequester) else Modifier)
             .focusProperties {
@@ -635,6 +639,9 @@ private fun ResultsSportRow(
             ResultsChip(
                 name = stringResource(R.string.sports_live_results_my_sports),
                 isSelected = state.selectedSport == null,
+                count = state.sportCounts[null],
+                // A grid, not the star of ★ My teams (#79): these are sports, not followed teams.
+                icon = SportsLiveChipIcon.MY_SPORTS,
                 activeFocusRequester = sportFocusRequester,
                 upFocusRequester = upFocusRequester,
                 downFocusRequester = downFocusRequester,
@@ -645,6 +652,7 @@ private fun ResultsSportRow(
                 ResultsChip(
                     name = mySportLabel(sport),
                     isSelected = sport == state.selectedSport,
+                    count = state.sportCounts[sport],
                     activeFocusRequester = sportFocusRequester,
                     upFocusRequester = upFocusRequester,
                     downFocusRequester = downFocusRequester,
@@ -653,7 +661,7 @@ private fun ResultsSportRow(
                 )
             }
         }
-        // A link, not a filter: focus does not select it; OK opens My sports in Settings. Outside the
+        // A link, not a filter: OK opens My sports in Settings. Outside the
         // scrolling chips, so its label always shows whole.
         SourceStatusFilterChip(
             name = stringResource(R.string.sports_live_results_edit_my_sports),
@@ -684,6 +692,7 @@ private fun ResultsLeagueRow(
         ResultsChip(
             name = stringResource(R.string.sports_live_filter_all),
             isSelected = state.selectedLeague == null,
+            count = state.leagueCounts[null],
             activeFocusRequester = leagueFocusRequester,
             upFocusRequester = upFocusRequester,
             downFocusRequester = downFocusRequester,
@@ -694,6 +703,7 @@ private fun ResultsLeagueRow(
             ResultsChip(
                 name = league.name ?: sportLabel(league.sport),
                 isSelected = league.key == state.selectedLeague,
+                count = state.leagueCounts[league.key],
                 activeFocusRequester = leagueFocusRequester,
                 upFocusRequester = upFocusRequester,
                 downFocusRequester = downFocusRequester,

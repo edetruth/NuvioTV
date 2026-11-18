@@ -78,6 +78,10 @@ data class SportsLiveResultsUiState(
     val leagues: List<ResultLeagueChip> = emptyList(),
     /** The chosen league chip's key; null is All. */
     val selectedLeague: String? = null,
+    /** Each sport chip's game count that day (#79); null is ★ My sports. */
+    val sportCounts: Map<MySport?, Int> = emptyMap(),
+    /** Each league chip's game count (#79), by key; null is All (the chosen sport's games). */
+    val leagueCounts: Map<String?, Int> = emptyMap(),
     /** The list: YOUR TEAMS first, then league sections, long tails collapsed. */
     val items: List<ResultListItem> = emptyList(),
     val mode: ScoresMode = ScoresMode.SHOW,
@@ -147,7 +151,8 @@ class SportsLiveResultsViewModel internal constructor(
         val leagues: List<ResultLeagueChip>,
         val league: String?,
         val items: List<ResultListItem>,
-        val replays: Map<String, SportsLiveItem>
+        val replays: Map<String, SportsLiveItem>,
+        val counts: ResultChipCounts
     )
 
     private val listing = combine(load, selection, replayIndex) { load, selected, replays ->
@@ -158,7 +163,8 @@ class SportsLiveResultsViewModel internal constructor(
         val sport = selected.sport?.takeIf { it in sports }
         val leagues = resultLeagueChips(rows, sport)
         val league = selected.league?.takeIf { key -> leagues.any { it.key == key } }
-        Listing(sports, sport, leagues, league, resultListItems(rows, mySports, sport, league, selected.expanded, replays.keys), replays)
+        val items = resultListItems(rows, mySports, sport, league, selected.expanded, replays.keys)
+        Listing(sports, sport, leagues, league, items, replays, resultChipCounts(rows, mySports, sports, sport))
     }.flowOn(computeDispatcher)
 
     val uiState: StateFlow<SportsLiveResultsUiState> = combine(
@@ -177,6 +183,8 @@ class SportsLiveResultsViewModel internal constructor(
             selectedSport = listing.sport,
             leagues = listing.leagues,
             selectedLeague = listing.league,
+            sportCounts = listing.counts.sports,
+            leagueCounts = listing.counts.leagues,
             items = listing.items,
             mode = mode,
             modeKnown = true,
@@ -186,8 +194,8 @@ class SportsLiveResultsViewModel internal constructor(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SportsLiveResultsUiState())
 
     init {
-        // A day loads while Results is the selected tab and on screen, after the date chip settles (chips
-        // select on focus, so moving across them does not request each day). Past days do not change: no
+        // A day loads while Results is the selected tab and on screen, after the date chip settles (quick
+        // picks in a row do not request each day). Past days do not change: no
         // polling. Today refreshes at most every 2 min, only while shown (#67).
         viewModelScope.launch {
             combine(active, daysAgo, mode, prefs.followedTeams, prefs.mySports) { isActive, days, _, _, _ ->
@@ -347,6 +355,27 @@ internal fun resultLeagueChips(rows: List<ResultRow>, sport: MySport?): List<Res
     if (sport == null) return emptyList()
     val groups = SportsResults.groups(rows.filter { it.event.league.sport == sport.espnSport })
     return if (groups.size < 2) emptyList() else groups.map { ResultLeagueChip(it.key, it.name, it.sport) }
+}
+
+/** The Results chips' game counts (#79): [sports] by sport (null: ★ My sports), [leagues] by key (null: All). */
+internal data class ResultChipCounts(val sports: Map<MySport?, Int>, val leagues: Map<String?, Int>)
+
+/**
+ * The Results chips' counts over the day's [rows] (#79): ★ My sports counts what it lists (followed
+ * teams' games and My sports' games), each of [sports] its games, and the chosen [sport]'s league chips
+ * their sections' games (All: the sport's). A count is no score: Hide until focused shows it too.
+ */
+internal fun resultChipCounts(rows: List<ResultRow>, mySports: MySports, sports: List<MySport>, sport: MySport?): ResultChipCounts {
+    val bySport = HashMap<MySport?, Int>()
+    bySport[null] = rows.count { it.followed || mySports.includes(it.event) }
+    sports.forEach { chip -> bySport[chip] = rows.count { it.event.league.sport == chip.espnSport } }
+    val leagues = HashMap<String?, Int>()
+    if (sport != null) {
+        val sportRows = rows.filter { it.event.league.sport == sport.espnSport }
+        leagues[null] = sportRows.size
+        sportRows.forEach { row -> SportsResults.groupKey(row.event).let { leagues[it] = (leagues[it] ?: 0) + 1 } }
+    }
+    return ResultChipCounts(bySport, leagues)
 }
 
 /**

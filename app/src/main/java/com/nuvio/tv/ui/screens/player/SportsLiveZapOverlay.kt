@@ -84,6 +84,11 @@ import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapBanner
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapPanelState
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveScoreChip
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveUiState
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveChipCursor
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveChipIcon
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveChipIconView
+import com.nuvio.tv.ui.screens.sportslive.sportsLiveChipIconOf
+import com.nuvio.tv.ui.screens.sportslive.sportsLiveChipText
 import com.nuvio.tv.ui.screens.sportslive.FOLLOWED_STAR_COLOR
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapViewModel
 import com.nuvio.tv.ui.screens.sportslive.ZapPanelGroup
@@ -514,6 +519,7 @@ private fun LiveGamesPanel(
             }
             PanelChipRow(
                 chips = state.chips,
+                counts = state.counts,
                 selected = state.chip,
                 onChip = onChip,
                 onFocusChanged = { focused ->
@@ -572,42 +578,52 @@ private fun LiveGamesPanel(
 }
 
 /**
- * The panel's filter chips (#68): ★ My teams, All, then each sport. One focus stop: Left and Right pick
- * the chip beside the selected one, and Down moves into the games.
+ * The panel's filter chips (#68): ★ My teams, All, then each sport, each with its game count (#79).
+ * One focus stop: Left and Right move the highlight (the focus ring) only, OK picks the highlighted
+ * chip (#79: focus never changes the filter), and Down moves into the games.
  */
 @Composable
 private fun PanelChipRow(
     chips: List<String?>,
+    counts: Map<String?, Int>,
     selected: String?,
     onChip: (String?) -> Unit,
     onFocusChanged: (Boolean) -> Unit,
     focusRequester: FocusRequester
 ) {
     var focused by remember { mutableStateOf(false) }
-    val shape = RoundedCornerShape(NuvioTheme.radii.xl)
+    var highlighted by remember { mutableStateOf(selected) }
+    val cursor = SportsLiveChipCursor(chips, selected, if (highlighted in chips) highlighted else selected)
     Row(
         horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs),
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .clip(shape)
-            .then(if (focused) Modifier.border(NuvioTheme.focusRing.border(NuvioTheme.spacing.xxs), shape) else Modifier)
             .onFocusChanged {
+                // The highlight starts on the selected chip each time the row takes focus.
+                if (it.isFocused && !focused) highlighted = selected
                 focused = it.isFocused
                 onFocusChanged(it.isFocused)
             }
             .onKeyEvent { event ->
-                val step = when (event.nativeKeyEvent.keyCode) {
-                    KeyEvent.KEYCODE_DPAD_LEFT -> -1
-                    KeyEvent.KEYCODE_DPAD_RIGHT -> 1
-                    else -> return@onKeyEvent false
+                val native = event.nativeKeyEvent
+                when (native.keyCode) {
+                    KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                        // Both the press and the release are used, so neither reaches the panel's close.
+                        if (native.action == KeyEvent.ACTION_DOWN) {
+                            highlighted = cursor.move(if (native.keyCode == KeyEvent.KEYCODE_DPAD_LEFT) -1 else 1).highlighted
+                        }
+                        true
+                    }
+                    KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                        if (native.action == KeyEvent.ACTION_DOWN && native.repeatCount == 0) {
+                            val picked = cursor.ok().selected
+                            if (picked != selected) onChip(picked)
+                        }
+                        true
+                    }
+                    else -> false
                 }
-                // Both the press and the release are used, so neither reaches the panel's close.
-                if (event.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
-                    val next = chips.indexOf(selected) + step
-                    if (next in chips.indices) onChip(chips[next])
-                }
-                true
             }
             .focusRequester(focusRequester)
             .focusable()
@@ -621,36 +637,48 @@ private fun PanelChipRow(
                     SportsLiveUiState.MY_TEAMS_FILTER -> stringResource(R.string.sports_live_filter_my_teams)
                     else -> chip
                 },
+                count = counts[chip] ?: 0,
+                icon = sportsLiveChipIconOf(chip),
                 selected = chip == selected,
-                rowFocused = focused
+                highlighted = focused && chip == cursor.highlighted
             )
         }
     }
 }
 
 @Composable
-private fun PanelChip(name: String, selected: Boolean, rowFocused: Boolean) {
-    // M6: the selected chip scrolls into view as Left and Right move along a long row, and again when
-    // the row takes focus, once laid out.
+private fun PanelChip(name: String, count: Int, icon: SportsLiveChipIcon, selected: Boolean, highlighted: Boolean) {
+    // M6: the highlighted chip (else the selected one) scrolls into view as Left and Right move along a
+    // long row, and again when the row takes focus, once laid out.
     val bringIntoView = remember { BringIntoViewRequester() }
-    LaunchedEffect(selected, rowFocused) {
-        if (selected) {
+    LaunchedEffect(selected, highlighted) {
+        if (highlighted || selected) {
             withFrameNanos { }
             runCatching { bringIntoView.bringIntoView() }
         }
     }
-    Text(
-        text = name,
-        style = MaterialTheme.typography.labelLarge,
-        color = if (selected) NuvioTheme.colors.OnPrimary else NuvioTheme.extendedColors.textSecondary,
-        maxLines = 1,
+    val shape = RoundedCornerShape(NuvioTheme.radii.xl)
+    val color = if (selected) NuvioTheme.colors.OnPrimary else NuvioTheme.extendedColors.textSecondary
+    // #79: the selected chip is filled; the highlighted one (where OK lands) carries the focus ring.
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xxs),
+        verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .bringIntoViewRequester(bringIntoView)
-            .clip(RoundedCornerShape(NuvioTheme.radii.xl))
+            .clip(shape)
             .background(if (selected) NuvioTheme.colors.Primary else NuvioTheme.colors.BackgroundCard)
+            .then(if (highlighted) Modifier.border(NuvioTheme.focusRing.border(NuvioTheme.spacing.xxs), shape) else Modifier)
             // M6: compact, so All and three sports fit the panel; a longer row scrolls.
             .padding(horizontal = NuvioTheme.spacing.sm, vertical = NuvioTheme.spacing.xs)
-    )
+    ) {
+        SportsLiveChipIconView(icon, tint = if (icon == SportsLiveChipIcon.MY_TEAMS && !selected) FOLLOWED_STAR_COLOR else color, size = 14)
+        Text(
+            text = sportsLiveChipText(name, count),
+            style = MaterialTheme.typography.labelLarge,
+            color = color,
+            maxLines = 1
+        )
+    }
 }
 
 /** A small group heading in the live games panel: Live now, Starting soon, More games. */

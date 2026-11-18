@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import android.view.KeyEvent as AndroidKeyEvent
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
@@ -41,6 +42,7 @@ import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
@@ -333,6 +335,7 @@ fun SportsLiveScreen(
             layout = layout,
             onSelectLayout = { viewModel.selectLayout(uiState.selectedTab, it) },
             onSelectSort = viewModel::selectLiveSort,
+            scoresMode = scoresMode,
             scoreboardRowsOf = scoreboardRowsOf,
             situationOf = situationOf,
             chipOf = chipOf,
@@ -369,6 +372,7 @@ fun SportsLiveScreen(
             },
             onSelectTab = viewModel::selectTab,
             onSelectFilter = viewModel::selectFilter,
+            onUserMoved = viewModel::onUserMoved,
             onSelectItem = viewModel::selectItem,
             onRefresh = { viewModel.refresh() },
             onPlay = { item ->
@@ -461,6 +465,8 @@ private fun SportsLiveContent(
     onSelectLayout: (SportsLiveLayout) -> Unit,
     /** Live now's sort (#43): Start time or Most exciting. */
     onSelectSort: (LiveNowSort) -> Unit,
+    /** The Scores setting (null until read): the View menu offers the sort only while it is on (#79). */
+    scoresMode: ScoresMode?,
     /** The Scoreboard's grouped rows for the tab's games as filtered. */
     scoreboardRowsOf: (List<SportsLiveItem>) -> List<ScoreboardRow>,
     /** A game's situation line ("" when none or hidden with the score). */
@@ -478,6 +484,8 @@ private fun SportsLiveContent(
     onCardFocus: (String?) -> Unit,
     onSelectTab: (SportsLiveTab) -> Unit,
     onSelectFilter: (String?) -> Unit,
+    /** A key pressed on the section: an emptied selected chip falls back to All (#79); true when it did. */
+    onUserMoved: () -> Boolean,
     onSelectItem: (String?) -> Unit,
     onRefresh: () -> Unit,
     onPlay: (SportsLiveItem) -> Unit,
@@ -620,11 +628,11 @@ private fun SportsLiveContent(
     }
     // Attached to whichever filter chip is selected; the chips only show with two or more values.
     val filterFocusRequester = remember { FocusRequester() }
-    // The layout switch's selected segment (C2): it leads the filter row on Live now and Upcoming.
-    val layoutFocusRequester = remember { FocusRequester() }
-    // Live now's sort control (#43), at the end of the row.
-    val sortFocusRequester = remember { FocusRequester() }
-    val header = SportsLiveHeaderFocus.of(uiState.selectedTab, uiState.filters.size, uiState.liveSortOffered)
+    // The View button (#79): layout and sort in one menu, leading the filter row on Live now and Upcoming.
+    val viewFocusRequester = remember { FocusRequester() }
+    val viewMenu = SportsLiveViewMenu.of(uiState.selectedTab, layout, scoresMode, uiState.liveSort)
+    var viewMenuOpen by remember { mutableStateOf(false) }
+    val header = SportsLiveHeaderFocus.of(uiState.selectedTab, uiState.filters.size)
     val showFilterRow = header.rowShown
     // The Catch up strip (#58) sits between the header and Live Now's games: Down from the header lands
     // on it, Up from the first game goes back to it.
@@ -641,9 +649,8 @@ private fun SportsLiveContent(
     val contentEntryFocusRequester = if (catchUpShown) catchUpFocusRequester else entryCardFocusRequester
     fun headerRequester(stop: SportsLiveHeaderFocus.Stop): FocusRequester? = when (stop) {
         SportsLiveHeaderFocus.Stop.TABS -> activeTabFocusRequester
-        SportsLiveHeaderFocus.Stop.SWITCH -> layoutFocusRequester
+        SportsLiveHeaderFocus.Stop.VIEW -> viewFocusRequester
         SportsLiveHeaderFocus.Stop.CHIPS -> filterFocusRequester
-        SportsLiveHeaderFocus.Stop.SORT -> sortFocusRequester
         SportsLiveHeaderFocus.Stop.CONTENT -> contentEntryFocusRequester
     }
     val aboveContentFocusRequester = headerRequester(header.contentUp) ?: activeTabFocusRequester
@@ -791,13 +798,25 @@ private fun SportsLiveContent(
         )
     }
 
+    if (viewMenuOpen && viewMenu != null) {
+        SportsLiveViewMenuDialog(
+            menu = viewMenu,
+            onSelectLayout = onSelectLayout,
+            onSelectSort = onSelectSort,
+            onDismiss = {
+                viewMenuOpen = false
+                runCatching { viewFocusRequester.requestFocus() }
+            }
+        )
+    }
+
     BackHandler(enabled = listHasFocus) {
         runCatching { activeTabFocusRequester.requestFocus() }
     }
     // The preview follows the focused card (in the list, or its pane's buttons) while no menu or
     // dialog is open; anything else stops it.
     val previewItem = selected?.takeIf {
-        (listHasFocus || paneHasFocus) && menuCardKey == null && !dialogOpen
+        (listHasFocus || paneHasFocus) && menuCardKey == null && !dialogOpen && !viewMenuOpen
     }
     val currentOnPreviewFocus by rememberUpdatedState(onPreviewFocus)
     LaunchedEffect(previewItem?.listKey) { currentOnPreviewFocus(previewItem) }
@@ -874,9 +893,23 @@ private fun SportsLiveContent(
         }
     }
 
+    val currentSelectedFilterEmpty by rememberUpdatedState(uiState.selectedFilterEmpty)
+    // The selected chip holds focus: when it is an emptied one, the key that drops it puts focus on All.
+    var selectedChipFocused by remember { mutableStateOf(false) }
     Column(
         modifier = Modifier
             .fillMaxSize()
+            // #79: a selected chip whose games have gone stays shown with 0 until the user moves; the first
+            // key falls back to All. On the chips, that key only puts focus on All (the 0 chip goes).
+            .onPreviewKeyEvent { event ->
+                if (event.nativeKeyEvent.action != AndroidKeyEvent.ACTION_DOWN || !currentSelectedFilterEmpty) return@onPreviewKeyEvent false
+                if (!onUserMoved() || !selectedChipFocused) return@onPreviewKeyEvent false
+                liveNowScope.launch {
+                    withFrameNanos { }
+                    runCatching { filterFocusRequester.requestFocus() }
+                }
+                true
+            }
             .padding(horizontal = NuvioTheme.spacing.screen.horizontal, vertical = NuvioTheme.spacing.screen.vertical)
     ) {
         val openList: () -> Unit = { runCatching { entryCardFocusRequester?.requestFocus() } }
@@ -953,12 +986,10 @@ private fun SportsLiveContent(
                 downFocusRequester = contentEntryFocusRequester,
                 onSelectFilter = onSelectFilter,
                 onOpenFilter = openList,
-                layouts = layouts,
-                layout = layout,
-                layoutFocusRequester = layoutFocusRequester,
-                onSelectLayout = onSelectLayout,
-                sortFocusRequester = sortFocusRequester,
-                onSelectSort = onSelectSort,
+                viewMenu = viewMenu,
+                viewFocusRequester = viewFocusRequester,
+                onOpenViewMenu = { viewMenuOpen = true },
+                onSelectedChipFocus = { selectedChipFocused = it },
                 modifier = Modifier
                     .padding(top = NuvioTheme.spacing.xs)
                     .onFocusChanged { state ->
@@ -1239,7 +1270,7 @@ private fun SportsLiveTabRow(
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // Down goes to the selected filter chip (or card), never to whichever chip sits below, since filter chips select on focus.
+    // Down goes to View, the selected filter chip (or card), never to whichever chip sits below.
     val downModifier = Modifier.focusProperties { downFocusRequester?.let { down = it } }
     val activeTabFocusRequester = tabFocusRequesters.getValue(uiState.selectedTab)
     // A plain scrolling Row keeps every chip composed, so the tab FocusRequesters stay attached.
@@ -1278,99 +1309,66 @@ private fun SportsLiveTabRow(
 @Composable
 private fun SportsLiveFilterRow(
     uiState: SportsLiveUiState,
-    /** Which of the switch and the chips show (C2). */
+    /** Which of the View button and the chips show (C2, #79). */
     header: SportsLiveHeaderFocus,
     filterFocusRequester: FocusRequester,
     upFocusRequester: FocusRequester,
     downFocusRequester: FocusRequester?,
     onSelectFilter: (String?) -> Unit,
     onOpenFilter: () -> Unit,
-    /** The tab's layouts (Cards | Scoreboard | Timeline), at the row's start. */
-    layouts: List<SportsLiveLayout>,
-    layout: SportsLiveLayout,
-    layoutFocusRequester: FocusRequester,
-    onSelectLayout: (SportsLiveLayout) -> Unit,
-    sortFocusRequester: FocusRequester,
-    onSelectSort: (LiveNowSort) -> Unit,
+    /** The tab's View menu (layout and sort, #79); null on a tab without one. */
+    viewMenu: SportsLiveViewMenu?,
+    viewFocusRequester: FocusRequester,
+    onOpenViewMenu: () -> Unit,
+    /** The selected chip took (true) or lost focus. */
+    onSelectedChipFocus: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
     @Composable
     fun FilterRowChip(name: String, value: String?) {
         val isSelected = value == uiState.selectedFilter
-        SourceStatusFilterChip(
+        SportsLiveFilterChip(
             name = name,
             isSelected = isSelected,
-            outlined = true,
-            // Like the tabs, focusing a filter selects it; OK moves into the list.
-            onFocusSelect = { onSelectFilter(value) },
-            onClick = onOpenFilter,
+            count = uiState.filterCounts[value] ?: 0,
+            icon = sportsLiveChipIconOf(value),
+            // #79: focus only highlights; OK picks the chip, and OK on the picked one moves into the list.
+            onClick = sportsLiveChipClick(isSelected, onSelect = { onSelectFilter(value) }, onOpenList = onOpenFilter),
             modifier = Modifier
                 .then(if (isSelected) Modifier.focusRequester(filterFocusRequester) else Modifier)
+                .onFocusChanged { if (isSelected || !it.isFocused) onSelectedChipFocus(isSelected && it.isFocused) }
                 .focusProperties {
                     up = upFocusRequester
                     downFocusRequester?.let { down = it }
                 }
         )
     }
-    // The switch sits outside the chips' scroll, so it is always whole on screen; the chips scroll beside it.
+    // The View button sits outside the chips' scroll, so it is always whole on screen; the chips scroll beside it.
     Row(
         modifier = modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        if (header.switchShown) {
-            SportsLiveLayoutSwitch(
-                layouts = layouts,
-                selected = layout,
-                onSelect = onSelectLayout,
-                selectedFocusRequester = layoutFocusRequester,
-                // Room for the focused segment's border.
-                modifier = Modifier.padding(start = NuvioTheme.spacing.sm, top = NuvioTheme.spacing.xs, bottom = NuvioTheme.spacing.xs),
-                segmentModifier = Modifier.focusProperties {
-                    up = upFocusRequester
-                    downFocusRequester?.let { down = it }
-                },
-                lastSegmentModifier = Modifier.focusProperties {
-                    // Nothing beside it: Right stays on the switch rather than wandering off.
-                    right = when (header.switchRight) {
-                        SportsLiveHeaderFocus.Stop.CHIPS -> filterFocusRequester
-                        SportsLiveHeaderFocus.Stop.SORT -> sortFocusRequester
-                        else -> FocusRequester.Cancel
+        if (header.viewShown && viewMenu != null) {
+            SportsLiveViewButton(
+                menu = viewMenu,
+                onClick = onOpenViewMenu,
+                // Room for the focused button's border.
+                modifier = Modifier
+                    .padding(start = NuvioTheme.spacing.sm, top = NuvioTheme.spacing.xs, bottom = NuvioTheme.spacing.xs)
+                    .focusRequester(viewFocusRequester)
+                    .focusProperties {
+                        up = upFocusRequester
+                        downFocusRequester?.let { down = it }
+                        // Right enters the chips on the selected one; with no chips, Right stays put.
+                        right = if (header.viewRight != null) filterFocusRequester else FocusRequester.Cancel
                     }
-                }
-            )
-        }
-        // Live now's sort (#43), right after the layout switch: its own stop, never across the chips.
-        if (header.sortShown) {
-            SportsLiveSegmentedSwitch(
-                options = LiveNowSort.entries,
-                selected = uiState.liveSort,
-                onSelect = onSelectSort,
-                selectedFocusRequester = sortFocusRequester,
-                label = { sort ->
-                    stringResource(
-                        when (sort) {
-                            LiveNowSort.START_TIME -> R.string.sports_live_sort_start_time
-                            LiveNowSort.MOST_EXCITING -> R.string.sports_live_sort_most_exciting
-                        }
-                    )
-                },
-                modifier = Modifier.padding(start = NuvioTheme.spacing.sm, top = NuvioTheme.spacing.xs, bottom = NuvioTheme.spacing.xs),
-                segmentModifier = Modifier.focusProperties {
-                    up = upFocusRequester
-                    downFocusRequester?.let { down = it }
-                },
-                // Right enters the chips on the selected one, so passing through never changes the filter.
-                lastSegmentModifier = Modifier.focusProperties {
-                    right = if (header.sortRight != null) filterFocusRequester else FocusRequester.Cancel
-                }
             )
         }
         if (header.chipsShown) {
             Row(
                 modifier = Modifier
                     .weight(1f)
-                    // Entering the chips from elsewhere (the pane, the list, the switch) lands on the
-                    // active chip, never on whichever chip sits nearest, since chips select on focus.
+                    // Entering the chips from elsewhere (the pane, the list, View) lands on the selected chip.
                     .focusProperties { onEnter = { filterFocusRequester.requestFocus() } }
                     .focusGroup()
                     .horizontalScroll(rememberScrollState())
@@ -1378,11 +1376,11 @@ private fun SportsLiveFilterRow(
                 horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                // "★ My teams" leads, then All, then each value with games (#79: empty ones hidden).
+                val myTeams = SportsLiveUiState.MY_TEAMS_FILTER
+                if (myTeams in uiState.filters) FilterRowChip(name = stringResource(R.string.sports_live_filter_my_teams), value = myTeams)
                 FilterRowChip(name = stringResource(R.string.sports_live_filter_all), value = null)
-                uiState.filters.forEach { filter ->
-                    val name = if (filter == SportsLiveUiState.MY_TEAMS_FILTER) stringResource(R.string.sports_live_filter_my_teams) else filter
-                    FilterRowChip(name = name, value = filter)
-                }
+                uiState.filters.filter { it != myTeams }.forEach { filter -> FilterRowChip(name = filter, value = filter) }
             }
         }
     }

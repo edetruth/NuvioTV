@@ -138,6 +138,8 @@ class SportsLiveViewModel internal constructor(
     private data class Selection(
         val tab: SportsLiveTab = SportsLiveTab.LIVE_NOW,
         val filter: String? = null,
+        /** The last chip picked on each tab (#79), for this session: a tab opens on it while it has games. */
+        val filterByTab: Map<SportsLiveTab, String> = emptyMap(),
         val itemId: String? = null,
         val isRefreshing: Boolean = false,
         val failures: List<SportsLiveFailure> = emptyList(),
@@ -313,7 +315,12 @@ class SportsLiveViewModel internal constructor(
     }
 
     fun selectTab(tab: SportsLiveTab) {
-        selectionState.update { it.copy(tab = tab, filter = null, itemId = null) }
+        // The tab opens on its last chip (#79) while that chip still has games there, else on All.
+        val remembered = selectionState.value.filterByTab[tab]?.takeIf { value ->
+            val tabItems = uiState.value.tabs[tab].orEmpty()
+            tabItems.any { it.matchesZapFilter(value, tab) }
+        }
+        selectionState.update { it.copy(tab = tab, filter = remembered, itemId = null) }
         previewController.onTab(tab)
     }
 
@@ -321,7 +328,20 @@ class SportsLiveViewModel internal constructor(
     fun selectFilter(value: String?) {
         // Another filter lists other cards: the preview stops until a card is focused again.
         if (value != selectionState.value.filter) previewController.onFocus(null)
-        selectionState.update { it.copy(filter = value) }
+        selectionState.update {
+            val remembered = if (value == null) it.filterByTab - it.tab else it.filterByTab + (it.tab to value)
+            it.copy(filter = value, filterByTab = remembered)
+        }
+    }
+
+    /**
+     * The user pressed a key on the section (#79): a selected chip whose games have all gone, kept
+     * shown with 0 until now, falls back to All. True when it did.
+     */
+    fun onUserMoved(): Boolean {
+        if (!uiState.value.selectedFilterEmpty) return false
+        selectFilter(null)
+        return true
     }
 
     /**
@@ -487,19 +507,14 @@ class SportsLiveViewModel internal constructor(
         // Channels are filtered by group, every other tab by sport.
         val filterOf: (SportsLiveItem) -> String? =
             if (selection.tab == SportsLiveTab.CHANNELS) SportsLiveItem::group else SportsLiveItem::sport
-        val values = tabItems.mapNotNull(filterOf).distinct().sortedWith(String.CASE_INSENSITIVE_ORDER)
-        // "★ My teams" leads whenever a followed team plays in the tab (never on Channels).
-        val filters = if (selection.tab != SportsLiveTab.CHANNELS && tabItems.any { it.followed }) {
-            listOf(SportsLiveUiState.MY_TEAMS_FILTER) + values
-        } else {
-            values
-        }
-        val filter = selection.filter?.takeIf { it in filters }
-        // A filter that left the list is cleared rather than kept hidden, so it never silently
-        // comes back on a later load that lists it again.
-        if (selection.filter != null && filter == null) {
-            selectionState.update { if (it.filter == selection.filter) it.copy(filter = null) else it }
-        }
+        val values = tabItems.mapNotNull(filterOf).distinct()
+        // The chips' counts (#79): Live now leaves its Just ended strip out, as its tab count does.
+        val counted = if (selection.tab == SportsLiveTab.LIVE_NOW) tabItems.filter { it.streamKey !in justEnded } else tabItems
+        val counts = sportsLiveFilterCounts(counted, filterOf, myTeams = selection.tab != SportsLiveTab.CHANNELS)
+        // "★ My teams" leads whenever a followed team plays in the tab (never on Channels); chips with no
+        // games hide, except the selected one, kept with 0 until the user moves (onUserMoved).
+        val filter = selection.filter
+        val filters = sportsLiveShownFilters(values, counts, filter)
         val visible = when (filter) {
             null -> tabItems
             SportsLiveUiState.MY_TEAMS_FILTER -> tabItems.filter { it.followed }
@@ -515,6 +530,7 @@ class SportsLiveViewModel internal constructor(
             selectedTab = selection.tab,
             filters = filters,
             selectedFilter = filter,
+            filterCounts = counts,
             visibleItems = visible,
             selectedItemId = selectedId,
             failures = selection.failures,

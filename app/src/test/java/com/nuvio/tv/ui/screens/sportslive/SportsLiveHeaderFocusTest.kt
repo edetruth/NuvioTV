@@ -8,42 +8,43 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** C2: the layout switch leads the filter row on Live now and Upcoming, reached with Down from the tabs. */
+/** C2, #79: the View button leads the filter row on Live now and Upcoming: tabs → View → chips → content. */
 class SportsLiveHeaderFocusTest {
 
     @Test
-    fun `the switch is offered on Live now and Upcoming only`() {
+    fun `the View button is offered on Live now and Upcoming only`() {
         for (tab in SportsLiveTab.entries) {
-            val shown = SportsLiveHeaderFocus.of(tab, filterCount = 3).switchShown
+            val shown = SportsLiveHeaderFocus.of(tab, filterCount = 3).viewShown
             assertEquals("$tab", tab == SportsLiveTab.LIVE_NOW || tab == SportsLiveTab.UPCOMING, shown)
         }
     }
 
     @Test
-    fun `Down from the tabs reaches the switch, never another tab`() {
+    fun `focus goes tabs, then View, then the chips, then the content`() {
         val header = SportsLiveHeaderFocus.of(SportsLiveTab.LIVE_NOW, filterCount = 3)
         assertTrue(header.rowShown)
-        assertEquals(Stop.SWITCH, header.tabsDown)
-        assertEquals(Stop.TABS, header.switchUp)
-        assertEquals(Stop.CHIPS, header.switchRight)
-        assertEquals(Stop.CONTENT, header.switchDown)
-        // Up from the content lands on the selected chip, the switch one step to its left.
+        assertEquals(Stop.VIEW, header.tabsDown)
+        assertEquals(Stop.TABS, header.viewUp)
+        assertEquals(Stop.CHIPS, header.viewRight)
+        assertEquals(Stop.CONTENT, header.viewDown)
+        // Up from the content lands on the selected chip, View one step to its left.
         assertEquals(Stop.CHIPS, header.contentUp)
     }
 
     @Test
-    fun `with one sport the row still shows, holding the switch alone`() {
+    fun `with one sport the row still shows, holding View alone`() {
         val header = SportsLiveHeaderFocus.of(SportsLiveTab.UPCOMING, filterCount = 1)
         assertTrue(header.rowShown)
         assertFalse(header.chipsShown)
-        assertEquals(Stop.SWITCH, header.tabsDown)
-        assertNull(header.switchRight)
-        assertEquals(Stop.SWITCH, header.contentUp)
+        assertEquals(Stop.VIEW, header.tabsDown)
+        assertNull(header.viewRight)
+        assertEquals(Stop.VIEW, header.contentUp)
     }
 
     @Test
-    fun `Channels and Replays keep the chips without a switch, Results has neither`() {
+    fun `Channels and Replays keep the chips without View, Results has neither`() {
         val channels = SportsLiveHeaderFocus.of(SportsLiveTab.CHANNELS, filterCount = 2)
+        assertFalse(channels.viewShown)
         assertEquals(Stop.CHIPS, channels.tabsDown)
         assertEquals(Stop.CHIPS, channels.contentUp)
         val replays = SportsLiveHeaderFocus.of(SportsLiveTab.REPLAYS, filterCount = 1)

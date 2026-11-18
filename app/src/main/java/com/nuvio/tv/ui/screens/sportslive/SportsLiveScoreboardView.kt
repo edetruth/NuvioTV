@@ -1,8 +1,6 @@
 package com.nuvio.tv.ui.screens.sportslive
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,8 +36,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusProperties
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -51,15 +47,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Border
-import androidx.tv.material3.ClickableSurfaceDefaults
-import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
-import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
 import com.nuvio.tv.R
-import com.nuvio.tv.core.sportslive.SportsLiveLayout
 import com.nuvio.tv.core.sportslive.scores.ChipScore
 import com.nuvio.tv.core.sportslive.scores.GameArtTeam
 import com.nuvio.tv.core.sportslive.scores.GameSituationStrings
@@ -86,102 +78,6 @@ internal fun rememberGameSituationStrings(): GameSituationStrings {
     val third = stringResource(R.string.sports_live_situation_third)
     return remember(separator, possession, redZone, inning, outs, runnerOn, twoRunners, loaded, first, second, third) {
         GameSituationStrings(separator, possession, redZone, inning, outs, runnerOn, twoRunners, loaded, first, second, third)
-    }
-}
-
-/**
- * Cards | Scoreboard | Timeline (C2): a compact segmented control at the start of the filter row, its
- * own focus stop. OK picks a layout (focus alone does not, unlike the tabs). Entering it lands on the
- * selected segment ([selectedFocusRequester]); [segmentModifier] carries the explicit neighbours
- * (Up the tabs, Down the content), [lastSegmentModifier] the last segment's Right (the filter chips).
- */
-@OptIn(ExperimentalTvMaterial3Api::class)
-@Composable
-internal fun SportsLiveLayoutSwitch(
-    layouts: List<SportsLiveLayout>,
-    selected: SportsLiveLayout,
-    onSelect: (SportsLiveLayout) -> Unit,
-    selectedFocusRequester: FocusRequester,
-    modifier: Modifier = Modifier,
-    segmentModifier: Modifier = Modifier,
-    lastSegmentModifier: Modifier = Modifier
-) {
-    SportsLiveSegmentedSwitch(
-        options = layouts,
-        selected = selected,
-        onSelect = onSelect,
-        selectedFocusRequester = selectedFocusRequester,
-        label = { layout ->
-            stringResource(
-                when (layout) {
-                    SportsLiveLayout.CARDS -> R.string.sports_live_layout_cards
-                    SportsLiveLayout.SCOREBOARD -> R.string.sports_live_layout_scoreboard
-                    SportsLiveLayout.TIMELINE -> R.string.sports_live_layout_timeline
-                }
-            )
-        },
-        modifier = modifier,
-        segmentModifier = segmentModifier,
-        lastSegmentModifier = lastSegmentModifier
-    )
-}
-
-/**
- * The segmented control behind the layout switch and Live now's sort (#43): OK picks an option, focus
- * alone does not; entering it lands on the selected one.
- */
-@OptIn(ExperimentalTvMaterial3Api::class)
-@Composable
-internal fun <T> SportsLiveSegmentedSwitch(
-    options: List<T>,
-    selected: T,
-    onSelect: (T) -> Unit,
-    selectedFocusRequester: FocusRequester,
-    label: @Composable (T) -> String,
-    modifier: Modifier = Modifier,
-    segmentModifier: Modifier = Modifier,
-    lastSegmentModifier: Modifier = Modifier
-) {
-    val outer = RoundedCornerShape(20.dp)
-    val inner = RoundedCornerShape(16.dp)
-    Row(
-        modifier = modifier
-            .focusProperties { onEnter = { selectedFocusRequester.requestFocus() } }
-            .focusGroup()
-            .border(NuvioTheme.spacing.hairline, NuvioTheme.colors.TextTertiary, outer)
-            .padding(NuvioTheme.spacing.xxs),
-        horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xxs),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        options.forEachIndexed { index, option ->
-            val isSelected = option == selected
-            Surface(
-                onClick = { onSelect(option) },
-                modifier = segmentModifier
-                    .then(if (index == options.lastIndex) lastSegmentModifier else Modifier)
-                    .then(if (isSelected) Modifier.focusRequester(selectedFocusRequester) else Modifier),
-                // Components board (N12): the selected segment keeps the light fill; focus adds the white
-                // ring and a small lift, so a focused segment that is not selected never looks picked.
-                colors = ClickableSurfaceDefaults.colors(
-                    containerColor = if (isSelected) NuvioTheme.colors.Secondary else Color.Transparent,
-                    contentColor = if (isSelected) NuvioTheme.colors.OnSecondary else NuvioTheme.colors.TextSecondary,
-                    focusedContainerColor = if (isSelected) NuvioTheme.colors.Secondary else Color.Transparent,
-                    focusedContentColor = if (isSelected) NuvioTheme.colors.OnSecondary else NuvioTheme.colors.TextPrimary
-                ),
-                border = ClickableSurfaceDefaults.border(
-                    focusedBorder = Border(border = NuvioTheme.focusRing.border(NuvioTheme.spacing.xxs), shape = inner)
-                ),
-                shape = ClickableSurfaceDefaults.shape(inner),
-                scale = ClickableSurfaceDefaults.scale(focusedScale = SWITCH_FOCUSED_SCALE)
-            ) {
-                Text(
-                    text = label(option),
-                    style = MaterialTheme.typography.labelLarge,
-                    maxLines = 1,
-                    modifier = Modifier.padding(horizontal = NuvioTheme.spacing.md, vertical = NuvioTheme.spacing.xs)
-                )
-            }
-        }
     }
 }
 
@@ -594,9 +490,6 @@ internal fun SportsLiveBoardButtons(
 }
 
 private val FOLLOWED_GOLD = Color(0xFFFFC107)
-
-/** The layout switch's focused segment lifts slightly; its ring says where focus is (N12). */
-private const val SWITCH_FOCUSED_SCALE = 1.06f
 
 /** A row's league tag never takes more than this (N1); a long name ellipsizes. */
 private val ROW_TAG_MAX_WIDTH = 64.dp

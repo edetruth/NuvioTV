@@ -135,18 +135,13 @@ class SportsLiveExcitingOrderTest {
     }
 
     @Test
-    fun `the sort sits between the switch and the chips, never reached across the chips`() {
-        val noChips = SportsLiveHeaderFocus.of(SportsLiveTab.LIVE_NOW, filterCount = 1, sortOffered = true)
-        assertTrue(noChips.sortShown)
-        assertEquals(SportsLiveHeaderFocus.Stop.SORT, noChips.switchRight)
-        assertNull(noChips.sortRight)
-        val chips = SportsLiveHeaderFocus.of(SportsLiveTab.LIVE_NOW, filterCount = 3, sortOffered = true)
-        assertEquals(SportsLiveHeaderFocus.Stop.SORT, chips.switchRight)
-        assertEquals(SportsLiveHeaderFocus.Stop.CHIPS, chips.sortRight)
-        // Without the sort, the switch leads to the chips as before.
-        assertEquals(SportsLiveHeaderFocus.Stop.CHIPS, SportsLiveHeaderFocus.of(SportsLiveTab.LIVE_NOW, filterCount = 3).switchRight)
-        assertFalse(SportsLiveHeaderFocus.of(SportsLiveTab.UPCOMING, filterCount = 3, sortOffered = true).sortShown)
-        assertFalse(SportsLiveHeaderFocus.of(SportsLiveTab.LIVE_NOW, filterCount = 3).sortShown)
+    fun `the View menu offers the sort on Live now only, never on the Timeline or with Scores Off`() {
+        val cards = SportsLiveViewMenu.of(SportsLiveTab.LIVE_NOW, SportsLiveLayout.CARDS, ScoresMode.SHOW, LiveNowSort.MOST_EXCITING)!!
+        assertTrue(cards.sortShown)
+        assertEquals(LiveNowSort.MOST_EXCITING, cards.sort)
+        assertFalse(SportsLiveViewMenu.of(SportsLiveTab.LIVE_NOW, SportsLiveLayout.TIMELINE, ScoresMode.SHOW, LiveNowSort.MOST_EXCITING)!!.sortShown)
+        assertFalse(SportsLiveViewMenu.of(SportsLiveTab.LIVE_NOW, SportsLiveLayout.CARDS, ScoresMode.OFF, LiveNowSort.MOST_EXCITING)!!.sortShown)
+        assertFalse(SportsLiveViewMenu.of(SportsLiveTab.UPCOMING, SportsLiveLayout.CARDS, ScoresMode.SHOW, LiveNowSort.MOST_EXCITING)!!.sortShown)
     }
 
     @Test

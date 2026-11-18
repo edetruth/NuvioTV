@@ -44,6 +44,9 @@ internal fun panelChips(items: List<SportsLiveItem>, selected: String?): List<St
         sports.sortedWith(String.CASE_INSENSITIVE_ORDER)
 }
 
+/** The live games panel's chip counts over [items] (#79): All, "★ My teams" and each sport, as the section counts them. */
+internal fun panelChipCounts(items: List<SportsLiveItem>): Map<String?, Int> = sportsLiveFilterCounts(items, SportsLiveItem::sport)
+
 /** The panel games under [chip] (null is All, otherwise a sport or "★ My teams"). */
 internal fun filterPanelItems(items: List<SportsLiveItem>, chip: String?): List<SportsLiveItem> =
     if (chip == null) items else items.filter { it.matchesZapFilter(chip, SportsLiveTab.LIVE_NOW) }
@@ -252,7 +255,9 @@ data class SportsLiveZapPanelState(
     val currentKey: String,
     val chips: List<String?> = listOf(null),
     val chip: String? = null,
-    val allItems: List<SportsLiveItem> = rows.map { it.item }
+    val allItems: List<SportsLiveItem> = rows.map { it.item },
+    /** Each chip's game count over [allItems] (#79): All (null), "★ My teams" and each sport. */
+    val counts: Map<String?, Int> = panelChipCounts(allItems)
 ) {
     val items: List<SportsLiveItem> = rows.map { it.item }
 }

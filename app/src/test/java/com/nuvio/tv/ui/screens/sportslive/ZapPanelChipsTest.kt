@@ -69,6 +69,8 @@ class ZapPanelChipsTest {
 
         assertNull(state.chip)
         assertEquals(listOf(my, null, "Basketball", "Soccer"), state.chips)
+        // #79: each chip counts its games.
+        assertEquals(mapOf(null to 3, my to 1, "Basketball" to 2, "Soccer" to 1), state.counts)
         assertEquals(setOf("k", "b", "a"), state.items.map { it.id }.toSet())
         assertEquals("k", state.rows.first().item.id)
         assertTrue(state.rows.first().item.followed)
