@@ -98,11 +98,21 @@ internal class ScoreDelay {
         private const val RECENT_START_MS = 12 * 60 * 60_000L
 
         /**
-         * True when [s] is a final that may have ended within a score delay: ESPN gives no end or
-         * last-update time, so any final that started within [RECENT_START_MS] (or at an unknown time).
+         * A golf final is dated by its final round's day (US Eastern midnight): that round, a Monday
+         * finish included, is over within this long of it.
          */
-        fun mayHaveJustEnded(s: ScoreSnapshot, now: Long): Boolean =
-            s.state == ScoreState.POST && s.isFinal && (s.startMs == null || now - s.startMs < RECENT_START_MS)
+        private const val GOLF_FINAL_DAY_MS = 36 * 60 * 60_000L
+
+        /**
+         * True when [s] is a final that may have ended within a score delay: ESPN gives no end or
+         * last-update time, so any final that started within [RECENT_START_MS] (or at an unknown time);
+         * golf, dated by its final round's day, within [GOLF_FINAL_DAY_MS] of that day's start.
+         */
+        fun mayHaveJustEnded(s: ScoreSnapshot, now: Long): Boolean {
+            if (s.state != ScoreState.POST || !s.isFinal) return false
+            val start = s.startMs ?: return true
+            return now - start < if (s.individual is GolfResult) GOLF_FINAL_DAY_MS else RECENT_START_MS
+        }
     }
 
     private fun withLive(newest: ScoreSnapshot, shown: ScoreSnapshot): ScoreSnapshot =

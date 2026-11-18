@@ -32,8 +32,10 @@ sealed interface ResultsLoad {
      * [rows] to list; [events] are all the day's events fetched, for matching replays; [mySports] is
      * My sports with followed teams' sports, for the ★ My sports view and the sport chips. [heldUntil]:
      * when finals the score delay holds back are due (null: none held); load the day again then.
-     * [liveNow] (Today only): games of My sports and followed teams being played now, finals the delay
-     * still holds included (they are not listed yet).
+     * [liveNow]: team games of My sports and followed teams being played now, finals the delay still
+     * holds included (they are not listed yet); on Today, Yesterday's late games too (after US Eastern
+     * midnight a West Coast game is still Yesterday's). Individual sports are not counted: Live Now
+     * lists a tennis match or a fight only when an addon has it.
      */
     data class Loaded(
         val date: LocalDate,
@@ -49,19 +51,20 @@ sealed interface ResultsLoad {
 }
 
 /**
- * A Results date chip: [daysAgo] → ESPN [date]. Day 0 is "Today" (ESPN's current day); for the others
- * [isDeviceYesterday] picks the "Yesterday" label.
+ * A Results date chip: [daysAgo] → ESPN [date]. "Today" only when [isDeviceToday], "Yesterday" only
+ * when [isDeviceYesterday] (ESPN's US Eastern day is also the device's); otherwise its date.
  */
-data class ResultDay(val daysAgo: Int, val date: LocalDate, val isDeviceYesterday: Boolean)
+data class ResultDay(val daysAgo: Int, val date: LocalDate, val isDeviceYesterday: Boolean, val isDeviceToday: Boolean = false)
 
 /**
  * Finals of Today, Yesterday and the 5 days before (#67) for the Results view. Per day: one `soccer/all`
  * request (limit 1000: every soccer competition) when soccer is in My sports, plus one per non-soccer
  * league in effect ([SportsResults.relevantLeagues]); past days served from the provider's disk cache and
  * kept in memory for the session (yesterday for [YESTERDAY_TTL_MS], as late games may still finish).
- * Today is still being played: a today feed the live scores fetched within [TODAY_TTL_MS] is reused
- * ([liveFeed], no request); otherwise it is fetched and kept in memory for [TODAY_TTL_MS] only. A copy
- * fetched while its day was not over is never kept as a final day.
+ * Today is still being played: a today (or yesterday) feed the live scores fetched within
+ * [TODAY_TTL_MS] is reused ([liveFeed], no request); otherwise Today is fetched and kept in memory for
+ * [TODAY_TTL_MS] only, as is Yesterday while one of its games is live. A copy fetched while its day was
+ * not over is never kept as a final day.
  * No polling here: a day is fetched when it is shown. Scores Off: no requests at all.
  * The score delay applies as on the cards ([ScoreDelay]): a final that may have just ended
  * ([ScoreDelay.mayHaveJustEnded]) is left out until the delay has passed since it was first seen.
@@ -110,13 +113,21 @@ class ResultsRepository internal constructor(
     fun dateFor(daysAgo: Int): LocalDate =
         Instant.ofEpochMilli(now()).atZone(SportsResults.EASTERN).toLocalDate().minusDays(daysAgo.toLong())
 
-    /** The date chips: each day offered; "Yesterday" only when it is also the device's yesterday. */
+    /** The date chips: each day offered; "Today" / "Yesterday" only when it is also the device's. */
     fun days(): List<ResultDay> {
-        val deviceYesterday = Instant.ofEpochMilli(now()).atZone(zone()).toLocalDate().minusDays(1)
+        val deviceToday = Instant.ofEpochMilli(now()).atZone(zone()).toLocalDate()
         return SportsResults.DAYS_AGO.map { days ->
             val date = dateFor(days)
-            ResultDay(days, date, isDeviceYesterday = date == deviceYesterday)
+            ResultDay(days, date, isDeviceYesterday = date == deviceToday.minusDays(1), isDeviceToday = date == deviceToday)
         }
+    }
+
+    /** Millis until ESPN's next day (US Eastern midnight), when the days move on. */
+    fun msToNextDay(): Long {
+        val nowMs = now()
+        val next = Instant.ofEpochMilli(nowMs).atZone(SportsResults.EASTERN).toLocalDate().plusDays(1)
+            .atStartOfDay(SportsResults.EASTERN).toInstant().toEpochMilli()
+        return next - nowMs
     }
 
     /**
@@ -130,21 +141,41 @@ class ResultsRepository internal constructor(
         val followed = followedTeams.first()
         val relevant = SportsResults.relevantLeagues(mySports.first(), followed)
         if (relevant.isEmpty) return ResultsLoad.NoLeagues
-        val date = dateFor(daysAgo.coerceIn(SportsResults.DAYS_AGO))
-        val results = coroutineScope {
-            relevant.leagues.map { league -> async { fetch(ScoreFeed(league, date)) } }.awaitAll()
-        }
-        if (results.all { it == null }) return ResultsLoad.Failed
-        val events = results.filterNotNull().flatten()
-        val held = held(events, settings.delaySeconds * 1_000L)
+        val day = daysAgo.coerceIn(SportsResults.DAYS_AGO)
+        val date = dateFor(day)
+        val events = dayEvents(relevant, date) ?: return ResultsLoad.Failed
+        val delayMs = settings.delaySeconds * 1_000L
+        val held = held(events, delayMs)
         val shown = if (held.isEmpty()) events else events.filter { it.eventId !in held }
-        // Today: games being played (and finals still held) are counted, never listed.
-        val liveNow = if (date != dateFor(SportsResults.TODAY)) 0 else events.asSequence()
-            .filter { it.state == ScoreState.IN || it.eventId in held }
-            .distinctBy { it.eventId }
+        // Games being played (and finals still held) are counted, never listed. On Today in the small
+        // hours (US Eastern), Yesterday's late games too.
+        val late = if (day == SportsResults.TODAY && easternHour() < LATE_GAMES_UNTIL_HOUR) {
+            dayEvents(relevant, dateFor(SportsResults.YESTERDAY)).orEmpty()
+        } else {
+            emptyList()
+        }
+        val live = liveGames(events, held) + if (late.isEmpty()) emptyList() else liveGames(late, held(late, delayMs))
+        val liveNow = live.distinctBy { it.eventId }
             .count { event -> relevant.mySports.includes(event) || followed.any { SportsResults.follows(it, event) } }
         return ResultsLoad.Loaded(date, SportsResults.rows(shown, followed), events, relevant.mySports, held.values.minOrNull(), liveNow)
     }
+
+    /** [date]'s events of every relevant league; null when every league failed. */
+    private suspend fun dayEvents(relevant: RelevantLeagues, date: LocalDate): List<ScoreSnapshot>? {
+        val results = coroutineScope {
+            relevant.leagues.map { league -> async { fetch(ScoreFeed(league, date)) } }.awaitAll()
+        }
+        return if (results.all { it == null }) null else results.filterNotNull().flatten()
+    }
+
+    /**
+     * Team games being played, and finals the delay still holds ([held]). Individual sports are left out:
+     * Live Now shows a tennis match, fight or session only when an addon lists it.
+     */
+    private fun liveGames(events: List<ScoreSnapshot>, held: Map<String, Long>): List<ScoreSnapshot> =
+        events.filter { it.individual == null && (it.state == ScoreState.IN || it.eventId in held) }
+
+    private fun easternHour(): Int = Instant.ofEpochMilli(now()).atZone(SportsResults.EASTERN).hour
 
     /** The finals of [events] the score delay still holds back: event id → when each is due. */
     private suspend fun held(events: List<ScoreSnapshot>, delayMs: Long): Map<String, Long> {
@@ -159,20 +190,20 @@ class ResultsRepository internal constructor(
     }
 
     /**
-     * [feed]'s events: a today feed from the live scores when they fetched it within [TODAY_TTL_MS];
-     * else from memory while still good, else from the provider (past days: its disk cache first);
-     * null on failure.
+     * [feed]'s events: a today or yesterday feed from the live scores when they fetched it within
+     * [TODAY_TTL_MS]; else from memory while still good (Today, and Yesterday while a game is being
+     * played: [TODAY_TTL_MS]), else from the provider (past days: its disk cache first); null on failure.
      */
     private suspend fun fetch(feed: ScoreFeed): List<ScoreSnapshot>? {
         val today = dateFor(SportsResults.TODAY)
-        if (feed.date == today) liveFeed(feed, TODAY_TTL_MS)?.let { return it }
+        if (!feed.date.isBefore(today.minusDays(1))) liveFeed(feed, TODAY_TTL_MS)?.let { return it }
         lock.withLock {
             cache[feed]?.takeIf { cached ->
                 val age = now() - cached.fetchedAt
                 when {
                     // Kept for good only when fetched once its day was over (before that day's yesterday).
                     feed.date.isBefore(easternDate(cached.fetchedAt).minusDays(1)) -> true
-                    feed.date == today -> age < TODAY_TTL_MS
+                    feed.date == today || cached.events.any { it.state == ScoreState.IN } -> age < TODAY_TTL_MS
                     else -> age < YESTERDAY_TTL_MS
                 }
             }?.let { return it.events }
@@ -189,8 +220,10 @@ class ResultsRepository internal constructor(
     private fun easternDate(ms: Long): LocalDate = Instant.ofEpochMilli(ms).atZone(SportsResults.EASTERN).toLocalDate()
 
     companion object {
-        /** Today's finals so far are fetched again at most this often (#67). */
+        /** Today's finals so far (and Yesterday's while a game is live) are fetched again at most this often (#67). */
         const val TODAY_TTL_MS = 2 * 60_000L
+        /** Before this US Eastern hour, Today's live count includes Yesterday's late games. */
+        private const val LATE_GAMES_UNTIL_HOUR = 4
         private const val YESTERDAY_TTL_MS = 15 * 60_000L
         private const val MAX_PARALLEL = 4
         private const val MAX_CACHED = 200

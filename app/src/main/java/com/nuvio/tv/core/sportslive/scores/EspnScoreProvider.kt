@@ -8,7 +8,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.CacheControl
 import okhttp3.OkHttpClient
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.Protocol
 import okhttp3.Request
+import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
+import java.io.IOException
 import java.time.Instant
 import java.time.LocalDate
 import java.time.OffsetDateTime
@@ -95,8 +100,21 @@ class EspnScoreProvider internal constructor(
                 // progress) is never a final day (#67): the past day is fetched again.
                 val stored = call.cacheResponse
                 if (past && call.networkResponse == null && stored != null && !storedAsPast(date, stored.receivedResponseAtMillis)) {
-                    call.close()
-                    call = client.newCall(Request.Builder().url(url).header("Cache-Control", "no-cache").build()).execute()
+                    val storedBody = call.use { it.body?.string() }
+                    val fresh = try {
+                        client.newCall(Request.Builder().url(url).header("Cache-Control", "no-cache").build()).execute()
+                    } catch (e: IOException) {
+                        null
+                    }
+                    // Offline or refused: the stored copy is still better than nothing (only its finals are listed).
+                    call = if (fresh != null && (fresh.isSuccessful || storedBody == null)) {
+                        fresh
+                    } else {
+                        fresh?.close()
+                        if (storedBody == null) throw IOException("no stored copy")
+                        Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(200).message("stored")
+                            .body(storedBody.toResponseBody(JSON)).build()
+                    }
                 }
                 call.use { response ->
                     val body = response.body?.string()
@@ -165,6 +183,8 @@ class EspnScoreProvider internal constructor(
         // ".../gameId/401930175/league/fifa.friendly_u21"
         private val LEAGUE_IN_LINK = Regex("""/league/([a-z0-9._-]+)""")
         private const val PAST_DAY_MAX_STALE_DAYS = 7
+
+        private val JSON = "application/json".toMediaType()
 
         /** True when ESPN day [date] was already past (before yesterday, US Eastern) at [receivedAtMs]. */
         internal fun storedAsPast(date: LocalDate, receivedAtMs: Long): Boolean =

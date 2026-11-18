@@ -110,6 +110,8 @@ class SportsLiveResultsViewModel @Inject constructor(
     private val earlierOpen = MutableStateFlow(results.chosenDay?.let { it in SportsResults.EARLIER } ?: false)
     /** Today's load made to work out the opening day, shown at once when Today is that day. */
     private var openingLoad: ResultsLoad? = null
+    /** The day [load] holds. */
+    private var loadedDays: Int? = null
 
     /** The day shown (null: being worked out). */
     internal val selectedDay: StateFlow<Int?> = daysAgo.asStateFlow()
@@ -119,6 +121,9 @@ class SportsLiveResultsViewModel @Inject constructor(
     private val selection = MutableStateFlow(Selection())
     private val replayItems = MutableStateFlow<List<SportsLiveItem>>(emptyList())
     private val load = MutableStateFlow<ResultsLoad?>(null)
+
+    /** The day's load on screen (null: loading, nothing shown). */
+    internal val shownLoad: StateFlow<ResultsLoad?> = load.asStateFlow()
     private val reveal = ResultSpoilerReveal(viewModelScope)
     private val mode = prefs.scoreSettings.map { it.mode }.distinctUntilChanged()
 
@@ -196,18 +201,27 @@ class SportsLiveResultsViewModel @Inject constructor(
                     var loaded = openingLoad?.takeIf { days == SportsResults.TODAY }
                     openingLoad = null
                     if (loaded == null) {
-                        load.value = null
-                        delay(DAY_SETTLE_MS)
+                        // The same day back on screen (from a replay, the Game page, another tab) keeps its
+                        // list while it reloads, so focus stays on its row; a new day starts empty.
+                        val onScreen = load.value as? ResultsLoad.Loaded
+                        if (onScreen == null || loadedDays != days || onScreen.date != results.dateFor(days)) {
+                            load.value = null
+                            delay(DAY_SETTLE_MS)
+                        }
                         loaded = results.load(days)
                     }
+                    loadedDays = days
                     load.value = loaded
                     // Finals the score delay holds back: the day loads again (from memory) once they are
-                    // due. Today: again every 2 min (the repository asks ESPN at most that often).
+                    // due. Today, and a day with games still live: again every 2 min (the repository asks
+                    // ESPN at most that often). At US Eastern midnight the days move on: loaded again.
                     while (loaded is ResultsLoad.Loaded) {
+                        val current: ResultsLoad.Loaded = loaded
                         val wait = listOfNotNull(
-                            loaded.heldUntil?.let { it - results.nowMs() },
-                            ResultsRepository.TODAY_TTL_MS.takeIf { days == SportsResults.TODAY }
-                        ).minOrNull() ?: break
+                            current.heldUntil?.let { it - results.nowMs() },
+                            ResultsRepository.TODAY_TTL_MS.takeIf { days == SportsResults.TODAY || current.liveNow > 0 },
+                            results.msToNextDay() + DAY_ROLLOVER_MARGIN_MS
+                        ).min()
                         delay(wait.coerceAtLeast(0))
                         loaded = results.load(days)
                         load.value = loaded
@@ -292,6 +306,8 @@ class SportsLiveResultsViewModel @Inject constructor(
 
     private companion object {
         const val DAY_SETTLE_MS = 300L
+        /** A moment after US Eastern midnight, so the new day is ESPN's. */
+        const val DAY_ROLLOVER_MARGIN_MS = 1_000L
     }
 }
 

@@ -203,6 +203,71 @@ class ResultsRepositoryTest {
     }
 
     @Test
+    fun `the ESPN today chip is Today only when it is also the device's day (#67 review)`() = runTest {
+        // 20:00Z: the 16th in New York, already the 17th in Tokyo.
+        clock = Instant.parse("2026-11-16T20:00:00Z").toEpochMilli()
+        assertEquals(listOf(true) + List(6) { false }, repository(ZoneId.of("America/New_York")).days().map { it.isDeviceToday })
+        assertTrue(repository(ZoneId.of("Asia/Tokyo")).days().none { it.isDeviceToday })
+        // 03:00Z: still the 15th in New York (ESPN's today), the 16th in London.
+        clock = Instant.parse("2026-11-16T03:00:00Z").toEpochMilli()
+        val london = repository(ZoneId.of("Europe/London")).days()
+        assertTrue(london.none { it.isDeviceToday })
+        assertTrue(london.first().isDeviceYesterday)
+    }
+
+    @Test
+    fun `a new golf final is held for the delay, judged by its final round's day (#67 review)`() = runTest {
+        settings.value = ScoreSettings(delaySeconds = 30)
+        mySports.value = MySports.decode(setOf("golf/lpga"))
+        val lpga = EspnIndividualResults.toSnapshots(
+            EspnFixtures.moshi.adapter(EspnScoreboardDto::class.java).fromJson(EspnFixtures.json("espn_golf_lpga_20261115.json"))!!,
+            EspnLeagueMap.LPGA,
+            nov15
+        )
+        // Dated by the final round (the 15th), not round 1 (the 12th).
+        assertEquals(Instant.parse("2026-11-15T05:00:00Z").toEpochMilli(), lpga.single().startMs)
+        provider.respond = { feed -> ScoreboardResult(if (feed.league == EspnLeagueMap.LPGA) lpga else emptyList()) }
+        // 18:30 US Eastern on the final day: the tournament may have just ended.
+        clock = Instant.parse("2026-11-15T23:30:00Z").toEpochMilli()
+        val repo = repository()
+        val first = repo.load(0) as ResultsLoad.Loaded
+        assertTrue(first.rows.isEmpty())
+        assertEquals(clock + 30_000, first.heldUntil)
+        // A golf result is never counted as a live game.
+        assertEquals(0, first.liveNow)
+        clock += 30_000
+        assertEquals(listOf("golf:401835176"), (repo.load(0) as ResultsLoad.Loaded).rows.map { it.event.eventId })
+        // Seen first two days later: shown at once.
+        clock += 2 * 24 * 60 * 60_000L
+        assertEquals(1, (repository().load(2) as ResultsLoad.Loaded).rows.size)
+    }
+
+    @Test
+    fun `after US Eastern midnight Today counts Yesterday's late games as live, and Yesterday refreshes every 2 min while live (#67 review)`() = runTest {
+        // 00:30 US Eastern on the 17th: a West Coast game of the 16th is still being played.
+        clock = Instant.parse("2026-11-17T05:30:00Z").toEpochMilli()
+        mySports.value = basketballOnly
+        provider.respond = { feed -> ScoreboardResult(if (feed == nbaToday) listOf(todayGame("late", ScoreState.IN)) else emptyList()) }
+        val repo = repository()
+        val today = repo.load(0) as ResultsLoad.Loaded
+        assertEquals(LocalDate.of(2026, 11, 17), today.date)
+        assertTrue(today.rows.isEmpty())
+        assertEquals(1, today.liveNow)
+        val yesterday = repo.load(1) as ResultsLoad.Loaded
+        assertEquals(1, yesterday.liveNow)
+        assertEquals(1, provider.calls.count { it == nbaToday })
+        // Yesterday with a live game: fetched again after 2 min, not 15.
+        clock += 2 * 60_000L
+        repo.load(1)
+        assertEquals(2, provider.calls.count { it == nbaToday })
+        // Later in the morning Today no longer asks for Yesterday.
+        clock = Instant.parse("2026-11-17T12:00:00Z").toEpochMilli()
+        provider.calls.clear()
+        repo.load(0)
+        assertTrue(provider.calls.none { it.date == nov16 })
+    }
+
+    @Test
     fun `Today lists finals only and counts the games being played in My sports (#67)`() = runTest {
         mySports.value = basketballOnly
         val games = listOf(
@@ -238,8 +303,8 @@ class ResultsRepositoryTest {
         val today = repo.load(0) as ResultsLoad.Loaded
         assertEquals(listOf("final"), today.rows.map { it.event.eventId })
         assertTrue(provider.calls.isEmpty())
-        // Past days never ask the live scores.
-        repo.load(1)
+        // Days before yesterday never ask the live scores.
+        repo.load(2)
         assertEquals(listOf(nbaToday), liveAsked)
         // A copy 2 min old is not fresh: Today is fetched.
         clock += 60_000L

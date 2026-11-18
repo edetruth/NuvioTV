@@ -127,7 +127,12 @@ internal fun SportsLiveResultsView(
     // Saved with the back stack entry, so returning from a replay refocuses its row.
     var focusedKey by rememberSaveable { mutableStateOf<String?>(null) }
     var listHasFocus by remember { mutableStateOf(false) }
-    val listKey = "${state.daysAgo}|${state.selectedSport?.id.orEmpty()}|${state.selectedLeague.orEmpty()}"
+    // The date too: at US Eastern midnight Today becomes a new day, a new list.
+    val selectedDate = state.dates.firstOrNull { it.daysAgo == state.daysAgo }?.date
+    val listKey = "${state.daysAgo}|$selectedDate|${state.selectedSport?.id.orEmpty()}|${state.selectedLeague.orEmpty()}"
+    val currentListKey by rememberUpdatedState(listKey)
+    // The list (by its key) that holds focus; kept when that list goes because its key changed.
+    var focusedListKey by remember { mutableStateOf<String?>(null) }
     val listState = rememberSaveable(listKey, saver = LazyListState.Saver) { LazyListState() }
     val items = if (ready) state.items else emptyList()
 
@@ -162,6 +167,12 @@ internal fun SportsLiveResultsView(
         listedKey = listKey
         focusedKey = null
         listState.scrollToItem(0)
+        // The list in focus was replaced under it (the day moved on at midnight): focus goes to the date rail.
+        if (focusedListKey != null && focusedListKey != listKey) {
+            focusedListKey = null
+            withFrameNanos { }
+            runCatching { dateFocusRequester.requestFocus() }
+        }
     }
     // Back from a replay: focus returns to the row that opened it, once its day has loaded. Once per
     // entry (not saved), so every return restores, like the section's cards.
@@ -327,6 +338,7 @@ internal fun SportsLiveResultsView(
                         .fillMaxWidth()
                         .onFocusChanged { focus ->
                             listHasFocus = focus.hasFocus
+                            if (focus.hasFocus) focusedListKey = listKey else if (currentListKey == listKey) focusedListKey = null
                             if (!focus.hasFocus) onRowFocus(null)
                         }
                         .focusRestorer(entryFocusRequester ?: itemFocusRequester(firstFocusableKey))
@@ -422,10 +434,9 @@ private fun ResultsDateRow(
     val dayChip: @Composable (ResultDay) -> Unit = { day ->
         val days = day.daysAgo
         SourceStatusFilterChip(
-            // Today is ESPN's current (US Eastern) day; "Yesterday" only when the ESPN day is also the
-            // device's yesterday.
+            // "Today" / "Yesterday" only when the ESPN (US Eastern) day is also the device's; else its date.
             name = when {
-                days == SportsResults.TODAY -> today
+                day.isDeviceToday -> today
                 day.isDeviceYesterday -> yesterday
                 else -> day.date.dayLabel(dayFormat)
             },

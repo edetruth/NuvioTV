@@ -175,6 +175,48 @@ class SportsLiveResultsTodayTest {
     }
 
     @Test
+    fun `back on Results the day keeps its list while it reloads (#67 review)`() = runTest {
+        todayHasFinal(true)
+        val vm = viewModel()
+        vm.selectDay(SportsResults.YESTERDAY)
+        vm.setActive(true)
+        advanceTimeBy(1_000); runCurrent()
+        val shown = vm.shownLoad.value
+        assertTrue(shown is ResultsLoad.Loaded)
+        // The Game page or a replay, then back: the list never empties.
+        vm.setActive(false)
+        runCurrent()
+        vm.setActive(true)
+        runCurrent()
+        assertTrue(vm.shownLoad.value is ResultsLoad.Loaded)
+        // A different day starts empty.
+        vm.selectDay(3)
+        runCurrent()
+        assertNull(vm.shownLoad.value)
+        vm.close()
+    }
+
+    @Test
+    fun `Yesterday refreshes every 2 min while one of its games is live, then stops (#67 review)`() = runTest {
+        var live = true
+        provider.respond = { feed ->
+            ScoreboardResult(if (feed.date == today.minusDays(1)) listOf(aFinal.copy(eventId = "late", state = if (live) ScoreState.IN else ScoreState.POST)) else emptyList())
+        }
+        val vm = viewModel()
+        vm.selectDay(SportsResults.YESTERDAY)
+        vm.setActive(true)
+        advanceTimeBy(1_000); runCurrent()
+        assertEquals(1, provider.calls.size)
+        live = false
+        advanceTimeBy(120_000); runCurrent()
+        assertEquals(2, provider.calls.size)
+        // Over: no more refreshes.
+        advanceTimeBy(60 * 60_000L); runCurrent()
+        assertEquals(2, provider.calls.size)
+        vm.close()
+    }
+
+    @Test
     fun `a past day is not refreshed`() = runTest {
         val vm = viewModel()
         vm.selectDay(SportsResults.YESTERDAY)

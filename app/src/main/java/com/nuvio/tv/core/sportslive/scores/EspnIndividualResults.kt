@@ -152,7 +152,8 @@ internal object EspnIndividualResults {
                 toPar = score
             )
         }
-        return snapshot("golf", event.id, league, leagueName, null, event.date, competition.status ?: event.status, GolfResult(event.name?.takeIf { it.isNotBlank() }, leaders))
+        // Dated by the final round's day, not round 1's: the score delay judges a new final by it (#67).
+        return snapshot("golf", event.id, league, leagueName, null, event.endDate, competition.status ?: event.status, GolfResult(event.name?.takeIf { it.isNotBlank() }, leaders))
     }
 
     /** The two sides of a match or fight in ESPN's listing order (`order`, which never gives the result). */
