@@ -389,6 +389,54 @@ class SportsLivePlayViewModelTest {
         assertTrue(!target.autoPicked)
     }
 
+    // --- Catch up replays (#58): played at once, never the addon's page or Stream screen ---
+
+    @Test
+    fun `a catch-up replay with one source plays its stream at once, under ESPN's matchup`() = runTest(mainDispatcherRule.dispatcher) {
+        coEvery { resolver.lookup(any()) } returns SportsLiveLookup.Found(STREAM)
+        val viewModel = newViewModel()
+        val events = eventsOf(viewModel)
+
+        viewModel.playReplay(listOf(REPLAY.copy(meta = REPLAY.meta.copy(name = "A 101-99 B"))), "Away at Home")
+        advanceUntilIdle()
+
+        val play = events.single() as SportsLivePlayEvent.Play
+        assertEquals(STREAM.url, play.target.playback?.url)
+        assertEquals("Away at Home", play.target.item.meta.name)
+        assertEquals(SportsLivePlayState.Idle, viewModel.state.value)
+    }
+
+    @Test
+    fun `a catch-up replay from several sources offers the sources, and the pick plays`() = runTest(mainDispatcherRule.dispatcher) {
+        val other = item("replay-2", "two").copy(kind = SportsLiveKind.REPLAY, isLive = false)
+        coEvery { resolver.lookup(any()) } returns SportsLiveLookup.Found(STREAM)
+        val viewModel = newViewModel()
+        val events = eventsOf(viewModel)
+
+        viewModel.playReplay(listOf(REPLAY, other), "Away at Home")
+        advanceUntilIdle()
+        val picking = viewModel.state.value as SportsLivePlayState.PickingReplaySource
+        assertEquals(listOf("one", "two"), picking.sources.map { it.first.addonName })
+        assertTrue(events.isEmpty())
+
+        viewModel.pickReplaySource(1)
+        advanceUntilIdle()
+        val play = events.single() as SportsLivePlayEvent.Play
+        assertEquals("replay-2", play.target.item.id)
+    }
+
+    @Test
+    fun `a catch-up replay with no playable stream says so and opens no Stream screen`() = runTest(mainDispatcherRule.dispatcher) {
+        coEvery { resolver.lookup(any()) } returns SportsLiveLookup.NonePlayable(listOf(STREAM))
+        val viewModel = newViewModel()
+        val events = eventsOf(viewModel)
+
+        viewModel.playReplay(listOf(REPLAY), "Away at Home")
+        advanceUntilIdle()
+
+        assertEquals(listOf(SportsLivePlayEvent.NoStream("Away at Home")), events)
+    }
+
     private companion object {
         fun item(id: String, addon: String) = SportsLiveItem(
             meta = MetaPreview(

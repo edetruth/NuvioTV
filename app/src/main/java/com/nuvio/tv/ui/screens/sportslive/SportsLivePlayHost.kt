@@ -82,6 +82,13 @@ fun SportsLivePlayHost(
             onPick = playViewModel::pick,
             onDismiss = playViewModel::dismiss
         )
+        is SportsLivePlayState.ResolvingReplay -> SportsLiveReplayResolvingDialog(state.title, onDismiss = playViewModel::dismiss)
+        is SportsLivePlayState.PickingReplaySource -> SportsLiveReplaySourceDialog(
+            title = state.title,
+            sources = state.sources.map { it.first.addonName },
+            onPick = playViewModel::pickReplaySource,
+            onDismiss = playViewModel::dismiss
+        )
         SportsLivePlayState.Idle -> Unit
     }
 }

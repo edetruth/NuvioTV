@@ -33,13 +33,20 @@ class CatchUpTest {
     private val now = ms("2026-11-16T12:00:00Z")
     private val longAgo = now - CatchUp.WINDOW_MS
 
-    private fun replay(name: String, start: String?, timed: Boolean = true, isChannel: Boolean = false) = SportsLiveItem(
+    private fun replay(
+        name: String,
+        start: String?,
+        timed: Boolean = true,
+        isChannel: Boolean = false,
+        addonId: String = "a",
+        type: ContentType = ContentType.UNKNOWN
+    ) = SportsLiveItem(
         meta = MetaPreview(
-            id = name, type = ContentType.UNKNOWN, rawType = "sport", name = name, poster = null,
+            id = "$addonId:$name", type = type, rawType = if (type == ContentType.UNKNOWN) "sport" else type.toApiString(), name = name, poster = null,
             posterShape = PosterShape.LANDSCAPE, background = null, logo = null, description = null,
             releaseInfo = null, imdbRating = null, genres = listOf("Basketball")
         ),
-        addonId = "a", addonName = "a", addonBaseUrl = "https://example.invalid", catalogKey = "k", catalogName = "Replays",
+        addonId = addonId, addonName = addonId, addonBaseUrl = "https://example.invalid", catalogKey = "k", catalogName = "Replays",
         kind = if (isChannel) SportsLiveKind.CHANNELS else SportsLiveKind.REPLAY, isLive = false, isChannel = isChannel,
         startMs = start?.let(::ms), sport = "Basketball", startHasTimeOfDay = timed, teams = SportsLiveTeams.parse(name)
     )
@@ -51,7 +58,7 @@ class CatchUpTest {
         marks: CatchUpMarks = CatchUpMarks(),
         nowMs: Long = now,
         days: List<CatchUpDay> = listOf(day)
-    ) = CatchUp.select(days, replays, followed, since, marks, nowMs).map { it.key }
+    ) = CatchUp.select(days, replays, followed, since, marks, nowMs).items.map { it.key }
 
     // --- Only followed teams ---
 
@@ -82,8 +89,56 @@ class CatchUpTest {
 
     @Test
     fun `the item carries the strict replay match`() {
-        val items = CatchUp.select(listOf(day), listOf(knicksReplay, pacersReplay), listOf(pacers), longAgo, CatchUpMarks(), now)
+        val items = CatchUp.select(listOf(day), listOf(knicksReplay, pacersReplay), listOf(pacers), longAgo, CatchUpMarks(), now).items
         assertEquals(pacersReplay, items.single().replay)
+    }
+
+    @Test
+    fun `each source's strict match is kept, one per source, and a series folder never counts`() {
+        val other = replay("Indiana Pacers vs Philadelphia 76ers", "2026-11-15T18:00:00Z", addonId = "b")
+        val sameSource = replay("Indiana Pacers vs Philadelphia 76ers", "2026-11-15T18:05:00Z")
+        val items = CatchUp.select(listOf(day), listOf(pacersReplay, sameSource, other), listOf(pacers), longAgo, CatchUpMarks(), now).items
+        assertEquals(listOf(pacersReplay, other), items.single().replays)
+
+        val series = replay("Indiana Pacers vs Philadelphia 76ers", "2026-11-15T18:00:00Z", type = ContentType.SERIES)
+        assertTrue(select(replays = listOf(series)).isEmpty())
+    }
+
+    // --- Pending: a replay that arrives late ---
+
+    @Test
+    fun `a followed final with no replay yet is pending, and listed once a replay arrives, however far since moved`() {
+        val waiting = CatchUp.select(listOf(day), listOf(knicksReplay), listOf(pacers), longAgo, CatchUpMarks(), now)
+        assertTrue(waiting.items.isEmpty())
+        assertEquals(mapOf(pacersId to pacersStart), waiting.pending)
+
+        // Next visit, long after the game: since alone would drop it; pending keeps it.
+        val laterSince = pacersStart + 20 * hour
+        assertTrue(select(since = laterSince).isEmpty())
+        assertEquals(listOf(pacersId), select(since = laterSince, marks = CatchUpMarks(pending = waiting.pending)))
+    }
+
+    @Test
+    fun `a pending game expires 3 days after its start`() {
+        val marks = CatchUpMarks(pending = mapOf(pacersId to pacersStart))
+        val later = pacersStart + CatchUp.WINDOW_MS + hour
+        assertTrue(select(since = later, marks = marks, nowMs = later).isEmpty())
+        val muchLater = later + 6 * hour
+        assertTrue(CatchUp.pruned(marks, muchLater).pending.isEmpty())
+        assertEquals(marks, CatchUp.pruned(marks, now))
+    }
+
+    @Test
+    fun `remembering moves a listed game out of pending and keeps at most the newest pending`() {
+        val listed = CatchUp.select(listOf(day), listOf(pacersReplay), listOf(pacers), longAgo, CatchUpMarks(), now).items
+        val marks = CatchUp.remembered(CatchUpMarks(pending = mapOf(pacersId to pacersStart)), listed, emptyMap())
+        assertTrue(marks.pending.isEmpty())
+        assertEquals(mapOf(pacersId to pacersStart), marks.surfaced)
+
+        val many = (0 until CatchUp.MAX_PENDING + 5).associate { "e$it" to it.toLong() }
+        val kept = CatchUp.remembered(CatchUpMarks(), emptyList(), many).pending
+        assertEquals(CatchUp.MAX_PENDING, kept.size)
+        assertTrue("the oldest go first", "e0" !in kept && "e${CatchUp.MAX_PENDING + 4}" in kept)
     }
 
     @Test

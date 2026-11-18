@@ -134,18 +134,27 @@ object SportsResults {
      * channels and team folders never match. A wrong replay is worse than none: individual sports
      * (tennis, UFC, F1, golf) get none, as no rule matches a player-named replay strictly enough.
      */
-    fun replaysByEvent(events: List<ScoreSnapshot>, date: LocalDate, replays: List<SportsLiveItem>, nowMs: Long): Map<String, SportsLiveItem> {
+    fun replaysByEvent(events: List<ScoreSnapshot>, date: LocalDate, replays: List<SportsLiveItem>, nowMs: Long): Map<String, SportsLiveItem> =
+        replayCandidatesByEvent(events, date, replays, nowMs).mapValues { it.value.first() }
+
+    /** Every replay [replaysByEvent] would match to each event, by event id, in [replays] order (the first is its pick). */
+    fun replayCandidatesByEvent(
+        events: List<ScoreSnapshot>,
+        date: LocalDate,
+        replays: List<SportsLiveItem>,
+        nowMs: Long
+    ): Map<String, List<SportsLiveItem>> {
         val teamEvents = events.filter { it.individual == null }
         if (teamEvents.isEmpty() || replays.isEmpty()) return emptyMap()
         val matcher = ScoreMatcher(zone = { EASTERN }, minScore = ScoreMatcher.BOTH_STRONG, previousDayFallback = false)
-        val found = LinkedHashMap<String, SportsLiveItem>()
+        val found = LinkedHashMap<String, MutableList<SportsLiveItem>>()
         for (replay in replays) {
             val start = replay.startMs ?: continue
             if (replay.isChannel) continue
             if (!replay.startHasTimeOfDay && Instant.ofEpochMilli(start).atZone(ZoneOffset.UTC).toLocalDate() != date) continue
             val card = ScoreCard.from(replay) ?: continue
             val event = matcher.match(card, teamEvents, nowMs) ?: continue
-            found.putIfAbsent(event.eventId, replay)
+            found.getOrPut(event.eventId) { ArrayList() } += replay
         }
         return found
     }

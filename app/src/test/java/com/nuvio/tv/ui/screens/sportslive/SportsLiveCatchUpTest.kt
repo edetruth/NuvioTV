@@ -34,7 +34,7 @@ class SportsLiveCatchUpTest {
         kind = SportsLiveKind.REPLAY, isLive = false, isChannel = false, startMs = pacersGame.startMs, sport = "Basketball",
         startHasTimeOfDay = true, teams = SportsLiveTeams.parse("Indiana Pacers vs Philadelphia 76ers")
     )
-    private val item = CatchUpItem(pacersGame, replay)
+    private val item = CatchUpItem(pacersGame, listOf(replay))
     private val scoreTexts = listOfNotNull(pacersGame.homeScore, pacersGame.awayScore).map { it.toString() } + listOf("117", "109", "FT", "win")
 
     @Test
@@ -72,6 +72,21 @@ class SportsLiveCatchUpTest {
         assertEquals(pacersGame.away.logo, art.first.logo)
         assertEquals(pacersGame.leagueName, art.league)
         assertNull(art.startMs)
+    }
+
+    @Test
+    fun `the replay plays under ESPN's matchup, without the addon's title, text or artwork`() {
+        val safe = spoilerSafeReplay(replay, "Indiana Pacers at Philadelphia 76ers")
+        assertEquals("Indiana Pacers at Philadelphia 76ers", safe.meta.name)
+        assertNull(safe.meta.description)
+        assertNull(safe.meta.releaseInfo)
+        assertNull(safe.meta.poster)
+        assertNull(safe.meta.background)
+        assertNull(safe.meta.landscapePoster)
+        // The same item to play: its id, source and stream key are kept.
+        assertEquals(replay.id, safe.id)
+        assertEquals(replay.streamKey, safe.streamKey)
+        assertEquals(replay.addonName, safe.addonName)
     }
 
     @Test

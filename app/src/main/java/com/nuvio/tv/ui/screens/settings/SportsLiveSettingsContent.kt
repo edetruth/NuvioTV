@@ -225,8 +225,8 @@ internal fun SportsLiveSettingsContent(
                     subtitle = stringResource(R.string.sports_live_setting_catch_up_row_subtitle),
                     checked = state.catchUpRow,
                     onToggle = { viewModel.setCatchUpRow(!state.catchUpRow) },
-                    // Scores Off means no score data at all: the row is off with it.
-                    enabled = state.showSection && state.scores.mode != ScoresMode.OFF
+                    // Scores Off means no score data at all, and the row needs the section's Home row: off with either.
+                    enabled = state.showSection && state.showHomeRow && state.scores.mode != ScoresMode.OFF
                 )
                 if (state.followedTeams.isEmpty()) {
                     Text(

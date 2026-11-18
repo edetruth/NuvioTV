@@ -513,7 +513,8 @@ private fun PlaybackNavHost(
                 },
                 // As in the section: a live game plays its best stream (or opens its Stream screen, per setting).
                 onLiveNowItemClick = { item -> sportsLivePlayViewModel.play(item, returnToHomeOnBack = true) },
-                onOpenSportsLiveGame = { navController.navigate(Screen.SportsLiveGame.route) }
+                onOpenSportsLiveGame = { navController.navigate(Screen.SportsLiveGame.route) },
+                onPlayCatchUpReplay = { replays, title -> sportsLivePlayViewModel.playReplay(replays, title, returnToHomeOnBack = true) }
             )
         }
 

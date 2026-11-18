@@ -16,6 +16,9 @@ import com.nuvio.tv.ui.screens.player.SportsLiveLaunchHeaders
 import com.nuvio.tv.ui.screens.stream.streamPlaybackInfoFor
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -123,7 +126,30 @@ sealed interface SportsLivePlayState {
     data object Idle : SportsLivePlayState
     data class Resolving(val item: SportsLiveItem) : SportsLivePlayState
     data class Picking(val item: SportsLiveItem, val streams: List<Stream>) : SportsLivePlayState
+
+    /** A catch-up replay's streams are looked up (#58); [title] is ESPN's matchup, never the replay's name. */
+    data class ResolvingReplay(val title: String) : SportsLivePlayState
+
+    /** A catch-up replay offered by several sources: [sources] (replay to its best stream), named by source only. */
+    data class PickingReplaySource(val title: String, val sources: List<Pair<SportsLiveItem, Stream>>) : SportsLivePlayState
 }
+
+/**
+ * [replay] as a catch-up item plays it (#58): named [title] (ESPN's matchup), without the addon's name,
+ * description or artwork, any of which may carry the score, so the player shows none of them.
+ */
+internal fun spoilerSafeReplay(replay: SportsLiveItem, title: String): SportsLiveItem = replay.copy(
+    meta = replay.meta.copy(
+        name = title,
+        description = null,
+        releaseInfo = null,
+        poster = null,
+        background = null,
+        landscapePoster = null,
+        logo = null,
+        rawPosterUrl = null
+    )
+)
 
 sealed interface SportsLivePlayEvent {
     /**
@@ -172,6 +198,44 @@ class SportsLivePlayViewModel @Inject constructor(
 
     /** OK on [item]: see [sportsLivePlayAction]. */
     fun play(item: SportsLiveItem, returnToHomeOnBack: Boolean = false) = start(item, returnToHomeOnBack, choose = false)
+
+    /**
+     * OK on a Catch up card (#58): its strict replay matches ([candidates], one per source) play at once,
+     * never through the addon's page or Stream screen. Each source's best stream is looked up; one found
+     * plays, several are offered by source name only ([SportsLivePlayState.PickingReplaySource]), none is
+     * a "no stream" notice. The player is named [title] (ESPN's matchup) and shows no addon artwork.
+     */
+    fun playReplay(candidates: List<SportsLiveItem>, title: String, returnToHomeOnBack: Boolean = false) {
+        job?.cancel()
+        this.returnToHomeOnBack = returnToHomeOnBack
+        _state.value = SportsLivePlayState.Idle
+        if (candidates.isEmpty()) return
+        SportsLiveZapSessions.clear()
+        val safe = candidates.map { spoilerSafeReplay(it, title) }
+        job = viewModelScope.launch {
+            _state.value = SportsLivePlayState.ResolvingReplay(title)
+            val found = coroutineScope {
+                safe.map { replay -> async { (resolver.lookup(replay) as? SportsLiveLookup.Found)?.let { replay to it.stream } } }.awaitAll()
+            }.filterNotNull()
+            _state.value = when {
+                found.size > 1 -> SportsLivePlayState.PickingReplaySource(title, found)
+                else -> SportsLivePlayState.Idle
+            }
+            when (found.size) {
+                0 -> _events.send(SportsLivePlayEvent.NoStream(title))
+                1 -> playStream(found[0].first, found[0].second)
+                else -> Unit
+            }
+        }
+    }
+
+    /** A source picked for a catch-up replay plays its stream. */
+    fun pickReplaySource(index: Int) {
+        val picking = _state.value as? SportsLivePlayState.PickingReplaySource ?: return
+        val (replay, stream) = picking.sources.getOrNull(index) ?: return
+        _state.value = SportsLivePlayState.Idle
+        job = viewModelScope.launch { playStream(replay, stream) }
+    }
 
     /** "Choose stream" on [item]: its streams to pick from (the Stream screen, or a merged card's picker). */
     fun chooseStream(item: SportsLiveItem, returnToHomeOnBack: Boolean = false) = start(item, returnToHomeOnBack, choose = true)

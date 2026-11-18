@@ -54,6 +54,7 @@ import com.nuvio.tv.ui.screens.sportslive.SportsLiveCatchUpViewModel
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveGameRequests
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveScoresViewModel
 import com.nuvio.tv.ui.screens.sportslive.catchUpGameRequest
+import com.nuvio.tv.ui.screens.sportslive.catchUpTitle
 import com.nuvio.tv.ui.screens.sportslive.rememberCatchUpCardArt
 import com.nuvio.tv.ui.components.LocalDrawnCardArt
 import androidx.compose.runtime.CompositionLocalProvider
@@ -112,13 +113,16 @@ fun HomeScreen(
     onLiveNowItemClick: (SportsLiveItem) -> Unit = {},
     /** Opens the Game page on the request just put in [SportsLiveGameRequests] (a Catch up card's menu). */
     onOpenSportsLiveGame: () -> Unit = {},
+    /** OK on a Catch up card (#58): its replay plays at once ([SportsLivePlayViewModel.playReplay]), titled by ESPN's matchup. */
+    onPlayCatchUpReplay: (replays: List<SportsLiveItem>, title: String) -> Unit = { _, _ -> },
     liveScoresViewModel: SportsLiveScoresViewModel = hiltViewModel(),
     catchUpViewModel: SportsLiveCatchUpViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     // The Catch up row (#58): worked out when Home resumes, never on a timer.
-    val catchUpItems by catchUpViewModel.homeItems.collectAsStateWithLifecycle()
+    val catchUpItems by catchUpViewModel.items.collectAsStateWithLifecycle()
+    val catchUpContext = androidx.compose.ui.platform.LocalContext.current
     LaunchedEffect(catchUpItems) { viewModel.setCatchUpItems(catchUpItems) }
     val catchUpCardArt = rememberCatchUpCardArt(uiState.catchUpItems)
     var catchUpMenuKey by remember { mutableStateOf<String?>(null) }
@@ -230,18 +234,12 @@ fun HomeScreen(
     }
 
     // Cards of the Live now row open the Sports & Live item, not an addon detail page.
-    val onNavigateToDetailStable: (String, String, String) -> Unit = remember(onNavigateToDetail, onLiveNowItemClick, viewModel, catchUpViewModel) {
+    val onNavigateToDetailStable: (String, String, String) -> Unit = remember(onNavigateToDetail, onLiveNowItemClick, onPlayCatchUpReplay, viewModel) {
         { itemId, itemType, addonBaseUrl ->
             if (SportsLiveCatchUpHomeRow.isCatchUpRow(addonBaseUrl)) {
-                // OK plays the replay (a series replay opens its page, as on the Game page).
+                // OK plays the replay at once: never the addon's page or Stream screen (spoilers).
                 viewModel.findCatchUpItem(itemId)?.let { item ->
-                    val replay = item.replay
-                    if (replay.apiType == "series") {
-                        onNavigateToDetail(replay.id, replay.apiType, replay.addonBaseUrl)
-                    } else {
-                        catchUpViewModel.onPlay(item)
-                        onLiveNowItemClick(replay)
-                    }
+                    onPlayCatchUpReplay(item.replays, catchUpTitle(catchUpContext, item))
                 }
             } else if (SportsLiveHomeRow.isLiveNowRow(addonBaseUrl)) {
                 viewModel.findLiveNowItem(itemId)?.let { item ->

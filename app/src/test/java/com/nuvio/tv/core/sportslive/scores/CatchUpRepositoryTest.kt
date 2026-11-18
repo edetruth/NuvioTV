@@ -2,6 +2,7 @@ package com.nuvio.tv.core.sportslive.scores
 
 import com.nuvio.tv.TestPreferencesStore
 import com.nuvio.tv.core.profile.ProfileManager
+import com.nuvio.tv.core.sportslive.SportsLivePlayedTime
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.data.local.ProfileDataStoreFactory
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
@@ -13,6 +14,7 @@ import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveKind
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -26,14 +28,25 @@ import org.junit.Test
 import java.time.Instant
 import java.time.LocalDate
 
+/**
+ * The repository runs in the test's background scope, which `advanceUntilIdle` does not wait for:
+ * every step settles with [runCurrent] (nothing here waits on virtual time but the provider's [FakeProvider.delayMs]).
+ */
 class CatchUpRepositoryTest {
 
     private class FakeProvider : ScoreProvider {
         val calls = mutableListOf<ScoreFeed>()
         var respond: (ScoreFeed) -> ScoreboardResult = { ScoreboardResult(emptyList()) }
+        var delayMs = 0L
+        var active = 0
+        var maxActive = 0
         override suspend fun scoreboard(league: EspnLeague, date: LocalDate): ScoreboardResult {
             val feed = ScoreFeed(league, date)
             calls += feed
+            active++
+            maxActive = maxOf(maxActive, active)
+            if (delayMs > 0) delay(delayMs)
+            active--
             return respond(feed)
         }
     }
@@ -47,20 +60,29 @@ class CatchUpRepositoryTest {
     private val provider = FakeProvider().apply {
         respond = { feed -> ScoreboardResult(if (feed.league == EspnLeagueMap.NBA && feed.date == nov15) nba else emptyList()) }
     }
-    private val store = TestPreferencesStore()
+    private val profile1 = TestPreferencesStore()
+    private val profile2 = TestPreferencesStore()
+    private val profileIds = MutableStateFlow(1)
     private val prefs = SportsLivePreferencesDataStore(
-        mockk<ProfileDataStoreFactory> { every { get(1, SportsLivePreferencesDataStore.FEATURE) } returns store },
-        mockk<ProfileManager> { every { activeProfileId } returns MutableStateFlow(1) }
+        mockk<ProfileDataStoreFactory> {
+            every { get(1, SportsLivePreferencesDataStore.FEATURE) } returns profile1
+            every { get(2, SportsLivePreferencesDataStore.FEATURE) } returns profile2
+        },
+        mockk<ProfileManager> { every { activeProfileId } returns profileIds }
     )
-    private val replays = MutableStateFlow(listOf(replay("Indiana Pacers vs Philadelphia 76ers", "2026-11-15T18:00:00Z")))
+    private val pacersReplay = replay("Indiana Pacers vs Philadelphia 76ers", "2026-11-15T18:00:00Z")
+    private val replays = MutableStateFlow(listOf(pacersReplay))
+    private val sectionEnabled = MutableStateFlow(true)
+    private var playerClock = 0L
+    private val played = SportsLivePlayedTime { playerClock }
 
-    private fun replay(name: String, start: String) = SportsLiveItem(
+    private fun replay(name: String, start: String, addonId: String = "a") = SportsLiveItem(
         meta = MetaPreview(
-            id = name, type = ContentType.UNKNOWN, rawType = "sport", name = name, poster = null,
+            id = "$addonId:$name", type = ContentType.UNKNOWN, rawType = "sport", name = name, poster = null,
             posterShape = PosterShape.LANDSCAPE, background = null, logo = null, description = null,
             releaseInfo = null, imdbRating = null, genres = listOf("Basketball")
         ),
-        addonId = "a", addonName = "a", addonBaseUrl = "https://example.invalid", catalogKey = "k", catalogName = "Replays",
+        addonId = addonId, addonName = addonId, addonBaseUrl = "https://example.invalid", catalogKey = "k", catalogName = "Replays",
         kind = SportsLiveKind.REPLAY, isLive = false, isChannel = false, startMs = Instant.parse(start).toEpochMilli(),
         sport = "Basketball", startHasTimeOfDay = true, teams = SportsLiveTeams.parse(name)
     )
@@ -74,66 +96,99 @@ class CatchUpRepositoryTest {
             now = { clock },
             zone = { SportsResults.EASTERN }
         )
-        val repo = CatchUpRepository(results, prefs, replays, { clock }, backgroundScope)
+        val repo = CatchUpRepository(results, prefs, replays, sectionEnabled, played, { clock }, backgroundScope)
         backgroundScope.launch { repo.items.collect { } }
         return repo
     }
 
     private suspend fun followPacers() = prefs.follow(FollowedTeam("Indiana Pacers", "Basketball"))
 
+    private fun TestScope.open(repo: CatchUpRepository) {
+        repo.onOpened()
+        runCurrent()
+    }
+
+    private fun keys(repo: CatchUpRepository) = repo.items.value.map { it.key }
+
+    // --- Requests ---
+
     @Test
     fun `an open loads each day of followed teams' feeds once and lists the replay`() = runTest {
         followPacers()
         val repo = repository()
-        repo.onOpened()
-        runCurrent()
-        assertEquals(listOf(pacersId), repo.items.value.map { it.key })
+        open(repo)
+        assertEquals(listOf(pacersId), keys(repo))
         // Never opened before: 3 days back. Only the NBA (the followed team's feed), one request per day.
         val expected = (0..3).map { ScoreFeed(EspnLeagueMap.NBA, LocalDate.of(2026, 11, 16).minusDays(it.toLong())) }
         assertEquals(expected.toSet(), provider.calls.toSet())
         assertEquals(expected.size, provider.calls.size)
-        // Listed once: remembered as surfaced.
         assertEquals(setOf(pacersId), prefs.catchUpMarks.first().surfaced.keys)
     }
 
     @Test
-    fun `opening again reuses the cache, and nothing is requested between opens`() = runTest {
+    fun `days load two at a time`() = runTest {
         followPacers()
+        provider.delayMs = 1_000L
         val repo = repository()
         repo.onOpened()
         runCurrent()
+        repeat(4) {
+            advanceTimeBy(1_000L)
+            runCurrent()
+        }
+        assertEquals(4, provider.calls.size)
+        assertEquals(CatchUpRepository.MAX_PARALLEL_DAYS, provider.maxActive)
+        assertEquals(listOf(pacersId), keys(repo))
+    }
+
+    @Test
+    fun `resumes reload at most every 10 min, and nothing is requested between them`() = runTest {
+        followPacers()
+        val repo = repository()
+        open(repo)
         val first = provider.calls.size
         advanceTimeBy(6 * 60 * minute)
         runCurrent()
         assertEquals("no polling", first, provider.calls.size)
-        clock += minute
-        repo.onOpened()
-        runCurrent()
-        assertEquals("past days and today come from the cache", first, provider.calls.size)
+        // 5 min later Today's copy is stale (2 min), yet the resume does not reload.
+        clock += 5 * minute
+        open(repo)
+        assertEquals(first, provider.calls.size)
+        // 10 min after the last load: reloaded, and only Today is asked again (past days are cached).
+        clock += 5 * minute
+        open(repo)
+        assertEquals(first + 1, provider.calls.size)
+        assertEquals(ScoreFeed(EspnLeagueMap.NBA, LocalDate.of(2026, 11, 16)), provider.calls.last())
         // A new replay list only re-selects.
         replays.value = replays.value.toList()
         runCurrent()
-        assertEquals(first, provider.calls.size)
+        assertEquals(first + 1, provider.calls.size)
     }
 
     @Test
-    fun `no team followed or the setting off requests nothing and shows nothing`() = runTest {
+    fun `no team, the row off, Sports & Live off or its Home row off, nothing requested and nothing shown`() = runTest {
         val repo = repository()
-        repo.onOpened()
-        runCurrent()
+        open(repo)
         assertTrue(repo.items.value.isEmpty())
         assertTrue(provider.calls.isEmpty())
 
         prefs.setCatchUpRow(false)
         followPacers()
-        repo.onOpened()
+        open(repo)
+        assertTrue(repo.items.value.isEmpty())
+        prefs.setCatchUpRow(true)
+        sectionEnabled.value = false
+        runCurrent()
+        assertTrue(repo.items.value.isEmpty())
+        sectionEnabled.value = true
+        prefs.setShowHomeRow(false)
         runCurrent()
         assertTrue(repo.items.value.isEmpty())
         assertTrue(provider.calls.isEmpty())
 
-        prefs.setCatchUpRow(true)
+        prefs.setShowHomeRow(true)
         runCurrent()
-        assertEquals(listOf(pacersId), repo.items.value.map { it.key })
+        assertEquals(listOf(pacersId), keys(repo))
         prefs.setCatchUpRow(false)
         runCurrent()
         assertTrue("the row hides", repo.items.value.isEmpty())
@@ -144,38 +199,39 @@ class CatchUpRepositoryTest {
         prefs.setScoresMode(ScoresMode.OFF)
         followPacers()
         val repo = repository()
-        repo.onOpened()
-        runCurrent()
+        open(repo)
         assertTrue(repo.items.value.isEmpty())
         assertTrue(provider.calls.isEmpty())
 
-        // Back to Show: listed; Off again: hidden at once.
         prefs.setScoresMode(ScoresMode.SHOW)
         runCurrent()
-        assertEquals(listOf(pacersId), repo.items.value.map { it.key })
+        assertEquals(listOf(pacersId), keys(repo))
         prefs.setScoresMode(ScoresMode.OFF)
         runCurrent()
         assertTrue(repo.items.value.isEmpty())
     }
 
+    // --- Watched ---
+
     @Test
-    fun `a replay played 2 min or more leaves the row, a shorter one stays`() = runTest {
+    fun `2 min of real playback clears the item, time away does not`() = runTest {
         followPacers()
         val repo = repository()
-        repo.onOpened()
-        runCurrent()
-        val item = repo.items.value.single()
+        open(repo)
 
-        repo.onPlay(item)
-        clock += CatchUp.WATCHED_AFTER_MS - 1
-        repo.onOpened()
-        runCurrent()
-        assertEquals(listOf(pacersId), repo.items.value.map { it.key })
+        // Away 30 min, the replay playing only 1 min of it: stays.
+        played.onPlaying(pacersReplay.id, playing = true)
+        playerClock += minute
+        played.onPlaying(pacersReplay.id, playing = false)
+        clock += 30 * minute
+        open(repo)
+        assertEquals(listOf(pacersId), keys(repo))
 
-        repo.onPlay(item)
-        clock += CatchUp.WATCHED_AFTER_MS
-        repo.onOpened()
-        runCurrent()
+        // Another minute of playback, wherever it was started (Results, the Game page): watched.
+        played.onPlaying(pacersReplay.id, playing = true)
+        playerClock += minute
+        played.onPlaying(pacersReplay.id, playing = false)
+        open(repo)
         assertTrue(repo.items.value.isEmpty())
         assertEquals(setOf(pacersId), prefs.catchUpMarks.first().seen.keys)
     }
@@ -184,28 +240,75 @@ class CatchUpRepositoryTest {
     fun `mark as watched removes the item`() = runTest {
         followPacers()
         val repo = repository()
-        repo.onOpened()
-        runCurrent()
+        open(repo)
         repo.markWatched(repo.items.value.single())
         runCurrent()
         assertTrue(repo.items.value.isEmpty())
     }
 
     @Test
+    fun `a profile switch drops the visit and what was played`() = runTest {
+        followPacers()
+        val repo = repository()
+        open(repo)
+        played.onPlaying(pacersReplay.id, playing = true)
+        playerClock += 3 * minute
+
+        profileIds.value = 2
+        runCurrent()
+        assertTrue("profile 2 follows nobody and was not opened", repo.items.value.isEmpty())
+        assertEquals(0L, played.playedMs(pacersReplay.id))
+
+        // Back on profile 1: its row comes back once opened, not marked watched by the other profile.
+        profileIds.value = 1
+        runCurrent()
+        open(repo)
+        assertEquals(listOf(pacersId), keys(repo))
+        assertTrue(prefs.catchUpMarks.first().seen.isEmpty())
+    }
+
+    // --- Pending: a replay that arrives late ---
+
+    @Test
+    fun `a replay that arrives after the visit still lists its game`() = runTest {
+        followPacers()
+        replays.value = emptyList()
+        val repo = repository()
+        open(repo)
+        assertTrue(repo.items.value.isEmpty())
+        assertEquals(setOf(pacersId), prefs.catchUpMarks.first().pending.keys)
+
+        // Back the next evening: since is now the last visit, long after the game ended.
+        clock += 10 * 60 * minute
+        open(repo)
+        assertTrue(repo.items.value.isEmpty())
+        // The replay arrives: listed, and no longer pending.
+        replays.value = listOf(pacersReplay)
+        runCurrent()
+        assertEquals(listOf(pacersId), keys(repo))
+        assertTrue(prefs.catchUpMarks.first().pending.isEmpty())
+        assertEquals(setOf(pacersId), prefs.catchUpMarks.first().surfaced.keys)
+    }
+
+    @Test
     fun `a listed game stays after since moves on, until 3 days after its start`() = runTest {
         followPacers()
         val repo = repository()
-        repo.onOpened()
-        runCurrent()
-        // Back after a long gap: since is now the last visit, after the game, yet it stays.
+        open(repo)
         clock += 10 * 60 * minute
-        repo.onOpened()
-        runCurrent()
-        assertEquals(listOf(pacersId), repo.items.value.map { it.key })
-        // 3 days after its start it is gone.
+        open(repo)
+        assertEquals(listOf(pacersId), keys(repo))
         clock = Instant.parse("2026-11-18T18:01:00Z").toEpochMilli()
-        repo.onOpened()
-        runCurrent()
+        open(repo)
         assertTrue(repo.items.value.isEmpty())
+    }
+
+    @Test
+    fun `several sources give one item with each source's replay`() = runTest {
+        followPacers()
+        replays.value = listOf(pacersReplay, replay("Indiana Pacers vs Philadelphia 76ers", "2026-11-15T18:00:00Z", addonId = "b"))
+        val repo = repository()
+        open(repo)
+        assertEquals(listOf("a", "b"), repo.items.value.single().replays.map { it.addonId })
     }
 }

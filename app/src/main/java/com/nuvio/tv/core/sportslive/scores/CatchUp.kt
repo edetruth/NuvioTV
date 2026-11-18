@@ -7,10 +7,26 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 
-/** A followed team's final with a strict replay match, for the Catch up row (#58). Never shows a score. */
-data class CatchUpItem(val event: ScoreSnapshot, val replay: SportsLiveItem) {
+/**
+ * A followed team's final with a strict replay match, for the Catch up row (#58). Never shows a score.
+ * [replays]: every strict match, one per source (addon), in the section's order; never empty.
+ */
+data class CatchUpItem(val event: ScoreSnapshot, val replays: List<SportsLiveItem>) {
+    init {
+        require(replays.isNotEmpty())
+    }
+
     val key: String get() = event.eventId
+
+    /** The first match: what the Game page's Watch replay opens. */
+    val replay: SportsLiveItem get() = replays.first()
 }
+
+/**
+ * What [CatchUp.select] found: the row, and [pending] (event id to start), the followed teams' finals
+ * that qualify but have no replay yet, remembered so a replay that arrives later still lists them.
+ */
+data class CatchUpSelection(val items: List<CatchUpItem>, val pending: Map<String, Long>)
 
 /** One ESPN (US Eastern) day for the row: [events] all fetched (replays match against them all), [finals] those listed. */
 data class CatchUpDay(val date: LocalDate, val events: List<ScoreSnapshot>, val finals: List<ScoreSnapshot>)
@@ -18,9 +34,14 @@ data class CatchUpDay(val date: LocalDate, val events: List<ScoreSnapshot>, val 
 /**
  * Stored per profile, by ESPN event id: [seen] when a replay was watched (played 2+ min, or marked
  * watched); [surfaced] the start of each game the row has listed, so it stays until watched or too old
- * even after "since" moves on.
+ * even after "since" moves on; [pending] the start of each followed final that qualified with no replay
+ * yet, so it is listed once a replay arrives, however far "since" has moved.
  */
-data class CatchUpMarks(val seen: Map<String, Long> = emptyMap(), val surfaced: Map<String, Long> = emptyMap())
+data class CatchUpMarks(
+    val seen: Map<String, Long> = emptyMap(),
+    val surfaced: Map<String, Long> = emptyMap(),
+    val pending: Map<String, Long> = emptyMap()
+)
 
 /**
  * The pure rules of the Catch up row (#58): followed teams' finals that ended since the user was last
@@ -42,6 +63,9 @@ object CatchUp {
      * with the late-start allowance ([SportsLiveGameLength.ofEspnSport], the #60 table).
      */
     fun estimatedEndMs(event: ScoreSnapshot, startMs: Long): Long = startMs + SportsLiveGameLength.ofEspnSport(event.league.sport)
+
+    /** At most this many pending games are remembered per profile (the newest). */
+    const val MAX_PENDING = 100
 
     /** Opening again within this of the last visit is the same visit: "since" stays. */
     const val VISIT_GAP_MS = 30 * MINUTE_MS
@@ -65,12 +89,12 @@ object CatchUp {
             .distinct()
 
     /**
-     * The Results days to load (0 = today): back to the earliest of "since" (less the longest game) and the
-     * surfaced games, never past [WINDOW_MS]. [easternDate] is the ESPN date of a moment.
+     * The Results days to load (0 = today): back to the earliest of "since" (less the longest game), the
+     * surfaced and the pending games, never past [WINDOW_MS]. [easternDate] is the ESPN date of a moment.
      */
     fun daysAgo(sinceMs: Long, marks: CatchUpMarks, nowMs: Long, easternDate: (Long) -> LocalDate): IntRange {
         val windowStart = nowMs - WINDOW_MS
-        val earliest = (listOf(sinceMs - SportsLiveGameLength.LONGEST_TEAM_GAME_MS) + marks.surfaced.values).min()
+        val earliest = (listOf(sinceMs - SportsLiveGameLength.LONGEST_TEAM_GAME_MS) + marks.surfaced.values + marks.pending.values).min()
             .coerceIn(windowStart, nowMs)
         val days = ChronoUnit.DAYS.between(easternDate(earliest), easternDate(nowMs)).toInt()
         return 0..days.coerceIn(0, SportsResults.DAYS_AGO.last)
@@ -78,8 +102,9 @@ object CatchUp {
 
     /**
      * The row, newest first: [days]' finals a followed team played in ([SportsResults.follows]), started
-     * within [WINDOW_MS], that ended since [sinceMs] (or were listed before: [CatchUpMarks.surfaced]), not
-     * watched ([CatchUpMarks.seen]), and that have a strict replay match among [replays].
+     * within [WINDOW_MS], that ended since [sinceMs] (or were listed or pending before: [CatchUpMarks]),
+     * not watched ([CatchUpMarks.seen]), and that have a strict replay match among [replays] (a series
+     * folder never counts: OK must play a replay at once). Those with none yet are [CatchUpSelection.pending].
      */
     fun select(
         days: List<CatchUpDay>,
@@ -88,9 +113,11 @@ object CatchUp {
         sinceMs: Long,
         marks: CatchUpMarks,
         nowMs: Long
-    ): List<CatchUpItem> {
-        if (followed.isEmpty() || replays.isEmpty()) return emptyList()
+    ): CatchUpSelection {
+        if (followed.isEmpty()) return CatchUpSelection(emptyList(), emptyMap())
+        val playable = replays.filter { it.apiType != "series" }
         val items = ArrayList<CatchUpItem>()
+        val pending = HashMap<String, Long>()
         for (day in days) {
             val candidates = SportsResults.rows(day.finals, followed).filter { row ->
                 val event = row.event
@@ -98,19 +125,38 @@ object CatchUp {
                 row.followed && event.individual == null && start != null && event.timeValid &&
                     start <= nowMs && nowMs - start < WINDOW_MS &&
                     event.eventId !in marks.seen &&
-                    (estimatedEndMs(event, start) > sinceMs || event.eventId in marks.surfaced)
+                    (estimatedEndMs(event, start) > sinceMs || event.eventId in marks.surfaced || event.eventId in marks.pending)
             }
             if (candidates.isEmpty()) continue
-            val matched = SportsResults.replaysByEvent(day.events, day.date, replays, nowMs)
-            candidates.forEach { row -> matched[row.event.eventId]?.let { items += CatchUpItem(row.event, it) } }
+            val matched = SportsResults.replayCandidatesByEvent(day.events, day.date, playable, nowMs)
+            for (row in candidates) {
+                val found = matched[row.event.eventId]?.distinctBy { it.addonId }
+                if (found.isNullOrEmpty()) pending[row.event.eventId] = row.event.startMs!! else items += CatchUpItem(row.event, found)
+            }
         }
-        return items.distinctBy { it.key }.sortedByDescending { it.event.startMs }
+        val listed = items.distinctBy { it.key }.sortedByDescending { it.event.startMs }
+        val listedKeys = listed.mapTo(HashSet()) { it.key }
+        return CatchUpSelection(listed, pending.filterKeys { it !in listedKeys })
+    }
+
+    /** [marks] with [listed] remembered as surfaced (no longer pending) and [pending] added, at most [MAX_PENDING]. */
+    fun remembered(marks: CatchUpMarks, listed: List<CatchUpItem>, pending: Map<String, Long>): CatchUpMarks {
+        val listedKeys = listed.mapTo(HashSet()) { it.key }
+        val allPending = (marks.pending + pending).filterKeys { it !in listedKeys }
+        return marks.copy(
+            surfaced = marks.surfaced + listed.associate { it.key to (it.event.startMs ?: 0L) },
+            pending = allPending.entries.sortedByDescending { it.value }.take(MAX_PENDING).associate { it.key to it.value }
+        )
     }
 
     /** [marks] without the games older than [WINDOW_MS] (and their watched marks): they can never show again. */
     fun pruned(marks: CatchUpMarks, nowMs: Long): CatchUpMarks {
         val oldest = nowMs - WINDOW_MS - SportsLiveGameLength.LONGEST_TEAM_GAME_MS
-        return CatchUpMarks(seen = marks.seen.filterValues { it >= oldest }, surfaced = marks.surfaced.filterValues { it >= oldest })
+        return CatchUpMarks(
+            seen = marks.seen.filterValues { it >= oldest },
+            surfaced = marks.surfaced.filterValues { it >= oldest },
+            pending = marks.pending.filterValues { it >= oldest }
+        )
     }
 
     /** The ESPN (US Eastern) date of [ms]. */

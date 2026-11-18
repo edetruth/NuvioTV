@@ -375,6 +375,10 @@ class PlayerRuntimeController(
                 .distinctUntilChanged()
                 .collect { isPlaying ->
                     com.nuvio.tv.core.recommendations.TvRecommendationManager.isPlaybackActive.value = isPlaying
+                    // Real playing time of a Sports & Live replay: 2+ min clears its Catch up item (#58).
+                    if (com.nuvio.tv.ui.screens.sportslive.SportsLiveExtraSources.isSportsPlayback(contentId)) {
+                        com.nuvio.tv.core.sportslive.SportsLivePlayedTime.shared.onPlaying(contentId, isPlaying)
+                    }
                 }
         }
     }
@@ -884,6 +888,8 @@ class PlayerRuntimeController(
     }
 
     fun onCleared() {
+        // The player is gone: a running playing stretch ends here.
+        com.nuvio.tv.core.sportslive.SportsLivePlayedTime.shared.onPlaying(contentId, playing = false)
         playerSession.close()
         stopServerPlayback()
         releasePlayer()

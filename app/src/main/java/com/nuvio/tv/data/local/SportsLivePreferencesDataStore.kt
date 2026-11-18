@@ -1,6 +1,7 @@
 package com.nuvio.tv.data.local
 
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
@@ -29,6 +30,7 @@ import com.nuvio.tv.domain.model.SportsLiveOverride
 import com.nuvio.tv.domain.model.SportsLiveTab
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
@@ -89,6 +91,7 @@ class SportsLivePreferencesDataStore @Inject constructor(
     // "eventId|ms" entries: when each replay was watched, and when each surfaced game started.
     private val catchUpSeenKey = stringSetPreferencesKey("sports_live_catch_up_seen")
     private val catchUpSurfacedKey = stringSetPreferencesKey("sports_live_catch_up_surfaced")
+    private val catchUpPendingKey = stringSetPreferencesKey("sports_live_catch_up_pending")
 
     val showSection: Flow<Boolean> = profileManager.activeProfileId.flatMapLatest { pid ->
         factory.get(pid, FEATURE).data.map { it[showSectionKey] ?: true }
@@ -240,16 +243,25 @@ class SportsLivePreferencesDataStore @Inject constructor(
 
     /** The catch-up row's watched replays and surfaced games (#58), by ESPN event id. */
     val catchUpMarks: Flow<CatchUpMarks> = profileManager.activeProfileId.flatMapLatest { pid ->
-        factory.get(pid, FEATURE).data.map { CatchUpMarks(decodeMarks(it[catchUpSeenKey]), decodeMarks(it[catchUpSurfacedKey])) }
+        factory.get(pid, FEATURE).data.map(::catchUpMarksOf)
     }
+
+    /** The active profile's id: the catch-up row's visit and played replays belong to it. */
+    val activeProfileId: StateFlow<Int> get() = profileManager.activeProfileId
+
+    private fun catchUpMarksOf(prefs: Preferences) = CatchUpMarks(
+        seen = decodeMarks(prefs[catchUpSeenKey]),
+        surfaced = decodeMarks(prefs[catchUpSurfacedKey]),
+        pending = decodeMarks(prefs[catchUpPendingKey])
+    )
 
     /** Saves [change] of the catch-up marks in one edit, dropping marks too old to matter ([CatchUp.pruned]). */
     suspend fun updateCatchUpMarks(nowMs: Long, change: (CatchUpMarks) -> CatchUpMarks) {
         store().edit { prefs ->
-            val current = CatchUpMarks(decodeMarks(prefs[catchUpSeenKey]), decodeMarks(prefs[catchUpSurfacedKey]))
-            val next = CatchUp.pruned(change(current), nowMs)
+            val next = CatchUp.pruned(change(catchUpMarksOf(prefs)), nowMs)
             prefs[catchUpSeenKey] = encodeMarks(next.seen)
             prefs[catchUpSurfacedKey] = encodeMarks(next.surfaced)
+            prefs[catchUpPendingKey] = encodeMarks(next.pending)
         }
     }
 

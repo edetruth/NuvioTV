@@ -379,14 +379,9 @@ fun SportsLiveScreen(
             onToggleReminder = remindersViewModel::toggle,
             catchUpItems = catchUpItems,
             onPlayCatchUp = { item ->
-                // OK plays the replay (a series replay opens its page, as on the Game page).
-                val replay = item.replay
-                if (replay.apiType == "series") {
-                    onOpenDetail(replay)
-                } else {
-                    catchUpViewModel.onPlay(item)
-                    playViewModel.play(replay)
-                }
+                // OK plays the replay at once: never the addon's page or Stream screen (spoilers).
+                previewPlayer.release()
+                playViewModel.playReplay(item.replays, catchUpTitle(context, item))
             },
             onOpenCatchUpGame = { item ->
                 SportsLiveGameRequests.open(catchUpGameRequest(item))
@@ -589,6 +584,14 @@ private fun SportsLiveContent(
     // on it, Up from the first game goes back to it.
     val catchUpShown = uiState.selectedTab == SportsLiveTab.LIVE_NOW && catchUpItems.isNotEmpty()
     val catchUpFocusRequester = remember { FocusRequester() }
+    // The strip held focus and has emptied (its last game watched): focus goes to the games, else the tab.
+    var catchUpHoldsFocus by remember { mutableStateOf(false) }
+    LaunchedEffect(catchUpShown) {
+        if (catchUpShown || !catchUpHoldsFocus) return@LaunchedEffect
+        catchUpHoldsFocus = false
+        withFrameNanos { }
+        runCatching { (entryCardFocusRequester ?: activeTabFocusRequester).requestFocus() }
+    }
     val contentEntryFocusRequester = if (catchUpShown) catchUpFocusRequester else entryCardFocusRequester
     fun headerRequester(stop: SportsLiveHeaderFocus.Stop): FocusRequester? = when (stop) {
         SportsLiveHeaderFocus.Stop.TABS -> activeTabFocusRequester
@@ -984,6 +987,7 @@ private fun SportsLiveContent(
                 onPlay = onPlayCatchUp,
                 onOpenGame = onOpenCatchUpGame,
                 onMarkWatched = onMarkCatchUpWatched,
+                onHoldsFocus = { catchUpHoldsFocus = it },
                 modifier = Modifier
                     .padding(top = NuvioTheme.spacing.sm)
                     .onFocusChanged { if (it.hasFocus) followedCardKey = null }
