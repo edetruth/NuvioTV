@@ -1,0 +1,175 @@
+{
+ "_note": "Trimmed real ESPN golf/pga scoreboard ?dates=20261116 (Monday finish; top 8 and last 2 players, hole scores dropped).",
+ "leagues": [
+  {
+   "id": "1106",
+   "uid": "s:1100~l:1106",
+   "name": "PGA Tour",
+   "abbreviation": "PGA",
+   "slug": "pga"
+  }
+ ],
+ "events": [
+  {
+   "id": "401850980",
+   "uid": "s:1100~l:1106~e:401850980",
+   "date": "2026-11-12T05:00Z",
+   "endDate": "2026-11-16T05:00Z",
+   "name": "Austin Championship pres. by Compliance Solutions",
+   "shortName": "Austin Championship pres. by Compliance Solutions",
+   "competitions": [
+    {
+     "id": "401850980",
+     "uid": "s:1100~l:1106~e:401850980~c:401850980",
+     "date": "2026-11-12T05:00Z",
+     "endDate": "2026-11-16T05:00Z",
+     "timeValid": false,
+     "competitors": [
+      {
+       "id": "10057",
+       "uid": "s:1100~l:1106~a:10057",
+       "type": "athlete",
+       "order": 1,
+       "athlete": {
+        "displayName": "Chad Ramey",
+        "shortName": "C. Ramey",
+        "fullName": "Chad Ramey"
+       },
+       "score": "-20"
+      },
+      {
+       "id": "6922",
+       "uid": "s:1100~l:1106~a:6922",
+       "type": "athlete",
+       "order": 2,
+       "athlete": {
+        "displayName": "Ben Kohles",
+        "shortName": "B. Kohles",
+        "fullName": "Ben Kohles"
+       },
+       "score": "-18"
+      },
+      {
+       "id": "11183",
+       "uid": "s:1100~l:1106~a:11183",
+       "type": "athlete",
+       "order": 3,
+       "athlete": {
+        "displayName": "Trace Crowe",
+        "shortName": "T. Crowe",
+        "fullName": "Trace Crowe"
+       },
+       "score": "-17"
+      },
+      {
+       "id": "10562",
+       "uid": "s:1100~l:1106~a:10562",
+       "type": "athlete",
+       "order": 4,
+       "athlete": {
+        "displayName": "Hayden Springer",
+        "shortName": "H. Springer",
+        "fullName": "Hayden Springer"
+       },
+       "score": "-16"
+      },
+      {
+       "id": "5211425",
+       "uid": "s:1100~l:1106~a:5211425",
+       "type": "athlete",
+       "order": 5,
+       "athlete": {
+        "displayName": "Blades Brown",
+        "shortName": "B. Brown",
+        "fullName": "Blades Brown"
+       },
+       "score": "-16"
+      },
+      {
+       "id": "9364",
+       "uid": "s:1100~l:1106~a:9364",
+       "type": "athlete",
+       "order": 6,
+       "athlete": {
+        "displayName": "Erik van Rooyen",
+        "shortName": "E. van Rooyen",
+        "fullName": "Erik van Rooyen"
+       },
+       "score": "-16"
+      },
+      {
+       "id": "9506",
+       "uid": "s:1100~l:1106~a:9506",
+       "type": "athlete",
+       "order": 7,
+       "athlete": {
+        "displayName": "Jordan Smith",
+        "shortName": "J. Smith",
+        "fullName": "Jordan Smith"
+       },
+       "score": "-15"
+      },
+      {
+       "id": "11056",
+       "uid": "s:1100~l:1106~a:11056",
+       "type": "athlete",
+       "order": 8,
+       "athlete": {
+        "displayName": "Austin Smotherman",
+        "shortName": "A. Smotherman",
+        "fullName": "Austin Smotherman"
+       },
+       "score": "-15"
+      },
+      {
+       "id": "6017",
+       "uid": "s:1100~l:1106~a:6017",
+       "type": "athlete",
+       "order": 119,
+       "athlete": {
+        "displayName": "C.T. Pan",
+        "shortName": "C.T. Pan",
+        "fullName": "C.T. Pan"
+       },
+       "score": "-1"
+      },
+      {
+       "id": "6001",
+       "uid": "s:1100~l:1106~a:6001",
+       "type": "athlete",
+       "order": 120,
+       "athlete": {
+        "displayName": "Séamus Power",
+        "shortName": "S. Power",
+        "fullName": "Séamus Power"
+       },
+       "score": "E"
+      }
+     ],
+     "status": {
+      "period": 4,
+      "type": {
+       "id": "3",
+       "name": "STATUS_FINAL",
+       "state": "post",
+       "completed": true,
+       "description": "Final",
+       "detail": "Final",
+       "shortDetail": "Complete"
+      }
+     },
+     "startDate": "2026-11-12T05:00Z"
+    }
+   ],
+   "status": {
+    "type": {
+     "id": "3",
+     "name": "STATUS_FINAL",
+     "state": "post",
+     "completed": true,
+     "description": "Final"
+    }
+   }
+  }
+ ]
+}

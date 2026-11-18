@@ -41,17 +41,19 @@ object SportsResults {
     /**
      * The rows for one day: finished games only (completed `post`; postponed, cancelled, live and
      * upcoming games are left out), each event once (a competition feed's copy before `soccer/all`'s);
-     * followed teams' games first, then by league and start.
+     * followed teams' games first, then by league and start (a UFC card: main event first). An
+     * individual sport's result is never a followed team's.
      */
     fun rows(events: List<ScoreSnapshot>, followed: List<FollowedTeam>): List<ResultRow> =
         events.asSequence()
             .filter { it.state == ScoreState.POST && it.isFinal }
             .sortedBy { if (it.league == EspnLeagueMap.SOCCER_ALL) 1 else 0 }
             .distinctBy { it.eventId }
-            .map { ResultRow(it, followed = followed.any { team -> follows(team, it) }, note = finalNote(it)) }
+            .map { ResultRow(it, followed = it.individual == null && followed.any { team -> follows(team, it) }, note = finalNote(it)) }
             .sortedWith(
                 compareByDescending<ResultRow> { it.followed }
                     .thenBy { it.event.leagueSlug }
+                    .thenBy { it.event.individual?.listOrder ?: 0 }
                     .thenBy { it.event.startMs ?: Long.MAX_VALUE }
                     .thenBy { it.event.eventId }
             )
@@ -120,10 +122,12 @@ object SportsResults {
      * all of [events] (a tie between two events gives none). A timed replay must start within ±3 h of
      * the game; a bare-date replay must be dated [date] itself, never the day after (a back-to-back
      * series' game 2 must not open game 1). Days are ESPN's (US Eastern). Replays with no date,
-     * channels and team folders never match. A wrong replay is worse than none.
+     * channels and team folders never match. A wrong replay is worse than none: individual sports
+     * (tennis, UFC, F1, golf) get none, as no rule matches a player-named replay strictly enough.
      */
     fun replaysByEvent(events: List<ScoreSnapshot>, date: LocalDate, replays: List<SportsLiveItem>, nowMs: Long): Map<String, SportsLiveItem> {
-        if (events.isEmpty() || replays.isEmpty()) return emptyMap()
+        val teamEvents = events.filter { it.individual == null }
+        if (teamEvents.isEmpty() || replays.isEmpty()) return emptyMap()
         val matcher = ScoreMatcher(zone = { EASTERN }, minScore = ScoreMatcher.BOTH_STRONG, previousDayFallback = false)
         val found = LinkedHashMap<String, SportsLiveItem>()
         for (replay in replays) {
@@ -131,7 +135,7 @@ object SportsResults {
             if (replay.isChannel) continue
             if (!replay.startHasTimeOfDay && Instant.ofEpochMilli(start).atZone(ZoneOffset.UTC).toLocalDate() != date) continue
             val card = ScoreCard.from(replay) ?: continue
-            val event = matcher.match(card, events, nowMs) ?: continue
+            val event = matcher.match(card, teamEvents, nowMs) ?: continue
             found.putIfAbsent(event.eventId, replay)
         }
         return found

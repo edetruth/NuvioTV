@@ -2,7 +2,7 @@ package com.nuvio.tv.core.sportslive.scores
 
 import com.nuvio.tv.domain.model.FollowedTeam
 
-/** Team sports have two sides and a score; individual sports (tennis, MMA, F1, golf: R2) have players and their own rows. */
+/** Team sports have two sides and a score; individual sports (tennis, MMA, F1, golf: #55 part 2) have players and their own rows. */
 enum class SportKind { TEAM, INDIVIDUAL }
 
 /**
@@ -15,7 +15,11 @@ enum class MySport(val id: String, val kind: SportKind, val espnSport: String) {
     FOOTBALL("football", SportKind.TEAM, "football"),
     HOCKEY("hockey", SportKind.TEAM, "hockey"),
     BASEBALL("baseball", SportKind.TEAM, "baseball"),
-    SOCCER("soccer", SportKind.TEAM, "soccer");
+    SOCCER("soccer", SportKind.TEAM, "soccer"),
+    TENNIS("tennis", SportKind.INDIVIDUAL, "tennis"),
+    MMA("mma", SportKind.INDIVIDUAL, "mma"),
+    MOTORSPORT("motorsport", SportKind.INDIVIDUAL, "racing"),
+    GOLF("golf", SportKind.INDIVIDUAL, "golf");
 
     /** Its leagues, in picker order. */
     val leagues: List<MyLeague> get() = MyLeague.entries.filter { it.sport == this }
@@ -64,7 +68,14 @@ enum class MyLeague(
     BUNDESLIGA("ger.1", MySport.SOCCER, null, isDefault = false, slugs = Regex("""^ger\.1$""")),
     SERIE_A("ita.1", MySport.SOCCER, null, isDefault = false, slugs = Regex("""^ita\.1$""")),
     LIGUE_1("fra.1", MySport.SOCCER, null, isDefault = false, slugs = Regex("""^fra\.1$""")),
-    MLS("usa.1", MySport.SOCCER, null, isDefault = false, slugs = Regex("""^usa\.1$"""));
+    MLS("usa.1", MySport.SOCCER, null, isDefault = false, slugs = Regex("""^usa\.1$""")),
+
+    ATP("atp", MySport.TENNIS, EspnLeagueMap.ATP, isDefault = true),
+    WTA("wta", MySport.TENNIS, EspnLeagueMap.WTA, isDefault = true),
+    UFC("ufc", MySport.MMA, EspnLeagueMap.UFC, isDefault = true),
+    F1("f1", MySport.MOTORSPORT, EspnLeagueMap.F1, isDefault = true),
+    PGA("pga", MySport.GOLF, EspnLeagueMap.PGA, isDefault = true),
+    LPGA("lpga", MySport.GOLF, EspnLeagueMap.LPGA, isDefault = true);
 
     /** True when [event] is a game of this league: its feed, or for soccer its slug / competition name. */
     fun covers(event: ScoreSnapshot): Boolean {
@@ -85,7 +96,8 @@ enum class MyLeague(
 
 /**
  * The sports (and, optionally, leagues) of one profile. A sport mapped to an empty set stands for its
- * [MySport.defaultLeagues] (soccer: every competition). An empty selection is the default: every sport.
+ * [MySport.defaultLeagues] (soccer: every competition). An empty selection is the default: every sport,
+ * individual ones included; a profile that picked its sports has an individual sport only once picked.
  */
 data class MySports(val sports: Map<MySport, Set<MyLeague>>) {
 
@@ -94,7 +106,7 @@ data class MySports(val sports: Map<MySport, Set<MyLeague>>) {
 
     /** The sports in effect, in [MySport] order. */
     val effectiveSports: List<MySport>
-        get() = if (isDefault) MySport.entries.filter { it.kind == SportKind.TEAM } else MySport.entries.filter { it in sports }
+        get() = if (isDefault) MySport.entries else MySport.entries.filter { it in sports }
 
     /** The leagues named for [sport]: empty when it uses its defaults (or is not picked). */
     fun namedLeagues(sport: MySport): Set<MyLeague> = sports[sport].orEmpty()
@@ -105,7 +117,8 @@ data class MySports(val sports: Map<MySport, Set<MyLeague>>) {
 
     /**
      * The ESPN feeds a Results day fetches: `soccer/all` once when soccer is in, then each non-soccer
-     * league in effect (NBA, NFL, NHL, MLB by default; college only when picked).
+     * league in effect (NBA, NFL, NHL, MLB, ATP, WTA, UFC, F1, PGA, LPGA by default; college only when
+     * picked). A sport not in effect is never requested.
      */
     fun feeds(): List<EspnLeague> {
         val soccer = if (MySport.SOCCER in effectiveSports) listOf(EspnLeagueMap.SOCCER_ALL) else emptyList()

@@ -47,10 +47,13 @@ class SportsResultsTest {
     // --- Relevant leagues ---
 
     @Test
-    fun `relevant leagues come from My sports, default soccer all once plus NBA NFL NHL MLB`() {
+    fun `relevant leagues come from My sports, default soccer all once plus NBA NFL NHL MLB and the individual sports`() {
         val relevant = SportsResults.relevantLeagues(MySports.DEFAULT, emptyList())
         assertEquals(
-            listOf(EspnLeagueMap.SOCCER_ALL, EspnLeagueMap.NBA, EspnLeagueMap.NFL, EspnLeagueMap.NHL, EspnLeagueMap.MLB),
+            listOf(
+                EspnLeagueMap.SOCCER_ALL, EspnLeagueMap.NBA, EspnLeagueMap.NFL, EspnLeagueMap.NHL, EspnLeagueMap.MLB,
+                EspnLeagueMap.ATP, EspnLeagueMap.WTA, EspnLeagueMap.UFC, EspnLeagueMap.F1, EspnLeagueMap.PGA, EspnLeagueMap.LPGA
+            ),
             relevant.leagues
         )
     }
@@ -214,5 +217,38 @@ class SportsResultsTest {
             item("NBA TV [Lakers vs Suns]", "2026-11-15T21:00:00Z", isChannel = true, kind = SportsLiveKind.CHANNELS)
         )
         assertTrue(SportsResults.replaysByEvent(nba, nov15, replays, now).isEmpty())
+    }
+
+    // --- Individual sports (#55 part 2) ---
+
+    private fun individual(file: String, league: EspnLeague, date: LocalDate) = EspnIndividualResults.toSnapshots(
+        EspnFixtures.moshi.adapter(EspnScoreboardDto::class.java).fromJson(EspnFixtures.json(file))!!, league, date
+    )
+
+    @Test
+    fun `an individual result never gets a replay, even one naming both players at the exact time`() {
+        val nov16 = LocalDate.of(2026, 11, 16)
+        val match = individual("espn_tennis_atp_20261116.json", EspnLeagueMap.ATP, nov16).single { it.eventId == "tennis:187512" }
+        // Even if a match ever carried its players as sides, it is never matched.
+        val named = match.copy(
+            home = match.home.copy(displayName = "Daniil Medvedev", name = "Medvedev"),
+            away = match.away.copy(displayName = "Flavio Cobolli", name = "Cobolli")
+        )
+        val replay = item("Daniil Medvedev vs Flavio Cobolli", "2026-11-16T19:55:00Z", sport = "Tennis")
+        assertTrue(SportsResults.replaysByEvent(listOf(match, named), nov16, listOf(replay), now).isEmpty())
+        // Team games of the same day still match as before.
+        val knicks = item("New York Knicks vs Toronto Raptors", "2026-11-15T00:00:00Z", timed = false)
+        assertEquals(setOf("401909990"), SportsResults.replaysByEvent(nba + match, nov15, listOf(knicks), now).keys)
+    }
+
+    @Test
+    fun `a UFC card lists its main event first, and no individual result is a followed team's`() {
+        val card = individual("espn_ufc_20261114.json", EspnLeagueMap.UFC, LocalDate.of(2026, 11, 14))
+        val rows = SportsResults.rows(card, listOf(FollowedTeam("Ciryl Gane", "MMA"), FollowedTeam("Gane", null)))
+        assertEquals("mma:401913646", rows.first().event.eventId)
+        assertEquals((0 until card.size).toList(), rows.map { (it.event.individual as Fight).bout })
+        assertTrue(rows.none { it.followed })
+        val groups = SportsResults.groups(rows)
+        assertEquals(listOf("UFC 334: Gane vs. Hokit"), groups.map { it.name })
     }
 }

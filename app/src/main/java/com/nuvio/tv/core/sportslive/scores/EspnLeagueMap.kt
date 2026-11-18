@@ -20,6 +20,14 @@ object EspnLeagueMap {
     val COLLEGE_BASKETBALL = EspnLeague("basketball", "mens-college-basketball")
     val SOCCER_ALL = EspnLeague("soccer", "all")
 
+    // Individual sports (#55 part 2): Results only, never routed from a card (see EXCLUDED).
+    val ATP = EspnLeague("tennis", "atp")
+    val WTA = EspnLeague("tennis", "wta")
+    val UFC = EspnLeague("mma", "ufc")
+    val F1 = EspnLeague("racing", "f1")
+    val PGA = EspnLeague("golf", "pga")
+    val LPGA = EspnLeague("golf", "lpga")
+
     private fun soccer(vararg slugs: String) = slugs.map { EspnLeague("soccer", it) }
 
     private val WORLD_CUP_QUALIFIERS = listOf(

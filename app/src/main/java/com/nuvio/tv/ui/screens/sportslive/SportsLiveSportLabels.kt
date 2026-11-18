@@ -15,6 +15,10 @@ internal fun mySportLabel(sport: MySport): String = stringResource(
         MySport.HOCKEY -> R.string.sports_live_results_sport_hockey
         MySport.BASEBALL -> R.string.sports_live_results_sport_baseball
         MySport.SOCCER -> R.string.sports_live_results_sport_soccer
+        MySport.TENNIS -> R.string.sports_live_results_sport_tennis
+        MySport.MMA -> R.string.sports_live_results_sport_mma
+        MySport.MOTORSPORT -> R.string.sports_live_results_sport_motorsport
+        MySport.GOLF -> R.string.sports_live_results_sport_golf
     }
 )
 
@@ -38,5 +42,11 @@ internal fun myLeagueLabel(league: MyLeague): String = stringResource(
         MyLeague.SERIE_A -> R.string.sports_live_league_serie_a
         MyLeague.LIGUE_1 -> R.string.sports_live_league_ligue_1
         MyLeague.MLS -> R.string.sports_live_league_mls
+        MyLeague.ATP -> R.string.sports_live_league_atp
+        MyLeague.WTA -> R.string.sports_live_league_wta
+        MyLeague.UFC -> R.string.sports_live_league_ufc
+        MyLeague.F1 -> R.string.sports_live_league_f1
+        MyLeague.PGA -> R.string.sports_live_league_pga
+        MyLeague.LPGA -> R.string.sports_live_league_lpga
     }
 )

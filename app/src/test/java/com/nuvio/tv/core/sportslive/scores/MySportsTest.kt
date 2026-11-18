@@ -14,7 +14,7 @@ class MySportsTest {
     private val women = EspnFixtures.events(EspnFixtures.SOCCER_ALL_WOMEN_20261108, EspnLeagueMap.SOCCER_ALL)
 
     @Test
-    fun `nothing picked is every team sport with its default leagues`() {
+    fun `nothing picked is every sport with its default leagues`() {
         val default = MySports.decode(null)
         assertTrue(default.isDefault)
         assertEquals(MySport.entries.toList(), default.effectiveSports)
@@ -27,29 +27,50 @@ class MySportsTest {
 
     @Test
     fun `tokens round trip, a league brings its sport and unknown tokens are skipped`() {
-        val sports = MySports.decode(setOf("basketball/college-basketball", "soccer", "soccer/eng.1", "tennis", "tennis/atp", "x/y"))
-        assertEquals(listOf(MySport.BASKETBALL, MySport.SOCCER), sports.effectiveSports)
+        val sports = MySports.decode(setOf("basketball/college-basketball", "soccer", "soccer/eng.1", "golf/lpga", "cricket", "cricket/ipl", "x/y"))
+        assertEquals(listOf(MySport.BASKETBALL, MySport.SOCCER, MySport.GOLF), sports.effectiveSports)
         assertEquals(setOf(MyLeague.COLLEGE_BASKETBALL), sports.leaguesOf(MySport.BASKETBALL))
         assertEquals(setOf(MyLeague.PREMIER_LEAGUE), sports.leaguesOf(MySport.SOCCER))
+        assertEquals(setOf(MyLeague.LPGA), sports.leaguesOf(MySport.GOLF))
         assertEquals(sports, MySports.decode(sports.encode()))
         assertEquals(
-            setOf("basketball", "basketball/college-basketball", "soccer", "soccer/eng.1"),
+            setOf("basketball", "basketball/college-basketball", "soccer", "soccer/eng.1", "golf", "golf/lpga"),
             sports.encode()
         )
     }
 
     @Test
-    fun `the model has room for individual sports`() {
-        assertTrue(MySport.entries.all { it.kind == SportKind.TEAM })
-        // Defaults list team sports only, so an individual sport added later is opt-in.
-        assertEquals(MySport.entries.filter { it.kind == SportKind.TEAM }, MySports.DEFAULT.effectiveSports)
+    fun `individual sports - in by default, only when picked once My sports is set`() {
+        val individual = MySport.entries.filter { it.kind == SportKind.INDIVIDUAL }
+        assertEquals(listOf(MySport.TENNIS, MySport.MMA, MySport.MOTORSPORT, MySport.GOLF), individual)
+        assertTrue(MySports.DEFAULT.effectiveSports.containsAll(individual))
+        assertEquals(setOf(MyLeague.ATP, MyLeague.WTA), MySports.DEFAULT.leaguesOf(MySport.TENNIS))
+        assertEquals(setOf(MyLeague.PGA, MyLeague.LPGA), MySports.DEFAULT.leaguesOf(MySport.GOLF))
+        // A profile that picked its sports before they existed does not get them.
+        val picked = MySports.decode(setOf("basketball", "soccer"))
+        assertTrue(picked.effectiveSports.none { it.kind == SportKind.INDIVIDUAL })
+        assertEquals(listOf(EspnLeagueMap.SOCCER_ALL, EspnLeagueMap.NBA), picked.feeds())
+        // Picked: its own feeds only; WTA off leaves ATP.
+        val tennis = picked.toggleSport(MySport.TENNIS)
+        assertEquals(listOf(EspnLeagueMap.SOCCER_ALL, EspnLeagueMap.NBA, EspnLeagueMap.ATP, EspnLeagueMap.WTA), tennis.feeds())
+        assertEquals(listOf(EspnLeagueMap.SOCCER_ALL, EspnLeagueMap.NBA, EspnLeagueMap.ATP), tennis.toggleLeague(MyLeague.WTA).feeds())
+        assertEquals(setOf("basketball", "soccer", "tennis"), tennis.encode())
     }
 
     @Test
     fun `switching sports on and off keeps the last one on`() {
         val noSoccer = MySports.DEFAULT.toggleSport(MySport.SOCCER)
-        assertEquals(listOf(MySport.BASKETBALL, MySport.FOOTBALL, MySport.HOCKEY, MySport.BASEBALL), noSoccer.effectiveSports)
-        assertEquals(listOf(EspnLeagueMap.NBA, EspnLeagueMap.NFL, EspnLeagueMap.NHL, EspnLeagueMap.MLB), noSoccer.feeds())
+        assertEquals(
+            listOf(MySport.BASKETBALL, MySport.FOOTBALL, MySport.HOCKEY, MySport.BASEBALL, MySport.TENNIS, MySport.MMA, MySport.MOTORSPORT, MySport.GOLF),
+            noSoccer.effectiveSports
+        )
+        assertEquals(
+            listOf(
+                EspnLeagueMap.NBA, EspnLeagueMap.NFL, EspnLeagueMap.NHL, EspnLeagueMap.MLB,
+                EspnLeagueMap.ATP, EspnLeagueMap.WTA, EspnLeagueMap.UFC, EspnLeagueMap.F1, EspnLeagueMap.PGA, EspnLeagueMap.LPGA
+            ),
+            noSoccer.feeds()
+        )
         val hockey = MySports.decode(setOf("hockey"))
         assertSame(hockey, hockey.toggleSport(MySport.HOCKEY))
         assertEquals(listOf(MySport.HOCKEY, MySport.SOCCER), hockey.toggleSport(MySport.SOCCER).effectiveSports)

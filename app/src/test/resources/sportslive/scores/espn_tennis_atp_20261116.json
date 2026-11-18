@@ -1,0 +1,781 @@
+{
+ "_note": "Trimmed real ESPN tennis/atp scoreboard ?dates=20261116 (Nitto ATP Finals; some matches kept, links/flags dropped).",
+ "leagues": [
+  {
+   "id": "851",
+   "uid": "s:850~l:851",
+   "name": "ATP",
+   "abbreviation": "ATP",
+   "slug": "atp"
+  }
+ ],
+ "events": [
+  {
+   "id": "339-2026",
+   "uid": "s:850~l:851~e:339-2026",
+   "date": "2026-11-15T05:00Z",
+   "endDate": "2026-11-23T04:59Z",
+   "major": false,
+   "name": "Nitto ATP Finals",
+   "shortName": "Nitto ATP Finals",
+   "groupings": [
+    {
+     "grouping": {
+      "id": "3",
+      "slug": "mens-doubles",
+      "displayName": "Men's Doubles"
+     },
+     "competitions": [
+      {
+       "id": "187517",
+       "uid": "s:850~l:851~e:339-2026~c:187517",
+       "date": "2026-11-15T10:40Z",
+       "startDate": "2026-11-15T10:40Z",
+       "timeValid": true,
+       "status": {
+        "period": 3,
+        "type": {
+         "id": "3",
+         "name": "STATUS_FINAL",
+         "state": "post",
+         "completed": true,
+         "description": "Final",
+         "detail": "Final",
+         "shortDetail": "Final"
+        }
+       },
+       "notes": [
+        {
+         "text": "(1) Harri Heliovaara (FIN) & Henry Patten (GBR) bt (8) Orlando Luz (BRA) & Rafael Matos (BRA) 6-3 5-7 1-0 (10-4)",
+         "type": "event"
+        }
+       ],
+       "competitors": [
+        {
+         "id": "2725-2434",
+         "uid": "s:850~l:851~t:2725-2434",
+         "type": "team",
+         "order": 2,
+         "homeAway": "away",
+         "winner": false,
+         "linescores": [
+          {
+           "value": 3.0,
+           "winner": false
+          },
+          {
+           "value": 7.0,
+           "winner": true
+          },
+          {
+           "value": 0.0,
+           "tiebreak": 4,
+           "winner": false
+          }
+         ],
+         "roster": {
+          "displayName": "Orlando Luz / Rafael Matos",
+          "shortDisplayName": "O. Luz / R. Matos"
+         }
+        },
+        {
+         "id": "3540-10685",
+         "uid": "s:850~l:851~t:3540-10685",
+         "type": "team",
+         "order": 1,
+         "homeAway": "home",
+         "winner": true,
+         "linescores": [
+          {
+           "value": 6.0,
+           "winner": true
+          },
+          {
+           "value": 5.0,
+           "winner": false
+          },
+          {
+           "value": 1.0,
+           "tiebreak": 10,
+           "winner": true
+          }
+         ],
+         "roster": {
+          "displayName": "Harri Heliovaara / Henry Patten",
+          "shortDisplayName": "H. Heliovaara / H. Patten"
+         }
+        }
+       ],
+       "tournamentId": 339,
+       "type": {
+        "id": "3",
+        "text": "Men's Doubles",
+        "slug": "mens-doubles"
+       },
+       "round": {
+        "id": "15",
+        "displayName": "Group Stage"
+       },
+       "wasSuspended": false
+      },
+      {
+       "id": "187524",
+       "uid": "s:850~l:851~e:339-2026~c:187524",
+       "date": "2026-11-16T10:40Z",
+       "startDate": "2026-11-16T10:40Z",
+       "timeValid": true,
+       "status": {
+        "period": 2,
+        "type": {
+         "id": "3",
+         "name": "STATUS_FINAL",
+         "state": "post",
+         "completed": true,
+         "description": "Final",
+         "detail": "Final",
+         "shortDetail": "Final"
+        }
+       },
+       "notes": [
+        {
+         "text": "(3) Marcel Granollers (ESP) & Horacio Zeballos (ARG) bt (5) Simone Bolelli (ITA) & Andrea Vavassori (ITA) 6-4 6-4",
+         "type": "event"
+        }
+       ],
+       "competitors": [
+        {
+         "id": "279-3548",
+         "uid": "s:850~l:851~t:279-3548",
+         "type": "team",
+         "order": 2,
+         "homeAway": "away",
+         "winner": false,
+         "linescores": [
+          {
+           "value": 4.0,
+           "winner": false
+          },
+          {
+           "value": 4.0,
+           "winner": false
+          }
+         ],
+         "roster": {
+          "displayName": "Simone Bolelli / Andrea Vavassori",
+          "shortDisplayName": "S. Bolelli / A. Vavassori"
+         }
+        },
+        {
+         "id": "698-1513",
+         "uid": "s:850~l:851~t:698-1513",
+         "type": "team",
+         "order": 1,
+         "homeAway": "home",
+         "winner": true,
+         "linescores": [
+          {
+           "value": 6.0,
+           "winner": true
+          },
+          {
+           "value": 6.0,
+           "winner": true
+          }
+         ],
+         "roster": {
+          "displayName": "Marcel Granollers / Horacio Zeballos",
+          "shortDisplayName": "M. Granollers / H. Zeballos"
+         }
+        }
+       ],
+       "tournamentId": 339,
+       "type": {
+        "id": "3",
+        "text": "Men's Doubles",
+        "slug": "mens-doubles"
+       },
+       "round": {
+        "id": "15",
+        "displayName": "Group Stage"
+       },
+       "wasSuspended": false
+      },
+      {
+       "id": "187530",
+       "uid": "s:850~l:851~e:339-2026~c:187530",
+       "date": "2026-11-21T05:00Z",
+       "startDate": "2026-11-21T05:00Z",
+       "timeValid": false,
+       "status": {
+        "period": 1,
+        "type": {
+         "id": "1",
+         "name": "STATUS_SCHEDULED",
+         "state": "pre",
+         "completed": false,
+         "description": "Scheduled",
+         "detail": "M/d - 'TBD'",
+         "shortDetail": "TBD"
+        }
+       },
+       "notes": [],
+       "competitors": [
+        {
+         "id": "-4",
+         "uid": "s:850~l:851~a:-4",
+         "type": "athlete",
+         "order": 2,
+         "homeAway": "away",
+         "athlete": {
+          "displayName": "TBD",
+          "shortName": "TBD",
+          "fullName": "TBD"
+         }
+        },
+        {
+         "id": "-3",
+         "uid": "s:850~l:851~a:-3",
+         "type": "athlete",
+         "order": 1,
+         "homeAway": "home",
+         "athlete": {
+          "displayName": "TBD",
+          "shortName": "TBD",
+          "fullName": "TBD"
+         }
+        }
+       ],
+       "tournamentId": 339,
+       "type": {
+        "id": "3",
+        "text": "Men's Doubles",
+        "slug": "mens-doubles"
+       },
+       "round": {
+        "id": "6",
+        "displayName": "Semifinal"
+       },
+       "wasSuspended": false
+      }
+     ]
+    },
+    {
+     "grouping": {
+      "id": "1",
+      "slug": "mens-singles",
+      "displayName": "Men's Singles"
+     },
+     "competitions": [
+      {
+       "id": "187505",
+       "uid": "s:850~l:851~e:339-2026~c:187505",
+       "date": "2026-11-15T13:25Z",
+       "startDate": "2026-11-15T13:25Z",
+       "timeValid": true,
+       "status": {
+        "period": 2,
+        "type": {
+         "id": "3",
+         "name": "STATUS_FINAL",
+         "state": "post",
+         "completed": true,
+         "description": "Final",
+         "detail": "Final",
+         "shortDetail": "Final"
+        }
+       },
+       "notes": [
+        {
+         "text": "(1) Alexander Zverev (GER) bt (8) Rafael Jodar (ESP) 6-4 6-4",
+         "type": "event"
+        }
+       ],
+       "competitors": [
+        {
+         "id": "12657",
+         "uid": "s:850~l:851~a:12657",
+         "type": "athlete",
+         "order": 2,
+         "homeAway": "away",
+         "winner": false,
+         "linescores": [
+          {
+           "value": 4.0,
+           "winner": false
+          },
+          {
+           "value": 4.0,
+           "winner": false
+          }
+         ],
+         "athlete": {
+          "displayName": "Rafael Jodar",
+          "shortName": "R. Jodar",
+          "fullName": "Rafael Jodar"
+         }
+        },
+        {
+         "id": "2375",
+         "uid": "s:850~l:851~a:2375",
+         "type": "athlete",
+         "order": 1,
+         "homeAway": "home",
+         "winner": true,
+         "linescores": [
+          {
+           "value": 6.0,
+           "winner": true
+          },
+          {
+           "value": 6.0,
+           "winner": true
+          }
+         ],
+         "athlete": {
+          "displayName": "Alexander Zverev",
+          "shortName": "A. Zverev",
+          "fullName": "Alexander Zverev"
+         }
+        }
+       ],
+       "tournamentId": 339,
+       "type": {
+        "id": "1",
+        "text": "Men's Singles",
+        "slug": "mens-singles"
+       },
+       "round": {
+        "id": "15",
+        "displayName": "Group Stage"
+       },
+       "wasSuspended": false
+      },
+      {
+       "id": "187506",
+       "uid": "s:850~l:851~e:339-2026~c:187506",
+       "date": "2026-11-15T19:40Z",
+       "startDate": "2026-11-15T19:40Z",
+       "timeValid": true,
+       "status": {
+        "period": 3,
+        "type": {
+         "id": "3",
+         "name": "STATUS_FINAL",
+         "state": "post",
+         "completed": true,
+         "description": "Final",
+         "detail": "Final",
+         "shortDetail": "Final"
+        }
+       },
+       "notes": [
+        {
+         "text": "(3) Ben Shelton (USA) bt (6) Arthur Fils (FRA) 6-2 3-6 6-3",
+         "type": "event"
+        }
+       ],
+       "competitors": [
+        {
+         "id": "10052",
+         "uid": "s:850~l:851~a:10052",
+         "type": "athlete",
+         "order": 2,
+         "homeAway": "away",
+         "winner": false,
+         "linescores": [
+          {
+           "value": 2.0,
+           "winner": false
+          },
+          {
+           "value": 6.0,
+           "winner": true
+          },
+          {
+           "value": 3.0,
+           "winner": false
+          }
+         ],
+         "athlete": {
+          "displayName": "Arthur Fils",
+          "shortName": "A. Fils",
+          "fullName": "Arthur Fils"
+         }
+        },
+        {
+         "id": "9250",
+         "uid": "s:850~l:851~a:9250",
+         "type": "athlete",
+         "order": 1,
+         "homeAway": "home",
+         "winner": true,
+         "linescores": [
+          {
+           "value": 6.0,
+           "winner": true
+          },
+          {
+           "value": 3.0,
+           "winner": false
+          },
+          {
+           "value": 6.0,
+           "winner": true
+          }
+         ],
+         "athlete": {
+          "displayName": "Ben Shelton",
+          "shortName": "B. Shelton",
+          "fullName": "Ben Shelton"
+         }
+        }
+       ],
+       "tournamentId": 339,
+       "type": {
+        "id": "1",
+        "text": "Men's Singles",
+        "slug": "mens-singles"
+       },
+       "round": {
+        "id": "15",
+        "displayName": "Group Stage"
+       },
+       "wasSuspended": false
+      },
+      {
+       "id": "187511",
+       "uid": "s:850~l:851~e:339-2026~c:187511",
+       "date": "2026-11-16T13:10Z",
+       "startDate": "2026-11-16T13:10Z",
+       "timeValid": true,
+       "status": {
+        "period": 2,
+        "type": {
+         "id": "3",
+         "name": "STATUS_FINAL",
+         "state": "post",
+         "completed": true,
+         "description": "Final",
+         "detail": "Final",
+         "shortDetail": "Final"
+        }
+       },
+       "notes": [
+        {
+         "text": "(2) Carlos Alcaraz (ESP) bt (7) Frances Tiafoe (USA) 6-2 6-2",
+         "type": "event"
+        }
+       ],
+       "competitors": [
+        {
+         "id": "2708",
+         "uid": "s:850~l:851~a:2708",
+         "type": "athlete",
+         "order": 2,
+         "homeAway": "away",
+         "winner": false,
+         "linescores": [
+          {
+           "value": 2.0,
+           "winner": false
+          },
+          {
+           "value": 2.0,
+           "winner": false
+          }
+         ],
+         "athlete": {
+          "displayName": "Frances Tiafoe",
+          "shortName": "F. Tiafoe",
+          "fullName": "Frances Tiafoe"
+         }
+        },
+        {
+         "id": "3782",
+         "uid": "s:850~l:851~a:3782",
+         "type": "athlete",
+         "order": 1,
+         "homeAway": "home",
+         "winner": true,
+         "linescores": [
+          {
+           "value": 6.0,
+           "winner": true
+          },
+          {
+           "value": 6.0,
+           "winner": true
+          }
+         ],
+         "athlete": {
+          "displayName": "Carlos Alcaraz",
+          "shortName": "C. Alcaraz",
+          "fullName": "Carlos Alcaraz"
+         }
+        }
+       ],
+       "tournamentId": 339,
+       "type": {
+        "id": "1",
+        "text": "Men's Singles",
+        "slug": "mens-singles"
+       },
+       "round": {
+        "id": "15",
+        "displayName": "Group Stage"
+       },
+       "wasSuspended": false
+      },
+      {
+       "id": "187512",
+       "uid": "s:850~l:851~e:339-2026~c:187512",
+       "date": "2026-11-16T19:55Z",
+       "startDate": "2026-11-16T19:55Z",
+       "timeValid": true,
+       "status": {
+        "period": 2,
+        "type": {
+         "id": "3",
+         "name": "STATUS_FINAL",
+         "state": "post",
+         "completed": true,
+         "description": "Final",
+         "detail": "Final",
+         "shortDetail": "Final"
+        }
+       },
+       "notes": [
+        {
+         "text": "(4) Daniil Medvedev (RUS) bt (5) Flavio Cobolli (ITA) 7-6 (7-4) 6-3",
+         "type": "event"
+        }
+       ],
+       "competitors": [
+        {
+         "id": "7602",
+         "uid": "s:850~l:851~a:7602",
+         "type": "athlete",
+         "order": 2,
+         "homeAway": "away",
+         "winner": false,
+         "linescores": [
+          {
+           "value": 6.0,
+           "tiebreak": 4,
+           "winner": false
+          },
+          {
+           "value": 3.0,
+           "winner": false
+          }
+         ],
+         "athlete": {
+          "displayName": "Flavio Cobolli",
+          "shortName": "F. Cobolli",
+          "fullName": "Flavio Cobolli"
+         }
+        },
+        {
+         "id": "2383",
+         "uid": "s:850~l:851~a:2383",
+         "type": "athlete",
+         "order": 1,
+         "homeAway": "home",
+         "winner": true,
+         "linescores": [
+          {
+           "value": 7.0,
+           "tiebreak": 7,
+           "winner": true
+          },
+          {
+           "value": 6.0,
+           "winner": true
+          }
+         ],
+         "athlete": {
+          "displayName": "Daniil Medvedev",
+          "shortName": "D. Medvedev",
+          "fullName": "Daniil Medvedev"
+         }
+        }
+       ],
+       "tournamentId": 339,
+       "type": {
+        "id": "1",
+        "text": "Men's Singles",
+        "slug": "mens-singles"
+       },
+       "round": {
+        "id": "15",
+        "displayName": "Group Stage"
+       },
+       "wasSuspended": false
+      },
+      {
+       "id": "187508",
+       "uid": "s:850~l:851~e:339-2026~c:187508",
+       "date": "2026-11-17T13:10Z",
+       "startDate": "2026-11-17T13:10Z",
+       "timeValid": true,
+       "status": {
+        "period": 3,
+        "type": {
+         "id": "3",
+         "name": "STATUS_FINAL",
+         "state": "post",
+         "completed": true,
+         "description": "Final",
+         "detail": "Final",
+         "shortDetail": "Final"
+        }
+       },
+       "notes": [
+        {
+         "text": "(6) Arthur Fils (FRA) bt (8) Rafael Jodar (ESP) 4-6 6-2 6-2",
+         "type": "event"
+        }
+       ],
+       "competitors": [
+        {
+         "id": "12657",
+         "uid": "s:850~l:851~a:12657",
+         "type": "athlete",
+         "order": 2,
+         "homeAway": "away",
+         "winner": false,
+         "linescores": [
+          {
+           "value": 6.0,
+           "winner": true
+          },
+          {
+           "value": 2.0,
+           "winner": false
+          },
+          {
+           "value": 2.0,
+           "winner": false
+          }
+         ],
+         "athlete": {
+          "displayName": "Rafael Jodar",
+          "shortName": "R. Jodar",
+          "fullName": "Rafael Jodar"
+         }
+        },
+        {
+         "id": "10052",
+         "uid": "s:850~l:851~a:10052",
+         "type": "athlete",
+         "order": 1,
+         "homeAway": "home",
+         "winner": true,
+         "linescores": [
+          {
+           "value": 4.0,
+           "winner": false
+          },
+          {
+           "value": 6.0,
+           "winner": true
+          },
+          {
+           "value": 6.0,
+           "winner": true
+          }
+         ],
+         "athlete": {
+          "displayName": "Arthur Fils",
+          "shortName": "A. Fils",
+          "fullName": "Arthur Fils"
+         }
+        }
+       ],
+       "tournamentId": 339,
+       "type": {
+        "id": "1",
+        "text": "Men's Singles",
+        "slug": "mens-singles"
+       },
+       "round": {
+        "id": "15",
+        "displayName": "Group Stage"
+       },
+       "wasSuspended": false
+      },
+      {
+       "id": "187509",
+       "uid": "s:850~l:851~e:339-2026~c:187509",
+       "date": "2026-11-18T13:00Z",
+       "startDate": "2026-11-18T13:00Z",
+       "timeValid": true,
+       "status": {
+        "period": 1,
+        "type": {
+         "id": "1",
+         "name": "STATUS_SCHEDULED",
+         "state": "pre",
+         "completed": false,
+         "description": "Scheduled",
+         "detail": "Wed, November 18th at 8:00 AM EST",
+         "shortDetail": "11/18 - 8:00 AM EST"
+        }
+       },
+       "notes": [],
+       "competitors": [
+        {
+         "id": "2383",
+         "uid": "s:850~l:851~a:2383",
+         "type": "athlete",
+         "order": 2,
+         "homeAway": "away",
+         "athlete": {
+          "displayName": "Daniil Medvedev",
+          "shortName": "D. Medvedev",
+          "fullName": "Daniil Medvedev"
+         }
+        },
+        {
+         "id": "3782",
+         "uid": "s:850~l:851~a:3782",
+         "type": "athlete",
+         "order": 1,
+         "homeAway": "home",
+         "athlete": {
+          "displayName": "Carlos Alcaraz",
+          "shortName": "C. Alcaraz",
+          "fullName": "Carlos Alcaraz"
+         }
+        }
+       ],
+       "tournamentId": 339,
+       "type": {
+        "id": "1",
+        "text": "Men's Singles",
+        "slug": "mens-singles"
+       },
+       "round": {
+        "id": "15",
+        "displayName": "Group Stage"
+       },
+       "wasSuspended": false
+      }
+     ]
+    }
+   ],
+   "status": {
+    "period": 3,
+    "type": {
+     "id": "3",
+     "name": "STATUS_FINAL",
+     "state": "post",
+     "completed": true,
+     "description": "Final",
+     "detail": "Final",
+     "shortDetail": "Final"
+    }
+   }
+  }
+ ]
+}

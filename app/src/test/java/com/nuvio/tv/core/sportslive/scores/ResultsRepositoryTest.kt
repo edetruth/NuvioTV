@@ -51,15 +51,41 @@ class ResultsRepositoryTest {
     }
 
     @Test
-    fun `by default a day fetches soccer all once plus NBA NFL NHL MLB, and nothing more`() = runTest {
+    fun `by default a day fetches soccer all once plus NBA NFL NHL MLB and the individual sports, and nothing more`() = runTest {
         val repo = repository()
         repo.load(1)
         assertEquals(
-            listOf(EspnLeagueMap.SOCCER_ALL, EspnLeagueMap.NBA, EspnLeagueMap.NFL, EspnLeagueMap.NHL, EspnLeagueMap.MLB).map { ScoreFeed(it, nov15) }.toSet(),
+            listOf(
+                EspnLeagueMap.SOCCER_ALL, EspnLeagueMap.NBA, EspnLeagueMap.NFL, EspnLeagueMap.NHL, EspnLeagueMap.MLB,
+                EspnLeagueMap.ATP, EspnLeagueMap.WTA, EspnLeagueMap.UFC, EspnLeagueMap.F1, EspnLeagueMap.PGA, EspnLeagueMap.LPGA
+            ).map { ScoreFeed(it, nov15) }.toSet(),
             provider.calls.toSet()
         )
-        assertEquals(5, provider.calls.size)
+        assertEquals(11, provider.calls.size)
         assertTrue(provider.calls.none { it.league == EspnLeagueMap.COLLEGE_BASKETBALL })
+    }
+
+    @Test
+    fun `a set My sports requests no individual sport it did not pick`() = runTest {
+        mySports.value = MySports.decode(setOf("basketball", "soccer"))
+        repository().load(1)
+        assertEquals(setOf(EspnLeagueMap.SOCCER_ALL, EspnLeagueMap.NBA), provider.calls.map { it.league }.toSet())
+        assertTrue(provider.calls.none { EspnIndividualResults.covers(it.league) })
+    }
+
+    @Test
+    fun `a picked individual sport requests only its chosen leagues, and lists its results`() = runTest {
+        mySports.value = MySports.decode(setOf("golf/lpga", "mma"))
+        val lpga = EspnIndividualResults.toSnapshots(
+            EspnFixtures.moshi.adapter(EspnScoreboardDto::class.java).fromJson(EspnFixtures.json("espn_golf_lpga_20261115.json"))!!,
+            EspnLeagueMap.LPGA,
+            nov15
+        )
+        provider.respond = { feed -> ScoreboardResult(if (feed.league == EspnLeagueMap.LPGA) lpga else emptyList()) }
+        val loaded = repository().load(1) as ResultsLoad.Loaded
+        assertEquals(setOf(EspnLeagueMap.LPGA, EspnLeagueMap.UFC), provider.calls.map { it.league }.toSet())
+        assertEquals(listOf("golf:401835176"), loaded.rows.map { it.event.eventId })
+        assertTrue(loaded.rows.none { it.followed })
     }
 
     @Test

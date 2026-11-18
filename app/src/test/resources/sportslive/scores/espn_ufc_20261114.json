@@ -1,0 +1,1192 @@
+{
+ "_note": "Trimmed real ESPN mma/ufc scoreboard ?dates=20261114 (UFC 334; details kept only for the Unofficial Winner entries).",
+ "leagues": [
+  {
+   "id": "3321",
+   "uid": "s:3301~l:3321",
+   "name": "Ultimate Fighting Championship",
+   "abbreviation": "UFC",
+   "slug": "ufc"
+  }
+ ],
+ "events": [
+  {
+   "id": "600061400",
+   "uid": "s:3301~l:3321~e:600061400",
+   "date": "2026-11-14T22:00Z",
+   "name": "UFC 334: Gane vs. Hokit",
+   "shortName": "UFC 334",
+   "competitions": [
+    {
+     "id": "401932013",
+     "uid": "s:3301~l:3321~e:600061400~c:401932013",
+     "date": "2026-11-14T22:00Z",
+     "endDate": "2026-11-14T22:00Z",
+     "type": {
+      "id": "986",
+      "abbreviation": "Lightweight"
+     },
+     "timeValid": true,
+     "competitors": [
+      {
+       "id": "5037883",
+       "uid": "s:3301~a:5037883",
+       "type": "athlete",
+       "order": 1,
+       "winner": true,
+       "athlete": {
+        "displayName": "Evan Elder",
+        "shortName": "E. Elder",
+        "fullName": "Evan Elder"
+       },
+       "linescores": [
+        {
+         "value": 90.0,
+         "displayValue": "90.0",
+         "period": 0,
+         "linescores": [
+          {
+           "value": 30.0,
+           "displayValue": "30",
+           "period": 0
+          },
+          {
+           "value": 30.0,
+           "displayValue": "30",
+           "period": 0
+          },
+          {
+           "value": 30.0,
+           "displayValue": "30",
+           "period": 0
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "id": "5293557",
+       "uid": "s:3301~a:5293557",
+       "type": "athlete",
+       "order": 2,
+       "winner": false,
+       "athlete": {
+        "displayName": "Samuel Sanches",
+        "shortName": "S. Sanches",
+        "fullName": "Samuel Sanches"
+       },
+       "linescores": [
+        {
+         "value": 78.0,
+         "displayValue": "78.0",
+         "period": 0,
+         "linescores": [
+          {
+           "value": 26.0,
+           "displayValue": "26",
+           "period": 0
+          },
+          {
+           "value": 26.0,
+           "displayValue": "26",
+           "period": 0
+          },
+          {
+           "value": 26.0,
+           "displayValue": "26",
+           "period": 0
+          }
+         ]
+        }
+       ]
+      }
+     ],
+     "status": {
+      "clock": 300.0,
+      "displayClock": "5:00",
+      "period": 3,
+      "type": {
+       "id": "3",
+       "name": "STATUS_FINAL",
+       "state": "post",
+       "completed": true,
+       "description": "Final",
+       "detail": "Final",
+       "shortDetail": "Final"
+      },
+      "featured": false
+     },
+     "details": [
+      {
+       "type": {
+        "text": "Unofficial Winner Decision"
+       }
+      }
+     ],
+     "startDate": "2026-11-14T22:00Z"
+    },
+    {
+     "id": "401933936",
+     "uid": "s:3301~l:3321~e:600061400~c:401933936",
+     "date": "2026-11-14T22:00Z",
+     "endDate": "2026-11-14T22:00Z",
+     "type": {
+      "id": "970",
+      "abbreviation": "Bantamweight"
+     },
+     "timeValid": true,
+     "competitors": [
+      {
+       "id": "3154389",
+       "uid": "s:3301~a:3154389",
+       "type": "athlete",
+       "order": 1,
+       "winner": false,
+       "athlete": {
+        "displayName": "Alatengheili",
+        "shortName": "Alatengheili",
+        "fullName": "Alatengheili"
+       },
+       "linescores": [
+        {
+         "value": 81.0,
+         "displayValue": "81.0",
+         "period": 0,
+         "linescores": [
+          {
+           "value": 27.0,
+           "displayValue": "27",
+           "period": 0
+          },
+          {
+           "value": 27.0,
+           "displayValue": "27",
+           "period": 0
+          },
+          {
+           "value": 27.0,
+           "displayValue": "27",
+           "period": 0
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "id": "5310574",
+       "uid": "s:3301~a:5310574",
+       "type": "athlete",
+       "order": 2,
+       "winner": true,
+       "athlete": {
+        "displayName": "Juan Diaz",
+        "shortName": "J. Diaz",
+        "fullName": "Juan Diaz"
+       },
+       "linescores": [
+        {
+         "value": 90.0,
+         "displayValue": "90.0",
+         "period": 0,
+         "linescores": [
+          {
+           "value": 30.0,
+           "displayValue": "30",
+           "period": 0
+          },
+          {
+           "value": 30.0,
+           "displayValue": "30",
+           "period": 0
+          },
+          {
+           "value": 30.0,
+           "displayValue": "30",
+           "period": 0
+          }
+         ]
+        }
+       ]
+      }
+     ],
+     "status": {
+      "clock": 300.0,
+      "displayClock": "5:00",
+      "period": 3,
+      "type": {
+       "id": "3",
+       "name": "STATUS_FINAL",
+       "state": "post",
+       "completed": true,
+       "description": "Final",
+       "detail": "Final",
+       "shortDetail": "Final"
+      },
+      "featured": false
+     },
+     "details": [
+      {
+       "type": {
+        "text": "Unofficial Winner Decision"
+       }
+      }
+     ],
+     "startDate": "2026-11-14T22:00Z"
+    },
+    {
+     "id": "401922645",
+     "uid": "s:3301~l:3321~e:600061400~c:401922645",
+     "date": "2026-11-14T22:00Z",
+     "endDate": "2026-11-14T22:00Z",
+     "type": {
+      "id": "1003",
+      "abbreviation": "W Bantamweight"
+     },
+     "timeValid": true,
+     "competitors": [
+      {
+       "id": "4334306",
+       "uid": "s:3301~a:4334306",
+       "type": "athlete",
+       "order": 1,
+       "winner": false,
+       "athlete": {
+        "displayName": "Macy Chiasson",
+        "shortName": "M. Chiasson",
+        "fullName": "Macy Chiasson"
+       }
+      },
+      {
+       "id": "5310274",
+       "uid": "s:3301~a:5310274",
+       "type": "athlete",
+       "order": 2,
+       "winner": true,
+       "athlete": {
+        "displayName": "Bia Mesquita",
+        "shortName": "B. Mesquita",
+        "fullName": "Bia Mesquita"
+       }
+      }
+     ],
+     "status": {
+      "clock": 203.0,
+      "displayClock": "3:23",
+      "period": 1,
+      "type": {
+       "id": "3",
+       "name": "STATUS_FINAL",
+       "state": "post",
+       "completed": true,
+       "description": "Final",
+       "detail": "Final",
+       "shortDetail": "Final"
+      },
+      "featured": false
+     },
+     "details": [
+      {
+       "type": {
+        "text": "Unofficial Winner Submission"
+       }
+      }
+     ],
+     "startDate": "2026-11-14T22:00Z"
+    },
+    {
+     "id": "401931774",
+     "uid": "s:3301~l:3321~e:600061400~c:401931774",
+     "date": "2026-11-14T22:00Z",
+     "endDate": "2026-11-14T22:00Z",
+     "type": {
+      "id": "986",
+      "abbreviation": "Lightweight"
+     },
+     "timeValid": true,
+     "competitors": [
+      {
+       "id": "3894823",
+       "uid": "s:3301~a:3894823",
+       "type": "athlete",
+       "order": 1,
+       "winner": false,
+       "athlete": {
+        "displayName": "Jared Gordon",
+        "shortName": "J. Gordon",
+        "fullName": "Jared Gordon"
+       },
+       "linescores": [
+        {
+         "value": 84.0,
+         "displayValue": "84.0",
+         "period": 0,
+         "linescores": [
+          {
+           "value": 28.0,
+           "displayValue": "28",
+           "period": 0
+          },
+          {
+           "value": 28.0,
+           "displayValue": "28",
+           "period": 0
+          },
+          {
+           "value": 28.0,
+           "displayValue": "28",
+           "period": 0
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "id": "4425763",
+       "uid": "s:3301~a:4425763",
+       "type": "athlete",
+       "order": 2,
+       "winner": true,
+       "athlete": {
+        "displayName": "Melquizael Costa",
+        "shortName": "M. Costa",
+        "fullName": "Melquizael Costa"
+       },
+       "linescores": [
+        {
+         "value": 87.0,
+         "displayValue": "87.0",
+         "period": 0,
+         "linescores": [
+          {
+           "value": 29.0,
+           "displayValue": "29",
+           "period": 0
+          },
+          {
+           "value": 29.0,
+           "displayValue": "29",
+           "period": 0
+          },
+          {
+           "value": 29.0,
+           "displayValue": "29",
+           "period": 0
+          }
+         ]
+        }
+       ]
+      }
+     ],
+     "status": {
+      "clock": 300.0,
+      "displayClock": "5:00",
+      "period": 3,
+      "type": {
+       "id": "3",
+       "name": "STATUS_FINAL",
+       "state": "post",
+       "completed": true,
+       "description": "Final",
+       "detail": "Final",
+       "shortDetail": "Final"
+      },
+      "featured": false
+     },
+     "details": [
+      {
+       "type": {
+        "text": "Unofficial Winner Decision"
+       }
+      }
+     ],
+     "startDate": "2026-11-14T22:00Z"
+    },
+    {
+     "id": "401931773",
+     "uid": "s:3301~l:3321~e:600061400~c:401931773",
+     "date": "2026-11-15T00:00Z",
+     "endDate": "2026-11-15T00:00Z",
+     "type": {
+      "id": "1002",
+      "abbreviation": "Catch Weight"
+     },
+     "timeValid": true,
+     "competitors": [
+      {
+       "id": "5144068",
+       "uid": "s:3301~a:5144068",
+       "type": "athlete",
+       "order": 2,
+       "winner": true,
+       "athlete": {
+        "displayName": "Cesar Almeida",
+        "shortName": "C. Almeida",
+        "fullName": "Cesar Almeida"
+       }
+      },
+      {
+       "id": "5302831",
+       "uid": "s:3301~a:5302831",
+       "type": "athlete",
+       "order": 1,
+       "winner": false,
+       "athlete": {
+        "displayName": "Donte Johnson",
+        "shortName": "D. Johnson",
+        "fullName": "Donte Johnson"
+       }
+      }
+     ],
+     "status": {
+      "clock": 200.0,
+      "displayClock": "3:20",
+      "period": 1,
+      "type": {
+       "id": "3",
+       "name": "STATUS_FINAL",
+       "state": "post",
+       "completed": true,
+       "description": "Final",
+       "detail": "Final",
+       "shortDetail": "Final"
+      },
+      "featured": false
+     },
+     "details": [
+      {
+       "type": {
+        "text": "Unofficial Winner Kotko"
+       }
+      }
+     ],
+     "startDate": "2026-11-15T00:00Z"
+    },
+    {
+     "id": "401922643",
+     "uid": "s:3301~l:3321~e:600061400~c:401922643",
+     "date": "2026-11-15T00:00Z",
+     "endDate": "2026-11-15T00:00Z",
+     "type": {
+      "id": "986",
+      "abbreviation": "Lightweight"
+     },
+     "timeValid": true,
+     "competitors": [
+      {
+       "id": "2335718",
+       "uid": "s:3301~a:2335718",
+       "type": "athlete",
+       "order": 1,
+       "winner": false,
+       "athlete": {
+        "displayName": "Jim Miller",
+        "shortName": "J. Miller",
+        "fullName": "Jim Miller"
+       }
+      },
+      {
+       "id": "4425604",
+       "uid": "s:3301~a:4425604",
+       "type": "athlete",
+       "order": 2,
+       "winner": true,
+       "athlete": {
+        "displayName": "Terrance McKinney",
+        "shortName": "T. McKinney",
+        "fullName": "Terrance McKinney"
+       }
+      }
+     ],
+     "status": {
+      "clock": 113.0,
+      "displayClock": "1:53",
+      "period": 1,
+      "type": {
+       "id": "3",
+       "name": "STATUS_FINAL",
+       "state": "post",
+       "completed": true,
+       "description": "Final",
+       "detail": "Final",
+       "shortDetail": "Final"
+      },
+      "featured": false
+     },
+     "details": [
+      {
+       "type": {
+        "text": "Unofficial Winner Kotko"
+       }
+      }
+     ],
+     "startDate": "2026-11-15T00:00Z"
+    },
+    {
+     "id": "401922642",
+     "uid": "s:3301~l:3321~e:600061400~c:401922642",
+     "date": "2026-11-15T00:00Z",
+     "endDate": "2026-11-15T00:00Z",
+     "type": {
+      "id": "986",
+      "abbreviation": "Lightweight"
+     },
+     "timeValid": true,
+     "competitors": [
+      {
+       "id": "2951202",
+       "uid": "s:3301~a:2951202",
+       "type": "athlete",
+       "order": 1,
+       "winner": false,
+       "athlete": {
+        "displayName": "Drew Dober",
+        "shortName": "D. Dober",
+        "fullName": "Drew Dober"
+       },
+       "linescores": [
+        {
+         "value": 82.0,
+         "displayValue": "82.0",
+         "period": 0,
+         "linescores": [
+          {
+           "value": 28.0,
+           "displayValue": "28",
+           "period": 0
+          },
+          {
+           "value": 27.0,
+           "displayValue": "27",
+           "period": 0
+          },
+          {
+           "value": 27.0,
+           "displayValue": "27",
+           "period": 0
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "id": "4867356",
+       "uid": "s:3301~a:4867356",
+       "type": "athlete",
+       "order": 2,
+       "winner": true,
+       "athlete": {
+        "displayName": "Chris Duncan",
+        "shortName": "C. Duncan",
+        "fullName": "Chris Duncan"
+       },
+       "linescores": [
+        {
+         "value": 89.0,
+         "displayValue": "89.0",
+         "period": 0,
+         "linescores": [
+          {
+           "value": 29.0,
+           "displayValue": "29",
+           "period": 0
+          },
+          {
+           "value": 30.0,
+           "displayValue": "30",
+           "period": 0
+          },
+          {
+           "value": 30.0,
+           "displayValue": "30",
+           "period": 0
+          }
+         ]
+        }
+       ]
+      }
+     ],
+     "status": {
+      "clock": 300.0,
+      "displayClock": "5:00",
+      "period": 3,
+      "type": {
+       "id": "3",
+       "name": "STATUS_FINAL",
+       "state": "post",
+       "completed": true,
+       "description": "Final",
+       "detail": "Final",
+       "shortDetail": "Final"
+      },
+      "featured": false
+     },
+     "details": [
+      {
+       "type": {
+        "text": "Unofficial Winner Decision"
+       }
+      }
+     ],
+     "startDate": "2026-11-15T00:00Z"
+    },
+    {
+     "id": "401913647",
+     "uid": "s:3301~l:3321~e:600061400~c:401913647",
+     "date": "2026-11-15T00:00Z",
+     "endDate": "2026-11-15T00:00Z",
+     "type": {
+      "id": "969",
+      "abbreviation": "Welterweight"
+     },
+     "timeValid": true,
+     "competitors": [
+      {
+       "id": "2615077",
+       "uid": "s:3301~a:2615077",
+       "type": "athlete",
+       "order": 1,
+       "winner": true,
+       "athlete": {
+        "displayName": "Stephen Thompson",
+        "shortName": "S. Thompson",
+        "fullName": "Stephen Thompson"
+       }
+      },
+      {
+       "id": "4416297",
+       "uid": "s:3301~a:4416297",
+       "type": "athlete",
+       "order": 2,
+       "winner": false,
+       "athlete": {
+        "displayName": "Charles Radtke",
+        "shortName": "C. Radtke",
+        "fullName": "Charles Radtke"
+       }
+      }
+     ],
+     "status": {
+      "clock": 174.0,
+      "displayClock": "2:54",
+      "period": 3,
+      "type": {
+       "id": "3",
+       "name": "STATUS_FINAL",
+       "state": "post",
+       "completed": true,
+       "description": "Final",
+       "detail": "Final",
+       "shortDetail": "Final"
+      },
+      "featured": false
+     },
+     "details": [
+      {
+       "type": {
+        "text": "Unofficial Winner Kotko"
+       }
+      }
+     ],
+     "startDate": "2026-11-15T00:00Z"
+    },
+    {
+     "id": "401922641",
+     "uid": "s:3301~l:3321~e:600061400~c:401922641",
+     "date": "2026-11-15T02:00Z",
+     "endDate": "2026-11-15T02:00Z",
+     "type": {
+      "id": "956",
+      "abbreviation": "Flyweight"
+     },
+     "timeValid": true,
+     "competitors": [
+      {
+       "id": "5218137",
+       "uid": "s:3301~a:5218137",
+       "type": "athlete",
+       "order": 2,
+       "winner": true,
+       "athlete": {
+        "displayName": "Luis Gurule",
+        "shortName": "L. Gurule",
+        "fullName": "Luis Gurule"
+       },
+       "linescores": [
+        {
+         "value": 86.0,
+         "displayValue": "86.0",
+         "period": 0,
+         "linescores": [
+          {
+           "value": 29.0,
+           "displayValue": "29",
+           "period": 0
+          },
+          {
+           "value": 29.0,
+           "displayValue": "29",
+           "period": 0
+          },
+          {
+           "value": 28.0,
+           "displayValue": "28",
+           "period": 0
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "id": "5264405",
+       "uid": "s:3301~a:5264405",
+       "type": "athlete",
+       "order": 1,
+       "winner": false,
+       "athlete": {
+        "displayName": "Bilal Hasan",
+        "shortName": "B. Hasan",
+        "fullName": "Bilal Hasan"
+       },
+       "linescores": [
+        {
+         "value": 85.0,
+         "displayValue": "85.0",
+         "period": 0,
+         "linescores": [
+          {
+           "value": 28.0,
+           "displayValue": "28",
+           "period": 0
+          },
+          {
+           "value": 28.0,
+           "displayValue": "28",
+           "period": 0
+          },
+          {
+           "value": 29.0,
+           "displayValue": "29",
+           "period": 0
+          }
+         ]
+        }
+       ]
+      }
+     ],
+     "status": {
+      "clock": 300.0,
+      "displayClock": "5:00",
+      "period": 3,
+      "type": {
+       "id": "3",
+       "name": "STATUS_FINAL",
+       "state": "post",
+       "completed": true,
+       "description": "Final",
+       "detail": "Final",
+       "shortDetail": "Final"
+      },
+      "featured": false
+     },
+     "details": [
+      {
+       "type": {
+        "text": "Unofficial Winner Decision"
+       }
+      }
+     ],
+     "startDate": "2026-11-15T02:00Z"
+    },
+    {
+     "id": "401922640",
+     "uid": "s:3301~l:3321~e:600061400~c:401922640",
+     "date": "2026-11-15T02:00Z",
+     "endDate": "2026-11-15T02:00Z",
+     "type": {
+      "id": "969",
+      "abbreviation": "Welterweight"
+     },
+     "timeValid": true,
+     "competitors": [
+      {
+       "id": "3943695",
+       "uid": "s:3301~a:3943695",
+       "type": "athlete",
+       "order": 2,
+       "winner": false,
+       "athlete": {
+        "displayName": "Kevin Holland",
+        "shortName": "K. Holland",
+        "fullName": "Kevin Holland"
+       },
+       "linescores": [
+        {
+         "value": 83.0,
+         "displayValue": "83.0",
+         "period": 0,
+         "linescores": [
+          {
+           "value": 28.0,
+           "displayValue": "28",
+           "period": 0
+          },
+          {
+           "value": 28.0,
+           "displayValue": "28",
+           "period": 0
+          },
+          {
+           "value": 27.0,
+           "displayValue": "27",
+           "period": 0
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "id": "4685870",
+       "uid": "s:3301~a:4685870",
+       "type": "athlete",
+       "order": 1,
+       "winner": false,
+       "athlete": {
+        "displayName": "Uroš Medić",
+        "shortName": "U. Medić",
+        "fullName": "Uroš Medić"
+       },
+       "linescores": [
+        {
+         "value": 85.0,
+         "displayValue": "85.0",
+         "period": 0,
+         "linescores": [
+          {
+           "value": 28.0,
+           "displayValue": "28",
+           "period": 0
+          },
+          {
+           "value": 28.0,
+           "displayValue": "28",
+           "period": 0
+          },
+          {
+           "value": 29.0,
+           "displayValue": "29",
+           "period": 0
+          }
+         ]
+        }
+       ]
+      }
+     ],
+     "status": {
+      "clock": 300.0,
+      "displayClock": "5:00",
+      "period": 3,
+      "type": {
+       "id": "3",
+       "name": "STATUS_FINAL",
+       "state": "post",
+       "completed": true,
+       "description": "Final",
+       "detail": "Final",
+       "shortDetail": "Final"
+      },
+      "featured": false
+     },
+     "details": [],
+     "startDate": "2026-11-15T02:00Z"
+    },
+    {
+     "id": "401922639",
+     "uid": "s:3301~l:3321~e:600061400~c:401922639",
+     "date": "2026-11-15T02:00Z",
+     "endDate": "2026-11-15T02:00Z",
+     "type": {
+      "id": "972",
+      "abbreviation": "Middleweight"
+     },
+     "timeValid": true,
+     "competitors": [
+      {
+       "id": "4835137",
+       "uid": "s:3301~a:4835137",
+       "type": "athlete",
+       "order": 1,
+       "winner": true,
+       "athlete": {
+        "displayName": "Caio Borralho",
+        "shortName": "C. Borralho",
+        "fullName": "Caio Borralho"
+       },
+       "linescores": [
+        {
+         "value": 90.0,
+         "displayValue": "90.0",
+         "period": 0,
+         "linescores": [
+          {
+           "value": 30.0,
+           "displayValue": "30",
+           "period": 0
+          },
+          {
+           "value": 30.0,
+           "displayValue": "30",
+           "period": 0
+          },
+          {
+           "value": 30.0,
+           "displayValue": "30",
+           "period": 0
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "id": "5149815",
+       "uid": "s:3301~a:5149815",
+       "type": "athlete",
+       "order": 2,
+       "winner": false,
+       "athlete": {
+        "displayName": "Yousri Belgaroui",
+        "shortName": "Y. Belgaroui",
+        "fullName": "Yousri Belgaroui"
+       },
+       "linescores": [
+        {
+         "value": 81.0,
+         "displayValue": "81.0",
+         "period": 0,
+         "linescores": [
+          {
+           "value": 27.0,
+           "displayValue": "27",
+           "period": 0
+          },
+          {
+           "value": 27.0,
+           "displayValue": "27",
+           "period": 0
+          },
+          {
+           "value": 27.0,
+           "displayValue": "27",
+           "period": 0
+          }
+         ]
+        }
+       ]
+      }
+     ],
+     "status": {
+      "clock": 300.0,
+      "displayClock": "5:00",
+      "period": 3,
+      "type": {
+       "id": "3",
+       "name": "STATUS_FINAL",
+       "state": "post",
+       "completed": true,
+       "description": "Final",
+       "detail": "Final",
+       "shortDetail": "Final"
+      },
+      "featured": false
+     },
+     "details": [
+      {
+       "type": {
+        "text": "Unofficial Winner Decision"
+       }
+      }
+     ],
+     "startDate": "2026-11-15T02:00Z"
+    },
+    {
+     "id": "401922638",
+     "uid": "s:3301~l:3321~e:600061400~c:401922638",
+     "date": "2026-11-15T02:00Z",
+     "endDate": "2026-11-15T02:00Z",
+     "type": {
+      "id": "1003",
+      "abbreviation": "W Bantamweight"
+     },
+     "timeValid": true,
+     "competitors": [
+      {
+       "id": "2516131",
+       "uid": "s:3301~a:2516131",
+       "type": "athlete",
+       "order": 2,
+       "winner": false,
+       "athlete": {
+        "displayName": "Amanda Nunes",
+        "shortName": "A. Nunes",
+        "fullName": "Amanda Nunes"
+       }
+      },
+      {
+       "id": "4332765",
+       "uid": "s:3301~a:4332765",
+       "type": "athlete",
+       "order": 1,
+       "winner": true,
+       "athlete": {
+        "displayName": "Kayla Harrison",
+        "shortName": "K. Harrison",
+        "fullName": "Kayla Harrison"
+       }
+      }
+     ],
+     "status": {
+      "clock": 89.0,
+      "displayClock": "1:29",
+      "period": 4,
+      "type": {
+       "id": "3",
+       "name": "STATUS_FINAL",
+       "state": "post",
+       "completed": true,
+       "description": "Final",
+       "detail": "Final",
+       "shortDetail": "Final"
+      },
+      "featured": false
+     },
+     "details": [
+      {
+       "type": {
+        "text": "Unofficial Winner Submission"
+       }
+      }
+     ],
+     "startDate": "2026-11-15T02:00Z"
+    },
+    {
+     "id": "401913646",
+     "uid": "s:3301~l:3321~e:600061400~c:401913646",
+     "date": "2026-11-15T02:00Z",
+     "endDate": "2026-11-15T02:00Z",
+     "type": {
+      "id": "982",
+      "abbreviation": "Heavyweight"
+     },
+     "timeValid": true,
+     "competitors": [
+      {
+       "id": "4049391",
+       "uid": "s:3301~a:4049391",
+       "type": "athlete",
+       "order": 2,
+       "winner": false,
+       "athlete": {
+        "displayName": "Josh Hokit",
+        "shortName": "J. Hokit",
+        "fullName": "Josh Hokit"
+       },
+       "linescores": [
+        {
+         "value": 141.0,
+         "displayValue": "141.0",
+         "period": 0,
+         "linescores": [
+          {
+           "value": 47.0,
+           "displayValue": "47",
+           "period": 0
+          },
+          {
+           "value": 47.0,
+           "displayValue": "47",
+           "period": 0
+          },
+          {
+           "value": 47.0,
+           "displayValue": "47",
+           "period": 0
+          }
+         ]
+        }
+       ]
+      },
+      {
+       "id": "4426000",
+       "uid": "s:3301~a:4426000",
+       "type": "athlete",
+       "order": 1,
+       "winner": true,
+       "athlete": {
+        "displayName": "Ciryl Gane",
+        "shortName": "C. Gane",
+        "fullName": "Ciryl Gane"
+       },
+       "linescores": [
+        {
+         "value": 144.0,
+         "displayValue": "144.0",
+         "period": 0,
+         "linescores": [
+          {
+           "value": 48.0,
+           "displayValue": "48",
+           "period": 0
+          },
+          {
+           "value": 48.0,
+           "displayValue": "48",
+           "period": 0
+          },
+          {
+           "value": 48.0,
+           "displayValue": "48",
+           "period": 0
+          }
+         ]
+        }
+       ]
+      }
+     ],
+     "status": {
+      "clock": 300.0,
+      "displayClock": "5:00",
+      "period": 5,
+      "type": {
+       "id": "3",
+       "name": "STATUS_FINAL",
+       "state": "post",
+       "completed": true,
+       "description": "Final",
+       "detail": "Final",
+       "shortDetail": "Final"
+      },
+      "featured": true
+     },
+     "details": [
+      {
+       "type": {
+        "text": "Unofficial Winner Decision"
+       }
+      }
+     ],
+     "startDate": "2026-11-15T02:00Z"
+    }
+   ],
+   "status": {
+    "type": {
+     "id": "3",
+     "name": "STATUS_FINAL",
+     "state": "post",
+     "completed": true,
+     "description": "Final",
+     "detail": "Final",
+     "shortDetail": "Final"
+    }
+   }
+  }
+ ]
+}

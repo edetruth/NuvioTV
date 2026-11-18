@@ -3645,6 +3645,31 @@
     <string name="sports_live_league_serie_a">Serie A</string>
     <string name="sports_live_league_ligue_1">Ligue 1</string>
     <string name="sports_live_league_mls">MLS</string>
+    <!-- Individual sports in My sports and Results (#55 part 2). -->
+    <string name="sports_live_results_sport_tennis">Tennis</string>
+    <string name="sports_live_results_sport_mma">MMA</string>
+    <string name="sports_live_results_sport_motorsport">Motorsport</string>
+    <string name="sports_live_results_sport_golf">Golf</string>
+    <string name="sports_live_league_atp">ATP</string>
+    <string name="sports_live_league_wta">WTA</string>
+    <string name="sports_live_league_ufc">UFC</string>
+    <string name="sports_live_league_f1">F1</string>
+    <string name="sports_live_league_pga">PGA Tour</string>
+    <string name="sports_live_league_lpga">LPGA</string>
+    <string name="sports_live_results_result_hidden">Result hidden</string>
+    <string name="sports_live_results_tennis_retired">Ret.</string>
+    <string name="sports_live_results_tennis_walkover">W/O</string>
+    <string name="sports_live_results_fight_vs">vs</string>
+    <string name="sports_live_results_fight_ko">KO/TKO</string>
+    <string name="sports_live_results_fight_submission">Submission</string>
+    <string name="sports_live_results_fight_decision">Decision</string>
+    <!-- Where a fight was stopped: round and time, "R2 3:14". -->
+    <string name="sports_live_results_fight_round">R%1$d %2$s</string>
+    <string name="sports_live_results_fight_no_result">Result not given</string>
+    <plurals name="sports_live_results_golf_more">
+        <item quantity="one">+ %1$d more</item>
+        <item quantity="other">+ %1$d more</item>
+    </plurals>
     <string name="sports_live_watch">Watch</string>
     <string name="sports_live_no_streams_now">No streams right now</string>
     <string name="sports_live_details">Details</string>

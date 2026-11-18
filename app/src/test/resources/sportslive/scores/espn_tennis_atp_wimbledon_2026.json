@@ -1,0 +1,692 @@
+{
+ "_note": "Trimmed real ESPN tennis/atp scoreboard ?dates=20260710 (Wimbledon retirements, a womens-singles match, a walkover; Nordea Open walkover).",
+ "leagues": [
+  {
+   "id": "851",
+   "uid": "s:850~l:851",
+   "name": "ATP",
+   "abbreviation": "ATP",
+   "slug": "atp"
+  }
+ ],
+ "events": [
+  {
+   "id": "188-2026",
+   "uid": "s:850~l:851~e:188-2026",
+   "date": "2026-06-22T04:00Z",
+   "endDate": "2026-07-13T03:59Z",
+   "major": true,
+   "name": "Wimbledon",
+   "shortName": "Wimbledon",
+   "groupings": [
+    {
+     "grouping": {
+      "id": "1",
+      "slug": "mens-singles",
+      "displayName": "Men's Singles"
+     },
+     "competitions": [
+      {
+       "id": "177320",
+       "uid": "s:850~l:851~e:188-2026~c:177320",
+       "date": "2026-06-29T10:05Z",
+       "startDate": "2026-06-29T10:05Z",
+       "timeValid": true,
+       "status": {
+        "period": 2,
+        "type": {
+         "id": "38",
+         "name": "STATUS_RETIRED",
+         "state": "post",
+         "completed": true,
+         "description": "Retired",
+         "detail": "Retired",
+         "shortDetail": "Retired"
+        }
+       },
+       "notes": [
+        {
+         "text": "Pablo Carreno Busta (ESP) bt Denis Shapovalov (CAN) 6-3 7-6 (9-7) 0-0 ret",
+         "type": "event"
+        }
+       ],
+       "competitors": [
+        {
+         "id": "1590",
+         "uid": "s:850~l:851~a:1590",
+         "type": "athlete",
+         "order": 2,
+         "homeAway": "away",
+         "winner": true,
+         "linescores": [
+          {
+           "value": 6.0,
+           "winner": true
+          },
+          {
+           "value": 7.0,
+           "tiebreak": 9,
+           "winner": false
+          }
+         ],
+         "athlete": {
+          "displayName": "Pablo Carreno Busta",
+          "shortName": "P. Carreno Busta",
+          "fullName": "Pablo Carreno Busta"
+         }
+        },
+        {
+         "id": "2860",
+         "uid": "s:850~l:851~a:2860",
+         "type": "athlete",
+         "order": 1,
+         "homeAway": "home",
+         "winner": false,
+         "linescores": [
+          {
+           "value": 3.0,
+           "winner": false
+          },
+          {
+           "value": 6.0,
+           "tiebreak": 7,
+           "winner": false
+          }
+         ],
+         "athlete": {
+          "displayName": "Denis Shapovalov",
+          "shortName": "D. Shapovalov",
+          "fullName": "Denis Shapovalov"
+         }
+        }
+       ],
+       "tournamentId": 188,
+       "type": {
+        "id": "1",
+        "text": "Men's Singles",
+        "slug": "mens-singles"
+       },
+       "round": {
+        "id": "1",
+        "displayName": "Round 1"
+       },
+       "wasSuspended": false
+      },
+      {
+       "id": "177357",
+       "uid": "s:850~l:851~e:188-2026~c:177357",
+       "date": "2026-06-29T10:10Z",
+       "startDate": "2026-06-29T10:10Z",
+       "timeValid": true,
+       "status": {
+        "period": 2,
+        "type": {
+         "id": "38",
+         "name": "STATUS_RETIRED",
+         "state": "post",
+         "completed": true,
+         "description": "Retired",
+         "detail": "Retired",
+         "shortDetail": "Retired"
+        }
+       },
+       "notes": [
+        {
+         "text": "Marton Fucsovics (HUN) bt Luca Van Assche (FRA) 6-3 4-0 ret",
+         "type": "event"
+        }
+       ],
+       "competitors": [
+        {
+         "id": "1862",
+         "uid": "s:850~l:851~a:1862",
+         "type": "athlete",
+         "order": 2,
+         "homeAway": "away",
+         "winner": true,
+         "linescores": [
+          {
+           "value": 6.0,
+           "winner": true
+          },
+          {
+           "value": 4.0,
+           "winner": false
+          }
+         ],
+         "athlete": {
+          "displayName": "Marton Fucsovics",
+          "shortName": "M. Fucsovics",
+          "fullName": "Marton Fucsovics"
+         }
+        },
+        {
+         "id": "8814",
+         "uid": "s:850~l:851~a:8814",
+         "type": "athlete",
+         "order": 1,
+         "homeAway": "home",
+         "winner": false,
+         "linescores": [
+          {
+           "value": 3.0,
+           "winner": false
+          },
+          {
+           "value": 0.0,
+           "winner": false
+          }
+         ],
+         "athlete": {
+          "displayName": "Luca Van Assche",
+          "shortName": "L. Van Assche",
+          "fullName": "Luca Van Assche"
+         }
+        }
+       ],
+       "tournamentId": 188,
+       "type": {
+        "id": "1",
+        "text": "Men's Singles",
+        "slug": "mens-singles"
+       },
+       "round": {
+        "id": "1",
+        "displayName": "Round 1"
+       },
+       "wasSuspended": false
+      },
+      {
+       "id": "177338",
+       "uid": "s:850~l:851~e:188-2026~c:177338",
+       "date": "2026-06-29T11:50Z",
+       "startDate": "2026-06-29T11:50Z",
+       "timeValid": true,
+       "status": {
+        "period": 4,
+        "type": {
+         "id": "38",
+         "name": "STATUS_RETIRED",
+         "state": "post",
+         "completed": true,
+         "description": "Retired",
+         "detail": "Retired",
+         "shortDetail": "Retired"
+        }
+       },
+       "notes": [
+        {
+         "text": "Daniel Merida (ESP) bt Camilo Ugo Carabelli (ARG) 4-6 3-6 6-2 3-0 ret",
+         "type": "event"
+        }
+       ],
+       "competitors": [
+        {
+         "id": "10239",
+         "uid": "s:850~l:851~a:10239",
+         "type": "athlete",
+         "order": 2,
+         "homeAway": "away",
+         "winner": true,
+         "linescores": [
+          {
+           "value": 4.0,
+           "winner": false
+          },
+          {
+           "value": 3.0,
+           "winner": false
+          },
+          {
+           "value": 6.0,
+           "winner": true
+          },
+          {
+           "value": 3.0,
+           "winner": false
+          }
+         ],
+         "athlete": {
+          "displayName": "Daniel Merida",
+          "shortName": "D. Merida",
+          "fullName": "Daniel Merida"
+         }
+        },
+        {
+         "id": "3666",
+         "uid": "s:850~l:851~a:3666",
+         "type": "athlete",
+         "order": 1,
+         "homeAway": "home",
+         "winner": false,
+         "linescores": [
+          {
+           "value": 6.0,
+           "winner": true
+          },
+          {
+           "value": 6.0,
+           "winner": true
+          },
+          {
+           "value": 2.0,
+           "winner": false
+          },
+          {
+           "value": 0.0,
+           "winner": false
+          }
+         ],
+         "athlete": {
+          "displayName": "Camilo Ugo Carabelli",
+          "shortName": "C. Ugo Carabelli",
+          "fullName": "Camilo Ugo Carabelli"
+         }
+        }
+       ],
+       "tournamentId": 188,
+       "type": {
+        "id": "1",
+        "text": "Men's Singles",
+        "slug": "mens-singles"
+       },
+       "round": {
+        "id": "1",
+        "displayName": "Round 1"
+       },
+       "wasSuspended": false
+      },
+      {
+       "id": "177363",
+       "uid": "s:850~l:851~e:188-2026~c:177363",
+       "date": "2026-06-30T16:30Z",
+       "startDate": "2026-06-30T16:30Z",
+       "timeValid": true,
+       "status": {
+        "period": 4,
+        "type": {
+         "id": "3",
+         "name": "STATUS_FINAL",
+         "state": "post",
+         "completed": true,
+         "description": "Final",
+         "detail": "Final",
+         "shortDetail": "Final"
+        }
+       },
+       "notes": [
+        {
+         "text": "Matteo Berrettini (ITA) bt Stan Wawrinka (SUI) 6-7 (7-9) 7-6 (18-16) 7-6 (9-7) 7-6 (7-5)",
+         "type": "event"
+        }
+       ],
+       "competitors": [
+        {
+         "id": "2622",
+         "uid": "s:850~l:851~a:2622",
+         "type": "athlete",
+         "order": 2,
+         "homeAway": "away",
+         "winner": true,
+         "linescores": [
+          {
+           "value": 6.0,
+           "tiebreak": 7,
+           "winner": false
+          },
+          {
+           "value": 7.0,
+           "tiebreak": 18,
+           "winner": true
+          },
+          {
+           "value": 7.0,
+           "tiebreak": 9,
+           "winner": true
+          },
+          {
+           "value": 7.0,
+           "tiebreak": 7,
+           "winner": true
+          }
+         ],
+         "athlete": {
+          "displayName": "Matteo Berrettini",
+          "shortName": "M. Berrettini",
+          "fullName": "Matteo Berrettini"
+         }
+        },
+        {
+         "id": "264",
+         "uid": "s:850~l:851~a:264",
+         "type": "athlete",
+         "order": 1,
+         "homeAway": "home",
+         "winner": false,
+         "linescores": [
+          {
+           "value": 7.0,
+           "tiebreak": 9,
+           "winner": true
+          },
+          {
+           "value": 6.0,
+           "tiebreak": 16,
+           "winner": false
+          },
+          {
+           "value": 6.0,
+           "tiebreak": 7,
+           "winner": false
+          },
+          {
+           "value": 6.0,
+           "tiebreak": 5,
+           "winner": false
+          }
+         ],
+         "athlete": {
+          "displayName": "Stan Wawrinka",
+          "shortName": "S. Wawrinka",
+          "fullName": "Stan Wawrinka"
+         }
+        }
+       ],
+       "tournamentId": 188,
+       "type": {
+        "id": "1",
+        "text": "Men's Singles",
+        "slug": "mens-singles"
+       },
+       "round": {
+        "id": "1",
+        "displayName": "Round 1"
+       },
+       "wasSuspended": false
+      }
+     ]
+    },
+    {
+     "grouping": {
+      "id": "2",
+      "slug": "womens-singles",
+      "displayName": "Women's Singles"
+     },
+     "competitions": [
+      {
+       "id": "177532",
+       "uid": "s:850~l:851~e:188-2026~c:177532",
+       "date": "2026-06-29T11:50Z",
+       "startDate": "2026-06-29T11:50Z",
+       "timeValid": true,
+       "status": {
+        "period": 3,
+        "type": {
+         "id": "3",
+         "name": "STATUS_FINAL",
+         "state": "post",
+         "completed": true,
+         "description": "Final",
+         "detail": "Final",
+         "shortDetail": "Final"
+        }
+       },
+       "notes": [
+        {
+         "text": "Wang Xinyu (CHN) bt Elisabetta Cocciaretto (ITA) 6-3 2-6 6-2",
+         "type": "event"
+        }
+       ],
+       "competitors": [
+        {
+         "id": "3831",
+         "uid": "s:850~l:851~a:3831",
+         "type": "athlete",
+         "order": 2,
+         "homeAway": "away",
+         "winner": false,
+         "linescores": [
+          {
+           "value": 3.0,
+           "winner": false
+          },
+          {
+           "value": 6.0,
+           "winner": true
+          },
+          {
+           "value": 2.0,
+           "winner": false
+          }
+         ],
+         "athlete": {
+          "displayName": "Elisabetta Cocciaretto",
+          "shortName": "E. Cocciaretto",
+          "fullName": "Elisabetta Cocciaretto"
+         }
+        },
+        {
+         "id": "3387",
+         "uid": "s:850~l:851~a:3387",
+         "type": "athlete",
+         "order": 1,
+         "homeAway": "home",
+         "winner": true,
+         "linescores": [
+          {
+           "value": 6.0,
+           "winner": true
+          },
+          {
+           "value": 2.0,
+           "winner": false
+          },
+          {
+           "value": 6.0,
+           "winner": true
+          }
+         ],
+         "athlete": {
+          "displayName": "Wang Xinyu",
+          "shortName": "W. Xinyu",
+          "fullName": "Wang Xinyu"
+         }
+        }
+       ],
+       "tournamentId": 188,
+       "type": {
+        "id": "2",
+        "text": "Women's Singles",
+        "slug": "womens-singles"
+       },
+       "round": {
+        "id": "1",
+        "displayName": "Round 1"
+       },
+       "wasSuspended": false
+      }
+     ]
+    },
+    {
+     "grouping": {
+      "id": "3",
+      "slug": "mens-doubles",
+      "displayName": "Men's Doubles"
+     },
+     "competitions": [
+      {
+       "id": "177436",
+       "uid": "s:850~l:851~e:188-2026~c:177436",
+       "date": "2026-07-02T13:45Z",
+       "startDate": "2026-07-02T13:45Z",
+       "timeValid": true,
+       "status": {
+        "period": 1,
+        "type": {
+         "id": "40",
+         "name": "STATUS_WALKOVER",
+         "state": "post",
+         "completed": true,
+         "description": "Walkover",
+         "detail": "Walkover",
+         "shortDetail": "Walkover"
+        }
+       },
+       "notes": [
+        {
+         "text": "Roman Andres Burruchaga (ARG) & Thiago Agustin Tirante (ARG) bt Raphael Collignon (BEL) & Dino Prizmic (CRO) w/o",
+         "type": "event"
+        }
+       ],
+       "competitors": [
+        {
+         "id": "11222-10105",
+         "uid": "s:850~l:851~t:11222-10105",
+         "type": "team",
+         "order": 2,
+         "homeAway": "away",
+         "winner": false,
+         "roster": {
+          "displayName": "Raphael Collignon / Dino Prizmic",
+          "shortDisplayName": "R. Collignon / D. Prizmic"
+         }
+        },
+        {
+         "id": "4011-4010",
+         "uid": "s:850~l:851~t:4011-4010",
+         "type": "team",
+         "order": 1,
+         "homeAway": "home",
+         "winner": true,
+         "roster": {
+          "displayName": "Roman Andres Burruchaga / Thiago Agustin Tirante",
+          "shortDisplayName": "R. Burruchaga / T. Tirante"
+         }
+        }
+       ],
+       "tournamentId": 188,
+       "type": {
+        "id": "3",
+        "text": "Men's Doubles",
+        "slug": "mens-doubles"
+       },
+       "round": {
+        "id": "1",
+        "displayName": "Round 1"
+       },
+       "wasSuspended": false
+      }
+     ]
+    }
+   ],
+   "status": {
+    "period": 2,
+    "type": {
+     "id": "3",
+     "name": "STATUS_FINAL",
+     "state": "post",
+     "completed": true,
+     "description": "Final",
+     "detail": "Final",
+     "shortDetail": "Final"
+    }
+   }
+  },
+  {
+   "id": "306-2026",
+   "uid": "s:850~l:851~e:306-2026",
+   "date": "2026-07-06T04:00Z",
+   "endDate": "2026-07-20T03:59Z",
+   "major": false,
+   "name": "Nordea Open",
+   "shortName": "Nordea Open",
+   "groupings": [
+    {
+     "grouping": {
+      "id": "1",
+      "slug": "mens-singles",
+      "displayName": "Men's Singles"
+     },
+     "competitions": [
+      {
+       "id": "178630",
+       "uid": "s:850~l:851~e:306-2026~c:178630",
+       "date": "2026-07-17T14:15Z",
+       "startDate": "2026-07-17T14:15Z",
+       "timeValid": true,
+       "status": {
+        "period": 1,
+        "type": {
+         "id": "40",
+         "name": "STATUS_WALKOVER",
+         "state": "post",
+         "completed": true,
+         "description": "Walkover",
+         "detail": "Walkover",
+         "shortDetail": "Walkover"
+        }
+       },
+       "notes": [
+        {
+         "text": "(3) Alejandro Tabilo (CHI) bt (7) Thiago Agustin Tirante (ARG) w/o",
+         "type": "event"
+        }
+       ],
+       "competitors": [
+        {
+         "id": "4010",
+         "uid": "s:850~l:851~a:4010",
+         "type": "athlete",
+         "order": 2,
+         "homeAway": "away",
+         "winner": false,
+         "athlete": {
+          "displayName": "Thiago Agustin Tirante",
+          "shortName": "T. Tirante",
+          "fullName": "Thiago Agustin Tirante"
+         }
+        },
+        {
+         "id": "2970",
+         "uid": "s:850~l:851~a:2970",
+         "type": "athlete",
+         "order": 1,
+         "homeAway": "home",
+         "winner": true,
+         "athlete": {
+          "displayName": "Alejandro Tabilo",
+          "shortName": "A. Tabilo",
+          "fullName": "Alejandro Tabilo"
+         }
+        }
+       ],
+       "tournamentId": 306,
+       "type": {
+        "id": "1",
+        "text": "Men's Singles",
+        "slug": "mens-singles"
+       },
+       "round": {
+        "id": "5",
+        "displayName": "Quarterfinal"
+       },
+       "wasSuspended": false
+      }
+     ]
+    }
+   ],
+   "status": {
+    "period": 2,
+    "type": {
+     "id": "3",
+     "name": "STATUS_FINAL",
+     "state": "post",
+     "completed": true,
+     "description": "Final",
+     "detail": "Final",
+     "shortDetail": "Final"
+    }
+   }
+  }
+ ]
+}

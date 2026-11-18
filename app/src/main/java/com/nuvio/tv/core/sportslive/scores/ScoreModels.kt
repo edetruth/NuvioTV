@@ -67,7 +67,12 @@ data class ScoreSnapshot(
     /** For an [ScoreState.OFF] game: true when it is suspended or delayed and may resume. */
     val mayResume: Boolean = false,
     /** What is happening now in a live game (ESPN `situation`); null unless live and given. */
-    val situation: GameSituation? = null
+    val situation: GameSituation? = null,
+    /**
+     * An individual sport's result (tennis, UFC, F1, golf: #55 part 2); null for a team game. Such an
+     * event has no sides: [home] and [away] are empty, and it never matches a card, team or replay.
+     */
+    val individual: IndividualResult? = null
 ) {
     val homeAbbr: String? get() = home.abbreviation
     val awayAbbr: String? get() = away.abbreviation

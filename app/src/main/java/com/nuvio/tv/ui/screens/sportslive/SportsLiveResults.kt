@@ -61,6 +61,7 @@ import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
 import com.nuvio.tv.R
 import com.nuvio.tv.core.sportslive.scores.FinalNote
+import com.nuvio.tv.core.sportslive.scores.GolfResult
 import com.nuvio.tv.core.sportslive.scores.MySport
 import com.nuvio.tv.core.sportslive.scores.ResultRow
 import com.nuvio.tv.core.sportslive.scores.ScoreSide
@@ -194,6 +195,8 @@ internal fun SportsLiveResultsView(
     }
     // Hold OK on a row: Game stats and Follow / Following for each side (away first, as listed).
     var menuRowKey by remember { mutableStateOf<String?>(null) }
+    // Golf rows whose top five OK has listed.
+    var expandedGolf by remember { mutableStateOf<Set<String>>(emptySet()) }
     items.firstNotNullOfOrNull { (it as? ResultListItem.Row)?.row?.takeIf { row -> row.key == menuRowKey } }?.let { row ->
         val sides = listOf(ScoreSide.AWAY to row.event.away, ScoreSide.HOME to row.event.home)
         SportsLiveCardMenu(
@@ -297,7 +300,28 @@ internal fun SportsLiveResultsView(
                             }
                         when (item) {
                             is ResultListItem.Header -> ResultsHeader(item, first = index == 0)
-                            is ResultListItem.Row -> ResultRowCard(
+                            // Tennis, UFC, F1, golf: the Game page cannot show them. OK on golf lists
+                            // its top five; on the others OK does nothing (no toast). No Follow menu.
+                            is ResultListItem.Row -> if (item.row.event.individual != null) {
+                                val individual = item.row.event.individual
+                                IndividualResultCard(
+                                    row = item.row,
+                                    result = individual,
+                                    showScore = state.showsScore(item.row),
+                                    expanded = item.key in expandedGolf,
+                                    onClick = {
+                                        if (individual is GolfResult) {
+                                            expandedGolf = if (item.key in expandedGolf) expandedGolf - item.key else expandedGolf + item.key
+                                        }
+                                    },
+                                    onFocus = {
+                                        focusedKey = item.key
+                                        onRowFocus(item.key)
+                                        if (item.key == firstFocusableKey) scope.launch { listState.scrollToItem(0) }
+                                    },
+                                    modifier = focusModifier
+                                )
+                            } else ResultRowCard(
                                 row = item.row,
                                 showScore = state.showsScore(item.row),
                                 hasReplay = item.hasReplay,
@@ -704,6 +728,10 @@ private fun sportLabel(sport: String): String = when (sport) {
     "hockey" -> stringResource(R.string.sports_live_results_sport_hockey)
     "baseball" -> stringResource(R.string.sports_live_results_sport_baseball)
     "soccer" -> stringResource(R.string.sports_live_results_sport_soccer)
+    "tennis" -> stringResource(R.string.sports_live_results_sport_tennis)
+    "mma" -> stringResource(R.string.sports_live_results_sport_mma)
+    "racing" -> stringResource(R.string.sports_live_results_sport_motorsport)
+    "golf" -> stringResource(R.string.sports_live_results_sport_golf)
     else -> sport.replaceFirstChar { it.titlecase(Locale.getDefault()) }
 }
 

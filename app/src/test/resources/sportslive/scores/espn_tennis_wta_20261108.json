@@ -1,0 +1,742 @@
+{
+ "_note": "Trimmed real ESPN tennis/wta scoreboard ?dates=20261108 (Hong Kong, Chennai, WTA Finals).",
+ "leagues": [
+  {
+   "id": "900",
+   "uid": "s:850~l:900",
+   "name": "WTA",
+   "abbreviation": "WTA",
+   "slug": "wta"
+  }
+ ],
+ "events": [
+  {
+   "id": "380-2026",
+   "uid": "s:850~l:900~e:380-2026",
+   "date": "2026-10-30T04:00Z",
+   "endDate": "2026-11-09T04:59Z",
+   "major": false,
+   "name": "Prudential Hong Kong Tennis Open",
+   "shortName": "Prudential Hong Kong Tennis Open",
+   "groupings": [
+    {
+     "grouping": {
+      "id": "2",
+      "slug": "womens-singles",
+      "displayName": "Women's Singles"
+     },
+     "competitions": [
+      {
+       "id": "186642",
+       "uid": "s:850~l:900~e:380-2026~c:186642",
+       "date": "2026-11-08T08:05Z",
+       "startDate": "2026-11-08T08:05Z",
+       "timeValid": true,
+       "status": {
+        "period": 2,
+        "type": {
+         "id": "3",
+         "name": "STATUS_FINAL",
+         "state": "post",
+         "completed": true,
+         "description": "Final",
+         "detail": "Final",
+         "shortDetail": "Final"
+        }
+       },
+       "notes": [
+        {
+         "text": "Claire Liu (USA) bt (2) Alexandra Eala (PHI) 6-3 6-0",
+         "type": "event"
+        }
+       ],
+       "competitors": [
+        {
+         "id": "7759",
+         "uid": "s:850~l:900~a:7759",
+         "type": "athlete",
+         "order": 2,
+         "homeAway": "away",
+         "winner": false,
+         "linescores": [
+          {
+           "value": 3.0,
+           "winner": false
+          },
+          {
+           "value": 0.0,
+           "winner": false
+          }
+         ],
+         "athlete": {
+          "displayName": "Alexandra Eala",
+          "shortName": "A. Eala",
+          "fullName": "Alexandra Eala"
+         }
+        },
+        {
+         "id": "2980",
+         "uid": "s:850~l:900~a:2980",
+         "type": "athlete",
+         "order": 1,
+         "homeAway": "home",
+         "winner": true,
+         "linescores": [
+          {
+           "value": 6.0,
+           "winner": true
+          },
+          {
+           "value": 6.0,
+           "winner": true
+          }
+         ],
+         "athlete": {
+          "displayName": "Claire Liu",
+          "shortName": "C. Liu",
+          "fullName": "Claire Liu"
+         }
+        }
+       ],
+       "tournamentId": 380,
+       "type": {
+        "id": "2",
+        "text": "Women's Singles",
+        "slug": "womens-singles"
+       },
+       "round": {
+        "id": "7",
+        "displayName": "Final"
+       },
+       "wasSuspended": false
+      }
+     ]
+    },
+    {
+     "grouping": {
+      "id": "4",
+      "slug": "womens-doubles",
+      "displayName": "Women's Doubles"
+     },
+     "competitions": [
+      {
+       "id": "186659",
+       "uid": "s:850~l:900~e:380-2026~c:186659",
+       "date": "2026-11-08T05:35Z",
+       "startDate": "2026-11-08T05:35Z",
+       "timeValid": true,
+       "status": {
+        "period": 2,
+        "type": {
+         "id": "3",
+         "name": "STATUS_FINAL",
+         "state": "post",
+         "completed": true,
+         "description": "Final",
+         "detail": "Final",
+         "shortDetail": "Final"
+        }
+       },
+       "notes": [
+        {
+         "text": "(2) Hao-Ching Chan (TPO) & Miyu Kato (JPN) bt Talia Gibson (AUS) & Maddison Inglis (AUS) 6-4 6-4",
+         "type": "event"
+        }
+       ],
+       "competitors": [
+        {
+         "id": "2167-1877",
+         "uid": "s:850~l:900~t:2167-1877",
+         "type": "team",
+         "order": 2,
+         "homeAway": "away",
+         "winner": true,
+         "linescores": [
+          {
+           "value": 6.0,
+           "winner": true
+          },
+          {
+           "value": 6.0,
+           "winner": true
+          }
+         ],
+         "roster": {
+          "displayName": "Hao-Ching Chan / Miyu Kato",
+          "shortDisplayName": "H. Chan / M. Kato"
+         }
+        },
+        {
+         "id": "6708-2584",
+         "uid": "s:850~l:900~t:6708-2584",
+         "type": "team",
+         "order": 1,
+         "homeAway": "home",
+         "winner": false,
+         "linescores": [
+          {
+           "value": 4.0,
+           "winner": false
+          },
+          {
+           "value": 4.0,
+           "winner": false
+          }
+         ],
+         "roster": {
+          "displayName": "Talia Gibson / Maddison Inglis",
+          "shortDisplayName": "T. Gibson / M. Inglis"
+         }
+        }
+       ],
+       "tournamentId": 380,
+       "type": {
+        "id": "4",
+        "text": "Women's Doubles",
+        "slug": "womens-doubles"
+       },
+       "round": {
+        "id": "7",
+        "displayName": "Final"
+       },
+       "wasSuspended": false
+      }
+     ]
+    }
+   ],
+   "status": {
+    "period": 2,
+    "type": {
+     "id": "3",
+     "name": "STATUS_FINAL",
+     "state": "post",
+     "completed": true,
+     "description": "Final",
+     "detail": "Final",
+     "shortDetail": "Final"
+    }
+   }
+  },
+  {
+   "id": "889-2026",
+   "uid": "s:850~l:900~e:889-2026",
+   "date": "2026-10-31T04:00Z",
+   "endDate": "2026-11-10T04:59Z",
+   "major": false,
+   "name": "Chennai Open",
+   "shortName": "Chennai Open",
+   "groupings": [
+    {
+     "grouping": {
+      "id": "2",
+      "slug": "womens-singles",
+      "displayName": "Women's Singles"
+     },
+     "competitions": [
+      {
+       "id": "186598",
+       "uid": "s:850~l:900~e:889-2026~c:186598",
+       "date": "2026-11-09T05:35Z",
+       "startDate": "2026-11-09T05:35Z",
+       "timeValid": true,
+       "status": {
+        "period": 3,
+        "type": {
+         "id": "3",
+         "name": "STATUS_FINAL",
+         "state": "post",
+         "completed": true,
+         "description": "Final",
+         "detail": "Final",
+         "shortDetail": "Final"
+        }
+       },
+       "notes": [
+        {
+         "text": "(3) Magda Linette (POL) bt (1) Janice Tjen (INA) 5-7 6-1 6-4",
+         "type": "event"
+        }
+       ],
+       "competitors": [
+        {
+         "id": "1649",
+         "uid": "s:850~l:900~a:1649",
+         "type": "athlete",
+         "order": 2,
+         "homeAway": "away",
+         "winner": true,
+         "linescores": [
+          {
+           "value": 5.0,
+           "winner": false
+          },
+          {
+           "value": 6.0,
+           "winner": true
+          },
+          {
+           "value": 6.0,
+           "winner": true
+          }
+         ],
+         "athlete": {
+          "displayName": "Magda Linette",
+          "shortName": "M. Linette",
+          "fullName": "Magda Linette"
+         }
+        },
+        {
+         "id": "6368",
+         "uid": "s:850~l:900~a:6368",
+         "type": "athlete",
+         "order": 1,
+         "homeAway": "home",
+         "winner": false,
+         "linescores": [
+          {
+           "value": 7.0,
+           "winner": true
+          },
+          {
+           "value": 1.0,
+           "winner": false
+          },
+          {
+           "value": 4.0,
+           "winner": false
+          }
+         ],
+         "athlete": {
+          "displayName": "Janice Tjen",
+          "shortName": "J. Tjen",
+          "fullName": "Janice Tjen"
+         }
+        }
+       ],
+       "tournamentId": 889,
+       "type": {
+        "id": "2",
+        "text": "Women's Singles",
+        "slug": "womens-singles"
+       },
+       "round": {
+        "id": "7",
+        "displayName": "Final"
+       },
+       "wasSuspended": false
+      }
+     ]
+    }
+   ],
+   "status": {
+    "period": 2,
+    "type": {
+     "id": "38",
+     "name": "STATUS_RETIRED",
+     "state": "post",
+     "completed": true,
+     "description": "Retired",
+     "detail": "Retired",
+     "shortDetail": "Retired"
+    }
+   }
+  },
+  {
+   "id": "382-2026",
+   "uid": "s:850~l:900~e:382-2026",
+   "date": "2026-11-08T05:00Z",
+   "endDate": "2026-11-16T04:59Z",
+   "major": false,
+   "name": "FAGE WTA Finals Indian Wells",
+   "shortName": "FAGE WTA Finals Indian Wells",
+   "groupings": [
+    {
+     "grouping": {
+      "id": "2",
+      "slug": "womens-singles",
+      "displayName": "Women's Singles"
+     },
+     "competitions": [
+      {
+       "id": "187373",
+       "uid": "s:850~l:900~e:382-2026~c:187373",
+       "date": "2026-11-08T20:15Z",
+       "startDate": "2026-11-08T20:15Z",
+       "timeValid": true,
+       "status": {
+        "period": 2,
+        "type": {
+         "id": "3",
+         "name": "STATUS_FINAL",
+         "state": "post",
+         "completed": true,
+         "description": "Final",
+         "detail": "Final",
+         "shortDetail": "Final"
+        }
+       },
+       "notes": [
+        {
+         "text": "(8) Linda Noskova (CZE) bt (9) Marta Kostyuk (UKR) 6-2 6-4",
+         "type": "event"
+        }
+       ],
+       "competitors": [
+        {
+         "id": "6970",
+         "uid": "s:850~l:900~a:6970",
+         "type": "athlete",
+         "order": 2,
+         "homeAway": "away",
+         "winner": true,
+         "linescores": [
+          {
+           "value": 6.0,
+           "winner": true
+          },
+          {
+           "value": 6.0,
+           "winner": true
+          }
+         ],
+         "athlete": {
+          "displayName": "Linda Noskova",
+          "shortName": "L. Noskova",
+          "fullName": "Linda Noskova"
+         }
+        },
+        {
+         "id": "3382",
+         "uid": "s:850~l:900~a:3382",
+         "type": "athlete",
+         "order": 1,
+         "homeAway": "home",
+         "winner": false,
+         "linescores": [
+          {
+           "value": 2.0,
+           "winner": false
+          },
+          {
+           "value": 4.0,
+           "winner": false
+          }
+         ],
+         "athlete": {
+          "displayName": "Marta Kostyuk",
+          "shortName": "M. Kostyuk",
+          "fullName": "Marta Kostyuk"
+         }
+        }
+       ],
+       "tournamentId": 382,
+       "type": {
+        "id": "2",
+        "text": "Women's Singles",
+        "slug": "womens-singles"
+       },
+       "round": {
+        "id": "15",
+        "displayName": "Group Stage"
+       },
+       "wasSuspended": false
+      },
+      {
+       "id": "187374",
+       "uid": "s:850~l:900~e:382-2026~c:187374",
+       "date": "2026-11-08T22:05Z",
+       "startDate": "2026-11-08T22:05Z",
+       "timeValid": true,
+       "status": {
+        "period": 3,
+        "type": {
+         "id": "3",
+         "name": "STATUS_FINAL",
+         "state": "post",
+         "completed": true,
+         "description": "Final",
+         "detail": "Final",
+         "shortDetail": "Final"
+        }
+       },
+       "notes": [
+        {
+         "text": "(4) Coco Gauff (USA) bt (5) Jessica Pegula (USA) 6-4 6-7 (5-7) 6-2",
+         "type": "event"
+        }
+       ],
+       "competitors": [
+        {
+         "id": "2113",
+         "uid": "s:850~l:900~a:2113",
+         "type": "athlete",
+         "order": 2,
+         "homeAway": "away",
+         "winner": false,
+         "linescores": [
+          {
+           "value": 4.0,
+           "winner": false
+          },
+          {
+           "value": 7.0,
+           "tiebreak": 7,
+           "winner": true
+          },
+          {
+           "value": 2.0,
+           "winner": false
+          }
+         ],
+         "athlete": {
+          "displayName": "Jessica Pegula",
+          "shortName": "J. Pegula",
+          "fullName": "Jessica Pegula"
+         }
+        },
+        {
+         "id": "3626",
+         "uid": "s:850~l:900~a:3626",
+         "type": "athlete",
+         "order": 1,
+         "homeAway": "home",
+         "winner": true,
+         "linescores": [
+          {
+           "value": 6.0,
+           "winner": true
+          },
+          {
+           "value": 6.0,
+           "tiebreak": 5,
+           "winner": false
+          },
+          {
+           "value": 6.0,
+           "winner": true
+          }
+         ],
+         "athlete": {
+          "displayName": "Coco Gauff",
+          "shortName": "C. Gauff",
+          "fullName": "Coco Gauff"
+         }
+        }
+       ],
+       "tournamentId": 382,
+       "type": {
+        "id": "2",
+        "text": "Women's Singles",
+        "slug": "womens-singles"
+       },
+       "round": {
+        "id": "15",
+        "displayName": "Group Stage"
+       },
+       "wasSuspended": false
+      },
+      {
+       "id": "187381",
+       "uid": "s:850~l:900~e:382-2026~c:187381",
+       "date": "2026-11-09T20:15Z",
+       "startDate": "2026-11-09T20:15Z",
+       "timeValid": true,
+       "status": {
+        "period": 2,
+        "type": {
+         "id": "3",
+         "name": "STATUS_FINAL",
+         "state": "post",
+         "completed": true,
+         "description": "Final",
+         "detail": "Final",
+         "shortDetail": "Final"
+        }
+       },
+       "notes": [
+        {
+         "text": "(2) Aryna Sabalenka (BLR) bt (7) Karolina Muchova (CZE) 7-6 (7-2) 7-5",
+         "type": "event"
+        }
+       ],
+       "competitors": [
+        {
+         "id": "3039",
+         "uid": "s:850~l:900~a:3039",
+         "type": "athlete",
+         "order": 2,
+         "homeAway": "away",
+         "winner": false,
+         "linescores": [
+          {
+           "value": 6.0,
+           "tiebreak": 2,
+           "winner": false
+          },
+          {
+           "value": 5.0,
+           "winner": false
+          }
+         ],
+         "athlete": {
+          "displayName": "Karolina Muchova",
+          "shortName": "K. Muchova",
+          "fullName": "Karolina Muchova"
+         }
+        },
+        {
+         "id": "3038",
+         "uid": "s:850~l:900~a:3038",
+         "type": "athlete",
+         "order": 1,
+         "homeAway": "home",
+         "winner": true,
+         "linescores": [
+          {
+           "value": 7.0,
+           "tiebreak": 7,
+           "winner": true
+          },
+          {
+           "value": 7.0,
+           "winner": true
+          }
+         ],
+         "athlete": {
+          "displayName": "Aryna Sabalenka",
+          "shortName": "A. Sabalenka",
+          "fullName": "Aryna Sabalenka"
+         }
+        }
+       ],
+       "tournamentId": 382,
+       "type": {
+        "id": "2",
+        "text": "Women's Singles",
+        "slug": "womens-singles"
+       },
+       "round": {
+        "id": "15",
+        "displayName": "Group Stage"
+       },
+       "wasSuspended": false
+      }
+     ]
+    },
+    {
+     "grouping": {
+      "id": "4",
+      "slug": "womens-doubles",
+      "displayName": "Women's Doubles"
+     },
+     "competitions": [
+      {
+       "id": "187391",
+       "uid": "s:850~l:900~e:382-2026~c:187391",
+       "date": "2026-11-09T01:10Z",
+       "startDate": "2026-11-09T01:10Z",
+       "timeValid": true,
+       "status": {
+        "period": 3,
+        "type": {
+         "id": "3",
+         "name": "STATUS_FINAL",
+         "state": "post",
+         "completed": true,
+         "description": "Final",
+         "detail": "Final",
+         "shortDetail": "Final"
+        }
+       },
+       "notes": [
+        {
+         "text": "(8) Sara Errani (ITA) & Jasmine Paolini (ITA) bt (2) Katerina Siniakova (CZE) & Taylor Townsend (USA) 4-6 6-1 1-0 (10-8)",
+         "type": "event"
+        }
+       ],
+       "competitors": [
+        {
+         "id": "636-2615",
+         "uid": "s:850~l:900~t:636-2615",
+         "type": "team",
+         "order": 2,
+         "homeAway": "away",
+         "winner": true,
+         "linescores": [
+          {
+           "value": 4.0,
+           "winner": false
+          },
+          {
+           "value": 6.0,
+           "winner": true
+          },
+          {
+           "value": 1.0,
+           "tiebreak": 10,
+           "winner": true
+          }
+         ],
+         "roster": {
+          "displayName": "Sara Errani / Jasmine Paolini",
+          "shortDisplayName": "S. Errani / J. Paolini"
+         }
+        },
+        {
+         "id": "2248-2114",
+         "uid": "s:850~l:900~t:2248-2114",
+         "type": "team",
+         "order": 1,
+         "homeAway": "home",
+         "winner": false,
+         "linescores": [
+          {
+           "value": 6.0,
+           "winner": true
+          },
+          {
+           "value": 1.0,
+           "winner": false
+          },
+          {
+           "value": 0.0,
+           "tiebreak": 8,
+           "winner": false
+          }
+         ],
+         "roster": {
+          "displayName": "Katerina Siniakova / Taylor Townsend",
+          "shortDisplayName": "K. Siniakova / T. Townsend"
+         }
+        }
+       ],
+       "tournamentId": 382,
+       "type": {
+        "id": "4",
+        "text": "Women's Doubles",
+        "slug": "womens-doubles"
+       },
+       "round": {
+        "id": "15",
+        "displayName": "Group Stage"
+       },
+       "wasSuspended": false
+      }
+     ]
+    }
+   ],
+   "status": {
+    "period": 2,
+    "type": {
+     "id": "3",
+     "name": "STATUS_FINAL",
+     "state": "post",
+     "completed": true,
+     "description": "Final",
+     "detail": "Final",
+     "shortDetail": "Final"
+    }
+   }
+  }
+ ]
+}

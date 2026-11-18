@@ -19,14 +19,33 @@ data class EspnEventDto(
     val date: String? = null,
     val status: EspnStatusDto? = null,
     val competitions: List<EspnCompetitionDto>? = null,
-    val links: List<EspnLinkDto>? = null
+    val links: List<EspnLinkDto>? = null,
+    /** Individual sports: the tournament, card or Grand Prix ("Nitto ATP Finals", "UFC 334: Gane vs. Hokit"). */
+    val name: String? = null,
+    /** Golf: the final round's day (US Eastern midnight); tennis and F1: the last day. */
+    val endDate: String? = null,
+    /** Tennis: the tournament's draws, each with every match of the tournament. */
+    val groupings: List<EspnGroupingDto>? = null
 )
+
+/** A tennis draw ("mens-singles") and its matches. */
+@JsonClass(generateAdapter = true)
+data class EspnGroupingDto(val grouping: EspnGroupingInfoDto? = null, val competitions: List<EspnCompetitionDto>? = null)
+
+@JsonClass(generateAdapter = true)
+data class EspnGroupingInfoDto(val slug: String? = null, val displayName: String? = null)
 
 @JsonClass(generateAdapter = true)
 data class EspnLinkDto(val href: String? = null)
 
 @JsonClass(generateAdapter = true)
-data class EspnStatusDto(val type: EspnStatusTypeDto? = null)
+data class EspnStatusDto(
+    val type: EspnStatusTypeDto? = null,
+    /** UFC: the round a fight ended in. */
+    val period: Int? = null,
+    /** UFC: the time in that round ("3:14"). */
+    val displayClock: String? = null
+)
 
 @JsonClass(generateAdapter = true)
 data class EspnStatusTypeDto(
@@ -39,6 +58,14 @@ data class EspnStatusTypeDto(
 
 @JsonClass(generateAdapter = true)
 data class EspnCompetitionDto(
+    /** Individual sports: the match, fight or session id; its own [date] and [status]. */
+    val id: String? = null,
+    val date: String? = null,
+    val status: EspnStatusDto? = null,
+    /** UFC: the weight class ("Lightweight"); F1: the session ("FP1", "Qual", "Race"). */
+    val type: EspnCompetitionTypeDto? = null,
+    /** Tennis: "Group Stage", "Round 1", "Final". */
+    val round: EspnRoundDto? = null,
     val competitors: List<EspnCompetitorDto>? = null,
     /** "UEFA Nations League, Group A2", "Men's International Friendly": the competition, then the stage. */
     val altGameNote: String? = null,
@@ -54,8 +81,24 @@ data class EspnCompetitorDto(
     val homeAway: String? = null,
     val score: String? = null,
     val team: EspnTeamDto? = null,
-    val linescores: List<EspnLinescoreDto>? = null
+    val linescores: List<EspnLinescoreDto>? = null,
+    /** Individual sports: the player, fighter or driver. */
+    val athlete: EspnAthleteDto? = null,
+    /** Tennis doubles: the pair. */
+    val roster: EspnRosterDto? = null,
+    val winner: Boolean? = null,
+    /** Tennis/UFC: the listing order (not the result); F1 and golf: the finishing position. */
+    val order: Int? = null
 )
+
+@JsonClass(generateAdapter = true)
+data class EspnRosterDto(val displayName: String? = null, val shortDisplayName: String? = null)
+
+@JsonClass(generateAdapter = true)
+data class EspnCompetitionTypeDto(val abbreviation: String? = null, val text: String? = null)
+
+@JsonClass(generateAdapter = true)
+data class EspnRoundDto(val displayName: String? = null)
 
 @JsonClass(generateAdapter = true)
 data class EspnTeamDto(
@@ -69,10 +112,16 @@ data class EspnTeamDto(
 )
 
 @JsonClass(generateAdapter = true)
-data class EspnLinescoreDto(val value: Double? = null)
+data class EspnLinescoreDto(
+    val value: Double? = null,
+    /** Tennis: this side's tiebreak points in the set. */
+    val tiebreak: Int? = null
+)
 
 @JsonClass(generateAdapter = true)
 data class EspnDetailDto(
+    /** UFC: "Unofficial Winner Kotko" / "... Submission" / "... Decision" gives the method. */
+    val type: EspnDetailTypeDto? = null,
     val clock: EspnDetailClockDto? = null,
     val team: EspnDetailTeamDto? = null,
     val scoringPlay: Boolean? = null,
@@ -81,6 +130,9 @@ data class EspnDetailDto(
     val shootout: Boolean? = null,
     val athletesInvolved: List<EspnAthleteDto>? = null
 )
+
+@JsonClass(generateAdapter = true)
+data class EspnDetailTypeDto(val text: String? = null)
 
 @JsonClass(generateAdapter = true)
 data class EspnDetailClockDto(val displayValue: String? = null)

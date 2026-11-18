@@ -56,7 +56,11 @@ class EspnScoreProvider internal constructor(
                         ScoreboardResult.FAILED.copy(retryAfterMs = retryAfterMs(response.header("Retry-After")))
                     } else {
                         val dto = adapter.fromJson(body)
-                        if (dto == null) ScoreboardResult.FAILED else ScoreboardResult(toSnapshots(dto, league))
+                        when {
+                            dto == null -> ScoreboardResult.FAILED
+                            EspnIndividualResults.covers(league) -> ScoreboardResult(EspnIndividualResults.toSnapshots(dto, league, date))
+                            else -> ScoreboardResult(toSnapshots(dto, league))
+                        }
                     }
                 }
             } catch (e: CancellationException) {
