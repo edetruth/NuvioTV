@@ -6,8 +6,11 @@ import com.nuvio.tv.domain.model.SportsLiveKind
 import java.time.ZoneId
 import java.util.Locale
 
-/** One side of a drawn game card: [name] for large cards, [short] (an abbreviation when known) for small ones. */
-data class GameArtTeam(val name: String, val short: String, val logo: String?)
+/**
+ * One side of a drawn game card: [name] for large cards, [short] (an abbreviation when known) for small
+ * ones, and [shortName] (ESPN's short name, "Auburn" for "Auburn Tigers") between the two, for rows.
+ */
+data class GameArtTeam(val name: String, val short: String, val logo: String?, val shortName: String = name)
 
 /**
  * The card Nuvio draws for a game in place of the addon's poster (whose painted-in "13:00 UTC" never
@@ -61,7 +64,12 @@ data class GameArt(
             val name = espn?.displayName?.takeIf { it.isNotBlank() } ?: own
             val short = espn?.abbreviation?.takeIf { it.isNotBlank() } ?: espn?.shortDisplayName?.takeIf { it.isNotBlank() }
                 ?: known?.abbreviation ?: own
-            return GameArtTeam(name = name, short = short, logo = espn?.logo?.takeIf { it.isNotBlank() } ?: known?.logo)
+            return GameArtTeam(
+                name = name,
+                short = short,
+                logo = espn?.logo?.takeIf { it.isNotBlank() } ?: known?.logo,
+                shortName = espn?.shortDisplayName?.takeIf { it.isNotBlank() } ?: name
+            )
         }
 
         // "NBA: Boston Celtics" → "Boston Celtics"; a league or channel tag before the first team is not its name.

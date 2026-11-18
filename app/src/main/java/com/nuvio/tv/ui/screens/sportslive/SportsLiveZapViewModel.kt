@@ -48,6 +48,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -134,9 +135,19 @@ class SportsLiveZapViewModel internal constructor(
         SportsLiveZapSessions.activeFor(contentId)?.takeIf { SportsLiveZapSessions.consumeZapArrival() }
     )
 
-    /** The zap banner: "Switching to …" while a stream is looked up, then the arrival banner. */
-    val banner: StateFlow<SportsLiveZapBanner?> = combine(controller.resolving, arrival) { resolving, arrived ->
-        resolving?.banner(switching = true) ?: arrived?.banner(switching = false)
+    /**
+     * The zap banner (#76): "Switching to …" while a stream is looked up, then the arrival banner, with
+     * logos, the score chip under the Scores setting (no score until it is read) and the next game.
+     */
+    val banner: StateFlow<SportsLiveZapBanner?> = combine(
+        controller.resolving,
+        arrival,
+        liveScores.scores,
+        liveScores.mode.map<ScoresMode, ScoresMode?> { it }.onStart { emit(null) },
+        repo.endedKeys
+    ) { resolving, arrived, scores, mode, ended ->
+        resolving?.banner(switching = true, scores = scores, mode = mode, endedKeys = ended, known = logos)
+            ?: arrived?.banner(switching = false, scores = scores, mode = mode, endedKeys = ended, known = logos)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     // The session when the panel opened; null while it is closed.
@@ -258,8 +269,15 @@ class SportsLiveZapViewModel internal constructor(
         }
     }
 
-    /** True when the key was used for a zap. No zaps while a watch party is active. */
+    /**
+     * True when the key was used: a zap, or ▼ while the arrival banner shows, which opens the live games
+     * panel (#76; CH− still zaps). No zaps while a watch party is active.
+     */
     fun onKey(keyCode: Int, partyActive: Boolean): Boolean {
+        if (zapBannerOpensPanel(keyCode, partyActive, banner.value)) {
+            openPanel()
+            return true
+        }
         val forward = zapDirection(keyCode, partyActive) ?: return false
         return controller.zap(contentId, forward)
     }
@@ -283,6 +301,8 @@ class SportsLiveZapViewModel internal constructor(
         focusedRowKey = null
         shownOrder = null
         shownMinute = null
+        // The panel takes over from the arrival banner (#76).
+        arrival.value = null
         // Opens on All, or on the chip picked earlier in this playback (#68).
         panelChip.value = session.panelChip?.filter
         panelSession.value = session
@@ -413,6 +433,13 @@ private const val BANNER_MS = 3_000L
 
 /** The panel's games: [all] of them, and those [shown] under [chip]. */
 private data class PanelList(val all: List<SportsLiveItem>, val chip: String?, val shown: List<SportsLiveItem>)
+
+/**
+ * Whether [keyCode] opens the live games panel from the zap banner (#76): ▼ (the D-pad, not CH−) while
+ * the arrival banner shows. While a stream is still being looked up ("Switching to …") ▼ zaps on.
+ */
+internal fun zapBannerOpensPanel(keyCode: Int, partyActive: Boolean, banner: SportsLiveZapBanner?): Boolean =
+    !partyActive && keyCode == KeyEvent.KEYCODE_DPAD_DOWN && banner != null && !banner.switching
 
 /** true = next game, false = previous game, null = not a zap key or a watch party is active. */
 internal fun zapDirection(keyCode: Int, partyActive: Boolean): Boolean? = if (partyActive) null else when (keyCode) {

@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -253,26 +254,41 @@ private fun BoxScope.BehindLiveIndicator(
     )
 }
 
+/**
+ * The zap banner (#76): both logos around the matchup (or the channel's name), the score chip under
+ * the Scores setting, "league · source", "4 of 13", the next game and, once arrived, "▼ All games".
+ */
 @Composable
 private fun ZapBanner(banner: SportsLiveZapBanner) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
+            .widthIn(max = 720.dp)
             .clip(RoundedCornerShape(NuvioTheme.radii.xl))
             .background(NuvioTheme.colors.BackgroundElevated.copy(alpha = 0.92f))
             .padding(horizontal = 28.dp, vertical = 14.dp)
     ) {
-        Text(
-            text = if (banner.switching) {
-                stringResource(R.string.sports_live_zap_switching, banner.name)
-            } else {
-                banner.name
-            },
-            style = MaterialTheme.typography.titleLarge,
-            color = NuvioTheme.colors.TextPrimary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            val art = banner.art?.takeIf { it.hasLogos }
+            if (art != null) SportsLiveTeamLogo(art.first.logo, art.first.short, TeamLogoUrls.CARD_PX, Modifier.size(36.dp))
+            Text(
+                text = if (banner.switching) {
+                    stringResource(R.string.sports_live_zap_switching, banner.name)
+                } else {
+                    banner.name
+                },
+                style = MaterialTheme.typography.titleLarge,
+                color = NuvioTheme.colors.TextPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false)
+            )
+            if (art != null) SportsLiveTeamLogo(art.second.logo, art.second.short, TeamLogoUrls.CARD_PX, Modifier.size(36.dp))
+        }
+        banner.chip?.let { chip ->
+            Spacer(modifier = Modifier.height(4.dp))
+            SportsLiveScoreChip(chip)
+        }
         Spacer(modifier = Modifier.height(4.dp))
         Text(
             text = banner.detail,
@@ -282,11 +298,31 @@ private fun ZapBanner(banner: SportsLiveZapBanner) {
             overflow = TextOverflow.Ellipsis
         )
         Spacer(modifier = Modifier.height(2.dp))
-        Text(
-            text = stringResource(R.string.sports_live_zap_position, banner.position, banner.total),
-            style = MaterialTheme.typography.labelLarge,
-            color = NuvioTheme.colors.Primary
-        )
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Text(
+                text = stringResource(R.string.sports_live_zap_position, banner.position, banner.total),
+                style = MaterialTheme.typography.labelLarge,
+                color = NuvioTheme.colors.Primary
+            )
+            banner.next?.let { next ->
+                Text(
+                    text = stringResource(R.string.sports_live_zap_next, next),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = NuvioTheme.extendedColors.textSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+            }
+            if (!banner.switching) {
+                Text(
+                    text = stringResource(R.string.sports_live_zap_down_hint),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = NuvioTheme.colors.TextPrimary,
+                    maxLines = 1
+                )
+            }
+        }
     }
 }
 

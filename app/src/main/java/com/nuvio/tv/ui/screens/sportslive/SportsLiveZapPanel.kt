@@ -65,24 +65,48 @@ internal fun SportsLiveZapSession.pickFromPanel(
         returnToHomeOnBack = returnToHomeOnBack
     )?.copy(panelChip = panelChip)
 
-/** What the zap banner shows; [switching] while the game's stream is being looked up. */
+/**
+ * What the zap banner shows (#76); [switching] while the game's stream is being looked up. A game
+ * matched to its teams carries [art] (logos, names) and the score [chip] under the Scores setting (never
+ * revealed by the banner: Hide until focused reads "Score hidden"; Off, none). [next] is the game ▼ / CH−
+ * zaps to from here, null when there is none.
+ */
 data class SportsLiveZapBanner(
+    /** The matchup or the channel, as the card names it. */
     val name: String,
-    /** "league · addon". */
+    /** "league · source". */
     val detail: String,
     val position: Int,
     val total: Int,
-    val switching: Boolean
+    val switching: Boolean,
+    val art: GameArt? = null,
+    val chip: ScoreChip? = null,
+    val next: String? = null
 )
 
-internal fun SportsLiveZapSession.banner(switching: Boolean): SportsLiveZapBanner {
+internal fun SportsLiveZapSession.banner(
+    switching: Boolean,
+    scores: Map<String, ScoreSnapshot> = emptyMap(),
+    mode: ScoresMode? = null,
+    endedKeys: Set<String> = emptySet(),
+    known: TeamLogoBook = TeamLogoBook.shared
+): SportsLiveZapBanner {
     val (position, total) = positionLabelArgs
+    val item = current
+    // A score only with the Scores setting known and on; never one of a game it does not strictly match.
+    val event = scores[item.streamKey].takeIf { mode != null && mode != ScoresMode.OFF }
+        ?.let { ScoreChips.matchedEvent(item, it) }
+    val art = GameArt.of(item, event, known)
     return SportsLiveZapBanner(
-        name = current.meta.name,
-        detail = "${current.sport ?: current.catalogName} · ${current.addonName}",
+        name = item.meta.name,
+        detail = "${art?.league ?: item.sport ?: item.catalogName} · ${item.addonName}",
         position = position,
         total = total,
-        switching = switching
+        switching = switching,
+        art = art,
+        // The banner never reveals a score: Hide until focused shows it hidden.
+        chip = ScoreChips.of(item, event, mode, revealed = false),
+        next = step(forward = true, endedKeys = endedKeys)?.current?.takeIf { it.streamKey != item.streamKey }?.meta?.name
     )
 }
 

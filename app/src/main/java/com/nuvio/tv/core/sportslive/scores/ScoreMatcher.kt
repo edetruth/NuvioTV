@@ -163,8 +163,12 @@ class ScoreMatcher(
         return Pick(top.first)
     }
 
-    /** A card side: its base name (qualifier removed) for the suffix rule, equality keys and qualifier. */
-    private class Side(val base: String, val keys: Set<String>, val qualifier: String?)
+    /**
+     * A card side: its base name (qualifier removed) for the suffix rule, equality keys and qualifier, and
+     * [collegeKeys] ([collegeAlternates]: "Georgetown University" as "georgetown"), compared with a
+     * team's own names only, never its city (N9).
+     */
+    private class Side(val base: String, val keys: Set<String>, val qualifier: String?, val collegeKeys: Set<String> = emptySet())
 
     private fun side(name: String): Side = sideOf(name)
 
@@ -241,6 +245,7 @@ class ScoreMatcher(
         fun score(side: Side): Int = when {
             side.qualifier != qualifier -> 0
             side.keys.any { it in strongKeys } -> STRONG
+            side.collegeKeys.any { it in strongKeys } -> STRONG
             side.keys.any { it in locationKeys } -> WEAK
             fullNames.any { SportsLiveTeams.matches(side.base, it) } -> WEAK
             else -> 0
@@ -282,7 +287,36 @@ class ScoreMatcher(
 
         private fun sideOf(name: String): Side {
             val (base, qualifier) = splitQualifier(fold(name))
-            return Side(base, setOf(SportsLiveTeams.normalise(base), SportsLiveTeams.canonicalise(base)) - "", qualifier)
+            val keys = setOf(SportsLiveTeams.normalise(base), SportsLiveTeams.canonicalise(base)) - ""
+            return Side(base, keys, qualifier, collegeAlternates(SportsLiveTeams.normalise(base)) - keys)
+        }
+
+        // A bare name that is another school than "‹name› University": Miami University is Miami (OH),
+        // not Miami (FL); Washington University (St. Louis) is not Washington.
+        private val UNIVERSITY_KEEPS = setOf("miami", "washington")
+        private val SCHOOL_WORDS = setOf("university", "college", "univ")
+
+        /**
+         * The other names a college card side may go by on ESPN (N9), from its [normalised] name: without a
+         * trailing "University" / "College" ("georgetown university" → "georgetown") or a leading
+         * "University of" ("university of michigan" → "michigan"), and with a trailing "State" written
+         * "St" or the reverse ("michigan state" ↔ "michigan st", ESPN's short form). "State" is never
+         * dropped ("Ohio State" is not Ohio), a one-word name is left alone ("College"), and
+         * [UNIVERSITY_KEEPS] are not shortened. They count only against a team's own names, never its city.
+         */
+        internal fun collegeAlternates(normalised: String): Set<String> {
+            val words = normalised.split(' ').filter { it.isNotEmpty() }
+            if (words.size < 2) return emptySet()
+            val stripped = when {
+                words.size >= 3 && words[0] in SCHOOL_WORDS && words[1] == "of" -> words.drop(2)
+                words.last() in SCHOOL_WORDS -> words.dropLast(1).takeUnless { it.joinToString(" ") in UNIVERSITY_KEEPS }
+                else -> null
+            } ?: words
+            return buildSet {
+                if (stripped != words) add(stripped.joinToString(" "))
+                if (stripped.size >= 2 && stripped.last() == "state") add((stripped.dropLast(1) + "st").joinToString(" "))
+                if (stripped.size >= 2 && stripped.last() == "st") add((stripped.dropLast(1) + "state").joinToString(" "))
+            }
         }
 
         /**

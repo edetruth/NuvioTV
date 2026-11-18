@@ -138,7 +138,7 @@ fun SportsLiveGameScreen(
     val sections = state.sections
     val section = state.section
     val showsScore = state.showsScore
-    val headerRows = gameHeaderRows(showsScore = showsScore, hasReplay = state.replay != null)
+    val headerRows = gameHeaderRows(showsScore = showsScore, hasReplay = state.replay != null, homeFirst = state.homeFirst)
 
     // Back from highlights: focus returns to the card played, or to Watch all highlights.
     var returnToHighlights by rememberSaveable { mutableStateOf(false) }
@@ -288,6 +288,8 @@ private fun GameHeader(
     val summary = state.summary
     val showsScore = state.showsScore
     val (away, home) = headerSides(summary, event)
+    // In the order of the card the page came from (N10): away first unless the card named home first.
+    val (first, second) = inCardOrder(away, home, state.homeFirst)
     val gameState = summary?.state ?: event.state
     val live = gameState == ScoreState.IN
     // Middle and buttons have fixed widths, measured first: the teams share what is left, so a long
@@ -301,20 +303,20 @@ private fun GameHeader(
         horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.lg),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        HeaderTeam(away, showRecord = showsScore, alignEnd = false, modifier = Modifier.weight(1f))
+        HeaderTeam(first, showRecord = showsScore, alignEnd = false, modifier = Modifier.weight(1f))
         Column(
             modifier = Modifier.width(HEADER_MIDDLE_WIDTH),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xxs)
         ) {
-            val awayScore = away.score
-            val homeScore = home.score
+            val firstScore = first.score
+            val secondScore = second.score
             val played = gameState == ScoreState.IN || gameState == ScoreState.POST
             Text(
                 text = when {
                     !showsScore -> stringResource(R.string.sports_live_results_score_hidden)
-                    played && awayScore != null && homeScore != null ->
-                        stringResource(R.string.sports_live_details_sides, awayScore.toString(), homeScore.toString())
+                    played && firstScore != null && secondScore != null ->
+                        stringResource(R.string.sports_live_details_sides, firstScore.toString(), secondScore.toString())
                     else -> stringResource(R.string.sports_live_art_vs)
                 },
                 style = if (showsScore) {
@@ -328,7 +330,7 @@ private fun GameHeader(
             )
             GameStatusLine(summary = summary, event = event, showsScore = showsScore, live = live)
         }
-        HeaderTeam(home, showRecord = showsScore, alignEnd = true, modifier = Modifier.weight(1f))
+        HeaderTeam(second, showRecord = showsScore, alignEnd = true, modifier = Modifier.weight(1f))
         // A grid as the design: Reveal and Watch replay each on a row, then Follow ‹away› · Follow ‹home›.
         Column(
             modifier = Modifier.width(HEADER_BUTTONS_WIDTH),
@@ -378,13 +380,16 @@ internal enum class GameHeaderButton { REVEAL, REPLAY, FOLLOW_AWAY, FOLLOW_HOME 
 
 /**
  * The header's buttons, row by row: Reveal (only while the score is hidden), Watch replay (only with a
- * replay), then both Follow buttons side by side, which every game has.
+ * replay), then both Follow buttons side by side, which every game has, in the header's team order.
  */
-internal fun gameHeaderRows(showsScore: Boolean, hasReplay: Boolean): List<List<GameHeaderButton>> = buildList {
+internal fun gameHeaderRows(showsScore: Boolean, hasReplay: Boolean, homeFirst: Boolean = false): List<List<GameHeaderButton>> = buildList {
     if (!showsScore) add(listOf(GameHeaderButton.REVEAL))
     if (hasReplay) add(listOf(GameHeaderButton.REPLAY))
-    add(listOf(GameHeaderButton.FOLLOW_AWAY, GameHeaderButton.FOLLOW_HOME))
+    add(inCardOrder(GameHeaderButton.FOLLOW_AWAY, GameHeaderButton.FOLLOW_HOME, homeFirst).toList())
 }
+
+/** [away] and [home] in the order the page shows them: home first when [homeFirst] (N10). */
+internal fun <T> inCardOrder(away: T, home: T, homeFirst: Boolean): Pair<T, T> = if (homeFirst) home to away else away to home
 
 /** The page's first focus: Reveal when shown, else Watch replay, else Follow ‹away›. */
 internal fun gameHeaderFirstFocus(rows: List<List<GameHeaderButton>>): GameHeaderButton = rows.first().first()
@@ -586,7 +591,7 @@ private fun GameBody(
                     .focusRequester(entryFocusRequester)
                     .focusProperties { up = upFocusRequester }
                 when (section) {
-                    GameSection.GAME -> gameTab(summary, first)
+                    GameSection.GAME -> gameTab(summary, first, state.homeFirst)
                     GameSection.BOX_SCORE -> boxScoreTab(summary.boxScore, first)
                     GameSection.STANDINGS -> standingsTab(summary.standings, first)
                     GameSection.HIGHLIGHTS -> highlightsTab(summary.highlights, first, highlightFocus, onPlayHighlights)
@@ -621,7 +626,7 @@ private fun GamePanel(
     }
 }
 
-private fun LazyListScope.gameTab(summary: GameSummary, first: Modifier) {
+private fun LazyListScope.gameTab(summary: GameSummary, first: Modifier, homeFirst: Boolean) {
     val details = summary.scoreDetails()?.takeIf { it.periods.isNotEmpty() || it.soccer }
     val performers = summary.performers
     val stats = summary.teamStats
@@ -656,14 +661,15 @@ private fun LazyListScope.gameTab(summary: GameSummary, first: Modifier) {
             }
             if (stats.isNotEmpty()) {
                 GamePanel(modifier = Modifier.weight(0.55f).then(focus(2))) {
+                    val (left, right) = inCardOrder(summary.away.short, summary.home.short, homeFirst)
                     Row(modifier = Modifier.fillMaxWidth()) {
-                        SectionTitle(summary.away.short)
+                        SectionTitle(left)
                         Spacer(Modifier.weight(1f))
                         SectionTitle(stringResource(R.string.sports_live_game_team_stats))
                         Spacer(Modifier.weight(1f))
-                        SectionTitle(summary.home.short)
+                        SectionTitle(right)
                     }
-                    stats.forEach { StatBar(it) }
+                    stats.forEach { StatBar(it, homeFirst) }
                 }
             }
         }
@@ -711,15 +717,19 @@ private fun PerformerCard(performer: Performer, modifier: Modifier) {
 }
 
 @Composable
-private fun StatBar(comparison: StatComparison) {
+private fun StatBar(comparison: StatComparison, homeFirst: Boolean) {
     val percent = stringResource(R.string.sports_live_game_percent)
     fun shown(text: String) = if (comparison.stat.percent && !text.endsWith("%")) String.format(percent, text) else text
-    val awayBetter = comparison.better == ScoreSide.AWAY
-    val homeBetter = comparison.better == ScoreSide.HOME
+    // "away" and "home" below are the left and right sides, in the header's order (N10).
+    val (leftSide, rightSide) = inCardOrder(ScoreSide.AWAY, ScoreSide.HOME, homeFirst)
+    val awayBetter = comparison.better == leftSide
+    val homeBetter = comparison.better == rightSide
+    val (leftText, rightText) = inCardOrder(comparison.away, comparison.home, homeFirst)
+    val (leftValue, rightValue) = inCardOrder(comparison.awayValue, comparison.homeValue, homeFirst)
     Column(verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs)) {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(
-                shown(comparison.away),
+                shown(leftText),
                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = if (awayBetter) FontWeight.Bold else FontWeight.Normal, fontFeatureSettings = "tnum"),
                 color = NuvioTheme.colors.TextPrimary
             )
@@ -732,12 +742,12 @@ private fun StatBar(comparison: StatComparison) {
                 modifier = Modifier.weight(1f)
             )
             Text(
-                shown(comparison.home),
+                shown(rightText),
                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = if (homeBetter) FontWeight.Bold else FontWeight.Normal, fontFeatureSettings = "tnum"),
                 color = NuvioTheme.colors.TextPrimary
             )
         }
-        val (awayWeight, homeWeight) = statBarWeights(comparison.awayValue, comparison.homeValue)
+        val (awayWeight, homeWeight) = statBarWeights(leftValue, rightValue)
         Row(
             modifier = Modifier
                 .fillMaxWidth()

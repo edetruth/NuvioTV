@@ -59,7 +59,8 @@ import com.nuvio.tv.ui.theme.NuvioTheme
 import com.nuvio.tv.ui.screens.sportslive.sportsLiveSourceLoadingRows
 import androidx.compose.ui.res.stringResource
 import com.nuvio.tv.R
-import com.nuvio.tv.ui.screens.sportslive.SportsLiveSourceNoticeLabel
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveSourceNoticeRow
+import com.nuvio.tv.ui.screens.sportslive.sportsLiveNoticesLast
 import com.nuvio.tv.ui.util.localizeEpisodeTitle
 import androidx.compose.ui.platform.LocalContext
 
@@ -108,18 +109,21 @@ internal fun StreamSourcesSidePanel(
         }
     }
 
-    val streamKeys = remember(uiState.sourceFilteredStreams) {
+    // Sports & Live (N2): a source's notices sit after its streams, as info rows nobody can focus or play.
+    val shownStreams = remember(uiState.sourceFilteredStreams) { sportsLiveNoticesLast(uiState.sourceFilteredStreams, isNotice) }
+    val noticeIndices = remember(shownStreams) { shownStreams.indices.filter { isNotice(shownStreams[it]) }.toSet() }
+    val streamKeys = remember(shownStreams) {
         val seen = mutableMapOf<String, Int>()
-        uiState.sourceFilteredStreams.map { stream ->
+        shownStreams.map { stream ->
             val base = stream.stableKey(0)
             val count = seen.getOrDefault(base, 0)
             seen[base] = count + 1
             stream.stableKey(count)
         }
     }
-    val firstStreamKey = streamKeys.firstOrNull()
+    val firstStreamKey = streamKeys.indices.firstOrNull { it !in noticeIndices }?.let(streamKeys::get)
     val currentStreamIndex = remember(
-        uiState.sourceFilteredStreams,
+        shownStreams,
         uiState.currentStreamInfoHash,
         uiState.currentStreamFileIdx,
         uiState.currentStreamAddonName,
@@ -129,7 +133,7 @@ internal fun StreamSourcesSidePanel(
         currentFilename
     ) {
         findCurrentStreamIndex(
-            streams = uiState.sourceFilteredStreams,
+            streams = shownStreams,
             currentStreamInfoHash = uiState.currentStreamInfoHash,
             currentStreamFileIdx = uiState.currentStreamFileIdx,
             currentStreamAddonName = uiState.currentStreamAddonName,
@@ -139,8 +143,8 @@ internal fun StreamSourcesSidePanel(
             currentFilename = currentFilename
         )
     }
-    // The panel opens on the stream playing now, falling back to the first result.
-    val currentStreamKey = streamKeys.getOrNull(currentStreamIndex)
+    // The panel opens on the stream playing now, falling back to the first result; never on a notice (N2).
+    val currentStreamKey = streamKeys.getOrNull(currentStreamIndex)?.takeIf { currentStreamIndex !in noticeIndices }
     val streamFocusRequesters = remember { mutableMapOf<String, FocusRequester>() }
     streamKeys.forEach { key ->
         streamFocusRequesters.getOrPut(key) { FocusRequester() }
@@ -493,12 +497,14 @@ internal fun StreamSourcesSidePanel(
                                 }
                             }
                     ) {
-                        itemsIndexed(uiState.sourceFilteredStreams, key = { index, _ ->
+                        itemsIndexed(shownStreams, key = { index, _ ->
                             streamKeys[index]
                         }) { index, stream ->
-                            val notice = isNotice(stream)
+                            if (index in noticeIndices) {
+                                SportsLiveSourceNoticeRow(stream)
+                                return@itemsIndexed
+                            }
                             Column {
-                                if (notice) SportsLiveSourceNoticeLabel()
                                 StreamItem(
                                     stream = stream,
                                     focusRequester = if (index == 0) {
@@ -510,7 +516,7 @@ internal fun StreamSourcesSidePanel(
                                     showFileSizeBadges = uiState.showFileSizeBadges,
                                     showAddonLogo = uiState.showAddonLogo,
                                     badgePlacement = uiState.streamBadgePlacement,
-                                    onClick = { if (!notice) onStreamSelected(stream) },
+                                    onClick = { onStreamSelected(stream) },
                                     onFocusChanged = { focused ->
                                         if (focused) {
                                             focusedStreamKey = streamKeys[index]

@@ -27,10 +27,14 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Event
+import androidx.compose.material.icons.rounded.LiveTv
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -54,6 +58,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
@@ -183,6 +188,25 @@ internal fun SportsLiveTimelineView(
         val gridColor = NuvioTheme.colors.Border.copy(alpha = 0.35f)
         val nowLineX = xOf(model.nowMs)
         val tickXs = remember(model.ticks, originMs, pxPerMs) { model.ticks.map { xOf(it.ms) } }
+        // The now tag's width, measured: an hour label it would cover is not drawn (N7).
+        var nowTagWidth by remember { mutableFloatStateOf(0f) }
+        fun nowTagLeft(): Float = SportsLiveTimeline.nowTagLeft(nowLineX, scroll.value, NOW_TAG_SHIFT_PX.toFloat(), nowTagWidth, viewportPx)
+        // The window's time span, to the minute: only the edge hints read it, so scrolling recomposes them alone.
+        val windowStart = remember(windowKey, pxPerMs) {
+            derivedStateOf { originMs + (scroll.value / pxPerMs).toLong() / MINUTE_MS * MINUTE_MS }
+        }
+
+        // Fast-forward / rewind, or holding ← →: the window jumps 3 h and focus goes to the game nearest
+        // that time (#77). A held key jumps once per press.
+        var jumpHeld by remember { mutableStateOf(false) }
+        fun jump(fromKey: String, forward: Boolean) {
+            val target = SportsLiveTimeline.jumpScroll(scroll.value, forward, hourPx, minScroll, maxScroll)
+            // The window moves first, so the new focus's reveal measures against where it now is.
+            scope.launch {
+                scroll.snapTo(target)
+                SportsLiveTimeline.jumpTarget(currentModel, fromKey, forward)?.let(::focus)
+            }
+        }
 
         Column(modifier = Modifier.fillMaxSize()) {
             // The ruler: hour labels and the now tag, sliding with the window.
@@ -202,6 +226,13 @@ internal fun SportsLiveTimelineView(
                         modifier = Modifier
                             .align(Alignment.CenterStart)
                             .offset { IntOffset((tickXs[index] - scroll.value).roundToInt() + TICK_LABEL_INSET_PX, 0) }
+                            // Read at draw time, so scrolling never recomposes the ruler.
+                            .drawWithContent {
+                                val left = tickXs[index] - scroll.value + TICK_LABEL_INSET_PX
+                                val covered = nowTagWidth > 0f &&
+                                    SportsLiveTimeline.spansOverlap(left, size.width, nowTagLeft(), nowTagWidth, NOW_TAG_GAP_PX)
+                                if (!covered) drawContent()
+                            }
                     )
                 }
                 Text(
@@ -211,7 +242,9 @@ internal fun SportsLiveTimelineView(
                     maxLines = 1,
                     modifier = Modifier
                         .align(Alignment.CenterStart)
-                        .offset { IntOffset((nowLineX - scroll.value).roundToInt() - NOW_TAG_SHIFT_PX, 0) }
+                        .onSizeChanged { nowTagWidth = it.width.toFloat() }
+                        // Kept whole inside the ruler while the now line is in the window (N7).
+                        .offset { IntOffset(nowTagLeft().roundToInt(), 0) }
                         .clip(RoundedCornerShape(NuvioTheme.radii.sm))
                         .background(ArtColors.LiveRed)
                         .padding(horizontal = NuvioTheme.spacing.xs)
@@ -225,13 +258,17 @@ internal fun SportsLiveTimelineView(
                     .drawWithContent {
                         val left = LABEL_WIDTH.toPx()
                         val offset = scroll.value
+                        // The "No time" strip is not on the ruler: no hour or now line crosses it (N8).
+                        val bottom = rowState.layoutInfo.visibleItemsInfo
+                            .firstOrNull { it.key == UNTIMED_KEY }
+                            ?.offset?.toFloat()?.coerceIn(0f, size.height) ?: size.height
                         tickXs.forEach { x ->
                             val at = left + x - offset
-                            if (at >= left && at <= size.width) drawLine(gridColor, Offset(at, 0f), Offset(at, size.height), 1f)
+                            if (at >= left && at <= size.width) drawLine(gridColor, Offset(at, 0f), Offset(at, bottom), 1f)
                         }
                         drawContent()
                         val now = left + nowLineX - offset
-                        if (now >= left && now <= size.width) drawLine(ArtColors.LiveRed, Offset(now, 0f), Offset(now, size.height), NOW_LINE_PX)
+                        if (now >= left && now <= size.width) drawLine(ArtColors.LiveRed, Offset(now, 0f), Offset(now, bottom), NOW_LINE_PX)
                     }
             ) {
                 LazyColumn(
@@ -246,6 +283,18 @@ internal fun SportsLiveTimelineView(
                         .dpadRepeatThrottle()
                         .onPreviewKeyEvent { event ->
                             val native = event.nativeKeyEvent
+                            if (native.action == AndroidKeyEvent.ACTION_DOWN && native.repeatCount == 0) jumpHeld = false
+                            when (val jumpKey = timelineJumpKey(native.keyCode, native.action, native.repeatCount, jumpHeld)) {
+                                null -> Unit
+                                TimelineJumpKey.CONSUME -> return@onPreviewKeyEvent true
+                                TimelineJumpKey.RELEASE -> jumpHeld = false
+                                TimelineJumpKey.FORWARD, TimelineJumpKey.BACK -> {
+                                    val from = focusedKey ?: return@onPreviewKeyEvent false
+                                    if (native.repeatCount > 0) jumpHeld = true
+                                    jump(from, forward = jumpKey == TimelineJumpKey.FORWARD)
+                                    return@onPreviewKeyEvent true
+                                }
+                            }
                             val move = when (native.keyCode) {
                                 AndroidKeyEvent.KEYCODE_DPAD_LEFT -> TimelineMove.LEFT
                                 AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> TimelineMove.RIGHT
@@ -275,6 +324,13 @@ internal fun SportsLiveTimelineView(
                                     .height(LANE_HEIGHT * league.lanes)
                                     .clipToBounds()
                             ) {
+                                // Nothing of this row in the window: where its games are (#77).
+                                TimelineRowHintChip(
+                                    league = league,
+                                    windowStartMs = { windowStart.value },
+                                    windowEndMs = { windowStart.value + currentModel.viewMs },
+                                    modifier = Modifier.fillMaxSize()
+                                )
                                 league.blocks.forEach { block ->
                                     val item = block.row.item
                                     val blockX = xOf(block.startMs)
@@ -314,15 +370,24 @@ internal fun SportsLiveTimelineView(
                         }
                     }
                     if (model.untimed.isNotEmpty()) {
-                        item(key = "untimed") {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                        // A strip of its own under the ruler's rows (N8): no hour or now line crosses it,
+                        // and its channels are tiles with a TV mark, not programmes on the clock.
+                        item(key = UNTIMED_KEY) {
+                            Row(
+                                modifier = Modifier
+                                    .padding(top = NuvioTheme.spacing.sm)
+                                    .clip(RoundedCornerShape(NuvioTheme.radii.md))
+                                    .background(ArtColors.Panel),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 LeagueLabel(stringResource(R.string.sports_live_timeline_no_time), followed = false)
                                 Row(
                                     modifier = Modifier
                                         .weight(1f)
                                         .horizontalScroll(rememberScrollState())
-                                        .padding(vertical = NuvioTheme.spacing.xxs),
-                                    horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)
+                                        // Room for the focused tile's ring at both ends of the scroll.
+                                        .padding(horizontal = NuvioTheme.spacing.sm, vertical = NuvioTheme.spacing.xs),
+                                    horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md)
                                 ) {
                                     model.untimed.forEach { row ->
                                         val item = row.item
@@ -555,7 +620,18 @@ private fun TimelineUntimedCard(
         },
         focusedBorder = Border(border = NuvioTheme.focusRing.border(NuvioTheme.spacing.xxs), shape = shape)
     ) {
-        Column(modifier = Modifier.padding(horizontal = NuvioTheme.spacing.sm, vertical = NuvioTheme.spacing.xxs)) {
+        Row(
+            modifier = Modifier.padding(horizontal = NuvioTheme.spacing.sm, vertical = NuvioTheme.spacing.xxs),
+            horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = if (row.item.isChannel) Icons.Rounded.LiveTv else Icons.Rounded.Event,
+                contentDescription = null,
+                tint = if (live) ArtColors.LiveText else ArtColors.Muted,
+                modifier = Modifier.size(20.dp)
+            )
+            Column {
             Text(
                 text = matchupOf(row, wide = true),
                 style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
@@ -570,7 +646,40 @@ private fun TimelineUntimedCard(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+            }
         }
+    }
+}
+
+/**
+ * "+2 later · 7:30 PM" at a league row's right end (or "3 earlier · 1:00 PM" at its left) while none of
+ * its games is in the window (#77). Reads the window lazily, so only the hint recomposes as it moves.
+ */
+@Composable
+private fun TimelineRowHintChip(
+    league: TimelineLeague,
+    windowStartMs: () -> Long,
+    windowEndMs: () -> Long,
+    modifier: Modifier = Modifier
+) {
+    val hint = SportsLiveTimeline.rowHint(league, windowStartMs(), windowEndMs()) ?: return
+    val time = rememberLocalTime(hint.atMs)
+    Box(modifier = modifier, contentAlignment = if (hint.later) Alignment.CenterEnd else Alignment.CenterStart) {
+        Text(
+            text = stringResource(
+                if (hint.later) R.string.sports_live_timeline_later else R.string.sports_live_timeline_earlier,
+                hint.count,
+                time
+            ),
+            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum"),
+            color = ArtColors.Secondary,
+            maxLines = 1,
+            modifier = Modifier
+                .padding(horizontal = NuvioTheme.spacing.sm)
+                .clip(RoundedCornerShape(NuvioTheme.radii.sm))
+                .background(ArtColors.Panel)
+                .padding(horizontal = NuvioTheme.spacing.sm, vertical = NuvioTheme.spacing.xxs)
+        )
     }
 }
 
@@ -594,7 +703,12 @@ internal fun SportsLiveTimelinePanel(
     watchFocusRequester: FocusRequester,
     /** Where ↑ and ← from the buttons go: the focused block. */
     blockFocusRequester: FocusRequester?,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /**
+     * → from the buttons reaches the mini player beside the panel when it plays; with nothing there it
+     * stays put rather than jump to whatever lies furthest that way (N3).
+     */
+    miniPlayerBeside: Boolean = false
 ) {
     val item = row.item
     val chipStrings = rememberScoreChipStrings()
@@ -604,6 +718,7 @@ internal fun SportsLiveTimelinePanel(
             left = it
             up = it
         }
+        if (!miniPlayerBeside) right = FocusRequester.Cancel
     }
     Row(
         modifier = modifier
@@ -706,7 +821,10 @@ internal fun SportsLiveTimelinePanel(
                 watchModifier = Modifier
                     .focusRequester(watchFocusRequester)
                     .then(back),
-                otherModifier = Modifier.focusProperties { blockFocusRequester?.let { left = it } }
+                otherModifier = Modifier.focusProperties {
+                    blockFocusRequester?.let { left = it }
+                    if (!miniPlayerBeside) right = FocusRequester.Cancel
+                }
             )
         }
     }
@@ -727,6 +845,11 @@ private const val FINAL_ALPHA = 0.6f
 private const val NOW_LINE_PX = 4f
 private const val TICK_LABEL_INSET_PX = 6
 private const val NOW_TAG_SHIFT_PX = 24
+/** An hour label closer than this to the now tag is not drawn (N7). */
+private const val NOW_TAG_GAP_PX = 4f
+private const val MINUTE_MS = 60_000L
+/** The "No time" strip's list key. */
+private const val UNTIMED_KEY = "untimed"
 /** 220 px at 1080p. */
 private val LABEL_WIDTH: Dp = 110.dp
 private val RULER_HEIGHT: Dp = 24.dp

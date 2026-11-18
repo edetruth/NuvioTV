@@ -264,6 +264,36 @@ class SportsLiveScoreboardTest {
     }
 
     @Test
+    fun `an ESPN final outside Just ended is a FINAL row and offers no Watch with another game`() {
+        // N5: after a restart the final is no Just ended game, yet ESPN says it is over.
+        val row = scoreboardRows(listOf(lakers), SportsLiveTab.LIVE_NOW, scores, ScoresMode.SHOW, emptySet(), NOW).single()
+        assertEquals(ScoreboardGroup.FINAL, row.group)
+        assertFalse(scoreboardButtons(SportsLiveTab.LIVE_NOW, row, lakersEvent).watchWith)
+        // Hidden scores keep the grouping (only the chip is hidden).
+        val hidden = scoreboardRows(listOf(lakers), SportsLiveTab.LIVE_NOW, scores, ScoresMode.HIDE_UNTIL_FOCUSED, emptySet(), NOW).single()
+        assertEquals(ScoreboardGroup.FINAL, hidden.group)
+        assertEquals(ScoreChip.Hidden, hidden.chip)
+        // A game with no ESPN state stays under more games, with the button.
+        val channelLike = scoreboardRows(listOf(later), SportsLiveTab.LIVE_NOW, emptyMap(), ScoresMode.SHOW, emptySet(), NOW).single()
+        assertTrue(scoreboardButtons(SportsLiveTab.LIVE_NOW, channelLike, null).watchWith)
+    }
+
+    @Test
+    fun `a row names each team by the longest of full name, short name and abbreviation`() {
+        // N1: ESPN's names for a matched game, longest first.
+        val pacersRow = rows().first { it.item == pacers }
+        assertEquals(listOf("Indiana Pacers", "Pacers", "IND"), scoreboardNameChoices(pacersRow.art!!.first))
+        assertEquals(listOf("Philadelphia 76ers", "76ers", "PHI"), scoreboardNameChoices(pacersRow.art!!.second))
+        // An unmatched card has its own name only once; blanks never show.
+        assertEquals(listOf("Celtics"), scoreboardNameChoices(com.nuvio.tv.core.sportslive.scores.GameArtTeam("Celtics", "Celtics", null)))
+        assertEquals(
+            listOf("Auburn Tigers", "Auburn", "AUB"),
+            scoreboardNameChoices(com.nuvio.tv.core.sportslive.scores.GameArtTeam("Auburn Tigers", " AUB ", null, shortName = "Auburn"))
+        )
+        assertEquals(listOf("Navy"), scoreboardNameChoices(com.nuvio.tv.core.sportslive.scores.GameArtTeam("Navy", "", null, shortName = " ")))
+    }
+
+    @Test
     fun `countdown to kickoff rounds up to the minute`() {
         assertEquals(1 to 44, scoreboardStartsIn(NOW + 104 * 60_000L - 30_000L, NOW))
         assertEquals(0 to 1, scoreboardStartsIn(NOW + 1_000L, NOW))

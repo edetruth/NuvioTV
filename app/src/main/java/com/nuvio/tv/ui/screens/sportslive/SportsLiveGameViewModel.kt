@@ -8,6 +8,8 @@ import com.nuvio.tv.core.sportslive.scores.GameSection
 import com.nuvio.tv.core.sportslive.scores.GameSummary
 import com.nuvio.tv.core.sportslive.scores.GameSummaryLoad
 import com.nuvio.tv.core.sportslive.scores.GameSummaryRepository
+import com.nuvio.tv.core.sportslive.scores.ScoreChips
+import com.nuvio.tv.core.sportslive.scores.ScoreMatcher
 import com.nuvio.tv.core.sportslive.scores.ScoreSettings
 import com.nuvio.tv.core.sportslive.scores.ScoreSide
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
@@ -34,10 +36,20 @@ import javax.inject.Inject
 
 /**
  * What opens a Game page: the ESPN [event] (from a Results row or a strictly matched card), the
- * strictly matched [replay] when there is one, and whether the score was already revealed where the
- * page was opened (Hide until focused).
+ * strictly matched [replay] when there is one, whether the score was already revealed where the
+ * page was opened (Hide until focused), and [homeFirst]: the card it was opened from names the home
+ * team first, so the page does too (N10). Results rows are away first, as ESPN lists them.
  */
-data class SportsLiveGameRequest(val event: ScoreSnapshot, val replay: SportsLiveItem? = null, val revealed: Boolean = false)
+data class SportsLiveGameRequest(
+    val event: ScoreSnapshot,
+    val replay: SportsLiveItem? = null,
+    val revealed: Boolean = false,
+    val homeFirst: Boolean = false
+)
+
+/** Whether [item]'s card names [event]'s home team first (N10); away first when that is not known. */
+internal fun sportsLiveGameHomeFirst(item: SportsLiveItem, event: ScoreSnapshot): Boolean =
+    ScoreChips.orderedSides(item)?.let { (first, second) -> ScoreMatcher.firstIsHome(first, second, event) } == true
 
 /** Hands the request to the Game page's ViewModel, once (like dual screen's session). */
 internal object SportsLiveGameRequests {
@@ -70,7 +82,9 @@ data class SportsLiveGameUiState(
     val selected: GameSection? = null,
     val replay: SportsLiveItem? = null,
     val awayFollowed: Boolean = false,
-    val homeFollowed: Boolean = false
+    val homeFollowed: Boolean = false,
+    /** The header and team stats name the home team first, as the card the page was opened from (N10). */
+    val homeFirst: Boolean = false
 ) {
     /** Score, records and stats show: Scores Show, or revealed (Hide until focused / Off). */
     val showsScore: Boolean get() = mode == ScoresMode.SHOW || revealed
@@ -138,12 +152,18 @@ class SportsLiveGameViewModel internal constructor(
             selected = page.selected,
             replay = request?.replay,
             awayFollowed = event != null && TeamFollows.followersOf(followed, event, event.away).isNotEmpty(),
-            homeFollowed = event != null && TeamFollows.followersOf(followed, event, event.home).isNotEmpty()
+            homeFollowed = event != null && TeamFollows.followersOf(followed, event, event.home).isNotEmpty(),
+            homeFirst = request?.homeFirst == true
         )
     }.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5_000),
-        SportsLiveGameUiState(event = request?.event, replay = request?.replay, revealed = request?.revealed == true)
+        SportsLiveGameUiState(
+            event = request?.event,
+            replay = request?.replay,
+            revealed = request?.revealed == true,
+            homeFirst = request?.homeFirst == true
+        )
     )
 
     // Summaries waiting out the score delay; kept across visibility changes.

@@ -6,6 +6,8 @@ import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -14,7 +16,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -22,6 +27,7 @@ import androidx.compose.material.icons.rounded.Star
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -43,6 +49,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Border
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.ExperimentalTvMaterial3Api
@@ -54,10 +61,12 @@ import coil3.compose.AsyncImage
 import com.nuvio.tv.R
 import com.nuvio.tv.core.sportslive.SportsLiveLayout
 import com.nuvio.tv.core.sportslive.scores.ChipScore
+import com.nuvio.tv.core.sportslive.scores.GameArtTeam
 import com.nuvio.tv.core.sportslive.scores.GameSituationStrings
 import com.nuvio.tv.core.sportslive.scores.ScoreChip
 import com.nuvio.tv.core.sportslive.scores.ScoreDetails
 import com.nuvio.tv.core.sportslive.scores.ScoreDetailsBuilder
+import com.nuvio.tv.core.sportslive.scores.TeamLogoUrls
 import com.nuvio.tv.ui.components.LightweightCard
 import com.nuvio.tv.ui.theme.NuvioTheme
 
@@ -151,17 +160,19 @@ internal fun <T> SportsLiveSegmentedSwitch(
                 modifier = segmentModifier
                     .then(if (index == options.lastIndex) lastSegmentModifier else Modifier)
                     .then(if (isSelected) Modifier.focusRequester(selectedFocusRequester) else Modifier),
+                // Components board (N12): the selected segment keeps the light fill; focus adds the white
+                // ring and a small lift, so a focused segment that is not selected never looks picked.
                 colors = ClickableSurfaceDefaults.colors(
                     containerColor = if (isSelected) NuvioTheme.colors.Secondary else Color.Transparent,
                     contentColor = if (isSelected) NuvioTheme.colors.OnSecondary else NuvioTheme.colors.TextSecondary,
-                    focusedContainerColor = NuvioTheme.colors.Secondary,
-                    focusedContentColor = NuvioTheme.colors.OnSecondary
+                    focusedContainerColor = if (isSelected) NuvioTheme.colors.Secondary else Color.Transparent,
+                    focusedContentColor = if (isSelected) NuvioTheme.colors.OnSecondary else NuvioTheme.colors.TextPrimary
                 ),
                 border = ClickableSurfaceDefaults.border(
                     focusedBorder = Border(border = NuvioTheme.focusRing.border(NuvioTheme.spacing.xxs), shape = inner)
                 ),
                 shape = ClickableSurfaceDefaults.shape(inner),
-                scale = ClickableSurfaceDefaults.scale(focusedScale = 1f)
+                scale = ClickableSurfaceDefaults.scale(focusedScale = SWITCH_FOCUSED_SCALE)
             ) {
                 Text(
                     text = label(option),
@@ -194,9 +205,10 @@ internal fun SportsLiveScoreboardHeader(group: ScoreboardGroup, modifier: Modifi
 }
 
 /**
- * A stadium-board row: league tag, the two teams in the card's order (★ for a followed side), the
- * scores stacked beside them and the clock (or kickoff and countdown, the final note, "Probably
- * ended", "Score hidden"). Hold OK / Menu opens the card menu, as on a card.
+ * A stadium-board row: a compact league tag, the two teams in the card's order (logo, ★ for a followed
+ * side, the longest name that fits: full, short or abbreviation, N1), the scores stacked beside them and
+ * the clock (or kickoff and countdown, the final note, "Probably ended", "Score hidden") in a column only
+ * as wide as its text. Hold OK / Menu opens the card menu, as on a card.
  */
 @Composable
 internal fun SportsLiveScoreboardRow(
@@ -235,7 +247,7 @@ internal fun SportsLiveScoreboardRow(
     ) {
         Row(
             modifier = Modifier.padding(horizontal = NuvioTheme.spacing.md, vertical = NuvioTheme.spacing.sm),
-            horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md),
+            horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
@@ -245,7 +257,7 @@ internal fun SportsLiveScoreboardRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
-                    .width(88.dp)
+                    .widthIn(max = ROW_TAG_MAX_WIDTH)
                     .clip(RoundedCornerShape(NuvioTheme.radii.sm))
                     .background(ArtColors.Panel)
                     .padding(horizontal = NuvioTheme.spacing.xs, vertical = NuvioTheme.spacing.xxs)
@@ -253,10 +265,17 @@ internal fun SportsLiveScoreboardRow(
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xxs)) {
                 val art = row.art
                 if (art != null) {
-                    TeamLine(art.first.name, row.firstFollowed, pickedFirst)
-                    TeamLine(art.second.name, row.secondFollowed, false)
+                    // Both lines step down together (full name, short name, abbreviation), so the two
+                    // teams always read alike.
+                    val firstChoices = remember(art.first) { scoreboardNameChoices(art.first) }
+                    val secondChoices = remember(art.second) { scoreboardNameChoices(art.second) }
+                    var level by remember(firstChoices, secondChoices) { mutableIntStateOf(0) }
+                    val maxLevel = maxOf(firstChoices.lastIndex, secondChoices.lastIndex)
+                    val tooLong: () -> Unit = { if (level < maxLevel) level++ }
+                    TeamLine(firstChoices, level, art.first, art.hasLogos, row.firstFollowed, pickedFirst, tooLong)
+                    TeamLine(secondChoices, level, art.second, art.hasLogos, row.secondFollowed, false, tooLong)
                 } else {
-                    TeamLine(item.meta.name, item.followed, pickedFirst)
+                    ItemLine(item.meta.name, item.followed, pickedFirst)
                 }
             }
             scoreOf(row.chip)?.let { score ->
@@ -265,25 +284,63 @@ internal fun SportsLiveScoreboardRow(
                     ScoreText(score.second)
                 }
             }
-            RowStatus(row, modifier = Modifier.width(150.dp))
+            RowStatus(row, modifier = Modifier.widthIn(max = ROW_STATUS_MAX_WIDTH))
         }
     }
 }
 
+/** The "1" badge on the game picked first for dual screen. */
 @Composable
-private fun TeamLine(name: String, followed: Boolean, pickedFirst: Boolean) {
+private fun PickedFirstBadge() {
+    Text(
+        text = "1",
+        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+        color = NuvioTheme.colors.OnPrimary,
+        modifier = Modifier
+            .clip(RoundedCornerShape(NuvioTheme.radii.sm))
+            .background(NuvioTheme.colors.Primary)
+            .padding(horizontal = NuvioTheme.spacing.sm)
+    )
+}
+
+/** One team: its logo (when both sides have one), ★ when followed, and [choices] at [level] or shorter. */
+@Composable
+private fun TeamLine(
+    choices: List<String>,
+    level: Int,
+    team: GameArtTeam,
+    withLogo: Boolean,
+    followed: Boolean,
+    pickedFirst: Boolean,
+    onTooLong: () -> Unit
+) {
     Row(horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs), verticalAlignment = Alignment.CenterVertically) {
-        if (pickedFirst) {
-            Text(
-                text = "1",
-                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                color = NuvioTheme.colors.OnPrimary,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(NuvioTheme.radii.sm))
-                    .background(NuvioTheme.colors.Primary)
-                    .padding(horizontal = NuvioTheme.spacing.sm)
-            )
+        if (pickedFirst) PickedFirstBadge()
+        if (withLogo) {
+            SportsLiveTeamLogo(team.logo, team.short, TeamLogoUrls.CARD_PX, Modifier.size(ROW_LOGO_SIZE), fontSize = 9.sp)
         }
+        if (followed) {
+            Icon(imageVector = Icons.Rounded.Star, contentDescription = null, tint = FOLLOWED_GOLD, modifier = Modifier.size(18.dp))
+        }
+        val index = level.coerceAtMost(choices.lastIndex)
+        Text(
+            text = choices[index],
+            style = MaterialTheme.typography.titleMedium,
+            color = NuvioTheme.colors.TextPrimary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            onTextLayout = { layout ->
+                if (index < choices.lastIndex && (layout.hasVisualOverflow || layout.isLineEllipsized(0))) onTooLong()
+            }
+        )
+    }
+}
+
+/** A row with no two sides (a channel, an unparsed title): its name, on up to two lines. */
+@Composable
+private fun ItemLine(name: String, followed: Boolean, pickedFirst: Boolean) {
+    Row(horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs), verticalAlignment = Alignment.CenterVertically) {
+        if (pickedFirst) PickedFirstBadge()
         if (followed) {
             Icon(imageVector = Icons.Rounded.Star, contentDescription = null, tint = FOLLOWED_GOLD, modifier = Modifier.size(18.dp))
         }
@@ -291,7 +348,7 @@ private fun TeamLine(name: String, followed: Boolean, pickedFirst: Boolean) {
             text = name,
             style = MaterialTheme.typography.titleMedium,
             color = NuvioTheme.colors.TextPrimary,
-            maxLines = 1,
+            maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )
     }
@@ -334,6 +391,8 @@ private fun RowStatus(row: ScoreboardRow, modifier: Modifier = Modifier) {
     val countdown = row.startsIn?.takeIf { text == null }?.let { (h, m) ->
         if (h > 0) stringResource(R.string.sports_live_scoreboard_in_hm, h, m) else stringResource(R.string.sports_live_scoreboard_in_m, m)
     }
+    // A channel or an undated game has nothing to say here: its name gets the whole width.
+    if (text == null && kickoff == null && countdown == null) return
     Column(modifier = modifier, horizontalAlignment = Alignment.End) {
         Row(horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs), verticalAlignment = Alignment.CenterVertically) {
             if (live) Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(ArtColors.LiveRed))
@@ -357,6 +416,7 @@ private fun RowStatus(row: ScoreboardRow, modifier: Modifier = Modifier) {
  * scoreline, the clock line, soccer's scorers, the situation line, then Watch, Watch with another
  * game and Game stats.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun SportsLiveScoreboardPane(
     row: ScoreboardRow,
@@ -377,11 +437,16 @@ internal fun SportsLiveScoreboardPane(
     val item = row.item
     val chipStrings = rememberScoreChipStrings()
     val detailStrings = rememberScoreDetailsStrings()
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md)) {
+    // The picture keeps one size for every row (N6), so the pane never jumps as focus moves; the text
+    // below scrolls (following the focused button) rather than squeeze it.
+    Column(
+        modifier = modifier.verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md)
+    ) {
         Box(
             modifier = Modifier
-                .weight(1f, fill = false)
-                .aspectRatio(16f / 9f, matchHeightConstraintsFirst = true)
+                .width(SCOREBOARD_ART_WIDTH)
+                .aspectRatio(16f / 9f)
                 .clip(RoundedCornerShape(NuvioTheme.radii.md))
                 .background(NuvioTheme.colors.PosterFallback)
         ) {
@@ -400,15 +465,17 @@ internal fun SportsLiveScoreboardPane(
                 }
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm), verticalAlignment = Alignment.CenterVertically) {
-            if (row.group == ScoreboardGroup.LIVE) SportsLiveStatePill(label = stringResource(R.string.sports_live_live_pill), isLive = true)
-            if (previewShowing) {
-                Text(
-                    text = stringResource(R.string.sports_live_scoreboard_preview_hint),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = NuvioTheme.colors.TextSecondary,
-                    maxLines = 1
-                )
+        if (row.group == ScoreboardGroup.LIVE || previewShowing) {
+            Row(horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm), verticalAlignment = Alignment.CenterVertically) {
+                if (row.group == ScoreboardGroup.LIVE) SportsLiveStatePill(label = stringResource(R.string.sports_live_live_pill), isLive = true)
+                if (previewShowing) {
+                    Text(
+                        text = stringResource(R.string.sports_live_scoreboard_preview_hint),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = NuvioTheme.colors.TextSecondary,
+                        maxLines = 1
+                    )
+                }
             }
         }
         val big = when (details) {
@@ -417,9 +484,12 @@ internal fun SportsLiveScoreboardPane(
             is ScoreDetails.Status -> details.text ?: chipStrings.postponed
             null -> item.meta.name
         }
+        // A scoreline is short and set large; a channel's or unmatched game's title gets a smaller face
+        // so it never runs to two display-size lines (N6).
         Text(
             text = big,
-            style = MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum"),
+            style = (if (details == null) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.displaySmall)
+                .copy(fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum"),
             color = NuvioTheme.colors.TextPrimary,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
@@ -470,7 +540,11 @@ internal fun SportsLiveScoreboardPane(
                 maxLines = 1
             )
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md)) {
+        // Each button keeps its label on one line (N4, as I4 on the Cards pane): the row wraps instead.
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md),
+            verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)
+        ) {
             SportsLiveBoardButtons(
                 buttons = buttons,
                 onWatch = onWatch,
@@ -514,26 +588,41 @@ internal fun SportsLiveBoardButtons(
         withFrameNanos { }
         runCatching { watchFocusRequester.requestFocus() }
     }
-    SportsLivePaneButton(onClick = onWatch, modifier = watchModifier.then(if (noStream) Modifier.alpha(0.5f) else Modifier)) {
+    val button = Modifier.widthIn(min = PANE_BUTTON_MIN_WIDTH)
+    SportsLivePaneButton(onClick = onWatch, modifier = watchModifier.then(button).then(if (noStream) Modifier.alpha(0.5f) else Modifier)) {
         Icon(imageVector = Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
         Spacer(modifier = Modifier.width(NuvioTheme.spacing.xs))
-        Text(stringResource(R.string.sports_live_watch))
+        PaneButtonLabel(stringResource(R.string.sports_live_watch))
     }
     if (buttons.watchWith) {
         SportsLivePaneButton(
             onClick = onWatchWith,
-            modifier = otherModifier.onFocusChanged { if (it.isFocused || currentButtons.watchWith) watchWithFocused = it.isFocused }
-        ) { Text(stringResource(R.string.sports_live_dual_watch_with)) }
+            modifier = otherModifier.then(button).onFocusChanged { if (it.isFocused || currentButtons.watchWith) watchWithFocused = it.isFocused }
+        ) { PaneButtonLabel(stringResource(R.string.sports_live_dual_watch_with)) }
     }
     if (buttons.gameStats) {
         SportsLivePaneButton(
             onClick = onGameStats,
-            modifier = otherModifier.onFocusChanged { if (it.isFocused || currentButtons.gameStats) gameStatsFocused = it.isFocused }
-        ) { Text(stringResource(R.string.sports_live_game_stats)) }
+            modifier = otherModifier.then(button).onFocusChanged { if (it.isFocused || currentButtons.gameStats) gameStatsFocused = it.isFocused }
+        ) { PaneButtonLabel(stringResource(R.string.sports_live_game_stats)) }
     }
 }
 
 private val FOLLOWED_GOLD = Color(0xFFFFC107)
+
+/** The layout switch's focused segment lifts slightly; its ring says where focus is (N12). */
+private const val SWITCH_FOCUSED_SCALE = 1.06f
+
+/** A row's league tag never takes more than this (N1); a long name ellipsizes. */
+private val ROW_TAG_MAX_WIDTH = 64.dp
+
+/** A row's status column is only as wide as its text, up to this ("Probably ended"). */
+private val ROW_STATUS_MAX_WIDTH = 112.dp
+
+private val ROW_LOGO_SIZE = 22.dp
+
+/** The Scoreboard pane's picture: one width for every row (N6). */
+private val SCOREBOARD_ART_WIDTH = 344.dp
 
 /** A FINAL row is dimmed until focused, like a Just ended card. */
 private const val FINAL_ROW_ALPHA = 0.6f

@@ -3593,6 +3593,9 @@
     <string name="sports_live_results_earlier">Earlier ▸</string>
     <string name="sports_live_results_earlier_open">Earlier ◂</string>
     <string name="sports_live_results_no_finals_yet">No finals yet</string>
+    <!-- An empty Today before 6 AM: last night's late games are filed under Yesterday (#78). -->
+    <string name="sports_live_results_last_night">No finals yet today. Last night\'s games are under Yesterday.</string>
+    <string name="sports_live_results_see_yesterday">See yesterday\'s results</string>
     <!-- Above Today's results: OK jumps to the Live Now tab (#67). -->
     <plurals name="sports_live_results_live_now">
         <item quantity="one">%d game live now →</item>
@@ -3792,6 +3795,8 @@
     <string name="sports_live_why_bases_loaded">Bases loaded</string>
     <string name="sports_live_why_scoring_position">Runners in scoring position</string>
     <string name="sports_live_why_close">Close game</string>
+    <string name="sports_live_timeline_later">+%1$d later · %2$s →</string>
+    <string name="sports_live_timeline_earlier">← %1$d earlier · %2$s</string>
     <string name="sports_live_situation_separator">" · "</string>
     <string name="sports_live_situation_possession">%1$s ball</string>
     <string name="sports_live_situation_red_zone">Red zone</string>
@@ -3812,6 +3817,9 @@
     <string name="sports_live_zap_no_stream">No stream for %1$s right now</string>
     <string name="sports_live_zap_position">%1$d of %2$d</string>
     <string name="sports_live_zap_switching">Switching to %1$s…</string>
+    <!-- Zap banner (#76): the game the next ▼ / CH− zap goes to, and what ▼ does while the banner shows. -->
+    <string name="sports_live_zap_next">Next: %1$s</string>
+    <string name="sports_live_zap_down_hint">▼ All games</string>
     <string name="sports_live_zap_panel_title">Live now</string>
     <string name="sports_live_zap_panel_empty">Nothing live right now</string>
     <plurals name="sports_live_sources_count">

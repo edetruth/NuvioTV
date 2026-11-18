@@ -81,8 +81,59 @@ import com.nuvio.tv.ui.theme.NuvioTheme
 import com.nuvio.tv.ui.util.dpadRepeatThrottle
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+
+/** What an empty Today says (#78): until [LAST_NIGHT_UNTIL_HOUR] local, last night's games are under Yesterday. */
+internal enum class ResultsTodayEmpty { LAST_NIGHT, NO_FINALS_YET }
+
+/** Until this local hour an empty Today speaks of last night (#78). */
+internal const val LAST_NIGHT_UNTIL_HOUR = 6
+
+internal fun resultsTodayEmpty(localHour: Int): ResultsTodayEmpty =
+    if (localHour < LAST_NIGHT_UNTIL_HOUR) ResultsTodayEmpty.LAST_NIGHT else ResultsTodayEmpty.NO_FINALS_YET
+
+/** Whether the list offers "See yesterday's results" (#78): Today, with nothing listed. */
+internal fun resultsOffersYesterday(daysAgo: Int?, hasRows: Boolean): Boolean = daysAgo == SportsResults.TODAY && !hasRows
+
+/** An empty Today: its note and a button that opens Yesterday (#78). */
+@Composable
+private fun ResultsEmptyToday(
+    empty: ResultsTodayEmpty,
+    onSeeYesterday: () -> Unit,
+    focusRequester: FocusRequester,
+    upFocusRequester: FocusRequester
+) {
+    Column(
+        modifier = Modifier.padding(horizontal = NuvioTheme.spacing.sm),
+        verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md)
+    ) {
+        Text(
+            text = stringResource(
+                when (empty) {
+                    ResultsTodayEmpty.LAST_NIGHT -> R.string.sports_live_results_last_night
+                    ResultsTodayEmpty.NO_FINALS_YET -> R.string.sports_live_results_no_finals_yet
+                }
+            ),
+            style = MaterialTheme.typography.titleMedium,
+            color = NuvioTheme.colors.TextSecondary
+        )
+        SportsLivePaneButton(
+            onClick = onSeeYesterday,
+            modifier = Modifier
+                .focusRequester(focusRequester)
+                .focusProperties {
+                    up = upFocusRequester
+                    left = FocusRequester.Cancel
+                    right = FocusRequester.Cancel
+                    down = FocusRequester.Cancel
+                }
+        ) {
+            PaneButtonLabel(stringResource(R.string.sports_live_results_see_yesterday))
+        }
+    }
+}
 
 /**
  * The Results tab: the date rail (Today · Yesterday · Earlier ▸, which opens the 5 older days), the
@@ -153,7 +204,11 @@ internal fun SportsLiveResultsView(
         }
     }
     val firstFocusableKey = items.firstOrNull { it.isFocusable }?.key
-    val entryFocusRequester = entryKey?.let(::itemFocusRequester)
+    // An empty Today offers Yesterday's results (#78); Down from the chips lands on that button.
+    val yesterdayFocusRequester = remember { FocusRequester() }
+    val offersYesterday = ready && resultsOffersYesterday(state.daysAgo, firstFocusableKey != null) &&
+        !(state.selectedSport == null && state.sports.isNotEmpty())
+    val entryFocusRequester = entryKey?.let(::itemFocusRequester) ?: yesterdayFocusRequester.takeIf { offersYesterday }
     val chipsAboveFocusRequester = when {
         showLeagueRow -> leagueFocusRequester
         showSportRow -> sportFocusRequester
@@ -330,9 +385,13 @@ internal fun SportsLiveResultsView(
             // ★ My sports has nothing that day but other sports do: point at their chips.
             firstFocusableKey == null && state.selectedSport == null && state.sports.isNotEmpty() ->
                 EmptyScreenState(title = stringResource(R.string.sports_live_results_my_sports_empty))
-            // Today before its first final.
-            firstFocusableKey == null && state.daysAgo == SportsResults.TODAY ->
-                EmptyScreenState(title = stringResource(R.string.sports_live_results_no_finals_yet))
+            // Today before its first final: after midnight, last night's games are under Yesterday (#78).
+            offersYesterday -> ResultsEmptyToday(
+                empty = resultsTodayEmpty(remember(selectedDate) { LocalTime.now().hour }),
+                onSeeYesterday = { onSelectDay(SportsResults.YESTERDAY) },
+                focusRequester = yesterdayFocusRequester,
+                upFocusRequester = aboveListFocusRequester
+            )
             firstFocusableKey == null -> EmptyScreenState(title = stringResource(R.string.sports_live_results_empty_day))
             else -> androidx.compose.runtime.key(listKey) {
                 LazyColumn(

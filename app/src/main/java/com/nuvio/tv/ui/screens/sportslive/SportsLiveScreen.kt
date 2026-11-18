@@ -43,6 +43,7 @@ import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -88,7 +89,10 @@ import com.nuvio.tv.ui.components.SourceStatusFilterChip
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualSession
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualSessions
 import com.nuvio.tv.ui.screens.sportslive.dual.offersDual
+import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniGeometry
+import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniPlacement
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniPlayers
+import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniSpot
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniState
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniStop
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveNowPlayingCard
@@ -304,7 +308,13 @@ fun SportsLiveScreen(
                     SportsLiveEndedGames.replayFor(it, uiState.tabs[SportsLiveTab.REPLAYS].orEmpty(), System.currentTimeMillis())
                 }
                 SportsLiveGameRequests.open(
-                    SportsLiveGameRequest(event, replay = replay, revealed = scoresMode == ScoresMode.SHOW || item.streamKey in revealed)
+                    SportsLiveGameRequest(
+                        event,
+                        replay = replay,
+                        revealed = scoresMode == ScoresMode.SHOW || item.streamKey in revealed,
+                        // The page names the teams in the card's order (N10).
+                        homeFirst = sportsLiveGameHomeFirst(item, event)
+                    )
                 )
                 onOpenGame()
             },
@@ -725,7 +735,13 @@ private fun SportsLiveContent(
         if (index < 0) return@LaunchedEffect
         scrollToCard(key, index, onlyIfHidden = false)
         repeat(2) { withFrameNanos { } }
-        runCatching { cardFocusRequesters[key]?.requestFocus() }
+        // Back from the player the card (a Timeline block too) gets focus, not the panel's Watch it
+        // was played from (N3): asked again for a few frames until the list holds it.
+        repeat(RETURN_FOCUS_FRAMES) {
+            runCatching { cardFocusRequesters[key]?.requestFocus() }
+            withFrameNanos { }
+            if (listHasFocus) return@LaunchedEffect
+        }
     }
 
     // A refresh or an ended verdict can drop the focused card. The selection (and with it the pane
@@ -938,6 +954,18 @@ private fun SportsLiveContent(
             }
             val selectedRow = boardRowOf[selected.listKey] ?: return@Column
             val event = gameOf(selected)
+            // The mini player sits at the panel's right end, smaller, and the panel keeps that part
+            // free (N3): its buttons are never under the video.
+            DisposableEffect(Unit) {
+                val token = Any()
+                SportsLiveMiniPlacement.claim(token, SportsLiveMiniSpot.TIMELINE_PANEL)
+                onDispose { SportsLiveMiniPlacement.release(token) }
+            }
+            val windowWidthDp = LocalConfiguration.current.screenWidthDp.toFloat()
+            val miniReserve = if (nowPlaying == null) 0.dp else SportsLiveMiniGeometry.timelinePanelReserveDp(
+                windowWidthDp = windowWidthDp,
+                screenEndPaddingDp = NuvioTheme.spacing.screen.horizontal.value
+            ).dp
             SportsLiveTimelinePanel(
                 row = selectedRow,
                 buttons = scoreboardButtons(uiState.selectedTab, selectedRow, event),
@@ -956,8 +984,9 @@ private fun SportsLiveContent(
                 situation = situationOf(selected),
                 watchFocusRequester = watchFocusRequester,
                 blockFocusRequester = selectedCardFocusRequester,
+                miniPlayerBeside = nowPlaying != null,
                 modifier = Modifier
-                    .padding(top = NuvioTheme.spacing.sm)
+                    .padding(top = NuvioTheme.spacing.sm, end = miniReserve)
                     .fillMaxWidth()
                     .height(TIMELINE_PANEL_HEIGHT)
                     .onFocusChanged { paneHasFocus = it.hasFocus }
@@ -974,7 +1003,8 @@ private fun SportsLiveContent(
             LazyColumn(
                 state = listState,
                 modifier = Modifier
-                    .weight(0.45f)
+                    // The Scoreboard's rows carry two team lines, scores and a clock: half the width (N1).
+                    .weight(if (scoreboard) SCOREBOARD_LIST_WEIGHT else 0.45f)
                     .fillMaxHeight()
                     .onFocusChanged {
                         listHasFocus = it.hasFocus
@@ -1067,7 +1097,7 @@ private fun SportsLiveContent(
                     details = detailsOf(selected),
                     situation = situationOf(selected),
                     modifier = Modifier
-                        .weight(0.55f)
+                        .weight(1f - SCOREBOARD_LIST_WEIGHT)
                         .fillMaxHeight()
                         .onFocusChanged { paneHasFocus = it.hasFocus },
                     watchFocusRequester = watchFocusRequester,
@@ -1272,6 +1302,8 @@ private fun SportsLiveFilterRow(
 }
 
 private const val FOLLOW_REFOCUS_WINDOW_MS = 1_500L
+private const val SCOREBOARD_LIST_WEIGHT = 0.5f
+private const val RETURN_FOCUS_FRAMES = 10
 private const val MINUTE_MS = 60_000L
 
 /** The Timeline's bottom panel (preview, scoreline, linescore, buttons). */

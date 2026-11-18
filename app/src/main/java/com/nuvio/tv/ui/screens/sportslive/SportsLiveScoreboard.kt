@@ -4,6 +4,7 @@ import androidx.compose.runtime.Immutable
 import com.nuvio.tv.core.sportslive.EndedGame
 import com.nuvio.tv.core.sportslive.EndedSignal
 import com.nuvio.tv.core.sportslive.scores.GameArt
+import com.nuvio.tv.core.sportslive.scores.GameArtTeam
 import com.nuvio.tv.core.sportslive.scores.ScoreChip
 import com.nuvio.tv.core.sportslive.scores.ScoreChips
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
@@ -70,7 +71,12 @@ internal fun scoreboardRows(
                 else -> ScoreboardGroup.MORE_GAMES
             }
             ZapPanelGroup.STARTING_SOON -> ScoreboardGroup.STARTING_SOON
-            ZapPanelGroup.OTHER -> ScoreboardGroup.MORE_GAMES
+            // An ESPN final not (or no longer) in the Just ended set is still a final (N5): never "more games".
+            ZapPanelGroup.OTHER -> if (ScoreChips.matchedEvent(item, snapshot)?.state == ScoreState.POST) {
+                ScoreboardGroup.FINAL
+            } else {
+                ScoreboardGroup.MORE_GAMES
+            }
             ZapPanelGroup.JUST_ENDED -> ScoreboardGroup.FINAL
         }
         val estimate = endedGame?.signal == EndedSignal.ESTIMATE
@@ -90,6 +96,14 @@ internal fun scoreboardRows(
             .thenBy { if (it.group == ScoreboardGroup.LIVE) liveRank[it.item.streamKey] ?: Int.MAX_VALUE else 0 }
     )
 }
+
+/**
+ * The names a Scoreboard row may give [team], longest first (N1): the full name, ESPN's short name,
+ * then the abbreviation. The row shows the first that fits both team lines; blanks and repeats are dropped.
+ */
+internal fun scoreboardNameChoices(team: GameArtTeam): List<String> =
+    listOf(team.name, team.shortName, team.short).map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+        .ifEmpty { listOf(team.name) }
 
 /** Which buttons the Scoreboard's focused game offers beside Watch (always shown). */
 @Immutable

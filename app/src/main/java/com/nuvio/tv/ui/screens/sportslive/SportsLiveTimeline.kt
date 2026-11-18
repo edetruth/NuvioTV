@@ -326,9 +326,106 @@ internal object SportsLiveTimeline {
             ?: model.navRows.firstOrNull()?.firstOrNull()
     }
 
+    /** How far fast-forward / rewind (or holding ← →) moves the window (#77). */
+    const val JUMP_MS = 3 * HOUR_MS
+
+    /** A block in another row counts this much further from a jump's time per row away (#77). */
+    private const val JUMP_ROW_PENALTY_MS = 30 * 60_000L
+
+    /**
+     * Where a ±3 h jump ([forward] or back) from [fromKey] puts focus (#77): the game starting nearest
+     * [JUMP_MS] on from the focused one's start (now, from the "No time" row), among the games starting
+     * after it (before it, going back), the focused row first ([JUMP_ROW_PENALTY_MS] per row away). Null
+     * when no game lies that way: the window still moves.
+     */
+    fun jumpTarget(model: TimelineModel, fromKey: String, forward: Boolean): String? {
+        val anchor = model.blocks[fromKey]?.startMs ?: model.nowMs
+        val target = if (forward) anchor + JUMP_MS else anchor - JUMP_MS
+        val fromRow = model.leagues.indexOfFirst { league -> league.blocks.any { it.key == fromKey } }
+            .takeIf { it >= 0 } ?: model.leagues.size
+        return model.leagues.withIndex().flatMap { (rowIndex, league) ->
+            league.blocks
+                .filter { it.key != fromKey && if (forward) it.startMs > anchor else it.startMs < anchor }
+                .map { block -> block to kotlin.math.abs(block.startMs - target) + kotlin.math.abs(rowIndex - fromRow) * JUMP_ROW_PENALTY_MS }
+        }.minWithOrNull(compareBy<Pair<TimelineBlock, Long>> { it.second }.thenBy { it.first.lane })?.first?.key
+    }
+
+    /**
+     * The window offset (px) after a jump: [JUMP_MS] on or back from [scroll], [hourPx] to an hour,
+     * clamped to [minScroll]..[maxScroll].
+     */
+    fun jumpScroll(scroll: Float, forward: Boolean, hourPx: Float, minScroll: Float, maxScroll: Float): Float {
+        val delta = hourPx * (JUMP_MS / HOUR_MS)
+        return (if (forward) scroll + delta else scroll - delta).coerceIn(minScroll, maxOf(minScroll, maxScroll))
+    }
+
+    /**
+     * The hint a league row shows when none of its games is in the window [windowStartMs]..[windowEndMs]
+     * (#77): how many start later and the first of them, else how many ended earlier and the latest of
+     * those. Null while a game of the row is in view.
+     */
+    fun rowHint(league: TimelineLeague, windowStartMs: Long, windowEndMs: Long): TimelineRowHint? {
+        if (league.blocks.any { it.startMs < windowEndMs && it.endMs > windowStartMs }) return null
+        val later = league.blocks.filter { it.startMs >= windowEndMs }
+        if (later.isNotEmpty()) return TimelineRowHint(later = true, count = later.size, atMs = later.minOf { it.startMs })
+        val earlier = league.blocks.filter { it.endMs <= windowStartMs }
+        if (earlier.isEmpty()) return null
+        return TimelineRowHint(later = false, count = earlier.size, atMs = earlier.maxOf { it.startMs })
+    }
+
+    /**
+     * Where the now tag's left edge sits (px in the ruler): [shiftPx] left of the now line at [nowX]
+     * less [scroll], kept wholly inside a ruler [viewport] wide while the now line is in the window (N7).
+     */
+    fun nowTagLeft(nowX: Float, scroll: Float, shiftPx: Float, tagWidth: Float, viewport: Float): Float {
+        val line = nowX - scroll
+        val left = line - shiftPx
+        if (line < 0f || line > viewport) return left
+        return left.coerceIn(0f, maxOf(0f, viewport - tagWidth))
+    }
+
+    /** Whether a span from [aLeft] of width [aWidth] comes within [gap] of one from [bLeft] of [bWidth]. */
+    fun spansOverlap(aLeft: Float, aWidth: Float, bLeft: Float, bWidth: Float, gap: Float = 0f): Boolean =
+        aLeft < bLeft + bWidth + gap && bLeft < aLeft + aWidth + gap
+
     /** A guard against a runaway ruler (a start far in the future): two weeks of hours. */
     const val MAX_TICKS = 24 * 14
 }
+
+/** What a key does to the Timeline's window (#77). */
+enum class TimelineJumpKey { FORWARD, BACK, CONSUME, RELEASE }
+
+/**
+ * The Timeline's jump keys (#77): fast-forward / rewind jump ±3 h on their first down (their repeats and
+ * release are consumed); holding → / ← jumps once when the key starts repeating (a press's first down
+ * still moves a block), then its repeats are consumed until the release ([held]: this press has jumped).
+ * Null: the key moves as usual.
+ */
+internal fun timelineJumpKey(keyCode: Int, action: Int, repeatCount: Int, held: Boolean): TimelineJumpKey? {
+    val down = action == android.view.KeyEvent.ACTION_DOWN
+    return when (keyCode) {
+        android.view.KeyEvent.KEYCODE_MEDIA_FAST_FORWARD, android.view.KeyEvent.KEYCODE_MEDIA_REWIND -> when {
+            down && repeatCount == 0 ->
+                if (keyCode == android.view.KeyEvent.KEYCODE_MEDIA_FAST_FORWARD) TimelineJumpKey.FORWARD else TimelineJumpKey.BACK
+            else -> TimelineJumpKey.CONSUME
+        }
+        android.view.KeyEvent.KEYCODE_DPAD_RIGHT, android.view.KeyEvent.KEYCODE_DPAD_LEFT -> when {
+            !down -> if (held) TimelineJumpKey.RELEASE else null
+            repeatCount == 0 -> null
+            held -> TimelineJumpKey.CONSUME
+            keyCode == android.view.KeyEvent.KEYCODE_DPAD_RIGHT -> TimelineJumpKey.FORWARD
+            else -> TimelineJumpKey.BACK
+        }
+        else -> null
+    }
+}
+
+/**
+ * A league row's edge hint (#77): [count] games [later] than the window, the first at [atMs] ("+2 later ·
+ * 7:30 PM"), or that many ended before it, the latest starting at [atMs].
+ */
+@Immutable
+data class TimelineRowHint(val later: Boolean, val count: Int, val atMs: Long)
 
 /** A card's key in lists (unique within a tab: one copy per addon), as the card list keys it. */
 internal val SportsLiveItem.timelineKey: String get() = "$addonId|$id"

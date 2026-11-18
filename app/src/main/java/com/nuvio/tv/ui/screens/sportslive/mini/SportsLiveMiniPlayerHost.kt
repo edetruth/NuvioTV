@@ -252,6 +252,8 @@ fun SportsLiveMiniPlayerHost(
     if (playing == null) return
     // In picture-in-picture only the video shows, filling the window.
     val inPip by SportsLivePip.inPip.collectAsState()
+    // A little smaller beside the Timeline panel's buttons (N3), else the usual corner.
+    val spot by SportsLiveMiniPlacement.spot.collectAsState()
     BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
@@ -263,8 +265,8 @@ fun SportsLiveMiniPlayerHost(
             } else {
                 Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(end = 24.dp, bottom = 24.dp)
-                    .width(maxWidth * 0.24f)
+                    .padding(end = SportsLiveMiniGeometry.EDGE_DP.dp, bottom = SportsLiveMiniGeometry.EDGE_DP.dp)
+                    .width(maxWidth * SportsLiveMiniGeometry.widthFraction(spot))
                     .onFocusChanged { focused = it.isFocused }
                     .onKeyEvent { event ->
                         val native = event.nativeKeyEvent

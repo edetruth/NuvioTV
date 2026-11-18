@@ -48,9 +48,13 @@ internal fun SportsLiveStreamPickerDialog(
     onPick: (Stream) -> Unit,
     onDismiss: () -> Unit
 ) {
-    // Consecutive streams of one addon share a header; order is kept as given.
-    val groups = remember(streams) {
-        streams.fold(mutableListOf<Pair<String, MutableList<Stream>>>()) { acc, stream ->
+    // A source's notices (N2) go after every stream, as info rows; otherwise the order is kept as given.
+    val notices = remember(streams) { streams.filter(SportsLiveZapResolver::isNonStream).toSet() }
+    val ordered = remember(streams, notices) { sportsLiveNoticesLast(streams) { it in notices } }
+    val firstPlayable = ordered.firstOrNull { it !in notices }
+    // Consecutive streams of one addon share a header.
+    val groups = remember(ordered) {
+        ordered.fold(mutableListOf<Pair<String, MutableList<Stream>>>()) { acc, stream ->
             val addon = stream.addonName
             if (acc.lastOrNull()?.first == addon) acc.last().second += stream else acc += addon to mutableListOf(stream)
             acc
@@ -95,10 +99,14 @@ internal fun SportsLiveStreamPickerDialog(
                 }
                 items(groupStreams.size, key = { "stream-$groupIndex-$it" }) { index ->
                     val stream = groupStreams[index]
+                    if (stream in notices) {
+                        SportsLiveSourceNoticeRow(stream)
+                        return@items
+                    }
                     StreamButton(
                         stream = stream,
                         onClick = { onPick(stream) },
-                        modifier = if (groupIndex == 0 && index == 0) {
+                        modifier = if (stream === firstPlayable) {
                             Modifier
                                 .focusRequester(firstFocusRequester)
                                 .onFocusChanged { firstFocused.value = it.isFocused }

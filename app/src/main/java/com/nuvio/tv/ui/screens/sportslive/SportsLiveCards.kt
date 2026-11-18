@@ -515,11 +515,11 @@ private fun SportsLiveMenuButton(text: String, onClick: () -> Unit, modifier: Mo
 
 /** A pane button's label: one line at its full width, never wrapped. */
 @Composable
-private fun PaneButtonLabel(text: String) {
+internal fun PaneButtonLabel(text: String) {
     Text(text, maxLines = 1, softWrap = false)
 }
 
-private val PANE_BUTTON_MIN_WIDTH = 96.dp
+internal val PANE_BUTTON_MIN_WIDTH = 96.dp
 
 /** Styled like the retry button in `ErrorState`; focused, the design's white fill with dark text. */
 @Composable

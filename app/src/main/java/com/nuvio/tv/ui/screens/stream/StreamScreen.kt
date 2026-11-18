@@ -100,6 +100,9 @@ import com.nuvio.tv.ui.components.P2pConsentDialog
 import com.nuvio.tv.ui.components.StreamBadgeChips
 import com.nuvio.tv.ui.components.StreamsSkeletonList
 import com.nuvio.tv.ui.screens.player.LoadingOverlay
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveSourceNoticeRow
+import com.nuvio.tv.ui.screens.sportslive.sportsLiveSourceNotice
+import com.nuvio.tv.ui.screens.sportslive.sportsLiveStreamScreenOrder
 import com.nuvio.tv.ui.screens.player.AddonFilterChips
 import com.nuvio.tv.ui.screens.player.focusChip
 import com.nuvio.tv.ui.theme.NuvioTheme
@@ -133,6 +136,11 @@ fun StreamScreen(
     onAutoPlayResolved: (StreamPlaybackInfo) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    // Sports & Live (N2): a source's notices go last and show as info rows, never as streams to play.
+    val shownStreams = remember(uiState.videoId, uiState.filteredStreams) {
+        sportsLiveStreamScreenOrder(uiState.videoId, uiState.filteredStreams)
+    }
+    val isSportsNotice: (Stream) -> Boolean = remember(uiState.videoId) { { sportsLiveSourceNotice(uiState.videoId, it) } }
     val watchProgress by viewModel.watchProgress.collectAsStateWithLifecycle()
     val resumeProgress = streamResumeProgress(watchProgress, startFromBeginning)
     val resumePositionMs = resumeProgress?.position?.takeIf { it > 0L }
@@ -465,7 +473,8 @@ fun StreamScreen(
                     isLoading = uiState.isLoading,
                     resumeText = resumeText,
                     error = uiState.error,
-                    streams = uiState.filteredStreams,
+                    streams = shownStreams,
+                    isNotice = isSportsNotice,
                     availableAddons = uiState.availableAddons,
                     sourceChips = uiState.sourceChips,
                     selectedAddonFilter = uiState.selectedAddonFilter,
@@ -488,7 +497,7 @@ fun StreamScreen(
                         }
                     },
                     onStreamSelected = { stream ->
-                        val currentIndex = uiState.filteredStreams.indexOfFirst {
+                        val currentIndex = shownStreams.indexOfFirst {
                             it.url == stream.url &&
                                 it.infoHash == stream.infoHash &&
                                 it.ytId == stream.ytId &&
@@ -763,6 +772,7 @@ private fun RightStreamSection(
     resumeText: String?,
     error: String?,
     streams: List<Stream>,
+    isNotice: (Stream) -> Boolean = { false },
     availableAddons: List<String>,
     sourceChips: List<SourceChipItem>,
     selectedAddonFilter: String?,
@@ -977,6 +987,7 @@ private fun RightStreamSection(
                         else -> {
                             StreamsList(
                                 streams = streams,
+                                isNotice = isNotice,
                                 sharedStream = sharedStream,
                                 partySource = partySource,
                                 onSharedStreamSelected = onSharedStreamSelected,
@@ -1100,6 +1111,7 @@ private fun EmptyState() {
 @Composable
 private fun StreamsList(
     streams: List<Stream>,
+    isNotice: (Stream) -> Boolean = { false },
     sharedStream: SharedStream?,
     partySource: PartySource?,
     onSharedStreamSelected: (Stream) -> Unit,
@@ -1310,6 +1322,10 @@ private fun StreamsList(
                 verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)
             ) {
                 StreamProviderHeader(streamProviderHeader(stream, streams.getOrNull(index - 1)))
+                if (isNotice(stream)) {
+                    SportsLiveSourceNoticeRow(stream)
+                    return@Column
+                }
                 val isPartySource = partySource?.matches(stream) == true
                 StreamCard(
                     stream = stream,
