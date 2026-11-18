@@ -7,7 +7,8 @@ import java.time.LocalDate
  * ESPN scoreboards of individual sports (#55 part 2) as Results snapshots of ESPN day [LocalDate] (US
  * Eastern, as ESPN files team games). A feed's `?dates=` lists every tournament, card or Grand Prix
  * running that day, with all its matches or sessions, so each result is kept only on its own day:
- * - tennis: one snapshot per singles match that started that day (ATP men's draws, WTA women's);
+ * - tennis: one snapshot per singles match that started that day (ATP men's draws, WTA women's),
+ *   qualifying listed after the main draw with a "Q1" round tag;
  * - UFC: one per fight of a card dated that day, main event first;
  * - F1: the race (not practice, qualifying or sprint) of that day, its podium;
  * - golf: a finished tournament whose final round was that day, its top five.
@@ -53,8 +54,9 @@ internal object EspnIndividualResults {
                         TennisPlayer(
                             name = name,
                             winner = competitor.winner == true,
-                            sets = competitor.linescores.orEmpty().mapNotNull { set ->
-                                set.value?.toInt()?.let { TennisSet(it, set.tiebreak) }
+                            // A set without games drops the match: skipping it would shift the set columns.
+                            sets = competitor.linescores.orEmpty().map { set ->
+                                TennisSet(set.value?.toInt() ?: return@mapNotNull null, set.tiebreak)
                             }
                         )
                     }
@@ -73,10 +75,25 @@ internal object EspnIndividualResults {
                         competitionId = event.id?.let { "$it/${grouping.grouping?.slug}" },
                         date = match.date,
                         status = match.status,
-                        result = TennisMatch(match.round?.displayName?.takeIf { it.isNotBlank() }, players, ending)
+                        result = tennisRound(match).let { (round, qualifying) -> TennisMatch(round, players, ending, qualifying) }
                     )
                 }
             }
+    }
+
+    private val QUALIFYING = Regex("""qualif""", RegexOption.IGNORE_CASE)
+    private val ROUND_NUMBER = Regex("""\d+""")
+
+    /**
+     * The match's round tag and whether it is a qualifying match (ESPN's round or draw type says
+     * "qualifying"): main draw rounds as ESPN names them, qualifying ones as "Q1", "Q2" (or "Q").
+     */
+    private fun tennisRound(match: EspnCompetitionDto): Pair<String?, Boolean> {
+        val round = match.round?.displayName?.takeIf { it.isNotBlank() }
+        val type = match.type
+        val qualifying = listOfNotNull(round, type?.slug, type?.text).any { QUALIFYING.containsMatchIn(it) }
+        if (!qualifying) return round to false
+        return "Q${round?.let { ROUND_NUMBER.find(it)?.value }.orEmpty()}" to true
     }
 
     private fun fights(event: EspnEventDto, league: EspnLeague, day: LocalDate): List<ScoreSnapshot> {

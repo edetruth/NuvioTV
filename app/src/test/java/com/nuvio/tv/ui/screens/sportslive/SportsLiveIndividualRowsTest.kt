@@ -12,6 +12,10 @@ import com.nuvio.tv.core.sportslive.scores.MySport
 import com.nuvio.tv.core.sportslive.scores.MySports
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.core.sportslive.scores.SportsResults
+import com.nuvio.tv.core.sportslive.scores.TennisEnding
+import com.nuvio.tv.core.sportslive.scores.TennisMatch
+import com.nuvio.tv.core.sportslive.scores.TennisPlayer
+import com.nuvio.tv.core.sportslive.scores.TennisSet
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -43,6 +47,38 @@ class SportsLiveIndividualRowsTest {
         // A winner without a method names only the winner.
         val bare = Fight(null, listOf(Fighter("A", true), Fighter("B", false)), method = null, round = 2, clock = "3:14", bout = 0)
         assertEquals("A", line(bare))
+    }
+
+    @Test
+    fun `after a retirement the unfinished last set is nobody's`() {
+        val day = parse("espn_tennis_atp_wimbledon_2026.json", EspnLeagueMap.ATP, LocalDate.of(2026, 6, 29))
+        fun bold(id: String): List<List<Boolean>> {
+            val match = day.single { it.eventId == id }.individual as TennisMatch
+            val (winner, loser) = match.winner!! to match.players.single { !it.winner }
+            return listOf(winner to loser, loser to winner).map { (player, opponent) ->
+                (0 until match.setCount).map { tennisWonSet(match, player, opponent, it) }
+            }
+        }
+        // "4–6 3–6 6–2 3–0 ret.": the 3–0 set was not won.
+        assertEquals(listOf(listOf(false, false, true, false), listOf(true, true, false, false)), bold("tennis:177338"))
+        // "6–3 7–6 ret." after two finished sets: both stay won.
+        assertEquals(listOf(listOf(true, true), listOf(false, false)), bold("tennis:177320"))
+        // A completed match's last set is won as usual.
+        val done = TennisMatch(
+            null,
+            listOf(TennisPlayer("A", true, listOf(TennisSet(6), TennisSet(3))), TennisPlayer("B", false, listOf(TennisSet(4), TennisSet(1)))),
+            TennisEnding.COMPLETED
+        )
+        assertTrue(tennisWonSet(done, done.players[0], done.players[1], 1))
+        assertFalse(tennisWonSet(done.copy(ending = TennisEnding.RETIRED), done.players[0], done.players[1], 1))
+    }
+
+    @Test
+    fun `OK on a golf row lists and folds its top five, never while the result is hidden`() {
+        assertEquals(setOf("g"), toggleGolf(emptySet(), "g", showScore = true))
+        assertEquals(emptySet<String>(), toggleGolf(setOf("g"), "g", showScore = true))
+        assertEquals(emptySet<String>(), toggleGolf(emptySet(), "g", showScore = false))
+        assertEquals(setOf("g"), toggleGolf(setOf("g"), "g", showScore = false))
     }
 
     @Test

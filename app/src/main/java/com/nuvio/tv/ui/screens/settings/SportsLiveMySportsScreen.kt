@@ -26,6 +26,7 @@ fun SportsLiveMySportsScreen(
 ) {
     BackHandler { onBackPress() }
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val newSportsHint by viewModel.newSportsHint.collectAsStateWithLifecycle()
     val firstFocusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) {
         withFrameNanos { }
@@ -44,7 +45,9 @@ fun SportsLiveMySportsScreen(
                     onToggleSport = viewModel::toggleMySport,
                     onToggleLeague = viewModel::toggleMyLeague,
                     onAllSoccerCompetitions = viewModel::allSoccerCompetitions,
-                    firstFocusRequester = firstFocusRequester
+                    firstFocusRequester = firstFocusRequester,
+                    newSportsHint = newSportsHint,
+                    onShown = viewModel::onMySportsShown
                 )
             }
         }

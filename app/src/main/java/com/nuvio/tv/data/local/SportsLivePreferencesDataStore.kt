@@ -14,6 +14,7 @@ import com.nuvio.tv.core.sportslive.scores.MySports
 import com.nuvio.tv.core.sportslive.scores.ScoreDelayChoices
 import com.nuvio.tv.core.sportslive.scores.ScoreSettings
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
+import com.nuvio.tv.core.sportslive.scores.SportKind
 import com.nuvio.tv.domain.model.CatalogOption
 import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveOverride
@@ -54,6 +55,7 @@ class SportsLivePreferencesDataStore @Inject constructor(
     private val catalogOptionsKey = stringPreferencesKey("sports_live_catalog_options")
     private val followedTeamsKey = stringPreferencesKey("sports_live_followed_teams")
     private val dualHintShownKey = intPreferencesKey("sports_live_dual_hint_shown")
+    private val newSportsHintSeenKey = booleanPreferencesKey("sports_live_new_sports_hint_seen")
     private val scoresModeKey = stringPreferencesKey("sports_live_scores_mode")
     private val scoreDelayKey = intPreferencesKey("sports_live_score_delay_seconds")
     // Leagues seen on cards (scores S3), no longer used: cleared on the next My sports save.
@@ -196,6 +198,20 @@ class SportsLivePreferencesDataStore @Inject constructor(
         return show
     }
 
+    /**
+     * Called when the My sports picker shows: true the first time only, and only for a profile that
+     * saved My sports before the individual sports existed ([shouldShowNewSportsHint]). Seen either way.
+     */
+    suspend fun claimNewSportsHint(): Boolean {
+        var show = false
+        store().edit { prefs ->
+            if (prefs[newSportsHintSeenKey] == true) return@edit
+            show = shouldShowNewSportsHint(prefs[mySportsKey])
+            prefs[newSportsHintSeenKey] = true
+        }
+        return show
+    }
+
     suspend fun setShowSection(v: Boolean) {
         store().edit { it[showSectionKey] = v }
     }
@@ -283,6 +299,13 @@ class SportsLivePreferencesDataStore @Inject constructor(
         }.getOrDefault(emptyMap())
     }
 }
+
+/**
+ * Whether the My sports picker points out the individual sports: My sports was saved ([savedTokens]
+ * set) with none of them, as a profile did before they existed. Unsaved My sports already has them.
+ */
+fun shouldShowNewSportsHint(savedTokens: Set<String>?): Boolean =
+    !savedTokens.isNullOrEmpty() && MySports.decode(savedTokens).sports.keys.none { it.kind == SportKind.INDIVIDUAL }
 
 /** Dual screen entries that show the keys hint. */
 const val DUAL_KEYS_HINT_ENTRIES = 3

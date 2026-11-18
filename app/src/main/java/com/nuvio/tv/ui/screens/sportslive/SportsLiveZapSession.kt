@@ -8,8 +8,9 @@ import com.nuvio.tv.domain.model.SportsLiveTab
  * game. The list is a snapshot taken at launch: on Live now every game of the tab, whatever the filter
  * (#68), so the player's live games panel and its chips can reach them all.
  *
- * Zap order ([zapOrder]): once a chip is picked in the panel ([panelChip], Live now only), only that
- * chip's games; before that, the games of the [filter] the game was started under first, then the rest.
+ * Zap order ([zapOrder]): once a chip is picked in the panel ([panelChip]), only that chip's games,
+ * whichever tab the session started from (all of them when the session has none of its games);
+ * before that, the games of the [filter] the game was started under first, then the rest.
  */
 data class SportsLiveZapSession(
     val items: List<SportsLiveItem>,
@@ -28,9 +29,11 @@ data class SportsLiveZapSession(
 
     /** Indices of [items] in the order Up/Down zap through them. */
     internal val zapOrder: List<Int> by lazy {
-        val chip = panelChip?.takeIf { tab == SportsLiveTab.LIVE_NOW }
+        val chip = panelChip
         if (chip != null) {
-            items.indices.filter { items[it].matchesZapFilter(chip.filter, tab) }
+            // The panel's chips are Live now's (a sport or My teams), whatever tab the session is on.
+            items.indices.filter { items[it].matchesZapFilter(chip.filter, SportsLiveTab.LIVE_NOW) }
+                .ifEmpty { items.indices.toList() }
         } else {
             val (first, rest) = items.indices.partition { items[it].matchesZapFilter(filter, tab) }
             first + rest

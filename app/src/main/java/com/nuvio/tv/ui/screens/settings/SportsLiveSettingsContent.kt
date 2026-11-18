@@ -56,6 +56,7 @@ internal fun SportsLiveSettingsContent(
     viewModel: SportsLiveSettingsViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val newSportsHint by viewModel.newSportsHint.collectAsStateWithLifecycle()
     var filterKey by remember { mutableStateOf<String?>(null) }
     var scorePicker by remember { mutableStateOf<ScorePicker?>(null) }
     // Scores status (#70): worked out on a 30 s clock, so a feed no longer in use drops out.
@@ -180,7 +181,9 @@ internal fun SportsLiveSettingsContent(
                 enabled = state.showSection,
                 onToggleSport = viewModel::toggleMySport,
                 onToggleLeague = viewModel::toggleMyLeague,
-                onAllSoccerCompetitions = viewModel::allSoccerCompetitions
+                onAllSoccerCompetitions = viewModel::allSoccerCompetitions,
+                newSportsHint = newSportsHint,
+                onShown = viewModel::onMySportsShown
             )
         }
         item(key = "my_teams") {
@@ -318,15 +321,23 @@ internal fun MySportsSettings(
     onToggleLeague: (MyLeague) -> Unit,
     onAllSoccerCompetitions: () -> Unit,
     /** On the first sport's switch, when a screen opens on this card. */
-    firstFocusRequester: FocusRequester? = null
+    firstFocusRequester: FocusRequester? = null,
+    /** "New: Tennis, UFC, F1, Golf" under the subtitle, for a profile that saved My sports before them. */
+    newSportsHint: Boolean = false,
+    /** Called when the card shows, so its one-time hint can be claimed. */
+    onShown: () -> Unit = {}
 ) {
+    LaunchedEffect(Unit) { onShown() }
     var expanded by remember { mutableStateOf<MySport?>(null) }
     val allCompetitions = stringResource(R.string.sports_live_my_sports_all_competitions)
     val leagueIndent = Modifier.padding(start = NuvioTheme.spacing.lg)
     SettingsGroupCard(
         modifier = Modifier.fillMaxWidth(),
         title = stringResource(R.string.sports_live_my_sports_title),
-        subtitle = stringResource(R.string.sports_live_my_sports_subtitle)
+        subtitle = listOfNotNull(
+            stringResource(R.string.sports_live_my_sports_subtitle),
+            if (newSportsHint) stringResource(R.string.sports_live_my_sports_new_sports) else null
+        ).joinToString("\n")
     ) {
         MySport.entries.forEach { sport ->
             val on = sport in mySports.effectiveSports

@@ -41,7 +41,10 @@ class PlayerZapController(
     /** The session of the game playing, from before the zaps whose lookup is still running. */
     private var playing: SportsLiveZapSession? = null
 
-    /** Counts lookups, so a cancelled one does not clear [resolving] for a newer one. */
+    /** The session moved to the game whose lookup runs: a chip picked meanwhile is stored on it. */
+    private var target: SportsLiveZapSession? = null
+
+    /** Counts lookups, so a cancelled one does not clear [resolving] or revert for a newer one. */
     private var lookups = 0
 
     private val _resolving = MutableStateFlow<SportsLiveZapSession?>(null)
@@ -86,21 +89,25 @@ class PlayerZapController(
 
     /**
      * A chip ([filter], null is All) was picked in the live games panel of the player showing
-     * [contentId]: from now on Up/Down follow it (#68). A running lookup is dropped, so the session
-     * is back on the game playing before it takes the chip.
+     * [contentId]: from now on Up/Down follow it (#68). A running lookup goes on: its target takes
+     * the chip, and so does the game playing, should the lookup find no stream.
      */
     fun pickChip(contentId: String?, filter: String?) {
+        val chip = ZapPanelChip(filter)
         if (job?.isActive == true) {
-            job?.cancel()
-            playing?.let(SportsLiveZapSessions::update)
+            val moved = target?.takeIf { SportsLiveZapSessions.current() === it } ?: return
+            playing = playing?.copy(panelChip = chip)
+            target = moved.copy(panelChip = chip).also(SportsLiveZapSessions::update)
+            return
         }
         val base = SportsLiveZapSessions.activeFor(contentId) ?: return
-        SportsLiveZapSessions.update(base.copy(panelChip = ZapPanelChip(filter)))
+        SportsLiveZapSessions.update(base.copy(panelChip = chip))
     }
 
     private fun zapTo(target: SportsLiveZapSession): Boolean {
-        val revertTo = playing ?: return false
+        if (playing == null) return false
         SportsLiveZapSessions.update(target)
+        this.target = target
         job?.cancel()
         _resolving.value = target
         val lookup = ++lookups
@@ -111,14 +118,14 @@ class PlayerZapController(
                 if (settleMs > 0) delay(settleMs)
                 val stream = resolve(item)
                 if (stream == null) {
-                    revertIfCurrent(target, revertTo)
+                    revertIfCurrent(lookup)
                     onNoStream(item)
                 } else {
                     onNavigate(item, stream)
                 }
             } catch (e: CancellationException) {
                 // A newer zap has already moved the session on; a player left mid-lookup has not.
-                revertIfCurrent(target, revertTo)
+                revertIfCurrent(lookup)
                 throw e
             } finally {
                 if (lookups == lookup) _resolving.value = null
@@ -127,7 +134,9 @@ class PlayerZapController(
         return true
     }
 
-    private fun revertIfCurrent(target: SportsLiveZapSession, playing: SportsLiveZapSession) {
-        if (SportsLiveZapSessions.current() === target) SportsLiveZapSessions.update(playing)
+    /** Back to the game playing (with any chip picked since), unless a newer zap moved the session on. */
+    private fun revertIfCurrent(lookup: Int) {
+        val revertTo = playing ?: return
+        if (lookups == lookup && SportsLiveZapSessions.current() === target) SportsLiveZapSessions.update(revertTo)
     }
 }

@@ -239,6 +239,29 @@ class SportsLivePreferencesDataStoreTest {
     }
 
     @Test
+    fun `the new sports hint is for My sports saved without any individual sport`() {
+        assertEquals(false, shouldShowNewSportsHint(null))
+        assertEquals(false, shouldShowNewSportsHint(emptySet()))
+        assertTrue(shouldShowNewSportsHint(setOf("basketball", "soccer")))
+        assertEquals(false, shouldShowNewSportsHint(setOf("basketball", "tennis")))
+        // A later version's sport alone is not a pick of today's individual ones either.
+        assertTrue(shouldShowNewSportsHint(setOf("hockey", "curling")))
+    }
+
+    @Test
+    fun `the new sports hint is claimed once per profile`() = runTest {
+        val store = SportsLivePreferencesDataStore(factory, profiles)
+        store.updateMySports { MySports.decode(setOf("basketball")) }
+        assertEquals(listOf(true, false), List(2) { store.claimNewSportsHint() })
+        assertEquals(true, profile1Store.data.first()[booleanPreferencesKey("sports_live_new_sports_hint_seen")])
+        // A profile on the default (individual sports included) never gets it, and it is seen.
+        activeProfile.value = 2
+        assertEquals(false, store.claimNewSportsHint())
+        store.updateMySports { MySports.decode(setOf("basketball")) }
+        assertEquals(false, store.claimNewSportsHint())
+    }
+
+    @Test
     fun `score settings default to Show with no delay and are per profile`() = runTest {
         val store = SportsLivePreferencesDataStore(factory, profiles)
         assertEquals(ScoreSettings(ScoresMode.SHOW, 0), store.scoreSettings.first())
@@ -265,7 +288,7 @@ class SportsLivePreferencesDataStoreTest {
         profile1Store.updateData { mutablePreferencesOf(recentKey to "{\"basketball/nba\":1}") }
         store.updateMySports { it.toggleSport(MySport.SOCCER).toggleLeague(MyLeague.COLLEGE_BASKETBALL) }
         val saved = store.mySports.first()
-        assertEquals(listOf(MySport.BASKETBALL, MySport.FOOTBALL, MySport.HOCKEY, MySport.BASEBALL, MySport.TENNIS, MySport.MMA, MySport.MOTORSPORT, MySport.GOLF), saved.effectiveSports)
+        assertEquals(MySport.entries - MySport.SOCCER, saved.effectiveSports)
         assertEquals(setOf(MyLeague.NBA, MyLeague.COLLEGE_BASKETBALL), saved.leaguesOf(MySport.BASKETBALL))
         assertTrue("basketball/college-basketball" in profile1Store.data.first()[key].orEmpty())
         assertNull(profile1Store.data.first()[recentKey])

@@ -97,6 +97,24 @@ class SportsLiveSettingsViewModelTest {
     }
 
     @Test
+    fun `my sports saved before the individual sports shows the new sports hint once`() = runTest {
+        prefs.updateMySports { MySports.decode(setOf("basketball", "hockey")) }
+        val viewModel = newViewModel()
+        viewModel.onMySportsShown()
+        advanceUntilIdle()
+        assertTrue(viewModel.newSportsHint.value)
+        // Shown again on this screen (scrolled back to): the hint stays.
+        viewModel.onMySportsShown()
+        advanceUntilIdle()
+        assertTrue(viewModel.newSportsHint.value)
+        // The next visit: seen.
+        val next = newViewModel()
+        next.onMySportsShown()
+        advanceUntilIdle()
+        assertFalse(next.newSportsHint.value)
+    }
+
+    @Test
     fun `scores and score delay settings are shown and saved`() = runTest {
         val viewModel = newViewModel()
         advanceUntilIdle()
@@ -117,7 +135,7 @@ class SportsLiveSettingsViewModelTest {
         viewModel.toggleMyLeague(MyLeague.PREMIER_LEAGUE)
         advanceUntilIdle()
         val picked = viewModel.uiState.value.mySports
-        assertEquals(listOf(MySport.BASKETBALL, MySport.FOOTBALL, MySport.BASEBALL, MySport.SOCCER, MySport.TENNIS, MySport.MMA, MySport.MOTORSPORT, MySport.GOLF), picked.effectiveSports)
+        assertEquals(MySport.entries - MySport.HOCKEY, picked.effectiveSports)
         assertEquals(setOf(MyLeague.NFL, MyLeague.COLLEGE_FOOTBALL), picked.leaguesOf(MySport.FOOTBALL))
         assertEquals(setOf(MyLeague.PREMIER_LEAGUE), picked.namedLeagues(MySport.SOCCER))
         assertEquals(picked, prefs.mySports.first())

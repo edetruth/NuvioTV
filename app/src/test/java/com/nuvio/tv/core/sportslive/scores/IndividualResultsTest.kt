@@ -99,6 +99,59 @@ class IndividualResultsTest {
         assertFalse(IndividualFormat.isMatchTiebreak(TennisSet(7, 7), TennisSet(6, 5)))
     }
 
+    private val finished = EspnStatusDto(EspnStatusTypeDto(name = "STATUS_FINAL", state = "post", completed = true))
+
+    private fun player(name: String, order: Int, winner: Boolean, vararg games: Double?) = EspnCompetitorDto(
+        order = order, winner = winner, athlete = EspnAthleteDto(displayName = name), linescores = games.map { EspnLinescoreDto(value = it) }
+    )
+
+    private fun match(id: String, hour: Int, round: String?, type: EspnCompetitionTypeDto? = null, a: Array<Double?> = arrayOf(6.0, 6.0), b: Array<Double?> = arrayOf(3.0, 4.0)) =
+        EspnCompetitionDto(
+            id = id, date = "2026-06-29T${hour}:00Z", status = finished, type = type, round = round?.let { EspnRoundDto(it) },
+            competitors = listOf(player("A$id", 1, true, *a), player("B$id", 2, false, *b))
+        )
+
+    private fun draw(vararg matches: EspnCompetitionDto) = EspnIndividualResults.toSnapshots(
+        EspnScoreboardDto(
+            events = listOf(
+                EspnEventDto(
+                    id = "188-2026", name = "Wimbledon",
+                    groupings = listOf(EspnGroupingDto(EspnGroupingInfoDto("mens-singles", "Men's Singles"), matches.toList()))
+                )
+            )
+        ),
+        EspnLeagueMap.ATP,
+        LocalDate.of(2026, 6, 29)
+    )
+
+    @Test
+    fun `a set with no games drops the match, rather than shifting the set columns`() {
+        val snapshots = draw(
+            match("1", 14, "Round 1", a = arrayOf(6.0, null, 6.0), b = arrayOf(3.0, 6.0, 2.0)),
+            match("2", 15, "Round 1")
+        )
+        assertEquals(listOf("tennis:2"), snapshots.map { it.eventId })
+    }
+
+    @Test
+    fun `qualifying matches are tagged Q and listed after the main draw`() {
+        val snapshots = draw(
+            match("q1", 12, "Qualifying 1st Round"),
+            match("m1", 16, "Round 1"),
+            match("q2", 13, "Round 2", type = EspnCompetitionTypeDto(text = "Men's Singles Qualifying", slug = "mens-singles-qualifying")),
+            match("q3", 14, "Final Qualifying Round")
+        )
+        val titles = snapshots.associate { it.eventId to (it.individual as TennisMatch).let { m -> m.title to m.qualifying } }
+        assertEquals("Round 1" to false, titles["tennis:m1"])
+        assertEquals("Q1" to true, titles["tennis:q1"])
+        assertEquals("Q2" to true, titles["tennis:q2"])
+        assertEquals("Q" to true, titles["tennis:q3"])
+        // One section: the main draw first, then qualifying by start time.
+        val rows = SportsResults.rows(snapshots, emptyList())
+        assertEquals(listOf("tennis:m1", "tennis:q1", "tennis:q2", "tennis:q3"), rows.map { it.event.eventId })
+        assertEquals(1, rows.map { it.event.competitionId }.distinct().size)
+    }
+
     // ---- UFC ----
 
     @Test

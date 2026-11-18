@@ -367,7 +367,7 @@ internal fun SportsLiveResultsView(
                                     expanded = item.key in expandedGolf,
                                     onClick = {
                                         if (individual is GolfResult) {
-                                            expandedGolf = if (item.key in expandedGolf) expandedGolf - item.key else expandedGolf + item.key
+                                            expandedGolf = toggleGolf(expandedGolf, item.key, showScore = state.showsScore(item.row))
                                         }
                                     },
                                     onFocus = {
@@ -414,6 +414,13 @@ internal fun SportsLiveResultsView(
 }
 
 private val ResultListItem.isFocusable: Boolean get() = this !is ResultListItem.Header
+
+/** OK on a golf row lists its top five, or folds it again; never while its result is hidden. */
+internal fun toggleGolf(expanded: Set<String>, key: String, showScore: Boolean): Set<String> = when {
+    !showScore -> expanded
+    key in expanded -> expanded - key
+    else -> expanded + key
+}
 
 @Composable
 private fun ResultsDateRow(

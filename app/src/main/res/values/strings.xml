@@ -3654,6 +3654,7 @@
     </plurals>
     <string name="sports_live_my_sports_title">My sports</string>
     <string name="sports_live_my_sports_subtitle">Results shows these sports. A team you follow adds its sport.</string>
+    <string name="sports_live_my_sports_new_sports">New: Tennis, UFC, F1, Golf</string>
     <string name="sports_live_my_sports_leagues">Leagues</string>
     <string name="sports_live_my_sports_all_competitions">All competitions</string>
     <string name="sports_live_league_nba">NBA</string>
@@ -3697,6 +3698,7 @@
         <item quantity="one">+ %1$d more</item>
         <item quantity="other">+ %1$d more</item>
     </plurals>
+    <string name="sports_live_results_golf_collapse">OK to collapse</string>
     <string name="sports_live_watch">Watch</string>
     <string name="sports_live_no_streams_now">No streams right now</string>
     <string name="sports_live_details">Details</string>

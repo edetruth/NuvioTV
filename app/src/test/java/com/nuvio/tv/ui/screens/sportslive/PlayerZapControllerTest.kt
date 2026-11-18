@@ -341,6 +341,53 @@ class PlayerZapControllerTest {
         assertNull(controller.resolving.value)
     }
 
+    @Test
+    fun `a chip picked during a lookup keeps the zap going and is stored on its target`() = runTest {
+        startOn("a")
+        val controller = controller()
+
+        controller.zap("a", forward = true)
+        runCurrent()
+        controller.pickChip("a", "Soccer")
+        runCurrent()
+
+        assertTrue(cancelled.isEmpty())
+        assertEquals("b", controller.resolving.value?.current?.id)
+        assertEquals("b", SportsLiveZapSessions.current()?.current?.id)
+        assertEquals(ZapPanelChip("Soccer"), SportsLiveZapSessions.current()?.panelChip)
+        pending.getValue("b").complete(STREAM)
+        runCurrent()
+
+        assertEquals(listOf("b" to STREAM), navigated)
+        assertEquals(ZapPanelChip("Soccer"), SportsLiveZapSessions.activeFor("b")?.panelChip)
+    }
+
+    @Test
+    fun `a chip picked during a lookup that finds no stream stays with the game playing`() = runTest {
+        startOn("a")
+        val controller = controller()
+
+        controller.zap("a", forward = true)
+        runCurrent()
+        controller.pickChip("a", null)
+        pending.getValue("b").complete(null)
+        runCurrent()
+
+        assertEquals(listOf("b"), noStream)
+        val back = SportsLiveZapSessions.activeFor("a")!!
+        assertEquals(ZapPanelChip(null), back.panelChip)
+        // Leaving the player mid lookup after a chip also goes back to the game playing.
+        val playerScope = CoroutineScope(backgroundScope.coroutineContext + Job())
+        val second = controller(playerScope)
+        second.zap("a", forward = false)
+        runCurrent()
+        second.pickChip("a", "Soccer")
+        assertEquals("d", SportsLiveZapSessions.current()?.current?.id)
+        playerScope.cancel()
+        runCurrent()
+        assertEquals(ZapPanelChip("Soccer"), SportsLiveZapSessions.activeFor("a")?.panelChip)
+    }
+
     private companion object {
         val STREAM = Stream(
             name = "HD",

@@ -19,13 +19,18 @@ data class TennisPlayer(val name: String, val winner: Boolean, val sets: List<Te
 
 enum class TennisEnding { COMPLETED, RETIRED, WALKOVER }
 
-/** A tennis match: [players] in ESPN's listing order (never the result's), each with their sets. */
+/**
+ * A tennis match: [players] in ESPN's listing order (never the result's), each with their sets. A
+ * [qualifying] match is listed after its tournament's main draw ([title] "Q1", "Q2").
+ */
 data class TennisMatch(
     override val title: String?,
     val players: List<TennisPlayer>,
-    val ending: TennisEnding
+    val ending: TennisEnding,
+    val qualifying: Boolean = false
 ) : IndividualResult {
     val winner: TennisPlayer? get() = players.singleOrNull { it.winner }
+    override val listOrder: Int get() = if (qualifying) 1 else 0
 
     /** The set count both players have. */
     val setCount: Int get() = players.minOfOrNull { it.sets.size } ?: 0

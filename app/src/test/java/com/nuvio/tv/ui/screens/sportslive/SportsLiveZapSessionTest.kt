@@ -164,15 +164,31 @@ class SportsLiveZapSessionTest {
         assertEquals(listOf("f2", "f1", "f2"), mine.zapIds(3))
         // The chip survives zaps.
         assertEquals(ZapPanelChip("Soccer"), soccer.step(true, emptySet())!!.panelChip)
-        // A chip with no other game left: no zap.
-        assertNull(session.copy(panelChip = ZapPanelChip("Tennis")).step(true, emptySet()))
+        // A chip whose only game is the one playing: no zap.
+        assertNull(SportsLiveZapSession(listOf(f1, s1, b1), 1, SportsLiveTab.LIVE_NOW, null, false, ZapPanelChip("Soccer")).step(true, emptySet()))
     }
 
     @Test
-    fun `a chip only sets the zap order of a live now session`() {
-        val channels = SportsLiveZapSession(listOf(f1, s1, b1), 0, SportsLiveTab.CHANNELS, null, false, ZapPanelChip("Soccer"))
+    fun `a chip with no games in the session zaps through all of them`() {
+        val tennis = myTeamsSession().copy(panelChip = ZapPanelChip("Tennis"))
 
-        assertEquals(listOf("s1", "b1", "f1"), channels.zapIds(3))
+        assertEquals(listOf("s1", "f2", "b1", "f1"), tennis.zapIds(4))
+        assertEquals(1 to 4, tennis.positionLabelArgs)
+    }
+
+    @Test
+    fun `a chip sets the zap order of a session from any tab, by sport`() {
+        // A Channels session: the chip is a sport, never a channel group of the same name.
+        val grouped = f1.copy(group = "Soccer")
+        val channels = SportsLiveZapSession(listOf(grouped, s1, b1), 0, SportsLiveTab.CHANNELS, null, false, ZapPanelChip("Soccer"))
+        assertEquals(listOf("s1"), channels.zapIds(3))
+        listOf(SportsLiveTab.UPCOMING, SportsLiveTab.REPLAYS).forEach { tab ->
+            val session = SportsLiveZapSession(listOf(f1, s1, f2, b1), 0, tab, null, false, ZapPanelChip("Basketball"))
+            assertEquals(listOf("b1", "f1", "b1"), session.zapIds(3))
+            assertEquals(1 to 2, session.positionLabelArgs)
+            val mine = session.copy(panelChip = ZapPanelChip(SportsLiveUiState.MY_TEAMS_FILTER))
+            assertEquals(listOf("f2", "f1"), mine.zapIds(2))
+        }
     }
 
     @Test

@@ -28,8 +28,10 @@ import com.nuvio.tv.domain.repository.AddonRepository
 import com.nuvio.tv.domain.repository.SportsLiveRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
@@ -167,6 +169,20 @@ class SportsLiveSettingsViewModel @Inject constructor(
 
     fun setScoreDelaySeconds(seconds: Int) {
         viewModelScope.launch { prefs.setScoreDelaySeconds(seconds) }
+    }
+
+    private val _newSportsHint = MutableStateFlow(false)
+
+    /** My sports shows "New: Tennis, UFC, F1, Golf" (once per profile: [SportsLivePreferencesDataStore.claimNewSportsHint]). */
+    val newSportsHint: StateFlow<Boolean> = _newSportsHint.asStateFlow()
+
+    private var newSportsHintClaimed = false
+
+    /** The My sports picker shows: claims its one-time hint, once for this screen. */
+    fun onMySportsShown() {
+        if (newSportsHintClaimed) return
+        newSportsHintClaimed = true
+        viewModelScope.launch { _newSportsHint.value = prefs.claimNewSportsHint() }
     }
 
     /** My sports: [sport] on or off (the last sport stays on). */

@@ -6,8 +6,16 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
@@ -44,7 +52,8 @@ import com.nuvio.tv.ui.theme.NuvioTheme
  * An individual sport's Results row (#55 part 2), as the design's individual-sport row: tennis players
  * with set columns, a UFC fight and how it ended, an F1 podium, a golf winner (OK lists the top five).
  * [showScore] false (Hide until focused, before the 1 s reveal) hides every part of the result: the
- * winner's bold, sets, method, podium and leaderboard. No Replay pill and no Follow menu.
+ * winner's bold, sets, method, podium and leaderboard. No Replay pill and no Follow menu. A golf row
+ * OK lists scrolls its new lines into view.
  */
 @Composable
 internal fun IndividualResultCard(
@@ -58,10 +67,21 @@ internal fun IndividualResultCard(
     modifier: Modifier = Modifier
 ) {
     val shape = RoundedCornerShape(NuvioTheme.radii.md)
+    val bringIntoView = remember { BringIntoViewRequester() }
+    // Only on OK: a row composed already listed (scrolled back to) stays where it is.
+    var wasExpanded by remember { mutableStateOf(expanded) }
+    LaunchedEffect(expanded) {
+        val opened = expanded && !wasExpanded
+        wasExpanded = expanded
+        if (!opened) return@LaunchedEffect
+        withFrameNanos { }
+        runCatching { bringIntoView.bringIntoView() }
+    }
     LightweightCard(
         onClick = onClick,
         modifier = modifier
             .fillMaxWidth()
+            .bringIntoViewRequester(bringIntoView)
             .onFocusChanged { if (it.isFocused) onFocus() },
         shape = shape,
         containerColor = NuvioTheme.colors.BackgroundCard,
@@ -117,7 +137,7 @@ private fun TennisLines(match: TennisMatch, showScore: Boolean) {
                 Text(
                     text = tennisSetCell(player, opponent, set),
                     style = MaterialTheme.typography.titleMedium.let {
-                        if (opponent != null && tennisWonSet(player, opponent, set)) it.copy(fontWeight = FontWeight.Bold) else it
+                        if (opponent != null && tennisWonSet(match, player, opponent, set)) it.copy(fontWeight = FontWeight.Bold) else it
                     },
                     color = NuvioTheme.colors.TextPrimary,
                     textAlign = TextAlign.Center,
@@ -156,10 +176,23 @@ private fun tennisSetCell(player: TennisPlayer, opponent: TennisPlayer?, set: In
     }
 }
 
-private fun tennisWonSet(player: TennisPlayer, opponent: TennisPlayer, set: Int): Boolean {
+/**
+ * True when [player] won [set] (its column is bold). After a retirement the last set may be unfinished
+ * ("3–0 ret."): it is nobody's unless its score ends a set (6–4, 7–5, 7–6, a match tiebreak).
+ */
+internal fun tennisWonSet(match: TennisMatch, player: TennisPlayer, opponent: TennisPlayer, set: Int): Boolean {
     val mine = player.sets[set]
     val theirs = opponent.sets.getOrNull(set) ?: return false
-    return if (IndividualFormat.isMatchTiebreak(mine, theirs)) (mine.tiebreak ?: 0) > (theirs.tiebreak ?: 0) else mine.games > theirs.games
+    if (IndividualFormat.isMatchTiebreak(mine, theirs)) return (mine.tiebreak ?: 0) > (theirs.tiebreak ?: 0)
+    val unfinished = match.ending == TennisEnding.RETIRED && set == match.setCount - 1 && !tennisSetOver(mine.games, theirs.games)
+    return !unfinished && mine.games > theirs.games
+}
+
+/** A set's games that end it: six or more by two clear, or 7–5 / 7–6. */
+private fun tennisSetOver(a: Int, b: Int): Boolean {
+    val high = maxOf(a, b)
+    val low = minOf(a, b)
+    return (high >= 6 && high - low >= 2) || (high == 7 && low >= 5)
 }
 
 /** "Ciryl Gane vs Josh Hokit" (winner bold), then "Ciryl Gane · Decision" / "… · KO/TKO R2 3:14". */
@@ -204,7 +237,7 @@ internal fun fightResultLine(fight: Fight, method: (FightMethod) -> String, roun
     return listOfNotNull(winner.name, detail).joinToString(" · ")
 }
 
-/** The winner and score to par, "+ 4 more" until OK lists the rest of the top five. */
+/** The winner and score to par, "+ 4 more" until OK lists the rest of the top five, then "OK to collapse". */
 @Composable
 private fun GolfLines(golf: GolfResult, showScore: Boolean, expanded: Boolean) {
     if (!showScore) {
@@ -214,9 +247,14 @@ private fun GolfLines(golf: GolfResult, showScore: Boolean, expanded: Boolean) {
     val shown = if (expanded) golf.leaders else golf.leaders.take(1)
     shown.forEach { GolfLine(it, bold = it.position == 1 && !it.tied) }
     val more = golf.leaders.size - shown.size
-    if (more > 0) {
+    val hint = when {
+        more > 0 -> pluralStringResource(R.plurals.sports_live_results_golf_more, more, more)
+        expanded && golf.leaders.size > 1 -> stringResource(R.string.sports_live_results_golf_collapse)
+        else -> null
+    }
+    if (hint != null) {
         Text(
-            text = pluralStringResource(R.plurals.sports_live_results_golf_more, more, more),
+            text = hint,
             style = MaterialTheme.typography.labelMedium,
             color = NuvioTheme.colors.TextTertiary,
             maxLines = 1

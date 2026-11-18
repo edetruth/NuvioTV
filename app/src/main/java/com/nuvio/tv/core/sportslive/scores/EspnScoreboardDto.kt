@@ -64,7 +64,7 @@ data class EspnCompetitionDto(
     val status: EspnStatusDto? = null,
     /** UFC: the weight class ("Lightweight"); F1: the session ("FP1", "Qual", "Race"). */
     val type: EspnCompetitionTypeDto? = null,
-    /** Tennis: "Group Stage", "Round 1", "Final". */
+    /** Tennis: "Group Stage", "Round 1", "Final"; qualifying: "Qualifying 1st Round". */
     val round: EspnRoundDto? = null,
     val competitors: List<EspnCompetitorDto>? = null,
     /** "UEFA Nations League, Group A2", "Men's International Friendly": the competition, then the stage. */
@@ -95,7 +95,12 @@ data class EspnCompetitorDto(
 data class EspnRosterDto(val displayName: String? = null, val shortDisplayName: String? = null)
 
 @JsonClass(generateAdapter = true)
-data class EspnCompetitionTypeDto(val abbreviation: String? = null, val text: String? = null)
+data class EspnCompetitionTypeDto(
+    val abbreviation: String? = null,
+    val text: String? = null,
+    /** Tennis: the draw ("mens-singles"); a qualifying draw names it ("mens-singles-qualifying"). */
+    val slug: String? = null
+)
 
 @JsonClass(generateAdapter = true)
 data class EspnRoundDto(val displayName: String? = null)
