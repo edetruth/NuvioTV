@@ -33,9 +33,6 @@ env:
   UPSTREAM_BRANCH: dev
   LIVE_BRANCH: live
   CONFLICT_ISSUE_TITLE: Upstream merge needs attention
-  # Known failing/flaky upstream tests, excluded by class name.
-  # ParallelRangeChunkLeaseTest: upstream streaming-cache concurrency test, flaky under CI load (not fork code).
-  EXCLUDED_TESTS: TraktAuthServiceTest SearchViewModelSuggestionsTest ContinueWatchingAiringRulesTest ParallelRangeChunkLeaseTest
 
 jobs:
   sync-release:
@@ -209,26 +206,15 @@ jobs:
           sed -i -E "s/^NUVIO_LIVE_BUILD=[0-9]+/NUVIO_LIVE_BUILD=${next}/" gradle.properties
           echo "build=${next}" >> "${GITHUB_OUTPUT}"
 
-      - name: Run unit tests
+      # One invocation: the release variant is compiled once for both the tests and the APKs. A failing
+      # test fails the build, and so this step, before anything is committed, tagged or published.
+      # Known failing upstream tests are excluded, by method where possible, by the init script.
+      - name: Run unit tests and build full release APKs
         if: steps.decide.outputs.release == 'true'
         run: |
-          {
-            echo 'allprojects {'
-            echo '  tasks.withType(Test).configureEach {'
-            echo '    filter {'
-            for test_class in ${EXCLUDED_TESTS}; do
-              echo "      excludeTestsMatching '*.${test_class}'"
-            done
-            echo '    }'
-            echo '  }'
-            echo '}'
-          } > "${RUNNER_TEMP}/exclude-known-failing-tests.gradle"
-          ./gradlew :app:testFullDebugUnitTest \
-            --init-script "${RUNNER_TEMP}/exclude-known-failing-tests.gradle" --stacktrace
-
-      - name: Build full release APKs
-        if: steps.decide.outputs.release == 'true'
-        run: ./gradlew :app:assembleFullRelease --stacktrace
+          ./gradlew :app:testFullReleaseUnitTest :app:assembleFullRelease \
+            --init-script .github/exclude-known-failing-tests.gradle \
+            -PunitTestForks=3 --stacktrace
 
       - name: Read version
         if: steps.decide.outputs.release == 'true'
