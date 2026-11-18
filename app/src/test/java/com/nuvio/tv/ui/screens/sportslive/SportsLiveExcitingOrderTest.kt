@@ -135,16 +135,6 @@ class SportsLiveExcitingOrderTest {
     }
 
     @Test
-    fun `the View menu offers the sort on Live now only, never on the Timeline or with Scores Off`() {
-        val cards = SportsLiveViewMenu.of(SportsLiveTab.LIVE_NOW, SportsLiveLayout.CARDS, ScoresMode.SHOW, LiveNowSort.MOST_EXCITING)!!
-        assertTrue(cards.sortShown)
-        assertEquals(LiveNowSort.MOST_EXCITING, cards.sort)
-        assertFalse(SportsLiveViewMenu.of(SportsLiveTab.LIVE_NOW, SportsLiveLayout.TIMELINE, ScoresMode.SHOW, LiveNowSort.MOST_EXCITING)!!.sortShown)
-        assertFalse(SportsLiveViewMenu.of(SportsLiveTab.LIVE_NOW, SportsLiveLayout.CARDS, ScoresMode.OFF, LiveNowSort.MOST_EXCITING)!!.sortShown)
-        assertFalse(SportsLiveViewMenu.of(SportsLiveTab.UPCOMING, SportsLiveLayout.CARDS, ScoresMode.SHOW, LiveNowSort.MOST_EXCITING)!!.sortShown)
-    }
-
-    @Test
     fun `the Scoreboard's LIVE group follows Live now's order`() {
         val pacers = item("Indiana Pacers at Philadelphia 76ers", startMs = NOW - 2 * HOUR)
         val lakers = item("Los Angeles Lakers at Phoenix Suns", startMs = NOW - HOUR)

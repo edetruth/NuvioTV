@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.sportslive.dual
 
+import com.nuvio.tv.core.sportslive.displayName
 import android.view.KeyEvent
 import android.view.ViewGroup
 import androidx.activity.compose.BackHandler
@@ -358,7 +359,7 @@ private fun DualPaneView(
         ) {
             PaneSoundIndicator(sound)
             Text(
-                text = "${pane.item.meta.name} · ${pane.item.sport ?: pane.item.catalogName}",
+                text = "${pane.item.displayName} · ${pane.item.sport ?: pane.item.catalogName}",
                 style = MaterialTheme.typography.bodyMedium,
                 color = if (highlighted) NuvioTheme.colors.TextPrimary else NuvioTheme.colors.TextSecondary,
                 maxLines = 1,

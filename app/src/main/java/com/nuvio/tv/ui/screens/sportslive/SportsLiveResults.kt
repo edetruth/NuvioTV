@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import com.nuvio.tv.core.sportslive.GameStatusText
 import android.view.KeyEvent as AndroidKeyEvent
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -869,7 +870,8 @@ private fun ResultRowCard(
             ) {
                 // The note ("AET", "Pens", "OT") tells how the game ended, so it hides with the score.
                 Text(
-                    text = if (showScore) stringResource(row.note.labelRes()) else stringResource(R.string.sports_live_results_note_ft),
+                    // A plain end reads per sport (#102): "FT" for soccer, "Final" for the US sports.
+                    text = stringResource(if (showScore) row.note.labelRes(row.event.league.sport) else FinalNote.FT.labelRes(row.event.league.sport)),
                     style = MaterialTheme.typography.labelMedium,
                     color = NuvioTheme.colors.TextSecondary,
                     maxLines = 1
@@ -951,8 +953,8 @@ private fun sportLabel(sport: String): String = when (sport) {
     else -> sport.replaceFirstChar { it.titlecase(Locale.getDefault()) }
 }
 
-private fun FinalNote.labelRes(): Int = when (this) {
-    FinalNote.FT -> R.string.sports_live_results_note_ft
+private fun FinalNote.labelRes(sport: String): Int = when (this) {
+    FinalNote.FT -> if (GameStatusText.endsAtFullTime(sport)) R.string.sports_live_results_note_ft else R.string.sports_live_chip_final_note
     FinalNote.OT -> R.string.sports_live_results_note_ot
     FinalNote.SO -> R.string.sports_live_results_note_so
     FinalNote.AET -> R.string.sports_live_results_note_aet

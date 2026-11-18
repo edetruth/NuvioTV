@@ -3658,6 +3658,14 @@
     <string name="sports_live_results_sport_soccer">Soccer</string>
     <string name="sports_live_filter_all">All</string>
     <string name="sports_live_filter_my_teams">My teams</string>
+    <string name="sports_live_filter_my_teams_star">★ My teams</string>
+    <string name="sports_live_source_failure_line">%1$s · %2$s: %3$s</string>
+    <string name="sports_live_status_live_clock">● %1$s</string>
+    <string name="sports_live_status_clock_period">%1$s · %2$s</string>
+    <string name="sports_live_status_time_countdown">%1$s · %2$s</string>
+    <string name="sports_live_status_in_hm">in %1$d h %2$d m</string>
+    <string name="sports_live_status_in_h">in %1$d h</string>
+    <string name="sports_live_status_in_m">in %1$d min</string>
     <string name="sports_live_results_my_sports">My sports</string>
     <string name="sports_live_results_your_teams">Your teams</string>
     <string name="sports_live_results_my_sports_empty">Nothing from My sports this day. Pick a sport above to see its games.</string>
@@ -3815,29 +3823,16 @@
     <string name="sports_live_just_ended">Just ended</string>
     <string name="sports_live_probably_ended">Probably ended</string>
     <!-- Scoreboard layout (#23) -->
-    <string name="sports_live_layout_cards">Cards</string>
-    <string name="sports_live_layout_scoreboard">Scoreboard</string>
     <string name="sports_live_scoreboard_live">LIVE</string>
     <string name="sports_live_scoreboard_starting_soon">STARTING SOON</string>
     <string name="sports_live_scoreboard_more_games">MORE GAMES</string>
     <string name="sports_live_scoreboard_final">FINAL</string>
-    <string name="sports_live_scoreboard_in_hm">in %1$d h %2$d m</string>
-    <string name="sports_live_scoreboard_in_m">in %1$d m</string>
     <string name="sports_live_scoreboard_preview_hint">Preview · muted · OK for full screen</string>
-    <string name="sports_live_layout_timeline">Timeline</string>
     <string name="sports_live_timeline_no_time">No time</string>
     <string name="sports_live_timeline_live_clock">LIVE · %1$s</string>
     <string name="sports_live_timeline_matchup">%1$s v %2$s</string>
     <!-- Live now sort (#43): the control and the why tags on Most exciting cards. -->
-    <string name="sports_live_sort_start_time">Start time</string>
-    <string name="sports_live_sort_most_exciting">Most exciting</string>
     <!-- One View button for layout and sort (#79): "View · Scoreboard · Exciting". -->
-    <string name="sports_live_view">View</string>
-    <string name="sports_live_view_layout">Layout</string>
-    <string name="sports_live_view_sort">Sort</string>
-    <string name="sports_live_view_sort_exciting">Exciting</string>
-    <string name="sports_live_view_label">View · %1$s</string>
-    <string name="sports_live_view_label_sort">View · %1$s · %2$s</string>
     <string name="sports_live_why_penalties">Penalties</string>
     <string name="sports_live_why_shootout">Shootout</string>
     <string name="sports_live_why_overtime">OT</string>

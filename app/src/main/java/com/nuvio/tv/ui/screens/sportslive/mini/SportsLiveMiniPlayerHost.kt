@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.sportslive.mini
 
+import com.nuvio.tv.core.sportslive.displayName
 import android.content.Context
 import android.view.ViewGroup
 import androidx.annotation.OptIn
@@ -341,7 +342,7 @@ fun SportsLiveMiniPlayerHost(
                 Text(
                     text = stringResource(
                         if (focused) R.string.sports_live_mini_ok_hint else R.string.sports_live_mini_hint,
-                        playing.item.meta.name
+                        playing.item.displayName
                     ),
                     style = MaterialTheme.typography.labelMedium,
                     color = NuvioTheme.colors.TextPrimary,

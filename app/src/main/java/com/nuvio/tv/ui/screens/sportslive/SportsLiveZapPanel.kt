@@ -1,6 +1,8 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import com.nuvio.tv.core.sportslive.displayName
 import com.nuvio.tv.core.sportslive.EndedGame
+import com.nuvio.tv.core.sportslive.GameStatus
 import com.nuvio.tv.core.sportslive.SportsLiveEndedGames
 import com.nuvio.tv.core.sportslive.SportsLiveItemBucketer
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
@@ -9,9 +11,7 @@ import com.nuvio.tv.core.sportslive.scores.GameSituation
 import com.nuvio.tv.core.sportslive.scores.GameSituations
 import com.nuvio.tv.core.sportslive.scores.ScoreChip
 import com.nuvio.tv.core.sportslive.scores.ScoreChips
-import com.nuvio.tv.core.sportslive.scores.ScoreMatcher
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
-import com.nuvio.tv.core.sportslive.scores.ScoreState
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.core.sportslive.scores.TeamLogoBook
 import com.nuvio.tv.domain.model.FollowedTeam
@@ -104,7 +104,7 @@ internal fun SportsLiveZapSession.banner(
         ?.let { ScoreChips.matchedEvent(item, it) }
     val art = GameArt.of(item, event, known)
     return SportsLiveZapBanner(
-        name = item.meta.name,
+        name = item.displayName,
         detail = "${art?.league ?: item.sport ?: item.catalogName} · ${item.addonName}",
         position = position,
         total = total,
@@ -112,12 +112,12 @@ internal fun SportsLiveZapSession.banner(
         art = art,
         // The banner never reveals a score: Hide until focused shows it hidden.
         chip = ScoreChips.of(item, event, mode, revealed = false),
-        next = step(forward = true, endedKeys = endedKeys)?.current?.takeIf { it.streamKey != item.streamKey }?.meta?.name
+        next = step(forward = true, endedKeys = endedKeys)?.current?.takeIf { it.streamKey != item.streamKey }?.displayName
     )
 }
 
 /** How far ahead a game counts as starting soon in the live games panel. */
-internal const val SOON_WINDOW_MS = 3 * 60 * 60 * 1000L
+internal const val SOON_WINDOW_MS = GameStatus.SOON_WINDOW_MS
 
 /** The live games panel's groups, in the order they are listed. */
 enum class ZapPanelGroup { LIVE_NOW, STARTING_SOON, OTHER, JUST_ENDED }
@@ -133,7 +133,9 @@ data class ZapPanelRow(
     val group: ZapPanelGroup,
     val chip: ScoreChip?,
     val art: GameArt?,
-    val teams: GameArt? = null
+    val teams: GameArt? = null,
+    /** Where the game stands ([GameStatus.of]): [group] is read from it. */
+    val status: GameStatus = GameStatus.Channel
 )
 
 /**
@@ -152,42 +154,43 @@ internal fun groupPanelRows(
     revealed: Set<String>,
     nowMs: Long,
     ended: Map<String, EndedGame> = emptyMap(),
-    known: TeamLogoBook = TeamLogoBook.shared
+    known: TeamLogoBook = TeamLogoBook.shared,
+    /** The list says its games are live (Live now, the panel); Upcoming's are not: ESPN alone makes one live there. */
+    listedLive: Boolean = true
 ): List<ZapPanelRow> {
     class Entry(val row: ZapPanelRow, val startMs: Long?, val index: Int)
     val entries = items.mapIndexed { index, item ->
         val endedGame = ended[item.streamKey]
         // A Just ended game keeps the final it was moved on, whatever is tracked now.
         val snapshot = (scores[item.streamKey] ?: endedGame?.event).takeIf { mode != null && mode != ScoresMode.OFF }
-        val sides = ScoreChips.orderedSides(item)
-        val event = snapshot?.takeIf { sides != null && ScoreMatcher.firstIsHome(sides.first, sides.second, it) != null }
-        val eventStart = event?.takeIf { it.timeValid }?.startMs
-        val start = eventStart ?: item.startMs?.takeIf { item.startHasTimeOfDay }
-        val soon = start != null && start <= nowMs + SOON_WINDOW_MS
-        // A final is grouped as one in every mode, as the cards label it (C3); Hide until focused keeps
-        // only its score hidden (the chip).
-        val state = event?.state
-        val group = if (endedGame != null) ZapPanelGroup.JUST_ENDED else when (state) {
-            ScoreState.IN -> ZapPanelGroup.LIVE_NOW
-            ScoreState.PRE -> if (soon) ZapPanelGroup.STARTING_SOON else ZapPanelGroup.OTHER
-            ScoreState.POST, ScoreState.OFF -> ZapPanelGroup.OTHER
-            // Unmatched: every panel game is one its addon marks live; a later start says it has not begun.
-            ScoreState.UNKNOWN, null -> when {
-                item.isChannel -> ZapPanelGroup.OTHER
-                start != null && start > nowMs -> if (soon) ZapPanelGroup.STARTING_SOON else ZapPanelGroup.OTHER
-                else -> ZapPanelGroup.LIVE_NOW
-            }
+        val event = ScoreChips.matchedEvent(item, snapshot)
+        // One status source (#102): a final is grouped as one in every mode, as the cards label it (C3);
+        // Hide until focused keeps only its score hidden (the chip).
+        val status = GameStatus.of(item, snapshot, endedGame, nowMs, listedLive)
+        val group = panelGroupOf(status)
+        val start = when (status) {
+            is GameStatus.StartingSoon -> status.startMs
+            is GameStatus.Live -> status.event?.takeIf { it.timeValid }?.startMs ?: item.startMs?.takeIf { item.startHasTimeOfDay }
+            else -> null
         }
         val chip = ScoreChips.of(item, event, mode, item.streamKey in revealed)
         val teams = PanelArt.of(item, event, known)
         val art = teams.takeIf { group == ZapPanelGroup.STARTING_SOON }
-        Entry(ZapPanelRow(item, group, chip, art, teams), start, index)
+        Entry(ZapPanelRow(item, group, chip, art, teams, status), start, index)
     }
     val order = compareBy<Entry> { it.row.group.ordinal }
         .thenByDescending { it.row.item.followed }
         .thenBy { if (it.row.group >= ZapPanelGroup.OTHER) 0L else it.startMs ?: Long.MAX_VALUE }
         .thenBy { it.index }
     return entries.sortedWith(order).map { it.row }
+}
+
+/** The panel group of a game's [status]: live, starting soon, just ended, or the rest. */
+internal fun panelGroupOf(status: GameStatus): ZapPanelGroup = when (status) {
+    is GameStatus.Live -> ZapPanelGroup.LIVE_NOW
+    is GameStatus.StartingSoon -> ZapPanelGroup.STARTING_SOON
+    is GameStatus.JustEnded -> ZapPanelGroup.JUST_ENDED
+    is GameStatus.Upcoming, is GameStatus.Final, is GameStatus.Postponed, GameStatus.Channel -> ZapPanelGroup.OTHER
 }
 
 /**
@@ -280,7 +283,7 @@ internal fun panelBoards(
         val item = row.item
         val endedGame = ended[item.streamKey]
         val snapshot = (scores[item.streamKey] ?: endedGame?.event).takeIf { scoresOn }
-        val board = scoreboardRowOf(row, SportsLiveTab.LIVE_NOW, snapshot, endedGame, nowMs, followsSide, row.teams)
+        val board = scoreboardRowOf(row, snapshot, endedGame, nowMs, followsSide, row.teams)
         val situation = if (board.chip is ScoreChip.Live) {
             GameSituations.of(item, snapshot, mode, item.streamKey in revealed)
         } else {

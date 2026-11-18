@@ -3,12 +3,12 @@ package com.nuvio.tv.ui.screens.sportslive
 import androidx.compose.runtime.Immutable
 import com.nuvio.tv.core.sportslive.EndedGame
 import com.nuvio.tv.core.sportslive.EndedSignal
+import com.nuvio.tv.core.sportslive.GameStatus
 import com.nuvio.tv.core.sportslive.scores.GameArt
 import com.nuvio.tv.core.sportslive.scores.GameArtTeam
 import com.nuvio.tv.core.sportslive.scores.ScoreChip
 import com.nuvio.tv.core.sportslive.scores.ScoreChips
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
-import com.nuvio.tv.core.sportslive.scores.ScoreState
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveTab
@@ -32,7 +32,9 @@ data class ScoreboardRow(
     val firstFollowed: Boolean,
     val secondFollowed: Boolean,
     val probablyEnded: Boolean,
-    val startsIn: Pair<Int, Int>? = null
+    val startsIn: Pair<Int, Int>? = null,
+    /** Where the game stands ([GameStatus.of]): [group] and the status column are read from it. */
+    val status: GameStatus = GameStatus.Channel
 )
 
 /**
@@ -56,10 +58,10 @@ internal fun scoreboardRows(
     liveRank: Map<String, Int> = emptyMap()
 ): List<ScoreboardRow> {
     val scoresOn = mode != null && mode != ScoresMode.OFF
-    return groupPanelRows(items, scores, mode, revealed, nowMs, ended).map { row ->
+    return groupPanelRows(items, scores, mode, revealed, nowMs, ended, listedLive = tab != SportsLiveTab.UPCOMING).map { row ->
         val endedGame = ended[row.item.streamKey]
         val snapshot = (scores[row.item.streamKey] ?: endedGame?.event).takeIf { scoresOn }
-        scoreboardRowOf(row, tab, snapshot, endedGame, nowMs, followsSide, GameArt.of(row.item, snapshot))
+        scoreboardRowOf(row, snapshot, endedGame, nowMs, followsSide, GameArt.of(row.item, snapshot))
     }.sortedWith(
         compareBy<ScoreboardRow> { it.group.ordinal }
             .thenBy { if (it.group == ScoreboardGroup.LIVE) liveRank[it.item.streamKey] ?: Int.MAX_VALUE else 0 }
@@ -73,7 +75,6 @@ internal fun scoreboardRows(
  */
 internal fun scoreboardRowOf(
     row: ZapPanelRow,
-    tab: SportsLiveTab,
     snapshot: ScoreSnapshot?,
     endedGame: EndedGame?,
     nowMs: Long,
@@ -81,23 +82,9 @@ internal fun scoreboardRowOf(
     art: GameArt?
 ): ScoreboardRow {
     val item = row.item
-    // A kickoff with a time of day: a date alone ("Sat 21 Nov") never starts soon or counts down.
-    val timedStart = art?.takeIf { it.hasTimeOfDay }?.startMs ?: item.startMs?.takeIf { item.startHasTimeOfDay }
-    val group = when (row.group) {
-        ZapPanelGroup.LIVE_NOW -> when {
-            tab != SportsLiveTab.UPCOMING || ScoreChips.matchedEvent(item, snapshot)?.state == ScoreState.IN -> ScoreboardGroup.LIVE
-            timedStart != null -> ScoreboardGroup.STARTING_SOON
-            else -> ScoreboardGroup.MORE_GAMES
-        }
-        ZapPanelGroup.STARTING_SOON -> ScoreboardGroup.STARTING_SOON
-        // An ESPN final not (or no longer) in the Just ended set is still a final (N5): never "more games".
-        ZapPanelGroup.OTHER -> if (ScoreChips.matchedEvent(item, snapshot)?.state == ScoreState.POST) {
-            ScoreboardGroup.FINAL
-        } else {
-            ScoreboardGroup.MORE_GAMES
-        }
-        ZapPanelGroup.JUST_ENDED -> ScoreboardGroup.FINAL
-    }
+    // One status source (#102): the row's group is its game's status, as in the panel and the cards.
+    val status = row.status
+    val group = scoreboardGroupOf(status)
     val estimate = endedGame?.signal == EndedSignal.ESTIMATE
     val sides = ScoreChips.orderedSides(item)
     return ScoreboardRow(
@@ -108,8 +95,17 @@ internal fun scoreboardRowOf(
         firstFollowed = sides != null && followsSide(item, sides.first),
         secondFollowed = sides != null && followsSide(item, sides.second),
         probablyEnded = estimate,
-        startsIn = if (group == ScoreboardGroup.STARTING_SOON) scoreboardStartsIn(timedStart, nowMs) else null
+        startsIn = (status as? GameStatus.StartingSoon)?.let { GameStatus.startsIn(it.startMs, nowMs) },
+        status = status
     )
+}
+
+/** The Scoreboard group of a game's [status]. */
+internal fun scoreboardGroupOf(status: GameStatus): ScoreboardGroup = when (status) {
+    is GameStatus.Live -> ScoreboardGroup.LIVE
+    is GameStatus.StartingSoon -> ScoreboardGroup.STARTING_SOON
+    is GameStatus.Final, is GameStatus.JustEnded -> ScoreboardGroup.FINAL
+    is GameStatus.Upcoming, is GameStatus.Postponed, GameStatus.Channel -> ScoreboardGroup.MORE_GAMES
 }
 
 /**
@@ -138,9 +134,4 @@ internal fun scoreboardButtons(tab: SportsLiveTab, row: ScoreboardRow, matchedEv
  * Time to kickoff for a Starting soon row as (hours, minutes), rounded up to the minute; null once
  * [startMs] has passed or when it is unknown.
  */
-internal fun scoreboardStartsIn(startMs: Long?, nowMs: Long): Pair<Int, Int>? {
-    val left = (startMs ?: return null) - nowMs
-    if (left <= 0) return null
-    val minutes = ((left + 59_999) / 60_000).toInt()
-    return minutes / 60 to minutes % 60
-}
+internal fun scoreboardStartsIn(startMs: Long?, nowMs: Long): Pair<Int, Int>? = startMs?.let { GameStatus.startsIn(it, nowMs) }

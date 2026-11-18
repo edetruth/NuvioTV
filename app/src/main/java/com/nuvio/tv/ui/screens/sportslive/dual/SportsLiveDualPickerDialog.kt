@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.sportslive.dual
 
+import com.nuvio.tv.core.sportslive.displayName
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -100,7 +101,7 @@ internal fun SportsLiveDualPickerDialog(
                         // Logos only when both teams have one and both loaded (#130); never letters.
                         rememberTeamLogoPair(row?.teams)?.let { logos -> TeamLogoPairSlot(logos, 28.dp, NuvioTheme.spacing.xs) }
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(item.meta.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(item.displayName, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text(
                                 text = "${item.sport ?: item.catalogName} · ${item.addonName}",
                                 style = MaterialTheme.typography.bodySmall,

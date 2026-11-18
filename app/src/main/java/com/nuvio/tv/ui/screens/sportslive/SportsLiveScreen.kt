@@ -1,5 +1,9 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens
+import com.nuvio.tv.core.sportslive.GameStatus
+import androidx.compose.foundation.background
+import com.nuvio.tv.core.sportslive.displayName
 import android.view.KeyEvent as AndroidKeyEvent
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -14,18 +18,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.focusGroup
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -34,7 +36,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.withFrameNanos
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -45,9 +46,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.nuvio.tv.ui.screens.ambient.LocalAmbientIdleController
@@ -62,9 +61,7 @@ import androidx.tv.material3.Text
 import com.nuvio.tv.R
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.TeamPair
-import com.nuvio.tv.core.sportslive.EndedSignal
 import com.nuvio.tv.core.sportslive.SportsLiveEndedGames
-import com.nuvio.tv.core.sportslive.LiveNowSort
 import com.nuvio.tv.core.sportslive.SportsLiveLayout
 import com.nuvio.tv.core.sportslive.alerts.GameReminders
 import com.nuvio.tv.core.sportslive.alerts.RemindersState
@@ -92,8 +89,6 @@ import com.nuvio.tv.domain.model.SportsLiveKind
 import com.nuvio.tv.domain.model.SportsLiveTab
 import com.nuvio.tv.ui.components.EmptyScreenState
 import com.nuvio.tv.ui.components.LoadingIndicator
-import com.nuvio.tv.ui.components.RefreshFilterChip
-import com.nuvio.tv.ui.components.SourceStatusFilterChip
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualSession
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualSessions
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniGeometry
@@ -328,9 +323,6 @@ fun SportsLiveScreen(
             uiState = uiState,
             followedTeams = followedTeams,
             layout = layout,
-            onSelectLayout = { viewModel.selectLayout(uiState.selectedTab, it) },
-            onSelectSort = viewModel::selectLiveSort,
-            scoresMode = scoresMode,
             board = board,
             situationOf = situationOf,
             chipOf = chipOf,
@@ -455,13 +447,8 @@ private fun NoAddonsState(onOpenAddons: () -> Unit) {
 private fun SportsLiveContent(
     uiState: SportsLiveUiState,
     followedTeams: List<FollowedTeam>,
-    /** The selected tab's layout: Cards, or the Scoreboard (#23). */
+    /** The selected tab's layout: the Scoreboard on Live now and Upcoming (V2), the list elsewhere. */
     layout: SportsLiveLayout,
-    onSelectLayout: (SportsLiveLayout) -> Unit,
-    /** Live now's sort (#43): Start time or Most exciting. */
-    onSelectSort: (LiveNowSort) -> Unit,
-    /** The Scores setting (null until read): the View menu offers the sort only while it is on (#79). */
-    scoresMode: ScoresMode?,
     /** The list's model, built off the main thread (#71); null or another tab's until ready. */
     board: SportsLiveBoard?,
     /** A game's situation line ("" when none or hidden with the score). */
@@ -549,18 +536,25 @@ private fun SportsLiveContent(
     // The Timeline's league rows (#24), saved like the list's position.
     val timelineRowState = rememberSaveable(filterKey, saver = LazyListState.Saver) { LazyListState() }
     val baseStateLabelOf = rememberSportsLiveStateLabeler(uiState.selectedTab)
+    val liveLabel = stringResource(R.string.sports_live_live_pill)
     val finalLabel = stringResource(R.string.sports_live_chip_final_note)
     val probablyEndedLabel = stringResource(R.string.sports_live_probably_ended)
+    // One status source (#102): the same answer as the Scoreboard and the player's panel.
+    val statusOf: (SportsLiveItem) -> GameStatus = { item -> GameStatus.of(item, gameOf(item), uiState.endedOf(item), uiState.nowMs) }
     // ESPN says the game is over (C3): labelled final, never LIVE, even in the postgame grace.
-    val espnFinalOf: (SportsLiveItem) -> Boolean = { item -> SportsLiveEndedGames.isEspnFinal(item, gameOf(item)) }
+    val espnFinalOf: (SportsLiveItem) -> Boolean = { item -> statusOf(item) is GameStatus.Final }
     // A Just ended card (#60) or an ESPN final: "Final" (left to the chip when it already says it) or "Probably ended".
     val stateLabelOf: (SportsLiveItem) -> String? = { item ->
-        val ended = uiState.endedOf(item)
-        when {
-            ended == null && !espnFinalOf(item) -> baseStateLabelOf(item)
-            ended?.signal == EndedSignal.ESTIMATE -> probablyEndedLabel
-            chipOf(item) is ScoreChip.Final -> null
-            else -> finalLabel
+        when (val status = statusOf(item)) {
+            is GameStatus.Live -> liveLabel
+            is GameStatus.JustEnded, is GameStatus.Final -> when {
+                status is GameStatus.JustEnded && status.estimate -> probablyEndedLabel
+                chipOf(item) is ScoreChip.Final -> null
+                else -> finalLabel
+            }
+            GameStatus.Channel -> baseStateLabelOf(item)
+            // Not started: an addon-live card ESPN still has as scheduled reads its kickoff, never LIVE (F5).
+            is GameStatus.StartingSoon, is GameStatus.Upcoming, is GameStatus.Postponed -> baseStateLabelOf(item.copy(isLive = false))
         }
     }
     // Just ended cards with a strict replay match carry the Replay tag.
@@ -627,14 +621,6 @@ private fun SportsLiveContent(
     } else {
         items.firstOrNull { it.listKey == entryKey }?.let(::cardFocusRequester) ?: selectedCardFocusRequester
     }
-    // Attached to whichever filter chip is selected; the chips only show with two or more values.
-    val filterFocusRequester = remember { FocusRequester() }
-    // The View button (#79): layout and sort in one menu, leading the filter row on Live now and Upcoming.
-    val viewFocusRequester = remember { FocusRequester() }
-    val viewMenu = SportsLiveViewMenu.of(uiState.selectedTab, layout, scoresMode, uiState.liveSort)
-    var viewMenuOpen by remember { mutableStateOf(false) }
-    val header = SportsLiveHeaderFocus.of(uiState.selectedTab, uiState.filters.size)
-    val showFilterRow = header.rowShown
     // The Catch up strip (#58) sits between the header and Live Now's games: Down from the header lands
     // on it, Up from the first game goes back to it.
     val catchUpShown = uiState.selectedTab == SportsLiveTab.LIVE_NOW && catchUpItems.isNotEmpty()
@@ -648,31 +634,32 @@ private fun SportsLiveContent(
         runCatching { (entryCardFocusRequester ?: activeTabFocusRequester).requestFocus() }
     }
     val contentEntryFocusRequester = if (catchUpShown) catchUpFocusRequester else entryCardFocusRequester
-    fun headerRequester(stop: SportsLiveHeaderFocus.Stop): FocusRequester? = when (stop) {
-        SportsLiveHeaderFocus.Stop.TABS -> activeTabFocusRequester
-        SportsLiveHeaderFocus.Stop.VIEW -> viewFocusRequester
-        SportsLiveHeaderFocus.Stop.CHIPS -> filterFocusRequester
-        SportsLiveHeaderFocus.Stop.CONTENT -> contentEntryFocusRequester
-    }
-    val aboveContentFocusRequester = headerRequester(header.contentUp) ?: activeTabFocusRequester
+    // The tab's filter (V2): one focus stop in the header; Upcoming, Channels and Replays only.
+    val filterShown = sportsLiveHeaderFilterShown(uiState.selectedTab, uiState.filters.size)
+    val filterFocusRequester = remember { FocusRequester() }
+    // The one-line header (V2): Up from the content goes to the tab's filter (the tabs sit left of it: Right
+    // along them would switch tabs), else to the active tab.
+    val aboveContentFocusRequester = if (filterShown) filterFocusRequester else activeTabFocusRequester
     val aboveListFocusRequester = if (catchUpShown) catchUpFocusRequester else aboveContentFocusRequester
+    val myTeamsLabel = stringResource(R.string.sports_live_filter_my_teams_star)
+    val allLabel = stringResource(R.string.sports_live_filter_all)
+    val filterOptions = remember(filterShown, uiState.filters, myTeamsLabel, allLabel) {
+        if (filterShown) sportsLiveFilterOptions(uiState.filters, myTeamsLabel, allLabel) else null
+    }
+    // Live now has no filter (V2): a filter left from earlier falls back to All.
+    LaunchedEffect(uiState.selectedTab, uiState.selectedFilter) {
+        if (uiState.selectedTab == SportsLiveTab.LIVE_NOW && uiState.selectedFilter != null) onSelectFilter(null)
+    }
+    var failuresOpen by remember { mutableStateOf(false) }
+    if (failuresOpen && uiState.failures.isNotEmpty()) {
+        SportsLiveSourceFailuresDialog(failures = uiState.failures, onDismiss = { failuresOpen = false })
+    }
     // On the Results tab, the selected date chip (the tab row's Down).
     val resultsDateFocusRequester = remember { FocusRequester() }
     val showingResults = uiState.selectedTab == SportsLiveTab.RESULTS
     // Scores Off: no Results tab at all.
     // Shown only once the setting is read, so a Scores-Off user never sees it flash in.
     val shownTabs = SportsLiveTab.entries.filter { it != SportsLiveTab.RESULTS || (results.modeKnown && results.mode != ScoresMode.OFF) }
-    // A refresh can drop the filter row while a chip holds focus; focus then goes to the active tab
-    // instead of being lost. Losing focus because the row is being removed does not clear the flag.
-    var filterRowHasFocus by remember { mutableStateOf(false) }
-    val currentShowFilterRow by rememberUpdatedState(showFilterRow)
-    LaunchedEffect(showFilterRow) {
-        if (showFilterRow || !filterRowHasFocus) return@LaunchedEffect
-        filterRowHasFocus = false
-        withFrameNanos { }
-        runCatching { activeTabFocusRequester.requestFocus() }
-    }
-
     // Replay "series" items are team folders; the detail page lists their videos.
     val open: (SportsLiveItem) -> Unit = { item ->
         if (item.kind == SportsLiveKind.REPLAY && item.apiType == "series") onOpenDetail(item) else onPlay(item)
@@ -742,7 +729,7 @@ private fun SportsLiveContent(
         val canRemind = remindable(item)
         if (teams == null && !watchWith && !canRemind) return@let
         SportsLiveCardMenu(
-            title = item.meta.name,
+            title = item.displayName,
             sides = teams?.inTitleOrder(item.meta.name).orEmpty().map { side ->
                 side to followedTeams.any { SportsLiveTeams.followsSideOfAnySource(it, side, item) }
             },
@@ -802,25 +789,13 @@ private fun SportsLiveContent(
         )
     }
 
-    if (viewMenuOpen && viewMenu != null) {
-        SportsLiveViewMenuDialog(
-            menu = viewMenu,
-            onSelectLayout = onSelectLayout,
-            onSelectSort = onSelectSort,
-            onDismiss = {
-                viewMenuOpen = false
-                runCatching { viewFocusRequester.requestFocus() }
-            }
-        )
-    }
-
     BackHandler(enabled = listHasFocus) {
         runCatching { activeTabFocusRequester.requestFocus() }
     }
     // The preview follows the focused card (in the list, or its pane's buttons) while no menu or
     // dialog is open; anything else stops it.
     val previewItem = selected?.takeIf {
-        (listHasFocus || paneHasFocus) && menuCardKey == null && !dialogOpen && !viewMenuOpen
+        (listHasFocus || paneHasFocus) && menuCardKey == null && !dialogOpen
     }
     val currentOnPreviewFocus by rememberUpdatedState(onPreviewFocus)
     LaunchedEffect(previewItem?.listKey) { currentOnPreviewFocus(previewItem) }
@@ -898,23 +873,22 @@ private fun SportsLiveContent(
     }
 
     val currentSelectedFilterEmpty by rememberUpdatedState(uiState.selectedFilterEmpty)
-    // The selected chip holds focus: when it is an emptied one, the key that drops it puts focus on All.
-    var selectedChipFocused by remember { mutableStateOf(false) }
     Column(
         modifier = Modifier
             .fillMaxSize()
-            // #79: a selected chip whose games have gone stays shown with 0 until the user moves; the first
-            // key falls back to All. On the chips, that key only puts focus on All (the 0 chip goes).
+            .background(SportsLiveTokens.Colors.Background)
+            // #79: a selected filter whose games have gone stays shown until the user moves; the first key
+            // falls back to All (the filter control keeps focus).
             .onPreviewKeyEvent { event ->
-                if (event.nativeKeyEvent.action != AndroidKeyEvent.ACTION_DOWN || !currentSelectedFilterEmpty) return@onPreviewKeyEvent false
-                if (!onUserMoved() || !selectedChipFocused) return@onPreviewKeyEvent false
-                liveNowScope.launch {
-                    withFrameNanos { }
-                    runCatching { filterFocusRequester.requestFocus() }
-                }
-                true
+                if (event.nativeKeyEvent.action == AndroidKeyEvent.ACTION_DOWN && currentSelectedFilterEmpty) onUserMoved()
+                false
             }
-            .padding(horizontal = NuvioTheme.spacing.screen.horizontal, vertical = NuvioTheme.spacing.screen.vertical)
+            .padding(
+                start = SportsLiveTokens.Size.SafeStart,
+                top = SportsLiveTokens.Size.SafeTop,
+                end = SportsLiveTokens.Size.SafeEnd,
+                bottom = SportsLiveTokens.Size.SafeBottom
+            )
     ) {
         val openList: () -> Unit = { runCatching { entryCardFocusRequester?.requestFocus() } }
         val miniPlayer = SportsLiveMiniPlayers.controller
@@ -930,7 +904,7 @@ private fun SportsLiveContent(
         }
         if (nowPlaying != null) {
             SportsLiveNowPlayingCard(
-                name = nowPlaying.meta.name,
+                name = nowPlaying.displayName,
                 onExpand = { miniPlayer.requestExpand() },
                 onStop = {
                     runCatching { activeTabFocusRequester.requestFocus() }
@@ -942,13 +916,19 @@ private fun SportsLiveContent(
                     .onFocusChanged { if (it.hasFocus || miniPlayer.isActive) nowPlayingHasFocus = it.hasFocus }
             )
         }
-        SportsLiveTabRow(
-            uiState = uiState,
+        SportsLiveHeader(
             tabs = shownTabs,
+            selectedTab = uiState.selectedTab,
             tabFocusRequesters = tabFocusRequesters,
-            downFocusRequester = if (showingResults) resultsDateFocusRequester else headerRequester(header.tabsDown),
+            downFocusRequester = if (showingResults) resultsDateFocusRequester else contentEntryFocusRequester,
             onSelectTab = onSelectTab,
             onOpenTab = openList,
+            filterOptions = filterOptions,
+            filterFocusRequester = filterFocusRequester,
+            selectedFilter = uiState.selectedFilter,
+            onSelectFilter = onSelectFilter,
+            failures = uiState.failures.size,
+            onShowFailures = { failuresOpen = true },
             onRefresh = onRefresh,
             modifier = Modifier.onFocusChanged { if (it.hasFocus) followedCardKey = null }
         )
@@ -982,41 +962,6 @@ private fun SportsLiveContent(
             )
             return@Column
         }
-        if (showFilterRow) {
-            SportsLiveFilterRow(
-                uiState = uiState,
-                header = header,
-                filterFocusRequester = filterFocusRequester,
-                upFocusRequester = activeTabFocusRequester,
-                downFocusRequester = contentEntryFocusRequester,
-                onSelectFilter = onSelectFilter,
-                onOpenFilter = openList,
-                viewMenu = viewMenu,
-                viewFocusRequester = viewFocusRequester,
-                onOpenViewMenu = { viewMenuOpen = true },
-                onSelectedChipFocus = { selectedChipFocused = it },
-                modifier = Modifier
-                    .padding(top = NuvioTheme.spacing.xs)
-                    .onFocusChanged { state ->
-                        if (state.hasFocus) {
-                            filterRowHasFocus = true
-                            followedCardKey = null
-                        } else if (currentShowFilterRow) {
-                            filterRowHasFocus = false
-                        }
-                    }
-            )
-        }
-        if (uiState.failures.isNotEmpty()) {
-            Text(
-                text = pluralStringResource(R.plurals.sports_live_partial_failure, uiState.failures.size, uiState.failures.size),
-                style = MaterialTheme.typography.bodySmall,
-                color = NuvioTheme.colors.TextTertiary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = NuvioTheme.spacing.sm)
-            )
-        }
         if (catchUpShown) {
             SportsLiveCatchUpStrip(
                 items = catchUpItems,
@@ -1032,7 +977,7 @@ private fun SportsLiveContent(
                     .onFocusChanged { if (it.hasFocus) followedCardKey = null }
             )
         }
-        Spacer(modifier = Modifier.height(NuvioTheme.spacing.lg))
+        Spacer(modifier = Modifier.height(SportsLiveTokens.Size.HeaderBottomGap))
 
         // The board is being built (#71): nothing to draw for a moment, and never "nothing here".
         if (boardPending && uiState.visibleItems.isNotEmpty()) return@Column
@@ -1280,134 +1225,6 @@ private fun SportsLiveContent(
     }
 }
 
-@Composable
-private fun SportsLiveTabRow(
-    uiState: SportsLiveUiState,
-    tabs: List<SportsLiveTab>,
-    tabFocusRequesters: Map<SportsLiveTab, FocusRequester>,
-    downFocusRequester: FocusRequester?,
-    onSelectTab: (SportsLiveTab) -> Unit,
-    onOpenTab: () -> Unit,
-    onRefresh: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    // Down goes to View, the selected filter chip (or card), never to whichever chip sits below.
-    val downModifier = Modifier.focusProperties { downFocusRequester?.let { down = it } }
-    val activeTabFocusRequester = tabFocusRequesters.getValue(uiState.selectedTab)
-    // A plain scrolling Row keeps every chip composed, so the tab FocusRequesters stay attached.
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            // Entering the row from elsewhere (the pane, the list) lands on the active tab, never on
-            // whichever tab sits nearest, since tabs select on focus.
-            .focusProperties { onEnter = { activeTabFocusRequester.requestFocus() } }
-            .focusGroup()
-            .horizontalScroll(rememberScrollState())
-            // Room inside the scroll for the focused chip's border, which otherwise clips at the edges.
-            .padding(horizontal = NuvioTheme.spacing.sm, vertical = NuvioTheme.spacing.xs),
-        horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        tabs.forEach { tab ->
-            val label = stringResource(tab.labelRes())
-            val count = uiState.countOf(tab)
-            SourceStatusFilterChip(
-                name = if (count > 0) "$label $count" else label,
-                isSelected = tab == uiState.selectedTab,
-                // Like FolderDetailScreen, focusing a tab selects it; OK moves into the list.
-                onFocusSelect = { onSelectTab(tab) },
-                onClick = onOpenTab,
-                modifier = Modifier
-                    .focusRequester(tabFocusRequesters.getValue(tab))
-                    .then(downModifier)
-            )
-        }
-        Spacer(modifier = Modifier.width(NuvioTheme.spacing.md))
-        RefreshFilterChip(onClick = onRefresh, isLoading = uiState.isLoading, modifier = downModifier)
-    }
-}
-
-@Composable
-private fun SportsLiveFilterRow(
-    uiState: SportsLiveUiState,
-    /** Which of the View button and the chips show (C2, #79). */
-    header: SportsLiveHeaderFocus,
-    filterFocusRequester: FocusRequester,
-    upFocusRequester: FocusRequester,
-    downFocusRequester: FocusRequester?,
-    onSelectFilter: (String?) -> Unit,
-    onOpenFilter: () -> Unit,
-    /** The tab's View menu (layout and sort, #79); null on a tab without one. */
-    viewMenu: SportsLiveViewMenu?,
-    viewFocusRequester: FocusRequester,
-    onOpenViewMenu: () -> Unit,
-    /** The selected chip took (true) or lost focus. */
-    onSelectedChipFocus: (Boolean) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    @Composable
-    fun FilterRowChip(name: String, value: String?) {
-        val isSelected = value == uiState.selectedFilter
-        SportsLiveFilterChip(
-            name = name,
-            isSelected = isSelected,
-            count = uiState.filterCounts[value] ?: 0,
-            icon = sportsLiveChipIconOf(value),
-            // #79: focus only highlights; OK picks the chip, and OK on the picked one moves into the list.
-            onClick = sportsLiveChipClick(isSelected, onSelect = { onSelectFilter(value) }, onOpenList = onOpenFilter),
-            modifier = Modifier
-                .then(if (isSelected) Modifier.focusRequester(filterFocusRequester) else Modifier)
-                .onFocusChanged { if (isSelected || !it.isFocused) onSelectedChipFocus(isSelected && it.isFocused) }
-                .focusProperties {
-                    up = upFocusRequester
-                    downFocusRequester?.let { down = it }
-                }
-        )
-    }
-    // The View button sits outside the chips' scroll, so it is always whole on screen; the chips scroll beside it.
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        if (header.viewShown && viewMenu != null) {
-            SportsLiveViewButton(
-                menu = viewMenu,
-                onClick = onOpenViewMenu,
-                // Room for the focused button's border and focus scale, clear of the first chip (QA pass 3).
-                modifier = Modifier
-                    .padding(start = NuvioTheme.spacing.sm, end = NuvioTheme.spacing.md, top = NuvioTheme.spacing.xs, bottom = NuvioTheme.spacing.xs)
-                    .focusRequester(viewFocusRequester)
-                    .focusProperties {
-                        up = upFocusRequester
-                        downFocusRequester?.let { down = it }
-                        // Right enters the chips on the selected one; with no chips, Right stays put.
-                        right = if (header.viewRight != null) filterFocusRequester else FocusRequester.Cancel
-                    }
-            )
-        }
-        if (header.chipsShown) {
-            Row(
-                modifier = Modifier
-                    .weight(1f)
-                    // Entering the chips from elsewhere (the pane, the list, View) lands on the selected chip.
-                    .focusProperties { onEnter = { filterFocusRequester.requestFocus() } }
-                    .focusGroup()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = NuvioTheme.spacing.sm, vertical = NuvioTheme.spacing.xs),
-                // Wide enough that a focused chip's scale never reaches its neighbour's border.
-                horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // "★ My teams" leads, then All, then each value with games (#79: empty ones hidden).
-                val myTeams = SportsLiveUiState.MY_TEAMS_FILTER
-                if (myTeams in uiState.filters) FilterRowChip(name = stringResource(R.string.sports_live_filter_my_teams), value = myTeams)
-                FilterRowChip(name = stringResource(R.string.sports_live_filter_all), value = null)
-                uiState.filters.filter { it != myTeams }.forEach { filter -> FilterRowChip(name = filter, value = filter) }
-            }
-        }
-    }
-}
-
 private const val FOLLOW_REFOCUS_WINDOW_MS = 1_500L
 private const val SCOREBOARD_LIST_WEIGHT = 0.5f
 private const val RETURN_FOCUS_FRAMES = 10
@@ -1421,11 +1238,3 @@ private fun TeamPair.inTitleOrder(title: String): List<String> =
 
 /** Unique within a tab: the bucketer keeps one copy of an item per addon. */
 private val SportsLiveItem.listKey: String get() = "$addonId|$id"
-
-private fun SportsLiveTab.labelRes(): Int = when (this) {
-    SportsLiveTab.LIVE_NOW -> R.string.sports_live_tab_live_now
-    SportsLiveTab.UPCOMING -> R.string.sports_live_tab_upcoming
-    SportsLiveTab.CHANNELS -> R.string.sports_live_tab_channels
-    SportsLiveTab.REPLAYS -> R.string.sports_live_tab_replays
-    SportsLiveTab.RESULTS -> R.string.sports_live_tab_results
-}

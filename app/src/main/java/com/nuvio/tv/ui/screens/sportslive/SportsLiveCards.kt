@@ -1,5 +1,11 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveBadge
+import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveButton
+import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveButtonRole
+import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens
+import com.nuvio.tv.core.sportslive.displayName
+import com.nuvio.tv.core.sportslive.SportsLiveDisplayText
 import android.view.KeyEvent as AndroidKeyEvent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -237,12 +243,15 @@ internal fun SportsLiveListCard(
                         )
                     }
                     Text(
-                        text = item.meta.name,
+                        text = item.displayName,
                         style = MaterialTheme.typography.titleMedium,
                         color = NuvioTheme.colors.TextPrimary,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
                     )
+                    // The addon's quality marker, cut from the name (#100), as a badge.
+                    SportsLiveDisplayText.of(item.meta.name).quality?.let { SportsLiveBadge(it) }
                 }
                 // A merged game names its primary addon and how many addons carry it.
                 val sources = if (item.alternates.isEmpty()) {
@@ -321,7 +330,7 @@ internal fun SportsLiveDetailsPane(
             }
         }
         Text(
-            text = item.meta.name,
+            text = item.displayName,
             style = MaterialTheme.typography.headlineSmall,
             color = NuvioTheme.colors.TextPrimary,
             maxLines = 2,
@@ -352,7 +361,7 @@ internal fun SportsLiveDetailsPane(
         scoreDetails?.let { SportsLiveScoreDetails(it) }
         val tomorrow = stringResource(R.string.sports_live_tomorrow)
         val description = remember(item.meta.id, item.meta.description, tomorrow, over) {
-            item.meta.description?.let { if (over) withoutLiveMarkers(it) else it }?.let {
+            SportsLiveDisplayText.description(item.meta.description)?.let { if (over) withoutLiveMarkers(it) else it }?.let {
                 SportsLiveLocalTime.localizeUtcStamps(
                     text = it,
                     nowMs = System.currentTimeMillis(),
@@ -388,7 +397,8 @@ internal fun SportsLiveDetailsPane(
             // Still focusable and pressable when dimmed: OK looks the streams up again.
             SportsLivePaneButton(
                 onClick = onWatch,
-                modifier = watchModifier.then(button).then(if (noStream) Modifier.alpha(0.5f) else Modifier)
+                modifier = watchModifier.then(button).then(if (noStream) Modifier.alpha(0.5f) else Modifier),
+                primary = true
             ) {
                 Icon(
                     imageVector = Icons.Rounded.PlayArrow,
@@ -560,18 +570,14 @@ internal val PANE_ART_HEIGHT = 270.dp
 internal fun SportsLivePaneButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    /** The pane's main action (Watch): filled white; the rest are outlined (#93). */
+    primary: Boolean = false,
     content: @Composable RowScope.() -> Unit
 ) {
-    Button(
+    SportsLiveButton(
         onClick = onClick,
         modifier = modifier,
-        colors = ButtonDefaults.colors(
-            containerColor = NuvioTheme.colors.BackgroundCard,
-            contentColor = NuvioTheme.colors.TextPrimary,
-            focusedContainerColor = NuvioTheme.colors.TextPrimary,
-            focusedContentColor = NuvioTheme.colors.TextInverse
-        ),
-        shape = ButtonDefaults.shape(RoundedCornerShape(NuvioTheme.radii.md)),
+        role = if (primary) SportsLiveButtonRole.PRIMARY else SportsLiveButtonRole.SECONDARY,
         content = content
     )
 }
@@ -583,7 +589,7 @@ internal fun withoutLiveMarkers(description: String): String =
     description.lines().filterNot { LIVE_MARKER_LINE.matches(it.trim()) }.joinToString("\n").trim()
 
 /** The gold star of a followed team's game (cards, the player's live games panel). */
-internal val FOLLOWED_STAR_COLOR = Color(0xFFFFC107)
+internal val FOLLOWED_STAR_COLOR = SportsLiveTokens.Colors.FollowedGold
 
 /** A Most exciting card's why tag (#43): blue, so it never reads as live (red) or followed (gold). */
 @Composable
@@ -644,9 +650,9 @@ internal fun whyTagText(tag: WhyTag): String = when (tag.kind) {
     WhyKind.CLOSE -> stringResource(R.string.sports_live_why_close)
 }
 
-private val WHY_TAG_TEXT = Color(0xFFCFE1FF)
-private val WHY_TAG_BACKGROUND = Color(0xFF13233A)
-private val WHY_TAG_BORDER = Color(0xFF2B4A75)
+private val WHY_TAG_TEXT = SportsLiveTokens.Colors.WhyTagText
+private val WHY_TAG_BACKGROUND = SportsLiveTokens.Colors.WhyTagBackground
+private val WHY_TAG_BORDER = SportsLiveTokens.Colors.WhyTagBorder
 
 /** How a Just ended card (#60) is dimmed. */
 private const val ENDED_CARD_ALPHA = 0.55f

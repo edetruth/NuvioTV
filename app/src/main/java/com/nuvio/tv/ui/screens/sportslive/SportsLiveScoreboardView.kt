@@ -1,5 +1,7 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import com.nuvio.tv.core.sportslive.GameStatusText
+import com.nuvio.tv.core.sportslive.displayName
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -190,7 +192,7 @@ internal fun SportsLiveScoreboardRow(
                     TeamLine(firstChoices, level, logos?.first, logos?.shown == true, row.firstFollowed, tooLong)
                     TeamLine(secondChoices, level, logos?.second, logos?.shown == true, row.secondFollowed, tooLong)
                 } else {
-                    ItemLine(item.meta.name, item.followed)
+                    ItemLine(item.displayName, item.followed)
                 }
                 if (situation.isNotEmpty() && row.chip is ScoreChip.Live) {
                     Text(
@@ -277,26 +279,27 @@ private fun scoreOf(chip: ScoreChip?): ChipScore? = when (chip) {
     else -> null
 }
 
-/** The row's right column: what the clock, kickoff or end says. */
+/** The row's right column: what the clock, kickoff or end says, in the one status format (#102). */
 @Composable
 private fun RowStatus(row: ScoreboardRow, modifier: Modifier = Modifier) {
-    val chipStrings = rememberScoreChipStrings()
+    val strings = rememberGameStatusStrings()
+    val chipStrings = strings.chip
     val live = row.chip is ScoreChip.Live
+    val sport = GameStatusText.sportOf(row.status)
     val text = when {
-        row.probablyEnded -> stringResource(R.string.sports_live_probably_ended)
+        row.probablyEnded -> strings.probablyEnded
         row.chip is ScoreChip.Hidden -> chipStrings.hidden
-        row.chip is ScoreChip.Live -> row.chip.clock ?: stringResource(R.string.sports_live_live_pill)
-        row.chip is ScoreChip.Final -> row.chip.note ?: chipStrings.finalNote
+        // The red dot is drawn beside it: the clock alone ("9:51 · 2nd half").
+        row.chip is ScoreChip.Live -> row.chip.clock?.let { GameStatusText.liveClock(it, strings) } ?: strings.live
+        row.chip is ScoreChip.Final -> row.chip.note ?: GameStatusText.finalWord(sport, strings)
         row.chip is ScoreChip.Status -> row.chip.text ?: chipStrings.postponed
-        row.group == ScoreboardGroup.FINAL -> chipStrings.finalNote
-        row.group == ScoreboardGroup.LIVE -> stringResource(R.string.sports_live_live_pill)
+        row.group == ScoreboardGroup.FINAL -> GameStatusText.finalWord(sport, strings)
+        row.group == ScoreboardGroup.LIVE -> strings.live
         else -> null
     }
     val kickoff = if (text == null) row.art?.let { kickoffText(it) } else null
     // Worked out with the rows, on the view model's clock: nothing here reads the time.
-    val countdown = row.startsIn?.takeIf { text == null }?.let { (h, m) ->
-        if (h > 0) stringResource(R.string.sports_live_scoreboard_in_hm, h, m) else stringResource(R.string.sports_live_scoreboard_in_m, m)
-    }
+    val countdown = row.startsIn?.takeIf { text == null }?.let { GameStatusText.countdown(it, strings) }
     // A channel or an undated game has nothing to say here: its name gets the whole width.
     if (text == null && kickoff == null && countdown == null) return
     Column(modifier = modifier, horizontalAlignment = Alignment.End) {
@@ -389,7 +392,7 @@ internal fun SportsLiveScoreboardPane(
             is ScoreDetails.Shown -> ScoreDetailsBuilder.scorelineText(details, detailStrings)
             is ScoreDetails.Hidden -> chipStrings.hidden
             is ScoreDetails.Status -> details.text ?: chipStrings.postponed
-            null -> item.meta.name
+            null -> item.displayName
         }
         // A scoreline is short and set large; a channel's or unmatched game's title gets a smaller face
         // so it never runs to two display-size lines (N6).
@@ -496,7 +499,7 @@ internal fun SportsLiveBoardButtons(
         runCatching { watchFocusRequester.requestFocus() }
     }
     val button = Modifier.widthIn(min = PANE_BUTTON_MIN_WIDTH)
-    SportsLivePaneButton(onClick = onWatch, modifier = watchModifier.then(button).then(if (noStream) Modifier.alpha(0.5f) else Modifier)) {
+    SportsLivePaneButton(onClick = onWatch, modifier = watchModifier.then(button).then(if (noStream) Modifier.alpha(0.5f) else Modifier), primary = true) {
         Icon(imageVector = Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
         Spacer(modifier = Modifier.width(NuvioTheme.spacing.xs))
         PaneButtonLabel(stringResource(R.string.sports_live_watch))

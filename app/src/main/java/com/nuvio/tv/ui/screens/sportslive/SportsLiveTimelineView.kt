@@ -1,5 +1,7 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import com.nuvio.tv.core.sportslive.GameStatusText
+import com.nuvio.tv.core.sportslive.displayName
 import android.text.format.DateFormat
 import android.view.KeyEvent as AndroidKeyEvent
 import androidx.compose.animation.core.Animatable
@@ -455,7 +457,7 @@ private fun LeagueLabel(name: String, followed: Boolean, modifier: Modifier = Mo
 /** The block's two sides ("LV v SEA", full names on a wide block), or the card's title. */
 @Composable
 private fun matchupOf(row: ScoreboardRow, wide: Boolean): String {
-    val art = row.art ?: return row.item.meta.name
+    val art = row.art ?: return row.item.displayName
     return if (wide) {
         stringResource(R.string.sports_live_timeline_matchup, art.first.name, art.second.name)
     } else {
@@ -499,9 +501,7 @@ private fun TimelineBlockCard(
         }
         TimelineBlockKind.UPCOMING -> {
             val kickoff = rememberLocalTime(block.startMs)
-            val countdown = block.startsIn?.let { (h, m) ->
-                if (h > 0) stringResource(R.string.sports_live_scoreboard_in_hm, h, m) else stringResource(R.string.sports_live_scoreboard_in_m, m)
-            }
+            val countdown = GameStatusText.countdown(block.startsIn, rememberGameStatusStrings())
             val status = (chip as? ScoreChip.Status)?.let { ScoreChips.text(it, chipStrings) }
             (status ?: listOfNotNull(kickoff, countdown).joinToString(" · ")) to null
         }
@@ -772,7 +772,7 @@ internal fun SportsLiveTimelinePanel(
                         is ScoreDetails.Shown -> ScoreDetailsBuilder.scorelineText(details, detailStrings)
                         is ScoreDetails.Hidden -> chipStrings.hidden
                         is ScoreDetails.Status -> details.text ?: chipStrings.postponed
-                        null -> item.meta.name
+                        null -> item.displayName
                     },
                     style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum"),
                     color = NuvioTheme.colors.TextPrimary,

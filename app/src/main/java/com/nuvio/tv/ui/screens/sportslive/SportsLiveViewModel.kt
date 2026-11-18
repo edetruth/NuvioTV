@@ -129,10 +129,10 @@ class SportsLiveViewModel internal constructor(
                 delay(ENDED_TICK_MS)
             }
         },
-        layouts = prefs.layouts,
-        saveLayout = prefs::setLayout,
-        liveSort = prefs.liveNowSort,
-        saveLiveSort = prefs::setLiveNowSort,
+        // V2 (#132): one view per tab, the Scoreboard on Live now and Upcoming, in start order; the View menu
+        // and Sort are gone, so stored choices are not read (P2 and P3 replace these layouts).
+        layouts = flowOf(SportsLiveLayout.V2),
+        liveSort = flowOf(LiveNowSort.START_TIME),
         scoresMode = liveScores.mode,
         linkChecker = SportsLiveLinkChecker(fetch = manifestFetcher::fetch, verdicts = SportsLiveLinkVerdicts.shared),
         // Only a fresh resolve (the resolve cache's, at most five minutes old): never an older link that

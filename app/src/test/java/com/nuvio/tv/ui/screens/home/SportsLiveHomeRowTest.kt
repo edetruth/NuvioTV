@@ -50,6 +50,19 @@ class SportsLiveHomeRowTest {
     }
 
     @Test
+    fun `cards show the clean addon title with no taglines`() {
+        val raw = item("r").let {
+            it.copy(meta = it.meta.copy(name = "(FHD) : SPORTS CHANNEL 1 HQ", description = "Live IPTV Recording\nMatchday coverage"))
+        }
+
+        val card = SportsLiveHomeRow.build(listOf(raw), "Live now").items.single()
+
+        assertEquals("Sports Channel 1 HQ", card.name)
+        assertEquals("Matchday coverage", card.description)
+        assertEquals(raw.id, card.id)
+    }
+
+    @Test
     fun `isLiveNowRow matches only the sentinel base url`() {
         assertTrue(SportsLiveHomeRow.isLiveNowRow("nuvio://sports-live"))
         assertFalse(SportsLiveHomeRow.isLiveNowRow("https://addon.example"))

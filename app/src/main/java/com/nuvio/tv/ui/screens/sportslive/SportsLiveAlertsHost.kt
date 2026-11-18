@@ -314,7 +314,7 @@ private fun KickoffPrompt(
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            SportsLivePaneButton(onClick = onWatch, modifier = Modifier.focusRequester(watchFocus)) {
+            SportsLivePaneButton(onClick = onWatch, modifier = Modifier.focusRequester(watchFocus), primary = true) {
                 Icon(imageVector = Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
                 Text(stringResource(R.string.sports_live_watch), maxLines = 1)
             }

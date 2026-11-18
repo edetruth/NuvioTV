@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import com.nuvio.tv.core.sportslive.displayName
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.ui.navigation.Screen
 
@@ -10,7 +11,7 @@ import com.nuvio.tv.ui.navigation.Screen
 fun streamRouteFor(item: SportsLiveItem, returnToHomeOnBack: Boolean, manualSelection: Boolean = false): String = Screen.Stream.createRoute(
     videoId = item.id,
     contentType = item.apiType,
-    title = item.meta.name,
+    title = item.displayName,
     poster = item.meta.poster,
     backdrop = item.meta.backdropUrl,
     logo = item.meta.logo,

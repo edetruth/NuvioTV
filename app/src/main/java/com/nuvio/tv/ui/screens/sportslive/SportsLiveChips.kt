@@ -1,10 +1,8 @@
 package com.nuvio.tv.ui.screens.sportslive
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.Star
@@ -18,14 +16,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import androidx.tv.material3.Border
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.FilterChip
 import androidx.tv.material3.FilterChipDefaults
 import androidx.tv.material3.Icon
-import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.nuvio.tv.domain.model.SportsLiveItem
+import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveFocus
+import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens
 import com.nuvio.tv.ui.theme.NuvioTheme
 
 /** What OK does on a filter chip (#79): focus only highlights a chip, OK picks it. */
@@ -111,9 +109,9 @@ internal fun sportsLiveChipIconOf(value: String?): SportsLiveChipIcon =
 internal fun sportsLiveChipText(name: String, count: Int?): String = if (count == null) name else "$name $count"
 
 /**
- * A Sports & Live filter chip (#79, Components board): the selected chip is filled; focus adds the
- * white ring without the fill, so a focused chip never looks picked. OK calls [onClick]; focus alone
- * does nothing. [count] follows the name ("Soccer 6"); [icon] leads it.
+ * A Sports & Live filter chip (#79), in the one focus language (#93): the selected chip has a tinted
+ * fill (never white); focus adds the white ring and the lift, so a focused chip never looks picked. OK
+ * calls [onClick]; focus alone does nothing. [count] follows the name ("Soccer 6"); [icon] leads it.
  */
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -126,44 +124,46 @@ internal fun SportsLiveFilterChip(
     icon: SportsLiveChipIcon = SportsLiveChipIcon.NONE
 ) {
     var focused by remember { mutableStateOf(false) }
-    val shape = RoundedCornerShape(20.dp)
+    val shape = SportsLiveTokens.Radius.PillShape
     val gold = icon == SportsLiveChipIcon.MY_TEAMS
-    val fill = if (gold) FOLLOWED_STAR_COLOR else NuvioTheme.colors.Secondary
+    val fill = SportsLiveFocus.selectedFill
     val content = when {
-        isSelected -> NuvioTheme.colors.OnSecondary
-        gold -> FOLLOWED_STAR_COLOR
-        focused -> NuvioTheme.colors.TextPrimary
-        else -> NuvioTheme.colors.TextSecondary
+        gold -> SportsLiveTokens.Colors.FollowedGold
+        isSelected || focused -> SportsLiveTokens.Colors.TextPrimary
+        else -> SportsLiveTokens.Colors.TextInactive
     }
-    val ring = Border(border = NuvioTheme.focusRing.border(NuvioTheme.spacing.xxs), shape = shape)
+    val ring = SportsLiveFocus.ring(shape)
     FilterChip(
         selected = isSelected,
         onClick = onClick,
         modifier = modifier.onFocusChanged { focused = it.isFocused },
+        scale = FilterChipDefaults.scale(focusedScale = SportsLiveTokens.Focus.LIFT, focusedSelectedScale = SportsLiveTokens.Focus.LIFT),
         colors = FilterChipDefaults.colors(
             containerColor = Color.Transparent,
-            focusedContainerColor = Color.Transparent,
+            focusedContainerColor = SportsLiveFocus.focusedFill(Color.Transparent),
             selectedContainerColor = fill,
-            focusedSelectedContainerColor = fill,
+            focusedSelectedContainerColor = SportsLiveFocus.focusedFill(fill),
             contentColor = content,
             focusedContentColor = content,
             selectedContentColor = content,
             focusedSelectedContentColor = content
         ),
         border = FilterChipDefaults.border(
-            border = Border(
-                border = BorderStroke(NuvioTheme.spacing.hairline, if (gold) FOLLOWED_STAR_COLOR.copy(alpha = 0.4f) else NuvioTheme.colors.TextTertiary),
-                shape = shape
-            ),
+            border = SportsLiveFocus.outline(shape, if (gold) SportsLiveTokens.Colors.FollowedGold.copy(alpha = 0.4f) else SportsLiveTokens.Colors.Outline),
             focusedBorder = ring,
-            selectedBorder = Border(border = BorderStroke(NuvioTheme.spacing.hairline, fill), shape = shape),
+            selectedBorder = SportsLiveFocus.outline(shape, fill),
             focusedSelectedBorder = ring
         ),
         shape = FilterChipDefaults.shape(shape = shape)
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs), verticalAlignment = Alignment.CenterVertically) {
             SportsLiveChipIconView(icon, tint = content, size = 16)
-            Text(text = sportsLiveChipText(name, count), style = MaterialTheme.typography.labelLarge, color = content, maxLines = 1)
+            Text(
+                text = sportsLiveChipText(name, count),
+                style = SportsLiveTokens.style(if (isSelected) SportsLiveTokens.Type.ControlSelected else SportsLiveTokens.Type.Control),
+                color = content,
+                maxLines = 1
+            )
         }
     }
 }

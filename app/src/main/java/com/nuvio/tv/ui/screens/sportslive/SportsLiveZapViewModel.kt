@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import com.nuvio.tv.core.sportslive.displayName
 import android.os.SystemClock
 import android.view.KeyEvent
 import android.widget.Toast
@@ -133,7 +134,7 @@ class SportsLiveZapViewModel internal constructor(
             SportsLiveZapSessions.markZapArrival()
             _events.send(SportsLiveZapEvent.Navigate(target))
         },
-        onNoStream = { item -> _events.trySend(SportsLiveZapEvent.NoStream(item.meta.name)) },
+        onNoStream = { item -> _events.trySend(SportsLiveZapEvent.NoStream(item.displayName)) },
         endedKeys = { repo.endedKeys.value }
     )
 

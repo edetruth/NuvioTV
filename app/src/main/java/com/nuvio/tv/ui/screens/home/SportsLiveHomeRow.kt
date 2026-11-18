@@ -1,5 +1,7 @@
 package com.nuvio.tv.ui.screens.home
 
+import com.nuvio.tv.core.sportslive.SportsLiveDisplayText
+import com.nuvio.tv.core.sportslive.displayName
 import com.nuvio.tv.core.sportslive.scores.ScoreChip
 import com.nuvio.tv.core.sportslive.scores.ScoreChipStrings
 import com.nuvio.tv.core.sportslive.scores.ScoreChips
@@ -28,7 +30,10 @@ object SportsLiveHomeRow {
         type = ContentType.UNKNOWN,
         rawType = "sport",
         items = items.map { item ->
-            val meta = scoreLabels[item.streamKey]?.let { item.meta.copy(releaseInfo = it) } ?: item.meta
+            // Clean addon text (#100): the card and hero show the display name and no taglines; Details
+            // loads the addon's own meta.
+            val clean = item.meta.copy(name = item.displayName, description = SportsLiveDisplayText.description(item.meta.description))
+            val meta = scoreLabels[item.streamKey]?.let { clean.copy(releaseInfo = it) } ?: clean
             // The card's own art as its landscape poster: a channel's art carries its logo, so the focused
             // card draws no title over it.
             val art = meta.backdropUrl

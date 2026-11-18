@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.sportslive.dual
 
+import com.nuvio.tv.core.sportslive.displayName
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nuvio.tv.core.debrid.DirectDebridResolver
@@ -218,7 +219,7 @@ class SportsLiveDualViewModel internal constructor(
             load(Side.LEFT, it.left)
             load(Side.RIGHT, it.right)
             if (it.pairedHint) {
-                _pairHint.value = it.right.meta.name
+                _pairHint.value = it.right.displayName
                 viewModelScope.launch {
                     delay(PAIR_HINT_MS)
                     _pairHint.value = null

@@ -1,0 +1,194 @@
+package com.nuvio.tv.ui.screens.sportslive.theme
+
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
+import androidx.compose.ui.unit.sp
+import androidx.tv.material3.MaterialTheme
+
+/**
+ * The Sports & Live design tokens (V2, #96): one place for the section's colours, TV type scale, sizes
+ * and focus values, from the approved boards (`docs/superpowers/designs/2026-11-16-sports-live-views`,
+ * V2-Header-and-Focus).
+ *
+ * The boards are drawn in px on the 1920×1080 frame. This app runs a 1080p TV at density 320, so
+ * **1 dp = 2 px** (and 1 sp = 2 px at font scale 1): every value below is the board's px value halved.
+ */
+object SportsLiveTokens {
+
+    /** Board px → dp at 1080p (density 320: 2 px per dp). */
+    fun pxToDp(px: Int): Dp = (px / PX_PER_DP).dp
+
+    /** Board px → sp at 1080p (font scale 1). */
+    fun pxToSp(px: Int): TextUnit = (px / PX_PER_DP).sp
+
+    const val PX_PER_DP = 2f
+
+    /** Semantic colours: the section's dark broadcast palette, the same under every app theme (#94). */
+    object Colors {
+        val Background = Color(0xFF0A0D12)
+        /** Panels and dialogs. */
+        val Surface = Color(0xFF121821)
+        val SurfaceRaised = Color(0xFF1F2A36)
+        /** A list row at rest. */
+        val Row = Color(0xFF141A23)
+        /** A list row with focus: [Row] 8 % lighter. */
+        val RowFocused = focusFill(Row)
+        /** A live game's row tint. */
+        val LiveRow = Color(0xFF1C1519)
+        /** Outlines of resting controls (filter, icon buttons). */
+        val Outline = Color(0xFF2A3442)
+        /** Outline of a secondary button. */
+        val OutlineStrong = Color(0xFF3A4554)
+        /** Hairline dividers. */
+        val Divider = Color(0xFF1E2632)
+
+        val TextPrimary = Color(0xFFF2F4F7)
+        val TextSecondary = Color(0xFFC7CED8)
+        val TextMuted = Color(0xFF9AA4B2)
+        /** Tabs not selected, filter options not selected: 70 % white. */
+        val TextInactive = TextPrimary.copy(alpha = 0.7f)
+
+        /** Live games only (the dot, the clock, the progress bar): never focus, never a pill fill. */
+        val LiveRed = Color(0xFFFF4D57)
+        val LiveText = Color(0xFFFFB3B8)
+        /** Followed teams: the ★, the left bar, "★ My teams". */
+        val FollowedGold = Color(0xFFFFC107)
+        /** Replay pill and "stream listed". */
+        val ReplayGreen = Color(0xFF7EE0A1)
+        val ReplayGreenText = Color(0xFF0B1F12)
+        /** Why tags and reminders: blue, so they never read as live (red) or followed (gold). */
+        val WhyTagBlue = Color(0xFF6AA8FF)
+        val WhyTagText = Color(0xFFCFE1FF)
+        val WhyTagBackground = Color(0xFF13233A)
+        val WhyTagBorder = Color(0xFF2B4A75)
+        /** Warnings (sources that did not respond). */
+        val WarningAmber = Color(0xFFFFB020)
+        val WarningAmberOutline = WarningAmber.copy(alpha = 0.45f)
+        /** The focus ring, and the selected tab's underline. */
+        val FocusWhite = Color(0xFFFFFFFF)
+        /** A selected filter option: a tinted fill, never white. */
+        val SelectedTint = Color(0xFF263142)
+        /** The primary button's fill and its text. */
+        val PrimaryFill = TextPrimary
+        val OnPrimary = Background
+    }
+
+    /** The TV type scale (board px → sp). Merge with the app font: [SportsLiveTokens.style]. */
+    object Type {
+        /** Tags (league, period, badges): 22 px. */
+        val Tag = TextStyle(fontSize = 11.sp, lineHeight = 14.sp, fontWeight = FontWeight.SemiBold)
+        /** Metadata ("Today · 3:30 PM · in 2 h 21 m"): 26 px. */
+        val Meta = TextStyle(fontSize = 13.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium)
+        /** Row names: 30 px. */
+        val RowName = TextStyle(fontSize = 15.sp, lineHeight = 21.sp, fontWeight = FontWeight.Normal)
+        /** Row scores: 40 px bold, tabular. */
+        val RowScore = TextStyle(fontSize = 20.sp, lineHeight = 21.sp, fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum")
+        /** The stage's scoreline: 64 px bold, tabular. */
+        val StageScore = TextStyle(fontSize = 32.sp, lineHeight = 36.sp, fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum")
+        /** Group / section headers: 24 px caps, 0.08 em apart. */
+        val SectionHeader = TextStyle(fontSize = 12.sp, lineHeight = 14.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.08.em)
+        /** Header tabs: 34 px (selected semibold, others medium). */
+        val Tab = TextStyle(fontSize = 17.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium)
+        val TabSelected = Tab.copy(fontWeight = FontWeight.SemiBold)
+        /** Header controls (filter options, source count): 24 px. */
+        val Control = TextStyle(fontSize = 12.sp, lineHeight = 14.sp, fontWeight = FontWeight.Medium)
+        val ControlSelected = Control.copy(fontWeight = FontWeight.SemiBold)
+        /** Buttons (Watch, More…): 28 px semibold. */
+        val Button = TextStyle(fontSize = 14.sp, lineHeight = 17.sp, fontWeight = FontWeight.SemiBold)
+    }
+
+    /** Frame, rows, columns and controls (board px → dp). */
+    object Size {
+        /** Safe area inside the section's content box (the board: top 54, bottom 1026, right 1824 px). */
+        val SafeTop = 27.dp
+        val SafeBottom = 27.dp
+        val SafeEnd = 48.dp
+        /**
+         * Where the header and list start, from the content box's left edge: the board's x = 256 px. The
+         * section's content box starts at x = 108 px beside the collapsed rail (measured on the 1080p
+         * emulator), so (256 − 108) / 2.
+         */
+        val SafeStart = 74.dp
+
+        /** The one-line header: 80 px. */
+        val HeaderHeight = 40.dp
+        /** Header gap between text tabs (32 px), and the tab's own focus padding. */
+        val TabGap = 16.dp
+        val TabPaddingHorizontal = 6.dp
+        /** The selected tab's underline: 4 px, 10 px under the text. */
+        val TabUnderline = 2.dp
+        val TabUnderlineGap = 5.dp
+        /** Header controls: 56 px tall (filter, source icon, refresh), 14 px apart. */
+        val ControlHeight = 28.dp
+        val ControlGap = 7.dp
+        val ControlIcon = 14.dp
+        /** Header to list: the list starts at y = 150 px. */
+        val HeaderBottomGap = 8.dp
+
+        /** Row heights: live 112, starting soon / upcoming 96, channel 72, just ended 80 px. */
+        val RowLive = 56.dp
+        val RowSoon = 48.dp
+        val RowChannel = 36.dp
+        val RowJustEnded = 40.dp
+        val RowGap = 6.dp
+        /** Row columns: league 96, names 440, scores 96, status 150 px. */
+        val ColumnLeague = 48.dp
+        val ColumnNames = 220.dp
+        val ColumnScores = 48.dp
+        val ColumnStatus = 75.dp
+        /** The list (800 px) and the stage (720 px). */
+        val ListWidth = 400.dp
+        val StageWidth = 360.dp
+        val StageGap = 24.dp
+
+        /** Buttons: 72 px tall; the primary at least 200 px wide. */
+        val ButtonHeight = 36.dp
+        val ButtonMinWidth = 100.dp
+        val ButtonGap = 11.dp
+    }
+
+    /** Corner radii (board px → dp). */
+    object Radius {
+        /** Rows: 20 px. */
+        val Row = 10.dp
+        /** Buttons and menu entries: 14 px. */
+        val Button = 7.dp
+        /** Pills (filter, source icon): fully round. */
+        val Pill = 14.dp
+        val Badge = 3.dp
+        val RowShape = RoundedCornerShape(Row)
+        val ButtonShape = RoundedCornerShape(Button)
+        val PillShape = RoundedCornerShape(50)
+    }
+
+    /** The one focus language (#93). */
+    object Focus {
+        /** Focused: a 4 px white ring. */
+        val RingWidth = 2.dp
+        /** The primary button's ring sits 4 px off its white fill, so the fill keeps its role. */
+        val PrimaryRingGap = 2.dp
+        /** Focused: a 1.03 lift. */
+        const val LIFT = 1.03f
+        /** Focused: the fill 8 % lighter. */
+        const val FILL_LIGHTEN = 0.08f
+    }
+
+    /** [base] with focus: each sRGB channel 8 % of the way to white (#93); alpha kept. */
+    fun focusFill(base: Color): Color {
+        fun up(channel: Float) = channel + (1f - channel) * Focus.FILL_LIGHTEN
+        return Color(red = up(base.red), green = up(base.green), blue = up(base.blue), alpha = base.alpha)
+    }
+
+    /** [token] in the app's font (the user's font choice), with the token's size, weight and spacing. */
+    @Composable
+    @ReadOnlyComposable
+    fun style(token: TextStyle): TextStyle = MaterialTheme.typography.bodyMedium.merge(token)
+}

@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import com.nuvio.tv.core.sportslive.displayName
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -76,7 +77,7 @@ internal fun SportsLiveStreamPickerDialog(
 
     NuvioDialog(
         onDismiss = onDismiss,
-        title = item.meta.name,
+        title = item.displayName,
         subtitle = pluralStringResource(R.plurals.sports_live_sources_count, item.sourceCount, item.sourceCount),
         width = 640.dp
     ) {
@@ -125,7 +126,7 @@ internal fun SportsLiveStreamPickerDialog(
 internal fun SportsLiveResolvingDialog(item: SportsLiveItem, onDismiss: () -> Unit) {
     NuvioDialog(
         onDismiss = onDismiss,
-        title = stringResource(R.string.sports_live_zap_switching, item.meta.name)
+        title = stringResource(R.string.sports_live_zap_switching, item.displayName)
     ) {
         Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
             LoadingIndicator()

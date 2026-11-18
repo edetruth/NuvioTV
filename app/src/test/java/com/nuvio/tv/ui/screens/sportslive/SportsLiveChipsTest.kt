@@ -1,7 +1,5 @@
 package com.nuvio.tv.ui.screens.sportslive
 
-import com.nuvio.tv.core.sportslive.LiveNowSort
-import com.nuvio.tv.core.sportslive.SportsLiveLayout
 import com.nuvio.tv.core.sportslive.scores.EspnLeague
 import com.nuvio.tv.core.sportslive.scores.FinalNote
 import com.nuvio.tv.core.sportslive.scores.MySport
@@ -10,14 +8,12 @@ import com.nuvio.tv.core.sportslive.scores.ResultRow
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.ScoreState
 import com.nuvio.tv.core.sportslive.scores.ScoreTeam
-import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.core.sportslive.scores.SportsResults
 import com.nuvio.tv.domain.model.ContentType
 import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.domain.model.PosterShape
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveKind
-import com.nuvio.tv.domain.model.SportsLiveTab
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -163,38 +159,6 @@ class SportsLiveChipsTest {
         assertEquals(SportsLiveChipIcon.NONE, sportsLiveChipIconOf(null))
         assertEquals(SportsLiveChipIcon.NONE, sportsLiveChipIconOf("Soccer"))
         assertTrue(SportsLiveChipIcon.MY_TEAMS != SportsLiveChipIcon.MY_SPORTS)
-    }
-
-    @Test
-    fun `the View menu applies the layout and the sort`() {
-        val menu = SportsLiveViewMenu.of(SportsLiveTab.LIVE_NOW, SportsLiveLayout.SCOREBOARD, ScoresMode.SHOW, LiveNowSort.START_TIME)!!
-        assertEquals(SportsLiveLayout.entries, menu.layoutOptions.map { it.layout })
-        assertEquals(LiveNowSort.entries, menu.sortOptions.map { it.sort })
-        assertTrue(menu.isChecked(SportsLiveViewOption.Layout(SportsLiveLayout.SCOREBOARD)))
-        assertTrue(menu.isChecked(SportsLiveViewOption.Sort(LiveNowSort.START_TIME)))
-        val layouts = ArrayList<SportsLiveLayout>()
-        val sorts = ArrayList<LiveNowSort>()
-        menu.apply(SportsLiveViewOption.Layout(SportsLiveLayout.CARDS), layouts::add, sorts::add)
-        menu.apply(SportsLiveViewOption.Sort(LiveNowSort.MOST_EXCITING), layouts::add, sorts::add)
-        assertEquals(listOf(SportsLiveLayout.CARDS), layouts)
-        assertEquals(listOf(LiveNowSort.MOST_EXCITING), sorts)
-    }
-
-    @Test
-    fun `the View menu hides Sort on the Timeline and with Scores Off`() {
-        val timeline = SportsLiveViewMenu.of(SportsLiveTab.LIVE_NOW, SportsLiveLayout.TIMELINE, ScoresMode.SHOW, LiveNowSort.MOST_EXCITING)!!
-        assertTrue(timeline.sortOptions.isEmpty())
-        assertEquals(3, timeline.layoutOptions.size)
-        val off = SportsLiveViewMenu.of(SportsLiveTab.LIVE_NOW, SportsLiveLayout.CARDS, ScoresMode.OFF, LiveNowSort.MOST_EXCITING)!!
-        assertTrue(off.sortOptions.isEmpty())
-        // Off falls back to Start time, the stored choice kept for later.
-        assertEquals(LiveNowSort.START_TIME, off.sort)
-        assertTrue(SportsLiveViewMenu.of(SportsLiveTab.LIVE_NOW, SportsLiveLayout.CARDS, null, LiveNowSort.START_TIME)!!.sortOptions.isEmpty())
-        val hidden = SportsLiveViewMenu.of(SportsLiveTab.LIVE_NOW, SportsLiveLayout.CARDS, ScoresMode.HIDE_UNTIL_FOCUSED, LiveNowSort.START_TIME)!!
-        assertEquals(2, hidden.sortOptions.size)
-        // No View menu on Channels, Replays or Results.
-        assertNull(SportsLiveViewMenu.of(SportsLiveTab.CHANNELS, SportsLiveLayout.CARDS, ScoresMode.SHOW, LiveNowSort.START_TIME))
-        assertNull(SportsLiveViewMenu.of(SportsLiveTab.RESULTS, SportsLiveLayout.CARDS, ScoresMode.SHOW, LiveNowSort.START_TIME))
     }
 
     private fun result(id: String, sport: String, league: String, followed: Boolean = false): ResultRow {

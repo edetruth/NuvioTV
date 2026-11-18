@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import com.nuvio.tv.core.sportslive.displayName
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nuvio.tv.core.debrid.DirectDebridResolver
@@ -94,7 +95,7 @@ internal suspend fun sportsLiveZapTarget(
         // Same mapping as the Stream screen's getStreamForPlayback, with the item as the content.
         streamPlaybackInfoFor(
             stream = stream,
-            title = item.meta.name,
+            title = item.displayName,
             year = null,
             contentId = item.id,
             contentType = item.apiType,
@@ -382,6 +383,6 @@ class SportsLivePlayViewModel @Inject constructor(
     }
 
     private suspend fun noStream(item: SportsLiveItem) {
-        _events.send(SportsLivePlayEvent.NoStream(item.meta.name))
+        _events.send(SportsLivePlayEvent.NoStream(item.displayName))
     }
 }

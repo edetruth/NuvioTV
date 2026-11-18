@@ -12,6 +12,12 @@ enum class SportsLiveLayout {
     TIMELINE;
 
     companion object {
+        /** V2 (#132): one view per tab, the Scoreboard on Live now and Upcoming; nothing switches it. */
+        val V2: Map<SportsLiveTab, SportsLiveLayout> = mapOf(
+            SportsLiveTab.LIVE_NOW to SCOREBOARD,
+            SportsLiveTab.UPCOMING to SCOREBOARD
+        )
+
         /** The layouts [tab] can switch between; empty (no switch) for Channels, Replays and Results. */
         fun offeredFor(tab: SportsLiveTab): List<SportsLiveLayout> =
             if (tab == SportsLiveTab.LIVE_NOW || tab == SportsLiveTab.UPCOMING) entries else emptyList()
