@@ -3,7 +3,6 @@ package com.nuvio.tv.ui.screens.sportslive
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -29,6 +28,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.MaterialTheme
@@ -191,7 +191,7 @@ private fun CompactTeam(team: GameArtTeam, withLogo: Boolean) {
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        if (withLogo) SportsLiveTeamLogo(team.logo, team.short, TeamLogoUrls.CARD_PX, Modifier.size(18.dp))
+        if (withLogo) SportsLiveTeamLogo(team.logo, team.short, TeamLogoUrls.CARD_PX, Modifier.size(18.dp), fontSize = 9.sp)
         Text(
             text = team.short,
             // Without logos the names carry the card, in larger type.
@@ -210,7 +210,7 @@ private fun LargeTeam(team: GameArtTeam, withLogo: Boolean, modifier: Modifier =
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)
     ) {
-        if (withLogo) SportsLiveTeamLogo(team.logo, team.short, TeamLogoUrls.LARGE_PX, Modifier.size(72.dp))
+        if (withLogo) SportsLiveTeamLogo(team.logo, team.short, TeamLogoUrls.LARGE_PX, Modifier.size(72.dp), letters = 3, fontSize = 20.sp)
         Text(
             text = team.name,
             style = (if (withLogo) MaterialTheme.typography.titleMedium else MaterialTheme.typography.headlineSmall)
@@ -224,24 +224,29 @@ private fun LargeTeam(team: GameArtTeam, withLogo: Boolean, modifier: Modifier =
 }
 
 /**
- * A team's logo, scaled by ESPN to [px] (#66). The abbreviation circle shows at once and stays while
- * the logo loads (from the image disk cache, usually) or when it fails; the logo fades in over it.
+ * A team's logo, scaled by ESPN to [px] (#66). The abbreviation circle ([letters] of [short], at
+ * [fontSize]) shows at once and stays while the logo loads (from the image disk cache, usually) or when
+ * it fails; the logo fades in over it.
  */
 @Composable
-internal fun SportsLiveTeamLogo(logo: String?, short: String, px: Int, modifier: Modifier) {
+internal fun SportsLiveTeamLogo(
+    logo: String?,
+    short: String,
+    px: Int,
+    modifier: Modifier,
+    letters: Int = 1,
+    fontSize: TextUnit = 12.sp
+) {
     var loaded by remember(logo) { mutableStateOf(false) }
-    BoxWithConstraints(modifier = modifier, contentAlignment = Alignment.Center) {
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
         if (!loaded) {
-            // A small circle has room for one letter only.
-            val width = maxWidth
-            val letters = if (width < 32.dp) 1 else 3
             Box(
                 modifier = Modifier.fillMaxSize().clip(CircleShape).background(ArtColors.LogoCircle),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = short.take(letters).uppercase(Locale.getDefault()),
-                    style = TextStyle(fontSize = (width.value * if (letters == 1) 0.5f else 0.28f).sp, fontWeight = FontWeight.Bold),
+                    style = TextStyle(fontSize = fontSize, fontWeight = FontWeight.Bold),
                     color = ArtColors.Secondary,
                     maxLines = 1
                 )

@@ -137,7 +137,7 @@ internal fun groupPanelRows(
             }
         }
         val chip = ScoreChips.of(item, event, mode, item.streamKey in revealed)
-        val teams = GameArt.of(item, event, known)
+        val teams = PanelArt.of(item, event, known)
         val art = teams.takeIf { group == ZapPanelGroup.STARTING_SOON }
         Entry(ZapPanelRow(item, group, chip, art, teams), start, index)
     }
@@ -146,6 +146,22 @@ internal fun groupPanelRows(
         .thenBy { if (it.row.group >= ZapPanelGroup.OTHER) 0L else it.startMs ?: Long.MAX_VALUE }
         .thenBy { it.index }
     return entries.sortedWith(order).map { it.row }
+}
+
+/** The panel rows' drawn teams, kept per game, event and logo-map revision: the rows are regrouped on every tick and score (#66). */
+private object PanelArt {
+    private val cache = HashMap<List<Any?>, GameArt?>()
+
+    @Synchronized
+    fun of(item: SportsLiveItem, event: ScoreSnapshot?, known: TeamLogoBook): GameArt? {
+        val key = listOf(item, event, known, known.revision.value, known.active)
+        cache[key]?.let { return it }
+        if (key in cache) return null
+        if (cache.size >= MAX_CACHED) cache.clear()
+        return GameArt.of(item, event, known).also { cache[key] = it }
+    }
+
+    private const val MAX_CACHED = 512
 }
 
 /**

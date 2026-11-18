@@ -279,9 +279,9 @@ class ZapPanelScoresTest {
 
     @Test
     fun `panel rows carry both teams' logos with no score snapshot, channels none (#66)`() {
-        val book = TeamLogoBook()
-        book.learn(EspnLeagueMap.NBA, "Indiana Pacers", pacersEvent.away)
-        book.learn(EspnLeagueMap.NBA, "Philadelphia 76ers", pacersEvent.home)
+        val book = TeamLogoBook(active = true)
+        book.learn(EspnLeagueMap.NBA, pacersEvent.away)
+        book.learn(EspnLeagueMap.NBA, pacersEvent.home)
         val game = item("Indiana Pacers at Philadelphia 76ers", now - HOUR)
         val unknown = item("Team A vs Team B", now - HOUR)
         val channel = item("Sports Channel 1", null, isChannel = true)

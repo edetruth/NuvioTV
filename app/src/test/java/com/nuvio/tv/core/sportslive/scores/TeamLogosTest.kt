@@ -16,8 +16,8 @@ import java.nio.file.Files
 
 class TeamLogosTest {
 
-    private fun team(abbr: String, logo: String?) = ScoreTeam(
-        id = abbr, abbreviation = abbr, displayName = abbr, shortDisplayName = abbr, name = abbr, location = null,
+    private fun team(id: String, displayName: String, abbr: String, logo: String?, short: String = displayName) = ScoreTeam(
+        id = id, abbreviation = abbr, displayName = displayName, shortDisplayName = short, name = displayName, location = null,
         logo = logo, score = null, linescores = emptyList()
     )
 
@@ -33,6 +33,7 @@ class TeamLogosTest {
     )
 
     private val logo = "https://a.espncdn.com/i/teamlogos/nba/500/ind.png"
+    private val pacers = team("11", "Indiana Pacers", "IND", logo, short = "Pacers")
 
     @Test
     fun `scaled logos go through ESPN's combiner, other URLs stay as they are`() {
@@ -49,28 +50,40 @@ class TeamLogosTest {
     }
 
     @Test
-    fun `a learned side is found by its card name in its league only`() {
-        val book = TeamLogoBook()
-        assertTrue(book.learn(EspnLeagueMap.NBA, "Pacers", team("IND", logo)))
-        assertFalse(book.learn(EspnLeagueMap.NBA, "Pacers", team("IND", logo)))
-        assertEquals(KnownTeam(logo, "IND"), book.lookup(EspnLeagueMap.NBA, " pacers "))
-        assertNull(book.lookup(EspnLeagueMap.COLLEGE_BASKETBALL, "Pacers"))
+    fun `an ESPN team is found by its ESPN names in its league only`() {
+        val book = TeamLogoBook(active = true)
+        assertTrue(book.learn(EspnLeagueMap.NBA, pacers))
+        assertFalse(book.learn(EspnLeagueMap.NBA, pacers))
+        assertEquals(KnownTeam(logo, "IND"), book.resolve(EspnLeagueMap.NBA, "Indiana Pacers"))
+        assertEquals(KnownTeam(logo, "IND"), book.resolve(EspnLeagueMap.NBA, "Pacers"))
+        assertEquals(KnownTeam(logo, "IND"), book.resolve(EspnLeagueMap.NBA, "IND"))
+        // The abbreviation is not canonicalised: "India" is not "IND".
+        assertNull(book.resolve(EspnLeagueMap.NBA, "India"))
+        assertNull(book.resolve(EspnLeagueMap.COLLEGE_BASKETBALL, "Pacers"))
         // No logo, nothing learned.
-        assertFalse(book.learn(EspnLeagueMap.NBA, "Bulls", team("CHI", null)))
+        assertFalse(book.learn(EspnLeagueMap.NBA, team("4", "Chicago Bulls", "CHI", null)))
         // Soccer feeds share one key space.
-        book.learn(EspnLeague("soccer", "eng.1"), "Arsenal", team("ARS", "https://a.espncdn.com/i/teamlogos/soccer/500/359.png"))
-        assertEquals("ARS", book.lookup(EspnLeagueMap.SOCCER_ALL, "Arsenal")?.abbreviation)
+        book.learn(EspnLeague("soccer", "eng.1"), team("359", "Arsenal", "ARS", "https://a.espncdn.com/i/teamlogos/soccer/500/359.png"))
+        assertEquals("ARS", book.resolve(EspnLeagueMap.SOCCER_ALL, "Arsenal")?.abbreviation)
+    }
+
+    @Test
+    fun `a name two ESPN teams answer to gets no logo`() {
+        val book = TeamLogoBook(active = true)
+        book.learn(EspnLeagueMap.SOCCER_ALL, team("359", "Arsenal", "ARS", "$logo#eng"))
+        book.learn(EspnLeagueMap.SOCCER_ALL, team("2", "Arsenal de Sarandi", "ARS", "$logo#arg", short = "Arsenal"))
+        assertNull(book.resolve(EspnLeagueMap.SOCCER_ALL, "Arsenal"))
+        assertEquals("$logo#arg", book.resolve(EspnLeagueMap.SOCCER_ALL, "Arsenal de Sarandí")?.logo)
     }
 
     @Test
     fun `the book keeps at most its bound, dropping the least recently used`() {
         val book = TeamLogoBook(maxEntries = 3)
-        listOf("A", "B", "C").forEach { book.learn(EspnLeagueMap.NBA, it, team(it, "$logo#$it")) }
-        book.lookup(EspnLeagueMap.NBA, "A")
-        book.learn(EspnLeagueMap.NBA, "D", team("D", "$logo#D"))
+        listOf("A", "B", "C").forEach { book.learn(EspnLeagueMap.NBA, team(it, "Team $it", it, "$logo#$it")) }
+        book.resolve(EspnLeagueMap.NBA, "Team A")
+        book.learn(EspnLeagueMap.NBA, team("D", "Team D", "D", "$logo#D"))
         assertEquals(3, book.size)
-        assertNull(book.lookup(EspnLeagueMap.NBA, "B"))
-        assertTrue(book.lookup(EspnLeagueMap.NBA, "A") != null)
+        assertNull(book.resolve(EspnLeagueMap.NBA, "Team B"))
         assertEquals(TeamLogoBook.MAX_ENTRIES, 2_000)
     }
 
@@ -80,44 +93,39 @@ class TeamLogosTest {
         try {
             val file = TeamLogoFile(File(dir, "sportslive/team_logos.tsv"))
             val book = TeamLogoBook()
-            book.learn(EspnLeagueMap.NBA, "Pacers", team("IND", logo))
-            book.learn(EspnLeagueMap.NBA, "76ers", team("PHI", "https://a.espncdn.com/i/teamlogos/nba/500/phi.png"))
+            book.learn(EspnLeagueMap.NBA, pacers)
+            book.learn(EspnLeagueMap.NBA, team("20", "Philadelphia 76ers", "PHI", "https://a.espncdn.com/i/teamlogos/nba/500/phi.png", short = "76ers"))
             file.write(book.encode())
             val restarted = TeamLogoBook()
             val before = restarted.revision.value
             restarted.load(file.read()!!)
-            assertEquals(KnownTeam(logo, "IND"), restarted.lookup(EspnLeagueMap.NBA, "Pacers"))
+            assertEquals(KnownTeam(logo, "IND"), restarted.resolve(EspnLeagueMap.NBA, "Pacers"))
             assertTrue(restarted.revision.value > before)
             // A damaged line is skipped, the rest is read.
-            val damaged = TeamLogoBook().apply { load("garbage\n" + book.encode()) }
-            assertEquals(2, damaged.size)
+            assertEquals(2, TeamLogoBook().apply { load("garbage\n" + book.encode()) }.size)
             // Loading under a bound keeps the newest entries.
             val small = TeamLogoBook(maxEntries = 1).apply { load(book.encode()) }
             assertEquals(1, small.size)
-            assertTrue(small.lookup(EspnLeagueMap.NBA, "76ers") != null)
+            assertTrue(small.resolve(EspnLeagueMap.NBA, "76ers") != null)
         } finally {
             dir.deleteRecursively()
         }
     }
 
     @Test
-    fun `a card gets known logos only when one of its leagues knows both sides`() {
+    fun `a card gets known logos only when one of its leagues resolves both sides, and only when active`() {
         val book = TeamLogoBook()
-        book.learn(EspnLeagueMap.NBA, "Miami", team("MIA", "$logo#heat"))
-        book.learn(EspnLeagueMap.NBA, "Boston", team("BOS", "$logo#celtics"))
-        book.learn(EspnLeagueMap.COLLEGE_BASKETBALL, "Miami", team("MIA", "$logo#canes"))
-        book.learn(EspnLeagueMap.COLLEGE_BASKETBALL, "Duke", team("DUKE", "$logo#duke"))
-        // NBA knows Miami and Boston; college knows only Miami.
-        assertEquals("$logo#heat", book.forCard(item("Miami vs Boston", "Basketball"), "Miami", "Boston")?.first?.logo)
-        // College knows both (a bare "Basketball" card may be college); NBA does not know Duke.
+        book.learn(EspnLeagueMap.NBA, team("14", "Miami Heat", "MIA", "$logo#heat", short = "Heat"))
+        book.learn(EspnLeagueMap.NBA, team("2", "Boston Celtics", "BOS", "$logo#celtics", short = "Celtics"))
+        book.learn(EspnLeagueMap.COLLEGE_BASKETBALL, team("2390", "Miami Hurricanes", "MIA", "$logo#canes", short = "Miami"))
+        book.learn(EspnLeagueMap.COLLEGE_BASKETBALL, team("150", "Duke Blue Devils", "DUKE", "$logo#duke", short = "Duke"))
+        // Not active until the Scores setting is known (and while Off).
+        assertNull(book.forCard(item("Miami vs Duke", "Basketball"), "Miami", "Duke"))
+        book.active = true
+        assertEquals("$logo#heat", book.forCard(item("Heat vs Celtics", "Basketball"), "Heat", "Celtics")?.first?.logo)
+        // College resolves both (a bare "Basketball" card may be college); the NBA does not know Duke.
         assertEquals("$logo#canes", book.forCard(item("Miami vs Duke", "Basketball"), "Miami", "Duke")?.first?.logo)
         // A card naming the NBA never reads college logos.
         assertNull(book.forCard(item("Miami vs Duke", "NBA"), "Miami", "Duke"))
-        // Both leagues knowing both sides: ambiguous, none.
-        book.learn(EspnLeagueMap.COLLEGE_BASKETBALL, "Boston", team("BC", "$logo#bc"))
-        assertNull(book.forCard(item("Miami vs Boston", "Basketball"), "Miami", "Boston"))
-        // Off: nothing.
-        book.active = false
-        assertNull(book.forCard(item("Miami vs Duke", "Basketball"), "Miami", "Duke"))
     }
 }

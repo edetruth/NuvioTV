@@ -53,9 +53,14 @@ class EspnScoreProvider internal constructor(
                     .build()
                 client.newCall(request).execute().use { response ->
                     val body = response.body?.string()
-                    if (!response.isSuccessful || response.cacheResponse == null || body == null) return@use null
+                    val cached = response.cacheResponse
+                    if (!response.isSuccessful || cached == null || body == null) return@use null
                     val dto = adapter.fromJson(body) ?: return@use null
-                    if (EspnIndividualResults.covers(league)) null else ScoreboardResult(toSnapshots(dto, league))
+                    if (EspnIndividualResults.covers(league)) {
+                        null
+                    } else {
+                        ScoreboardResult(toSnapshots(dto, league), receivedAtMs = cached.receivedResponseAtMillis)
+                    }
                 }
             } catch (e: CancellationException) {
                 throw e

@@ -347,7 +347,8 @@ class ScoreMatcherTest {
         val nacional = liveSoccer.first { it.away.displayName == "Once Caldas" }.eventId
         assertEquals(nacional, match("Atletico Nacional vs Once Caldas", "2026-11-17T23:30:00Z", liveSoccer, now))
         assertEquals(nacional, match("Atlético Nacional v Once Caldas", "2026-11-17T23:30:00Z", liveSoccer, now))
-        assertEquals(nacional, match("Nacional vs Once Caldas", "2026-11-17T23:30:00Z", liveSoccer, now))
+        // ESPN names no league for this game (no link, no sibling): a weak side ("Nacional") is not enough.
+        assertNull(match("Nacional vs Once Caldas", "2026-11-17T23:30:00Z", liveSoccer, now))
     }
 
     @Test
@@ -364,4 +365,36 @@ class ScoreMatcherTest {
         assertTrue(SportsLiveTeams.canonicalise("Northern Ireland") != SportsLiveTeams.canonicalise("Ireland"))
     }
 
+
+    /** An eng.1 game as soccer/all lists one with no league link, no sibling and no note. */
+    private fun unknownLeague(event: ScoreSnapshot, id: String, startMs: Long? = event.startMs) =
+        event.copy(eventId = id, league = EspnLeagueMap.SOCCER_ALL, leagueSlug = "all", leagueName = null, competitionId = null, startMs = startMs)
+
+    @Test
+    fun `an event of unknown league needs both sides strong (#66)`() {
+        val game = eng1.first { it.eventId == "401879240" }
+        val unknown = listOf(unknownLeague(game, "u1"))
+        val start = java.time.Instant.ofEpochMilli(game.startMs!!).toString()
+        val now = start
+        // Both strong: matched.
+        assertEquals("u1", match("${game.home.displayName} vs ${game.away.displayName}", start, unknown, now))
+        // One side only weak (a suffix): enough on a known league, not here.
+        val weakHome = game.home.displayName!!.substringAfter(' ')
+        assertEquals("401879240", match("$weakHome vs ${game.away.displayName}", start, listOf(game), now))
+        assertNull(match("$weakHome vs ${game.away.displayName}", start, unknown, now))
+        // A women's card never takes it.
+        assertNull(match("${game.home.displayName} (W) vs ${game.away.displayName} (W)", start, unknown, now))
+    }
+
+    @Test
+    fun `a men's game and an unknown-league game of the same pair that day give no score (#66)`() {
+        val game = eng1.first { it.eventId == "401879240" }
+        val start = java.time.Instant.ofEpochMilli(game.startMs!!).toString()
+        // The same clubs again five hours later, league unknown (a women's game ESPN does not label).
+        val later = unknownLeague(game, "w1", game.startMs!! + 5 * 3_600_000L)
+        val title = "${game.home.displayName} vs ${game.away.displayName}"
+        assertEquals("401879240", match(title, start, listOf(game), start))
+        assertNull(match(title, start, listOf(game, later), start))
+        assertNull(match(title, java.time.Instant.ofEpochMilli(later.startMs!!).toString(), listOf(game, later), start))
+    }
 }

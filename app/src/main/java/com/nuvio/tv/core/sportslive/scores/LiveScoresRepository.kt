@@ -160,6 +160,15 @@ class LiveScoresRepository internal constructor(
     /** See [unmatched]. */
     private val unmatchedKeys = HashSet<String>()
     private val matcher = ScoreMatcher(zone)
+    /** For the college fallback: both sides must match STRONG (a plain card's sport is only a guess). */
+    private val strictMatcher = ScoreMatcher(zone, minScore = ScoreMatcher.BOTH_STRONG)
+    /**
+     * Card key to (the college fetch last counted, consecutive college fetches without the game): after
+     * [COLLEGE_MAX_MISSES] the card's college feed is dropped until the tracked cards change.
+     */
+    private val collegeMisses = HashMap<String, Pair<Long, Int>>()
+    @Volatile
+    private var logosDirty = false
     private val scoreDelay = ScoreDelay()
     private val nextRelease = MutableStateFlow<Long?>(null)
 
@@ -167,6 +176,8 @@ class LiveScoresRepository internal constructor(
         logoFile?.let { file ->
             scope.launch(io) { file.read()?.let(logos::load) }
         }
+        // No learned logo is drawn before the Scores setting is known, nor while it is Off.
+        scope.launch { mode.collect { logos.active = it != ScoresMode.OFF } }
         scope.launch {
             output.subscriptionCount.map { it > 0 }.distinctUntilChanged().collectLatest { active ->
                 if (active) {
@@ -219,7 +230,6 @@ class LiveScoresRepository internal constructor(
     // While someone collects [scores]: settings, then the tracked cards, drive the pollers.
     private suspend fun run() {
         combine(settings.distinctUntilChanged(), mySports.distinctUntilChanged(), ::Pair).collectLatest { (current, picked) ->
-            logos.active = current.mode != ScoresMode.OFF
             if (current.mode == ScoresMode.OFF) {
                 lock.withLock { publishLocked(off = true) }
                 return@collectLatest
@@ -237,7 +247,12 @@ class LiveScoresRepository internal constructor(
                         lock.withLock { publishLocked() }
                     }
                 }
-                tracked.collect { lock.withLock { refreshLocked(pollerScope, restartStopped = true) } }
+                tracked.collect {
+                    lock.withLock {
+                        collegeMisses.clear()
+                        refreshLocked(pollerScope, restartStopped = true)
+                    }
+                }
             }
         }
     }
@@ -284,8 +299,9 @@ class LiveScoresRepository internal constructor(
         lock.withLock {
             val state = feeds[feed] ?: return
             if (state.lastSuccessAt != null) return
+            // Stamped when ESPN's copy arrived, not now: shown only while younger than RECENT_MS.
+            state.lastSuccessAt = warm.receivedAtMs?.coerceAtMost(now()) ?: return
             state.events = warm.events
-            state.lastSuccessAt = now()
             refreshLocked(pollerScope, restartStopped = false)
         }
     }
@@ -297,6 +313,11 @@ class LiveScoresRepository internal constructor(
             state.failures++
             state.retryAfterMs = result.retryAfterMs
             if (state.paused) state.events = emptyList()
+            // A warm copy past its limit never lasts through the backoff.
+            if (!state.fetched && state.lastSuccessAt?.let { now() - it > ScoreProvider.RECENT_MS } == true) {
+                state.events = emptyList()
+                state.lastSuccessAt = null
+            }
         } else {
             state.failures = 0
             state.retryAfterMs = null
@@ -348,7 +369,7 @@ class LiveScoresRepository internal constructor(
                 return
             }
             unmatchedKeys -= card.key
-            learnLogos(card, match)
+            learnLogos(match)
             // Matched: only the feeds holding the game (and any not fetched yet) keep polling, so a
             // late game does not also poll the next Eastern day all night.
             needed += cardFeeds.filter { feed ->
@@ -378,7 +399,9 @@ class LiveScoresRepository internal constructor(
             }
             // Over the budget: a card whose feeds are not polled already gets no score (never a stale one).
             if (!fits(cardFeeds)) continue
-            var match = matchOn(card, cardFeeds)
+            // A card matched on its college fallback stays held to both sides STRONG.
+            val strict = entry.fallback != null && remembered[card.key] == entry.fallback
+            var match = matchOn(card, cardFeeds, if (strict) strictMatcher else matcher)
             // A soccer competition feed without the game: try soccer/all (shared, at its own cadence).
             if (match == null && leagues.all { it.sport == "soccer" && it != EspnLeagueMap.SOCCER_ALL } &&
                 cardFeeds.all { feed -> feeds[feed]?.let { it.fetched && !it.paused } == true }
@@ -402,17 +425,34 @@ class LiveScoresRepository internal constructor(
             settle(entry, dates, cardFeeds, match)
         }
         for (wait in deferred) {
+            val key = wait.entry.card.key
+            // Its college feed answered twice without it: dropped until the tracked cards change.
+            if ((collegeMisses[key]?.second ?: 0) >= COLLEGE_MAX_MISSES) {
+                settle(wait.entry, wait.dates, wait.cardFeeds, null)
+                continue
+            }
             val college = feedsOf(listOf(wait.fallback), wait.dates)
             // No budget left: no score for it this time, and not confirmed unmatched either.
             if (!fits(college)) continue
-            val cardFeeds = wait.cardFeeds + college
-            val match = matchOn(wait.entry.card, cardFeeds)
-            // Matched there: the card is polled on its college feed alone from now on.
-            if (match != null && match.league == wait.fallback) {
+            // Both sides STRONG, on the college feed alone.
+            val match = matchOn(wait.entry.card, college, strictMatcher)
+            if (match != null) {
+                // Matched there: the card is polled on its college feed alone from now on.
                 if (remembered.size >= MAX_REMEMBERED) remembered.clear()
-                remembered[wait.entry.card.key] = wait.fallback
+                remembered[key] = wait.fallback
+                collegeMisses -= key
+            } else {
+                val answered = college.mapNotNull { feed -> feeds[feed]?.takeIf { it.fetched && it.isFresh(nowMs) }?.lastSuccessAt }
+                if (answered.size == college.size) {
+                    val fetch = answered.max()
+                    val prior = collegeMisses[key]
+                    if (prior?.first != fetch) {
+                        if (collegeMisses.size >= MAX_REMEMBERED) collegeMisses.clear()
+                        collegeMisses[key] = fetch to (prior?.second ?: 0) + 1
+                    }
+                }
             }
-            settle(wait.entry, wait.dates, cardFeeds, match)
+            settle(wait.entry, wait.dates, wait.cardFeeds + college, match)
         }
         raw = matched
         unmatchedOutput.value = unmatchedKeys.toSet()
@@ -436,11 +476,10 @@ class LiveScoresRepository internal constructor(
         publishLocked()
     }
 
-    /** Each side's logo, under the side's name as the card writes it (only when the sides sit one way round). */
-    private fun learnLogos(card: ScoreCard, match: ScoreSnapshot) {
-        val firstIsHome = ScoreMatcher.firstIsHome(card.teams.home, card.teams.away, match) ?: return
-        logos.learn(match.league, card.teams.home, if (firstIsHome) match.home else match.away)
-        logos.learn(match.league, card.teams.away, if (firstIsHome) match.away else match.home)
+    /** Both ESPN teams of a matched game: their logos, abbreviations and names, by ESPN identity. */
+    private fun learnLogos(match: ScoreSnapshot) {
+        logos.learn(match.league, match.home)
+        logos.learn(match.league, match.away)
     }
 
     /** Matched games' logos and the known logos of tracked cards, each URL handed over once. */
@@ -451,7 +490,7 @@ class LiveScoresRepository internal constructor(
             val leagues = remembered[entry.card.key]?.let(::listOf) ?: (entry.leagues + listOfNotNull(entry.fallback))
             for (league in leagues) {
                 for (side in listOf(entry.card.teams.home, entry.card.teams.away)) {
-                    logos.lookup(league, side)?.let { urls += TeamLogoUrls.scaled(it.logo) }
+                    logos.resolve(league, side)?.let { urls += TeamLogoUrls.scaled(it.logo) }
                 }
             }
         }
@@ -462,13 +501,20 @@ class LiveScoresRepository internal constructor(
         prefetch(fresh)
     }
 
-    /** Writes [logos] to its file a moment after the last change, off the poll path. */
+    /**
+     * Writes [logos] to its file a moment after the last change, off the poll path; a change made while
+     * a write runs is written after it.
+     */
     private fun saveLogos() {
         val file = logoFile ?: return
+        logosDirty = true
         if (logoWrite?.isActive == true) return
         logoWrite = scope.launch(io) {
-            delay(LOGO_WRITE_DELAY_MS)
-            file.write(logos.encode())
+            while (logosDirty) {
+                delay(LOGO_WRITE_DELAY_MS)
+                logosDirty = false
+                file.write(logos.encode())
+            }
         }
     }
 
@@ -485,7 +531,7 @@ class LiveScoresRepository internal constructor(
         return MyLeague.ofFeed(league)?.let { it in sports.leaguesOf(sport) } ?: false
     }
 
-    private fun matchOn(card: ScoreCard, cardFeeds: List<ScoreFeed>): ScoreSnapshot? {
+    private fun matchOn(card: ScoreCard, cardFeeds: List<ScoreFeed>, using: ScoreMatcher = matcher): ScoreSnapshot? {
         val nowMs = now()
         // A card with no start is matched across ESPN's days: a league counts only once all its days are
         // in, so yesterday's final never stands alone while today's feed is loading, failing or paused.
@@ -494,7 +540,7 @@ class LiveScoresRepository internal constructor(
             .flatten()
         val events = usable.flatMap { feed -> feeds[feed]?.takeIf { it.isFresh(nowMs) }?.events.orEmpty() }
             .distinctBy { it.eventId }
-        return if (events.isEmpty()) null else matcher.match(card, events, now())
+        return if (events.isEmpty()) null else using.match(card, events, now())
     }
 
     /**
@@ -504,6 +550,8 @@ class LiveScoresRepository internal constructor(
      */
     private fun FeedState.isFresh(nowMs: Long): Boolean {
         val success = lastSuccessAt ?: return false
+        // Only a warm copy so far: shown while younger than its limit.
+        if (!fetched && nowMs - success > ScoreProvider.RECENT_MS) return false
         val interval = intervalMs ?: return true
         return nowMs - success <= 2 * interval + ScoreCadence.JITTER_MS
     }
@@ -557,6 +605,7 @@ class LiveScoresRepository internal constructor(
         internal const val MAX_FEEDS = 16
         private const val RETAIN_RETIRED_MS = 10 * 60_000L
         private const val LOGO_WRITE_DELAY_MS = 2_000L
+        private const val COLLEGE_MAX_MISSES = 2
         private val SLUG = Regex("""[a-z0-9._-]+""")
         private val EASTERN: ZoneId = ZoneId.of("America/New_York")
     }

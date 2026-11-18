@@ -127,9 +127,9 @@ class GameArtTest {
 
     @Test
     fun `an unmatched card draws the logos its sides matched before, before any score (#66)`() {
-        val book = TeamLogoBook()
-        book.learn(EspnLeagueMap.NBA, "Pacers", pacers.away)
-        book.learn(EspnLeagueMap.NBA, "76ers", pacers.home)
+        val book = TeamLogoBook(active = true)
+        book.learn(EspnLeagueMap.NBA, pacers.away)
+        book.learn(EspnLeagueMap.NBA, pacers.home)
         val art = GameArt.of(item("Pacers at 76ers"), null, book)!!
         assertTrue(art.hasLogos)
         assertEquals(pacers.away.logo, art.first.logo)

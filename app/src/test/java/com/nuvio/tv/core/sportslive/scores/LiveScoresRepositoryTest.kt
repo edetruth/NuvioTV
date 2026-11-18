@@ -827,7 +827,8 @@ class LiveScoresRepositoryTest {
 
     @Test
     fun `a warm copy shows at once and the network fetch follows immediately`() = runTest {
-        provider.recent = { feed -> if (feed == nba15) ScoreboardResult(listOf(game(ScoreState.IN, 40, 38))) else null }
+        val received = ms("2026-11-15T18:59:30Z")
+        provider.recent = { feed -> if (feed == nba15) ScoreboardResult(listOf(game(ScoreState.IN, 40, 38)), receivedAtMs = received) else null }
         provider.respond = { ScoreboardResult(listOf(game(ScoreState.IN, 50, 48))) }
         val gate = CompletableDeferred<Unit>()
         provider.gate = gate
@@ -849,7 +850,7 @@ class LiveScoresRepositoryTest {
     @Test
     fun `a warm copy is held back by the score delay like any first-seen live game`() = runTest {
         settings.value = ScoreSettings(delaySeconds = 30)
-        provider.recent = { ScoreboardResult(listOf(game(ScoreState.IN, 40, 38))) }
+        provider.recent = { ScoreboardResult(listOf(game(ScoreState.IN, 40, 38)), receivedAtMs = ms("2026-11-15T18:59:30Z")) }
         provider.gate = CompletableDeferred()
         val repo = repository("2026-11-15T19:00:00Z")
         collect(repo)
@@ -869,7 +870,7 @@ class LiveScoresRepositoryTest {
         val card = item("Pacers at 76ers", "Basketball", "2026-11-15T18:00:00Z")
         repo.track(SECTION, listOf(card))
         runCurrent()
-        val known = repo.logos.lookup(EspnLeagueMap.NBA, "Pacers")!!
+        val known = repo.logos.resolve(EspnLeagueMap.NBA, "Pacers")!!
         assertEquals("IND", known.abbreviation)
         assertEquals(pacers.away.logo, known.logo)
         assertTrue(prefetched.isNotEmpty())
@@ -878,7 +879,7 @@ class LiveScoresRepositoryTest {
         assertNull(file.read())
         advanceTimeBy(5_000L); runCurrent()
         val reloaded = TeamLogoBook().apply { load(file.read()!!) }
-        assertEquals(known, reloaded.lookup(EspnLeagueMap.NBA, "Pacers"))
+        assertEquals(known, reloaded.resolve(EspnLeagueMap.NBA, "Indiana Pacers"))
         dir.deleteRecursively()
     }
 
@@ -896,5 +897,74 @@ class LiveScoresRepositoryTest {
         assertEquals(ScoreFeed(EspnLeagueMap.SOCCER_ALL, LocalDate.of(2026, 11, 17)), provider.calls.first())
         assertTrue(provider.calls.all { it.date == LocalDate.of(2026, 11, 17) })
         assertEquals("401929766", repo.scores.value.getValue(card.streamKey).eventId)
+    }
+
+    // --- #66 review ---
+
+    @Test
+    fun `a warm copy is aged from when ESPN sent it and never outlives a failing fetch`() = runTest {
+        // Received 100 s before now: shown (under 2 min), but the network fetch fails.
+        provider.recent = { ScoreboardResult(listOf(game(ScoreState.IN, 40, 38)), receivedAtMs = ms("2026-11-15T18:58:20Z")) }
+        provider.respond = { ScoreboardResult.FAILED }
+        val gate = CompletableDeferred<Unit>()
+        provider.gate = gate
+        val repo = repository("2026-11-15T19:00:00Z")
+        collect(repo)
+        repo.track(SECTION, listOf(pacersCard))
+        runCurrent()
+        assertEquals(40, repo.scores.value.getValue(pacersCard.streamKey).homeScore)
+        provider.gate = null
+        gate.complete(Unit)
+        runCurrent()
+        // The backoff retry 30 s later fails too: the copy is now 130 s old and is gone.
+        advanceTimeBy(30_000L); runCurrent()
+        assertTrue(repo.scores.value.isEmpty())
+    }
+
+    @Test
+    fun `a warm copy older than two minutes by ESPN's time is not shown`() = runTest {
+        provider.recent = { ScoreboardResult(listOf(game(ScoreState.IN, 40, 38)), receivedAtMs = ms("2026-11-15T18:57:50Z")) }
+        provider.gate = CompletableDeferred()
+        val repo = repository("2026-11-15T19:00:00Z")
+        collect(repo)
+        repo.track(SECTION, listOf(pacersCard))
+        runCurrent()
+        assertTrue(repo.scores.value.isEmpty())
+    }
+
+    @Test
+    fun `the college fallback needs both sides strong`() = runTest {
+        provider.respond = ::nbaAndCollege
+        val repo = repository("2026-11-16T01:00:00Z")
+        collect(repo)
+        // "Storm" is St. John's Red Storm only by the suffix rule (weak): with "Syracuse Orange" strong it
+        // would reach the usual total, but not both-strong.
+        val weak = item("Syracuse Orange at Storm", "Basketball", "2026-11-16T00:00:00Z")
+        repo.track(SECTION, listOf(weak))
+        runCurrent()
+        assertTrue(cbb15 in provider.calls)
+        assertTrue(repo.scores.value.isEmpty())
+        assertEquals(setOf(weak.streamKey), repo.unmatched.value)
+    }
+
+    @Test
+    fun `a college feed that misses a card twice stops polling until the cards change`() = runTest {
+        provider.respond = { feed ->
+            if (feed.league == EspnLeagueMap.NBA) ScoreboardResult(emptyList())
+            else ScoreboardResult(listOf(game(ScoreState.IN, 1, 1).copy(league = EspnLeagueMap.COLLEGE_BASKETBALL)))
+        }
+        val repo = repository("2026-11-15T19:00:00Z")
+        collect(repo)
+        val unknown = item("Nowhere Owls at Somewhere Hawks", "Basketball", "2026-11-15T20:00:00Z")
+        repo.track(SECTION, listOf(unknown))
+        runCurrent()
+        advanceTimeBy(60 * 60_000L); runCurrent()
+        // Two college answers without the game, then no more.
+        assertEquals(2, provider.calls.count { it == cbb15 })
+        // A new card list tries again.
+        repo.track(SECTION, listOf(unknown, pacersCard))
+        runCurrent()
+        advanceTimeBy(10 * 60_000L); runCurrent()
+        assertTrue(provider.calls.count { it == cbb15 } > 2)
     }
 }

@@ -1,5 +1,6 @@
 package com.nuvio.tv.core.sportslive.scores
 
+import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.domain.model.SportsLiveItem
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -12,35 +13,43 @@ import java.text.Normalizer
 data class KnownTeam(val logo: String, val abbreviation: String?)
 
 /**
- * Team logos learned from matched games (#66), kept in app storage so a card draws its logos on the
- * next launch before any score feed answers. Keyed by league (soccer as one, since `soccer/all` and the
- * competition feeds list the same clubs) and the side's name as the card writes it, so only a name
- * that once matched strictly is ever drawn with a logo. Least recently used entries go past [maxEntries].
+ * ESPN teams seen in matched games (#66), kept in app storage so a card draws its logos on the next
+ * launch before any score feed answers. Each entry is an ESPN team (its league, soccer as one, and
+ * its ESPN id) with its logo, abbreviation and ESPN names; the addon's text is never stored. A card
+ * side not matched yet finds its team only through those names, and only when exactly one team of
+ * the card's league answers to it ("Arsenal" with both an English and an Argentine Arsenal known:
+ * none, the abbreviation circle shows). Least recently used teams go past [maxEntries].
  */
-class TeamLogoBook(private val maxEntries: Int = MAX_ENTRIES) {
+class TeamLogoBook(private val maxEntries: Int = MAX_ENTRIES, active: Boolean = false) {
 
-    private val entries = LinkedHashMap<String, KnownTeam>(64, 0.75f, true)
+    private class Team(val known: KnownTeam, val names: Set<String>)
+
+    private val entries = LinkedHashMap<String, Team>(64, 0.75f, true)
     private val revisionFlow = MutableStateFlow(0)
 
-    /** Bumped when entries are loaded or learned: a drawn card re-reads its logos. */
+    /** Bumped when teams are loaded or learned: a drawn card re-reads its logos. */
     val revision: StateFlow<Int> = revisionFlow.asStateFlow()
 
-    /** False while Scores is Off: no learned logo is drawn. */
+    /** False until the Scores setting is known, and while it is Off: no learned logo is drawn. */
     @Volatile
-    var active: Boolean = true
+    var active: Boolean = active
 
     val size: Int @Synchronized get() = entries.size
 
-    /** Remembers [team]'s logo for the card side [cardSide] on [league]; true when that changed anything. */
-    fun learn(league: EspnLeague, cardSide: String, team: ScoreTeam): Boolean {
-        val logo = team.logo?.takeIf { it.isNotBlank() && it.none(Char::isWhitespace) } ?: return false
-        val key = key(league, cardSide) ?: return false
-        val known = KnownTeam(logo, team.abbreviation?.trim()?.takeIf { it.isNotEmpty() && it.none(Char::isWhitespace) })
+    /** Remembers [team] of [league] (its logo, abbreviation and names); true when that changed anything. */
+    fun learn(league: EspnLeague, team: ScoreTeam): Boolean {
+        val logo = team.logo?.takeIf { it.isNotBlank() && it.none(::unsafe) } ?: return false
+        val id = (team.id?.takeIf { it.isNotBlank() } ?: team.displayName?.let(::fold))?.takeIf { it.none(::unsafe) } ?: return false
+        val names = namesOf(team)
+        if (names.isEmpty()) return false
+        val entry = Team(KnownTeam(logo, team.abbreviation?.trim()?.takeIf { it.isNotEmpty() && it.none(::unsafe) }), names)
+        val key = "${bookLeague(league)}|$id"
         val changed = synchronized(this) {
-            if (entries[key] == known) {
+            val old = entries[key]
+            if (old != null && old.known == entry.known && old.names == entry.names) {
                 false
             } else {
-                entries[key] = known
+                entries[key] = entry
                 trimLocked()
                 true
             }
@@ -49,14 +58,21 @@ class TeamLogoBook(private val maxEntries: Int = MAX_ENTRIES) {
         return changed
     }
 
-    fun lookup(league: EspnLeague, cardSide: String): KnownTeam? {
-        val key = key(league, cardSide) ?: return null
-        return synchronized(this) { entries[key] }
+    /** The one known team of [league] whose ESPN names include [cardSide]; null when none or several. */
+    fun resolve(league: EspnLeague, cardSide: String): KnownTeam? {
+        val keys = sideKeys(cardSide)
+        if (keys.isEmpty()) return null
+        val prefix = "${bookLeague(league)}|"
+        val found = synchronized(this) {
+            entries.entries.filter { (key, team) -> key.startsWith(prefix) && team.names.any { it in keys } }.map { it.key }
+        }
+        val key = found.singleOrNull() ?: return null
+        return synchronized(this) { entries[key]?.known }
     }
 
     /**
      * Both sides' known teams for [item], whose sides are [first] and [second]: only when exactly one
-     * of the leagues the card can be on ([EspnLeagueMap], with its college fallback) knows both sides.
+     * of the leagues the card can be on ([EspnLeagueMap], with its college fallback) resolves both.
      */
     fun forCard(item: SportsLiveItem, first: String, second: String): Pair<KnownTeam, KnownTeam>? {
         if (!active) return null
@@ -64,23 +80,27 @@ class TeamLogoBook(private val maxEntries: Int = MAX_ENTRIES) {
         val leagues = (EspnLeagueMap.leaguesFor(source) + listOfNotNull(EspnLeagueMap.collegeFallbackFor(source)))
             .distinctBy(::bookLeague)
         val found = leagues.mapNotNull { league ->
-            val a = lookup(league, first) ?: return@mapNotNull null
-            val b = lookup(league, second) ?: return@mapNotNull null
+            val a = resolve(league, first) ?: return@mapNotNull null
+            val b = resolve(league, second) ?: return@mapNotNull null
             a to b
         }.distinct()
         return found.singleOrNull()
     }
 
-    /** One line per entry: key, logo and abbreviation, tab-separated; least recently used first. */
+    /** One line per team: key, logo, abbreviation and names (unit-separated); least recently used first. */
     @Synchronized
-    fun encode(): String = entries.entries.joinToString("\n") { (key, team) -> "$key\t${team.logo}\t${team.abbreviation.orEmpty()}" }
+    fun encode(): String = entries.entries.joinToString("\n") { (key, team) ->
+        "$key\t${team.known.logo}\t${team.known.abbreviation.orEmpty()}\t${team.names.joinToString(NAME_SEPARATOR)}"
+    }
 
-    /** Adds [text]'s entries ([encode]d) under the ones already known; unreadable lines are skipped. */
+    /** Adds [text]'s teams ([encode]d) under the ones already known; unreadable lines are skipped. */
     fun load(text: String) {
         val read = text.lineSequence().mapNotNull { line ->
             val parts = line.split('\t')
-            if (parts.size != 3 || parts[0].isEmpty() || parts[1].isEmpty()) return@mapNotNull null
-            parts[0] to KnownTeam(parts[1], parts[2].ifEmpty { null })
+            if (parts.size != 4 || parts[0].isEmpty() || parts[1].isEmpty()) return@mapNotNull null
+            val names = parts[3].split(NAME_SEPARATOR).filter { it.isNotEmpty() }.toSet()
+            if (names.isEmpty()) return@mapNotNull null
+            parts[0] to Team(KnownTeam(parts[1], parts[2].ifEmpty { null }), names)
         }.toList()
         if (read.isEmpty()) return
         synchronized(this) {
@@ -107,16 +127,34 @@ class TeamLogoBook(private val maxEntries: Int = MAX_ENTRIES) {
         /** The app's book: filled by [LiveScoresRepository], read by [GameArt.of]. */
         val shared = TeamLogoBook()
 
+        private const val NAME_SEPARATOR = "\u001f"
         private val MARKS = Regex("""\p{Mn}+""")
-        private val SPACE = Regex("""[\s\t]+""")
+
+        private fun unsafe(c: Char) = c.isWhitespace() || c == '\u001f'
 
         private fun bookLeague(league: EspnLeague): String = if (league.sport == "soccer") "soccer" else league.path
 
-        internal fun key(league: EspnLeague, cardSide: String): String? {
-            val name = Normalizer.normalize(cardSide, Normalizer.Form.NFD).replace(MARKS, "").lowercase()
-                .replace(SPACE, " ").trim()
-            return if (name.isEmpty()) null else "${bookLeague(league)}|$name"
+        private fun fold(text: String): String =
+            Normalizer.normalize(text.replace('’', '\''), Normalizer.Form.NFD).replace(MARKS, "").trim()
+
+        private fun keysOf(name: String): Set<String> {
+            val folded = fold(name)
+            return setOf(SportsLiveTeams.normalise(folded), SportsLiveTeams.canonicalise(folded)) - ""
         }
+
+        /**
+         * The names a card side may use for [team], as [ScoreMatcher] reads them: ESPN's names and
+         * location + name (never the city alone); the abbreviation only lowercased ("IND" is not India).
+         */
+        private fun namesOf(team: ScoreTeam): Set<String> {
+            val names = listOfNotNull(team.displayName, team.shortDisplayName, team.name,
+                if (team.location != null && team.name != null) "${team.location} ${team.name}" else null)
+            val keys = names.filter { it.isNotBlank() }.flatMapTo(LinkedHashSet(), ::keysOf)
+            team.abbreviation?.takeIf { it.isNotBlank() }?.let { keys += SportsLiveTeams.normalise(fold(it)) }
+            return keys.filterTo(LinkedHashSet()) { it.isNotEmpty() && '\t' !in it && '\n' !in it && NAME_SEPARATOR !in it }
+        }
+
+        private fun sideKeys(cardSide: String): Set<String> = keysOf(cardSide)
     }
 }
 

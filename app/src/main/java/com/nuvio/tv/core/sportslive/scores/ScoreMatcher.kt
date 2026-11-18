@@ -85,7 +85,7 @@ class ScoreMatcher(
             else -> Instant.ofEpochMilli(start).atZone(ZoneOffset.UTC).toLocalDate()
         }
         cache[card.key]?.takeIf { it.day == day }?.let { cached ->
-            events.firstOrNull { it.eventId == cached.eventId }?.let { return it }
+            events.firstOrNull { it.eventId == cached.eventId }?.let { return it.takeUnless { doubleHeader(home, away, it, events) } }
         }
         // The day before is tried only when the day has no candidate at all, not when it is ambiguous.
         val pick = if (timed) {
@@ -94,7 +94,7 @@ class ScoreMatcher(
             bestOnDay(home, away, events, day, zoneId)
                 ?: if (previousDayFallback) bestOnDay(home, away, events, day.minusDays(1), zoneId) else null
         }
-        val best = pick?.event
+        val best = pick?.event?.takeUnless { doubleHeader(home, away, it, events) }
         if (best == null) {
             if (BuildConfig.DEBUG) Log.d(TAG, "no match: ${card.teams.home} / ${card.teams.away}")
             return null
@@ -116,7 +116,7 @@ class ScoreMatcher(
         val candidates = events
             .filter { event -> event.startMs != null && event.startMs in from until until && score(home, away, event) != null }
             .distinctBy { it.eventId }
-        if (candidates.size <= 1) return candidates.firstOrNull()
+        if (candidates.size <= 1) return candidates.firstOrNull()?.takeUnless { doubleHeader(home, away, it, events) }
         val live = candidates.filter { it.state == ScoreState.IN }
         val pick = if (live.isNotEmpty()) {
             live.singleOrNull()
@@ -126,7 +126,7 @@ class ScoreMatcher(
             }
         }
         if (pick == null && BuildConfig.DEBUG) Log.d(TAG, "ambiguous: ${candidates.size} meetings for ${home.base} / ${away.base}")
-        return pick
+        return pick?.takeUnless { doubleHeader(home, away, it, events) }
     }
 
     private fun bestOnDay(home: Side, away: Side, events: List<ScoreSnapshot>, day: LocalDate, zoneId: ZoneId): Pick? {
@@ -165,19 +165,50 @@ class ScoreMatcher(
 
     private fun side(name: String): Side = sideOf(name)
 
-    /** Best total over both orientations, or null unless both sides match and the total is at least 5. */
+    /**
+     * Best total over both orientations, or null unless both sides match and the total is at least 5.
+     * A `soccer/all` event whose league is unknown (no league link, no sibling naming it, no women's or
+     * youth note in its competition or team names) could be a women's or youth game: both sides must
+     * match STRONG (#66).
+     */
     private fun score(home: Side, away: Side, event: ScoreSnapshot): Int? {
         val slugQualifier = leagueQualifier(event.leagueSlug, event.leagueName)
         val eventHome = Competitor(event.home, slugQualifier)
         val eventAway = Competitor(event.away, slugQualifier)
+        val least = if (unknownLeague(event, eventHome, eventAway)) BOTH_STRONG else minScore
         return listOfNotNull(
-            pairScore(eventHome.score(home), eventAway.score(away)),
-            pairScore(eventAway.score(home), eventHome.score(away))
+            pairScore(eventHome.score(home), eventAway.score(away), least),
+            pairScore(eventAway.score(home), eventHome.score(away), least)
         ).maxOrNull()
     }
 
-    private fun pairScore(first: Int, second: Int): Int? =
-        if (first > 0 && second > 0 && first + second >= minScore) first + second else null
+    private fun pairScore(first: Int, second: Int, least: Int = minScore): Int? =
+        if (first > 0 && second > 0 && first + second >= least) first + second else null
+
+    private fun unknownLeague(event: ScoreSnapshot, home: Competitor, away: Competitor): Boolean =
+        event.league == EspnLeagueMap.SOCCER_ALL && event.leagueSlug == EspnLeagueMap.SOCCER_ALL.league &&
+            home.qualifier == null && away.qualifier == null
+
+    private fun unknownLeague(event: ScoreSnapshot): Boolean {
+        val qualifier = leagueQualifier(event.leagueSlug, event.leagueName)
+        return unknownLeague(event, Competitor(event.home, qualifier), Competitor(event.away, qualifier))
+    }
+
+    /**
+     * True when [pick] and another event of the pair share ESPN's (US Eastern) day and either has an
+     * unknown league (#66): a men's and a women's game of the same two clubs that day (a double-header)
+     * cannot be told apart, so neither gets a score.
+     */
+    private fun doubleHeader(home: Side, away: Side, pick: ScoreSnapshot, events: List<ScoreSnapshot>): Boolean {
+        val day = pick.startMs?.let { Instant.ofEpochMilli(it).atZone(EASTERN).toLocalDate() } ?: return false
+        val pickUnknown = unknownLeague(pick)
+        return events.any { other ->
+            other.eventId != pick.eventId &&
+                other.startMs?.let { Instant.ofEpochMilli(it).atZone(EASTERN).toLocalDate() } == day &&
+                (pickUnknown || unknownLeague(other)) &&
+                score(home, away, other) != null
+        }
+    }
 
     /** A competitor's names, qualifiers removed: STRONG keys, the WEAK location key, suffix-rule names. */
     private class Competitor(team: ScoreTeam, slugQualifier: String?) {

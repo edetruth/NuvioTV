@@ -113,7 +113,9 @@ data class GameSituation(
 data class ScoreboardResult(
     val events: List<ScoreSnapshot>,
     val failed: Boolean = false,
-    val retryAfterMs: Long? = null
+    val retryAfterMs: Long? = null,
+    /** For a stored copy ([ScoreProvider.recentScoreboard]): when it was received from ESPN. */
+    val receivedAtMs: Long? = null
 ) {
     companion object {
         val FAILED = ScoreboardResult(emptyList(), failed = true)
