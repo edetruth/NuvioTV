@@ -43,7 +43,12 @@ internal class DualPlayers(
     context: Context,
     private val onFirstFrame: (SportsLiveItem) -> Unit,
     /** [decoderInit]: the player could not get a decoder. */
-    private val onError: (item: SportsLiveItem, decoderInit: Boolean) -> Unit
+    private val onError: (item: SportsLiveItem, decoderInit: Boolean) -> Unit,
+    /**
+     * Whether [item]'s pane is playing (advancing: not paused, buffering or stopped). A stop or
+     * release reports false, so time away from the screen never counts as played (#65).
+     */
+    private val onIsPlaying: (item: SportsLiveItem, playing: Boolean) -> Unit = { _, _ -> }
 ) {
     private val appContext = context.applicationContext
 
@@ -66,6 +71,20 @@ internal class DualPlayers(
 
         /** Counts loads; a load's listener drops events once a newer load (or a stop) has started. */
         private var loads = 0
+
+        /** The game this player last reported as playing, or null. */
+        private var reported: SportsLiveItem? = null
+
+        /** Sets [isPlaying] and reports a change of the game playing ([item] when [playing]). */
+        private fun report(item: SportsLiveItem?, playing: Boolean) {
+            isPlaying = playing
+            val now = item.takeIf { playing }
+            val before = reported
+            if (before == now) return
+            reported = now
+            before?.let { onIsPlaying(it, false) }
+            now?.let { onIsPlaying(it, true) }
+        }
         private var listener: Player.Listener? = null
 
         /**
@@ -74,7 +93,7 @@ internal class DualPlayers(
          */
         private fun listenToLoad(item: SportsLiveItem, stream: Stream) {
             val load = ++loads
-            isPlaying = false
+            report(null, false)
             val sourceKey = SportsLiveExtraSources.sourceKeyFor(item, stream)
             val startedAtMs = System.currentTimeMillis()
             var rendered = false
@@ -98,14 +117,14 @@ internal class DualPlayers(
                 }
 
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
-                    if (load == loads) this@Slot.isPlaying = isPlaying
+                    if (load == loads) report(item, isPlaying)
                 }
             }.also(player::addListener)
         }
 
         fun release() {
             loads++
-            isPlaying = false
+            report(null, false)
             player.release()
         }
 
@@ -134,7 +153,7 @@ internal class DualPlayers(
             if (wanted == null || url == null) {
                 loaded = null
                 loads++
-                isPlaying = false
+                report(null, false)
                 player.stop()
                 player.clearMediaItems()
                 return

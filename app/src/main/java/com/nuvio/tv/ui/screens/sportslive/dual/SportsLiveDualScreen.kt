@@ -131,7 +131,8 @@ fun SportsLiveDualScreen(
                     players = DualPlayers(
                         context = context,
                         onFirstFrame = viewModel::onFirstFrame,
-                        onError = viewModel::onPlayerError
+                        onError = viewModel::onPlayerError,
+                        onIsPlaying = viewModel::onIsPlayingChanged
                     )
                     viewModel.onPlayersCreated()
                 }

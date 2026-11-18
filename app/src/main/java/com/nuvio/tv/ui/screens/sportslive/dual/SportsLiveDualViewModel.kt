@@ -181,8 +181,19 @@ class SportsLiveDualViewModel internal constructor(
      */
     private val handOffs = mutableMapOf<String, Stream>()
 
-    /** When each pane's game (by stream key) showed its first frame, and with which stream. */
-    private val playingSince = mutableMapOf<String, Pair<Stream, Long>>()
+    /** How long a pane's link has actually played (advancing, not paused or buffering). */
+    private class PlayClock(val stream: Stream) {
+        var playedMs = 0L
+        var sinceMs: Long? = null
+
+        fun stop(nowMs: Long) {
+            sinceMs?.let { playedMs += nowMs - it }
+            sinceMs = null
+        }
+    }
+
+    /** Each pane game's play clock, by stream key; kept across a swap, a restart and a decoder retry. */
+    private val clocks = mutableMapOf<String, PlayClock>()
 
     init {
         session?.let { s -> s.leftStream?.let { handOffs[s.left.streamKey] = it } }
@@ -244,11 +255,25 @@ class SportsLiveDualViewModel internal constructor(
         dispatch(DualAction.FirstFrame(item))
         // Playing now: the pane's first-frame timeout is no longer needed, and a later decoder
         // failure gets its retry again.
-        val pane = _state.value?.pane(side)
-        if (pane?.status == PaneStatus.Playing) {
+        if (_state.value?.pane(side)?.status == PaneStatus.Playing) {
             jobs.remove(side)?.cancel()
             deviceLimitRetried.remove(item.streamKey)
-            pane.stream?.let { stream -> playingSince.getOrPut(item.streamKey) { stream to workingLinks.nowMs() } }
+        }
+    }
+
+    /**
+     * [item]'s pane player started ([playing]) or stopped advancing (paused, buffering, stopped or
+     * released): only the time in between counts as played for its link.
+     */
+    fun onIsPlayingChanged(item: SportsLiveItem, playing: Boolean) {
+        val stream = _state.value?.let { state -> state.sideOf(item)?.let(state::pane) }?.stream ?: return
+        val clock = clocks[item.streamKey]?.takeIf { it.stream.getStreamUrl() == stream.getStreamUrl() }
+            ?: PlayClock(stream).also { clocks[item.streamKey] = it }
+        val now = workingLinks.nowMs()
+        if (playing) {
+            if (clock.sinceMs == null) clock.sinceMs = now
+        } else {
+            clock.stop(now)
         }
     }
 
@@ -285,8 +310,6 @@ class SportsLiveDualViewModel internal constructor(
             val pane = state.pane(side)
             if (pane.status != PaneStatus.Playing) continue
             jobs.remove(side)?.cancel()
-            // Played time restarts with the next first frame: how long the pane was away is unknown.
-            playingSince.remove(pane.item.streamKey)
             dispatch(DualAction.Restarted(pane.item))
             jobs[side] = viewModelScope.launch {
                 delay(FIRST_FRAME_TIMEOUT_MS)
@@ -336,20 +359,25 @@ class SportsLiveDualViewModel internal constructor(
         dispatch(DualAction.TimedOut(item))
     }
 
-    /** [stream] failed for [item]: quarantined, and not handed over again. */
+    /**
+     * [stream] failed for [item]. Its played time counts first, so a link that played long enough
+     * stays good after one failure; a quarantined link is not handed over again.
+     */
     private fun linkFailed(item: SportsLiveItem, stream: Stream?) {
         val url = stream?.getStreamUrl() ?: return
-        playingSince.remove(item.streamKey)
-        if (handOffs[item.streamKey]?.getStreamUrl() == url) handOffs.remove(item.streamKey)
-        workingLinks.quarantine(item.id, url)
+        settle(item)
+        val quarantined = workingLinks.failed(item.id, url)
+        if (quarantined && handOffs[item.streamKey]?.getStreamUrl() == url) handOffs.remove(item.streamKey)
     }
 
     /** [item]'s pane stops playing it: a link that played long enough is remembered as good. */
     private fun settle(item: SportsLiveItem) {
-        val (stream, sinceMs) = playingSince.remove(item.streamKey) ?: return
-        workingLinks.played(item.id, stream.getStreamUrl(), workingLinks.nowMs() - sinceMs)
+        val clock = clocks.remove(item.streamKey) ?: return
+        clock.stop(workingLinks.nowMs())
+        workingLinks.played(item.id, clock.stream.getStreamUrl(), clock.playedMs)
     }
 
+    // Time in the background is not counted: the players report a stop when released (ON_STOP).
     override fun onCleared() {
         _state.value?.let { state -> Side.entries.forEach { settle(state.pane(it).item) } }
         super.onCleared()

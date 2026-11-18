@@ -104,6 +104,9 @@ internal fun PlayerRuntimeController.trySportsLiveFailoverAfterError(
     decoderInit: Boolean = false
 ): Boolean {
     if (!SportsLiveExtraSources.isSportsPlayback(contentId)) return false
+    // Nothing that works plays now (also a Sources panel pick failing before its first frame): dual
+    // screen must not take over a stream this player no longer plays (#65).
+    SportsLiveWorkingLinks.shared.stoppedPlaying(contentId.orEmpty())
     // The source that just failed must not be re-served from the resolve cache next time.
     SportsLiveExtraSources.invalidateResolve(contentId)
     if (sourceFallbackJob?.isActive == true) return true
@@ -112,8 +115,9 @@ internal fun PlayerRuntimeController.trySportsLiveFailoverAfterError(
             currentSportsSourceKey(),
             if (stalled) SportsLiveSourceReliability.Outcome.STALL else SportsLiveSourceReliability.Outcome.FAILURE
         )
-        // A link that failed to start or hit a fatal error is skipped for this game for a while (#65).
-        if (!stalled) SportsLiveWorkingLinks.shared.quarantine(contentId.orEmpty(), currentSportsStream()?.getStreamUrl())
+        // A link that failed to start or hit a fatal error is skipped for this game for a while,
+        // unless it is known to work and this is its only recent failure (#65).
+        if (!stalled) SportsLiveWorkingLinks.shared.failed(contentId.orEmpty(), currentSportsStream()?.getStreamUrl())
     }
     cancelSportsStallWatchdog()
 
@@ -211,10 +215,6 @@ internal fun PlayerRuntimeController.scheduleSportsStallWatchdog() {
         var markedGood = false
         while (true) {
             delay(SPORTS_STALL_POLL_INTERVAL_MS)
-            // A link that keeps playing for 30 s is remembered as working for this game (#65).
-            if (!markedGood && _uiState.value.error == null && !isInBackground && hasRenderedFirstFrame) {
-                markedGood = SportsLiveWorkingLinks.shared.notePlaying(contentId.orEmpty())
-            }
             if (_uiState.value.error != null || isInBackground || !hasRenderedFirstFrame) {
                 lastProgressAtMs = System.currentTimeMillis()
                 continue
@@ -224,6 +224,10 @@ internal fun PlayerRuntimeController.scheduleSportsStallWatchdog() {
             val buffering = player?.playbackState == Player.STATE_BUFFERING
             val advancing = position > lastPosition
             val paused = player?.playWhenReady == false || userPausedManually
+            // 30 s of actual progress (not paused, not buffering) mark the link as working for this game (#65).
+            if (advancing && !paused && !markedGood) {
+                markedGood = SportsLiveWorkingLinks.shared.progressed(contentId.orEmpty(), SPORTS_STALL_POLL_INTERVAL_MS)
+            }
             if (advancing || paused) {
                 lastPosition = position
                 lastProgressAtMs = System.currentTimeMillis()

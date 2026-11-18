@@ -131,10 +131,33 @@ class SportsLiveDualHandOffTest {
         val viewModel = newViewModel()
         runCurrent()
         viewModel.onFirstFrame(a)
+        viewModel.onIsPlayingChanged(a, true)
+        now += 20_000
+        // Buffering (or paused) time does not count.
+        viewModel.onIsPlayingChanged(a, false)
+        now += 60_000
+        viewModel.onIsPlayingChanged(a, true)
+        now += 10_000
 
-        now += SportsLiveWorkingLinks.GOOD_AFTER_MS
         assertTrue(viewModel.zap(forward = true))
         assertTrue(links.isGood(a.id, playing.url))
+    }
+
+    @Test
+    fun `time with the players released is not played time`() = runTest(mainDispatcherRule.dispatcher) {
+        val viewModel = newViewModel()
+        runCurrent()
+        viewModel.onFirstFrame(a)
+        viewModel.onIsPlayingChanged(a, true)
+        now += 10_000
+        // ON_STOP releases the players, which report a stop; an hour away does not count.
+        viewModel.onIsPlayingChanged(a, false)
+        now += 60 * 60 * 1000L
+        viewModel.onPlayersCreated()
+        viewModel.onFirstFrame(a)
+
+        assertTrue(viewModel.zap(forward = true))
+        assertFalse(links.isGood(a.id, playing.url))
     }
 
     @Test
@@ -142,9 +165,32 @@ class SportsLiveDualHandOffTest {
         val viewModel = newViewModel()
         runCurrent()
         viewModel.onFirstFrame(a)
+        viewModel.onIsPlayingChanged(a, true)
 
         now += SportsLiveWorkingLinks.GOOD_AFTER_MS - 1
         assertTrue(viewModel.zap(forward = true))
         assertFalse(links.isGood(a.id, playing.url))
     }
+
+    @Test
+    fun `a link that played long enough stays good after one error, and keeps its hand-off`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            val viewModel = newViewModel()
+            runCurrent()
+            viewModel.onFirstFrame(a)
+            viewModel.onIsPlayingChanged(a, true)
+            now += SportsLiveWorkingLinks.GOOD_AFTER_MS
+
+            viewModel.onPlayerError(a, decoderInit = false)
+            assertTrue(links.isGood(a.id, playing.url))
+            assertFalse(links.isQuarantined(a.id, playing.url))
+
+            // Zap away and back: the working stream is reused, with no lookup.
+            assertTrue(viewModel.zap(forward = true))
+            runCurrent()
+            assertTrue(viewModel.zap(forward = false))
+            runCurrent()
+            assertEquals(listOf("b", "c"), resolveCalls)
+            assertSame(playing, viewModel.current().left.stream)
+        }
 }

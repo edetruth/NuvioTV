@@ -49,7 +49,8 @@ class SportsLiveZapResolverTest {
     private val probe = mockk<SportsLiveStreamProbe>(relaxed = true)
     private var settings = PlayerSettings()
     private var preparationCheckThrows = false
-    private val links = SportsLiveWorkingLinks(nowMs = { 0L })
+    private var linkNow = 0L
+    private val links = SportsLiveWorkingLinks(nowMs = { linkNow })
     private val debrid = mockk<DirectDebridResolver>().also {
         coEvery { it.shouldResolveToPlayableStream(any()) } answers {
             if (preparationCheckThrows && firstArg<Stream>() == PREPARE_ALT) error("debrid check failed")
@@ -532,6 +533,27 @@ class SportsLiveZapResolverTest {
         links.quarantine(ITEM.id, SD.url)
 
         assertEquals(HD, resolver.resolve(ITEM))
+        assertEquals(2, streams.calls.size)
+    }
+
+    @Test
+    fun `a game with only quarantined links is searched at most once per quarantine window`() = runTest {
+        streams.response = { result(SD, HD) }
+        links.quarantine(ITEM.id, SD.url)
+        links.quarantine(ITEM.id, HD.url)
+        val resolver = newResolver()
+        resolveCache.nowMs = { linkNow }
+
+        repeat(3) {
+            assertEquals(SD, resolver.resolve(ITEM))
+            // Past the resolve cache's life, still inside the quarantine window.
+            linkNow += SportsLiveResolveCache.TTL_MS + 1
+        }
+        assertEquals(1, streams.calls.size)
+
+        // Now past the quarantine window: one more search.
+        assertTrue(linkNow > SportsLiveWorkingLinks.QUARANTINE_MS)
+        assertEquals(SD, resolver.resolve(ITEM))
         assertEquals(2, streams.calls.size)
     }
 

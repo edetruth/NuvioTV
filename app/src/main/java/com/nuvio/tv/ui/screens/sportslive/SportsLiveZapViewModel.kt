@@ -81,7 +81,7 @@ class SportsLiveZapViewModel internal constructor(
     private val liveScores: LiveScoresRepository,
     // Where the panel's list is built and grouped; tests pass their dispatcher, so it runs in virtual time.
     computeDispatcher: CoroutineDispatcher,
-    // The stream this player plays, handed to dual screen (#65).
+    // The stream this player plays, handed to dual screen (#65); cleared when the player leaves.
     private val workingLinks: SportsLiveWorkingLinks = SportsLiveWorkingLinks.shared
 ) : ViewModel() {
 
@@ -329,6 +329,8 @@ class SportsLiveZapViewModel internal constructor(
 
     override fun onCleared() {
         scoreTracker.onStop()
+        // This player left: its stream no longer plays, so dual screen cannot take it over (#65).
+        contentId?.let(workingLinks::stoppedPlaying)
         super.onCleared()
     }
 

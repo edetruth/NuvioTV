@@ -79,11 +79,11 @@ class SportsLiveZapResolver @Inject constructor(
     @VisibleForTesting
     internal var timeoutMs = TIMEOUT_MS
 
-    /** Runs a merged game's fetches, so alternates still finish (and are recorded) after the primary is played. */
     /** Which links worked or failed for each game (#65): good ones are tried first, quarantined ones last. */
     @VisibleForTesting
     internal var workingLinks: SportsLiveWorkingLinks = SportsLiveWorkingLinks.shared
 
+    /** Runs a merged game's fetches, so alternates still finish (and are recorded) after the primary is played. */
     @VisibleForTesting
     internal var fetchScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -119,14 +119,21 @@ class SportsLiveZapResolver @Inject constructor(
 
     suspend fun lookup(item: SportsLiveItem, forceRefresh: Boolean): SportsLiveLookup =
         try {
-            // A cached link that has since failed is not served again.
-            val cached = if (forceRefresh) null else resolveCache.get(item.streamKey)
-                ?.takeUnless { workingLinks.isQuarantined(item.id, it) }
+            // A cached link that has since failed is not served again, unless a search already found
+            // nothing better than a quarantined link: that one is served until its window ends, so a
+            // game with only failed links is searched at most once per quarantine window.
+            val cached = if (forceRefresh) null else {
+                resolveCache.get(item.streamKey)?.takeUnless { workingLinks.isQuarantined(item.id, it) }
+                    ?: workingLinks.fallback(item.id)
+            }
             if (cached != null) {
                 SportsLiveLookup.Found(cached)
             } else {
                 val found = if (item.alternates.isEmpty()) search(item) else bestAcrossSources(item)
-                if (found is SportsLiveLookup.Found) resolveCache.put(item.streamKey, found.stream)
+                if (found is SportsLiveLookup.Found) {
+                    resolveCache.put(item.streamKey, found.stream)
+                    if (workingLinks.isQuarantined(item.id, found.stream)) workingLinks.noteFallback(item.id, found.stream)
+                }
                 found
             }
         } catch (e: CancellationException) {
