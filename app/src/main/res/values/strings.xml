@@ -3715,6 +3715,10 @@
     <string name="sports_live_scoreboard_in_hm">in %1$d h %2$d m</string>
     <string name="sports_live_scoreboard_in_m">in %1$d m</string>
     <string name="sports_live_scoreboard_preview_hint">Preview · muted · OK for full screen</string>
+    <string name="sports_live_layout_timeline">Timeline</string>
+    <string name="sports_live_timeline_no_time">No time</string>
+    <string name="sports_live_timeline_live_clock">LIVE · %1$s</string>
+    <string name="sports_live_timeline_matchup">%1$s v %2$s</string>
     <string name="sports_live_situation_separator">" · "</string>
     <string name="sports_live_situation_possession">%1$s ball</string>
     <string name="sports_live_situation_red_zone">Red zone</string>

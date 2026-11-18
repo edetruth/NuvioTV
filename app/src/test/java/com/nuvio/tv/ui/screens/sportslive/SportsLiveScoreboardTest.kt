@@ -91,7 +91,10 @@ class SportsLiveScoreboardTest {
 
     @Test
     fun `layouts are offered on Live now and Upcoming only, Cards by default, per tab`() {
-        assertEquals(listOf(SportsLiveLayout.CARDS, SportsLiveLayout.SCOREBOARD), SportsLiveLayout.offeredFor(SportsLiveTab.LIVE_NOW))
+        assertEquals(
+            listOf(SportsLiveLayout.CARDS, SportsLiveLayout.SCOREBOARD, SportsLiveLayout.TIMELINE),
+            SportsLiveLayout.offeredFor(SportsLiveTab.LIVE_NOW)
+        )
         assertEquals(SportsLiveLayout.offeredFor(SportsLiveTab.LIVE_NOW), SportsLiveLayout.offeredFor(SportsLiveTab.UPCOMING))
         listOf(SportsLiveTab.CHANNELS, SportsLiveTab.REPLAYS, SportsLiveTab.RESULTS).forEach {
             assertTrue(SportsLiveLayout.offeredFor(it).isEmpty())
@@ -109,8 +112,8 @@ class SportsLiveScoreboardTest {
         assertEquals("LIVE_NOW=SCOREBOARD,UPCOMING=CARDS", SportsLiveLayout.encode(choices))
         assertEquals(choices, SportsLiveLayout.decode(SportsLiveLayout.encode(choices)))
         assertEquals(
-            mapOf(SportsLiveTab.LIVE_NOW to SportsLiveLayout.SCOREBOARD),
-            SportsLiveLayout.decode("LIVE_NOW=SCOREBOARD,UPCOMING=TIMELINE,NOPE=CARDS,,=")
+            mapOf(SportsLiveTab.LIVE_NOW to SportsLiveLayout.SCOREBOARD, SportsLiveTab.UPCOMING to SportsLiveLayout.TIMELINE),
+            SportsLiveLayout.decode("LIVE_NOW=SCOREBOARD,UPCOMING=TIMELINE,NOPE=CARDS,,=,REPLAYS=GRID")
         )
         assertTrue(SportsLiveLayout.decode(null).isEmpty())
     }

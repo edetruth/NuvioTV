@@ -3,12 +3,13 @@ package com.nuvio.tv.core.sportslive
 import com.nuvio.tv.domain.model.SportsLiveTab
 
 /**
- * How Live now and Upcoming lay out their games (#23): the card list, or the stadium Scoreboard. The
- * Timeline (#24) joins as a third entry; the switch lists whatever [offeredFor] returns.
+ * How Live now and Upcoming lay out their games: the card list, the stadium Scoreboard (#23), or the
+ * Matchday timeline (#24). The switch lists whatever [offeredFor] returns.
  */
 enum class SportsLiveLayout {
     CARDS,
-    SCOREBOARD;
+    SCOREBOARD,
+    TIMELINE;
 
     companion object {
         /** The layouts [tab] can switch between; empty (no switch) for Channels, Replays and Results. */

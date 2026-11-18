@@ -74,7 +74,7 @@ internal fun rememberGameSituationStrings(): GameSituationStrings {
     }
 }
 
-/** Cards · Scoreboard: OK picks a layout (focus alone does not, unlike the tabs). */
+/** Cards · Scoreboard · Timeline: OK picks a layout (focus alone does not, unlike the tabs). */
 @Composable
 internal fun SportsLiveLayoutSwitch(
     layouts: List<SportsLiveLayout>,
@@ -88,6 +88,7 @@ internal fun SportsLiveLayoutSwitch(
                 when (layout) {
                     SportsLiveLayout.CARDS -> R.string.sports_live_layout_cards
                     SportsLiveLayout.SCOREBOARD -> R.string.sports_live_layout_scoreboard
+                    SportsLiveLayout.TIMELINE -> R.string.sports_live_layout_timeline
                 }
             ),
             isSelected = layout == selected,
@@ -300,20 +301,6 @@ internal fun SportsLiveScoreboardPane(
 ) {
     val item = row.item
     val chipStrings = rememberScoreChipStrings()
-    // A refresh can take Watch with another game or Game stats away while focused (the game ended, the
-    // match was lost); focus then goes to Watch instead of being lost.
-    var watchWithFocused by remember { mutableStateOf(false) }
-    var gameStatsFocused by remember { mutableStateOf(false) }
-    // Read in the focus callbacks: losing focus because the button is being removed keeps the flag.
-    val currentButtons by rememberUpdatedState(buttons)
-    LaunchedEffect(buttons.watchWith, buttons.gameStats) {
-        val lost = (!buttons.watchWith && watchWithFocused) || (!buttons.gameStats && gameStatsFocused)
-        if (!buttons.watchWith) watchWithFocused = false
-        if (!buttons.gameStats) gameStatsFocused = false
-        if (!lost) return@LaunchedEffect
-        withFrameNanos { }
-        runCatching { watchFocusRequester.requestFocus() }
-    }
     val detailStrings = rememberScoreDetailsStrings()
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md)) {
         Box(
@@ -409,24 +396,65 @@ internal fun SportsLiveScoreboardPane(
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md)) {
-            SportsLivePaneButton(onClick = onWatch, modifier = watchModifier.then(if (noStream) Modifier.alpha(0.5f) else Modifier)) {
-                Icon(imageVector = Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
-                Spacer(modifier = Modifier.width(NuvioTheme.spacing.xs))
-                Text(stringResource(R.string.sports_live_watch))
-            }
-            if (buttons.watchWith) {
-                SportsLivePaneButton(
-                    onClick = onWatchWith,
-                    modifier = Modifier.onFocusChanged { if (it.isFocused || currentButtons.watchWith) watchWithFocused = it.isFocused }
-                ) { Text(stringResource(R.string.sports_live_dual_watch_with)) }
-            }
-            if (buttons.gameStats) {
-                SportsLivePaneButton(
-                    onClick = onGameStats,
-                    modifier = Modifier.onFocusChanged { if (it.isFocused || currentButtons.gameStats) gameStatsFocused = it.isFocused }
-                ) { Text(stringResource(R.string.sports_live_game_stats)) }
-            }
+            SportsLiveBoardButtons(
+                buttons = buttons,
+                onWatch = onWatch,
+                onWatchWith = onWatchWith,
+                onGameStats = onGameStats,
+                noStream = noStream,
+                watchFocusRequester = watchFocusRequester,
+                watchModifier = watchModifier
+            )
         }
+    }
+}
+
+/**
+ * The focused game's buttons (Scoreboard pane, Timeline panel): **Watch**, then **Watch with another
+ * game** and **Game stats** when [buttons] offers them. Laid out by the caller's row or column.
+ */
+@Composable
+internal fun SportsLiveBoardButtons(
+    buttons: ScoreboardButtons,
+    onWatch: () -> Unit,
+    onWatchWith: () -> Unit,
+    onGameStats: () -> Unit,
+    noStream: Boolean,
+    /** Watch's requester: focus goes back there when the focused button is taken away. */
+    watchFocusRequester: FocusRequester,
+    watchModifier: Modifier = Modifier,
+    otherModifier: Modifier = Modifier
+) {
+    // A refresh can take Watch with another game or Game stats away while focused (the game ended, the
+    // match was lost); focus then goes to Watch instead of being lost.
+    var watchWithFocused by remember { mutableStateOf(false) }
+    var gameStatsFocused by remember { mutableStateOf(false) }
+    // Read in the focus callbacks: losing focus because the button is being removed keeps the flag.
+    val currentButtons by rememberUpdatedState(buttons)
+    LaunchedEffect(buttons.watchWith, buttons.gameStats) {
+        val lost = (!buttons.watchWith && watchWithFocused) || (!buttons.gameStats && gameStatsFocused)
+        if (!buttons.watchWith) watchWithFocused = false
+        if (!buttons.gameStats) gameStatsFocused = false
+        if (!lost) return@LaunchedEffect
+        withFrameNanos { }
+        runCatching { watchFocusRequester.requestFocus() }
+    }
+    SportsLivePaneButton(onClick = onWatch, modifier = watchModifier.then(if (noStream) Modifier.alpha(0.5f) else Modifier)) {
+        Icon(imageVector = Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
+        Spacer(modifier = Modifier.width(NuvioTheme.spacing.xs))
+        Text(stringResource(R.string.sports_live_watch))
+    }
+    if (buttons.watchWith) {
+        SportsLivePaneButton(
+            onClick = onWatchWith,
+            modifier = otherModifier.onFocusChanged { if (it.isFocused || currentButtons.watchWith) watchWithFocused = it.isFocused }
+        ) { Text(stringResource(R.string.sports_live_dual_watch_with)) }
+    }
+    if (buttons.gameStats) {
+        SportsLivePaneButton(
+            onClick = onGameStats,
+            modifier = otherModifier.onFocusChanged { if (it.isFocused || currentButtons.gameStats) gameStatsFocused = it.isFocused }
+        ) { Text(stringResource(R.string.sports_live_game_stats)) }
     }
 }
 
