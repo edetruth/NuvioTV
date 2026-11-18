@@ -379,6 +379,13 @@ android {
 
     testOptions {
         unitTests.isReturnDefaultValues = true
+        // Unit-test JVMs side by side: 2 fits beside the emulator here; CI passes -PunitTestForks=3
+        // (or UNIT_TEST_FORKS=3). Each fork is its own JVM, so static mocks stay isolated.
+        unitTests.all {
+            it.maxParallelForks = providers.gradleProperty("unitTestForks")
+                .orElse(providers.environmentVariable("UNIT_TEST_FORKS"))
+                .orNull?.toIntOrNull() ?: 2
+        }
     }
 }
 
