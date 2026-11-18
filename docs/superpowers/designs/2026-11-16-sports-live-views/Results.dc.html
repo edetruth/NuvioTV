@@ -15,122 +15,95 @@ body{margin:0}
 a{color:#9AC2FF}a:hover{color:#C7DCFF}
 </style>
 </helmet>
-<div style="width: 1920px; height: 1080px; box-sizing: border-box; background: #0A0D12; color: #F2F4F7; font-family: Inter, system-ui, sans-serif; padding: 44px 64px 36px; display: flex; flex-direction: column; gap: 20px; overflow: hidden;">
+<div style="width: 1920px; height: 1080px; box-sizing: border-box; background: #0A0D12; color: #F2F4F7; font-family: Inter, system-ui, sans-serif; padding: 44px 64px 36px; display: flex; flex-direction: column; gap: 16px; position: relative; overflow: hidden;">
 
-  <header style="display: flex; align-items: center; gap: 28px;">
-    <div style="display: flex; flex-direction: column; gap: 4px;">
-      <span style="font-family: 'Space Grotesk', sans-serif; font-size: 40px; font-weight: 700; letter-spacing: -0.5px;">Results</span>
-      <span style="font-size: 19px; color: #9AA4B2;">Finals from the last 7 days · days follow US Eastern time</span>
+  <header style="display: flex; align-items: center; gap: 22px;">
+    <div style="display: flex; flex-direction: column; gap: 2px;">
+      <span style="font-family: 'Space Grotesk', sans-serif; font-size: 34px; font-weight: 700; letter-spacing: -0.5px;">Sports &amp; Live</span>
+      <span style="font-size: 18px; color: #9AA4B2;">Results · days follow US Eastern time</span>
     </div>
-    <nav aria-label="View" style="display: flex; gap: 8px; margin-left: 32px; background: #121821; padding: 6px; border-radius: 999px;">
-      <a href="Main.dc.html" style="text-decoration: none; padding: 10px 22px; border-radius: 999px; color: #C7CED8; font-weight: 600; font-size: 20px;">Timeline</a>
-      <a href="Scoreboard.dc.html" style="text-decoration: none; padding: 10px 22px; border-radius: 999px; color: #C7CED8; font-weight: 600; font-size: 20px;">Scoreboard</a>
-      <a href="Guide.dc.html" style="text-decoration: none; padding: 10px 22px; border-radius: 999px; color: #C7CED8; font-weight: 600; font-size: 20px;">Channels</a>
-      <a href="Results.dc.html" style="text-decoration: none; padding: 10px 22px; border-radius: 999px; background: #F2F4F7; color: #0A0D12; font-weight: 600; font-size: 20px;">Results</a>
-    </nav>
+    <nav aria-label="Tabs" style="display: flex; gap: 4px; background: #121821; padding: 6px; border-radius: 999px;"><a href="LiveNow.dc.html" style="padding: 9px 18px; border-radius: 999px; font-size: 19px; text-decoration: none; color: #C7CED8; font-weight: 600;">Live Now</a><span style="padding: 9px 18px; border-radius: 999px; font-size: 19px; text-decoration: none; color: #C7CED8; font-weight: 600;">Upcoming</span><a href="Guide.dc.html" style="padding: 9px 18px; border-radius: 999px; font-size: 19px; text-decoration: none; color: #C7CED8; font-weight: 600;">Channels</a><span style="padding: 9px 18px; border-radius: 999px; font-size: 19px; text-decoration: none; color: #C7CED8; font-weight: 600;">Replays</span><a href="Results.dc.html" style="padding: 9px 18px; border-radius: 999px; font-size: 19px; text-decoration: none; background: #F2F4F7; color: #0A0D12; font-weight: 700;">Results</a></nav>
+    <div style="flex-grow: 1;"></div>
+    <span style="font-size: 14px; font-weight: 700; letter-spacing: 1px; color: #9AC2FF; background: #0F1B2C; border: 1px solid #9AC2FF55; padding: 3px 10px; border-radius: 999px;">TODAY / EARLIER: IN BATCH #67</span>
   </header>
 
   <div style="display: flex; gap: 10px; align-items: center;">
-    <button style="font: 700 19px Inter, sans-serif; color: #0A0D12; background: #F2F4F7; border: 0; border-radius: 999px; padding: 10px 22px;">Yesterday</button>
-    <button style="font: 600 19px Inter, sans-serif; color: #C7CED8; background: transparent; border: 2px solid #2A3442; border-radius: 999px; padding: 8px 20px;">Sat 15</button>
-    <button style="font: 600 19px Inter, sans-serif; color: #C7CED8; background: transparent; border: 2px solid #2A3442; border-radius: 999px; padding: 8px 20px;">Fri 14</button>
-    <button style="font: 600 19px Inter, sans-serif; color: #C7CED8; background: transparent; border: 2px solid #2A3442; border-radius: 999px; padding: 8px 20px;">Thu 13</button>
-    <button style="font: 600 19px Inter, sans-serif; color: #C7CED8; background: transparent; border: 2px solid #2A3442; border-radius: 999px; padding: 8px 20px;">Wed 12</button>
-    <button style="font: 600 19px Inter, sans-serif; color: #C7CED8; background: transparent; border: 2px solid #2A3442; border-radius: 999px; padding: 8px 20px;">Tue 11</button>
-    <button style="font: 600 19px Inter, sans-serif; color: #C7CED8; background: transparent; border: 2px solid #2A3442; border-radius: 999px; padding: 8px 20px;">Mon 10</button>
+    <button style="font: 700 19px Inter, sans-serif; color: #0A0D12; background: #F2F4F7; border: 0; border-radius: 999px; padding: 10px 22px;">Today</button>
+    <button style="font: 600 19px Inter, sans-serif; color: #C7CED8; background: transparent; border: 2px solid #2A3442; border-radius: 999px; padding: 8px 20px;">Yesterday</button>
+    <button style="font: 600 19px Inter, sans-serif; color: #C7CED8; background: transparent; border: 2px solid #2A3442; border-radius: 999px; padding: 8px 20px;">Earlier ▸</button>
+    <span style="font-size: 16px; color: #9AA4B2; margin-left: 14px;">Earlier opens Sat 15 · Fri 14 · Thu 13 · Wed 12 · Tue 11. Before today's first final: opens on Yesterday, Today reads "No finals yet".</span>
   </div>
 
   <div style="display: flex; gap: 10px; align-items: center;">
-    <button style="font: 700 19px Inter, sans-serif; color: #0A0D12; background: #FFC107; border: 0; border-radius: 999px; padding: 10px 20px; display: flex; align-items: center; gap: 8px;"><svg width="18" height="18" viewBox="0 0 24 24" fill="#0A0D12" aria-hidden="true"><path d="M12 2.5l2.9 6.1 6.6.8-4.9 4.5 1.3 6.6L12 17.2l-5.9 3.3 1.3-6.6L2.5 9.4l6.6-.8z"/></svg>My sports</button>
-    <button style="font: 600 19px Inter, sans-serif; color: #C7CED8; background: transparent; border: 2px solid #2A3442; border-radius: 999px; padding: 8px 18px;">Basketball</button>
-    <button style="font: 600 19px Inter, sans-serif; color: #C7CED8; background: transparent; border: 2px solid #2A3442; border-radius: 999px; padding: 8px 18px;">American Football</button>
-    <button style="font: 600 19px Inter, sans-serif; color: #C7CED8; background: transparent; border: 2px solid #2A3442; border-radius: 999px; padding: 8px 18px;">Soccer</button>
-    <button style="font: 600 19px Inter, sans-serif; color: #C7CED8; background: transparent; border: 2px solid #2A3442; border-radius: 999px; padding: 8px 18px;">Hockey</button>
-    <button style="font: 600 19px Inter, sans-serif; color: #C7CED8; background: transparent; border: 2px solid #2A3442; border-radius: 999px; padding: 8px 18px;">Tennis</button>
+    <button style="font: 600 18px Inter, sans-serif; color: #0A0D12; background: #FFC107; border: 0; padding: 9px 18px; border-radius: 999px; white-space: nowrap;">★ My sports</button>
+    <button style="font: 600 18px Inter, sans-serif; color: #C7CED8; background: transparent; border: 2px solid #2A3442; padding: 7px 16px; border-radius: 999px; white-space: nowrap;">Basketball</button><button style="font: 600 18px Inter, sans-serif; color: #C7CED8; background: transparent; border: 2px solid #2A3442; padding: 7px 16px; border-radius: 999px; white-space: nowrap;">American Football</button><button style="font: 600 18px Inter, sans-serif; color: #C7CED8; background: transparent; border: 2px solid #2A3442; padding: 7px 16px; border-radius: 999px; white-space: nowrap;">Soccer</button><button style="font: 600 18px Inter, sans-serif; color: #C7CED8; background: transparent; border: 2px solid #2A3442; padding: 7px 16px; border-radius: 999px; white-space: nowrap;">Tennis</button><button style="font: 600 18px Inter, sans-serif; color: #C7CED8; background: transparent; border: 2px solid #2A3442; padding: 7px 16px; border-radius: 999px; white-space: nowrap;">MMA</button><button style="font: 600 18px Inter, sans-serif; color: #C7CED8; background: transparent; border: 2px solid #2A3442; padding: 7px 16px; border-radius: 999px; white-space: nowrap;">Motorsport</button><button style="font: 600 18px Inter, sans-serif; color: #C7CED8; background: transparent; border: 2px solid #2A3442; padding: 7px 16px; border-radius: 999px; white-space: nowrap;">Golf</button>
     <div style="flex-grow: 1;"></div>
     <button style="font: 600 17px Inter, sans-serif; color: #C7CED8; background: transparent; border: 0; padding: 8px 6px; text-decoration: underline;">Edit my sports</button>
   </div>
 
-  <div style="flex-grow: 1; display: flex; gap: 32px; min-height: 0;">
-    <section aria-label="Results" style="width: 1150px; flex-shrink: 0; display: flex; flex-direction: column; gap: 8px;">
-      <h2 style="margin: 4px 0 2px; font-size: 16px; font-weight: 700; letter-spacing: 2px; color: #FFC107;">YOUR TEAMS</h2>
-      <div style="display: grid; grid-template-columns: 120px 1fr 130px 150px; align-items: center; gap: 18px; background: #161C25; border-radius: 14px; padding: 12px 20px;">
-        <span style="font-size: 15px; font-weight: 600; color: #9AA4B2; display: flex; align-items: center; gap: 6px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="#FFC107" role="img" aria-label="Followed"><path d="M12 2.5l2.9 6.1 6.6.8-4.9 4.5 1.3 6.6L12 17.2l-5.9 3.3 1.3-6.6L2.5 9.4l6.6-.8z"/></svg>NFL</span>
-        <div style="display: flex; flex-direction: column; gap: 2px;">
-          <span style="font-size: 22px; font-weight: 700;">Las Vegas Raiders</span>
-          <span style="font-size: 22px; font-weight: 600; color: #C7CED8;">Seattle Seahawks</span>
-        </div>
-        <div style="display: flex; flex-direction: column; align-items: flex-end; font-family: 'Space Grotesk', sans-serif; font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.2;"><span>24</span><span style="color: #C7CED8;">17</span></div>
-        <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 6px;"><span style="font-size: 16px; color: #9AA4B2;">FT</span><span style="font-size: 14px; font-weight: 700; color: #0A0D12; background: #7EE0A1; padding: 3px 10px; border-radius: 999px;">Replay</span></div>
-      </div>
+  <a href="LiveNow.dc.html" style="align-self: flex-start; text-decoration: none; font-size: 19px; font-weight: 600; color: #FFB3B8; border: 2px solid #3A171B; background: #1A1012; border-radius: 12px; padding: 8px 16px; display: flex; align-items: center; gap: 10px;"><span style="width: 10px; height: 10px; border-radius: 50%; background: #FF4D57; display: inline-block; flex-shrink: 0;"></span>3 games live now →</a>
 
-      <h2 style="margin: 10px 0 2px; font-size: 16px; font-weight: 700; letter-spacing: 2px; color: #9AA4B2;">NBA</h2>
-      <div style="display: grid; grid-template-columns: 120px 1fr 130px 150px; align-items: center; gap: 18px; background: #1E2836; border: 3px solid #FFFFFF; border-radius: 14px; padding: 10px 18px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
-        <span style="font-size: 15px; font-weight: 600; color: #C7CED8;">NBA</span>
-        <div style="display: flex; flex-direction: column; gap: 2px;">
-          <span style="font-size: 22px; font-weight: 600; color: #C7CED8;">Indiana Pacers</span>
-          <span style="font-size: 22px; font-weight: 700;">Philadelphia 76ers</span>
-        </div>
-        <div style="display: flex; flex-direction: column; align-items: flex-end; font-family: 'Space Grotesk', sans-serif; font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.2;"><span style="color: #C7CED8;">124</span><span>131</span></div>
-        <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 6px;"><span style="font-size: 16px; color: #F2F4F7;">FT</span><span style="font-size: 14px; font-weight: 700; color: #0A0D12; background: #7EE0A1; padding: 3px 10px; border-radius: 999px;">Replay</span></div>
+  <section aria-label="Results" style="width: 1760px; flex-grow: 1; min-height: 0; display: flex; flex-direction: column; gap: 7px;">
+      <h2 style="margin: 6px 0 0; font-size: 15px; font-weight: 700; letter-spacing: 2px; color: #FFC107;">YOUR TEAMS</h2>
+      <div style="display: grid; grid-template-columns: 130px 1fr 300px 160px; align-items: center; gap: 18px; background: #161C25; padding: 7px 20px; border-radius: 14px;">
+        <span style="font-size: 15px; font-weight: 600; color: #9AA4B2; display: flex; align-items: center; gap: 6px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="#FFC107" role="img" aria-label="Followed"><path d="M12 2.5l2.9 6.1 6.6.8-4.9 4.5 1.3 6.6L12 17.2l-5.9 3.3 1.3-6.6L2.5 9.4l6.6-.8z"/></svg>NFL</span>
+        <div style="display: flex; flex-direction: column; gap: 2px;"><span style="font-size: 21px; font-weight: 700; color: #F2F4F7; display: flex; align-items: center; gap: 10px;"><span role="img" aria-label="LV logo" style="width: 26px; height: 26px; border-radius: 50%; background: #1F2A36; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;"><span style="width: 16px; height: 16px; border-radius: 30% 30% 45% 45%; background: linear-gradient(160deg, #6E8BB5, #2C3E5C); display: block;"></span></span>Las Vegas Raiders</span><span style="font-size: 21px; font-weight: 600; color: #C7CED8; display: flex; align-items: center; gap: 10px;"><span role="img" aria-label="SEA logo" style="width: 26px; height: 26px; border-radius: 50%; background: #1F2A36; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;"><span style="width: 16px; height: 16px; border-radius: 30% 30% 45% 45%; background: linear-gradient(160deg, #6E8BB5, #2C3E5C); display: block;"></span></span>Seattle Seahawks</span></div>
+        <div style="display: flex; flex-direction: column; align-items: flex-end; font-family: 'Space Grotesk', sans-serif; font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.2;"><span>24</span><span style="color: #C7CED8;">17</span></div>
+        <div style="display: flex; align-items: center; justify-content: flex-end; gap: 12px;"><span style="font-size: 16px; color: #9AA4B2;">FT</span><span style="font-size: 14px; font-weight: 700; color: #0A0D12; background: #7EE0A1; padding: 3px 10px; border-radius: 999px;">Replay</span></div>
       </div>
-      <div style="display: grid; grid-template-columns: 120px 1fr 130px 150px; align-items: center; gap: 18px; background: #161C25; border-radius: 14px; padding: 12px 20px;">
-        <span style="font-size: 15px; font-weight: 600; color: #9AA4B2;">NBA</span>
-        <div style="display: flex; flex-direction: column; gap: 2px;">
-          <span style="font-size: 22px; font-weight: 700;">Los Angeles Lakers</span>
-          <span style="font-size: 22px; font-weight: 600; color: #C7CED8;">Boston Celtics</span>
-        </div>
-        <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px;"><span style="font-size: 16px; color: #9AA4B2;">Score hidden</span></div>
-        <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 6px;"><span style="font-size: 16px; color: #9AA4B2;">FT</span></div>
+      <h2 style="margin: 6px 0 0; font-size: 15px; font-weight: 700; letter-spacing: 2px; color: #9AA4B2;">NBA</h2>
+      <div style="display: grid; grid-template-columns: 130px 1fr 300px 160px; align-items: center; gap: 18px; background: #1E2836; border: 3px solid #FFFFFF; box-shadow: 0 10px 30px rgba(0,0,0,0.5); padding: 5px 18px; border-radius: 14px;">
+        <span style="font-size: 15px; font-weight: 600; color: #9AA4B2; display: flex; align-items: center; gap: 6px;">NBA</span>
+        <div style="display: flex; flex-direction: column; gap: 2px;"><span style="font-size: 21px; font-weight: 600; color: #C7CED8; display: flex; align-items: center; gap: 10px;"><span role="img" aria-label="IND logo" style="width: 26px; height: 26px; border-radius: 50%; background: #1F2A36; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;"><span style="width: 16px; height: 16px; border-radius: 30% 30% 45% 45%; background: linear-gradient(160deg, #6E8BB5, #2C3E5C); display: block;"></span></span>Indiana Pacers</span><span style="font-size: 21px; font-weight: 700; color: #F2F4F7; display: flex; align-items: center; gap: 10px;"><span role="img" aria-label="PHI logo" style="width: 26px; height: 26px; border-radius: 50%; background: #1F2A36; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;"><span style="width: 16px; height: 16px; border-radius: 30% 30% 45% 45%; background: linear-gradient(160deg, #6E8BB5, #2C3E5C); display: block;"></span></span>Philadelphia 76ers</span></div>
+        <div style="display: flex; flex-direction: column; align-items: flex-end; font-family: 'Space Grotesk', sans-serif; font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.2;"><span style="color: #C7CED8;">124</span><span>131</span></div>
+        <div style="display: flex; align-items: center; justify-content: flex-end; gap: 12px;"><span style="font-size: 16px; color: #F2F4F7;">FT</span><span style="font-size: 14px; font-weight: 700; color: #0A0D12; background: #7EE0A1; padding: 3px 10px; border-radius: 999px;">Replay</span></div>
       </div>
-
-      <h2 style="margin: 10px 0 2px; font-size: 16px; font-weight: 700; letter-spacing: 2px; color: #9AA4B2;">WORLD CUP QUALIFIERS · UEFA</h2>
-      <div style="display: grid; grid-template-columns: 120px 1fr 130px 150px; align-items: center; gap: 18px; background: #161C25; border-radius: 14px; padding: 12px 20px;">
-        <span style="font-size: 15px; font-weight: 600; color: #9AA4B2;">WCQ</span>
-        <div style="display: flex; flex-direction: column; gap: 2px;">
-          <span style="font-size: 22px; font-weight: 600; color: #C7CED8;">Netherlands</span>
-          <span style="font-size: 22px; font-weight: 700;">Germany</span>
-        </div>
-        <div style="display: flex; flex-direction: column; align-items: flex-end; font-family: 'Space Grotesk', sans-serif; font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.2;"><span style="color: #C7CED8;">1</span><span>2</span></div>
-        <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 6px;"><span style="font-size: 16px; color: #9AA4B2;">FT</span></div>
+      <div style="display: grid; grid-template-columns: 130px 1fr 300px 160px; align-items: center; gap: 18px; background: #161C25; padding: 7px 20px; border-radius: 14px;">
+        <span style="font-size: 15px; font-weight: 600; color: #9AA4B2; display: flex; align-items: center; gap: 6px;">NBA</span>
+        <div style="display: flex; flex-direction: column; gap: 2px;"><span style="font-size: 21px; font-weight: 600; color: #C7CED8; display: flex; align-items: center; gap: 10px;"><span role="img" aria-label="LAL logo" style="width: 26px; height: 26px; border-radius: 50%; background: #1F2A36; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;"><span style="width: 16px; height: 16px; border-radius: 30% 30% 45% 45%; background: linear-gradient(160deg, #6E8BB5, #2C3E5C); display: block;"></span></span>Los Angeles Lakers</span><span style="font-size: 21px; font-weight: 600; color: #C7CED8; display: flex; align-items: center; gap: 10px;"><span role="img" aria-label="BOS logo" style="width: 26px; height: 26px; border-radius: 50%; background: #1F2A36; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;"><span style="width: 16px; height: 16px; border-radius: 30% 30% 45% 45%; background: linear-gradient(160deg, #6E8BB5, #2C3E5C); display: block;"></span></span>Boston Celtics</span></div>
+        <span style="font-size: 17px; color: #9AA4B2; text-align: right;">Score hidden</span>
+        <div style="display: flex; align-items: center; justify-content: flex-end; gap: 12px;"><span style="font-size: 16px; color: #9AA4B2;">FT</span></div>
       </div>
-
-      <h2 style="margin: 10px 0 2px; font-size: 16px; font-weight: 700; letter-spacing: 2px; color: #9AA4B2;">TENNIS · ATP FINALS</h2>
-      <div style="display: grid; grid-template-columns: 120px 1fr 260px 20px; align-items: center; gap: 18px; background: #161C25; border-radius: 14px; padding: 12px 20px;">
+      <h2 style="margin: 6px 0 0; font-size: 15px; font-weight: 700; letter-spacing: 2px; color: #9AA4B2;">TENNIS · ATP FINALS · MEN'S SINGLES</h2>
+      <div style="display: grid; grid-template-columns: 130px 1fr 300px 160px; align-items: center; gap: 18px; background: #161C25; border-radius: 14px; padding: 7px 20px;">
         <span style="font-size: 15px; font-weight: 600; color: #9AA4B2;">Semi-final</span>
         <div style="display: flex; flex-direction: column; gap: 2px;">
-          <span style="font-size: 22px; font-weight: 700;">Sinner</span>
-          <span style="font-size: 22px; font-weight: 600; color: #C7CED8;">Alcaraz</span>
+          <span style="font-size: 21px; font-weight: 700;">J. Sinner</span>
+          <span style="font-size: 21px; font-weight: 600; color: #C7CED8;">C. Alcaraz</span>
         </div>
-        <div style="display: flex; flex-direction: column; align-items: flex-end; font-family: 'Space Grotesk', sans-serif; font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.25; letter-spacing: 2px;"><span>6 &nbsp;3 &nbsp;7</span><span style="color: #C7CED8;">4 &nbsp;6 &nbsp;6</span></div>
+        <div style="display: grid; grid-template-columns: repeat(3, 44px); justify-content: end; font-family: 'Space Grotesk', sans-serif; font-size: 23px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.2; text-align: center;">
+          <span>6</span><span style="color: #C7CED8;">3</span><span>7</span>
+          <span style="color: #C7CED8;">4</span><span>6</span><span style="color: #C7CED8;">6<sup style="font-size: 13px;">5</sup></span>
+        </div>
         <span></span>
       </div>
-
-      <button style="font: 600 18px Inter, sans-serif; color: #C7CED8; background: transparent; border: 2px dashed #2A3442; border-radius: 14px; padding: 12px 20px; text-align: left;">+ 48 more NCAAM games</button>
-    </section>
-
-    <section aria-label="Focused result" style="flex-grow: 1; display: flex; flex-direction: column; gap: 18px; background: #121821; border-radius: 18px; padding: 26px 28px; min-width: 0;">
-      <span style="font-size: 17px; color: #9AA4B2;">NBA · Sat 15 Nov · Final</span>
-      <div style="display: flex; align-items: center; justify-content: space-between;">
-        <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;"><span style="width: 84px; height: 84px; border-radius: 50%; background: #1F2A36; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 22px;">IND</span><span style="font-size: 18px; color: #C7CED8;">Pacers</span></div>
-        <span style="font-family: 'Space Grotesk', sans-serif; font-size: 58px; font-weight: 700; font-variant-numeric: tabular-nums;">124 – 131</span>
-        <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;"><span style="width: 84px; height: 84px; border-radius: 50%; background: #1F2A36; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 22px;">PHI</span><span style="font-size: 18px; color: #F2F4F7;">76ers</span></div>
-      </div>
-      <span style="font-size: 18px; color: #C7CED8;">Top: Siakam 31 PTS · Embiid 34 PTS, 12 REB</span>
-      <div style="display: flex; flex-direction: column; gap: 10px; margin-top: auto;">
-        <button style="font: 700 21px Inter, sans-serif; background: #F2F4F7; color: #0A0D12; border: 0; border-radius: 12px; padding: 15px 20px; display: flex; align-items: center; gap: 12px;"><svg width="20" height="20" viewBox="0 0 24 24" fill="#0A0D12" aria-hidden="true"><path d="M7 4.5v15l12-7.5z"/></svg>Watch replay</button>
-        <button style="font: 600 20px Inter, sans-serif; background: transparent; color: #F2F4F7; border: 2px solid #2A3442; border-radius: 12px; padding: 13px 20px; text-align: left;">Game stats</button>
-        <div style="display: flex; gap: 10px;">
-          <button style="flex: 1; font: 600 18px Inter, sans-serif; background: transparent; color: #F2F4F7; border: 2px solid #2A3442; border-radius: 12px; padding: 12px 14px;">Follow Pacers</button>
-          <button style="flex: 1; font: 600 18px Inter, sans-serif; background: transparent; color: #F2F4F7; border: 2px solid #2A3442; border-radius: 12px; padding: 12px 14px;">Follow 76ers</button>
+      <h2 style="margin: 6px 0 0; font-size: 15px; font-weight: 700; letter-spacing: 2px; color: #9AA4B2;">MMA · UFC FIGHT NIGHT</h2>
+      <div style="display: grid; grid-template-columns: 130px 1fr 300px 160px; align-items: center; gap: 18px; background: #161C25; border-radius: 14px; padding: 9px 20px;">
+        <span style="font-size: 15px; font-weight: 600; color: #9AA4B2;">Main event</span>
+        <div style="display: flex; flex-direction: column; gap: 2px;">
+          <span style="font-size: 21px; color: #C7CED8;"><b style="color: #F2F4F7;">K. Duarte</b> vs J. Hale</span>
+          <span style="font-size: 18px; color: #C7CED8;">K. Duarte · KO/TKO R2 3:14</span>
         </div>
+        <span></span><span></span>
       </div>
-    </section>
-  </div>
+      <h2 style="margin: 6px 0 0; font-size: 15px; font-weight: 700; letter-spacing: 2px; color: #9AA4B2;">MOTORSPORT · F1 · SÃO PAULO GP</h2>
+      <div style="display: grid; grid-template-columns: 130px 1fr 300px 160px; align-items: center; gap: 18px; background: #161C25; border-radius: 14px; padding: 13px 20px;">
+        <span style="font-size: 15px; font-weight: 600; color: #9AA4B2;">Race</span>
+        <span style="font-size: 21px; color: #DDE2E8;"><b style="color: #F2F4F7;">1. Norris</b> · 2. Verstappen · 3. Hadjar</span>
+        <span></span><span style="font-size: 15px; color: #9AA4B2; text-align: right;">Podium only</span>
+      </div>
+      <h2 style="margin: 6px 0 0; font-size: 15px; font-weight: 700; letter-spacing: 2px; color: #9AA4B2;">GOLF · PGA TOUR</h2>
+      <div style="display: grid; grid-template-columns: 130px 1fr 300px 160px; align-items: center; gap: 18px; background: #161C25; border-radius: 14px; padding: 9px 20px;">
+        <span style="font-size: 15px; font-weight: 600; color: #9AA4B2;">Final round</span>
+        <div style="display: flex; flex-direction: column; gap: 2px;">
+          <span style="font-size: 21px; display: flex; gap: 16px;"><span style="width: 40px; color: #C7CED8;">1</span><b>S. Park</b><span style="font-family: 'Space Grotesk', sans-serif; font-weight: 700;">-20</span></span>
+          <span style="font-size: 17px; color: #9AA4B2;">+ 4 more · OK shows the top 5 (T4 for ties)</span>
+        </div>
+        <span></span><span></span>
+      </div>
+  </section>
 
-  <footer style="display: flex; gap: 28px; font-size: 16px; color: #9AA4B2;">
-    <span>↑ ↓ results and chip rows</span><span>← → days, sports, leagues</span><span>OK plays the replay (Game page with #18)</span><span>Hold OK: Follow ‹team› (#54)</span>
-  </footer>
+  <footer style="display: flex; gap: 22px; font-size: 16px; color: #9AA4B2; align-items: center;"><span>↑ ↓ results and chip rows</span><span>← → days, sports, leagues</span><span>OK opens the Game page</span><span>Hold OK: Game stats · Follow ‹team›</span><div style="margin-left: auto; display: flex; gap: 8px; align-items: center; font-size: 14px;"><span>Scores:</span><span style="border: 1px solid #2A3442; border-radius: 999px; padding: 2px 10px; color: #C7CED8;">Show</span><span style="background: #F2F4F7; color: #0A0D12; border-radius: 999px; padding: 3px 10px; font-weight: 700;">Hide until focused (drawn; Celtics row not yet focused)</span><span style="border: 1px solid #2A3442; border-radius: 999px; padding: 2px 10px; color: #C7CED8;">Off · Score hidden / Result hidden</span></div></footer>
 </div>
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1920,"height":1080}}'>
