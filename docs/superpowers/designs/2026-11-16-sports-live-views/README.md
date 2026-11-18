@@ -23,6 +23,27 @@ Started as three "beyond cards" views (approved: "I love the designs"). This fol
 | `ReplayJumps.dc.html` | Quarter jumps in replays | **Deferred** experiment (#64, last) |
 | `Components.dc.html` | Component sheet | reference; every new board links it |
 
+## V2 proposal (pending approval)
+
+From the 1080p design review of 2026-11-18 (§4 one view per tab, §5 top 10). Nothing here is built; the boards above stay the record of what is.
+
+**Decision proposed: one view per tab.** Live Now becomes **Scoreboard + Stage**; Upcoming becomes **Agenda + Stage**. The Cards and Timeline layouts, the View button and menu, Sort, per-row thumbnails, the LIVE pill on channels, the repeated title/meta lines and the "N sources didn't respond" text line go away. The Timeline code is kept for a future full-screen Guide (#25).
+
+- **Frame:** collapsed rail 0–160; safe area left 256, right 1824, top 54, bottom 1026.
+- **Header:** one 80 px line (y 54–134): 34 px text tabs, selected = white + 4 px underline; refresh at the right; source failures as one amber "⚠ 3" icon. Upcoming (and Results) add one sports filter as a single focus stop; Results puts the date in the title ("Results · Yesterday ‹ ›").
+- **List:** x 256–1056 (800 px), y 150–1026, 80 px edge fades. Fixed columns: league 96 · names 440 · scores 96 · status 150. Rows: live 112 px (stacked 40 px scores, red dot + clock, period, 4 px progress bar, gold ★ and gold left bar for followed teams, blank logo slot when logos are missing), starting soon 96, channel 72, just ended 80 (60 % until focused, Replay pill).
+- **Stage:** x 1104–1824, fixed: 720×405 media (preview or drawn matchup art; the mini player replaces it), 64 px scoreline, status line, linescore, one button row: Watch / Remind me (primary) + More….
+- **Focus:** focused = 4 px white ring + 1.03 lift; selected = underline, tinted fill or a white left bar; never a white fill for selected, never red for focus.
+- **Type scale:** tags 22, metadata 26, names 30, row scores 40, stage score 64.
+- **Upcoming keys:** ↑ ↓ rows (headers skipped), ← → time slots, CH +/− day.
+
+| Board | What |
+|---|---|
+| [`V2-LiveNow.dc.html`](V2-LiveNow.dc.html) | Live Now · Scoreboard + Stage (at these row sizes Channels 2–3 and Just ended sit below the fold; all row types are on the sheet) |
+| [`V2-Upcoming.dc.html`](V2-Upcoming.dc.html) | Upcoming · Agenda + Stage |
+| [`V2-Header-and-Focus.dc.html`](V2-Header-and-Focus.dc.html) | Header per tab, focus language, type scale, row types, More… menu |
+| [`V2-Before-After.dc.html`](V2-Before-After.dc.html) | Today's Live Now (schematic) vs V2, the five biggest differences |
+
 ## Shared visual language
 - Dark broadcast look. Background `#0A0D12`; panels `#121821` / `#0E131A`; row lines `#1E2632`.
 - Text `#F2F4F7`, secondary `#C7CED8`, muted `#9AA4B2`.
