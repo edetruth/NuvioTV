@@ -462,7 +462,11 @@ class SportsLiveZapResolverTest {
         assertEquals(SD, resolver.resolve(ITEM))
         assertEquals(1, streams.calls.size) // second resolve served from cache
 
-        now += SportsLiveResolveCache.TTL_MS
+        now += SportsLiveResolveCache.TTL_MS - 1
+        assertEquals(SD, resolver.resolve(ITEM))
+        assertEquals(1, streams.calls.size) // still within the TTL
+
+        now += 1
         assertEquals(SD, resolver.resolve(ITEM))
         assertEquals(2, streams.calls.size) // entry expired, re-fetched
     }
@@ -501,28 +505,21 @@ class SportsLiveZapResolverTest {
     }
 
     @Test
-    fun `a quarantined link is skipped for the game`() = runTest {
+    fun `the pick follows the working links - quarantined skipped, known good preferred, all quarantined still plays`() = runTest {
         streams.response = { result(SD, HD) }
+        // The ordering rules themselves are SportsLiveWorkingLinksTest's; this is the resolver's wiring.
+        // Each case starts from empty links and a fresh resolver (empty cache).
         links.quarantine(ITEM.id, SD.url)
+        assertEquals("a quarantined link is skipped", HD, newResolver().resolve(ITEM))
 
-        assertEquals(HD, newResolver().resolve(ITEM))
-    }
-
-    @Test
-    fun `a link known to work for the game is preferred`() = runTest {
-        streams.response = { result(SD, HD) }
+        links.clear()
         links.markGood(ITEM.id, HD.url)
+        assertEquals("a link known to work is preferred", HD, newResolver().resolve(ITEM))
 
-        assertEquals(HD, newResolver().resolve(ITEM))
-    }
-
-    @Test
-    fun `with every link quarantined the usual pick still plays`() = runTest {
-        streams.response = { result(SD, HD) }
+        links.clear()
         links.quarantine(ITEM.id, SD.url)
         links.quarantine(ITEM.id, HD.url)
-
-        assertEquals(SD, newResolver().resolve(ITEM))
+        assertEquals("every link quarantined: the usual pick plays", SD, newResolver().resolve(ITEM))
     }
 
     @Test

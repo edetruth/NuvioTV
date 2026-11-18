@@ -47,11 +47,17 @@ class EspnScoreProviderTest {
     private val day = LocalDate.of(2026, 11, 15)
 
     @Test
-    fun `parses an NBA scoreboard and asks only for league and date`() = runTest {
+    fun `a scoreboard request asks only for league and date`() = runTest {
+        provider(respond(200, EspnFixtures.json(EspnFixtures.NBA_20261115))).scoreboard(EspnLeagueMap.NBA, day)
+
+        assertEquals(listOf("https://example.invalid/apis/site/v2/sports/basketball/nba/scoreboard?dates=20261115&limit=1000"), requested)
+    }
+
+    @Test
+    fun `parses an NBA scoreboard`() = runTest {
         val result = provider(respond(200, EspnFixtures.json(EspnFixtures.NBA_20261115)))
             .scoreboard(EspnLeagueMap.NBA, day)
 
-        assertEquals(listOf("https://example.invalid/apis/site/v2/sports/basketball/nba/scoreboard?dates=20261115&limit=1000"), requested)
         assertFalse(result.failed)
         assertEquals(5, result.events.size)
         val game = result.events.first { it.eventId == "401909985" }

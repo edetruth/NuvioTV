@@ -10,6 +10,7 @@ import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.domain.model.PosterShape
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveKind
+import com.nuvio.tv.ui.screens.home.HomeUiState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -236,7 +237,7 @@ class SportsLiveEndedGamesTest {
     }
 
     @Test
-    fun `Home drops only ESPN-confirmed finals past the grace, never an estimate`() {
+    fun `Home drops only ESPN-confirmed finals past the grace, never an estimate, live games or channels`() {
         val games = SportsLiveEndedGames()
         val card = item()
         val overdue = item(name = "Team A vs Team B", sport = "Soccer", id = "o", startMs = START - 10 * HOUR)
@@ -248,6 +249,30 @@ class SportsLiveEndedGamesTest {
         games.verdict(card, pacersFinal, end)
         assertTrue(games.confirmedEndedKeys(listOf(card), scores, end + 9 * MINUTE).isEmpty())
         assertEquals(setOf(card.streamKey), games.confirmedEndedKeys(listOf(card, overdue), scores, end + 10 * MINUTE))
+
+        // Home's list: the final (matched to a re-titled card) goes, live games and channels stay.
+        val arsenal = item(name = "Arsenal vs Chelsea", sport = "Soccer", startMs = START - 2 * HOUR)
+        val running = item(name = "Leeds vs Everton", sport = "Soccer", startMs = START - HOUR)
+        val channel = item(name = "Sky Sports Main Event", sport = "Soccer", startMs = START - 6 * HOUR, isChannel = true)
+        val shown = listOf(arsenal, running, channel)
+        // Crystal Palace 1-3 Liverpool, re-titled for the card.
+        val eplFinal = EspnFixtures.events(EspnFixtures.ENG1_20261108, EspnFixtures.ENG1).first { it.eventId == "401879243" }
+        val palace = item(name = "Crystal Palace vs Liverpool", sport = "Soccer", startMs = START - 2 * HOUR)
+        val home = SportsLiveEndedGames()
+        home.verdict(palace, eplFinal.copy(state = ScoreState.IN, isFinal = false), START - 30 * MINUTE)
+        home.verdict(palace, eplFinal, START - 15 * MINUTE)
+        val homeEnded = home.confirmedEndedKeys(shown + palace, mapOf(palace.streamKey to eplFinal), START)
+        assertEquals(setOf(palace.streamKey), homeEnded)
+        assertEquals(shown, HomeUiState(liveNowItems = shown + palace, liveNowEnded = homeEnded).liveNowShown)
+        assertEquals(shown + palace, HomeUiState(liveNowItems = shown + palace).liveNowShown)
+        // With no score data (Hide until focused or Off) Home drops neither an overdue nor an untimed game.
+        val quiet = listOf(
+            item(name = "Arsenal vs Chelsea", sport = "Soccer", startMs = START - 8 * HOUR),
+            item(name = "Ajax vs PSV", sport = "Soccer", startMs = null, timed = false)
+        )
+        val quietEnded = SportsLiveEndedGames().confirmedEndedKeys(quiet, emptyMap(), START)
+        assertTrue(quietEnded.isEmpty())
+        assertEquals(quiet, HomeUiState(liveNowItems = quiet, liveNowEnded = quietEnded).liveNowShown)
     }
 
     @Test

@@ -60,9 +60,10 @@ class ZapPanelChipsTest {
     private val my = SportsLiveUiState.MY_TEAMS_FILTER
 
     @Test
-    fun `a game started from my teams opens the panel on all, followed games first`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `the panel opens on all with followed games first, a chip filters rows and zaps for its session, a pick keeps it`() = runTest(mainDispatcherRule.dispatcher) {
         val viewModel = panelViewModel()
 
+        // A game started from My teams opens the panel on All, followed games first.
         viewModel.openPanel()
         val state = viewModel.panel.first { it != null }!!
 
@@ -73,15 +74,8 @@ class ZapPanelChipsTest {
         assertTrue(state.rows.first().item.followed)
         // Until a chip is picked, Up/Down start with the followed games.
         assertNull(SportsLiveZapSessions.current()!!.panelChip)
-        viewModel.closePanel()
-    }
 
-    @Test
-    fun `a chip filters the rows and the zap order, and is remembered for the session`() = runTest(mainDispatcherRule.dispatcher) {
-        val viewModel = panelViewModel()
-        viewModel.openPanel()
-        viewModel.panel.first { it != null }
-
+        // A chip filters the rows and the zap order, and is remembered for the session.
         viewModel.onPanelChip("Soccer")
         val soccer = viewModel.panel.first { it?.chip == "Soccer" }!!
 
@@ -113,11 +107,9 @@ class ZapPanelChipsTest {
         runCurrent()
         assertNull(viewModel.panel.first { it != null }!!.chip)
         viewModel.closePanel()
-    }
+        runCurrent()
 
-    @Test
-    fun `a pick under a chip keeps zapping by that chip`() = runTest(mainDispatcherRule.dispatcher) {
-        val viewModel = panelViewModel()
+        // A pick under a chip keeps zapping by that chip.
         viewModel.openPanel()
         viewModel.panel.first { it != null }
         viewModel.onPanelChip("Basketball")

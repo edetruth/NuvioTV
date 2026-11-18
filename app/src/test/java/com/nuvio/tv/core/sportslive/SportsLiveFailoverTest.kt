@@ -14,10 +14,7 @@ class SportsLiveFailoverTest {
         // Three distinct sources already tried: stop auto-trying and surface the manual overlay.
         assertFalse(SportsLiveFailover.canAutoTry(attempts = SportsLiveFailover.MAX_SOURCES))
         assertFalse(SportsLiveFailover.canAutoTry(attempts = SportsLiveFailover.MAX_SOURCES + 1))
-    }
-
-    @Test
-    fun `a custom cap is honoured`() {
+        // A custom cap is honoured.
         assertTrue(SportsLiveFailover.canAutoTry(attempts = 0, cap = 1))
         assertFalse(SportsLiveFailover.canAutoTry(attempts = 1, cap = 1))
     }

@@ -108,35 +108,31 @@ class SportsLiveItemBucketerTest {
     }
 
     @Test
-    fun `event that started 2 hours ago with a time of day is live`() {
-        val item = SportsLiveItemBucketer.describe(
+    fun `an event that started 2 hours or 1 minute ago is live, 5 hours ago is in neither LIVE_NOW nor UPCOMING`() {
+        // 2 hours ago, with a time of day.
+        val started = SportsLiveItemBucketer.describe(
             meta("started", "Started game", releaseInfo = "15 Nov 2026 · 12:30 UTC"),
             highflyFootball,
             now
         )
-        val tabs = SportsLiveItemBucketer.bucket(listOf(item), now)
+        val startedTabs = SportsLiveItemBucketer.bucket(listOf(started), now)
 
-        assertTrue(item.isLive)
-        assertTrue(item.startHasTimeOfDay)
-        assertEquals(listOf("started"), tabs.getValue(SportsLiveTab.LIVE_NOW).map { it.id })
-        assertTrue(tabs.getValue(SportsLiveTab.UPCOMING).isEmpty())
-    }
+        assertTrue(started.isLive)
+        assertTrue(started.startHasTimeOfDay)
+        assertEquals(listOf("started"), startedTabs.getValue(SportsLiveTab.LIVE_NOW).map { it.id })
+        assertTrue(startedTabs.getValue(SportsLiveTab.UPCOMING).isEmpty())
 
-    @Test
-    fun `event that started 1 minute ago is live`() {
-        val item = SportsLiveItemBucketer.describe(
+        // 1 minute ago.
+        val kickoff = SportsLiveItemBucketer.describe(
             meta("kickoff", "Kickoff", released = "2026-11-15T14:29:00Z"),
             highflyFootball,
             now
         )
 
-        assertTrue(item.isLive)
-        assertEquals(listOf("kickoff"), SportsLiveItemBucketer.bucket(listOf(item), now).getValue(SportsLiveTab.LIVE_NOW).map { it.id })
-    }
+        assertTrue(kickoff.isLive)
+        assertEquals(listOf("kickoff"), SportsLiveItemBucketer.bucket(listOf(kickoff), now).getValue(SportsLiveTab.LIVE_NOW).map { it.id })
 
-    @Test
-    fun `event that started 5 hours ago is in neither LIVE_NOW nor UPCOMING`() {
-        // "Today" matches the UPCOMING catalog keywords, so this also checks that a known past start wins over the keyword.
+        // 5 hours ago. "Today" matches the UPCOMING catalog keywords, so this also checks that a known past start wins over the keyword.
         val item = SportsLiveItemBucketer.describe(
             meta("old", "Old game", releaseInfo = "15 Nov 2026 · 09:30 UTC"),
             highflyToday,
@@ -529,7 +525,8 @@ class SportsLiveItemBucketerTest {
     }
 
     @Test
-    fun `signal-less catalog named Live Events is all live`() {
+    fun `a signal-less catalog is live, upcoming Time TBA or replays by its name, and unchanged when the name is unknown`() {
+        // Named live: all live.
         val metas = listOf(meta("a", "Team A vs Team B"), meta("b", "Team C vs Team D"))
         for (name in listOf("Live Events", "Fútbol en vivo", "Direct")) {
             val items = SportsLiveItemBucketer.describeCatalog(metas, claimed("sport", "x", name, SportsLiveKind.EVENTS), now)
@@ -537,21 +534,17 @@ class SportsLiveItemBucketerTest {
             assertTrue(name, items.all { it.isLive })
             assertEquals(name, 2, SportsLiveItemBucketer.bucket(items, now).getValue(SportsLiveTab.LIVE_NOW).size)
         }
-    }
 
-    @Test
-    fun `signal-less catalog named Agenda de hoy is upcoming Time TBA`() {
-        val catalog = claimed("sport", "agenda", "Agenda de hoy", SportsLiveKind.EVENTS)
-        val items = SportsLiveItemBucketer.describeCatalog(listOf(meta("a", "A vs B"), meta("b", "C vs D")), catalog, now)
-        val tabs = SportsLiveItemBucketer.bucket(items, now)
+        // "Agenda de hoy": upcoming, Time TBA.
+        val agenda = claimed("sport", "agenda", "Agenda de hoy", SportsLiveKind.EVENTS)
+        val agendaItems = SportsLiveItemBucketer.describeCatalog(listOf(meta("a", "A vs B"), meta("b", "C vs D")), agenda, now)
+        val agendaTabs = SportsLiveItemBucketer.bucket(agendaItems, now)
 
-        assertTrue(items.none { it.isLive || it.startMs != null })
-        assertEquals(listOf("a", "b"), tabs.getValue(SportsLiveTab.UPCOMING).map { it.id })
-        assertTrue(tabs.getValue(SportsLiveTab.LIVE_NOW).isEmpty())
-    }
+        assertTrue(agendaItems.none { it.isLive || it.startMs != null })
+        assertEquals(listOf("a", "b"), agendaTabs.getValue(SportsLiveTab.UPCOMING).map { it.id })
+        assertTrue(agendaTabs.getValue(SportsLiveTab.LIVE_NOW).isEmpty())
 
-    @Test
-    fun `signal-less catalog named Full Match Replays is replays`() {
+        // Named replays.
         for (name in listOf("Full Match Replays", "Full Match", "Melhores Momentos")) {
             val catalog = claimed("sport", "fm", name, SportsLiveKind.EVENTS)
             val items = SportsLiveItemBucketer.describeCatalog(listOf(meta("a", "A vs B")), catalog, now)
@@ -560,16 +553,13 @@ class SportsLiveItemBucketerTest {
             assertEquals(name, listOf("a"), tabs.getValue(SportsLiveTab.REPLAYS).map { it.id })
             assertTrue(name, tabs.getValue(SportsLiveTab.UPCOMING).isEmpty())
         }
-    }
 
-    @Test
-    fun `signal-less catalog with an unknown name is unchanged`() {
-        val catalog = claimed("sport", "misc", "Misc", SportsLiveKind.EVENTS)
-        val metas = listOf(meta("a", "A vs B"))
-
+        // An unknown name: unchanged.
+        val misc = claimed("sport", "misc", "Misc", SportsLiveKind.EVENTS)
+        val miscMetas = listOf(meta("a", "A vs B"))
         assertEquals(
-            metas.map { SportsLiveItemBucketer.describe(it, catalog, now) },
-            SportsLiveItemBucketer.describeCatalog(metas, catalog, now)
+            miscMetas.map { SportsLiveItemBucketer.describe(it, misc, now) },
+            SportsLiveItemBucketer.describeCatalog(miscMetas, misc, now)
         )
     }
 

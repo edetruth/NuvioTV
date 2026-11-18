@@ -13,15 +13,12 @@ import org.junit.Test
 
 class SportsLiveCatalogPolicyTest {
     @Test
-    fun `sport typed catalog is claimed as EVENTS`() {
+    fun `sport and sports typed catalogs are claimed by the type rule`() {
         val catalog = catalog("sport", "sports_live", "Live Now")
         val claim = classify(addon("highfly", "Sports Streams", catalog), catalog)
         assertEquals(SportsLiveKind.EVENTS, claim?.kind)
         assertEquals("type:sport", claim?.reason)
-    }
 
-    @Test
-    fun `sports typed catalog is claimed by the type rule`() {
         val live = catalog("sports", "streamed-events-live-now", "Nebula Sports: Live Now")
         val replays = catalog("sports", "streamed-replays", "Nebula Sports: Replays")
         val addon = addon("org.nebulastreams.sports", "Nebula Sports", live, replays)
@@ -43,14 +40,9 @@ class SportsLiveCatalogPolicyTest {
     }
 
     @Test
-    fun `channel typed catalog named Channels is CHANNELS`() {
-        val catalog = catalog("channel", "tv_channels", "Channels - TV")
-        val claim = classify(addon("pengu", "PenguPlay", catalog), catalog)
-        assertEquals(SportsLiveKind.CHANNELS, claim?.kind)
-    }
-
-    @Test
     fun `channel typed catalog is CHANNELS whatever its name`() {
+        val channels = catalog("channel", "tv_channels", "Channels - TV")
+        assertEquals(SportsLiveKind.CHANNELS, classify(addon("pengu", "PenguPlay", channels), channels)?.kind)
         val plain = catalog("channel", "uk", "United Kingdom")
         assertEquals(SportsLiveKind.CHANNELS, classify(addon("iptv", "Some IPTV", plain), plain)?.kind)
         val replayNamed = catalog("channel", "replay_tv", "Replay TV")
@@ -81,9 +73,11 @@ class SportsLiveCatalogPolicyTest {
     }
 
     @Test
-    fun `cinemeta popular movies is not claimed`() {
+    fun `cinemeta popular movies is not claimed, and a keyword match is word bounded`() {
         val catalog = catalog("movie", "top", "Popular")
         assertNull(classify(addon("com.linvo.cinemeta", "Cinemeta", catalog), catalog))
+        val transport = catalog("movie", "transport_docs", "Transportation Docs")
+        assertNull(classify(addon("docs", "Docs Addon", transport), transport))
     }
 
     @Test
@@ -131,12 +125,6 @@ class SportsLiveCatalogPolicyTest {
         val catalog = catalog("sport", "sports_recap", "Sports")
         val claim = classify(addon("highfly", "Sports Streams", catalog), catalog)
         assertEquals(SportsLiveKind.REPLAY, claim?.kind)
-    }
-
-    @Test
-    fun `keyword match is word bounded`() {
-        val catalog = catalog("movie", "transport_docs", "Transportation Docs")
-        assertNull(classify(addon("docs", "Docs Addon", catalog), catalog))
     }
 
     @Test

@@ -15,48 +15,30 @@ import org.junit.Test
 class SportsLiveTeamsTest {
 
     @Test
-    fun `highfly vs names parse`() {
-        assertEquals(TeamPair("Tenerife", "Ceuta"), SportsLiveTeams.parse("Tenerife vs Ceuta"))
-        assertEquals(TeamPair("Cyprus", "Montenegro"), SportsLiveTeams.parse("Cyprus vs Montenegro"))
-        assertEquals(
-            TeamPair("Detroit Lions", "New England Patriots"),
-            SportsLiveTeams.parse("Detroit Lions vs New England Patriots")
+    fun `game names parse with every separator, case-insensitively, and at puts home second without rankings`() {
+        val cases = listOf(
+            // Highfly "vs" names.
+            "Tenerife vs Ceuta" to TeamPair("Tenerife", "Ceuta"),
+            "Cyprus vs Montenegro" to TeamPair("Cyprus", "Montenegro"),
+            "Detroit Lions vs New England Patriots" to TeamPair("Detroit Lions", "New England Patriots"),
+            // Nebula and CNC names.
+            "Las Vegas Raiders vs Seattle Seahawks" to TeamPair("Las Vegas Raiders", "Seattle Seahawks"),
+            "Dallas Cowboys vs San Francisco 49ers" to TeamPair("Dallas Cowboys", "San Francisco 49ers"),
+            "AFG vs ZIM" to TeamPair("AFG", "ZIM"),
+            // Sports Replay "at" names: rankings stripped, home second.
+            "2 Utah Utes at 23 Arizona Wildcats" to TeamPair(home = "Arizona Wildcats", away = "Utah Utes"),
+            "Boston College Eagles at 5 Notre Dame Fighting Irish" to TeamPair(home = "Notre Dame Fighting Irish", away = "Boston College Eagles"),
+            // Other separators, case-insensitively.
+            "Celtics vs. 76ers" to TeamPair("Celtics", "76ers"),
+            "Arsenal v Chelsea" to TeamPair("Arsenal", "Chelsea"),
+            "Arsenal VS Chelsea" to TeamPair("Arsenal", "Chelsea"),
+            "Bills @ Chiefs" to TeamPair("Chiefs", "Bills"),
+            "Real Madrid - Barcelona" to TeamPair("Real Madrid", "Barcelona"),
+            "Wolves AT Stoke" to TeamPair(home = "Stoke", away = "Wolves")
         )
-    }
-
-    @Test
-    fun `nebula and cnc names parse`() {
-        assertEquals(
-            TeamPair("Las Vegas Raiders", "Seattle Seahawks"),
-            SportsLiveTeams.parse("Las Vegas Raiders vs Seattle Seahawks")
-        )
-        assertEquals(
-            TeamPair("Dallas Cowboys", "San Francisco 49ers"),
-            SportsLiveTeams.parse("Dallas Cowboys vs San Francisco 49ers")
-        )
-        assertEquals(TeamPair("AFG", "ZIM"), SportsLiveTeams.parse("AFG vs ZIM"))
-    }
-
-    @Test
-    fun `sports replay at names strip rankings and put home second`() {
-        assertEquals(
-            TeamPair(home = "Arizona Wildcats", away = "Utah Utes"),
-            SportsLiveTeams.parse("2 Utah Utes at 23 Arizona Wildcats")
-        )
-        assertEquals(
-            TeamPair(home = "Notre Dame Fighting Irish", away = "Boston College Eagles"),
-            SportsLiveTeams.parse("Boston College Eagles at 5 Notre Dame Fighting Irish")
-        )
-    }
-
-    @Test
-    fun `other separators parse case-insensitively`() {
-        assertEquals(TeamPair("Celtics", "76ers"), SportsLiveTeams.parse("Celtics vs. 76ers"))
-        assertEquals(TeamPair("Arsenal", "Chelsea"), SportsLiveTeams.parse("Arsenal v Chelsea"))
-        assertEquals(TeamPair("Arsenal", "Chelsea"), SportsLiveTeams.parse("Arsenal VS Chelsea"))
-        assertEquals(TeamPair("Chiefs", "Bills"), SportsLiveTeams.parse("Bills @ Chiefs"))
-        assertEquals(TeamPair("Real Madrid", "Barcelona"), SportsLiveTeams.parse("Real Madrid - Barcelona"))
-        assertEquals(TeamPair(home = "Stoke", away = "Wolves"), SportsLiveTeams.parse("Wolves AT Stoke"))
+        for ((name, expected) in cases) {
+            assertEquals(name, expected, SportsLiveTeams.parse(name))
+        }
     }
 
     @Test

@@ -83,13 +83,9 @@ class SportsLiveDualStateTest {
     }
 
     @Test
-    fun `first frame plays`() {
+    fun `first frame plays, before a stream it is ignored`() {
         val state = initial.reduce(DualAction.Resolved(a, dualStream("a"))).reduce(DualAction.FirstFrame(a))
         assertEquals(PaneStatus.Playing, state.left.status)
-    }
-
-    @Test
-    fun `first frame before a stream is ignored`() {
         assertSame(initial, initial.reduce(DualAction.FirstFrame(a)))
     }
 
@@ -160,7 +156,7 @@ class SportsLiveDualStateTest {
     }
 
     @Test
-    fun `sound indicator moves only while the audible pane plays, the other is muted`() {
+    fun `sound indicator moves only while the audible pane plays, the other is muted, and follows the sound`() {
         val playing = initial.reduce(DualAction.Resolved(a, dualStream("a"))).reduce(DualAction.FirstFrame(a))
         assertEquals(PaneSound.AUDIBLE_PLAYING, playing.paneSound(Side.LEFT, isPlaying = true))
         // Buffering or stalled: the speaker stays, the bars stop.
@@ -168,10 +164,8 @@ class SportsLiveDualStateTest {
         assertEquals(PaneSound.MUTED, playing.paneSound(Side.RIGHT, isPlaying = true))
         // Still loading: an isPlaying player does not count before the first frame.
         assertEquals(PaneSound.AUDIBLE, initial.paneSound(Side.LEFT, isPlaying = true))
-    }
 
-    @Test
-    fun `sound indicator follows the sound, not a failed highlighted pane`() {
+        // It follows the sound, not a failed highlighted pane.
         val state = initial
             .reduce(DualAction.Resolved(a, dualStream("a"))).reduce(DualAction.FirstFrame(a))
             .reduce(DualAction.Highlight(Side.RIGHT))

@@ -27,15 +27,11 @@ class SportsLiveShortPressKeysTest {
     private fun up(code: Int, atMs: Long) = keys.onKey(event(code, KeyEvent.ACTION_UP, atMs = atMs), active = true)
 
     @Test
-    fun `short right shows the controls only on release and consumes both events`() {
+    fun `short right shows the controls and short left opens the panel, only on release, consuming both events`() {
         assertEquals(SportsLiveShortPress.CONSUMED, down(KeyEvent.KEYCODE_DPAD_RIGHT))
         assertEquals(SportsLiveShortPress.SHOW_CONTROLS, up(KeyEvent.KEYCODE_DPAD_RIGHT, atMs = 100L))
-    }
-
-    @Test
-    fun `short left opens the panel only on release`() {
-        assertEquals(SportsLiveShortPress.CONSUMED, down(KeyEvent.KEYCODE_DPAD_LEFT))
-        assertEquals(SportsLiveShortPress.OPEN_PANEL, up(KeyEvent.KEYCODE_DPAD_LEFT, atMs = 100L))
+        assertEquals(SportsLiveShortPress.CONSUMED, down(KeyEvent.KEYCODE_DPAD_LEFT, atMs = 1_000L))
+        assertEquals(SportsLiveShortPress.OPEN_PANEL, up(KeyEvent.KEYCODE_DPAD_LEFT, atMs = 1_100L))
     }
 
     @Test
@@ -56,17 +52,14 @@ class SportsLiveShortPressKeysTest {
     }
 
     @Test
-    fun `without an active session every event is left to the player`() {
+    fun `without an active session every event, and other keys always, are left to the player`() {
         val inactive = { e: KeyEvent -> keys.onKey(e, active = false) }
 
         assertEquals(SportsLiveShortPress.NONE, inactive(event(KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.ACTION_DOWN)))
         assertEquals(SportsLiveShortPress.NONE, inactive(event(KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.ACTION_UP, atMs = 100L)))
         assertEquals(SportsLiveShortPress.NONE, inactive(event(KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.ACTION_DOWN)))
         assertEquals(SportsLiveShortPress.NONE, inactive(event(KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.ACTION_UP, atMs = 100L)))
-    }
-
-    @Test
-    fun `other keys are left to the player`() {
+        // Other keys, with a session too.
         assertEquals(SportsLiveShortPress.NONE, down(KeyEvent.KEYCODE_DPAD_DOWN))
         assertEquals(SportsLiveShortPress.NONE, up(KeyEvent.KEYCODE_DPAD_DOWN, atMs = 100L))
     }

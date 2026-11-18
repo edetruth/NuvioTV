@@ -114,17 +114,6 @@ class ScoreMatcherTest {
     }
 
     @Test
-    fun `DR Congo matches Congo DR`() {
-        val original = caf.first { it.eventId == "401927170" }
-        val congo = original.copy(
-            eventId = "cod",
-            home = original.home.copy(abbreviation = "COD", displayName = "Congo DR", shortDisplayName = "Congo DR", name = "Congo DR", location = "Congo DR")
-        )
-        assertEquals("cod", match("DR Congo vs Cameroon", "2026-11-16T13:00:00Z", listOf(congo)))
-        assertEquals("cod", match("Congo DR vs Cameroon", "2026-11-16T13:00:00Z", listOf(congo)))
-    }
-
-    @Test
     fun `games outside the window are rejected`() {
         assertEquals("401927170", match("NAM vs CMR", "2026-11-16T15:59:00Z", caf))
         assertEquals("401927170", match("NAM vs CMR", "2026-11-16T10:01:00Z", caf))
@@ -363,6 +352,14 @@ class ScoreMatcherTest {
         assertTrue(SportsLiveTeams.canonicalise("USA (W)") != SportsLiveTeams.canonicalise("United States"))
         assertTrue(SportsLiveTeams.canonicalise("USWNT") != SportsLiveTeams.canonicalise("United States"))
         assertTrue(SportsLiveTeams.canonicalise("Northern Ireland") != SportsLiveTeams.canonicalise("Ireland"))
+        // And in a match: DR Congo is Congo DR either way round.
+        val original = caf.first { it.eventId == "401927170" }
+        val congo = original.copy(
+            eventId = "cod",
+            home = original.home.copy(abbreviation = "COD", displayName = "Congo DR", shortDisplayName = "Congo DR", name = "Congo DR", location = "Congo DR")
+        )
+        assertEquals("cod", match("DR Congo vs Cameroon", "2026-11-16T13:00:00Z", listOf(congo)))
+        assertEquals("cod", match("Congo DR vs Cameroon", "2026-11-16T13:00:00Z", listOf(congo)))
     }
 
 
@@ -396,5 +393,91 @@ class ScoreMatcherTest {
         assertEquals("401879240", match(title, start, listOf(game), start))
         assertNull(match(title, start, listOf(game, later), start))
         assertNull(match(title, java.time.Instant.ofEpochMilli(later.startMs!!).toString(), listOf(game, later), start))
+    }
+
+    // --- Hardening: women's slugs, youth forms, curly apostrophes, club names and punctuation (S1 follow-up + S1b) ---
+
+    private val germany = soccerAll.first { it.eventId == "401861185" } // Germany 5-0 Netherlands, 19:45Z
+    private val englandU21 = soccerAll.first { it.eventId == "401930175" } // England U21 v France U21, 19:30Z
+
+    /** A timed card matched with the clock at 0, as the hardening cases were written. */
+    private fun matchTimed(title: String, start: String, events: List<ScoreSnapshot>): String? =
+        ScoreMatcher(zone = { ZoneOffset.UTC })
+            .match(ScoreCard("k", SportsLiveTeams.parse(title)!!, ms(start), hasTimeOfDay = true), events, 0L)?.eventId
+
+    @Test
+    fun `a men's card never matches a game in a women's league`() {
+        val women = listOf(
+            "eng.w.1", "esp.w.1", "can.w.nsl", "usa.w.usl.1", "usa.nwsl", "uefa.wchampions", "fifa.wwc",
+            "uefa.weuro", "uefa.wnations", "fifa.wworld.u17", "fifa.wworldq.uefa", "esp.copa_de_la_reina",
+            "conmebol.america.femenina", "fifa.shebelieves"
+        )
+        for (slug in women) {
+            assertNull(slug, matchTimed("Germany vs Netherlands", "2026-11-16T19:45:00Z", listOf(germany.copy(leagueSlug = slug))))
+        }
+    }
+
+    @Test
+    fun `men's world cup, qualifiers and Wales' league are not women's`() {
+        for (slug in listOf("fifa.world", "fifa.worldq.uefa", "fifa.worldq.conmebol", "wal.1", "uefa.nations", "fifa.friendly")) {
+            assertEquals(slug, "401861185", matchTimed("Germany vs Netherlands", "2026-11-16T19:45:00Z", listOf(germany.copy(leagueSlug = slug))))
+        }
+    }
+
+    @Test
+    fun `youth forms are one qualifier`() {
+        for (title in listOf("England U-21 vs France U-21", "England Under 21 vs France Under-21", "England U21s vs France (U21)")) {
+            assertEquals(title, "401930175", matchTimed(title, "2026-11-16T19:30:00Z", soccerAll))
+        }
+        // Senior and youth sides stay apart.
+        assertNull(matchTimed("England Under-21 vs France", "2026-11-16T19:30:00Z", listOf(englandU21)))
+        assertEquals(listOf("401861185"), listOf(matchTimed("Germany vs Netherlands", "2026-11-16T19:45:00Z", soccerAll)))
+    }
+
+    @Test
+    fun `a curly apostrophe still marks a women's side`() {
+        assertNull(matchTimed("Germany Women’s vs Netherlands Women’s", "2026-11-16T19:45:00Z", listOf(germany)))
+        assertNull(matchTimed("Germany Women's vs Netherlands Women's", "2026-11-16T19:45:00Z", listOf(germany)))
+    }
+
+    private fun clubGame(home: String, away: String) = germany.copy(
+        eventId = "club",
+        leagueSlug = "ita.1",
+        home = germany.home.copy(abbreviation = null, displayName = home, shortDisplayName = home, name = home, location = null),
+        away = germany.away.copy(abbreviation = null, displayName = away, shortDisplayName = away, name = away, location = null)
+    )
+
+    @Test
+    fun `club tags, club aliases and Inter versus Milan`() {
+        val milan = clubGame("AC Milan", "Juventus")
+        assertEquals("club", matchTimed("Milan vs Juventus", "2026-11-16T19:45:00Z", listOf(milan)))
+        assertNull(matchTimed("Inter Milan vs Juventus", "2026-11-16T19:45:00Z", listOf(milan)))
+        assertEquals("club", matchTimed("Inter Milan vs Juventus", "2026-11-16T19:45:00Z", listOf(clubGame("Internazionale", "Juventus"))))
+        assertEquals("club", matchTimed("Man Utd vs PSG", "2026-11-16T19:45:00Z", listOf(clubGame("Manchester United", "Paris Saint-Germain"))))
+        assertEquals("club", matchTimed("VfB Stuttgart vs Bayern", "2026-11-16T19:45:00Z", listOf(clubGame("Stuttgart", "Bayern Munich"))))
+        // Ambiguous nicknames are not aliases: "Spurs" is not Tottenham.
+        assertNull(matchTimed("Spurs vs Villa", "2026-11-16T19:45:00Z", listOf(clubGame("Tottenham Hotspur", "Aston Villa"))))
+    }
+
+    @Test
+    fun `ampersand, punctuation and small raised letters are folded`() {
+        val game = clubGame("Brighton & Hove Albion", "St. Louis City SC")
+        assertEquals("club", matchTimed("Brighton and Hove Albion vs St Louis City", "2026-11-16T19:45:00Z", listOf(game)))
+        assertEquals("club", matchTimed("Brighton & Hove Albion ᴴᴰ vs St. Louis City ᴸᴵⱽᴱ", "2026-11-16T19:45:00Z", listOf(game)))
+    }
+
+    @Test
+    fun `UEFA Youth League games are under-19`() {
+        val youth = clubGame("Real Madrid", "Bayern Munich").copy(leagueSlug = "uefa.youth")
+        assertEquals("club", matchTimed("Real Madrid U19 vs Bayern Munich U19", "2026-11-16T19:45:00Z", listOf(youth)))
+        assertNull(matchTimed("Real Madrid vs Bayern Munich", "2026-11-16T19:45:00Z", listOf(youth)))
+    }
+
+    @Test
+    fun `reserve sides never take the senior score`() {
+        val senior = clubGame("Real Madrid", "Barcelona")
+        assertNull(matchTimed("Real Madrid B vs Barcelona B", "2026-11-16T19:45:00Z", listOf(senior)))
+        assertNull(matchTimed("Real Madrid Castilla vs Barcelona Atletic", "2026-11-16T19:45:00Z", listOf(senior)))
+        assertNull(matchTimed("Castilla vs Barcelona", "2026-11-16T19:45:00Z", listOf(senior)))
     }
 }

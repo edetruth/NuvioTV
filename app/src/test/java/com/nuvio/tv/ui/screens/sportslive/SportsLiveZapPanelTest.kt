@@ -70,16 +70,12 @@ class SportsLiveZapPanelTest {
     }
 
     @Test
-    fun `picking a game of the session moves it there`() {
-        val picked = session(SportsLiveTab.LIVE_NOW, "Football").pickFromPanel(basketball, listOf(football1))!!
+    fun `picking a game of the session moves it there, another starts a live now session over the panel list`() {
+        val inSession = session(SportsLiveTab.LIVE_NOW, "Football").pickFromPanel(basketball, listOf(football1))!!
+        assertEquals(2, inSession.index)
+        assertEquals(3, inSession.items.size)
+        assertEquals("Football", inSession.filter)
 
-        assertEquals(2, picked.index)
-        assertEquals(3, picked.items.size)
-        assertEquals("Football", picked.filter)
-    }
-
-    @Test
-    fun `picking another game starts a live now session over the panel list`() {
         val other = item("o1", sport = "Tennis")
         val start = SportsLiveZapSession.of(listOf(football1), football1.streamKey, SportsLiveTab.CHANNELS, "UK", true)!!
 

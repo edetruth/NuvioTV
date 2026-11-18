@@ -117,13 +117,6 @@ class SportsLiveSourceReliabilityTest {
     }
 
     @Test
-    fun `the most reliable source goes first`() {
-        val scores = mapOf("p" to 0.2, "a" to 0.5, "b" to 0.9)
-
-        assertEquals(listOf("b", "a", "p"), reliability.rank(listOf("p", "a", "b"), scoreOf = { scores.getValue(it) }))
-    }
-
-    @Test
     fun `the primary keeps first place unless another source is clearly better`() {
         val close = mapOf("p" to 0.5, "a" to 0.55)
         val clear = mapOf("p" to 0.5, "a" to 0.75)
@@ -144,7 +137,10 @@ class SportsLiveSourceReliabilityTest {
     }
 
     @Test
-    fun `a recorded failure moves a source down and a success moves it up`() {
+    fun `the most reliable source goes first, and a recorded failure moves a source down and a success up`() {
+        val scores = mapOf("p" to 0.2, "a" to 0.5, "b" to 0.9)
+        assertEquals(listOf("b", "a", "p"), reliability.rank(listOf("p", "a", "b"), scoreOf = { scores.getValue(it) }))
+
         reliability.nowMs = { t0 }
         val sources = listOf("p", "a", "b")
         fun ranked() = reliability.rank(sources, scoreOf = { reliability.scoreOf(it) })
@@ -172,16 +168,10 @@ class SportsLiveSourceReliabilityTest {
     // --- storage ---
 
     @Test
-    fun `the book is capped, dropping the least recently used sources`() {
+    fun `the book is capped, dropping the least recently used sources, also when recording past the cap`() {
         val records = (1..10).associate { "s$it" to Record(successes = 1.0, atMs = t0 + it) }
+        assertEquals(setOf("s8", "s9", "s10"), reliability.capped(records, max = 3).keys)
 
-        val capped = reliability.capped(records, max = 3)
-
-        assertEquals(setOf("s8", "s9", "s10"), capped.keys)
-    }
-
-    @Test
-    fun `recording past the cap evicts the oldest source`() {
         var now = t0
         reliability.nowMs = { now }
         repeat(SportsLiveSourceReliability.MAX_ENTRIES + 1) {

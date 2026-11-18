@@ -200,25 +200,66 @@ class SportsLiveDualViewModelTest {
     }
 
     @Test
-    fun `a decoder failure while the other pane plays is the device limit`() = runTest(mainDispatcherRule.dispatcher) {
-        val viewModel = newViewModel()
-        runCurrent()
-        answer("a", dualStream("a"))
-        answer("b", dualStream("b"))
-        runCurrent()
-        viewModel.onFirstFrame(a)
+    fun `a decoder failure is the device limit while the other pane has its stream, else a stream error`() = runTest(mainDispatcherRule.dispatcher) {
+        // The other pane plays: the first failure retries the pane, the second is the device limit.
+        run {
+            val viewModel = newViewModel()
+            runCurrent()
+            answer("a", dualStream("a"))
+            answer("b", dualStream("b"))
+            runCurrent()
+            viewModel.onFirstFrame(a)
 
-        // The first failure retries the pane after a second; the second one is the device limit.
-        viewModel.onPlayerError(b, decoderInit = true)
-        assertEquals(DualPane(b), viewModel.current().right)
-        advanceTimeBy(SportsLiveDualViewModel.DEVICE_LIMIT_RETRY_MS + 1)
-        runCurrent()
-        assertEquals(DualPane(b, dualStream("b"), PaneStatus.Loading), viewModel.current().right)
-        viewModel.onPlayerError(b, decoderInit = true)
+            // The first failure retries the pane after a second; the second one is the device limit.
+            viewModel.onPlayerError(b, decoderInit = true)
+            assertEquals(DualPane(b), viewModel.current().right)
+            advanceTimeBy(SportsLiveDualViewModel.DEVICE_LIMIT_RETRY_MS + 1)
+            runCurrent()
+            assertEquals(DualPane(b, dualStream("b"), PaneStatus.Loading), viewModel.current().right)
+            viewModel.onPlayerError(b, decoderInit = true)
 
-        assertEquals(PaneStatus.DeviceLimit, viewModel.current().right.status)
-        assertEquals(PaneStatus.Playing, viewModel.current().left.status)
-        assertEquals(Side.LEFT, viewModel.current().audibleSide)
+            assertEquals(PaneStatus.DeviceLimit, viewModel.current().right.status)
+            assertEquals(PaneStatus.Playing, viewModel.current().left.status)
+            assertEquals(Side.LEFT, viewModel.current().audibleSide)
+        }
+        // Nothing else plays: a stream error.
+        pending.clear()
+        run {
+            val viewModel = newViewModel()
+            runCurrent()
+            answer("a", dualStream("a"))
+            runCurrent()
+            viewModel.onPlayerError(a, decoderInit = true)
+            assertEquals(PaneStatus.Error, viewModel.current().left.status)
+        }
+        // The other pane is still starting (no first frame yet): the retry fails too, the device limit.
+        pending.clear()
+        run {
+            val viewModel = newViewModel()
+            runCurrent()
+            answer("a", dualStream("a"))
+            answer("b", dualStream("b"))
+            runCurrent()
+
+            // Both panes start together: neither has a first frame yet. The retry fails too.
+            viewModel.onPlayerError(b, decoderInit = true)
+            advanceTimeBy(SportsLiveDualViewModel.DEVICE_LIMIT_RETRY_MS + 1)
+            runCurrent()
+            viewModel.onPlayerError(b, decoderInit = true)
+
+            assertEquals(PaneStatus.DeviceLimit, viewModel.current().right.status)
+            assertEquals(PaneStatus.Loading, viewModel.current().left.status)
+        }
+        // The other pane is still looking its stream up: a stream error.
+        pending.clear()
+        run {
+            val viewModel = newViewModel()
+            runCurrent()
+            answer("b", dualStream("b"))
+            runCurrent()
+            viewModel.onPlayerError(b, decoderInit = true)
+            assertEquals(PaneStatus.Error, viewModel.current().right.status)
+        }
     }
 
     @Test
@@ -275,45 +316,6 @@ class SportsLiveDualViewModelTest {
         assertTrue(viewModel.zap(forward = true))
         assertEquals(c, viewModel.current().left.item)
     }
-
-    @Test
-    fun `a decoder failure with nothing else playing is a stream error`() = runTest(mainDispatcherRule.dispatcher) {
-        val viewModel = newViewModel()
-        runCurrent()
-        answer("a", dualStream("a"))
-        runCurrent()
-        viewModel.onPlayerError(a, decoderInit = true)
-        assertEquals(PaneStatus.Error, viewModel.current().left.status)
-    }
-
-    @Test
-    fun `a decoder failure while the other pane is still starting is the device limit`() = runTest(mainDispatcherRule.dispatcher) {
-        val viewModel = newViewModel()
-        runCurrent()
-        answer("a", dualStream("a"))
-        answer("b", dualStream("b"))
-        runCurrent()
-
-        // Both panes start together: neither has a first frame yet. The retry fails too.
-        viewModel.onPlayerError(b, decoderInit = true)
-        advanceTimeBy(SportsLiveDualViewModel.DEVICE_LIMIT_RETRY_MS + 1)
-        runCurrent()
-        viewModel.onPlayerError(b, decoderInit = true)
-
-        assertEquals(PaneStatus.DeviceLimit, viewModel.current().right.status)
-        assertEquals(PaneStatus.Loading, viewModel.current().left.status)
-    }
-
-    @Test
-    fun `a decoder failure while the other pane is still looking its stream up is a stream error`() =
-        runTest(mainDispatcherRule.dispatcher) {
-            val viewModel = newViewModel()
-            runCurrent()
-            answer("b", dualStream("b"))
-            runCurrent()
-            viewModel.onPlayerError(b, decoderInit = true)
-            assertEquals(PaneStatus.Error, viewModel.current().right.status)
-        }
 
     @Test
     fun `the first frame cancels the pane's timeout`() = runTest(mainDispatcherRule.dispatcher) {

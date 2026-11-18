@@ -254,7 +254,7 @@ class PlayerZapControllerTest {
     }
 
     @Test
-    fun `factory copies the list and finds the item`() {
+    fun `factory copies the list and finds the item, or returns null`() {
         val source = items.toMutableList()
         val session = SportsLiveZapSession.of(source, "addon|c", SportsLiveTab.CHANNELS, "UK", true)!!
         source.clear()
@@ -264,10 +264,7 @@ class PlayerZapControllerTest {
         assertEquals(SportsLiveTab.CHANNELS, session.tab)
         assertEquals("UK", session.filter)
         assertTrue(session.returnToHomeOnBack)
-    }
-
-    @Test
-    fun `factory returns null for an empty list or a missing item`() {
+        // Null for an empty list or a missing item.
         assertNull(SportsLiveZapSession.of(emptyList(), "addon|a", SportsLiveTab.LIVE_NOW, null, false))
         assertNull(SportsLiveZapSession.of(items, "addon|missing", SportsLiveTab.LIVE_NOW, null, false))
         assertNull(SportsLiveZapSession.of(items, "other|a", SportsLiveTab.LIVE_NOW, null, false))

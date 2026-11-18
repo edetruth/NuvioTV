@@ -27,6 +27,8 @@ class SportsLiveZapSessionTest {
         assertEquals("a", session.next().next().next().current.id)
         assertEquals("c", session.previous().current.id)
         assertEquals("a", session.previous().next().current.id)
+        // The position label is one based.
+        assertEquals(2 to 3, session.next().positionLabelArgs)
     }
 
     @Test
@@ -59,21 +61,9 @@ class SportsLiveZapSessionTest {
         assertEquals(2, moved?.index)
         assertEquals("addon", moved?.current?.addonId)
         assertEquals(1, session.moveTo("other|b")?.index)
-    }
-
-    @Test
-    fun `moveTo returns null for an absent key`() {
-        val session = session(listOf(item("a"), item("b")), index = 0)
-
+        // An absent key: null.
         assertNull(session.moveTo("addon|missing"))
         assertNull(session.moveTo("other|a"))
-    }
-
-    @Test
-    fun `position label args are one based`() {
-        val session = session(listOf(item("a"), item("b"), item("c")), index = 1)
-
-        assertEquals(2 to 3, session.positionLabelArgs)
     }
 
     @Test
@@ -88,7 +78,7 @@ class SportsLiveZapSessionTest {
     }
 
     @Test
-    fun `update replaces the held session`() {
+    fun `the holder - update replaces the held session, clear empties it`() {
         val session = session(listOf(item("a"), item("b")), index = 0)
         SportsLiveZapSessions.start(session)
 
@@ -97,16 +87,11 @@ class SportsLiveZapSessionTest {
         assertEquals("b", SportsLiveZapSessions.current()?.current?.id)
         assertNull(SportsLiveZapSessions.activeFor("a"))
         assertEquals("b", SportsLiveZapSessions.activeFor("b")?.current?.id)
-    }
-
-    @Test
-    fun `clear empties the holder`() {
-        SportsLiveZapSessions.start(session(listOf(item("a")), index = 0))
 
         SportsLiveZapSessions.clear()
 
         assertNull(SportsLiveZapSessions.current())
-        assertNull(SportsLiveZapSessions.activeFor("a"))
+        assertNull(SportsLiveZapSessions.activeFor("b"))
     }
 
     @Test
@@ -166,12 +151,8 @@ class SportsLiveZapSessionTest {
         assertEquals(ZapPanelChip("Soccer"), soccer.step(true, emptySet())!!.panelChip)
         // A chip whose only game is the one playing: no zap.
         assertNull(SportsLiveZapSession(listOf(f1, s1, b1), 1, SportsLiveTab.LIVE_NOW, null, false, ZapPanelChip("Soccer")).step(true, emptySet()))
-    }
-
-    @Test
-    fun `a chip with no games in the session zaps through all of them`() {
-        val tennis = myTeamsSession().copy(panelChip = ZapPanelChip("Tennis"))
-
+        // A chip with no games in the session: every game, as under All.
+        val tennis = session.copy(panelChip = ZapPanelChip("Tennis"))
         assertEquals(listOf("s1", "f2", "b1", "f1"), tennis.zapIds(4))
         assertEquals(1 to 4, tennis.positionLabelArgs)
     }

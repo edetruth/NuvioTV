@@ -57,50 +57,36 @@ class SportsLiveDualPickTest {
     }
 
     @Test
-    fun `a long press on the game playing pairs with nothing`() {
+    fun `a long press on the game playing, a card sharing its source or an ended game pairs with nothing`() {
         val pick = SportsLiveDualPick(chosen = a, items = listOf(a, b, c), filter = null, tab = SportsLiveTab.LIVE_NOW)
-        assertNull(pick.pairWith(a))
-    }
+        assertNull("the game playing", pick.pairWith(a))
 
-    @Test
-    fun `a long press on a card sharing a source with the game playing pairs with nothing`() {
         val playing = dualItem("m").copy(alternates = listOf(dualItem("x").copy(addonId = "other")))
         val sameGameElsewhere = dualItem("x").copy(addonId = "other")
-        val pick = SportsLiveDualPick(chosen = playing, items = listOf(playing, sameGameElsewhere, c), filter = null, tab = SportsLiveTab.LIVE_NOW)
-        assertNull(pick.pairWith(sameGameElsewhere))
+        val merged = SportsLiveDualPick(chosen = playing, items = listOf(playing, sameGameElsewhere, c), filter = null, tab = SportsLiveTab.LIVE_NOW)
+        assertNull("a card sharing a source", merged.pairWith(sameGameElsewhere))
+
+        val ended = SportsLiveDualPick(chosen = a, items = listOf(a, b), filter = null, tab = SportsLiveTab.LIVE_NOW, endedKeys = setOf(b.streamKey))
+        assertNull("an ended game", ended.pairWith(b))
     }
 
     @Test
-    fun `a long press on a game known to have ended pairs with nothing`() {
-        val pick = SportsLiveDualPick(chosen = a, items = listOf(a, b), filter = null, tab = SportsLiveTab.LIVE_NOW, endedKeys = setOf(b.streamKey))
-        assertNull(pick.pairWith(b))
-    }
-
-    @Test
-    fun `pick mode OK on Live now pairs the first game with the card over the list shown`() {
+    fun `pick mode OK on Live now or Channels pairs the first game with the card over the list shown`() {
         val session = sportsLivePickModeSession(
             chosen = a, item = c, tab = SportsLiveTab.LIVE_NOW, items = listOf(b, c), filter = "Soccer"
         )
         assertEquals(SportsLiveDualSession(a, c, listOf(b, c), "Soccer", SportsLiveTab.LIVE_NOW), session)
-    }
-
-    @Test
-    fun `pick mode OK on Channels pairs too`() {
-        val session = sportsLivePickModeSession(
+        val channels = sportsLivePickModeSession(
             chosen = a, item = b, tab = SportsLiveTab.CHANNELS, items = listOf(a, b), filter = null
         )
-        assertEquals(SportsLiveDualSession(a, b, listOf(a, b), null, SportsLiveTab.CHANNELS), session)
+        assertEquals(SportsLiveDualSession(a, b, listOf(a, b), null, SportsLiveTab.CHANNELS), channels)
     }
 
     @Test
-    fun `pick mode OK on Upcoming or Replays does nothing`() {
+    fun `pick mode OK on Upcoming or Replays, the first game or a card sharing its source does nothing`() {
         for (tab in listOf(SportsLiveTab.UPCOMING, SportsLiveTab.REPLAYS)) {
             assertNull(sportsLivePickModeSession(chosen = a, item = b, tab = tab, items = listOf(a, b), filter = null))
         }
-    }
-
-    @Test
-    fun `pick mode OK on the first game or a card sharing its source does nothing`() {
         val first = dualItem("m").copy(alternates = listOf(dualItem("x").copy(addonId = "other")))
         val sameGameElsewhere = dualItem("x").copy(addonId = "other")
         val items = listOf(first, sameGameElsewhere, c)

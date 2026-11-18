@@ -114,7 +114,7 @@ class SportsResultsTest {
     }
 
     @Test
-    fun `a followed soccer team never stars another sport's namesake`() {
+    fun `a followed team never stars another sport's namesake`() {
         fun game(sport: String, league: String) = nba.first().copy(
             league = EspnLeague(sport, league), leagueSlug = league,
             home = nba.first().home.copy(displayName = "Rangers", shortDisplayName = "Rangers", name = "Rangers", location = null, abbreviation = null)
@@ -129,6 +129,9 @@ class SportsResultsTest {
         assertFalse(SportsResults.follows(football, game("hockey", "nhl")))
         // No sport given: no sport check (as before).
         assertTrue(SportsResults.follows(FollowedTeam("Rangers"), game("hockey", "nhl")))
+        // In the rows: a followed team of another sport stars no namesake.
+        val rows = SportsResults.rows(nba, listOf(FollowedTeam("Rangers", "Hockey"), FollowedTeam("Suns", "Hockey")))
+        assertTrue(rows.none { it.followed })
     }
 
     @Test
@@ -147,12 +150,6 @@ class SportsResultsTest {
         assertEquals("w", ScoreMatcher.leagueQualifier("all", "NCAAW Soccer"))
         assertEquals("u21", ScoreMatcher.leagueQualifier("all", "EURO U-21 Qualifying"))
         assertEquals(null, ScoreMatcher.leagueQualifier("all", "UEFA Nations League"))
-    }
-
-    @Test
-    fun `a followed team of another sport does not star a namesake`() {
-        val rows = SportsResults.rows(nba, listOf(FollowedTeam("Rangers", "Hockey"), FollowedTeam("Suns", "Hockey")))
-        assertTrue(rows.none { it.followed })
     }
 
     @Test

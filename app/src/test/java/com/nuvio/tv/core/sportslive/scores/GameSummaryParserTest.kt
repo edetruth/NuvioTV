@@ -12,10 +12,12 @@ class GameSummaryParserTest {
     private fun summary(file: String, league: EspnLeague, id: String): GameSummary =
         GameSummaryParser.parse(GameSummaryFixtures.dto(file), league, id)!!
 
+    /** ORL 115 @ BOS 105, Final, TD Garden. */
+    private val nbaFinal by lazy { summary(GameSummaryFixtures.NBA, EspnLeagueMap.NBA, "401909994") }
+
     @Test
-    fun `NBA final - header, linescore, team stats, performers, box score and standings`() {
-        // ORL 115 @ BOS 105, Final, TD Garden.
-        val game = summary(GameSummaryFixtures.NBA, EspnLeagueMap.NBA, "401909994")
+    fun `NBA final - header and linescore`() {
+        val game = nbaFinal
         assertEquals(ScoreState.POST, game.state)
         assertTrue(game.isFinal)
         assertEquals("Final", game.clockText)
@@ -29,7 +31,11 @@ class GameSummaryParserTest {
         assertEquals(105, game.home.score)
         assertEquals("11-3", game.home.record)
         assertTrue(game.home.logo!!.endsWith("/bos.png"))
+    }
 
+    @Test
+    fun `NBA final - team stats and the better side`() {
+        val game = nbaFinal
         assertEquals(
             listOf(GameStat.FIELD_GOAL_PCT, GameStat.THREE_POINT_PCT, GameStat.REBOUNDS, GameStat.ASSISTS, GameStat.TURNOVERS),
             game.teamStats.map { it.stat }
@@ -40,19 +46,31 @@ class GameSummaryParserTest {
         assertEquals(ScoreSide.AWAY, fg.better)
         // Fewer turnovers is better: BOS 11 beats ORL 13.
         assertEquals(ScoreSide.HOME, game.teamStats.first { it.stat == GameStat.TURNOVERS }.better)
+    }
 
+    @Test
+    fun `NBA final - performers`() {
+        val game = nbaFinal
         // 2×2: away 1, home 1, away 2, home 2; a player's categories are grouped.
         assertEquals(listOf("D. Bane", "J. Tatum", "F. Wagner", "P. Pritchard"), game.performers.map { it.player })
         assertEquals(listOf(ScoreSide.AWAY, ScoreSide.HOME, ScoreSide.AWAY, ScoreSide.HOME), game.performers.map { it.side })
         assertEquals(listOf(PerformerStat("24", "PTS"), PerformerStat("12", "REB")), game.performers[1].stats)
+    }
 
+    @Test
+    fun `NBA final - box score`() {
+        val game = nbaFinal
         assertEquals(listOf(ScoreSide.AWAY, ScoreSide.HOME), game.boxScore.map { it.side })
         val orl = game.boxScore.first().tables.single()
         assertNull(orl.title)
         assertEquals(listOf("MIN", "PTS", "FG", "3PT", "FT", "REB", "AST", "STL", "BLK", "TO"), orl.labels)
         assertEquals("F. Wagner", orl.rows.first().player)
         assertEquals("115", orl.totals!![1])
+    }
 
+    @Test
+    fun `NBA final - standings, and the sections shown`() {
+        val game = nbaFinal
         assertEquals(listOf("2026-27 Southeast Standings", "2026-27 Atlantic Standings"), game.standings.map { it.title })
         assertEquals(listOf("W", "L", "PCT", "GB", "STRK"), game.standings.first().columns)
         assertEquals(listOf("Orlando"), game.standings.first().rows.filter { it.inGame }.map { it.team })
