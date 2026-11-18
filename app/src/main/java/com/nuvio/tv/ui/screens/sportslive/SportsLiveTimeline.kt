@@ -31,11 +31,14 @@ data class TimelineBlock(
     val key: String get() = row.item.timelineKey
 }
 
-/** One league row: its blocks in time order (start, then lane) and how many [lanes] they stack into. */
+/**
+ * One league row: its blocks in time order (start, then lane) and how many [lanes] they stack into. [id]
+ * is the league's stable key (its name folded), for the row list.
+ */
 @Immutable
-data class TimelineLeague(val name: String, val followed: Boolean, val lanes: Int, val blocks: List<TimelineBlock>)
+data class TimelineLeague(val id: String, val name: String, val followed: Boolean, val lanes: Int, val blocks: List<TimelineBlock>)
 
-/** A local hour boundary on the ruler; [midnight] ticks carry the day. */
+/** A local hour boundary on the ruler; [midnight] ticks are a new local day's first and carry the day. */
 @Immutable
 data class TimelineTick(val ms: Long, val midnight: Boolean)
 
@@ -105,15 +108,59 @@ internal object SportsLiveTimeline {
     private fun nextHour(hourMs: Long, zone: ZoneId): Long =
         Instant.ofEpochMilli(hourMs).atZone(zone).plusHours(1).truncatedTo(ChronoUnit.HOURS).toInstant().toEpochMilli()
 
-    /** Local hour boundaries from [startMs] to [endMs] (both on hours), each a real hour apart. */
+    /**
+     * Local hour boundaries from [startMs] to [endMs] (both on hours), each a real hour apart. A new local
+     * day's first tick is its midnight, also where DST skips 00:00 (the day then starts at 01:00).
+     */
     fun ticks(startMs: Long, endMs: Long, zone: ZoneId): List<TimelineTick> {
         val ticks = ArrayList<TimelineTick>()
         var t = floorHour(startMs, zone)
+        var day = Instant.ofEpochMilli(t).atZone(zone).toLocalDate().minusDays(1)
         while (t <= endMs && ticks.size < MAX_TICKS) {
-            ticks += TimelineTick(t, Instant.ofEpochMilli(t).atZone(zone).hour == 0)
+            val local = Instant.ofEpochMilli(t).atZone(zone)
+            ticks += TimelineTick(t, local.toLocalDate() != day && (ticks.isNotEmpty() || local.hour == 0))
+            day = local.toLocalDate()
             t = nextHour(t, zone)
         }
         return ticks
+    }
+
+    /**
+     * The part of a block from [left] to [right] (px on the ruler) drawn at window offset [scroll] of
+     * width [viewport]: clamped to the window, so a block longer than the window (an 8 h live game) is
+     * never laid out wider than the screen and pushed out of view. A block wholly outside keeps its own
+     * span (it is off screen anyway). Returns (left, right).
+     */
+    fun visibleSpan(left: Float, right: Float, scroll: Float, viewport: Float): Pair<Float, Float> {
+        val from = maxOf(left, scroll)
+        val to = minOf(right, scroll + viewport)
+        return if (to > from) from to to else left to minOf(right, left + viewport)
+    }
+
+    /**
+     * Where the window scrolls to show a focused block from [left] to [right], or null when enough of it
+     * is on screen already (its whole width, or a quarter of the window, as [visibleSpan] draws it). A
+     * block mostly right of the window comes in with its start half an hour from the left edge; one
+     * mostly left of it shows its last part (a long live game: its end, now, at three quarters of the
+     * window) or, if short, its start. Clamped to [minScroll]..[maxScroll].
+     */
+    fun revealTarget(
+        left: Float,
+        right: Float,
+        scroll: Float,
+        viewport: Float,
+        hourPx: Float,
+        minScroll: Float,
+        maxScroll: Float
+    ): Float? {
+        val shown = minOf(right, scroll + viewport) - maxOf(left, scroll)
+        if (shown >= minOf(right - left, viewport * 0.25f)) return null
+        val target = if ((left + right) / 2 < scroll + viewport / 2) {
+            maxOf(left - hourPx * 0.5f, right - viewport * 0.75f)
+        } else {
+            left - hourPx * 0.5f
+        }
+        return target.coerceIn(minScroll, maxOf(minScroll, maxScroll))
     }
 
     /**
@@ -127,6 +174,20 @@ internal object SportsLiveTimeline {
             if (lane == laneEnds.size) laneEnds += block.endMs else laneEnds[lane] = block.endMs
             block.copy(lane = lane)
         }.sortedWith(compareBy({ it.startMs }, { it.lane }))
+    }
+
+    /**
+     * The window offset for ← on a row's first block or → on its last ([move]), the block from [left] to
+     * [right]: half a window on, but never so far that less than a quarter window (or the whole block)
+     * of it stays on screen.
+     */
+    fun edgeScroll(move: TimelineMove, left: Float, right: Float, scroll: Float, viewport: Float): Float {
+        val keep = minOf(right - left, viewport * 0.25f)
+        return if (move == TimelineMove.LEFT) {
+            maxOf(scroll - viewport / 2, minOf(scroll, left + keep - viewport))
+        } else {
+            minOf(scroll + viewport / 2, maxOf(scroll, right - keep))
+        }
     }
 
     /**
@@ -145,11 +206,17 @@ internal object SportsLiveTimeline {
         val byLeague = LinkedHashMap<String, MutableList<TimelineBlock>>()
         val names = HashMap<String, String>()
         val followed = HashSet<String>()
+        // A kickoff with a time of day: a date alone never sits on the ruler (nor counts down).
+        fun startOf(row: ScoreboardRow): Long? =
+            row.art?.takeIf { it.hasTimeOfDay }?.startMs ?: row.item.startMs?.takeIf { row.item.startHasTimeOfDay }
+        val (viewStart, viewMs) = window(tab, nowMs)
+        // The ruler spans at most [MAX_TICKS] hours: a game starting past that is listed under "No time".
+        val rulerStart = floorHour(minOf(viewStart, rows.mapNotNull(::startOf).minOrNull() ?: viewStart), zone)
+        val rulerCap = rulerStart + (MAX_TICKS - 1) * HOUR_MS
         for (row in rows) {
             val item = row.item
-            // A kickoff with a time of day: a date alone never sits on the ruler (nor counts down).
-            val start = row.art?.takeIf { it.hasTimeOfDay }?.startMs ?: item.startMs?.takeIf { item.startHasTimeOfDay }
-            if (start == null) {
+            val start = startOf(row)
+            if (start == null || start >= rulerCap) {
                 untimed += row
                 continue
             }
@@ -185,6 +252,7 @@ internal object SportsLiveTimeline {
         val leagues = byLeague.map { (key, blocks) ->
             val stacked = stack(blocks)
             TimelineLeague(
+                id = key,
                 name = names.getValue(key),
                 followed = key in followed,
                 lanes = (stacked.maxOfOrNull { it.lane } ?: 0) + 1,
@@ -196,10 +264,9 @@ internal object SportsLiveTimeline {
                 .thenBy { league -> league.blocks.filter { it.kind != TimelineBlockKind.FINAL }.minOfOrNull { it.startMs } ?: Long.MAX_VALUE }
                 .thenBy { it.name.lowercase() }
         )
-        val (viewStart, viewMs) = window(tab, nowMs)
         val all = leagues.flatMap { it.blocks }
-        val start = floorHour(minOf(viewStart, all.minOfOrNull { it.startMs } ?: viewStart), zone)
-        val end = ceilHour(maxOf(viewStart + viewMs, all.maxOfOrNull { it.endMs } ?: 0L), zone)
+        val start = rulerStart
+        val end = minOf(ceilHour(maxOf(viewStart + viewMs, all.maxOfOrNull { it.endMs } ?: 0L), zone), rulerCap)
         return TimelineModel(
             leagues = leagues,
             untimed = untimed,
@@ -260,7 +327,7 @@ internal object SportsLiveTimeline {
     }
 
     /** A guard against a runaway ruler (a start far in the future): two weeks of hours. */
-    private const val MAX_TICKS = 24 * 14
+    const val MAX_TICKS = 24 * 14
 }
 
 /** A card's key in lists (unique within a tab: one copy per addon), as the card list keys it. */

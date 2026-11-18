@@ -35,7 +35,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
@@ -54,6 +53,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -100,6 +101,8 @@ internal fun SportsLiveTimelineView(
     model: TimelineModel,
     /** The tab, filter and layout: a new value opens the window afresh. */
     windowKey: String,
+    /** The league rows' scroll, owned by the screen (its refocus after a removal scrolls it too). */
+    rowState: LazyListState,
     selectedKey: String,
     menuKey: String?,
     pickedFirstKey: String?,
@@ -114,7 +117,6 @@ internal fun SportsLiveTimelineView(
 ) {
     val currentModel by rememberUpdatedState(model)
     val scope = rememberCoroutineScope()
-    val rowState = rememberSaveable(windowKey, saver = LazyListState.Saver) { LazyListState() }
     val itemsByKey = remember(model) { model.items.associateBy { it.timelineKey } }
     val selectedRequester = itemsByKey[selectedKey]?.let(cardFocusRequester)
     var focusedKey by remember { mutableStateOf<String?>(null) }
@@ -133,15 +135,18 @@ internal fun SportsLiveTimelineView(
         LaunchedEffect(minScroll, maxScroll) { scroll.updateBounds(minScroll, maxScroll) }
         val hourPx = pxPerMs * HOUR_MS
 
-        // Keeps the focused block in the window: enough of it shown, else its start (or, for a block
-        // longer than the window, its latest part) brought in with half an hour before it.
+        // Keeps the focused block in the window, by the same span it is drawn with.
         fun reveal(block: TimelineBlock) {
-            val left = xOf(block.startMs)
-            val right = xOf(block.endMs)
-            val from = scroll.value
-            val shown = minOf(right, from + viewportPx) - maxOf(left, from)
-            if (shown >= minOf(right - left, viewportPx * 0.25f)) return
-            val target = if (right - left > viewportPx * 0.75f && right <= from) right - viewportPx * 0.75f else left - hourPx * 0.5f
+            val target = SportsLiveTimeline.revealTarget(
+                xOf(block.startMs), xOf(block.endMs), scroll.value, viewportPx, hourPx, minScroll, maxScroll
+            ) ?: return
+            scope.launch { scroll.animateTo(target, tween(SCROLL_MS)) }
+        }
+
+        // ← on a row's first block, → on its last: the window moves on by half its width, keeping a
+        // part of the focused block on screen.
+        fun scrollPast(block: TimelineBlock, move: TimelineMove) {
+            val target = SportsLiveTimeline.edgeScroll(move, xOf(block.startMs), xOf(block.endMs), scroll.value, viewportPx)
             scope.launch { scroll.animateTo(target.coerceIn(minScroll, maxScroll), tween(SCROLL_MS)) }
         }
 
@@ -255,12 +260,13 @@ internal fun SportsLiveTimelineView(
                                 target != null -> focus(target)
                                 move == TimelineMove.UP -> runCatching { upFocusRequester.requestFocus() }
                                 move == TimelineMove.DOWN -> runCatching { watchFocusRequester.requestFocus() }
+                                else -> currentModel.blocks[from]?.let { scrollPast(it, move) }
                             }
                             true
                         },
                     verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs)
                 ) {
-                    itemsIndexed(model.leagues, key = { _, league -> "league|${league.name}" }) { _, league ->
+                    itemsIndexed(model.leagues, key = { _, league -> "league|${league.id}" }) { _, league ->
                         Row(verticalAlignment = Alignment.Top) {
                             LeagueLabel(league.name, league.followed)
                             Box(
@@ -272,18 +278,16 @@ internal fun SportsLiveTimelineView(
                                 league.blocks.forEach { block ->
                                     val item = block.row.item
                                     val blockX = xOf(block.startMs)
-                                    val widthPx = (xOf(block.endMs) - blockX).coerceAtLeast(1f)
+                                    val blockRight = xOf(block.endMs)
+                                    val widthPx = (blockRight - blockX).coerceAtLeast(1f)
                                     val laneY = with(density) { (LANE_HEIGHT * block.lane).roundToPx() }
+                                    val blockHeight = with(density) { (LANE_HEIGHT - BLOCK_GAP).roundToPx() }
                                     TimelineBlockCard(
                                         block = block,
                                         selected = block.key == selectedKey,
                                         menuOpen = block.key == menuKey,
                                         pickedFirst = block.key == pickedFirstKey,
                                         wide = with(density) { widthPx.toDp() } >= WIDE_BLOCK,
-                                        // Keeps the block's words on screen when its start is left of the window.
-                                        contentShiftPx = {
-                                            (scroll.value - blockX).coerceIn(0f, (widthPx - with(density) { MIN_STICKY_WIDTH.toPx() }).coerceAtLeast(0f))
-                                        },
                                         onClick = { onClick(item) },
                                         onLongClick = { onLongClick(item) },
                                         onFocus = {
@@ -292,9 +296,17 @@ internal fun SportsLiveTimelineView(
                                             onFocus(item)
                                         },
                                         modifier = Modifier
-                                            .offset { IntOffset((blockX - scroll.value).roundToInt(), laneY) }
-                                            .width(with(density) { widthPx.toDp() })
-                                            .height(LANE_HEIGHT - BLOCK_GAP)
+                                            // Laid out as the part inside the window (read at layout, so
+                                            // scrolling never recomposes): a block longer than the window is
+                                            // never squeezed to the row's width and pushed out of view, and
+                                            // its words stay at the visible part's left.
+                                            .layout { measurable, constraints ->
+                                                val offset = scroll.value
+                                                val (from, to) = SportsLiveTimeline.visibleSpan(blockX, blockRight, offset, viewportPx)
+                                                val width = (to - from).roundToInt().coerceIn(1, maxOf(1, constraints.maxWidth))
+                                                val placeable = measurable.measure(Constraints.fixed(width, blockHeight))
+                                                layout(width, blockHeight) { placeable.place((from - offset).roundToInt(), laneY) }
+                                            }
                                             .focusRequester(cardFocusRequester(item))
                                     )
                                 }
@@ -385,7 +397,6 @@ private fun TimelineBlockCard(
     menuOpen: Boolean,
     pickedFirst: Boolean,
     wide: Boolean,
-    contentShiftPx: () -> Float,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     onFocus: () -> Unit,
@@ -457,7 +468,6 @@ private fun TimelineBlockCard(
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .offset { IntOffset(contentShiftPx().roundToInt(), 0) }
                 .padding(horizontal = NuvioTheme.spacing.sm, vertical = NuvioTheme.spacing.xxs),
             horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm),
             verticalAlignment = Alignment.CenterVertically
@@ -725,8 +735,6 @@ private val BLOCK_GAP: Dp = 6.dp
 private val UNTIMED_WIDTH: Dp = 200.dp
 /** A block this wide shows full team names; a narrower one their abbreviations. */
 private val WIDE_BLOCK: Dp = 240.dp
-/** Room the block's words keep when they slide right to stay on screen. */
-private val MIN_STICKY_WIDTH: Dp = 120.dp
 private val FOLLOWED_GOLD = Color(0xFFFFC107)
 private val UPCOMING_OUTLINE = Color(0xFF2A3442)
 private val LIVE_BLOCK_SELECTED = Color(0xFF3A171B)

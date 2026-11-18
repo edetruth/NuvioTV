@@ -236,6 +236,82 @@ class SportsLiveTimelineTest {
         assertEquals(at("2026-11-17T10:30:00Z"), SportsLiveTimeline.ceilHour(at("2026-11-17T10:30:00Z"), kolkata))
     }
 
+    @Test
+    fun `a day whose 00-00 DST skips still gets its midnight mark, at 01-00`() {
+        val santiago = ZoneId.of("America/Santiago")
+        // 6 September 2026: 00:00 → 01:00 in Chile (04:00 UTC).
+        val ticks = SportsLiveTimeline.ticks(at("2026-09-06T01:00:00Z"), at("2026-09-06T07:00:00Z"), santiago)
+        val firstOfDay = ticks.first { Instant.ofEpochMilli(it.ms).atZone(santiago).dayOfMonth == 6 }
+        assertEquals(1, Instant.ofEpochMilli(firstOfDay.ms).atZone(santiago).hour)
+        assertEquals(listOf(firstOfDay), ticks.filter { it.midnight })
+    }
+
+    @Test
+    fun `the ruler is capped at two weeks, a game further out is listed under No time`() {
+        val far = item("Bulls @ Heat", NOW + 20 * 24 * HOUR, isLive = false)
+        val near = item("Celtics @ Knicks", NOW + HOUR, isLive = false)
+        val model = SportsLiveTimeline.model(
+            listOf(row(far, ScoreboardGroup.MORE_GAMES), row(near, ScoreboardGroup.STARTING_SOON)),
+            SportsLiveTab.UPCOMING, NOW, utc
+        )
+        assertEquals(listOf(far), model.untimed.map { it.item })
+        assertTrue(model.endMs - model.startMs <= (SportsLiveTimeline.MAX_TICKS - 1) * HOUR)
+        assertTrue(model.ticks.size <= SportsLiveTimeline.MAX_TICKS)
+        assertEquals(model.ticks.last().ms, model.endMs)
+    }
+
+    @Test
+    fun `an 8 h live game is drawn inside the window and revealed with now on screen`() {
+        val marathon = item("Pacers @ 76ers", NOW - 8 * HOUR)
+        val model = SportsLiveTimeline.model(listOf(row(marathon, ScoreboardGroup.LIVE)), SportsLiveTab.LIVE_NOW, NOW, utc)
+        val block = model.blocks.getValue(marathon.timelineKey)
+        assertEquals(NOW, block.endMs)
+        // The screen's geometry: 1600 px for the opening 6 h window, measured from its start.
+        val viewport = 1600f
+        val pxPerMs = viewport / model.viewMs
+        fun x(ms: Long) = (ms - model.viewStartMs) * pxPerMs
+        val left = x(block.startMs)
+        val right = x(block.endMs)
+        val minScroll = x(model.startMs)
+        val maxScroll = x(model.endMs) - viewport
+        // Opening window (scroll 0): the drawn part is inside the window, never the 8 h width.
+        val (from, to) = SportsLiveTimeline.visibleSpan(left, right, 0f, viewport)
+        assertTrue(from >= 0f && to <= viewport && to > from)
+        // Only 1 h of it shows: focusing it scrolls so its end (now) sits at three quarters of the window.
+        val target = SportsLiveTimeline.revealTarget(left, right, 0f, viewport, pxPerMs * HOUR, minScroll, maxScroll)!!
+        val (shownFrom, shownTo) = SportsLiveTimeline.visibleSpan(left, right, target, viewport)
+        assertTrue(shownFrom >= target && shownTo <= target + viewport)
+        assertTrue(shownTo - shownFrom >= viewport * 0.25f)
+        assertTrue(x(NOW) in target..(target + viewport))
+        // Once shown, focusing it again does not move the window.
+        assertNull(SportsLiveTimeline.revealTarget(left, right, target, viewport, pxPerMs * HOUR, minScroll, maxScroll))
+    }
+
+    @Test
+    fun `a game right of the window comes in by its start, and the edge scroll keeps the focused block on screen`() {
+        val viewport = 1200f
+        val hour = 200f
+        // A 2 h game from 1500 to 1900, the window at 0: its start comes in half an hour from the edge.
+        assertEquals(1400f, SportsLiveTimeline.revealTarget(1500f, 1900f, 0f, viewport, hour, -5000f, 5000f))
+        // ← on the first block (at 100..500): half a window back, but its first quarter window stays in.
+        assertEquals(-600f, SportsLiveTimeline.edgeScroll(TimelineMove.LEFT, 100f, 500f, 0f, viewport))
+        val back = SportsLiveTimeline.edgeScroll(TimelineMove.LEFT, 100f, 500f, 0f, viewport)
+        assertTrue(SportsLiveTimeline.visibleSpan(100f, 500f, back, viewport).let { (f, t) -> t - f >= viewport * 0.25f })
+        // → on the last block (at 900..1100): on by at most half a window, its last part kept.
+        val on = SportsLiveTimeline.edgeScroll(TimelineMove.RIGHT, 900f, 1100f, 0f, viewport)
+        assertEquals(600f, on)
+        assertTrue(SportsLiveTimeline.visibleSpan(900f, 1100f, on, viewport).let { (f, t) -> t > f && f >= on })
+    }
+
+    @Test
+    fun `league rows are keyed by a stable id whatever their case`() {
+        val a = item("Arsenal vs Chelsea", NOW, sport = "Premier League")
+        val b = item("Spurs vs Fulham", NOW + 3 * HOUR, sport = "premier league")
+        val model = SportsLiveTimeline.model(listOf(row(a, ScoreboardGroup.LIVE), row(b, ScoreboardGroup.MORE_GAMES)), SportsLiveTab.LIVE_NOW, NOW, utc)
+        assertEquals(listOf("premier league"), model.leagues.map { it.id })
+        assertEquals("Premier League", model.leagues.single().name)
+    }
+
     // --- spoilers ---
 
     @Test

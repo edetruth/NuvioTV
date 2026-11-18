@@ -168,9 +168,11 @@ fun SportsLiveScreen(
     // The Scoreboard layout (#23): Live now and Upcoming only, remembered per tab.
     val layouts by viewModel.layouts.collectAsStateWithLifecycle()
     val layout = SportsLiveLayout.of(layouts, uiState.selectedTab)
-    // Regrouped on the view model's clock, so Starting soon and its countdowns move on as time passes.
+    // Regrouped on the view model's clock, so Starting soon and its countdowns move on as time passes. Keyed
+    // on the whole minute: every state emission (a selection change too) carries a fresh nowMs.
+    val clockMs = uiState.nowMs / MINUTE_MS * MINUTE_MS
     val scoreboardRowsOf: (List<SportsLiveItem>) -> List<ScoreboardRow> =
-        remember(scores, scoresMode, revealed, uiState.selectedTab, uiState.justEnded, followedTeams, uiState.nowMs) {
+        remember(scores, scoresMode, revealed, uiState.selectedTab, uiState.justEnded, followedTeams, clockMs) {
             { items ->
                 scoreboardRows(
                     items = items,
@@ -178,7 +180,7 @@ fun SportsLiveScreen(
                     scores = scores,
                     mode = scoresMode,
                     revealed = revealed,
-                    nowMs = uiState.nowMs,
+                    nowMs = clockMs,
                     ended = if (uiState.selectedTab == SportsLiveTab.LIVE_NOW) uiState.justEnded else emptyMap(),
                     followsSide = { item, side -> followedTeams.any { SportsLiveTeams.followsSideOfAnySource(it, side, item) } }
                 )
@@ -422,6 +424,8 @@ private fun SportsLiveContent(
     // A layout change is a new list, like a filter change.
     val filterKey = "${uiState.selectedTab.name}|${uiState.selectedFilter.orEmpty()}|${if (scoreboard || timeline) layout.name else ""}"
     val listState = rememberSaveable(filterKey, saver = LazyListState.Saver) { LazyListState() }
+    // The Timeline's league rows (#24), saved like the list's position.
+    val timelineRowState = rememberSaveable(filterKey, saver = LazyListState.Saver) { LazyListState() }
     val baseStateLabelOf = rememberSportsLiveStateLabeler(uiState.selectedTab)
     val finalLabel = stringResource(R.string.sports_live_chip_final_note)
     val probablyEndedLabel = stringResource(R.string.sports_live_probably_ended)
@@ -449,11 +453,11 @@ private fun SportsLiveContent(
     val boardRowOf = remember(boardRows) { boardRows?.associateBy { it.item.listKey }.orEmpty() }
     // Rebuilt with the rows (scores, settings, reveals) and on the view model's clock, never per frame.
     val timelineModel = if (timeline && boardRows != null) {
-        remember(boardRows, uiState.selectedTab, uiState.nowMs, uiState.justEnded) {
+        remember(boardRows, uiState.selectedTab, uiState.nowMs / MINUTE_MS, uiState.justEnded) {
             SportsLiveTimeline.model(
                 rows = boardRows,
                 tab = uiState.selectedTab,
-                nowMs = uiState.nowMs,
+                nowMs = uiState.nowMs / MINUTE_MS * MINUTE_MS,
                 zone = ZoneId.systemDefault(),
                 ended = if (uiState.selectedTab == SportsLiveTab.LIVE_NOW) uiState.justEnded else emptyMap()
             )
@@ -466,11 +470,21 @@ private fun SportsLiveContent(
     }
     // The Timeline opens on its first live game (else the next to start), not on its first row's first block.
     val timelineEntryKey = timelineModel?.let { SportsLiveTimeline.entryKey(it, focusedCardKey) }
+    // Until a block is focused there, the Timeline's selection is its entry game, not the view model's
+    // default (the first card in addon order).
     val selected = items.firstOrNull { it.listKey == focusedCardKey && it.id == uiState.selectedItemId }
+        ?: timelineEntryKey?.let { key -> items.firstOrNull { it.listKey == key } }
         ?: items.firstOrNull { it.id == uiState.selectedItemId }
-        ?: items.firstOrNull { it.listKey == timelineEntryKey }
         ?: items.firstOrNull()
     val selectedCardFocusRequester = selected?.let(::cardFocusRequester)
+    // Brings the card [key] (at [index] in [items]) on screen: its list item, or on the Timeline its row.
+    suspend fun scrollToCard(key: String, index: Int, onlyIfHidden: Boolean = true) {
+        val model = timelineModel
+        val state = if (model != null) timelineRowState else listState
+        val target = model?.navRows?.indexOfFirst { key in it } ?: index
+        if (target < 0) return
+        if (!onlyIfHidden || state.layoutInfo.visibleItemsInfo.none { it.index == target }) state.scrollToItem(target)
+    }
     // Where a move into the list lands: the focused card while on screen, else the first card on
     // screen. Read from the layout, so Down never aims at a card scrolled away (which traps focus).
     val currentItemKeys by rememberUpdatedState(items.map { it.listKey })
@@ -549,7 +563,7 @@ private fun SportsLiveContent(
         if (target == null) {
             runCatching { activeTabFocusRequester.requestFocus() }
         } else {
-            if (listState.layoutInfo.visibleItemsInfo.none { it.index == targetIndex }) listState.scrollToItem(targetIndex)
+            scrollToCard(target.listKey, targetIndex)
             repeat(2) { withFrameNanos { } }
             runCatching { cardFocusRequester(target).requestFocus() }
         }
@@ -668,7 +682,7 @@ private fun SportsLiveContent(
         val key = focusedCardKey ?: return@LaunchedEffect
         val index = items.indexOfFirst { it.listKey == key }
         if (index < 0) return@LaunchedEffect
-        listState.scrollToItem(index)
+        scrollToCard(key, index, onlyIfHidden = false)
         repeat(2) { withFrameNanos { } }
         runCatching { cardFocusRequesters[key]?.requestFocus() }
     }
@@ -689,10 +703,8 @@ private fun SportsLiveContent(
         if (key in itemKeys) {
             // Moved (into the Just ended strip, #60): keep the focused card in view.
             val index = itemKeys.indexOf(key)
-            if (listFocusedAtChange && shownKeys.indexOf(key) != index &&
-                listState.layoutInfo.visibleItemsInfo.none { it.index == index }
-            ) {
-                listState.scrollToItem(index)
+            if (listFocusedAtChange && shownKeys.indexOf(key) != index) {
+                scrollToCard(key, index)
                 repeat(2) { withFrameNanos { } }
                 runCatching { cardFocusRequesters[key]?.requestFocus() }
             }
@@ -707,8 +719,7 @@ private fun SportsLiveContent(
             runCatching { activeTabFocusRequester.requestFocus() }
             return@LaunchedEffect
         }
-        val index = items.indexOf(next)
-        if (listState.layoutInfo.visibleItemsInfo.none { it.index == index }) listState.scrollToItem(index)
+        scrollToCard(next.listKey, items.indexOf(next))
         repeat(2) { withFrameNanos { } }
         runCatching { cardFocusRequester(next).requestFocus() }
     }
@@ -851,9 +862,12 @@ private fun SportsLiveContent(
 
         val selectedPreview = preview?.takeIf { it.item.listKey == selected.listKey }
         if (timelineModel != null) {
+            // Recreated per tab and filter, so its focus restorer never brings back another list's block.
+            key(filterKey) {
             SportsLiveTimelineView(
                 model = timelineModel,
                 windowKey = filterKey,
+                rowState = timelineRowState,
                 selectedKey = selected.listKey,
                 menuKey = menuCardKey,
                 pickedFirstKey = pickFirst?.listKey,
@@ -871,6 +885,7 @@ private fun SportsLiveContent(
                     .weight(1f)
                     .fillMaxWidth()
             )
+            }
             val selectedRow = boardRowOf[selected.listKey] ?: return@Column
             val event = gameOf(selected)
             SportsLiveTimelinePanel(
@@ -1147,6 +1162,7 @@ private fun SportsLiveFilterRow(
 }
 
 private const val FOLLOW_REFOCUS_WINDOW_MS = 1_500L
+private const val MINUTE_MS = 60_000L
 
 /** The Timeline's bottom panel (preview, scoreline, linescore, buttons). */
 private val TIMELINE_PANEL_HEIGHT = 168.dp
