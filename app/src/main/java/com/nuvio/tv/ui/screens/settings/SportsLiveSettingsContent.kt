@@ -220,6 +220,14 @@ internal fun SportsLiveSettingsContent(
                 modifier = Modifier.fillMaxWidth(),
                 title = stringResource(R.string.sports_live_my_teams_title)
             ) {
+                SettingsToggleRow(
+                    title = stringResource(R.string.sports_live_setting_catch_up_row),
+                    subtitle = stringResource(R.string.sports_live_setting_catch_up_row_subtitle),
+                    checked = state.catchUpRow,
+                    onToggle = { viewModel.setCatchUpRow(!state.catchUpRow) },
+                    // Scores Off means no score data at all: the row is off with it.
+                    enabled = state.showSection && state.scores.mode != ScoresMode.OFF
+                )
                 if (state.followedTeams.isEmpty()) {
                     Text(
                         text = stringResource(R.string.sports_live_my_teams_empty),

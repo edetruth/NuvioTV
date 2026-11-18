@@ -3,6 +3,8 @@ package com.nuvio.tv.ui.screens.home
 import android.util.Log
 import androidx.lifecycle.viewModelScope
 import com.nuvio.tv.R
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveCatchUpHomeRow
+import com.nuvio.tv.ui.screens.sportslive.catchUpName
 import com.nuvio.tv.core.network.NetworkResult
 import com.nuvio.tv.domain.model.Addon
 import com.nuvio.tv.domain.model.CatalogDescriptor
@@ -584,6 +586,18 @@ internal suspend fun HomeViewModel.updateCatalogRowsPipeline() {
     val titlesSnapshot = customCatalogTitles
     val liveNowItems = _uiState.value.liveNowShown
     val liveNowTitle = if (liveNowItems.isNotEmpty()) appContext.getString(R.string.sports_live_home_row_title) else ""
+    // The Catch up row (#58) heads the sports rows: ESPN's names and "Replay", never a score.
+    val catchUpItems = _uiState.value.catchUpItems
+    val catchUpRow = if (catchUpItems.isEmpty()) {
+        null
+    } else {
+        SportsLiveCatchUpHomeRow.build(
+            items = catchUpItems,
+            title = appContext.getString(R.string.sports_live_catch_up_title),
+            names = { appContext.getString(R.string.sports_live_results_menu_title, it.event.away.catchUpName, it.event.home.catchUpName) },
+            replayLabel = appContext.getString(R.string.sports_live_results_replay)
+        )
+    }
 
     val (displayRows, baseHeroItems, baseGridItems, fullRowsFiltered) = withContext(Dispatchers.Default) {
         val rawRows = orderedKeys.mapNotNull { key ->
@@ -729,6 +743,7 @@ internal suspend fun HomeViewModel.updateCatalogRowsPipeline() {
                 placeholderDescriptors.associateBy { it.catalogKey }
             }
             val addedCollectionIds = mutableSetOf<String>()
+            if (catchUpRow != null) add(HomeRow.Catalog(catchUpRow))
             if (liveNowItems.isNotEmpty()) {
                 add(HomeRow.Catalog(SportsLiveHomeRow.build(liveNowItems, liveNowTitle, liveNowScoreLabels)))
             }

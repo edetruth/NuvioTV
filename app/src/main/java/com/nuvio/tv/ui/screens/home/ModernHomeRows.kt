@@ -122,6 +122,7 @@ import com.nuvio.tv.ui.components.continueWatchingImageModel
 import com.nuvio.tv.ui.components.continueWatchingShouldBlur
 import com.nuvio.tv.ui.components.continueWatchingUsesEpisodeThumbnails
 import com.nuvio.tv.ui.components.LocalCardDepthStyle
+import com.nuvio.tv.ui.components.DrawnCardArtOr
 import com.nuvio.tv.ui.components.MonochromePosterPlaceholder
 import com.nuvio.tv.ui.components.TrailerPlayer
 import com.nuvio.tv.ui.components.WatchedMarker
@@ -1518,7 +1519,7 @@ private fun ModernCarouselCard(
                             )
                         }
                     } else {
-                        MonochromePosterPlaceholder()
+                        DrawnCardArtOr(item.metaPreview?.id) { MonochromePosterPlaceholder() }
                     }
 
                     // GIF overlay: renders on top of image or emoji, visible only once loaded

@@ -1,6 +1,7 @@
 package com.nuvio.tv.ui.screens.home
 
 import android.util.Log
+import com.nuvio.tv.core.sportslive.scores.CatchUpItem
 import androidx.lifecycle.viewModelScope
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveTab
@@ -69,6 +70,13 @@ internal fun HomeViewModel.setLiveNowScoreLabels(labels: Map<String, String>) {
 internal fun HomeViewModel.setLiveNowEnded(keys: Set<String>) {
     if (keys == _uiState.value.liveNowEnded) return
     _uiState.update { it.copy(liveNowEnded = keys) }
+    if (addonsCache.isNotEmpty()) scheduleUpdateCatalogRows()
+}
+
+/** The Catch up row's items (#58, from Home's screen): the rows are rebuilt only when they change. */
+internal fun HomeViewModel.setCatchUpItems(items: List<CatchUpItem>) {
+    if (items == _uiState.value.catchUpItems) return
+    _uiState.update { it.copy(catchUpItems = items) }
     if (addonsCache.isNotEmpty()) scheduleUpdateCatalogRows()
 }
 

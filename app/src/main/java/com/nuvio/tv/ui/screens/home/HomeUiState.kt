@@ -82,7 +82,9 @@ data class HomeUiState(
     val mdbListRatingOrder: List<String> = com.nuvio.tv.domain.model.MDBListSettings.DEFAULT_RATING_ORDER,
     val liveNowItems: List<SportsLiveItem> = emptyList(),
     /** Card keys of [liveNowItems] whose game is over (#60): Home drops them (no Just ended strip there). */
-    val liveNowEnded: Set<String> = emptySet()
+    val liveNowEnded: Set<String> = emptySet(),
+    /** The Catch up row (#58): followed teams' replays since the last visit, above Live now. */
+    val catchUpItems: List<com.nuvio.tv.core.sportslive.scores.CatchUpItem> = emptyList()
 ) {
     /** The Live now row's cards: [liveNowItems] without the ended games. */
     val liveNowShown: List<SportsLiveItem>

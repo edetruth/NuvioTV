@@ -162,6 +162,18 @@ class SportsLiveSettingsViewModelTest {
     }
 
     @Test
+    fun `the catch-up row is on by default and the switch turns it off`() = runTest {
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.catchUpRow)
+
+        viewModel.setCatchUpRow(false)
+        advanceUntilIdle()
+        assertFalse(viewModel.uiState.value.catchUpRow)
+        assertFalse(prefs.catchUpRow.first())
+    }
+
+    @Test
     fun `cycleOverride goes Auto Include Exclude Auto`() = runTest {
         val viewModel = newViewModel()
         val key = SportsLiveCatalogPolicy.keyFor(PLAIN_ADDON, MOVIES)

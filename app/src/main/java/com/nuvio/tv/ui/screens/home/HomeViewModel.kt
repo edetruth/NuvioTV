@@ -925,7 +925,15 @@ class HomeViewModel @Inject constructor(
     fun findLiveNowItem(id: String): SportsLiveItem? =
         _uiState.value.liveNowItems.firstOrNull { it.id == id }
 
-    private fun isLiveNowItem(id: String): Boolean = findLiveNowItem(id) != null
+    /** The catch-up item behind a card of the Catch up row (#58), or null when it has gone. */
+    fun findCatchUpItem(id: String): com.nuvio.tv.core.sportslive.scores.CatchUpItem? {
+        val eventId = com.nuvio.tv.ui.screens.sportslive.SportsLiveCatchUpHomeRow.eventIdOf(id) ?: return null
+        return _uiState.value.catchUpItems.firstOrNull { it.key == eventId }
+    }
+
+    // Live now and Catch up cards are not addon metas.
+    private fun isLiveNowItem(id: String): Boolean =
+        findLiveNowItem(id) != null || com.nuvio.tv.ui.screens.sportslive.SportsLiveCatchUpHomeRow.eventIdOf(id) != null
 
     private suspend fun loadAllCatalogs(addons: List<Addon>, forceReload: Boolean = false) =
         loadAllCatalogsPipeline(addons, forceReload)

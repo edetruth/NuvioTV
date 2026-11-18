@@ -48,7 +48,15 @@ import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.core.sportslive.SportsLiveEndedGames
 import com.nuvio.tv.core.sportslive.scores.LiveScoresRepository
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveCatchUpHomeRow
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveCatchUpMenu
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveCatchUpViewModel
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveGameRequests
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveScoresViewModel
+import com.nuvio.tv.ui.screens.sportslive.catchUpGameRequest
+import com.nuvio.tv.ui.screens.sportslive.rememberCatchUpCardArt
+import com.nuvio.tv.ui.components.LocalDrawnCardArt
+import androidx.compose.runtime.CompositionLocalProvider
 import com.nuvio.tv.ui.screens.sportslive.TrackLiveScores
 import com.nuvio.tv.ui.screens.sportslive.rememberScoreChipStrings
 import com.nuvio.tv.ui.screens.sportslive.rememberSportsLiveClockMs
@@ -102,9 +110,33 @@ fun HomeScreen(
     onNavigateToFolderDetail: (String, String) -> Unit = { _, _ -> },
     onNavigateToSportsLive: () -> Unit = {},
     onLiveNowItemClick: (SportsLiveItem) -> Unit = {},
-    liveScoresViewModel: SportsLiveScoresViewModel = hiltViewModel()
+    /** Opens the Game page on the request just put in [SportsLiveGameRequests] (a Catch up card's menu). */
+    onOpenSportsLiveGame: () -> Unit = {},
+    liveScoresViewModel: SportsLiveScoresViewModel = hiltViewModel(),
+    catchUpViewModel: SportsLiveCatchUpViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    // The Catch up row (#58): worked out when Home resumes, never on a timer.
+    val catchUpItems by catchUpViewModel.homeItems.collectAsStateWithLifecycle()
+    LaunchedEffect(catchUpItems) { viewModel.setCatchUpItems(catchUpItems) }
+    val catchUpCardArt = rememberCatchUpCardArt(uiState.catchUpItems)
+    var catchUpMenuKey by remember { mutableStateOf<String?>(null) }
+    uiState.catchUpItems.firstOrNull { it.key == catchUpMenuKey }?.let { item ->
+        SportsLiveCatchUpMenu(
+            item = item,
+            onOpenGame = {
+                catchUpMenuKey = null
+                SportsLiveGameRequests.open(catchUpGameRequest(item))
+                onOpenSportsLiveGame()
+            },
+            onMarkWatched = {
+                catchUpMenuKey = null
+                catchUpViewModel.markWatched(item)
+            },
+            onDismiss = { catchUpMenuKey = null }
+        )
+    }
 
     // Live now cards get a score label under Show only (Home has no focus reveal), polled only while
     // Home is started.
@@ -135,6 +167,7 @@ fun HomeScreen(
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
+                catchUpViewModel.onOpened()
                 viewModel.beginShuffleHomeVisit()
                 viewModel.refreshHomeCatalogsIfStale()
                 viewModel.refreshContinueWatchingIfReleased()
@@ -185,8 +218,11 @@ fun HomeScreen(
     }
     val onCatalogItemLongPress: (MetaPreview, String) -> Unit = remember {
         { item, addonBaseUrl ->
-            // Live now cards have no poster options; a long press on them does nothing.
-            if (!SportsLiveHomeRow.isLiveNowRow(addonBaseUrl)) {
+            // Live now cards have no poster options; a long press on them does nothing. A Catch up card's
+            // offers Game stats (score behind Reveal) and Mark as watched.
+            if (SportsLiveCatchUpHomeRow.isCatchUpRow(addonBaseUrl)) {
+                catchUpMenuKey = SportsLiveCatchUpHomeRow.eventIdOf(item.id)
+            } else if (!SportsLiveHomeRow.isLiveNowRow(addonBaseUrl)) {
                 posterOptionsTarget = HomePosterOptionsTarget(item, addonBaseUrl)
                 viewModel.refreshPosterLibraryStatus(item)
             }
@@ -194,9 +230,20 @@ fun HomeScreen(
     }
 
     // Cards of the Live now row open the Sports & Live item, not an addon detail page.
-    val onNavigateToDetailStable: (String, String, String) -> Unit = remember(onNavigateToDetail, onLiveNowItemClick, viewModel) {
+    val onNavigateToDetailStable: (String, String, String) -> Unit = remember(onNavigateToDetail, onLiveNowItemClick, viewModel, catchUpViewModel) {
         { itemId, itemType, addonBaseUrl ->
-            if (SportsLiveHomeRow.isLiveNowRow(addonBaseUrl)) {
+            if (SportsLiveCatchUpHomeRow.isCatchUpRow(addonBaseUrl)) {
+                // OK plays the replay (a series replay opens its page, as on the Game page).
+                viewModel.findCatchUpItem(itemId)?.let { item ->
+                    val replay = item.replay
+                    if (replay.apiType == "series") {
+                        onNavigateToDetail(replay.id, replay.apiType, replay.addonBaseUrl)
+                    } else {
+                        catchUpViewModel.onPlay(item)
+                        onLiveNowItemClick(replay)
+                    }
+                }
+            } else if (SportsLiveHomeRow.isLiveNowRow(addonBaseUrl)) {
                 viewModel.findLiveNowItem(itemId)?.let { item ->
                     viewModel.startLiveNowZapSession(item)
                     onLiveNowItemClick(item)
@@ -321,6 +368,8 @@ fun HomeScreen(
         }
     }
 
+    // Catch up cards (#58) carry no image: their drawn art (logos and names, never a score) stands in.
+    CompositionLocalProvider(LocalDrawnCardArt provides catchUpCardArt) {
     Box(
         modifier = Modifier.fillMaxSize()
     ) {
@@ -511,6 +560,7 @@ fun HomeScreen(
                 )
             }
         }
+    }
     }
 
     val selectedPoster = posterOptionsTarget

@@ -77,6 +77,7 @@ import com.nuvio.tv.core.sportslive.scores.ScoreChips
 import com.nuvio.tv.core.sportslive.scores.ScoreDetails
 import com.nuvio.tv.core.sportslive.scores.ScoreDetailsBuilder
 import com.nuvio.tv.core.sportslive.scores.ScoreSide
+import com.nuvio.tv.core.sportslive.scores.CatchUpItem
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.TeamFollows
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
@@ -116,6 +117,7 @@ fun SportsLiveScreen(
     resultsViewModel: SportsLiveResultsViewModel = hiltViewModel(),
     scoresViewModel: SportsLiveScoresViewModel = hiltViewModel(),
     remindersViewModel: SportsLiveRemindersViewModel = hiltViewModel(),
+    catchUpViewModel: SportsLiveCatchUpViewModel = hiltViewModel(),
     /** Opens the item's Stream screen; the Boolean: the user picks there (no autoplay). */
     onPlay: (SportsLiveItem, Boolean) -> Unit,
     onPlayTarget: (SportsLiveZapTarget) -> Unit,
@@ -135,6 +137,8 @@ fun SportsLiveScreen(
     val resultsState by resultsViewModel.uiState.collectAsStateWithLifecycle()
     val reminders by remindersViewModel.state.collectAsStateWithLifecycle()
     SportsLiveReminderToasts(remindersViewModel)
+    // The Catch up strip (#58) at the top of Live Now: worked out when the screen resumes, never on a timer.
+    val catchUpItems by catchUpViewModel.items.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     // Live scores for the Live now and Upcoming cards on screen, polled only while the screen is
@@ -267,6 +271,7 @@ fun SportsLiveScreen(
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_RESUME -> {
+                    catchUpViewModel.onOpened()
                     previewPlayer.suspended = false
                     viewModel.onScreenVisible(true)
                 }
@@ -371,7 +376,23 @@ fun SportsLiveScreen(
             },
             onToggleResultFollow = resultsViewModel::toggleFollow,
             reminders = reminders,
-            onToggleReminder = remindersViewModel::toggle
+            onToggleReminder = remindersViewModel::toggle,
+            catchUpItems = catchUpItems,
+            onPlayCatchUp = { item ->
+                // OK plays the replay (a series replay opens its page, as on the Game page).
+                val replay = item.replay
+                if (replay.apiType == "series") {
+                    onOpenDetail(replay)
+                } else {
+                    catchUpViewModel.onPlay(item)
+                    playViewModel.play(replay)
+                }
+            },
+            onOpenCatchUpGame = { item ->
+                SportsLiveGameRequests.open(catchUpGameRequest(item))
+                onOpenGame()
+            },
+            onMarkCatchUpWatched = catchUpViewModel::markWatched
         )
     }
 }
@@ -448,7 +469,12 @@ private fun SportsLiveContent(
     onToggleResultFollow: (ResultRow, ScoreSide) -> Unit,
     /** Reminders (#44): the bell on upcoming games, and Remind me / Cancel reminder. */
     reminders: RemindersState = RemindersState(),
-    onToggleReminder: (SportsLiveItem) -> Unit = {}
+    onToggleReminder: (SportsLiveItem) -> Unit = {},
+    /** The Catch up strip's items (#58): shown at the top of Live Now. */
+    catchUpItems: List<CatchUpItem>,
+    onPlayCatchUp: (CatchUpItem) -> Unit,
+    onOpenCatchUpGame: (CatchUpItem) -> Unit,
+    onMarkCatchUpWatched: (CatchUpItem) -> Unit
 ) {
     val tabFocusRequesters = remember { SportsLiveTab.entries.associateWith { FocusRequester() } }
     val liveNowScope = rememberCoroutineScope()
@@ -559,14 +585,20 @@ private fun SportsLiveContent(
     val sortFocusRequester = remember { FocusRequester() }
     val header = SportsLiveHeaderFocus.of(uiState.selectedTab, uiState.filters.size, uiState.liveSortOffered)
     val showFilterRow = header.rowShown
+    // The Catch up strip (#58) sits between the header and Live Now's games: Down from the header lands
+    // on it, Up from the first game goes back to it.
+    val catchUpShown = uiState.selectedTab == SportsLiveTab.LIVE_NOW && catchUpItems.isNotEmpty()
+    val catchUpFocusRequester = remember { FocusRequester() }
+    val contentEntryFocusRequester = if (catchUpShown) catchUpFocusRequester else entryCardFocusRequester
     fun headerRequester(stop: SportsLiveHeaderFocus.Stop): FocusRequester? = when (stop) {
         SportsLiveHeaderFocus.Stop.TABS -> activeTabFocusRequester
         SportsLiveHeaderFocus.Stop.SWITCH -> layoutFocusRequester
         SportsLiveHeaderFocus.Stop.CHIPS -> filterFocusRequester
         SportsLiveHeaderFocus.Stop.SORT -> sortFocusRequester
-        SportsLiveHeaderFocus.Stop.CONTENT -> entryCardFocusRequester
+        SportsLiveHeaderFocus.Stop.CONTENT -> contentEntryFocusRequester
     }
-    val aboveListFocusRequester = headerRequester(header.contentUp) ?: activeTabFocusRequester
+    val aboveContentFocusRequester = headerRequester(header.contentUp) ?: activeTabFocusRequester
+    val aboveListFocusRequester = if (catchUpShown) catchUpFocusRequester else aboveContentFocusRequester
     // On the Results tab, the selected date chip (the tab row's Down).
     val resultsDateFocusRequester = remember { FocusRequester() }
     val showingResults = uiState.selectedTab == SportsLiveTab.RESULTS
@@ -898,7 +930,7 @@ private fun SportsLiveContent(
                 header = header,
                 filterFocusRequester = filterFocusRequester,
                 upFocusRequester = activeTabFocusRequester,
-                downFocusRequester = entryCardFocusRequester,
+                downFocusRequester = contentEntryFocusRequester,
                 onSelectFilter = onSelectFilter,
                 onOpenFilter = openList,
                 layouts = layouts,
@@ -941,6 +973,20 @@ private fun SportsLiveContent(
                     .clip(RoundedCornerShape(NuvioTheme.radii.md))
                     .background(NuvioTheme.colors.FocusBackground)
                     .padding(horizontal = NuvioTheme.spacing.md, vertical = NuvioTheme.spacing.xs)
+            )
+        }
+        if (catchUpShown) {
+            SportsLiveCatchUpStrip(
+                items = catchUpItems,
+                firstFocusRequester = catchUpFocusRequester,
+                upFocusRequester = aboveContentFocusRequester,
+                downFocusRequester = entryCardFocusRequester,
+                onPlay = onPlayCatchUp,
+                onOpenGame = onOpenCatchUpGame,
+                onMarkWatched = onMarkCatchUpWatched,
+                modifier = Modifier
+                    .padding(top = NuvioTheme.spacing.sm)
+                    .onFocusChanged { if (it.hasFocus) followedCardKey = null }
             )
         }
         Spacer(modifier = Modifier.height(NuvioTheme.spacing.lg))

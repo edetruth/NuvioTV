@@ -525,7 +525,7 @@ internal fun SportsLiveCardMenu(
 }
 
 @Composable
-private fun SportsLiveMenuButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+internal fun SportsLiveMenuButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Button(
         onClick = onClick,
         modifier = modifier.fillMaxWidth(),

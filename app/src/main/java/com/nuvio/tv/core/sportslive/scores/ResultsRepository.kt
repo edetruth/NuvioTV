@@ -160,10 +160,28 @@ class ResultsRepository internal constructor(
         return ResultsLoad.Loaded(date, SportsResults.rows(shown, followed), events, relevant.mySports, held.values.minOrNull(), liveNow)
     }
 
+    /**
+     * The Catch up row's day (#58): [daysAgo]'s events on [feeds] (followed teams' feeds, [CatchUp.feeds]),
+     * through the same caches as [load] (at most one request per feed and day; past days from the disk
+     * cache), with the finals the score delay still holds left out of [CatchUpDay.finals]. Null, with no
+     * request, under Scores Off (no score data at all); null too when [feeds] is empty or every feed failed.
+     */
+    suspend fun catchUpDay(daysAgo: Int, feeds: List<EspnLeague>): CatchUpDay? {
+        val settings = settings.first()
+        if (settings.mode == ScoresMode.OFF || feeds.isEmpty()) return null
+        val date = dateFor(daysAgo.coerceIn(SportsResults.DAYS_AGO))
+        val events = dayEvents(feeds, date) ?: return null
+        val held = held(events, settings.delaySeconds * 1_000L)
+        val finals = events.filter { it.state == ScoreState.POST && it.isFinal && it.eventId !in held }
+        return CatchUpDay(date, events, finals)
+    }
+
     /** [date]'s events of every relevant league; null when every league failed. */
-    private suspend fun dayEvents(relevant: RelevantLeagues, date: LocalDate): List<ScoreSnapshot>? {
+    private suspend fun dayEvents(relevant: RelevantLeagues, date: LocalDate): List<ScoreSnapshot>? = dayEvents(relevant.leagues, date)
+
+    private suspend fun dayEvents(leagues: List<EspnLeague>, date: LocalDate): List<ScoreSnapshot>? {
         val results = coroutineScope {
-            relevant.leagues.map { league -> async { fetch(ScoreFeed(league, date)) } }.awaitAll()
+            leagues.map { league -> async { fetch(ScoreFeed(league, date)) } }.awaitAll()
         }
         return if (results.all { it == null }) null else results.filterNotNull().flatten()
     }

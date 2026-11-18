@@ -3,6 +3,7 @@ package com.nuvio.tv.data.local
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.google.gson.Gson
@@ -14,6 +15,8 @@ import com.nuvio.tv.core.sportslive.SportsLiveOpenGame
 import com.nuvio.tv.core.sportslive.alerts.GameReminder
 import com.nuvio.tv.core.sportslive.alerts.RemindersState
 import com.nuvio.tv.core.sportslive.alerts.SportsLiveAlertSettings
+import com.nuvio.tv.core.sportslive.scores.CatchUp
+import com.nuvio.tv.core.sportslive.scores.CatchUpMarks
 import com.nuvio.tv.core.sportslive.scores.MySports
 import com.nuvio.tv.core.sportslive.scores.ScoreDelayChoices
 import com.nuvio.tv.core.sportslive.scores.ScoreSettings
@@ -76,6 +79,12 @@ class SportsLivePreferencesDataStore @Inject constructor(
 
     // [{"keys": source keys joined by REMINDER_KEY_SEPARATOR, "title": ..., "home": ..., "away": ..., "start": "epoch ms"}]; plain maps, like the follows.
     private val remindersType = object : TypeToken<List<Map<String, String?>>>() {}.type
+    private val catchUpRowKey = booleanPreferencesKey("sports_live_catch_up_row")
+    private val catchUpLastOpenedKey = longPreferencesKey("sports_live_catch_up_last_opened")
+    private val catchUpSinceKey = longPreferencesKey("sports_live_catch_up_since")
+    // "eventId|ms" entries: when each replay was watched, and when each surfaced game started.
+    private val catchUpSeenKey = stringSetPreferencesKey("sports_live_catch_up_seen")
+    private val catchUpSurfacedKey = stringSetPreferencesKey("sports_live_catch_up_surfaced")
 
     val showSection: Flow<Boolean> = profileManager.activeProfileId.flatMapLatest { pid ->
         factory.get(pid, FEATURE).data.map { it[showSectionKey] ?: true }
@@ -216,6 +225,44 @@ class SportsLivePreferencesDataStore @Inject constructor(
         return saved
     }
 
+    /** The Catch up row (#58): on by default. */
+    val catchUpRow: Flow<Boolean> = profileManager.activeProfileId.flatMapLatest { pid ->
+        factory.get(pid, FEATURE).data.map { it[catchUpRowKey] ?: true }
+    }
+
+    suspend fun setCatchUpRow(v: Boolean) {
+        store().edit { it[catchUpRowKey] = v }
+    }
+
+    /** The catch-up row's watched replays and surfaced games (#58), by ESPN event id. */
+    val catchUpMarks: Flow<CatchUpMarks> = profileManager.activeProfileId.flatMapLatest { pid ->
+        factory.get(pid, FEATURE).data.map { CatchUpMarks(decodeMarks(it[catchUpSeenKey]), decodeMarks(it[catchUpSurfacedKey])) }
+    }
+
+    /** Saves [change] of the catch-up marks in one edit, dropping marks too old to matter ([CatchUp.pruned]). */
+    suspend fun updateCatchUpMarks(nowMs: Long, change: (CatchUpMarks) -> CatchUpMarks) {
+        store().edit { prefs ->
+            val current = CatchUpMarks(decodeMarks(prefs[catchUpSeenKey]), decodeMarks(prefs[catchUpSurfacedKey]))
+            val next = CatchUp.pruned(change(current), nowMs)
+            prefs[catchUpSeenKey] = encodeMarks(next.seen)
+            prefs[catchUpSurfacedKey] = encodeMarks(next.surfaced)
+        }
+    }
+
+    /**
+     * Home or Sports & Live opened at [nowMs] (#58): returns the catch-up row's "since" ([CatchUp.since]:
+     * the last visit before a gap, else the one kept) and stores both.
+     */
+    suspend fun openCatchUp(nowMs: Long): Long {
+        var since = nowMs
+        store().edit { prefs ->
+            since = CatchUp.since(prefs[catchUpLastOpenedKey], prefs[catchUpSinceKey], nowMs)
+            prefs[catchUpSinceKey] = since
+            prefs[catchUpLastOpenedKey] = nowMs
+        }
+        return since
+    }
+
     suspend fun setOpenGame(openGame: SportsLiveOpenGame) {
         store().edit { it[openGameKey] = openGame.name }
     }
@@ -320,6 +367,15 @@ class SportsLivePreferencesDataStore @Inject constructor(
             prefs[catalogOptionsKey] = gson.toJson(updated.mapValues { mapOf("extra" to it.value.extra, "value" to it.value.value) })
         }
     }
+
+    private fun encodeMarks(marks: Map<String, Long>): Set<String> = marks.mapTo(HashSet()) { (id, ms) -> "$id|$ms" }
+
+    private fun decodeMarks(stored: Set<String>?): Map<String, Long> =
+        stored.orEmpty().mapNotNull { entry ->
+            val id = entry.substringBeforeLast('|', "").takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+            val ms = entry.substringAfterLast('|').toLongOrNull() ?: return@mapNotNull null
+            id to ms
+        }.toMap()
 
     private fun FollowedTeam.sameAs(other: FollowedTeam): Boolean =
         name.equals(other.name, ignoreCase = true) && (sport ?: "").equals(other.sport ?: "", ignoreCase = true)

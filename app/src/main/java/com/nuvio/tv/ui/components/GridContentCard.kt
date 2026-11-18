@@ -232,7 +232,7 @@ fun GridContentCard(
                     builder.build()
                 }
                 if (effectiveImageUrl.isNullOrBlank()) {
-                    MonochromePosterPlaceholder(contentDescription = item.name)
+                    DrawnCardArtOr(item.id) { MonochromePosterPlaceholder(contentDescription = item.name) }
                 } else {
                     AsyncImage(
                         model = imageModel,

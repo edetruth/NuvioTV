@@ -512,7 +512,8 @@ private fun PlaybackNavHost(
                     navController.navigate(Screen.SportsLive.route) { launchSingleTop = true }
                 },
                 // As in the section: a live game plays its best stream (or opens its Stream screen, per setting).
-                onLiveNowItemClick = { item -> sportsLivePlayViewModel.play(item, returnToHomeOnBack = true) }
+                onLiveNowItemClick = { item -> sportsLivePlayViewModel.play(item, returnToHomeOnBack = true) },
+                onOpenSportsLiveGame = { navController.navigate(Screen.SportsLiveGame.route) }
             )
         }
 

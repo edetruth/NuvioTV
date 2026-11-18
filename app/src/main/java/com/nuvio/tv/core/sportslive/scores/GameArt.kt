@@ -55,6 +55,29 @@ data class GameArt(
             )
         }
 
+        /**
+         * The drawn card for an ESPN [event] alone (the Catch up row, #58): away first, as Results lists
+         * them, ESPN's names, abbreviations and logos, its league; no time and no score.
+         */
+        fun ofEvent(event: ScoreSnapshot): GameArt = GameArt(
+            first = espnTeam(event.away),
+            second = espnTeam(event.home),
+            league = event.leagueName?.takeIf { it.isNotBlank() },
+            startMs = null,
+            hasTimeOfDay = false
+        )
+
+        private fun espnTeam(team: ScoreTeam): GameArtTeam {
+            val name = listOf(team.displayName, team.shortDisplayName, team.name, team.abbreviation)
+                .firstOrNull { !it.isNullOrBlank() }.orEmpty()
+            return GameArtTeam(
+                name = name,
+                short = team.abbreviation?.takeIf { it.isNotBlank() } ?: team.shortDisplayName?.takeIf { it.isNotBlank() } ?: name,
+                logo = team.logo?.takeIf { it.isNotBlank() },
+                shortName = team.shortDisplayName?.takeIf { it.isNotBlank() } ?: name
+            )
+        }
+
         /** The kickoff in the viewer's [zone] (time only today, "Tomorrow", weekday, else date), or null. */
         fun kickoff(art: GameArt, nowMs: Long, zone: ZoneId, locale: Locale): SportsLivePillTime? =
             art.startMs?.let { SportsLivePillTime.of(it, art.hasTimeOfDay, nowMs, zone, locale) }

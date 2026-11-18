@@ -11,6 +11,8 @@ import com.nuvio.tv.core.sportslive.SportsLiveOpenGame
 import com.nuvio.tv.core.sportslive.alerts.GameReminder
 import com.nuvio.tv.core.sportslive.alerts.RemindersState
 import com.nuvio.tv.core.sportslive.alerts.SportsLiveAlertSettings
+import com.nuvio.tv.core.sportslive.scores.CatchUp
+import com.nuvio.tv.core.sportslive.scores.CatchUpMarks
 import com.nuvio.tv.core.sportslive.scores.MyLeague
 import com.nuvio.tv.core.sportslive.scores.MySport
 import com.nuvio.tv.core.sportslive.scores.MySports
@@ -70,6 +72,36 @@ class SportsLivePreferencesDataStoreTest {
         profile1Store.updateData { mutablePreferencesOf(stringPreferencesKey("sports_live_open_game") to "SOMETHING_ELSE") }
         val store = SportsLivePreferencesDataStore(factory, profiles)
         assertNull(store.openGame.first())
+    }
+
+    @Test
+    fun `the catch-up row is on by default, per profile`() = runTest {
+        val store = SportsLivePreferencesDataStore(factory, profiles)
+        assertTrue(store.catchUpRow.first())
+        store.setCatchUpRow(false)
+        assertEquals(false, store.catchUpRow.first())
+        activeProfile.value = 2
+        assertTrue(store.catchUpRow.first())
+    }
+
+    @Test
+    fun `catch-up marks round trip and old ones are dropped`() = runTest {
+        val store = SportsLivePreferencesDataStore(factory, profiles)
+        val now = 10 * CatchUp.WINDOW_MS
+        store.updateCatchUpMarks(now) {
+            CatchUpMarks(seen = mapOf("e:1" to now, "old" to 1L), surfaced = mapOf("e|2" to now - 1_000L))
+        }
+        assertEquals(CatchUpMarks(mapOf("e:1" to now), mapOf("e|2" to now - 1_000L)), store.catchUpMarks.first())
+    }
+
+    @Test
+    fun `opening keeps since within a visit and moves it to the last visit after a gap`() = runTest {
+        val store = SportsLivePreferencesDataStore(factory, profiles)
+        val now = 10 * CatchUp.WINDOW_MS
+        assertEquals(now - CatchUp.WINDOW_MS, store.openCatchUp(now))
+        assertEquals(now - CatchUp.WINDOW_MS, store.openCatchUp(now + 60_000L))
+        val later = now + 60_000L + CatchUp.VISIT_GAP_MS
+        assertEquals(now + 60_000L, store.openCatchUp(later))
     }
 
     @Test

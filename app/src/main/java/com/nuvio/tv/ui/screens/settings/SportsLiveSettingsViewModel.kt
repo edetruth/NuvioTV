@@ -73,7 +73,9 @@ data class SportsLiveSettingsUiState(
     /** My sports as picked (followed teams' sports are added where it is used, not here). */
     val mySports: MySports = MySports.DEFAULT,
     /** "When I open a game": Play best stream (default) / Let me choose. */
-    val openGame: SportsLiveOpenGame = SportsLiveOpenGame.PLAY_BEST
+    val openGame: SportsLiveOpenGame = SportsLiveOpenGame.PLAY_BEST,
+    /** The Catch up row (#58) on Home and Live Now. */
+    val catchUpRow: Boolean = true
 )
 
 @HiltViewModel
@@ -109,12 +111,13 @@ class SportsLiveSettingsViewModel @Inject constructor(
 
     val uiState: StateFlow<SportsLiveSettingsUiState> = combine(
         addonRepository.getInstalledAddons(),
-        combine(prefs.overrides, prefs.catalogOptions, prefs.followedTeams, ::Triple),
+        combine(prefs.overrides, prefs.catalogOptions, combine(prefs.followedTeams, prefs.catchUpRow, ::Pair), ::Triple),
         prefs.showSection,
         combine(prefs.showHomeRow, prefs.hoverPreview, prefs.dataSaver, ::Triple),
         combine(claimedStats, prefs.pipEnabled, combine(prefs.scoreSettings, prefs.mySports, openGame, ::Triple), ::Triple)
-    ) { addons, (overrides, options, followedTeams), showSection, (showHomeRow, hoverPreview, dataSaver), (stats, pipEnabled, scoreAndSports) ->
+    ) { addons, (overrides, options, teamsAndCatchUp), showSection, (showHomeRow, hoverPreview, dataSaver), (stats, pipEnabled, scoreAndSports) ->
         val (scores, mySports, openGame) = scoreAndSports
+        val (followedTeams, catchUpRow) = teamsAndCatchUp
         val catalogs = addons.enabledAddons().flatMap { addon ->
             addon.catalogs.filter(SportsLiveCatalogPolicy::isClaimable).map { catalog ->
                 val key = SportsLiveCatalogPolicy.keyFor(addon, catalog)
@@ -137,7 +140,7 @@ class SportsLiveSettingsViewModel @Inject constructor(
                 )
             }
         }
-        SportsLiveSettingsUiState(showSection, showHomeRow, hoverPreview, dataSaver, pipEnabled, catalogs, followedTeams, scores, mySports, openGame)
+        SportsLiveSettingsUiState(showSection, showHomeRow, hoverPreview, dataSaver, pipEnabled, catalogs, followedTeams, scores, mySports, openGame, catchUpRow)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SportsLiveSettingsUiState())
 
     fun setShowSection(show: Boolean) {
@@ -146,6 +149,10 @@ class SportsLiveSettingsViewModel @Inject constructor(
 
     fun setShowHomeRow(show: Boolean) {
         viewModelScope.launch { prefs.setShowHomeRow(show) }
+    }
+
+    fun setCatchUpRow(enabled: Boolean) {
+        viewModelScope.launch { prefs.setCatchUpRow(enabled) }
     }
 
     fun setHoverPreview(enabled: Boolean) {

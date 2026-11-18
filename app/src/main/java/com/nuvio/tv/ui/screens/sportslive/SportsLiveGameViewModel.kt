@@ -39,6 +39,7 @@ import javax.inject.Inject
  * strictly matched [replay] when there is one, whether the score was already revealed where the
  * page was opened (Hide until focused), and [homeFirst]: the card it was opened from names the home
  * team first, so the page does too (N10). Results rows are away first, as ESPN lists them.
+ * [spoilerSafe] (from the Catch up row, #58): the score stays behind Reveal whatever the Scores setting.
  */
 data class SportsLiveGameRequest(
     val event: ScoreSnapshot,
@@ -46,7 +47,8 @@ data class SportsLiveGameRequest(
     val revealed: Boolean = false,
     val homeFirst: Boolean = false,
     /** The card the page was opened from (Game stats); an upcoming one offers Remind me (#44). */
-    val card: SportsLiveItem? = null
+    val card: SportsLiveItem? = null,
+    val spoilerSafe: Boolean = false
 )
 
 /** Whether [item]'s card names [event]'s home team first (N10); away first when that is not known. */
@@ -88,10 +90,12 @@ data class SportsLiveGameUiState(
     /** The header and team stats name the home team first, as the card the page was opened from (N10). */
     val homeFirst: Boolean = false,
     /** The card the page was opened from, when any. */
-    val card: SportsLiveItem? = null
+    val card: SportsLiveItem? = null,
+    /** Opened from the Catch up row (#58): the score shows only once revealed, even under Show. */
+    val spoilerSafe: Boolean = false
 ) {
-    /** Score, records and stats show: Scores Show, or revealed (Hide until focused / Off). */
-    val showsScore: Boolean get() = mode == ScoresMode.SHOW || revealed
+    /** Score, records and stats show: Scores Show (unless [spoilerSafe]), or revealed. */
+    val showsScore: Boolean get() = (mode == ScoresMode.SHOW && !spoilerSafe) || revealed
 
     /** The sections with something to show; none while the score is hidden. */
     val sections: List<GameSection> get() = if (showsScore) summary?.sections.orEmpty() else emptyList()
@@ -158,7 +162,8 @@ class SportsLiveGameViewModel internal constructor(
             awayFollowed = event != null && TeamFollows.followersOf(followed, event, event.away).isNotEmpty(),
             homeFollowed = event != null && TeamFollows.followersOf(followed, event, event.home).isNotEmpty(),
             homeFirst = request?.homeFirst == true,
-            card = request?.card
+            card = request?.card,
+            spoilerSafe = request?.spoilerSafe == true
         )
     }.stateIn(
         viewModelScope,
@@ -168,7 +173,8 @@ class SportsLiveGameViewModel internal constructor(
             replay = request?.replay,
             revealed = request?.revealed == true,
             homeFirst = request?.homeFirst == true,
-            card = request?.card
+            card = request?.card,
+            spoilerSafe = request?.spoilerSafe == true
         )
     )
 

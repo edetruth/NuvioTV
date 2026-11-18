@@ -35,6 +35,12 @@ object SportsLiveGameLength {
         "baseball" to BASEBALL_MS
     )
 
+    /** A team game of ESPN [sport] ("basketball"), plus [LATE_START_MS]: the Catch up row's end estimate (#58). */
+    fun ofEspnSport(sport: String): Long = (byEspnSport[sport] ?: UNKNOWN_MS) + LATE_START_MS
+
+    /** The longest [ofEspnSport] can be. */
+    val LONGEST_TEAM_GAME_MS: Long = maxOf(byEspnSport.values.max(), UNKNOWN_MS) + LATE_START_MS
+
     // Sessions that can run past [UNKNOWN_MS]: no estimate, so a long match or card is never moved.
     private val LONG_SESSIONS = Regex(
         """\b(tennis|atp|wta|golf|pga|cricket|icc|t20|odi|ipl|test match|f1|formula 1|formula one|grand prix|motogp|""" +

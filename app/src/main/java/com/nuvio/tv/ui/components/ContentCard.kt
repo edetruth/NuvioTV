@@ -427,12 +427,13 @@ fun ContentCard(
                         contentScale = ContentScale.Crop
                     )
                 } else {
-                    MonochromePosterPlaceholder(contentDescription = item.name)
+                    DrawnCardArtOr(item.id) { MonochromePosterPlaceholder(contentDescription = item.name) }
                 }
 
-                // Landscape mode: show clearlogo or title overlay on backdrop cards
+                // Landscape mode: show clearlogo or title overlay on backdrop cards (drawn art names its teams).
                 val isLandscapeBackdropCard = globalLandscape &&
-                    effectiveLandscapePoster.isNullOrBlank()
+                    effectiveLandscapePoster.isNullOrBlank() &&
+                    LocalDrawnCardArt.current(item.id) == null
 
                 val shouldPlayTrailerPreview = isBackdropExpanded &&
                     focusedPosterBackdropTrailerEnabled &&
