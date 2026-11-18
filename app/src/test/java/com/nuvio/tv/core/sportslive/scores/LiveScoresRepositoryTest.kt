@@ -94,7 +94,9 @@ class LiveScoresRepositoryTest {
         start: String,
         zone: ZoneId = ZoneOffset.UTC,
         logoFile: TeamLogoFile? = null,
-        prefetch: (List<String>) -> Unit = {}
+        prefetch: (List<String>) -> Unit = {},
+        health: EspnFeedHealth? = null,
+        notifyOutage: () -> Unit = {}
     ): LiveScoresRepository {
         val base = ms(start)
         return LiveScoresRepository(
@@ -107,8 +109,75 @@ class LiveScoresRepositoryTest {
             jitter = { 0L },
             logoFile = logoFile,
             prefetch = prefetch,
-            io = EmptyCoroutineContext
+            io = EmptyCoroutineContext,
+            health = health ?: EspnFeedHealth { base + testScheduler.currentTime },
+            notifyOutage = notifyOutage
         )
+    }
+
+    // --- Scores status (#70) ---
+
+    @Test
+    fun `retry now fetches each scoreboard in use once, at its last day`() = runTest {
+        val base = ms("2026-11-16T12:00:00Z")
+        val health = EspnFeedHealth { base + testScheduler.currentTime }
+        health.recordFailure(EspnFeedKey.scoreboard(EspnLeagueMap.NBA), FeedFailureKind.NETWORK, date = nba15.date)
+        val repo = repository("2026-11-16T12:00:00Z", health = health)
+        repo.retryNow()
+        runCurrent()
+        assertEquals(listOf(nba15), provider.calls)
+    }
+
+    @Test
+    fun `scores Off makes retry now fetch nothing`() = runTest {
+        settings.value = ScoreSettings(ScoresMode.OFF)
+        val base = ms("2026-11-16T12:00:00Z")
+        val health = EspnFeedHealth { base + testScheduler.currentTime }
+        health.recordFailure(EspnFeedKey.scoreboard(EspnLeagueMap.NBA), FeedFailureKind.NETWORK, date = nba15.date)
+        val repo = repository("2026-11-16T12:00:00Z", health = health)
+        collect(repo)
+        repo.track(SECTION, listOf(pacersCard))
+        repo.retryNow()
+        advanceTimeBy(30 * 60_000L); runCurrent()
+        assertTrue(provider.calls.isEmpty())
+    }
+
+    @Test
+    fun `the outage toast shows once, after every feed has failed for 10 minutes in the section`() = runTest {
+        val base = ms("2026-11-15T19:00:00Z")
+        val health = EspnFeedHealth { base + testScheduler.currentTime }
+        // The provider records each failure as the ESPN provider does.
+        provider.respond = { feed ->
+            health.recordFailure(EspnFeedKey.scoreboard(feed.league), FeedFailureKind.NETWORK, date = feed.date)
+            ScoreboardResult.FAILED
+        }
+        var toasts = 0
+        val repo = repository("2026-11-15T19:00:00Z", health = health, notifyOutage = { toasts++ })
+        collect(repo)
+        repo.track(SECTION, listOf(pacersCard))
+        // Backoff 30 s, 60 s, 2 min, 5 min, 5 min...: failures at 0, 0:30, 1:30, 3:30, 8:30, 13:30.
+        advanceTimeBy(9 * 60_000L); runCurrent()
+        assertEquals(0, toasts)
+        advanceTimeBy(5 * 60_000L); runCurrent()
+        assertEquals(1, toasts)
+        advanceTimeBy(30 * 60_000L); runCurrent()
+        assertEquals(1, toasts)
+    }
+
+    @Test
+    fun `no outage toast while only Home is tracked`() = runTest {
+        val base = ms("2026-11-15T19:00:00Z")
+        val health = EspnFeedHealth { base + testScheduler.currentTime }
+        provider.respond = { feed ->
+            health.recordFailure(EspnFeedKey.scoreboard(feed.league), FeedFailureKind.NETWORK, date = feed.date)
+            ScoreboardResult.FAILED
+        }
+        var toasts = 0
+        val repo = repository("2026-11-15T19:00:00Z", health = health, notifyOutage = { toasts++ })
+        collect(repo)
+        repo.track(HOME, listOf(pacersCard))
+        advanceTimeBy(30 * 60_000L); runCurrent()
+        assertEquals(0, toasts)
     }
 
     private fun TestScope.collect(repo: LiveScoresRepository) = backgroundScope.launch { repo.scores.collect {} }

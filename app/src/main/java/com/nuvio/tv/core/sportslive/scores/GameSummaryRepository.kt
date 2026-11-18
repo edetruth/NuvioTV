@@ -67,14 +67,17 @@ class GameSummaryRepository internal constructor(
     private val source: GameSummarySource,
     private val disk: GameSummaryDiskCache?,
     moshi: Moshi,
-    private val now: () -> Long
+    private val now: () -> Long,
+    /** Where a fetched summary's read is recorded (#70); the source records request failures. */
+    private val health: EspnFeedHealth = EspnFeedHealth(now)
 ) {
     @Inject
-    constructor(source: GameSummarySource, @ApplicationContext context: Context, moshi: Moshi) : this(
+    constructor(source: GameSummarySource, @ApplicationContext context: Context, moshi: Moshi, health: EspnFeedHealth) : this(
         source = source,
         disk = GameSummaryDiskCache(File(context.cacheDir, "espn_game_summaries")),
         moshi = moshi,
-        now = System::currentTimeMillis
+        now = System::currentTimeMillis,
+        health = health
     )
 
     private class Cached(val dto: EspnSummaryDto, val fetchedAt: Long, val final: Boolean)
@@ -96,7 +99,14 @@ class GameSummaryRepository internal constructor(
                 return loaded(cached, league, eventId)
             }
         }
-        val dto = source.summary(league, eventId)?.let(::parse) ?: return GameSummaryLoad.Failed
+        val json = source.summary(league, eventId) ?: return GameSummaryLoad.Failed
+        // Read, but without the game's two sides: ESPN changed its data format.
+        val dto = parse(json)?.takeIf { it.header?.competitions?.firstOrNull()?.competitors.orEmpty().isNotEmpty() }
+        if (dto == null) {
+            health.recordFailure(EspnFeedKey.SUMMARY, FeedFailureKind.FORMAT)
+            return GameSummaryLoad.Failed
+        }
+        health.recordSuccess(EspnFeedKey.SUMMARY)
         val final = GameSummaryParser.isFinal(dto)
         if (final) disk?.let { cache -> withContext(Dispatchers.IO) { cache.write(key, adapter.toJson(dto)) } }
         val cached = Cached(dto, now(), final)

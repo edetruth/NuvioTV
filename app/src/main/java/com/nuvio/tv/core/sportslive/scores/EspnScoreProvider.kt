@@ -28,11 +28,14 @@ class EspnScoreProvider internal constructor(
     moshi: Moshi,
     private val baseUrl: String,
     /** ESPN's day now (US Eastern): which scoreboards are still live and which are past. */
-    private val today: () -> LocalDate = { LocalDate.now(SportsResults.EASTERN) }
+    private val today: () -> LocalDate = { LocalDate.now(SportsResults.EASTERN) },
+    /** Where each request's outcome is recorded (#70). */
+    private val health: EspnFeedHealth = EspnFeedHealth()
 ) : ScoreProvider, GameSummarySource {
 
     @Inject
-    constructor(okHttpClient: OkHttpClient, moshi: Moshi) : this(espnClient(okHttpClient), moshi, BASE_URL)
+    constructor(okHttpClient: OkHttpClient, moshi: Moshi, health: EspnFeedHealth) :
+        this(espnClient(okHttpClient), moshi, BASE_URL, health = health)
 
     private val adapter = moshi.adapter(EspnScoreboardDto::class.java)
 
@@ -74,6 +77,7 @@ class EspnScoreProvider internal constructor(
     override suspend fun scoreboard(league: EspnLeague, date: LocalDate): ScoreboardResult =
         withContext(Dispatchers.IO) {
             val url = scoreboardUrl(league, date)
+            val key = EspnFeedKey.scoreboard(league)
             try {
                 val past = date.isBefore(today().minusDays(1))
                 val request = Request.Builder().url(url).apply {
@@ -98,13 +102,20 @@ class EspnScoreProvider internal constructor(
                     val body = response.body?.string()
                     if (!response.isSuccessful || body == null) {
                         debugLog("${league.path} $date: HTTP ${response.code}")
+                        health.recordFailure(key, FeedFailureKind.HTTP, response.code, date)
                         ScoreboardResult.FAILED.copy(retryAfterMs = retryAfterMs(response.header("Retry-After")))
                     } else {
                         val dto = adapter.fromJson(body)
-                        when {
-                            dto == null -> ScoreboardResult.FAILED
-                            EspnIndividualResults.covers(league) -> ScoreboardResult(EspnIndividualResults.toSnapshots(dto, league, date))
-                            else -> ScoreboardResult(toSnapshots(dto, league))
+                        val individual = EspnIndividualResults.covers(league)
+                        // Read, but every event lost its competitors: ESPN changed its data, not an empty day.
+                        if (dto == null || (!individual && EspnFeedHealth.formatChanged(dto))) {
+                            debugLog("${league.path} $date: format changed")
+                            health.recordFailure(key, FeedFailureKind.FORMAT, date = date)
+                            ScoreboardResult.FAILED
+                        } else {
+                            health.recordSuccess(key, date)
+                            if (individual) ScoreboardResult(EspnIndividualResults.toSnapshots(dto, league, date))
+                            else ScoreboardResult(toSnapshots(dto, league))
                         }
                     }
                 }
@@ -112,13 +123,15 @@ class EspnScoreProvider internal constructor(
                 throw e
             } catch (e: Exception) {
                 debugLog("${league.path} $date: ${e.javaClass.simpleName}")
+                health.recordFailure(key, FeedFailureKind.of(e), date = date)
                 ScoreboardResult.FAILED
             }
         }
 
     /**
      * The game summary of [eventId] on [league]'s feed path, as ESPN sent it; null on any failure. Never
-     * stored in the HTTP cache (a summary is ~500 KB): finals have their own trimmed disk copy.
+     * stored in the HTTP cache (a summary is ~500 KB): finals have their own trimmed disk copy. A failure
+     * is recorded in [health] here; a success once the body is read ([GameSummaryRepository]).
      */
     override suspend fun summary(league: EspnLeague, eventId: String): String? =
         withContext(Dispatchers.IO) {
@@ -131,6 +144,7 @@ class EspnScoreProvider internal constructor(
                     val body = response.body?.string()
                     if (!response.isSuccessful || body == null) {
                         debugLog("${league.path} summary $eventId: HTTP ${response.code}")
+                        health.recordFailure(EspnFeedKey.SUMMARY, FeedFailureKind.HTTP, response.code)
                         null
                     } else {
                         body
@@ -140,6 +154,7 @@ class EspnScoreProvider internal constructor(
                 throw e
             } catch (e: Exception) {
                 debugLog("${league.path} summary $eventId: ${e.javaClass.simpleName}")
+                health.recordFailure(EspnFeedKey.SUMMARY, FeedFailureKind.of(e))
                 null
             }
         }

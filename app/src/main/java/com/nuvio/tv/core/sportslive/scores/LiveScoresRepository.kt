@@ -1,6 +1,9 @@
 package com.nuvio.tv.core.sportslive.scores
 
 import android.content.Context
+import android.widget.Toast
+import androidx.core.content.ContextCompat
+import com.nuvio.tv.R
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import com.nuvio.tv.domain.model.SportsLiveItem
@@ -11,6 +14,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -20,6 +24,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
@@ -58,6 +63,8 @@ import kotlin.random.Random
  *   it on the next launch before any feed answers, and tracked games' logos are prefetched.
  * - Warm start (#66): a feed's first fetch after a restart is preceded by the provider's copy of it
  *   from the last two minutes, if any ([ScoreProvider.recentScoreboard]); the network fetch follows at once.
+ * - Health (#70): after a failed fetch, if every ESPN feed in use has failed for 10 minutes while the
+ *   section or the player panel is tracked, [notifyOutage] is called, once per app session.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @Singleton
@@ -78,10 +85,19 @@ class LiveScoresRepository internal constructor(
     /** Loads logo URLs into the image disk cache. */
     private val prefetch: (List<String>) -> Unit = {},
     /** Where the logo file is read and written. */
-    private val io: CoroutineContext = Dispatchers.IO
+    private val io: CoroutineContext = Dispatchers.IO,
+    /** ESPN feed health (#70): read for the outage toast and "Retry now". */
+    private val health: EspnFeedHealth = EspnFeedHealth(now),
+    /** Shows the one-time "Live scores aren't available right now" toast. */
+    private val notifyOutage: () -> Unit = {}
 ) : LiveScoreTracking {
     @Inject
-    constructor(provider: ScoreProvider, prefs: SportsLivePreferencesDataStore, @ApplicationContext context: Context) : this(
+    constructor(
+        provider: ScoreProvider,
+        prefs: SportsLivePreferencesDataStore,
+        @ApplicationContext context: Context,
+        health: EspnFeedHealth
+    ) : this(
         provider = provider,
         settings = prefs.scoreSettings,
         mySports = combine(prefs.mySports, prefs.followedTeams) { sports, followed -> sports.withFollowed(followed) },
@@ -91,7 +107,13 @@ class LiveScoresRepository internal constructor(
         jitter = { Random.nextLong(-ScoreCadence.JITTER_MS, ScoreCadence.JITTER_MS + 1) },
         logos = TeamLogoBook.shared,
         logoFile = TeamLogoFile(File(context.filesDir, "sportslive/team_logos.tsv")),
-        prefetch = { urls -> TeamLogoPrefetch.enqueue(context, urls) }
+        prefetch = { urls -> TeamLogoPrefetch.enqueue(context, urls) },
+        health = health,
+        notifyOutage = {
+            ContextCompat.getMainExecutor(context).execute {
+                Toast.makeText(context, R.string.sports_live_scores_outage_toast, Toast.LENGTH_LONG).show()
+            }
+        }
     )
 
     /** What the settings screen and surfaces read: Show / Hide until focused / Off. */
@@ -171,6 +193,12 @@ class LiveScoresRepository internal constructor(
     private var logosDirty = false
     private val scoreDelay = ScoreDelay()
     private val nextRelease = MutableStateFlow<Long?>(null)
+    private val outage = ScoresOutageNotice(health)
+    /** The running pollers' scope while someone collects [scores] and Scores is not Off. */
+    @Volatile
+    private var activePollerScope: CoroutineScope? = null
+    /** The Scores setting as the pollers last saw it; OFF until read. */
+    private var scoresMode = ScoresMode.OFF
 
     init {
         logoFile?.let { file ->
@@ -241,6 +269,7 @@ class LiveScoresRepository internal constructor(
     // While someone collects [scores]: settings, then the tracked cards, drive the pollers.
     private suspend fun run() {
         combine(settings.distinctUntilChanged(), mySports.distinctUntilChanged(), ::Pair).collectLatest { (current, picked) ->
+            lock.withLock { scoresMode = current.mode }
             if (current.mode == ScoresMode.OFF) {
                 lock.withLock { publishLocked(off = true) }
                 return@collectLatest
@@ -250,19 +279,24 @@ class LiveScoresRepository internal constructor(
                 lock.withLock {
                     delayMs = current.delaySeconds * 1_000L
                     sports = picked
+                    activePollerScope = pollerScope
                 }
-                launch {
-                    nextRelease.collectLatest { at ->
-                        if (at == null) return@collectLatest
-                        delay((at - now()).coerceAtLeast(0))
-                        lock.withLock { publishLocked() }
+                try {
+                    launch {
+                        nextRelease.collectLatest { at ->
+                            if (at == null) return@collectLatest
+                            delay((at - now()).coerceAtLeast(0))
+                            lock.withLock { publishLocked() }
+                        }
                     }
-                }
-                tracked.collect {
-                    lock.withLock {
-                        collegeMisses.clear()
-                        refreshLocked(pollerScope, restartStopped = true)
+                    tracked.collect {
+                        lock.withLock {
+                            collegeMisses.clear()
+                            refreshLocked(pollerScope, restartStopped = true)
+                        }
                     }
+                } finally {
+                    if (activePollerScope === pollerScope) activePollerScope = null
                 }
             }
         }
@@ -273,22 +307,41 @@ class LiveScoresRepository internal constructor(
         while (true) {
             val wait = lock.withLock { waitLocked(feed) } ?: return
             if (wait > 0) delay(wait)
-            val request = lock.withLock {
-                inFlight.getOrPut(feed) {
-                    // In the repository scope: a request outlives a poller restart and is shared.
-                    scope.async {
-                        val result = provider.scoreboard(feed.league, feed.date)
-                        lock.withLock {
-                            inFlight.remove(feed)
-                            feeds[feed]?.let { record(it, result) }
-                        }
-                        result
-                    }
-                }
-            }
+            val request = lock.withLock { fetchLocked(feed) }
             request.await()
             lock.withLock { refreshLocked(pollerScope, restartStopped = false) }
         }
+    }
+
+    /** [feed]'s request in flight, or a new one: in the repository scope, it outlives a poller restart and is shared. */
+    private fun fetchLocked(feed: ScoreFeed): Deferred<ScoreboardResult> = inFlight.getOrPut(feed) {
+        scope.async {
+            val result = provider.scoreboard(feed.league, feed.date)
+            lock.withLock {
+                inFlight.remove(feed)
+                feeds[feed]?.let { record(it, result) }
+                if (result.failed) checkOutageLocked()
+            }
+            result
+        }
+    }
+
+    // The section or the player panel in use, and every feed failing for 10 minutes: the toast, once.
+    private fun checkOutageLocked() {
+        val inUse = tracked.value.keys.any { it == SCREEN_SECTION || it == SCREEN_PLAYER_PANEL }
+        if (outage.check(now(), scoresMode, inUse)) notifyOutage()
+    }
+
+    /**
+     * Settings → Scores status → Retry now (#70): one immediate fetch of each scoreboard in use (at its last
+     * requested day), shared with any request in flight; nothing while Scores is Off.
+     */
+    fun retryNow(): Job = scope.launch {
+        if (settings.first().mode == ScoresMode.OFF) return@launch
+        val requests = lock.withLock { health.scoreboardsInUse(now()).distinct().map(::fetchLocked) }
+        if (requests.isEmpty()) return@launch
+        requests.awaitAll()
+        lock.withLock { activePollerScope?.let { refreshLocked(it, restartStopped = false) } }
     }
 
     /**

@@ -6,6 +6,10 @@ import com.nuvio.tv.core.sportslive.SportsLiveCatalogOptions
 import com.nuvio.tv.core.sportslive.SportsLiveCatalogPolicy
 import com.nuvio.tv.core.sportslive.SportsLiveOpenGame
 import com.nuvio.tv.core.sportslive.SportsLiveSourceReliability
+import com.nuvio.tv.core.sportslive.scores.EspnFeedHealth
+import com.nuvio.tv.core.sportslive.scores.EspnFeedKey
+import com.nuvio.tv.core.sportslive.scores.FeedHealth
+import com.nuvio.tv.core.sportslive.scores.LiveScoresRepository
 import com.nuvio.tv.core.sportslive.scores.MyLeague
 import com.nuvio.tv.core.sportslive.scores.MySport
 import com.nuvio.tv.core.sportslive.scores.MySports
@@ -74,8 +78,18 @@ class SportsLiveSettingsViewModel @Inject constructor(
     private val prefs: SportsLivePreferencesDataStore,
     addonRepository: AddonRepository,
     private val sportsLiveRepository: SportsLiveRepository,
-    playerSettingsDataStore: PlayerSettingsDataStore
+    playerSettingsDataStore: PlayerSettingsDataStore,
+    health: EspnFeedHealth,
+    private val liveScores: LiveScoresRepository
 ) : ViewModel() {
+
+    /** ESPN feed health (#70), for Scores status; the screen works the status out on its clock. */
+    val feedHealth: StateFlow<Map<EspnFeedKey, FeedHealth>> = health.feeds
+
+    /** Scores status → Retry now: one immediate fetch of the scoreboards in use (none while Scores is Off). */
+    fun retryScores() {
+        liveScores.retryNow()
+    }
 
     /** The "When I open a game" in effect: the stored choice, else the default for the player's autoplay mode. */
     private val openGame = combine(prefs.openGame, playerSettingsDataStore.playerSettings) { stored, player ->

@@ -1,6 +1,7 @@
 package com.nuvio.tv.core.di
 
 import android.content.Context
+import com.nuvio.tv.core.sportslive.scores.EspnFeedHealth
 import com.nuvio.tv.core.sportslive.scores.EspnScoreProvider
 import com.nuvio.tv.core.sportslive.scores.GameSummarySource
 import com.nuvio.tv.core.sportslive.scores.ScoreProvider
@@ -31,10 +32,12 @@ object ScoresModule {
     fun provideEspnScoreProvider(
         @ApplicationContext context: Context,
         okHttpClient: OkHttpClient,
-        moshi: Moshi
+        moshi: Moshi,
+        health: EspnFeedHealth
     ): EspnScoreProvider = EspnScoreProvider(
         okHttpClient.newBuilder().cache(Cache(File(context.cacheDir, "espn_scores"), CACHE_BYTES)).build(),
-        moshi
+        moshi,
+        health
     )
 
     @Provides

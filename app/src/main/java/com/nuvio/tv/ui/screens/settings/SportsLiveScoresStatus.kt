@@ -1,0 +1,126 @@
+package com.nuvio.tv.ui.screens.settings
+
+import android.text.format.DateFormat
+import androidx.annotation.StringRes
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.tv.material3.Button
+import androidx.tv.material3.ButtonDefaults
+import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Text
+import com.nuvio.tv.R
+import com.nuvio.tv.core.sportslive.scores.EspnFeedKey
+import com.nuvio.tv.core.sportslive.scores.FeedFailureKind
+import com.nuvio.tv.core.sportslive.scores.FeedHealth
+import com.nuvio.tv.core.sportslive.scores.MyLeague
+import com.nuvio.tv.core.sportslive.scores.MySport
+import com.nuvio.tv.core.sportslive.scores.ScoresStatus
+import com.nuvio.tv.ui.components.NuvioDialog
+import com.nuvio.tv.ui.screens.sportslive.myLeagueLabel
+import com.nuvio.tv.ui.screens.sportslive.mySportLabel
+import com.nuvio.tv.ui.theme.NuvioTheme
+import java.util.Date
+
+/** The Scores status row's value (#70): its string and, for a failure, when it began (shown as a time). */
+internal data class ScoresStatusLabel(@StringRes val res: Int, val sinceMs: Long? = null) {
+    companion object {
+        fun of(status: ScoresStatus): ScoresStatusLabel = when (status) {
+            ScoresStatus.Off -> ScoresStatusLabel(R.string.sports_live_scores_off)
+            ScoresStatus.NotChecked -> ScoresStatusLabel(R.string.sports_live_scores_status_not_checked)
+            ScoresStatus.Working -> ScoresStatusLabel(R.string.sports_live_scores_status_working)
+            is ScoresStatus.SomeFailing -> ScoresStatusLabel(R.string.sports_live_scores_status_some_failing, status.sinceMs)
+            is ScoresStatus.NotResponding -> ScoresStatusLabel(R.string.sports_live_scores_status_not_responding, status.sinceMs)
+        }
+
+        /** A failing feed's plain-language reason. */
+        @StringRes
+        fun reasonOf(kind: FeedFailureKind): Int = when (kind) {
+            FeedFailureKind.FORMAT -> R.string.sports_live_scores_reason_format
+            FeedFailureKind.NETWORK -> R.string.sports_live_scores_reason_network
+            FeedFailureKind.TIMEOUT -> R.string.sports_live_scores_reason_timeout
+            FeedFailureKind.HTTP -> R.string.sports_live_scores_reason_http
+        }
+    }
+}
+
+@Composable
+internal fun scoresStatusText(status: ScoresStatus): String {
+    val label = ScoresStatusLabel.of(status)
+    return label.sinceMs?.let { stringResource(label.res, clockTime(it)) } ?: stringResource(label.res)
+}
+
+/** [ms] as the device writes a time of day (12 or 24 hour). */
+@Composable
+private fun clockTime(ms: Long): String = DateFormat.getTimeFormat(LocalContext.current).format(Date(ms))
+
+/** The failing feeds with their reasons, and Retry now (not while Scores is Off). */
+@Composable
+internal fun ScoresStatusDialog(status: ScoresStatus, onRetry: () -> Unit, onDismiss: () -> Unit) {
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    NuvioDialog(
+        onDismiss = onDismiss,
+        title = stringResource(R.string.sports_live_setting_scores_status),
+        subtitle = scoresStatusText(status)
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)) {
+            val lines = when (status) {
+                ScoresStatus.Off -> listOf(stringResource(R.string.sports_live_scores_status_off_detail))
+                ScoresStatus.NotChecked -> listOf(stringResource(R.string.sports_live_scores_status_not_checked_detail))
+                ScoresStatus.Working -> listOf(stringResource(R.string.sports_live_scores_status_all_ok))
+                is ScoresStatus.SomeFailing -> status.failing.map { failingLine(it) }
+                is ScoresStatus.NotResponding -> status.failing.map { failingLine(it) }
+            }
+            lines.forEach { line ->
+                Text(text = line, style = MaterialTheme.typography.bodyMedium, color = NuvioTheme.colors.TextSecondary)
+            }
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md)
+        ) {
+            val colors = ButtonDefaults.colors(
+                containerColor = NuvioTheme.colors.BackgroundCard,
+                contentColor = NuvioTheme.colors.TextPrimary
+            )
+            if (status != ScoresStatus.Off) {
+                Button(onClick = onRetry, modifier = Modifier.weight(1f).focusRequester(focus), colors = colors) {
+                    Text(stringResource(R.string.sports_live_scores_retry_now))
+                }
+            }
+            Button(
+                onClick = onDismiss,
+                modifier = Modifier.weight(1f).then(if (status == ScoresStatus.Off) Modifier.focusRequester(focus) else Modifier),
+                colors = colors
+            ) {
+                Text(stringResource(R.string.action_close))
+            }
+        }
+    }
+}
+
+@Composable
+private fun failingLine(feed: FeedHealth): String {
+    val kind = feed.lastFailure ?: FeedFailureKind.NETWORK
+    val reasonRes = ScoresStatusLabel.reasonOf(kind)
+    val reason = if (kind == FeedFailureKind.HTTP) stringResource(reasonRes, feed.lastHttpCode ?: 0) else stringResource(reasonRes)
+    return stringResource(R.string.sports_live_scores_feed_failing, feedName(feed.key), reason, clockTime(feed.failingSince ?: feed.lastAttemptAt))
+}
+
+@Composable
+private fun feedName(key: EspnFeedKey): String {
+    val league = key.league ?: return stringResource(R.string.sports_live_scores_feed_game_details)
+    MyLeague.ofFeed(league)?.let { return myLeagueLabel(it) }
+    MySport.ofEspn(league.sport)?.let { return mySportLabel(it) }
+    return league.path
+}

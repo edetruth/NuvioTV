@@ -39,11 +39,13 @@ import com.nuvio.tv.core.sportslive.scores.MySport
 import com.nuvio.tv.core.sportslive.scores.MySports
 import com.nuvio.tv.core.sportslive.scores.ScoreDelayChoices
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
+import com.nuvio.tv.core.sportslive.scores.ScoresStatus
 import com.nuvio.tv.domain.model.CatalogStats
 import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveOverride
 import com.nuvio.tv.ui.screens.sportslive.mini.SPORTS_LIVE_PIP_SETTINGS_ACTION
 import com.nuvio.tv.ui.screens.sportslive.myLeagueLabel
+import com.nuvio.tv.ui.screens.sportslive.rememberSportsLiveClockMs
 import com.nuvio.tv.ui.screens.sportslive.mySportLabel
 import com.nuvio.tv.ui.screens.sportslive.mini.sportsLivePipSupported
 import com.nuvio.tv.ui.theme.NuvioTheme
@@ -56,6 +58,12 @@ internal fun SportsLiveSettingsContent(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var filterKey by remember { mutableStateOf<String?>(null) }
     var scorePicker by remember { mutableStateOf<ScorePicker?>(null) }
+    // Scores status (#70): worked out on a 30 s clock, so a feed no longer in use drops out.
+    val feedHealth by viewModel.feedHealth.collectAsStateWithLifecycle()
+    val clockMs by rememberSportsLiveClockMs()
+    val scoresStatus = remember(state.scores.mode, feedHealth, clockMs) {
+        ScoresStatus.of(state.scores.mode, feedHealth.values, System.currentTimeMillis())
+    }
     // After OK unfollows a team, focus goes to the row now in its place (the next team, else the
     // previous one); with no team left, to the nearest enabled switch above the card.
     val teamFocusRequesters = remember { mutableMapOf<FollowedTeam, FocusRequester>() }
@@ -156,6 +164,13 @@ internal fun SportsLiveSettingsContent(
                     value = scoreDelayLabel(state.scores.delaySeconds),
                     onClick = { scorePicker = ScorePicker.DELAY },
                     enabled = state.showSection && state.scores.mode != ScoresMode.OFF
+                )
+                SettingsActionRow(
+                    title = stringResource(R.string.sports_live_setting_scores_status),
+                    subtitle = stringResource(R.string.sports_live_setting_scores_status_subtitle),
+                    value = scoresStatusText(scoresStatus),
+                    onClick = { scorePicker = ScorePicker.STATUS },
+                    enabled = state.showSection
                 )
             }
         }
@@ -262,6 +277,11 @@ internal fun SportsLiveSettingsContent(
             },
             onDismiss = { scorePicker = null }
         )
+        ScorePicker.STATUS -> ScoresStatusDialog(
+            status = scoresStatus,
+            onRetry = viewModel::retryScores,
+            onDismiss = { scorePicker = null }
+        )
         null -> Unit
     }
 
@@ -283,8 +303,8 @@ internal fun SportsLiveSettingsContent(
     }
 }
 
-/** The single-choice dialog open: scores mode, score delay, or "When I open a game". */
-private enum class ScorePicker { MODE, DELAY, OPEN_GAME }
+/** The dialog open: scores mode, score delay, "When I open a game", or Scores status. */
+private enum class ScorePicker { MODE, DELAY, OPEN_GAME, STATUS }
 
 /**
  * My sports (#55): a switch per sport, in order; a sport with several leagues has a Leagues row below

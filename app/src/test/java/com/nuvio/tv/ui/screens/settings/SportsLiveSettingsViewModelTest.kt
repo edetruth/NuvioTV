@@ -5,6 +5,8 @@ import com.nuvio.tv.TestPreferencesStore
 import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.core.sportslive.SportsLiveCatalogPolicy
 import com.nuvio.tv.core.sportslive.SportsLiveOpenGame
+import com.nuvio.tv.core.sportslive.scores.EspnFeedHealth
+import com.nuvio.tv.core.sportslive.scores.LiveScoresRepository
 import com.nuvio.tv.core.sportslive.scores.MyLeague
 import com.nuvio.tv.core.sportslive.scores.MySport
 import com.nuvio.tv.core.sportslive.scores.MySports
@@ -77,10 +79,21 @@ class SportsLiveSettingsViewModelTest {
         every { playerSettings } returns this@SportsLiveSettingsViewModelTest.playerSettings
     }
 
+    private val liveScores = mockk<LiveScoresRepository>(relaxed = true)
+
     private fun TestScope.newViewModel(): SportsLiveSettingsViewModel {
-        val viewModel = SportsLiveSettingsViewModel(prefs, addonRepository, sportsLiveRepository, playerSettingsDataStore)
+        val viewModel = SportsLiveSettingsViewModel(
+            prefs, addonRepository, sportsLiveRepository, playerSettingsDataStore, EspnFeedHealth(), liveScores
+        )
         backgroundScope.launch { viewModel.uiState.collect {} }
         return viewModel
+    }
+
+    @Test
+    fun `retry now asks the live scores repository for one fetch`() = runTest {
+        val viewModel = newViewModel()
+        viewModel.retryScores()
+        io.mockk.verify(exactly = 1) { liveScores.retryNow() }
     }
 
     @Test
