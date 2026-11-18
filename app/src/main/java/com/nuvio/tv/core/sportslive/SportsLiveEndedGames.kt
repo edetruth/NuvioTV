@@ -97,8 +97,11 @@ class SportsLiveEndedGames {
 
     private class SeenFinal(val atMs: Long, val event: ScoreSnapshot, val graced: Boolean)
 
-    /** When a card's final was first seen, and whether it keeps the grace: what is kept across restarts. */
-    data class FinalTime(val atMs: Long, val graced: Boolean = true)
+    /**
+     * When a card's final was first seen, whether it keeps the grace, and the ESPN [eventId] it was seen
+     * on: what is kept across restarts. Reused only for that same event, within [FORGET_AFTER_MS].
+     */
+    data class FinalTime(val atMs: Long, val graced: Boolean = true, val eventId: String = "")
 
     private val finals = HashMap<String, SeenFinal>()
     /** Every remembered final's time by card key, restored ones included; the stored book. */
@@ -128,7 +131,9 @@ class SportsLiveEndedGames {
                     null
                 }
                 isFinalWithScore(event) -> {
-                    val at = times[key] ?: firstFinalAt(item, event, key, nowMs).also { first ->
+                    // A stored time counts only for this same ESPN event and while young enough.
+                    val stored = times[key]?.takeIf { it.eventId == event.eventId && nowMs - it.atMs <= FORGET_AFTER_MS }
+                    val at = stored ?: firstFinalAt(item, event, key, nowMs).also { first ->
                         if (times.size >= MAX_REMEMBERED) prune(nowMs)
                         times[key] = first
                         publishTimes()
@@ -234,11 +239,11 @@ class SportsLiveEndedGames {
      * length, capped at now; with no start or no length: now, with no grace (never a fresh LIVE spell).
      */
     private fun firstFinalAt(item: SportsLiveItem, event: ScoreSnapshot, key: String, nowMs: Long): FinalTime {
-        if (key in seenUnfinished) return FinalTime(nowMs)
+        if (key in seenUnfinished) return FinalTime(nowMs, eventId = event.eventId)
         val start = event.startMs?.takeIf { event.timeValid } ?: timedStart(item)
         val length = SportsLiveGameLength.of(item)
-        if (start == null || length == null) return FinalTime(nowMs, graced = false)
-        return FinalTime(minOf(nowMs, start + length))
+        if (start == null || length == null) return FinalTime(nowMs, graced = false, eventId = event.eventId)
+        return FinalTime(minOf(nowMs, start + length), eventId = event.eventId)
     }
 
     private fun estimate(item: SportsLiveItem, nowMs: Long): EndedGame? {
@@ -289,30 +294,36 @@ class SportsLiveEndedGames {
             event.state == ScoreState.POST && event.isFinal && event.homeScore != null && event.awayScore != null
 
         /**
-         * ESPN's (delayed) view says [item]'s strictly matched game is over, its score shown or still
-         * withheld: the card is labelled final, never LIVE, whatever its addon says (C3).
+         * ESPN's delayed view says [item]'s strictly matched game is over, with its score out (a final the
+         * delay still withholds is not, so "Final" never shows early): the card is labelled final, never
+         * LIVE, whatever its addon says (C3). Never a channel (24/7): it keeps its LIVE pill, as [verdict]
+         * never moves one.
          */
         fun isEspnFinal(item: SportsLiveItem, snapshot: ScoreSnapshot?): Boolean {
+            if (item.isChannel) return false
             val event = ScoreChips.matchedEvent(item, snapshot) ?: return false
-            return event.state == ScoreState.POST && event.isFinal
+            return isFinalWithScore(event)
         }
 
-        /** One line per time: "atMs,g|n,key" (the key last, so it may hold commas). */
+        /** One line per time: "atMs,g|n,eventId,key" (the key last, so it may hold commas). */
         fun encodeTimes(times: Map<String, FinalTime>): String =
-            times.entries.joinToString("\n") { (key, time) -> "${time.atMs},${if (time.graced) 'g' else 'n'},$key" }
+            times.entries.joinToString("\n") { (key, time) ->
+                "${time.atMs},${if (time.graced) 'g' else 'n'},${time.eventId},$key"
+            }
 
         /** Reads [encodeTimes]' text; a line it cannot read is skipped. */
         fun decodeTimes(stored: String?): Map<String, FinalTime> =
             stored.orEmpty().lineSequence().mapNotNull { line ->
-                val parts = line.split(',', limit = 3)
+                val parts = line.split(',', limit = 4)
                 val atMs = parts.getOrNull(0)?.toLongOrNull() ?: return@mapNotNull null
                 val graced = when (parts.getOrNull(1)) {
                     "g" -> true
                     "n" -> false
                     else -> return@mapNotNull null
                 }
-                val key = parts.getOrNull(2)?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
-                key to FinalTime(atMs, graced)
+                val eventId = parts.getOrNull(2)?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+                val key = parts.getOrNull(3)?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+                key to FinalTime(atMs, graced, eventId)
             }.toMap()
 
         /**

@@ -1194,7 +1194,8 @@ private fun SportsLiveFilterRow(
                     downFocusRequester?.let { down = it }
                 },
                 lastSegmentModifier = Modifier.focusProperties {
-                    if (header.switchRight != null) right = filterFocusRequester
+                    // No chips beside it: Right stays on the switch rather than wandering off.
+                    right = if (header.switchRight != null) filterFocusRequester else FocusRequester.Cancel
                 }
             )
         }

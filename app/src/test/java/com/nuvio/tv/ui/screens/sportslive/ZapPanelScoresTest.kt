@@ -118,16 +118,16 @@ class ZapPanelScoresTest {
     }
 
     @Test
-    fun `under hide until focused a finished game keeps its place by start time`() {
+    fun `under hide until focused a finished game is grouped as a final, its score hidden`() {
         // Both games have begun by ESPN's starts (the Hornets tip off last).
         val at = hornetsEvent.startMs!! + HOUR
         val finished = item("Charlotte Hornets at LA Clippers", at - 3 * HOUR)
         val live = item("Indiana Pacers at Philadelphia 76ers", at - 2 * HOUR)
         val scores = mapOf(finished.streamKey to hornetsEvent, live.streamKey to live(pacersEvent, "Q4 2:00", 100, 98))
         val hidden = groupPanelRows(listOf(live, finished), scores, ScoresMode.HIDE_UNTIL_FOCUSED, emptySet(), at)
-        // Both in Live now, ordered by ESPN's start (the Pacers tipped off first), not by the result.
+        // As the cards label it final (C3): the live game in Live now, the final with the rest.
         assertEquals(listOf(live, finished), hidden.map { it.item })
-        assertEquals(listOf(ZapPanelGroup.LIVE_NOW, ZapPanelGroup.LIVE_NOW), hidden.map { it.group })
+        assertEquals(listOf(ZapPanelGroup.LIVE_NOW, ZapPanelGroup.OTHER), hidden.map { it.group })
         assertEquals(ScoreChip.Hidden, hidden.first { it.item == finished }.chip)
         // Shown, the final drops to the rest.
         assertEquals(ZapPanelGroup.OTHER, groupPanelRows(listOf(finished), scores, ScoresMode.SHOW, emptySet(), at).single().group)

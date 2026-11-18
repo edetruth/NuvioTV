@@ -383,10 +383,27 @@ class SportsLiveEndedGamesTest {
     }
 
     @Test
+    fun `a stored time is reused only for the same ESPN event and while younger than 6 h`() {
+        val card = item()
+        val endedAt = START + 2 * HOUR
+        // Stored for another event under the same card key (an addon reusing its id the next day).
+        val other = SportsLiveEndedGames()
+        other.install(mapOf(card.streamKey to SportsLiveEndedGames.FinalTime(endedAt, eventId = "other")), endedAt) { }
+        assertEquals(START + BASKETBALL, other.verdict(card, pacersFinal, START + 5 * HOUR)!!.endedAtMs)
+        // The same event: the stored time stands.
+        val same = SportsLiveEndedGames()
+        same.install(mapOf(card.streamKey to SportsLiveEndedGames.FinalTime(endedAt, eventId = pacersFinal.eventId)), endedAt) { }
+        assertEquals(endedAt, same.verdict(card, pacersFinal, endedAt + 5 * MINUTE)!!.endedAtMs)
+        // Past 6 h it is not reused (re-dated from the estimate instead).
+        val late = endedAt + SportsLiveEndedGames.FORGET_AFTER_MS + MINUTE
+        assertEquals(START + BASKETBALL, same.verdict(card, pacersFinal, late)!!.endedAtMs)
+    }
+
+    @Test
     fun `the stored text round-trips keys with commas and the no-grace mark`() {
         val times = mapOf(
-            "a|b,c" to SportsLiveEndedGames.FinalTime(START, graced = false),
-            "k" to SportsLiveEndedGames.FinalTime(START + MINUTE)
+            "a|b,c" to SportsLiveEndedGames.FinalTime(START, graced = false, eventId = "401909985"),
+            "k" to SportsLiveEndedGames.FinalTime(START + MINUTE, eventId = "7")
         )
         assertEquals(times, SportsLiveEndedGames.decodeTimes(SportsLiveEndedGames.encodeTimes(times)))
         assertTrue(SportsLiveEndedGames.decodeTimes(null).isEmpty())
@@ -404,9 +421,12 @@ class SportsLiveEndedGamesTest {
         assertTrue(SportsLiveEndedGames.isEspnFinal(card, pacersFinal))
         assertTrue(!SportsLiveEndedGames.isEspnFinal(card, live(pacersFinal)))
         assertTrue(!SportsLiveEndedGames.isEspnFinal(card, null))
-        // A withheld final (score held back by the delay) is still a final: no LIVE pill.
+        // A final the delay still withholds (no score yet) is not labelled final early.
         val withheld = pacersFinal.copy(home = pacersFinal.home.copy(score = null), away = pacersFinal.away.copy(score = null))
-        assertTrue(SportsLiveEndedGames.isEspnFinal(card, withheld))
+        assertTrue(!SportsLiveEndedGames.isEspnFinal(card, withheld))
+        // A channel naming the game keeps its LIVE pill, as it is never moved.
+        val channel = item(name = "US: Sports 1 [Indiana Pacers at Philadelphia 76ers]", isChannel = true)
+        assertTrue(!SportsLiveEndedGames.isEspnFinal(channel, pacersFinal))
         // A surface without the snapshot now (the player panel) still gets the final, so it never groups it as live.
         assertEquals(pacersFinal.eventId, split.scoresWithFinals(emptyMap())[card.streamKey]?.eventId)
     }
