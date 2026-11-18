@@ -4,6 +4,7 @@ import com.nuvio.tv.ui.theme.NuvioMotion
 import com.nuvio.tv.ui.components.PlaybackAvailabilityProvider
 import com.nuvio.tv.ui.components.LocalPlaybackAvailability
 import com.nuvio.tv.ui.components.canStream
+import android.os.SystemClock
 import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
 import com.nuvio.tv.R
@@ -67,6 +68,10 @@ import com.nuvio.tv.ui.screens.settings.TrackingSettingsScreen
 import com.nuvio.tv.ui.screens.settings.TmdbSettingsScreen
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveScreen
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveGameScreen
+import com.nuvio.tv.ui.screens.sportslive.HighlightStep
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveHighlights
+import com.nuvio.tv.ui.screens.sportslive.highlightPlayerRoute
+import kotlinx.coroutines.flow.first
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveExtraSources
 import com.nuvio.tv.ui.screens.sportslive.SportsLivePlayHost
 import com.nuvio.tv.ui.screens.sportslive.SportsLivePlayViewModel
@@ -1059,6 +1064,27 @@ private fun PlaybackNavHost(
                 return returnedToStream
             }
 
+            // A Game page highlight clip (#61): its end plays the next clip, a failure the next link or
+            // clip (with a toast when a clip is given up on), and the last one returns to the Game page.
+            val highlightContext = LocalContext.current
+            val isHighlightClip = remember(backStackEntry.id) {
+                SportsLiveHighlights.isClip(backStackEntry.arguments?.getString("streamUrl"))
+            }
+            // Only while this player is on top: a player already left never moves the playlist on.
+            fun followHighlights(advance: () -> HighlightStep) {
+                if (navController.currentBackStackEntry?.id != backStackEntry.id) return
+                val step = advance()
+                if (step.failedClipId != null) {
+                    Toast.makeText(highlightContext, R.string.sports_live_game_highlight_skipped, Toast.LENGTH_SHORT).show()
+                }
+                when (step) {
+                    is HighlightStep.Play -> navController.navigate(highlightPlayerRoute(step.clip, SystemClock.elapsedRealtime())) {
+                        popUpTo(Screen.Player.route) { inclusive = true }
+                    }
+                    is HighlightStep.Done -> navController.popBackStack()
+                }
+            }
+
             fun navigateFromPostPlay(
                 recommendation: PostPlayRecommendation,
                 playOnLoad: Boolean,
@@ -1103,9 +1129,24 @@ private fun PlaybackNavHost(
             // In picture-in-picture only the video shows: the controls are hidden.
             val inPip by SportsLivePip.inPip.collectAsState()
             LaunchedEffect(inPip) { if (inPip) playerViewModel.hideControls() }
+            if (isHighlightClip) {
+                // A clip's error (after the player's own retries) moves on at once: no error screen.
+                LaunchedEffect(backStackEntry.id) {
+                    playerViewModel.uiState.first { !it.error.isNullOrBlank() }
+                    playerViewModel.stopAndRelease()
+                    followHighlights(SportsLiveHighlights::failed)
+                }
+                // Leaving this player any other way (zap, party, closed) ends the playlist too.
+                DisposableEffect(backStackEntry.id) {
+                    val url = backStackEntry.arguments?.getString("streamUrl")
+                    onDispose { SportsLiveHighlights.playerLeft(url) }
+                }
+            }
             PlayerScreen(
                 viewModel = playerViewModel,
                 onBackPress = { currentVideoId, currentSeason, currentEpisode, autoPlayEnabled, playbackCompleted ->
+                    // Back stops a highlights playlist and returns to the Game page.
+                    if (isHighlightClip) SportsLiveHighlights.stop()
                     if (!playbackCompleted) {
                         startSportsLiveMiniPlayerOnBack(backStackEntry.arguments?.getString("contentId"), playerViewModel)
                     }
@@ -1222,7 +1263,11 @@ private fun PlaybackNavHost(
                         }
                     }
                 },
-                onPlaybackEnded = { nextVideoId, nextSeason, nextEpisode, exitReason ->
+                onPlaybackEnded = onPlaybackEnded@{ nextVideoId, nextSeason, nextEpisode, exitReason ->
+                    if (isHighlightClip) {
+                        followHighlights(SportsLiveHighlights::ended)
+                        return@onPlaybackEnded
+                    }
                     val args = backStackEntry.arguments
                     val contentType = args?.getString("contentType").orEmpty()
                     val contentId = args?.getString("contentId").orEmpty()
@@ -1349,6 +1394,7 @@ private fun PlaybackNavHost(
                 onOpenPartyMedia = ::openPartyMedia,
                 onZap = { target -> navigateToSportsLiveZapTarget(navController, target) },
                 onPlaybackErrorBack = {
+                    if (isHighlightClip) SportsLiveHighlights.stop()
                     val returnedToStream = popBackToStream()
                     if (!returnedToStream) {
                         val args = backStackEntry.arguments
@@ -1512,7 +1558,8 @@ private fun PlaybackNavHost(
                             addonBaseUrl = item.addonBaseUrl
                         )
                     )
-                }
+                },
+                onPlayHighlight = { clip -> navController.navigate(highlightPlayerRoute(clip, SystemClock.elapsedRealtime())) }
             )
         }
 

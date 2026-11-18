@@ -54,6 +54,28 @@ class GameSummaryRepositoryTest {
     }
 
     @Test
+    fun `a final saved before highlight links were kept is fetched once more, then served from disk`() = runTest {
+        // NY @ TOR as a pre-#61 version saved it: the clips without their links, under the unversioned name.
+        val adapter = EspnFixtures.moshi.adapter(EspnSummaryDto::class.java)
+        val withLinks = GameSummaryFixtures.dto(GameSummaryFixtures.NBA_VIDEOS)
+        val legacy = withLinks.copy(videos = withLinks.videos!!.map { it.copy(links = null) })
+        val league = EspnLeagueMap.NBA
+        GameSummaryDiskCache(folder.root).write("${league.sport}_${league.league}_401910002", adapter.toJson(legacy))
+
+        val source = FakeSource(EspnFixtures.json(GameSummaryFixtures.NBA_VIDEOS))
+        val loaded = repository(source).load(league, "401910002") as GameSummaryLoad.Loaded
+        assertEquals(listOf("basketball/nba/401910002"), source.requests)
+        assertEquals(4, loaded.summary.highlights.size)
+        assertTrue(GameSection.HIGHLIGHTS in loaded.summary.sections)
+
+        // Saved again in the current format: the next session reads it, links and all, without a request.
+        val nextSource = FakeSource(null)
+        val reopened = repository(nextSource).load(league, "401910002") as GameSummaryLoad.Loaded
+        assertTrue(nextSource.requests.isEmpty())
+        assertEquals(loaded.summary.highlights, reopened.summary.highlights)
+    }
+
+    @Test
     fun `a live game is reused for at most 30 s and never written to disk`() = runTest {
         val source = FakeSource(liveJson)
         val repo = repository(source)

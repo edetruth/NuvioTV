@@ -89,6 +89,22 @@ class NaturalPlaybackCompletionRulesTest {
     }
 
     @Test
+    fun `a Sports and Live highlight clip ends naturally however short`() {
+        // ESPN highlight clips run 15-60 s (#61): their end plays the next clip.
+        assertTrue(
+            shouldTreatAsNaturalPlaybackCompletion(
+                hasRenderedFirstFrame = true,
+                hasFatalError = false,
+                durationMs = 16_000L,
+                highlightClip = true
+            )
+        )
+        // Still never without a first frame or after a fatal error.
+        assertFalse(shouldTreatAsNaturalPlaybackCompletion(hasRenderedFirstFrame = false, hasFatalError = false, durationMs = 16_000L, highlightClip = true))
+        assertFalse(shouldTreatAsNaturalPlaybackCompletion(hasRenderedFirstFrame = true, hasFatalError = true, durationMs = 16_000L, highlightClip = true))
+    }
+
+    @Test
     fun `isShortPlaceholderDuration covers error and cache-sync clips`() {
         assertTrue(isShortPlaceholderDuration(1L))
         assertTrue(isShortPlaceholderDuration(5_000L))

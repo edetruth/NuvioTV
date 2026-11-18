@@ -95,7 +95,9 @@ class SportsLiveGameViewModel internal constructor(
     private val followedTeams: Flow<List<FollowedTeam>>,
     private val follow: suspend (FollowedTeam) -> Unit,
     private val unfollow: suspend (FollowedTeam) -> Unit,
-    private val now: () -> Long
+    private val now: () -> Long,
+    /** Highlight clips that failed to play this session (#61): hidden. */
+    failedHighlights: Flow<Set<String>> = SportsLiveHighlights.failedClipIds
 ) : ViewModel() {
 
     @Inject
@@ -121,11 +123,15 @@ class SportsLiveGameViewModel internal constructor(
     private val visible = MutableStateFlow(false)
     private val revealRequested = MutableStateFlow(request?.revealed == true)
 
-    val uiState: StateFlow<SportsLiveGameUiState> = combine(page, followedTeams) { page, followed ->
+    val uiState: StateFlow<SportsLiveGameUiState> = combine(page, followedTeams, failedHighlights) { page, followed, failed ->
         val event = request?.event
         SportsLiveGameUiState(
             event = event,
-            summary = page.summary,
+            // A clip that failed is gone; with none left the Highlights tab hides.
+            summary = page.summary?.let { summary ->
+                val kept = summary.highlights.filterNot { it.id in failed }
+                if (kept.size == summary.highlights.size) summary else summary.copy(highlights = kept)
+            },
             status = page.status,
             mode = page.mode,
             revealed = page.revealed,

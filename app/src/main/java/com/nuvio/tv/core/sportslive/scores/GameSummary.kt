@@ -85,8 +85,17 @@ data class StandingsRow(val team: String, val values: List<String>, val inGame: 
 /** A standings table ("2026-27 Atlantic Division Standings") with ESPN's column abbreviations. */
 data class StandingsTable(val title: String?, val columns: List<String>, val rows: List<StandingsRow>)
 
-/** A highlight clip, shown as information only: its video is never played. */
-data class GameHighlight(val title: String, val thumbnail: String?, val durationSeconds: Int?)
+/**
+ * An ESPN highlight clip (#61), played in the app player. [links] are its direct video links, best
+ * first (HLS, then HD MP4, then MP4); never empty: a clip without one is not a highlight here.
+ */
+data class GameHighlight(
+    val id: String,
+    val title: String,
+    val thumbnail: String?,
+    val durationSeconds: Int?,
+    val links: List<String>
+)
 
 enum class GameSection { GAME, BOX_SCORE, STANDINGS, HIGHLIGHTS }
 
@@ -159,12 +168,31 @@ object GameSummaryParser {
             performers = if (played) performers(dto.leaders.orEmpty(), home, away) else emptyList(),
             boxScore = if (played) boxScore(dto.boxscore?.players.orEmpty(), sport, home, away) else emptyList(),
             standings = standings(dto.standings, sport, setOfNotNull(home.id, away.id)),
-            highlights = dto.videos.orEmpty().mapNotNull { video ->
-                val title = video.headline?.trim()?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
-                GameHighlight(title, video.thumbnail?.takeIf { it.isNotBlank() }, video.duration?.toInt()?.takeIf { it > 0 })
-            }
+            // One card per clip: ESPN can list a clip twice, and the list is keyed by id.
+            highlights = dto.videos.orEmpty().mapNotNull(::highlight).distinctBy { it.id }
         )
     }
+
+    /** A clip with a title and at least one playable link; null otherwise (it is not shown). */
+    internal fun highlight(video: EspnVideoDto): GameHighlight? {
+        val title = video.headline?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        val links = highlightLinks(video.links?.source)
+        if (links.isEmpty()) return null
+        return GameHighlight(
+            id = video.id?.takeIf { it.isNotBlank() } ?: links.first(),
+            title = title,
+            thumbnail = video.thumbnail?.takeIf { it.isNotBlank() },
+            durationSeconds = video.duration?.toInt()?.takeIf { it > 0 },
+            links = links
+        )
+    }
+
+    /** A clip's links, best first: HLS (HD, then plain), then HD MP4, then MP4. http(s) only, no repeats. */
+    internal fun highlightLinks(source: EspnVideoSourceDto?): List<String> =
+        listOfNotNull(source?.hls?.hd?.href, source?.hls?.href, source?.hd?.href, source?.href)
+            .map { it.trim() }
+            .filter { it.startsWith("https://", ignoreCase = true) || it.startsWith("http://", ignoreCase = true) }
+            .distinct()
 
     /** True when the summary says the game is over for good: its copy never changes again. */
     fun isFinal(dto: EspnSummaryDto): Boolean {

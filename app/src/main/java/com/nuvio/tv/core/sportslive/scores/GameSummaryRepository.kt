@@ -91,8 +91,9 @@ class GameSummaryRepository internal constructor(
         lock.withLock {
             memory[key]?.takeIf { it.final || now() - it.fetchedAt < LIVE_TTL_MS }?.let { return loaded(it, league, eventId) }
         }
+        val diskKey = "v${DISK_FORMAT}_$key"
         disk?.let { cache ->
-            val stored = withContext(Dispatchers.IO) { cache.read(key)?.let(::parse) }
+            val stored = withContext(Dispatchers.IO) { cache.read(diskKey)?.let(::parse) }
             if (stored != null && GameSummaryParser.isFinal(stored)) {
                 val cached = Cached(stored, now(), final = true)
                 remember(key, cached)
@@ -108,7 +109,7 @@ class GameSummaryRepository internal constructor(
         }
         health.recordSuccess(EspnFeedKey.SUMMARY)
         val final = GameSummaryParser.isFinal(dto)
-        if (final) disk?.let { cache -> withContext(Dispatchers.IO) { cache.write(key, adapter.toJson(dto)) } }
+        if (final) disk?.let { cache -> withContext(Dispatchers.IO) { cache.write(diskKey, adapter.toJson(dto)) } }
         val cached = Cached(dto, now(), final)
         remember(key, cached)
         return loaded(cached, league, eventId)
@@ -130,6 +131,13 @@ class GameSummaryRepository internal constructor(
     companion object {
         /** A game not final yet is fetched again after this long. */
         const val LIVE_TTL_MS = 30_000L
+
+        /**
+         * The disk copy's format, part of its file name. A copy written in an older format is never read
+         * (its game is fetched once more and saved again) and ages out with the oldest files.
+         * 2: highlight clips keep their video links (#61); copies from before had none, so no Highlights.
+         */
+        internal const val DISK_FORMAT = 2
         private const val MAX_IN_MEMORY = 20
     }
 }

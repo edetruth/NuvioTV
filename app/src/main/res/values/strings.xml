@@ -3730,7 +3730,10 @@
     <string name="sports_live_game_team">Team</string>
     <string name="sports_live_game_totals">Totals</string>
     <string name="sports_live_game_duration">%1$d:%2$02d</string>
-    <string name="sports_live_game_highlights_note">Highlight titles from ESPN, for information</string>
+    <string name="sports_live_game_highlights_note">OK plays a clip · clips that fail to play are skipped</string>
+    <string name="sports_live_game_watch_all_highlights">Watch all highlights</string>
+    <string name="sports_live_game_espn_highlight">ESPN highlight</string>
+    <string name="sports_live_game_highlight_skipped">Highlight unavailable, skipped</string>
     <string name="sports_live_game_keys">← → sections · ↑ ↓ scroll · Back to return</string>
     <string name="sports_live_stat_fg_pct" formatted="false">Field goal %</string>
     <string name="sports_live_stat_three_pct" formatted="false">3-point %</string>

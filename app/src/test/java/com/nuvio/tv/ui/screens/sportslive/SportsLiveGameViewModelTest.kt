@@ -49,6 +49,9 @@ class SportsLiveGameViewModelTest {
 
     private val settings = MutableStateFlow(ScoreSettings())
     private val followed = MutableStateFlow<List<FollowedTeam>>(emptyList())
+    private val failedHighlights = MutableStateFlow<Set<String>>(emptySet())
+    // NY @ TOR with four playable ESPN clips.
+    private val highlightsSummary = GameSummaryFixtures.summary(GameSummaryFixtures.NBA_VIDEOS, EspnLeagueMap.NBA, "401910002")
     private val requests = mutableListOf<String>()
     private var nextLoad: () -> GameSummaryLoad = { GameSummaryLoad.Loaded(palaceSummary, final = true) }
 
@@ -62,7 +65,8 @@ class SportsLiveGameViewModelTest {
         followedTeams = followed,
         follow = { team -> followed.update { it + team } },
         unfollow = { team -> followed.update { list -> list.filterNot { it == team } } },
-        now = { testScheduler.currentTime }
+        now = { testScheduler.currentTime },
+        failedHighlights = failedHighlights
     ).also { vm -> backgroundScope.launch { vm.uiState.collect {} } }
 
     @Test
@@ -259,6 +263,53 @@ class SportsLiveGameViewModelTest {
         val plain = SportsLiveResultsUiState(mode = ScoresMode.HIDE_UNTIL_FOCUSED)
         assertEquals(SportsLiveGameRequest(palaceGame, replay = null, revealed = false), plain.gameRequestFor(row))
         assertEquals(true, SportsLiveResultsUiState().gameRequestFor(row).revealed)
+    }
+
+    @Test
+    fun `highlights - a clip that failed is hidden, and with none left the tab goes`() = runTest(mainDispatcherRule.dispatcher) {
+        nextLoad = { GameSummaryLoad.Loaded(highlightsSummary, final = true) }
+        val vm = viewModel(SportsLiveGameRequest(palaceGame))
+        vm.setVisible(true)
+        runCurrent()
+        vm.selectSection(GameSection.HIGHLIGHTS)
+        runCurrent()
+        assertEquals(GameSection.HIGHLIGHTS, vm.uiState.value.section)
+        assertEquals(4, vm.uiState.value.summary!!.highlights.size)
+
+        failedHighlights.value = setOf("50516726")
+        runCurrent()
+        assertEquals(listOf("50515367", "50515447", "50515574"), vm.uiState.value.summary!!.highlights.map { it.id })
+        assertEquals(GameSection.HIGHLIGHTS, vm.uiState.value.section)
+
+        failedHighlights.value = highlightsSummary.highlights.map { it.id }.toSet()
+        runCurrent()
+        assertTrue(vm.uiState.value.summary!!.highlights.isEmpty())
+        // This trimmed summary has nothing else: no section is left.
+        assertTrue(vm.uiState.value.sections.isEmpty())
+        assertNull(vm.uiState.value.section)
+    }
+
+    @Test
+    fun `highlights wait for Reveal under Hide until focused and Off - clip titles give results away`() = runTest(mainDispatcherRule.dispatcher) {
+        nextLoad = { GameSummaryLoad.Loaded(highlightsSummary, final = true) }
+        for (mode in listOf(ScoresMode.HIDE_UNTIL_FOCUSED, ScoresMode.OFF)) {
+            settings.value = ScoreSettings(mode = mode)
+            val vm = viewModel(SportsLiveGameRequest(palaceGame))
+            vm.setVisible(true)
+            vm.selectSection(GameSection.HIGHLIGHTS)
+            runCurrent()
+            assertTrue(vm.uiState.value.sections.isEmpty())
+            assertNull(vm.uiState.value.section)
+            vm.reveal()
+            runCurrent()
+            assertEquals(GameSection.HIGHLIGHTS, vm.uiState.value.section)
+        }
+        // Show: there at once.
+        settings.value = ScoreSettings(mode = ScoresMode.SHOW)
+        val shown = viewModel(SportsLiveGameRequest(palaceGame))
+        shown.setVisible(true)
+        runCurrent()
+        assertTrue(GameSection.HIGHLIGHTS in shown.uiState.value.sections)
     }
 
     @Test

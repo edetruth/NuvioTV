@@ -1,0 +1,121 @@
+{
+  "header": {
+    "id": "401910002",
+    "competitions": [
+      {
+        "date": "2026-11-18T00:30Z",
+        "status": {
+          "type": {
+            "state": "post",
+            "completed": true,
+            "shortDetail": "Final"
+          }
+        },
+        "competitors": [
+          {
+            "homeAway": "home",
+            "winner": false,
+            "score": "102",
+            "team": {
+              "id": "28",
+              "abbreviation": "TOR",
+              "displayName": "Toronto Raptors"
+            }
+          },
+          {
+            "homeAway": "away",
+            "winner": true,
+            "score": "111",
+            "team": {
+              "id": "18",
+              "abbreviation": "NY",
+              "displayName": "New York Knicks"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "videos": [
+    {
+      "id": 50516726,
+      "headline": "New York Knicks vs. Toronto Raptors: Game Highlights",
+      "thumbnail": "https://espnmedia-cdn.akamaized.net/espn/media/common/wsc/2026/1118/4f45d450-f247-4a64-a035-5ef328b8ea53/4f45d450-f247-4a64-a035-5ef328b8ea53.jpg",
+      "duration": 59,
+      "links": {
+        "source": {
+          "href": "https://espnmedia-cdn.akamaized.net/espn/media/16x9/wsc/2026/1118/4f45d450-f247-4a64-a035-5ef328b8ea53/4f45d450-f247-4a64-a035-5ef328b8ea53.mp4",
+          "HD": {
+            "href": "https://espnmedia-cdn.akamaized.net/espn/media/16x9/wsc/2026/1118/4f45d450-f247-4a64-a035-5ef328b8ea53/4f45d450-f247-4a64-a035-5ef328b8ea53.mp4"
+          },
+          "HLS": {
+            "href": "https://cmp-espn.media.dssott.com/opp/hls/espn/wsc/2026/1118/4f45d450-f247-4a64-a035-5ef328b8ea53/4f45d450-f247-4a64-a035-5ef328b8ea53/playlist.m3u8",
+            "HD": {
+              "href": "https://cmp-espn.media.dssott.com/opp/hls/espn/wsc/2026/1118/4f45d450-f247-4a64-a035-5ef328b8ea53/4f45d450-f247-4a64-a035-5ef328b8ea53/playlist.m3u8"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": 50515367,
+      "headline": "Miles McBride nails the trey vs. Toronto Raptors",
+      "thumbnail": "https://espnmedia-cdn.akamaized.net/espn/media/common/wsc/2026/1118/bf18adab-7a18-4206-adf8-e5ea687edde2/bf18adab-7a18-4206-adf8-e5ea687edde2.jpg",
+      "duration": 16,
+      "links": {
+        "source": {
+          "href": "https://espnmedia-cdn.akamaized.net/espn/media/16x9/wsc/2026/1118/bf18adab-7a18-4206-adf8-e5ea687edde2/bf18adab-7a18-4206-adf8-e5ea687edde2.mp4",
+          "HD": {
+            "href": "https://espnmedia-cdn.akamaized.net/espn/media/16x9/wsc/2026/1118/bf18adab-7a18-4206-adf8-e5ea687edde2/bf18adab-7a18-4206-adf8-e5ea687edde2.mp4"
+          },
+          "HLS": {
+            "href": "https://cmp-espn.media.dssott.com/opp/hls/espn/wsc/2026/1118/bf18adab-7a18-4206-adf8-e5ea687edde2/bf18adab-7a18-4206-adf8-e5ea687edde2/playlist.m3u8",
+            "HD": {
+              "href": "https://cmp-espn.media.dssott.com/opp/hls/espn/wsc/2026/1118/bf18adab-7a18-4206-adf8-e5ea687edde2/bf18adab-7a18-4206-adf8-e5ea687edde2/playlist.m3u8"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": 50515447,
+      "headline": "Collin Murray-Boyles with the massive block at the rim",
+      "thumbnail": "https://espnmedia-cdn.akamaized.net/espn/media/common/wsc/2026/1118/fdc91a10-30ba-4559-bea2-95843b58f2b0/fdc91a10-30ba-4559-bea2-95843b58f2b0.jpg",
+      "duration": 22,
+      "links": {
+        "source": {
+          "href": "https://espnmedia-cdn.akamaized.net/espn/media/16x9/wsc/2026/1118/fdc91a10-30ba-4559-bea2-95843b58f2b0/fdc91a10-30ba-4559-bea2-95843b58f2b0.mp4",
+          "HD": {
+            "href": "https://espnmedia-cdn.akamaized.net/espn/media/16x9/wsc/2026/1118/fdc91a10-30ba-4559-bea2-95843b58f2b0/fdc91a10-30ba-4559-bea2-95843b58f2b0.mp4"
+          },
+          "HLS": {
+            "href": "https://cmp-espn.media.dssott.com/opp/hls/espn/wsc/2026/1118/fdc91a10-30ba-4559-bea2-95843b58f2b0/fdc91a10-30ba-4559-bea2-95843b58f2b0/playlist.m3u8",
+            "HD": {
+              "href": "https://cmp-espn.media.dssott.com/opp/hls/espn/wsc/2026/1118/fdc91a10-30ba-4559-bea2-95843b58f2b0/fdc91a10-30ba-4559-bea2-95843b58f2b0/playlist.m3u8"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": 50515574,
+      "headline": "OG Anunoby skies for big jam",
+      "thumbnail": "https://espnmedia-cdn.akamaized.net/espn/media/common/wsc/2026/1118/ba6be26f-5e09-40cc-bf75-9ee39a599e8a/ba6be26f-5e09-40cc-bf75-9ee39a599e8a.jpg",
+      "duration": 20,
+      "links": {
+        "source": {
+          "href": "https://espnmedia-cdn.akamaized.net/espn/media/16x9/wsc/2026/1118/ba6be26f-5e09-40cc-bf75-9ee39a599e8a/ba6be26f-5e09-40cc-bf75-9ee39a599e8a.mp4",
+          "HD": {
+            "href": "https://espnmedia-cdn.akamaized.net/espn/media/16x9/wsc/2026/1118/ba6be26f-5e09-40cc-bf75-9ee39a599e8a/ba6be26f-5e09-40cc-bf75-9ee39a599e8a.mp4"
+          },
+          "HLS": {
+            "href": "https://cmp-espn.media.dssott.com/opp/hls/espn/wsc/2026/1118/ba6be26f-5e09-40cc-bf75-9ee39a599e8a/ba6be26f-5e09-40cc-bf75-9ee39a599e8a/playlist.m3u8",
+            "HD": {
+              "href": "https://cmp-espn.media.dssott.com/opp/hls/espn/wsc/2026/1118/ba6be26f-5e09-40cc-bf75-9ee39a599e8a/ba6be26f-5e09-40cc-bf75-9ee39a599e8a/playlist.m3u8"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

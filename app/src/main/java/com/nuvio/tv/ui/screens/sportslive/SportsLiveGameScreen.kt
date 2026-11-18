@@ -31,6 +31,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
@@ -88,7 +89,8 @@ import java.util.Locale
  * The Game page (#18, `GamePage.dc.html`): a header panel (logos, names, records, the big score, the
  * status line, Watch replay / Reveal / Follow ‹team›), the section pill (Game · Box Score · Standings ·
  * Highlights, empty ones hidden) and the chosen section. ← → change sections from the body, ↑ ↓ scroll,
- * Back returns to where the page was opened. Highlights are listed, never played.
+ * Back returns to where the page was opened. Highlights play in the app player (#61): OK plays a clip,
+ * Watch all highlights plays them all in a row.
  */
 @Composable
 fun SportsLiveGameScreen(
@@ -98,7 +100,9 @@ fun SportsLiveGameScreen(
     /** Opens a replay's Stream screen; the Boolean: the user picks there (no autoplay). */
     onPlay: (SportsLiveItem, Boolean) -> Unit,
     onPlayTarget: (SportsLiveZapTarget) -> Unit,
-    onOpenDetail: (SportsLiveItem) -> Unit
+    onOpenDetail: (SportsLiveItem) -> Unit,
+    /** Plays the first clip of a highlights playlist just started (SportsLiveHighlights). */
+    onPlayHighlight: (HighlightClipPlay) -> Unit
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val currentOnBack by rememberUpdatedState(onBack)
@@ -137,11 +141,22 @@ fun SportsLiveGameScreen(
     val section = state.section
     val showsScore = state.showsScore
 
+    // Back from highlights: focus returns to the card played, or to Watch all highlights.
+    var returnToHighlights by rememberSaveable { mutableStateOf(false) }
+    var returnHighlightId by rememberSaveable { mutableStateOf<String?>(null) }
+    val highlightFocusRequester = remember { FocusRequester() }
     // First focus: Reveal while the score is hidden, else Watch replay, else Follow.
     LaunchedEffect(Unit) {
         withFrameNanos { }
+        val highlightsShown = returnToHighlights && section == GameSection.HIGHLIGHTS
+        val cardShown = highlightsShown && state.summary?.highlights.orEmpty().any { it.id == returnHighlightId }
+        returnToHighlights = false
+        if (highlightsShown) withFrameNanos { }
+        // A card scrolled out of the list has no focus target: Watch all highlights instead.
+        if (cardShown && runCatching { highlightFocusRequester.requestFocus() }.isSuccess) return@LaunchedEffect
         runCatching {
             when {
+                highlightsShown -> bodyFocusRequester
                 !showsScore -> revealFocusRequester
                 state.replay != null -> replayFocusRequester
                 else -> followFocusRequester
@@ -220,7 +235,21 @@ fun SportsLiveGameScreen(
                     true
                 }
         ) {
-            GameBody(state = state, section = section, entryFocusRequester = bodyFocusRequester, upFocusRequester = sectionFocusRequester)
+            GameBody(
+                state = state,
+                section = section,
+                entryFocusRequester = bodyFocusRequester,
+                upFocusRequester = sectionFocusRequester,
+                highlightFocus = returnHighlightId to highlightFocusRequester,
+                onPlayHighlights = { clips ->
+                    SportsLiveHighlights.start(clips)?.let { clip ->
+                        returnToHighlights = true
+                        // One card: back on it; Watch all: back on the button.
+                        returnHighlightId = clips.singleOrNull()?.id
+                        onPlayHighlight(clip)
+                    }
+                }
+            )
         }
         Text(
             text = stringResource(R.string.sports_live_game_keys),
@@ -475,7 +504,15 @@ private fun GameSection.labelRes(): Int = when (this) {
 }
 
 @Composable
-private fun GameBody(state: SportsLiveGameUiState, section: GameSection?, entryFocusRequester: FocusRequester, upFocusRequester: FocusRequester) {
+private fun GameBody(
+    state: SportsLiveGameUiState,
+    section: GameSection?,
+    entryFocusRequester: FocusRequester,
+    upFocusRequester: FocusRequester,
+    /** The card to focus on return from playing it, and its requester. */
+    highlightFocus: Pair<String?, FocusRequester>,
+    onPlayHighlights: (List<GameHighlight>) -> Unit
+) {
     val summary = state.summary
     when {
         !state.showsScore -> GameMessage(stringResource(R.string.sports_live_game_hidden))
@@ -499,7 +536,7 @@ private fun GameBody(state: SportsLiveGameUiState, section: GameSection?, entryF
                     GameSection.GAME -> gameTab(summary, first)
                     GameSection.BOX_SCORE -> boxScoreTab(summary.boxScore, first)
                     GameSection.STANDINGS -> standingsTab(summary.standings, first)
-                    GameSection.HIGHLIGHTS -> highlightsTab(summary.highlights, first)
+                    GameSection.HIGHLIGHTS -> highlightsTab(summary.highlights, first, highlightFocus, onPlayHighlights)
                 }
             }
         }
@@ -777,48 +814,106 @@ private fun LazyListScope.standingsTab(tables: List<StandingsTable>, first: Modi
     }
 }
 
-private fun LazyListScope.highlightsTab(highlights: List<GameHighlight>, first: Modifier) {
-    item(key = "note") {
-        Text(
-            stringResource(R.string.sports_live_game_highlights_note),
-            style = MaterialTheme.typography.bodySmall,
-            color = NuvioTheme.colors.TextTertiary
-        )
-    }
-    items(highlights.size, key = { "v|$it" }) { index ->
-        val highlight = highlights[index]
-        GamePanel(modifier = if (index == 0) first else Modifier, padding = NuvioTheme.spacing.sm) {
-            Row(horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md), verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .width(160.dp)
-                        .height(90.dp)
-                        .clip(RoundedCornerShape(NuvioTheme.radii.sm))
-                        .background(NuvioTheme.colors.PosterFallback)
-                ) {
-                    highlight.thumbnail?.let { AsyncImage(model = it, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
-                }
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        highlight.title,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = NuvioTheme.colors.TextPrimary,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    highlight.durationSeconds?.let { seconds ->
-                        Text(
-                            stringResource(R.string.sports_live_game_duration, seconds / 60, seconds % 60),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = NuvioTheme.colors.TextTertiary
-                        )
-                    }
-                }
+/**
+ * Highlights (#61): Watch all highlights (plays every clip in a row), then one card per clip, OK plays it.
+ * Only reached once the score shows: clip titles and thumbnails give results away.
+ */
+private fun LazyListScope.highlightsTab(
+    highlights: List<GameHighlight>,
+    first: Modifier,
+    focus: Pair<String?, FocusRequester>,
+    onPlay: (List<GameHighlight>) -> Unit
+) {
+    item(key = "all") {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.lg)) {
+            SportsLivePaneButton(onClick = { onPlay(highlights) }, modifier = first) {
+                Icon(imageVector = Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
+                Spacer(modifier = Modifier.width(NuvioTheme.spacing.xs))
+                Text(stringResource(R.string.sports_live_game_watch_all_highlights), maxLines = 1)
             }
+            Text(
+                stringResource(R.string.sports_live_game_highlights_note),
+                style = MaterialTheme.typography.bodySmall,
+                color = NuvioTheme.colors.TextTertiary
+            )
         }
     }
+    items(highlights.size, key = { "v|${highlights[it].id}" }) { index ->
+        val highlight = highlights[index]
+        HighlightCard(
+            highlight = highlight,
+            modifier = if (highlight.id == focus.first) Modifier.focusRequester(focus.second) else Modifier,
+            onClick = { onPlay(listOf(highlight)) }
+        )
+    }
+}
+
+@Composable
+private fun HighlightCard(highlight: GameHighlight, modifier: Modifier, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(NuvioTheme.radii.md)
+    LightweightCard(
+        onClick = onClick,
+        modifier = modifier.fillMaxWidth(),
+        shape = shape,
+        containerColor = NuvioTheme.colors.BackgroundCard,
+        focusedBorder = Border(border = NuvioTheme.focusRing.border(NuvioTheme.spacing.xxs), shape = shape)
+    ) {
+        Row(
+            modifier = Modifier.padding(NuvioTheme.spacing.sm),
+            horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(192.dp)
+                    .height(108.dp)
+                    .clip(RoundedCornerShape(NuvioTheme.radii.sm))
+                    .background(NuvioTheme.colors.PosterFallback)
+            ) {
+                highlight.thumbnail?.let { AsyncImage(model = it, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(HIGHLIGHT_BADGE_COLOR),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(imageVector = Icons.Rounded.PlayArrow, contentDescription = null, tint = NuvioTheme.colors.TextPrimary, modifier = Modifier.size(22.dp))
+                }
+                HighlightBadge(stringResource(R.string.sports_live_game_espn_highlight), Modifier.align(Alignment.TopStart))
+                highlight.durationSeconds?.let { seconds ->
+                    HighlightBadge(stringResource(R.string.sports_live_game_duration, seconds / 60, seconds % 60), Modifier.align(Alignment.BottomEnd))
+                }
+            }
+            Text(
+                highlight.title,
+                style = MaterialTheme.typography.titleMedium,
+                color = NuvioTheme.colors.TextPrimary,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun HighlightBadge(text: String, modifier: Modifier) {
+    Text(
+        text,
+        style = MaterialTheme.typography.labelSmall,
+        color = NuvioTheme.colors.TextSecondary,
+        maxLines = 1,
+        modifier = modifier
+            .padding(NuvioTheme.spacing.xs)
+            .clip(RoundedCornerShape(NuvioTheme.radii.sm))
+            .background(HIGHLIGHT_BADGE_COLOR)
+            .padding(horizontal = NuvioTheme.spacing.xs)
+    )
 }
 
 private val GAME_STAR_COLOR = Color(0xFFFFC107)
 private val STAT_BETTER_COLOR = Color(0xFF9AC2FF)
 private val STAT_OTHER_COLOR = Color(0xFF4B5A6E)
+private val HIGHLIGHT_BADGE_COLOR = Color(0xD90A0D12)

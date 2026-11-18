@@ -13,7 +13,7 @@ class GameSummaryParserTest {
         GameSummaryParser.parse(GameSummaryFixtures.dto(file), league, id)!!
 
     @Test
-    fun `NBA final - header, linescore, team stats, performers, box score, standings and highlights`() {
+    fun `NBA final - header, linescore, team stats, performers, box score and standings`() {
         // ORL 115 @ BOS 105, Final, TD Garden.
         val game = summary(GameSummaryFixtures.NBA, EspnLeagueMap.NBA, "401909994")
         assertEquals(ScoreState.POST, game.state)
@@ -58,9 +58,72 @@ class GameSummaryParserTest {
         assertEquals(listOf("Orlando"), game.standings.first().rows.filter { it.inGame }.map { it.team })
         assertEquals(listOf("Boston"), game.standings[1].rows.filter { it.inGame }.map { it.team })
 
-        assertEquals(3, game.highlights.size)
-        assertEquals("Orlando Magic vs. Boston Celtics: Game Highlights", game.highlights.first().title)
-        assertEquals(GameSection.entries.toList(), game.sections)
+        // This copy's three clips were trimmed without their links: none is playable, so no Highlights tab.
+        assertTrue(game.highlights.isEmpty())
+        assertEquals(listOf(GameSection.GAME, GameSection.BOX_SCORE, GameSection.STANDINGS), game.sections)
+    }
+
+    @Test
+    fun `NBA final with highlights - each clip's links, HLS first then MP4, and the Highlights tab`() {
+        // NY 111 @ TOR 102: ESPN's clips with their links.source (trimmed).
+        val game = summary(GameSummaryFixtures.NBA_VIDEOS, EspnLeagueMap.NBA, "401910002")
+        assertEquals(4, game.highlights.size)
+        val recap = game.highlights.first()
+        assertEquals("50516726", recap.id)
+        assertEquals("New York Knicks vs. Toronto Raptors: Game Highlights", recap.title)
+        assertEquals(59, recap.durationSeconds)
+        assertTrue(recap.thumbnail!!.endsWith(".jpg"))
+        // HLS.HD and HLS are the same playlist, HD and plain the same MP4: one of each, HLS first.
+        assertEquals(2, recap.links.size)
+        assertTrue(recap.links[0].startsWith("https://cmp-espn.media.dssott.com/") && recap.links[0].endsWith("/playlist.m3u8"))
+        assertTrue(recap.links[1].startsWith("https://espnmedia-cdn.akamaized.net/") && recap.links[1].endsWith(".mp4"))
+        assertEquals(listOf("50515367", "50515447", "50515574"), game.highlights.drop(1).map { it.id })
+        // This trimmed copy has only the clips: Highlights is its one section.
+        assertEquals(listOf(GameSection.HIGHLIGHTS), game.sections)
+    }
+
+    @Test
+    fun `highlight links - HLS HD, HLS, HD MP4, MP4 in that order, http only, no repeats`() {
+        val all = EspnVideoSourceDto(
+            href = "https://cdn.example/clip.mp4",
+            hd = EspnHrefDto("https://cdn.example/clip_hd.mp4"),
+            hls = EspnVideoHlsDto(href = "https://cdn.example/clip.m3u8", hd = EspnHrefDto("https://cdn.example/clip_hd.m3u8"))
+        )
+        assertEquals(
+            listOf("https://cdn.example/clip_hd.m3u8", "https://cdn.example/clip.m3u8", "https://cdn.example/clip_hd.mp4", "https://cdn.example/clip.mp4"),
+            GameSummaryParser.highlightLinks(all)
+        )
+        // MP4 only: HD first.
+        assertEquals(
+            listOf("https://cdn.example/clip_hd.mp4", "https://cdn.example/clip.mp4"),
+            GameSummaryParser.highlightLinks(all.copy(hls = null))
+        )
+        // Not a web link, or blank: left out.
+        assertEquals(
+            listOf("https://cdn.example/clip.mp4"),
+            GameSummaryParser.highlightLinks(EspnVideoSourceDto(href = "https://cdn.example/clip.mp4", hd = EspnHrefDto("  "), hls = EspnVideoHlsDto(href = "rtmp://x/clip")))
+        )
+        assertTrue(GameSummaryParser.highlightLinks(null).isEmpty())
+    }
+
+    @Test
+    fun `a clip ESPN lists twice shows once - the cards are keyed by clip id`() {
+        val dto = GameSummaryFixtures.dto(GameSummaryFixtures.NBA_VIDEOS)
+        val twice = dto.copy(videos = dto.videos!! + dto.videos!!.first().copy(headline = "Same clip again"))
+        val game = GameSummaryParser.parse(twice, EspnLeagueMap.NBA, "401910002")!!
+        assertEquals(listOf("50516726", "50515367", "50515447", "50515574"), game.highlights.map { it.id })
+        assertEquals("New York Knicks vs. Toronto Raptors: Game Highlights", game.highlights.first().title)
+    }
+
+    @Test
+    fun `a clip without a title or a playable link is not a highlight`() {
+        val links = EspnVideoLinksDto(EspnVideoSourceDto(href = "https://cdn.example/clip.mp4"))
+        val clip = GameSummaryParser.highlight(EspnVideoDto(id = "7", headline = " Dunk ", duration = 12.6, links = links))!!
+        assertEquals(GameHighlight("7", "Dunk", null, 12, listOf("https://cdn.example/clip.mp4")), clip)
+        assertNull(GameSummaryParser.highlight(EspnVideoDto(id = "7", headline = "Dunk")))
+        assertNull(GameSummaryParser.highlight(EspnVideoDto(id = "7", headline = " ", links = links)))
+        // No id: the link stands in for it, so a failed clip can still be hidden.
+        assertEquals("https://cdn.example/clip.mp4", GameSummaryParser.highlight(EspnVideoDto(headline = "Dunk", links = links))!!.id)
     }
 
     @Test
@@ -193,6 +256,7 @@ class GameSummaryParserTest {
 internal object GameSummaryFixtures {
     const val NBA = "espn_summary_nba_401909994.json"
     const val NBA_PRE = "espn_summary_nba_pre_401910002.json"
+    const val NBA_VIDEOS = "espn_summary_nba_videos_401910002.json"
     const val NFL = "espn_summary_nfl_401873060.json"
     const val NHL = "espn_summary_nhl_401892726.json"
     const val SOCCER = "espn_summary_eng1_401879243.json"

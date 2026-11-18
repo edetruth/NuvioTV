@@ -32,6 +32,8 @@ internal data class CachedSourceIdentity(
 internal fun PlayerRuntimeController.tryRefreshExpiredLinkAfterError(errorMessage: String): Boolean {
     val failedUrl = currentStreamUrl
     if (failedUrl.isBlank() || failedUrl.startsWith("torrent://")) return false
+    // A highlight clip has no source to fetch again: its failure moves on to the next link or clip (#61).
+    if (isHighlightClip()) return false
     val fromLinkCache = failedUrl == linkCacheSourceUrl
     if (!fromLinkCache && !failedUrl.hasLikelyExpiringPlaybackCredentials()) return false
     if (failedUrl == linkRefreshAttemptedUrl) return false

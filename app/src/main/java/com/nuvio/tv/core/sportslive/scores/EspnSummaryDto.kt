@@ -1,5 +1,6 @@
 package com.nuvio.tv.core.sportslive.scores
 
+import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
 // Tolerant DTOs for ESPN's site API game summary (`{sport}/{league}/summary?event=<id>`): only the fields
@@ -166,11 +167,32 @@ data class EspnStandingsEntryDto(val team: String? = null, val id: String? = nul
 @JsonClass(generateAdapter = true)
 data class EspnStandingsStatDto(val name: String? = null, val abbreviation: String? = null, val displayValue: String? = null)
 
-/** A highlight clip: only its title, thumbnail and length are read; the video itself is never played. */
+/** A highlight clip (#61): title, thumbnail, length and its direct video links. */
 @JsonClass(generateAdapter = true)
 data class EspnVideoDto(
     val id: String? = null,
     val headline: String? = null,
     val thumbnail: String? = null,
-    val duration: Double? = null
+    val duration: Double? = null,
+    val links: EspnVideoLinksDto? = null
 )
+
+@JsonClass(generateAdapter = true)
+data class EspnVideoLinksDto(val source: EspnVideoSourceDto? = null)
+
+/** `links.source`: the MP4 ([href], [hd]) and the HLS playlist ([hls]). */
+@JsonClass(generateAdapter = true)
+data class EspnVideoSourceDto(
+    val href: String? = null,
+    @Json(name = "HD") val hd: EspnHrefDto? = null,
+    @Json(name = "HLS") val hls: EspnVideoHlsDto? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class EspnVideoHlsDto(
+    val href: String? = null,
+    @Json(name = "HD") val hd: EspnHrefDto? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class EspnHrefDto(val href: String? = null)

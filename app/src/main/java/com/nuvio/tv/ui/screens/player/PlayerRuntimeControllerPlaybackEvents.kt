@@ -23,6 +23,7 @@ import com.nuvio.tv.data.repository.PlaybackIssuePlaybackSettingsInput
 import com.nuvio.tv.data.repository.PlaybackIssueReportInput
 import com.nuvio.tv.data.repository.SkipInterval
 import com.nuvio.tv.domain.model.WatchProgress
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveHighlights
 import java.io.IOException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.update
@@ -340,13 +341,18 @@ internal fun shouldResetPostPlayStateAfterPlaybackEnded(
 internal fun shouldTreatAsNaturalPlaybackCompletion(
     hasRenderedFirstFrame: Boolean,
     hasFatalError: Boolean,
-    durationMs: Long
+    durationMs: Long,
+    /** A Sports & Live highlight clip (#61): short by nature, so its end is a real end. */
+    highlightClip: Boolean = false
 ): Boolean {
     if (hasFatalError) return false
     if (!hasRenderedFirstFrame) return false
-    if (isShortPlaceholderDuration(durationMs)) return false
+    if (!highlightClip && isShortPlaceholderDuration(durationMs)) return false
     return true
 }
+
+/** Whether this player plays a Sports & Live highlight clip (#61). */
+internal fun PlayerRuntimeController.isHighlightClip(): Boolean = SportsLiveHighlights.isClip(currentStreamUrl)
 
 /** Streams shorter than ~2:01 are treated as error/placeholder clips, not real episodes. */
 internal fun isShortPlaceholderDuration(duration: Long): Boolean = duration in 1..120_999L
@@ -425,7 +431,8 @@ internal fun PlayerRuntimeController.startProgressUpdates() {
                     val naturalEnded = !view.isLiveStreamNow() && (nearEnd || mpvEofReached) && shouldTreatAsNaturalPlaybackCompletion(
                         hasRenderedFirstFrame = firstFrameReady,
                         hasFatalError = !_uiState.value.error.isNullOrBlank(),
-                        durationMs = effectiveDuration
+                        durationMs = effectiveDuration,
+                        highlightClip = isHighlightClip()
                     )
                     val wasEnded = _uiState.value.playbackEnded
                     _uiState.update { state ->
@@ -600,7 +607,8 @@ internal fun PlayerRuntimeController.checkExoPlaybackOverrun(
     val naturalEnded = shouldTreatAsNaturalPlaybackCompletion(
         hasRenderedFirstFrame = hasRenderedFirstFrame,
         hasFatalError = !_uiState.value.error.isNullOrBlank(),
-        durationMs = maxOf(durationMs, lastKnownDuration)
+        durationMs = maxOf(durationMs, lastKnownDuration),
+        highlightClip = isHighlightClip()
     )
     if (!naturalEnded) return
     // Stop the runaway clock. The completion scrobble below clears the active
@@ -903,7 +911,8 @@ internal fun PlayerRuntimeController.handleNaturalPlaybackEnded() {
     if (!shouldTreatAsNaturalPlaybackCompletion(
             hasRenderedFirstFrame = hasRenderedFirstFrame,
             hasFatalError = hasFatalError,
-            durationMs = duration
+            durationMs = duration,
+            highlightClip = isHighlightClip()
         )
     ) {
         Log.i(
