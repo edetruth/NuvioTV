@@ -397,6 +397,8 @@ fun rememberSportsLiveZapKeyHandler(
     val viewModel: SportsLiveZapViewModel = hiltViewModel()
     val context = LocalContext.current
     val currentOnZap by rememberUpdatedState(onZap)
+    // A source that answered with a rate-limit notice while zapping is announced once (C1).
+    SportsLiveCooldownToasts()
     LaunchedEffect(viewModel) {
         viewModel.events.collect { event ->
             when (event) {

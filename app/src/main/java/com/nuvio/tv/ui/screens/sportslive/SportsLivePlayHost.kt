@@ -32,6 +32,8 @@ fun SportsLivePlayHost(
     val currentOnOpenStreamScreen by rememberUpdatedState(onOpenStreamScreen)
     val currentOnPlayTarget by rememberUpdatedState(onPlayTarget)
     val lifecycleOwner = LocalLifecycleOwner.current
+    // A source that answered with a rate-limit notice is announced once (C1).
+    SportsLiveCooldownToasts()
     LaunchedEffect(playViewModel, lifecycleOwner) {
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
             playViewModel.events.collect { event ->

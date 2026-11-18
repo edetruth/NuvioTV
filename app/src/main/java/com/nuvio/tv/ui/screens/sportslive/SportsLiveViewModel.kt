@@ -3,7 +3,6 @@ package com.nuvio.tv.ui.screens.sportslive
 import androidx.annotation.VisibleForTesting
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.nuvio.tv.core.debrid.DirectDebridResolver
 import com.nuvio.tv.core.sportslive.SportsLiveDataSaver
 import com.nuvio.tv.core.sportslive.EndedGame
 import com.nuvio.tv.core.sportslive.EndedInputs
@@ -78,20 +77,13 @@ class SportsLiveViewModel internal constructor(
     constructor(
         repo: SportsLiveRepository,
         resolver: SportsLiveZapResolver,
-        directDebridResolver: DirectDebridResolver,
         prefs: SportsLivePreferencesDataStore,
         liveScores: LiveScoresRepository
     ) : this(
         repo = repo,
-        // The zap's pick, which joins the stream search the ended-games probe started on settle.
-        previewResolve = { item ->
-            val stream = resolver.resolve(item)
-            when {
-                stream == null -> SportsLivePreviewLookup.NoStream
-                sportsLiveLightPlayable(stream, directDebridResolver) -> SportsLivePreviewLookup.Found(stream)
-                else -> SportsLivePreviewLookup.NotPreviewable
-            }
-        },
+        // The zap's pick, which joins the stream search the ended-games probe started on settle; a
+        // cached resolve, else at most one resolve per game per window, never during a cool-down (C1).
+        previewResolve = resolver::previewLookup,
         hoverPreviewEnabled = combine(prefs.hoverPreview, prefs.dataSaver) { hover, saver ->
             SportsLiveDataSaver.hoverPreviewAllowed(hover, saver)
         },

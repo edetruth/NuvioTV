@@ -144,6 +144,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import androidx.compose.ui.res.stringResource
 import com.nuvio.tv.R
+import com.nuvio.tv.ui.screens.sportslive.sportsLiveSourceNotice
 import com.nuvio.tv.BuildConfig
 import com.nuvio.tv.core.party.PartyAction
 import com.nuvio.tv.core.party.PartyMedia
@@ -2016,6 +2017,7 @@ fun PlayerScreen(
                     onAddonFilterSelected = { viewModel.onEvent(PlayerEvent.OnSourceAddonFilterSelected(it)) },
                     onStreamSelected = { viewModel.onEvent(PlayerEvent.OnSourceStreamSelected(it)) },
                     onExpandStreams = { viewModel.controller.expandSourceFilteredStreamsIfNeeded() },
+                    isNotice = { sportsLiveSourceNotice(viewModel.controller.contentId, it) },
                     modifier = Modifier.align(Alignment.CenterEnd)
                 )
             }

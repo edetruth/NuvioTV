@@ -209,6 +209,12 @@ class SportsLiveWorkingLinks(internal val nowMs: () -> Long = { System.currentTi
         return good + fresh + bad
     }
 
+    /** The stream playing, else last launched, for [gameKey] when its link is known good; else null. */
+    fun goodStream(gameKey: String): Stream? = synchronized(this) {
+        val game = games[gameKey] ?: return null
+        listOfNotNull(game.playing, game.launched).firstOrNull { isGood(gameKey, it.getStreamUrl()) }
+    }
+
     /** [streams] without [gameKey]'s quarantined links. */
     fun withoutQuarantined(gameKey: String, streams: List<Stream>): List<Stream> =
         streams.filterNot { isQuarantined(gameKey, it) }

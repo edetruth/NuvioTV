@@ -1958,6 +1958,7 @@ fun PlayerRuntimeController.onEvent(
         }
         PlayerEvent.OnDismissSourcesPanel -> {
             dismissSourcesPanel()
+            restoreSportsRecoveryIfNothingPlays()
         }
         PlayerEvent.OnShowPartyPanel -> {
             showPartyPanel()

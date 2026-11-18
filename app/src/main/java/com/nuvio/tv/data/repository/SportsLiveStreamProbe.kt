@@ -3,9 +3,10 @@ package com.nuvio.tv.data.repository
 import androidx.annotation.VisibleForTesting
 import com.nuvio.tv.core.network.NetworkResult
 import com.nuvio.tv.core.player.StreamAutoPlaySelector
+import com.nuvio.tv.core.sportslive.SportsLiveNoticeEntries
+import com.nuvio.tv.core.sportslive.SportsLiveSourceCooldown
 import com.nuvio.tv.domain.model.AddonStreams
 import com.nuvio.tv.domain.model.SportsLiveItem
-import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.domain.repository.StreamRepository
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveResolveCache
 import kotlinx.coroutines.CancellationException
@@ -62,12 +63,14 @@ class SportsLiveStreamProbe @Inject constructor(
 
         /** Whether an ended verdict reached after [recheckCount] background re-checks gets another one. */
         fun shouldRecheckEnded(recheckCount: Int): Boolean = recheckCount < MAX_ENDED_RECHECKS
-
-        private val rateLimitWords = listOf("rate limit", "too many")
     }
 
     @VisibleForTesting
     internal var nowMs: () -> Long = { System.currentTimeMillis() }
+
+    /** Sources cooling down after a rate-limit notice are not probed (C1). */
+    @VisibleForTesting
+    internal var cooldown: SportsLiveSourceCooldown = SportsLiveSourceCooldown.shared
 
     @VisibleForTesting
     internal var dispatcher: CoroutineDispatcher = Dispatchers.IO
@@ -100,6 +103,8 @@ class SportsLiveStreamProbe @Inject constructor(
         // A fresh resolve (from preview/zap/section) already proved the game alive; don't spend a
         // request probing on mere focus.
         if (resolveCache.isFresh(key)) return
+        // A source that asked to wait is left alone until its cool-down ends (C1).
+        if (cooldown.isCoolingDown(item.addonName)) return
         val entry = entries[key]
         if (entry != null && nowMs() - entry.probedAtMs < REPROBE_AFTER_MS) return
         if (!inFlight.add(key)) return
@@ -207,19 +212,14 @@ class SportsLiveStreamProbe @Inject constructor(
         is NetworkResult.Success -> {
             val streams = result.data.flatMap { it.streams }
             when {
-                streams.any(::isRateLimitNotice) -> null
+                streams.any { SportsLiveNoticeEntries.rateLimitMinutes(it) != null } -> null
                 // A torrent may still be resolving through debrid; it is never proof of an end.
                 streams.any { it.getEffectiveInfoHash() != null } -> false
-                else -> streams.none(StreamAutoPlaySelector::isPlayable)
+                // An informational entry is never a playable stream (C1).
+                else -> streams.filterNot(SportsLiveNoticeEntries::isNotice).none(StreamAutoPlaySelector::isPlayable)
             }
         }
         is NetworkResult.Error -> if (result.code == NetworkResult.STREAMS_NOT_FOUND_CODE) true else null
         NetworkResult.Loading -> null
-    }
-
-    /** Addons such as highfly answer a rate limit with an informational "stream". */
-    private fun isRateLimitNotice(stream: Stream): Boolean {
-        val text = listOfNotNull(stream.name, stream.title, stream.description).joinToString(" ").lowercase()
-        return rateLimitWords.any { it in text }
     }
 }

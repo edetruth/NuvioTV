@@ -3793,7 +3793,7 @@
     <string name="sports_live_no_addons_title">No sports or live addons</string>
     <string name="sports_live_no_addons_subtitle">Install an addon that offers live sports or TV channels to use this section</string>
     <string name="sports_live_open_addons">Open add-ons</string>
-    <string name="sports_live_zap_no_stream">No stream for %1$s</string>
+    <string name="sports_live_zap_no_stream">No stream for %1$s right now</string>
     <string name="sports_live_zap_position">%1$d of %2$d</string>
     <string name="sports_live_zap_switching">Switching to %1$s…</string>
     <string name="sports_live_zap_panel_title">Live now</string>
@@ -3821,4 +3821,7 @@
     <string name="sports_live_dual_sound_off">Muted</string>
     <string name="sports_live_dual_keys_hint">←/→ sound · ↑/↓ change game · OK full screen · Menu swap</string>
     <string name="sports_live_source_loading">%1$s · loading…</string>
+    <string name="sports_live_source_notice">Message from the source · not a stream</string>
+    <string name="sports_live_source_rate_limited">%1$s is rate-limited, try again in %2$d min</string>
+    <string name="sports_live_nothing_playing">Nothing is playing. Choose a stream or go back.</string>
 </resources>

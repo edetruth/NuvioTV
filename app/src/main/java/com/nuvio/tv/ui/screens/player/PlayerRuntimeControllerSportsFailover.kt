@@ -1,6 +1,7 @@
 package com.nuvio.tv.ui.screens.player
 
 import android.util.Log
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import com.nuvio.tv.R
 import com.nuvio.tv.core.debrid.DirectDebridPlayableResult
@@ -12,6 +13,7 @@ import com.nuvio.tv.domain.model.ProxyHeaders
 import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.domain.model.StreamBehaviorHints
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveExtraSources
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapResolver
 import com.nuvio.tv.ui.screens.sportslive.sportsLiveFallbackCandidate
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -145,10 +147,17 @@ internal fun PlayerRuntimeController.trySportsLiveFailoverAfterError(
             val sources = _uiState.value
             val searchDone = !sources.isLoadingSourceStreams &&
                 (sources.sourceAllStreams.isNotEmpty() || sources.sourceStreamsError != null)
-            // Links known to work for this game first, quarantined ones last (#65).
+            // Links known to work for this game first, quarantined ones last (#65); an addon's
+            // informational entries and junk links are never tried (C1).
             val next = sportsLiveFallbackCandidate(
-                streams = SportsLiveWorkingLinks.shared.order(contentId.orEmpty(), sources.sourceAllStreams),
-                extras = SportsLiveWorkingLinks.shared.order(contentId.orEmpty(), SportsLiveExtraSources.availableStreamsFor(contentId)),
+                streams = SportsLiveWorkingLinks.shared.order(
+                    contentId.orEmpty(),
+                    sources.sourceAllStreams.filterNot(SportsLiveZapResolver::isNonStream)
+                ),
+                extras = SportsLiveWorkingLinks.shared.order(
+                    contentId.orEmpty(),
+                    SportsLiveExtraSources.availableStreamsFor(contentId).filterNot(SportsLiveZapResolver::isNonStream)
+                ),
                 extrasAllowed = searchDone || polls >= SPORTS_FAILOVER_POLL_COUNT,
                 settings = settings,
                 installedAddonNames = installedAddonNames,
@@ -185,6 +194,36 @@ internal fun PlayerRuntimeController.trySportsLiveFailoverAfterError(
         surfaceSportsFailoverError(errorMessage)
     }
     return true
+}
+
+/**
+ * Whether a sports [errorCode] skips straight to failover (C1): a container the player cannot parse
+ * before the first frame is not media at all (an addon's notice or placeholder), so retrying or
+ * re-probing it only delays the next source. It counts as a failed link (#65 quarantine).
+ */
+internal fun sportsFailsOverAtOnce(errorCode: Int, hasRenderedFirstFrame: Boolean): Boolean =
+    !hasRenderedFirstFrame && errorCode == PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED
+
+/**
+ * [sportsFailsOverAtOnce] for the error just raised: hands it to [trySportsLiveFailoverAfterError].
+ * True when sports handled it; false for movies/shows and any other error.
+ */
+internal fun PlayerRuntimeController.trySportsFailoverOnUnplayableStart(errorCode: Int, errorMessage: String): Boolean {
+    if (!SportsLiveExtraSources.isSportsPlayback(contentId)) return false
+    if (!sportsFailsOverAtOnce(errorCode, hasRenderedFirstFrame)) return false
+    return trySportsLiveFailoverAfterError(errorMessage)
+}
+
+/**
+ * The Sources panel closed while nothing plays for a sports game (its source failed and no pick
+ * replaced it): the recovery overlay (Choose stream / Retry / Back) comes back, not a black player (C1).
+ */
+internal fun PlayerRuntimeController.restoreSportsRecoveryIfNothingPlays() {
+    if (!SportsLiveExtraSources.isSportsPlayback(contentId)) return
+    if (sourceFallbackJob?.isActive == true) return
+    val player = _exoPlayer ?: return
+    if (player.playerError == null && player.playbackState != Player.STATE_IDLE) return
+    surfaceSportsFailoverError(context.getString(R.string.sports_live_nothing_playing))
 }
 
 /** Shows the standalone, focusable recovery overlay (Try another source / Retry / Back). */

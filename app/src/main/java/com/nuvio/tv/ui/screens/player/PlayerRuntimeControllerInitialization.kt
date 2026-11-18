@@ -1648,6 +1648,11 @@ internal fun PlayerRuntimeController.initializePlayer(
                             return
                         }
 
+                        // Sports & Live: an unparseable container before the first frame fails over at once (C1).
+                        if (trySportsFailoverOnUnplayableStart(error.errorCode, detailedError)) {
+                            return
+                        }
+
                         if (tryParsingErrorProbeFallback(
                             error = error,
                             detailedError = detailedError,

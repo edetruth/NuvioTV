@@ -59,6 +59,7 @@ import com.nuvio.tv.ui.theme.NuvioTheme
 import com.nuvio.tv.ui.screens.sportslive.sportsLiveSourceLoadingRows
 import androidx.compose.ui.res.stringResource
 import com.nuvio.tv.R
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveSourceNoticeLabel
 import com.nuvio.tv.ui.util.localizeEpisodeTitle
 import androidx.compose.ui.platform.LocalContext
 
@@ -72,6 +73,8 @@ internal fun StreamSourcesSidePanel(
     onAddonFilterSelected: (String?) -> Unit,
     onStreamSelected: (Stream) -> Unit,
     onExpandStreams: () -> Unit = {},
+    // Sports & Live (C1): an addon's informational entry, listed as a notice row that does not play.
+    isNotice: (Stream) -> Boolean = { false },
     modifier: Modifier = Modifier
 ) {
     val isRtl = androidx.compose.ui.platform.LocalLayoutDirection.current == androidx.compose.ui.unit.LayoutDirection.Rtl
@@ -493,32 +496,36 @@ internal fun StreamSourcesSidePanel(
                         itemsIndexed(uiState.sourceFilteredStreams, key = { index, _ ->
                             streamKeys[index]
                         }) { index, stream ->
-                            StreamItem(
-                                stream = stream,
-                                focusRequester = if (index == 0) {
-                                    streamsFocusRequester
-                                } else {
-                                    streamFocusRequesters.getValue(streamKeys[index])
-                                },
-                                isCurrentStream = index == currentStreamIndex,
-                                showFileSizeBadges = uiState.showFileSizeBadges,
-                                showAddonLogo = uiState.showAddonLogo,
-                                badgePlacement = uiState.streamBadgePlacement,
-                                onClick = { onStreamSelected(stream) },
-                                onFocusChanged = { focused ->
-                                    if (focused) {
-                                        focusedStreamKey = streamKeys[index]
-                                    }
-                                    if (index == 0) {
-                                        firstCardHasFocus = focused
-                                    }
-                                },
-                                onUpKey = if (index == 0 && chipFocusRequesters.isNotEmpty()) {{
-                                    val idx = if (uiState.sourceSelectedAddonFilter == null) 1
-                                              else orderedAddonNames.indexOf(uiState.sourceSelectedAddonFilter) + 2
-                                    requestChipFocus(idx)
-                                }} else null
-                            )
+                            val notice = isNotice(stream)
+                            Column {
+                                if (notice) SportsLiveSourceNoticeLabel()
+                                StreamItem(
+                                    stream = stream,
+                                    focusRequester = if (index == 0) {
+                                        streamsFocusRequester
+                                    } else {
+                                        streamFocusRequesters.getValue(streamKeys[index])
+                                    },
+                                    isCurrentStream = index == currentStreamIndex,
+                                    showFileSizeBadges = uiState.showFileSizeBadges,
+                                    showAddonLogo = uiState.showAddonLogo,
+                                    badgePlacement = uiState.streamBadgePlacement,
+                                    onClick = { if (!notice) onStreamSelected(stream) },
+                                    onFocusChanged = { focused ->
+                                        if (focused) {
+                                            focusedStreamKey = streamKeys[index]
+                                        }
+                                        if (index == 0) {
+                                            firstCardHasFocus = focused
+                                        }
+                                    },
+                                    onUpKey = if (index == 0 && chipFocusRequesters.isNotEmpty()) {{
+                                        val idx = if (uiState.sourceSelectedAddonFilter == null) 1
+                                                  else orderedAddonNames.indexOf(uiState.sourceSelectedAddonFilter) + 2
+                                        requestChipFocus(idx)
+                                    }} else null
+                                )
+                            }
                         }
                         sportsLiveSourceLoadingRows(uiState.sourceSportsLiveLoading, uiState.sourceSelectedAddonFilter)
                         if (uiState.isLoadingSourceStreams) {
