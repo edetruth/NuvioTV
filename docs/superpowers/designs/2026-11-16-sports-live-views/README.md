@@ -140,7 +140,18 @@ Reuse these instead of drawing new ones.
 4. **Situation line: yes.** Built (SB1) for football and baseball; ESPN sends none for soccer or hockey power plays.
 5. Game page under Scores = Off: score behind **Reveal**, no request until then. Built that way.
 
-## Decisions to confirm (new screens, before they are built)
+## Decisions (approved by the user 2026-11-18 — the new layouts and these picks)
+1. Most exciting under Hide until focused: keep the order, hide the "why" tags; followed teams stay pinned first.
+2. Reminders: automatic for followed teams; "Later" asks again once after 5 min.
+3. Full-time toast under Hide until focused: names only ("Celtics vs Knicks · Full time").
+4. Score-change toasts: followed teams only, max one per game per 2 min.
+5. Team page under Hide until focused: record + standings shown; last-5 results behind Reveal.
+6. Team page entry: Game page + hold-OK menus on cards and Results rows.
+7. Replay jumps: always list OT; under Scores Off fetch play-by-play only after Mark tip-off.
+8. Player card: no "Follow player" yet.
+9. Watch all highlights: auto-play next clip; Back stops.
+
+## Original open questions (superseded by the decisions above)
 1. **Most exciting (#43):** under Hide until focused, fall back to start order with no why tags (drawn), or keep the excitement order without tags? (The order alone hints that a game is close.) And should followed teams stay pinned first in this sort?
 2. **Kickoff prompt (#44):** turn on automatic reminders for followed teams by default? What does **Later** do: dismiss, or ask again in 5 min? Show the prompt when you are already watching the other followed game?
 3. **Full-time toast under Hide until focused (#42):** show the names-only "GAME OVER" toast (drawn), or nothing, since knowing a game ended early can itself spoil?
