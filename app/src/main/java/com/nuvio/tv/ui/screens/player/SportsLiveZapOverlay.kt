@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -38,10 +39,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.rounded.Star
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -61,16 +58,19 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.tv.material3.Border
 import androidx.tv.material3.Card
@@ -90,6 +90,19 @@ import com.nuvio.tv.ui.screens.sportslive.SportsLiveChipIconView
 import com.nuvio.tv.ui.screens.sportslive.sportsLiveChipIconOf
 import com.nuvio.tv.ui.screens.sportslive.sportsLiveChipText
 import com.nuvio.tv.ui.screens.sportslive.FOLLOWED_STAR_COLOR
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveGameArt
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveScoreboardRow
+import com.nuvio.tv.ui.screens.sportslive.ZapPanelBoard
+import com.nuvio.tv.ui.screens.sportslive.panelBoards
+import com.nuvio.tv.ui.screens.sportslive.rememberGameSituationStrings
+import com.nuvio.tv.ui.screens.sportslive.preview.SportsLivePanelPreviewViewModel
+import com.nuvio.tv.ui.screens.sportslive.preview.SportsLivePreviewLabel
+import com.nuvio.tv.ui.screens.sportslive.preview.SportsLivePreviewPlayer
+import com.nuvio.tv.ui.screens.sportslive.preview.SportsLivePreviewState
+import com.nuvio.tv.ui.screens.sportslive.preview.SportsLivePreviewVideo
+import com.nuvio.tv.ui.screens.sportslive.preview.previewKey
+import com.nuvio.tv.core.sportslive.scores.GameSituations
+import coil3.compose.AsyncImage
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapViewModel
 import com.nuvio.tv.ui.screens.sportslive.ZapPanelGroup
 import com.nuvio.tv.ui.screens.sportslive.ZapPanelRow
@@ -101,7 +114,6 @@ import com.nuvio.tv.core.sportslive.FullTimeToastStrings
 import com.nuvio.tv.core.sportslive.SportsLiveFullTimeToasts
 import com.nuvio.tv.core.sportslive.scores.TeamLogoUrls
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveTeamLogo
-import com.nuvio.tv.ui.screens.sportslive.kickoffText
 import com.nuvio.tv.ui.screens.sportslive.dual.LocalOpenSportsLiveDual
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualPick
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualPickerDialog
@@ -200,13 +212,58 @@ internal fun BoxScope.SportsLiveZapOverlay(
         wasOpen = panelOpen
     }
 
+    // #83: the focused row's muted preview, in its own light player, only while the panel is open.
+    val previewViewModel: SportsLivePanelPreviewViewModel = hiltViewModel()
+    val context = LocalContext.current
+    val previewPlayer = remember(previewViewModel) {
+        SportsLivePreviewPlayer(
+            context,
+            previewViewModel::onFirstFrame,
+            previewViewModel::onError,
+            previewViewModel::onDecoderLimit,
+            lowBitrate = true
+        )
+    }
+    // Behind Home, another app or the screensaver (paused): the preview stops and nothing plays meanwhile.
+    DisposableEffect(lifecycleOwner, previewPlayer) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> {
+                    previewPlayer.suspended = false
+                    previewViewModel.onForeground(true)
+                }
+                Lifecycle.Event.ON_PAUSE -> {
+                    previewPlayer.suspended = true
+                    previewViewModel.onForeground(false)
+                    previewPlayer.release()
+                }
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    LaunchedEffect(panelOpen) { previewViewModel.onPanelOpen(panelOpen) }
+    val previewState by previewViewModel.state.collectAsState()
+    val previewPlaying = previewState as? SportsLivePreviewState.Playing
+    LaunchedEffect(previewPlaying?.item?.previewKey, previewPlaying?.stream) {
+        if (previewPlaying == null) previewPlayer.release() else previewPlayer.play(previewPlaying.item, previewPlaying.stream)
+    }
+    DisposableEffect(previewPlayer) {
+        onDispose {
+            previewViewModel.onPanelOpen(false)
+            previewPlayer.release()
+        }
+    }
+
     AnimatedVisibility(
         visible = panelOpen,
         enter = fadeIn(tween(120)),
         exit = fadeOut(tween(120)),
         modifier = Modifier.zIndex(3.1f)
     ) {
-        Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)))
+        // #83: the video keeps playing visibly on the right, behind a left-to-right scrim.
+        Box(modifier = Modifier.fillMaxSize().background(PANEL_SCRIM))
     }
     AnimatedVisibility(
         visible = panelOpen,
@@ -221,11 +278,15 @@ internal fun BoxScope.SportsLiveZapOverlay(
             val canWatchWith = remember(state.currentKey, openDual) { openDual != null && viewModel.dualPick() != null }
             LiveGamesPanel(
                 state = state,
-                onPick = viewModel::onPanelPick,
+                onPick = { item ->
+                    previewViewModel.onPick()
+                    viewModel.onPanelPick(item)
+                },
                 // Long-press OK: dual screen right away, the game playing beside the one held.
                 onLongPick = if (canWatchWith) {
                     { item ->
                         viewModel.dualSessionWith(item)?.let { session ->
+                            previewViewModel.onPick()
                             viewModel.closePanel()
                             SportsLiveDualSessions.start(session)
                             openDual?.invoke()
@@ -237,6 +298,9 @@ internal fun BoxScope.SportsLiveZapOverlay(
                 onClose = { viewModel.closePanel() },
                 onChip = viewModel::onPanelChip,
                 onRowFocus = viewModel::onPanelRowFocus,
+                onPreviewFocus = { item -> previewViewModel.onFocus(item, state.currentKey) },
+                preview = previewPlaying,
+                previewPlayer = previewPlayer,
                 onKey = viewModel::onPanelKey,
                 onWatchWith = if (canWatchWith) {
                     {
@@ -418,6 +482,11 @@ private fun LiveGamesPanel(
     onWatchWith: (() -> Unit)?,
     /** A game row took focus (Hide until focused reveals its score after a second). */
     onRowFocus: (String?) -> Unit,
+    /** The focused row's game for the corner preview (#83); null when no row has focus. */
+    onPreviewFocus: (SportsLiveItem?) -> Unit,
+    /** The corner preview loaded in [previewPlayer], null when none plays. */
+    preview: SportsLivePreviewState.Playing?,
+    previewPlayer: SportsLivePreviewPlayer,
     /** Any key pressed inside the panel (Hide until focused reveals only after one). */
     onKey: () -> Unit
 ) {
@@ -432,6 +501,10 @@ private fun LiveGamesPanel(
     var chipsFocused by remember { mutableStateOf(false) }
     // The game row with focus, by stream key (null on the chips or the button above them).
     var focusedKey by remember { mutableStateOf<String?>(null) }
+    val currentOnPreviewFocus by rememberUpdatedState(onPreviewFocus)
+    // The preview follows the focused row; none while the chips or the button have focus (#83).
+    val focusedItem = state.items.firstOrNull { it.streamKey == focusedKey }
+    LaunchedEffect(focusedItem?.streamKey) { currentOnPreviewFocus(focusedItem) }
     val currentRows by rememberUpdatedState(state.rows)
 
     LaunchedEffect(state.items.isEmpty()) {
@@ -458,9 +531,8 @@ private fun LiveGamesPanel(
     Box(
         modifier = Modifier
             .fillMaxHeight()
-            .width(340.dp)
-            .clip(RoundedCornerShape(topEnd = NuvioTheme.spacing.lg, bottomEnd = NuvioTheme.spacing.lg))
-            .background(NuvioTheme.colors.BackgroundElevated)
+            // #83: Scoreboard-wide rows; no opaque backing, the scrim behind keeps the video visible.
+            .width(PANEL_WIDTH)
             .focusProperties { onExit = { cancelFocusChange() } }
             .onPreviewKeyEvent {
                 if (it.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) onKey()
@@ -478,45 +550,56 @@ private fun LiveGamesPanel(
             }
     ) {
         Column(modifier = Modifier.padding(NuvioTheme.spacing.xl)) {
-            Text(
-                text = stringResource(R.string.sports_live_zap_panel_title),
-                style = MaterialTheme.typography.headlineSmall,
-                color = NuvioTheme.colors.TextPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            if (onLongPick != null) {
-                Text(
-                    text = stringResource(R.string.sports_live_dual_hold_hint),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = NuvioTheme.extendedColors.textSecondary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = NuvioTheme.spacing.xs)
-                )
-            }
-            Spacer(modifier = Modifier.height(NuvioTheme.spacing.lg))
-            if (onWatchWith != null) {
-                PanelCard(
-                    onClick = onWatchWith,
-                    modifier = Modifier.fillMaxWidth().onFocusChanged {
-                        if (it.isFocused) {
-                            focusedKey = null
-                            onRowFocus(null)
-                        }
-                    }
-                ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md)) {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = stringResource(R.string.sports_live_dual_watch_with),
-                        style = MaterialTheme.typography.titleMedium,
+                        text = stringResource(R.string.sports_live_zap_panel_title),
+                        style = MaterialTheme.typography.headlineSmall,
                         color = NuvioTheme.colors.TextPrimary,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
+                        overflow = TextOverflow.Ellipsis
                     )
+                    if (onLongPick != null) {
+                        Text(
+                            text = stringResource(R.string.sports_live_dual_hold_hint),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = NuvioTheme.extendedColors.textSecondary,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(top = NuvioTheme.spacing.xs)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(NuvioTheme.spacing.lg))
+                    if (onWatchWith != null) {
+                        PanelCard(
+                            onClick = onWatchWith,
+                            modifier = Modifier.fillMaxWidth().onFocusChanged {
+                                if (it.isFocused) {
+                                    focusedKey = null
+                                    onRowFocus(null)
+                                }
+                            }
+                        ) {
+                            Text(
+                                text = stringResource(R.string.sports_live_dual_watch_with),
+                                style = MaterialTheme.typography.titleMedium,
+                                color = NuvioTheme.colors.TextPrimary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
+                            )
+                        }
+                    }
                 }
-                Spacer(modifier = Modifier.height(NuvioTheme.spacing.sm))
+                // #83: the focused game (the one playing when none is) in the top-right corner.
+                val cornerKey = focusedKey ?: state.currentKey
+                PanelPreviewCorner(
+                    row = state.rows.firstOrNull { it.item.streamKey == cornerKey },
+                    preview = preview?.takeIf { it.item.streamKey == focusedKey },
+                    player = previewPlayer
+                )
             }
+            Spacer(modifier = Modifier.height(NuvioTheme.spacing.sm))
             PanelChipRow(
                 chips = state.chips,
                 counts = state.counts,
@@ -559,6 +642,7 @@ private fun LiveGamesPanel(
                         item(key = item.streamKey) {
                             LiveGameItem(
                                 row = row,
+                                board = state.boards[item.streamKey],
                                 isCurrent = item.streamKey == state.currentKey,
                                 modifier = (if (item.streamKey == startKey) Modifier.focusRequester(focusRequester) else Modifier)
                                     .then(if (upToChips) Modifier.focusProperties { up = chipsFocusRequester } else Modifier),
@@ -700,87 +784,67 @@ private fun GroupHeader(group: ZapPanelGroup) {
     )
 }
 
+/**
+ * A game of the live games panel, drawn as a Scoreboard row (#83): logos, short names, stacked scores,
+ * the clock or kickoff on the right and, with a shown live score, the situation line. The game playing
+ * is labelled NOW PLAYING and highlighted. A row with no [board] uses one built from [row] alone.
+ */
 @Composable
 private fun LiveGameItem(
     row: ZapPanelRow,
+    board: ZapPanelBoard?,
     isCurrent: Boolean,
     modifier: Modifier,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)?,
     onFocus: () -> Unit
 ) {
-    val item = row.item
-    PanelCard(
+    val situationStrings = rememberGameSituationStrings()
+    val event = board?.event
+    val situation = if (event != null) board?.situation?.let { GameSituations.situationLine(it, event, situationStrings) } else null
+    SportsLiveScoreboardRow(
+        row = board?.board ?: panelBoards(listOf(row), emptyMap(), null, emptySet(), 0L).single().board,
+        selected = isCurrent,
         onClick = onClick,
         onLongClick = onLongClick,
-        modifier = modifier.fillMaxWidth().onFocusChanged { if (it.isFocused) onFocus() }
+        onFocus = onFocus,
+        modifier = modifier,
+        nowPlaying = isCurrent,
+        situation = situation.orEmpty(),
+        shortNames = true
+    )
+}
+
+/**
+ * The panel's top-right corner (#83): the focused game's muted 16:9 preview once its first frame is
+ * drawn, otherwise its logos art (or its poster when it names no two teams). Never focusable.
+ */
+@Composable
+private fun PanelPreviewCorner(row: ZapPanelRow?, preview: SportsLivePreviewState.Playing?, player: SportsLivePreviewPlayer) {
+    Box(
+        modifier = Modifier
+            .width(PANEL_PREVIEW_WIDTH)
+            .aspectRatio(16f / 9f)
+            .clip(RoundedCornerShape(NuvioTheme.radii.md))
+            .background(NuvioTheme.colors.PosterFallback)
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
-        ) {
-            Box(modifier = Modifier.width(24.dp), contentAlignment = Alignment.Center) {
-                if (isCurrent) {
-                    Icon(
-                        imageVector = Icons.Default.PlayArrow,
-                        contentDescription = stringResource(R.string.cd_current),
-                        tint = NuvioTheme.colors.TextPrimary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            }
-            // Both teams' logos (#66): from the logos learned before, so they never wait for a score.
-            row.teams?.let { teams ->
-                Row(horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs)) {
-                    SportsLiveTeamLogo(teams.first.logo, teams.first.short, TeamLogoUrls.CARD_PX, Modifier.size(28.dp))
-                    SportsLiveTeamLogo(teams.second.logo, teams.second.short, TeamLogoUrls.CARD_PX, Modifier.size(28.dp))
-                }
-            }
-            Column(modifier = Modifier.weight(1f)) {
-                // M6: the game playing is labelled, as in the design.
-                if (isCurrent) {
-                    Text(
-                        text = stringResource(R.string.sports_live_now_playing).uppercase(),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = NuvioTheme.colors.Primary,
-                        letterSpacing = 1.sp,
-                        maxLines = 1
-                    )
-                }
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs)
-                ) {
-                    // A followed team plays: the cards' gold star (#68).
-                    if (item.followed) {
-                        Icon(
-                            imageVector = Icons.Rounded.Star,
-                            contentDescription = null,
-                            tint = FOLLOWED_STAR_COLOR,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                    Text(
-                        text = item.meta.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = NuvioTheme.colors.TextPrimary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-                // A game starting soon leads with its local kickoff.
-                val detail = "${item.sport ?: item.catalogName} · ${item.addonName}"
-                val kickoff = row.art?.let { kickoffText(it) }
-                Text(
-                    text = if (kickoff != null) stringResource(R.string.sports_live_art_footer, kickoff, detail) else detail,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = NuvioTheme.extendedColors.textTertiary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+        // The video is laid out while the stream loads, so its first frame can arrive; the art covers it until then.
+        if (preview != null) SportsLivePreviewVideo(player, overVideo = true)
+        if (preview?.rendering != true && row != null) {
+            val teams = row.teams
+            if (teams != null) {
+                SportsLiveGameArt(art = teams, compact = true, chip = row.chip, modifier = Modifier.fillMaxSize())
+            } else {
+                AsyncImage(
+                    model = row.item.meta.backdropUrl,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
                 )
-                row.chip?.let { SportsLiveScoreChip(chip = it, modifier = Modifier.padding(top = NuvioTheme.spacing.xxs)) }
             }
+        }
+        if (preview?.rendering == true) {
+            SportsLivePreviewLabel(modifier = Modifier.align(Alignment.TopStart).padding(NuvioTheme.spacing.xs))
         }
     }
 }
@@ -830,3 +894,16 @@ private fun LazyListState.isFullyVisible(index: Int): Boolean {
     val info = layoutInfo.visibleItemsInfo.firstOrNull { it.index == index } ?: return false
     return info.offset >= layoutInfo.viewportStartOffset && info.offset + info.size <= layoutInfo.viewportEndOffset
 }
+
+/** The live games panel's width at 1080p (#83): Scoreboard-style rows. */
+private val PANEL_WIDTH = 680.dp
+
+/** The corner preview: 16:9 at this width (#83). */
+private val PANEL_PREVIEW_WIDTH = 240.dp
+
+/** Behind the panel (#83): about 85% black at the left edge, clear by the right, so the video stays visible. */
+private val PANEL_SCRIM = Brush.horizontalGradient(
+    0f to Color.Black.copy(alpha = 0.85f),
+    0.4f to Color.Black.copy(alpha = 0.7f),
+    1f to Color.Transparent
+)

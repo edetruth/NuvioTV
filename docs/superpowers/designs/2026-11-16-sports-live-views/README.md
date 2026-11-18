@@ -16,7 +16,7 @@ Started as three "beyond cards" views (approved: "I love the designs"). This fol
 | `Guide.dc.html` | Channel guide | **Deferred** (#25), board unchanged |
 | `Results.dc.html` | Results tab | **Built** (R1, R2); Today / Earlier ▸ / "N games live now →" **In batch** (#67) |
 | `GamePage.dc.html` | Game page | **Built** (G1); playable highlights **In batch** (#61) |
-| `PlayerPanel.dc.html` | In-player Live now panel | logos + scores **Built** (#66); chips, opens on All **In batch** (#68) |
+| `PlayerPanel.dc.html` | In-player Live now panel | logos + scores **Built** (#66); chips (#68, #79); Scoreboard rows, preview corner, dimmed video **Built** (#83) |
 | `Prompts.dc.html` | Alerts and reminders | **In batch** (#42 + #44) |
 | `TeamPage.dc.html` | Team page | **Deferred** (#62, queued after the batch) |
 | `PlayerCard.dc.html` | Player card | **Deferred** (#63, after the Team page) |
@@ -91,10 +91,13 @@ The board shows **Hide until focused** with the Celtics row not yet focused.
 - Data: ESPN `summary`, cached per game (finals on disk, max 60); 30 s refresh only while visible and live. Remote: ← → sections, ↑ ↓ scroll, Back returns (focus back on the row).
 - With #62/#63: OK on a team logo opens the Team page; OK on a top performer opens the Player card.
 
-## 7 · In-player Live now panel (`PlayerPanel.dc.html`, #66, #68)
+## 7 · In-player Live now panel (`PlayerPanel.dc.html`, #66, #68, #83)
 - **Built:** groups **Live now** (furthest-in first) → **Starting soon** (row leads with the local kickoff) → **More games** → **Just ended**; followed teams first in each group; score chips; two **logo circles** per row from the saved team → logo map (#66), with the abbreviation circle as the instant fallback; scores fetched as soon as the panel opens.
 - **In batch (#68):** the panel opens on **All**, whatever filter the game was started from; a chip row **★ My teams · All · ‹sports present›** at the top (one focus stop, ← → pick, ↓ into the games); the chip also orders channel up/down for the rest of the playback session.
 - The playing game is marked "NOW PLAYING". Keys: ↑ ↓ games, OK switch, hold OK watch both, Back closes.
+- **Built (#83):** the panel is 680 dp wide and its rows are the **Scoreboard row** (`SportsLiveScoreboardRow`, model from `scoreboardRowOf`): league tag, two team lines with logos and short names, stacked scores, the clock or kickoff (and countdown) on the right, and the **situation line** under the teams only while the live score shows. Chips with counts, groups, NOW PLAYING, starred followed sides, frozen order under focus and the spoiler rules are unchanged.
+- **Preview corner (#83):** top right of the panel, 240 × 135. After 1 s on a row that is not the game playing, its muted preview plays in the hover-preview player, from a cached resolve or the C1 budgeted one; sources cooling down are skipped. It stops when focus moves, the panel closes, a game is picked, the app or screensaver goes to the background, or 20 s after the row took focus. It asks for the lowest bitrate at most 480p and never touches the main stream's audio. Data saver, the hover-preview setting off, a low-RAM device (`isLowRamDevice`) or a decoder limit seen (dual screen, or a preview that got no decoder) keep the corner on the game's logos art.
+- **Dimmed video (#83):** no opaque panel; a left-to-right scrim (85 % → 0 % black) keeps the game playing visible on the right. Rows keep their solid backgrounds for legibility.
 
 ## 8 · Alerts and reminders (`Prompts.dc.html`, #42 + #44) — **In batch**
 Overlays on video, drawn 1:1 on crops of the screen. One at a time; Back dismisses; never in the first 10 s of a stream.
@@ -128,7 +131,7 @@ Reuse these instead of drawing new ones.
 - **Details-pane score block** (`ScoreDetails.kt`, `SportsLiveScoreDetails.kt`): scoreline in abbreviations, linescore (OT/2OT, ET1/ET2, SO, "–" unplayed), soccer scorers.
 - **Situation line** (`GameSituations.kt`, SB1): shown only when the chip is Live (so never when hidden, Off, upcoming or final).
 - **Scoreboard row / Timeline block** (`SportsLiveScoreboardView.kt`, `SportsLiveTimelineView.kt`) and the shared **board buttons** (`SportsLiveBoardButtons`).
-- **In-player panel row** (`SportsLiveZapPanel.kt`, `SportsLiveZapOverlay.kt`): two logo circles (`SportsLiveTeamLogo`, `TeamLogoUrls`), title, chip; groups as above.
+- **In-player panel row** (`SportsLiveZapPanel.kt`, `SportsLiveZapOverlay.kt`): the Scoreboard row (#83, `panelBoards` → `SportsLiveScoreboardRow`), with NOW PLAYING and the situation line; groups as above. Preview corner: `SportsLivePanelPreview.kt`.
 - **Ended games** (`SportsLiveEndedGames.kt`, `SportsLiveGameLength.kt`): ESPN final + 10 min grace → strip; estimate → "Probably ended".
 - **Spoiler and delay** (`ScoreSettings.kt`, `ScoreDelay.kt`, `ResultSpoilerReveal`), **My sports** (`MySports.kt`, now with Tennis, MMA, Motorsport, Golf), **Follow** (`TeamFollows`, ESPN id + abbreviation + league).
 - **New (designed here):** why tag, reminder chip and bell badge, "≈ Approximate" tag, prompt toasts (score change, full time, reminder set, kickoff).

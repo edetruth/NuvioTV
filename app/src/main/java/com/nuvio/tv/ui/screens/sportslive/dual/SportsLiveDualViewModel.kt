@@ -14,6 +14,7 @@ import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapSession
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapSessions
 import com.nuvio.tv.ui.screens.sportslive.ZapPanelRow
 import com.nuvio.tv.ui.screens.sportslive.sportsLiveLightPlayable
+import com.nuvio.tv.ui.screens.sportslive.preview.SportsLiveDecoderLimit
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -368,6 +369,8 @@ class SportsLiveDualViewModel internal constructor(
         if (deviceLimitRetried.add(item.streamKey)) {
             load(side, item, delayMs = DEVICE_LIMIT_RETRY_MS)
         } else {
+            // The in-player panel no longer previews on this device (#83).
+            SportsLiveDecoderLimit.note()
             dispatch(DualAction.DeviceLimit(item))
         }
     }

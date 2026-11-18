@@ -57,42 +57,58 @@ internal fun scoreboardRows(
 ): List<ScoreboardRow> {
     val scoresOn = mode != null && mode != ScoresMode.OFF
     return groupPanelRows(items, scores, mode, revealed, nowMs, ended).map { row ->
-        val item = row.item
-        val endedGame = ended[item.streamKey]
-        val snapshot = (scores[item.streamKey] ?: endedGame?.event).takeIf { scoresOn }
-        val art = GameArt.of(item, snapshot)
-        // A kickoff with a time of day: a date alone ("Sat 21 Nov") never starts soon or counts down.
-        val timedStart = art?.takeIf { it.hasTimeOfDay }?.startMs ?: item.startMs?.takeIf { item.startHasTimeOfDay }
-        val group = when (row.group) {
-            ZapPanelGroup.LIVE_NOW -> when {
-                tab != SportsLiveTab.UPCOMING || ScoreChips.matchedEvent(item, snapshot)?.state == ScoreState.IN -> ScoreboardGroup.LIVE
-                timedStart != null -> ScoreboardGroup.STARTING_SOON
-                else -> ScoreboardGroup.MORE_GAMES
-            }
-            ZapPanelGroup.STARTING_SOON -> ScoreboardGroup.STARTING_SOON
-            // An ESPN final not (or no longer) in the Just ended set is still a final (N5): never "more games".
-            ZapPanelGroup.OTHER -> if (ScoreChips.matchedEvent(item, snapshot)?.state == ScoreState.POST) {
-                ScoreboardGroup.FINAL
-            } else {
-                ScoreboardGroup.MORE_GAMES
-            }
-            ZapPanelGroup.JUST_ENDED -> ScoreboardGroup.FINAL
-        }
-        val estimate = endedGame?.signal == EndedSignal.ESTIMATE
-        val sides = ScoreChips.orderedSides(item)
-        ScoreboardRow(
-            item = item,
-            group = group,
-            chip = if (estimate) null else row.chip,
-            art = art,
-            firstFollowed = sides != null && followsSide(item, sides.first),
-            secondFollowed = sides != null && followsSide(item, sides.second),
-            probablyEnded = estimate,
-            startsIn = if (group == ScoreboardGroup.STARTING_SOON) scoreboardStartsIn(timedStart, nowMs) else null
-        )
+        val endedGame = ended[row.item.streamKey]
+        val snapshot = (scores[row.item.streamKey] ?: endedGame?.event).takeIf { scoresOn }
+        scoreboardRowOf(row, tab, snapshot, endedGame, nowMs, followsSide, GameArt.of(row.item, snapshot))
     }.sortedWith(
         compareBy<ScoreboardRow> { it.group.ordinal }
             .thenBy { if (it.group == ScoreboardGroup.LIVE) liveRank[it.item.streamKey] ?: Int.MAX_VALUE else 0 }
+    )
+}
+
+/**
+ * [row] (a [groupPanelRows] row) as a Scoreboard row: the Scoreboard and the in-player panel (#83) draw
+ * every game from this one model. [snapshot] is the game's score (Scores on), [endedGame] its Just ended
+ * verdict, [art] its drawn teams (the panel passes the ones it already holds).
+ */
+internal fun scoreboardRowOf(
+    row: ZapPanelRow,
+    tab: SportsLiveTab,
+    snapshot: ScoreSnapshot?,
+    endedGame: EndedGame?,
+    nowMs: Long,
+    followsSide: (SportsLiveItem, String) -> Boolean,
+    art: GameArt?
+): ScoreboardRow {
+    val item = row.item
+    // A kickoff with a time of day: a date alone ("Sat 21 Nov") never starts soon or counts down.
+    val timedStart = art?.takeIf { it.hasTimeOfDay }?.startMs ?: item.startMs?.takeIf { item.startHasTimeOfDay }
+    val group = when (row.group) {
+        ZapPanelGroup.LIVE_NOW -> when {
+            tab != SportsLiveTab.UPCOMING || ScoreChips.matchedEvent(item, snapshot)?.state == ScoreState.IN -> ScoreboardGroup.LIVE
+            timedStart != null -> ScoreboardGroup.STARTING_SOON
+            else -> ScoreboardGroup.MORE_GAMES
+        }
+        ZapPanelGroup.STARTING_SOON -> ScoreboardGroup.STARTING_SOON
+        // An ESPN final not (or no longer) in the Just ended set is still a final (N5): never "more games".
+        ZapPanelGroup.OTHER -> if (ScoreChips.matchedEvent(item, snapshot)?.state == ScoreState.POST) {
+            ScoreboardGroup.FINAL
+        } else {
+            ScoreboardGroup.MORE_GAMES
+        }
+        ZapPanelGroup.JUST_ENDED -> ScoreboardGroup.FINAL
+    }
+    val estimate = endedGame?.signal == EndedSignal.ESTIMATE
+    val sides = ScoreChips.orderedSides(item)
+    return ScoreboardRow(
+        item = item,
+        group = group,
+        chip = if (estimate) null else row.chip,
+        art = art,
+        firstFollowed = sides != null && followsSide(item, sides.first),
+        secondFollowed = sides != null && followsSide(item, sides.second),
+        probablyEnded = estimate,
+        startsIn = if (group == ScoreboardGroup.STARTING_SOON) scoreboardStartsIn(timedStart, nowMs) else null
     )
 }
 

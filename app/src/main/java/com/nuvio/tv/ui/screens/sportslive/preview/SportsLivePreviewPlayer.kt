@@ -6,6 +6,7 @@ import android.os.Looper
 import androidx.annotation.OptIn
 import androidx.media3.common.C
 import androidx.media3.common.PlaybackException
+import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
@@ -34,7 +35,11 @@ import com.nuvio.tv.ui.screens.sportslive.playSportsLiveStream
 internal class SportsLivePreviewPlayer(
     context: Context,
     private val onFirstFrame: (SportsLiveItem) -> Unit,
-    private val onError: (SportsLiveItem) -> Unit
+    private val onError: (SportsLiveItem) -> Unit,
+    /** The device gave this player no decoder (another video holds it), before [onError]. */
+    private val onDecoderInitFailure: () -> Unit = {},
+    /** Ask for the lowest bitrate, at most about 480p ([capPreviewVideo]): the in-player panel's preview (#83). */
+    private val lowBitrate: Boolean = false
 ) {
     private val appContext = context.applicationContext
     private var player: ExoPlayer? = null
@@ -66,6 +71,7 @@ internal class SportsLivePreviewPlayer(
             trackSelectionParameters = trackSelectionParameters.buildUpon()
                 .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true)
                 .build()
+                .let { if (lowBitrate) it.capPreviewVideo() else it }
             addListener(object : Player.Listener {
                 override fun onRenderedFirstFrame() {
                     if (player !== this@apply) return
@@ -93,7 +99,11 @@ internal class SportsLivePreviewPlayer(
                 override fun onPlayerError(error: PlaybackException) {
                     if (player !== this@apply) return
                     // A missing decoder is the device's fault, not the source's.
-                    if (!error.isDecoderInitFailure()) SportsLiveSourceReliability.record(sourceKey, Outcome.FAILURE)
+                    if (error.isDecoderInitFailure()) {
+                        onDecoderInitFailure()
+                    } else {
+                        SportsLiveSourceReliability.record(sourceKey, Outcome.FAILURE)
+                    }
                     onError(item)
                 }
             })
@@ -124,3 +134,16 @@ internal class SportsLivePreviewPlayer(
         const val STALL_TIMEOUT_MS = 10_000L
     }
 }
+
+/**
+ * These parameters asking for the lowest bitrate at most 854 x 480 (#83): a small corner preview
+ * needs no more. A stream with nothing that small still plays its smallest rendition.
+ */
+internal fun TrackSelectionParameters.capPreviewVideo(): TrackSelectionParameters =
+    buildUpon()
+        .setMaxVideoSize(PREVIEW_MAX_WIDTH, PREVIEW_MAX_HEIGHT)
+        .setForceLowestBitrate(true)
+        .build()
+
+internal const val PREVIEW_MAX_WIDTH = 854
+internal const val PREVIEW_MAX_HEIGHT = 480

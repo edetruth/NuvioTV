@@ -25,6 +25,7 @@ import com.nuvio.tv.core.sportslive.SportsLiveWorkingLinks
 import com.nuvio.tv.core.sportslive.scores.LiveScoresRepository
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.core.sportslive.scores.TeamLogoBook
+import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.domain.repository.SportsLiveRepository
@@ -191,10 +192,10 @@ class SportsLiveZapViewModel internal constructor(
                     followed = followed,
                     nowMs = System.currentTimeMillis(),
                     addonOrder = claimed.map { it.addon.id }.distinct()
-                )
+                ) to followed
             }.flowOn(computeDispatcher)
             // The games under the chip are the ones listed and tracked.
-            val items = combine(all, panelChip) { list, chip -> PanelList(list, chip, filterPanelItems(list, chip)) }
+            val items = combine(all, panelChip) { (list, followed), chip -> PanelList(list, chip, filterPanelItems(list, chip), followed) }
             // Grouped off the main thread; the tracker is updated back on it.
             // Ticks while the panel is open, so a grace or an estimate running out regroups its games.
             // A logo learned while open (a score feed answering, the map loading) redraws the rows.
@@ -210,7 +211,8 @@ class SportsLiveZapViewModel internal constructor(
                 val canEstimate = SportsLiveEndedGames.estimateGate(scoresMode == ScoresMode.OFF, unmatched)
                 val split = SportsLiveEndedGames.shared.split(list, scores, nowMs, canEstimate)
                 // A final in its grace is grouped (and chipped) as the final it is, never as live (C3).
-                val fresh = groupPanelRows(split.live + split.justEnded, split.scoresWithFinals(scores), scoresMode, revealed, nowMs, split.ended, logos)
+                val boardScores = split.scoresWithFinals(scores)
+                val fresh = groupPanelRows(split.live + split.justEnded, boardScores, scoresMode, revealed, nowMs, split.ended, logos)
                 // The order stays put under a focused row, taking the fresh one each new minute (I3).
                 val rows = if (panelMayReorder(focusedRowKey, nowMs, shownMinute)) {
                     shownMinute = nowMs / PANEL_REORDER_MS
@@ -224,7 +226,10 @@ class SportsLiveZapViewModel internal constructor(
                     currentKey = session.current.streamKey,
                     chips = panelChips(panelList.all, panelList.chip),
                     chip = panelList.chip,
-                    allItems = panelList.all
+                    allItems = panelList.all,
+                    // #83: each row drawn as the Scoreboard draws it.
+                    boards = panelBoards(rows, boardScores, scoresMode, revealed, nowMs, split.ended, panelList.followed)
+                        .associateBy { it.board.item.streamKey }
                 )
                 Triple(list, scoresMode, state)
             }.flowOn(computeDispatcher).map { (list, scoresMode, state) ->
@@ -557,8 +562,13 @@ internal const val FULL_TIME_TOAST_MS = 10_000L
 /** A full-time toast the overlay could not show this long (controls or the panel up) is dropped. */
 internal const val FULL_TIME_PENDING_MS = 60_000L
 
-/** The panel's games: [all] of them, and those [shown] under [chip]. */
-private data class PanelList(val all: List<SportsLiveItem>, val chip: String?, val shown: List<SportsLiveItem>)
+/** The panel's games: [all] of them, and those [shown] under [chip]; [followed] stars their sides (#83). */
+private data class PanelList(
+    val all: List<SportsLiveItem>,
+    val chip: String?,
+    val shown: List<SportsLiveItem>,
+    val followed: List<FollowedTeam> = emptyList()
+)
 
 /**
  * Whether [keyCode] opens the live games panel from the zap banner (#76): ▼ (the D-pad, not CH−) while

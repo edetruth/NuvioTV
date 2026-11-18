@@ -3,7 +3,10 @@ package com.nuvio.tv.ui.screens.sportslive
 import com.nuvio.tv.core.sportslive.EndedGame
 import com.nuvio.tv.core.sportslive.SportsLiveEndedGames
 import com.nuvio.tv.core.sportslive.SportsLiveItemBucketer
+import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.scores.GameArt
+import com.nuvio.tv.core.sportslive.scores.GameSituation
+import com.nuvio.tv.core.sportslive.scores.GameSituations
 import com.nuvio.tv.core.sportslive.scores.ScoreChip
 import com.nuvio.tv.core.sportslive.scores.ScoreChips
 import com.nuvio.tv.core.sportslive.scores.ScoreMatcher
@@ -245,6 +248,49 @@ private object PanelArt {
 }
 
 /**
+ * A panel row drawn as a Scoreboard row (#83): [board] is the Scoreboard's own model of the game, and
+ * [situation] its SB1 situation with the [event] it reads from, only while its live score shows (never
+ * before a key press in the panel under Hide until focused: [groupPanelRows]' reveal rule).
+ */
+data class ZapPanelBoard(
+    val board: ScoreboardRow,
+    val situation: GameSituation? = null,
+    val event: ScoreSnapshot? = null
+)
+
+/**
+ * The panel's [rows] (as shown) as Scoreboard rows, one each, in the same order: the same
+ * [scoreboardRowOf] the Scoreboard uses (Live now), with the rows' drawn teams, stars on the sides a
+ * [followed] team plays, and the situation line's inputs.
+ */
+internal fun panelBoards(
+    rows: List<ZapPanelRow>,
+    scores: Map<String, ScoreSnapshot>,
+    mode: ScoresMode?,
+    revealed: Set<String>,
+    nowMs: Long,
+    ended: Map<String, EndedGame> = emptyMap(),
+    followed: List<FollowedTeam> = emptyList()
+): List<ZapPanelBoard> {
+    val scoresOn = mode != null && mode != ScoresMode.OFF
+    val followsSide: (SportsLiveItem, String) -> Boolean = { item, side ->
+        followed.any { SportsLiveTeams.followsSideOfAnySource(it, side, item) }
+    }
+    return rows.map { row ->
+        val item = row.item
+        val endedGame = ended[item.streamKey]
+        val snapshot = (scores[item.streamKey] ?: endedGame?.event).takeIf { scoresOn }
+        val board = scoreboardRowOf(row, SportsLiveTab.LIVE_NOW, snapshot, endedGame, nowMs, followsSide, row.teams)
+        val situation = if (board.chip is ScoreChip.Live) {
+            GameSituations.of(item, snapshot, mode, item.streamKey in revealed)
+        } else {
+            null
+        }
+        ZapPanelBoard(board, situation, snapshot.takeIf { situation != null })
+    }
+}
+
+/**
  * The live games panel's content: its [rows], grouped and ordered by [groupPanelRows]; [currentKey] is
  * the playing game's stream key, highlighted. [items] are the rows' games in that order. [chips] are
  * the filter chips over [allItems] (every game listed, whatever the chip), [chip] the selected one
@@ -257,7 +303,9 @@ data class SportsLiveZapPanelState(
     val chip: String? = null,
     val allItems: List<SportsLiveItem> = rows.map { it.item },
     /** Each chip's game count over [allItems] (#79): All (null), "★ My teams" and each sport. */
-    val counts: Map<String?, Int> = panelChipCounts(allItems)
+    val counts: Map<String?, Int> = panelChipCounts(allItems),
+    /** [rows] as Scoreboard rows (#83), by stream key: what each row draws. */
+    val boards: Map<String, ZapPanelBoard> = emptyMap()
 ) {
     val items: List<SportsLiveItem> = rows.map { it.item }
 }

@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.sportslive.preview
 
+import android.view.SurfaceView
 import android.view.ViewGroup
 import androidx.annotation.OptIn
 import androidx.compose.foundation.background
@@ -23,10 +24,12 @@ import com.nuvio.tv.ui.theme.NuvioTheme
 /**
  * The preview's video in the details pane: a [PlayerView] with its default SurfaceView (composited
  * by the display hardware, as in the dual screen) showing [player]'s video. It never takes focus.
+ * [overVideo]: drawn over the full player's own video (the in-player panel, #83), so its surface is
+ * put above that one.
  */
 @OptIn(UnstableApi::class)
 @Composable
-internal fun SportsLivePreviewVideo(player: SportsLivePreviewPlayer, modifier: Modifier = Modifier) {
+internal fun SportsLivePreviewVideo(player: SportsLivePreviewPlayer, modifier: Modifier = Modifier, overVideo: Boolean = false) {
     AndroidView(
         factory = { ctx ->
             PlayerView(ctx).apply {
@@ -39,6 +42,7 @@ internal fun SportsLivePreviewVideo(player: SportsLivePreviewPlayer, modifier: M
                 setShutterBackgroundColor(android.graphics.Color.BLACK)
                 isFocusable = false
                 descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+                if (overVideo) (videoSurfaceView as? SurfaceView)?.setZOrderMediaOverlay(true)
             }.also(player::attach)
         },
         onRelease = { player.attach(null) },

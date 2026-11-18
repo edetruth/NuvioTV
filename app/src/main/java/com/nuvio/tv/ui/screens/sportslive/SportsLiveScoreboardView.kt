@@ -104,23 +104,32 @@ internal fun SportsLiveScoreboardHeader(group: ScoreboardGroup, modifier: Modifi
  * A stadium-board row: a compact league tag, the two teams in the card's order (logo, ★ for a followed
  * side, the longest name that fits: full, short or abbreviation, N1), the scores stacked beside them and
  * the clock (or kickoff and countdown, the final note, "Probably ended", "Score hidden") in a column only
- * as wide as its text. Hold OK / Menu opens the card menu, as on a card.
+ * as wide as its text. Hold OK / Menu opens the card menu, as on a card. The in-player panel (#83)
+ * draws its games with this same row: [nowPlaying] labels the game playing, [situation] adds the SB1
+ * line under the teams, [shortNames] starts from ESPN's short names.
  */
 @Composable
 internal fun SportsLiveScoreboardRow(
     row: ScoreboardRow,
     selected: Boolean,
     onClick: () -> Unit,
-    onLongClick: () -> Unit,
+    /** Hold OK / Menu; null leaves long presses alone (OK held clicks on release). */
+    onLongClick: (() -> Unit)?,
     onFocus: () -> Unit,
     modifier: Modifier = Modifier,
     menuOpen: Boolean = false,
     /** An upcoming game with a reminder (#44): a bell before its status. */
-    reminded: Boolean = false
+    reminded: Boolean = false,
+    /** The game playing (the in-player panel): "NOW PLAYING" above its teams. */
+    nowPlaying: Boolean = false,
+    /** The situation line ("" for none), shown only with the live score. */
+    situation: String = "",
+    /** Team names start from the short name (the panel's narrower rows). */
+    shortNames: Boolean = false
 ) {
     val shape = RoundedCornerShape(NuvioTheme.radii.md)
     var focused by remember { mutableStateOf(false) }
-    val (longPress, click) = rememberSportsLiveLongPress(menuOpen, onLongClick, onClick)
+    val (longPress, click) = if (onLongClick != null) rememberSportsLiveLongPress(menuOpen, onLongClick, onClick) else Modifier to onClick
     val item = row.item
     val final = row.group == ScoreboardGroup.FINAL
     LightweightCard(
@@ -160,19 +169,37 @@ internal fun SportsLiveScoreboardRow(
                     .padding(horizontal = NuvioTheme.spacing.xs, vertical = NuvioTheme.spacing.xxs)
             )
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xxs)) {
+                if (nowPlaying) {
+                    Text(
+                        text = stringResource(R.string.sports_live_now_playing).uppercase(),
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = NuvioTheme.colors.Primary,
+                        letterSpacing = 1.sp,
+                        maxLines = 1
+                    )
+                }
                 val art = row.art
                 if (art != null) {
                     // Both lines step down together (full name, short name, abbreviation), so the two
                     // teams always read alike.
                     val firstChoices = remember(art.first) { scoreboardNameChoices(art.first) }
                     val secondChoices = remember(art.second) { scoreboardNameChoices(art.second) }
-                    var level by remember(firstChoices, secondChoices) { mutableIntStateOf(0) }
+                    var level by remember(firstChoices, secondChoices, shortNames) { mutableIntStateOf(if (shortNames) 1 else 0) }
                     val maxLevel = maxOf(firstChoices.lastIndex, secondChoices.lastIndex)
                     val tooLong: () -> Unit = { if (level < maxLevel) level++ }
                     TeamLine(firstChoices, level, art.first, art.hasLogos, row.firstFollowed, tooLong)
                     TeamLine(secondChoices, level, art.second, art.hasLogos, row.secondFollowed, tooLong)
                 } else {
                     ItemLine(item.meta.name, item.followed)
+                }
+                if (situation.isNotEmpty() && row.chip is ScoreChip.Live) {
+                    Text(
+                        text = situation,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = ArtColors.Secondary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
             scoreOf(row.chip)?.let { score ->
