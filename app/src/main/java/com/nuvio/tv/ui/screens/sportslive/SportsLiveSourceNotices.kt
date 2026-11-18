@@ -44,7 +44,7 @@ internal fun SportsLiveSourceNoticeLabel() {
 
 /**
  * Shows each rate-limit cool-down once, while the screen is started: "‹source› is rate-limited, try
- * again in N min" ([SportsLiveSourceCooldown.announcements]).
+ * again in N min" ([SportsLiveSourceCooldown.announcements]); several sources share one toast.
  */
 @Composable
 internal fun SportsLiveCooldownToasts(cooldown: SportsLiveSourceCooldown = SportsLiveSourceCooldown.shared) {
@@ -53,11 +53,12 @@ internal fun SportsLiveCooldownToasts(cooldown: SportsLiveSourceCooldown = Sport
     LaunchedEffect(cooldown, lifecycleOwner) {
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
             cooldown.announcements.collect { notice ->
-                Toast.makeText(
-                    context,
-                    context.getString(R.string.sports_live_source_rate_limited, notice.source, notice.minutes),
-                    Toast.LENGTH_LONG
-                ).show()
+                val text = if (notice.sources.size == 1) {
+                    context.getString(R.string.sports_live_source_rate_limited, notice.sources.single(), notice.minutes)
+                } else {
+                    context.getString(R.string.sports_live_sources_rate_limited, notice.sources.joinToString(", "), notice.minutes)
+                }
+                Toast.makeText(context, text, Toast.LENGTH_LONG).show()
             }
         }
     }

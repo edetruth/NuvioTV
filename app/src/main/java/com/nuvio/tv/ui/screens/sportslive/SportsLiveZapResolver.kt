@@ -33,6 +33,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
@@ -40,7 +41,6 @@ import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.withTimeoutOrNull
-import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -81,6 +81,12 @@ class SportsLiveZapResolver @Inject constructor(
 
         /** A hover preview resolves a game at most once in this window; a cached resolve is free (C1). */
         const val PREVIEW_RESOLVE_WINDOW_MS = 10 * 60_000L
+
+        /** Preview resolves allowed per minute across every game (C1). */
+        const val PREVIEW_RESOLVES_PER_MINUTE = 3
+
+        /** A preview resolve cancelled sooner than this (the hover moved on) spends no budget (C1). */
+        const val PREVIEW_FREE_CANCEL_MS = 2_000L
         private const val MAX_PREVIEW_ENTRIES = 200
 
         /** An addon's informational entry or junk link: never auto-picked, never counted as playable (C1). */
@@ -102,8 +108,12 @@ class SportsLiveZapResolver @Inject constructor(
     @VisibleForTesting
     internal var nowMs: () -> Long = { System.currentTimeMillis() }
 
-    /** Per game ([SportsLiveItem.streamKey]): when a hover preview last resolved it. */
-    private val previewResolvedAtMs = ConcurrentHashMap<String, Long>()
+    /** Per game ([SportsLiveItem.streamKey]): when a hover preview last resolved it. Guarded by [previewLock]. */
+    private val previewResolvedAtMs = HashMap<String, Long>()
+
+    /** When each preview resolve of the last minute started, across games. Guarded by [previewLock]. */
+    private val previewStarts = ArrayDeque<Long>()
+    private val previewLock = Any()
 
     /** Runs a merged game's fetches, so alternates still finish (and are recorded) after the primary is played. */
     @VisibleForTesting
@@ -150,16 +160,19 @@ class SportsLiveZapResolver @Inject constructor(
             }
             if (cached != null) {
                 SportsLiveLookup.Found(cached)
-            } else if (coolingDown(item)) {
-                // Every source of the game is rate-limited: no request. A link known to work still plays.
-                workingLinks.goodStream(item.id)?.let { SportsLiveLookup.Found(it) } ?: SportsLiveLookup.NothingFound
             } else {
                 val found = if (item.alternates.isEmpty()) search(item) else bestAcrossSources(item)
                 if (found is SportsLiveLookup.Found) {
                     resolveCache.put(item.streamKey, found.stream)
                     if (workingLinks.isQuarantined(item.id, found.stream)) workingLinks.noteFallback(item.id, found.stream)
+                    found
+                } else {
+                    // An addon cooling down was left out of the search: a link known to work still plays (C1).
+                    workingLinks.goodStream(item.id)
+                        ?.takeIf { cooldown.coolingBaseUrls().isNotEmpty() }
+                        ?.let { SportsLiveLookup.Found(it) }
+                        ?: found
                 }
-                found
             }
         } catch (e: CancellationException) {
             throw e
@@ -167,20 +180,24 @@ class SportsLiveZapResolver @Inject constructor(
             SportsLiveLookup.NothingFound
         }
 
-    /** Whether every source of [item] (the primary and its alternates) is cooling down after a rate limit. */
-    private fun coolingDown(item: SportsLiveItem): Boolean =
-        (listOf(item) + item.alternates).all { cooldown.isCoolingDown(it.addonName) }
-
     /**
      * The hover preview's lookup (C1): a cached resolve costs nothing; otherwise a game is resolved at
-     * most once per [PREVIEW_RESOLVE_WINDOW_MS], and never while its sources cool down after a rate
-     * limit. A preview that may not resolve shows nothing ([SportsLivePreviewLookup.NotPreviewable]).
+     * most once per [PREVIEW_RESOLVE_WINDOW_MS], and at most [PREVIEW_RESOLVES_PER_MINUTE] games a
+     * minute. Its search leaves out addons cooling down after a rate limit, as every search does. A
+     * preview that may not resolve shows nothing ([SportsLivePreviewLookup.NotPreviewable]). A resolve
+     * cancelled within [PREVIEW_FREE_CANCEL_MS] (the hover moved on) is not counted.
      */
     suspend fun previewLookup(item: SportsLiveItem): SportsLivePreviewLookup {
         val cached = resolveCache.get(item.streamKey)?.takeUnless { workingLinks.isQuarantined(item.id, it) }
         val stream = cached ?: run {
-            if (coolingDown(item) || !takePreviewResolve(item)) return SportsLivePreviewLookup.NotPreviewable
-            resolve(item) ?: return SportsLivePreviewLookup.NoStream
+            val startedAtMs = takePreviewResolve(item) ?: return SportsLivePreviewLookup.NotPreviewable
+            val resolved = try {
+                resolve(item)
+            } catch (e: CancellationException) {
+                if (nowMs() - startedAtMs < PREVIEW_FREE_CANCEL_MS) refundPreviewResolve(item, startedAtMs)
+                throw e
+            }
+            resolved ?: return SportsLivePreviewLookup.NoStream
         }
         return if (sportsLiveLightPlayable(stream, directDebridResolver)) {
             SportsLivePreviewLookup.Found(stream)
@@ -189,22 +206,40 @@ class SportsLiveZapResolver @Inject constructor(
         }
     }
 
-    /** True (and spent) when [item]'s preview has not resolved within [PREVIEW_RESOLVE_WINDOW_MS]. */
-    private fun takePreviewResolve(item: SportsLiveItem): Boolean {
+    /**
+     * Spends a preview resolve of [item] and returns when it started, or null when [item] resolved
+     * within [PREVIEW_RESOLVE_WINDOW_MS] or [PREVIEW_RESOLVES_PER_MINUTE] games already did this minute.
+     */
+    private fun takePreviewResolve(item: SportsLiveItem): Long? = synchronized(previewLock) {
         val now = nowMs()
-        var allowed = false
-        previewResolvedAtMs.compute(item.streamKey) { _, last ->
-            if (last == null || now - last >= PREVIEW_RESOLVE_WINDOW_MS) {
-                allowed = true
-                now
-            } else {
-                last
-            }
-        }
+        while (previewStarts.isNotEmpty() && now - previewStarts.first() >= 60_000L) previewStarts.removeFirst()
+        if (previewStarts.size >= PREVIEW_RESOLVES_PER_MINUTE) return null
+        val last = previewResolvedAtMs[item.streamKey]
+        if (last != null && now - last < PREVIEW_RESOLVE_WINDOW_MS) return null
+        previewResolvedAtMs[item.streamKey] = now
+        previewStarts.addLast(now)
         if (previewResolvedAtMs.size > MAX_PREVIEW_ENTRIES) {
-            previewResolvedAtMs.entries.removeAll { now - it.value >= PREVIEW_RESOLVE_WINDOW_MS }
+            previewResolvedAtMs.values.removeAll { now - it >= PREVIEW_RESOLVE_WINDOW_MS }
         }
-        return allowed
+        now
+    }
+
+    /** Gives back the preview resolve of [item] that started at [startedAtMs] (cancelled at once). */
+    private fun refundPreviewResolve(item: SportsLiveItem, startedAtMs: Long) {
+        synchronized(previewLock) {
+            if (previewResolvedAtMs[item.streamKey] == startedAtMs) previewResolvedAtMs.remove(item.streamKey)
+            previewStarts.remove(startedAtMs)
+        }
+    }
+
+    /** [item]'s streams from every addon but those cooling down after a rate limit (C1). */
+    private fun streamsOf(item: SportsLiveItem): Flow<NetworkResult<List<AddonStreams>>> {
+        val cooling = cooldown.coolingBaseUrls()
+        return if (cooling.isEmpty()) {
+            streamRepository.getStreamsFromAllAddons(item.apiType, item.id)
+        } else {
+            streamRepository.getStreamsFromAllAddonsExcept(item.apiType, item.id, cooling)
+        }
     }
 
     /** Drops the cached resolve for [item] (after a playback failure), so the next resolve refreshes it. */
@@ -317,9 +352,8 @@ class SportsLiveZapResolver @Inject constructor(
     private suspend fun bestAcrossSources(item: SportsLiveItem): SportsLiveLookup {
         val settings = playerSettingsDataStore.playerSettings.first()
         val installedOrder = installedOrder()
-        // The most reliable source first; its best stream plays as soon as it is known. A source
-        // cooling down after a rate limit is not asked (C1).
-        val sources = rankedSources(item, settings).filterNot { cooldown.isCoolingDown(it.addonName) }
+        // The most reliable source first; its best stream plays as soon as it is known.
+        val sources = rankedSources(item, settings)
         val fetches = sources.map { source -> fetchScope.async { fetchSource(item, source, installedOrder) } }
         val previous = synchronized(this) {
             backgroundFetches.also { backgroundFetches = item.streamKey to fetches }
@@ -397,7 +431,7 @@ class SportsLiveZapResolver @Inject constructor(
         try {
             var last: NetworkResult<List<AddonStreams>>? = null
             val finished = withTimeoutOrNull(timeoutMs) {
-                streamRepository.getStreamsFromAllAddons(source.apiType, source.id).collect { last = it }
+                streamsOf(source).collect { last = it }
                 true
             } == true
             val result = last
@@ -426,7 +460,7 @@ class SportsLiveZapResolver @Inject constructor(
         var finished = false
         // Never forced: a forced fetch cancels other collectors of the same stream session.
         val events = merge(
-            streamRepository.getStreamsFromAllAddons(item.apiType, item.id)
+            streamsOf(item)
                 .map<NetworkResult<List<AddonStreams>>, Event> { Event.Result(it) }
                 .onCompletion { cause -> if (cause == null) emit(Event.Finished) },
             flow { delay(EARLY_PICK_MS); emit(Event.EarlyPick) }

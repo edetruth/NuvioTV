@@ -53,6 +53,9 @@ class SportsLiveWorkingLinks(internal val nowMs: () -> Long = { System.currentTi
         /** Playback progress of [playing], in ms. */
         var playedMs = 0L
 
+        /** The link that failed last with nothing started since ([failedNow]). */
+        var failedUrl: String? = null
+
         /** A quarantined link a lookup had to fall back to, and until when nothing better is expected. */
         var fallback: Stream? = null
         var fallbackUntilMs = 0L
@@ -93,13 +96,33 @@ class SportsLiveWorkingLinks(internal val nowMs: () -> Long = { System.currentTi
                 // The same link starting again (a seek, a new surface) keeps its play time.
                 if (linkKey(playing?.getStreamUrl()) != linkKey(stream.getStreamUrl())) playedMs = 0L
                 playing = stream
+                failedUrl = null
             }
         }
     }
 
-    /** The full player for [gameKey] stopped (it left, or its link failed): nothing plays for it now. */
-    fun stoppedPlaying(gameKey: String) {
-        synchronized(this) { games[gameKey]?.playing = null }
+    /**
+     * The full player for [gameKey] stopped (it left, or its link [failedUrl] failed): nothing plays
+     * for it now.
+     */
+    fun stoppedPlaying(gameKey: String, failedUrl: String? = null) {
+        synchronized(this) {
+            if (failedUrl != null) {
+                game(gameKey).apply {
+                    playing = null
+                    this.failedUrl = failedUrl
+                }
+            } else {
+                games[gameKey]?.playing = null
+            }
+        }
+    }
+
+    /** True when [url] is the link that failed last for [gameKey] and nothing has started playing since (C1). */
+    fun failedNow(gameKey: String, url: String?): Boolean = synchronized(this) {
+        val game = games[gameKey] ?: return false
+        val key = linkKey(url) ?: return false
+        game.playing == null && linkKey(game.failedUrl) == key
     }
 
     /** The stream the full player plays for [gameKey] now, or null. */

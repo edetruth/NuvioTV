@@ -25,6 +25,8 @@ import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
@@ -34,7 +36,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -53,7 +55,7 @@ class SportsLiveNoticeResolverTest {
         val dataStore = mockk<PlayerSettingsDataStore>()
         every { dataStore.playerSettings } answers { flowOf(settings) }
         val addons = mockk<AddonRepository>()
-        every { addons.getInstalledAddons() } returns flowOf(listOf(addon("Sports"), addon("Other")))
+        every { addons.getInstalledAddons() } returns flowOf(listOf(addon("Sports"), addon("Other"), addon("Streamer")))
         val debrid = mockk<DirectDebridResolver>()
         coEvery { debrid.shouldResolveToPlayableStream(any()) } returns false
         return SportsLiveZapResolver(streams, dataStore, addons, mockk<SportsLiveStreamProbe>(relaxed = true), debrid, resolveCache).also {
@@ -102,64 +104,77 @@ class SportsLiveNoticeResolverTest {
         streams.responses["alt"] = { flowOf(success(HD, addon = "Other")) }
 
         assertEquals(HD, newResolver().resolve(MERGED))
-        assertEquals(listOf(HD), newResolver().also { resolveCache.clear() }.resolveAll(MERGED))
+        assertEquals(listOf(HD), newResolver().resolveAll(MERGED))
     }
 
     @Test
-    fun `a rate-limit notice starts a cool-down for its source`() = runTest {
+    fun `a rate-limit notice cools down the stream addon that sent it, by base url`() = runTest {
         streams.response = { flowOf(success(RATE_LIMIT)) }
 
         newResolver().lookup(ITEM)
 
-        assertTrue(cooldown.isCoolingDown("Sports"))
-        assertEquals(7, cooldown.remainingMinutes("Sports"))
+        assertTrue(cooldown.isCoolingDown(urlOf("Sports")))
+        assertEquals(7, cooldown.remainingMinutes(urlOf("Sports")))
     }
 
     @Test
-    fun `during a cool-down the source is not asked again, until it expires`() = runTest {
-        cooldown.note("Sports", 7)
-        streams.response = { flowOf(success(SD)) }
+    fun `a card whose stream addon differs is still searched while that addon cools down`() = runTest {
+        // The card comes from the "Sports" catalog; its streams come from "Streamer" and "Other".
+        streams.response = {
+            flowOf(results(addonStreams("Streamer", RATE_LIMIT.copy(addonName = "Streamer")), addonStreams("Other", HD)))
+        }
         val resolver = newResolver()
 
-        assertEquals(SportsLiveLookup.NothingFound, resolver.lookup(ITEM))
-        assertTrue(streams.calls.isEmpty())
+        assertEquals(HD, resolver.resolve(ITEM))
+        assertTrue(cooldown.isCoolingDown(urlOf("Streamer")))
+        assertFalse(cooldown.isCoolingDown(urlOf("Sports")))
 
+        // The next search still runs for the card, leaving out only the cooling addon.
+        resolveCache.clear()
+        assertEquals(HD, resolver.resolve(ITEM))
+        assertEquals(listOf(setOf(urlOf("Streamer"))), streams.exclusions)
+    }
+
+    @Test
+    fun `one cooling addon is left out while the others still return streams`() = runTest {
+        cooldown.note(urlOf("Sports"), "Sports", 7)
+        streams.response = { flowOf(results(addonStreams("Sports", SD), addonStreams("Other", HD))) }
+        val resolver = newResolver()
+
+        assertEquals(HD, resolver.resolve(ITEM))
+        assertEquals(listOf(setOf(urlOf("Sports"))), streams.exclusions)
+
+        // Once the cool-down is over, every addon is asked again.
         now += 7 * 60_000L
-        assertEquals(SportsLiveLookup.Found(SD), resolver.lookup(ITEM))
-        assertEquals(1, streams.calls.size)
+        resolveCache.clear()
+        settings = PlayerSettings(streamAutoPlayMode = StreamAutoPlayMode.MANUAL)
+        assertEquals(SD, resolver.resolve(ITEM))
+        assertEquals(1, streams.exclusions.size)
     }
 
     @Test
     fun `during a cool-down a cached resolve or a known-good link still plays`() = runTest {
         val resolver = newResolver()
         resolveCache.put(ITEM.streamKey, SD)
-        cooldown.note("Sports", 7)
+        cooldown.note(urlOf("Sports"), "Sports", 7)
         assertEquals(SD, resolver.resolve(ITEM))
+        assertTrue(streams.calls.isEmpty())
 
+        // Only the cooling addon had streams: the link known to work plays.
         resolveCache.clear()
+        streams.response = { flowOf(success(SD)) }
         links.noteLaunch(ITEM.id, HD)
         links.markGood(ITEM.id, HD.url)
         assertEquals(HD, resolver.resolve(ITEM))
-        assertTrue(streams.calls.isEmpty())
     }
 
     @Test
-    fun `a merged game skips a cooling source and asks the others`() = runTest {
-        cooldown.note("Sports", 7)
-        streams.responses["game"] = { flowOf(success(SD)) }
-        streams.responses["alt"] = { flowOf(success(HD, addon = "Other")) }
-
-        assertEquals(HD, newResolver().resolve(MERGED))
-        assertEquals(listOf("alt"), streams.calls)
-    }
-
-    @Test
-    fun `previews are suspended while the source cools down`() = runTest {
-        cooldown.note("Sports", 7)
+    fun `previews never ask an addon cooling down`() = runTest {
+        cooldown.note(urlOf("Sports"), "Sports", 7)
         streams.response = { flowOf(success(SD)) }
 
-        assertEquals(SportsLivePreviewLookup.NotPreviewable, newResolver().previewLookup(ITEM))
-        assertTrue(streams.calls.isEmpty())
+        assertEquals(SportsLivePreviewLookup.NoStream, newResolver().previewLookup(ITEM))
+        assertEquals(listOf(setOf(urlOf("Sports"))), streams.exclusions)
     }
 
     @Test
@@ -181,6 +196,48 @@ class SportsLiveNoticeResolverTest {
         now += 1
         assertEquals(SportsLivePreviewLookup.Found(SD), resolver.previewLookup(ITEM))
         assertEquals(2, streams.calls.size)
+    }
+
+    @Test
+    fun `at most three games a minute resolve for a preview`() = runTest {
+        streams.response = { flowOf(success(SD)) }
+        val resolver = newResolver()
+        val games = (1..4).map { ITEM.copy(meta = ITEM.meta.copy(id = "g$it")) }
+
+        games.take(3).forEach { assertEquals(SportsLivePreviewLookup.Found(SD), resolver.previewLookup(it)) }
+        assertEquals(SportsLivePreviewLookup.NotPreviewable, resolver.previewLookup(games[3]))
+        assertEquals(3, streams.calls.size)
+
+        now += 60_000L
+        assertEquals(SportsLivePreviewLookup.Found(SD), resolver.previewLookup(games[3]))
+        assertEquals(4, streams.calls.size)
+    }
+
+    @Test
+    fun `a preview cancelled within two seconds spends no budget`() = runTest {
+        streams.response = { flow { awaitCancellation() } }
+        val resolver = newResolver()
+
+        val hover = async { resolver.previewLookup(ITEM) }
+        runCurrent()
+        now += SportsLiveZapResolver.PREVIEW_FREE_CANCEL_MS - 1
+        hover.cancel()
+        runCurrent()
+
+        streams.response = { flowOf(success(SD)) }
+        assertEquals(SportsLivePreviewLookup.Found(SD), resolver.previewLookup(ITEM))
+
+        // One cancelled later than that has spent the game's budget.
+        resolveCache.clear()
+        val other = ITEM.copy(meta = ITEM.meta.copy(id = "other"))
+        streams.response = { flow { awaitCancellation() } }
+        val late = async { resolver.previewLookup(other) }
+        runCurrent()
+        now += SportsLiveZapResolver.PREVIEW_FREE_CANCEL_MS
+        late.cancel()
+        runCurrent()
+        streams.response = { flowOf(success(SD)) }
+        assertEquals(SportsLivePreviewLookup.NotPreviewable, resolver.previewLookup(other))
     }
 
     @Test
@@ -213,14 +270,16 @@ class SportsLiveNoticeResolverTest {
         SportsLiveExtraSources.markSportsPlayback("game")
 
         assertTrue(sportsLiveSourceNotice("game", RATE_LIMIT))
-        assertEquals(false, sportsLiveSourceNotice("game", SD))
-        assertEquals(false, sportsLiveSourceNotice("movie", RATE_LIMIT))
+        assertFalse(sportsLiveSourceNotice("game", SD))
+        assertFalse(sportsLiveSourceNotice("movie", RATE_LIMIT))
     }
 
+    /** Answers per video id; a search that leaves addons out drops their groups and records the set. */
     private class FakeStreamRepository : StreamRepository {
         var response: () -> Flow<NetworkResult<List<AddonStreams>>> = { flowOf() }
         val responses = mutableMapOf<String, () -> Flow<NetworkResult<List<AddonStreams>>>>()
         val calls = mutableListOf<String>()
+        val exclusions = mutableListOf<Set<String>>()
 
         override fun getStreamsFromAllAddons(
             type: String,
@@ -234,6 +293,25 @@ class SportsLiveNoticeResolverTest {
         ): Flow<NetworkResult<List<AddonStreams>>> = flow {
             calls += videoId
             emitAll((responses[videoId] ?: response)())
+        }
+
+        override fun getStreamsFromAllAddonsExcept(
+            type: String,
+            videoId: String,
+            excludedAddonBaseUrls: Set<String>,
+            forceRefresh: Boolean
+        ): Flow<NetworkResult<List<AddonStreams>>> = flow {
+            calls += videoId
+            exclusions += excludedAddonBaseUrls
+            (responses[videoId] ?: response)().collect { result ->
+                emit(
+                    if (result is NetworkResult.Success) {
+                        NetworkResult.Success(result.data.filterNot { it.addonBaseUrl in excludedAddonBaseUrls })
+                    } else {
+                        result
+                    }
+                )
+            }
         }
 
         override fun setLocalPluginSearchPaused(paused: Boolean) = Unit
@@ -252,9 +330,17 @@ class SportsLiveNoticeResolverTest {
             title = "Rate limit reached",
             description = "Please wait 7 min. The stream you are already watching keeps working."
         )
-        val UPGRADE = stream(url = "https://cdn.example.invalid/upgrade.mp4", title = "Upgrade for more links")
+        val UPGRADE = stream(url = null, externalUrl = "https://site.example.invalid/upgrade", title = "Upgrade for more links")
 
-        fun stream(url: String?, title: String, description: String? = null, addonName: String = "Sports") = Stream(
+        fun urlOf(addon: String) = "https://${addon.lowercase()}.example.invalid"
+
+        fun stream(
+            url: String?,
+            title: String,
+            description: String? = null,
+            addonName: String = "Sports",
+            externalUrl: String? = null
+        ) = Stream(
             name = addonName,
             title = title,
             description = description,
@@ -262,14 +348,19 @@ class SportsLiveNoticeResolverTest {
             ytId = null,
             infoHash = null,
             fileIdx = null,
-            externalUrl = null,
+            externalUrl = externalUrl,
             behaviorHints = null,
             addonName = addonName,
             addonLogo = null
         )
 
+        fun addonStreams(addon: String, vararg streams: Stream) =
+            AddonStreams(addonName = addon, addonLogo = null, streams = streams.toList(), addonBaseUrl = urlOf(addon))
+
+        fun results(vararg groups: AddonStreams): NetworkResult<List<AddonStreams>> = NetworkResult.Success(groups.toList())
+
         fun success(vararg streams: Stream, addon: String = "Sports"): NetworkResult<List<AddonStreams>> =
-            NetworkResult.Success(listOf(AddonStreams(addonName = addon, addonLogo = null, streams = streams.toList())))
+            results(addonStreams(addon, *streams))
 
         fun addon(name: String) = Addon(
             id = name,
@@ -277,7 +368,7 @@ class SportsLiveNoticeResolverTest {
             version = "1",
             description = null,
             logo = null,
-            baseUrl = "https://$name.example.invalid",
+            baseUrl = urlOf(name),
             catalogs = emptyList(),
             types = emptyList(),
             resources = emptyList(),

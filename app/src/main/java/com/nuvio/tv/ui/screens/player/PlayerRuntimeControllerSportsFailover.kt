@@ -108,7 +108,7 @@ internal fun PlayerRuntimeController.trySportsLiveFailoverAfterError(
     if (!SportsLiveExtraSources.isSportsPlayback(contentId)) return false
     // Nothing that works plays now (also a Sources panel pick failing before its first frame): dual
     // screen must not take over a stream this player no longer plays (#65).
-    SportsLiveWorkingLinks.shared.stoppedPlaying(contentId.orEmpty())
+    SportsLiveWorkingLinks.shared.stoppedPlaying(contentId.orEmpty(), failedUrl = currentStreamUrl)
     // The source that just failed must not be re-served from the resolve cache next time.
     SportsLiveExtraSources.invalidateResolve(contentId)
     if (sourceFallbackJob?.isActive == true) return true
@@ -198,11 +198,20 @@ internal fun PlayerRuntimeController.trySportsLiveFailoverAfterError(
 
 /**
  * Whether a sports [errorCode] skips straight to failover (C1): a container the player cannot parse
- * before the first frame is not media at all (an addon's notice or placeholder), so retrying or
- * re-probing it only delays the next source. It counts as a failed link (#65 quarantine).
+ * before the first frame, once the parsing probe has already re-tried it with the probed type
+ * ([probeAttempted]), or at once when the link is an addon's notice or placeholder ([isNotice]). A
+ * real link without an extension or with a wrong MIME type still gets the probe first. It counts as
+ * a failed link (#65 quarantine).
  */
-internal fun sportsFailsOverAtOnce(errorCode: Int, hasRenderedFirstFrame: Boolean): Boolean =
-    !hasRenderedFirstFrame && errorCode == PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED
+internal fun sportsFailsOverAtOnce(
+    errorCode: Int,
+    hasRenderedFirstFrame: Boolean,
+    probeAttempted: Boolean,
+    isNotice: Boolean
+): Boolean =
+    !hasRenderedFirstFrame &&
+        errorCode == PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED &&
+        (probeAttempted || isNotice)
 
 /**
  * [sportsFailsOverAtOnce] for the error just raised: hands it to [trySportsLiveFailoverAfterError].
@@ -210,19 +219,20 @@ internal fun sportsFailsOverAtOnce(errorCode: Int, hasRenderedFirstFrame: Boolea
  */
 internal fun PlayerRuntimeController.trySportsFailoverOnUnplayableStart(errorCode: Int, errorMessage: String): Boolean {
     if (!SportsLiveExtraSources.isSportsPlayback(contentId)) return false
-    if (!sportsFailsOverAtOnce(errorCode, hasRenderedFirstFrame)) return false
+    val isNotice = currentSportsStream()?.let(SportsLiveZapResolver::isNonStream) == true
+    if (!sportsFailsOverAtOnce(errorCode, hasRenderedFirstFrame, parsingErrorProbeAttempted, isNotice)) return false
     return trySportsLiveFailoverAfterError(errorMessage)
 }
 
 /**
  * The Sources panel closed while nothing plays for a sports game (its source failed and no pick
  * replaced it): the recovery overlay (Choose stream / Retry / Back) comes back, not a black player (C1).
+ * Engine-agnostic (ExoPlayer and mpv): it reads the failure the failover recorded for the link loaded.
  */
 internal fun PlayerRuntimeController.restoreSportsRecoveryIfNothingPlays() {
     if (!SportsLiveExtraSources.isSportsPlayback(contentId)) return
     if (sourceFallbackJob?.isActive == true) return
-    val player = _exoPlayer ?: return
-    if (player.playerError == null && player.playbackState != Player.STATE_IDLE) return
+    if (!SportsLiveWorkingLinks.shared.failedNow(contentId.orEmpty(), currentStreamUrl)) return
     surfaceSportsFailoverError(context.getString(R.string.sports_live_nothing_playing))
 }
 

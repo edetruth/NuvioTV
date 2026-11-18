@@ -99,8 +99,45 @@ class StreamRepositoryImpl @Inject constructor(
         priorityBingeGroup: String?,
         preferredPluginOnly: Boolean,
         continuePluginOnly: Boolean
+    ): Flow<NetworkResult<List<AddonStreams>>> = searchStreams(
+        type, videoId, season, episode, forceRefresh, priorityBingeGroup, preferredPluginOnly, continuePluginOnly,
+        excludedAddonBaseUrls = emptySet()
+    )
+
+    override fun getStreamsFromAllAddonsExcept(
+        type: String,
+        videoId: String,
+        excludedAddonBaseUrls: Set<String>,
+        forceRefresh: Boolean
+    ): Flow<NetworkResult<List<AddonStreams>>> = searchStreams(
+        type, videoId, season = null, episode = null, forceRefresh = forceRefresh, priorityBingeGroup = null,
+        preferredPluginOnly = false, continuePluginOnly = false, excludedAddonBaseUrls = excludedAddonBaseUrls
+    )
+
+    /**
+     * The shared search behind [getStreamsFromAllAddons]. Addons whose base url is in
+     * [excludedAddonBaseUrls] are left out of the fan-out; the search session key follows the
+     * addons asked, so a narrowed search never replays a full one's results or the reverse.
+     */
+    private fun searchStreams(
+        type: String,
+        videoId: String,
+        season: Int?,
+        episode: Int?,
+        forceRefresh: Boolean,
+        priorityBingeGroup: String?,
+        preferredPluginOnly: Boolean,
+        continuePluginOnly: Boolean,
+        excludedAddonBaseUrls: Set<String>
     ): Flow<NetworkResult<List<AddonStreams>>> = flow {
-        val sourceConfiguration = captureSourceConfiguration()
+        val sourceConfiguration = captureSourceConfiguration().let { configuration ->
+            if (excludedAddonBaseUrls.isEmpty()) {
+                configuration
+            } else {
+                val excluded = excludedAddonBaseUrls.mapTo(HashSet()) { it.trim().trimEnd('/') }
+                configuration.copy(addons = configuration.addons.filterNot { it.baseUrl.trim().trimEnd('/') in excluded })
+            }
+        }
         val isNativeServerRequest = serverStreams.isNativeRequest(videoId)
         val requestKey = buildStreamSearchRequestKey(
             sourceConfiguration,
@@ -273,7 +310,8 @@ class StreamRepositoryImpl @Inject constructor(
                                             AddonStreams(
                                                 addonName = addon.displayName,
                                                 addonLogo = addon.logo,
-                                                streams = namedStreams
+                                                streams = namedStreams,
+                                                addonBaseUrl = addon.baseUrl
                                             )
                                         )
                                     } else {
@@ -287,7 +325,8 @@ class StreamRepositoryImpl @Inject constructor(
                                                 AddonStreams(
                                                     addonName = addon.displayName,
                                                     addonLogo = addon.logo,
-                                                    streams = inlineStreams
+                                                    streams = inlineStreams,
+                                                    addonBaseUrl = addon.baseUrl
                                                 )
                                             )
                                         } else {

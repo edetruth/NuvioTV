@@ -3823,5 +3823,6 @@
     <string name="sports_live_source_loading">%1$s · loading…</string>
     <string name="sports_live_source_notice">Message from the source · not a stream</string>
     <string name="sports_live_source_rate_limited">%1$s is rate-limited, try again in %2$d min</string>
+    <string name="sports_live_sources_rate_limited">%1$s are rate-limited, try again in %2$d min</string>
     <string name="sports_live_nothing_playing">Nothing is playing. Choose a stream or go back.</string>
 </resources>

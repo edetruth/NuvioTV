@@ -68,7 +68,7 @@ class SportsLiveStreamProbe @Inject constructor(
     @VisibleForTesting
     internal var nowMs: () -> Long = { System.currentTimeMillis() }
 
-    /** Sources cooling down after a rate-limit notice are not probed (C1). */
+    /** Addons cooling down after a rate-limit notice are left out of a probe's search (C1). */
     @VisibleForTesting
     internal var cooldown: SportsLiveSourceCooldown = SportsLiveSourceCooldown.shared
 
@@ -103,8 +103,6 @@ class SportsLiveStreamProbe @Inject constructor(
         // A fresh resolve (from preview/zap/section) already proved the game alive; don't spend a
         // request probing on mere focus.
         if (resolveCache.isFresh(key)) return
-        // A source that asked to wait is left alone until its cool-down ends (C1).
-        if (cooldown.isCoolingDown(item.addonName)) return
         val entry = entries[key]
         if (entry != null && nowMs() - entry.probedAtMs < REPROBE_AFTER_MS) return
         if (!inFlight.add(key)) return
@@ -137,7 +135,8 @@ class SportsLiveStreamProbe @Inject constructor(
 
     /** Records the outcome of a stream fetch made elsewhere (zap, merged cards) for [item]. */
     fun recordResult(item: SportsLiveItem, result: NetworkResult<List<AddonStreams>>) {
-        record(item, verdictOf(result))
+        // A search that left out an addon cooling down cannot prove an end (C1).
+        record(item, verdictOf(result)?.takeUnless { it && cooldown.coolingBaseUrls().isNotEmpty() })
     }
 
     /**
@@ -194,9 +193,16 @@ class SportsLiveStreamProbe @Inject constructor(
     /** The verdict of a full search; null on a timeout or an exception. */
     private suspend fun search(item: SportsLiveItem, forceRefresh: Boolean): Boolean? {
         var last: NetworkResult<List<AddonStreams>>? = null
+        // An addon cooling down is not asked; without its answer, finding nothing proves no end (C1).
+        val cooling = cooldown.coolingBaseUrls()
         val finished = try {
             withTimeoutOrNull(PROBE_TIMEOUT_MS) {
-                streamRepository.getStreamsFromAllAddons(item.apiType, item.id, forceRefresh = forceRefresh).collect { last = it }
+                val streams = if (cooling.isEmpty()) {
+                    streamRepository.getStreamsFromAllAddons(item.apiType, item.id, forceRefresh = forceRefresh)
+                } else {
+                    streamRepository.getStreamsFromAllAddonsExcept(item.apiType, item.id, cooling, forceRefresh)
+                }
+                streams.collect { last = it }
                 true
             }
         } catch (e: CancellationException) {
@@ -204,7 +210,8 @@ class SportsLiveStreamProbe @Inject constructor(
         } catch (_: Exception) {
             null
         }
-        return if (finished == null) null else last?.let(::verdictOf)
+        val verdict = if (finished == null) null else last?.let(::verdictOf)
+        return if (verdict == true && cooling.isNotEmpty()) null else verdict
     }
 
     /** True = ended, false = alive, null = inconclusive. */

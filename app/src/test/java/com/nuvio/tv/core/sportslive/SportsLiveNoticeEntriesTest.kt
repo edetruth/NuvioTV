@@ -11,20 +11,43 @@ import org.junit.Test
 class SportsLiveNoticeEntriesTest {
 
     @Test
-    fun `informational entries are notices`() {
+    fun `a strong rate-limit phrase flags an entry even with a media url`() {
         listOf(
             stream(name = "Rate limit reached", description = "Please wait 7 min. The stream you are already watching keeps working."),
             stream(title = "Daily limit reached"),
             stream(title = "Too many requests, slow down"),
-            stream(title = "Please try again later"),
-            stream(title = "Error: could not load this event"),
-            stream(title = "This event is not available in your region"),
-            stream(title = "Stream unavailable"),
-            stream(title = "No streams found for this game"),
-            stream(title = "Upgrade to unlock more links"),
-            stream(title = "Premium required for this channel"),
-            stream(title = "Subscription required")
+            stream(title = "Please wait 3 minutes")
         ).forEach { assertTrue(SportsLiveNoticeEntries.text(it), SportsLiveNoticeEntries.isNotice(it)) }
+    }
+
+    @Test
+    fun `a soft word flags an entry with no media target`() {
+        listOf(
+            "Please try again later",
+            "Error: could not load this event",
+            "This event is not available in your region",
+            "Stream unavailable",
+            "No streams found for this game",
+            "Upgrade to unlock more links",
+            "Premium required for this channel",
+            "Subscription required"
+        ).flatMap { title ->
+            listOf(
+                stream(title = title, url = null, externalUrl = "https://site.example.invalid/info"),
+                stream(title = title, url = "https://site.example.invalid/"),
+                stream(title = title, url = "https://site.example.invalid/info.html")
+            )
+        }.forEach { assertTrue(SportsLiveNoticeEntries.text(it), SportsLiveNoticeEntries.isNotice(it)) }
+    }
+
+    @Test
+    fun `soft words alone never flag an entry with a valid media url`() {
+        listOf(
+            stream(title = "4K not available · 1080p"),
+            stream(title = "if it buffers, try again"),
+            stream(title = "Upgrade: new 1080p server"),
+            stream(title = "Backup feed (error correction on)")
+        ).forEach { assertFalse(SportsLiveNoticeEntries.text(it), SportsLiveNoticeEntries.isNotice(it)) }
     }
 
     @Test
@@ -75,6 +98,14 @@ class SportsLiveNoticeEntriesTest {
     }
 
     @Test
+    fun `a wait time far from the rate-limit phrase is not its cool-down`() {
+        val far = "Rate limit reached. " + "Our schedule lists every match of the week with kickoff times. ".repeat(2) +
+            "Halftime show in 15 minutes"
+        assertEquals(SportsLiveNoticeEntries.DEFAULT_COOLDOWN_MIN, SportsLiveNoticeEntries.rateLimitMinutes(stream(title = far)))
+        assertEquals(9, SportsLiveNoticeEntries.rateLimitMinutes(stream(title = "Rate limit reached", description = "Try again in 9 min")))
+    }
+
+    @Test
     fun `a rate limit with no wait time gets the default cool-down`() {
         assertEquals(
             SportsLiveNoticeEntries.DEFAULT_COOLDOWN_MIN,
@@ -84,7 +115,7 @@ class SportsLiveNoticeEntriesTest {
 
     @Test
     fun `other notices and real streams are not rate limits`() {
-        assertNull(SportsLiveNoticeEntries.rateLimitMinutes(stream(title = "Upgrade to unlock more links")))
+        assertNull(SportsLiveNoticeEntries.rateLimitMinutes(stream(title = "Upgrade to unlock more links", url = null)))
         assertNull(SportsLiveNoticeEntries.rateLimitMinutes(stream(title = "Sports HD 1080p")))
     }
 

@@ -30,6 +30,19 @@ interface StreamRepository {
     ): Flow<NetworkResult<List<AddonStreams>>>
 
     /**
+     * [getStreamsFromAllAddons] without asking the addons whose transport base url is in
+     * [excludedAddonBaseUrls] (Sports & Live: addons cooling down after a rate limit); every other
+     * addon is asked as usual. The default asks every addon.
+     */
+    fun getStreamsFromAllAddonsExcept(
+        type: String,
+        videoId: String,
+        excludedAddonBaseUrls: Set<String>,
+        forceRefresh: Boolean = false
+    ): Flow<NetworkResult<List<AddonStreams>>> =
+        getStreamsFromAllAddons(type, videoId, forceRefresh = forceRefresh)
+
+    /**
      * Returns streams a recent search already holds for this video, including a plugin
      * continuation stored under a different search mode. Never starts a search.
      */

@@ -302,7 +302,9 @@ data class ProxyHeaders(
 data class AddonStreams(
     val addonName: String,
     val addonLogo: String?,
-    val streams: List<Stream>
+    val streams: List<Stream>,
+    /** The addon's transport base url (null for plugins and servers). In memory only; never logged. */
+    val addonBaseUrl: String? = null
 )
 
 private fun String?.isMagnetLink(): Boolean =
