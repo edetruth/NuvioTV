@@ -233,7 +233,7 @@ class ZapPanelScoresTest {
         every { profiles.activeProfileId } returns MutableStateFlow(1)
         val viewModel = SportsLiveZapViewModel(
             SavedStateHandle(mapOf("contentId" to playing.id)), mockk(relaxed = true), mockk<DirectDebridResolver>(relaxed = true),
-            profiles, repo, scores
+            profiles, repo, scores, mainDispatcherRule.dispatcher
         )
         return viewModel to playing
     }
@@ -271,6 +271,9 @@ class ZapPanelScoresTest {
         viewModel.onPanelRowFocus("a|other")
         advanceTimeBy(5_000L); runCurrent()
         assertEquals(setOf(playing.streamKey), viewModel.revealedRows)
+
+        // An open panel ticks forever on the test scheduler; closed, the test can finish.
+        viewModel.closePanel()
     }
 
     private companion object {

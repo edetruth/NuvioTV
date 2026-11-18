@@ -28,6 +28,7 @@ import com.nuvio.tv.ui.screens.sportslive.dual.offersDual
 import com.nuvio.tv.ui.screens.stream.StreamPlaybackInfo
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
@@ -70,14 +71,25 @@ sealed interface SportsLiveZapEvent {
 /** Zap state of one Player back stack entry, whose route arguments it reads. */
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
-class SportsLiveZapViewModel @Inject constructor(
+class SportsLiveZapViewModel internal constructor(
     savedStateHandle: SavedStateHandle,
     resolver: SportsLiveZapResolver,
     private val directDebridResolver: DirectDebridResolver,
     profileManager: ProfileManager,
     private val repo: SportsLiveRepository,
-    private val liveScores: LiveScoresRepository
+    private val liveScores: LiveScoresRepository,
+    // Where the panel's list is built and grouped; tests pass their dispatcher, so it runs in virtual time.
+    computeDispatcher: CoroutineDispatcher
 ) : ViewModel() {
+
+    @Inject constructor(
+        savedStateHandle: SavedStateHandle,
+        resolver: SportsLiveZapResolver,
+        directDebridResolver: DirectDebridResolver,
+        profileManager: ProfileManager,
+        repo: SportsLiveRepository,
+        liveScores: LiveScoresRepository
+    ) : this(savedStateHandle, resolver, directDebridResolver, profileManager, repo, liveScores, Dispatchers.Default)
 
     private val contentId: String? = savedStateHandle.get<String>("contentId").also { id ->
         // A player for other content ends the session; zap targets match because the
@@ -151,7 +163,7 @@ class SportsLiveZapViewModel @Inject constructor(
                     nowMs = System.currentTimeMillis(),
                     addonOrder = claimed.map { it.addon.id }.distinct()
                 )
-            }.flowOn(Dispatchers.Default)
+            }.flowOn(computeDispatcher)
             // The mode is null until read: no chips and nothing tracked before it is known.
             val mode = liveScores.mode.map<ScoresMode, ScoresMode?> { it }.onStart { emit(null) }
             // Grouped off the main thread; the tracker is updated back on it.
@@ -167,8 +179,12 @@ class SportsLiveZapViewModel @Inject constructor(
                     currentKey = session.current.streamKey
                 )
                 Triple(list, scoresMode, state)
-            }.flowOn(Dispatchers.Default).map { (list, scoresMode, state) ->
-                scoreTracker.update(list, enabled = scoresMode != null && scoresMode != ScoresMode.OFF)
+            }.flowOn(computeDispatcher).map { (list, scoresMode, state) ->
+                // A list grouped before closePanel can arrive after it: it must not become the tracker's
+                // cards, or the next open would start tracking this session's list.
+                if (panelSession.value === session) {
+                    scoreTracker.update(list, enabled = scoresMode != null && scoresMode != ScoresMode.OFF)
+                }
                 state
             }
         }
