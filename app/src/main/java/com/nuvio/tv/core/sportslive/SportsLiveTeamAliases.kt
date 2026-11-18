@@ -64,7 +64,25 @@ object SportsLiveTeamAliases {
         "st kitts and nevis" to listOf("saint kitts and nevis", "st kitts"),
         "st lucia" to listOf("saint lucia"),
         "trinidad and tobago" to listOf("trinidad", "tto")
-    ) + CLUBS
+    ) + COLLEGES + CLUBS
+
+    /**
+     * US colleges ESPN names by their initials ("SMU Mustangs", location "SMU") while addons often write
+     * the full name ("Southern Methodist vs Oral Roberts", I6). Only names that mean one school.
+     */
+    private val COLLEGES: List<Pair<String, List<String>>>
+        get() = listOf(
+            "smu" to listOf("southern methodist"),
+            "tcu" to listOf("texas christian"),
+            "byu" to listOf("brigham young"),
+            "lsu" to listOf("louisiana state"),
+            "ucf" to listOf("central florida"),
+            "unlv" to listOf("nevada las vegas"),
+            "vcu" to listOf("virginia commonwealth"),
+            "uab" to listOf("alabama birmingham"),
+            "utep" to listOf("texas el paso"),
+            "utsa" to listOf("texas san antonio")
+        )
 
     /**
      * Soccer clubs: the names addons use for them. Keys and values in normalised form (leading

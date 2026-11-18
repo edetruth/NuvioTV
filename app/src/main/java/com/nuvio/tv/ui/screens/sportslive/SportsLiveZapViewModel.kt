@@ -187,7 +187,8 @@ class SportsLiveZapViewModel internal constructor(
                 val canEstimate = SportsLiveEndedGames.estimateGate(scoresMode == ScoresMode.OFF, unmatched)
                 val split = SportsLiveEndedGames.shared.split(list, scores, nowMs, canEstimate)
                 val state = SportsLiveZapPanelState(
-                    rows = groupPanelRows(split.live + split.justEnded, scores, scoresMode, revealed, nowMs, split.ended, logos),
+                    // A final in its grace is grouped (and chipped) as the final it is, never as live (C3).
+                    rows = groupPanelRows(split.live + split.justEnded, split.scoresWithFinals(scores), scoresMode, revealed, nowMs, split.ended, logos),
                     currentKey = session.current.streamKey,
                     chips = panelChips(panelList.all, panelList.chip),
                     chip = panelList.chip,
@@ -324,7 +325,9 @@ class SportsLiveZapViewModel internal constructor(
             zapItems = zapItems(session),
             filter = session.filter,
             tab = session.tab,
-            endedKeys = repo.endedKeys.value,
+            // ESPN finals past their grace are left out too (C3), as remembered across restarts.
+            endedKeys = repo.endedKeys.value +
+                SportsLiveEndedGames.shared.confirmedEndedSourceKeys(items(session), liveScores.scores.value, System.currentTimeMillis()),
             // The game playing keeps its working stream in dual screen, with no new lookup (#65).
             chosenStream = workingLinks.playing(session.current.id)
         )

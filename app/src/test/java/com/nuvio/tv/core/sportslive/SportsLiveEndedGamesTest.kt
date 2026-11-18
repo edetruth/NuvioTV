@@ -310,6 +310,117 @@ class SportsLiveEndedGamesTest {
         assertEquals(20 * MINUTE, LATE)
     }
 
+    // --- C3: finals after a restart, persisted times, never LIVE ---
+
+    @Test
+    fun `after a restart a long-over final is not live - it is already gone from Live now`() {
+        // A fresh instance (nothing remembered) first sees the final 5 h after tip-off: dated at
+        // start + length, so its grace and its half hour have both run out.
+        val games = SportsLiveEndedGames()
+        val now = START + 5 * HOUR
+        val verdict = games.verdict(item(), pacersFinal, now)!!
+        assertEquals(START + BASKETBALL, verdict.endedAtMs)
+        val split = games.split(listOf(item()), mapOf(item().streamKey to pacersFinal), now)
+        assertTrue(split.live.isEmpty())
+        assertTrue(split.justEnded.isEmpty())
+    }
+
+    @Test
+    fun `after a restart a final older than the grace goes straight to Just ended`() {
+        val now = START + BASKETBALL + 15 * MINUTE
+        val split = SportsLiveEndedGames().split(listOf(item()), mapOf(item().streamKey to pacersFinal), now)
+        assertTrue(split.live.isEmpty())
+        assertEquals(listOf(item()), split.justEnded)
+    }
+
+    @Test
+    fun `a final with no start is dated now with no grace - straight to Just ended, never live`() {
+        val card = item(startMs = null, timed = false)
+        val final = pacersFinal.copy(startMs = null)
+        val now = START + 3 * HOUR
+        val verdict = SportsLiveEndedGames().verdict(card, final, now)!!
+        assertEquals(now, verdict.endedAtMs)
+        assertEquals(false, verdict.graced)
+        assertEquals(now, verdict.movesAtMs)
+        val split = SportsLiveEndedGames().split(listOf(card), mapOf(card.streamKey to final), now)
+        assertTrue(split.live.isEmpty())
+        assertEquals(listOf(card), split.justEnded)
+    }
+
+    @Test
+    fun `a sport with no length has an unknown end too - no grace`() {
+        val card = item(name = "Indiana Pacers at Philadelphia 76ers", sport = "Basketball UFC")
+        val verdict = SportsLiveEndedGames().verdict(card, pacersFinal, START + 3 * HOUR)!!
+        assertEquals(false, verdict.graced)
+    }
+
+    @Test
+    fun `final times are kept across a restart, so the timers never reset`() {
+        val card = item()
+        val saved = ArrayList<Map<String, SportsLiveEndedGames.FinalTime>>()
+        val before = SportsLiveEndedGames()
+        before.install(emptyMap(), START) { saved += it }
+        // Seen in play, then final: dated when first seen.
+        before.verdict(card, live(pacersFinal), START + 2 * HOUR)
+        val endedAt = START + 2 * HOUR + 5 * MINUTE
+        before.verdict(card, pacersFinal, endedAt)
+        val stored = SportsLiveEndedGames.encodeTimes(saved.last())
+
+        // Restart 8 min later: the stored time stands, so 2 min of grace are left, not a fresh 10.
+        val after = SportsLiveEndedGames()
+        after.install(SportsLiveEndedGames.decodeTimes(stored), endedAt + 8 * MINUTE) { }
+        val verdict = after.verdict(card, pacersFinal, endedAt + 8 * MINUTE)!!
+        assertEquals(endedAt, verdict.endedAtMs)
+        assertEquals(endedAt + SportsLiveEndedGames.GRACE_MS, verdict.movesAtMs)
+
+        // Times older than 6 h are not restored; unreadable lines are skipped.
+        val old = SportsLiveEndedGames.decodeTimes(stored + "\nnot a line\n1,x,k")
+        assertEquals(setOf(card.streamKey), old.keys)
+        val late = SportsLiveEndedGames()
+        val saw = ArrayList<Map<String, SportsLiveEndedGames.FinalTime>>()
+        late.install(old, endedAt + SportsLiveEndedGames.FORGET_AFTER_MS + MINUTE) { saw += it }
+        assertTrue(saw.last().isEmpty())
+    }
+
+    @Test
+    fun `the stored text round-trips keys with commas and the no-grace mark`() {
+        val times = mapOf(
+            "a|b,c" to SportsLiveEndedGames.FinalTime(START, graced = false),
+            "k" to SportsLiveEndedGames.FinalTime(START + MINUTE)
+        )
+        assertEquals(times, SportsLiveEndedGames.decodeTimes(SportsLiveEndedGames.encodeTimes(times)))
+        assertTrue(SportsLiveEndedGames.decodeTimes(null).isEmpty())
+    }
+
+    @Test
+    fun `a final in its grace stays in the main list but is marked final, never live`() {
+        val games = SportsLiveEndedGames()
+        val card = item()
+        games.verdict(card, live(pacersFinal), START + 2 * HOUR)
+        val endedAt = START + 2 * HOUR + MINUTE
+        val split = games.split(listOf(card), mapOf(card.streamKey to pacersFinal), endedAt + 5 * MINUTE)
+        assertEquals(listOf(card), split.live)
+        assertEquals(EndedSignal.FINAL, split.finals[card.streamKey]?.signal)
+        assertTrue(SportsLiveEndedGames.isEspnFinal(card, pacersFinal))
+        assertTrue(!SportsLiveEndedGames.isEspnFinal(card, live(pacersFinal)))
+        assertTrue(!SportsLiveEndedGames.isEspnFinal(card, null))
+        // A withheld final (score held back by the delay) is still a final: no LIVE pill.
+        val withheld = pacersFinal.copy(home = pacersFinal.home.copy(score = null), away = pacersFinal.away.copy(score = null))
+        assertTrue(SportsLiveEndedGames.isEspnFinal(card, withheld))
+        // A surface without the snapshot now (the player panel) still gets the final, so it never groups it as live.
+        assertEquals(pacersFinal.eventId, split.scoresWithFinals(emptyMap())[card.streamKey]?.eventId)
+    }
+
+    @Test
+    fun `the dual picker leaves out finals past the grace, with every source of a merged card`() {
+        val games = SportsLiveEndedGames()
+        val alternate = item(id = "alt").copy(addonId = "b")
+        val card = item().copy(alternates = listOf(alternate))
+        val now = START + BASKETBALL + 15 * MINUTE
+        val keys = games.confirmedEndedSourceKeys(listOf(card), mapOf(card.streamKey to pacersFinal), now)
+        assertTrue(card.hasEnded(keys))
+    }
+
     @Test
     fun `replayFor finds a strict replay match of an ended game`() {
         val replay = item(name = "Indiana Pacers vs Philadelphia 76ers", id = "rp", startMs = START).copy(kind = SportsLiveKind.REPLAY, isLive = false)

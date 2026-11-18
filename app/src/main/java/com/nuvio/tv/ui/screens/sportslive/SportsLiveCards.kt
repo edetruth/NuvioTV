@@ -132,6 +132,8 @@ internal fun SportsLiveListCard(
     chip: ScoreChip? = null,
     /** In the Just ended strip (#60): dimmed, and its pill never red. */
     ended: Boolean = false,
+    /** ESPN says the game is over (C3), in the postgame grace too: its pill is never red. */
+    final: Boolean = false,
     /** A strict replay match exists: the Replay tag beside the chip. */
     hasReplay: Boolean = false
 ) {
@@ -206,7 +208,7 @@ internal fun SportsLiveListCard(
                         horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        if (stateLabel != null) SportsLiveStatePill(label = stateLabel, isLive = item.isLive && !ended)
+                        if (stateLabel != null) SportsLiveStatePill(label = stateLabel, isLive = item.isLive && !ended && !final)
                         if (chip != null) SportsLiveScoreChip(chip)
                         if (hasReplay) ReplayPill()
                     }
@@ -285,7 +287,9 @@ internal fun SportsLiveDetailsPane(
     /** The score chip drawn on [art]. */
     chip: ScoreChip? = null,
     /** A matched game's scoreline, linescore and scorers (spoiler setting applied); null shows none. */
-    scoreDetails: ScoreDetails? = null
+    scoreDetails: ScoreDetails? = null,
+    /** The game is over (Just ended, or an ESPN final): the addon's "LIVE NOW" line is left out (C3). */
+    over: Boolean = false
 ) {
     Column(
         modifier = modifier,
@@ -344,8 +348,8 @@ internal fun SportsLiveDetailsPane(
         }
         scoreDetails?.let { SportsLiveScoreDetails(it) }
         val tomorrow = stringResource(R.string.sports_live_tomorrow)
-        val description = remember(item.meta.id, item.meta.description, tomorrow) {
-            item.meta.description?.let {
+        val description = remember(item.meta.id, item.meta.description, tomorrow, over) {
+            item.meta.description?.let { if (over) withoutLiveMarkers(it) else it }?.let {
                 SportsLiveLocalTime.localizeUtcStamps(
                     text = it,
                     nowMs = System.currentTimeMillis(),
@@ -516,6 +520,12 @@ internal fun SportsLivePaneButton(
         content = content
     )
 }
+
+private val LIVE_MARKER_LINE = Regex("""^\W*live(\s+now)?\W*$""", RegexOption.IGNORE_CASE)
+
+/** [description] without the addon's own "LIVE" / "LIVE NOW" lines: for a game that is over (C3). */
+internal fun withoutLiveMarkers(description: String): String =
+    description.lines().filterNot { LIVE_MARKER_LINE.matches(it.trim()) }.joinToString("\n").trim()
 
 /** The gold star of a followed team's game (cards, the player's live games panel). */
 internal val FOLLOWED_STAR_COLOR = Color(0xFFFFC107)

@@ -53,8 +53,9 @@ data class ScoreCard(
  *   device time zone.
  * - A card with no start (chiefly a channel's "[A vs B]") is matched on ESPN's days, US Eastern: today
  *   and yesterday, whatever the device's zone. One meeting of the pair is the match; when there are
- *   more (a series, a home-and-home), only the one live game, or else the one scheduled for today, is,
- *   so yesterday's final never lands on tonight's card. See [undated].
+ *   more (a series, a home-and-home, a back-to-back), only the one live game, or else the one
+ *   scheduled for today, or else today's lone final, is, so yesterday's final never lands on
+ *   tonight's card. See [undated].
  * - Best score wins; two different events tied for the best score give no match (ambiguous).
  * A dated card's match is cached per card per day, so a later poll finds the event by id. A miss
  * returns null and is not cached, so the next refresh retries.
@@ -107,7 +108,9 @@ class ScoreMatcher(
     /**
      * A card with no start, on ESPN's (US Eastern) [today] and, with [previousDayFallback], yesterday:
      * the pair's only meeting there; with more than one, the one live, else the one scheduled for
-     * [today]; anything else (two live, two scheduled, only finals) gives none.
+     * [today], else the one final of [today] (an NBA back-to-back: tonight's game over, last night's
+     * final never lands on the card, I6); anything else (two live, two scheduled, finals of
+     * yesterday only, two today) gives none.
      */
     private fun undated(home: Side, away: Side, events: List<ScoreSnapshot>, today: LocalDate): ScoreSnapshot? {
         val first = if (previousDayFallback) today.minusDays(1) else today
@@ -121,9 +124,9 @@ class ScoreMatcher(
         val pick = if (live.isNotEmpty()) {
             live.singleOrNull()
         } else {
-            candidates.singleOrNull { event ->
-                event.state == ScoreState.PRE && Instant.ofEpochMilli(event.startMs!!).atZone(EASTERN).toLocalDate() == today
-            }
+            val onToday = candidates.filter { Instant.ofEpochMilli(it.startMs!!).atZone(EASTERN).toLocalDate() == today }
+            onToday.singleOrNull { it.state == ScoreState.PRE }
+                ?: onToday.singleOrNull()?.takeIf { it.state == ScoreState.POST }
         }
         if (pick == null && BuildConfig.DEBUG) Log.d(TAG, "ambiguous: ${candidates.size} meetings for ${home.base} / ${away.base}")
         return pick?.takeUnless { doubleHeader(home, away, it, events) }

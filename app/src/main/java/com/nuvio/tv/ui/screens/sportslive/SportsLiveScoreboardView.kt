@@ -1,6 +1,8 @@
 package com.nuvio.tv.ui.screens.sportslive
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,6 +32,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -40,8 +44,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Border
+import androidx.tv.material3.ClickableSurfaceDefaults
+import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
 import com.nuvio.tv.R
@@ -52,7 +59,6 @@ import com.nuvio.tv.core.sportslive.scores.ScoreChip
 import com.nuvio.tv.core.sportslive.scores.ScoreDetails
 import com.nuvio.tv.core.sportslive.scores.ScoreDetailsBuilder
 import com.nuvio.tv.ui.components.LightweightCard
-import com.nuvio.tv.ui.components.SourceStatusFilterChip
 import com.nuvio.tv.ui.theme.NuvioTheme
 
 /** The situation line's words from string resources. */
@@ -74,28 +80,67 @@ internal fun rememberGameSituationStrings(): GameSituationStrings {
     }
 }
 
-/** Cards · Scoreboard · Timeline: OK picks a layout (focus alone does not, unlike the tabs). */
+/**
+ * Cards | Scoreboard | Timeline (C2): a compact segmented control at the start of the filter row, its
+ * own focus stop. OK picks a layout (focus alone does not, unlike the tabs). Entering it lands on the
+ * selected segment ([selectedFocusRequester]); [segmentModifier] carries the explicit neighbours
+ * (Up the tabs, Down the content), [lastSegmentModifier] the last segment's Right (the filter chips).
+ */
+@OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 internal fun SportsLiveLayoutSwitch(
     layouts: List<SportsLiveLayout>,
     selected: SportsLiveLayout,
     onSelect: (SportsLiveLayout) -> Unit,
-    chipModifier: Modifier = Modifier
+    selectedFocusRequester: FocusRequester,
+    modifier: Modifier = Modifier,
+    segmentModifier: Modifier = Modifier,
+    lastSegmentModifier: Modifier = Modifier
 ) {
-    layouts.forEach { layout ->
-        SourceStatusFilterChip(
-            name = stringResource(
-                when (layout) {
-                    SportsLiveLayout.CARDS -> R.string.sports_live_layout_cards
-                    SportsLiveLayout.SCOREBOARD -> R.string.sports_live_layout_scoreboard
-                    SportsLiveLayout.TIMELINE -> R.string.sports_live_layout_timeline
-                }
-            ),
-            isSelected = layout == selected,
-            outlined = true,
-            onClick = { onSelect(layout) },
-            modifier = chipModifier
-        )
+    val outer = RoundedCornerShape(20.dp)
+    val inner = RoundedCornerShape(16.dp)
+    Row(
+        modifier = modifier
+            .focusProperties { onEnter = { selectedFocusRequester.requestFocus() } }
+            .focusGroup()
+            .border(NuvioTheme.spacing.hairline, NuvioTheme.colors.TextTertiary, outer)
+            .padding(NuvioTheme.spacing.xxs),
+        horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xxs),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        layouts.forEachIndexed { index, layout ->
+            val isSelected = layout == selected
+            Surface(
+                onClick = { onSelect(layout) },
+                modifier = segmentModifier
+                    .then(if (index == layouts.lastIndex) lastSegmentModifier else Modifier)
+                    .then(if (isSelected) Modifier.focusRequester(selectedFocusRequester) else Modifier),
+                colors = ClickableSurfaceDefaults.colors(
+                    containerColor = if (isSelected) NuvioTheme.colors.Secondary else Color.Transparent,
+                    contentColor = if (isSelected) NuvioTheme.colors.OnSecondary else NuvioTheme.colors.TextSecondary,
+                    focusedContainerColor = NuvioTheme.colors.Secondary,
+                    focusedContentColor = NuvioTheme.colors.OnSecondary
+                ),
+                border = ClickableSurfaceDefaults.border(
+                    focusedBorder = Border(border = NuvioTheme.focusRing.border(NuvioTheme.spacing.xxs), shape = inner)
+                ),
+                shape = ClickableSurfaceDefaults.shape(inner),
+                scale = ClickableSurfaceDefaults.scale(focusedScale = 1f)
+            ) {
+                Text(
+                    text = stringResource(
+                        when (layout) {
+                            SportsLiveLayout.CARDS -> R.string.sports_live_layout_cards
+                            SportsLiveLayout.SCOREBOARD -> R.string.sports_live_layout_scoreboard
+                            SportsLiveLayout.TIMELINE -> R.string.sports_live_layout_timeline
+                        }
+                    ),
+                    style = MaterialTheme.typography.labelLarge,
+                    maxLines = 1,
+                    modifier = Modifier.padding(horizontal = NuvioTheme.spacing.md, vertical = NuvioTheme.spacing.xs)
+                )
+            }
+        }
     }
 }
 

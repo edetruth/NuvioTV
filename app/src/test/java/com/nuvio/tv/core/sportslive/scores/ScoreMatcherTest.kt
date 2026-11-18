@@ -168,9 +168,9 @@ class ScoreMatcherTest {
             // 20:00 Eastern: tonight's game is live.
             val live = meeting("today", "2026-11-17T00:10:00Z", ScoreState.IN)
             assertEquals("$zone", "today", undated(zone, listOf(yesterdayFinal, live), now = "2026-11-17T01:00:00Z"))
-            // 23:00 Eastern: both are finals, so neither can be told for tonight's: no score.
+            // 23:00 Eastern: both are finals; tonight's is today's lone final, never yesterday's (I6).
             val tonightFinal = meeting("today", "2026-11-17T00:10:00Z", ScoreState.POST)
-            assertNull("$zone", undated(zone, listOf(yesterdayFinal, tonightFinal), now = "2026-11-17T04:00:00Z"))
+            assertEquals("$zone", "today", undated(zone, listOf(yesterdayFinal, tonightFinal), now = "2026-11-17T04:00:00Z"))
             // Two live meetings (a doubleheader) are ambiguous too.
             val other = meeting("other", "2026-11-16T17:05:00Z", ScoreState.IN)
             assertNull("$zone", undated(zone, listOf(other, live), now = "2026-11-17T01:00:00Z"))
@@ -205,6 +205,44 @@ class ScoreMatcherTest {
             // Two Eastern days back is out of reach.
             assertNull("$zone", undated(zone, listOf(yesterdayFinal), "2026-11-18T12:00:00Z", matcher))
         }
+    }
+
+    // I6, real feeds: Minnesota and Portland met on 2026-11-16 and again on 2026-11-17 (ET), both finals
+    // by 23:00 ET; the addon's card had no start, so the two finals tied and the card kept its LIVE pill.
+    private val minPor = EspnFixtures.events("espn_nba_min_por_20261116.json", EspnLeagueMap.NBA) +
+        EspnFixtures.events("espn_nba_min_por_20261117.json", EspnLeagueMap.NBA)
+
+    @Test
+    fun `an undated back-to-back card takes tonight's final, not last night's (I6)`() {
+        for (zone in zones) {
+            val m = ScoreMatcher(zone = { zone })
+            val card = ScoreCard("min-por", SportsLiveTeams.parse("Minnesota Timberwolves vs Portland Trail Blazers")!!, null, hasTimeOfDay = false)
+            // 23:30 ET on the 17th.
+            val event = m.match(card, minPor, ms("2026-11-18T04:30:00Z"))
+            assertEquals("$zone", "401910003", event?.eventId)
+            assertEquals(106, event?.home?.score)
+            assertEquals(105, event?.away?.score)
+            assertEquals(true, ScoreMatcher.firstIsHome("Minnesota Timberwolves", "Portland Trail Blazers", event!!))
+        }
+    }
+
+    @Test
+    fun `two cities alone still never match, even in a back-to-back (I6)`() {
+        val card = ScoreCard("min-por-cities", TeamPair("Minnesota", "Portland"), ms("2026-11-18T01:00:00Z"), hasTimeOfDay = true)
+        assertNull(ScoreMatcher(zone = { ZoneOffset.UTC }).match(card, minPor, ms("2026-11-18T04:30:00Z")))
+    }
+
+    @Test
+    fun `Southern Methodist is SMU on the strict college match (I6)`() {
+        val cbb = EspnFixtures.events("espn_cbb_smu_20261117.json", EspnLeagueMap.COLLEGE_BASKETBALL)
+        val strict = ScoreMatcher(zone = { ZoneOffset.UTC }, minScore = ScoreMatcher.BOTH_STRONG)
+        val card = ScoreCard("smu-oru", SportsLiveTeams.parse("Southern Methodist vs Oral Roberts")!!, null, hasTimeOfDay = false)
+        val event = strict.match(card, cbb, ms("2026-11-18T04:30:00Z"))
+        assertEquals("401918970", event?.eventId)
+        assertEquals(true, ScoreMatcher.firstIsHome("Southern Methodist", "Oral Roberts", event!!))
+        // "Southern" alone is no school.
+        val loose = ScoreCard("s-oru", TeamPair("Southern", "Oral Roberts"), null, hasTimeOfDay = false)
+        assertNull(strict.match(loose, cbb, ms("2026-11-18T04:30:00Z")))
     }
 
     @Test
