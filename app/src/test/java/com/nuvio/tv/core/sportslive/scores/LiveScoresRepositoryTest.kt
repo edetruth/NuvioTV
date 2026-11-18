@@ -117,15 +117,72 @@ class LiveScoresRepositoryTest {
 
     // --- Scores status (#70) ---
 
+    private fun failure(health: EspnFeedHealth, feed: ScoreFeed) =
+        health.recordFailure(EspnFeedKey.scoreboard(feed.league, feed.date), FeedFailureKind.NETWORK)
+
     @Test
-    fun `retry now fetches each scoreboard in use once, at its last day`() = runTest {
-        val base = ms("2026-11-16T12:00:00Z")
+    fun `retry now fetches today's and yesterday's scoreboards in use, never a past day`() = runTest {
+        // Noon US Eastern on 2026-11-16.
+        val base = ms("2026-11-16T17:00:00Z")
         val health = EspnFeedHealth { base + testScheduler.currentTime }
-        health.recordFailure(EspnFeedKey.scoreboard(EspnLeagueMap.NBA), FeedFailureKind.NETWORK, date = nba15.date)
-        val repo = repository("2026-11-16T12:00:00Z", health = health)
+        val today = ScoreFeed(EspnLeagueMap.NBA, LocalDate.of(2026, 11, 16))
+        val past = ScoreFeed(EspnLeagueMap.NBA, LocalDate.of(2026, 11, 10))
+        listOf(today, nba15, past).forEach { failure(health, it) }
+        val repo = repository("2026-11-16T17:00:00Z", health = health)
+        advanceTimeBy(31_000L)
         repo.retryNow()
         runCurrent()
-        assertEquals(listOf(nba15), provider.calls)
+        assertEquals(setOf(today, nba15), provider.calls.toSet())
+        assertEquals(2, provider.calls.size)
+    }
+
+    @Test
+    fun `retry now runs at most once per 30 s`() = runTest {
+        val base = ms("2026-11-16T12:00:00Z")
+        val health = EspnFeedHealth { base + testScheduler.currentTime }
+        failure(health, nba15)
+        val repo = repository("2026-11-16T12:00:00Z", health = health)
+        advanceTimeBy(31_000L)
+        repo.retryNow(); runCurrent()
+        assertEquals(1, provider.calls.size)
+        advanceTimeBy(14_000L)
+        repo.retryNow(); runCurrent()
+        assertEquals(1, provider.calls.size)
+        advanceTimeBy(17_000L)
+        repo.retryNow(); runCurrent()
+        assertEquals(2, provider.calls.size)
+    }
+
+    @Test
+    fun `a failed retry keeps the feed's backoff, counts once, and Retry-After is respected`() = runTest {
+        val base = ms("2026-11-15T19:00:00Z")
+        val health = EspnFeedHealth { base + testScheduler.currentTime }
+        provider.respond = { feed -> failure(health, feed); ScoreboardResult.FAILED }
+        val repo = repository("2026-11-15T19:00:00Z", health = health)
+        collect(repo)
+        repo.track(SECTION, listOf(pacersCard))
+        runCurrent() // 0 s: failure 1, next at 30 s
+        // Asked for within 30 s: Retry now skips it.
+        advanceTimeBy(10_000L); repo.retryNow(); runCurrent()
+        assertEquals(1, provider.calls.size)
+        advanceTimeBy(20_000L); runCurrent() // 30 s: failure 2, next at 90 s
+        assertEquals(2, provider.calls.size)
+        advanceTimeBy(30_000L); repo.retryNow(); runCurrent() // 60 s: the retry fails
+        assertEquals(3, provider.calls.size)
+        val key = EspnFeedKey.scoreboard(nba15.league, nba15.date)
+        assertEquals(3, health.feeds.value.getValue(key).consecutiveFailures)
+        // Not counted again by the poller: its next fetch stays at 90 s (not 60 s + 2 min).
+        advanceTimeBy(29_000L); runCurrent()
+        assertEquals(3, provider.calls.size)
+        advanceTimeBy(1_000L); runCurrent()
+        assertEquals(4, provider.calls.size)
+
+        // ESPN asks to wait 10 minutes: Retry now leaves the feed alone meanwhile.
+        provider.respond = { feed -> failure(health, feed); ScoreboardResult.FAILED.copy(retryAfterMs = 10 * 60_000L) }
+        advanceTimeBy(2 * 60_000L); runCurrent() // 3:30: failure with Retry-After
+        assertEquals(5, provider.calls.size)
+        advanceTimeBy(60_000L); repo.retryNow(); runCurrent()
+        assertEquals(5, provider.calls.size)
     }
 
     @Test
@@ -133,7 +190,7 @@ class LiveScoresRepositoryTest {
         settings.value = ScoreSettings(ScoresMode.OFF)
         val base = ms("2026-11-16T12:00:00Z")
         val health = EspnFeedHealth { base + testScheduler.currentTime }
-        health.recordFailure(EspnFeedKey.scoreboard(EspnLeagueMap.NBA), FeedFailureKind.NETWORK, date = nba15.date)
+        failure(health, nba15)
         val repo = repository("2026-11-16T12:00:00Z", health = health)
         collect(repo)
         repo.track(SECTION, listOf(pacersCard))
@@ -148,7 +205,7 @@ class LiveScoresRepositoryTest {
         val health = EspnFeedHealth { base + testScheduler.currentTime }
         // The provider records each failure as the ESPN provider does.
         provider.respond = { feed ->
-            health.recordFailure(EspnFeedKey.scoreboard(feed.league), FeedFailureKind.NETWORK, date = feed.date)
+            failure(health, feed)
             ScoreboardResult.FAILED
         }
         var toasts = 0
@@ -169,7 +226,7 @@ class LiveScoresRepositoryTest {
         val base = ms("2026-11-15T19:00:00Z")
         val health = EspnFeedHealth { base + testScheduler.currentTime }
         provider.respond = { feed ->
-            health.recordFailure(EspnFeedKey.scoreboard(feed.league), FeedFailureKind.NETWORK, date = feed.date)
+            failure(health, feed)
             ScoreboardResult.FAILED
         }
         var toasts = 0

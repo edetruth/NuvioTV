@@ -29,7 +29,11 @@ import com.nuvio.tv.ui.components.NuvioDialog
 import com.nuvio.tv.ui.screens.sportslive.myLeagueLabel
 import com.nuvio.tv.ui.screens.sportslive.mySportLabel
 import com.nuvio.tv.ui.theme.NuvioTheme
+import java.text.SimpleDateFormat
+import java.time.Instant
+import java.time.ZoneId
 import java.util.Date
+import java.util.Locale
 
 /** The Scores status row's value (#70): its string and, for a failure, when it began (shown as a time). */
 internal data class ScoresStatusLabel(@StringRes val res: Int, val sinceMs: Long? = null) {
@@ -50,6 +54,10 @@ internal data class ScoresStatusLabel(@StringRes val res: Int, val sinceMs: Long
             FeedFailureKind.TIMEOUT -> R.string.sports_live_scores_reason_timeout
             FeedFailureKind.HTTP -> R.string.sports_live_scores_reason_http
         }
+
+        /** True when [sinceMs] fell on another day than [nowMs] in [zone]: the time then shows its weekday. */
+        fun showsDay(sinceMs: Long, nowMs: Long, zone: ZoneId): Boolean =
+            Instant.ofEpochMilli(sinceMs).atZone(zone).toLocalDate() != Instant.ofEpochMilli(nowMs).atZone(zone).toLocalDate()
     }
 }
 
@@ -59,9 +67,13 @@ internal fun scoresStatusText(status: ScoresStatus): String {
     return label.sinceMs?.let { stringResource(label.res, clockTime(it)) } ?: stringResource(label.res)
 }
 
-/** [ms] as the device writes a time of day (12 or 24 hour). */
+/** [ms] as the device writes a time of day (12 or 24 hour), after its weekday when not today ("Tue 11:50 PM"). */
 @Composable
-private fun clockTime(ms: Long): String = DateFormat.getTimeFormat(LocalContext.current).format(Date(ms))
+private fun clockTime(ms: Long): String {
+    val time = DateFormat.getTimeFormat(LocalContext.current).format(Date(ms))
+    if (!ScoresStatusLabel.showsDay(ms, System.currentTimeMillis(), ZoneId.systemDefault())) return time
+    return SimpleDateFormat("EEE", Locale.getDefault()).format(Date(ms)) + " " + time
+}
 
 /** The failing feeds with their reasons, and Retry now (not while Scores is Off). */
 @Composable
@@ -78,8 +90,9 @@ internal fun ScoresStatusDialog(status: ScoresStatus, onRetry: () -> Unit, onDis
                 ScoresStatus.Off -> listOf(stringResource(R.string.sports_live_scores_status_off_detail))
                 ScoresStatus.NotChecked -> listOf(stringResource(R.string.sports_live_scores_status_not_checked_detail))
                 ScoresStatus.Working -> listOf(stringResource(R.string.sports_live_scores_status_all_ok))
-                is ScoresStatus.SomeFailing -> status.failing.map { failingLine(it) }
-                is ScoresStatus.NotResponding -> status.failing.map { failingLine(it) }
+                // One line per league: today's and yesterday's scoreboards fail together.
+                is ScoresStatus.SomeFailing -> status.failing.distinctBy { it.key.family to it.key.league }.map { failingLine(it) }
+                is ScoresStatus.NotResponding -> status.failing.distinctBy { it.key.family to it.key.league }.map { failingLine(it) }
             }
             lines.forEach { line ->
                 Text(text = line, style = MaterialTheme.typography.bodyMedium, color = NuvioTheme.colors.TextSecondary)

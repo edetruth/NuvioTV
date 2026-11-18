@@ -82,7 +82,7 @@ class EspnScoreProvider internal constructor(
     override suspend fun scoreboard(league: EspnLeague, date: LocalDate): ScoreboardResult =
         withContext(Dispatchers.IO) {
             val url = scoreboardUrl(league, date)
-            val key = EspnFeedKey.scoreboard(league)
+            val key = EspnFeedKey.scoreboard(league, date)
             try {
                 val past = date.isBefore(today().minusDays(1))
                 val request = Request.Builder().url(url).apply {
@@ -96,6 +96,8 @@ class EspnScoreProvider internal constructor(
                     }
                 }.build()
                 var call = client.newCall(request).execute()
+                // The stored copy stood in for a failed refetch: it says nothing about ESPN now.
+                var storedStandIn = false
                 // A copy stored while its day was still live (today's or yesterday's scoreboard, games in
                 // progress) is never a final day (#67): the past day is fetched again.
                 val stored = call.cacheResponse
@@ -112,26 +114,29 @@ class EspnScoreProvider internal constructor(
                     } else {
                         fresh?.close()
                         if (storedBody == null) throw IOException("no stored copy")
+                        storedStandIn = true
                         Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(200).message("stored")
                             .body(storedBody.toResponseBody(JSON)).build()
                     }
                 }
                 call.use { response ->
                     val body = response.body?.string()
+                    // Only an answer from ESPN tells its health: an HTTP-cache hit (a past day offline) does not.
+                    val fromNetwork = !storedStandIn && (response.networkResponse != null || response.cacheResponse == null)
                     if (!response.isSuccessful || body == null) {
                         debugLog("${league.path} $date: HTTP ${response.code}")
-                        health.recordFailure(key, FeedFailureKind.HTTP, response.code, date)
+                        if (fromNetwork) health.recordFailure(key, FeedFailureKind.HTTP, response.code)
                         ScoreboardResult.FAILED.copy(retryAfterMs = retryAfterMs(response.header("Retry-After")))
                     } else {
                         val dto = adapter.fromJson(body)
                         val individual = EspnIndividualResults.covers(league)
-                        // Read, but every event lost its competitors: ESPN changed its data, not an empty day.
+                        // Read, but games lost their competitors: ESPN changed its data, not an empty day.
                         if (dto == null || (!individual && EspnFeedHealth.formatChanged(dto))) {
                             debugLog("${league.path} $date: format changed")
-                            health.recordFailure(key, FeedFailureKind.FORMAT, date = date)
+                            if (fromNetwork) health.recordFailure(key, FeedFailureKind.FORMAT)
                             ScoreboardResult.FAILED
                         } else {
-                            health.recordSuccess(key, date)
+                            if (fromNetwork) health.recordSuccess(key)
                             if (individual) ScoreboardResult(EspnIndividualResults.toSnapshots(dto, league, date))
                             else ScoreboardResult(toSnapshots(dto, league))
                         }
@@ -141,7 +146,7 @@ class EspnScoreProvider internal constructor(
                 throw e
             } catch (e: Exception) {
                 debugLog("${league.path} $date: ${e.javaClass.simpleName}")
-                health.recordFailure(key, FeedFailureKind.of(e), date = date)
+                health.recordFailure(key, FeedFailureKind.of(e))
                 ScoreboardResult.FAILED
             }
         }

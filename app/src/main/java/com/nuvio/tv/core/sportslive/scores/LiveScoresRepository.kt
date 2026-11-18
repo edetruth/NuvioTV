@@ -199,6 +199,8 @@ class LiveScoresRepository internal constructor(
     private var activePollerScope: CoroutineScope? = null
     /** The Scores setting as the pollers last saw it; OFF until read. */
     private var scoresMode = ScoresMode.OFF
+    /** When "Retry now" last fetched. */
+    private var lastRetryAt: Long? = null
 
     init {
         logoFile?.let { file ->
@@ -313,13 +315,17 @@ class LiveScoresRepository internal constructor(
         }
     }
 
-    /** [feed]'s request in flight, or a new one: in the repository scope, it outlives a poller restart and is shared. */
-    private fun fetchLocked(feed: ScoreFeed): Deferred<ScoreboardResult> = inFlight.getOrPut(feed) {
+    /**
+     * [feed]'s request in flight, or a new one: in the repository scope, it outlives a poller restart and is
+     * shared. A failed [retry] leaves the feed's failures and backoff as they were: the provider has counted
+     * it once in [health], and the poller keeps its own schedule.
+     */
+    private fun fetchLocked(feed: ScoreFeed, retry: Boolean = false): Deferred<ScoreboardResult> = inFlight.getOrPut(feed) {
         scope.async {
             val result = provider.scoreboard(feed.league, feed.date)
             lock.withLock {
                 inFlight.remove(feed)
-                feeds[feed]?.let { record(it, result) }
+                if (!retry || !result.failed) feeds[feed]?.let { record(it, result) }
                 if (result.failed) checkOutageLocked()
             }
             result
@@ -333,12 +339,25 @@ class LiveScoresRepository internal constructor(
     }
 
     /**
-     * Settings → Scores status → Retry now (#70): one immediate fetch of each scoreboard in use (at its last
-     * requested day), shared with any request in flight; nothing while Scores is Off.
+     * Settings → Scores status → Retry now (#70): one immediate fetch of each live scoreboard in use (today's
+     * and yesterday's, never a past day), shared with any request in flight. At most one per
+     * [RETRY_MIN_INTERVAL_MS]; a feed asked for within that time, or inside ESPN's Retry-After, is skipped.
+     * Nothing while Scores is Off.
      */
     fun retryNow(): Job = scope.launch {
         if (settings.first().mode == ScoresMode.OFF) return@launch
-        val requests = lock.withLock { health.scoreboardsInUse(now()).distinct().map(::fetchLocked) }
+        val requests = lock.withLock {
+            val at = now()
+            if (lastRetryAt?.let { at - it < RETRY_MIN_INTERVAL_MS } == true) return@withLock emptyList()
+            lastRetryAt = at
+            val lastAsked = health.feeds.value
+            health.scoreboardsInUse(at).distinct().filter { feed ->
+                val asked = lastAsked[EspnFeedKey.scoreboard(feed.league, feed.date)]?.lastAttemptAt
+                val state = feeds[feed]
+                val retryAfter = state?.retryAfterMs?.let { wait -> state.lastAttemptAt?.let { at - it < wait } } == true
+                !retryAfter && (asked == null || at - asked >= RETRY_MIN_INTERVAL_MS)
+            }.map { fetchLocked(it, retry = true) }
+        }
         if (requests.isEmpty()) return@launch
         requests.awaitAll()
         lock.withLock { activePollerScope?.let { refreshLocked(it, restartStopped = false) } }
@@ -670,6 +689,8 @@ class LiveScoresRepository internal constructor(
         private const val RETAIN_RETIRED_MS = 10 * 60_000L
         private const val LOGO_WRITE_DELAY_MS = 2_000L
         private const val COLLEGE_MAX_MISSES = 2
+        /** "Retry now" at most this often, and never on a feed asked for within this long. */
+        internal const val RETRY_MIN_INTERVAL_MS = 30_000L
         private val SLUG = Regex("""[a-z0-9._-]+""")
         private val EASTERN: ZoneId = ZoneId.of("America/New_York")
     }

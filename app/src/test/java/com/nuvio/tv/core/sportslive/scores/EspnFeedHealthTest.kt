@@ -1,12 +1,15 @@
 package com.nuvio.tv.core.sportslive.scores
 
 import kotlinx.coroutines.test.runTest
+import okhttp3.Cache
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -14,15 +17,18 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
+import java.nio.file.Files
+import java.time.Instant
 import java.time.LocalDate
 
 class EspnFeedHealthTest {
 
-    private var nowMs = 1_000_000L
+    /** 3 PM US Eastern on 2026-11-15: ESPN's today is [day]. */
+    private var nowMs = Instant.parse("2026-11-15T20:00:00Z").toEpochMilli()
     private val health = EspnFeedHealth { nowMs }
-    private val nba = EspnFeedKey.scoreboard(EspnLeagueMap.NBA)
-    private val nfl = EspnFeedKey.scoreboard(EspnLeagueMap.NFL)
     private val day = LocalDate.of(2026, 11, 15)
+    private val nba = EspnFeedKey.scoreboard(EspnLeagueMap.NBA, day)
+    private val nfl = EspnFeedKey.scoreboard(EspnLeagueMap.NFL, day)
 
     private fun feed(key: EspnFeedKey) = health.feeds.value.getValue(key)
 
@@ -30,7 +36,7 @@ class EspnFeedHealthTest {
 
     @Test
     fun `a failure run counts up, keeps when it began, and a success clears it`() {
-        health.recordSuccess(nba, day)
+        health.recordSuccess(nba)
         val okAt = nowMs
         nowMs += 30_000
         health.recordFailure(nba, FeedFailureKind.HTTP, 503)
@@ -44,7 +50,6 @@ class EspnFeedHealthTest {
             assertEquals(FeedFailureKind.TIMEOUT, lastFailure)
             assertNull(lastHttpCode)
             assertEquals(okAt, lastSuccessAt)
-            assertEquals(day, lastDate)
             assertTrue(failing)
         }
         nowMs += 30_000
@@ -65,10 +70,14 @@ class EspnFeedHealthTest {
     }
 
     @Test
-    fun `individual sports and summaries are their own families`() {
-        assertEquals(EspnFeedFamily.INDIVIDUAL, EspnFeedKey.scoreboard(EspnLeagueMap.ATP).family)
+    fun `feeds are keyed by league and day, individual sports and summaries in their own families`() {
+        assertEquals(EspnFeedFamily.INDIVIDUAL, EspnFeedKey.scoreboard(EspnLeagueMap.ATP, day).family)
         assertEquals(EspnFeedFamily.SCOREBOARD, nba.family)
         assertEquals(EspnFeedFamily.SUMMARY, EspnFeedKey.SUMMARY.family)
+        health.recordFailure(nba, FeedFailureKind.NETWORK)
+        health.recordSuccess(EspnFeedKey.scoreboard(EspnLeagueMap.NBA, day.minusDays(1)))
+        assertTrue(feed(nba).failing)
+        assertEquals(2, health.feeds.value.size)
     }
 
     @Test
@@ -80,12 +89,17 @@ class EspnFeedHealthTest {
     }
 
     @Test
-    fun `scoreboards in use are those asked for within 20 minutes, at their last day`() {
-        health.recordFailure(nba, FeedFailureKind.NETWORK, date = day)
+    fun `scoreboards in use are live ones asked for within 20 minutes, never a past day`() {
+        health.recordFailure(nba, FeedFailureKind.NETWORK)
         nowMs += 21 * 60_000L
-        health.recordSuccess(nfl, day.plusDays(1))
+        health.recordSuccess(nfl)
+        health.recordFailure(EspnFeedKey.scoreboard(EspnLeagueMap.NFL, day.minusDays(1)), FeedFailureKind.NETWORK)
+        health.recordFailure(EspnFeedKey.scoreboard(EspnLeagueMap.NFL, day.minusDays(5)), FeedFailureKind.NETWORK)
         health.recordFailure(EspnFeedKey.SUMMARY, FeedFailureKind.NETWORK)
-        assertEquals(listOf(ScoreFeed(EspnLeagueMap.NFL, day.plusDays(1))), health.scoreboardsInUse(nowMs))
+        assertEquals(
+            setOf(ScoreFeed(EspnLeagueMap.NFL, day), ScoreFeed(EspnLeagueMap.NFL, day.minusDays(1))),
+            health.scoreboardsInUse(nowMs).toSet()
+        )
     }
 
     // --- Status ---
@@ -95,8 +109,8 @@ class EspnFeedHealthTest {
     @Test
     fun `status for each state`() {
         assertEquals(ScoresStatus.NotChecked, status())
-        health.recordSuccess(nba, day)
-        health.recordSuccess(nfl, day)
+        health.recordSuccess(nba)
+        health.recordSuccess(nfl)
         assertEquals(ScoresStatus.Working, status())
 
         nowMs += 60_000
@@ -126,6 +140,43 @@ class EspnFeedHealthTest {
         assertEquals(ScoresStatus.Working, status())
     }
 
+    @Test
+    fun `a past day never drives the status`() {
+        health.recordSuccess(EspnFeedKey.scoreboard(EspnLeagueMap.NBA, day.minusDays(5)))
+        assertEquals(ScoresStatus.NotChecked, status())
+        health.recordFailure(nba, FeedFailureKind.NETWORK)
+        assertTrue(status() is ScoresStatus.NotResponding)
+    }
+
+    @Test
+    fun `an offline Results day served from the HTTP cache is not recorded, so it never shows Working`() = runTest {
+        val dir = Files.createTempDirectory("espn-health-cache").toFile()
+        val server = MockWebServer()
+        server.enqueue(
+            MockResponse().setBody(EspnFixtures.json(EspnFixtures.NBA_20261115)).addHeader("Cache-Control", "max-age=60")
+        )
+        server.start()
+        try {
+            val client = OkHttpClient.Builder().cache(Cache(dir, 1024L * 1024)).build()
+            val past = LocalDate.of(2026, 11, 1)
+            val key = EspnFeedKey.scoreboard(EspnLeagueMap.NBA, past)
+            val provider = EspnScoreProvider(
+                client, EspnFixtures.moshi, server.url("/").toString(), today = { LocalDate.of(2026, 11, 16) }, health = health
+            )
+            assertFalse(provider.scoreboard(EspnLeagueMap.NBA, past).failed)
+            val fetchedAt = feed(key).lastAttemptAt
+            server.shutdown()
+            nowMs += 60_000
+            // Offline: the stored past day still reads, but proves nothing about ESPN.
+            assertFalse(provider.scoreboard(EspnLeagueMap.NBA, past).failed)
+            assertEquals(fetchedAt, feed(key).lastAttemptAt)
+            assertEquals(ScoresStatus.NotChecked, status())
+        } finally {
+            runCatching { server.shutdown() }
+            dir.deleteRecursively()
+        }
+    }
+
     // --- One-time toast ---
 
     @Test
@@ -151,11 +202,32 @@ class EspnFeedHealthTest {
         health.recordFailure(nba, FeedFailureKind.NETWORK)
         nowMs += 11 * 60_000L
         health.recordFailure(nba, FeedFailureKind.NETWORK)
-        health.recordSuccess(nfl, day)
+        health.recordSuccess(nfl)
         assertFalse(notice.check(nowMs, ScoresMode.SHOW, inUse = true))
     }
 
     // --- Format change ---
+
+    private val adapter = EspnFixtures.moshi.adapter(EspnScoreboardDto::class.java)
+    private fun dto(json: String) = adapter.fromJson(json)!!
+    private val tbd = EspnFixtures.json(EspnFixtures.NFL_TBD_PLAYOFFS_SAMPLE)
+
+    @Test
+    fun `scheduled TBD playoff games without competitors are not a format change`() {
+        assertFalse(EspnFeedHealth.formatChanged(dto(tbd)))
+    }
+
+    @Test
+    fun `a game in progress or final without competitors is a format change`() {
+        assertTrue(EspnFeedHealth.formatChanged(dto(tbd.replaceFirst("\"state\": \"pre\"", "\"state\": \"post\""))))
+        assertTrue(EspnFeedHealth.formatChanged(dto(tbd.replaceFirst("\"state\": \"pre\"", "\"state\": \"in\""))))
+    }
+
+    @Test
+    fun `every event malformed is a format change, a day without events is not`() {
+        assertTrue(EspnFeedHealth.formatChanged(dto("""{"events":[{"id":"1"},{"id":"2","competitions":[]}]}""")))
+        assertFalse(EspnFeedHealth.formatChanged(dto("""{"events":[]}""")))
+    }
 
     private fun provider(code: Int, body: String) = EspnScoreProvider(
         OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
@@ -169,14 +241,13 @@ class EspnFeedHealthTest {
     )
 
     @Test
-    fun `a scoreboard whose events all lost their competitors is a format change, not an empty day`() = runTest {
+    fun `finals that lost their competitors are recorded as a format change, not an empty day`() = runTest {
         val json = EspnFixtures.json(EspnFixtures.NBA_20261115).replace("\"competitors\"", "\"competitorsRenamed\"")
         val result = provider(200, json).scoreboard(EspnLeagueMap.NBA, day)
         assertTrue(result.failed)
         with(feed(nba)) {
             assertEquals(FeedFailureKind.FORMAT, lastFailure)
             assertEquals(1, consecutiveFailures)
-            assertEquals(day, lastDate)
         }
     }
 

@@ -11,6 +11,10 @@ set -u
 BASE="https://site.api.espn.com/apis/site/v2/sports"
 UA="Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko)"
 PY="${PYTHON:-python}"
+if ! "$PY" -c 'import sys' >/dev/null 2>&1; then
+  echo "espn-check: Python not found (tried '$PY'). Install Python 3 or set PYTHON=/path/to/python." >&2
+  exit 2
+fi
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 

@@ -26,6 +26,8 @@ internal object EspnFixtures {
     const val NFL_LIVE_SITUATION_SAMPLE = "espn_nfl_live_situation_sample.json"
     /** Hand-trimmed SAMPLE (labelled in the file): live MLB `situation`s, off-season when captured. */
     const val MLB_LIVE_SITUATION_SAMPLE = "espn_mlb_live_situation_sample.json"
+    /** Hand-trimmed SAMPLE (labelled in the file): a playoff round of TBD slots, scheduled, without competitors (#70). */
+    const val NFL_TBD_PLAYOFFS_SAMPLE = "espn_nfl_tbd_playoffs_sample.json"
 
     val CAF_QUAL = EspnLeague("soccer", "caf.nations_qual")
     val ENG1 = EspnLeague("soccer", "eng.1")
