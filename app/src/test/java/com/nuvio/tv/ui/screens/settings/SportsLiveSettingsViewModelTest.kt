@@ -1,5 +1,8 @@
 package com.nuvio.tv.ui.screens.settings
 
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import com.nuvio.tv.MainDispatcherRule
 import com.nuvio.tv.TestPreferencesStore
 import com.nuvio.tv.core.profile.ProfileManager
@@ -43,6 +46,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -412,6 +416,50 @@ class SportsLiveSettingsViewModelTest {
         viewModel.setCatalogFilter(tvKey, "genre", "United States")
         advanceUntilIdle()
         assertEquals(CatalogOption("genre", "United States"), prefs.catalogOptions.first()[tvKey])
+    }
+
+    @Test
+    fun `every switch row of the regrouped screen writes its old pref key`() = runTest {
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+        val keys = mapOf(
+            SportsLiveSetting.SHOW_SECTION to "sports_live_show_section",
+            SportsLiveSetting.HOME_ROW to "sports_live_show_home_row",
+            SportsLiveSetting.CATCH_UP_ROW to "sports_live_catch_up_row",
+            SportsLiveSetting.HOVER_PREVIEW to "sports_live_hover_preview",
+            SportsLiveSetting.DATA_SAVER to "sports_live_data_saver",
+            SportsLiveSetting.PICTURE_IN_PICTURE to "sports_live_pip_enabled",
+            SportsLiveSetting.REMIND_MY_TEAMS to "sports_live_remind_my_teams",
+            SportsLiveSetting.SCORE_ALERTS to "sports_live_score_alerts",
+            SportsLiveSetting.FULL_TIME_ALERTS to "sports_live_full_time_alerts"
+        )
+        keys.forEach { (setting, key) ->
+            for (on in listOf(false, true)) {
+                viewModel.setSwitch(setting, on)
+                advanceUntilIdle()
+                assertEquals("$setting → $key", on, prefsStore.value[booleanPreferencesKey(key)])
+            }
+        }
+        // The settings that are not switches write nothing through setSwitch.
+        val before = prefsStore.value
+        (SportsLiveSetting.entries - keys.keys).forEach { viewModel.setSwitch(it, false) }
+        advanceUntilIdle()
+        assertEquals(before, prefsStore.value)
+    }
+
+    @Test
+    fun `the pickers of the regrouped screen write their old pref keys`() = runTest {
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+        viewModel.setScoresMode(ScoresMode.HIDE_UNTIL_FOCUSED)
+        viewModel.setScoreDelaySeconds(30)
+        viewModel.setOpenGame(SportsLiveOpenGame.LET_ME_CHOOSE)
+        advanceUntilIdle()
+        assertNotNull(prefsStore.value[stringPreferencesKey("sports_live_scores_mode")])
+        assertEquals(30, prefsStore.value[intPreferencesKey("sports_live_score_delay_seconds")])
+        assertNotNull(prefsStore.value[stringPreferencesKey("sports_live_open_game")])
+        assertEquals(ScoreSettings(ScoresMode.HIDE_UNTIL_FOCUSED, 30), prefs.scoreSettings.first())
+        assertEquals(SportsLiveOpenGame.LET_ME_CHOOSE, prefs.openGame.first())
     }
 
     private companion object {

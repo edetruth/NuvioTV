@@ -19,6 +19,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
@@ -66,168 +67,53 @@ internal fun SportsLiveSettingsContent(
     val scoresStatus = remember(state.scores.mode, feedHealth, clockMs) {
         ScoresStatus.of(state.scores.mode, feedHealth.values, System.currentTimeMillis())
     }
+    // The first usable row: the first sport of My sports, or the Show switch while the section is off.
+    // The screen opens on it, and focus goes back to it after OK unfollows the last team.
+    val ownFirstRowFocusRequester = remember { FocusRequester() }
+    val firstRowFocusRequester = initialFocusRequester ?: ownFirstRowFocusRequester
     // After OK unfollows a team, focus goes to the row now in its place (the next team, else the
-    // previous one); with no team left, to the nearest enabled switch above the card.
+    // previous one); with no team left, to the first usable row.
     val teamFocusRequesters = remember { mutableMapOf<FollowedTeam, FocusRequester>() }
-    val switchFocusRequester = remember { FocusRequester() }
     var unfollowedIndex by remember { mutableStateOf<Int?>(null) }
     LaunchedEffect(state.followedTeams) {
         val index = unfollowedIndex ?: return@LaunchedEffect
         unfollowedIndex = null
         val next = state.followedTeams.getOrNull(index.coerceAtMost(state.followedTeams.lastIndex))
         withFrameNanos { }
-        runCatching { (next?.let(teamFocusRequesters::get) ?: switchFocusRequester).requestFocus() }
+        runCatching { (next?.let(teamFocusRequesters::get) ?: firstRowFocusRequester).requestFocus() }
     }
+    var moreExpanded by rememberSaveable { mutableStateOf(SPORTS_LIVE_MORE_EXPANDED_BY_DEFAULT) }
+    var streamMemoryReset by remember { mutableStateOf(false) }
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md)
-    ) {
-        item(key = "header") {
-            SettingsDetailHeader(
-                title = stringResource(R.string.settings_sports_live),
-                subtitle = stringResource(R.string.sports_live_setting_show_section_subtitle)
+    // One setting's row(s): switches write through viewModel.setSwitch, pickers through the dialogs below.
+    val settingRows: @Composable (SportsLiveSetting) -> Unit = { setting ->
+        val enabled = setting.isEnabled(state)
+        val switchRow: @Composable (Int, Int, Boolean, Modifier) -> Unit = { title, subtitle, checked, modifier ->
+            SettingsToggleRow(
+                title = stringResource(title),
+                subtitle = stringResource(subtitle),
+                checked = checked,
+                onToggle = { viewModel.setSwitch(setting, !checked) },
+                enabled = enabled,
+                modifier = modifier
             )
         }
-        item(key = "switches") {
-            SettingsGroupCard(modifier = Modifier.fillMaxWidth()) {
-                SettingsToggleRow(
-                    title = stringResource(R.string.sports_live_setting_show_section),
-                    subtitle = null,
-                    checked = state.showSection,
-                    onToggle = { viewModel.setShowSection(!state.showSection) },
-                    modifier = Modifier
-                        .then(if (initialFocusRequester != null) Modifier.focusRequester(initialFocusRequester) else Modifier)
-                        .then(if (state.showSection) Modifier else Modifier.focusRequester(switchFocusRequester))
-                )
-                SettingsToggleRow(
-                    title = stringResource(R.string.sports_live_setting_home_row),
-                    subtitle = null,
-                    checked = state.showHomeRow,
-                    onToggle = { viewModel.setShowHomeRow(!state.showHomeRow) },
-                    enabled = state.showSection
-                )
-                SettingsToggleRow(
-                    title = stringResource(R.string.sports_live_setting_hover_preview),
-                    subtitle = null,
-                    checked = state.hoverPreview && !state.dataSaver,
-                    onToggle = { viewModel.setHoverPreview(!state.hoverPreview) },
-                    enabled = state.showSection && !state.dataSaver,
-                    modifier = if (state.showSection) Modifier.focusRequester(switchFocusRequester) else Modifier
-                )
-                SettingsToggleRow(
-                    title = stringResource(R.string.sports_live_setting_data_saver),
-                    subtitle = stringResource(R.string.sports_live_setting_data_saver_subtitle),
-                    checked = state.dataSaver,
-                    onToggle = { viewModel.setDataSaver(!state.dataSaver) },
-                    enabled = state.showSection
-                )
-                SettingsActionRow(
-                    title = stringResource(R.string.sports_live_setting_open_game),
-                    subtitle = stringResource(R.string.sports_live_setting_open_game_subtitle),
-                    value = openGameLabel(state.openGame),
-                    onClick = { scorePicker = ScorePicker.OPEN_GAME },
-                    enabled = state.showSection
-                )
-                var streamMemoryReset by remember { mutableStateOf(false) }
-                SettingsActionRow(
-                    title = stringResource(R.string.sports_live_setting_reset_stream_memory),
-                    subtitle = stringResource(R.string.sports_live_setting_reset_stream_memory_subtitle),
-                    value = if (streamMemoryReset) stringResource(R.string.sports_live_setting_reset_stream_memory_done) else null,
-                    onClick = {
-                        viewModel.resetStreamMemory()
-                        streamMemoryReset = true
-                    }
-                )
-            }
-        }
-        item(key = "pip") {
-            SportsLivePipSettings(
-                enabled = state.pipEnabled,
-                sectionShown = state.showSection,
-                onToggle = { viewModel.setPipEnabled(!state.pipEnabled) }
-            )
-        }
-        item(key = "scores") {
-            SettingsGroupCard(
-                modifier = Modifier.fillMaxWidth(),
-                title = stringResource(R.string.sports_live_scores_title)
-            ) {
-                SettingsActionRow(
-                    title = stringResource(R.string.sports_live_setting_scores),
-                    subtitle = stringResource(R.string.sports_live_setting_scores_subtitle),
-                    value = scoresModeLabel(state.scores.mode),
-                    onClick = { scorePicker = ScorePicker.MODE },
-                    enabled = state.showSection
-                )
-                SettingsActionRow(
-                    title = stringResource(R.string.sports_live_setting_score_delay),
-                    subtitle = stringResource(R.string.sports_live_setting_score_delay_subtitle),
-                    value = scoreDelayLabel(state.scores.delaySeconds),
-                    onClick = { scorePicker = ScorePicker.DELAY },
-                    enabled = state.showSection && state.scores.mode != ScoresMode.OFF
-                )
-                SettingsActionRow(
-                    title = stringResource(R.string.sports_live_setting_scores_status),
-                    subtitle = stringResource(R.string.sports_live_setting_scores_status_subtitle),
-                    value = scoresStatusText(scoresStatus),
-                    onClick = { scorePicker = ScorePicker.STATUS },
-                    enabled = state.showSection
-                )
-            }
-        }
-        item(key = "alerts") {
-            SettingsGroupCard(
-                modifier = Modifier.fillMaxWidth(),
-                title = stringResource(R.string.sports_live_alerts_title)
-            ) {
-                SettingsToggleRow(
-                    title = stringResource(R.string.sports_live_setting_remind_my_teams),
-                    subtitle = stringResource(R.string.sports_live_setting_remind_my_teams_subtitle),
-                    checked = alerts.remindMyTeams,
-                    onToggle = { viewModel.setRemindMyTeams(!alerts.remindMyTeams) },
-                    enabled = state.showSection
-                )
-                SettingsToggleRow(
-                    title = stringResource(R.string.sports_live_setting_score_alerts),
-                    subtitle = stringResource(R.string.sports_live_setting_score_alerts_subtitle),
-                    checked = alerts.scoreAlerts,
-                    onToggle = { viewModel.setScoreAlerts(!alerts.scoreAlerts) },
-                    enabled = state.showSection && state.scores.mode == ScoresMode.SHOW
-                )
-                SettingsToggleRow(
-                    title = stringResource(R.string.sports_live_setting_full_time_alerts),
-                    subtitle = stringResource(R.string.sports_live_setting_full_time_alerts_subtitle),
-                    checked = alerts.fullTimeAlerts,
-                    onToggle = { viewModel.setFullTimeAlerts(!alerts.fullTimeAlerts) },
-                    enabled = state.showSection && state.scores.mode != ScoresMode.OFF
-                )
-            }
-        }
-        item(key = "my_sports") {
-            MySportsSettings(
+        when (setting) {
+            SportsLiveSetting.MY_SPORTS -> MySportsSettings(
                 mySports = state.mySports,
-                enabled = state.showSection,
+                enabled = enabled,
                 onToggleSport = viewModel::toggleMySport,
                 onToggleLeague = viewModel::toggleMyLeague,
                 onAllSoccerCompetitions = viewModel::allSoccerCompetitions,
+                firstFocusRequester = if (state.showSection) firstRowFocusRequester else null,
                 newSportsHint = newSportsHint,
                 onShown = viewModel::onMySportsShown
             )
-        }
-        item(key = "my_teams") {
-            SettingsGroupCard(
+            SportsLiveSetting.MY_TEAMS -> SettingsGroupCard(
                 modifier = Modifier.fillMaxWidth(),
-                title = stringResource(R.string.sports_live_my_teams_title)
+                title = stringResource(R.string.sports_live_my_teams_title),
+                subtitle = stringResource(R.string.sports_live_my_teams_subtitle)
             ) {
-                SettingsToggleRow(
-                    title = stringResource(R.string.sports_live_setting_catch_up_row),
-                    subtitle = stringResource(R.string.sports_live_setting_catch_up_row_subtitle),
-                    checked = state.catchUpRow,
-                    onToggle = { viewModel.setCatchUpRow(!state.catchUpRow) },
-                    // Scores Off means no score data at all, and the row needs the section's Home row: off with either.
-                    enabled = state.showSection && state.showHomeRow && state.scores.mode != ScoresMode.OFF
-                )
                 if (state.followedTeams.isEmpty()) {
                     Text(
                         text = stringResource(R.string.sports_live_my_teams_empty),
@@ -250,12 +136,103 @@ internal fun SportsLiveSettingsContent(
                     )
                 }
             }
-        }
-        if (state.catalogs.isNotEmpty()) {
-            item(key = "catalogs") {
+            SportsLiveSetting.SCORES -> SettingsActionRow(
+                title = stringResource(R.string.sports_live_setting_scores),
+                subtitle = stringResource(R.string.sports_live_setting_scores_subtitle),
+                value = scoresModeLabel(state.scores.mode),
+                onClick = { scorePicker = ScorePicker.MODE },
+                enabled = enabled
+            )
+            SportsLiveSetting.SCORE_DELAY -> SettingsActionRow(
+                title = stringResource(R.string.sports_live_setting_score_delay),
+                subtitle = stringResource(R.string.sports_live_setting_score_delay_subtitle),
+                value = scoreDelayLabel(state.scores.delaySeconds),
+                onClick = { scorePicker = ScorePicker.DELAY },
+                enabled = enabled
+            )
+            SportsLiveSetting.OPEN_GAME -> SettingsActionRow(
+                title = stringResource(R.string.sports_live_setting_open_game),
+                subtitle = stringResource(R.string.sports_live_setting_open_game_subtitle),
+                value = openGameLabel(state.openGame),
+                onClick = { scorePicker = ScorePicker.OPEN_GAME },
+                enabled = enabled
+            )
+            SportsLiveSetting.PICTURE_IN_PICTURE -> SportsLivePipRows(
+                enabled = state.pipEnabled,
+                rowEnabled = enabled,
+                onToggle = { viewModel.setSwitch(setting, !state.pipEnabled) }
+            )
+            SportsLiveSetting.SHOW_SECTION -> switchRow(
+                R.string.sports_live_setting_show_section,
+                R.string.sports_live_setting_show_section_subtitle,
+                state.showSection,
+                if (state.showSection) Modifier else Modifier.focusRequester(firstRowFocusRequester)
+            )
+            SportsLiveSetting.HOME_ROW -> switchRow(
+                R.string.sports_live_setting_home_row,
+                R.string.sports_live_setting_home_row_subtitle,
+                state.showHomeRow,
+                Modifier
+            )
+            SportsLiveSetting.CATCH_UP_ROW -> switchRow(
+                R.string.sports_live_setting_catch_up_row,
+                R.string.sports_live_setting_catch_up_row_subtitle,
+                state.catchUpRow,
+                Modifier
+            )
+            SportsLiveSetting.HOVER_PREVIEW -> SettingsToggleRow(
+                title = stringResource(R.string.sports_live_setting_hover_preview),
+                subtitle = stringResource(R.string.sports_live_setting_hover_preview_subtitle),
+                checked = state.hoverPreview && !state.dataSaver,
+                onToggle = { viewModel.setSwitch(setting, !state.hoverPreview) },
+                enabled = enabled
+            )
+            SportsLiveSetting.REMIND_MY_TEAMS -> switchRow(
+                R.string.sports_live_setting_remind_my_teams,
+                R.string.sports_live_setting_remind_my_teams_subtitle,
+                alerts.remindMyTeams,
+                Modifier
+            )
+            SportsLiveSetting.SCORE_ALERTS -> switchRow(
+                R.string.sports_live_setting_score_alerts,
+                R.string.sports_live_setting_score_alerts_subtitle,
+                alerts.scoreAlerts,
+                Modifier
+            )
+            SportsLiveSetting.FULL_TIME_ALERTS -> switchRow(
+                R.string.sports_live_setting_full_time_alerts,
+                R.string.sports_live_setting_full_time_alerts_subtitle,
+                alerts.fullTimeAlerts,
+                Modifier
+            )
+            SportsLiveSetting.SCORES_STATUS -> SettingsActionRow(
+                title = stringResource(R.string.sports_live_setting_scores_status),
+                subtitle = stringResource(R.string.sports_live_setting_scores_status_subtitle),
+                value = scoresStatusText(scoresStatus),
+                onClick = { scorePicker = ScorePicker.STATUS },
+                enabled = enabled
+            )
+            SportsLiveSetting.DATA_SAVER -> switchRow(
+                R.string.sports_live_setting_data_saver,
+                R.string.sports_live_setting_data_saver_subtitle,
+                state.dataSaver,
+                Modifier
+            )
+            SportsLiveSetting.RESET_STREAM_MEMORY -> SettingsActionRow(
+                title = stringResource(R.string.sports_live_setting_reset_stream_memory),
+                subtitle = stringResource(R.string.sports_live_setting_reset_stream_memory_subtitle),
+                value = if (streamMemoryReset) stringResource(R.string.sports_live_setting_reset_stream_memory_done) else null,
+                onClick = {
+                    viewModel.resetStreamMemory()
+                    streamMemoryReset = true
+                },
+                enabled = enabled
+            )
+            SportsLiveSetting.CATALOGS -> if (state.catalogs.isNotEmpty()) {
                 SettingsGroupCard(
                     modifier = Modifier.fillMaxWidth(),
-                    title = stringResource(R.string.sports_live_setting_catalogs)
+                    title = stringResource(R.string.sports_live_setting_catalogs),
+                    subtitle = stringResource(R.string.sports_live_setting_catalogs_subtitle)
                 ) {
                     state.catalogs.forEach { catalog ->
                         SettingsActionRow(
@@ -265,7 +242,7 @@ internal fun SportsLiveSettingsContent(
                                 catalog.stats?.let { catalogStats(it, catalog.filterValue) }
                             ).joinToString("\n"),
                             onClick = { viewModel.cycleOverride(catalog.key) },
-                            enabled = state.showSection
+                            enabled = enabled
                         )
                         if (catalog.filterExtra != null) {
                             SettingsActionRow(
@@ -275,11 +252,52 @@ internal fun SportsLiveSettingsContent(
                                 ),
                                 subtitle = null,
                                 onClick = { filterKey = catalog.key },
-                                enabled = state.showSection
+                                enabled = enabled
                             )
                         }
                     }
                 }
+            }
+        }
+    }
+
+    // Section headers are plain text (never focused); rows run top to bottom; More is one focusable row.
+    // Rows keep their keys while values change, so focus stays on the row that changed.
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md)
+    ) {
+        item(key = "header") {
+            SettingsDetailHeader(
+                title = stringResource(R.string.settings_sports_live),
+                subtitle = stringResource(R.string.sports_live_settings_subtitle)
+            )
+        }
+        sportsLiveSettingsLayout().forEach { (section, settings) ->
+            item(key = "section_${section.name}") {
+                SportsLiveSectionHeader(sectionTitle(section))
+            }
+            if (section == SportsLiveSettingsSection.MORE) {
+                item(key = "more_toggle") {
+                    SettingsActionRow(
+                        title = stringResource(R.string.sports_live_section_more_row),
+                        subtitle = stringResource(R.string.sports_live_section_more_subtitle),
+                        onClick = { moreExpanded = !moreExpanded },
+                        trailingIcon = if (moreExpanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown
+                    )
+                }
+                if (!moreExpanded) return@forEach
+            }
+            val shared = settings.filterNot { it.ownCard }
+            if (shared.isNotEmpty()) {
+                item(key = "card_${section.name}") {
+                    SettingsGroupCard(modifier = Modifier.fillMaxWidth()) {
+                        shared.forEach { settingRows(it) }
+                    }
+                }
+            }
+            settings.filter { it.ownCard }.forEach { setting ->
+                item(key = "card_${setting.name}") { settingRows(setting) }
             }
         }
     }
@@ -486,10 +504,10 @@ private fun catalogStats(stats: CatalogStats, filterValue: String?): String {
 /**
  * Picture-in-picture, which some TVs (onn boxes among them) lack or hide: whether this device
  * supports it, our own switch (Home only goes picture-in-picture with it on), and the system's
- * per-app setting when the device has a screen for it.
+ * per-app setting when the device has a screen for it. Rows of the Playing card.
  */
 @Composable
-private fun SportsLivePipSettings(enabled: Boolean, sectionShown: Boolean, onToggle: () -> Unit) {
+private fun SportsLivePipRows(enabled: Boolean, rowEnabled: Boolean, onToggle: () -> Unit) {
     val context = LocalContext.current
     val supported = remember(context) {
         sportsLivePipSupported(
@@ -498,31 +516,53 @@ private fun SportsLivePipSettings(enabled: Boolean, sectionShown: Boolean, onTog
         )
     }
     val systemSetting = remember(context) { pipSystemSettingIntent(context) }
-    SettingsGroupCard(modifier = Modifier.fillMaxWidth()) {
-        SettingsToggleRow(
-            title = stringResource(R.string.sports_live_setting_pip),
-            subtitle = stringResource(R.string.sports_live_setting_pip_subtitle),
-            checked = enabled && supported,
-            onToggle = onToggle,
-            enabled = sectionShown && supported
+    SettingsToggleRow(
+        title = stringResource(R.string.sports_live_setting_pip),
+        subtitle = stringResource(R.string.sports_live_setting_pip_subtitle),
+        checked = enabled && supported,
+        onToggle = onToggle,
+        enabled = rowEnabled && supported
+    )
+    Text(
+        text = stringResource(
+            if (supported) R.string.sports_live_setting_pip_supported else R.string.sports_live_setting_pip_unsupported
+        ),
+        style = MaterialTheme.typography.bodyMedium,
+        color = NuvioTheme.colors.TextSecondary,
+        modifier = Modifier.padding(NuvioTheme.spacing.sm)
+    )
+    if (supported && systemSetting != null) {
+        SettingsActionRow(
+            title = stringResource(R.string.sports_live_setting_pip_system),
+            subtitle = stringResource(R.string.sports_live_setting_pip_system_subtitle),
+            onClick = { runCatching { context.startActivity(systemSetting) } }
         )
-        Text(
-            text = stringResource(
-                if (supported) R.string.sports_live_setting_pip_supported else R.string.sports_live_setting_pip_unsupported
-            ),
-            style = MaterialTheme.typography.bodyMedium,
-            color = NuvioTheme.colors.TextSecondary,
-            modifier = Modifier.padding(NuvioTheme.spacing.sm)
-        )
-        if (supported && systemSetting != null) {
-            SettingsActionRow(
-                title = stringResource(R.string.sports_live_setting_pip_system),
-                subtitle = null,
-                onClick = { runCatching { context.startActivity(systemSetting) } }
-            )
-        }
     }
 }
+
+/** A section title (#72): plain text, so the D-pad passes over it. */
+@Composable
+private fun SportsLiveSectionHeader(title: String) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.titleMedium,
+        color = NuvioTheme.colors.TextPrimary,
+        modifier = Modifier.padding(top = NuvioTheme.spacing.sm)
+    )
+}
+
+@Composable
+private fun sectionTitle(section: SportsLiveSettingsSection): String = stringResource(
+    when (section) {
+        SportsLiveSettingsSection.WHAT_I_FOLLOW -> R.string.sports_live_section_what_i_follow
+        SportsLiveSettingsSection.SCORES_AND_SPOILERS -> R.string.sports_live_section_scores_and_spoilers
+        SportsLiveSettingsSection.PLAYING -> R.string.sports_live_section_playing
+        SportsLiveSettingsSection.HOME_AND_ROWS -> R.string.sports_live_section_home_and_rows
+        SportsLiveSettingsSection.ALERTS -> R.string.sports_live_alerts_title
+        SportsLiveSettingsSection.STATUS -> R.string.sports_live_section_status
+        SportsLiveSettingsSection.MORE -> R.string.sports_live_section_more
+    }
+)
 
 /** The system's picture-in-picture setting (this app's page when it has one); null when nothing handles it. */
 private fun pipSystemSettingIntent(context: Context): Intent? {

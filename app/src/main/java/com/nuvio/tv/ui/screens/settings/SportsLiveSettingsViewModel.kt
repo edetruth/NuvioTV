@@ -143,6 +143,25 @@ class SportsLiveSettingsViewModel @Inject constructor(
         SportsLiveSettingsUiState(showSection, showHomeRow, hoverPreview, dataSaver, pipEnabled, catalogs, followedTeams, scores, mySports, openGame, catchUpRow)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SportsLiveSettingsUiState())
 
+    /** A switch row of the screen (#72) set to [on], through the same setter (and pref key) as before. */
+    internal fun setSwitch(setting: SportsLiveSetting, on: Boolean) {
+        when (setting) {
+            SportsLiveSetting.SHOW_SECTION -> setShowSection(on)
+            SportsLiveSetting.HOME_ROW -> setShowHomeRow(on)
+            SportsLiveSetting.CATCH_UP_ROW -> setCatchUpRow(on)
+            SportsLiveSetting.HOVER_PREVIEW -> setHoverPreview(on)
+            SportsLiveSetting.DATA_SAVER -> setDataSaver(on)
+            SportsLiveSetting.PICTURE_IN_PICTURE -> setPipEnabled(on)
+            SportsLiveSetting.REMIND_MY_TEAMS -> setRemindMyTeams(on)
+            SportsLiveSetting.SCORE_ALERTS -> setScoreAlerts(on)
+            SportsLiveSetting.FULL_TIME_ALERTS -> setFullTimeAlerts(on)
+            // Not switches: pickers, lists and actions with their own calls.
+            SportsLiveSetting.MY_SPORTS, SportsLiveSetting.MY_TEAMS, SportsLiveSetting.SCORES,
+            SportsLiveSetting.SCORE_DELAY, SportsLiveSetting.OPEN_GAME, SportsLiveSetting.SCORES_STATUS,
+            SportsLiveSetting.RESET_STREAM_MEMORY, SportsLiveSetting.CATALOGS -> Unit
+        }
+    }
+
     fun setShowSection(show: Boolean) {
         viewModelScope.launch { prefs.setShowSection(show) }
     }
