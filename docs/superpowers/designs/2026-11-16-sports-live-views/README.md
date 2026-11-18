@@ -23,7 +23,7 @@ Started as three "beyond cards" views (approved: "I love the designs"). This fol
 | `ReplayJumps.dc.html` | Quarter jumps in replays | **Deferred** experiment (#64, last) |
 | `Components.dc.html` | Component sheet | reference; every new board links it |
 
-## V2 proposal (pending approval)
+## V2 (approved 2026-11-18, building)
 
 From the 1080p design review of 2026-11-18 (§4 one view per tab, §5 top 10). Nothing here is built; the boards above stay the record of what is.
 
