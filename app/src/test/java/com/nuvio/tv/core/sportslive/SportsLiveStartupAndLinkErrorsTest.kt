@@ -70,8 +70,78 @@ class SportsLiveStartupAndLinkErrorsTest {
     fun `the start-up limits`() {
         assertEquals(15_000L, SportsLiveStartupTimeout.limitMs(requestFailed = false))
         assertEquals(8_000L, SportsLiveStartupTimeout.limitMs(requestFailed = true))
-        assertFalse(SportsLiveStartupTimeout.isExpired(7_999, requestFailed = true))
-        assertTrue(SportsLiveStartupTimeout.isExpired(8_000, requestFailed = true))
+        assertEquals(10_000L, SportsLiveStartupTimeout.noProgressLimitMs(requestFailed = false))
+        assertEquals(30_000L, SportsLiveStartupTimeout.hardCapMs())
+    }
+
+    // --- Progress-aware start-up (#158) ---
+
+    /** Ticks [watch] every 500 ms until it expires, feeding [progressAt]; the elapsed time when it did. */
+    private fun expiresAt(
+        watch: SportsLiveStartupTimeout.Watch = SportsLiveStartupTimeout.Watch(SportsLiveStartupTimeout.Progress(0, 0)),
+        requestFailed: (Long) -> Boolean = { false },
+        progressAt: (Long) -> SportsLiveStartupTimeout.Progress
+    ): Long {
+        var t = 0L
+        while (t < 120_000L) {
+            t += 500
+            if (watch.advance(500, progressAt(t), requestFailed(t))) return t
+        }
+        return -1
+    }
+
+    private fun loaded(bytes: Long, bufferedMs: Long = 0) = SportsLiveStartupTimeout.Progress(bytes, bufferedMs)
+
+    @Test
+    fun `a link that keeps loading is not cut off at 15 s but at the 30 s hard cap`() {
+        assertEquals(30_000L, expiresAt { t -> loaded(bytes = t * 100) })
+    }
+
+    @Test
+    fun `a link that stops loading is given up 10 s after its last progress`() {
+        assertEquals(22_000L, expiresAt { t -> loaded(bytes = minOf(t, 12_000L) * 100) })
+    }
+
+    @Test
+    fun `a link is never given up before 15 s, as in live 18`() {
+        // Progress stopped at 3 s: 10 s without progress at 13 s, but the old 15 s still holds.
+        assertEquals(15_000L, expiresAt { t -> loaded(bytes = minOf(t, 3_000L) * 100) })
+    }
+
+    @Test
+    fun `a link that never loads a byte is given up at 15 s`() {
+        assertEquals(15_000L, expiresAt { loaded(bytes = 0) })
+    }
+
+    @Test
+    fun `playlist reloads alone are not progress`() {
+        // About 2 KB every 2 s: a live playlist refresh with no segment arriving.
+        assertEquals(15_000L, expiresAt { t -> loaded(bytes = (t / 2_000) * 2_000) })
+    }
+
+    @Test
+    fun `more media buffered counts as progress`() {
+        assertEquals(30_000L, expiresAt { t -> loaded(bytes = 0, bufferedMs = t / 10) })
+    }
+
+    @Test
+    fun `after a failed request a link with no progress goes at 8 s, one still loading goes on`() {
+        assertEquals(8_000L, expiresAt(requestFailed = { true }) { loaded(bytes = 0) })
+        assertEquals(30_000L, expiresAt(requestFailed = { true }) { t -> loaded(bytes = t * 100) })
+    }
+
+    @Test
+    fun `await gives a link that keeps loading more than 15 s`() = runTest {
+        val waited = async {
+            SportsLiveStartupTimeout.await(requestFailed = { false }, progress = { loaded(bytes = currentTime * 100) })
+        }
+        advanceTimeBy(20_000)
+        runCurrent()
+        assertFalse(waited.isCompleted)
+        advanceTimeBy(10_000)
+        runCurrent()
+        assertTrue(waited.isCompleted)
+        assertEquals(30_000L, currentTime)
     }
 
     // --- Behind the live window ---
@@ -174,15 +244,33 @@ class SportsLiveStartupAndLinkErrorsTest {
     )
 
     @Test
-    fun `an addon slower than 6 s gives nothing`() = runTest {
+    fun `an addon slower than the background limit gives nothing`() = runTest {
         val fetch = SportsLiveAddonFetch()
         val result = fetch.fetch(
             addonKey = "slow",
-            streams = { delay(15_000); NetworkResult.Success(listOf(stream("late"))) },
+            streams = { delay(60_000); NetworkResult.Success(listOf(stream("late"))) },
             inlineFromMeta = { emptyList() }
         )
         assertNull(result)
         assertEquals(SportsLiveStreamThresholds.ADDON_LOOKUP_TIMEOUT_MS, currentTime)
+    }
+
+    @Test
+    fun `a cold answer just past 6 s is kept`() = runTest {
+        // #158: cold answers clustered at 6.1 s; live.18 dropped them and showed no streams.
+        val fetch = SportsLiveAddonFetch()
+        val result = fetch.fetch(
+            addonKey = "cold",
+            streams = { delay(6_150); NetworkResult.Success(listOf(stream("a"))) },
+            inlineFromMeta = { emptyList() }
+        )
+        assertEquals(NetworkResult.Success(listOf(stream("a"))), result)
+    }
+
+    @Test
+    fun `a lookup waits at most its hard cap but an addon may answer later in the background`() {
+        assertTrue(SportsLiveStreamThresholds.LOOKUP_SOFT_DEADLINE_MS < SportsLiveStreamThresholds.LOOKUP_HARD_CAP_MS)
+        assertTrue(SportsLiveStreamThresholds.LOOKUP_HARD_CAP_MS < SportsLiveStreamThresholds.ADDON_LOOKUP_TIMEOUT_MS)
     }
 
     @Test

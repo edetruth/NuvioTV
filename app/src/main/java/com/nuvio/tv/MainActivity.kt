@@ -312,6 +312,9 @@ open class MainActivity : ComponentActivity() {
     lateinit var sportsLiveAlerts: com.nuvio.tv.core.sportslive.alerts.SportsLiveAlerts
 
     @Inject
+    lateinit var sportsLiveDebugProbe: com.nuvio.tv.ui.screens.sportslive.SportsLiveDebugProbe
+
+    @Inject
     lateinit var trackingProgressRefreshCoordinator: TrackingProgressRefreshCoordinator
 
     @Inject
@@ -1464,6 +1467,17 @@ open class MainActivity : ComponentActivity() {
         if (BuildConfig.IS_DEBUG_BUILD) {
             val count = intent.getIntExtra("debugSportsAlerts", 0)
             if (count > 0) lifecycleScope.launch { sportsLiveAlerts.debugRaise(count) }
+            // `--es debugSportsProbe <sport>`: measures sports lookups and link starts (#158).
+            intent.getStringExtra("debugSportsProbe")?.let { filter ->
+                sportsLiveDebugProbe.run(
+                    filter = filter,
+                    games = intent.getIntExtra("debugProbeGames", 3),
+                    links = intent.getIntExtra("debugProbeLinks", 3),
+                    maxMs = intent.getIntExtra("debugProbeMaxMs", 45_000).toLong(),
+                    skipGames = intent.getIntExtra("debugProbeSkip", 0),
+                    watch = intent.getBooleanExtra("debugProbeWatch", false)
+                )
+            }
         }
         captureDeepLinkIntent(intent)
         captureLaunchIntent(intent)

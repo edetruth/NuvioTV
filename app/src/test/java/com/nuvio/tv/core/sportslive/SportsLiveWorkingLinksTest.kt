@@ -148,6 +148,46 @@ class SportsLiveWorkingLinksTest {
     }
 
     @Test
+    fun `a link that was only slow to start is tried again after two minutes`() {
+        // #158: slow links that failed to start often played a minute or two later.
+        assertTrue(links.failed(GAME, a.url, SportsLiveStreamHealth.Problem.NO_START))
+        now += 2 * 60_000L - 1
+        assertTrue(links.isQuarantined(GAME, a.url))
+        now += 1
+        assertFalse(links.isQuarantined(GAME, a.url))
+        assertEquals(listOf(a, b), links.order(GAME, listOf(a, b)))
+    }
+
+    @Test
+    fun `a dead host or an error stays quarantined for fifteen minutes`() {
+        links.failed(GAME, a.url, SportsLiveStreamHealth.Problem.DEAD_LINK)
+        links.failed(GAME, b.url, SportsLiveStreamHealth.Problem.ERROR_BURST)
+        links.failed(GAME, c.url)
+        now += 2 * 60_000L
+        assertTrue(listOf(a, b, c).all { links.isQuarantined(GAME, it.url) })
+        now += SportsLiveWorkingLinks.QUARANTINE_MS - 2 * 60_000L
+        assertFalse(listOf(a, b, c).any { links.isQuarantined(GAME, it.url) })
+    }
+
+    @Test
+    fun `a slow start never shortens a longer quarantine`() {
+        links.failed(GAME, a.url, SportsLiveStreamHealth.Problem.DEAD_LINK)
+        links.failed(GAME, a.url, SportsLiveStreamHealth.Problem.NO_START)
+        now += 2 * 60_000L
+        assertTrue(links.isQuarantined(GAME, a.url))
+    }
+
+    @Test
+    fun `a fallback to a slow-start link lasts as long as its quarantine`() {
+        links.failed(GAME, a.url, SportsLiveStreamHealth.Problem.NO_START)
+        links.noteFallback(GAME, a)
+        now += SportsLiveWorkingLinks.SLOW_START_QUARANTINE_MS - 1
+        assertSame(a, links.fallback(GAME))
+        now += 1
+        assertNull(links.fallback(GAME))
+    }
+
+    @Test
     fun `a fallback is kept for one quarantine window`() {
         links.noteFallback(GAME, a)
         now += SportsLiveWorkingLinks.QUARANTINE_MS - 1

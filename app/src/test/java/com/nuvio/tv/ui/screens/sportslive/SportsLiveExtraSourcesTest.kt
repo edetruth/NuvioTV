@@ -355,6 +355,24 @@ class SportsLiveExtraSourcesTest {
     }
 
     @Test
+    fun `in manual mode a game's own next link is tried`() {
+        // #158: manual mode (the default) never failed over to the game's own next link.
+        fun next(tried: Set<String>, failedHash: String? = null) = sportsLiveFallbackCandidate(
+            streams = primary,
+            extras = emptyList(),
+            extrasAllowed = true,
+            settings = settings.copy(streamAutoPlayMode = StreamAutoPlayMode.MANUAL),
+            installedAddonNames = setOf("one", "two"),
+            triedKeys = tried,
+            failedAddonName = "one",
+            failedInfoHash = failedHash
+        )
+
+        assertEquals(primary[1], next(setOf(primary[0].sourceFallbackKey())))
+        assertNull(next(primary.map { it.sourceFallbackKey() }.toSet()))
+    }
+
+    @Test
     fun `extras the fallback cannot prepare are skipped`() {
         val youTube = stream("yt", url = null, addon = "two").copy(ytId = "abc")
         val primaryTried = primary.map { it.sourceFallbackKey() }.toSet()

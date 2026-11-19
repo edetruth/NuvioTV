@@ -309,7 +309,8 @@ class StreamRepositoryImpl @Inject constructor(
                                 sportsFetch.fetch(
                                     addonKey = addon.baseUrl,
                                     streams = { getStreamsFromAddon(addon, type, videoId) },
-                                    inlineFromMeta = { fetchInlineStreamsFromMeta(addon, type, videoId) }
+                                    inlineFromMeta = { fetchInlineStreamsFromMeta(addon, type, videoId) },
+                                    label = addon.displayName
                                 ) ?: NetworkResult.Error(
                                     context.getString(com.nuvio.tv.R.string.stream_error_detail_addon_timeout)
                                 )

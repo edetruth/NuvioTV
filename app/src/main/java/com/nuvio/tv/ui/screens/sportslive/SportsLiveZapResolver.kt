@@ -5,11 +5,13 @@ import com.nuvio.tv.core.debrid.DirectDebridResolver
 import com.nuvio.tv.core.network.NetworkResult
 import com.nuvio.tv.core.player.StreamAutoPlaySelector
 import com.nuvio.tv.core.sportslive.SportsLiveAddonFetch
+import com.nuvio.tv.core.sportslive.SportsLiveDebugTiming
 import com.nuvio.tv.core.sportslive.SportsLiveNoticeEntries
 import com.nuvio.tv.core.sportslive.SportsLiveRecoveryCandidates
 import com.nuvio.tv.core.sportslive.SportsLiveSourceCooldown
 import com.nuvio.tv.core.sportslive.SportsLiveSourceLabels
 import com.nuvio.tv.core.sportslive.SportsLiveSourceReliability
+import com.nuvio.tv.core.sportslive.SportsLiveStreamThresholds
 import com.nuvio.tv.core.sportslive.SportsLiveWorkingLinks
 import com.nuvio.tv.core.streams.UnplayableStreamFilter
 import com.nuvio.tv.data.local.PlayerSettings
@@ -76,7 +78,11 @@ class SportsLiveZapResolver @Inject constructor(
     private val resolveCache: SportsLiveResolveCache
 ) {
     companion object {
-        const val TIMEOUT_MS = 12_000L
+        /** A lookup with nothing to play gives up after this long (#158); the search goes on in the background. */
+        const val TIMEOUT_MS = SportsLiveStreamThresholds.LOOKUP_HARD_CAP_MS
+
+        /** After this, a lookup plays the best of what came back without waiting for slower addons (#158). */
+        const val SOFT_DEADLINE_MS = SportsLiveStreamThresholds.LOOKUP_SOFT_DEADLINE_MS
 
         /** After this, a still-running search stops as soon as it holds the stream the user's settings prefer. */
         const val EARLY_PICK_MS = 4_000L
@@ -98,6 +104,9 @@ class SportsLiveZapResolver @Inject constructor(
 
     @VisibleForTesting
     internal var timeoutMs = TIMEOUT_MS
+
+    @VisibleForTesting
+    internal var softDeadlineMs = SOFT_DEADLINE_MS
 
     /** Which links worked or failed for each game (#65): good ones are tried first, quarantined ones last. */
     @VisibleForTesting
@@ -127,6 +136,7 @@ class SportsLiveZapResolver @Inject constructor(
     private sealed interface Event {
         data class Result(val result: NetworkResult<List<AddonStreams>>) : Event
         data object EarlyPick : Event
+        data object SoftDeadline : Event
         data object Finished : Event
     }
 
@@ -151,7 +161,17 @@ class SportsLiveZapResolver @Inject constructor(
      */
     suspend fun lookup(item: SportsLiveItem): SportsLiveLookup = lookup(item, forceRefresh = false)
 
-    suspend fun lookup(item: SportsLiveItem, forceRefresh: Boolean): SportsLiveLookup =
+    suspend fun lookup(item: SportsLiveItem, forceRefresh: Boolean): SportsLiveLookup {
+        val startedAt = System.currentTimeMillis()
+        return lookupNow(item, forceRefresh).also { found ->
+            SportsLiveDebugTiming.log {
+                "gameLookup ms=${System.currentTimeMillis() - startedAt} outcome=${found::class.simpleName} " +
+                    "sport=${item.sport} source=${SportsLiveDebugTiming.label(item.addonName)}"
+            }
+        }
+    }
+
+    private suspend fun lookupNow(item: SportsLiveItem, forceRefresh: Boolean): SportsLiveLookup =
         try {
             // A cached link that has since failed is not served again, unless a search already found
             // nothing better than a quarantined link: that one is served until its window ends, so a
@@ -470,8 +490,10 @@ class SportsLiveZapResolver @Inject constructor(
 
     /**
      * [source]'s streams in addon order, junk dropped (those that need preparation kept: see
-     * [playablePerSource]). A finished fetch is reported to the probe for the source's own key; a
-     * timeout keeps what came back so far and reports nothing. Any failure gives no streams rather
+     * [playablePerSource]). Past the soft deadline ([softDeadlineMs], #158) it stops as soon as any
+     * stream came back; slower addons keep answering in the background. A finished fetch, or one that
+     * stopped with streams, is reported to the probe for the source's own key; a timeout keeps what
+     * came back so far and reports nothing. Any failure gives no streams rather
      * than failing the caller.
      */
     private suspend fun fetchSource(
@@ -481,12 +503,30 @@ class SportsLiveZapResolver @Inject constructor(
     ): Fetched =
         try {
             var last: NetworkResult<List<AddonStreams>>? = null
-            val finished = withTimeoutOrNull(timeoutMs) {
-                streamsOf(source).collect { last = it }
-                true
+            var finished = false
+            var softPassed = false
+            val hasStreams = { (last as? NetworkResult.Success)?.data.orEmpty().any { it.streams.isNotEmpty() } }
+            // Past the soft deadline, what came back is used; slower addons answer in the background (#158).
+            val stoppedWithStreams = withTimeoutOrNull(timeoutMs) {
+                merge(
+                    streamsOf(source)
+                        .map<NetworkResult<List<AddonStreams>>, Event> { Event.Result(it) }
+                        .onCompletion { cause -> if (cause == null) emit(Event.Finished) },
+                    flow { delay(softDeadlineMs); emit(Event.SoftDeadline) }
+                ).first { event ->
+                    when (event) {
+                        is Event.Result -> last = event.result
+                        Event.Finished -> finished = true
+                        Event.SoftDeadline -> softPassed = true
+                        Event.EarlyPick -> Unit
+                    }
+                    finished || (softPassed && hasStreams())
+                }
+                !finished
             } == true
             val result = last
-            if (finished && result != null) streamProbe.recordResult(source, result)
+            // Streams found are a verdict even before the search finished (the game is on).
+            if ((finished || stoppedWithStreams) && result != null) streamProbe.recordResult(source, result)
             (result as? NetworkResult.Success)?.data?.let(cooldown::noteNotices)
             val streams = StreamAutoPlaySelector.orderAddonStreams(
                 (result as? NetworkResult.Success)?.data.orEmpty(),
@@ -508,19 +548,22 @@ class SportsLiveZapResolver @Inject constructor(
 
         var last: NetworkResult<List<AddonStreams>>? = null
         var earlyPickAllowed = false
+        var softPassed = false
         var finished = false
         // Never forced: a forced fetch cancels other collectors of the same stream session.
         val events = merge(
             streamsOf(item)
                 .map<NetworkResult<List<AddonStreams>>, Event> { Event.Result(it) }
                 .onCompletion { cause -> if (cause == null) emit(Event.Finished) },
-            flow { delay(EARLY_PICK_MS); emit(Event.EarlyPick) }
+            flow { delay(EARLY_PICK_MS); emit(Event.EarlyPick) },
+            flow { delay(softDeadlineMs); emit(Event.SoftDeadline) }
         )
         val decision = withTimeoutOrNull(timeoutMs) {
             events.mapNotNull { event ->
                 when (event) {
                     is Event.Result -> last = event.result
                     Event.EarlyPick -> earlyPickAllowed = true
+                    Event.SoftDeadline -> softPassed = true
                     Event.Finished -> finished = true
                 }
                 // Links known to work for this game first; quarantined ones only when nothing else plays (#65).
@@ -541,6 +584,8 @@ class SportsLiveZapResolver @Inject constructor(
                             ?: ordered.firstOrNull(StreamAutoPlaySelector::isPlayable)
                     )
                     earlyPickAllowed && preferred != null -> Decision(preferred)
+                    // Past the soft deadline, a slow addon is not waited for when something plays (#158).
+                    softPassed -> (preferred ?: fresh.firstOrNull(StreamAutoPlaySelector::isPlayable))?.let(::Decision)
                     else -> null
                 }
             }.first()

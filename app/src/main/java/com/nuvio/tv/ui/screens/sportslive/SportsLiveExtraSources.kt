@@ -438,7 +438,9 @@ private fun appendExtraGroups(
  * keeps a small edge, so with no evidence it goes first as before). Within a source, the stream is
  * the one [nextSourceFallbackCandidate] picks. Extras ranked below the primary wait until its search
  * is done ([extrasAllowed]). Extras that need server or YouTube preparation are left out, since the
- * fallback only prepares debrid links. With no extras, exactly [nextSourceFallbackCandidate].
+ * fallback only prepares debrid links. With no extras, exactly [nextSourceFallbackCandidate], except
+ * in manual mode, which has no choice of its own: there, as on the play path, the first playable
+ * untried stream (#158; before, a game's own next link was never tried in manual mode).
  */
 internal fun sportsLiveFallbackCandidate(
     streams: List<Stream>,
@@ -458,7 +460,12 @@ internal fun sportsLiveFallbackCandidate(
         triedKeys = triedKeys,
         failedAddonName = failedAddonName,
         failedInfoHash = failedInfoHash
-    )
+    ) ?: from.takeIf { settings.streamAutoPlayMode == StreamAutoPlayMode.MANUAL }?.firstOrNull { stream ->
+        stream.sourceFallbackKey() !in triedKeys &&
+            !(failedInfoHash != null && stream.addonName == failedAddonName &&
+                stream.getEffectiveInfoHash().equals(failedInfoHash, ignoreCase = true)) &&
+            StreamAutoPlaySelector.isPlayable(stream)
+    }
     if (extras.isEmpty()) return pick(streams)
     // The Sources panel's list holds the extras too; they are tried as their own sources.
     val extraKeys = extras.mapTo(HashSet()) { it.sourceFallbackKey() }

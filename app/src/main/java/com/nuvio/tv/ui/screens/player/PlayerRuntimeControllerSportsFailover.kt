@@ -2,6 +2,7 @@ package com.nuvio.tv.ui.screens.player
 
 import android.util.Log
 import androidx.media3.common.PlaybackException
+import com.nuvio.tv.BuildConfig
 import com.nuvio.tv.R
 import com.nuvio.tv.core.debrid.DirectDebridPlayableResult
 import com.nuvio.tv.core.sportslive.SportsLiveFailover
@@ -23,6 +24,8 @@ import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapResolver
 import com.nuvio.tv.ui.screens.sportslive.retrySportsLiveLink
 import com.nuvio.tv.ui.screens.sportslive.sportsLiveFallbackCandidate
 import com.nuvio.tv.ui.screens.sportslive.sportsLiveHealthSample
+import com.nuvio.tv.ui.screens.sportslive.sportsLiveLinkId
+import com.nuvio.tv.ui.screens.sportslive.traceSportsLiveStart
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
@@ -117,7 +120,9 @@ internal fun PlayerRuntimeController.trySportsLiveFailoverAfterError(
     decoderInit: Boolean = false,
     autoTry: Boolean = true,
     /** False when the viewer skipped a link still starting (#138): it is only left behind, not held against it. */
-    recordFailure: Boolean = true
+    recordFailure: Boolean = true,
+    /** What went wrong, when the health ladder knows: a slow start is quarantined for less time (#158). */
+    problem: SportsLiveStreamHealth.Problem? = null
 ): Boolean {
     if (!SportsLiveExtraSources.isSportsPlayback(contentId)) return false
     // Nothing that works plays now (also a Sources panel pick failing before its first frame): dual
@@ -133,7 +138,7 @@ internal fun PlayerRuntimeController.trySportsLiveFailoverAfterError(
         )
         // A link that failed to start, hit a fatal error or froze is skipped for this game for a
         // while, unless it is known to work and this is its only recent failure (#65, #138).
-        SportsLiveWorkingLinks.shared.failed(contentId.orEmpty(), currentSportsStream()?.getStreamUrl())
+        SportsLiveWorkingLinks.shared.failed(contentId.orEmpty(), currentSportsStream()?.getStreamUrl(), problem)
     }
     cancelSportsStallWatchdog()
 
@@ -358,7 +363,7 @@ private fun PlayerRuntimeController.recoverSportsHealth(problem: SportsLiveStrea
             currentSportsSourceKey(),
             if (problem.isStall) SportsLiveSourceReliability.Outcome.STALL else SportsLiveSourceReliability.Outcome.FAILURE
         )
-        SportsLiveWorkingLinks.shared.failed(gameKey, url)
+        SportsLiveWorkingLinks.shared.failed(gameKey, url, problem)
         _uiState.update { it.copy(sportsReconnecting = true) }
         sportsHealth.rebaseline()
         player.retrySportsLiveLink()
@@ -366,7 +371,7 @@ private fun PlayerRuntimeController.recoverSportsHealth(problem: SportsLiveStrea
     }
     val autoTry = step != SportsLiveRecoveryLadder.Step.CHOICES
     _uiState.update { it.copy(sportsReconnecting = autoTry) }
-    trySportsLiveFailoverAfterError(message, stalled = problem.isStall, autoTry = autoTry)
+    trySportsLiveFailoverAfterError(message, stalled = problem.isStall, autoTry = autoTry, problem = problem)
 }
 
 /**
@@ -408,21 +413,47 @@ internal fun PlayerRuntimeController.scheduleSportsStartupTimeout() {
             )
         )
     }
+    if (BuildConfig.IS_DEBUG_BUILD) {
+        scope.launch {
+            traceSportsLiveStart(
+                who = "full",
+                link = sportsLiveLinkId(url),
+                player = { _exoPlayer },
+                bytes = { mediaSourceFactory.bytesLoaded },
+                firstFrame = { hasRenderedFirstFrame },
+                stillLoading = { currentStreamUrl == url && _uiState.value.error == null }
+            )
+        }
+    }
     sportsStartupJob = scope.launch {
-        SportsLiveStartupTimeout.await { sportsStartRequestFailed }
+        // A slow link that keeps loading is not cut off (#158): only one that stopped making progress.
+        SportsLiveStartupTimeout.await(
+            requestFailed = { sportsStartRequestFailed },
+            progress = { sportsStartProgress() }
+        )
         // The viewer is choosing a source: the link is left alone until the panel closes.
         while (_uiState.value.showSourcesPanel) delay(SportsLiveStreamThresholds.POLL_INTERVAL_MS)
         if (hasRenderedFirstFrame || currentStreamUrl != url) return@launch
         if (_uiState.value.error != null || isInBackground || sourceFallbackJob?.isActive == true) return@launch
         Log.w(PlayerRuntimeController.TAG, "Sports link showed no first frame in time, trying the next one")
+        com.nuvio.tv.core.sportslive.SportsLiveDebugTiming.log { "startupTimeout who=full link=${sportsLiveLinkId(url)} requestFailed=$sportsStartRequestFailed" }
         stopPendingSportsStart()
         recoverSportsHealth(SportsLiveStreamHealth.Problem.NO_START, context.getString(R.string.sports_live_link_slow))
     }
 }
 
+/** What the sports link still starting has loaded so far (#158), for its start-up timeout. */
+private fun PlayerRuntimeController.sportsStartProgress(): SportsLiveStartupTimeout.Progress? =
+    _exoPlayer?.let { SportsLiveStartupTimeout.Progress(mediaSourceFactory.bytesLoaded, it.totalBufferedDuration) }
+
 /** A request of the sports link still starting failed: its start-up time shortens (#138). */
 internal fun PlayerRuntimeController.noteSportsStartRequestFailed() {
-    if (!hasRenderedFirstFrame && sportsStartupJob?.isActive == true) sportsStartRequestFailed = true
+    if (!hasRenderedFirstFrame && sportsStartupJob?.isActive == true) {
+        if (!sportsStartRequestFailed) {
+            com.nuvio.tv.core.sportslive.SportsLiveDebugTiming.log { "requestFailed who=full link=${sportsLiveLinkId(sportsStartupUrl)}" }
+        }
+        sportsStartRequestFailed = true
+    }
 }
 
 /** The sports link showed its first frame (or the start was given up): no timeout, no starting card. */

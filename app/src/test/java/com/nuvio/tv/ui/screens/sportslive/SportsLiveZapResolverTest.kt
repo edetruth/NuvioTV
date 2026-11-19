@@ -185,6 +185,43 @@ class SportsLiveZapResolverTest {
     }
 
     @Test
+    fun `a slow answer within the hard cap still plays`() = runTest {
+        // #158: cold answers took up to 15 s; live.18 gave up at 6 s and showed no streams.
+        streams.response = { flow { emit(NetworkResult.Loading); delay(15_000); emit(success(SD)) } }
+
+        assertEquals(SD, newResolver().resolve(ITEM))
+        assertEquals(15_000L, testScheduler.currentTime)
+        assertEquals(20_000L, SportsLiveZapResolver.TIMEOUT_MS)
+    }
+
+    @Test
+    fun `past the soft deadline what came back plays without waiting for a slow addon`() = runTest {
+        settings = PlayerSettings(streamAutoPlayMode = StreamAutoPlayMode.REGEX_MATCH, streamAutoPlayRegex = "4K")
+        streams.response = { flow { emit(success(SD)); awaitCancellation() } }
+
+        assertEquals(SD, newResolver().resolve(ITEM))
+        assertEquals(SportsLiveZapResolver.SOFT_DEADLINE_MS, testScheduler.currentTime)
+    }
+
+    @Test
+    fun `with nothing in at the soft deadline the lookup keeps waiting`() = runTest {
+        streams.response = { flow { emit(success(WEB)); delay(9_000); emit(success(WEB, SD)) } }
+
+        assertEquals(SD, newResolver().resolve(ITEM))
+        assertEquals(9_000L, testScheduler.currentTime)
+    }
+
+    @Test
+    fun `a merged game's source with links plays at the soft deadline while another addon is slow`() = runTest {
+        streams.responses["game"] = { flow { emit(success(SD)); awaitCancellation() } }
+        streams.responses["alt1"] = { flowOf(success(HD, addon = "Other")) }
+        streams.responses["alt2"] = { flowOf(success(OTHER_HD, addon = "Third")) }
+
+        assertEquals(listOf(SD, HD, OTHER_HD), newResolver().resolveAll(MERGED))
+        assertEquals(SportsLiveZapResolver.SOFT_DEADLINE_MS, testScheduler.currentTime)
+    }
+
+    @Test
     fun `resolveAll lists the primary's streams first, then each alternate's, fetched in parallel`() = runTest {
         streams.responses["game"] = { flow { delay(2_000); emit(success(SD)) } }
         streams.responses["alt1"] = { flowOf(success(HD, addon = "Other")) }
@@ -200,15 +237,29 @@ class SportsLiveZapResolverTest {
     }
 
     @Test
-    fun `resolveAll keeps a timed out source's partial streams but does not report it`() = runTest {
+    fun `resolveAll uses a slow source's streams at the soft deadline and reports them`() = runTest {
+        // #158: streams already in are a verdict (the game is on); the source is not waited for.
         streams.responses["game"] = { flow { emit(success(SD)); awaitCancellation() } }
         streams.responses["alt1"] = { flowOf(success(HD, addon = "Other")) }
         streams.responses["alt2"] = { flowOf(success(addon = "Third")) }
 
         assertEquals(listOf(SD, HD), newResolver().resolveAll(MERGED))
-        verify(exactly = 0) { probe.recordResult(MERGED, any()) }
+        assertEquals(SportsLiveZapResolver.SOFT_DEADLINE_MS, testScheduler.currentTime)
+        verify { probe.recordResult(MERGED, any()) }
         verify { probe.recordResult(ALT1, any()) }
         verify { probe.recordResult(ALT2, any()) }
+    }
+
+    @Test
+    fun `resolveAll does not report a source that timed out with nothing`() = runTest {
+        streams.responses["game"] = { flow { emit(NetworkResult.Loading); awaitCancellation() } }
+        streams.responses["alt1"] = { flowOf(success(HD, addon = "Other")) }
+        streams.responses["alt2"] = { flowOf(success(addon = "Third")) }
+
+        assertEquals(listOf(HD), newResolver().resolveAll(MERGED))
+        assertEquals(SportsLiveZapResolver.TIMEOUT_MS, testScheduler.currentTime)
+        verify(exactly = 0) { probe.recordResult(MERGED, any()) }
+        verify { probe.recordResult(ALT1, any()) }
     }
 
     @Test

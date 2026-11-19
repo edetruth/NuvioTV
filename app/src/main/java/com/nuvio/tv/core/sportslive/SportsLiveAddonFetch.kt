@@ -9,9 +9,10 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withTimeoutOrNull
 
 /**
- * How one addon's streams are fetched for a Sports & Live game (#138), so a slow or empty addon
- * cannot hold a sports lookup up:
- * - each addon gets [SportsLiveStreamThresholds.ADDON_LOOKUP_TIMEOUT_MS] for its whole answer;
+ * How one addon's streams are fetched for a Sports & Live game (#138, #158):
+ * - each addon gets [SportsLiveStreamThresholds.ADDON_LOOKUP_TIMEOUT_MS] for its whole answer; a lookup
+ *   does not wait that long ([SportsLiveStreamThresholds.LOOKUP_SOFT_DEADLINE_MS]), but a slow answer
+ *   still lands in the shared search for the Sources list, the recovery ladder and the next lookup;
  * - the meta fallback (an addon whose stream answer is empty may list inline streams in its meta) is
  *   asked at the same time as the streams, not after them, and only from addons not known to answer
  *   it with nothing ([noInlineStreams]).
@@ -47,8 +48,27 @@ class SportsLiveAddonFetch(private val timeoutMs: Long = SportsLiveStreamThresho
     suspend fun fetch(
         addonKey: String,
         streams: suspend () -> NetworkResult<List<Stream>>,
+        inlineFromMeta: suspend () -> List<Stream>,
+        /** The addon's name, for debug timing lines only. */
+        label: String = ""
+    ): NetworkResult<List<Stream>>? {
+        val limit = SportsLiveDebugTiming.override(SportsLiveDebugTiming.LOOKUP_TIMEOUT)
+            ?.let { if (it <= 0) Long.MAX_VALUE else it } ?: timeoutMs
+        val startedAt = System.currentTimeMillis()
+        val result = withTimeoutOrNull(limit) { fetchNow(addonKey, streams, inlineFromMeta) }
+        SportsLiveDebugTiming.log {
+            val count = (result as? NetworkResult.Success)?.data?.size
+            "lookup addon=${SportsLiveDebugTiming.label(label)} ms=${System.currentTimeMillis() - startedAt} " +
+                "limit=$limit outcome=${if (result == null) "timeout" else if (count != null) "ok" else "error"} links=${count ?: 0}"
+        }
+        return result
+    }
+
+    private suspend fun fetchNow(
+        addonKey: String,
+        streams: suspend () -> NetworkResult<List<Stream>>,
         inlineFromMeta: suspend () -> List<Stream>
-    ): NetworkResult<List<Stream>>? = withTimeoutOrNull(timeoutMs) {
+    ): NetworkResult<List<Stream>> =
         coroutineScope {
             val askMeta = synchronized(noInlineStreams) { addonKey !in noInlineStreams }
             val meta: Deferred<List<Stream>>? = if (askMeta) {
@@ -75,5 +95,4 @@ class SportsLiveAddonFetch(private val timeoutMs: Long = SportsLiveStreamThresho
             }
             if (inline.isEmpty()) answer else NetworkResult.Success(inline)
         }
-    }
 }

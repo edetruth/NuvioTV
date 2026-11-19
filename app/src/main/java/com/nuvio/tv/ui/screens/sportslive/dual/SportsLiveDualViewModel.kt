@@ -239,6 +239,9 @@ class SportsLiveDualViewModel internal constructor(
     /** Pane games (by stream key) whose starting link had a request fail: a shorter start-up time (#138). */
     private val startRequestFailed = mutableSetOf<String>()
 
+    /** What each pane game's link has loaded so far (#158), by stream key, for its start-up timeout. */
+    private val loadProgress = mutableMapOf<String, SportsLiveStartupTimeout.Progress>()
+
     init {
         session?.let { s -> s.leftStream?.let { handOffs[s.left.streamKey] = it } }
         session?.let {
@@ -392,7 +395,7 @@ class SportsLiveDualViewModel internal constructor(
         val startFailure = pane.status == PaneStatus.Loading &&
             (problem == SportsLiveStreamHealth.Problem.NO_START || problem == SportsLiveStreamHealth.Problem.DEAD_LINK)
         if (pane.status != PaneStatus.Playing && !pane.reconnecting && !startFailure) return
-        linkFailed(item, stream)
+        linkFailed(item, stream, problem)
         SportsLiveWorkingLinks.linkKey(stream.getStreamUrl())?.let { tried.getOrPut(item.streamKey) { mutableSetOf() } += it }
         val ladder = ladders.getOrPut(item.streamKey) { SportsLiveRecoveryLadder(recoveryBudget, workingLinks.nowMs) }
         when (ladder.decide(item.id, stream.getStreamUrl(), problem)) {
@@ -441,12 +444,21 @@ class SportsLiveDualViewModel internal constructor(
     }
 
     /**
-     * Waits out [item]'s pane link start-up time (#138, [SportsLiveStartupTimeout]): 15 s, or 8 s once
-     * one of its requests failed ([onRequestFailed]).
+     * Waits out [item]'s pane link start-up time (#138, #158, [SportsLiveStartupTimeout]): at least 15 s
+     * (8 s once one of its requests failed, [onRequestFailed]), longer while it keeps loading ([onLoadProgress]).
      */
     private suspend fun awaitStart(item: SportsLiveItem) {
         startRequestFailed -= item.streamKey
-        SportsLiveStartupTimeout.await { item.streamKey in startRequestFailed }
+        loadProgress -= item.streamKey
+        SportsLiveStartupTimeout.await(
+            requestFailed = { item.streamKey in startRequestFailed },
+            progress = { loadProgress[item.streamKey] }
+        )
+    }
+
+    /** What [item]'s pane link has loaded so far (#158), sampled every second. */
+    fun onLoadProgress(item: SportsLiveItem, progress: SportsLiveStartupTimeout.Progress) {
+        loadProgress[item.streamKey] = progress
     }
 
     /** A manifest or segment request of [item]'s pane link failed before its first frame (#138). */
@@ -664,10 +676,10 @@ class SportsLiveDualViewModel internal constructor(
      * [stream] failed for [item]. Its played time counts first, so a link that played long enough
      * stays good after one failure; a quarantined link is not handed over again.
      */
-    private fun linkFailed(item: SportsLiveItem, stream: Stream?) {
+    private fun linkFailed(item: SportsLiveItem, stream: Stream?, problem: SportsLiveStreamHealth.Problem? = null) {
         val url = stream?.getStreamUrl() ?: return
         settle(item)
-        val quarantined = workingLinks.failed(item.id, url)
+        val quarantined = workingLinks.failed(item.id, url, problem)
         if (quarantined && handOffs[item.streamKey]?.getStreamUrl() == url) handOffs.remove(item.streamKey)
     }
 

@@ -30,11 +30,28 @@ object SportsLiveStreamThresholds {
      */
     const val FAILOVER_RUN_MS = 3L * 60 * 1000
 
-    /** No first frame this long after a link starts loading: the next link is tried. */
+    /**
+     * A link still starting is never given up sooner than this (#138): live.18's whole start-up
+     * limit, so the progress rule below is never stricter than it was.
+     */
     const val NO_FIRST_FRAME_MS = 15_000L
 
     /** The same, once a manifest or segment request of the link has already failed. */
     const val NO_FIRST_FRAME_AFTER_FAILED_REQUEST_MS = 8_000L
+
+    /**
+     * Past [NO_FIRST_FRAME_MS], a link still starting is given up only once it has loaded nothing new
+     * this long (#158); [NO_FIRST_FRAME_AFTER_FAILED_REQUEST_MS] once a request failed. Measured on
+     * 2026-11-19: every link that played had its first byte within 7.8 s and its first frame within
+     * 9.0 s; links that failed did so with an error, not by hanging.
+     */
+    const val STARTUP_NO_PROGRESS_MS = 10_000L
+
+    /** A link still starting is given up after this long even while it keeps loading (#158). */
+    const val STARTUP_HARD_CAP_MS = 30_000L
+
+    /** At least this many more bytes count as start-up progress; a live playlist reload alone does not. */
+    const val STARTUP_PROGRESS_MIN_BYTES = 32L * 1024
 
     /**
      * A live stream that falls behind its live window is moved back to the live edge in place, up to
@@ -43,8 +60,19 @@ object SportsLiveStreamThresholds {
     const val BEHIND_LIVE_WINDOW_COUNT = 3
     const val BEHIND_LIVE_WINDOW_WINDOW_MS = 60_000L
 
-    /** Each addon's stream answer for a sports lookup may take this long. */
-    const val ADDON_LOOKUP_TIMEOUT_MS = 6_000L
+    /**
+     * A sports lookup plays what came back after this long (#158), without waiting for slower addons;
+     * their answers still arrive in the background ([ADDON_LOOKUP_TIMEOUT_MS]) for the Sources list and
+     * the recovery ladder. Measured on 2026-11-19, cold answers clustered at 6.1 s and reached 15 s
+     * (60 s for one addon), so a lookup that has nothing yet keeps waiting, up to [LOOKUP_HARD_CAP_MS].
+     */
+    const val LOOKUP_SOFT_DEADLINE_MS = 6_000L
+
+    /** A sports lookup with nothing to play this long gives up (its addons keep answering in the background). */
+    const val LOOKUP_HARD_CAP_MS = 20_000L
+
+    /** Each addon's stream answer for a sports lookup may take this long, in the background (#158). */
+    const val ADDON_LOOKUP_TIMEOUT_MS = 45_000L
 
     /** A zap that lands on games with no streams skips at most this many before giving up. */
     const val MAX_ZAP_SKIPS = 5

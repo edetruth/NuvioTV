@@ -11,7 +11,9 @@ import com.nuvio.tv.domain.model.Stream
  * the url the player plays (credentials moved into headers) are the same link.
  * - A link with [GOOD_AFTER_MS] of actual playback progress is good for that game for [GOOD_FOR_MS].
  * - A link that fails ([failed]) is quarantined for [QUARANTINE_MS], unless it is good: a good link
- *   is quarantined only when it fails twice within [STRIKE_WINDOW_MS].
+ *   is quarantined only when it fails twice within [STRIKE_WINDOW_MS]. A link that was only slow to
+ *   start ([SportsLiveStreamHealth.Problem.NO_START]) is quarantined for [SLOW_START_QUARANTINE_MS]
+ *   (#158): slow links often start fine a minute later.
  * - [order] puts good links first and quarantined ones last, so they play only when nothing else can.
  *
  * It also holds the stream the full player is playing for a game ([playing]), so dual screen can take
@@ -22,6 +24,7 @@ class SportsLiveWorkingLinks(internal val nowMs: () -> Long = { System.currentTi
         const val GOOD_AFTER_MS = 30_000L
         const val GOOD_FOR_MS = 3L * 60 * 60 * 1000
         const val QUARANTINE_MS = 15L * 60 * 1000
+        const val SLOW_START_QUARANTINE_MS = 2L * 60 * 1000
         const val STRIKE_WINDOW_MS = 10L * 60 * 1000
         private const val MAX_GAMES = 200
 
@@ -29,6 +32,10 @@ class SportsLiveWorkingLinks(internal val nowMs: () -> Long = { System.currentTi
 
         /** The process-wide memory the app uses. */
         val shared = SportsLiveWorkingLinks()
+
+        /** How long a link that failed with [problem] stays quarantined (#158); null: a plain failure. */
+        fun quarantineMsFor(problem: SportsLiveStreamHealth.Problem?): Long =
+            if (problem == SportsLiveStreamHealth.Problem.NO_START) SLOW_START_QUARANTINE_MS else QUARANTINE_MS
 
         /** [url] as a link key: without user info, as the player plays it; null when blank. */
         internal fun linkKey(url: String?): String? = url?.takeIf { it.isNotBlank() }?.replaceFirst(USER_INFO, "$1")
@@ -162,11 +169,11 @@ class SportsLiveWorkingLinks(internal val nowMs: () -> Long = { System.currentTi
     }
 
     /**
-     * [url] failed to start or hit a fatal error for [gameKey]. A good link takes a strike and stays
-     * good, unless it already failed within [STRIKE_WINDOW_MS]; any other link is quarantined. True
-     * when it was quarantined.
+     * [url] failed to start or hit a fatal error for [gameKey] ([problem], when known). A good link
+     * takes a strike and stays good, unless it already failed within [STRIKE_WINDOW_MS]; any other
+     * link is quarantined ([quarantineMsFor]). True when it was quarantined.
      */
-    fun failed(gameKey: String, url: String?): Boolean {
+    fun failed(gameKey: String, url: String?, problem: SportsLiveStreamHealth.Problem? = null): Boolean {
         val key = linkKey(url) ?: return false
         synchronized(this) {
             val game = game(gameKey)
@@ -175,18 +182,21 @@ class SportsLiveWorkingLinks(internal val nowMs: () -> Long = { System.currentTi
                 return false
             }
         }
-        quarantine(gameKey, url)
+        quarantine(gameKey, url, quarantineMsFor(problem))
         return true
     }
 
-    /** [url] is quarantined for [gameKey] for [QUARANTINE_MS], no longer good, and no longer playing. */
-    fun quarantine(gameKey: String, url: String?) {
+    /**
+     * [url] is quarantined for [gameKey] for [forMs] (a running longer quarantine is kept), no longer
+     * good, and no longer playing.
+     */
+    fun quarantine(gameKey: String, url: String?, forMs: Long = QUARANTINE_MS) {
         val key = linkKey(url) ?: return
         synchronized(this) {
             game(gameKey).apply {
                 good.remove(key)
                 strikes.remove(key)
-                bad[key] = nowMs() + QUARANTINE_MS
+                bad[key] = maxOf(bad[key] ?: 0L, nowMs() + forMs)
                 if (linkKey(playing?.getStreamUrl()) == key) playing = null
             }
         }
@@ -194,13 +204,13 @@ class SportsLiveWorkingLinks(internal val nowMs: () -> Long = { System.currentTi
 
     /**
      * A lookup for [gameKey] found nothing better than quarantined [stream]: it is served again,
-     * with no new search, until that quarantine window ends ([fallback]).
+     * with no new search, until its quarantine ends ([fallback]).
      */
     fun noteFallback(gameKey: String, stream: Stream) {
         synchronized(this) {
             game(gameKey).apply {
                 fallback = stream
-                fallbackUntilMs = nowMs() + QUARANTINE_MS
+                fallbackUntilMs = linkKey(stream.getStreamUrl())?.let(bad::get) ?: (nowMs() + QUARANTINE_MS)
             }
         }
     }

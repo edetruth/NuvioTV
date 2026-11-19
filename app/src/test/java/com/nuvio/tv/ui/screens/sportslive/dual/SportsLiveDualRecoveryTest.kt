@@ -3,6 +3,7 @@ package com.nuvio.tv.ui.screens.sportslive.dual
 import com.nuvio.tv.MainDispatcherRule
 import com.nuvio.tv.core.sportslive.SportsLiveRecoveryBudget
 import com.nuvio.tv.core.sportslive.SportsLiveStreamHealth.Problem
+import com.nuvio.tv.core.sportslive.SportsLiveStartupTimeout
 import com.nuvio.tv.core.sportslive.SportsLiveWorkingLinks
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveTab
@@ -262,6 +263,34 @@ class SportsLiveDualRecoveryTest {
     }
 
     // --- Start-up (#138) ---
+
+    @Test
+    fun `a pane link still loading is not cut off at 15 s and is retried after two minutes`() = runTest(mainDispatcherRule.dispatcher) {
+        nextLinks["a"] = ArrayDeque(listOf(streamA2))
+        val viewModel = newViewModel()
+        runCurrent()
+
+        // #158: the link keeps loading for 18 s, so it is spared past 15 s.
+        var bytes = 0L
+        repeat(18) {
+            bytes += 100_000
+            viewModel.onLoadProgress(a, SportsLiveStartupTimeout.Progress(bytes, 0))
+            advanceTimeBy(1_000)
+            runCurrent()
+        }
+        assertEquals(streamA, viewModel.current().left.stream)
+
+        // It stopped loading at about 17.5 s: the next link is tried 10 s after that.
+        advanceTimeBy(9_000)
+        runCurrent()
+        assertEquals(streamA, viewModel.current().left.stream)
+        advanceTimeBy(1_000)
+        runCurrent()
+        assertEquals(streamA2, viewModel.current().left.stream)
+        // A slow start is quarantined for two minutes only.
+        assertTrue(links.isQuarantined(a.id, streamA.url))
+    }
+
 
     @Test
     fun `a pane with no first frame in 15 s moves on to the next link`() = runTest(mainDispatcherRule.dispatcher) {

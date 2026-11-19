@@ -142,9 +142,12 @@ internal class SportsLiveMiniPlayback(
     private var stream: Stream? = null
     private var rendered = false
 
-    /** How long the link loading now has gone without its first frame, and whether a request of it failed (#138). */
-    private var startingMs = 0L
+    /** The start-up clock of the link loading now (#138, #158), and whether a request of it failed. */
+    private var startWatch = SportsLiveStartupTimeout.Watch()
     private var startRequestFailed = false
+
+    /** The media source factory of the link loading now: its bytes are the link's start-up progress (#158). */
+    private var mediaSourceFactory: PlayerMediaSourceFactory? = null
     private var recoveryJob: Job? = null
     private val ticker = SportsLiveHealthTicker(::checkHealth)
 
@@ -211,13 +214,13 @@ internal class SportsLiveMiniPlayback(
         item = playing.item
         this.stream = stream
         rendered = false
-        startingMs = 0L
+        startWatch = SportsLiveStartupTimeout.Watch()
         startRequestFailed = false
         tried.clear()
         ladder = SportsLiveRecoveryLadder()
         health.reset()
         view?.player = built
-        built.playSportsLiveStream(appContext, PlayerMediaSourceFactory(appContext), stream, url)
+        built.playSportsLiveStream(appContext, PlayerMediaSourceFactory(appContext).also { mediaSourceFactory = it }, stream, url)
         ticker.start()
     }
 
@@ -243,9 +246,12 @@ internal class SportsLiveMiniPlayback(
     private fun checkHealth() {
         val current = player ?: return
         if (!rendered) {
-            startingMs += SportsLiveStreamThresholds.POLL_INTERVAL_MS
-            if (recoveryJob?.isActive != true && SportsLiveStartupTimeout.isExpired(startingMs, startRequestFailed)) {
-                startingMs = 0L
+            // A slow link that keeps loading is not cut off (#158).
+            val progress = mediaSourceFactory?.let { SportsLiveStartupTimeout.Progress(it.bytesLoaded, current.totalBufferedDuration) }
+            if (recoveryJob?.isActive != true &&
+                startWatch.advance(SportsLiveStreamThresholds.POLL_INTERVAL_MS, progress, startRequestFailed)
+            ) {
+                startWatch = SportsLiveStartupTimeout.Watch()
                 recover(SportsLiveStreamHealth.Problem.NO_START)
             }
             return
@@ -269,7 +275,7 @@ internal class SportsLiveMiniPlayback(
             SportsLiveExtraSources.sourceKeyFor(game, failed),
             if (problem.isStall) SportsLiveSourceReliability.Outcome.STALL else SportsLiveSourceReliability.Outcome.FAILURE
         )
-        SportsLiveWorkingLinks.shared.failed(game.id, url)
+        SportsLiveWorkingLinks.shared.failed(game.id, url, problem)
         SportsLiveWorkingLinks.linkKey(url)?.let(tried::add)
         when (ladder.decide(game.id, url, problem)) {
             SportsLiveRecoveryLadder.Step.RETRY_SAME -> {
@@ -291,10 +297,10 @@ internal class SportsLiveMiniPlayback(
                     }
                     stream = next
                     rendered = false
-                    startingMs = 0L
+                    startWatch = SportsLiveStartupTimeout.Watch()
                     startRequestFailed = false
                     health.reset()
-                    current.playSportsLiveStream(appContext, PlayerMediaSourceFactory(appContext), next, nextUrl)
+                    current.playSportsLiveStream(appContext, PlayerMediaSourceFactory(appContext).also { mediaSourceFactory = it }, next, nextUrl)
                     onStreamReplaced(sessionId, next)
                 }
             }

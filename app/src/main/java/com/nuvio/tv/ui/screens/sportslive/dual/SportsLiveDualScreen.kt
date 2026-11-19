@@ -148,7 +148,8 @@ fun SportsLiveDualScreen(
                         onIsPlaying = viewModel::onIsPlayingChanged,
                         onUnhealthy = viewModel::onUnhealthy,
                         onMoving = viewModel::onMoving,
-                        onRequestFailed = viewModel::onRequestFailed
+                        onRequestFailed = viewModel::onRequestFailed,
+                        onLoadProgress = viewModel::onLoadProgress
                     )
                     viewModel.onPlayersCreated()
                 }

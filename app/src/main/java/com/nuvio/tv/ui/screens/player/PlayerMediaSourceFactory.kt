@@ -10,7 +10,9 @@ import androidx.media3.common.NuvioEngineConfig
 import androidx.media3.database.StandaloneDatabaseProvider
 import androidx.media3.datasource.DataSink
 import androidx.media3.datasource.DataSource
+import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.TransferListener
 import androidx.media3.datasource.cache.Cache
 import androidx.media3.datasource.cache.CacheDataSink
 import androidx.media3.datasource.cache.CacheDataSource
@@ -72,6 +74,27 @@ internal class PlayerMediaSourceFactory(private val context: Context) {
      * once instead of being retried, so the next link is tried. Off for movies and shows.
      */
     @Volatile var failFastOnDeadHost: Boolean = false
+
+    private val loadedBytes = AtomicLong()
+
+    /**
+     * Bytes read over the network by this factory's media sources so far (#158): a sports link still
+     * starting is making progress while it grows. Only ever grows.
+     */
+    val bytesLoaded: Long get() = loadedBytes.get()
+
+    private val byteCounter = object : TransferListener {
+        override fun onTransferInitializing(source: DataSource, dataSpec: DataSpec, isNetwork: Boolean) = Unit
+        override fun onTransferStart(source: DataSource, dataSpec: DataSpec, isNetwork: Boolean) = Unit
+        override fun onBytesTransferred(source: DataSource, dataSpec: DataSpec, isNetwork: Boolean, bytesTransferred: Int) {
+            if (isNetwork) loadedBytes.addAndGet(bytesTransferred.toLong())
+        }
+        override fun onTransferEnd(source: DataSource, dataSpec: DataSpec, isNetwork: Boolean) = Unit
+    }
+
+    /** This factory's data sources, counted in [bytesLoaded]. */
+    private fun DataSource.Factory.counted(): DataSource.Factory =
+        DataSource.Factory { createDataSource().also { it.addTransferListener(byteCounter) } }
 
     @Volatile private var currentVodCacheUrl: String? = null
     @Volatile private var currentVodCacheResolvedUrl: String? = null
@@ -199,7 +222,7 @@ internal class PlayerMediaSourceFactory(private val context: Context) {
             if (isHls) HlsParameterSetInitDataSource.Factory(adaptiveFactory) else adaptiveFactory
         } else {
             PlayerPlaybackNetworking.createDataSourceFactory(context, sanitizedHeaders)
-        }
+        }.counted()
 
         val mediaItemBuilder = MediaItem.Builder().setUri(url)
         resolvedMimeType?.let(mediaItemBuilder::setMimeType)
@@ -258,7 +281,7 @@ internal class PlayerMediaSourceFactory(private val context: Context) {
             PlayerPlaybackNetworking.createHttpDataSourceFactory(sanitizedHeaders, useLongReadTimeout = true)
         } else {
             httpDataSourceFactory
-        }
+        }.let { if (it === httpDataSourceFactory) it else it.counted() }
         val progressiveUpstreamFactory: DataSource.Factory =
             RedirectReportingDataSource.Factory(networkProgressiveFactory, url) { resolvedUrl ->
                 onStreamRedirected?.invoke(url, resolvedUrl)

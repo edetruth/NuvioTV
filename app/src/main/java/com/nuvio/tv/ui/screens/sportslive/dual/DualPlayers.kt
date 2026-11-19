@@ -32,6 +32,7 @@ import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniStop
 import com.nuvio.tv.ui.screens.sportslive.playSportsLiveStream
 import com.nuvio.tv.ui.screens.sportslive.retrySportsLiveLink
 import com.nuvio.tv.ui.screens.sportslive.sportsLiveHealthSample
+import com.nuvio.tv.core.sportslive.SportsLiveStartupTimeout
 
 /**
  * The dual screen's two ExoPlayers. [sync] plays each pane of a [DualState] (a pane keeps its
@@ -77,7 +78,9 @@ internal class DualPlayers(
     /** [item]'s stream moves (a new frame or position), checked every second (#138). */
     private val onMoving: (item: SportsLiveItem) -> Unit = {},
     /** A manifest or segment request of [item]'s link failed before its first frame (#138). */
-    private val onRequestFailed: (item: SportsLiveItem) -> Unit = {}
+    private val onRequestFailed: (item: SportsLiveItem) -> Unit = {},
+    /** What [item]'s link has loaded so far, every second (#158): its start-up timeout spares a link still loading. */
+    private val onLoadProgress: (item: SportsLiveItem, progress: SportsLiveStartupTimeout.Progress) -> Unit = { _, _ -> }
 ) {
     private val appContext = context.applicationContext
 
@@ -199,6 +202,7 @@ internal class DualPlayers(
         /** Samples this player's health (#138): reports a problem, or that a recovering stream moves. */
         fun checkHealth() {
             val (item, stream) = loaded ?: return
+            onLoadProgress(item, SportsLiveStartupTimeout.Progress(mediaSourceFactory.bytesLoaded, player.totalBufferedDuration))
             val problem = health.sample(player.sportsLiveHealthSample())
             if (problem != null) {
                 if (problem.isStall) {
