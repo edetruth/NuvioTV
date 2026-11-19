@@ -43,6 +43,20 @@ data class SportsLiveResumeOffer(val item: SportsLiveItem, val stream: Stream, v
     fun expiredAt(nowMs: Long): Boolean = nowMs - atMs >= SportsLiveMiniPlayerController.RESUME_TTL_MS
 }
 
+/** What Back from a Sports & Live player leaves behind (#148, #175). */
+enum class SportsLiveBackAction { MINI_PLAYER, RESUME_OFFER, NOTHING }
+
+/**
+ * A stream that never drew a frame ([started] false: still starting, connecting or recovering) leaves
+ * nothing, so a slow link can never start playing later on a screen showing another game (#175); a
+ * paused one is offered for Resume (#148); a playing one goes on in the mini player.
+ */
+fun sportsLiveBackAction(paused: Boolean, started: Boolean): SportsLiveBackAction = when {
+    !started -> SportsLiveBackAction.NOTHING
+    paused -> SportsLiveBackAction.RESUME_OFFER
+    else -> SportsLiveBackAction.MINI_PLAYER
+}
+
 /** Why the mini player stopped. */
 enum class SportsLiveMiniStop {
     OTHER_PLAYER, PROFILE_SWITCH, USER_STOP, IDLE_TIMEOUT, DUAL_SCREEN, EXPANDED, STREAM_ERROR, APP_FINISH, APP_BACKGROUND, PIP_CLOSED
@@ -98,19 +112,26 @@ class SportsLiveMiniPlayerController(
     /**
      * Back from a player of [contentId]: with [session] on that content and a [stream] the mini
      * player can play, it starts; otherwise nothing changes. A player the user left [paused] (#148)
-     * starts no mini player: Live now offers Resume instead, for [RESUME_TTL_MS].
+     * starts no mini player: Live now offers Resume instead, for [RESUME_TTL_MS]. One left before its
+     * stream drew a frame ([started] false, #175) starts nothing at all.
      */
     fun onBackFromPlayer(
         contentId: String?,
         session: SportsLiveZapSession?,
         stream: Stream?,
         paused: Boolean = false,
-        nowMs: Long = System.currentTimeMillis()
+        nowMs: Long = System.currentTimeMillis(),
+        /** The stream drew its first frame (#175); a player left while still starting starts nothing. */
+        started: Boolean = true
     ) {
         if (session == null || stream == null || contentId == null || session.current.id != contentId) return
-        if (paused) {
-            offerResume(SportsLiveResumeOffer(session.current, stream, nowMs))
-            return
+        when (sportsLiveBackAction(paused, started)) {
+            SportsLiveBackAction.NOTHING -> return
+            SportsLiveBackAction.RESUME_OFFER -> {
+                offerResume(SportsLiveResumeOffer(session.current, stream, nowMs))
+                return
+            }
+            SportsLiveBackAction.MINI_PLAYER -> Unit
         }
         dismissResume()
         onStopped?.invoke()

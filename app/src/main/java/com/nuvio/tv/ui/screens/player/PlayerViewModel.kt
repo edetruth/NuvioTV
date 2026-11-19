@@ -236,6 +236,14 @@ class PlayerViewModel @Inject constructor(
 
     private var pausedAtRelease: Boolean? = null
 
+    /**
+     * The stream playing now has drawn its first frame (#175): a player still starting, connecting or
+     * switching links has not. Once released, the answer it had just before.
+     */
+    fun hasStartedPlaying(): Boolean = startedAtRelease ?: controller.hasRenderedFirstFrame
+
+    private var startedAtRelease: Boolean? = null
+
     fun getCurrentFileSizeBytes(): Long? = controller.currentVideoSize
 
     @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
@@ -246,6 +254,7 @@ class PlayerViewModel @Inject constructor(
 
     fun stopAndRelease() {
         if (pausedAtRelease == null) pausedAtRelease = isPausedByUser()
+        if (startedAtRelease == null) startedAtRelease = controller.hasRenderedFirstFrame
         postPlayRecommendationController.stop()
         controller.stopAndRelease()
     }

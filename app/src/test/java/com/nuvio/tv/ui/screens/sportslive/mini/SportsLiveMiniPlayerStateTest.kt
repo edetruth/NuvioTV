@@ -43,6 +43,26 @@ class SportsLiveMiniPlayerStateTest {
     }
 
     @Test
+    fun `Back before the first frame starts no mini player and offers no Resume`() = runTest {
+        val mini = controller()
+
+        // Still starting, connecting or switching links: a slow link must never play later in the stage (#175).
+        mini.onBackFromPlayer("a", session, stream, started = false)
+        mini.onBackFromPlayer("a", session, stream, paused = true, started = false)
+
+        assertEquals(SportsLiveMiniState.Idle, mini.state.value)
+        assertNull(mini.resume.value)
+    }
+
+    @Test
+    fun `what Back leaves follows the first frame, then the pause`() {
+        assertEquals(SportsLiveBackAction.NOTHING, sportsLiveBackAction(paused = false, started = false))
+        assertEquals(SportsLiveBackAction.NOTHING, sportsLiveBackAction(paused = true, started = false))
+        assertEquals(SportsLiveBackAction.RESUME_OFFER, sportsLiveBackAction(paused = true, started = true))
+        assertEquals(SportsLiveBackAction.MINI_PLAYER, sportsLiveBackAction(paused = false, started = true))
+    }
+
+    @Test
     fun `Back from a player without a session, or for other content, starts nothing`() = runTest {
         val mini = controller()
 

@@ -270,7 +270,8 @@ private fun clearSportsLiveZapSessionOnPlayerBack(navController: NavHostControll
  * Back from a player whose content has a Sports & Live zap session starts the mini player on the
  * stream that player plays now (its url and headers, after any source fallback); any other
  * player (movies, series) leaves it alone. A paused player starts none: Live now offers Resume
- * instead (#148). Runs before the session is cleared.
+ * instead (#148). A player left before its stream drew a frame (still starting or switching links)
+ * starts nothing (#175): Back there is a stop. Runs before the session is cleared.
  */
 private fun startSportsLiveMiniPlayerOnBack(contentId: String?, player: PlayerViewModel) {
     // An exit for an in-app launch (external player, browser) is not the user going back to browse.
@@ -288,7 +289,8 @@ private fun startSportsLiveMiniPlayerOnBack(contentId: String?, player: PlayerVi
             name = null,
             addonName = playing.currentAddonName
         ),
-        paused = player.isPausedByUser()
+        paused = player.isPausedByUser(),
+        started = player.hasStartedPlaying()
     )
 }
 
