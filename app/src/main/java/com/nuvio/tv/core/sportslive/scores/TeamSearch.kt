@@ -148,7 +148,7 @@ object TeamSearch {
             for (alias in SportsLiveTeamAliases.group(place)) {
                 val shown = titleCase(alias)
                 add(TeamMatchField.ALIAS, shown)
-                if (nickname != null && !fold(shown).endsWith(nickname)) add(TeamMatchField.ALIAS, "$shown ${team.nickname!!.trim()}")
+                if (nickname != null && !fold(shown).endsWith(nickname)) add(TeamMatchField.ALIAS, "$shown ${team.nickname.trim()}")
             }
         }
         return IndexedTeam(team, league, fold(team.displayName), names)
