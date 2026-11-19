@@ -12,6 +12,7 @@ import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.HOVER_PREVIEW
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.MY_SPORTS
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.MY_TEAMS
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.OPEN_GAME
+import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.HIDE_UNPLAYABLE
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.PICTURE_IN_PICTURE
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.REMIND_MY_TEAMS
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.RESET_STREAM_MEMORY
@@ -31,6 +32,7 @@ import com.nuvio.tv.ui.screens.settings.SportsLiveSettingsSection.STATUS
 import com.nuvio.tv.ui.screens.settings.SportsLiveSettingsSection.WHAT_I_FOLLOW
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SportsLiveSettingsSectionsTest {
@@ -53,7 +55,7 @@ class SportsLiveSettingsSectionsTest {
                 SCORES_AND_SPOILERS to listOf(SCORES, SCORE_DELAY),
                 WHAT_I_FOLLOW to listOf(MY_TEAMS, MY_SPORTS),
                 ALERTS to listOf(REMIND_MY_TEAMS, SCORE_ALERTS, FULL_TIME_ALERTS),
-                PLAYING to listOf(OPEN_GAME, PICTURE_IN_PICTURE),
+                PLAYING to listOf(OPEN_GAME, HIDE_UNPLAYABLE, PICTURE_IN_PICTURE),
                 HOME_AND_ROWS to listOf(SHOW_SECTION, HOME_ROW, CATCH_UP_ROW, HOVER_PREVIEW),
                 SETUP to listOf(RUN_SETUP),
                 STATUS to listOf(SCORES_STATUS),
@@ -71,7 +73,7 @@ class SportsLiveSettingsSectionsTest {
             setOf(
                 SHOW_SECTION, HOME_ROW, HOVER_PREVIEW, DATA_SAVER, OPEN_GAME, RESET_STREAM_MEMORY,
                 PICTURE_IN_PICTURE, SCORES, SCORE_DELAY, SCORES_STATUS, REMIND_MY_TEAMS, SCORE_ALERTS,
-                FULL_TIME_ALERTS, MY_SPORTS, MY_TEAMS, CATCH_UP_ROW, RUN_SETUP, HIDDEN, CATALOGS
+                FULL_TIME_ALERTS, MY_SPORTS, MY_TEAMS, CATCH_UP_ROW, RUN_SETUP, HIDDEN, CATALOGS, HIDE_UNPLAYABLE
             ),
             shown.toSet()
         )
@@ -122,5 +124,13 @@ class SportsLiveSettingsSectionsTest {
             SportsLiveSetting.entries.toSet() - HOVER_PREVIEW,
             enabledIn(SportsLiveSettingsUiState(dataSaver = true))
         )
+    }
+
+    @Test
+    fun `hide links this TV cant play is a switch in playing, on by default`() {
+        assertTrue(HIDE_UNPLAYABLE.isSwitch)
+        assertEquals(PLAYING, HIDE_UNPLAYABLE.section)
+        assertTrue(SportsLiveSettingsUiState().hideUnplayable)
+        assertFalse(HIDE_UNPLAYABLE.isEnabled(SportsLiveSettingsUiState(showSection = false)))
     }
 }

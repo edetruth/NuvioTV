@@ -6,6 +6,7 @@ import com.nuvio.tv.core.network.NetworkResult
 import com.nuvio.tv.core.player.StreamAutoPlaySelector
 import com.nuvio.tv.core.sportslive.SportsLiveAddonFetch
 import com.nuvio.tv.core.sportslive.SportsLiveDebugTiming
+import com.nuvio.tv.core.sportslive.SportsLiveLinkMarks
 import com.nuvio.tv.core.sportslive.SportsLiveNoticeEntries
 import com.nuvio.tv.core.sportslive.SportsLiveRecoveryCandidates
 import com.nuvio.tv.core.sportslive.SportsLiveSourceCooldown
@@ -97,8 +98,15 @@ class SportsLiveZapResolver @Inject constructor(
         const val PREVIEW_FREE_CANCEL_MS = 2_000L
         private const val MAX_PREVIEW_ENTRIES = 200
 
-        /** An addon's informational entry or junk link: never auto-picked, never counted as playable (C1). */
+        /**
+         * An addon's informational entry, a junk link, or a DRM-protected link this TV cannot play (#166):
+         * never auto-picked, never counted as playable (C1).
+         */
         internal fun isNonStream(stream: Stream): Boolean =
+            isNoticeEntry(stream) || SportsLiveLinkMarks.shared.isProtected(stream.getStreamUrl())
+
+        /** An addon's informational entry or junk link: a stream list shows it as a notice row (N2). */
+        internal fun isNoticeEntry(stream: Stream): Boolean =
             UnplayableStreamFilter.isUnplayableJunk(stream) || SportsLiveNoticeEntries.isNotice(stream)
     }
 

@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.sportslive.dual
 
+import com.nuvio.tv.core.sportslive.SportsLiveLinkMarks
 import com.nuvio.tv.core.sportslive.SportsLiveTriedGames
 import com.nuvio.tv.core.sportslive.displayName
 import androidx.lifecycle.ViewModel
@@ -538,6 +539,8 @@ class SportsLiveDualViewModel internal constructor(
         val side = _state.value?.sideOf(item) ?: return
         if (stream != null && !sameLink(_state.value?.pane(side)?.stream, stream)) return
         startRequestFailed -= item.streamKey
+        // The link plays: its "didn't work" mark clears in the stream lists (#156).
+        SportsLiveLinkMarks.shared.played(item.id, (stream ?: _state.value?.pane(side)?.stream)?.getStreamUrl())
         dispatch(DualAction.FirstFrame(item))
         // Playing now: the pane's first-frame timeout is no longer needed, and a later decoder
         // failure gets its retry again.

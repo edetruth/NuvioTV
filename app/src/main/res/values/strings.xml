@@ -508,6 +508,8 @@
     <string name="sports_live_scores_reason_http">ESPN returned an error (%1$d)</string>
     <string name="sports_live_scores_retry_now">Retry now</string>
     <string name="sports_live_scores_outage_toast">Live scores aren\'t available right now</string>
+    <string name="sports_live_setting_hide_unplayable">Hide links this TV can\'t play</string>
+    <string name="sports_live_setting_hide_unplayable_subtitle">Links protected by DRM that this TV has no licence for are left out of Sources and never picked. Off, they show at the bottom, marked Protected.</string>
     <string name="sports_live_setting_pip">Picture-in-picture</string>
     <string name="sports_live_setting_pip_subtitle">Home while a game plays keeps it in a small window over other apps. Off, or where unsupported, the in-app mini player is used.</string>
     <string name="sports_live_setting_pip_supported">Picture-in-picture: supported on this device</string>
@@ -4094,6 +4096,20 @@
     <string name="sports_live_dual_keys_hint">←/→ sound · ↑/↓ change game · OK full screen · Menu swap</string>
     <string name="sports_live_source_loading">%1$s · loading…</string>
     <string name="sports_live_source_notice">Message from the source · not a stream</string>
+    <!-- #156: marks on links that already failed or played for this game, in every stream list. -->
+    <string name="sports_live_links_didnt_work">Didn\'t work</string>
+    <string name="sports_live_link_played">✓ Played</string>
+    <string name="sports_live_link_didnt_start">Didn\'t start</string>
+    <string name="sports_live_link_stopped">Stopped playing</string>
+    <string name="sports_live_link_dead">Link dead</string>
+    <string name="sports_live_link_protected">Protected · can\'t play on this TV</string>
+    <string name="sports_live_link_unsupported">Format not supported</string>
+    <string name="sports_live_link_refused">Refused by the source</string>
+    <string name="sports_live_link_expired">Expired or blocked here</string>
+    <string name="sports_live_link_mark_warning">⚠ %1$s</string>
+    <string name="sports_live_link_mark_warning_with_age">⚠ %1$s · %2$s</string>
+    <string name="sports_live_link_age_now">just now</string>
+    <string name="sports_live_link_age_minutes">%1$d min ago</string>
     <string name="sports_live_nothing_playing">Nothing is playing. Choose a stream or go back.</string>
     <!-- V2 Upcoming: Agenda + Stage (#132, P3) -->
     <string name="sports_live_agenda_today">Today</string>

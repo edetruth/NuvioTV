@@ -2112,6 +2112,7 @@ fun PlayerScreen(
                     onStreamSelected = { viewModel.onEvent(PlayerEvent.OnSourceStreamSelected(it)) },
                     onExpandStreams = { viewModel.controller.expandSourceFilteredStreamsIfNeeded() },
                     isNotice = { sportsLiveSourceNotice(viewModel.controller.contentId, it) },
+                    linkMarks = com.nuvio.tv.ui.screens.sportslive.rememberSportsLiveLinkMarks(viewModel.controller.contentId),
                     modifier = Modifier.align(Alignment.CenterEnd)
                 )
             }

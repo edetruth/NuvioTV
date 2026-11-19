@@ -44,6 +44,7 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -103,6 +104,13 @@ import com.nuvio.tv.ui.screens.player.LoadingOverlay
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveSourceNoticeRow
 import com.nuvio.tv.ui.screens.sportslive.sportsLiveSourceNotice
 import com.nuvio.tv.ui.screens.sportslive.sportsLiveStreamScreenOrder
+import com.nuvio.tv.core.sportslive.SportsLiveLinkMark
+import com.nuvio.tv.ui.screens.sportslive.SPORTS_LIVE_FAILED_LINK_ALPHA
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveDidntWorkHeader
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveLinkMarkLine
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveLinkMarksView
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapResolver
+import com.nuvio.tv.ui.screens.sportslive.rememberSportsLiveLinkMarks
 import com.nuvio.tv.ui.screens.player.AddonFilterChips
 import com.nuvio.tv.ui.screens.player.focusChip
 import com.nuvio.tv.ui.theme.NuvioTheme
@@ -137,8 +145,11 @@ fun StreamScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     // Sports & Live (N2): a source's notices go last and show as info rows, never as streams to play.
-    val shownStreams = remember(uiState.videoId, uiState.filteredStreams) {
-        sportsLiveStreamScreenOrder(uiState.videoId, uiState.filteredStreams)
+    // #156: links that failed for the game go last, under "Didn't work"; protected ones hidden when set (#166).
+    val linkMarks = rememberSportsLiveLinkMarks(uiState.videoId)
+    val shownStreams = remember(uiState.videoId, uiState.filteredStreams, linkMarks) {
+        val ordered = sportsLiveStreamScreenOrder(uiState.videoId, uiState.filteredStreams)
+        linkMarks?.group(ordered, SportsLiveZapResolver::isNoticeEntry)?.items ?: ordered
     }
     val isSportsNotice: (Stream) -> Boolean = remember(uiState.videoId) { { sportsLiveSourceNotice(uiState.videoId, it) } }
     val watchProgress by viewModel.watchProgress.collectAsStateWithLifecycle()
@@ -475,6 +486,7 @@ fun StreamScreen(
                     error = uiState.error,
                     streams = shownStreams,
                     isNotice = isSportsNotice,
+                    linkMarks = linkMarks,
                     availableAddons = uiState.availableAddons,
                     sourceChips = uiState.sourceChips,
                     selectedAddonFilter = uiState.selectedAddonFilter,
@@ -773,6 +785,7 @@ private fun RightStreamSection(
     error: String?,
     streams: List<Stream>,
     isNotice: (Stream) -> Boolean = { false },
+    linkMarks: SportsLiveLinkMarksView? = null,
     availableAddons: List<String>,
     sourceChips: List<SourceChipItem>,
     selectedAddonFilter: String?,
@@ -988,6 +1001,7 @@ private fun RightStreamSection(
                             StreamsList(
                                 streams = streams,
                                 isNotice = isNotice,
+                                linkMarks = linkMarks,
                                 sharedStream = sharedStream,
                                 partySource = partySource,
                                 onSharedStreamSelected = onSharedStreamSelected,
@@ -1112,6 +1126,7 @@ private fun EmptyState() {
 private fun StreamsList(
     streams: List<Stream>,
     isNotice: (Stream) -> Boolean = { false },
+    linkMarks: SportsLiveLinkMarksView? = null,
     sharedStream: SharedStream?,
     partySource: PartySource?,
     onSharedStreamSelected: (Stream) -> Unit,
@@ -1138,6 +1153,10 @@ private fun StreamsList(
     val lastKeyRepeatDispatchRef = remember { java.util.concurrent.atomic.AtomicLong(0L) }
     val restoreFocusRequester = remember { FocusRequester() }
     val streamListState = rememberLazyListState()
+    // The "Didn't work" header (#156) sits over the first link that failed for the game.
+    val didntWorkIndex = remember(streams, linkMarks) {
+        if (linkMarks == null) -1 else streams.indexOfFirst { !isNotice(it) && linkMarks.markOf(it) is SportsLiveLinkMark.Failed }
+    }
     val streamKeys = remember(streams) {
         val seen = mutableMapOf<String, Int>()
         streams.map { stream ->
@@ -1321,39 +1340,53 @@ private fun StreamsList(
                 modifier = Modifier.padding(vertical = NuvioTheme.spacing.xs),
                 verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)
             ) {
+                val linkMark = linkMarks?.markOf(stream)
+                if (index == didntWorkIndex) SportsLiveDidntWorkHeader()
                 StreamProviderHeader(streamProviderHeader(stream, streams.getOrNull(index - 1)))
                 if (isNotice(stream)) {
                     SportsLiveSourceNoticeRow(stream)
                     return@Column
                 }
                 val isPartySource = partySource?.matches(stream) == true
-                StreamCard(
-                    stream = stream,
-                    showFileSizeBadges = showFileSizeBadges,
-                    showAddonLogo = showAddonLogo,
-                    badgePlacement = badgePlacement,
-                    reserveBadgeSpace = hasBadgeRules && stream.badges.isEmpty(),
-                    label = partySourceLabel.takeIf { isPartySource },
-                    onClick = { onStreamSelected(stream) },
-                    focusRequester = when {
-                        shouldRestoreFocusedStream && index == focusedStreamIndex.coerceIn(0, (streams.lastIndex).coerceAtLeast(0)) -> restoreFocusRequester
-                        else -> streamFocusRequesters.getOrPut(streamKeys[index]) { FocusRequester() }
-                    },
-                    onFocusChanged = { focused ->
-                        if (focused) {
-                            focusedStreamKey = streamKeys.getOrNull(index)
-                            onFocusedStreamKeyChanged(focusedStreamKey)
-                        }
-                        if (index == 0) {
-                            firstCardHasFocus = focused
-                        }
-                    },
-                    onUpKey = if (index == 0 && sharedStream == null) {{
-                        val idx = if (selectedAddonFilter == null) 1
-                                  else orderedAddonNames.indexOf(selectedAddonFilter) + 2
-                        onRequestChipFocus(idx)
-                    }} else null
-                )
+                var cardFocused by remember { mutableStateOf(false) }
+                // A link that failed for this game is dimmed while not focused (#156).
+                val dimmed = linkMark is SportsLiveLinkMark.Failed && !cardFocused
+                Box(
+                    modifier = Modifier
+                        .onFocusChanged { cardFocused = it.hasFocus }
+                        .then(if (dimmed) Modifier.alpha(SPORTS_LIVE_FAILED_LINK_ALPHA) else Modifier)
+                ) {
+                    StreamCard(
+                        stream = stream,
+                        showFileSizeBadges = showFileSizeBadges,
+                        showAddonLogo = showAddonLogo,
+                        badgePlacement = badgePlacement,
+                        reserveBadgeSpace = hasBadgeRules && stream.badges.isEmpty(),
+                        label = partySourceLabel.takeIf { isPartySource },
+                        onClick = { onStreamSelected(stream) },
+                        focusRequester = when {
+                            shouldRestoreFocusedStream && index == focusedStreamIndex.coerceIn(0, (streams.lastIndex).coerceAtLeast(0)) -> restoreFocusRequester
+                            else -> streamFocusRequesters.getOrPut(streamKeys[index]) { FocusRequester() }
+                        },
+                        onFocusChanged = { focused ->
+                            if (focused) {
+                                focusedStreamKey = streamKeys.getOrNull(index)
+                                onFocusedStreamKeyChanged(focusedStreamKey)
+                            }
+                            if (index == 0) {
+                                firstCardHasFocus = focused
+                            }
+                        },
+                        onUpKey = if (index == 0 && sharedStream == null) {{
+                            val idx = if (selectedAddonFilter == null) 1
+                                      else orderedAddonNames.indexOf(selectedAddonFilter) + 2
+                            onRequestChipFocus(idx)
+                        }} else null
+                    )
+                }
+                linkMark?.let { mark ->
+                    SportsLiveLinkMarkLine(mark, linkMarks?.nowMs ?: 0L, Modifier.padding(start = NuvioTheme.spacing.lg))
+                }
             }
         }
     }

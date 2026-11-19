@@ -15,6 +15,9 @@ import com.nuvio.tv.BuildConfig
 import com.nuvio.tv.core.network.NetworkResult
 import com.nuvio.tv.core.sportslive.SportsLiveAddonFetch
 import com.nuvio.tv.core.sportslive.SportsLiveDebugTiming
+import com.nuvio.tv.core.sportslive.SportsLiveLinkCause
+import com.nuvio.tv.core.sportslive.SportsLiveLinkMarks
+import com.nuvio.tv.core.sportslive.SportsLiveStreamLicences
 import com.nuvio.tv.domain.model.AddonStreams
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.Stream
@@ -32,6 +35,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 
 /**
  * Debug builds only (#158): measures sports lookups and link starts outside the UI. Started with
@@ -50,6 +55,9 @@ class SportsLiveDebugProbe @Inject constructor(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var job: Job? = null
 
+    /** Per addon label: how many probed links fell in each class (#166). */
+    private val classes = LinkedHashMap<String, MutableMap<String, Int>>()
+
     fun run(filter: String, games: Int, links: Int, maxMs: Long, skipGames: Int, watch: Boolean = false) {
         if (!BuildConfig.IS_DEBUG_BUILD) return
         job?.cancel()
@@ -63,8 +71,15 @@ class SportsLiveDebugProbe @Inject constructor(
                 .drop(skipGames)
                 .take(games)
             SportsLiveDebugTiming.log { "probe begin filter=$filter games=${picked.size}" }
+            classes.clear()
             picked.forEachIndexed { index, item ->
                 if (watch) probeWatch(index + skipGames, item, maxMs) else probeGame(index + skipGames, item, links, maxMs)
+            }
+            // #166: how many links of each addon fall in each class.
+            classes.forEach { (source, counts) ->
+                SportsLiveDebugTiming.log {
+                    "probeClasses source=$source " + counts.entries.sortedBy { it.key }.joinToString(" ") { "${it.key}=${it.value}" }
+                }
             }
             SportsLiveDebugTiming.log { "probe end" }
         }
@@ -77,15 +92,17 @@ class SportsLiveDebugProbe @Inject constructor(
         withTimeoutOrNull(60_000L) {
             streamRepository.getStreamsFromAllAddons(item.apiType, item.id, forceRefresh = true).collect { last = it }
         }
+        // Protected links are probed too (#166): only notices and junk are left out.
         val streams = (last as? NetworkResult.Success)?.data.orEmpty().flatMap { it.streams }
-            .filterNot(SportsLiveZapResolver::isNonStream)
+            .filterNot(SportsLiveZapResolver::isNoticeEntry)
             .filter { !it.isExternal() && !it.isTorrent() && it.getStreamUrl() != null }
         SportsLiveDebugTiming.log {
             "probeGame g=$index sport=${item.sport} source=${SportsLiveDebugTiming.label(item.addonName)} " +
-                "title=${SportsLiveDebugTiming.label(item.meta.name)} lookupMs=${System.currentTimeMillis() - startedAt} links=${streams.size}"
+                "title=${SportsLiveDebugTiming.label(item.meta.name)} lookupMs=${System.currentTimeMillis() - startedAt} links=${streams.size} " +
+                "licenceFields=${streams.count { SportsLiveStreamLicences.describe(it.getStreamUrl()) != "none" }}"
         }
         streams.take(links).forEachIndexed { linkIndex, stream ->
-            probeLink(index, linkIndex, stream, maxMs)
+            probeLink(index, linkIndex, stream, maxMs, item.id)
             delay(1_000L)
         }
     }
@@ -99,17 +116,17 @@ class SportsLiveDebugProbe @Inject constructor(
         val found = resolver.lookup(item, forceRefresh = true)
         SportsLiveDebugTiming.log { "probeWatch g=$index outcome=${found::class.simpleName} title=${SportsLiveDebugTiming.label(item.meta.name)}" }
         if (found is SportsLiveLookup.Found) {
-            probeLink(index, 0, found.stream, maxMs)
+            probeLink(index, 0, found.stream, maxMs, item.id)
             return
         }
         delay(30_000L)
         val late = streamRepository.getCachedStreamsFromAllAddons(item.apiType, item.id).orEmpty()
-            .flatMap { it.streams }.filterNot(SportsLiveZapResolver::isNonStream)
+            .flatMap { it.streams }.filterNot(SportsLiveZapResolver::isNoticeEntry)
         SportsLiveDebugTiming.log { "probeWatch g=$index lateLinks=${late.size}" }
     }
 
     @OptIn(UnstableApi::class)
-    private suspend fun probeLink(game: Int, index: Int, stream: Stream, maxMs: Long) {
+    private suspend fun probeLink(game: Int, index: Int, stream: Stream, maxMs: Long, gameKey: String) {
         val url = stream.getStreamUrl() ?: return
         val factory = PlayerMediaSourceFactory(context)
         val player = buildSportsLiveLightPlayer(context)
@@ -167,20 +184,38 @@ class SportsLiveDebugProbe @Inject constructor(
                 if (firstFrameMs >= 0 || error != null || t >= maxMs) break
             }
         } finally {
+            player.release()
+            reader?.close()
             val outcome = when {
                 firstFrameMs >= 0 -> "frame"
                 error != null -> "error:${error?.errorCodeName}"
                 else -> "noframe"
             }
+            // #166: why it failed, from the error and the manifest; the marks learn it too.
+            val sniff = withContext(NonCancellable) {
+                SportsLiveManifestSniffer.check(url, stream.behaviorHints?.proxyHeaders?.request.orEmpty())
+            }
+            val failed = error
+            if (failed != null) SportsLiveLinkMarks.shared.noteCause(url, sportsLiveLinkCause(failed))
+            if (sniff.protected == true) SportsLiveLinkMarks.shared.noteCause(url, SportsLiveLinkCause.DRM)
+            val linkClass = when {
+                firstFrameMs >= 0 -> "played"
+                sniff.protected == true -> SportsLiveLinkCause.DRM.name
+                failed != null -> sportsLiveLinkCause(failed).name
+                else -> "NO_FRAME"
+            }
+            if (firstFrameMs >= 0) SportsLiveLinkMarks.shared.played(gameKey, url) else SportsLiveLinkMarks.shared.failed(gameKey, url)
+            val source = SportsLiveDebugTiming.label(stream.addonName)
+            val counts = classes.getOrPut(source) { LinkedHashMap() }
+            counts[linkClass] = (counts[linkClass] ?: 0) + 1
             SportsLiveDebugTiming.log {
                 "probeLink g=$game l=$index link=${sportsLiveLinkId(url)} source=${SportsLiveDebugTiming.label(stream.addonName)} " +
                     "outcome=$outcome ttff=$firstFrameMs ready=$readyMs firstByte=$firstByteMs " +
                     "failedReq=$failedRequests firstFailedReq=$firstFailedRequestMs " +
                     "bytes8=${marks[0]} bytes15=${marks[1]} buf8=${marks[2]} buf15=${marks[3]} total=${factory.bytesLoaded} " +
-                    "hls=${url.contains(".m3u8", ignoreCase = true)}"
+                    "hls=${url.contains(".m3u8", ignoreCase = true)} class=$linkClass drm=${sniff.protected} " +
+                    "manifestStatus=${sniff.status} licence=${SportsLiveStreamLicences.describe(url)}"
             }
-            player.release()
-            reader?.close()
         }
     }
 }

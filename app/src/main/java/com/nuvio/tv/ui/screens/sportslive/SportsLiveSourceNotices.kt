@@ -32,7 +32,7 @@ import com.nuvio.tv.ui.theme.NuvioTheme
  * stream as before.
  */
 internal fun sportsLiveSourceNotice(contentId: String?, stream: Stream): Boolean =
-    SportsLiveExtraSources.isSportsPlayback(contentId) && SportsLiveZapResolver.isNonStream(stream)
+    SportsLiveExtraSources.isSportsPlayback(contentId) && SportsLiveZapResolver.isNoticeEntry(stream)
 
 /**
  * [streams] with the entries [isNotice] flags moved after the others, each part in its own order (N2):
@@ -49,7 +49,7 @@ internal fun <T> sportsLiveNoticesLast(streams: List<T>, isNotice: (T) -> Boolea
  */
 internal fun sportsLiveStreamScreenOrder(videoId: String?, streams: List<Stream>): List<Stream> =
     if (!SportsLiveExtraSources.isSportsPlayback(videoId)) streams
-    else sportsLiveNoticesLast(streams, SportsLiveZapResolver::isNonStream)
+    else sportsLiveNoticesLast(streams, SportsLiveZapResolver::isNoticeEntry)
 
 /**
  * A source's message in a stream list (N2): "Message from the source · not a stream" over its text,

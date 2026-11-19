@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.sportslive.dual
 
+import com.nuvio.tv.ui.screens.sportslive.noteSportsLiveLinkError
 import android.content.Context
 import androidx.annotation.OptIn
 import androidx.compose.runtime.getValue
@@ -163,6 +164,8 @@ internal class DualPlayers(
                         }
                         return
                     }
+                    // Why the link failed, for the stream lists' marks (#166).
+                    noteSportsLiveLinkError(stream, stream.getStreamUrl(), error)
                     // A missing decoder is the device's fault, not the source's.
                     val decoderInit = error.isDecoderInitFailure()
                     if (!decoderInit) SportsLiveSourceReliability.record(sourceKey, Outcome.FAILURE)

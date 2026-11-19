@@ -218,6 +218,7 @@ internal fun SportsLiveSettingsContent(
                 SportsLiveSetting.SCORE_ALERTS -> alerts.scoreAlerts
                 SportsLiveSetting.FULL_TIME_ALERTS -> alerts.fullTimeAlerts
                 SportsLiveSetting.PICTURE_IN_PICTURE -> state.pipEnabled
+                SportsLiveSetting.HIDE_UNPLAYABLE -> state.hideUnplayable
                 SportsLiveSetting.SHOW_SECTION -> state.showSection
                 SportsLiveSetting.HOME_ROW -> state.showHomeRow
                 SportsLiveSetting.CATCH_UP_ROW -> state.catchUpRow

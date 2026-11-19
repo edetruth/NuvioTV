@@ -308,6 +308,20 @@ class SportsLiveSettingsViewModelTest {
     }
 
     @Test
+    fun `hide links this TV cant play is on by default and its switch is stored`() = runTest {
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.hideUnplayable)
+        assertTrue(prefs.hideUnplayable.first())
+
+        viewModel.setSwitch(SportsLiveSetting.HIDE_UNPLAYABLE, false)
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.hideUnplayable)
+        assertFalse(prefs.hideUnplayable.first())
+    }
+
+    @Test
     fun `alert switches are on by default and each is stored`() = runTest {
         val viewModel = newViewModel()
         backgroundScope.launch { viewModel.alertSettings.collect {} }

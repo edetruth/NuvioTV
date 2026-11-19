@@ -1,5 +1,6 @@
 package com.nuvio.tv.data.mapper
 
+import com.nuvio.tv.core.sportslive.SportsLiveStreamLicences
 import com.nuvio.tv.data.remote.dto.BehaviorHintsDto
 import com.nuvio.tv.data.remote.dto.ProxyHeadersDto
 import com.nuvio.tv.data.remote.dto.StreamClientResolveParsedDto
@@ -18,7 +19,15 @@ import com.nuvio.tv.domain.model.StreamClientResolveStream
 import com.nuvio.tv.domain.model.toStreamAudioDelayLanguage
 import com.nuvio.tv.domain.model.toStreamAudioDelayMs
 
-fun StreamDto.toDomain(addonName: String, addonLogo: String?): Stream = Stream(
+fun StreamDto.toDomain(addonName: String, addonLogo: String?): Stream {
+    // A licence server the addon names for this link (#166) is remembered for the players to use.
+    if (drm != null || license != null || behaviorHints?.drm != null || behaviorHints?.license != null) {
+        SportsLiveStreamLicences.note(url, SportsLiveStreamLicences.parse(behaviorHints?.drm, behaviorHints?.license, drm, license))
+    }
+    return toDomainStream(addonName, addonLogo)
+}
+
+private fun StreamDto.toDomainStream(addonName: String, addonLogo: String?): Stream = Stream(
     name = name,
     title = title,
     description = description,

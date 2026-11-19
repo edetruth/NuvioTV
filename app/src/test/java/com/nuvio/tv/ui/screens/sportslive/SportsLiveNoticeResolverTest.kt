@@ -2,6 +2,8 @@ package com.nuvio.tv.ui.screens.sportslive
 
 import com.nuvio.tv.core.debrid.DirectDebridResolver
 import com.nuvio.tv.core.network.NetworkResult
+import com.nuvio.tv.core.sportslive.SportsLiveLinkCause
+import com.nuvio.tv.core.sportslive.SportsLiveLinkMarks
 import com.nuvio.tv.core.sportslive.SportsLiveSourceCooldown
 import com.nuvio.tv.core.sportslive.SportsLiveSourceReliability
 import com.nuvio.tv.core.sportslive.SportsLiveWorkingLinks
@@ -68,6 +70,7 @@ class SportsLiveNoticeResolverTest {
 
     @After
     fun tearDown() {
+        SportsLiveLinkMarks.shared.clear()
         SportsLiveSourceReliability.reset()
         SportsLiveExtraSources.reset()
         SportsLiveZapSessions.clear()
@@ -89,6 +92,39 @@ class SportsLiveNoticeResolverTest {
         resolveCache.clear()
         settings = PlayerSettings(streamAutoPlayMode = StreamAutoPlayMode.REGEX_MATCH, streamAutoPlayRegex = "Upgrade|720")
         assertEquals(SD, newResolver().resolve(ITEM))
+    }
+
+    @Test
+    fun `a protected link listed first is never auto-picked`() = runTest {
+        SportsLiveLinkMarks.shared.noteCause(PROTECTED.url, SportsLiveLinkCause.DRM)
+        streams.response = { flowOf(success(PROTECTED, SD)) }
+
+        assertEquals(SD, newResolver().resolve(ITEM))
+    }
+
+    @Test
+    fun `a protected link is never auto-picked in manual mode either`() = runTest {
+        SportsLiveLinkMarks.shared.noteCause(PROTECTED.url, SportsLiveLinkCause.DRM)
+        settings = PlayerSettings(streamAutoPlayMode = StreamAutoPlayMode.MANUAL)
+        streams.response = { flowOf(success(PROTECTED, SD)) }
+
+        assertEquals(SD, newResolver().resolve(ITEM))
+    }
+
+    @Test
+    fun `only protected links is not a working stream for the game`() = runTest {
+        SportsLiveLinkMarks.shared.noteCause(PROTECTED.url, SportsLiveLinkCause.DRM)
+        streams.response = { flowOf(success(PROTECTED)) }
+
+        assertTrue(newResolver().lookup(ITEM) !is SportsLiveLookup.Found)
+    }
+
+    @Test
+    fun `a protected link is not a notice row, but never counts as a stream`() {
+        SportsLiveLinkMarks.shared.noteCause(PROTECTED.url, SportsLiveLinkCause.DRM)
+        assertTrue(SportsLiveZapResolver.isNonStream(PROTECTED))
+        assertFalse(SportsLiveZapResolver.isNoticeEntry(PROTECTED))
+        assertFalse(SportsLiveZapResolver.isNonStream(SD))
     }
 
     @Test
@@ -325,6 +361,7 @@ class SportsLiveNoticeResolverTest {
     private companion object {
         val SD = stream(url = "https://cdn.example.invalid/sd.m3u8", title = "Sports 720p")
         val HD = stream(url = "https://cdn2.example.invalid/hd.m3u8", title = "Other 1080p", addonName = "Other")
+        val PROTECTED = stream(url = "https://cdn.example.invalid/drm.mpd", title = "Sports 1080p")
         val RATE_LIMIT = stream(
             url = "https://cdn.example.invalid/notice.mp4",
             title = "Rate limit reached",

@@ -21,7 +21,10 @@ data class StreamDto(
     @Json(name = "behaviorHints") val behaviorHints: BehaviorHintsDto? = null,
     @Json(name = "sources") val sources: List<String>? = null,
     @Json(name = "subtitles") val subtitles: List<SubtitleDto>? = null,
-    @Json(name = "clientResolve") val clientResolve: StreamClientResolveDto? = null
+    @Json(name = "clientResolve") val clientResolve: StreamClientResolveDto? = null,
+    // DRM licence details some addons attach (#166); any JSON shape, read by SportsLiveStreamLicences.
+    @Json(name = "drm") val drm: Any? = null,
+    @Json(name = "license") val license: Any? = null
 )
 
 @JsonClass(generateAdapter = true)
@@ -98,7 +101,10 @@ data class BehaviorHintsDto(
     @Json(name = "videoSize") val videoSize: Long? = null,
     @Json(name = "filename") val filename: String? = null,
     @Json(name = "audioDelayMs") val audioDelayMs: Double? = null,
-    @Json(name = "audioDelayLanguage") val audioDelayLanguage: String? = null
+    @Json(name = "audioDelayLanguage") val audioDelayLanguage: String? = null,
+    // DRM licence details some addons attach (#166); any JSON shape, read by SportsLiveStreamLicences.
+    @Json(name = "drm") val drm: Any? = null,
+    @Json(name = "license") val license: Any? = null
 )
 
 @JsonClass(generateAdapter = true)

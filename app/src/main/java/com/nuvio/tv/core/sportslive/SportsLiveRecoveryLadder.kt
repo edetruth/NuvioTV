@@ -77,7 +77,8 @@ class SportsLiveRecoveryLadder(
  * The links a recovery may switch to (#138), best first: the game's own links (good ones first, as
  * [SportsLiveWorkingLinks.order] ranks them), then its other sources' (a merged card's siblings).
  * Never a link already [tried], a quarantined one, one from a source cooling down after a rate
- * limit ([coolingAddonNames]), an addon's notice entry or a junk link.
+ * limit ([coolingAddonNames]), an addon's notice entry, a junk link, or a DRM-protected link this TV
+ * cannot play (#166, [SportsLiveLinkMarks.isProtected]).
  */
 object SportsLiveRecoveryCandidates {
     fun order(
@@ -102,14 +103,16 @@ object SportsLiveRecoveryCandidates {
         gameKey: String,
         streams: List<Stream>,
         workingLinks: SportsLiveWorkingLinks,
-        coolingAddonNames: Set<String>
+        coolingAddonNames: Set<String>,
+        isProtected: (Stream) -> Boolean = { SportsLiveLinkMarks.shared.isProtected(it.getStreamUrl()) }
     ): List<Stream> = workingLinks.order(
         gameKey,
         streams.filterNot { stream ->
             workingLinks.isQuarantined(gameKey, stream) ||
                 stream.addonName.trim() in coolingAddonNames ||
                 UnplayableStreamFilter.isUnplayableJunk(stream) ||
-                SportsLiveNoticeEntries.isNotice(stream)
+                SportsLiveNoticeEntries.isNotice(stream) ||
+                isProtected(stream)
         }
     )
 }

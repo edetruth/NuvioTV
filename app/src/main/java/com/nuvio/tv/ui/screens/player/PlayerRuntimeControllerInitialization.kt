@@ -1501,6 +1501,8 @@ internal fun PlayerRuntimeController.initializePlayer(
                         // Sports & Live (#138): a live stream that fell behind its live window goes back to the
                         // live edge on the same player and link, not counted as an error.
                         if (trySportsBehindLiveWindowInPlace(error.errorCode)) return
+                        // Sports & Live (#166): why the link failed, for the stream lists' marks.
+                        noteSportsLinkError(error)
                         val detailedError = error.toDisplayMessage(context)
                         cancelStableProgressReset()
 
@@ -1653,6 +1655,11 @@ internal fun PlayerRuntimeController.initializePlayer(
                         val responseCode = (error.cause as? androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException)?.responseCode
                         if (responseCode == 416 && !hasRetriedCurrentStreamAfter416 && retried416Url != currentStreamUrl) {
                             retryCurrentStreamFromStartAfter416()
+                            return
+                        }
+
+                        // Sports & Live (#166): a link this TV's decoders can't play gets one try on mpv first.
+                        if (trySportsCodecRetryWithMpv(error.errorCode)) {
                             return
                         }
 

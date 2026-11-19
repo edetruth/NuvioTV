@@ -1,6 +1,11 @@
 package com.nuvio.tv.ui.screens.sportslive
 
 import com.nuvio.tv.core.sportslive.displayName
+import com.nuvio.tv.core.sportslive.SportsLiveLinkGroups
+import com.nuvio.tv.core.sportslive.SportsLiveLinkMark
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.draw.alpha
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -50,14 +55,24 @@ internal fun SportsLiveStreamPickerDialog(
     onDismiss: () -> Unit
 ) {
     // A source's notices (N2) go after every stream, as info rows; otherwise the order is kept as given.
-    val notices = remember(streams) { streams.filter(SportsLiveZapResolver::isNonStream).toSet() }
-    val ordered = remember(streams, notices) { sportsLiveNoticesLast(streams) { it in notices } }
+    val notices = remember(streams) { streams.filter(SportsLiveZapResolver::isNoticeEntry).toSet() }
+    // Links that failed for this game (#156) go to a trailing "Didn't work" group; protected ones too,
+    // unless hidden (#166).
+    val linkMarks = rememberSportsLiveLinkMarks(item.id, knownSports = true)
+    val grouped = remember(streams, notices, linkMarks) {
+        val noticesLast = sportsLiveNoticesLast(streams) { it in notices }
+        linkMarks?.group(noticesLast, isNotice = { it in notices })
+            ?: SportsLiveLinkGroups(noticesLast, -1)
+    }
+    val ordered = grouped.items
     val firstPlayable = ordered.firstOrNull { it !in notices }
-    // Consecutive streams of one addon share a header.
-    val groups = remember(ordered) {
-        ordered.fold(mutableListOf<Pair<String, MutableList<Stream>>>()) { acc, stream ->
-            val addon = stream.addonName
-            if (acc.lastOrNull()?.first == addon) acc.last().second += stream else acc += addon to mutableListOf(stream)
+    val didntWorkTitle = stringResource(R.string.sports_live_links_didnt_work)
+    // Consecutive streams of one addon share a header; the failed links share "Didn't work".
+    val groups = remember(grouped, didntWorkTitle) {
+        ordered.foldIndexed(mutableListOf<Pair<String, MutableList<Stream>>>()) { index, acc, stream ->
+            val failed = grouped.didntWorkFrom >= 0 && index >= grouped.didntWorkFrom && stream !in notices
+            val title = if (failed) didntWorkTitle else stream.addonName
+            if (acc.lastOrNull()?.first == title) acc.last().second += stream else acc += title to mutableListOf(stream)
             acc
         }
     }
@@ -106,6 +121,8 @@ internal fun SportsLiveStreamPickerDialog(
                     }
                     StreamButton(
                         stream = stream,
+                        mark = linkMarks?.markOf(stream),
+                        nowMs = linkMarks?.nowMs ?: 0L,
                         onClick = { onPick(stream) },
                         modifier = if (stream === firstPlayable) {
                             Modifier
@@ -135,12 +152,23 @@ internal fun SportsLiveResolvingDialog(item: SportsLiveItem, onDismiss: () -> Un
 }
 
 @Composable
-private fun StreamButton(stream: Stream, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun StreamButton(
+    stream: Stream,
+    mark: SportsLiveLinkMark?,
+    nowMs: Long,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     val name = stream.name?.takeIf { it.isNotBlank() } ?: stream.addonName
     val detail = (stream.title ?: stream.description)?.takeIf { it.isNotBlank() && it != name }
+    var focused by remember { mutableStateOf(false) }
     Button(
         onClick = onClick,
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .onFocusChanged { focused = it.isFocused }
+            // A link that failed for this game is dimmed while not focused (#156).
+            .then(if (mark is SportsLiveLinkMark.Failed && !focused) Modifier.alpha(SPORTS_LIVE_FAILED_LINK_ALPHA) else Modifier),
         colors = ButtonDefaults.colors(
             containerColor = NuvioTheme.colors.BackgroundCard,
             contentColor = NuvioTheme.colors.TextPrimary
@@ -156,6 +184,7 @@ private fun StreamButton(stream: Stream, onClick: () -> Unit, modifier: Modifier
                     overflow = TextOverflow.Ellipsis
                 )
             }
+            if (mark != null) SportsLiveLinkMarkLine(mark, nowMs)
         }
     }
 }

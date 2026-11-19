@@ -57,7 +57,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import com.nuvio.tv.core.streams.StreamBadgePlacement
+import com.nuvio.tv.core.sportslive.SportsLiveLinkMark
 import com.nuvio.tv.domain.model.Stream
+import com.nuvio.tv.ui.screens.sportslive.SPORTS_LIVE_FAILED_LINK_ALPHA
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveLinkMarkLine
+import androidx.compose.ui.draw.alpha
 import com.nuvio.tv.ui.components.SourceChipItem
 import com.nuvio.tv.ui.components.SourceChipStatus
 import com.nuvio.tv.ui.components.SourceStatusFilterChip
@@ -82,11 +86,17 @@ internal fun StreamItem(
     showFileSizeBadges: Boolean = true,
     showAddonLogo: Boolean = true,
     badgePlacement: StreamBadgePlacement = StreamBadgePlacement.BOTTOM,
+    /** Sports & Live (#156): what this link did for the game, and the time its age is read at. */
+    linkMark: SportsLiveLinkMark? = null,
+    linkMarkNowMs: Long = 0L,
     onClick: () -> Unit,
     onFocusChanged: ((Boolean) -> Unit)? = null,
     onUpKey: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
+    var isFocused by remember { mutableStateOf(false) }
+    // A link that failed for this game is dimmed, except while focused (#156).
+    val dimmed = linkMark is SportsLiveLinkMark.Failed && !isFocused
     val density = LocalDensity.current
     val unknownStreamLabel = stringResource(R.string.stream_unknown)
     val streamName = remember(stream, unknownStreamLabel) { stream.getDisplayNameOrNull() ?: unknownStreamLabel }
@@ -114,6 +124,7 @@ internal fun StreamItem(
             .fillMaxWidth()
             .then(if (focusRequester != null && requestInitialFocus) Modifier.focusRequester(focusRequester) else Modifier)
             .onFocusChanged {
+                isFocused = it.isFocused
                 onFocusChanged?.invoke(it.isFocused)
             }
             .then(if (onUpKey != null) Modifier.onKeyEvent { event ->
@@ -146,6 +157,7 @@ internal fun StreamItem(
             modifier = Modifier
                 .fillMaxWidth()
                 .then(if (isCurrentStream) Modifier.nowPlayingAccentBar(NuvioTheme.colors.Primary) else Modifier)
+                .then(if (dimmed) Modifier.alpha(SPORTS_LIVE_FAILED_LINK_ALPHA) else Modifier)
                 .padding(NuvioTheme.spacing.lg),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.lg)
@@ -191,6 +203,10 @@ internal fun StreamItem(
                             color = NuvioTheme.extendedColors.textSecondary
                         )
                     }
+                }
+
+                linkMark?.let { mark ->
+                    SportsLiveLinkMarkLine(mark, linkMarkNowMs)
                 }
 
                 if (hasBadges && badgePlacement == StreamBadgePlacement.BOTTOM) {

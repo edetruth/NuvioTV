@@ -19,7 +19,11 @@ import com.nuvio.tv.domain.model.Stream
  * It also holds the stream the full player is playing for a game ([playing]), so dual screen can take
  * it over as is instead of looking it up again.
  */
-class SportsLiveWorkingLinks(internal val nowMs: () -> Long = { System.currentTimeMillis() }) {
+class SportsLiveWorkingLinks(
+    internal val nowMs: () -> Long = { System.currentTimeMillis() },
+    /** The stream lists' marks (#156): a failure and a first frame are told to them too. */
+    private val marks: SportsLiveLinkMarks? = null
+) {
     companion object {
         const val GOOD_AFTER_MS = 30_000L
         const val GOOD_FOR_MS = 3L * 60 * 60 * 1000
@@ -31,7 +35,7 @@ class SportsLiveWorkingLinks(internal val nowMs: () -> Long = { System.currentTi
         private val USER_INFO = Regex("^([A-Za-z][A-Za-z0-9+.-]*://)[^/?#@]*@")
 
         /** The process-wide memory the app uses. */
-        val shared = SportsLiveWorkingLinks()
+        val shared = SportsLiveWorkingLinks(marks = SportsLiveLinkMarks.shared)
 
         /** How long a link that failed with [problem] stays quarantined (#158); null: a plain failure. */
         fun quarantineMsFor(problem: SportsLiveStreamHealth.Problem?): Long =
@@ -106,6 +110,7 @@ class SportsLiveWorkingLinks(internal val nowMs: () -> Long = { System.currentTi
                 failedUrl = null
             }
         }
+        marks?.played(gameKey, stream.getStreamUrl())
     }
 
     /**
@@ -175,6 +180,7 @@ class SportsLiveWorkingLinks(internal val nowMs: () -> Long = { System.currentTi
      */
     fun failed(gameKey: String, url: String?, problem: SportsLiveStreamHealth.Problem? = null): Boolean {
         val key = linkKey(url) ?: return false
+        marks?.failed(gameKey, url, problem)
         synchronized(this) {
             val game = game(gameKey)
             if (key in game.good && key !in game.strikes) {

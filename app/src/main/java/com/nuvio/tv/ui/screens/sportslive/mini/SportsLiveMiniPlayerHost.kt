@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.sportslive.mini
 
+import com.nuvio.tv.ui.screens.sportslive.noteSportsLiveLinkError
 import com.nuvio.tv.core.sportslive.displayName
 import android.content.Context
 import android.view.ViewGroup
@@ -83,6 +84,7 @@ import com.nuvio.tv.R
 import com.nuvio.tv.core.debrid.DirectDebridResolver
 import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.core.sportslive.SportsLiveLinkErrors
+import com.nuvio.tv.core.sportslive.SportsLiveLinkMarks
 import com.nuvio.tv.core.sportslive.SportsLiveRecoveryLadder
 import com.nuvio.tv.core.sportslive.SportsLiveStartupTimeout
 import com.nuvio.tv.core.sportslive.SportsLiveStreamThresholds
@@ -190,6 +192,9 @@ internal class SportsLiveMiniPlayback(
                     reconnecting = false
                     health.onFirstFrame()
                     reportLink(loadedSessionId, true)
+                    // The link plays: its "didn't work" mark clears in the stream lists (#156).
+                    val shown = this@SportsLiveMiniPlayback.stream
+                    this@SportsLiveMiniPlayback.item?.let { SportsLiveLinkMarks.shared.played(it.id, shown?.getStreamUrl()) }
                 }
 
                 override fun onPlayerError(error: PlaybackException) {
@@ -201,6 +206,9 @@ internal class SportsLiveMiniPlayback(
                         if (behind == null) retrySportsLiveLink() else recover(behind)
                         return
                     }
+                    // Why the link failed, for the stream lists' marks (#166).
+                    val failing = this@SportsLiveMiniPlayback.stream
+                    noteSportsLiveLinkError(failing, failing?.getStreamUrl(), error)
                     val decoderInit = error.isDecoderInitFailure()
                     // A dead host (#138): the next link at once, even before the first frame.
                     if (!decoderInit && SportsLiveLinkErrors.isDeadHost(error)) {
@@ -382,6 +390,8 @@ class SportsLiveMiniPlayerViewModel @Inject constructor(
         // Home reads the picture-in-picture setting synchronously, so it is mirrored here (this
         // view model lives as long as the activity).
         viewModelScope.launch { prefs.pipEnabled.collect { SportsLivePip.userEnabled = it } }
+        // Every stream list reads "Hide links this TV can't play" (#166) from the link marks.
+        viewModelScope.launch { prefs.hideUnplayable.collect { SportsLiveLinkMarks.shared.hideUnplayable.value = it } }
         // A mini player stopped elsewhere ends its lookup and dialog.
         viewModelScope.launch {
             controller.state.collect { if (it !is SportsLiveMiniState.Playing) expander.cancel() }

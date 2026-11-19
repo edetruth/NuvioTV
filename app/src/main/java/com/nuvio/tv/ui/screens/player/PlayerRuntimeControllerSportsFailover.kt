@@ -6,6 +6,11 @@ import com.nuvio.tv.BuildConfig
 import com.nuvio.tv.R
 import com.nuvio.tv.core.debrid.DirectDebridPlayableResult
 import com.nuvio.tv.core.sportslive.SportsLiveFailover
+import com.nuvio.tv.core.sportslive.SportsLiveLinkCause
+import com.nuvio.tv.core.sportslive.SportsLiveLinkMarks
+import com.nuvio.tv.data.local.InternalPlayerEngine
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveManifestSniffer
+import com.nuvio.tv.ui.screens.sportslive.noteSportsLiveLinkError
 import com.nuvio.tv.core.sportslive.SportsLiveLinkErrors
 import com.nuvio.tv.core.sportslive.SportsLiveRecoveryCandidates
 import com.nuvio.tv.core.sportslive.SportsLiveRecoveryLadder
@@ -143,6 +148,13 @@ internal fun PlayerRuntimeController.trySportsLiveFailoverAfterError(
         // A link that failed to start, hit a fatal error or froze is skipped for this game for a
         // while, unless it is known to work and this is its only recent failure (#65, #138).
         SportsLiveWorkingLinks.shared.failed(contentId.orEmpty(), currentSportsStream()?.getStreamUrl(), problem)
+    } else if (recordFailure) {
+        // No decoder for it: not held against the link, but the stream lists still say it didn't work (#156).
+        SportsLiveLinkMarks.shared.failed(contentId.orEmpty(), currentSportsStream()?.getStreamUrl(), problem)
+    }
+    // A link that never showed a frame without saying why may be DRM-only: its manifest is checked (#166).
+    if (recordFailure && problem == SportsLiveStreamHealth.Problem.NO_START) {
+        SportsLiveManifestSniffer.checkInBackground(currentSportsStream()?.getStreamUrl() ?: currentStreamUrl, currentHeaders)
     }
     cancelSportsStallWatchdog()
 
@@ -263,6 +275,58 @@ internal fun PlayerRuntimeController.trySportsFailoverOnUnplayableStart(errorCod
     val isNotice = currentSportsStream()?.let(SportsLiveZapResolver::isNonStream) == true
     if (!sportsFailsOverAtOnce(errorCode, hasRenderedFirstFrame, parsingErrorProbeAttempted, isNotice)) return false
     return trySportsLiveFailoverAfterError(errorMessage)
+}
+
+/**
+ * A sports link's playback error (#166): why it failed is noted for the stream lists' marks, and an error
+ * that does not say why has the link's manifest checked for DRM. Movies and shows: nothing.
+ */
+internal fun PlayerRuntimeController.noteSportsLinkError(error: PlaybackException) {
+    if (!SportsLiveExtraSources.isSportsPlayback(contentId)) return
+    val stream = currentSportsStream()
+    noteSportsLiveLinkError(stream, stream?.getStreamUrl() ?: currentStreamUrl, error)
+}
+
+/**
+ * Whether a sports link that failed with [errorCode] is retried once with the mpv engine before the next
+ * link (#166): a decoder or unsupported-format failure before the first frame, on ExoPlayer, not yet
+ * retried with mpv, and not a DRM-protected link (mpv cannot play that either). A container ExoPlayer
+ * cannot parse is retried only after the parsing probe already tried it ([probeAttempted]).
+ */
+internal fun sportsRetriesWithMpv(
+    errorCode: Int,
+    hasRenderedFirstFrame: Boolean,
+    onMpv: Boolean,
+    alreadyRetried: Boolean,
+    probeAttempted: Boolean,
+    isProtected: Boolean
+): Boolean {
+    if (hasRenderedFirstFrame || onMpv || alreadyRetried || isProtected) return false
+    if (SportsLiveLinkCause.isDecoderError(errorCode)) return true
+    return errorCode == PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED && probeAttempted
+}
+
+/**
+ * [sportsRetriesWithMpv] for the error just raised: the same link plays again on mpv, once. True when
+ * it does; false for movies and shows and any other case.
+ */
+internal fun PlayerRuntimeController.trySportsCodecRetryWithMpv(errorCode: Int): Boolean {
+    if (!SportsLiveExtraSources.isSportsPlayback(contentId)) return false
+    val url = currentStreamUrl
+    val retries = sportsRetriesWithMpv(
+        errorCode = errorCode,
+        hasRenderedFirstFrame = hasRenderedFirstFrame,
+        onMpv = isUsingMpvEngine(),
+        alreadyRetried = url in sportsMpvRetriedLinks,
+        probeAttempted = parsingErrorProbeAttempted,
+        isProtected = SportsLiveLinkMarks.shared.isProtected(url)
+    )
+    if (!retries || url.isBlank()) return false
+    sportsMpvRetriedLinks += url
+    Log.i(PlayerRuntimeController.TAG, "Sports link could not be decoded, retrying it once with mpv")
+    com.nuvio.tv.core.sportslive.SportsLiveDebugTiming.log { "codecRetryMpv who=full link=${sportsLiveLinkId(url)} code=$errorCode" }
+    switchToInternalPlayerEngine(InternalPlayerEngine.MVP_PLAYER, reason = "sports-codec-retry")
+    return true
 }
 
 /**
@@ -404,6 +468,7 @@ internal fun PlayerRuntimeController.scheduleSportsStartupTimeout() {
         sportsFailoverAttempts = 0
         sportsFailoverRunStartedAtMs = null
         sportsFailoverTriedKeys.clear()
+        sportsMpvRetriedLinks.clear()
     }
     if (!sports) {
         if (_uiState.value.sportsStarting != null) _uiState.update { it.copy(sportsStarting = null) }

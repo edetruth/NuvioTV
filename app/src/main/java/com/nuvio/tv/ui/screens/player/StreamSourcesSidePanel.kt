@@ -60,6 +60,9 @@ import com.nuvio.tv.ui.screens.sportslive.sportsLiveSourceLoadingRows
 import androidx.compose.ui.res.stringResource
 import com.nuvio.tv.R
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveSourceNoticeRow
+import com.nuvio.tv.core.sportslive.SportsLiveLinkMark
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveDidntWorkHeader
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveLinkMarksView
 import com.nuvio.tv.ui.screens.sportslive.sportsLiveNoticesLast
 import com.nuvio.tv.ui.util.localizeEpisodeTitle
 import androidx.compose.ui.platform.LocalContext
@@ -76,6 +79,8 @@ internal fun StreamSourcesSidePanel(
     onExpandStreams: () -> Unit = {},
     // Sports & Live (C1): an addon's informational entry, listed as a notice row that does not play.
     isNotice: (Stream) -> Boolean = { false },
+    // Sports & Live (#156, #166): what each link did for the game; null for movies and shows.
+    linkMarks: SportsLiveLinkMarksView? = null,
     modifier: Modifier = Modifier
 ) {
     val isRtl = androidx.compose.ui.platform.LocalLayoutDirection.current == androidx.compose.ui.unit.LayoutDirection.Rtl
@@ -110,7 +115,12 @@ internal fun StreamSourcesSidePanel(
     }
 
     // Sports & Live (N2): a source's notices sit after its streams, as info rows nobody can focus or play.
-    val orderedStreams = remember(uiState.sourceFilteredStreams) { sportsLiveNoticesLast(uiState.sourceFilteredStreams, isNotice) }
+    // Sports & Live (#156): links that failed for the game go to a trailing "Didn't work" group, protected
+    // ones too unless hidden (#166); the link playing is never hidden.
+    val orderedStreams = remember(uiState.sourceFilteredStreams, linkMarks, uiState.currentStreamUrl) {
+        val noticesLast = sportsLiveNoticesLast(uiState.sourceFilteredStreams, isNotice)
+        linkMarks?.group(noticesLast, isNotice, keep = { it.getStreamUrl() == uiState.currentStreamUrl })?.items ?: noticesLast
+    }
     val playingIndex = remember(
         orderedStreams,
         uiState.currentStreamInfoHash,
@@ -136,6 +146,13 @@ internal fun StreamSourcesSidePanel(
     val shownStreams = remember(orderedStreams, playingIndex) { pinPlayingFirst(orderedStreams, playingIndex) }
     val currentStreamIndex = if (playingIndex >= 0) 0 else -1
     val noticeIndices = remember(shownStreams) { shownStreams.indices.filter { isNotice(shownStreams[it]) }.toSet() }
+    // The "Didn't work" header sits over the first failed link after the pinned playing one.
+    val didntWorkIndex = remember(shownStreams, linkMarks, currentStreamIndex, noticeIndices) {
+        if (linkMarks == null) -1 else shownStreams.indices.firstOrNull { index ->
+            index != currentStreamIndex && index !in noticeIndices &&
+                linkMarks.markOf(shownStreams[index]) is SportsLiveLinkMark.Failed
+        } ?: -1
+    }
     val streamKeys = remember(shownStreams) {
         val seen = mutableMapOf<String, Int>()
         shownStreams.map { stream ->
@@ -509,6 +526,7 @@ internal fun StreamSourcesSidePanel(
                             }
                             Column {
                                 if (index == currentStreamIndex) NowPlayingHeader()
+                                if (index == didntWorkIndex) SportsLiveDidntWorkHeader()
                                 StreamItem(
                                     stream = stream,
                                     focusRequester = if (index == 0) {
@@ -521,6 +539,8 @@ internal fun StreamSourcesSidePanel(
                                     showFileSizeBadges = uiState.showFileSizeBadges,
                                     showAddonLogo = uiState.showAddonLogo,
                                     badgePlacement = uiState.streamBadgePlacement,
+                                    linkMark = linkMarks?.markOf(stream),
+                                    linkMarkNowMs = linkMarks?.nowMs ?: 0L,
                                     onClick = { onStreamSelected(stream) },
                                     onFocusChanged = { focused ->
                                         if (focused) {

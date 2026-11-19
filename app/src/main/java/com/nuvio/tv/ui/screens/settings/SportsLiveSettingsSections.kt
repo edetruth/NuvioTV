@@ -40,6 +40,8 @@ internal enum class SportsLiveSetting(
     SCORE_ALERTS(SportsLiveSettingsSection.ALERTS, R.string.sports_live_setting_score_alerts, R.string.sports_live_setting_score_alerts_subtitle),
     FULL_TIME_ALERTS(SportsLiveSettingsSection.ALERTS, R.string.sports_live_setting_full_time_alerts, R.string.sports_live_setting_full_time_alerts_subtitle),
     OPEN_GAME(SportsLiveSettingsSection.PLAYING, R.string.sports_live_setting_open_game, R.string.sports_live_setting_open_game_subtitle),
+    /** "Hide links this TV can't play" (#166): DRM links with no licence are left out of the stream lists. */
+    HIDE_UNPLAYABLE(SportsLiveSettingsSection.PLAYING, R.string.sports_live_setting_hide_unplayable, R.string.sports_live_setting_hide_unplayable_subtitle),
     PICTURE_IN_PICTURE(SportsLiveSettingsSection.PLAYING, R.string.sports_live_setting_pip, R.string.sports_live_setting_pip_subtitle),
     SHOW_SECTION(SportsLiveSettingsSection.HOME_AND_ROWS, R.string.sports_live_setting_show_section, R.string.sports_live_setting_show_section_subtitle),
     HOME_ROW(SportsLiveSettingsSection.HOME_AND_ROWS, R.string.sports_live_setting_home_row, R.string.sports_live_setting_home_row_subtitle),
@@ -69,7 +71,7 @@ internal enum class SportsLiveSetting(
             CATCH_UP_ROW -> section && state.showHomeRow && scores != ScoresMode.OFF
             HOVER_PREVIEW -> section && !state.dataSaver
             // The device's own picture-in-picture support is checked by the screen on top of this.
-            MY_SPORTS, SCORES, OPEN_GAME, PICTURE_IN_PICTURE, HOME_ROW, REMIND_MY_TEAMS,
+            MY_SPORTS, SCORES, OPEN_GAME, HIDE_UNPLAYABLE, PICTURE_IN_PICTURE, HOME_ROW, REMIND_MY_TEAMS,
             SCORES_STATUS, DATA_SAVER, CATALOGS -> section
         }
     }
@@ -80,7 +82,7 @@ internal enum class SportsLiveSetting(
 
     private companion object {
         val SWITCHES = setOf(
-            REMIND_MY_TEAMS, SCORE_ALERTS, FULL_TIME_ALERTS, PICTURE_IN_PICTURE, SHOW_SECTION, HOME_ROW,
+            REMIND_MY_TEAMS, SCORE_ALERTS, FULL_TIME_ALERTS, HIDE_UNPLAYABLE, PICTURE_IN_PICTURE, SHOW_SECTION, HOME_ROW,
             CATCH_UP_ROW, HOVER_PREVIEW, DATA_SAVER
         )
     }

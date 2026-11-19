@@ -22,6 +22,9 @@ import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.dash.DashMediaSource
+import androidx.media3.exoplayer.drm.DefaultDrmSessionManagerProvider
+import com.nuvio.tv.core.sportslive.SportsLiveStreamLicence
+import com.nuvio.tv.core.sportslive.SportsLiveStreamLicences
 import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MediaSource
@@ -232,6 +235,15 @@ internal class PlayerMediaSourceFactory(private val context: Context) {
             cacheKey?.takeIf { it.isNotBlank() }?.let(mediaItemBuilder::setCustomCacheKey)
         }
         mediaMetadata?.let(mediaItemBuilder::setMediaMetadata)
+        // A DRM licence server the addon named for this link (#166): licensed playback through Media3's
+        // DefaultDrmSessionManager, with the stream's request headers on every licence request too.
+        val licence = SportsLiveStreamLicences.forUrl(url)
+        val drmProvider = licence?.let {
+            mediaItemBuilder.setDrmConfiguration(sportsLiveDrmConfiguration(it, sanitizedHeaders))
+            DefaultDrmSessionManagerProvider().apply {
+                setDrmHttpDataSourceFactory(PlayerPlaybackNetworking.createHttpDataSourceFactory(sanitizedHeaders))
+            }
+        }
 
         if (subtitleConfigurations.isNotEmpty()) {
             mediaItemBuilder.setSubtitleConfigurations(subtitleConfigurations)
@@ -335,6 +347,7 @@ internal class PlayerMediaSourceFactory(private val context: Context) {
         }
         val defaultFactory = DefaultMediaSourceFactory(defaultSourceFactory, extractorsFactory).apply {
             setLoadErrorHandlingPolicy(loadErrorHandlingPolicy)
+            drmProvider?.let { setDrmSessionManagerProvider(it) }
             customSubtitleParserFactory?.let { parserFactory ->
                 setSubtitleParserFactory(parserFactory)
             }
@@ -353,9 +366,11 @@ internal class PlayerMediaSourceFactory(private val context: Context) {
             isHls && !forceDefaultFactory -> HlsMediaSource.Factory(httpDataSourceFactory)
                 .setAllowChunklessPreparation(true)
                 .setLoadErrorHandlingPolicy(loadErrorHandlingPolicy)
+                .apply { drmProvider?.let { setDrmSessionManagerProvider(it) } }
                 .createMediaSource(mediaItem)
             isDash && !forceDefaultFactory -> DashMediaSource.Factory(httpDataSourceFactory)
                 .setLoadErrorHandlingPolicy(loadErrorHandlingPolicy)
+                .apply { drmProvider?.let { setDrmSessionManagerProvider(it) } }
                 .createMediaSource(mediaItem)
             else -> defaultFactory.createMediaSource(mediaItem)
         }
@@ -1256,3 +1271,16 @@ internal fun shouldPreferAlternativeHlsTrack(
     responseCode == 404 &&
         dataType == C.DATA_TYPE_MEDIA &&
         alternativeTrackAvailable
+
+/** The licence request headers for [licence] (#166): the stream's own request headers, then the addon's licence headers. */
+internal fun sportsLiveLicenceHeaders(licence: SportsLiveStreamLicence, streamHeaders: Map<String, String>): Map<String, String> =
+    LinkedHashMap(streamHeaders).apply { putAll(licence.headers) }
+
+/** Media3's DRM configuration for an addon's licence server (#166). */
+internal fun sportsLiveDrmConfiguration(
+    licence: SportsLiveStreamLicence,
+    streamHeaders: Map<String, String>
+): MediaItem.DrmConfiguration = MediaItem.DrmConfiguration.Builder(licence.scheme.uuid)
+    .setLicenseUri(licence.licenseUrl)
+    .setLicenseRequestHeaders(sportsLiveLicenceHeaders(licence, streamHeaders))
+    .build()

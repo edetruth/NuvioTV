@@ -77,7 +77,9 @@ data class SportsLiveSettingsUiState(
     /** "When I open a game": Play best stream (default) / Let me choose. */
     val openGame: SportsLiveOpenGame = SportsLiveOpenGame.PLAY_BEST,
     /** The Catch up row (#58) on Home and Live Now. */
-    val catchUpRow: Boolean = true
+    val catchUpRow: Boolean = true,
+    /** "Hide links this TV can't play" (#166). */
+    val hideUnplayable: Boolean = true
 )
 
 @HiltViewModel
@@ -113,13 +115,13 @@ class SportsLiveSettingsViewModel @Inject constructor(
 
     val uiState: StateFlow<SportsLiveSettingsUiState> = combine(
         addonRepository.getInstalledAddons(),
-        combine(prefs.overrides, prefs.catalogOptions, combine(prefs.followedTeams, prefs.catchUpRow, ::Pair), ::Triple),
+        combine(prefs.overrides, prefs.catalogOptions, combine(prefs.followedTeams, prefs.catchUpRow, prefs.hideUnplayable, ::Triple), ::Triple),
         prefs.showSection,
         combine(prefs.showHomeRow, prefs.hoverPreview, prefs.dataSaver, ::Triple),
         combine(claimedStats, prefs.pipEnabled, combine(prefs.scoreSettings, prefs.mySports, openGame, ::Triple), ::Triple)
     ) { addons, (overrides, options, teamsAndCatchUp), showSection, (showHomeRow, hoverPreview, dataSaver), (stats, pipEnabled, scoreAndSports) ->
         val (scores, mySports, openGame) = scoreAndSports
-        val (followedTeams, catchUpRow) = teamsAndCatchUp
+        val (followedTeams, catchUpRow, hideUnplayable) = teamsAndCatchUp
         val catalogs = addons.enabledAddons().flatMap { addon ->
             addon.catalogs.filter(SportsLiveCatalogPolicy::isClaimable).map { catalog ->
                 val key = SportsLiveCatalogPolicy.keyFor(addon, catalog)
@@ -142,7 +144,7 @@ class SportsLiveSettingsViewModel @Inject constructor(
                 )
             }
         }
-        SportsLiveSettingsUiState(showSection, showHomeRow, hoverPreview, dataSaver, pipEnabled, catalogs, followedTeams, scores, mySports, openGame, catchUpRow)
+        SportsLiveSettingsUiState(showSection, showHomeRow, hoverPreview, dataSaver, pipEnabled, catalogs, followedTeams, scores, mySports, openGame, catchUpRow, hideUnplayable)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SportsLiveSettingsUiState())
 
     /** A switch row of the screen (#72) set to [on], through the same setter (and pref key) as before. */
@@ -154,6 +156,7 @@ class SportsLiveSettingsViewModel @Inject constructor(
             SportsLiveSetting.HOVER_PREVIEW -> setHoverPreview(on)
             SportsLiveSetting.DATA_SAVER -> setDataSaver(on)
             SportsLiveSetting.PICTURE_IN_PICTURE -> setPipEnabled(on)
+            SportsLiveSetting.HIDE_UNPLAYABLE -> setHideUnplayable(on)
             SportsLiveSetting.REMIND_MY_TEAMS -> setRemindMyTeams(on)
             SportsLiveSetting.SCORE_ALERTS -> setScoreAlerts(on)
             SportsLiveSetting.FULL_TIME_ALERTS -> setFullTimeAlerts(on)
@@ -190,6 +193,10 @@ class SportsLiveSettingsViewModel @Inject constructor(
 
     fun setPipEnabled(enabled: Boolean) {
         viewModelScope.launch { prefs.setPipEnabled(enabled) }
+    }
+
+    fun setHideUnplayable(hide: Boolean) {
+        viewModelScope.launch { prefs.setHideUnplayable(hide) }
     }
 
     /** Alerts (#42, #44): Remind me for my teams, Score alerts, Full-time alerts. */
@@ -255,6 +262,7 @@ class SportsLiveSettingsViewModel @Inject constructor(
     /** Forgets which stream sources worked (#40); every source starts neutral again. */
     fun resetStreamMemory() {
         SportsLiveSourceReliability.clear()
+        com.nuvio.tv.core.sportslive.SportsLiveLinkMarks.shared.clear()
     }
 
     fun unfollow(team: FollowedTeam) {

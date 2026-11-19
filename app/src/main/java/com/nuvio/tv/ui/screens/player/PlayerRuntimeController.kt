@@ -292,6 +292,8 @@ class PlayerRuntimeController(
     internal var sportsFailoverAttempts = 0
     internal var sportsFailoverRunStartedAtMs: Long? = null
     internal val sportsFailoverTriedKeys = mutableSetOf<String>()
+    /** Sports links of this game already retried with mpv after a decoder failure (#166): once each. */
+    internal val sportsMpvRetriedLinks = mutableSetOf<String>()
     internal var sportsStallWatchdogJob: Job? = null
 
     /** Sports & Live stream health and recovery steps of this player (#138). */

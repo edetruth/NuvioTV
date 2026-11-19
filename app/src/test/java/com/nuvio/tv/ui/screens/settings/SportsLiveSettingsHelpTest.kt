@@ -23,6 +23,7 @@ import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.HOVER_PREVIEW
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.MY_SPORTS
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.MY_TEAMS
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.OPEN_GAME
+import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.HIDE_UNPLAYABLE
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.PICTURE_IN_PICTURE
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.REMIND_MY_TEAMS
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.RESET_STREAM_MEMORY
@@ -65,7 +66,7 @@ class SportsLiveSettingsHelpTest {
                 header(SCORES_AND_SPOILERS), row(SCORES), row(SCORE_DELAY),
                 header(WHAT_I_FOLLOW), row(MY_TEAMS), row(MY_SPORTS),
                 header(ALERTS), row(REMIND_MY_TEAMS), row(SCORE_ALERTS), row(FULL_TIME_ALERTS),
-                header(PLAYING), row(OPEN_GAME), row(PICTURE_IN_PICTURE),
+                header(PLAYING), row(OPEN_GAME), row(HIDE_UNPLAYABLE), row(PICTURE_IN_PICTURE),
                 header(HOME_AND_ROWS), row(SHOW_SECTION), row(HOME_ROW), row(CATCH_UP_ROW), row(HOVER_PREVIEW),
                 header(STATUS), row(SCORES_STATUS),
                 header(MORE), Item.MoreToggle
@@ -78,7 +79,7 @@ class SportsLiveSettingsHelpTest {
     fun `setup, the system pip row, more and catalogs slot into their places`() {
         val items = sportsLiveSettingsItems(moreExpanded = true, setupAvailable = true, pipSystemAvailable = true, catalogCount = 3)
         assertEquals(
-            listOf(row(OPEN_GAME), row(PICTURE_IN_PICTURE), Item.PipSystem),
+            listOf(row(OPEN_GAME), row(HIDE_UNPLAYABLE), row(PICTURE_IN_PICTURE), Item.PipSystem),
             items.subList(items.indexOf(header(PLAYING)) + 1, items.indexOf(header(HOME_AND_ROWS)))
         )
         assertEquals(listOf(header(SETUP), row(RUN_SETUP), header(STATUS)), items.subList(items.indexOf(header(SETUP)), items.indexOf(header(STATUS)) + 1))
