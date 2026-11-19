@@ -194,6 +194,9 @@ class SportsLivePlayViewModel @Inject constructor(
 
     private var job: Job? = null
 
+    /** Each start's request token (#175): a stale start's late lookup never opens a player. */
+    private val gate = SportsLiveRequestGate()
+
     /** Whether Back from the played stream returns to Home (the Home Live now row) rather than the section. */
     private var returnToHomeOnBack = false
 
@@ -213,18 +216,20 @@ class SportsLivePlayViewModel @Inject constructor(
         if (candidates.isEmpty()) return
         SportsLiveZapSessions.clear()
         val safe = candidates.map { spoilerSafeReplay(it, title) }
+        val token = gate.begin("replay|$title")
         job = viewModelScope.launch {
             _state.value = SportsLivePlayState.ResolvingReplay(title)
             val found = coroutineScope {
                 safe.map { replay -> async { (resolver.lookup(replay) as? SportsLiveLookup.Found)?.let { replay to it.stream } } }.awaitAll()
             }.filterNotNull()
+            if (!gate.mayPlay(token)) return@launch
             _state.value = when {
                 found.size > 1 -> SportsLivePlayState.PickingReplaySource(title, found)
                 else -> SportsLivePlayState.Idle
             }
             when (found.size) {
                 0 -> _events.send(SportsLivePlayEvent.NoStream(title))
-                1 -> playStream(found[0].first, found[0].second)
+                1 -> playStream(found[0].first, found[0].second, token = token)
                 else -> Unit
             }
         }
@@ -235,7 +240,8 @@ class SportsLivePlayViewModel @Inject constructor(
         val picking = _state.value as? SportsLivePlayState.PickingReplaySource ?: return
         val (replay, stream) = picking.sources.getOrNull(index) ?: return
         _state.value = SportsLivePlayState.Idle
-        job = viewModelScope.launch { playStream(replay, stream) }
+        val token = gate.begin(replay.streamKey)
+        job = viewModelScope.launch { playStream(replay, stream, token = token) }
     }
 
     /** "Choose stream" on [item]: its streams to pick from (the Stream screen, or a merged card's picker). */
@@ -251,20 +257,22 @@ class SportsLivePlayViewModel @Inject constructor(
         job?.cancel()
         returnToHomeOnBack = false
         _state.value = SportsLivePlayState.Idle
-        job = viewModelScope.launch { playStream(item, stream, liveEdge = true) }
+        val token = gate.begin(item.streamKey)
+        job = viewModelScope.launch { playStream(item, stream, liveEdge = true, token = token) }
     }
 
     fun playCard(item: SportsLiveItem, takeOverPreview: () -> Stream?) {
         job?.cancel()
         returnToHomeOnBack = false
         _state.value = SportsLivePlayState.Idle
+        val token = gate.begin(item.streamKey)
         job = viewModelScope.launch {
             val chooses = sportsLiveAutoPlayEligible(item) && openGame() == SportsLiveOpenGame.LET_ME_CHOOSE
             val previewed = if (chooses) null else takeOverPreview()
             if (previewed != null) {
-                playStream(item, previewed, autoPicked = item.alternates.isNotEmpty(), announce = sportsLiveAutoPlayEligible(item))
+                playStream(item, previewed, autoPicked = item.alternates.isNotEmpty(), announce = sportsLiveAutoPlayEligible(item), token = token)
             } else {
-                run(item, choose = false)
+                run(item, choose = false, token = token)
             }
         }
     }
@@ -284,10 +292,11 @@ class SportsLivePlayViewModel @Inject constructor(
         job?.cancel()
         this.returnToHomeOnBack = returnToHomeOnBack
         _state.value = SportsLivePlayState.Idle
-        job = viewModelScope.launch { run(item, choose) }
+        val token = gate.begin(item.streamKey)
+        job = viewModelScope.launch { run(item, choose, token) }
     }
 
-    private suspend fun run(item: SportsLiveItem, choose: Boolean) {
+    private suspend fun run(item: SportsLiveItem, choose: Boolean, token: SportsLiveRequestToken) {
         val eligible = sportsLiveAutoPlayEligible(item)
         if (item.alternates.isEmpty() && (choose || !eligible)) {
             // Nothing to read or look up: the Stream screen opens at once, as before.
@@ -302,10 +311,12 @@ class SportsLivePlayViewModel @Inject constructor(
                 _state.value = SportsLivePlayState.Resolving(item)
                 // The zap's lookup: reliability order, the user's filters, junk dropped, cached.
                 val found = resolver.lookup(item)
+                // Stopped or replaced meanwhile (#175): what it found is cached by the resolver, and nothing plays.
+                if (!gate.mayPlay(token)) return
                 _state.value = SportsLivePlayState.Idle
                 when {
                     found is SportsLiveLookup.Found ->
-                        playStream(item, found.stream, autoPicked = item.alternates.isNotEmpty(), announce = eligible)
+                        playStream(item, found.stream, autoPicked = item.alternates.isNotEmpty(), announce = eligible, token = token)
                     !eligible -> noStream(item)
                     // No source returned anything: a toast, and no Stream screen re-asking every addon.
                     found is SportsLiveLookup.NothingFound -> _events.send(SportsLivePlayEvent.NothingFound)
@@ -319,6 +330,7 @@ class SportsLivePlayViewModel @Inject constructor(
             SportsLivePlayAction.PICK -> {
                 _state.value = SportsLivePlayState.Resolving(item)
                 val streams = resolver.resolveAll(item)
+                if (!gate.mayPlay(token)) return
                 if (streams.isEmpty()) {
                     _state.value = SportsLivePlayState.Idle
                     noStream(item)
@@ -337,8 +349,9 @@ class SportsLivePlayViewModel @Inject constructor(
         job?.cancel()
         returnToHomeOnBack = false
         _state.value = SportsLivePlayState.Idle
+        val token = gate.begin(item.streamKey)
         job = viewModelScope.launch {
-            playStream(item, stream, autoPicked = item.alternates.isNotEmpty(), announce = sportsLiveAutoPlayEligible(item))
+            playStream(item, stream, autoPicked = item.alternates.isNotEmpty(), announce = sportsLiveAutoPlayEligible(item), token = token)
         }
     }
 
@@ -346,7 +359,8 @@ class SportsLivePlayViewModel @Inject constructor(
     fun pick(stream: Stream) {
         val picking = _state.value as? SportsLivePlayState.Picking ?: return
         _state.value = SportsLivePlayState.Idle
-        job = viewModelScope.launch { playStream(picking.item, stream) }
+        val token = gate.begin(picking.item.streamKey)
+        job = viewModelScope.launch { playStream(picking.item, stream, token = token) }
     }
 
     /**
@@ -354,6 +368,7 @@ class SportsLivePlayViewModel @Inject constructor(
      * before plays later, including an event not yet collected.
      */
     fun dismiss() {
+        gate.invalidate()
         job?.cancel()
         _state.value = SportsLivePlayState.Idle
         while (_events.tryReceive().isSuccess) Unit
@@ -374,7 +389,8 @@ class SportsLivePlayViewModel @Inject constructor(
         stream: Stream,
         autoPicked: Boolean = false,
         announce: Boolean = false,
-        liveEdge: Boolean = false
+        liveEdge: Boolean = false,
+        token: SportsLiveRequestToken
     ) {
         val target = sportsLiveZapTarget(
             item = item,
@@ -384,6 +400,8 @@ class SportsLivePlayViewModel @Inject constructor(
             directDebridResolver = directDebridResolver,
             autoPicked = autoPicked
         ).copy(liveEdge = liveEdge)
+        // A start made stale meanwhile (#175) opens nothing.
+        if (!gate.mayPlay(token)) return
         // The player (or the primary's Stream screen) gets the other addons' streams for fallback and Sources.
         SportsLiveExtraSources.register(item.id, item)
         // A stream that opens the Stream screen for preparation is not announced: it is not playing yet.

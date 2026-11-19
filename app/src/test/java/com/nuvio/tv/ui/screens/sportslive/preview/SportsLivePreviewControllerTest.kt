@@ -271,6 +271,35 @@ class SportsLivePreviewControllerTest {
     }
 
     @Test
+    fun `a late result for a card left and focused again does not play over its new request`() = runTest {
+        val first = CompletableDeferred<Stream?>()
+        var calls = 0
+        val cached = mutableListOf<Stream>()
+        // The first lookup of "a" ignores cancellation and fills a cache when it lands, as the resolver does.
+        val preview = controller(resolve = { item ->
+            calls++
+            if (item.id == "a" && calls == 1) {
+                withContext(NonCancellable) { first.await()?.also(cached::add) }
+            } else {
+                streamB.takeIf { item.id == "b" } ?: streamA
+            }
+        })
+        preview.onFocus(a)
+        advanceTimeBy(2_001)
+        preview.onFocus(b)
+        preview.onFocus(a)
+        runCurrent()
+        // The old lookup lands now: its token is stale, so it fills the cache but plays nothing.
+        first.complete(dualStream("late"))
+        runCurrent()
+        assertEquals(SportsLivePreviewState.Idle, preview.state.value)
+        assertEquals(listOf(dualStream("late")), cached)
+        // The current request plays its own result.
+        advanceTimeBy(2_001)
+        assertEquals(SportsLivePreviewState.Playing(a, streamA), preview.state.value)
+    }
+
+    @Test
     fun `no first frame within 10 s goes back to the art`() = runTest {
         val preview = controller()
         preview.onFocus(a)

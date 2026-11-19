@@ -3,6 +3,7 @@ package com.nuvio.tv.ui.screens.sportslive.preview
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveTab
 import com.nuvio.tv.domain.model.Stream
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveRequestGate
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -84,8 +85,11 @@ class SportsLivePreviewController(
     private var ambient = false
     private var job: Job? = null
 
-    /** Counts restarts; a lookup whose generation is no longer current is ignored. */
-    private var generation = 0
+    /**
+     * Each settle's request token (#175): a focus, tab or setting change makes the running lookup's stale, so a
+     * slow lookup that lands late (#158) never plays on another card; it only fills the resolver's caches.
+     */
+    private val gate = SportsLiveRequestGate()
 
     /** The focused card (null: none, or the focus is elsewhere). A refreshed copy of the same card changes nothing. */
     fun onFocus(item: SportsLiveItem?) {
@@ -144,7 +148,7 @@ class SportsLivePreviewController(
     }
 
     private fun stop() {
-        generation++
+        gate.invalidate()
         job?.cancel()
         job = null
         _state.value = SportsLivePreviewState.Idle
@@ -154,12 +158,13 @@ class SportsLivePreviewController(
         stop()
         val item = focused ?: return
         if (!enabled || !visible || ambient || tab?.offersPreview() != true) return
-        val current = generation
+        val token = gate.begin(item.previewKey)
+        val current = { gate.mayPlay(token) && focused?.previewKey == token.key }
         job = scope.launch {
             delay(settleMs)
             _state.value = SportsLivePreviewState.Resolving(item)
             val lookup = resolve(item)
-            if (current != generation) return@launch
+            if (!current()) return@launch
             val stream = when (lookup) {
                 is SportsLivePreviewLookup.Found -> lookup.stream
                 SportsLivePreviewLookup.NotPreviewable -> {
@@ -173,14 +178,14 @@ class SportsLivePreviewController(
             }
             _state.value = SportsLivePreviewState.Playing(item, stream)
             delay(minOf(firstFrameTimeoutMs, maxPlayMs))
-            if (current != generation) return@launch
+            if (!current()) return@launch
             if ((_state.value as? SportsLivePreviewState.Playing)?.rendering != true) {
                 _state.value = SportsLivePreviewState.Idle
                 return@launch
             }
             // Its time is up: back to the art, with no new settle until an input changes.
             delay((maxPlayMs - firstFrameTimeoutMs).coerceAtLeast(0L))
-            if (current == generation) _state.value = SportsLivePreviewState.Idle
+            if (current()) _state.value = SportsLivePreviewState.Idle
         }
     }
 }

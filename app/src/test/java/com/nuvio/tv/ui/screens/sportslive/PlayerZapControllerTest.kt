@@ -181,6 +181,32 @@ class PlayerZapControllerTest {
     }
 
     @Test
+    fun `a late lookup that ignores cancellation never plays after a newer zap`() = runTest {
+        startOn("a")
+        val slowB = CompletableDeferred<Stream?>()
+        val controller = PlayerZapController(
+            scope = backgroundScope,
+            // Like a slow lookup that keeps running in the background (#158) and returns anyway.
+            resolve = { item -> if (item.id == "b") kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { slowB.await() } else STREAM },
+            onNavigate = { item, stream -> navigated += item.id to stream },
+            onNoStream = { item -> noStream += item.id },
+            onSkipped = { item -> skipped += item.id },
+            endedKeys = { ended },
+            settleMs = 0L
+        )
+
+        controller.zap("a", forward = true)
+        runCurrent()
+        controller.zap("a", forward = true)
+        runCurrent()
+        assertEquals(listOf("c" to STREAM), navigated)
+        slowB.complete(STREAM)
+        runCurrent()
+
+        assertEquals(listOf("c" to STREAM), navigated)
+    }
+
+    @Test
     fun `flipping past channels only resolves the one settled on`() = runTest {
         startOn("a")
         val controller = controller(settleMs = 600L)

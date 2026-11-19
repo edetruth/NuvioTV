@@ -175,6 +175,8 @@ class PlayerZapController(
                 while (true) {
                     val item = landed.current
                     val stream = if (direction == null) resolve(item) else resolveOrSkip(item)
+                    // A newer zap or pick made this lookup stale (#175): its result never plays.
+                    if (lookups != lookup) break
                     if (stream != null) {
                         onNavigate(item, stream)
                         break
