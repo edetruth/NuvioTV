@@ -23,6 +23,13 @@ object SportsLiveStreamThresholds {
     const val MAX_RECOVERIES = 3
     const val RECOVERY_WINDOW_MS = 10L * 60 * 1000
 
+    /**
+     * Links that never show a first frame are failed over one after another for at most this long (#153),
+     * whatever their number; then the viewer chooses. They do not spend [MAX_RECOVERIES], which is for a
+     * game that was playing.
+     */
+    const val FAILOVER_RUN_MS = 3L * 60 * 1000
+
     /** No first frame this long after a link starts loading: the next link is tried. */
     const val NO_FIRST_FRAME_MS = 15_000L
 

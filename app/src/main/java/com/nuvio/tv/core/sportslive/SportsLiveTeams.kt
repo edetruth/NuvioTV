@@ -149,6 +149,58 @@ object SportsLiveTeams {
         return x.endsWith(" $y") || y.endsWith(" $x")
     }
 
+    /** How closely two addons' names for one side agree when copies of a game are merged ([mergeMatch]). */
+    enum class MergeMatch { NONE, PREFIX, FULL }
+
+    /**
+     * Whether [a] and [b] name one side for merging copies of a game (#153): [FULL][MergeMatch.FULL] when they
+     * [match][matches] or are equal once a women's marker is folded ("Brisbane Heat W" = "Brisbane Heat Women");
+     * [PREFIX][MergeMatch.PREFIX] when one's words begin the other's and the shorter has a significant word
+     * ("Adelaide" / "Adelaide 36ers", "Brisbane W" / "Brisbane Heat Women"). Never across a (W)/U21 qualifier,
+     * nor between two different known teams. "Manchester United" and "Manchester City" are [NONE][MergeMatch.NONE].
+     * Not for My Teams: a followed "Adelaide 36ers" must not star every "Adelaide".
+     */
+    fun mergeMatch(a: String, b: String): MergeMatch {
+        val x = mergeForms(a)
+        val y = mergeForms(b)
+        if (x.words.isEmpty() || y.words.isEmpty() || x.qualifier != y.qualifier) return MergeMatch.NONE
+        if (x.words == y.words || matches(a, b)) return MergeMatch.FULL
+        if (x.canonical != null && y.canonical != null) return MergeMatch.NONE
+        val (shorter, longer) = if (x.words.size <= y.words.size) x to y else y to x
+        val prefix = shorter.words == longer.words.subList(0, shorter.words.size) &&
+            shorter.words.any(::isSignificantWord)
+        return if (prefix) MergeMatch.PREFIX else MergeMatch.NONE
+    }
+
+    /** A side's words for [mergeMatch], its (W)/U21 qualifier ("w", "u21") apart and its known canonical team. */
+    private class MergeForm(val words: List<String>, val qualifier: String?, val canonical: String?)
+
+    private val mergeForms = Memo(8_192) { team: String -> mergeFormUncached(team) }
+
+    private val WOMEN_WORDS = setOf("w", "women", "womens", "(w)", "(women)")
+
+    private fun mergeFormUncached(team: String): MergeForm {
+        val normalised = normalise(team)
+        val words = normalised.split(' ').filter { it.isNotEmpty() }.toMutableList()
+        val last = words.lastOrNull()?.trim('(', ')', '[', ']')
+        val qualifier = when {
+            words.size > 1 && words.last() in WOMEN_WORDS -> "w"
+            words.size > 1 && last != null && last.length > 1 && last[0] == 'u' && last.drop(1).all(Char::isDigit) -> last
+            else -> null
+        }
+        if (qualifier != null) words.removeAt(words.lastIndex)
+        return MergeForm(words, qualifier, canonicalOrNull(normalised))
+    }
+
+    // A word that names a team on its own: three or more characters with a letter, not a place or club filler.
+    private val FILLER_WORDS = setOf(
+        "the", "and", "club", "team", "city", "united", "real", "sporting", "athletic", "new", "san", "santa",
+        "los", "las", "saint", "north", "south", "east", "west", "inter", "atletico", "deportivo", "racing"
+    )
+
+    private fun isSignificantWord(word: String): Boolean =
+        word.length >= 3 && word.any(Char::isLetter) && word !in FILLER_WORDS
+
     /**
      * The canonical form of a team name for bucketing and matching: its normalised name, with a known
      * abbreviation/alias replaced by the canonical team ([SportsLiveTeamAliases]). An unknown name is

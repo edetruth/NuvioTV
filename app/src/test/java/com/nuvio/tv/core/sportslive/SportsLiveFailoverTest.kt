@@ -4,18 +4,24 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+/** #153: the full player's link failover is bounded by time and the links left, not by a count of 3. */
 class SportsLiveFailoverTest {
 
+    private val start = 1_000_000L
+
     @Test
-    fun `auto-tries are allowed up to the cap, then stop so the overlay is shown`() {
-        assertTrue(SportsLiveFailover.canAutoTry(attempts = 0))
-        assertTrue(SportsLiveFailover.canAutoTry(attempts = 1))
-        assertTrue(SportsLiveFailover.canAutoTry(attempts = 2))
-        // Three distinct sources already tried: stop auto-trying and surface the manual overlay.
-        assertFalse(SportsLiveFailover.canAutoTry(attempts = SportsLiveFailover.MAX_SOURCES))
-        assertFalse(SportsLiveFailover.canAutoTry(attempts = SportsLiveFailover.MAX_SOURCES + 1))
-        // A custom cap is honoured.
-        assertTrue(SportsLiveFailover.canAutoTry(attempts = 0, cap = 1))
-        assertFalse(SportsLiveFailover.canAutoTry(attempts = 1, cap = 1))
+    fun `a first failure may always auto-try`() {
+        assertTrue(SportsLiveFailover.canAutoTry(runStartedAtMs = null, nowMs = start))
+    }
+
+    @Test
+    fun `a run keeps trying links until its time is up`() {
+        val run = SportsLiveStreamThresholds.FAILOVER_RUN_MS
+        // Nine dead links, each failing at once, stay well inside the run.
+        assertTrue(SportsLiveFailover.canAutoTry(runStartedAtMs = start, nowMs = start + 9 * 1_000L))
+        // Nine links that each time out at start-up are still inside it too.
+        assertTrue(9 * SportsLiveStreamThresholds.NO_FIRST_FRAME_MS < run)
+        assertTrue(SportsLiveFailover.canAutoTry(runStartedAtMs = start, nowMs = start + run - 1))
+        assertFalse(SportsLiveFailover.canAutoTry(runStartedAtMs = start, nowMs = start + run))
     }
 }

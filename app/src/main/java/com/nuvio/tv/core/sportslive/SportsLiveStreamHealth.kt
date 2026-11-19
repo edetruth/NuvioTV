@@ -48,7 +48,10 @@ class SportsLiveStreamHealth(private val nowMs: () -> Long = { System.currentTim
         DEAD_LINK(isStall = false, retriesSameLink = false),
 
         /** The stream fell behind its live window again and again ([onBehindLiveWindow]). */
-        BEHIND_LIVE_WINDOW_REPEATED(isStall = true)
+        BEHIND_LIVE_WINDOW_REPEATED(isStall = true);
+
+        /** The link never played: it did not start in time, or its host does not exist. */
+        val isStartFailure: Boolean get() = this == NO_START || this == DEAD_LINK
     }
 
     enum class State { IDLE, BUFFERING, READY, ENDED }

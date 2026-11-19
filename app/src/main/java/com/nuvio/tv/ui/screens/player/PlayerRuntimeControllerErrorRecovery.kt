@@ -535,6 +535,11 @@ internal fun PlayerRuntimeController.tryParsingErrorProbeFallback(
             if (tryRefreshExpiredLinkAfterError(detailedError)) {
                 return@launch
             }
+            // Sports & Live (#153): a link the probe cannot read (a dead link's error page) goes to the
+            // next link, as any other sports error does, never to the bare error screen.
+            if (trySportsRecoveryAfterError(detailedError)) {
+                return@launch
+            }
             if (tryFallbackToNextSourceAfterError(detailedError)) {
                 return@launch
             }

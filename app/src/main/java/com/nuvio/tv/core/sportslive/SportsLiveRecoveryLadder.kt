@@ -55,7 +55,14 @@ class SportsLiveRecoveryLadder(
     /** Link -> when it was last retried as is. */
     private val retried = HashMap<String, Long>()
 
-    fun decide(gameKey: String, url: String?, problem: SportsLiveStreamHealth.Problem): Step {
+    /**
+     * [started] is false while [url] has not shown a first frame (#153): a link that never started
+     * ([SportsLiveStreamHealth.Problem.NO_START], a dead host) then goes to the next link without spending
+     * the game's budget, which is for a game that was playing; the caller's failover run bounds it
+     * ([SportsLiveFailover]). The dual and mini players keep the default.
+     */
+    fun decide(gameKey: String, url: String?, problem: SportsLiveStreamHealth.Problem, started: Boolean = true): Step {
+        if (!started && problem.isStartFailure) return Step.NEXT_LINK
         if (!budget.take(gameKey)) return Step.CHOICES
         val link = SportsLiveWorkingLinks.linkKey(url) ?: return Step.NEXT_LINK
         val now = nowMs()

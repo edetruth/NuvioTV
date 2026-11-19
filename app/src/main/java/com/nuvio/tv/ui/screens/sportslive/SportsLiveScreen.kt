@@ -680,7 +680,7 @@ private fun SportsLiveContent(
         SportsLiveTab.RESULTS -> SportsLiveHeaderDropdown(stringResource(R.string.sports_live_filter_title_sport), listOf(editMySportsLabel to onEditMySports))
         else -> null
     }
-    // Results' day in the title: ← older, → newer, while it has focus.
+    // Results' day in the title: OK on ‹ older, on › newer (#153).
     val resultsDay = results.dates.firstOrNull { it.daysAgo == results.daysAgo }
     val resultsDate = if (showingResults && resultsDay != null) {
         SportsLiveHeaderDate(

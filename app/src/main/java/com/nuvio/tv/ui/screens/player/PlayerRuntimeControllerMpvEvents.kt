@@ -276,6 +276,8 @@ internal fun PlayerRuntimeController.handleMpvPlaybackError(
 
         // A link that has likely expired is fetched again before anything else is tried on it.
         if (tryRefreshExpiredLinkAfterError(detailedError)) return
+        // Sports & Live (#153): the recovery ladder and the next link, never the bare error screen.
+        if (trySportsRecoveryAfterError(detailedError)) return
         if (tryFallbackToNextSourceAfterError(detailedError)) return
 
         val startupFailed = !hasRenderedFirstFrame

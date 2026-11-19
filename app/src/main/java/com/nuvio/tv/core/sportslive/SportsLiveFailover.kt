@@ -1,13 +1,14 @@
 package com.nuvio.tv.core.sportslive
 
 /**
- * Policy for Sports & Live automatic source failover (#28): how many distinct sources the player may
- * auto-try per playback session before it stops and hands the user the manual recovery overlay. The
- * cap protects a metered/free-tier provider from being looped through every link automatically.
+ * Policy for Sports & Live automatic link failover (#28, #153). A failover run is the links tried one
+ * after another while none shows a first frame: it goes on while untried links remain, for at most
+ * [SportsLiveStreamThresholds.FAILOVER_RUN_MS] (each link start is itself bounded by
+ * [SportsLiveStreamThresholds.NO_FIRST_FRAME_MS]); then the viewer chooses from the recovery overlay.
+ * A game with 9 links keeps trying past the third. A first frame ends the run.
  */
 object SportsLiveFailover {
-    const val MAX_SOURCES = 3
-
-    /** Whether another source may be auto-tried, given how many have already been tried this session. */
-    fun canAutoTry(attempts: Int, cap: Int = MAX_SOURCES): Boolean = attempts < cap
+    /** Whether another link may be auto-tried in a run that began at [runStartedAtMs] (null: none began yet). */
+    fun canAutoTry(runStartedAtMs: Long?, nowMs: Long): Boolean =
+        runStartedAtMs == null || nowMs - runStartedAtMs < SportsLiveStreamThresholds.FAILOVER_RUN_MS
 }

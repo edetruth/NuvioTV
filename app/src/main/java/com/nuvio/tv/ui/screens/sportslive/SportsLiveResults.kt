@@ -145,7 +145,7 @@ private fun ResultsEmptyToday(
 }
 
 /**
- * The Results tab (V2 P4): the day sits in the header's title ("Results · Yesterday ‹ ›", ← → change it) and
+ * The Results tab (V2 P4): the day sits in the header's title ("Results · Yesterday ‹ ›", OK on an arrow changes it) and
  * the sport in its one dropdown, so the list starts right under the header. On Today a small "N games live
  * now →" line leads. The list (400 dp, league section headers, YOUR TEAMS first, long tails collapsed) uses
  * fixed columns as in Live Now, so a score sits right after its names; the stage on the right shows the

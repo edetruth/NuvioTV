@@ -14,11 +14,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.ui.input.key.onPreviewKeyEvent
-import android.view.KeyEvent as AndroidKeyEvent
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -28,6 +24,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
 import com.nuvio.tv.R
@@ -55,12 +52,39 @@ internal fun sportsLiveHeaderFilterShown(tab: SportsLiveTab, filterCount: Int, a
 internal data class SportsLiveHeaderDropdown(val title: String, val actions: List<Pair<String, () -> Unit>> = emptyList())
 
 /**
- * The day in Results' title (V2 P4): "· Yesterday ‹ ›". While it has focus ← steps to an older day and → to a
- * newer one ([onStep], true for newer); at either end the key moves focus on along the header.
+ * The day in Results' title (V2 P4): "· Yesterday ‹ ›". OK on ‹ steps to an older day and on › to a newer one
+ * ([onStep], true for newer); each arrow is its own focus stop, so ← and → always move along the header (#153).
  */
 internal data class SportsLiveHeaderDate(val label: String, val canOlder: Boolean, val canNewer: Boolean, val onStep: (Boolean) -> Unit)
 
 private val FILTER_TABS = setOf(SportsLiveTab.UPCOMING, SportsLiveTab.CHANNELS, SportsLiveTab.REPLAYS)
+
+/** The header's focus stops, left to right: the active tab, Results' day arrows, the filter, "⚠ N", Refresh. */
+internal enum class SportsLiveHeaderStop { TAB, DAY_OLDER, DAY_NEWER, FILTER, FAILURES, REFRESH }
+
+/**
+ * The stop ← ([right] false) or → ([right] true) moves to from [stop] (#153): the next stop shown that way, or
+ * null at the ends. ← from the first control past the tabs is the active tab, never the nearest tab (tabs select
+ * on focus); the day arrows never hold the key, so the D-pad always gets back to the tabs.
+ */
+internal fun sportsLiveHeaderNeighbour(
+    stop: SportsLiveHeaderStop,
+    right: Boolean,
+    hasDate: Boolean,
+    hasFilter: Boolean,
+    hasFailures: Boolean
+): SportsLiveHeaderStop? {
+    val shown = SportsLiveHeaderStop.entries.filter {
+        when (it) {
+            SportsLiveHeaderStop.DAY_OLDER, SportsLiveHeaderStop.DAY_NEWER -> hasDate
+            SportsLiveHeaderStop.FILTER -> hasFilter
+            SportsLiveHeaderStop.FAILURES -> hasFailures
+            else -> true
+        }
+    }
+    val index = shown.indexOf(stop).takeIf { it >= 0 } ?: return null
+    return shown.getOrNull(if (right) index + 1 else index - 1)
+}
 
 /**
  * The section's one-line header (V2, #99): text tabs (selected = white with an underline, the rest 70 %
@@ -99,6 +123,18 @@ internal fun SportsLiveHeader(
     // F6 (#133): Right past the filter's last option goes to the next header control, never down into the stage.
     val failuresFocusRequester = remember { FocusRequester() }
     val refreshFocusRequester = remember { FocusRequester() }
+    val dayNewerFocusRequester = remember { FocusRequester() }
+    fun requesterOf(stop: SportsLiveHeaderStop?): FocusRequester = when (stop) {
+        SportsLiveHeaderStop.DAY_OLDER -> dateFocusRequester
+        SportsLiveHeaderStop.DAY_NEWER -> dayNewerFocusRequester
+        SportsLiveHeaderStop.FILTER -> filterFocusRequester
+        SportsLiveHeaderStop.FAILURES -> failuresFocusRequester
+        SportsLiveHeaderStop.REFRESH -> refreshFocusRequester
+        SportsLiveHeaderStop.TAB, null -> activeTabFocusRequester
+    }
+    fun neighbour(stop: SportsLiveHeaderStop, right: Boolean): FocusRequester = requesterOf(
+        sportsLiveHeaderNeighbour(stop, right, hasDate = date != null, hasFilter = filterOptions != null, hasFailures = failures > 0)
+    )
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -129,18 +165,18 @@ internal fun SportsLiveHeader(
             }
         }
         if (date != null) {
+            fun arrow(stop: SportsLiveHeaderStop, requester: FocusRequester) = Modifier
+                .focusRequester(requester)
+                .focusProperties {
+                    left = neighbour(stop, right = false)
+                    right = neighbour(stop, right = true)
+                    up = activeTabFocusRequester
+                    downFocusRequester?.let { down = it }
+                }
             SportsLiveHeaderDateControl(
                 date = date,
-                // OK on the day goes into its list, as OK on a tab does.
-                onOk = { runCatching { downFocusRequester?.requestFocus() } },
-                modifier = Modifier
-                    .focusRequester(dateFocusRequester)
-                    .focusProperties {
-                        left = activeTabFocusRequester
-                        right = if (filterOptions != null) filterFocusRequester else if (failures > 0) failuresFocusRequester else refreshFocusRequester
-                        up = activeTabFocusRequester
-                        downFocusRequester?.let { down = it }
-                    }
+                olderModifier = arrow(SportsLiveHeaderStop.DAY_OLDER, dateFocusRequester),
+                newerModifier = arrow(SportsLiveHeaderStop.DAY_NEWER, dayNewerFocusRequester)
             )
         }
         Box(
@@ -153,8 +189,8 @@ internal fun SportsLiveHeader(
                 val filterModifier = Modifier
                     .focusRequester(filterFocusRequester)
                     .focusProperties {
-                        left = if (date != null) dateFocusRequester else activeTabFocusRequester
-                        right = if (failures > 0) failuresFocusRequester else refreshFocusRequester
+                        left = neighbour(SportsLiveHeaderStop.FILTER, right = false)
+                        right = neighbour(SportsLiveHeaderStop.FILTER, right = true)
                         downFocusRequester?.let { down = it }
                     }
                 if (filterDropdown != null) {
@@ -213,12 +249,12 @@ internal fun SportsLiveHeader(
 }
 
 /**
- * Results' day in the title (V2 P4): "· Yesterday ‹ ›", one focus stop. ← and → step the day while it has focus
- * (an arrow is dimmed where no day is left that way); at either end the key is left to move focus on.
+ * Results' day in the title (V2 P4): "· Yesterday ‹ ›". The day is a label; ‹ and › are two focus stops, OK
+ * steps the day (#153: ← and → only move focus, so the stepper never traps the D-pad). An arrow with no day
+ * left that way is dimmed and does nothing.
  */
 @Composable
-private fun SportsLiveHeaderDateControl(date: SportsLiveHeaderDate, onOk: () -> Unit, modifier: Modifier = Modifier) {
-    val currentDate by rememberUpdatedState(date)
+private fun SportsLiveHeaderDateControl(date: SportsLiveHeaderDate, olderModifier: Modifier, newerModifier: Modifier) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
             text = stringResource(R.string.sports_live_title_separator),
@@ -226,42 +262,31 @@ private fun SportsLiveHeaderDateControl(date: SportsLiveHeaderDate, onOk: () -> 
             color = Colors.TextInactive,
             maxLines = 1
         )
-        SportsLiveHeaderControl(
-            onClick = onOk,
-            round = false,
-            outline = Color.Transparent,
-            modifier = modifier.onPreviewKeyEvent { event ->
-                val native = event.nativeKeyEvent
-                val newer = when (native.keyCode) {
-                    AndroidKeyEvent.KEYCODE_DPAD_LEFT -> false
-                    AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> true
-                    else -> return@onPreviewKeyEvent false
-                }
-                val can = if (newer) currentDate.canNewer else currentDate.canOlder
-                if (!can) return@onPreviewKeyEvent false
-                if (native.action == AndroidKeyEvent.ACTION_DOWN) currentDate.onStep(newer)
-                true
-            }
-        ) {
-            Text(
-                text = date.label,
-                style = SportsLiveTokens.style(SportsLiveTokens.Type.Tab),
-                color = Colors.TextPrimary,
-                maxLines = 1
-            )
-            Text(
-                text = stringResource(R.string.sports_live_day_older),
-                style = SportsLiveTokens.style(SportsLiveTokens.Type.Tab),
-                color = if (date.canOlder) Colors.TextSecondary else Colors.TextInactive.copy(alpha = 0.35f),
-                maxLines = 1
-            )
-            Text(
-                text = stringResource(R.string.sports_live_day_newer),
-                style = SportsLiveTokens.style(SportsLiveTokens.Type.Tab),
-                color = if (date.canNewer) Colors.TextSecondary else Colors.TextInactive.copy(alpha = 0.35f),
-                maxLines = 1
-            )
-        }
+        Text(
+            text = date.label,
+            style = SportsLiveTokens.style(SportsLiveTokens.Type.Tab),
+            color = Colors.TextPrimary,
+            maxLines = 1,
+            modifier = Modifier.padding(start = 9.dp, end = 4.dp)
+        )
+        SportsLiveHeaderDayArrow(R.string.sports_live_day_older, date.canOlder, { date.onStep(false) }, olderModifier)
+        SportsLiveHeaderDayArrow(R.string.sports_live_day_newer, date.canNewer, { date.onStep(true) }, newerModifier)
+    }
+}
+
+@Composable
+private fun SportsLiveHeaderDayArrow(glyph: Int, enabled: Boolean, onStep: () -> Unit, modifier: Modifier) {
+    SportsLiveHeaderControl(
+        onClick = { if (enabled) onStep() },
+        outline = Color.Transparent,
+        modifier = modifier
+    ) {
+        Text(
+            text = stringResource(glyph),
+            style = SportsLiveTokens.style(SportsLiveTokens.Type.Tab),
+            color = if (enabled) Colors.TextSecondary else Colors.TextInactive.copy(alpha = 0.35f),
+            maxLines = 1
+        )
     }
 }
 

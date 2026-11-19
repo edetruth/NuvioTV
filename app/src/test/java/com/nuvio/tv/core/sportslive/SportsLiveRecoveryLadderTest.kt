@@ -51,6 +51,25 @@ class SportsLiveRecoveryLadderTest {
     }
 
     @Test
+    fun `links that never started fail over past the budget in the full player (153)`() {
+        val ladder = ladder()
+        repeat(9) {
+            val link = "https://example.invalid/$it.m3u8"
+            val problem = if (it % 2 == 0) Problem.NO_START else Problem.DEAD_LINK
+            assertEquals(Step.NEXT_LINK, ladder.decide(GAME, link, problem, started = false))
+        }
+        // None of them spent the game's budget: a stream that was playing still gets its full ladder.
+        assertEquals(Step.RETRY_SAME, ladder.decide(GAME, A, Problem.FROZEN))
+    }
+
+    @Test
+    fun `a playing link's problems still spend the budget when started is false (153)`() {
+        val ladder = ladder()
+        repeat(SportsLiveStreamThresholds.MAX_RECOVERIES) { ladder.decide(GAME, "https://example.invalid/$it.m3u8", Problem.ERROR_BURST, started = false) }
+        assertEquals(Step.CHOICES, ladder.decide(GAME, B, Problem.ERROR_BURST, started = false))
+    }
+
+    @Test
     fun `a start-up timeout spends one of the game's recoveries`() {
         val ladder = ladder()
         repeat(SportsLiveStreamThresholds.MAX_RECOVERIES) { ladder.decide(GAME, "https://example.invalid/$it.m3u8", Problem.NO_START) }

@@ -312,4 +312,32 @@ class SportsLiveTeamsTest {
         assertFalse(SportsLiveTeams.matches("Inter Milan", "AC Milan"))
         assertFalse(SportsLiveTeams.matches("Spurs", "Tottenham Hotspur"))
     }
+
+    @Test
+    fun `merge matching folds name variants and a women marker`() {
+        val full = SportsLiveTeams.MergeMatch.FULL
+        val prefix = SportsLiveTeams.MergeMatch.PREFIX
+        assertEquals(prefix, SportsLiveTeams.mergeMatch("Adelaide", "Adelaide 36ers"))
+        assertEquals(prefix, SportsLiveTeams.mergeMatch("Brisbane W", "Brisbane Heat Women"))
+        assertEquals(full, SportsLiveTeams.mergeMatch("Brisbane Heat W", "Brisbane Heat Women"))
+        assertEquals(full, SportsLiveTeams.mergeMatch("Brisbane Heat (W)", "Brisbane Heat Womens"))
+        assertEquals(full, SportsLiveTeams.mergeMatch("Illawarra Hawks", "Illawarra Hawks"))
+        assertEquals(full, SportsLiveTeams.mergeMatch("Lakers", "Los Angeles Lakers"))
+    }
+
+    @Test
+    fun `merge matching keeps different teams and qualifiers apart`() {
+        val none = SportsLiveTeams.MergeMatch.NONE
+        assertEquals(none, SportsLiveTeams.mergeMatch("Manchester United", "Manchester City"))
+        assertEquals(none, SportsLiveTeams.mergeMatch("Brisbane Heat", "Brisbane Heat Women"))
+        assertEquals(none, SportsLiveTeams.mergeMatch("Brisbane W", "Brisbane Heat"))
+        assertEquals(none, SportsLiveTeams.mergeMatch("England", "England U21"))
+        assertEquals(none, SportsLiveTeams.mergeMatch("New", "New England Patriots"))
+        assertEquals(none, SportsLiveTeams.mergeMatch("Adelaide", "Melbourne"))
+    }
+
+    @Test
+    fun `My Teams matching does not take the merge prefix rule`() {
+        assertFalse(SportsLiveTeams.matches("Adelaide 36ers", "Adelaide"))
+    }
 }

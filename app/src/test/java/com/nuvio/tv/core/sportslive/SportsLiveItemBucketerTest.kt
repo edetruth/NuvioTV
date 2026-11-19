@@ -876,6 +876,45 @@ class SportsLiveItemBucketerTest {
     }
 
     @Test
+    fun `a side named in full merges with its short name in the same sport (153)`() {
+        val short = event("a", "a1", "Illawarra Hawks vs Adelaide", "LIVE", listOf("Basketball"))
+        val full = event("b", "b1", "Illawarra Hawks vs Adelaide 36ers", "LIVE", listOf("Basketball"))
+
+        val live = SportsLiveItemBucketer.bucketTab(listOf(full, short), SportsLiveTab.LIVE_NOW, now, addonOrder = listOf("a", "b"))
+
+        assertEquals(listOf("a1"), live.map { it.id })
+        assertEquals(listOf("b1"), live.single().alternates.map { it.id })
+    }
+
+    @Test
+    fun `a women marker and a short name merge when both sports are known (153)`() {
+        val short = event("a", "a1", "Brisbane W vs Hobart W", "LIVE", listOf("Cricket"))
+        val full = event("b", "b1", "Brisbane Heat Women vs Hobart Hurricanes Women", "LIVE", listOf("Cricket"))
+        val unknownSport = event("c", "c1", "Brisbane vs Hobart", "LIVE")
+
+        val live = SportsLiveItemBucketer.bucketTab(listOf(short, full, unknownSport), SportsLiveTab.LIVE_NOW, now, addonOrder = listOf("a", "b", "c"))
+
+        assertEquals(setOf("a1", "c1"), live.map { it.id }.toSet())
+        assertEquals(listOf("b1"), live.single { it.id == "a1" }.alternates.map { it.id })
+    }
+
+    @Test
+    fun `short names never merge across sports, other teams or other times (153)`() {
+        val basketball = event("a", "a1", "Illawarra Hawks vs Adelaide", "LIVE", listOf("Basketball"))
+        val soccer = event("b", "b1", "Illawarra Hawks vs Adelaide United", "LIVE", listOf("Soccer"))
+        val united = event("c", "c1", "Manchester United vs Liverpool", "LIVE", listOf("Soccer"))
+        val city = event("d", "d1", "Manchester City vs Liverpool", "LIVE", listOf("Soccer"))
+        val today = event("e", "e1", "Perth vs Sydney Kings", "15 Nov 2026 · 18:00 UTC", listOf("Basketball"))
+        val tomorrow = event("f", "f1", "Perth Wildcats vs Sydney Kings", "16 Nov 2026 · 18:00 UTC", listOf("Basketball"))
+
+        val tabs = SportsLiveItemBucketer.bucket(listOf(basketball, soccer, united, city, today, tomorrow), now)
+
+        assertEquals(setOf("a1", "b1", "c1", "d1"), tabs.getValue(SportsLiveTab.LIVE_NOW).map { it.id }.toSet())
+        assertEquals(setOf("e1", "f1"), tabs.getValue(SportsLiveTab.UPCOMING).map { it.id }.toSet())
+        assertTrue(tabs.values.flatten().all { it.alternates.isEmpty() })
+    }
+
+    @Test
     fun `two live copies merge whatever their starts`() {
         // Both are live, though their listed starts are an hour apart.
         val a = event("a", "a1", "Lions vs Patriots", "15 Nov 2026 · 12:00 UTC")

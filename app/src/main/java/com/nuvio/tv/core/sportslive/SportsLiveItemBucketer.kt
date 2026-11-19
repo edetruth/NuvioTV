@@ -190,13 +190,13 @@ object SportsLiveItemBucketer {
         nowMs: Long = System.currentTimeMillis()
     ): List<SportsLiveItem> {
         val rank = addonOrder.withIndex().associate { (index, id) -> id to index }
-        // Copies of one game share a canonical team-pair key, so only plausible matches are compared.
-        val candidates = items.filter {
-            it.kind == SportsLiveKind.EVENTS && !it.isChannel && it.teams != null &&
-                !SportsLiveTeams.isPlaceholderGame(it.teams)
-        }
-            .groupBy { pairKey(it.teams!!) }
-            .values.filter { it.size > 1 }
+        // Copies of one game share a team-pair key, so only plausible matches are compared.
+        val candidates = candidateGroups(
+            items.filter {
+                it.kind == SportsLiveKind.EVENTS && !it.isChannel && it.teams != null &&
+                    !SportsLiveTeams.isPlaceholderGame(it.teams)
+            }
+        )
         if (candidates.isEmpty()) return items
         // Keyed by the primary's stream key; a source joins at most one primary.
         val alternatesOf = HashMap<String, MutableList<SportsLiveItem>>()
@@ -248,9 +248,21 @@ object SportsLiveItemBucketer {
     private fun sameGame(a: SportsLiveItem, b: SportsLiveItem, nowMs: Long): Boolean {
         val x = a.teams ?: return false
         val y = b.teams ?: return false
-        val teamsMatch = (SportsLiveTeams.matches(x.home, y.home) && SportsLiveTeams.matches(x.away, y.away)) ||
-            (SportsLiveTeams.matches(x.home, y.away) && SportsLiveTeams.matches(x.away, y.home))
+        // Both sides must match. When both match only by prefix ("Brisbane W" / "Brisbane Heat Women" vs
+        // "Hobart W" / "Hobart Hurricanes Women"), both sports must be known as well, so an unknown-sport
+        // "Adelaide vs Brisbane" never takes "Adelaide United vs Brisbane Roar".
+        val sportsKnown = SportsLiveTeams.knownSport(a) != null && SportsLiveTeams.knownSport(b) != null
+        val teamsMatch = sidesMatch(x.home, y.home, x.away, y.away, sportsKnown) ||
+            sidesMatch(x.home, y.away, x.away, y.home, sportsKnown)
         return teamsMatch && sportsAgree(a, b) && sameTime(a, b, nowMs)
+    }
+
+    private fun sidesMatch(home: String, otherHome: String, away: String, otherAway: String, sportsKnown: Boolean): Boolean {
+        val first = SportsLiveTeams.mergeMatch(home, otherHome)
+        if (first == SportsLiveTeams.MergeMatch.NONE) return false
+        val second = SportsLiveTeams.mergeMatch(away, otherAway)
+        if (second == SportsLiveTeams.MergeMatch.NONE) return false
+        return first == SportsLiveTeams.MergeMatch.FULL || second == SportsLiveTeams.MergeMatch.FULL || sportsKnown
     }
 
     /**
@@ -293,12 +305,40 @@ object SportsLiveItemBucketer {
 
     private fun timedStart(item: SportsLiveItem): Long? = item.startMs?.takeIf { item.startHasTimeOfDay }
 
-    // The canonical name folds abbreviations in ("SL" -> "sri lanka"), so a game's copies bucket together
-    // whichever side names a team by its code; the last word keeps the bucket coarse, matches() is precise.
-    private fun pairKey(teams: TeamPair): Pair<String, String> {
-        val a = SportsLiveTeams.canonicalise(teams.home).substringAfterLast(' ')
-        val b = SportsLiveTeams.canonicalise(teams.away).substringAfterLast(' ')
-        return if (a <= b) a to b else b to a
+    /**
+     * The items that may be copies of one game, in groups of two or more: items sharing a team-pair key are
+     * joined, transitively. A side's keys are the first and last words of its canonical name (abbreviations
+     * folded in: "SL" -> "sri lanka"), so "Lakers" meets "Los Angeles Lakers" by the last word and
+     * "Adelaide" meets "Adelaide 36ers" by the first (#153). The keys keep the groups coarse; [sameGame] is precise.
+     */
+    private fun candidateGroups(items: List<SportsLiveItem>): Collection<List<SportsLiveItem>> {
+        val parent = IntArray(items.size) { it }
+        fun root(i: Int): Int {
+            var r = i
+            while (parent[r] != r) r = parent[r]
+            var j = i
+            while (parent[j] != r) j = parent[j].also { parent[j] = r }
+            return r
+        }
+        val firstWithKey = HashMap<Pair<String, String>, Int>()
+        items.forEachIndexed { index, item ->
+            for (key in pairKeys(item.teams!!)) {
+                val other = firstWithKey.putIfAbsent(key, index) ?: continue
+                parent[root(index)] = root(other)
+            }
+        }
+        return items.indices.groupBy(::root, items::get).values.filter { it.size > 1 }
+    }
+
+    private fun pairKeys(teams: TeamPair): List<Pair<String, String>> {
+        val home = sideKeys(teams.home)
+        val away = sideKeys(teams.away)
+        return home.flatMap { a -> away.map { b -> if (a <= b) a to b else b to a } }.distinct()
+    }
+
+    private fun sideKeys(team: String): List<String> {
+        val canonical = SportsLiveTeams.canonicalise(team)
+        return listOf(canonical.substringAfterLast(' '), canonical.substringBefore(' ')).distinct()
     }
 
     private fun firstSeenAddons(items: List<SportsLiveItem>): List<String> = items.mapTo(LinkedHashSet()) { it.addonId }.toList()

@@ -31,16 +31,15 @@ import kotlinx.coroutines.launch
 /**
  * Sports & Live two-stage error recovery (#28). On a fatal playback error — or a stall after
  * playback has started — the player automatically advances to the next untried source for this
- * game/channel (its own addon's other links plus a merged game's other addons' extras), up to
- * [SPORTS_FAILOVER_MAX_SOURCES] distinct sources per session. When that cap is hit or no untried
- * source remains, the standalone, focusable error overlay is shown so the user picks one by hand.
+ * game/channel (its own addon's other links plus a merged game's other addons' extras), link after
+ * link while none shows a first frame, for up to [SportsLiveStreamThresholds.FAILOVER_RUN_MS]
+ * ([SportsLiveFailover], #153). When that time is up or no untried source remains, the standalone,
+ * focusable error overlay is shown so the user picks one by hand.
  *
  * It is scoped to sports playback ([SportsLiveExtraSources.isSportsPlayback]); movies and shows keep
  * upstream behaviour. Already-tried sources are skipped, and the resolve path reuses whatever the
  * shared stream search already found, so a known source costs nothing extra.
  */
-internal val SPORTS_FAILOVER_MAX_SOURCES get() = SportsLiveFailover.MAX_SOURCES
-
 private const val SPORTS_FAILOVER_POLL_COUNT = 30
 private const val SPORTS_FAILOVER_POLL_INTERVAL_MS = 500L
 
@@ -49,6 +48,9 @@ private const val SPORTS_FAILOVER_POLL_INTERVAL_MS = 500L
  * with its time to first frame. A manual pick in the Sources panel that plays counts too. Sports only.
  */
 internal fun PlayerRuntimeController.recordSportsSourceFirstFrame() {
+    // A link plays: the failover run is over, the next failure starts a new one (#153).
+    sportsFailoverRunStartedAtMs = null
+    sportsFailoverAttempts = 0
     // The stream playing now, for dual screen to take over as is (#65).
     if (SportsLiveExtraSources.isSportsPlayback(contentId)) {
         currentSportsStream()?.let { SportsLiveWorkingLinks.shared.startedPlaying(contentId.orEmpty(), it) }
@@ -140,7 +142,8 @@ internal fun PlayerRuntimeController.trySportsLiveFailoverAfterError(
     val failedInfoHash = _uiState.value.currentStreamInfoHash ?: navigationArgs.infoHash
     sportsFailoverTriedKeys += "url:$failedUrl"
     val videoId = currentVideoId ?: contentId
-    if (videoId == null || !autoTry || !SportsLiveFailover.canAutoTry(sportsFailoverAttempts)) {
+    if (sportsFailoverRunStartedAtMs == null) sportsFailoverRunStartedAtMs = System.currentTimeMillis()
+    if (videoId == null || !autoTry || !canAutoTrySportsLink()) {
         surfaceSportsFailoverError(errorMessage)
         return true
     }
@@ -155,7 +158,7 @@ internal fun PlayerRuntimeController.trySportsLiveFailoverAfterError(
         val installedAddonNames = streamAddonsFor(videoId).map { it.displayName }.toSet()
 
         var polls = 0
-        while (SportsLiveFailover.canAutoTry(sportsFailoverAttempts)) {
+        while (canAutoTrySportsLink()) {
             val sources = _uiState.value
             val searchDone = !sources.isLoadingSourceStreams &&
                 (sources.sourceAllStreams.isNotEmpty() || sources.sourceStreamsError != null)
@@ -201,7 +204,7 @@ internal fun PlayerRuntimeController.trySportsLiveFailoverAfterError(
             Log.i(
                 PlayerRuntimeController.TAG,
                 "Sports source failed, auto-failing over to ${playable.name ?: playable.addonName} " +
-                    "(${sportsFailoverAttempts}/$SPORTS_FAILOVER_MAX_SOURCES)"
+                    "(link ${sportsFailoverAttempts} of this run)"
             )
             SportsLiveWorkingLinks.shared.noteLaunch(contentId.orEmpty(), playable)
             switchToSourceStream(playable)
@@ -212,6 +215,18 @@ internal fun PlayerRuntimeController.trySportsLiveFailoverAfterError(
     }
     return true
 }
+
+private fun PlayerRuntimeController.canAutoTrySportsLink(): Boolean =
+    SportsLiveFailover.canAutoTry(sportsFailoverRunStartedAtMs, System.currentTimeMillis())
+
+/**
+ * Any playback error of a sports link that a generic recovery would otherwise turn into the error
+ * screen (#153: the parsing probe's dead end, mpv's error handler): the stream-health ladder once the
+ * link played, else the next link. False for movies and shows.
+ */
+internal fun PlayerRuntimeController.trySportsRecoveryAfterError(errorMessage: String, decoderInit: Boolean = false): Boolean =
+    trySportsHealthRecoveryAfterError(errorMessage, decoderInit) ||
+        trySportsLiveFailoverAfterError(errorMessage, decoderInit = decoderInit)
 
 /**
  * Whether a sports [errorCode] skips straight to failover (C1): a container the player cannot parse
@@ -335,7 +350,7 @@ internal fun PlayerRuntimeController.trySportsHealthRecoveryAfterError(errorMess
 private fun PlayerRuntimeController.recoverSportsHealth(problem: SportsLiveStreamHealth.Problem, message: String) {
     val gameKey = contentId.orEmpty()
     val url = currentSportsStream()?.getStreamUrl() ?: currentStreamUrl
-    val step = sportsRecoveryLadder.decide(gameKey, url, problem)
+    val step = sportsRecoveryLadder.decide(gameKey, url, problem, started = hasRenderedFirstFrame)
     Log.i(PlayerRuntimeController.TAG, "Sports stream recovery: $problem -> $step")
     val player = _exoPlayer
     if (step == SportsLiveRecoveryLadder.Step.RETRY_SAME && player != null) {
@@ -375,6 +390,7 @@ internal fun PlayerRuntimeController.scheduleSportsStartupTimeout() {
         sportsStartupGame = contentId
         sportsStartedLinks.clear()
         sportsFailoverAttempts = 0
+        sportsFailoverRunStartedAtMs = null
         sportsFailoverTriedKeys.clear()
     }
     if (!sports) {

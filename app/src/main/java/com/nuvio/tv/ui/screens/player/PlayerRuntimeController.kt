@@ -285,8 +285,12 @@ class PlayerRuntimeController(
     internal var sourceFallbackJob: Job? = null
     internal var sourceStartupTimeoutJob: Job? = null
 
-    /** Sports & Live auto-failover: distinct sources auto-tried this session, and their keys. */
+    /**
+     * Sports & Live auto-failover: links auto-tried in the current run, when the run began (null: no run,
+     * a first frame ended it; #153), and the keys of every source tried this session.
+     */
     internal var sportsFailoverAttempts = 0
+    internal var sportsFailoverRunStartedAtMs: Long? = null
     internal val sportsFailoverTriedKeys = mutableSetOf<String>()
     internal var sportsStallWatchdogJob: Job? = null
 
