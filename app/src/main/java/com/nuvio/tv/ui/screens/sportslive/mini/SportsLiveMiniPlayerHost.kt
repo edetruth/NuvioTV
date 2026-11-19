@@ -4,7 +4,13 @@ import com.nuvio.tv.core.sportslive.displayName
 import android.content.Context
 import android.view.ViewGroup
 import androidx.annotation.OptIn
+import androidx.compose.animation.core.animateIntOffsetAsState
+import androidx.compose.animation.core.animateIntSizeAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
@@ -43,6 +49,10 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.em
+import com.nuvio.tv.ui.screens.sportslive.sportsLiveBold
+import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
@@ -119,7 +129,9 @@ internal class SportsLiveMiniPlayback(
     private val onError: (sessionId: Long) -> Unit,
     private val scope: CoroutineScope? = null,
     private val lookup: suspend (item: SportsLiveItem, tried: Set<String>) -> Stream? = { _, _ -> null },
-    private val onStreamReplaced: (sessionId: Long, stream: Stream) -> Unit = { _, _ -> }
+    private val onStreamReplaced: (sessionId: Long, stream: Stream) -> Unit = { _, _ -> },
+    /** Whether the link draws frames now (first frame in, not reconnecting): an expand reuses it (#157). */
+    private val onLinkPlaying: (sessionId: Long, playing: Boolean) -> Unit = { _, _ -> }
 ) {
     private val appContext = context.applicationContext
     private var player: ExoPlayer? = null
@@ -134,6 +146,10 @@ internal class SportsLiveMiniPlayback(
     /** A recovery runs (#138): "Reconnecting…" shows over the last frame. */
     var reconnecting by mutableStateOf(false)
         private set
+
+    private fun reportLink(sessionId: Long?, playing: Boolean) {
+        sessionId?.let { onLinkPlaying(it, playing) }
+    }
 
     private val health = SportsLiveStreamHealth()
     private var ladder = SportsLiveRecoveryLadder()
@@ -171,6 +187,7 @@ internal class SportsLiveMiniPlayback(
                     rendered = true
                     reconnecting = false
                     health.onFirstFrame()
+                    reportLink(loadedSessionId, true)
                 }
 
                 override fun onPlayerError(error: PlaybackException) {
@@ -226,6 +243,7 @@ internal class SportsLiveMiniPlayback(
 
     fun release() {
         val current = player ?: return
+        reportLink(loadedSessionId, false)
         ticker.stop()
         recoveryJob?.cancel()
         recoveryJob = null
@@ -261,6 +279,7 @@ internal class SportsLiveMiniPlayback(
             recover(problem)
         } else if (reconnecting && health.isProgressing) {
             reconnecting = false
+            reportLink(loadedSessionId, true)
         }
     }
 
@@ -271,6 +290,7 @@ internal class SportsLiveMiniPlayback(
         val game = item ?: return
         val failed = stream ?: return
         val url = failed.getStreamUrl()
+        reportLink(sessionId, false)
         SportsLiveSourceReliability.record(
             SportsLiveExtraSources.sourceKeyFor(game, failed),
             if (problem.isStall) SportsLiveSourceReliability.Outcome.STALL else SportsLiveSourceReliability.Outcome.FAILURE
@@ -405,7 +425,8 @@ fun SportsLiveMiniPlayerHost(
             onError = controller::onStreamError,
             scope = recoveryScope,
             lookup = viewModel::recoveryStream,
-            onStreamReplaced = controller::onStreamReplaced
+            onStreamReplaced = controller::onStreamReplaced,
+            onLinkPlaying = controller::onLinkPlaying
         )
     }
     val currentOnExpand by rememberUpdatedState(onExpand)
@@ -443,10 +464,13 @@ fun SportsLiveMiniPlayerHost(
     if (playing == null) return
     // In picture-in-picture only the video shows, filling the window.
     val inPip by SportsLivePip.inPip.collectAsState()
-    // In Live Now's stage media slot (V2, #132), where it takes the preview's place; else the usual corner.
-    val spot by SportsLiveMiniPlacement.spot.collectAsState()
-    val slot by SportsLiveMiniPlacement.slot.collectAsState()
-    val stageSlot = slot?.takeIf { spot == SportsLiveMiniSpot.STAGE && !inPip }
+    // Inside Sports Live, docked over the stage's media slot on every tab (V2, #132, #157), held through a tab
+    // switch; else the usual corner. The one PlayerView is only moved and resized, never recreated, so the
+    // decoder keeps its surface and the video flows on through a switch.
+    val dock = rememberSportsLiveMiniDock()
+    val stageSlot = (dock as? SportsLiveMiniDock.Docked)?.slot?.takeIf { !inPip }
+    var lastDocked by remember { mutableStateOf<SportsLiveMiniSlot?>(null) }
+    if (stageSlot != null) lastDocked = stageSlot
     // The host's own place in the window, so a slot (window pixels) is placed relative to it.
     var hostX by remember { mutableIntStateOf(0) }
     var hostY by remember { mutableIntStateOf(0) }
@@ -461,12 +485,15 @@ fun SportsLiveMiniPlayerHost(
             }
             .then(if (inPip) Modifier.background(Color.Black) else Modifier)
     ) {
+        // A stage at another place or size: the video glides there (its first dock lands at once).
+        val docked = (stageSlot ?: lastDocked)?.let { animatedDockBounds(it, hostX, hostY) }
         val placement = when {
             inPip -> Modifier.fillMaxSize()
-            stageSlot != null -> with(density) {
+            stageSlot != null && docked != null -> with(density) {
+                val (dockOffset, dockSize) = docked
                 Modifier
-                    .offset { IntOffset(stageSlot.x - hostX, stageSlot.y - hostY) }
-                    .size(stageSlot.width.toDp(), stageSlot.height.toDp())
+                    .offset { dockOffset }
+                    .size(dockSize.width.toDp(), dockSize.height.toDp())
             }
             else -> Modifier
                 .align(Alignment.BottomEnd)
@@ -489,8 +516,14 @@ fun SportsLiveMiniPlayerHost(
                         when (key) {
                             SportsLiveMiniKey.EXPAND -> controller.requestExpand()
                             SportsLiveMiniKey.CLOSE -> {
-                                // Focus goes back to the content first, as the Now playing card's Stop.
-                                if (!focusManager.moveFocus(FocusDirection.Up) &&
+                                // Focus goes back to the content first, as the Now playing card's Stop: docked, to
+                                // where it was in the stage or list (#157), whose preview then resumes.
+                                val restored = stageSlot != null && contentFocusRequester != null && runCatching {
+                                    contentFocusRequester.restoreFocusedChild() ||
+                                        contentFocusRequester.requestFocus(FocusDirection.Enter)
+                                }.getOrDefault(false)
+                                if (!restored &&
+                                    !focusManager.moveFocus(FocusDirection.Up) &&
                                     !focusManager.moveFocus(FocusDirection.Left)
                                 ) {
                                     focusManager.clearFocus()
@@ -560,18 +593,15 @@ fun SportsLiveMiniPlayerHost(
                 if (playback.reconnecting) {
                     SportsLiveReconnectingChip(small = true, modifier = Modifier.align(Alignment.TopStart).padding(6.dp))
                 }
-                // In the stage the caption is a small chip at the video's top-left (V2 P3): never over the
-                // broadcast's own scorebug along the bottom, nor over the score block below the box.
+                // Docked, the WATCHING strip along the video's top (#157): which game plays, never read as the
+                // stage's selected one; never over the broadcast's scorebug along the bottom.
                 if (!playback.reconnecting && stageSlot != null &&
                     SportsLiveMiniGeometry.captionSpot(inStage = true) == SportsLiveMiniCaptionSpot.TOP_START
                 ) {
-                    MiniCaption(
-                        text = stringResource(
-                            if (focused) R.string.sports_live_mini_ok_hint else R.string.sports_live_mini_hint,
-                            playing.item.displayName
-                        ),
-                        small = true,
-                        modifier = Modifier.align(Alignment.TopStart).padding(6.dp)
+                    WatchingStrip(
+                        name = playing.item.displayName,
+                        hint = stringResource(if (focused) R.string.sports_live_mini_watching_ok_hint else R.string.sports_live_mini_watching_hint),
+                        modifier = Modifier.align(Alignment.TopStart).fillMaxWidth()
                     )
                 }
             }
@@ -585,6 +615,50 @@ fun SportsLiveMiniPlayerHost(
                 )
             }
         }
+    }
+}
+
+private const val DOCK_MOVE_MS = 220
+
+/** [slot] relative to the host at [hostX], [hostY], animated as it changes; it starts where it is first asked. */
+@Composable
+private fun animatedDockBounds(slot: SportsLiveMiniSlot, hostX: Int, hostY: Int): Pair<IntOffset, IntSize> {
+    val offset by animateIntOffsetAsState(IntOffset(slot.x - hostX, slot.y - hostY), tween(DOCK_MOVE_MS), label = "miniDockOffset")
+    val size by animateIntSizeAsState(IntSize(slot.width, slot.height), tween(DOCK_MOVE_MS), label = "miniDockSize")
+    return offset to size
+}
+
+/** The docked mini player's label strip (#157): "WATCHING <game>" and how to expand, on a dark band. */
+@Composable
+private fun WatchingStrip(name: String, hint: String, modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier
+            .background(SportsLiveTokens.Colors.Background.copy(alpha = 0.78f))
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = stringResource(R.string.sports_live_mini_watching),
+            style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag).copy(letterSpacing = 0.08.em),
+            color = SportsLiveTokens.Colors.LiveText,
+            maxLines = 1
+        )
+        Text(
+            text = name,
+            style = SportsLiveTokens.style(SportsLiveTokens.Type.Meta).sportsLiveBold(),
+            color = SportsLiveTokens.Colors.TextPrimary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false)
+        )
+        Text(
+            text = hint,
+            style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag),
+            color = SportsLiveTokens.Colors.TextSecondary,
+            maxLines = 1,
+            softWrap = false
+        )
     }
 }
 

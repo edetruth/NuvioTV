@@ -22,6 +22,7 @@ import androidx.compose.material.icons.automirrored.rounded.VolumeOff
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,6 +55,8 @@ import com.nuvio.tv.core.sportslive.scores.ScoreDetails
 import com.nuvio.tv.core.sportslive.scores.ScoreDetailsBuilder
 import com.nuvio.tv.core.sportslive.scores.TeamLogoUrls
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniPlacement
+import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniPlayers
+import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniState
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniSlot
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniSpot
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveBadge
@@ -85,15 +88,19 @@ internal fun SportsLiveStage(
     onMore: () -> Unit,
     modifier: Modifier = Modifier,
     watchModifier: Modifier = Modifier,
-    moreModifier: Modifier = Modifier
+    moreModifier: Modifier = Modifier,
+    /** How the stage reads with the mini player in its media box (#157). */
+    header: SportsLiveStageHeader = SportsLiveStageHeader.NO_MINI
 ) {
+    val headed = header == SportsLiveStageHeader.SELECTED
     Column(
         modifier = modifier
             .width(SportsLiveStageLayout.WIDTH_DP.dp)
-            .height(SportsLiveStageLayout.HEIGHT_DP.dp),
+            .height(SportsLiveStageLayout.HEIGHT_DP.dp + if (headed) SportsLiveStageSelectedHeading.HEIGHT + SportsLiveStageLayout.GAP_DP.dp else 0.dp),
         verticalArrangement = Arrangement.spacedBy(SportsLiveStageLayout.GAP_DP.dp)
     ) {
         StageMedia(row, preview, previewShowing, miniInStage)
+        if (headed) SportsLiveStageSelectedHeading()
         if (row.group == ScoreboardGroup.CHANNELS) {
             // A channel's text block takes its own height, so the buttons sit right under it (no empty block).
             ChannelBlock(row, noStream)
@@ -139,6 +146,67 @@ private fun ButtonLabel(text: String) {
 }
 
 /**
+ * How a stage reads while the mini player plays in its media box (#157): with no mini player, as always
+ * ([NO_MINI]); on another game than the mini player's, its details under a **Selected** heading, the video
+ * labelled WATCHING ([SELECTED]), so the two are never read as one; on the mini player's own game, one normal
+ * stage whose Watch expands the mini player ([MERGED]).
+ */
+internal enum class SportsLiveStageHeader { NO_MINI, SELECTED, MERGED }
+
+/** The stage's header for the mini player's game ([miniKey], null when none plays) and the stage's ([selectedKey]). */
+internal fun sportsLiveStageHeader(miniKey: String?, selectedKey: String?): SportsLiveStageHeader = when {
+    miniKey == null -> SportsLiveStageHeader.NO_MINI
+    miniKey == selectedKey -> SportsLiveStageHeader.MERGED
+    else -> SportsLiveStageHeader.SELECTED
+}
+
+/** The "Selected" heading over the focused game's details while the mini player plays another (#157). */
+internal object SportsLiveStageSelectedHeading {
+    val HEIGHT = 16.dp
+
+    @Composable
+    operator fun invoke() {
+        Row(
+            modifier = Modifier.height(HEIGHT),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(modifier = Modifier.width(3.dp).height(12.dp).background(Colors.FocusWhite))
+            Text(
+                text = stringResource(R.string.sports_live_stage_selected).uppercase(Locale.getDefault()),
+                style = SportsLiveTokens.style(SportsLiveTokens.Type.SectionHeader),
+                color = Colors.TextSecondary,
+                maxLines = 1
+            )
+        }
+    }
+}
+
+/**
+ * The media box's place, passed to the mini player while it plays (#132, #157), which is then drawn over it:
+ * every stage's media box ([miniInStage], else the mini player's own state) claims it.
+ */
+@Composable
+internal fun Modifier.sportsLiveMiniSlot(miniInStage: Boolean? = null): Modifier {
+    val docked = miniInStage
+        ?: (SportsLiveMiniPlayers.controller.state.collectAsState().value is SportsLiveMiniState.Playing)
+    val token = remember { Any() }
+    // The mini player takes this slot while it plays; held through a tab switch, then the corner once Sports Live leaves.
+    DisposableEffect(docked) {
+        if (docked) SportsLiveMiniPlacement.claim(token, SportsLiveMiniSpot.STAGE)
+        onDispose { SportsLiveMiniPlacement.release(token) }
+    }
+    return onGloballyPositioned { coordinates ->
+        if (!docked) return@onGloballyPositioned
+        val bounds = coordinates.boundsInWindow()
+        SportsLiveMiniPlacement.moveTo(
+            token,
+            SportsLiveMiniSlot(bounds.left.toInt(), bounds.top.toInt(), bounds.width.toInt(), bounds.height.toInt())
+        )
+    }
+}
+
+/**
  * The 360×203 media box: preview, mini player or drawn art, never another size. [agendaArt]: Upcoming's
  * drawn matchup (league and season on top, records under the teams, "at" or "vs" between).
  */
@@ -150,25 +218,12 @@ internal fun StageMedia(
     miniInStage: Boolean,
     agendaArt: Boolean = false
 ) {
-    val token = remember { Any() }
-    // The mini player takes this slot while it plays; the corner again once the stage leaves.
-    DisposableEffect(miniInStage) {
-        if (miniInStage) SportsLiveMiniPlacement.claim(token, SportsLiveMiniSpot.STAGE)
-        onDispose { SportsLiveMiniPlacement.release(token) }
-    }
     val shape = SportsLiveTokens.Radius.RowShape
     Box(
         modifier = Modifier
             .width(SportsLiveStageLayout.WIDTH_DP.dp)
             .height(SportsLiveStageLayout.MEDIA_HEIGHT_DP.dp)
-            .onGloballyPositioned { coordinates ->
-                if (!miniInStage) return@onGloballyPositioned
-                val bounds = coordinates.boundsInWindow()
-                SportsLiveMiniPlacement.moveTo(
-                    token,
-                    SportsLiveMiniSlot(bounds.left.toInt(), bounds.top.toInt(), bounds.width.toInt(), bounds.height.toInt())
-                )
-            }
+            .sportsLiveMiniSlot(miniInStage)
             .clip(shape)
             .background(Colors.Surface)
     ) {

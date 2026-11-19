@@ -200,7 +200,9 @@ internal fun SportsLiveReplayStage(
     onWatch: () -> Unit,
     onMore: () -> Unit,
     modifier: Modifier = Modifier,
-    watchModifier: Modifier = Modifier
+    watchModifier: Modifier = Modifier,
+    /** A mini player plays (#157): it docks in the media box and the replay's details read as Selected. */
+    miniPlaying: Boolean = false
 ) {
     Column(
         modifier = modifier.width(SportsLiveStageLayout.WIDTH_DP.dp).fillMaxHeight(),
@@ -210,6 +212,7 @@ internal fun SportsLiveReplayStage(
             modifier = Modifier
                 .width(SportsLiveStageLayout.WIDTH_DP.dp)
                 .height(SportsLiveStageLayout.MEDIA_HEIGHT_DP.dp)
+                .sportsLiveMiniSlot(miniPlaying)
                 .clip(SportsLiveTokens.Radius.RowShape)
                 .background(Colors.Surface)
         ) {
@@ -242,6 +245,7 @@ internal fun SportsLiveReplayStage(
                 }
             }
         }
+        if (miniPlaying) SportsLiveStageSelectedHeading()
         Column(
             modifier = Modifier.fillMaxWidth().height(SportsLiveStageLayout.SCORE_BLOCK_HEIGHT_DP.dp),
             verticalArrangement = Arrangement.spacedBy(5.dp)
@@ -301,7 +305,9 @@ internal fun SportsLiveUpcomingStage(
     onWatch: () -> Unit,
     onMore: () -> Unit,
     modifier: Modifier = Modifier,
-    primaryModifier: Modifier = Modifier
+    primaryModifier: Modifier = Modifier,
+    /** How the stage reads with the mini player in its media box (#157). */
+    header: SportsLiveStageHeader = SportsLiveStageHeader.NO_MINI
 ) {
     val buttons = upcomingStageButtons(row.item, agendaStartOf(row), nowMs)
     Column(
@@ -309,6 +315,7 @@ internal fun SportsLiveUpcomingStage(
         verticalArrangement = Arrangement.spacedBy(SportsLiveStageLayout.GAP_DP.dp)
     ) {
         StageMedia(row, preview, previewShowing, miniInStage, agendaArt = true)
+        if (header == SportsLiveStageHeader.SELECTED) SportsLiveStageSelectedHeading()
         Column(
             modifier = Modifier.fillMaxWidth().height(SportsLiveStageLayout.SCORE_BLOCK_HEIGHT_DP.dp),
             verticalArrangement = Arrangement.spacedBy(5.dp)

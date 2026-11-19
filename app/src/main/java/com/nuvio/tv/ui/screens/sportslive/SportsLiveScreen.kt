@@ -95,7 +95,9 @@ import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualSession
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualSessions
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniGeometry
+import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniDock
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniPlacement
+import com.nuvio.tv.ui.screens.sportslive.mini.rememberSportsLiveMiniDock
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniPlayers
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniSpot
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniState
@@ -135,6 +137,12 @@ fun SportsLiveScreen(
     onOpenTeam: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    // While Sports Live shows, the mini player stays docked in its stage on every tab (#157).
+    val miniSection = remember { Any() }
+    DisposableEffect(miniSection) {
+        SportsLiveMiniPlacement.enterSection(miniSection)
+        onDispose { SportsLiveMiniPlacement.leaveSection(miniSection) }
+    }
     val followedTeams by viewModel.followedTeams.collectAsStateWithLifecycle()
     val preview by viewModel.preview.collectAsStateWithLifecycle()
     val playState by playViewModel.state.collectAsStateWithLifecycle()
@@ -1077,6 +1085,12 @@ private fun SportsLiveContent(
         val miniPlayer = SportsLiveMiniPlayers.controller
         val miniState by miniPlayer.state.collectAsStateWithLifecycle()
         val nowPlaying = (miniState as? SportsLiveMiniState.Playing)?.item
+        // The stage's header with the mini player docked (#157): Selected, or merged on its own game, where Watch expands it.
+        val stageHeader = sportsLiveStageHeader(nowPlaying?.listKey, selected?.listKey)
+        val stageWatch: () -> Unit = {
+            if (stageHeader == SportsLiveStageHeader.MERGED) miniPlayer.requestExpand() else selected?.let(open)
+        }
+        val miniDock = rememberSportsLiveMiniDock()
         // A card that goes away (idle timeout, profile switch) while focused hands focus to the active tab.
         var nowPlayingHasFocus by remember { mutableStateOf(false) }
         LaunchedEffect(nowPlaying == null) {
@@ -1085,10 +1099,9 @@ private fun SportsLiveContent(
             withFrameNanos { }
             runCatching { activeTabFocusRequester.requestFocus() }
         }
-        // On the Scoreboard the mini player sits in the stage (V2), so this card is not needed there.
-        // Replays' stage draws no media slot for it (P4): the card stays there.
-        val stageShown = scoreboard && !showingResults && uiState.selectedTab != SportsLiveTab.REPLAYS && selected != null && boardRowOf[selected.listKey] != null
-        if (nowPlaying != null && !stageShown) {
+        // Docked in a stage (every tab's, #157) the mini player needs no card; only in the corner (a tab with no
+        // stage, after the hold) does it show, so a tab switch never flashes it.
+        if (nowPlaying != null && miniDock == SportsLiveMiniDock.Corner) {
             SportsLiveNowPlayingCard(
                 name = nowPlaying.displayName,
                 onExpand = { miniPlayer.requestExpand() },
@@ -1299,7 +1312,8 @@ private fun SportsLiveContent(
                         .onFocusChanged { paneHasFocus = it.hasFocus },
                     watchModifier = Modifier
                         .focusRequester(watchFocusRequester)
-                        .focusProperties { left = entryCardFocusRequester ?: selectedCardFocusRequester }
+                        .focusProperties { left = entryCardFocusRequester ?: selectedCardFocusRequester },
+                    miniPlaying = nowPlaying != null
                 )
             }
             return@Column
@@ -1368,6 +1382,7 @@ private fun SportsLiveContent(
                                                         onFocus = { cardFocused(item) },
                                                         menuOpen = item.listKey == menuCardKey,
                                                         agenda = AgendaRowSide(bell = agendaBellOf(remindable(item), reminders.isReminded(item))),
+                                                        watching = item.listKey == nowPlaying?.listKey,
                                                         modifier = Modifier
                                                             .focusRequester(cardFocusRequester(item))
                                                             .focusProperties {
@@ -1407,14 +1422,15 @@ private fun SportsLiveContent(
                     miniInStage = nowPlaying != null,
                     noStream = noStreamKey == selected.listKey,
                     onRemind = { onToggleReminder(selected) },
-                    onWatch = { open(selected) },
+                    onWatch = stageWatch,
                     onMore = { menuCardKey = selected.listKey },
                     modifier = Modifier
                         .padding(top = LIST_FOCUS_ROOM)
                         .onFocusChanged { paneHasFocus = it.hasFocus },
                     primaryModifier = Modifier
                         .focusRequester(watchFocusRequester)
-                        .focusProperties { left = entryCardFocusRequester ?: selectedCardFocusRequester }
+                        .focusProperties { left = entryCardFocusRequester ?: selectedCardFocusRequester },
+                    header = stageHeader
                 )
             }
             return@Column
@@ -1489,6 +1505,7 @@ private fun SportsLiveContent(
                                             menuOpen = item.listKey == menuCardKey,
                                             reminded = remindedCard(item),
                                             hasReplay = item.streamKey in replayKeys,
+                                            watching = item.listKey == nowPlaying?.listKey,
                                             modifier = Modifier
                                                 .focusRequester(cardFocusRequester(item))
                                                 .focusProperties {
@@ -1526,14 +1543,15 @@ private fun SportsLiveContent(
                     previewShowing = selectedPreview?.rendering == true,
                     miniInStage = nowPlaying != null,
                     noStream = noStreamKey == selected.listKey,
-                    onWatch = { open(selected) },
+                    onWatch = stageWatch,
                     onMore = { menuCardKey = selected.listKey },
                     modifier = Modifier
                         .padding(top = LIST_FOCUS_ROOM)
                         .onFocusChanged { paneHasFocus = it.hasFocus },
                     watchModifier = Modifier
                         .focusRequester(watchFocusRequester)
-                        .focusProperties { left = entryCardFocusRequester ?: selectedCardFocusRequester }
+                        .focusProperties { left = entryCardFocusRequester ?: selectedCardFocusRequester },
+                    header = stageHeader
                 )
             }
             return@Column

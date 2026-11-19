@@ -126,4 +126,54 @@ class SportsLiveMiniExpanderTest {
         assertNull(s.expander.expanding.value)
         assertNull(SportsLiveZapSessions.current())
     }
+
+    @Test
+    fun `a playing link is reused and a link that is not playing is looked up`() {
+        assertEquals(SportsLiveMiniExpandSource.REUSE, sportsLiveMiniExpandSource(hasUrl = true, linkPlaying = true))
+        assertEquals(SportsLiveMiniExpandSource.RESOLVE, sportsLiveMiniExpandSource(hasUrl = true, linkPlaying = false))
+        assertEquals(SportsLiveMiniExpandSource.RESOLVE, sportsLiveMiniExpandSource(hasUrl = false, linkPlaying = true))
+    }
+
+    @Test
+    fun `expanding a playing mini player opens its own link with no lookup and no dialog`() = runTest {
+        val lookup = CompletableDeferred<Stream?>()
+        val s = setup(lookup)
+        s.mini.onLinkPlaying(s.playing().sessionId, true)
+
+        s.expander.expand(s.playing())
+        assertNull("no progress dialog", s.expander.expanding.value)
+        runCurrent()
+
+        assertEquals(0, lookups)
+        assertEquals(listOf(miniStream to false), picked)
+        assertEquals(1, s.targets.size)
+    }
+
+    @Test
+    fun `a mini player reconnecting is looked up again on expand`() = runTest {
+        val lookup = CompletableDeferred<Stream?>()
+        val s = setup(lookup)
+        val id = s.playing().sessionId
+        s.mini.onLinkPlaying(id, true)
+        s.mini.onLinkPlaying(id, false)
+
+        s.expander.expand(s.playing())
+        runCurrent()
+        assertEquals(1, lookups)
+        lookup.complete(freshStream)
+        runCurrent()
+        assertEquals(listOf(freshStream to true), picked)
+    }
+
+    @Test
+    fun `an earlier mini player's playing link is not the new one's`() = runTest {
+        val lookup = CompletableDeferred<Stream?>()
+        val s = setup(lookup)
+        val first = s.playing().sessionId
+        s.mini.onLinkPlaying(first, true)
+        s.mini.onBackFromPlayer("a", session, miniStream)
+
+        assertTrue(s.playing().sessionId != first)
+        assertTrue(!s.mini.isLinkPlaying(s.playing()))
+    }
 }

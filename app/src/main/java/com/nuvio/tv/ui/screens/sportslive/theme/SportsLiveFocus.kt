@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
@@ -30,6 +31,7 @@ import androidx.tv.material3.Border
 import androidx.tv.material3.Button
 import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.ClickableSurfaceDefaults
+import androidx.tv.material3.LocalContentColor
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens.Colors
@@ -102,9 +104,12 @@ fun SportsLiveButton(
             pressedBorder = SportsLiveFocus.ring(shape, gap = if (primary) Focus.PrimaryRingGap else 0.dp)
         ),
         shape = ButtonDefaults.shape(shape),
-        contentPadding = contentPadding,
-        content = content
-    )
+        contentPadding = contentPadding
+    ) {
+        // The label and icon take the role's text colour in every state (#157): the primary's dark text on
+        // white at rest too, never a grey that reads as disabled.
+        CompositionLocalProvider(LocalContentColor provides text) { content() }
+    }
 }
 
 /**

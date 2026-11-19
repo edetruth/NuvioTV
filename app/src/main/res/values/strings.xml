@@ -4040,6 +4040,11 @@
     <string name="sports_live_preview_label">Preview</string>
     <string name="sports_live_mini_hint">%1$s · Play/Pause to expand</string>
     <string name="sports_live_mini_ok_hint">%1$s · OK to expand · Back to close</string>
+    <string name="sports_live_mini_watching">WATCHING</string>
+    <string name="sports_live_mini_watching_hint">▶❚❚ to expand</string>
+    <string name="sports_live_mini_watching_ok_hint">OK to expand · Back ✕ to stop</string>
+    <string name="sports_live_stage_selected">Selected</string>
+    <string name="sports_live_row_watching">▶ Watching</string>
     <!-- #148: Live now's header chip after Back from a paused game. -->
     <string name="sports_live_resume_live">Resume %1$s · Live</string>
     <string name="sports_live_resume_final">%1$s · %2$s</string>

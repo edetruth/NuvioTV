@@ -118,6 +118,22 @@ class SportsLiveMiniPlayerController(
         restartIdleTimer()
     }
 
+    /** The session whose link draws frames now (#157); null while none does (loading, reconnecting). */
+    private var linkPlayingSessionId: Long? = null
+
+    /** Mini player [sessionId]'s link [playing] (first frame drawn, not reconnecting) or not. */
+    fun onLinkPlaying(sessionId: Long, playing: Boolean) {
+        if (playing) {
+            linkPlayingSessionId = sessionId
+        } else if (linkPlayingSessionId == sessionId) {
+            linkPlayingSessionId = null
+        }
+    }
+
+    /** True while [playing] is current and its link plays: an expand reuses it, with no lookup. */
+    fun isLinkPlaying(playing: SportsLiveMiniState.Playing): Boolean =
+        isCurrent(playing) && linkPlayingSessionId == playing.sessionId
+
     fun stop(reason: SportsLiveMiniStop) {
         if (_state.value !is SportsLiveMiniState.Playing) return
         idleJob?.cancel()

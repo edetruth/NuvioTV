@@ -88,6 +88,9 @@ import com.nuvio.tv.ui.theme.NuvioTheme
 import com.nuvio.tv.ui.util.dpadRepeatThrottle
 import kotlinx.coroutines.launch
 import java.time.LocalTime
+import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniPlayers
+import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniState
+import androidx.compose.runtime.collectAsState
 import java.util.Locale
 
 /** What an empty Today says (#78): until [LAST_NIGHT_UNTIL_HOUR] local, last night's games are under Yesterday. */
@@ -751,6 +754,8 @@ private fun ResultsStage(
     firstModifier: Modifier = Modifier
 ) {
     val event = row.event
+    // A mini player plays (#157): it docks in the media box, and the result's details read as Selected.
+    val miniPlaying = SportsLiveMiniPlayers.controller.state.collectAsState().value is SportsLiveMiniState.Playing
     Column(
         modifier = modifier.width(SportsLiveStageLayout.WIDTH_DP.dp),
         verticalArrangement = Arrangement.spacedBy(SportsLiveStageLayout.GAP_DP.dp)
@@ -759,6 +764,7 @@ private fun ResultsStage(
             modifier = Modifier
                 .width(SportsLiveStageLayout.WIDTH_DP.dp)
                 .height(SportsLiveStageLayout.MEDIA_HEIGHT_DP.dp)
+                .sportsLiveMiniSlot(miniPlaying)
                 .clip(SportsLiveTokens.Radius.RowShape)
                 .background(Colors.Surface)
         ) {
@@ -782,6 +788,7 @@ private fun ResultsStage(
                 }
             }
         }
+        if (miniPlaying) SportsLiveStageSelectedHeading()
         Column(
             modifier = Modifier.fillMaxWidth().height(SportsLiveStageLayout.SCORE_BLOCK_HEIGHT_DP.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)

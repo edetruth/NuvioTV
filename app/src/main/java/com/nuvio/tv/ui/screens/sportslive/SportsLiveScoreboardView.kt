@@ -162,7 +162,9 @@ internal fun SportsLiveScoreboardRow(
     /** Team names start from the short name (the panel's narrower rows). */
     shortNames: Boolean = false,
     /** An Agenda row (Upcoming): its right side shows the listing and the bell, never scores or a status. */
-    agenda: AgendaRowSide? = null
+    agenda: AgendaRowSide? = null,
+    /** The mini player's game (#157): a small "▶ Watching" marker at its top-right. */
+    watching: Boolean = false
 ) {
     val shape = SportsLiveTokens.Radius.RowShape
     var focused by remember { mutableStateOf(false) }
@@ -212,6 +214,20 @@ internal fun SportsLiveScoreboardRow(
             }
             if (bar != null) {
                 Box(modifier = Modifier.align(Alignment.CenterStart).width(BAR_WIDTH).fillMaxHeight().background(bar))
+            }
+            if (watching) {
+                Text(
+                    text = stringResource(R.string.sports_live_row_watching),
+                    style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag).copy(fontSize = 10.sp, lineHeight = 12.sp),
+                    color = Colors.OnPrimary,
+                    maxLines = 1,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = 3.dp, end = 4.dp)
+                        .clip(RoundedCornerShape(SportsLiveTokens.Radius.Badge))
+                        .background(Colors.PrimaryFill)
+                        .padding(horizontal = 4.dp)
+                )
             }
             row.progress?.let { share ->
                 Box(
