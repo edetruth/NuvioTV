@@ -5,6 +5,7 @@ import com.nuvio.tv.core.sportslive.scores.EspnLeague
 import com.nuvio.tv.core.sportslive.scores.EspnLeagueMap
 import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveItem
+import java.text.Normalizer
 
 /** Display names of the two sides of a game, rankings removed. */
 data class TeamPair(val home: String, val away: String)
@@ -14,8 +15,9 @@ object SportsLiveTeams {
     // Every load folds the same few thousand names many times over (#152). First, so it is set before any other initialiser runs.
     private val normalised = Memo(8_192) { team: String -> normaliseUncached(team) }
 
-    // In order of preference. " at " / " @ " put the home side second.
-    private val SEPARATORS = listOf(" vs ", " vs. ", " v ", " at ", " @ ", " - ")
+    // In order of preference. " at " / " @ " put the home side second. " x " (Portuguese and Spanish, #165)
+    // counts only between proper words ([isWordSeparatorAt]).
+    private val SEPARATORS = listOf(" vs ", " vs. ", " v ", " at ", " @ ", X_SEPARATOR, " - ")
     private val AWAY_FIRST = setOf(" at ", " @ ")
     private val LEADING_RANK = Regex("^\\d+\\s+")
     private val WHITESPACE = Regex("\\s+")
@@ -26,10 +28,10 @@ object SportsLiveTeams {
     // "Celtics [HD]", "76ers (2026-11-10 19:00:05)": a trailing bracketed group is not part of the name.
     private val TRAILING_GROUP = Regex("""\s*[\[(][^\[\]()]*[\])]\s*$""")
 
-    // "(W)", "(Women)", "(U21)", "[U21]", "U21", "U-21", "Under 21", "U21s": they tell teams apart, so
-    // they stay part of the name. An unbracketed youth form is written "u21" in a normalised name.
+    // "(W)", "(Women)", "(U21)", "[U21]", "U21", "U-21", "Under 21", "U21s", "Sub-17", "Sub 17" (#165): they tell
+    // teams apart, so they stay part of the name. An unbracketed youth form is written "u21" in a normalised name.
     private val QUALIFIER = Regex(
-        """\s*(\((w|women|u\d+)\)|\[u\d+]|\b(u|under)[- ]?(\d{1,2})s?)\s*$""",
+        """\s*(\((w|women|u\d+)\)|\[u\d+]|\b(u|under|sub)[- ]?(\d{1,2})s?)\s*$""",
         RegexOption.IGNORE_CASE
     )
     private val BRACKET_GROUP = Regex("""\[([^\[\]]*)]""")
@@ -68,6 +70,7 @@ object SportsLiveTeams {
         for (separator in SEPARATORS) {
             val index = name.indexOf(separator, ignoreCase = true)
             if (index < 0) continue
+            if (separator == X_SEPARATOR && !isWordSeparatorAt(name, index)) continue
             val dash = separator == DASH
             var firstText = name.substring(0, index)
             var secondText = name.substring(index + separator.length)
@@ -76,6 +79,8 @@ object SportsLiveTeams {
                 firstText = firstText.substringAfterLast(DASH)
                 secondText = secondText.substringBefore(DASH)
             }
+            // "LIVE: Qatar U17" (#165): the addon's live marker is no part of the first side.
+            firstText = withoutLivePrefix(firstText)
             val first = display(firstText)
             val second = display(secondText)
             if (first.isEmpty() || second.isEmpty()) continue
@@ -86,6 +91,32 @@ object SportsLiveTeams {
     }
 
     private const val DASH = " - "
+    private const val X_SEPARATOR = " x "
+
+    /**
+     * Whether the " x " at [index] of [name] separates two sides (#165): the words either side of it are proper
+     * words (two or more characters, or one capital letter), so a stray lone "x" never splits a title. A name
+     * like "Xavier" is never touched: it has no spaces round its x.
+     */
+    private fun isWordSeparatorAt(name: String, index: Int): Boolean {
+        val before = name.substring(0, index).trimEnd().substringAfterLast(' ')
+        val after = name.substring(index + X_SEPARATOR.length).trimStart().substringBefore(' ')
+        return isProperWord(before) && isProperWord(after)
+    }
+
+    private fun isProperWord(word: String): Boolean =
+        word.any(Char::isLetterOrDigit) && (word.length >= 2 || word[0].isUpperCase())
+
+    /** [side] without a leading "LIVE:" / "LIVE |" marker (#165); plain string checks, no regex (#152). */
+    private fun withoutLivePrefix(side: String): String {
+        val text = side.trimStart()
+        val start = text.indexOfFirst(Char::isLetter)
+        // At most an emoji or a bullet before it ("🔴 LIVE:").
+        if (start < 0 || start > 4 || !text.regionMatches(start, "live", 0, 4, ignoreCase = true)) return side
+        val rest = text.substring(start + 4).trimStart()
+        if (rest.isEmpty() || (rest[0] != ':' && rest[0] != '|')) return side
+        return rest.substring(1).trim().ifEmpty { side }
+    }
 
     /**
      * Whether [side] reads as a team or player rather than a tournament, round or session: it has a letter,
@@ -180,7 +211,8 @@ object SportsLiveTeams {
     private val WOMEN_WORDS = setOf("w", "women", "womens", "(w)", "(women)")
 
     private fun mergeFormUncached(team: String): MergeForm {
-        val normalised = normalise(team)
+        // "Panamá" and "Panama" are one side when copies are merged (#165).
+        val normalised = normalise(foldAccents(team))
         val words = normalised.split(' ').filter { it.isNotEmpty() }.toMutableList()
         val last = words.lastOrNull()?.trim('(', ')', '[', ']')
         val qualifier = when {
@@ -200,6 +232,18 @@ object SportsLiveTeams {
 
     private fun isSignificantWord(word: String): Boolean =
         word.length >= 3 && word.any(Char::isLetter) && word !in FILLER_WORDS
+
+    /**
+     * [text] without accents ("Panamá" → "Panama"), for merge keys (#165). No regex: each Regex call costs
+     * native memory on Android (#152). Plain ASCII is returned as it is.
+     */
+    fun foldAccents(text: String): String {
+        if (text.all { it.code < 128 }) return text
+        val decomposed = Normalizer.normalize(text, Normalizer.Form.NFD)
+        return buildString(decomposed.length) {
+            for (c in decomposed) if (Character.getType(c) != Character.NON_SPACING_MARK.toInt()) append(c)
+        }
+    }
 
     /**
      * The canonical form of a team name for bucketing and matching: its normalised name, with a known

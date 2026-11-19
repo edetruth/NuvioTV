@@ -3696,6 +3696,9 @@
     <string name="sports_live_league_serie_a">Serie A</string>
     <string name="sports_live_league_ligue_1">Ligue 1</string>
     <string name="sports_live_league_mls">MLS</string>
+    <string name="sports_live_league_nwsl">NWSL</string>
+    <string name="sports_live_league_womens_college_basketball">Women\'s college</string>
+    <string name="sports_live_league_wnba">WNBA</string>
     <!-- Individual sports in My sports and Results (#55 part 2). -->
     <string name="sports_live_results_sport_tennis">Tennis</string>
     <string name="sports_live_results_sport_mma">MMA</string>

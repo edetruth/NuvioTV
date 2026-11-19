@@ -121,10 +121,10 @@ class TeamDirectory(private val maxLeagues: Int = MAX_LEAGUES) {
             val a = resolve(league, first) ?: return@mapNotNull null
             val b = resolve(league, second) ?: return@mapNotNull null
             if (a.id == b.id) return@mapNotNull null
-            a to b
+            KnownTeam(a.logo, a.abbreviation) to KnownTeam(b.logo, b.abbreviation)
         }
-        val (a, b) = found.singleOrNull() ?: return null
-        return KnownTeam(a.logo, a.abbreviation) to KnownTeam(b.logo, b.abbreviation)
+        // A school's men's and women's teams share their logos (#163): a "College" card on both feeds still gets them.
+        return found.distinct().singleOrNull()
     }
 
     /**
@@ -179,7 +179,7 @@ class TeamDirectory(private val maxLeagues: Int = MAX_LEAGUES) {
             }
         }
 
-        private val COLLEGE_LEAGUES = setOf(EspnLeagueMap.COLLEGE_BASKETBALL, EspnLeagueMap.COLLEGE_FOOTBALL)
+        private val COLLEGE_LEAGUES = setOf(EspnLeagueMap.COLLEGE_BASKETBALL, EspnLeagueMap.COLLEGE_BASKETBALL_WOMEN, EspnLeagueMap.COLLEGE_FOOTBALL)
         private val BRACKETS = Regex("""[\[\]()]""")
 
         // Team sports ESPN lists teams for; individual sports (tennis, golf, MMA, racing) have none.

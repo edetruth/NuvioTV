@@ -26,6 +26,21 @@ class MySportsTest {
     }
 
     @Test
+    fun `women's leagues are off by default and picked like any other`() {
+        assertEquals(
+            listOf(MyLeague.NBA, MyLeague.COLLEGE_BASKETBALL, MyLeague.WOMENS_COLLEGE_BASKETBALL, MyLeague.WNBA),
+            MySport.BASKETBALL.leagues
+        )
+        assertTrue(MyLeague.NWSL in MySport.SOCCER.leagues)
+        assertEquals(setOf(MyLeague.NBA), MySports.decode(setOf("basketball")).leaguesOf(MySport.BASKETBALL))
+        val picked = MySports.decode(setOf("basketball/womens-college-basketball", "basketball/wnba", "soccer/usa.nwsl"))
+        assertEquals(setOf(MyLeague.WOMENS_COLLEGE_BASKETBALL, MyLeague.WNBA), picked.leaguesOf(MySport.BASKETBALL))
+        assertEquals(listOf(EspnLeagueMap.SOCCER_ALL, EspnLeagueMap.COLLEGE_BASKETBALL_WOMEN, EspnLeagueMap.WNBA), picked.feeds())
+        assertTrue(MyLeague.NWSL.coversLeague(EspnLeagueMap.NWSL))
+        assertEquals(MyLeague.WOMENS_COLLEGE_BASKETBALL, MyLeague.ofFeed(EspnLeagueMap.COLLEGE_BASKETBALL_WOMEN))
+    }
+
+    @Test
     fun `tokens round trip, a league brings its sport and unknown tokens are skipped`() {
         val sports = MySports.decode(setOf("basketball/college-basketball", "soccer", "soccer/eng.1", "golf/lpga", "cricket", "cricket/ipl", "x/y"))
         assertEquals(listOf(MySport.BASKETBALL, MySport.SOCCER, MySport.GOLF), sports.effectiveSports)

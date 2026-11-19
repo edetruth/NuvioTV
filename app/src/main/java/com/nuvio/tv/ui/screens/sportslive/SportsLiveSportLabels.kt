@@ -28,6 +28,8 @@ internal fun myLeagueLabel(league: MyLeague): String = stringResource(
     when (league) {
         MyLeague.NBA -> R.string.sports_live_league_nba
         MyLeague.COLLEGE_BASKETBALL -> R.string.sports_live_league_college_basketball
+        MyLeague.WOMENS_COLLEGE_BASKETBALL -> R.string.sports_live_league_womens_college_basketball
+        MyLeague.WNBA -> R.string.sports_live_league_wnba
         MyLeague.NFL -> R.string.sports_live_league_nfl
         MyLeague.COLLEGE_FOOTBALL -> R.string.sports_live_league_college_football
         MyLeague.NHL -> R.string.sports_live_league_nhl
@@ -42,6 +44,7 @@ internal fun myLeagueLabel(league: MyLeague): String = stringResource(
         MyLeague.SERIE_A -> R.string.sports_live_league_serie_a
         MyLeague.LIGUE_1 -> R.string.sports_live_league_ligue_1
         MyLeague.MLS -> R.string.sports_live_league_mls
+        MyLeague.NWSL -> R.string.sports_live_league_nwsl
         MyLeague.ATP -> R.string.sports_live_league_atp
         MyLeague.WTA -> R.string.sports_live_league_wta
         MyLeague.UFC -> R.string.sports_live_league_ufc

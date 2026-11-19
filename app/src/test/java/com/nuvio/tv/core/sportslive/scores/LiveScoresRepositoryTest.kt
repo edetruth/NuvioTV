@@ -991,11 +991,12 @@ class LiveScoresRepositoryTest {
         runCurrent()
         assertTrue(cbb15 !in provider.calls)
         assertTrue(namedNba.streamKey in repo.unmatched.value)
-        // A women's card is excluded from every feed: nothing is requested for it.
+        // A women's card goes to the women's feeds only (#163): never the NBA or the men's college feed.
         provider.calls.clear()
         repo.track(SECTION, listOf(item("Baylor Bears at Texas Longhorns", "Women's Basketball", "2026-11-15T20:00:00Z")))
         runCurrent()
-        assertTrue(provider.calls.isEmpty())
+        assertTrue(provider.calls.isNotEmpty())
+        assertTrue(provider.calls.all { it.league in EspnLeagueMap.WOMEN_FEEDS })
     }
 
     @Test

@@ -48,6 +48,9 @@ enum class MyLeague(
 ) {
     NBA("nba", MySport.BASKETBALL, EspnLeagueMap.NBA, isDefault = true),
     COLLEGE_BASKETBALL("college-basketball", MySport.BASKETBALL, EspnLeagueMap.COLLEGE_BASKETBALL, isDefault = false),
+    // Women's leagues (#163): off by default, like college; a sport ticked without naming leagues takes their games.
+    WOMENS_COLLEGE_BASKETBALL("womens-college-basketball", MySport.BASKETBALL, EspnLeagueMap.COLLEGE_BASKETBALL_WOMEN, isDefault = false),
+    WNBA("wnba", MySport.BASKETBALL, EspnLeagueMap.WNBA, isDefault = false),
     NFL("nfl", MySport.FOOTBALL, EspnLeagueMap.NFL, isDefault = true),
     COLLEGE_FOOTBALL("college-football", MySport.FOOTBALL, EspnLeagueMap.COLLEGE_FOOTBALL, isDefault = false),
     NHL("nhl", MySport.HOCKEY, EspnLeagueMap.NHL, isDefault = true),
@@ -69,6 +72,7 @@ enum class MyLeague(
     SERIE_A("ita.1", MySport.SOCCER, null, isDefault = false, slugs = Regex("""^ita\.1$""")),
     LIGUE_1("fra.1", MySport.SOCCER, null, isDefault = false, slugs = Regex("""^fra\.1$""")),
     MLS("usa.1", MySport.SOCCER, null, isDefault = false, slugs = Regex("""^usa\.1$""")),
+    NWSL("usa.nwsl", MySport.SOCCER, null, isDefault = false, slugs = Regex("""^usa\.nwsl$""")),
 
     ATP("atp", MySport.TENNIS, EspnLeagueMap.ATP, isDefault = true),
     WTA("wta", MySport.TENNIS, EspnLeagueMap.WTA, isDefault = true),

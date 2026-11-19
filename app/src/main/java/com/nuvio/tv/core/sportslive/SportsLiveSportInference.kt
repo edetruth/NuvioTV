@@ -29,7 +29,11 @@ object SportsLiveSportInference {
         EspnLeague("soccer", "ita.1") to "Serie A",
         EspnLeague("soccer", "ger.1") to "Bundesliga",
         EspnLeague("soccer", "fra.1") to "Ligue 1",
-        EspnLeague("soccer", "bra.1") to "Brazil Serie A"
+        EspnLeague("soccer", "bra.1") to "Brazil Serie A",
+        // Women's leagues (#163): their lists are kept too (team search, #149), and a card both of whose teams
+        // only they know is theirs.
+        EspnLeagueMap.WNBA to "WNBA",
+        EspnLeagueMap.NWSL to "NWSL"
     )
 
     /** The directory lists inference needs (asked for weekly with the rest, #82). */
@@ -38,6 +42,7 @@ object SportsLiveSportInference {
     /** College feeds a bare sport word may also be on ([EspnLeagueMap.collegeFallbackFor]), with their tags. */
     private val COLLEGE: List<Pair<EspnLeague, String>> = listOf(
         EspnLeagueMap.COLLEGE_BASKETBALL to "NCAAM",
+        EspnLeagueMap.COLLEGE_BASKETBALL_WOMEN to "NCAAW",
         EspnLeagueMap.COLLEGE_FOOTBALL to "NCAAF"
     )
 

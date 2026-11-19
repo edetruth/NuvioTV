@@ -65,6 +65,9 @@ object TeamFollows {
     fun sportWord(league: EspnLeague): String? = when {
         league == EspnLeagueMap.NBA -> "Basketball"
         league == EspnLeagueMap.COLLEGE_BASKETBALL -> "College Basketball"
+        league == EspnLeagueMap.COLLEGE_BASKETBALL_WOMEN -> "Women's College Basketball"
+        league == EspnLeagueMap.WNBA -> "WNBA"
+        league == EspnLeagueMap.NWSL -> "NWSL"
         league == EspnLeagueMap.NFL -> "American Football"
         league == EspnLeagueMap.COLLEGE_FOOTBALL -> "College Football"
         league == EspnLeagueMap.NHL -> "Hockey"

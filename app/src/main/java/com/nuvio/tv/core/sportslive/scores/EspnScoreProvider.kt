@@ -252,11 +252,11 @@ class EspnScoreProvider internal constructor(
 
         /**
          * College scoreboards list only featured games unless a group is asked for: 80 = FBS football,
-         * 50 = Division I men's basketball.
+         * 50 = Division I men's (and, on the women's scoreboard, women's) basketball.
          */
         internal fun groupsFor(league: EspnLeague): String = when (league) {
             EspnLeagueMap.COLLEGE_FOOTBALL -> "&groups=80"
-            EspnLeagueMap.COLLEGE_BASKETBALL -> "&groups=50"
+            EspnLeagueMap.COLLEGE_BASKETBALL, EspnLeagueMap.COLLEGE_BASKETBALL_WOMEN -> "&groups=50"
             else -> ""
         }
 

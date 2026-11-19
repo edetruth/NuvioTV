@@ -78,20 +78,24 @@ class EspnLeagueMapTest {
 
     @Test
     fun `women's and minor leagues never route to the pro feeds`() {
-        assertEquals(emptyList<String>(), slugs("WNBA", "Liberty vs Aces"))
-        assertEquals(emptyList<String>(), slugs("Basketball", "Liberty vs Aces", "WNBA"))
+        // Women's leagues have their own feeds (#163).
+        assertEquals(listOf("basketball/wnba"), slugs("WNBA", "Liberty vs Aces"))
+        assertEquals(listOf("basketball/wnba"), slugs("Basketball", "Liberty vs Aces", "WNBA"))
         assertEquals(emptyList<String>(), slugs("Hockey", "Toronto vs Boston", "PWHL"))
         assertEquals(emptyList<String>(), slugs("Hockey", "AHL: Toronto Marlies vs Belleville"))
         assertEquals(emptyList<String>(), slugs("Ice Hockey", "ECHL"))
         assertEquals(emptyList<String>(), slugs("Basketball", "NBA G League: Stockton vs Santa Cruz"))
-        assertEquals(emptyList<String>(), slugs("Basketball", "Women's Basketball: Lakers"))
+        assertEquals(
+            listOf("basketball/womens-college-basketball", "basketball/wnba"),
+            slugs("Basketball", "Women's Basketball: Lakers")
+        )
         assertEquals(emptyList<String>(), slugs("Soccer", "Womens Super League"))
         assertEquals(listOf("hockey/nhl"), slugs("Hockey", "Maple Leafs vs Bruins"))
     }
 
     @Test
-    fun `a College card naming no sport routes to both college feeds`() {
-        val both = listOf("basketball/mens-college-basketball", "football/college-football")
+    fun `a College card naming no sport routes to every college feed`() {
+        val both = listOf("basketball/mens-college-basketball", "basketball/womens-college-basketball", "football/college-football")
         assertEquals(both, slugs("COLLEGE", "Nevada vs Idaho"))
         assertEquals(both, slugs(null, "Nevada vs Idaho", "College"))
         // A sport word still picks one, and a pro sport word still routes nowhere for a college card.
@@ -170,6 +174,45 @@ class EspnLeagueMapTest {
         assertEquals(listOf("soccer/all"), slugs("Soccer", "Ipswich vs Norwich", "Football"))
         assertEquals(emptyList<String>(), slugs(null, "ODI: India vs Australia"))
         assertEquals(emptyList<String>(), slugs(null, "IPL: CSK vs MI"))
+    }
+
+    @Test
+    fun `a women's card routes to the women's feeds only`() {
+        val ncaaw = listOf("basketball/womens-college-basketball")
+        assertEquals(ncaaw, slugs("NCAAW", "Purdue at Florida State"))
+        assertEquals(ncaaw, slugs("COLLEGE", "Purdue at Florida State", "Women's"))
+        assertEquals(ncaaw, slugs("Women's College Basketball", "Purdue at Florida State"))
+        assertEquals(ncaaw, slugs("College Basketball", "Purdue W vs Florida State W"))
+        assertEquals(ncaaw, slugs("WBB", "Purdue vs Florida State", "NCAA"))
+        assertEquals(listOf("soccer/usa.nwsl"), slugs("Soccer", "NWSL - Portland Thorns vs Orlando Pride"))
+        // A women's sport with no women's feed still gets none; a "W" side on soccer/all keeps it, as before.
+        assertEquals(emptyList<String>(), slugs("Ice Hockey", "Women's Hockey: Canada vs USA"))
+        assertEquals(listOf("soccer/all"), slugs("Soccer", "Arsenal W vs Chelsea W"))
+    }
+
+    @Test
+    fun `a men's card routes to the men's feeds only`() {
+        assertEquals(listOf("basketball/mens-college-basketball", "football/college-football"), slugs("COLLEGE", "Purdue at Florida State", "Men's"))
+        assertEquals(listOf("basketball/mens-college-basketball"), slugs("NCAAM", "Purdue at Florida State"))
+        assertEquals(listOf("basketball/mens-college-basketball"), slugs("College Basketball", "Purdue at Florida State"))
+        assertEquals(listOf("basketball/nba"), slugs("Basketball", "Men's Basketball: Celtics vs Knicks", "NBA"))
+        assertEquals(EspnLeagueMap.COLLEGE_BASKETBALL, EspnLeagueMap.collegeFallbackFor("Basketball", listOf("Duke vs North Carolina")))
+    }
+
+    @Test
+    fun `women's and men's copies of one pairing are told apart`() {
+        fun card(sport: String) = SportsLiveItem(
+            meta = MetaPreview(
+                id = sport, type = ContentType.UNKNOWN, rawType = "sport", name = "Purdue at Florida State", poster = null,
+                posterShape = PosterShape.LANDSCAPE, background = null, logo = null, description = null, releaseInfo = null,
+                imdbRating = null, genres = listOf(sport)
+            ),
+            addonId = "a", addonName = "A", addonBaseUrl = "https://example.invalid", catalogKey = "k", catalogName = "Events",
+            kind = SportsLiveKind.EVENTS, isLive = true, isChannel = false, startMs = null, startHasTimeOfDay = false, sport = sport
+        )
+        assertEquals(true, EspnLeagueMap.otherGender(card("NCAAW"), card("NCAAM")))
+        assertEquals(false, EspnLeagueMap.otherGender(card("NCAAW"), card("COLLEGE")))
+        assertEquals(false, EspnLeagueMap.otherGender(card("Basketball"), card("NCAAM")))
     }
 
     @Test

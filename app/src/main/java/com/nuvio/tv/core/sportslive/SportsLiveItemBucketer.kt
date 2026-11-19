@@ -1,5 +1,6 @@
 package com.nuvio.tv.core.sportslive
 
+import com.nuvio.tv.core.sportslive.scores.EspnLeagueMap
 import com.nuvio.tv.domain.model.CatalogStats
 import com.nuvio.tv.domain.model.ClaimedCatalog
 import com.nuvio.tv.domain.model.FollowedTeam
@@ -11,6 +12,9 @@ import kotlin.math.abs
 
 /** Annotates items from claimed catalogs and sorts them into the Sports & Live tabs. */
 object SportsLiveItemBucketer {
+    // Every load merges the same names again (#152). First, so it is set before any other initialiser runs.
+    private val sideKeysOf = Memo(8_192) { team: String -> sideKeysUncached(team) }
+
     /** How long after a timed start an events-catalog item still counts as live. */
     private const val LIVE_WINDOW_MS = 4 * 60 * 60 * 1000L
 
@@ -177,8 +181,10 @@ object SportsLiveItemBucketer {
      * (`addonId|id`), so copies pool across addons AND across one addon's provider sub-catalogs (each
      * exposes the same game with its own stream under a different catalog/id); only two sources sharing
      * a stream key are never pooled twice. Two copies are one game when both are events (not channels,
-     * not replays) whose canonical team pairs match either way round (never a "TBD vs TBD" placeholder),
-     * their sports agree ([sportsAgree]: aliases fold, an unknown one agrees), and they are at one time
+     * not replays) whose canonical team pairs match either way round (never a "TBD vs TBD" placeholder; youth
+     * markers and accents fold, #165: "Panamá Sub-17" = "Panama U17", never "Panama"), their sports agree
+     * ([sportsAgree]: aliases fold, an unknown one agrees), neither is a women's game the other's men's
+     * ([EspnLeagueMap.otherGender], #163), and they are at one time
      * ([sameTime]). Each copy is compared with a group's primary; items that merge with nothing are
      * returned unchanged and in place. A merged card shows the first known sport
      * ([SportsLiveTeams.knownSport]) of its sources, and the first timed start among them when its
@@ -254,7 +260,7 @@ object SportsLiveItemBucketer {
         val sportsKnown = SportsLiveTeams.knownSport(a) != null && SportsLiveTeams.knownSport(b) != null
         val teamsMatch = sidesMatch(x.home, y.home, x.away, y.away, sportsKnown) ||
             sidesMatch(x.home, y.away, x.away, y.home, sportsKnown)
-        return teamsMatch && sportsAgree(a, b) && sameTime(a, b, nowMs)
+        return teamsMatch && sportsAgree(a, b) && !EspnLeagueMap.otherGender(a, b) && sameTime(a, b, nowMs)
     }
 
     private fun sidesMatch(home: String, otherHome: String, away: String, otherAway: String, sportsKnown: Boolean): Boolean {
@@ -336,8 +342,11 @@ object SportsLiveItemBucketer {
         return home.flatMap { a -> away.map { b -> if (a <= b) a to b else b to a } }.distinct()
     }
 
-    private fun sideKeys(team: String): List<String> {
-        val canonical = SportsLiveTeams.canonicalise(team)
+    private fun sideKeys(team: String): List<String> = sideKeysOf(team)
+
+    private fun sideKeysUncached(team: String): List<String> {
+        // Accents folded (#165): "Panamá" and "Panama" share a key.
+        val canonical = SportsLiveTeams.canonicalise(SportsLiveTeams.foldAccents(team))
         return listOf(canonical.substringAfterLast(' '), canonical.substringBefore(' ')).distinct()
     }
 

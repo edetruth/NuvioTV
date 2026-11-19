@@ -91,7 +91,7 @@ class ScoreMatcher(
         }
         // The day before is tried only when the day has no candidate at all, not when it is ambiguous.
         val pick = if (timed) {
-            best(home, away, events, (start - WINDOW_MS)..(start + WINDOW_MS), reference = start)
+            best(home, away, events, (start - WINDOW_MS)..(start + WINDOW_MS), reference = start, byStart = true)
         } else {
             bestOnDay(home, away, events, day, zoneId)
                 ?: if (previousDayFallback) bestOnDay(home, away, events, day.minusDays(1), zoneId) else null
@@ -146,9 +146,18 @@ class ScoreMatcher(
     /**
      * The best-scoring event in [window]; null when none matches. When two different events share the
      * best score (a doubleheader, two meetings on one day, a same-city pair) the pick has no event:
-     * no score beats a wrong one.
+     * no score beats a wrong one. With [byStart] (a timed card), a tie between games of different leagues
+     * (a men's and a women's college game of the same two schools that day, #163) goes to the one game that
+     * starts within [TIE_BREAK_MS] of the card's start.
      */
-    private fun best(home: Side, away: Side, events: List<ScoreSnapshot>, window: LongRange, reference: Long): Pick? {
+    private fun best(
+        home: Side,
+        away: Side,
+        events: List<ScoreSnapshot>,
+        window: LongRange,
+        reference: Long,
+        byStart: Boolean = false
+    ): Pick? {
         val ranked = events.asSequence()
             .filter { event -> event.startMs != null && event.startMs in window }
             .mapNotNull { event -> score(home, away, event)?.let { event to it } }
@@ -158,10 +167,18 @@ class ScoreMatcher(
         val top = ranked.firstOrNull() ?: return null
         val tied = ranked.drop(1).any { it.second == top.second && it.first.eventId != top.first.eventId }
         if (tied) {
+            if (byStart) startTieBreak(ranked.filter { it.second == top.second }.map { it.first }, reference)?.let { return Pick(it) }
             if (BuildConfig.DEBUG) Log.d(TAG, "ambiguous: ${ranked.size} candidates for ${home.base} / ${away.base}")
             return Pick(null)
         }
         return Pick(top.first)
+    }
+
+    // The one tied game near the card's start, when the tied games are of different leagues; else null.
+    private fun startTieBreak(tied: List<ScoreSnapshot>, reference: Long): ScoreSnapshot? {
+        val games = tied.distinctBy { it.eventId }
+        val near = games.singleOrNull { abs(it.startMs!! - reference) <= TIE_BREAK_MS } ?: return null
+        return near.takeIf { games.all { it === near || it.league != near.league } }
     }
 
     /**
@@ -180,13 +197,14 @@ class ScoreMatcher(
      * match STRONG (#66).
      */
     private fun score(home: Side, away: Side, event: ScoreSnapshot): Int? {
-        val slugQualifier = leagueQualifier(event.leagueSlug, event.leagueName)
+        val slugQualifier = eventQualifier(event)
+        val women = isWomenFeed(event)
         val eventHome = competitor(event.home, slugQualifier)
         val eventAway = competitor(event.away, slugQualifier)
         val least = if (unknownLeague(event, eventHome, eventAway)) BOTH_STRONG else minScore
         return listOfNotNull(
-            pairScore(eventHome.score(home), eventAway.score(away), least),
-            pairScore(eventAway.score(home), eventHome.score(away), least)
+            pairScore(eventHome.score(home, women), eventAway.score(away, women), least),
+            pairScore(eventAway.score(home, women), eventHome.score(away, women), least)
         ).maxOrNull()
     }
 
@@ -243,8 +261,9 @@ class ScoreMatcher(
         private val locationKeys: Set<String> = team.location?.let { splitQualifier(fold(it)).first }
             ?.let { setOf(SportsLiveTeams.normalise(it), SportsLiveTeams.canonicalise(it)) - "" }.orEmpty()
 
-        fun score(side: Side): Int = when {
-            side.qualifier != qualifier -> 0
+        /** [womenFeed]: the event is on a women's feed, where a card's women's marker is what the feed already says. */
+        fun score(side: Side, womenFeed: Boolean = false): Int = when {
+            (if (womenFeed && side.qualifier == "w") null else side.qualifier) != qualifier -> 0
             side.keys.any { it in strongKeys } -> STRONG
             side.collegeKeys.any { it in strongKeys } -> STRONG
             side.keys.any { it in locationKeys } -> WEAK
@@ -259,6 +278,8 @@ class ScoreMatcher(
 
         private const val TAG = "ScoreMatcher"
         private const val WINDOW_MS = 3 * 60 * 60 * 1000L
+        /** How close to a timed card's start a game must be to win a tie with another league's game (#163). */
+        private const val TIE_BREAK_MS = 45 * 60 * 1000L
         private const val STRONG = 3
         private const val WEAK = 2
         private const val MIN_TOTAL = 5
@@ -271,9 +292,9 @@ class ScoreMatcher(
 
         // Trailing qualifiers that tell a team apart: "(W)", "Women", "Women's", " W"; "U21", "(U21)", "[U21]".
         private val WOMEN = Regex("""\s*(\((w|women)\)|\bwomen'?s?|\s+w)\s*$""", RegexOption.IGNORE_CASE)
-        // "U21", "U-21", "Under 21", "Under-21", "U21s", bracketed or not.
+        // "U21", "U-21", "Under 21", "Under-21", "U21s", "Sub-17", "Sub 17" (#165), bracketed or not.
         private val YOUTH = Regex(
-            """\s*([\[(](?:u|under)[- ]?(\d{1,2})s?[\])]|\b(?:u|under)[- ]?(\d{1,2})s?)\s*$""",
+            """\s*([\[(](?:u|under|sub)[- ]?(\d{1,2})s?[\])]|\b(?:u|under|sub)[- ]?(\d{1,2})s?)\s*$""",
             RegexOption.IGNORE_CASE
         )
 
@@ -345,14 +366,15 @@ class ScoreMatcher(
          * wrong team.
          */
         fun firstIsHome(first: String, second: String, event: ScoreSnapshot): Boolean? {
-            val qualifier = leagueQualifier(event.leagueSlug, event.leagueName)
+            val qualifier = eventQualifier(event)
+            val women = isWomenFeed(event)
             val home = competitor(event.home, qualifier)
             val away = competitor(event.away, qualifier)
             val firstSide = sideOf(first)
             val secondSide = sideOf(second)
             fun total(a: Int, b: Int) = if (a > 0 && b > 0) a + b else 0
-            val asHome = total(home.score(firstSide), away.score(secondSide))
-            val asAway = total(away.score(firstSide), home.score(secondSide))
+            val asHome = total(home.score(firstSide, women), away.score(secondSide, women))
+            val asAway = total(away.score(firstSide, women), home.score(secondSide, women))
             return when {
                 maxOf(asHome, asAway) < MIN_TOTAL || asHome == asAway -> null
                 else -> asHome > asAway
@@ -376,6 +398,15 @@ class ScoreMatcher(
         // "Women's International Friendly", "NCAAW Soccer", "Men's U-21 Friendly", "EURO U-21 Qualifying".
         private val WOMEN_NAME = Regex("""\bwomen'?s?\b|\bncaaw\b|femenin|feminin""", RegexOption.IGNORE_CASE)
         private val YOUTH_NAME = Regex("""\b(?:u|under)[- ]?(\d{1,2})\b""", RegexOption.IGNORE_CASE)
+
+        /**
+         * A game on a women's feed (NCAAW, WNBA, NWSL; #163): its teams carry no women's marker, and a card's
+         * "(W)" or none both fit it. On a mixed feed (soccer/all) the slug's qualifier still tells them apart.
+         */
+        private fun isWomenFeed(event: ScoreSnapshot): Boolean = event.league in EspnLeagueMap.WOMEN_FEEDS
+
+        private fun eventQualifier(event: ScoreSnapshot): String? =
+            if (isWomenFeed(event)) null else leagueQualifier(event.leagueSlug, event.leagueName)
 
         /** The women's / youth qualifier of an event's league: from its slug, else its competition name. */
         internal fun leagueQualifier(slug: String, name: String?): String? =

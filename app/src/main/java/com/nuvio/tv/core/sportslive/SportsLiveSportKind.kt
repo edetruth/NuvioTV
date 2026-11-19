@@ -40,7 +40,7 @@ enum class SportsLiveSportKind {
             SNOOKER to """snooker""",
             WRESTLING to """wrestling|\bwwe\b|\baew\b|\bnxt\b|smackdown""",
             CYCLING to """cycling|tour de france""",
-            SOCCER to """soccer|football|futbol|futebol|premier league|la liga|bundesliga|serie a|ligue 1|\bmls\b|\buefa\b|champions league"""
+            SOCCER to """soccer|football|futbol|futebol|premier league|la liga|bundesliga|serie a|ligue 1|\bmls\b|\bnwsl\b|\buefa\b|champions league"""
         ).map { (kind, pattern) -> kind to Regex(pattern) }
 
         /** The sport [text] names ("American Football" → FOOTBALL, "Football" → SOCCER); null when none. */

@@ -58,7 +58,7 @@ class SportsLiveSportInferenceTest {
     private fun directory(vararg lists: Pair<EspnLeague, List<DirectoryTeam>>): TeamDirectory {
         val dir = TeamDirectory()
         val given = lists.toMap()
-        (SportsLiveSportInference.leagues + EspnLeagueMap.COLLEGE_BASKETBALL + EspnLeagueMap.COLLEGE_FOOTBALL).forEach { league ->
+        (SportsLiveSportInference.leagues + EspnLeagueMap.COLLEGE_BASKETBALL + EspnLeagueMap.COLLEGE_BASKETBALL_WOMEN + EspnLeagueMap.COLLEGE_FOOTBALL).forEach { league ->
             dir.put(league, given[league] ?: listOf(team("Placeholder ${league.league}", "Placeholder", "Nowhere", "PLC")), 0L)
         }
         return dir
@@ -176,6 +176,23 @@ class SportsLiveSportInferenceTest {
         val dir = directory(EspnLeagueMap.COLLEGE_BASKETBALL to both, EspnLeagueMap.COLLEGE_FOOTBALL to both)
 
         assertNull(SportsLiveSportInference.leagueOf(card("Nevada vs Idaho", sport = "COLLEGE"), dir))
+    }
+
+    @Test
+    fun `a College card both men's and women's basketball know infers nothing`() {
+        // Same schools, two games (#163): only the score feed's start can tell them apart.
+        val both = listOf(team("Nevada Wolf Pack", "Nevada", "Nevada", "NEV"), team("Idaho Vandals", "Idaho", "Idaho", "IDHO"))
+        val dir = directory(EspnLeagueMap.COLLEGE_BASKETBALL to both, EspnLeagueMap.COLLEGE_BASKETBALL_WOMEN to both)
+        assertNull(SportsLiveSportInference.leagueOf(card("Nevada vs Idaho", sport = "COLLEGE"), dir))
+    }
+
+    @Test
+    fun `a women's college card keeps the NCAAW tag`() {
+        val both = listOf(team("Nevada Wolf Pack", "Nevada", "Nevada", "NEV"), team("Idaho Vandals", "Idaho", "Idaho", "IDHO"))
+        val dir = directory(EspnLeagueMap.COLLEGE_BASKETBALL to both, EspnLeagueMap.COLLEGE_BASKETBALL_WOMEN to both)
+        val inferred = SportsLiveSportInference.infer(card("Nevada vs Idaho", sport = "College Basketball", genres = listOf("Women's")), dir)
+        assertEquals("NCAAW", inferred.sport)
+        assertEquals(listOf(EspnLeagueMap.COLLEGE_BASKETBALL_WOMEN), EspnLeagueMap.leaguesFor(inferred))
     }
 
     @Test
