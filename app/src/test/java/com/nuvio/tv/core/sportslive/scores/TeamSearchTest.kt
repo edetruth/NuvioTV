@@ -87,6 +87,15 @@ class TeamSearchTest {
         assertEquals(TeamMatchField.ALIAS, hits.single().match!!.field)
     }
 
+    @Test
+    fun `line 2 names the match only when the full name does not already show it`() {
+        assertNull(TeamSearch.reason(TeamSearch.search(index, "uconn").first()))
+        assertEquals("Connecticut", TeamSearch.reason(TeamSearch.search(index, "connecticut").first()))
+        assertEquals("Michigan St", TeamSearch.reason(TeamSearch.search(index, "michigan st").single()))
+        assertEquals("LAL", TeamSearch.reason(TeamSearch.search(index, "lal").single()))
+        assertNull(TeamSearch.reason(TeamSearch.browse(index).first().teams.first()))
+    }
+
     // --- Ranking ---
 
     @Test

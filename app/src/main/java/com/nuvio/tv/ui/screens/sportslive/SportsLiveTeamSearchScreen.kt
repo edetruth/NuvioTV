@@ -1,7 +1,12 @@
 package com.nuvio.tv.ui.screens.sportslive
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -59,7 +64,7 @@ import com.nuvio.tv.core.sportslive.scores.MyLeague
 import com.nuvio.tv.core.sportslive.scores.MySport
 import com.nuvio.tv.core.sportslive.scores.TeamHit
 import com.nuvio.tv.core.sportslive.scores.TeamLogoUrls
-import com.nuvio.tv.core.sportslive.scores.TeamMatchField
+import com.nuvio.tv.core.sportslive.scores.TeamSearch
 import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveButton
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveFocus
@@ -262,6 +267,7 @@ private fun GridKey(onClick: () -> Unit, width: Dp, modifier: Modifier = Modifie
 }
 
 /** The sport filter: one focus stop; ← → pick while it has focus (at either end they move focus on). */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun SportFilter(selected: MySport?, sports: List<MySport>, onSelect: (MySport?) -> Unit) {
     val options: List<MySport?> = listOf<MySport?>(null) + sports
@@ -295,18 +301,22 @@ private fun SportFilter(selected: MySport?, sports: List<MySport>, onSelect: (My
             pressedBorder = SportsLiveFocus.ring(shape)
         )
     ) {
+        // Wider than the column with five sports: it scrolls, keeping the picked sport in view.
         Row(
-            modifier = Modifier.fillMaxHeight().padding(horizontal = 3.dp),
+            modifier = Modifier.fillMaxHeight().horizontalScroll(rememberScrollState()).padding(horizontal = 3.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             options.forEach { option ->
                 val on = option == selected
+                val inView = remember { BringIntoViewRequester() }
+                if (on) LaunchedEffect(Unit) { inView.bringIntoView() }
                 Text(
                     text = option?.let { mySportLabel(it) } ?: stringResource(R.string.sports_live_team_search_all),
                     style = SportsLiveTokens.style(if (on) SportsLiveTokens.Type.ControlSelected else SportsLiveTokens.Type.Control),
                     color = if (on) Colors.TextPrimary else Colors.TextInactive,
                     maxLines = 1,
                     modifier = Modifier
+                        .bringIntoViewRequester(inView)
                         .background(if (on) SportsLiveFocus.selectedFill else Color.Transparent, shape)
                         .padding(horizontal = 9.dp, vertical = 4.dp)
                 )
@@ -431,8 +441,7 @@ private fun ResultRow(hit: TeamHit, following: Boolean, onClick: () -> Unit) {
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                val why = hit.match?.takeIf { it.field != TeamMatchField.NAME }?.text
-                    ?.let { stringResource(R.string.sports_live_team_search_matches, it) }
+                val why = TeamSearch.reason(hit)?.let { stringResource(R.string.sports_live_team_search_matches, it) }
                 Text(
                     text = listOfNotNull(leagueTag(hit.league), sportWord(hit.league), why).joinToString(" · "),
                     style = SportsLiveTokens.style(SportsLiveTokens.Type.Meta),

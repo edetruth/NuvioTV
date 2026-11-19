@@ -98,6 +98,18 @@ object TeamSearch {
             .toList()
     }
 
+    /**
+     * What line 2 says the result [hit] matched ("UConn" for Connecticut's alias); null when browsing, or when
+     * the matched name is already in the full name on line 1 ("uconn" on "UConn Huskies").
+     */
+    fun reason(hit: TeamHit): String? {
+        val match = hit.match ?: return null
+        if (match.field == TeamMatchField.NAME) return null
+        val name = fold(hit.team.displayName)
+        val text = fold(match.text)
+        return match.text.takeUnless { name == text || name.startsWith("$text ") || name.endsWith(" $text") || name.contains(" $text ") }
+    }
+
     /** Every team of [sport] (null: all), A–Z under its league, leagues in picker order; leagues without a list are left out. */
     fun browse(index: TeamSearchIndex, sport: MySport? = null): List<TeamGroup> =
         index.teams.filter { sport == null || it.league.sport == sport }
