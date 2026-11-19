@@ -152,6 +152,37 @@ class SportsLiveSportInferenceTest {
         assertNull(SportsLiveSportInference.leagueOf(card("Devils v Canadiens", sport = "Football"), full))
     }
 
+    // A "College" card naming no sport (#145)
+
+    @Test
+    fun `a College card of two teams one college league knows infers that league`() {
+        val dir = directory(
+            EspnLeagueMap.COLLEGE_BASKETBALL to listOf(
+                team("Nevada Wolf Pack", "Nevada", "Nevada", "NEV"),
+                team("Idaho Vandals", "Idaho", "Idaho", "IDHO")
+            ),
+            EspnLeagueMap.COLLEGE_FOOTBALL to listOf(team("Nevada Wolf Pack", "Nevada", "Nevada", "NEV"))
+        )
+        val inferred = SportsLiveSportInference.infer(card("Nevada vs Idaho", sport = "COLLEGE", genres = listOf("COLLEGE")), dir)
+
+        assertEquals("NCAAM", inferred.sport)
+        // Now on the college basketball feed alone: its scores and logos follow.
+        assertEquals(listOf(EspnLeagueMap.COLLEGE_BASKETBALL), EspnLeagueMap.leaguesFor(inferred))
+    }
+
+    @Test
+    fun `a College card both college leagues know infers nothing`() {
+        val both = listOf(team("Nevada Wolf Pack", "Nevada", "Nevada", "NEV"), team("Idaho Vandals", "Idaho", "Idaho", "IDHO"))
+        val dir = directory(EspnLeagueMap.COLLEGE_BASKETBALL to both, EspnLeagueMap.COLLEGE_FOOTBALL to both)
+
+        assertNull(SportsLiveSportInference.leagueOf(card("Nevada vs Idaho", sport = "COLLEGE"), dir))
+    }
+
+    @Test
+    fun `a College card of pro teams infers nothing`() {
+        assertNull(SportsLiveSportInference.leagueOf(card("Devils v Canadiens", sport = "COLLEGE"), full))
+    }
+
     // A basketball card of two college teams (P4 follow-up)
 
     @Test

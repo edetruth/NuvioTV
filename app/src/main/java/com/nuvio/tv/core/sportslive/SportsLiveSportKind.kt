@@ -18,7 +18,7 @@ enum class SportsLiveSportKind {
 
         // In order: American football before soccer's "football"; the first rule found anywhere decides.
         private val RULES: List<Pair<SportsLiveSportKind, Regex>> = listOf(
-            FOOTBALL to """american football|\bnfl\b|\bncaaf\b|college football|\bcfl\b""",
+            FOOTBALL to """american[ _]football|\bnfl\b|\bncaaf\b|college football|\bcfl\b""",
             BASKETBALL to """basketball|\bnba\b|\bncaab\b|\bncaam\b|\bncaaw\b|euroleague|\bwnba\b""",
             HOCKEY to """hockey|\bnhl\b|\bkhl\b""",
             BASEBALL to """baseball|\bmlb\b""",

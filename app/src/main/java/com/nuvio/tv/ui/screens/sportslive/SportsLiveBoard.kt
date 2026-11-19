@@ -30,6 +30,8 @@ data class SportsLiveBoardInputs(
     val scores: SportsLiveBoardScores,
     /** Live now's Just ended verdicts (#60); empty on other tabs. */
     val ended: Map<String, EndedGame>,
+    /** Live now's "no streams yet" cards by card key (#145): drawn dimmed; empty on other tabs. */
+    val noStreams: Set<String> = emptySet(),
     /** Live now's excitement badges by card key (#43, Scores shown); empty otherwise. */
     val excitement: Map<String, WhyTag>,
     val followed: List<FollowedTeam>,
@@ -81,7 +83,7 @@ data class SportsLiveBoard(
                     ended = inputs.ended,
                     followsSide = { item, side -> inputs.followed.any { SportsLiveTeams.followsSideOfAnySource(it, side, item) } },
                     excitement = inputs.excitement
-                )
+                ).map { row -> if (row.item.streamKey in inputs.noStreams) row.copy(noStreams = true) else row }
             } else {
                 when (tab) {
                     // V2 P4: Channels by region, Replays under their spoiler-free titles, by day.

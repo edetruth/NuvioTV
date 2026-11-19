@@ -79,7 +79,7 @@ object EspnLeagueMap {
     // The card's sport when no competition is named, checked rule by rule across all texts, so an
     // "American Football" genre beats a "Football" sport. Soccer ("Football") is the last fallback.
     private val SPORTS: List<Rule> = listOf(
-        Rule("""american football""", listOf(NFL)),
+        Rule("""american[ _]football""", listOf(NFL)),
         Rule("""\bbasketball\b""", listOf(NBA)),
         Rule("""\b(ice )?hockey\b""", listOf(NHL)),
         Rule("""\bbaseball\b""", listOf(MLB)),
@@ -113,7 +113,9 @@ object EspnLeagueMap {
      * Feeds for a card with [sport] (null when unknown) and text [hints] in priority order (title first).
      * A competition named in the sport or a hint wins; otherwise the sport word decides ("Basketball",
      * "Football" = soccer). A card whose sport or hints name an excluded sport or league gets none, as
-     * does a college card without a college feed. [routingHints] (the catalog name) route only.
+     * does a college card routed to a pro feed. A college card naming no sport at all ("COLLEGE", #145)
+     * gets both college feeds; [ScoreMatcher]'s two-team match picks the one its game is on.
+     * [routingHints] (the catalog name) route only.
      */
     fun leaguesFor(sport: String?, hints: List<String>, routingHints: List<String> = emptyList()): List<EspnLeague> {
         val own = (listOfNotNull(sport) + hints).map(::fold).filter { it.isNotEmpty() }
@@ -121,8 +123,16 @@ object EspnLeagueMap {
         val texts = own + routingHints.map(::fold).filter { it.isNotEmpty() }
         val leagues = (firstCompetition(texts) ?: firstSport(texts)).orEmpty()
         val college = texts.any { COLLEGE.containsMatchIn(it) }
-        return if (college && leagues.none { it in COLLEGE_FEEDS }) emptyList() else leagues
+        return when {
+            !college -> leagues
+            leagues.isEmpty() -> COLLEGE_ONLY
+            leagues.none { it in COLLEGE_FEEDS } -> emptyList()
+            else -> leagues
+        }
     }
+
+    // A college card that names no sport: either college feed.
+    private val COLLEGE_ONLY = listOf(COLLEGE_BASKETBALL, COLLEGE_FOOTBALL)
 
     /**
      * Whether [item]'s league may be inferred from its teams (#132 P4): it names no excluded sport or league

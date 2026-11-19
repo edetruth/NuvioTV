@@ -12,7 +12,8 @@ import com.nuvio.tv.domain.model.SportsLiveKind
  * league of [LEAGUES] the [TeamDirectory] holds (#82), and both land in the same single league, the card is
  * that league's: it gets that league's name as its sport, so the usual routing, logos and strict-match
  * scores follow. Precision first: a name two leagues know ("Rangers"), a league not loaded yet, a card that
- * names an excluded or college competition, or an already routed card is left alone.
+ * names an excluded or college competition, or an already routed card is left alone. A "College" card that
+ * names no sport (#145) may only land in a college league both its teams are in.
  */
 object SportsLiveSportInference {
 
@@ -51,6 +52,8 @@ object SportsLiveSportInference {
         if (item.isChannel || item.kind == SportsLiveKind.CHANNELS || item.teams == null) return null
         val routed = EspnLeagueMap.leaguesFor(item)
         val college = EspnLeagueMap.collegeFallbackFor(item)
+        // A "College" card naming no sport (#145): routed to both college feeds.
+        val collegeOnly = routed.size > 1 && routed.all { league -> COLLEGE.any { it.first == league } }
         val candidates = when {
             routed.isEmpty() -> {
                 if (!EspnLeagueMap.inferable(item)) return null
@@ -66,6 +69,12 @@ object SportsLiveSportInference {
             // One league already routed (a college card whose sport is only "Basketball"): its own tag when
             // both sides are that league's teams, never the generic sport word.
             routed.size == 1 && routed[0] in (LEAGUES + COLLEGE).map { it.first } -> routed
+            // A "College" card naming no sport: the college league both its teams are in; a sport its text
+            // names (a "Football" catalog) narrows it.
+            collegeOnly -> {
+                val named = SportsLiveSportKind.tagOf(item)
+                routed.filter { named == null || kindOf(it) == named }.filter(TeamDirectory::covers)
+            }
             else -> return null
         }
         if (candidates.isEmpty()) return null
@@ -74,8 +83,13 @@ object SportsLiveSportInference {
         if (candidates.any { directory.fetchedAt(it) == null }) return null
         val firstLeagues = candidates.filter { directory.resolve(it, first) != null }
         val secondLeagues = candidates.filter { directory.resolve(it, second) != null }
-        val league = firstLeagues.singleOrNull() ?: return null
-        if (secondLeagues.singleOrNull() != league) return null
+        // Colleges field teams in both sports ("Nevada"): a College card takes the one league that has both
+        // sides. Otherwise each side must name exactly one league, so a pro name two leagues share stays.
+        val league = if (collegeOnly) {
+            firstLeagues.filter { it in secondLeagues }.singleOrNull() ?: return null
+        } else {
+            firstLeagues.singleOrNull()?.takeIf { secondLeagues.singleOrNull() == it } ?: return null
+        }
         if (directory.resolve(league, first)?.id == directory.resolve(league, second)?.id) return null
         // Nothing to say beyond what the card already routes to (a bare "Basketball" card of two NBA teams stays).
         return league.takeIf { it in LEAGUES.map { (l, _) -> l } || it in COLLEGE.map { (l, _) -> l } }

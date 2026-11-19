@@ -448,24 +448,73 @@ class SportsLiveViewModelTest {
     }
 
     @Test
-    fun `ended items are hidden from Live now and stay in the other tabs`() = runTest {
+    fun `an empty stream lookup keeps the Live now row in place, dimmed as no streams yet`() = runTest {
         val live = item("a", isLive = true, sport = "Soccer")
-        val gone = item("b", isLive = true, sport = "Soccer")
+        val empty = item("b", isLive = true, sport = "Soccer")
         val upcoming = item("u", isLive = false, sport = "Tennis", startMs = NOW + HOUR)
-        nextLoad = load(listOf(live, gone, upcoming))
-        endedFlow.value = setOf(gone.streamKey, upcoming.streamKey)
+        nextLoad = load(listOf(live, empty, upcoming))
+        endedFlow.value = setOf(empty.streamKey, upcoming.streamKey)
         val viewModel = newViewModel()
         advanceUntilIdle()
 
+        // An empty lookup is not an end (#145): the row stays where it was, flagged.
         val state = viewModel.uiState.value
-        assertEquals(listOf("a"), state.tabs.getValue(SportsLiveTab.LIVE_NOW).map { it.id })
-        assertEquals(listOf("a"), state.visibleItems.map { it.id })
+        assertEquals(listOf("a", "b"), state.tabs.getValue(SportsLiveTab.LIVE_NOW).map { it.id })
+        assertEquals(listOf("a", "b"), state.visibleItems.map { it.id })
+        assertEquals(setOf(empty.streamKey), state.noStreams)
+        assertTrue(state.justEnded.isEmpty())
         assertEquals(listOf("u"), state.tabs.getValue(SportsLiveTab.UPCOMING).map { it.id })
 
-        // A later probe that finds streams brings the item back.
+        // A later lookup that finds streams clears the flag.
         endedFlow.value = emptySet()
         runCurrent()
         assertEquals(listOf("a", "b"), viewModel.uiState.value.visibleItems.map { it.id })
+        assertTrue(viewModel.uiState.value.noStreams.isEmpty())
+    }
+
+    @Test
+    fun `a no streams yet row is drawn dimmed until focused`() {
+        val live = item("a", isLive = true, sport = "Soccer", name = "Arsenal vs Chelsea")
+        val empty = item("b", isLive = true, sport = "Soccer", name = "Lyon vs Nice")
+        val board = SportsLiveBoard.build(
+            SportsLiveBoardInputs(
+                tab = SportsLiveTab.LIVE_NOW,
+                filter = null,
+                items = listOf(live, empty),
+                scores = SportsLiveBoardScores(),
+                ended = emptyMap(),
+                noStreams = setOf(empty.streamKey),
+                excitement = emptyMap(),
+                followed = emptyList(),
+                clockMs = NOW,
+                logoRevision = 0
+            )
+        )
+
+        val rows = board.rows!!.associateBy { it.item.id }
+        assertEquals(setOf("a", "b"), rows.keys)
+        assertTrue(rows.getValue("b").dimmed(focused = false))
+        assertFalse(rows.getValue("b").dimmed(focused = true))
+        assertFalse(rows.getValue("a").dimmed(focused = false))
+    }
+
+    @Test
+    fun `the focused Live now row is kept when a load drops it, until focus moves on`() = runTest {
+        val items = listOf("a", "b", "c").map { item(it, isLive = true, sport = "Soccer", name = it.uppercase()) }
+        nextLoad = load(items)
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+        viewModel.selectItem("b")
+        runCurrent()
+
+        latestFlow.value = load(listOf(items[0], items[2]))
+        runCurrent()
+        assertEquals(listOf("a", "b", "c"), viewModel.uiState.value.visibleItems.map { it.id })
+        assertEquals("b", viewModel.uiState.value.selectedItemId)
+
+        viewModel.selectItem("c")
+        runCurrent()
+        assertEquals(listOf("a", "c"), viewModel.uiState.value.visibleItems.map { it.id })
     }
 
     @Test

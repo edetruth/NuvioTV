@@ -54,6 +54,7 @@ import coil3.compose.AsyncImage
 import com.nuvio.tv.R
 import com.nuvio.tv.core.sportslive.SportsLiveDisplayText
 import com.nuvio.tv.core.sportslive.SportsLiveSportKind
+import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import java.util.Locale
 import com.nuvio.tv.core.sportslive.displayName
 import com.nuvio.tv.core.sportslive.scores.GameSituationStrings
@@ -260,7 +261,12 @@ private fun GameCells(row: ScoreboardRow, reminded: Boolean, hasReplay: Boolean,
 @Composable
 internal fun rowTagText(row: ScoreboardRow): String {
     val item = row.item
-    val tag = scoreboardRowTag(row.art?.league, item.sport, item.catalogName)
+    // A non-sport tag ("OTHER", #145) says nothing about the game: the sport its title names, else none.
+    val tag = scoreboardRowTag(
+        row.art?.league,
+        item.sport?.takeUnless(SportsLiveTeams::isNonSportTag),
+        item.catalogName.takeUnless(SportsLiveTeams::isNonSportTag).orEmpty()
+    )
     if (tag.isNotEmpty()) return tag
     return row.sportTag?.let { sportKindLabel(it).uppercase(Locale.getDefault()) }.orEmpty()
 }

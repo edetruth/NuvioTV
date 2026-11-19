@@ -189,6 +189,9 @@ class SportsLiveViewModel internal constructor(
     // Ambient mode, the screensaver or a dream is up: no preview and no catalog refresh meanwhile.
     private var ambientShowing = false
 
+    // Live now as last built, so the focused card is kept when a load drops it (#145).
+    private var shownLiveNow: List<SportsLiveItem> = emptyList()
+
 
     // The section is on screen (resumed): only then are links checked (#60 phase 2).
     @Volatile
@@ -266,6 +269,7 @@ class SportsLiveViewModel internal constructor(
                 items = state.visibleItems,
                 scores = scores,
                 ended = if (live) state.justEnded else emptyMap(),
+                noStreams = if (live) state.noStreams else emptySet(),
                 excitement = if (live) state.whyTags else emptyMap(),
                 followed = followed,
                 clockMs = state.nowMs / MINUTE_MS * MINUTE_MS,
@@ -499,17 +503,20 @@ class SportsLiveViewModel internal constructor(
         mySports: MySports = MySports.DEFAULT
     ): SportsLiveUiState {
         val hasClaimed = bucketed.hasClaimed
-        // Live items whose streams are gone have ended; the other tabs are left as they are. Games found
-        // over (#60) move to the Just ended strip at the end: ESPN finals leave half an hour after they
-        // ended, estimated ones stay (playable) until their addon drops them or six hours pass.
+        // A live game whose lookup found no streams is not over (#145): it stays where it is, dimmed as
+        // "no streams yet", and is looked up again later. Games found over (#60: ESPN, or their addon) move
+        // to the Just ended strip at the end: ESPN finals leave half an hour after they ended, estimated
+        // ones stay (playable) until their addon drops them or six hours pass.
         val now = nowMs()
         var justEnded = emptyMap<String, EndedGame>()
+        var noStreams = emptySet<String>()
         excitementHistory.observe(inputs.scores.values, now)
         var whyTags = emptyMap<String, WhyTag>()
         val tabs = bucketed.tabs.mapValues { (tab, tabItems) ->
             if (tab == SportsLiveTab.LIVE_NOW) {
                 val scores = inputs.scores
-                val split = endedGames.split(tabItems.filterNot { it.hasEnded(endedKeys) }, scores, now, inputs.canEstimate)
+                noStreams = tabItems.filter { it.hasEnded(endedKeys) }.mapTo(HashSet()) { it.streamKey }
+                val split = endedGames.split(tabItems, scores, now, inputs.canEstimate)
                 // Live far longer than its sport runs: moved to the strip, never hidden (a time estimate
                 // never hides a game), unless links were found lately or ESPN shows it in play.
                 val (overdue, notOverdue) = split.live.partition {
@@ -553,7 +560,10 @@ class SportsLiveViewModel internal constructor(
                         }
                     }
                 }
-                live + split.justEnded + overdueEnded.map { it.first } + linkEnded
+                val built = live + split.justEnded + overdueEnded.map { it.first } + linkEnded
+                // The focused card is never taken from under the user: kept in place until focus moves on.
+                val focusedId = selection.itemId.takeIf { selection.tab == SportsLiveTab.LIVE_NOW }
+                sportsLiveKeepFocused(shownLiveNow, built, focusedId).also { shownLiveNow = it }
             } else {
                 tabItems
             }
@@ -608,6 +618,7 @@ class SportsLiveViewModel internal constructor(
             failures = selection.failures,
             lastRefreshedMs = selection.lastRefreshedMs,
             justEnded = justEnded,
+            noStreams = noStreams,
             nowMs = now,
             whyTags = whyTags
         )

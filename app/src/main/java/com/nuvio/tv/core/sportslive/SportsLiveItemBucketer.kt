@@ -17,6 +17,12 @@ object SportsLiveItemBucketer {
     /** How far apart two addons' starts for one game may be. */
     private const val MERGE_START_WINDOW_MS = 30 * 60 * 1000L
 
+    /** A copy with no time of day joins a timed copy starting this close to now ("today", #145). */
+    private const val MERGE_TODAY_WINDOW_MS = 12 * 60 * 60 * 1000L
+
+    /** Two dated copies (one with no time of day) are one game only this close together. */
+    private const val MERGE_DATE_WINDOW_MS = 24 * 60 * 60 * 1000L
+
     private val nonLetters = Regex("""[^\p{L}]+""")
     // "LIVE NOW", "Live now": a whole phrase, so "Alive nowhere" does not count.
     private val liveNowPhrase = Regex("""(?<![\p{L}\p{N}])live now(?![\p{L}\p{N}])""", RegexOption.IGNORE_CASE)
@@ -77,6 +83,10 @@ object SportsLiveItemBucketer {
     /** The item, and whether the item itself (not its catalog) says what it is. */
     private fun describeWithSignal(rawMeta: MetaPreview, claimed: ClaimedCatalog, nowMs: Long): Pair<SportsLiveItem, Boolean> {
         val catalog = claimed.catalog
+        // An events catalog's item tagged as a TV network (#145) is a channel listing, never a game.
+        val network = claimed.kind == SportsLiveKind.EVENTS &&
+            rawMeta.genres.any { SportsLiveKeywords.containsKeyword(it, SportsLiveKeywords.NETWORKS) }
+        val kind = if (network) SportsLiveKind.CHANNELS else claimed.kind
         // A leading 🔴 / 🔜 / ✅ (CNCVerse) is a status, not part of the name.
         val trimmedName = rawMeta.name.trimStart()
         val status = listOf(LIVE_EMOJI, SOON_EMOJI, DONE_EMOJI).firstOrNull { trimmedName.startsWith(it) }
@@ -84,14 +94,14 @@ object SportsLiveItemBucketer {
         val start = SportsLiveTimeParser.parseStart(meta.releaseInfo, meta.released)
         val startMs = start?.startMs
         // "Live TV" in a channels catalog's name is a kind of content, not a sign its channels are on now.
-        val liveCatalog = claimed.kind != SportsLiveKind.CHANNELS &&
+        val liveCatalog = kind != SportsLiveKind.CHANNELS &&
             (SportsLiveKeywords.containsKeyword(catalog.name, SportsLiveKeywords.LIVE) ||
                 SportsLiveKeywords.containsKeyword(catalog.id, SportsLiveKeywords.LIVE))
         val liveMarker = isLiveMarker(meta.releaseInfo) ||
             meta.name.contains("LIVE NOW") ||
             meta.description?.let(liveNowPhrase::containsMatchIn) == true
         val description = meta.description.orEmpty()
-        val isChannel = claimed.kind == SportsLiveKind.CHANNELS ||
+        val isChannel = kind == SportsLiveKind.CHANNELS ||
             description.contains("IPTV") ||
             description.contains("Live on") ||
             meta.genres.any { SportsLiveKeywords.containsKeyword(it, SportsLiveKeywords.LIVE_TV) }
@@ -102,7 +112,7 @@ object SportsLiveItemBucketer {
             SOON_EMOJI, DONE_EMOJI -> false
             else -> liveMarker ||
                 (liveCatalog && startMs == null && !isChannel) ||
-                (claimed.kind == SportsLiveKind.EVENTS && start != null && start.hasTimeOfDay &&
+                (kind == SportsLiveKind.EVENTS && start != null && start.hasTimeOfDay &&
                     start.startMs > nowMs - LIVE_WINDOW_MS && start.startMs <= nowMs)
         }
         val item = SportsLiveItem(
@@ -112,7 +122,7 @@ object SportsLiveItemBucketer {
             addonBaseUrl = claimed.addon.baseUrl,
             catalogKey = claimed.key,
             catalogName = catalog.name,
-            kind = claimed.kind,
+            kind = kind,
             isLive = isLive,
             isChannel = isChannel,
             startMs = startMs,
@@ -157,7 +167,7 @@ object SportsLiveItemBucketer {
     ): List<SportsLiveItem> =
         items.filter { !it.isFinished && belongsTo(it, tab, nowMs) }
             .distinctBy { it.addonId to it.id }
-            .let { if (tab == SportsLiveTab.REPLAYS) it else merge(it, addonOrder) }
+            .let { if (tab == SportsLiveTab.REPLAYS) it else merge(it, addonOrder, nowMs) }
             .sortedWith(if (tab == SportsLiveTab.REPLAYS) replayOrder else tabOrder)
 
     /**
@@ -167,62 +177,121 @@ object SportsLiveItemBucketer {
      * (`addonId|id`), so copies pool across addons AND across one addon's provider sub-catalogs (each
      * exposes the same game with its own stream under a different catalog/id); only two sources sharing
      * a stream key are never pooled twice. Two copies are one game when both are events (not channels,
-     * not replays) whose canonical team pairs match either way round, their sports (from genres) agree
-     * or one is unknown, and both are live or their starts are within [MERGE_START_WINDOW_MS]. Each copy
-     * is compared with a group's primary; items that merge with nothing are returned unchanged and in
-     * place. A merged card shows the first known sport ([SportsLiveTeams.knownSport]) of its sources.
+     * not replays) whose canonical team pairs match either way round (never a "TBD vs TBD" placeholder),
+     * their sports agree ([sportsAgree]: aliases fold, an unknown one agrees), and they are at one time
+     * ([sameTime]). Each copy is compared with a group's primary; items that merge with nothing are
+     * returned unchanged and in place. A merged card shows the first known sport
+     * ([SportsLiveTeams.knownSport]) of its sources, and the first timed start among them when its
+     * primary has none, so its reminder bell and its place in the list follow the game.
      */
-    fun merge(items: List<SportsLiveItem>, addonOrder: List<String>): List<SportsLiveItem> {
+    fun merge(
+        items: List<SportsLiveItem>,
+        addonOrder: List<String>,
+        nowMs: Long = System.currentTimeMillis()
+    ): List<SportsLiveItem> {
         val rank = addonOrder.withIndex().associate { (index, id) -> id to index }
         // Copies of one game share a canonical team-pair key, so only plausible matches are compared.
-        val candidates = items.filter { it.kind == SportsLiveKind.EVENTS && !it.isChannel && it.teams != null }
+        val candidates = items.filter {
+            it.kind == SportsLiveKind.EVENTS && !it.isChannel && it.teams != null &&
+                !SportsLiveTeams.isPlaceholderGame(it.teams)
+        }
             .groupBy { pairKey(it.teams!!) }
             .values.filter { it.size > 1 }
         if (candidates.isEmpty()) return items
         // Keyed by the primary's stream key; a source joins at most one primary.
         val alternatesOf = HashMap<String, MutableList<SportsLiveItem>>()
+        // A primary with no timed start takes its first timed copy's, by the primary's stream key.
+        val adoptedStart = HashMap<String, SportsLiveItem>()
         val folded = HashSet<String>()
         for (group in candidates) {
+            // Each primary as later copies are compared with it: with the start it adopted, if any.
             val primaries = mutableListOf<SportsLiveItem>()
             // Deterministic primary: addon order, then catalog name, then id (independent of input order).
             val ordered = group.sortedWith(
                 compareBy({ rank[it.addonId] ?: Int.MAX_VALUE }, { it.catalogName }, { it.id })
             )
             for (item in ordered) {
-                val primary = primaries.firstOrNull { primary ->
+                val index = primaries.indexOfFirst { primary ->
                     val pooled = alternatesOf[primary.streamKey].orEmpty() + primary
-                    pooled.none { it.streamKey == item.streamKey } && sameGame(primary, item)
+                    pooled.none { it.streamKey == item.streamKey } && sameGame(primary, item, nowMs)
                 }
-                if (primary == null) {
+                if (index < 0) {
                     primaries += item
                 } else {
+                    val primary = primaries[index]
                     alternatesOf.getOrPut(primary.streamKey) { mutableListOf() } += item
                     folded += item.streamKey
+                    if (timedStart(primary) == null && timedStart(item) != null) {
+                        adoptedStart[primary.streamKey] = item
+                        primaries[index] = primary.copy(startMs = item.startMs, startHasTimeOfDay = true)
+                    }
                 }
             }
         }
         if (folded.isEmpty()) return items
         return items.mapNotNull { item ->
             if (item.streamKey in folded) return@mapNotNull null
-            alternatesOf[item.streamKey]?.let { item.copy(alternates = it, sport = mergedSport(item, it)) } ?: item
+            val alternates = alternatesOf[item.streamKey] ?: return@mapNotNull item
+            val timed = adoptedStart[item.streamKey]
+            item.copy(
+                alternates = alternates,
+                sport = mergedSport(item, alternates),
+                startMs = timed?.startMs ?: item.startMs,
+                startHasTimeOfDay = timed != null || item.startHasTimeOfDay
+            )
         }
     }
 
     private fun mergedSport(primary: SportsLiveItem, alternates: List<SportsLiveItem>): String? =
         SportsLiveTeams.knownSport(primary) ?: alternates.firstNotNullOfOrNull(SportsLiveTeams::knownSport) ?: primary.sport
 
-    private fun sameGame(a: SportsLiveItem, b: SportsLiveItem): Boolean {
+    private fun sameGame(a: SportsLiveItem, b: SportsLiveItem, nowMs: Long): Boolean {
         val x = a.teams ?: return false
         val y = b.teams ?: return false
         val teamsMatch = (SportsLiveTeams.matches(x.home, y.home) && SportsLiveTeams.matches(x.away, y.away)) ||
             (SportsLiveTeams.matches(x.home, y.away) && SportsLiveTeams.matches(x.away, y.home))
-        val sportA = SportsLiveTeams.knownSport(a)
-        val sportB = SportsLiveTeams.knownSport(b)
-        val sportsAgree = sportA == null || sportB == null || sportA.equals(sportB, ignoreCase = true)
-        val sameTime = (a.isLive && b.isLive) ||
-            (a.startMs != null && b.startMs != null && abs(a.startMs - b.startMs) <= MERGE_START_WINDOW_MS)
-        return teamsMatch && sportsAgree && sameTime
+        return teamsMatch && sportsAgree(a, b) && sameTime(a, b, nowMs)
     }
+
+    /**
+     * The sports of two copies agree (#145): the same word, or words naming one sport ("Soccer", "Football",
+     * "Futbol", "MLS" are all soccer; a bare "Football" may also be American football). An unknown or
+     * non-sport tag on either side ("COLLEGE", "OTHER", none) agrees with anything.
+     */
+    private fun sportsAgree(a: SportsLiveItem, b: SportsLiveItem): Boolean {
+        val sportA = SportsLiveTeams.knownSport(a) ?: return true
+        val sportB = SportsLiveTeams.knownSport(b) ?: return true
+        if (sportA.equals(sportB, ignoreCase = true)) return true
+        val kindsA = sportKinds(sportA) ?: return true
+        val kindsB = sportKinds(sportB) ?: return true
+        return kindsA.any { it in kindsB }
+    }
+
+    private val bareFootball = Regex("""^\s*football\s*$""", RegexOption.IGNORE_CASE)
+
+    // The sports a sport word can mean; null when it names none.
+    private fun sportKinds(sport: String): Set<SportsLiveSportKind>? {
+        val kind = SportsLiveSportKind.of(sport) ?: return null
+        return if (bareFootball.matches(sport)) setOf(SportsLiveSportKind.SOCCER, SportsLiveSportKind.FOOTBALL) else setOf(kind)
+    }
+
+    /**
+     * Two copies are at one time: both live, or both timed within [MERGE_START_WINDOW_MS]. A copy with no
+     * time of day (none, or a date only) joins when every timed copy is live or starts within
+     * [MERGE_TODAY_WINDOW_MS] of now (#145: the game is on today), and two dated copies are within a day.
+     */
+    private fun sameTime(a: SportsLiveItem, b: SportsLiveItem, nowMs: Long): Boolean {
+        if (a.isLive && b.isLive) return true
+        val timedA = timedStart(a)
+        val timedB = timedStart(b)
+        if (timedA != null && timedB != null) return abs(timedA - timedB) <= MERGE_START_WINDOW_MS
+        if (a.startMs != null && b.startMs != null && abs(a.startMs - b.startMs) > MERGE_DATE_WINDOW_MS) return false
+        return listOf(a to timedA, b to timedB).all { (item, timed) ->
+            timed == null || item.isLive || abs(timed - nowMs) <= MERGE_TODAY_WINDOW_MS
+        }
+    }
+
+    private fun timedStart(item: SportsLiveItem): Long? = item.startMs?.takeIf { item.startHasTimeOfDay }
 
     // The canonical name folds abbreviations in ("SL" -> "sri lanka"), so a game's copies bucket together
     // whichever side names a team by its code; the last word keeps the bucket coarse, matches() is precise.
@@ -270,14 +339,18 @@ object SportsLiveItemBucketer {
         return when (tab) {
             // A channel is shown live only when an events catalog lists it with a live signal of its
             // own (highfly's "LIVE NOW"); a channels catalog marking its whole list live would flood the tab.
+            // "TBD vs TBD" placeholders and TV shows (#145) are no game to list.
             SportsLiveTab.LIVE_NOW -> item.isLive && !replay &&
-                (!item.isChannel || item.kind == SportsLiveKind.EVENTS)
-            SportsLiveTab.UPCOMING -> !item.isLive && !replay && !item.isChannel && isUpcoming(item, nowMs)
+                (!item.isChannel || item.kind == SportsLiveKind.EVENTS) &&
+                !SportsLiveTeams.isPlaceholderGame(item.teams) && !SportsLiveNonSport.isNonSport(item)
+            SportsLiveTab.UPCOMING -> !item.isLive && !replay && !item.isChannel && isUpcoming(item, nowMs) &&
+                !SportsLiveTeams.isPlaceholderGame(item.teams) && !SportsLiveNonSport.isNonSport(item)
             SportsLiveTab.CHANNELS -> item.isChannel && !replay
             // A finished event from a catalog the user included by override is shown on demand as a
             // replay rather than dropped; rule-claimed catalogs keep the 4-hour cut-off.
-            SportsLiveTab.REPLAYS -> replay ||
-                (item.viaOverride && item.kind == SportsLiveKind.EVENTS && !item.isLive && !isUpcoming(item, nowMs))
+            SportsLiveTab.REPLAYS -> (replay ||
+                (item.viaOverride && item.kind == SportsLiveKind.EVENTS && !item.isLive && !isUpcoming(item, nowMs))) &&
+                !SportsLiveNonSport.isNonSport(item)
             // Results come from the score feed, never from addon items.
             SportsLiveTab.RESULTS -> false
         }

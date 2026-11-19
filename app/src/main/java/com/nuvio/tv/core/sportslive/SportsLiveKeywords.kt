@@ -11,6 +11,8 @@ object SportsLiveKeywords {
     )
     val REPLAY: Set<String> = setOf("replay", "replays", "highlights", "recap")
     val CHANNELS: Set<String> = setOf("channel", "channels")
+    /** A catalog or genre listing TV networks ("Networks": ABC, A&E, AMC...): channels, never games (#145). */
+    val NETWORKS: Set<String> = setOf("network", "networks", "tv network", "tv networks")
     val LIVE_TV: Set<String> = setOf("live tv")
     val EVENTS: Set<String> = setOf("event", "events")
     val LIVE: Set<String> = setOf("live")

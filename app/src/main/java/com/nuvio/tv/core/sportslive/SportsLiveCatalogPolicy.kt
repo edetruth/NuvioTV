@@ -61,9 +61,16 @@ object SportsLiveCatalogPolicy {
         if (isReplay) return SportsLiveKind.REPLAY
         val isChannels = listOf(catalog.name, catalog.id).any {
             SportsLiveKeywords.containsKeyword(it, SportsLiveKeywords.CHANNELS)
-        } || isLiveTv(catalog)
+        } || isLiveTv(catalog) || isNetworks(catalog)
         return if (isChannels) SportsLiveKind.CHANNELS else SportsLiveKind.EVENTS
     }
+
+    // "Networks" (ABC, A&E, AMC...) or a bare "TV" lists channels (#145); "Network Events" would still list events.
+    private fun isNetworks(catalog: CatalogDescriptor): Boolean =
+        listOf(catalog.name, catalog.id).any {
+            SportsLiveKeywords.containsKeyword(it, SportsLiveKeywords.NETWORKS) ||
+                it.trim().lowercase() in SportsLiveKeywords.GENERIC_CHANNEL_CATALOGS
+        } && !SportsLiveKeywords.containsKeyword(catalog.name, SportsLiveKeywords.EVENTS)
 
     // "EasyPlay Live TV (tv)" lists channels; "Live TV Events" would still list events.
     private fun isLiveTv(catalog: CatalogDescriptor): Boolean =

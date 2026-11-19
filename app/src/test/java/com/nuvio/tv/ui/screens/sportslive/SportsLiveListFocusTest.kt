@@ -1,5 +1,10 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import com.nuvio.tv.domain.model.ContentType
+import com.nuvio.tv.domain.model.MetaPreview
+import com.nuvio.tv.domain.model.PosterShape
+import com.nuvio.tv.domain.model.SportsLiveItem
+import com.nuvio.tv.domain.model.SportsLiveKind
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -47,5 +52,32 @@ class SportsLiveListFocusTest {
         assertNull(sportsLiveKeyAfterRemoval(keys, emptyList(), "c"))
         assertEquals("a", sportsLiveKeyAfterRemoval(keys, keys, null))
         assertEquals("b", sportsLiveKeyAfterRemoval(emptyList(), listOf("b", "c"), "x"))
+    }
+
+    @Test
+    fun `a focused card a load dropped is kept where it was`() {
+        val before = cards("a", "b", "c", "d")
+
+        assertEquals(listOf("a", "b", "c", "d"), ids(sportsLiveKeepFocused(before, cards("a", "c", "d"), "b")))
+        assertEquals(listOf("a", "b", "d"), ids(sportsLiveKeepFocused(before, cards("a", "d"), "b")))
+        assertEquals(listOf("b", "c"), ids(sportsLiveKeepFocused(before, cards("c"), "b")))
+        // Still listed, nothing focused, or an emptied list: the list as it is.
+        assertEquals(listOf("a", "c"), ids(sportsLiveKeepFocused(before, cards("a", "c"), "c")))
+        assertEquals(listOf("a", "c"), ids(sportsLiveKeepFocused(before, cards("a", "c"), null)))
+        assertEquals(emptyList<String>(), ids(sportsLiveKeepFocused(before, emptyList(), "b")))
+    }
+
+    private fun ids(items: List<SportsLiveItem>) = items.map { it.id }
+
+    private fun cards(vararg ids: String) = ids.map { id ->
+        SportsLiveItem(
+            meta = MetaPreview(
+                id = id, type = ContentType.UNKNOWN, rawType = "tv", name = id, poster = null,
+                posterShape = PosterShape.LANDSCAPE, background = null, logo = null,
+                description = null, releaseInfo = null, imdbRating = null, genres = emptyList()
+            ),
+            addonId = "x", addonName = "x", addonBaseUrl = "https://example.invalid", catalogKey = "k", catalogName = "Live",
+            kind = SportsLiveKind.EVENTS, isLive = true, isChannel = false, startMs = null, sport = null
+        )
     }
 }

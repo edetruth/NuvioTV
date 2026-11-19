@@ -90,6 +90,16 @@ class EspnLeagueMapTest {
     }
 
     @Test
+    fun `a College card naming no sport routes to both college feeds`() {
+        val both = listOf("basketball/mens-college-basketball", "football/college-football")
+        assertEquals(both, slugs("COLLEGE", "Nevada vs Idaho"))
+        assertEquals(both, slugs(null, "Nevada vs Idaho", "College"))
+        // A sport word still picks one, and a pro sport word still routes nowhere for a college card.
+        assertEquals(listOf("football/college-football"), slugs("College Football", "Nevada vs Idaho"))
+        assertEquals(emptyList<String>(), slugs("COLLEGE", "Nevada vs Idaho", "Hockey"))
+    }
+
+    @Test
     fun `college cards route only to college feeds`() {
         assertEquals(listOf("football/college-football"), slugs("College American Football", "Alabama vs Auburn"))
         assertEquals(listOf("football/college-football"), slugs("American Football", "NCAA Football: Alabama vs Auburn"))

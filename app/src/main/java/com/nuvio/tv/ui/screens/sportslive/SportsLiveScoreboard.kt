@@ -61,7 +61,9 @@ data class ScoreboardRow(
     /** The sport its title, genres or catalog name tell, for the tag when no league is known ("TENNIS"). */
     val sportTag: SportsLiveSportKind? = null,
     /** The list section it sits under (P4): a channel's region ([SportsLiveChannelRegions]); null for none. */
-    val section: String? = null
+    val section: String? = null,
+    /** Its last stream lookup found nothing (#145): kept, and dimmed until focused, as Just ended is. */
+    val noStreams: Boolean = false
 ) {
     /** A followed team plays in it: the gold left bar. */
     val followed: Boolean get() = firstFollowed || secondFollowed || item.followed
@@ -216,8 +218,9 @@ internal fun scoreboardGroupOf(status: GameStatus, item: SportsLiveItem, tab: Sp
     }
 }
 
-/** A Just ended row is dimmed (60 %) until it has focus (#60). */
-internal fun ScoreboardRow.dimmed(focused: Boolean): Boolean = group == ScoreboardGroup.JUST_ENDED && !focused
+/** A Just ended (#60) or "no streams yet" (#145) row is dimmed (60 %) until it has focus. */
+internal fun ScoreboardRow.dimmed(focused: Boolean): Boolean =
+    (group == ScoreboardGroup.JUST_ENDED || noStreams) && !focused
 
 /**
  * The names a Scoreboard row may give [team], longest first (N1): the full name, ESPN's short name,

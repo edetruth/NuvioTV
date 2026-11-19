@@ -43,6 +43,11 @@ data class SportsLiveUiState(
      * the games still live, as the dimmed Just ended strip.
      */
     val justEnded: Map<String, EndedGame> = emptyMap(),
+    /**
+     * Live now games whose last stream lookup found nothing (#145), by card key: still listed in place,
+     * dimmed as "no streams yet", and looked up again later. Never a sign the game is over.
+     */
+    val noStreams: Set<String> = emptySet(),
     /** The view model's clock when this state was built (it ticks while the list is watched). */
     val nowMs: Long = 0L,
     /** Live now's excitement badges (#43, V2) by card key, with scores shown only; empty otherwise. */

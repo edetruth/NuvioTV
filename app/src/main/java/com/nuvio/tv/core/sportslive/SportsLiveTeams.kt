@@ -222,9 +222,35 @@ object SportsLiveTeams {
         return sport.takeUnless { fromCatalog || isGenericSport(it) }
     }
 
-    private val GENERIC_SPORTS = setOf("sports", "live tv", "live", "tv", "events")
+    /**
+     * Tags an addon puts on items that are no sport at all (#145): a catch-all ("Other", "Misc", "General"),
+     * TV ("Entertainment") or a channel list ("Networks"). Never a sport for matching, filters or the row tag.
+     */
+    private val NON_SPORT_TAGS = setOf("other", "others", "misc", "general", "entertainment", "network", "networks")
+
+    private val GENERIC_SPORTS = setOf("sports", "live tv", "live", "tv", "events") + NON_SPORT_TAGS
 
     private fun isGenericSport(sport: String): Boolean = sport.trim().lowercase() in GENERIC_SPORTS
+
+    /** True for an addon tag that names no sport ("OTHER", "Entertainment", "NETWORKS"); see [NON_SPORT_TAGS]. */
+    fun isNonSportTag(tag: String): Boolean = tag.trim().lowercase() in NON_SPORT_TAGS
+
+    // "TBD", "TBA", "To be announced": a side not named yet; also at the end of a side ("NCAA TBD").
+    private val PLACEHOLDERS = setOf("tbd", "tba", "tbc", "to be determined", "to be announced", "to be confirmed")
+
+    /** True when [side] is a placeholder for a team not known yet ("TBD", "College TBD", "To be announced"). */
+    fun isPlaceholder(side: String): Boolean {
+        val name = normalise(side)
+        return PLACEHOLDERS.any { name == it || name.endsWith(" $it") }
+    }
+
+    /**
+     * True when neither side of [teams] is named yet ("TBD vs TBD", #145): such a listing is no game to
+     * show on Live now or Upcoming, and never a merge key (every TBD-vs-TBD pair would look alike).
+     * One named side ("TBD vs Lakers") is a game.
+     */
+    fun isPlaceholderGame(teams: TeamPair?): Boolean =
+        teams != null && isPlaceholder(teams.home) && isPlaceholder(teams.away)
 
     fun isFollowed(item: SportsLiveItem, followed: List<FollowedTeam>): Boolean = followed.any { follows(it, item) }
 

@@ -58,7 +58,9 @@ interface SportsLiveRepository {
 
     /**
      * Keys (`addonId|id`) of live items whose streams are gone: a probe of the focused item (or a
-     * reported stream fetch) found no playable stream. They are left out of Live now everywhere.
+     * reported stream fetch) found no playable stream. That never means the game is over (#145): Live now
+     * keeps them in place, dimmed as "no streams yet"; zapping and the dual-screen picker skip them, and the
+     * Home row leaves them out.
      */
     val endedKeys: StateFlow<Set<String>>
 

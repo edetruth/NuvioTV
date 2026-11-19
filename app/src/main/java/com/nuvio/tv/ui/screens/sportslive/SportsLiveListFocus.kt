@@ -1,5 +1,7 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import com.nuvio.tv.domain.model.SportsLiveItem
+
 /**
  * The card a move into the list (Down from the tab or filter row, OK on a tab or chip) lands on:
  * the last focused card when it is on screen, else the first card on screen, else the first card.
@@ -11,6 +13,22 @@ fun sportsLiveListEntryKey(keys: List<String>, focusedKey: String?, visibleIndic
     if (focusedIndex >= 0 && focusedIndex in visibleIndices) return focusedKey
     val firstVisible = visibleIndices.filter { it in keys.indices }.minOrNull()
     return firstVisible?.let(keys::get) ?: keys.firstOrNull()
+}
+
+/**
+ * [current] with the focused card ([focusedId]) kept when the list no longer has it (#145): a load or a
+ * verdict never takes the card from under the user. It goes back where it was in [previous], after the
+ * nearest card before it still listed (first when none is); it leaves on the next build once focus moves.
+ * An emptied list (a profile switch, every catalog gone) keeps nothing.
+ */
+fun sportsLiveKeepFocused(previous: List<SportsLiveItem>, current: List<SportsLiveItem>, focusedId: String?): List<SportsLiveItem> {
+    if (focusedId == null || current.isEmpty() || current.any { it.id == focusedId }) return current
+    val index = previous.indexOfFirst { it.id == focusedId }
+    if (index < 0) return current
+    val listed = current.mapTo(HashSet()) { it.id }
+    val before = previous.subList(0, index).lastOrNull { it.id in listed }
+    val at = if (before == null) 0 else current.indexOfFirst { it.id == before.id } + 1
+    return current.toMutableList().apply { add(at, previous[index]) }
 }
 
 /**
