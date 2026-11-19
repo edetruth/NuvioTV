@@ -1099,6 +1099,8 @@ private fun SportsLiveContent(
             withFrameNanos { }
             runCatching { activeTabFocusRequester.requestFocus() }
         }
+        // On the Scoreboard the Live Now / Channels stage shows (V2).
+        val stageShown = scoreboard && !showingResults && uiState.selectedTab != SportsLiveTab.REPLAYS && selected != null && boardRowOf[selected.listKey] != null
         // Docked in a stage (every tab's, #157) the mini player needs no card; only in the corner (a tab with no
         // stage, after the hold) does it show, so a tab switch never flashes it.
         if (nowPlaying != null && miniDock == SportsLiveMiniDock.Corner) {
