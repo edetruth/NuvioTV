@@ -1461,7 +1461,7 @@ open class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         // Debug builds only: `--ei debugSportsAlerts N` raises N score alerts, for checking #136 on a device.
-        if (BuildConfig.DEBUG) {
+        if (BuildConfig.IS_DEBUG_BUILD) {
             val count = intent.getIntExtra("debugSportsAlerts", 0)
             if (count > 0) lifecycleScope.launch { sportsLiveAlerts.debugRaise(count) }
         }

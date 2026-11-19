@@ -1,6 +1,8 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -318,7 +320,7 @@ fun SportsLiveAlertsHost(
         val actionable = shown != null && shown.first !is SportsLiveAlert.Kickoff && canActHere && on != null && !on.busy()
         return AlertKeyContext(
             cardActionable = actionable,
-            canPeek = actionable && currentInPlayer && on?.peek?.canPeek() == true,
+            canPeek = actionable && currentInPlayer && on.peek?.canPeek() == true,
             peeking = peek != null
         )
     }
@@ -359,8 +361,8 @@ fun SportsLiveAlertsHost(
         onDispose { if (SportsLiveAlertSurfaces.keys === keyHandler) SportsLiveAlertSurfaces.keys = null }
     }
 
-    // Back reaches the screens by the back callback too on recent Android: during a peek it is the peek's.
-    BackHandler(enabled = peek != null) { onPeek(PeekEvent.Back) }
+    // Back reaches the screens by the back callback first on recent Android: during a peek it is the peek's.
+    TakeBack(peek != null) { onPeek(PeekEvent.Back) }
     peek?.let { state ->
         SportsLivePeekLayer(
             state = state,
@@ -435,6 +437,8 @@ fun SportsLiveAlertsHost(
         val (alert, content) = worded[index]
         // The hint shows only while the card takes the keys (read again with every tick).
         val keys = keyContext()
+        // Back closes an actionable card only (never the player under it), by the back callback as by the key.
+        TakeBack(keys.cardActionable && peek == null) { currentCard?.let { alerts.close(it, AlertAnswer.DISMISS) } }
         val hint = when {
             peek != null || !keys.cardActionable -> null
             keys.canPeek -> stringResource(R.string.sports_live_alert_hint_watch) + HINT_SEPARATOR + stringResource(R.string.sports_live_alert_hint_peek)
@@ -455,6 +459,28 @@ fun SportsLiveAlertsHost(
             )
         }
     }
+    }
+}
+
+/**
+ * While [active], Back is [onBack]'s (#136). The callback is added when it turns active, so it is the
+ * newest and runs before the screens' own (a [BackHandler] composed at app start would come last); the
+ * key events of that same press are then swallowed ([SportsLiveAlertSurfaces.backTaken]).
+ */
+@Composable
+private fun TakeBack(active: Boolean, onBack: () -> Unit) {
+    val dispatcher = LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher ?: return
+    val currentOnBack by rememberUpdatedState(onBack)
+    DisposableEffect(active, dispatcher) {
+        if (!active) return@DisposableEffect onDispose { }
+        val callback = object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                SportsLiveAlertSurfaces.backTaken()
+                currentOnBack()
+            }
+        }
+        dispatcher.addCallback(callback)
+        onDispose { callback.remove() }
     }
 }
 

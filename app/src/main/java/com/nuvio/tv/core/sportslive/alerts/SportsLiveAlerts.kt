@@ -320,7 +320,7 @@ class SportsLiveAlerts @Inject constructor(
      * strict ESPN match is used when one is known, else a made-up 1–0. Nothing in a release build.
      */
     suspend fun debugRaise(count: Int) {
-        if (!BuildConfig.DEBUG) return
+        if (!BuildConfig.IS_DEBUG_BUILD) return
         val cards = candidates(repo.latest.value, repo.claimedCatalogs.first(), repo.followedTeams.first())
             .filter { it.isLive && it.teams != null && !SportsLiveAlertEngine.isPlaying(it, watching.value) }
             .take(count)
@@ -334,6 +334,7 @@ class SportsLiveAlerts @Inject constructor(
             )
             SportsLiveAlert.ScoreChange(card, snapshot, ScoreSide.HOME, leadChange = index == 1)
         }
+        android.util.Log.d("SportsLiveAlerts", "debugRaise: ${alerts.size} of ${cards.size} cards")
         if (alerts.isNotEmpty()) enqueue(alerts, System.currentTimeMillis())
     }
 

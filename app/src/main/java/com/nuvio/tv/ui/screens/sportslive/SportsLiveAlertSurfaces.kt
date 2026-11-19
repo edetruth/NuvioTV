@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import android.os.SystemClock
 import android.view.KeyEvent
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -74,8 +75,17 @@ internal object SportsLiveAlertSurfaces {
     /** Key codes whose first press an alert took: their repeats and release are its too. */
     private val taken = HashSet<Int>()
 
+    /** Uptime at which the back callback gave Back to an alert: that press's key events are its too. */
+    private var backTakenAtMs = Long.MIN_VALUE
+
+    /** The back callback gave Back to a card or a peek (it runs before the key events of the same press). */
+    fun backTaken() {
+        backTakenAtMs = SystemClock.uptimeMillis()
+    }
+
     /** True when an alert took [event] (see [SportsLiveAlertKeys.route]). */
     fun dispatch(event: KeyEvent): Boolean {
+        if (event.keyCode == KeyEvent.KEYCODE_BACK && event.downTime <= backTakenAtMs) return true
         if (event.action != KeyEvent.ACTION_DOWN || event.repeatCount > 0) {
             if (event.keyCode !in taken) return false
             if (event.action == KeyEvent.ACTION_UP) taken -= event.keyCode
