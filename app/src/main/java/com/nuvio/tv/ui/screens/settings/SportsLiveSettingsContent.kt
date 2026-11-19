@@ -5,20 +5,23 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.rounded.Close
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
@@ -31,10 +34,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.nuvio.tv.R
 import com.nuvio.tv.core.sportslive.SportsLiveOpenGame
+import com.nuvio.tv.core.sportslive.scores.EspnLeague
 import com.nuvio.tv.core.sportslive.scores.MyLeague
 import com.nuvio.tv.core.sportslive.scores.MySport
 import com.nuvio.tv.core.sportslive.scores.MySports
@@ -44,305 +47,368 @@ import com.nuvio.tv.core.sportslive.scores.ScoresStatus
 import com.nuvio.tv.domain.model.CatalogStats
 import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveOverride
+import com.nuvio.tv.ui.components.NuvioDialog
 import com.nuvio.tv.ui.screens.sportslive.mini.SPORTS_LIVE_PIP_SETTINGS_ACTION
-import com.nuvio.tv.ui.screens.sportslive.myLeagueLabel
-import com.nuvio.tv.ui.screens.sportslive.rememberSportsLiveClockMs
-import com.nuvio.tv.ui.screens.sportslive.mySportLabel
 import com.nuvio.tv.ui.screens.sportslive.mini.sportsLivePipSupported
-import com.nuvio.tv.ui.theme.NuvioTheme
+import com.nuvio.tv.ui.screens.sportslive.myLeagueLabel
+import com.nuvio.tv.ui.screens.sportslive.mySportLabel
+import com.nuvio.tv.ui.screens.sportslive.rememberSportsLiveClockMs
+import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveButton
+import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveButtonRole
+import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens
+import com.nuvio.tv.ui.screens.settings.SportsLiveSettingsItem as Item
 
+/** A page of Settings → Sports & Live (#134 V2): the main list, or a sub-step it opens in the same pane. */
+internal sealed interface SportsLiveSettingsPage {
+    data object Main : SportsLiveSettingsPage
+    data object MyTeams : SportsLiveSettingsPage
+    data object MySports : SportsLiveSettingsPage
+    data class Leagues(val sport: MySport) : SportsLiveSettingsPage
+    data object Catalogs : SportsLiveSettingsPage
+    /** More → Hidden: titles hidden from Live Now (#134). */
+    data object Hidden : SportsLiveSettingsPage
+
+    /** Where Back goes, and the row there that opened this page (focus returns to it). */
+    val parent: SportsLiveSettingsPage get() = if (this is Leagues) MySports else Main
+    val openerKey: String?
+        get() = when (this) {
+            Main -> null
+            MyTeams -> Item.Setting(SportsLiveSetting.MY_TEAMS).key
+            MySports -> Item.Setting(SportsLiveSetting.MY_SPORTS).key
+            is Leagues -> Item.Sport(sport).key
+            Catalogs -> Item.Setting(SportsLiveSetting.CATALOGS).key
+            Hidden -> Item.Setting(SportsLiveSetting.HIDDEN).key
+        }
+}
+
+/**
+ * Settings → Sports & Live (#72, #134 V2): flat 72 px rows in sections ordered by use, one fixed help line
+ * for the focused row (with why a row is off, #89), On/Off switches, and My teams, My sports, a sport's
+ * leagues and Catalogs as sub-steps in the same pane (Back returns to the row that opened them).
+ * [rootPage] is where the pane starts and Back stops (Results' "Edit my sports" starts at My sports).
+ */
 @Composable
 internal fun SportsLiveSettingsContent(
     initialFocusRequester: FocusRequester?,
+    modifier: Modifier = Modifier,
+    rootPage: SportsLiveSettingsPage = SportsLiveSettingsPage.Main,
+    /** "+ Add a team" (#149): opens Team search. */
     onAddTeam: () -> Unit = {},
+    /** "Run setup again" (#134 phase 7, first-run): the Setup row shows only once this is given. */
+    onRunSetup: (() -> Unit)? = null,
     viewModel: SportsLiveSettingsViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val alerts by viewModel.alertSettings.collectAsStateWithLifecycle()
     val newSportsHint by viewModel.newSportsHint.collectAsStateWithLifecycle()
     val hiddenTitles by viewModel.hiddenTitles.collectAsStateWithLifecycle()
-    var filterKey by remember { mutableStateOf<String?>(null) }
-    var scorePicker by remember { mutableStateOf<ScorePicker?>(null) }
     // Scores status (#70): worked out on a 30 s clock, so a feed no longer in use drops out.
     val feedHealth by viewModel.feedHealth.collectAsStateWithLifecycle()
     val clockMs by rememberSportsLiveClockMs()
     val scoresStatus = remember(state.scores.mode, feedHealth, clockMs) {
         ScoresStatus.of(state.scores.mode, feedHealth.values, System.currentTimeMillis())
     }
-    // The first usable row: the first sport of My sports, or the Show switch while the section is off.
-    // The screen opens on it, and focus goes back to it after OK unfollows the last team.
-    val ownFirstRowFocusRequester = remember { FocusRequester() }
-    val firstRowFocusRequester = initialFocusRequester ?: ownFirstRowFocusRequester
-    // After OK unfollows a team, focus goes to the row now in its place (the next team, else the
-    // previous one); with no team left, to the first usable row.
-    val teamFocusRequesters = remember { mutableMapOf<FollowedTeam, FocusRequester>() }
+    val context = LocalContext.current
+    val pipSupported = remember(context) {
+        sportsLivePipSupported(
+            sdkInt = Build.VERSION.SDK_INT,
+            hasPipFeature = context.packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
+        )
+    }
+    val pipSystemSetting = remember(context) { pipSystemSettingIntent(context) }
+
+    var page by remember { mutableStateOf(rootPage) }
+    var moreExpanded by rememberSaveable { mutableStateOf(SPORTS_LIVE_MORE_EXPANDED_BY_DEFAULT) }
+    var streamMemoryReset by remember { mutableStateOf(false) }
+    var picker by remember { mutableStateOf<ScorePicker?>(null) }
+    var filterKey by remember { mutableStateOf<String?>(null) }
+    var unfollowTeam by remember { mutableStateOf<FollowedTeam?>(null) }
     var unfollowedIndex by remember { mutableStateOf<Int?>(null) }
+    // The focused row (the help line follows it), and the row to focus once a page change has composed.
+    var focusedKey by remember { mutableStateOf<String?>(null) }
+    var pendingFocusKey by remember { mutableStateOf<String?>(null) }
+    val requesters = remember { mutableMapOf<String, FocusRequester>() }
+    fun requester(key: String) = requesters.getOrPut(key) { FocusRequester() }
+    val rootListState = rememberLazyListState()
+    val listState = if (page == rootPage) rootListState else key(page) { rememberLazyListState() }
+
+    val items: List<Item> = when (val current = page) {
+        SportsLiveSettingsPage.Main -> sportsLiveSettingsItems(
+            moreExpanded = moreExpanded,
+            setupAvailable = onRunSetup != null,
+            pipSystemAvailable = pipSupported && pipSystemSetting != null,
+            catalogCount = state.catalogs.size
+        )
+        SportsLiveSettingsPage.MyTeams -> myTeamsItems(state.followedTeams)
+        SportsLiveSettingsPage.Hidden -> hiddenItems(hiddenTitles)
+        SportsLiveSettingsPage.MySports -> mySportsItems()
+        is SportsLiveSettingsPage.Leagues -> sportLeagueItems(current.sport)
+        SportsLiveSettingsPage.Catalogs -> state.catalogs.flatMap { catalog ->
+            listOfNotNull(Item.Catalog(catalog.key), if (catalog.filterExtra != null) Item.CatalogFilter(catalog.key) else null)
+        }
+    }
+    val currentItems by rememberUpdatedState(items)
+
+    fun goTo(next: SportsLiveSettingsPage, focusKey: String?) {
+        pendingFocusKey = focusKey ?: FIRST_ROW
+        page = next
+    }
+
+    BackHandler(enabled = page != rootPage) { goTo(page.parent, page.openerKey) }
+
+    LaunchedEffect(page) {
+        if (page == SportsLiveSettingsPage.MySports) viewModel.onMySportsShown()
+    }
+
+    // Focus after a page change or an unfollow: the wanted row, scrolled into the list first if needed.
+    LaunchedEffect(pendingFocusKey, page) {
+        val wanted = pendingFocusKey ?: return@LaunchedEffect
+        withFrameNanos { }
+        val rows = currentItems
+        val key = if (wanted == FIRST_ROW) rows.firstOrNull { it.isFocusable }?.key else wanted
+        pendingFocusKey = null
+        if (key == null) return@LaunchedEffect
+        if (!runCatching { requester(key).requestFocus() }.getOrDefault(false)) {
+            val index = rows.indexOfFirst { it.key == key }
+            if (index >= 0) listState.scrollToItem(index + LIST_HEADER_ITEMS)
+            withFrameNanos { }
+            runCatching { requester(key).requestFocus() }
+        }
+    }
+
+    // After OK → Stop following, focus goes to the team now in its place (the next, else the previous).
     LaunchedEffect(state.followedTeams) {
         val index = unfollowedIndex ?: return@LaunchedEffect
         unfollowedIndex = null
         val next = state.followedTeams.getOrNull(index.coerceAtMost(state.followedTeams.lastIndex))
-        withFrameNanos { }
-        runCatching { (next?.let(teamFocusRequesters::get) ?: firstRowFocusRequester).requestFocus() }
+        pendingFocusKey = next?.let { Item.Team(it).key } ?: Item.AddTeam.key
     }
-    var moreExpanded by rememberSaveable { mutableStateOf(SPORTS_LIVE_MORE_EXPANDED_BY_DEFAULT) }
-    var streamMemoryReset by remember { mutableStateOf(false) }
 
-    // One setting's row(s): switches write through viewModel.setSwitch, pickers through the dialogs below.
-    val settingRows: @Composable (SportsLiveSetting) -> Unit = { setting ->
-        val enabled = setting.isEnabled(state)
-        val switchRow: @Composable (Int, Int, Boolean, Modifier) -> Unit = { title, subtitle, checked, modifier ->
-            SettingsToggleRow(
-                title = stringResource(title),
-                subtitle = stringResource(subtitle),
-                checked = checked,
-                onToggle = { viewModel.setSwitch(setting, !checked) },
+    // The pane opens on Scores; while the section is hidden, on its Show switch, scrolled into view.
+    val initialKey = when {
+        rootPage != SportsLiveSettingsPage.Main -> items.firstOrNull { it.isFocusable }?.key
+        state.showSection -> Item.Setting(SportsLiveSetting.SCORES).key
+        else -> Item.Setting(SportsLiveSetting.SHOW_SECTION).key
+    }
+    LaunchedEffect(state.showSection) {
+        if (rootPage != SportsLiveSettingsPage.Main || page != rootPage || state.showSection || focusedKey != null) return@LaunchedEffect
+        val index = currentItems.indexOfFirst { it.key == initialKey }
+        // Its section title stays in view above it.
+        if (index > 0) rootListState.scrollToItem(index - 1 + LIST_HEADER_ITEMS)
+    }
+
+    fun rowModifier(item: Item): Modifier {
+        val own = Modifier.focusRequester(requester(item.key))
+        return if (initialFocusRequester != null && page == rootPage && item.key == initialKey) {
+            own.focusRequester(initialFocusRequester)
+        } else {
+            own
+        }
+    }
+
+    // One setting's row: switches write through viewModel.setSwitch, pickers through the dialogs below.
+    val settingRow: @Composable (SportsLiveSetting, Modifier, () -> Unit) -> Unit = { setting, modifier, onFocused ->
+        val enabled = setting.offReason(state, pipSupported) == null
+        val title = stringResource(setting.title)
+        if (setting.isSwitch) {
+            val stored = when (setting) {
+                SportsLiveSetting.REMIND_MY_TEAMS -> alerts.remindMyTeams
+                SportsLiveSetting.SCORE_ALERTS -> alerts.scoreAlerts
+                SportsLiveSetting.FULL_TIME_ALERTS -> alerts.fullTimeAlerts
+                SportsLiveSetting.PICTURE_IN_PICTURE -> state.pipEnabled
+                SportsLiveSetting.SHOW_SECTION -> state.showSection
+                SportsLiveSetting.HOME_ROW -> state.showHomeRow
+                SportsLiveSetting.CATCH_UP_ROW -> state.catchUpRow
+                SportsLiveSetting.HOVER_PREVIEW -> state.hoverPreview
+                else -> state.dataSaver
+            }
+            // A row switched off by another setting reads Off; the help line says why.
+            SportsLiveSettingRow(
+                title = title,
+                switchOn = stored && enabled,
+                onClick = { viewModel.setSwitch(setting, !stored) },
                 enabled = enabled,
-                modifier = modifier
+                modifier = modifier,
+                onFocused = onFocused
+            )
+        } else {
+            val (value, onClick) = when (setting) {
+                SportsLiveSetting.SCORES -> scoresModeLabel(state.scores.mode) to { picker = ScorePicker.MODE }
+                SportsLiveSetting.SCORE_DELAY -> scoreDelayLabel(state.scores.delaySeconds) to { picker = ScorePicker.DELAY }
+                SportsLiveSetting.MY_TEAMS -> (summarise(state.followedTeams.map { it.name })
+                    ?: stringResource(R.string.sports_live_my_teams_none)) to { goTo(SportsLiveSettingsPage.MyTeams, null) }
+                SportsLiveSetting.MY_SPORTS -> mySportsSummary(state.mySports) to { goTo(SportsLiveSettingsPage.MySports, null) }
+                SportsLiveSetting.OPEN_GAME -> openGameLabel(state.openGame) to { picker = ScorePicker.OPEN_GAME }
+                SportsLiveSetting.SCORES_STATUS -> scoresStatusText(scoresStatus) to { picker = ScorePicker.STATUS }
+                SportsLiveSetting.RESET_STREAM_MEMORY ->
+                    (if (streamMemoryReset) stringResource(R.string.sports_live_setting_reset_stream_memory_done) else null) to {
+                        viewModel.resetStreamMemory()
+                        streamMemoryReset = true
+                    }
+                SportsLiveSetting.CATALOGS -> state.catalogs.size.toString() to { goTo(SportsLiveSettingsPage.Catalogs, null) }
+                SportsLiveSetting.HIDDEN -> hiddenTitles.size.toString() to { goTo(SportsLiveSettingsPage.Hidden, null) }
+                SportsLiveSetting.RUN_SETUP -> null to { onRunSetup?.invoke(); Unit }
+                else -> null to {}
+            }
+            SportsLiveSettingRow(
+                title = title,
+                value = value,
+                chevron = setting != SportsLiveSetting.RESET_STREAM_MEMORY,
+                onClick = onClick,
+                enabled = enabled,
+                modifier = modifier,
+                onFocused = onFocused
             )
         }
-        when (setting) {
-            SportsLiveSetting.MY_SPORTS -> MySportsSettings(
-                mySports = state.mySports,
-                enabled = enabled,
-                onToggleSport = viewModel::toggleMySport,
-                onToggleLeague = viewModel::toggleMyLeague,
-                onAllSoccerCompetitions = viewModel::allSoccerCompetitions,
-                firstFocusRequester = if (state.showSection) firstRowFocusRequester else null,
-                newSportsHint = newSportsHint,
-                onShown = viewModel::onMySportsShown
+    }
+
+    val itemRow: @Composable (Item) -> Unit = { item ->
+        val modifier = rowModifier(item)
+        val onFocused = { focusedKey = item.key }
+        val sportsEnabled = rootPage != SportsLiveSettingsPage.Main || SportsLiveSetting.MY_SPORTS.isEnabled(state)
+        val catalogsEnabled = SportsLiveSetting.CATALOGS.isEnabled(state)
+        when (item) {
+            is Item.Header -> SportsLiveSettingsSectionTitle(sectionTitle(item.section))
+            is Item.Setting -> settingRow(item.setting, modifier, onFocused)
+            Item.MoreToggle -> SportsLiveSettingRow(
+                title = stringResource(R.string.sports_live_section_more_row),
+                value = stringResource(if (moreExpanded) R.string.sports_live_more_hide else R.string.sports_live_more_show),
+                onClick = { moreExpanded = !moreExpanded },
+                modifier = modifier,
+                onFocused = onFocused
             )
-            SportsLiveSetting.MY_TEAMS -> SettingsGroupCard(
-                modifier = Modifier.fillMaxWidth(),
-                title = stringResource(R.string.sports_live_my_teams_title),
-                subtitle = stringResource(R.string.sports_live_my_teams_subtitle)
-            ) {
-                // #149: a team can be added without finding one of its games first.
-                SettingsActionRow(
-                    title = stringResource(R.string.sports_live_my_teams_add),
-                    subtitle = null,
-                    onClick = onAddTeam
+            Item.PipSystem -> SportsLiveSettingRow(
+                title = stringResource(R.string.sports_live_setting_pip_system),
+                chevron = true,
+                onClick = { pipSystemSetting?.let { intent -> runCatching { context.startActivity(intent) } } },
+                modifier = modifier,
+                onFocused = onFocused
+            )
+            Item.AddTeam -> SportsLiveSettingRow(
+                title = stringResource(R.string.sports_live_my_teams_add),
+                value = stringResource(R.string.sports_live_my_teams_add_hint),
+                chevron = true,
+                onClick = onAddTeam,
+                modifier = modifier,
+                onFocused = onFocused
+            )
+            Item.NoTeams -> SportsLiveSettingsNote(stringResource(R.string.sports_live_my_teams_empty))
+            is Item.HiddenTitle -> SportsLiveSettingRow(
+                title = item.title,
+                value = stringResource(R.string.sports_live_setting_hidden_show),
+                onClick = { viewModel.unhide(item.title) },
+                modifier = modifier,
+                onFocused = onFocused
+            )
+            Item.NoHidden -> SportsLiveSettingsNote(stringResource(R.string.sports_live_setting_hidden_empty))
+            is Item.Team -> SportsLiveSettingRow(
+                title = item.team.name,
+                tag = teamTag(item.team)?.uppercase(),
+                followed = true,
+                onClick = { unfollowTeam = item.team },
+                modifier = modifier,
+                onFocused = onFocused
+            )
+            is Item.Sport -> {
+                val sport = item.sport
+                val on = sport in state.mySports.effectiveSports
+                if (sport.hasLeaguePage) {
+                    SportsLiveSettingRow(
+                        title = mySportLabel(sport),
+                        value = sportLeaguesSummary(sport, state),
+                        chevron = true,
+                        onClick = { goTo(SportsLiveSettingsPage.Leagues(sport), null) },
+                        enabled = sportsEnabled,
+                        modifier = modifier,
+                        onFocused = onFocused
+                    )
+                } else {
+                    SportsLiveSettingRow(
+                        title = mySportLabel(sport),
+                        switchOn = on,
+                        onClick = { viewModel.toggleMySport(sport) },
+                        enabled = sportsEnabled,
+                        modifier = modifier,
+                        onFocused = onFocused
+                    )
+                }
+            }
+            Item.AllCompetitions -> SportsLiveSettingRow(
+                title = stringResource(R.string.sports_live_my_sports_all_competitions),
+                switchOn = state.mySports.allSoccerCompetitionsOn,
+                onClick = viewModel::pressAllCompetitions,
+                enabled = sportsEnabled,
+                modifier = modifier,
+                onFocused = onFocused
+            )
+            is Item.League -> SportsLiveSettingRow(
+                title = myLeagueLabel(item.league),
+                switchOn = state.mySports.leagueOn(item.league),
+                onClick = { viewModel.pressMyLeague(item.league) },
+                enabled = sportsEnabled,
+                modifier = modifier,
+                onFocused = onFocused
+            )
+            is Item.Catalog -> state.catalogs.firstOrNull { it.key == item.catalogKey }?.let { catalog ->
+                SportsLiveSettingRow(
+                    title = "${catalog.addonName} · ${catalog.catalogName}",
+                    value = catalogStatus(catalog, withReason = false),
+                    onClick = { viewModel.cycleOverride(catalog.key) },
+                    enabled = catalogsEnabled,
+                    modifier = modifier,
+                    onFocused = onFocused
                 )
-                if (state.followedTeams.isEmpty()) {
-                    Text(
-                        text = stringResource(R.string.sports_live_my_teams_empty),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = NuvioTheme.colors.TextSecondary,
-                        modifier = Modifier.padding(NuvioTheme.spacing.sm)
-                    )
-                }
-                // OK unfollows at once; following again is a long-press away.
-                state.followedTeams.forEachIndexed { index, team ->
-                    SettingsActionRow(
-                        title = listOfNotNull(team.name, team.sport).joinToString(" · "),
-                        subtitle = null,
-                        onClick = {
-                            unfollowedIndex = index
-                            viewModel.unfollow(team)
-                        },
-                        trailingIcon = Icons.Rounded.Close,
-                        modifier = Modifier.focusRequester(teamFocusRequesters.getOrPut(team) { FocusRequester() })
-                    )
-                }
             }
-            SportsLiveSetting.SCORES -> SettingsActionRow(
-                title = stringResource(R.string.sports_live_setting_scores),
-                subtitle = stringResource(R.string.sports_live_setting_scores_subtitle),
-                value = scoresModeLabel(state.scores.mode),
-                onClick = { scorePicker = ScorePicker.MODE },
-                enabled = enabled
-            )
-            SportsLiveSetting.SCORE_DELAY -> SettingsActionRow(
-                title = stringResource(R.string.sports_live_setting_score_delay),
-                subtitle = stringResource(R.string.sports_live_setting_score_delay_subtitle),
-                value = scoreDelayLabel(state.scores.delaySeconds),
-                onClick = { scorePicker = ScorePicker.DELAY },
-                enabled = enabled
-            )
-            SportsLiveSetting.OPEN_GAME -> SettingsActionRow(
-                title = stringResource(R.string.sports_live_setting_open_game),
-                subtitle = stringResource(R.string.sports_live_setting_open_game_subtitle),
-                value = openGameLabel(state.openGame),
-                onClick = { scorePicker = ScorePicker.OPEN_GAME },
-                enabled = enabled
-            )
-            SportsLiveSetting.PICTURE_IN_PICTURE -> SportsLivePipRows(
-                enabled = state.pipEnabled,
-                rowEnabled = enabled,
-                onToggle = { viewModel.setSwitch(setting, !state.pipEnabled) }
-            )
-            SportsLiveSetting.SHOW_SECTION -> switchRow(
-                R.string.sports_live_setting_show_section,
-                R.string.sports_live_setting_show_section_subtitle,
-                state.showSection,
-                if (state.showSection) Modifier else Modifier.focusRequester(firstRowFocusRequester)
-            )
-            SportsLiveSetting.HOME_ROW -> switchRow(
-                R.string.sports_live_setting_home_row,
-                R.string.sports_live_setting_home_row_subtitle,
-                state.showHomeRow,
-                Modifier
-            )
-            SportsLiveSetting.CATCH_UP_ROW -> switchRow(
-                R.string.sports_live_setting_catch_up_row,
-                R.string.sports_live_setting_catch_up_row_subtitle,
-                state.catchUpRow,
-                Modifier
-            )
-            SportsLiveSetting.HOVER_PREVIEW -> SettingsToggleRow(
-                title = stringResource(R.string.sports_live_setting_hover_preview),
-                subtitle = stringResource(R.string.sports_live_setting_hover_preview_subtitle),
-                checked = state.hoverPreview && !state.dataSaver,
-                onToggle = { viewModel.setSwitch(setting, !state.hoverPreview) },
-                enabled = enabled
-            )
-            SportsLiveSetting.REMIND_MY_TEAMS -> switchRow(
-                R.string.sports_live_setting_remind_my_teams,
-                R.string.sports_live_setting_remind_my_teams_subtitle,
-                alerts.remindMyTeams,
-                Modifier
-            )
-            SportsLiveSetting.SCORE_ALERTS -> switchRow(
-                R.string.sports_live_setting_score_alerts,
-                R.string.sports_live_setting_score_alerts_subtitle,
-                alerts.scoreAlerts,
-                Modifier
-            )
-            SportsLiveSetting.FULL_TIME_ALERTS -> switchRow(
-                R.string.sports_live_setting_full_time_alerts,
-                R.string.sports_live_setting_full_time_alerts_subtitle,
-                alerts.fullTimeAlerts,
-                Modifier
-            )
-            SportsLiveSetting.SCORES_STATUS -> SettingsActionRow(
-                title = stringResource(R.string.sports_live_setting_scores_status),
-                subtitle = stringResource(R.string.sports_live_setting_scores_status_subtitle),
-                value = scoresStatusText(scoresStatus),
-                onClick = { scorePicker = ScorePicker.STATUS },
-                enabled = enabled
-            )
-            SportsLiveSetting.DATA_SAVER -> switchRow(
-                R.string.sports_live_setting_data_saver,
-                R.string.sports_live_setting_data_saver_subtitle,
-                state.dataSaver,
-                Modifier
-            )
-            SportsLiveSetting.RESET_STREAM_MEMORY -> SettingsActionRow(
-                title = stringResource(R.string.sports_live_setting_reset_stream_memory),
-                subtitle = stringResource(R.string.sports_live_setting_reset_stream_memory_subtitle),
-                value = if (streamMemoryReset) stringResource(R.string.sports_live_setting_reset_stream_memory_done) else null,
-                onClick = {
-                    viewModel.resetStreamMemory()
-                    streamMemoryReset = true
-                },
-                enabled = enabled
-            )
-            // Hidden from Live Now (#134): a simple list; OK shows the title on Live Now again.
-            SportsLiveSetting.HIDDEN -> SettingsGroupCard(
-                modifier = Modifier.fillMaxWidth(),
-                title = stringResource(R.string.sports_live_setting_hidden),
-                subtitle = stringResource(R.string.sports_live_setting_hidden_subtitle)
-            ) {
-                if (hiddenTitles.isEmpty()) {
-                    Text(
-                        text = stringResource(R.string.sports_live_setting_hidden_empty),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = NuvioTheme.colors.TextSecondary,
-                        modifier = Modifier.padding(NuvioTheme.spacing.sm)
-                    )
-                }
-                hiddenTitles.forEach { title ->
-                    SettingsActionRow(
-                        title = title,
-                        subtitle = null,
-                        value = stringResource(R.string.sports_live_setting_hidden_show),
-                        onClick = { viewModel.unhide(title) }
-                    )
-                }
-            }
-            SportsLiveSetting.CATALOGS -> if (state.catalogs.isNotEmpty()) {
-                SettingsGroupCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    title = stringResource(R.string.sports_live_setting_catalogs),
-                    subtitle = stringResource(R.string.sports_live_setting_catalogs_subtitle)
-                ) {
-                    state.catalogs.forEach { catalog ->
-                        SettingsActionRow(
-                            title = "${catalog.addonName} · ${catalog.catalogName}",
-                            subtitle = listOfNotNull(
-                                catalogStatus(catalog),
-                                catalog.stats?.let { catalogStats(it, catalog.filterValue) }
-                            ).joinToString("\n"),
-                            onClick = { viewModel.cycleOverride(catalog.key) },
-                            enabled = enabled
-                        )
-                        if (catalog.filterExtra != null) {
-                            SettingsActionRow(
-                                title = stringResource(
-                                    R.string.sports_live_filter_action,
-                                    catalog.filterValue ?: stringResource(R.string.sports_live_filter_all_option)
-                                ),
-                                subtitle = null,
-                                onClick = { filterKey = catalog.key },
-                                enabled = enabled
-                            )
-                        }
-                    }
-                }
+            is Item.CatalogFilter -> state.catalogs.firstOrNull { it.key == item.catalogKey }?.let { catalog ->
+                SportsLiveSettingRow(
+                    title = stringResource(
+                        R.string.sports_live_filter_action,
+                        catalog.filterValue ?: stringResource(R.string.sports_live_filter_all_option)
+                    ),
+                    chevron = true,
+                    onClick = { filterKey = catalog.key },
+                    enabled = catalogsEnabled,
+                    modifier = modifier,
+                    onFocused = onFocused
+                )
             }
         }
     }
 
-    // Section headers are plain text (never focused); rows run top to bottom; More is one focusable row.
-    // Rows keep their keys while values change, so focus stays on the row that changed.
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md)
-    ) {
-        item(key = "header") {
-            SettingsDetailHeader(
-                title = stringResource(R.string.settings_sports_live),
-                subtitle = stringResource(R.string.sports_live_settings_subtitle)
-            )
-        }
-        sportsLiveSettingsLayout().forEach { (section, settings) ->
-            item(key = "section_${section.name}") {
-                SportsLiveSectionHeader(sectionTitle(section))
-            }
-            if (section == SportsLiveSettingsSection.MORE) {
-                item(key = "more_toggle") {
-                    SettingsActionRow(
-                        title = stringResource(R.string.sports_live_section_more_row),
-                        subtitle = stringResource(R.string.sports_live_section_more_subtitle),
-                        onClick = { moreExpanded = !moreExpanded },
-                        trailingIcon = if (moreExpanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown
-                    )
-                }
-                if (!moreExpanded) return@forEach
-            }
-            val shared = settings.filterNot { it.ownCard }
-            if (shared.isNotEmpty()) {
-                item(key = "card_${section.name}") {
-                    SettingsGroupCard(modifier = Modifier.fillMaxWidth()) {
-                        shared.forEach { settingRows(it) }
-                    }
-                }
-            }
-            settings.filter { it.ownCard }.forEach { setting ->
-                item(key = "card_${setting.name}") { settingRows(setting) }
-            }
+    val focusedItem = items.firstOrNull { it.key == focusedKey }
+    val help = focusedItem?.let { sportsLiveHelpFor(it, state, pipSupported) }
+    val helpPrefix = (focusedItem as? Item.Catalog)?.let { item ->
+        state.catalogs.firstOrNull { it.key == item.catalogKey }?.let { catalog ->
+            listOfNotNull(catalogStatus(catalog, withReason = true), catalog.stats?.let { catalogStats(it, catalog.filterValue) })
+                .joinToString(" · ")
         }
     }
+    val helpText = help?.let { helpLineText(it, helpPrefix) }
 
-    when (scorePicker) {
+    Column(modifier = modifier.fillMaxSize()) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(SportsLiveTokens.Settings.RowGap),
+            // Room for the focused row's ring and lift.
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
+        ) {
+            item(key = "page_header") { PageHeader(page, newSportsHint) }
+            items(items, key = { it.key }) { item -> itemRow(item) }
+        }
+        SportsLiveHelpLine(helpText)
+    }
+
+    when (picker) {
         ScorePicker.MODE -> SettingsSingleChoiceDialog(
             title = stringResource(R.string.sports_live_setting_scores),
             options = ScoresMode.entries.map { SettingsPickerOption(it, scoresModeLabel(it)) },
             selectedValue = state.scores.mode,
             onOptionSelected = { mode ->
-                scorePicker = null
+                picker = null
                 viewModel.setScoresMode(mode)
             },
-            onDismiss = { scorePicker = null }
+            onDismiss = { picker = null }
         )
         ScorePicker.DELAY -> SettingsSingleChoiceDialog(
             title = stringResource(R.string.sports_live_setting_score_delay),
@@ -350,10 +416,10 @@ internal fun SportsLiveSettingsContent(
             options = ScoreDelayChoices.SECONDS.map { SettingsPickerOption(it, scoreDelayLabel(it)) },
             selectedValue = state.scores.delaySeconds,
             onOptionSelected = { seconds ->
-                scorePicker = null
+                picker = null
                 viewModel.setScoreDelaySeconds(seconds)
             },
-            onDismiss = { scorePicker = null }
+            onDismiss = { picker = null }
         )
         ScorePicker.OPEN_GAME -> SettingsSingleChoiceDialog(
             title = stringResource(R.string.sports_live_setting_open_game),
@@ -361,15 +427,15 @@ internal fun SportsLiveSettingsContent(
             options = SportsLiveOpenGame.entries.map { SettingsPickerOption(it, openGameLabel(it)) },
             selectedValue = state.openGame,
             onOptionSelected = { openGame ->
-                scorePicker = null
+                picker = null
                 viewModel.setOpenGame(openGame)
             },
-            onDismiss = { scorePicker = null }
+            onDismiss = { picker = null }
         )
         ScorePicker.STATUS -> ScoresStatusDialog(
             status = scoresStatus,
             onRetry = viewModel::retryScores,
-            onDismiss = { scorePicker = null }
+            onDismiss = { picker = null }
         )
         null -> Unit
     }
@@ -390,93 +456,115 @@ internal fun SportsLiveSettingsContent(
             maxHeight = 420.dp
         )
     }
+
+    unfollowTeam?.let { team ->
+        UnfollowDialog(
+            team = team,
+            onConfirm = {
+                unfollowTeam = null
+                unfollowedIndex = state.followedTeams.indexOf(team).coerceAtLeast(0)
+                viewModel.unfollow(team)
+            },
+            onDismiss = { unfollowTeam = null }
+        )
+    }
 }
 
 /** The dialog open: scores mode, score delay, "When I open a game", or Scores status. */
 private enum class ScorePicker { MODE, DELAY, OPEN_GAME, STATUS }
 
-/**
- * My sports (#55): a switch per sport, in order; a sport with several leagues has a Leagues row below
- * it that opens (OK) its league switches right under it, so the D-pad walks sports, then leagues.
- */
+/** Asked for the first row of a page, once it has composed. */
+private const val FIRST_ROW = "\u0000first"
+
+/** Lazy items before the rows: the page header. */
+private const val LIST_HEADER_ITEMS = 1
+
 @Composable
-internal fun MySportsSettings(
-    mySports: MySports,
-    enabled: Boolean,
-    onToggleSport: (MySport) -> Unit,
-    onToggleLeague: (MyLeague) -> Unit,
-    onAllSoccerCompetitions: () -> Unit,
-    /** On the first sport's switch, when a screen opens on this card. */
-    firstFocusRequester: FocusRequester? = null,
-    /** "New: Tennis, UFC, F1, Golf" under the subtitle, for a profile that saved My sports before them. */
-    newSportsHint: Boolean = false,
-    /** Called when the card shows, so its one-time hint can be claimed. */
-    onShown: () -> Unit = {}
-) {
-    LaunchedEffect(Unit) { onShown() }
-    var expanded by remember { mutableStateOf<MySport?>(null) }
-    val allCompetitions = stringResource(R.string.sports_live_my_sports_all_competitions)
-    val leagueIndent = Modifier.padding(start = NuvioTheme.spacing.lg)
-    SettingsGroupCard(
-        modifier = Modifier.fillMaxWidth(),
-        title = stringResource(R.string.sports_live_my_sports_title),
-        subtitle = listOfNotNull(
-            stringResource(R.string.sports_live_my_sports_subtitle),
+private fun PageHeader(page: SportsLiveSettingsPage, newSportsHint: Boolean) {
+    val (title, subtitle) = when (page) {
+        SportsLiveSettingsPage.Main ->
+            stringResource(R.string.settings_sports_live) to stringResource(R.string.sports_live_settings_subtitle)
+        SportsLiveSettingsPage.MyTeams ->
+            stringResource(R.string.sports_live_my_teams_title) to stringResource(R.string.sports_live_my_teams_subtitle)
+        SportsLiveSettingsPage.MySports -> stringResource(R.string.sports_live_my_sports_title) to listOfNotNull(
+            stringResource(R.string.sports_live_my_sports_page_subtitle),
             if (newSportsHint) stringResource(R.string.sports_live_my_sports_new_sports) else null
-        ).joinToString("\n")
+        ).joinToString(" · ")
+        is SportsLiveSettingsPage.Leagues -> mySportLabel(page.sport).let { sport ->
+            sport to stringResource(R.string.sports_live_my_sports_leagues_subtitle, sport)
+        }
+        SportsLiveSettingsPage.Catalogs ->
+            stringResource(R.string.sports_live_setting_catalogs) to stringResource(R.string.sports_live_setting_catalogs_subtitle)
+        SportsLiveSettingsPage.Hidden ->
+            stringResource(R.string.sports_live_setting_hidden) to stringResource(R.string.sports_live_setting_hidden_subtitle)
+    }
+    SettingsDetailHeader(title = title, subtitle = subtitle)
+}
+
+/** "Stop following ‹team›?" (#89): OK on a team no longer unfollows at once. Cancel has focus. */
+@Composable
+private fun UnfollowDialog(team: FollowedTeam, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    val cancelFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { cancelFocus.requestFocus() } }
+    NuvioDialog(
+        onDismiss = onDismiss,
+        title = stringResource(R.string.sports_live_unfollow_title, team.name),
+        subtitle = stringResource(R.string.sports_live_unfollow_body)
     ) {
-        MySport.entries.forEach { sport ->
-            val on = sport in mySports.effectiveSports
-            SettingsToggleRow(
-                title = mySportLabel(sport),
-                subtitle = null,
-                checked = on,
-                onToggle = { onToggleSport(sport) },
-                enabled = enabled,
-                modifier = if (sport.ordinal == 0 && firstFocusRequester != null) Modifier.focusRequester(firstFocusRequester) else Modifier
-            )
-            if (!on || sport.leagues.size < 2) return@forEach
-            val isSoccer = sport == MySport.SOCCER
-            val named = mySports.namedLeagues(sport)
-            val summary = if (isSoccer && named.isEmpty()) {
-                allCompetitions
-            } else {
-                mySports.leaguesOf(sport).sortedBy { it.ordinal }.map { myLeagueLabel(it) }.joinToString(", ")
+        Row(horizontalArrangement = Arrangement.spacedBy(SportsLiveTokens.Size.ButtonGap)) {
+            SportsLiveButton(onClick = onConfirm, role = SportsLiveButtonRole.PRIMARY) {
+                Text(stringResource(R.string.sports_live_unfollow_confirm), style = SportsLiveTokens.style(SportsLiveTokens.Type.Button))
             }
-            val isExpanded = expanded == sport
-            SettingsActionRow(
-                title = stringResource(R.string.sports_live_my_sports_leagues),
-                subtitle = null,
-                value = summary,
-                onClick = { expanded = if (isExpanded) null else sport },
-                enabled = enabled,
-                trailingIcon = if (isExpanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
-                modifier = leagueIndent
-            )
-            if (!isExpanded) return@forEach
-            if (isSoccer) {
-                SettingsToggleRow(
-                    title = allCompetitions,
-                    subtitle = null,
-                    checked = named.isEmpty(),
-                    onToggle = onAllSoccerCompetitions,
-                    enabled = enabled,
-                    modifier = leagueIndent
-                )
-            }
-            val inEffect = if (isSoccer) named else mySports.leaguesOf(sport)
-            sport.leagues.forEach { league ->
-                SettingsToggleRow(
-                    title = myLeagueLabel(league),
-                    subtitle = null,
-                    checked = league in inEffect,
-                    onToggle = { onToggleLeague(league) },
-                    enabled = enabled,
-                    modifier = leagueIndent
-                )
+            SportsLiveButton(onClick = onDismiss, modifier = Modifier.focusRequester(cancelFocus)) {
+                Text(stringResource(R.string.action_cancel), style = SportsLiveTokens.style(SportsLiveTokens.Type.Button))
             }
         }
     }
+}
+
+/** The help line's text: the reason a row is off, else its explanation, naming what it switches off now. */
+@Composable
+private fun helpLineText(help: SportsLiveHelp, prefix: String?): String {
+    help.offReason?.let { return stringResource(it.text) }
+    val base = stringResource(help.text).let { text -> if (prefix.isNullOrEmpty()) text else "$prefix. $text" }
+    val off = help.switchesOff
+    return when {
+        off.isEmpty() -> base
+        off.size <= HELP_MAX_NAMED -> stringResource(
+            R.string.sports_live_help_switches_off,
+            base,
+            off.map { stringResource(it.title) }.joinToString(", ")
+        )
+        else -> stringResource(R.string.sports_live_help_switches_off_count, base, off.size)
+    }
+}
+
+/** Beyond this many, the help line counts the rows a setting switches off instead of naming them. */
+private const val HELP_MAX_NAMED = 4
+
+@Composable
+private fun mySportsSummary(mySports: MySports): String =
+    if (mySports.isDefault) stringResource(R.string.sports_live_my_sports_all_sports)
+    else summarise(mySports.effectiveSports.map { mySportLabel(it) }, max = 3).orEmpty()
+
+/** A sport's row value: Off, "All competitions" (soccer), or its leagues ("NBA, College"). */
+@Composable
+private fun sportLeaguesSummary(sport: MySport, state: SportsLiveSettingsUiState): String {
+    val mySports = state.mySports
+    return when {
+        sport !in mySports.effectiveSports -> stringResource(R.string.sports_live_switch_off)
+        sport == MySport.SOCCER && mySports.allSoccerCompetitionsOn -> stringResource(R.string.sports_live_my_sports_all_competitions)
+        else -> summarise(mySports.leaguesOf(sport).sortedBy { it.ordinal }.map { myLeagueLabel(it) }).orEmpty()
+    }
+}
+
+/** A followed team's league tag ("NBA", "Premier League"), from its stored ESPN feed; else its sport word. */
+@Composable
+private fun teamTag(team: FollowedTeam): String? {
+    val parts = team.league?.split('/')
+    val league = parts?.takeIf { it.size == 2 }?.let { EspnLeague(it[0], it[1]) }
+    val mine = league?.let { feed -> MyLeague.entries.firstOrNull { it.coversLeague(feed) } }
+    return mine?.let { myLeagueLabel(it) } ?: team.sport
 }
 
 @Composable
@@ -501,12 +589,14 @@ private fun scoreDelayLabel(seconds: Int): String =
     if (seconds <= 0) stringResource(R.string.sports_live_score_delay_off)
     else stringResource(R.string.sports_live_score_delay_seconds, seconds)
 
+/** "Included", "Excluded", "Auto · in Sports & Live" (with its reason in the help line), "Auto · on Home". */
 @Composable
-private fun catalogStatus(catalog: SportsLiveCatalogSetting): String = when (catalog.override) {
+private fun catalogStatus(catalog: SportsLiveCatalogSetting, withReason: Boolean): String = when (catalog.override) {
     SportsLiveOverride.INCLUDE -> stringResource(R.string.sports_live_override_included)
     SportsLiveOverride.EXCLUDE -> stringResource(R.string.sports_live_override_excluded)
     null -> catalog.autoClaim?.let {
-        "${stringResource(R.string.sports_live_override_auto_in)} (${it.reason})"
+        val auto = stringResource(R.string.sports_live_override_auto_in)
+        if (withReason) "$auto (${it.reason})" else auto
     } ?: stringResource(R.string.sports_live_override_auto_out)
 }
 
@@ -532,64 +622,15 @@ private fun catalogStats(stats: CatalogStats, filterValue: String?): String {
     }
 }
 
-/**
- * Picture-in-picture, which some TVs (onn boxes among them) lack or hide: whether this device
- * supports it, our own switch (Home only goes picture-in-picture with it on), and the system's
- * per-app setting when the device has a screen for it. Rows of the Playing card.
- */
-@Composable
-private fun SportsLivePipRows(enabled: Boolean, rowEnabled: Boolean, onToggle: () -> Unit) {
-    val context = LocalContext.current
-    val supported = remember(context) {
-        sportsLivePipSupported(
-            sdkInt = Build.VERSION.SDK_INT,
-            hasPipFeature = context.packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
-        )
-    }
-    val systemSetting = remember(context) { pipSystemSettingIntent(context) }
-    SettingsToggleRow(
-        title = stringResource(R.string.sports_live_setting_pip),
-        subtitle = stringResource(R.string.sports_live_setting_pip_subtitle),
-        checked = enabled && supported,
-        onToggle = onToggle,
-        enabled = rowEnabled && supported
-    )
-    Text(
-        text = stringResource(
-            if (supported) R.string.sports_live_setting_pip_supported else R.string.sports_live_setting_pip_unsupported
-        ),
-        style = MaterialTheme.typography.bodyMedium,
-        color = NuvioTheme.colors.TextSecondary,
-        modifier = Modifier.padding(NuvioTheme.spacing.sm)
-    )
-    if (supported && systemSetting != null) {
-        SettingsActionRow(
-            title = stringResource(R.string.sports_live_setting_pip_system),
-            subtitle = stringResource(R.string.sports_live_setting_pip_system_subtitle),
-            onClick = { runCatching { context.startActivity(systemSetting) } }
-        )
-    }
-}
-
-/** A section title (#72): plain text, so the D-pad passes over it. */
-@Composable
-private fun SportsLiveSectionHeader(title: String) {
-    Text(
-        text = title,
-        style = MaterialTheme.typography.titleMedium,
-        color = NuvioTheme.colors.TextPrimary,
-        modifier = Modifier.padding(top = NuvioTheme.spacing.sm)
-    )
-}
-
 @Composable
 private fun sectionTitle(section: SportsLiveSettingsSection): String = stringResource(
     when (section) {
-        SportsLiveSettingsSection.WHAT_I_FOLLOW -> R.string.sports_live_section_what_i_follow
         SportsLiveSettingsSection.SCORES_AND_SPOILERS -> R.string.sports_live_section_scores_and_spoilers
+        SportsLiveSettingsSection.WHAT_I_FOLLOW -> R.string.sports_live_section_what_i_follow
+        SportsLiveSettingsSection.ALERTS -> R.string.sports_live_alerts_title
         SportsLiveSettingsSection.PLAYING -> R.string.sports_live_section_playing
         SportsLiveSettingsSection.HOME_AND_ROWS -> R.string.sports_live_section_home_and_rows
-        SportsLiveSettingsSection.ALERTS -> R.string.sports_live_alerts_title
+        SportsLiveSettingsSection.SETUP -> R.string.sports_live_section_setup
         SportsLiveSettingsSection.STATUS -> R.string.sports_live_section_status
         SportsLiveSettingsSection.MORE -> R.string.sports_live_section_more
     }

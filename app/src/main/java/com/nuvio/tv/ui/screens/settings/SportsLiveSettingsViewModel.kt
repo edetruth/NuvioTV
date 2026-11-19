@@ -160,7 +160,7 @@ class SportsLiveSettingsViewModel @Inject constructor(
             // Not switches: pickers, lists and actions with their own calls.
             SportsLiveSetting.MY_SPORTS, SportsLiveSetting.MY_TEAMS, SportsLiveSetting.SCORES,
             SportsLiveSetting.SCORE_DELAY, SportsLiveSetting.OPEN_GAME, SportsLiveSetting.SCORES_STATUS,
-            SportsLiveSetting.RESET_STREAM_MEMORY, SportsLiveSetting.HIDDEN, SportsLiveSetting.CATALOGS -> Unit
+            SportsLiveSetting.RESET_STREAM_MEMORY, SportsLiveSetting.RUN_SETUP, SportsLiveSetting.HIDDEN, SportsLiveSetting.CATALOGS -> Unit
         }
     }
 
@@ -242,11 +242,11 @@ class SportsLiveSettingsViewModel @Inject constructor(
     /** My sports: [sport] on or off (the last sport stays on). */
     fun toggleMySport(sport: MySport) = updateMySports { it.toggleSport(sport) }
 
-    /** My sports: [league] on or off within its sport. */
-    fun toggleMyLeague(league: MyLeague) = updateMySports { it.toggleLeague(league) }
+    /** My sports → a sport's page: [league] pressed (no league left turns the sport off: [pressLeague]). */
+    fun pressMyLeague(league: MyLeague) = updateMySports { it.pressLeague(league) }
 
-    /** My sports: soccer back to every competition. */
-    fun allSoccerCompetitions() = updateMySports { it.allSoccerCompetitions() }
+    /** My sports → Soccer: "All competitions" pressed ([pressAllCompetitions]). */
+    fun pressAllCompetitions() = updateMySports { it.pressAllCompetitions() }
 
     private fun updateMySports(change: (MySports) -> MySports) {
         viewModelScope.launch { prefs.updateMySports(change) }

@@ -5,7 +5,6 @@ import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -14,8 +13,6 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.tv.material3.Button
-import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.nuvio.tv.R
@@ -28,6 +25,9 @@ import com.nuvio.tv.core.sportslive.scores.ScoresStatus
 import com.nuvio.tv.ui.components.NuvioDialog
 import com.nuvio.tv.ui.screens.sportslive.myLeagueLabel
 import com.nuvio.tv.ui.screens.sportslive.mySportLabel
+import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveButton
+import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveButtonRole
+import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens
 import com.nuvio.tv.ui.theme.NuvioTheme
 import java.text.SimpleDateFormat
 import java.time.Instant
@@ -98,25 +98,18 @@ internal fun ScoresStatusDialog(status: ScoresStatus, onRetry: () -> Unit, onDis
                 Text(text = line, style = MaterialTheme.typography.bodyMedium, color = NuvioTheme.colors.TextSecondary)
             }
         }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md)
-        ) {
-            val colors = ButtonDefaults.colors(
-                containerColor = NuvioTheme.colors.BackgroundCard,
-                contentColor = NuvioTheme.colors.TextPrimary
-            )
+        // V2 buttons (#134): Retry now is the one PRIMARY; focus is the ring, never a white slab.
+        Row(horizontalArrangement = Arrangement.spacedBy(SportsLiveTokens.Size.ButtonGap)) {
             if (status != ScoresStatus.Off) {
-                Button(onClick = onRetry, modifier = Modifier.weight(1f).focusRequester(focus), colors = colors) {
-                    Text(stringResource(R.string.sports_live_scores_retry_now))
+                SportsLiveButton(onClick = onRetry, modifier = Modifier.focusRequester(focus), role = SportsLiveButtonRole.PRIMARY) {
+                    Text(stringResource(R.string.sports_live_scores_retry_now), style = SportsLiveTokens.style(SportsLiveTokens.Type.Button))
                 }
             }
-            Button(
+            SportsLiveButton(
                 onClick = onDismiss,
-                modifier = Modifier.weight(1f).then(if (status == ScoresStatus.Off) Modifier.focusRequester(focus) else Modifier),
-                colors = colors
+                modifier = if (status == ScoresStatus.Off) Modifier.focusRequester(focus) else Modifier
             ) {
-                Text(stringResource(R.string.action_close))
+                Text(stringResource(R.string.action_close), style = SportsLiveTokens.style(SportsLiveTokens.Type.Button))
             }
         }
     }

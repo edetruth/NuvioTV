@@ -15,6 +15,7 @@ import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.OPEN_GAME
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.PICTURE_IN_PICTURE
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.REMIND_MY_TEAMS
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.RESET_STREAM_MEMORY
+import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.RUN_SETUP
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.SCORES
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.SCORES_STATUS
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.SCORE_ALERTS
@@ -25,6 +26,7 @@ import com.nuvio.tv.ui.screens.settings.SportsLiveSettingsSection.HOME_AND_ROWS
 import com.nuvio.tv.ui.screens.settings.SportsLiveSettingsSection.MORE
 import com.nuvio.tv.ui.screens.settings.SportsLiveSettingsSection.PLAYING
 import com.nuvio.tv.ui.screens.settings.SportsLiveSettingsSection.SCORES_AND_SPOILERS
+import com.nuvio.tv.ui.screens.settings.SportsLiveSettingsSection.SETUP
 import com.nuvio.tv.ui.screens.settings.SportsLiveSettingsSection.STATUS
 import com.nuvio.tv.ui.screens.settings.SportsLiveSettingsSection.WHAT_I_FOLLOW
 import org.junit.Assert.assertEquals
@@ -37,9 +39,9 @@ class SportsLiveSettingsSectionsTest {
         SportsLiveSetting.entries.filter { it.isEnabled(state) }.toSet()
 
     @Test
-    fun `sections come in the approved order`() {
+    fun `sections come in the approved order, by use with scores first`() {
         assertEquals(
-            listOf(WHAT_I_FOLLOW, SCORES_AND_SPOILERS, PLAYING, HOME_AND_ROWS, ALERTS, STATUS, MORE),
+            listOf(SCORES_AND_SPOILERS, WHAT_I_FOLLOW, ALERTS, PLAYING, HOME_AND_ROWS, SETUP, STATUS, MORE),
             sportsLiveSettingsLayout().map { it.first }
         )
     }
@@ -48,11 +50,12 @@ class SportsLiveSettingsSectionsTest {
     fun `each section holds its settings in order`() {
         assertEquals(
             listOf(
-                WHAT_I_FOLLOW to listOf(MY_SPORTS, MY_TEAMS),
                 SCORES_AND_SPOILERS to listOf(SCORES, SCORE_DELAY),
+                WHAT_I_FOLLOW to listOf(MY_TEAMS, MY_SPORTS),
+                ALERTS to listOf(REMIND_MY_TEAMS, SCORE_ALERTS, FULL_TIME_ALERTS),
                 PLAYING to listOf(OPEN_GAME, PICTURE_IN_PICTURE),
                 HOME_AND_ROWS to listOf(SHOW_SECTION, HOME_ROW, CATCH_UP_ROW, HOVER_PREVIEW),
-                ALERTS to listOf(REMIND_MY_TEAMS, SCORE_ALERTS, FULL_TIME_ALERTS),
+                SETUP to listOf(RUN_SETUP),
                 STATUS to listOf(SCORES_STATUS),
                 MORE to listOf(DATA_SAVER, RESET_STREAM_MEMORY, HIDDEN, CATALOGS)
             ),
@@ -68,7 +71,7 @@ class SportsLiveSettingsSectionsTest {
             setOf(
                 SHOW_SECTION, HOME_ROW, HOVER_PREVIEW, DATA_SAVER, OPEN_GAME, RESET_STREAM_MEMORY,
                 PICTURE_IN_PICTURE, SCORES, SCORE_DELAY, SCORES_STATUS, REMIND_MY_TEAMS, SCORE_ALERTS,
-                FULL_TIME_ALERTS, MY_SPORTS, MY_TEAMS, CATCH_UP_ROW, HIDDEN, CATALOGS
+                FULL_TIME_ALERTS, MY_SPORTS, MY_TEAMS, CATCH_UP_ROW, RUN_SETUP, HIDDEN, CATALOGS
             ),
             shown.toSet()
         )
@@ -86,9 +89,9 @@ class SportsLiveSettingsSectionsTest {
     }
 
     @Test
-    fun `section off greys out everything but the show switch, stream memory, my teams and hidden titles`() {
+    fun `section off greys out everything but the show switch, stream memory, my teams, setup and hidden titles`() {
         assertEquals(
-            setOf(SHOW_SECTION, RESET_STREAM_MEMORY, MY_TEAMS, HIDDEN),
+            setOf(SHOW_SECTION, RESET_STREAM_MEMORY, MY_TEAMS, RUN_SETUP, HIDDEN),
             enabledIn(SportsLiveSettingsUiState(showSection = false))
         )
     }

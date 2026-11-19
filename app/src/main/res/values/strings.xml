@@ -3905,7 +3905,7 @@
     <string name="sports_live_setting_full_time_alerts">Full-time alerts</string>
     <string name="sports_live_setting_full_time_alerts_subtitle">A short note when a followed team\'s game ends. Names only under Hide until focused</string>
     <!-- Sports & Live settings screen, grouped (#72) -->
-    <string name="sports_live_settings_subtitle">What you follow, scores, playing, Home rows and alerts</string>
+    <string name="sports_live_settings_subtitle">Scores, what you follow, alerts and playing</string>
     <string name="sports_live_section_what_i_follow">What I follow</string>
     <string name="sports_live_section_scores_and_spoilers">Scores &amp; spoilers</string>
     <string name="sports_live_section_playing">Playing</string>
@@ -3914,7 +3914,7 @@
     <string name="sports_live_section_more">More</string>
     <string name="sports_live_section_more_row">More settings</string>
     <string name="sports_live_section_more_subtitle">Data saver, stream memory and addon catalogs. Rarely needed</string>
-    <string name="sports_live_my_teams_subtitle">Their games come first and get alerts. OK on a team stops following it</string>
+    <string name="sports_live_my_teams_subtitle">Their games come first, get a gold ★ and get alerts</string>
     <!-- Team search (#149): Settings → My teams → + Add a team, and first-run step 3. -->
     <string name="sports_live_my_teams_add">+ Add a team</string>
     <string name="sports_live_team_search_title">Add a team</string>
@@ -3945,6 +3945,38 @@
     <string name="sports_live_setting_hover_preview_subtitle">Rest on a game for 2 s to watch it muted. Off under Data saver</string>
     <string name="sports_live_setting_pip_system_subtitle">Your TV\'s own picture-in-picture switch for this app</string>
     <string name="sports_live_setting_catalogs_subtitle">Which addon catalogs feed Sports &amp; Live. OK cycles Auto, Included, Excluded</string>
+    <!-- Settings → Sports & Live V2 (#134 phase 6): one help line, On/Off switches, why a row is off (#89). -->
+    <string name="sports_live_setting_scores_help">Show: scores everywhere · Hide until focused: a score shows after 1 s on its game · Off: no scores and no score checks.</string>
+    <string name="sports_live_section_setup">Setup</string>
+    <string name="sports_live_setting_run_setup">Run setup again</string>
+    <string name="sports_live_setting_run_setup_subtitle">Pick your sports, teams and how scores show, one step at a time</string>
+    <string name="sports_live_switch_on">On</string>
+    <string name="sports_live_switch_off">Off</string>
+    <string name="sports_live_off_section_hidden">Off because \"Show Sports &amp; Live section\" is off. Turn it on under Home &amp; rows to use this.</string>
+    <string name="sports_live_off_scores_off">Off because Scores is Off. Set Scores to Show or Hide until focused to use this.</string>
+    <string name="sports_live_off_scores_not_show">Off because Scores isn\'t Show. Set Scores to Show to use this.</string>
+    <string name="sports_live_off_home_row">Off because the \"Live now\" row on Home is off. Turn that row on to use this.</string>
+    <string name="sports_live_off_data_saver">Off because Data saver is on. Turn it off under More to use this.</string>
+    <string name="sports_live_off_pip_unsupported">This TV doesn\'t support picture-in-picture, so Home uses the in-app mini player.</string>
+    <string name="sports_live_help_switches_off">%1$s Now switching off: %2$s.</string>
+    <string name="sports_live_help_switches_off_count">%1$s Now switching off %2$d settings.</string>
+    <string name="sports_live_my_teams_team_help">OK: stop following. Follow more teams from More… on any game, in the player too.</string>
+    <string name="sports_live_my_teams_none">None yet</string>
+    <string name="sports_live_unfollow_title">Stop following %1$s?</string>
+    <string name="sports_live_unfollow_body">Its games lose the gold ★, and reminders and alerts for them stop.</string>
+    <string name="sports_live_unfollow_confirm">Stop following</string>
+    <string name="sports_live_my_sports_page_subtitle">One row per sport. OK picks its leagues; no league = off</string>
+    <string name="sports_live_my_sports_all_sports">All sports</string>
+    <string name="sports_live_my_sports_sport_help">OK picks its leagues. No league turns the sport off.</string>
+    <string name="sports_live_my_sports_single_help">OK turns it on or off.</string>
+    <string name="sports_live_my_sports_last_sport">Your only sport stays on. Turn on another sport first.</string>
+    <string name="sports_live_my_sports_leagues_subtitle">Pick its leagues. No league turns %1$s off</string>
+    <string name="sports_live_my_sports_league_help">OK turns this league on or off.</string>
+    <string name="sports_live_my_sports_all_competitions_help">Every soccer game. Pick competitions below to narrow it down.</string>
+    <string name="sports_live_my_teams_add_hint">Search by name, city or nickname</string>
+    <string name="sports_live_more_show">Show</string>
+    <string name="sports_live_more_hide">Hide</string>
+    <string name="sports_live_catalog_filter_help">Pins one filter value of this catalog, so Sports &amp; Live loads only that</string>
     <string name="sports_live_alert_kicking_off">KICKING OFF NOW</string>
     <string name="sports_live_alert_watch_now">Watch now?</string>
     <string name="sports_live_alert_watching">you\'re watching %1$s</string>

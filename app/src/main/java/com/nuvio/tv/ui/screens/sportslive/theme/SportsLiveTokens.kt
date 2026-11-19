@@ -69,6 +69,8 @@ object SportsLiveTokens {
         val WhyTagText = Color(0xFFCFE1FF)
         val WhyTagBackground = Color(0xFF13233A)
         val WhyTagBorder = Color(0xFF2B4A75)
+        /** A switch that is on (#134 Settings): blue already means "you set this", like the reminder bell. */
+        val SetBlue = WhyTagBlue
         /** Warnings (sources that did not respond). */
         val WarningAmber = Color(0xFFFFB020)
         val WarningAmberOutline = WarningAmber.copy(alpha = 0.45f)
@@ -177,6 +179,9 @@ object SportsLiveTokens {
         val ButtonMinWidth = 100.dp
         val ButtonGap = 11.dp
 
+        /** A Settings row (#134): 72 px, one line, the label centred. */
+        val SettingsRow = 36.dp
+
         /** Dual screen: the panes' side margins, the gap between them and the caption row under each. */
         val DualSideMargin = 32.dp
         val DualGap = 24.dp
@@ -226,6 +231,27 @@ object SportsLiveTokens {
         val RowShape = RoundedCornerShape(Row)
         val ButtonShape = RoundedCornerShape(Button)
         val PillShape = RoundedCornerShape(50)
+    }
+
+    /** Settings → Sports & Live (#134 phase 6): flat rows, the one help line and the On/Off switch. */
+    object Settings {
+        /** Rows lift less than list rows (1.02): they span the pane, so 1.03 would touch its edge. */
+        const val ROW_LIFT = 1.02f
+        val RowGap = 4.dp
+        val RowPaddingHorizontal = 14.dp
+        /** The switch: a 40 × 22 px track with a 16 px knob, after its "On" / "Off". */
+        val SwitchTrackWidth = 20.dp
+        val SwitchTrackHeight = 11.dp
+        val SwitchKnob = 8.dp
+        val SwitchGap = 8.dp
+        /** Room above a section title, and the fixed help line: two 22 px lines. */
+        val SectionTop = 10.dp
+        val HelpLineHeight = 34.dp
+        /** Row labels: 30 px; values: 26 px. */
+        val Label = TextStyle(fontSize = 15.sp, lineHeight = 18.sp, fontWeight = FontWeight.Medium)
+        val Value = TextStyle(fontSize = 13.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium)
+        /** The help line: 22 px. */
+        val Help = TextStyle(fontSize = 11.sp, lineHeight = 14.sp, fontWeight = FontWeight.Medium)
     }
 
     /** The one focus language (#93). */

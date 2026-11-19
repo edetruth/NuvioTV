@@ -1,32 +1,24 @@
 package com.nuvio.tv.ui.screens.settings
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.res.stringResource
-import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nuvio.tv.R
 
 /**
- * Settings → Sports & Live → My sports on its own, for Results' "Edit my sports": the same card as in
- * Settings, focus on the first sport. Back returns to Results, which reloads with the new choice.
+ * Settings → Sports & Live → My sports on its own, for Results' "Edit my sports": the same page as in
+ * Settings (one row per sport, a sport's leagues as a sub-step), focus on the first sport. Back from a
+ * sport's leagues returns to My sports; Back from My sports returns to Results, which reloads.
  */
 @Composable
-fun SportsLiveMySportsScreen(
-    onBackPress: () -> Unit,
-    viewModel: SportsLiveSettingsViewModel = hiltViewModel()
-) {
+fun SportsLiveMySportsScreen(onBackPress: () -> Unit) {
+    // The pane's own Back (leagues → My sports) composes later, so it is asked first.
     BackHandler { onBackPress() }
-    val state by viewModel.uiState.collectAsStateWithLifecycle()
-    val newSportsHint by viewModel.newSportsHint.collectAsStateWithLifecycle()
     val firstFocusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) {
         withFrameNanos { }
@@ -36,20 +28,10 @@ fun SportsLiveMySportsScreen(
         title = stringResource(R.string.settings_sports_live),
         subtitle = stringResource(R.string.sports_live_my_sports_title)
     ) {
-        LazyColumn(modifier = Modifier.fillMaxSize()) {
-            item(key = "my_sports") {
-                MySportsSettings(
-                    mySports = state.mySports,
-                    // Results is only reachable with the section shown.
-                    enabled = true,
-                    onToggleSport = viewModel::toggleMySport,
-                    onToggleLeague = viewModel::toggleMyLeague,
-                    onAllSoccerCompetitions = viewModel::allSoccerCompetitions,
-                    firstFocusRequester = firstFocusRequester,
-                    newSportsHint = newSportsHint,
-                    onShown = viewModel::onMySportsShown
-                )
-            }
-        }
+        SportsLiveSettingsContent(
+            initialFocusRequester = firstFocusRequester,
+            modifier = Modifier.weight(1f),
+            rootPage = SportsLiveSettingsPage.MySports
+        )
     }
 }
