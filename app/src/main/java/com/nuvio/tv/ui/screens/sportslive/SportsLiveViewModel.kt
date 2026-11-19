@@ -588,8 +588,8 @@ class SportsLiveViewModel internal constructor(
                 tabItems
             }
         }
-        // #146: My sports scopes Live now, Upcoming and Replays (never Channels): followed teams' games and games of
-        // no known sport stay. All sports lifts it on the tab it is picked on; the chips and counts follow My sports.
+        // #146: My sports scopes Live now, Upcoming and Replays (never Channels): followed teams' games stay, games of
+        // no identifiable sport go (#167). All sports lifts it on the tab it is picked on; the chips and counts follow My sports.
         val allSports = selection.filter == SportsLiveUiState.ALL_SPORTS_FILTER
         val scopedTabs = tabs.mapValues { (tab, items) ->
             if (tab in SCOPED_TABS) SportsLiveMySportsScope.scope(items, mySports) else items
@@ -637,6 +637,12 @@ class SportsLiveViewModel internal constructor(
             filters = filters,
             selectedFilter = filter,
             mySportsScoped = selection.tab in SCOPED_TABS && !mySports.isDefault,
+            // #167: under My sports (All picked), Live now ends with the games it hides, one press from All sports.
+            hiddenByMySports = if (selection.tab == SportsLiveTab.LIVE_NOW && filter == null) {
+                (counted(fullItems).size - counted(scopedItems).size).coerceAtLeast(0)
+            } else {
+                0
+            },
             filterCounts = counts,
             visibleItems = visible,
             selectedItemId = selectedId,

@@ -119,6 +119,36 @@ class ZapPanelScoresTest {
     }
 
     @Test
+    fun `inside a group followed games lead, then games with a live score, then the rest, each in its own order`() {
+        // Earliest start first would put the unscored games on top.
+        val unscoredEarly = item("Team A vs Team B", now - 3 * HOUR)
+        val followedUnscored = item("Team C vs Team D", now - HOUR / 4, followed = true)
+        val scoredLate = item("Los Angeles Lakers at Phoenix Suns", now - HOUR / 2)
+        val scoredEarly = item("Indiana Pacers at Philadelphia 76ers", now - 2 * HOUR)
+        val unscoredLate = item("Team E vs Team F", now - HOUR / 3)
+        val scores = mapOf(
+            scoredEarly.streamKey to live(pacersEvent, "Q4 2:00", 100, 98),
+            scoredLate.streamKey to live(lakersEvent, "Q1 9:00", 4, 2)
+        )
+        val items = listOf(unscoredLate, scoredLate, unscoredEarly, followedUnscored, scoredEarly)
+        val rows = groupPanelRows(items, scores, ScoresMode.SHOW, emptySet(), now)
+        assertEquals(
+            listOf(followedUnscored, scoredEarly, scoredLate, unscoredEarly, unscoredLate).map { it.id },
+            rows.map { it.item.id }
+        )
+        // The shared lineup (the panel, CH and Live now) keeps it; the big-game rank (#137) sits between.
+        assertEquals(rows.map { it.item.id }, panelLineup(rows).map { it.item.id })
+        assertTrue(LINEUP_RANK_FOLLOWED < LINEUP_RANK_BIG_GAME && LINEUP_RANK_BIG_GAME < LINEUP_RANK_SCORED)
+        assertTrue(LINEUP_RANK_SCORED < LINEUP_RANK_REST)
+        // Under Scores Off no game has a live score: start order again, followed first.
+        val off = groupPanelRows(items, scores, ScoresMode.OFF, emptySet(), now)
+        assertEquals(
+            listOf(followedUnscored, unscoredEarly, scoredEarly, scoredLate, unscoredLate).map { it.id },
+            off.map { it.item.id }
+        )
+    }
+
+    @Test
     fun `under hide until focused a finished game is grouped as a final, its score hidden`() {
         // Both games have begun by ESPN's starts (the Hornets tip off last).
         val at = hornetsEvent.startMs!! + HOUR

@@ -1498,6 +1498,17 @@ private fun SportsLiveContent(
                                         )
                                     }
                                 }
+                                // #167: under My sports, the games it hides are one press away (OK: All sports).
+                                if (uiState.hiddenByMySports > 0 && !channelsTab) {
+                                    item(key = HIDDEN_BY_MY_SPORTS_KEY) {
+                                        SportsLiveHiddenByMySportsLine(
+                                            count = uiState.hiddenByMySports,
+                                            onClick = { onSelectFilter(SportsLiveUiState.ALL_SPORTS_FILTER) },
+                                            height = SportsLiveTokens.Size.PanelLine + 8.dp,
+                                            modifier = Modifier.focusProperties { right = watchFocusRequester }
+                                        )
+                                    }
+                                }
                             }
                         }
                     }

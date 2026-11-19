@@ -16,7 +16,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** #140: the in-player panel as a cable guide, Now playing pinned and the lineup wrapped round from the next game. */
+/** #140: the in-player panel as a cable guide, Now playing pinned and the lineup in its own order, the game playing marked in place. */
 class SportsLivePanelGuideTest {
 
     private val now = 1_800_000_000_000L
@@ -46,44 +46,32 @@ class SportsLivePanelGuideTest {
             .withLineup(rows)
 
     @Test
-    fun `the list starts at the game after the current one and wraps round to the one before it`() {
+    fun `the list is the lineup in its own order, the current game in its place marked watching and pinned above`() {
         val rows = lineupOf(live)
         assertEquals(listOf("l1", "l2", "l3", "l4", "l5"), ids(rows))
         val guide = panelGuide(rows, live[2].streamKey)
         assertEquals("l3", guide.nowPlaying?.item?.id)
-        assertEquals(listOf("l4", "l5", "l1", "l2"), ids(guide.rows))
+        assertEquals(listOf("l1", "l2", "l3", "l4", "l5"), ids(guide.rows))
+        val games = guide.entries.filterIsInstance<PanelGuideEntry.Game>()
+        assertEquals(listOf("l3"), games.filter { it.watching }.map { it.row.item.id })
+        // One header over the one run; no divider of any kind.
+        assertEquals(listOf(PanelGuideEntry.Header(ScoreboardGroup.LIVE, 5, run = 0)), guide.entries.filterIsInstance<PanelGuideEntry.Header>())
+        assertEquals(6, guide.entries.size)
+        // The watching place is never focused: Now playing is its row.
+        assertEquals(listOf("l1", "l2", "l4", "l5").map { "addon|$it" }, guide.entries.mapNotNull { (it as? PanelGuideEntry.Game)?.takeUnless { g -> g.watching }?.key })
+        assertEquals("addon|l1", guide.firstFocusableKey)
+        assertEquals("addon|l2", panelGuide(rows, live[0].streamKey).firstFocusableKey)
     }
 
     @Test
-    fun `From the top sits where the lineup wraps, and only when it wraps`() {
-        val rows = lineupOf(live)
-        val wrapped = panelGuide(rows, live[2].streamKey).entries
-        val divider = wrapped.indexOf(PanelGuideEntry.FromTheTop)
-        // Header, l4, l5, From the top, header, l1, l2.
-        assertEquals(3, divider)
-        assertEquals("l5", (wrapped[divider - 1] as PanelGuideEntry.Game).row.item.id)
-        assertTrue(wrapped[divider + 1] is PanelGuideEntry.Header)
-        assertEquals("l1", (wrapped[divider + 2] as PanelGuideEntry.Game).row.item.id)
-        assertEquals(1, wrapped.count { it == PanelGuideEntry.FromTheTop })
-
-        // On the first game nothing wraps; on the last, the list is the lineup from its top.
-        val onFirst = panelGuide(rows, live.first().streamKey)
-        assertFalse(PanelGuideEntry.FromTheTop in onFirst.entries)
-        assertEquals(listOf("l2", "l3", "l4", "l5"), ids(onFirst.rows))
-        val onLast = panelGuide(rows, live.last().streamKey)
-        assertFalse(PanelGuideEntry.FromTheTop in onLast.entries)
-        assertEquals(listOf("l1", "l2", "l3", "l4"), ids(onLast.rows))
-    }
-
-    @Test
-    fun `the current game is pinned as Now playing and never repeated in the list`() {
+    fun `the current game is pinned and listed once in its own place, whatever the game`() {
         val rows = lineupOf(mix)
         rows.forEach { row ->
             val guide = panelGuide(rows, row.item.streamKey)
             assertEquals(row.item.id, guide.nowPlaying?.item?.id)
-            assertFalse(row.item.id in ids(guide.rows))
-            assertEquals(rows.size - 1, guide.rows.size)
-            assertEquals(-1, guide.indexOf(row.item.streamKey))
+            assertEquals(ids(rows), ids(guide.rows))
+            val watching = guide.entries.filterIsInstance<PanelGuideEntry.Game>().single { it.watching }
+            assertEquals(row.item.id, watching.row.item.id)
         }
         // The panel state pins the same row.
         val state = SportsLiveZapPanelState(rows = rows, currentKey = a.streamKey)
@@ -92,67 +80,83 @@ class SportsLivePanelGuideTest {
     }
 
     @Test
-    fun `the list is the zap order - its first row is CH minus and its last game before the finals is CH plus`() {
+    fun `CH minus plays the game after the watching place and CH plus the one before, wrapping at the ends`() {
         val rows = lineupOf(mix)
+        val zappable = ids(rows.filter { it.zappable })
         rows.filter { it.zappable }.forEach { row ->
-            val guide = panelGuide(rows, row.item.streamKey)
-            val zappable = ids(guide.rows.filter { it.zappable })
             val session = sessionOn(row.item, rows)
-            // Walking CH- from the game playing passes the list's games top to bottom, then comes back to it.
+            val here = zappable.indexOf(row.item.id)
+            val after = zappable[(here + 1) % zappable.size]
+            val before = zappable[(here - 1 + zappable.size) % zappable.size]
+            assertEquals("CH- from ${row.item.id}", after, session.step(true, emptySet())!!.current.id)
+            assertEquals("CH+ from ${row.item.id}", before, session.step(false, emptySet())!!.current.id)
+            // Walking CH- round passes the list's zappable games in the list's order.
             var at = session
-            val forward = (zappable.indices).map { at = at.step(true, emptySet())!!; at.current.id }
-            assertEquals("CH- from ${row.item.id}", zappable, forward)
-            assertEquals(row.item.id, at.step(true, emptySet())!!.current.id)
-            // CH+ walks it bottom to top.
-            at = session
-            val backward = (zappable.indices).map { at = at.step(false, emptySet())!!; at.current.id }
-            assertEquals("CH+ from ${row.item.id}", zappable.reversed(), backward)
-            // Down from Now playing is the first row: what CH- plays.
-            assertEquals(guide.rows.first().item.id, session.step(true, emptySet())!!.current.id)
+            val walk = zappable.indices.map { at = at.step(true, emptySet())!!; at.current.id }
+            assertEquals(zappable.drop(here + 1) + zappable.take(here + 1), walk)
         }
     }
 
     @Test
-    fun `finals stay listed after the wrapped games, outside the zap order`() {
+    fun `finals stay listed last, outside the zap order`() {
         val rows = lineupOf(mix)
         val guide = panelGuide(rows, a.streamKey)
         assertEquals("e", guide.rows.last().item.id)
         assertFalse(guide.rows.last().zappable)
-        assertTrue(guide.rows.dropLast(1).all { it.zappable })
         val header = guide.entries[guide.entries.size - 2] as PanelGuideEntry.Header
         assertEquals(ScoreboardGroup.JUST_ENDED, header.section)
     }
 
     @Test
-    fun `section headers start each run within a segment and count only its games`() {
-        // Lineup: f, a (live) · s2, s1 … (soon) · ch · e (just ended). On s2: s1 … ch, From the top, then f, a.
+    fun `a header starts each run of one group and counts its games`() {
         val rows = lineupOf(mix)
         val entries = panelGuide(rows, s2.streamKey).entries
-        val first = entries.first() as PanelGuideEntry.Header
-        assertEquals(rows.single { it.item == s1 }.section, first.section)
-        assertEquals("s1", (entries[1] as PanelGuideEntry.Game).row.item.id)
-        // Each header is followed by exactly its count of games of its group, then a header, the divider or the end.
+        assertTrue(entries.first() is PanelGuideEntry.Header)
         entries.forEachIndexed { index, entry ->
             if (entry !is PanelGuideEntry.Header) return@forEachIndexed
             val run = entries.subList(index + 1, index + 1 + entry.count)
-            assertTrue(run.all { it is PanelGuideEntry.Game && it.row.section == entry.section })
+            assertTrue(run.all { it is PanelGuideEntry.Game && it.row.placed == entry.section })
             assertFalse(entries.getOrNull(index + 1 + entry.count) is PanelGuideEntry.Game)
         }
-        // After the wrap, the live group again under its own header: f, a.
-        val top = entries.indexOf(PanelGuideEntry.FromTheTop)
-        assertEquals(PanelGuideEntry.Header(ScoreboardGroup.LIVE, 2, segment = 1), entries[top + 1])
-        assertEquals(listOf("f", "a"), entries.subList(top + 2, top + 4).map { (it as PanelGuideEntry.Game).row.item.id })
+        // Live first: f (followed), then a.
+        assertEquals(PanelGuideEntry.Header(ScoreboardGroup.LIVE, 2, run = 0), entries[0])
+        assertEquals(listOf("f", "a"), entries.subList(1, 3).map { (it as PanelGuideEntry.Game).row.item.id })
         // Every key is unique, so the list can key its items by them.
         assertEquals(entries.size, entries.map { it.key }.toSet().size)
     }
 
     @Test
-    fun `with the current game outside the list, the lineup reads in its own order and nothing is pinned from it`() {
+    fun `with the current game outside the list, nothing is pinned or marked watching`() {
         val rows = lineupOf(live)
         val guide = panelGuide(rows, "elsewhere|x")
         assertNull(guide.nowPlaying)
         assertEquals(ids(rows), ids(guide.rows))
-        assertFalse(PanelGuideEntry.FromTheTop in guide.entries)
+        assertTrue(guide.entries.filterIsInstance<PanelGuideEntry.Game>().none { it.watching })
+    }
+
+    @Test
+    fun `under My sports the list ends with the hidden line, which focus can reach`() {
+        val rows = lineupOf(live)
+        val guide = panelGuide(rows, live[0].streamKey, hiddenByMySports = 12)
+        assertEquals(PanelGuideEntry.HiddenByMySports(12), guide.entries.last())
+        assertEquals(guide.entries.size - 1, guide.indexOf(HIDDEN_BY_MY_SPORTS_KEY))
+        assertFalse(panelGuide(rows, live[0].streamKey).entries.any { it is PanelGuideEntry.HiddenByMySports })
+        // The panel state carries it to its guide.
+        val state = SportsLiveZapPanelState(rows = rows, currentKey = live[0].streamKey, hiddenByMySports = 3)
+        assertEquals(PanelGuideEntry.HiddenByMySports(3), state.guide.entries.last())
+    }
+
+    @Test
+    fun `a line that left the list hands focus to the nearest focusable one`() {
+        val rows = lineupOf(live)
+        // Header 0, l1 1, l2 2 (watching), l3 3, l4 4, l5 5.
+        val guide = panelGuide(rows, live[1].streamKey)
+        assertEquals("addon|l3", guide.nearestFocusable(3))
+        // Index 2 is the watching place: its neighbours tie, the lower one wins.
+        assertEquals("addon|l3", guide.nearestFocusable(2))
+        assertEquals("addon|l1", guide.nearestFocusable(0))
+        assertEquals("addon|l5", guide.nearestFocusable(40))
+        assertNull(panelGuide(emptyList(), null).nearestFocusable(3))
     }
 
     private fun game(id: String, startMs: Long?, sport: String = "Basketball") = SportsLiveItem(

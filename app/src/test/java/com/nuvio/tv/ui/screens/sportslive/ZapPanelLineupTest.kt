@@ -117,7 +117,10 @@ class ZapPanelLineupTest {
         viewModel.openPanel()
         val panel = viewModel.panel.first { it != null }!!
         assertEquals(listOf("a", "b"), panel.items.map { it.id })
-        assertEquals(listOf("b"), panel.guide.rows.map { it.item.id })
+        // The game playing listed in its place too (#140), then the line offering the game My sports hides (#167).
+        assertEquals(listOf("a", "b"), panel.guide.rows.map { it.item.id })
+        assertEquals(1, panel.hiddenByMySports)
+        assertEquals(PanelGuideEntry.HiddenByMySports(1), panel.guide.entries.last())
         assertTrue(SportsLiveUiState.ALL_SPORTS_FILTER in panel.chips)
         assertEquals(2, panel.counts[null])
         assertEquals(3, panel.counts[SportsLiveUiState.ALL_SPORTS_FILTER])
@@ -125,7 +128,8 @@ class ZapPanelLineupTest {
         // All sports: the panel lists every game, and the zaps walk them all.
         viewModel.onPanelChip(SportsLiveUiState.ALL_SPORTS_FILTER)
         val everything = viewModel.panel.first { it?.items?.size == 3 }!!
-        assertEquals(listOf("c", "b"), everything.guide.rows.map { it.item.id })
+        assertEquals(listOf("a", "c", "b"), everything.guide.rows.map { it.item.id })
+        assertEquals(0, everything.hiddenByMySports)
         viewModel.closePanel()
         runCurrent()
         assertEquals("c", zap(viewModel, KeyEvent.KEYCODE_CHANNEL_DOWN))

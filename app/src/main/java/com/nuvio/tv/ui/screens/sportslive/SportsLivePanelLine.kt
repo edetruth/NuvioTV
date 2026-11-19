@@ -123,7 +123,13 @@ internal fun SportsLivePanelLine(
     modifier: Modifier = Modifier,
     menuOpen: Boolean = false,
     /** What OK does, hinted at the row's end while it has focus ("Box score ›" on a matched Just ended game); null: none. */
-    okHint: String? = null
+    okHint: String? = null,
+    /** The game playing's own place in the list (#140): "▶ Watching" at its end, never focused. */
+    watching: Boolean = false,
+    /** Listed since the panel opened (#164): a "New" tag at its end. */
+    isNew: Boolean = false,
+    /** Gone from the list since the panel opened (#164): kept in place, dimmed. */
+    gone: Boolean = false
 ) {
     val strings = rememberGameStatusStrings()
     val kickoff = row.art?.let { kickoffText(it) }
@@ -146,7 +152,7 @@ internal fun SportsLivePanelLine(
             modifier = modifier
                 .fillMaxWidth()
                 .height(Size.PanelLine)
-                .then(if (row.dimmed(focused)) Modifier.alpha(JUST_ENDED_LINE_ALPHA) else Modifier)
+                .then(if (row.dimmed(focused) || (gone && !focused)) Modifier.alpha(JUST_ENDED_LINE_ALPHA) else Modifier)
                 .onFocusChanged {
                     focused = it.isFocused
                     if (it.isFocused) onFocus()
@@ -182,6 +188,20 @@ internal fun SportsLivePanelLine(
                         }
                     }
                     StatusText(line)
+                    val tag = when {
+                        watching -> stringResource(R.string.sports_live_panel_watching)
+                        isNew -> stringResource(R.string.sports_live_panel_new)
+                        else -> null
+                    }
+                    if (tag != null) {
+                        Text(
+                            text = tag,
+                            style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag),
+                            color = if (watching) Colors.TextPrimary else Colors.TextSecondary,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                    }
                     if (focused && okHint != null) {
                         Text(
                             text = okHint,
@@ -192,7 +212,7 @@ internal fun SportsLivePanelLine(
                         )
                     }
                 }
-                if (nowPlaying) {
+                if (nowPlaying || watching) {
                     Box(
                         modifier = Modifier
                             .align(Alignment.CenterStart)
@@ -306,6 +326,48 @@ private fun panelScoreText(text: String, scores: ScoreboardScores.Shown, bold: S
             addStyle(bold, secondAt, secondAt + second.length)
         }
         else -> Unit
+    }
+}
+
+/**
+ * "N more hidden by My sports · Show all" (#167), the last line of Live now's list and of the in-player panel
+ * under My sports: OK ([onClick]) switches to All sports. [height] is the list's row height.
+ */
+@Composable
+internal fun SportsLiveHiddenByMySportsLine(
+    count: Int,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    onFocus: () -> Unit = {},
+    height: androidx.compose.ui.unit.Dp = Size.PanelLine
+) {
+    val shape = RoundedCornerShape(PANEL_LINE_RADIUS)
+    Surface(
+        onClick = onClick,
+        modifier = modifier
+            .fillMaxWidth()
+            .height(height)
+            .onFocusChanged { if (it.isFocused) onFocus() },
+        shape = ClickableSurfaceDefaults.shape(shape),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = SportsLiveTokens.Focus.LIFT),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = Color.Transparent,
+            contentColor = Colors.TextSecondary,
+            focusedContainerColor = SportsLiveFocus.focusedFill(Color.Transparent),
+            focusedContentColor = Colors.TextPrimary,
+            pressedContainerColor = SportsLiveFocus.focusedFill(Color.Transparent),
+            pressedContentColor = Colors.TextPrimary
+        ),
+        border = ClickableSurfaceDefaults.border(focusedBorder = SportsLiveFocus.ring(shape), pressedBorder = SportsLiveFocus.ring(shape))
+    ) {
+        Box(modifier = Modifier.fillMaxSize().padding(start = 8.dp, end = 6.dp), contentAlignment = Alignment.CenterStart) {
+            Text(
+                text = stringResource(R.string.sports_live_hidden_by_my_sports, count),
+                style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
     }
 }
 

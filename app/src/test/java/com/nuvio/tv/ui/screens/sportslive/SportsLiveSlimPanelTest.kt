@@ -173,12 +173,12 @@ class SportsLiveSlimPanelTest {
     }
 
     @Test
-    fun `while a row has focus the order shown is kept and the zaps keep it too`() {
-        val shown = lineupOf(all)
+    fun `while the panel is open the order shown is kept and the zaps keep it too`() {
+        val (shown, order) = freezePanelLineup(lineupOf(all), null)
         val shownKeys = shown.map { it.item.streamKey }
-        // A fresh order (the followed game is no longer followed) is held back under focus.
-        val fresh = groupPanelRows(all.map { if (it == f) it.copy(followed = false) else it }, emptyMap(), ScoresMode.OFF, emptySet(), now, ended)
-        val frozen = panelLineup(fresh, shownKeys)
+        // A fresh order (the followed game is no longer followed) is held back while the panel is open (#164).
+        val fresh = panelLineup(groupPanelRows(all.map { if (it == f) it.copy(followed = false) else it }, emptyMap(), ScoresMode.OFF, emptySet(), now, ended))
+        val (frozen, _) = freezePanelLineup(fresh, order)
         assertEquals(shownKeys, frozen.map { it.item.streamKey })
         val session = sessionOn(a, frozen)
         assertEquals(shownKeys, session.zapOrder.map { session.items[it].streamKey })

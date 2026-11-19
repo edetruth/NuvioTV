@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import com.nuvio.tv.core.sportslive.SportsLiveStreamThresholds
 import com.nuvio.tv.domain.model.ContentType
 import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.domain.model.PosterShape
@@ -280,6 +281,74 @@ class PlayerZapControllerTest {
         assertTrue(navigated.isEmpty())
         assertEquals("g0", SportsLiveZapSessions.activeFor("g0")?.current?.id)
         assertNull(controller.resolving.value)
+    }
+
+    @Test
+    fun `a CH zap waits at most 8 s on a slow lookup and shows Looking for streams first`() = runTest {
+        startOn("a")
+        val controller = controller()
+
+        controller.zap("a", forward = true)
+        runCurrent()
+        assertEquals(listOf("b"), resolveCalls)
+        // No card for a lookup that answers quickly.
+        advanceTimeBy(SportsLiveStreamThresholds.ZAP_LOOKING_CARD_AFTER_MS - 1)
+        runCurrent()
+        assertNull(controller.looking.value)
+        advanceTimeBy(2)
+        runCurrent()
+        assertEquals("b", controller.looking.value?.id)
+        // Still nothing just before 8 s; at 8 s it skips on to the next game.
+        advanceTimeBy(SportsLiveStreamThresholds.ZAP_SKIP_WAIT_MS - SportsLiveStreamThresholds.ZAP_LOOKING_CARD_AFTER_MS - 2)
+        runCurrent()
+        assertTrue(skipped.isEmpty())
+        advanceTimeBy(2)
+        runCurrent()
+        assertEquals(listOf("b"), skipped)
+        assertTrue("b" in cancelled)
+        assertEquals("c", controller.resolving.value?.current?.id)
+        assertNull(controller.looking.value)
+        pending.getValue("c").complete(STREAM)
+        runCurrent()
+        assertEquals(listOf("c" to STREAM), navigated)
+    }
+
+    @Test
+    fun `Skip on the Looking for streams card moves on at once`() = runTest {
+        startOn("a")
+        val controller = controller()
+
+        controller.zap("a", forward = true)
+        runCurrent()
+        // No card yet: OK is left to the player.
+        assertFalse(controller.skip())
+        advanceTimeBy(SportsLiveStreamThresholds.ZAP_LOOKING_CARD_AFTER_MS + 1)
+        runCurrent()
+        assertTrue(controller.skip())
+        runCurrent()
+        assertEquals(listOf("b"), skipped)
+        assertEquals("c", controller.resolving.value?.current?.id)
+    }
+
+    @Test
+    fun `an explicit pick keeps waiting past 8 s for its lookup`() = runTest {
+        startOn("a")
+        val controller = controller()
+
+        controller.pick("a", items[2], items)
+        runCurrent()
+        advanceTimeBy(15_000)
+        runCurrent()
+        assertTrue(skipped.isEmpty())
+        assertTrue(noStream.isEmpty())
+        assertNull(controller.looking.value)
+        assertEquals("c", controller.resolving.value?.current?.id)
+        pending.getValue("c").complete(STREAM)
+        runCurrent()
+        assertEquals(listOf("c" to STREAM), navigated)
+        // The pick waits for the lookup's own 20 s cap (Watch, OK), the CH zap for 8 s.
+        assertEquals(20_000L, SportsLiveZapResolver.TIMEOUT_MS)
+        assertEquals(8_000L, SportsLiveStreamThresholds.ZAP_SKIP_WAIT_MS)
     }
 
     @Test

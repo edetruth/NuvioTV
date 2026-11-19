@@ -19,6 +19,7 @@ import com.nuvio.tv.core.sportslive.scores.TeamLogoBook
 import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveTab
+import kotlin.math.abs
 
 /**
  * The player's live games panel: the section's Live now list (claimed catalogs only, ended games left
@@ -100,7 +101,9 @@ data class SportsLiveZapBanner(
     val switching: Boolean,
     val art: GameArt? = null,
     val chip: ScoreChip? = null,
-    val next: String? = null
+    val next: String? = null,
+    /** A CH± zap's lookup is slow (#158): "Looking for streams…" with Skip (OK) shows. */
+    val looking: Boolean = false
 )
 
 internal fun SportsLiveZapSession.banner(
@@ -153,10 +156,19 @@ data class ZapPanelRow(
      * The row's V2 group (#142, the Scoreboard's [scoreboardGroupOf]): the panel heads and orders its rows by
      * it, and CH+/CH− walk them in that order. [groupPanelRows] sets it from [status].
      */
-    val section: ScoreboardGroup = sectionOf(group)
+    val section: ScoreboardGroup = sectionOf(group),
+    /**
+     * The group the row is listed under (#164): its [section], except while the open panel's order is frozen
+     * ([freezePanelLineup]), where a game that ended since the panel opened stays under its old header, dimmed.
+     */
+    val placed: ScoreboardGroup = section,
+    /** Listed since the panel opened (#164): appended to the end of its group, with a "New" tag. */
+    val isNew: Boolean = false,
+    /** Gone from the list since the panel opened (#164): kept in place, dimmed, until the panel closes. */
+    val gone: Boolean = false
 ) {
-    /** CH+/CH− stop on it (F11): every row but a final or just ended game, which the panel still lists. */
-    val zappable: Boolean get() = section != ScoreboardGroup.JUST_ENDED
+    /** CH+/CH− stop on it (F11): every row but a final, a just ended game or one gone, which the panel still lists. */
+    val zappable: Boolean get() = section != ScoreboardGroup.JUST_ENDED && !gone
 }
 
 /** A row built with no status (tests, the fallback row): its V2 group from its panel [group]. */
@@ -170,7 +182,7 @@ private fun sectionOf(group: ZapPanelGroup): ScoreboardGroup = when (group) {
 /**
  * The panel's [items] grouped by game state (#17): **Live now** first, the game furthest in (earliest
  * start) on top and games with no start after them, then **Starting soon** (within [SOON_WINDOW_MS]),
- * soonest first, then the rest (channels, later games, finished or postponed ones; under Hide until
+ * soonest first ([lineupRankOf] first inside each: followed teams, then live-scored games), then the rest (channels, later games, finished or postponed ones; under Hide until
  * focused too, as the cards label it final, its score still hidden). Followed teams' games stay first inside each group. A game's state comes
  * from its matched score event only when the card's sides sit on it one way round (the chip's rule);
  * otherwise from its start time. [scores] is ignored while Scores is Off. Games found over (#60, [ended]
@@ -187,7 +199,7 @@ internal fun groupPanelRows(
     /** The list says its games are live (Live now, the panel); Upcoming's are not: ESPN alone makes one live there. */
     listedLive: Boolean = true
 ): List<ZapPanelRow> {
-    class Entry(val row: ZapPanelRow, val startMs: Long?, val index: Int)
+    class Entry(val row: ZapPanelRow, val startMs: Long?, val index: Int, val rank: Int)
     val entries = items.mapIndexed { index, item ->
         val endedGame = ended[item.streamKey]
         // A Just ended game keeps the final it was moved on, whatever is tracked now.
@@ -205,14 +217,33 @@ internal fun groupPanelRows(
         val chip = ScoreChips.of(item, event, mode, item.streamKey in revealed)
         val teams = PanelArt.of(item, event, known)
         val art = teams.takeIf { group == ZapPanelGroup.STARTING_SOON }
-        Entry(ZapPanelRow(item, group, chip, art, teams, status, scoreboardGroupOf(status, item)), start, index)
+        // A live score shows only for a game in play that strictly matches its event (any score provider).
+        val rank = lineupRankOf(item, liveScored = group == ZapPanelGroup.LIVE_NOW && event != null)
+        Entry(ZapPanelRow(item, group, chip, art, teams, status, scoreboardGroupOf(status, item)), start, index, rank)
     }
     val order = compareBy<Entry> { it.row.group.ordinal }
-        .thenByDescending { it.row.item.followed }
+        .thenBy { it.rank }
         .thenBy { if (it.row.group >= ZapPanelGroup.OTHER) 0L else it.startMs ?: Long.MAX_VALUE }
         .thenBy { it.index }
     return entries.sortedWith(order).map { it.row }
 }
+
+/**
+ * Where a game sits inside its group (the panel, CH± and Live now share it): followed teams' games first
+ * ([LINEUP_RANK_FOLLOWED]), then games with a live score ([liveScored], [LINEUP_RANK_SCORED]), then the rest; the
+ * group's own order breaks ties. [LINEUP_RANK_BIG_GAME] is kept free between the first two for #137's big games.
+ */
+internal fun lineupRankOf(item: SportsLiveItem, liveScored: Boolean): Int = when {
+    item.followed -> LINEUP_RANK_FOLLOWED
+    // #137: a big game (its score's stakes) will rank LINEUP_RANK_BIG_GAME here.
+    liveScored -> LINEUP_RANK_SCORED
+    else -> LINEUP_RANK_REST
+}
+
+internal const val LINEUP_RANK_FOLLOWED = 0
+internal const val LINEUP_RANK_BIG_GAME = 1
+internal const val LINEUP_RANK_SCORED = 2
+internal const val LINEUP_RANK_REST = 3
 
 /** The panel group of a game's [status]: live, starting soon, just ended, or the rest. */
 internal fun panelGroupOf(status: GameStatus): ZapPanelGroup = when (status) {
@@ -223,58 +254,107 @@ internal fun panelGroupOf(status: GameStatus): ZapPanelGroup = when (status) {
 }
 
 /**
- * [fresh] rows ([groupPanelRows] order) with each group kept in the order of [previous] (stream keys,
- * as last shown): a row the user is on never moves within its group when a score or tick regroups the
- * list (I3). A row may still change group (a game starting, a final), as its header must say so; rows
- * new to the list follow the known ones of their group, in their fresh order. Null [previous]: as is.
- */
-internal fun stabilizePanelRows(fresh: List<ZapPanelRow>, previous: List<String>?): List<ZapPanelRow> {
-    if (previous == null) return fresh
-    val rank = HashMap<String, Int>(previous.size * 2)
-    previous.forEachIndexed { index, key -> rank.putIfAbsent(key, index) }
-    // Stable: rows new to the list keep their fresh order after the known ones.
-    return fresh.sortedWith(compareBy<ZapPanelRow> { it.section.ordinal }.thenBy { rank[it.item.streamKey] ?: Int.MAX_VALUE })
-}
-
-/**
  * The panel's one ordered list (#142), the list the panel shows and CH+/CH− walk: [grouped] ([groupPanelRows]
  * order) listed by V2 group ([ZapPanelRow.section]: live, starting soon, channels, just ended), followed teams'
- * games first inside each group, then as grouped. While a row has focus, [previous] (the order last shown)
- * keeps each group as it was ([stabilizePanelRows]); null takes the fresh order.
+ * games first inside each group, then as grouped. While the panel is open its order is frozen ([freezePanelLineup]).
  */
-internal fun panelLineup(grouped: List<ZapPanelRow>, previous: List<String>? = null): List<ZapPanelRow> {
-    val fresh = grouped.sortedWith(compareBy<ZapPanelRow> { it.section.ordinal }.thenByDescending { it.item.followed })
-    return stabilizePanelRows(fresh, previous)
-}
+internal fun panelLineup(grouped: List<ZapPanelRow>): List<ZapPanelRow> =
+    grouped.sortedWith(compareBy<ZapPanelRow> { it.section.ordinal }.thenByDescending { it.item.followed })
 
 /**
- * Whether the panel may take the fresh order now (I3): when no game row has focus, or on a new minute
- * since the order last shown was taken ([lastMinute], null when none was). Otherwise the rows keep
- * their order under the user's focus ([stabilizePanelRows]).
+ * The open panel's order (#164), taken when it opened: the rows' stream [keys] top to bottom, the group each is
+ * listed under ([placed]), the rows added since ([added]) and each row as last seen ([last]), for one gone since.
  */
-internal fun panelMayReorder(focusedKey: String?, nowMs: Long, lastMinute: Long?): Boolean =
-    focusedKey == null || lastMinute == null || nowMs / PANEL_REORDER_MS != lastMinute
+internal data class FrozenPanelOrder(
+    val keys: List<String>,
+    val placed: Map<String, ScoreboardGroup>,
+    val added: Set<String>,
+    val last: Map<String, ZapPanelRow>
+)
 
-internal const val PANEL_REORDER_MS = 60_000L
+/**
+ * [fresh] ([panelLineup] order) laid out in the [frozen] order of the open panel (#164), and the order to keep
+ * for the next update. Null [frozen] takes [fresh] as the snapshot. Otherwise rows never move: each known row
+ * keeps its place and its group header, its score, clock and status updated in place; a row gone from [fresh]
+ * stays where it was, dimmed ([ZapPanelRow.gone]) and out of the zap order; a row new to the list is appended to
+ * the end of its group, tagged New ([ZapPanelRow.isNew]).
+ */
+internal fun freezePanelLineup(fresh: List<ZapPanelRow>, frozen: FrozenPanelOrder?): Pair<List<ZapPanelRow>, FrozenPanelOrder> {
+    if (frozen == null) {
+        val snapshot = FrozenPanelOrder(
+            keys = fresh.map { it.item.streamKey },
+            placed = fresh.associate { it.item.streamKey to it.section },
+            added = emptySet(),
+            last = fresh.associateBy { it.item.streamKey }
+        )
+        return fresh to snapshot
+    }
+    val freshByKey = fresh.associateBy { it.item.streamKey }
+    val rows = ArrayList<ZapPanelRow>(frozen.keys.size + fresh.size)
+    frozen.keys.forEach { key ->
+        val placed = frozen.placed[key] ?: return@forEach
+        val row = freshByKey[key]
+        if (row != null) {
+            rows += row.copy(placed = placed, isNew = key in frozen.added)
+        } else {
+            frozen.last[key]?.let { rows += it.copy(placed = placed, gone = true) }
+        }
+    }
+    val added = LinkedHashSet(frozen.added)
+    fresh.forEach { row ->
+        val key = row.item.streamKey
+        if (key in frozen.placed) return@forEach
+        // The end of its group's run; with none, where its group would start.
+        val lastOfGroup = rows.indexOfLast { it.placed == row.section }
+        val at = if (lastOfGroup >= 0) {
+            lastOfGroup + 1
+        } else {
+            rows.indexOfFirst { it.placed.ordinal > row.section.ordinal }.takeIf { it >= 0 } ?: rows.size
+        }
+        rows.add(at, row.copy(isNew = true))
+        added += key
+    }
+    val next = FrozenPanelOrder(
+        keys = rows.map { it.item.streamKey },
+        placed = rows.associate { it.item.streamKey to it.placed },
+        added = added,
+        last = frozen.last + freshByKey
+    )
+    return rows to next
+}
+
+/** The open panel's order is taken afresh after this long without a key pressed in it (#164). */
+internal const val PANEL_IDLE_REORDER_MS = 2 * 60_000L
 
 /**
  * A line of the panel's list under its pinned **Now playing** row (#140): a group's [Header] (its [count] of
- * games in that run), the thin [FromTheTop] divider where the lineup wraps, or a [Game] row.
+ * games in that run), a [Game] row (the game playing too, in its own place, marked [Game.watching]), or the last
+ * line, [HiddenByMySports] (#167).
  */
 internal sealed interface PanelGuideEntry {
     val key: String
 
-    data class Header(val section: ScoreboardGroup, val count: Int, val segment: Int) : PanelGuideEntry {
-        override val key: String get() = "group_${segment}_$section"
+    data class Header(val section: ScoreboardGroup, val count: Int, val run: Int) : PanelGuideEntry {
+        override val key: String get() = "group_${run}_$section"
     }
 
-    data object FromTheTop : PanelGuideEntry {
-        override val key: String get() = "from_the_top"
-    }
-
-    data class Game(val row: ZapPanelRow) : PanelGuideEntry {
+    data class Game(val row: ZapPanelRow, val watching: Boolean = false) : PanelGuideEntry {
         override val key: String get() = row.item.streamKey
     }
+
+    /** "N more hidden by My sports · Show all" (#167): OK switches the panel to All sports. */
+    data class HiddenByMySports(val count: Int) : PanelGuideEntry {
+        override val key: String get() = HIDDEN_BY_MY_SPORTS_KEY
+    }
+}
+
+internal const val HIDDEN_BY_MY_SPORTS_KEY = "hidden_by_my_sports"
+
+/** The key focus may land on for [entry]: a game row (never the game playing's own place) or the last line. */
+private fun focusKeyOf(entry: PanelGuideEntry): String? = when (entry) {
+    is PanelGuideEntry.Game -> entry.key.takeUnless { entry.watching }
+    is PanelGuideEntry.HiddenByMySports -> entry.key
+    is PanelGuideEntry.Header -> null
 }
 
 /**
@@ -282,49 +362,56 @@ internal sealed interface PanelGuideEntry {
  * when the lineup leaves it out) and the list [entries] under it.
  */
 internal data class PanelGuide(val nowPlaying: ZapPanelRow?, val entries: List<PanelGuideEntry>) {
-    /** The list's game rows, top to bottom. */
+    /** The list's game rows, top to bottom (the game playing's own place included). */
     val rows: List<ZapPanelRow> get() = entries.mapNotNull { (it as? PanelGuideEntry.Game)?.row }
 
-    /** [key]'s index in [entries] (the LazyColumn's item index); -1 when not listed. */
-    fun indexOf(key: String?): Int = entries.indexOfFirst { it is PanelGuideEntry.Game && it.row.item.streamKey == key }
+    /** The first line focus can land on, top down; null when none. */
+    val firstFocusableKey: String? get() = entries.firstNotNullOfOrNull(::focusKeyOf)
+
+    /** The entry keyed [key]'s index in [entries] (the LazyColumn's item index); -1 when not listed. */
+    fun indexOf(key: String?): Int = if (key == null) -1 else entries.indexOfFirst { it.key == key }
+
+    /**
+     * Where focus goes when its row is no longer listed (#167): the focusable line nearest list index [lastIndex],
+     * the lower one on a tie; null when there is none.
+     */
+    fun nearestFocusable(lastIndex: Int): String? {
+        var best: String? = null
+        var bestDistance = Int.MAX_VALUE
+        entries.forEachIndexed { index, entry ->
+            val key = focusKeyOf(entry) ?: return@forEachIndexed
+            val distance = abs(index - lastIndex)
+            if (distance < bestDistance || (distance == bestDistance && index > lastIndex)) {
+                best = key
+                bestDistance = distance
+            }
+        }
+        return best
+    }
 }
 
 /**
- * The panel's [lineup] (#142, the one list CH± walk) laid out under Now playing (#140), the way a cable guide
- * starts at your channel: the game after [currentKey] first (what CH− / ▼ plays), on to the lineup's end, then
- * a "From the top" divider and the lineup's first game on to the one just before the current one (what CH+ /
- * ▲ plays). The current game is pinned, never repeated. Games CH± pass over (finals, [ZapPanelRow.zappable])
- * stay listed, in their own group after the wrapped ones, so the list's game rows down to them are exactly
- * the zap order. Each group's header starts its run within a segment. With the current game not in [lineup],
- * the lineup in its own order (CH− plays its first game, CH+ its last).
+ * The panel's [lineup] (#142, the one list CH± walk) laid out under Now playing (#140), in its own order: a
+ * header starts each run of one group ([ZapPanelRow.placed]). The game playing ([currentKey]) is pinned above the
+ * list and also listed in its own place, marked watching, so the order reads round it: CH− plays the game after
+ * that place, CH+ the one before it, both wrapping at the ends. [hiddenByMySports] above 0 ends the list with the
+ * "more hidden by My sports" line (#167).
  */
-internal fun panelGuide(lineup: List<ZapPanelRow>, currentKey: String?): PanelGuide {
-    val here = lineup.indexOfFirst { it.item.streamKey == currentKey }
-    val after = if (here < 0) lineup else lineup.subList(here + 1, lineup.size)
-    val before = if (here < 0) emptyList() else lineup.subList(0, here)
-    val ahead = after.filter { it.zappable }
-    val wrapped = before.filter { it.zappable }
-    val passedOver = lineup.filterIndexed { index, row -> index != here && !row.zappable }
+internal fun panelGuide(lineup: List<ZapPanelRow>, currentKey: String?, hiddenByMySports: Int = 0): PanelGuide {
     val entries = buildList {
-        addSegment(ahead, segment = 0)
-        if (ahead.isNotEmpty() && wrapped.isNotEmpty()) add(PanelGuideEntry.FromTheTop)
-        addSegment(wrapped, segment = 1)
-        addSegment(passedOver, segment = 2)
+        var start = 0
+        var run = 0
+        while (start < lineup.size) {
+            val section = lineup[start].placed
+            var end = start
+            while (end < lineup.size && lineup[end].placed == section) end++
+            add(PanelGuideEntry.Header(section, end - start, run++))
+            for (i in start until end) add(PanelGuideEntry.Game(lineup[i], watching = lineup[i].item.streamKey == currentKey))
+            start = end
+        }
+        if (hiddenByMySports > 0) add(PanelGuideEntry.HiddenByMySports(hiddenByMySports))
     }
-    return PanelGuide(lineup.getOrNull(here), entries)
-}
-
-/** [rows] with a header above each run of one group. */
-private fun MutableList<PanelGuideEntry>.addSegment(rows: List<ZapPanelRow>, segment: Int) {
-    var start = 0
-    while (start < rows.size) {
-        val section = rows[start].section
-        var end = start
-        while (end < rows.size && rows[end].section == section) end++
-        add(PanelGuideEntry.Header(section, end - start, segment))
-        for (i in start until end) add(PanelGuideEntry.Game(rows[i]))
-        start = end
-    }
+    return PanelGuide(lineup.firstOrNull { it.item.streamKey == currentKey }, entries)
 }
 
 /** The panel rows' drawn teams, kept per game, event and logo-map revision: the rows are regrouped on every tick and score (#66). */
@@ -408,12 +495,14 @@ data class SportsLiveZapPanelState(
      * The game playing as a row (#140), for the pinned Now playing row: its row in [rows], else built on its
      * own (the chip or My sports leaves it out of the list). Null when it is not known at all.
      */
-    val nowPlayingRow: ZapPanelRow? = rows.firstOrNull { it.item.streamKey == currentKey }
+    val nowPlayingRow: ZapPanelRow? = rows.firstOrNull { it.item.streamKey == currentKey },
+    /** Games My sports hides while the panel is on All (My sports, #167): the list's last line offers them. */
+    val hiddenByMySports: Int = 0
 ) {
     val items: List<SportsLiveItem> = rows.map { it.item }
 
-    /** The list under Now playing, wrapped round from the game after the current one (#140). */
-    internal val guide: PanelGuide by lazy { panelGuide(rows, currentKey) }
+    /** The list under Now playing, in the lineup's own order (#140, #164). */
+    internal val guide: PanelGuide by lazy { panelGuide(rows, currentKey, hiddenByMySports) }
 }
 
 /**

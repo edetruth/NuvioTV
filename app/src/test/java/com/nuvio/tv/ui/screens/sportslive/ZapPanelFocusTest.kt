@@ -7,8 +7,10 @@ import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.scores.EspnFixtures
 import com.nuvio.tv.core.sportslive.scores.EspnLeague
+import com.nuvio.tv.core.sportslive.scores.ChipScore
 import com.nuvio.tv.core.sportslive.scores.EspnLeagueMap
 import com.nuvio.tv.core.sportslive.scores.LiveScoresRepository
+import com.nuvio.tv.core.sportslive.scores.ScoreChip
 import com.nuvio.tv.core.sportslive.scores.ScoreProvider
 import com.nuvio.tv.core.sportslive.scores.ScoreSettings
 import com.nuvio.tv.core.sportslive.scores.ScoreboardResult
@@ -46,7 +48,7 @@ import java.io.File
 import java.time.LocalDate
 import java.time.ZoneOffset
 
-/** I3 and M11: the player panel keeps the focused game in place, and its dual picker leaves finals out. */
+/** #164 and M11: the open player panel keeps its order, focus by key, and its dual picker leaves finals out. */
 @OptIn(ExperimentalCoroutinesApi::class)
 class ZapPanelFocusTest {
 
@@ -63,50 +65,82 @@ class ZapPanelFocusTest {
 
     private fun row(key: String, group: ZapPanelGroup) = ZapPanelRow(item(key, null), group, chip = null, art = null)
 
+    private fun keys(rows: List<ZapPanelRow>) = rows.map { it.item.id }
+
     @Test
-    fun `a regroup keeps each group in the order shown, so the focused game keeps its key and place`() {
-        val shown = listOf(row("a", ZapPanelGroup.LIVE_NOW), row("b", ZapPanelGroup.LIVE_NOW), row("c", ZapPanelGroup.LIVE_NOW))
-        // A score arrives: fresh order puts c first, and a new game d comes in.
+    fun `the frozen order keeps every row in place while scores and status update in place`() {
+        val opened = listOf(row("a", ZapPanelGroup.LIVE_NOW), row("b", ZapPanelGroup.LIVE_NOW), row("c", ZapPanelGroup.STARTING_SOON))
+        val (shown, frozen) = freezePanelLineup(opened, null)
+        assertEquals(opened, shown)
+        // A score arrives and c starts: the fresh order is c, b, a.
+        val chip = ScoreChip.Live("Q1", ChipScore(1, 0))
         val fresh = listOf(
-            row("c", ZapPanelGroup.LIVE_NOW), row("d", ZapPanelGroup.LIVE_NOW),
-            row("a", ZapPanelGroup.LIVE_NOW), row("b", ZapPanelGroup.LIVE_NOW)
+            row("c", ZapPanelGroup.LIVE_NOW), row("b", ZapPanelGroup.LIVE_NOW).copy(chip = chip), row("a", ZapPanelGroup.LIVE_NOW)
         )
-        val stable = stabilizePanelRows(fresh, shown.map { it.item.streamKey })
-
-        assertEquals(listOf("a", "b", "c", "d"), stable.map { it.item.id })
-        // The focused row (b) is found by key at the same list index (one header above the group).
-        val focused = shown[1].item.streamKey
-        assertEquals(panelGuide(shown, null).indexOf(focused), panelGuide(stable, null).indexOf(focused))
-        assertEquals(2, panelGuide(stable, null).indexOf(focused))
-        assertEquals(-1, panelGuide(stable, null).indexOf("missing"))
+        val (again, _) = freezePanelLineup(fresh, frozen)
+        assertEquals(listOf("a", "b", "c"), keys(again))
+        // In place: b's new score, c's new group, still listed under the header it opened under.
+        assertEquals(chip, again[1].chip)
+        assertEquals(ScoreboardGroup.LIVE, again[2].section)
+        assertEquals(ScoreboardGroup.STARTING_SOON, again[2].placed)
+        assertTrue(again.none { it.isNew || it.gone })
     }
 
     @Test
-    fun `a game changing group still moves, under its new header, the rest keep their order`() {
-        val shown = listOf(row("a", ZapPanelGroup.LIVE_NOW), row("b", ZapPanelGroup.LIVE_NOW), row("c", ZapPanelGroup.STARTING_SOON))
-        val fresh = listOf(row("c", ZapPanelGroup.LIVE_NOW), row("b", ZapPanelGroup.LIVE_NOW), row("a", ZapPanelGroup.JUST_ENDED))
-        val stable = stabilizePanelRows(fresh, shown.map { it.item.streamKey })
-
-        assertEquals(listOf("b", "c", "a"), stable.map { it.item.id })
-        assertEquals(listOf(ZapPanelGroup.LIVE_NOW, ZapPanelGroup.LIVE_NOW, ZapPanelGroup.JUST_ENDED), stable.map { it.group })
-        // Two groups: headers at 0 and 3, a at index 4.
-        assertEquals(4, panelGuide(stable, null).indexOf(stable[2].item.streamKey))
-        assertEquals(fresh, stabilizePanelRows(fresh, null))
+    fun `new games go to the end of their group, tagged New, never above`() {
+        val (_, frozen) = freezePanelLineup(
+            listOf(row("a", ZapPanelGroup.LIVE_NOW), row("b", ZapPanelGroup.LIVE_NOW), row("s", ZapPanelGroup.STARTING_SOON)), null
+        )
+        // d (live) and t (starting soon) come first in the fresh order; o is of a group the panel had none of.
+        val fresh = listOf(
+            row("d", ZapPanelGroup.LIVE_NOW), row("a", ZapPanelGroup.LIVE_NOW), row("b", ZapPanelGroup.LIVE_NOW),
+            row("t", ZapPanelGroup.STARTING_SOON), row("s", ZapPanelGroup.STARTING_SOON), row("o", ZapPanelGroup.OTHER)
+        )
+        val (shown, next) = freezePanelLineup(fresh, frozen)
+        assertEquals(listOf("a", "b", "d", "s", "t", "o"), keys(shown))
+        assertEquals(listOf("d", "t", "o"), keys(shown.filter { it.isNew }))
+        // The next update keeps them where they landed, still New.
+        val (later, _) = freezePanelLineup(fresh.reversed(), next)
+        assertEquals(keys(shown), keys(later))
+        assertEquals(listOf("d", "t", "o"), keys(later.filter { it.isNew }))
     }
 
     @Test
-    fun `the order changes under focus only on a new minute, and at once with nothing focused`() {
-        val minute = 1_000L
-        val inMinute = minute * PANEL_REORDER_MS + 30_000L
-        assertTrue(panelMayReorder(focusedKey = null, nowMs = inMinute, lastMinute = minute))
-        assertFalse(panelMayReorder(focusedKey = "a|b", nowMs = inMinute, lastMinute = minute))
-        assertTrue(panelMayReorder(focusedKey = "a|b", nowMs = (minute + 1) * PANEL_REORDER_MS, lastMinute = minute))
-        // Nothing shown yet: the first list is taken as is.
-        assertTrue(panelMayReorder(focusedKey = "a|b", nowMs = inMinute, lastMinute = null))
+    fun `ended and vanished games stay in place, dimmed and out of the zap order`() {
+        val (_, frozen) = freezePanelLineup(
+            listOf(row("a", ZapPanelGroup.LIVE_NOW), row("b", ZapPanelGroup.LIVE_NOW), row("c", ZapPanelGroup.LIVE_NOW)), null
+        )
+        // a ends (Just ended), b leaves the list altogether.
+        val (shown, _) = freezePanelLineup(listOf(row("c", ZapPanelGroup.LIVE_NOW), row("a", ZapPanelGroup.JUST_ENDED)), frozen)
+        assertEquals(listOf("a", "b", "c"), keys(shown))
+        assertEquals(ScoreboardGroup.JUST_ENDED, shown[0].section)
+        assertEquals(ScoreboardGroup.LIVE, shown[0].placed)
+        assertTrue(shown[1].gone)
+        assertEquals(listOf(false, false, true), shown.map { it.zappable })
+        // One header over the run as it opened.
+        val guide = panelGuide(shown, null)
+        assertEquals(listOf(PanelGuideEntry.Header(ScoreboardGroup.LIVE, 3, run = 0)), guide.entries.filterIsInstance<PanelGuideEntry.Header>())
     }
 
     @Test
-    fun `while a row is focused the panel keeps its order when the list changes, and takes the new one when nothing is`() =
+    fun `focus is kept by key across an update, and a removed line falls back to the nearest`() {
+        val (opened, frozen) = freezePanelLineup(
+            listOf(row("a", ZapPanelGroup.LIVE_NOW), row("b", ZapPanelGroup.LIVE_NOW), row("c", ZapPanelGroup.LIVE_NOW)), null
+        )
+        val focused = opened[1].item.streamKey
+        val before = panelGuide(opened, null).indexOf(focused)
+        val (updated, _) = freezePanelLineup(
+            listOf(row("c", ZapPanelGroup.LIVE_NOW), row("b", ZapPanelGroup.LIVE_NOW), row("a", ZapPanelGroup.LIVE_NOW)), frozen
+        )
+        assertEquals(before, panelGuide(updated, null).indexOf(focused))
+        // A list without b (a new chip): focus goes to the line nearest where b was.
+        val narrowed = panelGuide(listOf(opened[0], opened[2]), null)
+        assertEquals(-1, narrowed.indexOf(focused))
+        assertEquals(opened[2].item.streamKey, narrowed.nearestFocusable(before))
+    }
+
+    @Test
+    fun `while the panel is open its order stays as it opened, and closing takes the fresh one`() =
         runTest(mainDispatcherRule.dispatcher) {
             // Live now is earliest start first: a, then b.
             val a = item("a", now - 2 * HOUR)
@@ -116,20 +150,24 @@ class ZapPanelFocusTest {
 
             viewModel.openPanel()
             assertEquals(listOf("a", "b"), viewModel.panel.first { it?.items?.size == 2 }!!.items.map { it.id })
-            viewModel.onPanelRowFocus(b.streamKey)
-
-            // a's start moves after b's: the fresh order is b, a, but the focused panel keeps a, b.
+            // a's start moves after b's: the fresh order is b, a, but the open panel keeps a, b, updated in place.
             latest.value = SportsLiveLoad(listOf(a.copy(startMs = now - HOUR / 2), b), emptyList(), 1L, setOf(CATALOG))
             runCurrent()
             assertEquals(listOf("a", "b"), viewModel.panel.value!!.items.map { it.id })
             assertEquals(now - HOUR / 2, viewModel.panel.value!!.items.first().startMs)
-
-            // With no row focused, the next change takes the fresh order.
-            viewModel.onPanelRowFocus(null)
-            latest.value = SportsLiveLoad(listOf(a.copy(startMs = now - HOUR / 3), b), emptyList(), 2L, setOf(CATALOG))
+            // A new game arrives: last, tagged New.
+            val c = item("c", now - 3 * HOUR)
+            latest.value = SportsLiveLoad(listOf(a.copy(startMs = now - HOUR / 2), b, c), emptyList(), 2L, setOf(CATALOG))
             runCurrent()
-            assertEquals(listOf("b", "a"), viewModel.panel.value!!.items.map { it.id })
+            assertEquals(listOf("a", "b", "c"), viewModel.panel.value!!.items.map { it.id })
+            assertTrue(viewModel.panel.value!!.rows.last().isNew)
 
+            // Closed and opened again: the fresh order.
+            viewModel.closePanel()
+            runCurrent()
+            viewModel.openPanel()
+            runCurrent()
+            assertEquals(listOf("c", "b", "a"), viewModel.panel.first { it?.items?.size == 3 }!!.items.map { it.id })
             viewModel.closePanel()
         }
 

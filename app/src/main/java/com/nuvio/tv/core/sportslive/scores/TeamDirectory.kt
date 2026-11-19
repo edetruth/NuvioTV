@@ -1,5 +1,6 @@
 package com.nuvio.tv.core.sportslive.scores
 
+import com.nuvio.tv.core.sportslive.Memo
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.squareup.moshi.JsonClass
 import com.squareup.moshi.Moshi
@@ -40,6 +41,10 @@ class TeamDirectory(private val maxLeagues: Int = MAX_LEAGUES) {
 
     private val leagues = LinkedHashMap<String, Entry>(16, 0.75f, true)
 
+    /** Bumped whenever a league is added or replaced: [leaguesHolding]'s answers are kept per generation. */
+    @Volatile
+    private var generation = 0L
+
     /** Called after a league is added or replaced (the [TeamLogoBook] bumps its revision: cards redraw). */
     @Volatile
     internal var onChange: (() -> Unit)? = null
@@ -49,6 +54,7 @@ class TeamDirectory(private val maxLeagues: Int = MAX_LEAGUES) {
         val entry = Entry(teams, fetchedAt, teams.map { TeamLogoBook.namesOf(it.asScoreTeam()) })
         val dropped = ArrayList<EspnLeague>()
         synchronized(this) {
+            generation++
             leagues[league.path] = entry
             val iterator = leagues.keys.iterator()
             while (leagues.size > maxLeagues && iterator.hasNext()) {
@@ -85,6 +91,21 @@ class TeamDirectory(private val maxLeagues: Int = MAX_LEAGUES) {
         }
         if (keys.isEmpty()) return null
         return found(keys).singleOrNull()?.let(entry.teams::get)
+    }
+
+    /**
+     * The loaded leagues whose list holds both [first] and [second] as two different teams (#167): a card that
+     * names no sport is told by its teams. Kept per pair and directory generation (no regex work per call).
+     */
+    fun leaguesHolding(first: String, second: String): List<EspnLeague> = holding(Triple(first, second, generation))
+
+    private val holding = Memo<Triple<String, String, Long>, List<EspnLeague>>(HOLDING_MEMO) { (first, second, _) ->
+        val loaded = synchronized(this) { leagues.keys.toList() }.mapNotNull(::leagueOf)
+        loaded.filter { league ->
+            val a = resolve(league, first) ?: return@filter false
+            val b = resolve(league, second) ?: return@filter false
+            a.id != b.id
+        }
     }
 
     /**
@@ -137,6 +158,8 @@ class TeamDirectory(private val maxLeagues: Int = MAX_LEAGUES) {
     companion object {
         /** Leagues kept in memory and on disk. */
         const val MAX_LEAGUES = 48
+
+        private const val HOLDING_MEMO = 2_048
 
         /** A list is fetched again after a week. */
         const val REFRESH_MS = 7L * 24 * 60 * 60 * 1000

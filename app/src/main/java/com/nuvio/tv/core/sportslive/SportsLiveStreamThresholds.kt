@@ -74,6 +74,15 @@ object SportsLiveStreamThresholds {
     /** Each addon's stream answer for a sports lookup may take this long, in the background (#158). */
     const val ADDON_LOOKUP_TIMEOUT_MS = 45_000L
 
+    /**
+     * A CH± zap waits at most this long for its game's lookup before skipping on (#158 follow-up); an explicit
+     * Watch or OK (a panel pick) keeps [LOOKUP_HARD_CAP_MS]. The addons keep answering in the background.
+     */
+    const val ZAP_SKIP_WAIT_MS = 8_000L
+
+    /** A CH± zap's lookup still running this long shows "Looking for streams…" with Skip. */
+    const val ZAP_LOOKING_CARD_AFTER_MS = 1_500L
+
     /** A zap that lands on games with no streams skips at most this many before giving up. */
     const val MAX_ZAP_SKIPS = 5
 

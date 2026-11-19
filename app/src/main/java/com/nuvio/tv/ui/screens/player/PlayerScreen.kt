@@ -936,6 +936,13 @@ fun PlayerScreen(
                         }
                         return@onKeyEvent true
                     }
+                    // Sports & Live (#158): OK on the "Looking for streams…" card skips on now.
+                    if (keyEvent.nativeKeyEvent.repeatCount == 0 &&
+                        com.nuvio.tv.core.sportslive.alerts.SportsLiveAlertKeys.isOk(keyEvent.nativeKeyEvent.keyCode) &&
+                        sportsLiveZap.skipLookup()
+                    ) {
+                        return@onKeyEvent true
+                    }
                     // Sports & Live zap: only for a player with a zap session, with the controls hidden.
                     if (!uiState.showControls && sportsLiveZapKey(keyEvent.nativeKeyEvent.keyCode, partyActive)) {
                         return@onKeyEvent true

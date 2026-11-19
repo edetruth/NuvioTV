@@ -1048,7 +1048,7 @@ class SportsLiveViewModelTest {
     private fun teamsOf(name: String) = SportsLiveTeams.parse(name)
 
     @Test
-    fun `My sports scopes Live now and Upcoming, keeps followed and unknown games, and All sports shows everything`() = runTest {
+    fun `My sports scopes Live now and Upcoming, keeps followed games, hides unknown ones, and All sports shows everything`() = runTest {
         val nba = item("nba", isLive = true, sport = "Basketball", name = "Lakers vs Celtics", startMs = NOW - HOUR)
         val cricket = item("cri", isLive = true, sport = "Cricket", name = "India vs Australia", startMs = NOW - HOUR)
         val followedCricket = item("fc", isLive = true, sport = "Cricket", name = "England vs Pakistan", startMs = NOW - HOUR)
@@ -1067,17 +1067,21 @@ class SportsLiveViewModelTest {
         advanceUntilIdle()
 
         val liveNow = viewModel.uiState.value
-        assertEquals(setOf("nba", "fc", "unk"), liveNow.visibleItems.map { it.id }.toSet())
+        // #167: a game whose sport cannot be told is hidden under My sports.
+        assertEquals(setOf("nba", "fc"), liveNow.visibleItems.map { it.id }.toSet())
         assertTrue(liveNow.mySportsScoped)
         assertTrue(SportsLiveUiState.ALL_SPORTS_FILTER in liveNow.filters)
         // The counts follow My sports; All sports counts every game.
-        assertEquals(3, liveNow.filterCounts[null])
+        assertEquals(2, liveNow.filterCounts[null])
         assertEquals(4, liveNow.filterCounts[SportsLiveUiState.ALL_SPORTS_FILTER])
-        assertEquals(3, liveNow.countOf(SportsLiveTab.LIVE_NOW))
+        assertEquals(2, liveNow.countOf(SportsLiveTab.LIVE_NOW))
+        // The list's last line: the cricket game and the unknown one.
+        assertEquals(2, liveNow.hiddenByMySports)
 
         viewModel.selectFilter(SportsLiveUiState.ALL_SPORTS_FILTER)
         runCurrent()
         assertEquals(setOf("nba", "cri", "fc", "unk"), viewModel.uiState.value.visibleItems.map { it.id }.toSet())
+        assertEquals(0, viewModel.uiState.value.hiddenByMySports)
         // The session started here carries every game, so the player can reach them all.
         assertTrue(viewModel.uiState.value.zapItems.any { it.id == "cri" })
 

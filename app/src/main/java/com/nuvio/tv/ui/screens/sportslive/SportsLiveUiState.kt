@@ -28,6 +28,8 @@ data class SportsLiveUiState(
     val selectedFilter: String? = null,
     /** My sports is picked and scopes [selectedTab] (#146): All reads "My sports"; [ALL_SPORTS_FILTER] is offered while it hides games. */
     val mySportsScoped: Boolean = false,
+    /** Live now games My sports hides under My sports (#167), for the list's last "N more hidden by My sports · Show all" line; 0: none. */
+    val hiddenByMySports: Int = 0,
     /**
      * Each chip's game count (#79): All (null), "★ My teams" and each value of [filters], over the tab's
      * list (Live now leaves its Just ended strip out, as its tab count does); a chip missing here has none.

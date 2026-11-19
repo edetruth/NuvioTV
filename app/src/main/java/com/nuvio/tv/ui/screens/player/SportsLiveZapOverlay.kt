@@ -40,7 +40,9 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
@@ -85,6 +87,8 @@ import com.nuvio.tv.ui.screens.sportslive.SportsLiveFilterOption
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveGameRequests
 import com.nuvio.tv.ui.screens.sportslive.SportsLivePanelHeader
 import com.nuvio.tv.ui.screens.sportslive.SportsLivePanelLine
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveHiddenByMySportsLine
+import com.nuvio.tv.ui.util.dpadRepeatThrottle
 import com.nuvio.tv.ui.screens.sportslive.SportsLivePanelMenu
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens
 import com.nuvio.tv.core.sportslive.displayName
@@ -107,6 +111,7 @@ import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualSessions
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLivePip
 import com.nuvio.tv.ui.theme.NuvioTheme
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * The Sports & Live zap overlay of a player with a zap session: the banner naming the game after a
@@ -230,11 +235,17 @@ internal fun BoxScope.SportsLiveZapOverlay(
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
-    LaunchedEffect(panelOpen) { previewViewModel.onPanelOpen(panelOpen) }
+    LaunchedEffect(panelOpen) {
+        previewViewModel.onPanelOpen(panelOpen)
+        // The one preview player lives while the panel is open; closed, it is freed (its codec was let go on stop).
+        if (!panelOpen) previewPlayer.release()
+    }
     val previewState by previewViewModel.state.collectAsState()
+    val previewsAllowed by previewViewModel.allowed.collectAsState()
     val previewPlaying = previewState as? SportsLivePreviewState.Playing
     LaunchedEffect(previewPlaying?.item?.previewKey, previewPlaying?.stream) {
-        if (previewPlaying == null) previewPlayer.release() else previewPlayer.play(previewPlaying.item, previewPlaying.stream)
+        // #167: a focus move only stops the preview (no player released or built on the main thread per move).
+        if (previewPlaying == null) previewPlayer.stop() else previewPlayer.play(previewPlaying.item, previewPlaying.stream)
     }
     DisposableEffect(previewPlayer) {
         onDispose {
@@ -284,9 +295,12 @@ internal fun BoxScope.SportsLiveZapOverlay(
                 onChip = viewModel::onPanelChip,
                 onRowFocus = viewModel::onPanelRowFocus,
                 onPreviewFocus = { item -> previewViewModel.onFocus(item, state.currentKey) },
+                onKeysRepeating = previewViewModel::onKeysRepeating,
                 preview = previewPlaying,
+                previewsAllowed = previewsAllowed,
                 previewPlayer = previewPlayer,
-                onKey = viewModel::onPanelKey
+                onKey = viewModel::onPanelKey,
+                open = panelOpen
             )
         }
     }
@@ -485,16 +499,40 @@ private fun ZapBanner(banner: SportsLiveZapBanner) {
                 )
             }
         }
+        if (banner.looking) {
+            // #158: a CH± zap's slow lookup; Skip is the card's one action (OK), drawn selected.
+            Spacer(modifier = Modifier.height(10.dp))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text(
+                    text = stringResource(R.string.sports_live_zap_looking),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = NuvioTheme.extendedColors.textSecondary,
+                    maxLines = 1
+                )
+                Text(
+                    text = stringResource(R.string.sports_live_zap_skip),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = Color.Black,
+                    maxLines = 1,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(NuvioTheme.radii.sm))
+                        .background(Color.White)
+                        .padding(horizontal = 14.dp, vertical = 4.dp)
+                )
+            }
+        }
     }
 }
 
 /**
  * The games live now, from the left edge (#140): a slim column of one-line rows over a soft fade, so the game
  * stays visible beside it. Under one compact filter (#68: on it Left and Right move along the options), the
- * game playing is pinned as **Now playing**, where focus opens; below it the lineup like a cable guide, from
- * the game after it (down / CH-) round to the one before it (CH+), with "From the top" where it wraps
- * ([SportsLiveZapPanelState.guide]). Left or Right closes the panel (Back is handled by the player), and
- * Up/Down stay inside it. OK on a game zaps to it; Hold OK opens its menu ([onLongPick]).
+ * game playing is pinned as **Now playing**, where focus opens; below it the lineup in its own order, the game
+ * playing listed in its place too, marked ▶ Watching ([SportsLiveZapPanelState.guide]), so CH− (the game after
+ * it) and CH+ (the one before it) read off the list. Under My sports the list may end with "N more hidden by My
+ * sports · Show all" (#167). Left or Right closes the panel (Back is handled by the player), and Up/Down stay
+ * inside it. OK on a game zaps to it; Hold OK opens its menu ([onLongPick]). Focus is kept by row key: a row that
+ * leaves the list hands focus to the nearest one, and focus lost while the panel is [open] is given back (#167).
  */
 @Composable
 private fun LiveGamesPanel(
@@ -511,55 +549,106 @@ private fun LiveGamesPanel(
     onRowFocus: (String?) -> Unit,
     /** The focused row's game for the corner preview (#83); null when no row has focus. */
     onPreviewFocus: (SportsLiveItem?) -> Unit,
+    /** A D-pad key is held, its repeats scrolling the list (true), or released: no preview meanwhile (#167). */
+    onKeysRepeating: (Boolean) -> Unit,
     /** The corner preview loaded in [previewPlayer], null when none plays. */
     preview: SportsLivePreviewState.Playing?,
+    /** Previews may play: the corner's room is kept, so the list never jumps as one starts or stops (#167). */
+    previewsAllowed: Boolean,
     previewPlayer: SportsLivePreviewPlayer,
     /** Any key pressed inside the panel (Hide until focused reveals only after one). */
-    onKey: () -> Unit
+    onKey: () -> Unit,
+    /** The panel is open (false while it fades out): only then is lost focus given back. */
+    open: Boolean
 ) {
-    // #140: the list starts at its top (the game after the one playing), never scrolled to centre one.
+    // #140: the list starts at its top, never scrolled to centre one.
     val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
     val nowFocusRequester = remember { FocusRequester() }
-    val firstRowFocusRequester = remember { FocusRequester() }
     val emptyFocusRequester = remember { FocusRequester() }
     val filterFocusRequester = remember { FocusRequester() }
+    // #167: one requester per focusable line, by key: focus is kept and given back by key, never by index.
+    val lineRequesters = remember { HashMap<String, FocusRequester>() }
+    fun requesterOf(key: String): FocusRequester = lineRequesters.getOrPut(key) { FocusRequester() }
     val guide = state.guide
     val nowRow = guide.nowPlaying ?: state.nowPlayingRow
-    val firstRowKey = guide.rows.firstOrNull()?.item?.streamKey
+    val nowKey = nowRow?.item?.streamKey
+    val firstKey = guide.firstFocusableKey
     // While the filter has focus, an option that empties (or fills) the list leaves focus on it.
     var filterFocused by remember { mutableStateOf(false) }
-    // The game row with focus, by stream key (null on the filter).
+    // The line with focus, by key (a game's stream key, the pinned row's too; null on the filter), and the list
+    // index it was last at, where focus falls back to should its line go.
     var focusedKey by remember { mutableStateOf<String?>(null) }
+    var focusedIndex by remember { mutableIntStateOf(-1) }
+    var panelHasFocus by remember { mutableStateOf(false) }
     val currentOnPreviewFocus by rememberUpdatedState(onPreviewFocus)
     // The preview follows the focused row; none while the filter has focus (#83).
-    val focusedItem = (state.items + listOfNotNull(nowRow?.item)).firstOrNull { it.streamKey == focusedKey }
+    val focusedItem = remember(state, focusedKey) {
+        state.rows.firstOrNull { it.item.streamKey == focusedKey }?.item ?: nowRow?.item?.takeIf { it.streamKey == focusedKey }
+    }
     LaunchedEffect(focusedItem?.streamKey) { currentOnPreviewFocus(focusedItem) }
     // One option (All) filters nothing: no filter then.
     val filterShown = state.chips.size > 1
 
+    /** Brings line [key] into view (scrolled to only when it is not laid out wholly) and focuses it. */
+    suspend fun focusLine(key: String) {
+        val index = guide.indexOf(key)
+        if (index < 0) return
+        if (!listState.isFullyVisible(index)) listState.scrollToItem(index)
+        withFrameNanos { }
+        runCatching { requesterOf(key).requestFocus() }
+    }
+
     // #140: focus opens on Now playing; on the first game when the game playing is unknown, else the empty line.
-    LaunchedEffect(nowRow == null, guide.rows.isEmpty()) {
+    LaunchedEffect(nowRow == null, firstKey == null) {
         if (filterFocused) return@LaunchedEffect
-        runCatching {
-            when {
-                nowRow != null -> nowFocusRequester.requestFocus()
-                guide.rows.isNotEmpty() -> firstRowFocusRequester.requestFocus()
-                else -> emptyFocusRequester.requestFocus()
-            }
+        when {
+            nowRow != null -> runCatching { nowFocusRequester.requestFocus() }
+            firstKey != null -> focusLine(firstKey)
+            else -> runCatching { emptyFocusRequester.requestFocus() }
         }
     }
-    // I3: rows regrouped by a score or a tick keep focus on the same game (by key) and keep it in view;
-    // the list scrolls only when that row left the view, and only to it.
+    // #164/#167: an update keeps focus on the same line, by key, and keeps it in view (scrolled only when it left
+    // the view). A line no longer listed (a chip or Show all changed the list) hands focus to the nearest one.
     LaunchedEffect(guide) {
-        val index = guide.indexOf(focusedKey ?: return@LaunchedEffect)
-        if (index < 0) return@LaunchedEffect
+        val key = focusedKey ?: return@LaunchedEffect
+        if (key == nowKey) return@LaunchedEffect
+        val index = guide.indexOf(key)
+        if (index >= 0) {
+            focusedIndex = index
+            withFrameNanos { }
+            if (!listState.isFullyVisible(index)) runCatching { listState.centerOn(index) }
+            return@LaunchedEffect
+        }
+        val fallback = guide.nearestFocusable(focusedIndex)
+        when {
+            fallback != null -> focusLine(fallback)
+            nowRow != null -> runCatching { nowFocusRequester.requestFocus() }
+            filterShown -> runCatching { filterFocusRequester.requestFocus() }
+        }
+    }
+    // #167: focus never stays lost while the panel is open (a removed node, a dialog gone): it comes back to the
+    // line it was on, else the nearest one, else Now playing. A move between lines never leaves the panel focusless
+    // for a frame, so two frames without focus is a loss.
+    LaunchedEffect(panelHasFocus, open, menuOpen) {
+        if (panelHasFocus || !open || menuOpen) return@LaunchedEffect
         withFrameNanos { }
-        if (!listState.isFullyVisible(index)) runCatching { listState.centerOn(index) }
+        withFrameNanos { }
+        val key = focusedKey
+        when {
+            key != null && key != nowKey && guide.indexOf(key) >= 0 -> focusLine(key)
+            key != null && key != nowKey -> guide.nearestFocusable(focusedIndex)?.let { focusLine(it) }
+                ?: runCatching { nowFocusRequester.requestFocus() }
+            filterFocused || (key == null && filterShown && nowRow == null) -> runCatching { filterFocusRequester.requestFocus() }
+            nowRow != null -> runCatching { nowFocusRequester.requestFocus() }
+            firstKey != null -> focusLine(firstKey)
+        }
     }
     val boxScoreHint = stringResource(R.string.sports_live_panel_box_score_hint)
-    val rowFocus: (SportsLiveItem) -> Unit = { item ->
-        focusedKey = item.streamKey
-        onRowFocus(item.streamKey)
+    val lineFocus: (String, String?) -> Unit = { key, rowKey ->
+        focusedKey = key
+        guide.indexOf(key).takeIf { it >= 0 && key != nowKey }?.let { focusedIndex = it }
+        onRowFocus(rowKey)
     }
 
     // Left or Right closes the panel on release, only when its press reached the panel: the filter uses its own.
@@ -568,9 +657,19 @@ private fun LiveGamesPanel(
         modifier = Modifier
             .fillMaxHeight()
             .width(PANEL_WIDTH)
+            .onFocusChanged { panelHasFocus = it.hasFocus }
             .focusProperties { onExit = { cancelFocusChange() } }
             .onPreviewKeyEvent {
-                if (it.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) onKey()
+                val native = it.nativeKeyEvent
+                val vertical = native.keyCode == KeyEvent.KEYCODE_DPAD_UP || native.keyCode == KeyEvent.KEYCODE_DPAD_DOWN
+                when (native.action) {
+                    KeyEvent.ACTION_DOWN -> {
+                        onKey()
+                        // #167: no preview while a held key scrolls the list.
+                        if (vertical && native.repeatCount > 0) onKeysRepeating(true)
+                    }
+                    KeyEvent.ACTION_UP -> if (vertical) onKeysRepeating(false)
+                }
                 false
             }
             .focusGroup()
@@ -592,7 +691,10 @@ private fun LiveGamesPanel(
     ) {
         Column(modifier = Modifier.padding(horizontal = PANEL_PADDING, vertical = NuvioTheme.spacing.lg)) {
             Row(
-                modifier = Modifier.padding(horizontal = PANEL_ROW_ROOM),
+                // #167: while previews may play, the corner's room is kept, so the list never jumps under focus.
+                modifier = Modifier
+                    .padding(horizontal = PANEL_ROW_ROOM)
+                    .then(if (previewsAllowed) Modifier.height(PANEL_PREVIEW_HEIGHT) else Modifier),
                 horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)
             ) {
                 // One line (#140): no info card under it.
@@ -632,8 +734,10 @@ private fun LiveGamesPanel(
                     selected = state.chip,
                     onSelect = onChip,
                     onOpenList = {
-                        runCatching {
-                            if (nowRow != null) nowFocusRequester.requestFocus() else if (guide.rows.isNotEmpty()) firstRowFocusRequester.requestFocus()
+                        if (nowRow != null) {
+                            runCatching { nowFocusRequester.requestFocus() }
+                        } else if (firstKey != null) {
+                            scope.launch { focusLine(firstKey) }
                         }
                     },
                     modifier = Modifier
@@ -650,8 +754,7 @@ private fun LiveGamesPanel(
                 )
             }
             Spacer(modifier = Modifier.height(NuvioTheme.spacing.xs))
-            // #140: the game playing, pinned under the filter. Up goes to the filter, Down to the list's first
-            // game (what CH- plays).
+            // #140: the game playing, pinned under the filter. Up goes to the filter, Down to the list's first line.
             nowRow?.let { row ->
                 val item = row.item
                 SportsLivePanelLine(
@@ -660,11 +763,21 @@ private fun LiveGamesPanel(
                     nowPlaying = true,
                     onClick = { onPick(item) },
                     onLongClick = { onLongPick(item) },
-                    onFocus = { rowFocus(item) },
+                    onFocus = { lineFocus(item.streamKey, item.streamKey) },
                     modifier = Modifier
                         .padding(horizontal = PANEL_ROW_ROOM)
                         .focusRequester(nowFocusRequester)
-                        .then(if (filterShown) Modifier.focusProperties { up = filterFocusRequester } else Modifier),
+                        .then(if (filterShown) Modifier.focusProperties { up = filterFocusRequester } else Modifier)
+                        .onPreviewKeyEvent { event ->
+                            // ▼: the list's first line, scrolled back into view first (#140).
+                            val native = event.nativeKeyEvent
+                            if (native.keyCode != KeyEvent.KEYCODE_DPAD_DOWN || native.action != KeyEvent.ACTION_DOWN) {
+                                return@onPreviewKeyEvent false
+                            }
+                            val first = firstKey ?: return@onPreviewKeyEvent false
+                            scope.launch { focusLine(first) }
+                            true
+                        },
                     menuOpen = menuOpen
                 )
                 // #145: a 6 dp gap and a thin rule, so the scrolled rows never butt into the pinned row.
@@ -678,7 +791,7 @@ private fun LiveGamesPanel(
                 )
                 Spacer(modifier = Modifier.height(NOW_PLAYING_GAP))
             }
-            if (guide.rows.isEmpty()) {
+            if (firstKey == null) {
                 // Nothing else on: Now playing alone, or the empty line when even that is unknown.
                 if (nowRow == null) {
                     Text(
@@ -693,41 +806,56 @@ private fun LiveGamesPanel(
                 }
                 Spacer(modifier = Modifier.weight(1f))
             } else {
+                // Up from the list's first line reaches Now playing (else the filter), never past it.
+                val upFromFirst: FocusRequester? = if (nowRow != null) nowFocusRequester else filterFocusRequester.takeIf { filterShown }
                 LazyColumn(
                     state = listState,
                     verticalArrangement = Arrangement.spacedBy(SportsLiveTokens.Size.PanelLineGap),
                     // Room for the rows' focus ring and lift, so neither is clipped.
                     contentPadding = PaddingValues(horizontal = PANEL_ROW_ROOM, vertical = NuvioTheme.spacing.xs),
-                    modifier = Modifier.weight(1f)
+                    // #167: held keys move focus at a steady pace instead of flooding the list.
+                    modifier = Modifier.weight(1f).dpadRepeatThrottle()
                 ) {
                     guide.entries.forEach { entry ->
                         when (entry) {
                             is PanelGuideEntry.Header -> item(key = entry.key) { SportsLivePanelHeader(entry.section, entry.count) }
-                            PanelGuideEntry.FromTheTop -> item(key = entry.key) { FromTheTopDivider() }
+                            is PanelGuideEntry.HiddenByMySports -> item(key = entry.key) {
+                                SportsLiveHiddenByMySportsLine(
+                                    count = entry.count,
+                                    onClick = { onChip(SportsLiveUiState.ALL_SPORTS_FILTER) },
+                                    onFocus = { lineFocus(entry.key, null) },
+                                    modifier = Modifier
+                                        .focusRequester(requesterOf(entry.key))
+                                        .then(
+                                            if (entry.key == firstKey && upFromFirst != null) {
+                                                Modifier.focusProperties { up = upFromFirst }
+                                            } else {
+                                                Modifier
+                                            }
+                                        )
+                                )
+                            }
                             is PanelGuideEntry.Game -> {
                                 val row = entry.row
                                 val item = row.item
-                                val first = item.streamKey == firstRowKey
                                 item(key = entry.key) {
                                     SportsLivePanelLine(
                                         row = state.boards[item.streamKey]?.board
                                             ?: panelBoards(listOf(row), emptyMap(), null, emptySet(), 0L).single().board,
                                         nowPlaying = false,
+                                        watching = entry.watching,
+                                        isNew = row.isNew,
+                                        gone = row.gone,
                                         onClick = { onPick(item) },
                                         onLongClick = { onLongPick(item) },
-                                        onFocus = { rowFocus(item) },
+                                        onFocus = { lineFocus(item.streamKey, item.streamKey) },
                                         okHint = boxScoreHint.takeIf { item.streamKey in state.boxScores },
-                                        // I3: Up from the first game reaches Now playing (else the filter), never past it.
-                                        modifier = if (first) {
-                                            Modifier.focusRequester(firstRowFocusRequester).focusProperties {
-                                                if (nowRow != null) {
-                                                    up = nowFocusRequester
-                                                } else if (filterShown) {
-                                                    up = filterFocusRequester
-                                                }
-                                            }
-                                        } else {
-                                            Modifier
+                                        modifier = when {
+                                            // The game playing's own place: shown, never focused (Now playing is its row).
+                                            entry.watching -> Modifier.focusProperties { canFocus = false }
+                                            entry.key == firstKey && upFromFirst != null ->
+                                                Modifier.focusRequester(requesterOf(entry.key)).focusProperties { up = upFromFirst }
+                                            else -> Modifier.focusRequester(requesterOf(entry.key))
                                         },
                                         menuOpen = menuOpen
                                     )
@@ -771,24 +899,6 @@ private fun PanelPreviewCorner(preview: SportsLivePreviewState.Playing?, player:
     }
 }
 
-/** "From the top" (#140): a thin rule and its words where the cable-guide lineup wraps to its first game. */
-@Composable
-private fun FromTheTopDivider() {
-    Row(
-        modifier = Modifier.padding(start = 8.dp, end = 6.dp, top = 4.dp, bottom = 2.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = stringResource(R.string.sports_live_panel_from_the_top),
-            style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag),
-            color = SportsLiveTokens.Colors.TextMuted,
-            maxLines = 1
-        )
-        Box(modifier = Modifier.weight(1f).height(1.dp).background(SportsLiveTokens.Colors.TextMuted.copy(alpha = 0.4f)))
-    }
-}
-
 /** Scrolls item [index] to the middle of the list (as near as the list's ends allow), once laid out. */
 private suspend fun LazyListState.centerOn(index: Int) {
     scrollToItem(index)
@@ -811,6 +921,9 @@ private val PANEL_ROW_ROOM = 6.dp
 
 /** The corner preview: 16:9 at this width (#83), beside the title, inside the panel's width (F12). */
 private val PANEL_PREVIEW_WIDTH = 150.dp
+
+/** The corner preview's height (16:9), kept for the title row while previews may play (#167). */
+private val PANEL_PREVIEW_HEIGHT = PANEL_PREVIEW_WIDTH * 9f / 16f
 
 /** Above and below the rule under the pinned Now playing row (#145). */
 private val NOW_PLAYING_GAP = 6.dp

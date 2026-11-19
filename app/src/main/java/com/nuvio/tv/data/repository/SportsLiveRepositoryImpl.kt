@@ -240,8 +240,8 @@ class SportsLiveRepositoryImpl @Inject constructor(
                 // The user's addon order picks a merged game's primary.
                 val addonOrder = claimed.map { it.addon.id }.distinct()
                 val live = SportsLiveItemBucketer.bucketTab(items, SportsLiveTab.LIVE_NOW, nowMs(), addonOrder)
-                // My sports scopes the row as it does the section (#146): followed teams' games, channels and games
-                // of no known sport stay.
+                // My sports scopes the row as it does the section (#146, #167): followed teams' games and channels stay;
+                // games of no identifiable sport go.
                 SportsLiveMySportsScope.scope(SportsLiveItemBucketer.pinFollowed(live, followed), mySports)
                     .filterNot { it.hasEnded(ended) }
                     .take(limit)

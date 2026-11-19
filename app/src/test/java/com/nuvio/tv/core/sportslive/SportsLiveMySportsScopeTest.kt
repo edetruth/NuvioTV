@@ -1,8 +1,11 @@
 package com.nuvio.tv.core.sportslive
 
+import com.nuvio.tv.core.sportslive.scores.DirectoryTeam
+import com.nuvio.tv.core.sportslive.scores.EspnLeague
 import com.nuvio.tv.core.sportslive.scores.MyLeague
 import com.nuvio.tv.core.sportslive.scores.MySport
 import com.nuvio.tv.core.sportslive.scores.MySports
+import com.nuvio.tv.core.sportslive.scores.TeamDirectory
 import com.nuvio.tv.domain.model.ContentType
 import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.domain.model.PosterShape
@@ -13,7 +16,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** #146: My sports scopes the addon game lists, never hiding a followed team's game or one of no known sport. */
+/** #146, #167: My sports scopes the addon game lists, never hiding a followed team's game; unidentified games are hidden. */
 class SportsLiveMySportsScopeTest {
 
     private val basketballAndSoccer = MySports(mapOf(MySport.BASKETBALL to emptySet(), MySport.SOCCER to emptySet()))
@@ -40,16 +43,62 @@ class SportsLiveMySportsScopeTest {
     }
 
     @Test
-    fun `a game whose sport is unknown stays visible`() {
-        val unknown = game("Team A vs Team B", sport = null)
-        assertTrue(SportsLiveMySportsScope.shows(unknown, basketballAndSoccer))
+    fun `a game whose sport cannot be told is hidden under My sports and shown under All sports`() {
+        val directory = TeamDirectory()
+        val unknown = game("Norwid Czestochowa vs ONICO Warszawa", sport = null)
+        assertFalse(SportsLiveMySportsScope.shows(unknown, basketballAndSoccer, directory))
         // A catch-all sport word or a mixed catalog name tells nothing either.
-        assertTrue(SportsLiveMySportsScope.shows(game("Team A vs Team B", sport = "Sports"), basketballAndSoccer))
-        assertTrue(SportsLiveMySportsScope.shows(game("Team A vs Team B", sport = null, catalog = "Live Sports (Cricket, Tennis, F1)"), basketballAndSoccer))
+        assertFalse(SportsLiveMySportsScope.shows(game("Team A vs Team B", sport = "Sports"), basketballAndSoccer, directory))
+        assertFalse(
+            SportsLiveMySportsScope.shows(
+                game("Team A vs Team B", sport = null, catalog = "Live Sports (Cricket, Tennis, F1)"), basketballAndSoccer, directory
+            )
+        )
+        // A doubles pairing with no tag.
+        assertFalse(SportsLiveMySportsScope.shows(game("Harri Heliovaara / Henry Patten", sport = null), basketballAndSoccer, directory))
+        // All sports (nothing picked) lists them all, and a followed team's game always shows.
+        assertTrue(SportsLiveMySportsScope.shows(unknown, MySports.DEFAULT, directory))
+        assertTrue(SportsLiveMySportsScope.shows(unknown.copy(followed = true), basketballAndSoccer, directory))
         // A merged game takes the first source that tells its sport.
         val merged = game("Team A vs Team B", sport = null).copy(alternates = listOf(game("Team A vs Team B", sport = "Cricket")))
-        assertFalse(SportsLiveMySportsScope.shows(merged, basketballAndSoccer))
+        assertFalse(SportsLiveMySportsScope.shows(merged, basketballAndSoccer, directory))
+        val mergedNba = game("Team A vs Team B", sport = null).copy(alternates = listOf(game("Team A vs Team B", sport = "NBA")))
+        assertTrue(SportsLiveMySportsScope.shows(mergedNba, basketballAndSoccer, directory))
     }
+
+    @Test
+    fun `an untagged game whose teams the team directory knows takes their sport`() {
+        val gLeague = EspnLeague("basketball", "nba-development")
+        val directory = TeamDirectory().apply {
+            put(
+                gLeague,
+                listOf(team("1", "Memphis Hustle", "Hustle", "MEM"), team("2", "Texas Legends", "Legends", "TEX")),
+                fetchedAt = 1L
+            )
+        }
+        val game = game("Memphis Hustle vs Texas Legends", sport = null)
+        assertEquals(listOf(gLeague), SportsLiveMySportsScope.directoryLeaguesOf(game, directory))
+        assertTrue(SportsLiveMySportsScope.shows(game, basketballAndSoccer, directory))
+        assertFalse(SportsLiveMySportsScope.shows(game, MySports(mapOf(MySport.HOCKEY to emptySet())), directory))
+        // One side alone is no match.
+        assertFalse(SportsLiveMySportsScope.shows(game("Memphis Hustle vs Somebody Else", sport = null), basketballAndSoccer, directory))
+    }
+
+    @Test
+    fun `scope keeps My sports games and followed ones and leaves out the unidentified`() {
+        val directory = TeamDirectory()
+        val unknown = game("Fino Kaposvar vs HAOK Mladost", sport = null)
+        val followedUnknown = game("Club X vs Club Y", sport = null).copy(followed = true)
+        val items = listOf(unknown, nba, followedUnknown, cricket)
+        val scoped = SportsLiveMySportsScope.scope(items, basketballAndSoccer, directory)
+        assertEquals(listOf(nba, followedUnknown), scoped)
+        // The hidden count the "N more hidden by My sports" line shows.
+        assertEquals(2, items.size - scoped.size)
+        assertEquals(items, SportsLiveMySportsScope.scope(items, MySports.DEFAULT, directory))
+    }
+
+    private fun team(id: String, display: String, short: String, abbr: String) =
+        DirectoryTeam(id, display, short, abbr, display.substringBeforeLast(' '), short, "https://a.espncdn.com/i/teamlogos/x/500/$id.png")
 
     @Test
     fun `nothing picked scopes nothing, and channels are never scoped`() {

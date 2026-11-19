@@ -181,15 +181,20 @@ class SportsLiveZapViewModel internal constructor(
      * logos, the score chip under the Scores setting (no score until it is read) and the next game.
      */
     val banner: StateFlow<SportsLiveZapBanner?> = combine(
-        controller.resolving,
+        combine(controller.resolving, controller.looking) { resolving, looking -> resolving to looking },
         arrival,
         liveScores.scores,
         liveScores.mode.map<ScoresMode, ScoresMode?> { it }.onStart { emit(null) },
         repo.endedKeys
-    ) { resolving, arrived, scores, mode, ended ->
+    ) { (resolving, looking), arrived, scores, mode, ended ->
         resolving?.banner(switching = true, scores = scores, mode = mode, endedKeys = ended, known = logos)
+            // #158: a CH± zap's slow lookup reads "Looking for streams…" with Skip.
+            ?.let { banner -> if (looking != null && looking.streamKey == resolving.current.streamKey) banner.copy(looking = true) else banner }
             ?: arrived?.banner(switching = false, scores = scores, mode = mode, endedKeys = ended, known = logos)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /** OK (or Skip) on the Looking for streams card (#158): the zap moves on now. False when no card shows. */
+    fun skipLookup(): Boolean = controller.skip()
 
     // The session when the panel opened; null while it is closed.
     private val panelSession = MutableStateFlow<SportsLiveZapSession?>(null)
@@ -208,20 +213,24 @@ class SportsLiveZapViewModel internal constructor(
     // Hide until focused: a row's score shows after it has been focused for a second.
     private val reveal = ResultSpoilerReveal(viewModelScope)
 
-    // Read where the rows are grouped, off the main thread.
+    // The focused panel row (Hide until focused reveal).
     @Volatile
     private var focusedRowKey: String? = null
 
-    // The row order last shown (stream keys) and the minute it was taken in (I3).
+    // #164: the open panel's frozen order and the chip it was taken under; null while closed.
     @Volatile
-    private var shownOrder: List<String>? = null
+    private var frozenOrder: FrozenPanelOrder? = null
     @Volatile
-    private var shownMinute: Long? = null
+    private var frozenChip: String? = null
+
+    // When a key was last pressed in the open panel: after PANEL_IDLE_REORDER_MS without one, the order is taken afresh.
+    @Volatile
+    private var lastPanelKeyAtMs = 0L
 
     /**
      * The live games panel's one ordered list (#142): the list the panel shows and CH+/CH- walk, kept current
      * for a player with a session, open or not. Grouped by V2 group with followed teams first ([panelLineup]),
-     * under the panel's chip, its order frozen while a row has focus (I3). Ticks only while the panel is open
+     * under the panel's chip, its order frozen while the panel is open (#164). Ticks only while the panel is open
      * (while closed, an order change comes with the next list or score); scores are polled only while open.
      */
     private val lineup: StateFlow<PanelLineup?> = if (!hasSession) {
@@ -260,14 +269,21 @@ class SportsLiveZapViewModel internal constructor(
             // A final in its grace is grouped (and chipped) as the final it is, never as live (C3).
             val boardScores = split.scoresWithFinals(scores)
             val grouped = groupPanelRows(split.live + split.justEnded, boardScores, scoresMode, revealed, nowMs, split.ended, logos)
-            // The order stays put under a focused row, taking the fresh one each new minute (I3).
-            val rows = if (panelMayReorder(focusedRowKey, nowMs, shownMinute)) {
-                shownMinute = nowMs / PANEL_REORDER_MS
-                panelLineup(grouped)
-            } else {
-                panelLineup(grouped, shownOrder)
+            // #164: while the panel is open its order stays as it opened (rows update in place, new ones go to the end of
+            // their group, gone ones stay dimmed); a new chip or two idle minutes take the fresh order. Closed: fresh.
+            val open = _panelOpen.value
+            val keep = frozenOrder?.takeIf {
+                open && frozenChip == panelList.chip && nowMs - lastPanelKeyAtMs < PANEL_IDLE_REORDER_MS
             }
-            shownOrder = rows.map { it.item.streamKey }
+            val (rows, frozen) = freezePanelLineup(panelLineup(grouped), keep)
+            if (open) {
+                frozenOrder = frozen
+                frozenChip = panelList.chip
+                // Idle: the fresh order was just taken, and is kept from here.
+                if (keep == null) lastPanelKeyAtMs = nowMs
+            } else {
+                frozenOrder = null
+            }
             // The rows CH± passes over count as finished too, so the chip's count is the banner's "of N".
             val finished = splitFinished + rows.filterNot { it.zappable }.map { it.item.streamKey }
             PanelLineup(panelList, rows, scoresMode, boardScores, split.ended, revealed, nowMs, loaded, finished)
@@ -310,8 +326,17 @@ class SportsLiveZapViewModel internal constructor(
                 boxScores = current.rows
                     .filter { panelRowOk(it, strictGame(current, it.item)) == PanelRowOk.BOX_SCORE }
                     .mapTo(HashSet()) { it.item.streamKey },
-                nowPlayingRow = nowRow
+                nowPlayingRow = nowRow,
+                // #167: under My sports (All picked), the list ends with the live games it hides, one press from All sports.
+                hiddenByMySports = if (current.list.chip == null) {
+                    (current.list.all.count { it.streamKey !in current.finished } -
+                        current.list.scoped.count { it.streamKey !in current.finished }).coerceAtLeast(0)
+                } else {
+                    0
+                }
             )
+            // Laid out here, off the main thread.
+            state.guide
             ShownPanel(current, state, session)
         }
     }.flowOn(computeDispatcher).map { shown ->
@@ -337,6 +362,7 @@ class SportsLiveZapViewModel internal constructor(
 
     /** A key was pressed inside the panel: from now on a row focused for a second reveals its score. */
     fun onPanelKey() {
+        lastPanelKeyAtMs = System.currentTimeMillis()
         if (panelKeyPressed) return
         panelKeyPressed = true
         reveal.onFocus(focusedRowKey)
@@ -508,6 +534,9 @@ class SportsLiveZapViewModel internal constructor(
         scoreTracker.onStart()
         panelKeyPressed = false
         focusedRowKey = null
+        // #164: the order is taken afresh as the panel opens, then kept while it is open.
+        frozenOrder = null
+        lastPanelKeyAtMs = System.currentTimeMillis()
         // The panel takes over from the arrival banner (#76).
         arrival.value = null
         // Opens on All, or on the chip picked earlier in this playback (#68).
@@ -530,6 +559,8 @@ class SportsLiveZapViewModel internal constructor(
         if (!_panelOpen.value) return false
         _panelOpen.value = false
         panelSession.value = null
+        // #164: the next open (and CH± meanwhile) takes the fresh order.
+        frozenOrder = null
         // Untracked now, and the next open starts from no cards rather than this list.
         scoreTracker.update(emptyList(), enabled = false)
         scoreTracker.onStop()

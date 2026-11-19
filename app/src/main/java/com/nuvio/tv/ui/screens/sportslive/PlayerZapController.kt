@@ -4,13 +4,18 @@ import com.nuvio.tv.core.sportslive.SportsLiveStreamThresholds
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.Stream
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.selects.select
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Zaps the player to the next or previous game of the [SportsLiveZapSessions] session.
@@ -18,7 +23,9 @@ import kotlinx.coroutines.launch
  * The session moves to the target at once, so repeated presses move further while a stream is
  * being looked up; a newer zap cancels the older lookup, so only the last target is played.
  * When an Up/Down zap lands on a game with no stream, it skips on in the same direction
- * ([onSkipped]), at most [SportsLiveStreamThresholds.MAX_ZAP_SKIPS] games (#138); when nothing is
+ * ([onSkipped]), at most [SportsLiveStreamThresholds.MAX_ZAP_SKIPS] games (#138). Such a zap waits at most
+ * [skipWaitMs] for a game's lookup (#158), showing "Looking for streams…" with Skip ([looking], [skip]) once it
+ * runs past [lookingAfterMs]; a panel pick waits for the lookup's own cap. When nothing is
  * found (or a game picked from the panel has no stream), the session goes back to the game still playing.
  */
 class PlayerZapController(
@@ -40,7 +47,11 @@ class PlayerZapController(
      * flip's job during this window, so skipping past channels to land on one costs a single resolve
      * instead of one per channel.
      */
-    private val settleMs: Long = SETTLE_MS
+    private val settleMs: Long = SETTLE_MS,
+    /** A CH± zap gives up on a slow lookup after this long and skips on (#158); a pick waits for the lookup. */
+    private val skipWaitMs: Long = SportsLiveStreamThresholds.ZAP_SKIP_WAIT_MS,
+    /** A CH± zap's lookup running this long shows the Looking for streams card. */
+    private val lookingAfterMs: Long = SportsLiveStreamThresholds.ZAP_LOOKING_CARD_AFTER_MS
 ) {
     companion object {
         const val SETTLE_MS = 600L
@@ -61,6 +72,20 @@ class PlayerZapController(
 
     /** The session moved to the game whose stream is being looked up; null when no lookup runs. */
     val resolving: StateFlow<SportsLiveZapSession?> = _resolving.asStateFlow()
+
+    private val _looking = MutableStateFlow<SportsLiveItem?>(null)
+
+    /** A CH± zap's game whose lookup is slow (#158): "Looking for streams…" shows, Skip moves on; null otherwise. */
+    val looking: StateFlow<SportsLiveItem?> = _looking.asStateFlow()
+
+    /** Completed by [skip]: the slow lookup in progress is given up and the zap moves on. */
+    private var skipRequest: CompletableDeferred<Unit>? = null
+
+    /** Skip on the Looking for streams card: the zap moves on to the next game now. False when no card shows. */
+    fun skip(): Boolean {
+        if (_looking.value == null) return false
+        return skipRequest?.complete(Unit) == true
+    }
 
     /**
      * The session the player showing [contentId] zaps from: while a lookup runs, the session already
@@ -147,7 +172,7 @@ class PlayerZapController(
                 val skipped = mutableSetOf<String>()
                 while (true) {
                     val item = landed.current
-                    val stream = resolve(item)
+                    val stream = if (direction == null) resolve(item) else resolveOrSkip(item)
                     if (stream != null) {
                         onNavigate(item, stream)
                         break
@@ -180,6 +205,33 @@ class PlayerZapController(
             }
         }
         return true
+    }
+
+    /**
+     * [item]'s stream for a CH± zap: null when its lookup finds none, takes over [skipWaitMs], or Skip is pressed.
+     * The card shows from [lookingAfterMs] on; the addons keep answering in the background for the next lookup.
+     */
+    private suspend fun resolveOrSkip(item: SportsLiveItem): Stream? = coroutineScope {
+        val skipped = CompletableDeferred<Unit>()
+        skipRequest = skipped
+        val found = async { resolve(item) }
+        val card = launch {
+            delay(lookingAfterMs)
+            _looking.value = item
+        }
+        try {
+            withTimeoutOrNull(skipWaitMs) {
+                select<Stream?> {
+                    found.onAwait { it }
+                    skipped.onAwait { null }
+                }
+            }
+        } finally {
+            card.cancel()
+            found.cancel()
+            if (skipRequest === skipped) skipRequest = null
+            _looking.value = null
+        }
     }
 
     /** Back to the game playing (with any chip picked since), unless a newer zap moved the session on. */

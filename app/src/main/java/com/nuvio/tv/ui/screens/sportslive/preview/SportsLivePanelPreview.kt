@@ -62,7 +62,8 @@ internal suspend fun panelPreviewLookup(
 
 /**
  * The in-player panel's preview of the focused row (#83): the hover preview's controller (Live now,
- * after [settleMs]) fed with the panel's focus, never the game playing. It plays only while the panel
+ * after [settleMs], a dwell #167 keeps short: a move cancels it) fed with the panel's focus, never the game
+ * playing. Nothing is looked up or played while a key repeats ([onKeysRepeating]): the dwell starts on release. It plays only while the panel
  * is open ([onPanelOpen]), the app is in the foreground ([onForeground]: not behind Home or the
  * screensaver) and [onAllowed]; focus moving, the panel closing or a pick ([onPick]) stop it. It plays
  * at most [maxRowMs] per row (counted from the row taking focus), then stays on the art until focus moves.
@@ -74,8 +75,8 @@ class SportsLivePanelPreview(
     private val maxRowMs: Long = MAX_ROW_MS
 ) {
     companion object {
-        /** A row rests this long before its preview is looked up. */
-        const val SETTLE_MS = 1_000L
+        /** A row rests this long before its preview is looked up (#167). */
+        const val SETTLE_MS = 800L
 
         /** A row's preview stops this long after the row took focus: a preview is a glance, not a stream. */
         const val MAX_ROW_MS = 20_000L
@@ -88,6 +89,8 @@ class SportsLivePanelPreview(
     private var open = false
     private var foreground = true
     private var focusedKey: String? = null
+    private var target: SportsLiveItem? = null
+    private var repeating = false
     private var cap: Job? = null
 
     /** The focused row's game (null: none, or the chips or a button); [currentKey] is the game playing's stream key. */
@@ -104,14 +107,29 @@ class SportsLivePanelPreview(
                 }
             }
         }
+        this.target = target
+        push()
+    }
+
+    /** A D-pad key is held (its repeats scroll the list): no preview meanwhile; the dwell starts on release. */
+    fun onKeysRepeating(repeating: Boolean) {
+        if (repeating == this.repeating) return
+        this.repeating = repeating
+        push()
+    }
+
+    private fun push() {
         // A row whose time is up stays on its art.
         if (cap?.isCompleted == true) return
-        controller.onFocus(target)
+        controller.onFocus(target.takeUnless { repeating })
     }
 
     fun onPanelOpen(open: Boolean) {
         this.open = open
-        if (!open) stopRow()
+        if (!open) {
+            repeating = false
+            stopRow()
+        }
         controller.onVisible(open && foreground)
     }
 
@@ -130,6 +148,7 @@ class SportsLivePanelPreview(
         cap?.cancel()
         cap = null
         focusedKey = null
+        target = null
         controller.onFocus(null)
     }
 
@@ -167,11 +186,19 @@ class SportsLivePanelPreviewViewModel internal constructor(
     // Re-read whenever the panel opens, so a decoder limit seen meanwhile (dual screen) applies.
     private val decoderLimit = MutableStateFlow(SportsLiveDecoderLimit.seen)
 
+    private val _allowed = MutableStateFlow(false)
+
+    /** Previews may play (#83): the panel keeps the corner's room while they may, so the list never jumps (#167). */
+    val allowed: StateFlow<Boolean> = _allowed
+
     init {
         viewModelScope.launch {
             combine(hoverPreview, dataSaver, decoderLimit) { hover, saver, limit ->
                 panelPreviewAllowed(hover, saver, lowRam, limit)
-            }.collect(preview::onAllowed)
+            }.collect { allowed ->
+                _allowed.value = allowed
+                preview.onAllowed(allowed)
+            }
         }
     }
 
@@ -181,6 +208,8 @@ class SportsLivePanelPreviewViewModel internal constructor(
     }
 
     fun onFocus(item: SportsLiveItem?, currentKey: String?) = preview.onFocus(item, currentKey)
+
+    fun onKeysRepeating(repeating: Boolean) = preview.onKeysRepeating(repeating)
 
     fun onForeground(foreground: Boolean) = preview.onForeground(foreground)
 

@@ -1,8 +1,10 @@
 package com.nuvio.tv.core.sportslive
 
+import com.nuvio.tv.core.sportslive.scores.EspnLeague
 import com.nuvio.tv.core.sportslive.scores.EspnLeagueMap
 import com.nuvio.tv.core.sportslive.scores.MySport
 import com.nuvio.tv.core.sportslive.scores.MySports
+import com.nuvio.tv.core.sportslive.scores.TeamDirectory
 import com.nuvio.tv.domain.model.SportsLiveItem
 
 /**
@@ -10,8 +12,10 @@ import com.nuvio.tv.domain.model.SportsLiveItem
  * lineup list only games whose sport (and, when the user named leagues for it, league) is in My sports.
  *
  * - Nothing picked ([MySports.isDefault]: every sport) scopes nothing.
- * - Channels, followed teams' games and games whose sport is unknown (no tag, no inference) always show:
- *   hiding a game you care about is worse than showing one you don't.
+ * - Channels and followed teams' games always show.
+ * - A game whose sport cannot be told (#167: no tag, no inference, no team directory match) is hidden once the
+ *   user has picked sports; All sports still lists it. A game with no tag whose teams the [TeamDirectory] knows
+ *   takes their league's sport.
  * - A known sport My sports cannot hold (cricket, rugby, darts...) is out once the user has picked sports.
  * - A sport ticked without naming leagues takes all of its games, college ones included (its default leagues
  *   only choose the Results feeds). With leagues named, a game whose league is known must be one of them; a
@@ -20,17 +24,41 @@ import com.nuvio.tv.domain.model.SportsLiveItem
 object SportsLiveMySportsScope {
 
     /** [items] My sports lets through, in their order; all of them when nothing is picked. */
-    fun scope(items: List<SportsLiveItem>, mySports: MySports): List<SportsLiveItem> =
-        if (mySports.isDefault) items else items.filter { shows(it, mySports) }
+    fun scope(
+        items: List<SportsLiveItem>,
+        mySports: MySports,
+        directory: TeamDirectory = TeamDirectory.shared
+    ): List<SportsLiveItem> =
+        if (mySports.isDefault) items else items.filter { shows(it, mySports, directory) }
 
     /** True when [item] is listed under [mySports]. */
-    fun shows(item: SportsLiveItem, mySports: MySports): Boolean {
+    fun shows(item: SportsLiveItem, mySports: MySports, directory: TeamDirectory = TeamDirectory.shared): Boolean {
         if (mySports.isDefault || item.isChannel || item.followed) return true
         val sources = listOf(item) + item.alternates
-        // The first source that tells its sport decides; none telling one: unknown, shown.
-        val source = sources.firstOrNull { kindOf(it) != null } ?: return true
-        val sports = sportsOf(source)
-        return sports.any { sport -> sport in mySports.effectiveSports && leagueAllowed(source, sport, mySports) }
+        // The first source that tells its sport decides.
+        val source = sources.firstOrNull { kindOf(it) != null }
+        if (source != null) {
+            val sports = sportsOf(source)
+            return sports.any { sport -> sport in mySports.effectiveSports && leagueAllowed(source, sport, mySports) }
+        }
+        // None tells one (#167): its teams may, through the team directory; otherwise it is unidentified, hidden.
+        val leagues = sources.firstNotNullOfOrNull { directoryLeaguesOf(it, directory).ifEmpty { null } } ?: return false
+        return leagues.any { league ->
+            val sport = MySport.ofEspn(league.sport) ?: return@any false
+            val named = mySports.namedLeagues(sport)
+            sport in mySports.effectiveSports && (named.isEmpty() || named.any { it.coversLeague(league) })
+        }
+    }
+
+    /**
+     * The leagues the [directory] places an untagged [item] in: its inferred league ([SportsLiveSportInference]),
+     * else every loaded league whose list holds both of its teams. Empty: no match.
+     */
+    internal fun directoryLeaguesOf(item: SportsLiveItem, directory: TeamDirectory): List<EspnLeague> {
+        SportsLiveSportInference.leagueOf(item, directory)?.let { return listOf(it) }
+        if (item.isChannel || item.teams == null) return emptyList()
+        val (first, second) = SportsLiveTeams.writtenOrder(item.meta.name) ?: return emptyList()
+        return directory.leaguesHolding(first, second)
     }
 
     /**

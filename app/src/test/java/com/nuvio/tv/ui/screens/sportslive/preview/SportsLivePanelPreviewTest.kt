@@ -50,7 +50,7 @@ class SportsLivePanelPreviewTest {
     }
 
     @Test
-    fun `a row focused for a second plays its preview, not before`() = runTest {
+    fun `a row focused for its dwell plays its preview, not before`() = runTest {
         val preview = openPanel()
         preview.onFocus(b, playing.streamKey)
         advanceTimeBy(SportsLivePanelPreview.SETTLE_MS - 1)
@@ -60,6 +60,75 @@ class SportsLivePanelPreviewTest {
         advanceTimeBy(2)
         runCurrent()
         assertEquals(SportsLivePreviewState.Playing(b, dualStream("b")), preview.state.value)
+    }
+
+    @Test
+    fun `the dwell is about 800 ms and a move within it cancels the lookup`() = runTest {
+        assertEquals(800L, SportsLivePanelPreview.SETTLE_MS)
+        val preview = openPanel()
+        // Scrolling past rows faster than the dwell looks nothing up.
+        listOf(b, c, b, c).forEach { row ->
+            preview.onFocus(row, playing.streamKey)
+            advanceTimeBy(SportsLivePanelPreview.SETTLE_MS - 100)
+            runCurrent()
+        }
+        assertTrue(lookups.isEmpty())
+        assertEquals(SportsLivePreviewState.Idle, preview.state.value)
+        settle()
+        assertEquals(listOf("c"), lookups)
+    }
+
+    @Test
+    fun `no preview while a key repeats, and the dwell starts on release`() = runTest {
+        val preview = openPanel()
+        preview.onFocus(b, playing.streamKey)
+        preview.onKeysRepeating(true)
+        preview.onFocus(c, playing.streamKey)
+        advanceTimeBy(5_000)
+        runCurrent()
+        assertTrue(lookups.isEmpty())
+        assertEquals(SportsLivePreviewState.Idle, preview.state.value)
+        // Held over a playing preview: it stops at once.
+        preview.onKeysRepeating(false)
+        settle()
+        assertEquals(SportsLivePreviewState.Playing(c, dualStream("c")), preview.state.value)
+        preview.onKeysRepeating(true)
+        runCurrent()
+        assertEquals(SportsLivePreviewState.Idle, preview.state.value)
+        preview.onKeysRepeating(false)
+        advanceTimeBy(SportsLivePanelPreview.SETTLE_MS - 1)
+        runCurrent()
+        assertEquals(SportsLivePreviewState.Idle, preview.state.value)
+        settle()
+        assertTrue(preview.state.value is SportsLivePreviewState.Playing)
+    }
+
+    @Test
+    fun `only one preview is ever in flight, the last row focused`() = runTest {
+        val started = mutableListOf<String>()
+        var running = 0
+        var maxRunning = 0
+        val slow: suspend (SportsLiveItem) -> SportsLivePreviewLookup = { item ->
+            started += item.id
+            running++
+            maxRunning = maxOf(maxRunning, running)
+            try {
+                kotlinx.coroutines.delay(3_000)
+                SportsLivePreviewLookup.Found(dualStream(item.id))
+            } finally {
+                running--
+            }
+        }
+        val preview = openPanel(slow)
+        preview.onFocus(b, playing.streamKey)
+        settle()
+        preview.onFocus(c, playing.streamKey)
+        settle()
+        advanceTimeBy(5_000)
+        runCurrent()
+        assertEquals(listOf("b", "c"), started)
+        assertEquals(1, maxRunning)
+        assertEquals(SportsLivePreviewState.Playing(c, dualStream("c")), preview.state.value)
     }
 
     @Test

@@ -22,14 +22,16 @@ import com.nuvio.tv.ui.screens.sportslive.isDecoderInitFailure
 import com.nuvio.tv.ui.screens.sportslive.playSportsLiveStream
 
 /**
- * The hover preview's one player, built like a dual screen pane's. It exists only while a preview
- * plays: [play] releases any previous player before building the next, and [release] frees it, so
- * there is never more than one. It is muted for good (unless [withSound], the alerts' peek): the audio track type is disabled before the
- * stream is prepared (volume 0 alone does not mute AC3/EAC3 passthrough, and a disabled track uses
- * no audio decoder), and it never asks for audio focus. Video is capped at about 480p ([capPreviewVideo]) unless [lowBitrate] is turned off. While [suspended] (the screen is paused) [play]
- * does nothing, so a late call cannot build a player after the pause released it. A stream that
- * buffers for [STALL_TIMEOUT_MS] after its first frame counts as an error. Each load's first frame,
- * error or stall is remembered for its source ([SportsLiveSourceReliability]).
+ * The hover preview's one player, built like a dual screen pane's. There is never more than one: it is built for
+ * the first preview and kept, and each next preview loads into it ([play]); [stop] ends a preview without freeing
+ * the player (#167: no player built or released on the main thread per focus move, only its codec let go, which
+ * ExoPlayer does on its own thread), and [release] frees it. It is muted for good (unless [withSound], the alerts'
+ * peek): the audio track type is disabled before the stream is prepared (volume 0 alone does not mute AC3/EAC3
+ * passthrough, and a disabled track uses no audio decoder), and it never asks for audio focus. Video is capped at
+ * about 480p ([capPreviewVideo]) unless [lowBitrate] is turned off. While [suspended] (the screen is paused)
+ * [play] does nothing, so a late call cannot build a player after the pause released it. A stream that buffers
+ * for [STALL_TIMEOUT_MS] after its first frame counts as an error. Each load's first frame, error or stall is
+ * remembered for its source ([SportsLiveSourceReliability]).
  */
 @OptIn(UnstableApi::class)
 internal class SportsLivePreviewPlayer(
@@ -50,8 +52,18 @@ internal class SportsLivePreviewPlayer(
     private val handler = Handler(Looper.getMainLooper())
     private var stallCheck: Runnable? = null
 
+    /** The load playing now: its game, source and start, and whether its first frame came. */
+    private var loadItem: SportsLiveItem? = null
+    private var loadSourceKey: String = ""
+    private var loadStartedAtMs = 0L
+    private var rendered = false
+
     /** Set from ON_PAUSE to ON_RESUME: [play] is ignored meanwhile. */
     var suspended = false
+
+    /** How many players this one has built (tests: never more than one at a time). */
+    internal var built = 0
+        private set
 
     /** The pane's view: it shows the player while one plays. */
     fun attach(view: PlayerView?) {
@@ -62,69 +74,89 @@ internal class SportsLivePreviewPlayer(
 
     fun play(item: SportsLiveItem, stream: Stream) {
         val wanted = item.previewKey to stream
-        if (suspended || (wanted == loaded && player != null)) return
-        release()
+        if (suspended || wanted == loaded) return
         val url = stream.getStreamUrl() ?: return onError(item)
-        var rendered = false
-        val sourceKey = SportsLiveExtraSources.sourceKeyFor(item, stream)
-        val startedAtMs = System.currentTimeMillis()
-        val built = buildSportsLiveLightPlayer(appContext).apply {
-            if (!withSound) {
-                volume = 0f
-                trackSelectionParameters = trackSelectionParameters.buildUpon()
-                    .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true)
-                    .build()
-            }
-            if (lowBitrate) trackSelectionParameters = trackSelectionParameters.capPreviewVideo()
-            addListener(object : Player.Listener {
-                override fun onRenderedFirstFrame() {
-                    if (player !== this@apply) return
-                    if (!rendered) {
-                        SportsLiveSourceReliability.record(sourceKey, Outcome.SUCCESS, System.currentTimeMillis() - startedAtMs)
-                    }
-                    rendered = true
-                    onFirstFrame(item)
-                }
-
-                override fun onPlaybackStateChanged(playbackState: Int) {
-                    if (player !== this@apply) return
-                    cancelStallCheck()
-                    if (playbackState == Player.STATE_BUFFERING && rendered) {
-                        val stalled = this@apply
-                        stallCheck = Runnable {
-                            if (player === stalled && stalled.playbackState == Player.STATE_BUFFERING) {
-                                SportsLiveSourceReliability.record(sourceKey, Outcome.STALL)
-                                onError(item)
-                            }
-                        }.also { handler.postDelayed(it, STALL_TIMEOUT_MS) }
-                    }
-                }
-
-                override fun onPlayerError(error: PlaybackException) {
-                    if (player !== this@apply) return
-                    // A missing decoder is the device's fault, not the source's.
-                    if (error.isDecoderInitFailure()) {
-                        onDecoderInitFailure()
-                    } else {
-                        SportsLiveSourceReliability.record(sourceKey, Outcome.FAILURE)
-                    }
-                    onError(item)
-                }
-            })
-        }
-        player = built
+        stop()
+        val exo = player ?: build().also { player = it }
         loaded = wanted
-        view?.player = built
+        loadItem = item
+        loadSourceKey = SportsLiveExtraSources.sourceKeyFor(item, stream)
+        loadStartedAtMs = System.currentTimeMillis()
+        rendered = false
+        view?.player = exo
         // Its own instance: parallel connections and the VOD cache stay at their defaults (off).
-        built.playSportsLiveStream(appContext, PlayerMediaSourceFactory(appContext), stream, url)
+        exo.playSportsLiveStream(appContext, PlayerMediaSourceFactory(appContext), stream, url)
     }
 
-    /** Frees the player at once (the view lets go of it first); does nothing when none plays. */
+    private fun build(): ExoPlayer = buildSportsLiveLightPlayer(appContext).apply {
+        built++
+        if (!withSound) {
+            volume = 0f
+            trackSelectionParameters = trackSelectionParameters.buildUpon()
+                .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true)
+                .build()
+        }
+        if (lowBitrate) trackSelectionParameters = trackSelectionParameters.capPreviewVideo()
+        addListener(object : Player.Listener {
+            override fun onRenderedFirstFrame() {
+                val item = loadItem ?: return
+                if (!rendered) {
+                    SportsLiveSourceReliability.record(loadSourceKey, Outcome.SUCCESS, System.currentTimeMillis() - loadStartedAtMs)
+                }
+                rendered = true
+                onFirstFrame(item)
+            }
+
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                cancelStallCheck()
+                val item = loadItem ?: return
+                if (playbackState == Player.STATE_BUFFERING && rendered) {
+                    val sourceKey = loadSourceKey
+                    stallCheck = Runnable {
+                        if (loadItem === item && player?.playbackState == Player.STATE_BUFFERING) {
+                            SportsLiveSourceReliability.record(sourceKey, Outcome.STALL)
+                            onError(item)
+                        }
+                    }.also { handler.postDelayed(it, STALL_TIMEOUT_MS) }
+                }
+            }
+
+            override fun onPlayerError(error: PlaybackException) {
+                val item = loadItem ?: return
+                // A missing decoder is the device's fault, not the source's.
+                if (error.isDecoderInitFailure()) {
+                    onDecoderInitFailure()
+                } else {
+                    SportsLiveSourceReliability.record(loadSourceKey, Outcome.FAILURE)
+                }
+                onError(item)
+            }
+        })
+    }
+
+    /**
+     * Ends the preview playing, keeping the player for the next one: ExoPlayer lets go of its codec and stream on
+     * its own thread, so the main thread never waits (#167). Does nothing when none plays.
+     */
+    fun stop() {
+        cancelStallCheck()
+        val current = player ?: return
+        if (loadItem == null) return
+        loadItem = null
+        loaded = null
+        rendered = false
+        current.stop()
+        current.clearMediaItems()
+    }
+
+    /** Frees the player at once (the view lets go of it first); does nothing when none was built. */
     fun release() {
         cancelStallCheck()
         val current = player ?: return
         player = null
         loaded = null
+        loadItem = null
+        rendered = false
         view?.player = null
         current.release()
     }
