@@ -628,7 +628,44 @@ private fun SportsLiveContent(
         withFrameNanos { }
         runCatching { (entryCardFocusRequester ?: activeTabFocusRequester).requestFocus() }
     }
-    val contentEntryFocusRequester = if (catchUpShown) catchUpFocusRequester else entryCardFocusRequester
+    // Back from a paused game (#148): Live now's first row offers Resume while it is live, its final once it ended.
+    val resumeOffer by SportsLiveMiniPlayers.controller.resume.collectAsStateWithLifecycle()
+    val liveNowItems = uiState.tabs[SportsLiveTab.LIVE_NOW]
+    val resumeListed = remember(resumeOffer, liveNowItems) {
+        resumeOffer?.let { offer ->
+            liveNowItems.orEmpty().let { list ->
+                list.firstOrNull { it.streamKey == offer.item.streamKey } ?: list.firstOrNull { it.id == offer.item.id }
+            }
+        }
+    }
+    val resumeChip = if (uiState.selectedTab == SportsLiveTab.LIVE_NOW) {
+        sportsLiveResumeChip(resumeOffer, resumeListed, statusOf, uiState.nowMs)
+    } else {
+        null
+    }
+    val statusStrings = rememberGameStatusStrings()
+    val resumeLabel = when (resumeChip) {
+        is SportsLiveResumeChip.Live -> stringResource(R.string.sports_live_resume_live, resumeChip.item.displayName)
+        is SportsLiveResumeChip.Final -> stringResource(
+            R.string.sports_live_resume_final,
+            resumeChip.item.displayName,
+            // The one status formatter: "Final 2–3", "FT 2–1", or "Score hidden" under Hide until focused.
+            GameStatusText.of(resumeChip.status, chipOf(resumeChip.item), statusStrings, { _, _ -> "" })
+        )
+        null -> null
+    }
+    val resumeShown = resumeLabel != null
+    val resumeFocusRequester = remember { FocusRequester() }
+    // The row held focus and went away (expired, or its game left Live now): focus goes to the games.
+    var resumeHoldsFocus by remember { mutableStateOf(false) }
+    LaunchedEffect(resumeShown) {
+        if (resumeShown || !resumeHoldsFocus) return@LaunchedEffect
+        resumeHoldsFocus = false
+        withFrameNanos { }
+        runCatching { (if (catchUpShown) catchUpFocusRequester else entryCardFocusRequester ?: activeTabFocusRequester).requestFocus() }
+    }
+    val belowResumeFocusRequester = if (catchUpShown) catchUpFocusRequester else entryCardFocusRequester
+    val contentEntryFocusRequester = if (resumeShown) resumeFocusRequester else belowResumeFocusRequester
     // On the Results tab: the day in the title (P4), and where the header's Down lands in its content.
     val resultsDateFocusRequester = remember { FocusRequester() }
     val resultsTopFocusRequester = remember { FocusRequester() }
@@ -647,7 +684,35 @@ private fun SportsLiveContent(
         filterShown -> filterFocusRequester
         else -> activeTabFocusRequester
     }
-    val aboveListFocusRequester = if (catchUpShown) catchUpFocusRequester else aboveContentFocusRequester
+    val aboveListFocusRequester = when {
+        catchUpShown -> catchUpFocusRequester
+        resumeShown -> resumeFocusRequester
+        else -> aboveContentFocusRequester
+    }
+    val aboveCatchUpFocusRequester = if (resumeShown) resumeFocusRequester else aboveContentFocusRequester
+    @Composable
+    fun ResumeRow(modifier: Modifier) {
+        val chip = resumeChip ?: return
+        SportsLiveResumeRow(
+            label = resumeLabel ?: return,
+            live = chip is SportsLiveResumeChip.Live,
+            focusRequester = resumeFocusRequester,
+            upFocusRequester = aboveContentFocusRequester,
+            downFocusRequester = belowResumeFocusRequester,
+            onOpen = {
+                SportsLiveMiniPlayers.controller.dismissResume()
+                when (val ok = sportsLiveResumeOk(chip)) {
+                    is SportsLiveResumeOk.RejoinLiveEdge -> onRejoin(ok.item, ok.stream)
+                    is SportsLiveResumeOk.OpenGame -> onOpenGame(ok.item, ok.event)
+                }
+            },
+            onDismiss = SportsLiveMiniPlayers.controller::dismissResume,
+            modifier = modifier.onFocusChanged {
+                // Losing focus because the row is being removed keeps the flag (see above).
+                if (it.hasFocus || SportsLiveMiniPlayers.controller.resume.value != null) resumeHoldsFocus = it.hasFocus
+            }
+        )
+    }
     val myTeamsLabel = stringResource(R.string.sports_live_filter_my_teams_star)
     val allLabel = stringResource(
         when {
@@ -1002,49 +1067,7 @@ private fun SportsLiveContent(
                     .onFocusChanged { if (it.hasFocus || miniPlayer.isActive) nowPlayingHasFocus = it.hasFocus }
             )
         }
-        // Back from a paused game (#148): Resume in the header while it is live, its final once it ended.
-        val resumeOffer by miniPlayer.resume.collectAsStateWithLifecycle()
-        val liveNowItems = uiState.tabs[SportsLiveTab.LIVE_NOW]
-        val resumeListed = remember(resumeOffer, liveNowItems) {
-            resumeOffer?.let { offer ->
-                liveNowItems.orEmpty().let { list ->
-                    list.firstOrNull { it.streamKey == offer.item.streamKey } ?: list.firstOrNull { it.id == offer.item.id }
-                }
-            }
-        }
-        val resumeChip = if (uiState.selectedTab == SportsLiveTab.LIVE_NOW) {
-            sportsLiveResumeChip(resumeOffer, resumeListed, statusOf, uiState.nowMs)
-        } else {
-            null
-        }
-        val statusStrings = rememberGameStatusStrings()
-        val resumeLabel = when (resumeChip) {
-            is SportsLiveResumeChip.Live -> stringResource(R.string.sports_live_resume_live, resumeChip.item.displayName)
-            is SportsLiveResumeChip.Final -> stringResource(
-                R.string.sports_live_resume_final,
-                resumeChip.item.displayName,
-                // The one status formatter: "Final 2–3", "FT 2–1", or "Score hidden" under Hide until focused.
-                GameStatusText.of(resumeChip.status, chipOf(resumeChip.item), statusStrings, { _, _ -> "" })
-            )
-            null -> null
-        }
         SportsLiveHeader(
-            resume = if (resumeChip != null && resumeLabel != null) {
-                SportsLiveHeaderResume(
-                    label = resumeLabel,
-                    live = resumeChip is SportsLiveResumeChip.Live,
-                    onOpen = {
-                        miniPlayer.dismissResume()
-                        when (val ok = sportsLiveResumeOk(resumeChip)) {
-                            is SportsLiveResumeOk.RejoinLiveEdge -> onRejoin(ok.item, ok.stream)
-                            is SportsLiveResumeOk.OpenGame -> onOpenGame(ok.item, ok.event)
-                        }
-                    },
-                    onDismiss = miniPlayer::dismissResume
-                )
-            } else {
-                null
-            },
             tabs = shownTabs,
             selectedTab = uiState.selectedTab,
             tabFocusRequesters = tabFocusRequesters,
@@ -1098,12 +1121,13 @@ private fun SportsLiveContent(
             )
             return@Column
         }
-        // With the stage shown the strip sits at the top of the list's column (the stage keeps its place).
+        // With the stage shown the row and the strip sit at the top of the list's column (the stage keeps its place).
+        if (!stageShown) ResumeRow(Modifier.padding(top = NuvioTheme.spacing.sm))
         if (catchUpShown && !stageShown) {
             SportsLiveCatchUpStrip(
                 items = catchUpItems,
                 firstFocusRequester = catchUpFocusRequester,
-                upFocusRequester = aboveContentFocusRequester,
+                upFocusRequester = aboveCatchUpFocusRequester,
                 downFocusRequester = entryCardFocusRequester,
                 onPlay = onPlayCatchUp,
                 onOpenGame = onOpenCatchUpGame,
@@ -1355,11 +1379,12 @@ private fun SportsLiveContent(
                         .offset(x = -LIST_FOCUS_ROOM)
                         .fillMaxHeight()
                 ) {
+                    ResumeRow(Modifier.padding(start = LIST_FOCUS_ROOM, end = LIST_FOCUS_ROOM, bottom = NuvioTheme.spacing.sm))
                     if (catchUpShown) {
                         SportsLiveCatchUpStrip(
                             items = catchUpItems,
                             firstFocusRequester = catchUpFocusRequester,
-                            upFocusRequester = aboveContentFocusRequester,
+                            upFocusRequester = aboveCatchUpFocusRequester,
                             downFocusRequester = entryCardFocusRequester,
                             onPlay = onPlayCatchUp,
                             onOpenGame = onOpenCatchUpGame,

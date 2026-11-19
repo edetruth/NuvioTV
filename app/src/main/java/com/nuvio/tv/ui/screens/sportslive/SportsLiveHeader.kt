@@ -10,31 +10,17 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.key.type
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -71,19 +57,10 @@ internal data class SportsLiveHeaderDropdown(val title: String, val actions: Lis
  */
 internal data class SportsLiveHeaderDate(val label: String, val canOlder: Boolean, val canNewer: Boolean, val onStep: (Boolean) -> Unit)
 
-/**
- * Live now's Resume chip in the header (#148): [label], OK [onOpen]; Back on it or its ✕ [onDismiss].
- * [live]: the game is still on (the play glyph); else it ended and OK opens its Game page.
- */
-internal data class SportsLiveHeaderResume(val label: String, val live: Boolean, val onOpen: () -> Unit, val onDismiss: () -> Unit)
-
 private val FILTER_TABS = setOf(SportsLiveTab.UPCOMING, SportsLiveTab.CHANNELS, SportsLiveTab.REPLAYS)
 
-/**
- * The header's focus stops, left to right: the active tab, Results' day arrows, Live now's Resume chip and its
- * ✕ (#148), the filter, "⚠ N", Refresh.
- */
-internal enum class SportsLiveHeaderStop { TAB, DAY_OLDER, DAY_NEWER, RESUME, RESUME_CLOSE, FILTER, FAILURES, REFRESH }
+/** The header's focus stops, left to right: the active tab, Results' day arrows, the filter, "⚠ N", Refresh. */
+internal enum class SportsLiveHeaderStop { TAB, DAY_OLDER, DAY_NEWER, FILTER, FAILURES, REFRESH }
 
 /**
  * The stop ← ([right] false) or → ([right] true) moves to from [stop] (#153): the next stop shown that way, or
@@ -95,13 +72,11 @@ internal fun sportsLiveHeaderNeighbour(
     right: Boolean,
     hasDate: Boolean,
     hasFilter: Boolean,
-    hasFailures: Boolean,
-    hasResume: Boolean = false
+    hasFailures: Boolean
 ): SportsLiveHeaderStop? {
     val shown = SportsLiveHeaderStop.entries.filter {
         when (it) {
             SportsLiveHeaderStop.DAY_OLDER, SportsLiveHeaderStop.DAY_NEWER -> hasDate
-            SportsLiveHeaderStop.RESUME, SportsLiveHeaderStop.RESUME_CLOSE -> hasResume
             SportsLiveHeaderStop.FILTER -> hasFilter
             SportsLiveHeaderStop.FAILURES -> hasFailures
             else -> true
@@ -139,8 +114,6 @@ internal fun SportsLiveHeader(
     /** Results' day in the title (P4), right after the tabs; null for none. */
     date: SportsLiveHeaderDate? = null,
     dateFocusRequester: FocusRequester = remember { FocusRequester() },
-    /** Live now's Resume chip (#148); null for none. */
-    resume: SportsLiveHeaderResume? = null,
     onShowFailures: () -> Unit,
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier
@@ -151,40 +124,19 @@ internal fun SportsLiveHeader(
     val failuresFocusRequester = remember { FocusRequester() }
     val refreshFocusRequester = remember { FocusRequester() }
     val dayNewerFocusRequester = remember { FocusRequester() }
-    val resumeFocusRequester = remember { FocusRequester() }
-    val resumeCloseFocusRequester = remember { FocusRequester() }
-    // The Resume chip expiring (or its game leaving Live now) while focused hands focus to the active tab.
-    var resumeFocused by remember { mutableStateOf(false) }
-    LaunchedEffect(resume == null) {
-        if (resume != null || !resumeFocused) return@LaunchedEffect
-        resumeFocused = false
-        withFrameNanos { }
-        runCatching { activeTabFocusRequester.requestFocus() }
-    }
     fun requesterOf(stop: SportsLiveHeaderStop?): FocusRequester = when (stop) {
         SportsLiveHeaderStop.DAY_OLDER -> dateFocusRequester
         SportsLiveHeaderStop.DAY_NEWER -> dayNewerFocusRequester
-        SportsLiveHeaderStop.RESUME -> resumeFocusRequester
-        SportsLiveHeaderStop.RESUME_CLOSE -> resumeCloseFocusRequester
         SportsLiveHeaderStop.FILTER -> filterFocusRequester
         SportsLiveHeaderStop.FAILURES -> failuresFocusRequester
         SportsLiveHeaderStop.REFRESH -> refreshFocusRequester
         SportsLiveHeaderStop.TAB, null -> activeTabFocusRequester
     }
     fun neighbour(stop: SportsLiveHeaderStop, right: Boolean): FocusRequester = requesterOf(
-        sportsLiveHeaderNeighbour(
-            stop,
-            right,
-            hasDate = date != null,
-            hasFilter = filterOptions != null,
-            hasFailures = failures > 0,
-            hasResume = resume != null
-        )
+        sportsLiveHeaderNeighbour(stop, right, hasDate = date != null, hasFilter = filterOptions != null, hasFailures = failures > 0)
     )
     Row(
         modifier = modifier
-            // Focus gone from the whole header: the chip no longer holds it.
-            .onFocusChanged { if (!it.hasFocus) resumeFocused = false }
             .fillMaxWidth()
             .height(Size.HeaderHeight),
         verticalAlignment = Alignment.CenterVertically
@@ -233,64 +185,31 @@ internal fun SportsLiveHeader(
                 .padding(start = Size.TabGap, end = Size.ControlGap),
             contentAlignment = Alignment.CenterEnd
         ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(Size.ControlGap), verticalAlignment = Alignment.CenterVertically) {
-                if (resume != null) {
-                    fun stopModifier(stop: SportsLiveHeaderStop, requester: FocusRequester) = Modifier
-                        .onFocusChanged { if (it.isFocused) resumeFocused = true }
-                        .focusRequester(requester)
-                        .focusProperties {
-                            left = neighbour(stop, right = false)
-                            right = neighbour(stop, right = true)
-                            downFocusRequester?.let { down = it }
-                        }
-                        // Back on the chip or its ✕ dismisses it; focus goes back to the active tab first.
-                        .onPreviewKeyEvent { event ->
-                            val back = event.key == Key.Back || event.key == Key.Escape
-                            if (back && event.type == KeyEventType.KeyUp) {
-                                resumeFocused = false
-                                runCatching { activeTabFocusRequester.requestFocus() }
-                                resume.onDismiss()
-                            }
-                            back
-                        }
-                    SportsLiveResumeControl(
-                        resume = resume,
-                        // A long game name ellipsizes: the chip never pushes the tabs.
-                        chipModifier = stopModifier(SportsLiveHeaderStop.RESUME, resumeFocusRequester).widthIn(max = RESUME_CHIP_MAX_WIDTH),
-                        closeModifier = stopModifier(SportsLiveHeaderStop.RESUME_CLOSE, resumeCloseFocusRequester),
-                        onClose = {
-                            resumeFocused = false
-                            runCatching { activeTabFocusRequester.requestFocus() }
-                            resume.onDismiss()
-                        }
-                    )
-                }
-                if (filterOptions != null) {
-                    val filterModifier = Modifier
-                        .focusRequester(filterFocusRequester)
-                        .focusProperties {
-                            left = neighbour(SportsLiveHeaderStop.FILTER, right = false)
-                            right = neighbour(SportsLiveHeaderStop.FILTER, right = true)
-                            downFocusRequester?.let { down = it }
-                        }
-                    if (filterDropdown != null) {
-                        SportsLiveFilterDropdown(
-                            options = filterOptions,
-                            selected = selectedFilter,
-                            onSelect = onSelectFilter,
-                            title = filterDropdown.title,
-                            actions = filterDropdown.actions,
-                            modifier = filterModifier
-                        )
-                    } else {
-                        SportsLiveFilterControl(
-                            options = filterOptions,
-                            selected = selectedFilter,
-                            onSelect = onSelectFilter,
-                            onOpenList = { runCatching { downFocusRequester?.requestFocus() } },
-                            modifier = filterModifier
-                        )
+            if (filterOptions != null) {
+                val filterModifier = Modifier
+                    .focusRequester(filterFocusRequester)
+                    .focusProperties {
+                        left = neighbour(SportsLiveHeaderStop.FILTER, right = false)
+                        right = neighbour(SportsLiveHeaderStop.FILTER, right = true)
+                        downFocusRequester?.let { down = it }
                     }
+                if (filterDropdown != null) {
+                    SportsLiveFilterDropdown(
+                        options = filterOptions,
+                        selected = selectedFilter,
+                        onSelect = onSelectFilter,
+                        title = filterDropdown.title,
+                        actions = filterDropdown.actions,
+                        modifier = filterModifier
+                    )
+                } else {
+                    SportsLiveFilterControl(
+                        options = filterOptions,
+                        selected = selectedFilter,
+                        onSelect = onSelectFilter,
+                        onOpenList = { runCatching { downFocusRequester?.requestFocus() } },
+                        modifier = filterModifier
+                    )
                 }
             }
         }
@@ -326,39 +245,6 @@ internal fun SportsLiveHeader(
                 )
             }
         }
-    }
-}
-
-/** The Resume chip's widest (#148): room for "Resume Devils vs Canadiens · Live"; longer names ellipsize. */
-private val RESUME_CHIP_MAX_WIDTH = 340.dp
-
-/** Live now's Resume chip (#148): "▶ Resume <game> · Live" (or "<game> · Final 2–3") and a round ✕. */
-@Composable
-private fun SportsLiveResumeControl(resume: SportsLiveHeaderResume, chipModifier: Modifier, closeModifier: Modifier, onClose: () -> Unit) {
-    SportsLiveHeaderControl(onClick = resume.onOpen, round = false, modifier = chipModifier) {
-        if (resume.live) {
-            Icon(
-                imageVector = Icons.Rounded.PlayArrow,
-                contentDescription = null,
-                tint = Colors.TextPrimary,
-                modifier = Modifier.size(Size.ControlIcon)
-            )
-        }
-        Text(
-            text = resume.label,
-            style = SportsLiveTokens.style(SportsLiveTokens.Type.ControlSelected),
-            color = Colors.TextPrimary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-    }
-    SportsLiveHeaderControl(onClick = onClose, modifier = closeModifier) {
-        Icon(
-            imageVector = Icons.Rounded.Close,
-            contentDescription = stringResource(R.string.sports_live_resume_dismiss),
-            tint = Colors.TextSecondary,
-            modifier = Modifier.size(Size.ControlIcon)
-        )
     }
 }
 
