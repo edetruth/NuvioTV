@@ -186,7 +186,9 @@ fun SportsLiveTeamScreen(
                 waiting -> SportsLivePageMessage(stringResource(R.string.sports_live_team_hidden_off))
                 state.status == GameLoadStatus.FAILED -> SportsLivePageMessage(stringResource(R.string.sports_live_team_unavailable))
                 data == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { LoadingIndicator() }
-                else -> Row(modifier = Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                // Scrolling only when a row nears an edge, so the list opens at its top with its heading showing (the TV
+                // default pivot would scroll a row returned to from a Game page up to a third of the height).
+                else -> SportsLiveKeepFromEdge(margin = TEAM_EDGE_KEEP) { Row(modifier = Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
                     val listModifier = Modifier.weight(1f).fillMaxSize().dpadRepeatThrottle()
                     val rowsPadding = PaddingValues(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 24.dp)
                     LazyColumn(modifier = listModifier, verticalArrangement = Arrangement.spacedBy(SportsLiveTokens.Size.RowGap), contentPadding = rowsPadding) {
@@ -258,7 +260,7 @@ fun SportsLiveTeamScreen(
                             }
                         }
                     }
-                }
+                } }
             }
         }
     }
@@ -546,6 +548,8 @@ private val HEADER_LINE = SportsLiveTokens.Type.Meta.copy(fontSize = 14.sp, line
 /** A leader's stat line: 24 px. */
 private val LEADER_STAT = SportsLiveTokens.Type.Control.copy(fontWeight = FontWeight.Normal)
 private val TEAM_LOGO = 70.dp
+/** How close to the list's top or bottom a focused row may come before it scrolls: one next-game row. */
+private val TEAM_EDGE_KEEP = 48.dp
 private val ROW_LOGO = 16.dp
 private val NEXT_ROW = 48.dp
 private val RECENT_ROW = 36.dp

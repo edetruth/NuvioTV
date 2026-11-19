@@ -1,0 +1,169 @@
+{
+ "_fixture": "ESPN NBA summary of MIL vs POR (401910020) before tip-off, trimmed to header and leaders. ESPN lists Herro and Ware under MIL (a trade in this season).",
+ "header": {
+  "id": "401910020",
+  "competitions": [
+   {
+    "date": "2026-11-20T01:00Z",
+    "competitors": [
+     {
+      "homeAway": "home",
+      "team": {
+       "id": "15",
+       "abbreviation": "MIL",
+       "displayName": "Milwaukee Bucks"
+      }
+     },
+     {
+      "homeAway": "away",
+      "team": {
+       "id": "22",
+       "abbreviation": "POR",
+       "displayName": "Portland Trail Blazers"
+      }
+     }
+    ]
+   }
+  ]
+ },
+ "leaders": [
+  {
+   "team": {
+    "id": "15",
+    "abbreviation": "MIL",
+    "displayName": "Milwaukee Bucks"
+   },
+   "leaders": [
+    {
+     "name": "pointsPerGame",
+     "displayName": "Points",
+     "abbreviation": null,
+     "leaders": [
+      {
+       "displayValue": "19.4",
+       "athlete": {
+        "id": "4395725",
+        "displayName": "Tyler Herro",
+        "shortName": "T. Herro",
+        "position": {
+         "name": "Guard",
+         "displayName": "Guard",
+         "abbreviation": "G"
+        }
+       }
+      }
+     ]
+    },
+    {
+     "name": "assistsPerGame",
+     "displayName": "Assists",
+     "abbreviation": null,
+     "leaders": [
+      {
+       "displayValue": "4.2",
+       "athlete": {
+        "id": "4395725",
+        "displayName": "Tyler Herro",
+        "shortName": "T. Herro",
+        "position": {
+         "name": "Guard",
+         "displayName": "Guard",
+         "abbreviation": "G"
+        }
+       }
+      }
+     ]
+    },
+    {
+     "name": "reboundsPerGame",
+     "displayName": "Rebounds",
+     "abbreviation": null,
+     "leaders": [
+      {
+       "displayValue": "6.5",
+       "athlete": {
+        "id": "5105623",
+        "displayName": "Kel'el Ware",
+        "shortName": "K. Ware",
+        "position": {
+         "name": "Center",
+         "displayName": "Center",
+         "abbreviation": "C"
+        }
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "team": {
+    "id": "22",
+    "abbreviation": "POR",
+    "displayName": "Portland Trail Blazers"
+   },
+   "leaders": [
+    {
+     "name": "pointsPerGame",
+     "displayName": "Points",
+     "abbreviation": null,
+     "leaders": [
+      {
+       "displayValue": "24.2",
+       "athlete": {
+        "id": "4683021",
+        "displayName": "Deni Avdija",
+        "shortName": "D. Avdija",
+        "position": {
+         "name": "Forward",
+         "displayName": "Forward",
+         "abbreviation": "F"
+        }
+       }
+      }
+     ]
+    },
+    {
+     "name": "assistsPerGame",
+     "displayName": "Assists",
+     "abbreviation": null,
+     "leaders": [
+      {
+       "displayValue": "6.1",
+       "athlete": {
+        "id": "4683021",
+        "displayName": "Deni Avdija",
+        "shortName": "D. Avdija",
+        "position": {
+         "name": "Forward",
+         "displayName": "Forward",
+         "abbreviation": "F"
+        }
+       }
+      }
+     ]
+    },
+    {
+     "name": "reboundsPerGame",
+     "displayName": "Rebounds",
+     "abbreviation": null,
+     "leaders": [
+      {
+       "displayValue": "10.6",
+       "athlete": {
+        "id": "5105565",
+        "displayName": "Donovan Clingan",
+        "shortName": "D. Clingan",
+        "position": {
+         "name": "Center",
+         "displayName": "Center",
+         "abbreviation": "C"
+        }
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}
