@@ -26,7 +26,7 @@ data class SportsLiveUiState(
     val filters: List<String> = emptyList(),
     /** null means All (My sports' games, #146, while it scopes the tab). */
     val selectedFilter: String? = null,
-    /** My sports hides games of [selectedTab] (#146): All reads "My sports" and [ALL_SPORTS_FILTER] is offered. */
+    /** My sports is picked and scopes [selectedTab] (#146): All reads "My sports"; [ALL_SPORTS_FILTER] is offered while it hides games. */
     val mySportsScoped: Boolean = false,
     /**
      * Each chip's game count (#79): All (null), "★ My teams" and each value of [filters], over the tab's

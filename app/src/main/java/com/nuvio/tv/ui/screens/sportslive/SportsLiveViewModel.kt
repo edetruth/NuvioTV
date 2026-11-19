@@ -601,7 +601,7 @@ class SportsLiveViewModel internal constructor(
             selectedTab = selection.tab,
             filters = filters,
             selectedFilter = filter,
-            mySportsScoped = mySportsScoped || allSports,
+            mySportsScoped = selection.tab in SCOPED_TABS && !mySports.isDefault,
             filterCounts = counts,
             visibleItems = visible,
             selectedItemId = selectedId,

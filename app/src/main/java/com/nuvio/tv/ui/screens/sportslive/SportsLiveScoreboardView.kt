@@ -651,7 +651,7 @@ private val ROW_LOGO_SIZE = 18.dp
  * The Agenda rows' (Upcoming, Replays) league column: wide enough for a ten-letter tag ("EUROLEAGUE",
  * "BASKETBALL") at the Tag size, so it never shrinks below the other rows' tags.
  */
-private val AGENDA_LEAGUE_WIDTH = 76.dp
+private val AGENDA_LEAGUE_WIDTH = 80.dp
 private val SINGLE_LINE_ROW_HEIGHT = 40.dp
 private val CHANNEL_LOGO_HEIGHT = 27.dp
 private val COLUMN_GAP = 6.dp
