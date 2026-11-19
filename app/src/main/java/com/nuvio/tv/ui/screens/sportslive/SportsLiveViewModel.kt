@@ -207,12 +207,12 @@ class SportsLiveViewModel internal constructor(
 
     // Followed teams' games first in every tab but Channels, where they are only marked (for the
     // card star); a follow change does not re-bucket.
-    // Live now's and Upcoming's unrouted two-team cards take the league their teams name (#132 P4), again
-    // whenever the team directory changes (it bumps the logo revision).
+    // Live now's, Upcoming's and Replays' unrouted two-team cards take the league their teams name (#132 P4),
+    // again whenever the team directory changes (it bumps the logo revision). Channels are never inferred.
     private val pinned = combine(bucketed, repo.followedTeams, logoRevision) { bucketed, followed, _ ->
         bucketed.copy(
             tabs = bucketed.tabs.mapValues { (tab, listed) ->
-                val items = if (tab == SportsLiveTab.LIVE_NOW || tab == SportsLiveTab.UPCOMING) listed.map(inferSport) else listed
+                val items = if (tab in INFERRED_TABS) listed.map(inferSport) else listed
                 if (tab == SportsLiveTab.CHANNELS) {
                     SportsLiveItemBucketer.markFollowed(items, followed)
                 } else {
@@ -604,6 +604,9 @@ class SportsLiveViewModel internal constructor(
         const val MINUTE_MS = 60_000L
         const val FOCUS_PROBE_DELAY_MS = 700L
         const val ENDED_TICK_MS = 30_000L
+
+        /** The tabs whose game cards take the league their teams name; never Channels or Results. */
+        val INFERRED_TABS = setOf(SportsLiveTab.LIVE_NOW, SportsLiveTab.UPCOMING, SportsLiveTab.REPLAYS)
     }
 }
 

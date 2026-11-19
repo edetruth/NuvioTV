@@ -47,7 +47,8 @@ object SportsLiveSportInference {
      * ("Arizona v Connecticut" → NCAAM, as neither side is an NBA team). A card naming its competition keeps it.
      */
     fun leagueOf(item: SportsLiveItem, directory: TeamDirectory): EspnLeague? {
-        if (item.isChannel || item.kind != SportsLiveKind.EVENTS || item.teams == null) return null
+        // A game listed live, upcoming or as a replay (#132): never a channel or a channels catalog's item.
+        if (item.isChannel || item.kind == SportsLiveKind.CHANNELS || item.teams == null) return null
         val routed = EspnLeagueMap.leaguesFor(item)
         val college = EspnLeagueMap.collegeFallbackFor(item)
         val candidates = when {

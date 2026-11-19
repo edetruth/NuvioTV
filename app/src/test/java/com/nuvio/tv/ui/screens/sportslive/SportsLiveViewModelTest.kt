@@ -703,6 +703,33 @@ class SportsLiveViewModelTest {
     }
 
     @Test
+    fun `sport inference reaches Live Now, Upcoming and Replays but never Channels`() = runTest {
+        nextLoad = load(
+            listOf(
+                item("a", isLive = true, sport = "Basketball", name = "Bulls vs Heat"),
+                item("u", isLive = false, sport = "Basketball", startMs = NOW + HOUR, name = "Bulls vs Nets"),
+                item("r", isLive = false, sport = "Basketball", startMs = NOW - HOUR, name = "Illinois vs Duke")
+                    .copy(kind = SportsLiveKind.REPLAY),
+                channel("ch", "US")
+            )
+        )
+        val viewModel = SportsLiveViewModel(
+            repo,
+            inferSport = { it.copy(sport = "Inferred") },
+            computeDispatcher = compute
+        )
+        viewModel.nowMs = { NOW }
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        val tabs = viewModel.uiState.value.tabs
+        assertEquals(listOf("Inferred"), tabs.getValue(SportsLiveTab.LIVE_NOW).map { it.sport })
+        assertEquals(listOf("Inferred"), tabs.getValue(SportsLiveTab.UPCOMING).map { it.sport })
+        assertEquals(listOf("Inferred"), tabs.getValue(SportsLiveTab.REPLAYS).map { it.sport })
+        assertFalse(tabs.getValue(SportsLiveTab.CHANNELS).any { it.sport == "Inferred" })
+    }
+
+    @Test
     fun `followed games come first in Live Now, Upcoming and Replays and are only marked on Channels`() = runTest {
         followedFlow.value = listOf(FollowedTeam("Celtics", "Basketball"))
         nextLoad = load(

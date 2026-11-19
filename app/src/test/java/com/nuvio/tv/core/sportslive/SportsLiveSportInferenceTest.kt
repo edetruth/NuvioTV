@@ -45,7 +45,12 @@ class SportsLiveSportInferenceTest {
         team("Miami (OH) RedHawks", "Miami (OH)", "Miami (OH)", "M-OH"),
         team("Michigan State Spartans", "Michigan St", "Michigan State", "MSU"),
         team("St. John's Red Storm", "St. John's", "St. John's", "SJU"),
-        team("Siena Saints", "Siena", "Siena", "SIE")
+        team("Siena Saints", "Siena", "Siena", "SIE"),
+        team("Rutgers Scarlet Knights", "Rutgers", "Rutgers", "RUTG"),
+        team("Notre Dame Fighting Irish", "Notre Dame", "Notre Dame", "ND"),
+        team("Illinois Fighting Illini", "Illinois", "Illinois", "ILL"),
+        team("Duke Blue Devils", "Duke", "Duke", "DUKE"),
+        team("Tennessee Volunteers", "Tennessee", "Tennessee", "TENN")
     )
     private val nba = listOf(team("Boston Celtics", "Celtics", "Boston", "BOS"), team("Miami Heat", "Heat", "Miami", "MIA"))
 
@@ -64,14 +69,20 @@ class SportsLiveSportInferenceTest {
         EspnLeagueMap.NBA to nba, EspnLeagueMap.COLLEGE_BASKETBALL to ncaam
     )
 
-    private fun card(name: String, sport: String? = null, catalog: String = "Live", genres: List<String> = emptyList()) = SportsLiveItem(
+    private fun card(
+        name: String,
+        sport: String? = null,
+        catalog: String = "Live",
+        genres: List<String> = emptyList(),
+        kind: SportsLiveKind = SportsLiveKind.EVENTS
+    ) = SportsLiveItem(
         meta = MetaPreview(
             id = name, type = ContentType.UNKNOWN, rawType = "sport", name = name, poster = null,
             posterShape = PosterShape.LANDSCAPE, background = null, logo = null, description = null,
             releaseInfo = null, imdbRating = null, genres = genres
         ),
         addonId = "a", addonName = "a", addonBaseUrl = "https://example.invalid", catalogKey = "k", catalogName = catalog,
-        kind = SportsLiveKind.EVENTS, isLive = true, isChannel = false, startMs = null, sport = sport,
+        kind = kind, isLive = kind == SportsLiveKind.EVENTS, isChannel = false, startMs = null, sport = sport,
         startHasTimeOfDay = true, teams = SportsLiveTeams.parse(name)
     )
 
@@ -195,5 +206,32 @@ class SportsLiveSportInferenceTest {
     fun `a possessive name normalises as written without the apostrophe`() {
         assertEquals(SportsLiveTeams.normalise("St Johns"), SportsLiveTeams.normalise("St. John's"))
         assertEquals("cote d ivoire", SportsLiveTeams.normalise("Cote d'Ivoire"))
+    }
+
+    @Test
+    fun `college replays with sport Basketball infer NCAAM like live cards`() {
+        val names = listOf(
+            "Rutgers Scarlet Knights vs Notre Dame Fighting Irish",
+            "Illinois vs Duke",
+            "Michigan St Spartans vs Tennessee Volunteers"
+        )
+        for (name in names) {
+            val inferred = SportsLiveSportInference.infer(card(name, sport = "Basketball", kind = SportsLiveKind.REPLAY), full)
+            assertEquals(name, "NCAAM", inferred.sport)
+            assertEquals(listOf(EspnLeagueMap.COLLEGE_BASKETBALL), EspnLeagueMap.leaguesFor(inferred))
+        }
+    }
+
+    @Test
+    fun `a replay keeps the same precision rules`() {
+        // Two colleges answer to "Miami": a replay is no more guessed than a live card.
+        assertNull(SportsLiveSportInference.leagueOf(card("Miami vs Arizona", sport = "Basketball", kind = SportsLiveKind.REPLAY), full))
+        assertEquals("NBA", SportsLiveSportInference.infer(card("Celtics vs Heat", sport = "Basketball", kind = SportsLiveKind.REPLAY), full).sport)
+    }
+
+    @Test
+    fun `a channels catalog item is never inferred`() {
+        val item = card("Devils v Canadiens", kind = SportsLiveKind.CHANNELS)
+        assertSame(item, SportsLiveSportInference.infer(item, full))
     }
 }
