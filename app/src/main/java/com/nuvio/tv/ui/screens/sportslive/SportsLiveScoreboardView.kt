@@ -630,7 +630,7 @@ internal fun scoreboardTag(name: String): String {
  * sport) cleaned, or null when it is only the item's catalog name, which says nothing about the game.
  */
 internal fun sportsLiveLeagueLabel(league: String?, catalogName: String): String? =
-    league?.takeIf { it.trim() != catalogName.trim() }?.let(SportsLiveDisplayText::label)
+    league?.takeIf { it.trim() != catalogName.trim() && !SportsLiveTeams.isNonSportTag(it) }?.let(SportsLiveDisplayText::label)
 
 /** [name] without bracketed parts, emoji or symbols ([SportsLiveDisplayText.label]). */
 private fun scoreboardTagText(name: String): String = SportsLiveDisplayText.label(name).orEmpty()

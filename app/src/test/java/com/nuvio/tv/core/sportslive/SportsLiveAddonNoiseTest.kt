@@ -123,10 +123,23 @@ class SportsLiveAddonNoiseTest {
         assertEquals(SportsLiveSportKind.CRICKET, tag("Mumbai Indians vs Chennai Super Kings"))
         assertEquals(SportsLiveSportKind.CRICKET, tag("Bangladesh A vs Hong Kong"))
         assertEquals(SportsLiveSportKind.CRICKET, tag("India A vs SA A"))
+        assertEquals(SportsLiveSportKind.CRICKET, tag("BAN-A vs HK"))
         // Two plain nations are never guessed (rugby, hockey and football play them too); an A side needs cricket nations.
         assertNull(tag("NZ vs IND"))
         assertNull(tag("Brazil A vs Argentina"))
         assertNull(tag("Hobart Hurricanes vs Carolina Hurricanes"))
+    }
+
+    @Test
+    fun `an A side written as a code merges with its full name and is out under My sports`() {
+        val full = event("a", "a1", "Bangladesh A vs Hong Kong", "LIVE", listOf("CRICKET"))
+        val coded = event("b", "b1", "BAN-A vs HK", "LIVE")
+
+        val merged = SportsLiveItemBucketer.merge(listOf(full, coded), listOf("a", "b"), now).single()
+
+        assertEquals(listOf("b1"), merged.alternates.map { it.id })
+        val basketball = com.nuvio.tv.core.sportslive.scores.MySports(mapOf(com.nuvio.tv.core.sportslive.scores.MySport.BASKETBALL to emptySet()))
+        assertFalse(SportsLiveMySportsScope.shows(coded, basketball))
     }
 
     // Wrestling

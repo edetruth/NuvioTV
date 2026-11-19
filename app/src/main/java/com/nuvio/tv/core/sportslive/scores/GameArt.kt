@@ -61,7 +61,7 @@ data class GameArt(
             return GameArt(
                 first = team(first, firstTeam, remembered?.first),
                 second = team(second, secondTeam, remembered?.second),
-                league = event?.leagueName?.takeIf { it.isNotBlank() } ?: item.sport?.takeIf { it.isNotBlank() },
+                league = event?.leagueName?.takeIf { it.isNotBlank() } ?: sportLabelOf(item),
                 startMs = eventStart ?: item.startMs,
                 hasTimeOfDay = if (eventStart != null) true else item.startHasTimeOfDay,
                 seasonType = event?.seasonType
@@ -86,7 +86,7 @@ data class GameArt(
             return GameArt(
                 first = team(first, null, remembered?.first),
                 second = team(second, null, remembered?.second),
-                league = competition ?: item.sport?.takeIf { it.isNotBlank() },
+                league = competition ?: sportLabelOf(item),
                 startMs = item.startMs,
                 hasTimeOfDay = item.startHasTimeOfDay
             )
@@ -140,3 +140,7 @@ data class GameArt(
         private fun displayName(side: String): String = side.replace(LEADING_TAG, "").trim().ifEmpty { side.trim() }
     }
 }
+
+/** [item]'s sport as a league label; none for a non-sport tag ("OTHER", #145), which says nothing about the game. */
+private fun sportLabelOf(item: SportsLiveItem): String? =
+    item.sport?.takeIf { it.isNotBlank() && !SportsLiveTeams.isNonSportTag(it) }

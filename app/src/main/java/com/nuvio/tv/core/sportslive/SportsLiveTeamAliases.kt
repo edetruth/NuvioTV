@@ -30,6 +30,8 @@ object SportsLiveTeamAliases {
         "scotland" to listOf("sco"),
         "netherlands" to listOf("ned", "nl", "holland"),
         "namibia" to listOf("nam"),
+        "hong kong" to listOf("hk"),
+        "nepal" to listOf("nep"),
         "cameroon" to listOf("cmr"),
         "cote d ivoire" to listOf("civ", "ivory coast", "côte d ivoire"),
         "dr congo" to listOf("cod", "drc", "congo dr"),
@@ -140,5 +142,8 @@ object SportsLiveTeamAliases {
      * the name is not a known abbreviation/alias. A canonical name resolves to itself, so a full name
      * and its abbreviation both return the same value.
      */
-    fun canonical(normalisedName: String): String? = TO_CANONICAL[normalisedName]
+    fun canonical(normalisedName: String): String? =
+        TO_CANONICAL[normalisedName]
+            // A national A side ("BAN-A", "Bangladesh A", #145): the nation's canonical name, then "a".
+            ?: normalisedName.takeIf { it.endsWith(" a") }?.let { TO_CANONICAL[it.dropLast(2)] }?.let { "$it a" }
 }

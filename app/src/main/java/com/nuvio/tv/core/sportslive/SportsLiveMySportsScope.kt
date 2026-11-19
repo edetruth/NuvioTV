@@ -40,6 +40,8 @@ object SportsLiveMySportsScope {
     internal fun kindOf(item: SportsLiveItem): SportsLiveSportKind? =
         (listOf(item.sport, item.meta.name) + item.meta.genres + item.meta.description).firstNotNullOfOrNull { SportsLiveSportKind.of(it) }
             ?: SportsLiveSportKind.single(item.catalogName)
+            // Cricket told from its teams alone (#145): out under My sports, as a tagged cricket game is.
+            ?: SportsLiveSportKind.CRICKET.takeIf { SportsLiveCricket.isCricketGame(item.teams) }
 
     /**
      * The My sports [item]'s sport can be ([kindOf]); empty for a sport My sports cannot hold. A bare
