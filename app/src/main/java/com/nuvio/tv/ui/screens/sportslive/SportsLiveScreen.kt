@@ -96,6 +96,7 @@ import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualSession
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualSessions
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniGeometry
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniDock
+import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniFocus
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniPlacement
 import com.nuvio.tv.ui.screens.sportslive.mini.rememberSportsLiveMiniDock
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniPlayers
@@ -1091,6 +1092,7 @@ private fun SportsLiveContent(
             if (stageHeader == SportsLiveStageHeader.MERGED) miniPlayer.requestExpand() else selected?.let(open)
         }
         val miniDock = rememberSportsLiveMiniDock()
+        val miniDocked = nowPlaying != null && miniDock is SportsLiveMiniDock.Docked
         // A card that goes away (idle timeout, profile switch) while focused hands focus to the active tab.
         var nowPlayingHasFocus by remember { mutableStateOf(false) }
         LaunchedEffect(nowPlaying == null) {
@@ -1314,7 +1316,11 @@ private fun SportsLiveContent(
                         .onFocusChanged { paneHasFocus = it.hasFocus },
                     watchModifier = Modifier
                         .focusRequester(watchFocusRequester)
-                        .focusProperties { left = entryCardFocusRequester ?: selectedCardFocusRequester },
+                        .focusProperties {
+                            left = entryCardFocusRequester ?: selectedCardFocusRequester
+                            // Up reaches the docked mini player (#157), whose Back stops it.
+                            if (miniDocked) up = SportsLiveMiniFocus.requester
+                        },
                     miniPlaying = nowPlaying != null
                 )
             }
@@ -1431,7 +1437,11 @@ private fun SportsLiveContent(
                         .onFocusChanged { paneHasFocus = it.hasFocus },
                     primaryModifier = Modifier
                         .focusRequester(watchFocusRequester)
-                        .focusProperties { left = entryCardFocusRequester ?: selectedCardFocusRequester },
+                        .focusProperties {
+                            left = entryCardFocusRequester ?: selectedCardFocusRequester
+                            // Up reaches the docked mini player (#157), whose Back stops it.
+                            if (miniDocked) up = SportsLiveMiniFocus.requester
+                        },
                     header = stageHeader
                 )
             }
@@ -1552,7 +1562,11 @@ private fun SportsLiveContent(
                         .onFocusChanged { paneHasFocus = it.hasFocus },
                     watchModifier = Modifier
                         .focusRequester(watchFocusRequester)
-                        .focusProperties { left = entryCardFocusRequester ?: selectedCardFocusRequester },
+                        .focusProperties {
+                            left = entryCardFocusRequester ?: selectedCardFocusRequester
+                            // Up reaches the docked mini player (#157), whose Back stops it.
+                            if (miniDocked) up = SportsLiveMiniFocus.requester
+                        },
                     header = stageHeader
                 )
             }

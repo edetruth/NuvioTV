@@ -89,6 +89,9 @@ import com.nuvio.tv.ui.util.dpadRepeatThrottle
 import kotlinx.coroutines.launch
 import java.time.LocalTime
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniPlayers
+import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniDock
+import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniFocus
+import com.nuvio.tv.ui.screens.sportslive.mini.rememberSportsLiveMiniDock
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniState
 import androidx.compose.runtime.collectAsState
 import java.util.Locale
@@ -447,6 +450,9 @@ internal fun SportsLiveResultsView(
                 }
             }
             Spacer(modifier = Modifier.width(SportsLiveTokens.Size.StageGap - RESULTS_FOCUS_ROOM * 2))
+            val miniDock = rememberSportsLiveMiniDock()
+            val miniDocked = SportsLiveMiniPlayers.controller.state.collectAsState().value is SportsLiveMiniState.Playing &&
+                miniDock is SportsLiveMiniDock.Docked
             if (stageItem != null && firstFocusableKey != null) {
                 ResultsStage(
                     row = stageItem.row,
@@ -460,7 +466,11 @@ internal fun SportsLiveResultsView(
                         .onFocusChanged { stageHasFocus = it.hasFocus },
                     firstModifier = Modifier
                         .focusRequester(stageFocusRequester)
-                        .focusProperties { left = itemFocusRequesters[stageItem.key] ?: FocusRequester.Default }
+                        .focusProperties {
+                            left = itemFocusRequesters[stageItem.key] ?: FocusRequester.Default
+                            // Up reaches the docked mini player (#157), whose Back stops it.
+                            if (miniDocked) up = SportsLiveMiniFocus.requester
+                        }
                 )
             }
         }

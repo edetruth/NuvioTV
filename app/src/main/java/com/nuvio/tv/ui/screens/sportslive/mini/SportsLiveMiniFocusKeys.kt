@@ -1,6 +1,15 @@
 package com.nuvio.tv.ui.screens.sportslive.mini
 
 import android.view.KeyEvent
+import androidx.compose.ui.focus.FocusRequester
+
+/**
+ * The docked mini player's focus (#157): a stage's primary button sends Up to it while it is docked, so
+ * OK (expand) and Back (stop) on it are one press away. Attached only while the mini player is drawn.
+ */
+object SportsLiveMiniFocus {
+    val requester = FocusRequester()
+}
 
 /** What a key does while the mini player has focus. */
 enum class SportsLiveMiniKey {
