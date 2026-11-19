@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import com.nuvio.tv.core.sportslive.SportsLiveStreamThresholds
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.Stream
 import kotlinx.coroutines.CancellationException
@@ -16,13 +17,17 @@ import kotlinx.coroutines.launch
  *
  * The session moves to the target at once, so repeated presses move further while a stream is
  * being looked up; a newer zap cancels the older lookup, so only the last target is played.
- * When the target has no stream, the session goes back to the game still playing.
+ * When an Up/Down zap lands on a game with no stream, it skips on in the same direction
+ * ([onSkipped]), at most [SportsLiveStreamThresholds.MAX_ZAP_SKIPS] games (#138); when nothing is
+ * found (or a game picked from the panel has no stream), the session goes back to the game still playing.
  */
 class PlayerZapController(
     private val scope: CoroutineScope,
     private val resolve: suspend (SportsLiveItem) -> Stream?,
     private val onNavigate: suspend (SportsLiveItem, Stream) -> Unit,
     private val onNoStream: (SportsLiveItem) -> Unit,
+    /** A zap skipped [SportsLiveItem], which had no stream, and goes on to the next game (#138). */
+    private val onSkipped: (SportsLiveItem) -> Unit = {},
     /** Stream keys of the games known to have ended, which zaps skip. */
     private val endedKeys: () -> Set<String> = { emptySet() },
     /**
@@ -73,7 +78,7 @@ class PlayerZapController(
         val base = session(contentId)?.let(::ordered) ?: return false
         val target = base.step(forward, endedKeys()) ?: return false
         if (!inFlight) playing = base
-        return zapTo(target)
+        return zapTo(target, direction = forward)
     }
 
     /**
@@ -125,7 +130,8 @@ class PlayerZapController(
     private fun ordered(session: SportsLiveZapSession): SportsLiveZapSession =
         lineup()?.let(session::withLineup) ?: session
 
-    private fun zapTo(target: SportsLiveZapSession): Boolean {
+    /** [direction]: an Up/Down zap's (true = next), which skips games with no stream; null for a panel pick. */
+    private fun zapTo(target: SportsLiveZapSession, direction: Boolean? = null): Boolean {
         if (playing == null) return false
         SportsLiveZapSessions.update(target)
         this.target = target
@@ -133,16 +139,37 @@ class PlayerZapController(
         _resolving.value = target
         val lookup = ++lookups
         job = scope.launch {
-            val item = target.current
             try {
                 // Settle first: a newer flip cancels this job here, so skipped channels never resolve.
                 if (settleMs > 0) delay(settleMs)
-                val stream = resolve(item)
-                if (stream == null) {
-                    revertIfCurrent(lookup)
-                    onNoStream(item)
-                } else {
-                    onNavigate(item, stream)
+                var landed = target
+                var skips = 0
+                val skipped = mutableSetOf<String>()
+                while (true) {
+                    val item = landed.current
+                    val stream = resolve(item)
+                    if (stream != null) {
+                        onNavigate(item, stream)
+                        break
+                    }
+                    // No stream: an Up/Down zap skips on in its direction, never back to the game playing.
+                    skipped += item.streamKey
+                    item.alternates.mapTo(skipped) { it.streamKey }
+                    val next = direction
+                        ?.takeIf { skips < SportsLiveStreamThresholds.MAX_ZAP_SKIPS }
+                        ?.let { landed.step(it, endedKeys() + skipped) }
+                        ?.takeUnless { it.current.streamKey == playing?.current?.streamKey }
+                    if (next == null || SportsLiveZapSessions.current() !== landed) {
+                        revertIfCurrent(lookup)
+                        onNoStream(item)
+                        break
+                    }
+                    skips++
+                    onSkipped(item)
+                    SportsLiveZapSessions.update(next)
+                    this@PlayerZapController.target = next
+                    _resolving.value = next
+                    landed = next
                 }
             } catch (e: CancellationException) {
                 // A newer zap has already moved the session on; a player left mid-lookup has not.

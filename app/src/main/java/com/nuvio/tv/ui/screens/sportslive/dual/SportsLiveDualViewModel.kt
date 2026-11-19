@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import com.nuvio.tv.core.debrid.DirectDebridResolver
 import com.nuvio.tv.core.sportslive.SportsLiveRecoveryBudget
 import com.nuvio.tv.core.sportslive.SportsLiveRecoveryLadder
+import com.nuvio.tv.core.sportslive.SportsLiveStartupTimeout
+import com.nuvio.tv.core.sportslive.SportsLiveStreamThresholds
 import com.nuvio.tv.core.sportslive.SportsLiveStreamHealth
 import com.nuvio.tv.core.sportslive.SportsLiveWorkingLinks
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
@@ -151,7 +153,9 @@ class SportsLiveDualViewModel internal constructor(
      */
     private val recoveryLookup: suspend (item: SportsLiveItem, tried: Set<String>) -> Stream? = { _, _ -> null },
     /** Automatic recoveries each game may have (#138). */
-    private val recoveryBudget: SportsLiveRecoveryBudget = SportsLiveRecoveryBudget()
+    private val recoveryBudget: SportsLiveRecoveryBudget = SportsLiveRecoveryBudget(),
+    /** How many links a game has, as far as known without a request (#138); 0 when unknown. */
+    private val linkCount: suspend (SportsLiveItem) -> Int = { 0 }
 ) : ViewModel() {
 
     @Inject
@@ -170,7 +174,8 @@ class SportsLiveDualViewModel internal constructor(
         claimKeysHint = preferences::claimDualKeysHint,
         handOffPlayable = { stream -> sportsLiveLightPlayable(stream, directDebridResolver) },
         recoveryLookup = resolver::recoveryStream,
-        recoveryBudget = SportsLiveRecoveryBudget.shared
+        recoveryBudget = SportsLiveRecoveryBudget.shared,
+        linkCount = resolver::cachedLinkCount
     )
 
     private val items: List<SportsLiveItem> = session?.items.orEmpty()
@@ -230,6 +235,9 @@ class SportsLiveDualViewModel internal constructor(
 
     /** The links each pane game's recoveries have given up on (#138), by stream key. */
     private val tried = mutableMapOf<String, MutableSet<String>>()
+
+    /** Pane games (by stream key) whose starting link had a request fail: a shorter start-up time (#138). */
+    private val startRequestFailed = mutableSetOf<String>()
 
     init {
         session?.let { s -> s.leftStream?.let { handOffs[s.left.streamKey] = it } }
@@ -361,7 +369,10 @@ class SportsLiveDualViewModel internal constructor(
         val side = state.sideOf(item) ?: return
         val pane = state.pane(side)
         val stream = pane.stream ?: return
-        if (pane.status != PaneStatus.Playing && !pane.reconnecting) return
+        // A link that never started (or whose host is unknown) recovers from Loading too.
+        val startFailure = pane.status == PaneStatus.Loading &&
+            (problem == SportsLiveStreamHealth.Problem.NO_START || problem == SportsLiveStreamHealth.Problem.DEAD_LINK)
+        if (pane.status != PaneStatus.Playing && !pane.reconnecting && !startFailure) return
         linkFailed(item, stream)
         SportsLiveWorkingLinks.linkKey(stream.getStreamUrl())?.let { tried.getOrPut(item.streamKey) { mutableSetOf() } += it }
         val ladder = ladders.getOrPut(item.streamKey) { SportsLiveRecoveryLadder(recoveryBudget, workingLinks.nowMs) }
@@ -396,7 +407,8 @@ class SportsLiveDualViewModel internal constructor(
                 return@launch
             }
             dispatch(DualAction.Switched(item, next))
-            delay(FIRST_FRAME_TIMEOUT_MS)
+            countLinks(item)
+            awaitStart(item)
             timeOut(item)
         }
     }
@@ -404,9 +416,48 @@ class SportsLiveDualViewModel internal constructor(
     private fun startTimeout(side: Side, item: SportsLiveItem) {
         jobs.remove(side)?.cancel()
         jobs[side] = viewModelScope.launch {
-            delay(FIRST_FRAME_TIMEOUT_MS)
+            awaitStart(item)
             timeOut(item)
         }
+    }
+
+    /**
+     * Waits out [item]'s pane link start-up time (#138, [SportsLiveStartupTimeout]): 15 s, or 8 s once
+     * one of its requests failed ([onRequestFailed]).
+     */
+    private suspend fun awaitStart(item: SportsLiveItem) {
+        startRequestFailed -= item.streamKey
+        SportsLiveStartupTimeout.await { item.streamKey in startRequestFailed }
+    }
+
+    /** A manifest or segment request of [item]'s pane link failed before its first frame (#138). */
+    fun onRequestFailed(item: SportsLiveItem) {
+        val pane = _state.value?.let { state -> state.sideOf(item)?.let(state::pane) } ?: return
+        if (pane.status == PaneStatus.Loading) startRequestFailed += item.streamKey
+    }
+
+    /** Looks up how many links [item]'s game has, for its starting card (#138); no request is made. */
+    private fun countLinks(item: SportsLiveItem) {
+        viewModelScope.launch {
+            val count = linkCount(item)
+            if (count > 0) dispatch(DualAction.LinkCount(item, count))
+        }
+    }
+
+    /**
+     * "Try next link" on the highlighted pane's starting card (#138): its link still starting is left
+     * behind (not held against it, no recovery spent) and the next link for the game is tried; a late
+     * first frame of the old link never counts ([onFirstFrame]). False when the pane is not starting.
+     */
+    fun tryNextLink(): Boolean {
+        val state = _state.value ?: return false
+        val side = state.highlighted
+        val pane = state.pane(side)
+        val stream = pane.stream
+        if (!pane.isStarting || stream == null) return false
+        SportsLiveWorkingLinks.linkKey(stream.getStreamUrl())?.let { tried.getOrPut(pane.item.streamKey) { mutableSetOf() } += it }
+        switchLink(side, pane.item)
+        return true
     }
 
     /** A game a pane moves to starts with a fresh recovery ladder (its budget stays, per game). */
@@ -443,8 +494,14 @@ class SportsLiveDualViewModel internal constructor(
         return item to (pane?.okStream ?: handOffs[item.streamKey])
     }
 
-    fun onFirstFrame(item: SportsLiveItem) {
+    /**
+     * [item]'s pane player showed its first frame of [stream] (null: whatever the pane plays). A late
+     * first frame of a link the pane already left (Try next link, a recovery) is ignored (#138).
+     */
+    fun onFirstFrame(item: SportsLiveItem, stream: Stream? = null) {
         val side = _state.value?.sideOf(item) ?: return
+        if (stream != null && !sameLink(_state.value?.pane(side)?.stream, stream)) return
+        startRequestFailed -= item.streamKey
         dispatch(DualAction.FirstFrame(item))
         // Playing now: the pane's first-frame timeout is no longer needed, and a later decoder
         // failure gets its retry again.
@@ -478,12 +535,18 @@ class SportsLiveDualViewModel internal constructor(
     fun onPlayerError(
         item: SportsLiveItem,
         decoderInit: Boolean,
-        problem: SportsLiveStreamHealth.Problem = SportsLiveStreamHealth.Problem.ERROR
+        problem: SportsLiveStreamHealth.Problem = SportsLiveStreamHealth.Problem.ERROR,
+        /** The link that failed; a link the pane already left is ignored (#138). Null: the pane's own. */
+        stream: Stream? = null
     ) {
         val state = _state.value ?: return
         val side = state.sideOf(item) ?: return
         val pane = state.pane(side)
-        if (!decoderInit && (pane.status == PaneStatus.Playing || pane.reconnecting)) {
+        if (stream != null && !sameLink(pane.stream, stream)) return
+        // A dead host (#138) moves on to the next link even before the first frame, with no retry.
+        if (!decoderInit && (pane.status == PaneStatus.Playing || pane.reconnecting ||
+                problem == SportsLiveStreamHealth.Problem.DEAD_LINK)
+        ) {
             onUnhealthy(item, problem)
             return
         }
@@ -520,7 +583,7 @@ class SportsLiveDualViewModel internal constructor(
             jobs.remove(side)?.cancel()
             dispatch(DualAction.Restarted(pane.item))
             jobs[side] = viewModelScope.launch {
-                delay(FIRST_FRAME_TIMEOUT_MS)
+                awaitStart(pane.item)
                 timeOut(pane.item)
             }
         }
@@ -554,21 +617,24 @@ class SportsLiveDualViewModel internal constructor(
             val stream = handOffs[item.streamKey]?.takeIf { handOffPlayable(it) } ?: resolve(item)
             dispatch(DualAction.Resolved(item, stream))
             if (stream != null) {
-                delay(FIRST_FRAME_TIMEOUT_MS)
+                countLinks(item)
+                awaitStart(item)
                 timeOut(item)
             }
         }
     }
 
-    /** No first frame in time: the pane shows an error, and its link is quarantined for the game. */
+    /**
+     * No first frame in time (#138): a step of the pane's recovery ladder, so the next link for the
+     * game is tried (its link is quarantined for the game); with none left, or the game's recoveries
+     * spent, the pane offers the choices.
+     */
     private fun timeOut(item: SportsLiveItem) {
         val pane = _state.value?.let { state -> state.sideOf(item)?.let(state::pane) }
-        // A link a recovery tried that did not start: the recovery goes on (#138).
-        if (pane?.status == PaneStatus.Loading && pane.reconnecting) {
+        if (pane?.status == PaneStatus.Loading && pane.stream != null) {
             onUnhealthy(item, SportsLiveStreamHealth.Problem.NO_START)
             return
         }
-        if (pane?.status == PaneStatus.Loading) linkFailed(item, pane.stream)
         dispatch(DualAction.TimedOut(item))
     }
 
@@ -600,9 +666,15 @@ class SportsLiveDualViewModel internal constructor(
         _state.update { it?.reduce(action) }
     }
 
+    private fun sameLink(a: Stream?, b: Stream?): Boolean =
+        a != null && b != null && a.getStreamUrl() == b.getStreamUrl()
+
     companion object {
-        /** A pane with no first frame this long after its stream was found shows an error. */
-        const val FIRST_FRAME_TIMEOUT_MS = 15_000L
+        /**
+         * A pane with no first frame this long after its stream was found moves on to the next link
+         * (#138); 8 s once one of its requests failed ([SportsLiveStartupTimeout]).
+         */
+        const val FIRST_FRAME_TIMEOUT_MS = SportsLiveStreamThresholds.NO_FIRST_FRAME_MS
 
         /** A pane that found no decoder starts again once, this long later, before showing the device limit. */
         const val DEVICE_LIMIT_RETRY_MS = 1_000L

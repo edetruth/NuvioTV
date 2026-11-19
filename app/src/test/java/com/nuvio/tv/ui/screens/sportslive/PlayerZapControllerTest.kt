@@ -33,6 +33,7 @@ class PlayerZapControllerTest {
     private val cancelled = mutableListOf<String>()
     private val navigated = mutableListOf<Pair<String, Stream>>()
     private val noStream = mutableListOf<String>()
+    private val skipped = mutableListOf<String>()
     private var ended = emptySet<String>()
 
     @After
@@ -57,6 +58,7 @@ class PlayerZapControllerTest {
         },
         onNavigate = { item, stream -> navigated += item.id to stream },
         onNoStream = { item -> noStream += item.id },
+        onSkipped = { item -> skipped += item.id },
         endedKeys = { ended },
         settleMs = settleMs
     )
@@ -210,8 +212,12 @@ class PlayerZapControllerTest {
         runCurrent()
         pending.getValue("c").complete(null)
         runCurrent()
+        // c had no stream: the zap skipped on to d (#138), which has none either; the next would be a, playing.
+        assertEquals(listOf("c"), skipped)
+        pending.getValue("d").complete(null)
+        runCurrent()
 
-        assertEquals(listOf("c"), noStream)
+        assertEquals(listOf("d"), noStream)
         assertTrue(navigated.isEmpty())
         assertEquals("a", SportsLiveZapSessions.activeFor("a")?.current?.id)
         // The player keeps zapping from the game it shows.
@@ -235,6 +241,59 @@ class PlayerZapControllerTest {
         assertEquals(listOf("b", "c"), cancelled)
         assertTrue(navigated.isEmpty())
         assertTrue(noStream.isEmpty())
+        assertEquals("a", SportsLiveZapSessions.activeFor("a")?.current?.id)
+    }
+
+    @Test
+    fun `a zap onto a game with no streams skips on in the same direction`() = runTest {
+        startOn("a")
+        val controller = controller()
+
+        controller.zap("a", forward = false)
+        runCurrent()
+        pending.getValue("d").complete(null)
+        runCurrent()
+
+        assertEquals(listOf("d"), skipped)
+        assertEquals("c", controller.resolving.value?.current?.id)
+        pending.getValue("c").complete(STREAM)
+        runCurrent()
+        assertEquals(listOf("c" to STREAM), navigated)
+        assertTrue(noStream.isEmpty())
+    }
+
+    @Test
+    fun `a zap stops after five skips and stays on the playing game`() = runTest {
+        val many = (0 until 9).map { item("g$it") }
+        SportsLiveZapSessions.start(
+            SportsLiveZapSession.of(many, "addon|g0", SportsLiveTab.LIVE_NOW, sportKey("Football"), false)!!
+        )
+        val controller = controller()
+        many.forEach { pending[it.id] = CompletableDeferred<Stream?>(null) }
+
+        controller.zap("g0", forward = true)
+        runCurrent()
+
+        assertEquals(listOf("g1", "g2", "g3", "g4", "g5"), skipped)
+        assertEquals(listOf("g6"), noStream)
+        assertEquals(listOf("g1", "g2", "g3", "g4", "g5", "g6"), resolveCalls)
+        assertTrue(navigated.isEmpty())
+        assertEquals("g0", SportsLiveZapSessions.activeFor("g0")?.current?.id)
+        assertNull(controller.resolving.value)
+    }
+
+    @Test
+    fun `a game picked in the panel with no stream is not skipped past`() = runTest {
+        startOn("a")
+        val controller = controller()
+
+        controller.pick("a", items[2], items)
+        runCurrent()
+        pending.getValue("c").complete(null)
+        runCurrent()
+
+        assertTrue(skipped.isEmpty())
+        assertEquals(listOf("c"), noStream)
         assertEquals("a", SportsLiveZapSessions.activeFor("a")?.current?.id)
     }
 
@@ -333,7 +392,7 @@ class PlayerZapControllerTest {
         runCurrent()
 
         assertEquals("b", controller.resolving.value?.current?.id)
-        pending.getValue("b").complete(null)
+        pending.getValue("b").complete(STREAM)
         runCurrent()
         assertNull(controller.resolving.value)
     }

@@ -72,6 +72,8 @@ import com.nuvio.tv.ui.screens.sportslive.SportsLivePlayHost
 import com.nuvio.tv.ui.screens.sportslive.SportsLivePlayState
 import com.nuvio.tv.ui.screens.sportslive.SportsLivePlayViewModel
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveReconnectingChip
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveStartingAction
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveStartingCard
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapTarget
 import com.nuvio.tv.ui.screens.sportslive.zapDirection
 import com.nuvio.tv.ui.theme.NuvioTheme
@@ -138,7 +140,8 @@ fun SportsLiveDualScreen(
                         onError = viewModel::onPlayerError,
                         onIsPlaying = viewModel::onIsPlayingChanged,
                         onUnhealthy = viewModel::onUnhealthy,
-                        onMoving = viewModel::onMoving
+                        onMoving = viewModel::onMoving,
+                        onRequestFailed = viewModel::onRequestFailed
                     )
                     viewModel.onPlayersCreated()
                 }
@@ -184,12 +187,12 @@ fun SportsLiveDualScreen(
     // Back from dual screen opened in a full player plays that game full screen again (M11), in place
     // of dual screen as OK does (#27); a second Back while it starts, or dual opened elsewhere, leaves.
     var backPlayed by remember { mutableStateOf(false) }
-    BackHandler {
+    val handleBack: () -> Unit = handleBack@{
         // "Close this side" (#138): the highlighted pane gave up; the other game plays full screen.
         viewModel.closeFailedSide()?.takeUnless { backPlayed }?.let { (item, stream) ->
             backPlayed = true
             playViewModel.playResolved(item, stream)
-            return@BackHandler
+            return@handleBack
         }
         val back = viewModel.backToPlayer()?.takeUnless { backPlayed }
         if (back == null) {
@@ -200,6 +203,12 @@ fun SportsLiveDualScreen(
             if (stream != null) playViewModel.playResolved(item, stream) else playViewModel.play(item)
         }
     }
+    BackHandler { handleBack() }
+
+    // The highlighted pane's starting card (#138): Up/Down move through its buttons, OK presses one.
+    val highlightedPane = dual.pane(dual.highlighted)
+    var startingSelection by remember { mutableStateOf(SportsLiveStartingAction.TRY_NEXT_LINK) }
+    LaunchedEffect(dual.highlighted, highlightedPane.stream) { startingSelection = SportsLiveStartingAction.TRY_NEXT_LINK }
 
     // Focus starts on the screen and comes back to it when OK's lookup or stream picker closes.
     val focusRequester = remember { FocusRequester() }
@@ -217,6 +226,30 @@ fun SportsLiveDualScreen(
             .onKeyEvent { event ->
                 val native = event.nativeKeyEvent
                 if (native.action != KeyEvent.ACTION_DOWN) return@onKeyEvent false
+                // A starting pane's card (#138): CH+/CH- still zap, as everywhere.
+                if (dual.pane(dual.highlighted).isStarting) {
+                    val actions = SportsLiveStartingAction.entries
+                    when (native.keyCode) {
+                        KeyEvent.KEYCODE_DPAD_UP -> {
+                            startingSelection = actions[(startingSelection.ordinal - 1).coerceAtLeast(0)]
+                            return@onKeyEvent true
+                        }
+                        KeyEvent.KEYCODE_DPAD_DOWN -> {
+                            startingSelection = actions[(startingSelection.ordinal + 1).coerceAtMost(actions.lastIndex)]
+                            return@onKeyEvent true
+                        }
+                        KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                            if (native.repeatCount == 0) {
+                                when (startingSelection) {
+                                    SportsLiveStartingAction.TRY_NEXT_LINK -> viewModel.tryNextLink()
+                                    SportsLiveStartingAction.SOURCES -> playViewModel.chooseStream(dual.pane(dual.highlighted).item)
+                                    SportsLiveStartingAction.BACK -> handleBack()
+                                }
+                            }
+                            return@onKeyEvent true
+                        }
+                    }
+                }
                 when (native.keyCode) {
                     // On the left pane already, Left opens the right pane's picker (#57).
                     KeyEvent.KEYCODE_DPAD_LEFT -> if (native.repeatCount == 0) viewModel.onLeft()
@@ -256,6 +289,7 @@ fun SportsLiveDualScreen(
                 DualPaneView(
                     pane = dual.pane(side),
                     highlighted = side == dual.highlighted,
+                    startingSelection = startingSelection,
                     sound = dual.paneSound(side, players?.isPlaying(side) == true),
                     onViewCreated = { view ->
                         views[side] = view
@@ -323,6 +357,7 @@ fun SportsLiveDualScreen(
 private fun DualPaneView(
     pane: DualPane,
     highlighted: Boolean,
+    startingSelection: SportsLiveStartingAction,
     sound: PaneSound,
     onViewCreated: (PlayerView) -> Unit,
     modifier: Modifier = Modifier
@@ -362,7 +397,7 @@ private fun DualPaneView(
                 },
                 modifier = Modifier.fillMaxSize()
             )
-            PaneStatusOverlay(pane)
+            PaneStatusOverlay(pane, highlighted, startingSelection)
         }
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -429,9 +464,26 @@ private fun SoundBars(color: Color, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun BoxScope.PaneStatusOverlay(pane: DualPane) {
+private fun BoxScope.PaneStatusOverlay(pane: DualPane, highlighted: Boolean, startingSelection: SportsLiveStartingAction) {
+    // A link starting (#138): its card; the highlighted pane's has the buttons the keys move through.
+    if (pane.isStarting) {
+        val startedAtMs = remember(pane.stream, pane.attempt) { System.currentTimeMillis() }
+        SportsLiveStartingCard(
+            game = pane.item.displayName,
+            linkNumber = pane.linkNumber,
+            linkCount = pane.linkCount,
+            sourceName = pane.stream?.addonName,
+            startedAtMs = startedAtMs,
+            onAction = {},
+            selected = startingSelection,
+            compact = true,
+            showActions = highlighted,
+            modifier = Modifier.align(Alignment.Center)
+        )
+        return
+    }
     // A recovery (#138): the last frame stays, with a small chip at its top-left, clear of the scorebug.
-    if (pane.reconnecting && (pane.status == PaneStatus.Loading || pane.status == PaneStatus.Playing)) {
+    if (pane.reconnecting && pane.status == PaneStatus.Playing) {
         SportsLiveReconnectingChip(
             small = true,
             modifier = Modifier

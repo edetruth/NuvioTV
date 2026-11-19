@@ -91,6 +91,9 @@ data class SportsLiveZapTarget(
 sealed interface SportsLiveZapEvent {
     data class Navigate(val target: SportsLiveZapTarget) : SportsLiveZapEvent
     data class NoStream(val name: String) : SportsLiveZapEvent
+
+    /** A zap skipped game [name], which had no stream, and went on in the same direction (#138). */
+    data class Skipped(val name: String) : SportsLiveZapEvent
 }
 
 /** Zap state of one Player back stack entry, whose route arguments it reads. */
@@ -154,6 +157,7 @@ class SportsLiveZapViewModel internal constructor(
             _events.send(SportsLiveZapEvent.Navigate(target))
         },
         onNoStream = { item -> _events.trySend(SportsLiveZapEvent.NoStream(item.displayName)) },
+        onSkipped = { item -> _events.trySend(SportsLiveZapEvent.Skipped(item.displayName)) },
         endedKeys = { repo.endedKeys.value },
         // #142: CH+/CH- walk the panel's own list.
         lineup = { lineup.value?.rows }
@@ -779,6 +783,11 @@ fun rememberSportsLiveZapKeyHandler(
                 is SportsLiveZapEvent.NoStream -> Toast.makeText(
                     context,
                     context.getString(R.string.sports_live_zap_no_stream, event.name),
+                    Toast.LENGTH_SHORT
+                ).show()
+                is SportsLiveZapEvent.Skipped -> Toast.makeText(
+                    context,
+                    context.getString(R.string.sports_live_zap_skipped, event.name),
                     Toast.LENGTH_SHORT
                 ).show()
             }

@@ -68,6 +68,8 @@ internal fun ExoPlayer.playSportsLiveStream(
     url: String
 ) {
     val spec = sportsLiveMediaSourceSpec(stream, url)
+    // A link whose host does not exist fails at once, so its player moves on to the next link (#138).
+    mediaSourceFactory.failFastOnDeadHost = true
     setMediaSource(
         mediaSourceFactory.createMediaSource(
             context = appContext,

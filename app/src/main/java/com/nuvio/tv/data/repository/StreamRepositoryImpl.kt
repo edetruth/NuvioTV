@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.nuvio.tv.R
 import com.nuvio.tv.core.network.NetworkResult
+import com.nuvio.tv.core.sportslive.SportsLiveAddonFetch
 import com.nuvio.tv.core.network.safeApiCall
 import com.nuvio.tv.core.debrid.DebridStreamPresentation
 import com.nuvio.tv.core.debrid.LocalDebridAvailabilityService
@@ -296,10 +297,23 @@ class StreamRepositoryImpl @Inject constructor(
                 val completedJobs = java.util.concurrent.atomic.AtomicInteger(0)
 
                 // Launch addon jobs
+                // A Sports & Live game's search (#138): each addon gets a few seconds, and its meta
+                // fallback is asked alongside the streams instead of after an empty answer.
+                val sportsFetch = SportsLiveAddonFetch.shared.takeIf { it.isSports(videoId) }
                 streamAddons.forEach { addon ->
                     launch {
                         try {
-                            val streamsResult = getStreamsFromAddon(addon, type, videoId)
+                            val streamsResult = if (sportsFetch == null) {
+                                getStreamsFromAddon(addon, type, videoId)
+                            } else {
+                                sportsFetch.fetch(
+                                    addonKey = addon.baseUrl,
+                                    streams = { getStreamsFromAddon(addon, type, videoId) },
+                                    inlineFromMeta = { fetchInlineStreamsFromMeta(addon, type, videoId) }
+                                ) ?: NetworkResult.Error(
+                                    context.getString(com.nuvio.tv.R.string.stream_error_detail_addon_timeout)
+                                )
+                            }
                             when (streamsResult) {
                                 is NetworkResult.Success -> {
                                     if (streamsResult.data.isNotEmpty()) {
@@ -316,8 +330,9 @@ class StreamRepositoryImpl @Inject constructor(
                                         )
                                     } else {
                                         // Stream endpoint returned empty - try inline
-                                        // streams from meta response as fallback.
-                                        val inlineStreams = fetchInlineStreamsFromMeta(
+                                        // streams from meta response as fallback (a sports
+                                        // search already asked it alongside).
+                                        val inlineStreams = if (sportsFetch != null) emptyList() else fetchInlineStreamsFromMeta(
                                             addon, type, videoId
                                         )
                                         if (inlineStreams.isNotEmpty()) {

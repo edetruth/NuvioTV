@@ -32,6 +32,32 @@ class SportsLiveRecoveryLadderTest {
     }
 
     @Test
+    fun `a link that never started or whose host is unknown goes straight to the next link`() {
+        val ladder = ladder()
+        assertEquals(Step.NEXT_LINK, ladder.decide(GAME, A, Problem.NO_START))
+        assertEquals(Step.NEXT_LINK, ladder.decide(GAME, B, Problem.DEAD_LINK))
+    }
+
+    @Test
+    fun `the ladder order is retry, next link, then the choices once the budget is spent`() {
+        val ladder = ladder()
+        val steps = listOf(
+            ladder.decide(GAME, A, Problem.FROZEN),
+            ladder.decide(GAME, A, Problem.FROZEN),
+            ladder.decide(GAME, B, Problem.NO_START),
+            ladder.decide(GAME, B, Problem.FROZEN)
+        )
+        assertEquals(listOf(Step.RETRY_SAME, Step.NEXT_LINK, Step.NEXT_LINK, Step.CHOICES), steps)
+    }
+
+    @Test
+    fun `a start-up timeout spends one of the game's recoveries`() {
+        val ladder = ladder()
+        repeat(SportsLiveStreamThresholds.MAX_RECOVERIES) { ladder.decide(GAME, "https://example.invalid/$it.m3u8", Problem.NO_START) }
+        assertEquals(Step.CHOICES, ladder.decide(GAME, B, Problem.NO_START))
+    }
+
+    @Test
     fun `a link without a url goes to the next link`() {
         assertEquals(Step.NEXT_LINK, ladder().decide(GAME, null, Problem.ERROR))
     }

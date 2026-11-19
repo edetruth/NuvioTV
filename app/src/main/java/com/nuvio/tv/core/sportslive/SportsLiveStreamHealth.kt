@@ -19,14 +19,18 @@ package com.nuvio.tv.core.sportslive
  */
 class SportsLiveStreamHealth(private val nowMs: () -> Long = { System.currentTimeMillis() }) {
     companion object {
-        const val POLL_INTERVAL_MS = 1_000L
-        const val BUFFERING_TOO_LONG_MS = 12_000L
-        const val FROZEN_MS = 8_000L
-        const val ERROR_BURST_WINDOW_MS = 30_000L
-        const val ERROR_BURST_COUNT = 2
+        const val POLL_INTERVAL_MS = SportsLiveStreamThresholds.POLL_INTERVAL_MS
+        const val BUFFERING_TOO_LONG_MS = SportsLiveStreamThresholds.BUFFERING_TOO_LONG_MS
+        const val FROZEN_MS = SportsLiveStreamThresholds.FROZEN_MS
+        const val ERROR_BURST_WINDOW_MS = SportsLiveStreamThresholds.ERROR_BURST_WINDOW_MS
+        const val ERROR_BURST_COUNT = SportsLiveStreamThresholds.ERROR_BURST_COUNT
     }
 
-    enum class Problem(val isStall: Boolean) {
+    /**
+     * [isStall]: the stream stopped moving (remembered as a stall, not a failure, for its source).
+     * [retriesSameLink]: loading the same link again may help; when false the ladder moves on at once.
+     */
+    enum class Problem(val isStall: Boolean, val retriesSameLink: Boolean = true) {
         BUFFERING_TOO_LONG(isStall = true),
         FROZEN(isStall = true),
         UNEXPECTED_END(isStall = false),
@@ -35,10 +39,16 @@ class SportsLiveStreamHealth(private val nowMs: () -> Long = { System.currentTim
         ERROR(isStall = false),
 
         /** A second error within [ERROR_BURST_WINDOW_MS]: retrying the same link again is pointless. */
-        ERROR_BURST(isStall = false),
+        ERROR_BURST(isStall = false, retriesSameLink = false),
 
-        /** A link tried during a recovery never showed its first frame. */
-        NO_START(isStall = false)
+        /** A link never showed its first frame in time ([SportsLiveStartupTimeout]). */
+        NO_START(isStall = false, retriesSameLink = false),
+
+        /** The link's host does not exist (an unknown host, a DNS failure): fatal on the first hit. */
+        DEAD_LINK(isStall = false, retriesSameLink = false),
+
+        /** The stream fell behind its live window again and again ([onBehindLiveWindow]). */
+        BEHIND_LIVE_WINDOW_REPEATED(isStall = true)
     }
 
     enum class State { IDLE, BUFFERING, READY, ENDED }
@@ -65,6 +75,7 @@ class SportsLiveStreamHealth(private val nowMs: () -> Long = { System.currentTim
     private var lastPositionMs: Long? = null
     private var lastFrames: Long? = null
     private val errorTimes = ArrayDeque<Long>()
+    private val behindLiveWindowTimes = ArrayDeque<Long>()
 
     /** True when the last sample showed the stream moving (a new frame or a position advance). */
     var isProgressing: Boolean = false
@@ -81,6 +92,7 @@ class SportsLiveStreamHealth(private val nowMs: () -> Long = { System.currentTim
         val key = SportsLiveWorkingLinks.linkKey(link)
         if (key != null && key != this.link) {
             errorTimes.clear()
+            behindLiveWindowTimes.clear()
             everLive = false
         }
         if (key != null) this.link = key
@@ -104,7 +116,28 @@ class SportsLiveStreamHealth(private val nowMs: () -> Long = { System.currentTim
         link = null
         everLive = false
         errorTimes.clear()
+        behindLiveWindowTimes.clear()
         rebaseline()
+    }
+
+    /**
+     * The live stream fell behind its live window (HLS BehindLiveWindowException). Null: the owner
+     * moves it back to the live edge in place (same player, same link) and it does not count as an
+     * error. [Problem.BEHIND_LIVE_WINDOW_REPEATED] when it is the
+     * [SportsLiveStreamThresholds.BEHIND_LIVE_WINDOW_COUNT]th within the window: a stall to recover from.
+     */
+    fun onBehindLiveWindow(): Problem? {
+        val now = nowMs()
+        behindLiveWindowTimes.addLast(now)
+        while (behindLiveWindowTimes.isNotEmpty() &&
+            now - behindLiveWindowTimes.first() >= SportsLiveStreamThresholds.BEHIND_LIVE_WINDOW_WINDOW_MS
+        ) behindLiveWindowTimes.removeFirst()
+        if (behindLiveWindowTimes.size < SportsLiveStreamThresholds.BEHIND_LIVE_WINDOW_COUNT) {
+            rebaseline()
+            return null
+        }
+        behindLiveWindowTimes.clear()
+        return report(Problem.BEHIND_LIVE_WINDOW_REPEATED)
     }
 
     /** A playback error: [Problem.ERROR_BURST] when it is the [ERROR_BURST_COUNT]th within the window. */

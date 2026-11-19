@@ -28,8 +28,16 @@ data class DualPane(
     /** A recovery runs (#138): "Reconnecting…" shows over the last frame. */
     val reconnecting: Boolean = false,
     /** Counts retries of [stream] as is (#138): a change makes the pane's player load it again. */
-    val attempt: Int = 0
+    val attempt: Int = 0,
+    /** Which of the game's links [stream] is, for the starting card (#138): 1 for the first one tried. */
+    val linkNumber: Int = 1,
+    /** How many links the game has, as far as known (#138); 0 when unknown. */
+    val linkCount: Int = 0
 )
+
+/** The pane's link is starting (#138): its starting card shows (Try next link / Sources / Back). */
+val DualPane.isStarting: Boolean
+    get() = status == PaneStatus.Loading && stream != null
 
 /** Two games side by side; only the [audibleSide] pane has sound. */
 data class DualState(
@@ -105,7 +113,15 @@ data class DualState(
         }
         is DualAction.Switched -> updatePaneOf(action.item) { pane ->
             if (!pane.isRecoverable) null
-            else pane.copy(stream = action.stream, status = PaneStatus.Loading, reconnecting = true)
+            else pane.copy(
+                stream = action.stream,
+                status = PaneStatus.Loading,
+                reconnecting = true,
+                linkNumber = pane.linkNumber + 1
+            )
+        }
+        is DualAction.LinkCount -> updatePaneOf(action.item) { pane ->
+            if (pane.linkCount == action.count) null else pane.copy(linkCount = action.count)
         }
         is DualAction.Recovered -> updatePaneOf(action.item) { pane ->
             if (pane.reconnecting && pane.status == PaneStatus.Playing) pane.copy(reconnecting = false) else null
@@ -189,4 +205,7 @@ sealed interface DualAction {
 
     /** Every recovery for [item] failed or its budget is used up: the pane offers the choices (#138). */
     data class Exhausted(val item: SportsLiveItem) : DualAction
+
+    /** [item]'s game has [count] links, as far as known (#138). */
+    data class LinkCount(val item: SportsLiveItem, val count: Int) : DualAction
 }

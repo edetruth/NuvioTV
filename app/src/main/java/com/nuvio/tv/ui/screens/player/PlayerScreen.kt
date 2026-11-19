@@ -580,8 +580,13 @@ fun PlayerScreen(
         }
     }
 
+    // Sports & Live (#138): the starting card while a link starts; it holds the focus meanwhile.
+    val sportsStartingVisible = uiState.sportsStarting != null && uiState.error == null &&
+        !uiState.showSourcesPanel && !uiState.showControls && !postPlayRecommendationState.isVisible
+
     // Request focus for key events when controls visibility or panel state changes
     LaunchedEffect(
+        sportsStartingVisible,
         uiState.showControls,
         uiState.showEpisodesPanel,
         uiState.showSourcesPanel,
@@ -599,6 +604,7 @@ fun PlayerScreen(
         if (shouldConfirmNextEpisodeOnEnd || postPlayRecommendationState.isVisible) return@LaunchedEffect
         if (uiState.error != null) return@LaunchedEffect
         if (uiState.showPartyPanel) return@LaunchedEffect
+        if (sportsStartingVisible) return@LaunchedEffect
         if (uiState.showControls && !uiState.showEpisodesPanel && !uiState.showSourcesPanel && !uiState.showChaptersPanel &&
             !uiState.showAudioOverlay && !uiState.showSubtitleOverlay &&
             !uiState.showSubtitleStylePanel && !uiState.showSubtitleDelayOverlay &&
@@ -866,6 +872,16 @@ fun PlayerScreen(
                     sportsLiveZapKey(keyEvent.nativeKeyEvent.keyCode, partyActive)
                 ) return@onKeyEvent true
                 if (panelOrDialogOpen) return@onKeyEvent false
+                // Sports & Live starting card (#138): CH+/CH- (and next/previous) still zap; Up/Down and
+                // OK belong to its buttons.
+                if (sportsStartingVisible) {
+                    val code = keyEvent.nativeKeyEvent.keyCode
+                    if (code != KeyEvent.KEYCODE_DPAD_UP && code != KeyEvent.KEYCODE_DPAD_DOWN &&
+                        keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN &&
+                        sportsLiveZapKey(code, partyActive)
+                    ) return@onKeyEvent true
+                    return@onKeyEvent false
+                }
                 // Sports & Live: a short Left press opens the live games panel, which then keeps the keys;
                 // a short Right press shows the controls (seeking is a no-op on live).
                 if (sportsLiveZap.panelOpen.value) return@onKeyEvent false
@@ -1409,6 +1425,36 @@ fun PlayerScreen(
                 .zIndex(2f)
         )
 
+        // Sports & Live (#138): a link is starting; the viewer can move on instead of waiting.
+        uiState.sportsStarting?.takeIf { sportsStartingVisible }?.let { starting ->
+            val linkCount = remember(uiState.sourceAllStreams) {
+                uiState.sourceAllStreams
+                    .filterNot(com.nuvio.tv.ui.screens.sportslive.SportsLiveZapResolver::isNonStream)
+                    .mapNotNull { it.getStreamUrl() }
+                    .distinct()
+                    .size
+            }
+            com.nuvio.tv.ui.screens.sportslive.SportsLiveStartingCard(
+                game = uiState.title,
+                linkNumber = starting.linkNumber,
+                linkCount = linkCount,
+                sourceName = starting.sourceName,
+                startedAtMs = starting.startedAtMs,
+                onAction = { action ->
+                    when (action) {
+                        com.nuvio.tv.ui.screens.sportslive.SportsLiveStartingAction.TRY_NEXT_LINK ->
+                            viewModel.onEvent(PlayerEvent.OnSportsTryNextLink)
+                        com.nuvio.tv.ui.screens.sportslive.SportsLiveStartingAction.SOURCES ->
+                            viewModel.onEvent(PlayerEvent.OnShowSourcesPanel)
+                        com.nuvio.tv.ui.screens.sportslive.SportsLiveStartingAction.BACK -> handleBackPress()
+                    }
+                },
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .zIndex(2.5f)
+            )
+        }
+
         if (uiState.playbackIssueReportsEnabled &&
             uiState.showLoadingOverlay &&
             uiState.error == null &&
@@ -1502,7 +1548,7 @@ fun PlayerScreen(
         )
 
         // Sports & Live stream recovery (#138): a small chip top-left, never over the scorebug.
-        if (uiState.sportsReconnecting && uiState.error == null) {
+        if (uiState.sportsReconnecting && uiState.error == null && !sportsStartingVisible) {
             SportsLiveReconnectingChip(
                 modifier = Modifier
                     .align(Alignment.TopStart)

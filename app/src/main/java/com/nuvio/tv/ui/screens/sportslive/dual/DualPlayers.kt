@@ -11,8 +11,13 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.analytics.AnalyticsListener
+import androidx.media3.exoplayer.source.LoadEventInfo
+import androidx.media3.exoplayer.source.MediaLoadData
+import java.io.IOException
 import com.nuvio.tv.core.sportslive.SportsLiveSourceReliability
 import com.nuvio.tv.core.sportslive.SportsLiveSourceReliability.Outcome
+import com.nuvio.tv.core.sportslive.SportsLiveLinkErrors
 import com.nuvio.tv.core.sportslive.SportsLiveStreamHealth
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.Stream
@@ -50,12 +55,18 @@ import com.nuvio.tv.ui.screens.sportslive.sportsLiveHealthSample
 @OptIn(UnstableApi::class)
 internal class DualPlayers(
     context: Context,
-    private val onFirstFrame: (SportsLiveItem) -> Unit,
+    /** [item]'s pane showed the first frame of [stream]. */
+    private val onFirstFrame: (item: SportsLiveItem, stream: Stream) -> Unit,
     /**
      * [decoderInit]: the player could not get a decoder. [problem]: [SportsLiveStreamHealth.Problem.ERROR],
      * or [SportsLiveStreamHealth.Problem.ERROR_BURST] when errors come in a burst.
      */
-    private val onError: (item: SportsLiveItem, decoderInit: Boolean, problem: SportsLiveStreamHealth.Problem) -> Unit,
+    private val onError: (
+        item: SportsLiveItem,
+        decoderInit: Boolean,
+        problem: SportsLiveStreamHealth.Problem,
+        stream: Stream
+    ) -> Unit,
     /**
      * Whether [item]'s pane is playing (advancing: not paused, buffering or stopped). A stop or
      * release reports false, so time away from the screen never counts as played (#65).
@@ -64,7 +75,9 @@ internal class DualPlayers(
     /** [item]'s stream went bad after its first frame (#138). */
     private val onUnhealthy: (item: SportsLiveItem, problem: SportsLiveStreamHealth.Problem) -> Unit = { _, _ -> },
     /** [item]'s stream moves (a new frame or position), checked every second (#138). */
-    private val onMoving: (item: SportsLiveItem) -> Unit = {}
+    private val onMoving: (item: SportsLiveItem) -> Unit = {},
+    /** A manifest or segment request of [item]'s link failed before its first frame (#138). */
+    private val onRequestFailed: (item: SportsLiveItem) -> Unit = {}
 ) {
     private val appContext = context.applicationContext
 
@@ -109,6 +122,7 @@ internal class DualPlayers(
             now?.let { onIsPlaying(it, true) }
         }
         private var listener: Player.Listener? = null
+        private var analyticsListener: AnalyticsListener? = null
 
         /**
          * Replaces the listener with one that reports [item]'s events for this load only; the load's
@@ -129,21 +143,51 @@ internal class DualPlayers(
                         rendered = true
                         SportsLiveSourceReliability.record(sourceKey, Outcome.SUCCESS, System.currentTimeMillis() - startedAtMs)
                     }
-                    onFirstFrame(item)
+                    onFirstFrame(item, stream)
                 }
 
                 override fun onPlayerError(error: PlaybackException) {
                     if (load != loads) return
+                    // Fell behind the live window (#138): back to the live edge on the same link, not an
+                    // error; only when it keeps happening is it a stall.
+                    if (error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW) {
+                        val problem = health.onBehindLiveWindow()
+                        if (problem == null) {
+                            player.retrySportsLiveLink()
+                        } else {
+                            SportsLiveSourceReliability.record(sourceKey, Outcome.STALL)
+                            onUnhealthy(item, problem)
+                        }
+                        return
+                    }
                     // A missing decoder is the device's fault, not the source's.
                     val decoderInit = error.isDecoderInitFailure()
                     if (!decoderInit) SportsLiveSourceReliability.record(sourceKey, Outcome.FAILURE)
-                    onError(item, decoderInit, health.onError())
+                    // A link whose host does not exist is dead: the next link, no retry (#138).
+                    val problem = if (!decoderInit && SportsLiveLinkErrors.isDeadHost(error)) {
+                        SportsLiveStreamHealth.Problem.DEAD_LINK
+                    } else {
+                        health.onError()
+                    }
+                    onError(item, decoderInit, problem, stream)
                 }
 
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
                     if (load == loads) report(item, isPlaying)
                 }
             }.also(player::addListener)
+            analyticsListener?.let(player::removeAnalyticsListener)
+            analyticsListener = object : AnalyticsListener {
+                override fun onLoadError(
+                    eventTime: AnalyticsListener.EventTime,
+                    loadEventInfo: LoadEventInfo,
+                    mediaLoadData: MediaLoadData,
+                    error: IOException,
+                    wasCanceled: Boolean
+                ) {
+                    if (load == loads && !rendered && !wasCanceled) onRequestFailed(item)
+                }
+            }.also(player::addAnalyticsListener)
         }
 
         fun release() {

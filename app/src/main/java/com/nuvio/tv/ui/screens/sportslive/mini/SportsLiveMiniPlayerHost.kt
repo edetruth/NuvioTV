@@ -59,6 +59,10 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.analytics.AnalyticsListener
+import androidx.media3.exoplayer.source.LoadEventInfo
+import androidx.media3.exoplayer.source.MediaLoadData
+import java.io.IOException
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import androidx.tv.material3.MaterialTheme
@@ -66,7 +70,10 @@ import androidx.tv.material3.Text
 import com.nuvio.tv.R
 import com.nuvio.tv.core.debrid.DirectDebridResolver
 import com.nuvio.tv.core.profile.ProfileManager
+import com.nuvio.tv.core.sportslive.SportsLiveLinkErrors
 import com.nuvio.tv.core.sportslive.SportsLiveRecoveryLadder
+import com.nuvio.tv.core.sportslive.SportsLiveStartupTimeout
+import com.nuvio.tv.core.sportslive.SportsLiveStreamThresholds
 import com.nuvio.tv.core.sportslive.SportsLiveSourceReliability
 import com.nuvio.tv.core.sportslive.SportsLiveStreamHealth
 import com.nuvio.tv.core.sportslive.SportsLiveWorkingLinks
@@ -134,6 +141,10 @@ internal class SportsLiveMiniPlayback(
     private var item: SportsLiveItem? = null
     private var stream: Stream? = null
     private var rendered = false
+
+    /** How long the link loading now has gone without its first frame, and whether a request of it failed (#138). */
+    private var startingMs = 0L
+    private var startRequestFailed = false
     private var recoveryJob: Job? = null
     private val ticker = SportsLiveHealthTicker(::checkHealth)
 
@@ -162,13 +173,36 @@ internal class SportsLiveMiniPlayback(
                 override fun onPlayerError(error: PlaybackException) {
                     // Only this load's errors count: a released or replaced player is ignored.
                     if (player !== this@apply) return
+                    // Fell behind the live window (#138): back to the live edge in place, not an error.
+                    if (error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW) {
+                        val behind = health.onBehindLiveWindow()
+                        if (behind == null) retrySportsLiveLink() else recover(behind)
+                        return
+                    }
+                    val decoderInit = error.isDecoderInitFailure()
+                    // A dead host (#138): the next link at once, even before the first frame.
+                    if (!decoderInit && SportsLiveLinkErrors.isDeadHost(error)) {
+                        recover(SportsLiveStreamHealth.Problem.DEAD_LINK)
+                        return
+                    }
                     val problem = health.onError()
                     // After its first frame, or on a link a recovery tries, the stream recovers (#138).
-                    if ((rendered || reconnecting) && !error.isDecoderInitFailure()) recover(problem) else onError(sessionId)
+                    if ((rendered || reconnecting) && !decoderInit) recover(problem) else onError(sessionId)
                 }
 
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
                     if (player === this@apply) reportPlaying(isPlaying)
+                }
+            })
+            addAnalyticsListener(object : AnalyticsListener {
+                override fun onLoadError(
+                    eventTime: AnalyticsListener.EventTime,
+                    loadEventInfo: LoadEventInfo,
+                    mediaLoadData: MediaLoadData,
+                    error: IOException,
+                    wasCanceled: Boolean
+                ) {
+                    if (player === this@apply && !rendered && !wasCanceled) startRequestFailed = true
                 }
             })
         }
@@ -177,6 +211,8 @@ internal class SportsLiveMiniPlayback(
         item = playing.item
         this.stream = stream
         rendered = false
+        startingMs = 0L
+        startRequestFailed = false
         tried.clear()
         ladder = SportsLiveRecoveryLadder()
         health.reset()
@@ -200,9 +236,20 @@ internal class SportsLiveMiniPlayback(
         current.release()
     }
 
-    /** Samples the stream's health (#138): a problem starts a recovery; moving again ends one. */
+    /**
+     * Samples the stream's health (#138): a problem starts a recovery; moving again ends one. A link
+     * with no first frame in time ([SportsLiveStartupTimeout]) is a recovery too: the next link.
+     */
     private fun checkHealth() {
         val current = player ?: return
+        if (!rendered) {
+            startingMs += SportsLiveStreamThresholds.POLL_INTERVAL_MS
+            if (recoveryJob?.isActive != true && SportsLiveStartupTimeout.isExpired(startingMs, startRequestFailed)) {
+                startingMs = 0L
+                recover(SportsLiveStreamHealth.Problem.NO_START)
+            }
+            return
+        }
         val problem = health.sample(current.sportsLiveHealthSample())
         if (problem != null) {
             recover(problem)
@@ -244,6 +291,8 @@ internal class SportsLiveMiniPlayback(
                     }
                     stream = next
                     rendered = false
+                    startingMs = 0L
+                    startRequestFailed = false
                     health.reset()
                     current.playSportsLiveStream(appContext, PlayerMediaSourceFactory(appContext), next, nextUrl)
                     onStreamReplaced(sessionId, next)

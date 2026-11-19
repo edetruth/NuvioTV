@@ -5,10 +5,14 @@ import androidx.media3.common.PlaybackException
 import com.nuvio.tv.R
 import com.nuvio.tv.core.debrid.DirectDebridPlayableResult
 import com.nuvio.tv.core.sportslive.SportsLiveFailover
+import com.nuvio.tv.core.sportslive.SportsLiveLinkErrors
 import com.nuvio.tv.core.sportslive.SportsLiveRecoveryCandidates
 import com.nuvio.tv.core.sportslive.SportsLiveRecoveryLadder
 import com.nuvio.tv.core.sportslive.SportsLiveSourceCooldown
 import com.nuvio.tv.core.sportslive.SportsLiveSourceReliability
+import com.nuvio.tv.core.sportslive.SportsLiveStartupTimeout
+import com.nuvio.tv.core.sportslive.SportsLiveStreamThresholds
+import com.nuvio.tv.core.sportslive.SportsLiveViewerText
 import com.nuvio.tv.core.sportslive.SportsLiveStreamHealth
 import com.nuvio.tv.core.sportslive.SportsLiveWorkingLinks
 import com.nuvio.tv.domain.model.ProxyHeaders
@@ -109,7 +113,9 @@ internal fun PlayerRuntimeController.trySportsLiveFailoverAfterError(
     errorMessage: String,
     stalled: Boolean = false,
     decoderInit: Boolean = false,
-    autoTry: Boolean = true
+    autoTry: Boolean = true,
+    /** False when the viewer skipped a link still starting (#138): it is only left behind, not held against it. */
+    recordFailure: Boolean = true
 ): Boolean {
     if (!SportsLiveExtraSources.isSportsPlayback(contentId)) return false
     // Nothing that works plays now (also a Sources panel pick failing before its first frame): dual
@@ -118,7 +124,7 @@ internal fun PlayerRuntimeController.trySportsLiveFailoverAfterError(
     // The source that just failed must not be re-served from the resolve cache next time.
     SportsLiveExtraSources.invalidateResolve(contentId)
     if (sourceFallbackJob?.isActive == true) return true
-    if (!decoderInit) {
+    if (!decoderInit && recordFailure) {
         SportsLiveSourceReliability.record(
             currentSportsSourceKey(),
             if (stalled) SportsLiveSourceReliability.Outcome.STALL else SportsLiveSourceReliability.Outcome.FAILURE
@@ -250,9 +256,12 @@ internal fun PlayerRuntimeController.restoreSportsRecoveryIfNothingPlays() {
 /** Shows the standalone, focusable recovery overlay (Choose stream / Next live game / Retry / Back). */
 private fun PlayerRuntimeController.surfaceSportsFailoverError(errorMessage: String) {
     streamCacheKey?.let { key -> scope.launch { streamLinkCacheDataStore.remove(key) } }
+    finishSportsStartup()
+    // Never a url or a host name on screen (#138): a raw exception becomes a plain message.
+    val shown = SportsLiveViewerText.forViewer(errorMessage, context.getString(R.string.sports_live_link_not_working))
     _uiState.update {
         it.copy(
-            error = errorMessage,
+            error = shown,
             canChooseAnotherSource = true,
             sportsReconnecting = false,
             isBuffering = false,
@@ -343,6 +352,111 @@ private fun PlayerRuntimeController.recoverSportsHealth(problem: SportsLiveStrea
     val autoTry = step != SportsLiveRecoveryLadder.Step.CHOICES
     _uiState.update { it.copy(sportsReconnecting = autoTry) }
     trySportsLiveFailoverAfterError(message, stalled = problem.isStall, autoTry = autoTry)
+}
+
+/**
+ * A sports link starts loading (#138): the starting card shows ("Starting link N of M · source"), and
+ * with no first frame within [SportsLiveStartupTimeout] the next link is tried, a step of the recovery
+ * ladder. Not sports: the card is cleared and nothing is scheduled. Called for every new load.
+ */
+internal fun PlayerRuntimeController.scheduleSportsStartupTimeout() {
+    sportsStartupJob?.cancel()
+    sportsStartRequestFailed = false
+    val sports = SportsLiveExtraSources.isSportsPlayback(contentId)
+    // A sports link whose host does not exist fails at once instead of being retried (#138).
+    mediaSourceFactory.failFastOnDeadHost = sports
+    if (!sports) {
+        if (_uiState.value.sportsStarting != null) _uiState.update { it.copy(sportsStarting = null) }
+        return
+    }
+    val url = currentStreamUrl
+    if (url.isNotBlank()) sportsStartedLinks += url
+    val number = sportsStartedLinks.indexOf(url) + 1
+    _uiState.update {
+        it.copy(
+            sportsStarting = SportsLiveStartingInfo(
+                linkNumber = number.coerceAtLeast(1),
+                sourceName = currentAddonName?.takeIf(String::isNotBlank) ?: it.currentStreamName,
+                startedAtMs = System.currentTimeMillis()
+            )
+        )
+    }
+    sportsStartupJob = scope.launch {
+        SportsLiveStartupTimeout.await { sportsStartRequestFailed }
+        // The viewer is choosing a source: the link is left alone until the panel closes.
+        while (_uiState.value.showSourcesPanel) delay(SportsLiveStreamThresholds.POLL_INTERVAL_MS)
+        if (hasRenderedFirstFrame || currentStreamUrl != url) return@launch
+        if (_uiState.value.error != null || isInBackground || sourceFallbackJob?.isActive == true) return@launch
+        Log.w(PlayerRuntimeController.TAG, "Sports link showed no first frame in time, trying the next one")
+        stopPendingSportsStart()
+        recoverSportsHealth(SportsLiveStreamHealth.Problem.NO_START, context.getString(R.string.sports_live_link_slow))
+    }
+}
+
+/** A request of the sports link still starting failed: its start-up time shortens (#138). */
+internal fun PlayerRuntimeController.noteSportsStartRequestFailed() {
+    if (!hasRenderedFirstFrame && sportsStartupJob?.isActive == true) sportsStartRequestFailed = true
+}
+
+/** The sports link showed its first frame (or the start was given up): no timeout, no starting card. */
+internal fun PlayerRuntimeController.finishSportsStartup() {
+    sportsStartupJob?.cancel()
+    sportsStartupJob = null
+    if (_uiState.value.sportsStarting != null) _uiState.update { it.copy(sportsStarting = null) }
+}
+
+/**
+ * Drops the sports link still starting (#138): the player stops loading it at once, so a late first
+ * frame of that link can never show (or count as the next link's) while the next one is looked up.
+ */
+private fun PlayerRuntimeController.stopPendingSportsStart() {
+    sportsStartupJob?.cancel()
+    sportsStartupJob = null
+    if (!hasRenderedFirstFrame) _exoPlayer?.stop()
+}
+
+/**
+ * "Try next link" on the starting card (#138): the link still starting is dropped (not held against
+ * it) and the next one is tried, as an automatic failover would.
+ */
+internal fun PlayerRuntimeController.sportsTryNextLink() {
+    if (!SportsLiveExtraSources.isSportsPlayback(contentId) || hasRenderedFirstFrame) return
+    if (sourceFallbackJob?.isActive == true) return
+    stopPendingSportsStart()
+    trySportsLiveFailoverAfterError(context.getString(R.string.sports_live_link_not_working), recordFailure = false)
+}
+
+/**
+ * A sports live stream fell behind its live window (#138): back to the live edge on the same player
+ * and link, not counted as an error; only when it keeps happening is it a stall for the recovery
+ * ladder. False for anything else, and for movies and shows.
+ */
+internal fun PlayerRuntimeController.trySportsBehindLiveWindowInPlace(errorCode: Int): Boolean {
+    if (errorCode != PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW) return false
+    if (!SportsLiveExtraSources.isSportsPlayback(contentId)) return false
+    val player = _exoPlayer ?: return false
+    val problem = sportsHealth.onBehindLiveWindow()
+    if (problem == null) {
+        Log.i(PlayerRuntimeController.TAG, "Sports stream fell behind the live window: back to the live edge")
+        player.retrySportsLiveLink()
+        return true
+    }
+    recoverSportsHealth(problem, context.getString(R.string.player_error_source_stalled))
+    return true
+}
+
+/**
+ * A sports link whose host does not exist (unknown host, DNS failure) is dead (#138): no retry, the
+ * next link at once (a step of the recovery ladder), and the viewer never sees the host name.
+ */
+internal fun PlayerRuntimeController.trySportsDeadLinkFailover(error: PlaybackException): Boolean {
+    if (!SportsLiveExtraSources.isSportsPlayback(contentId)) return false
+    if (!SportsLiveLinkErrors.isDeadHost(error)) return false
+    if (sourceFallbackJob?.isActive == true) return true
+    Log.w(PlayerRuntimeController.TAG, "Sports link host is unknown, trying the next link")
+    stopPendingSportsStart()
+    recoverSportsHealth(SportsLiveStreamHealth.Problem.DEAD_LINK, context.getString(R.string.sports_live_link_not_working))
+    return true
 }
 
 internal fun PlayerRuntimeController.cancelSportsStallWatchdog() {

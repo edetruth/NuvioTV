@@ -1471,6 +1471,8 @@ internal fun PlayerRuntimeController.initializePlayer(
                         }
                         refreshStableProgressResetGate()
                         cancelFirstFrameWatchdog()
+                        // A sports link's start-up timeout and starting card end here (#138).
+                        finishSportsStartup()
                         // Playback has started: begin the sports stall watchdog (sports-only, guarded),
                         // and remember that this sports source works.
                         if (isFirstFrame) recordSportsSourceFirstFrame()
@@ -1496,6 +1498,9 @@ internal fun PlayerRuntimeController.initializePlayer(
                     override fun onPlayerError(error: PlaybackException) {
                         if (isReleasingPlayer && error.errorCode == PlaybackException.ERROR_CODE_TIMEOUT) return
                         cancelFirstFrameWatchdog()
+                        // Sports & Live (#138): a live stream that fell behind its live window goes back to the
+                        // live edge on the same player and link, not counted as an error.
+                        if (trySportsBehindLiveWindowInPlace(error.errorCode)) return
                         val detailedError = error.toDisplayMessage(context)
                         cancelStableProgressReset()
 
@@ -1620,6 +1625,11 @@ internal fun PlayerRuntimeController.initializePlayer(
 
                         if (error.isStuckPlayingNoProgress()) {
                             if (tryNextAudioFallbackStep(currentPosition)) return
+                        }
+
+                        // Sports & Live (#138): a link whose host does not exist is dead: the next link at once.
+                        if (trySportsDeadLinkFailover(error)) {
+                            return
                         }
 
                         val timeoutError = error.findCause<SocketTimeoutException>()
@@ -1936,6 +1946,8 @@ internal fun PlayerRuntimeController.initializePlayer(
                         error: java.io.IOException,
                         wasCanceled: Boolean
                     ) {
+                        // A sports link whose manifest or segment request failed gets a shorter start-up time (#138).
+                        if (!wasCanceled) noteSportsStartRequestFailed()
                         playbackAnalyticsDiagnostics.onLoadError(
                             eventTime = eventTime,
                             loadEventInfo = loadEventInfo,
@@ -2136,6 +2148,7 @@ internal fun PlayerRuntimeController.resetLoadingOverlayForNewStream() {
     cancelFirstFrameWatchdog()
     cancelStallWatchdog()
     scheduleSourceStartupTimeout()
+    scheduleSportsStartupTimeout()
     val preparingMessage = context.getString(R.string.player_loading_preparing)
     resetLoadingDiagnostics(
         phase = "preparing",

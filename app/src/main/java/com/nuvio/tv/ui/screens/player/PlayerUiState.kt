@@ -196,6 +196,8 @@ data class PlayerUiState(
     val canChooseAnotherSource: Boolean = false,
     /** A Sports & Live stream is being recovered (#138): "Reconnecting…" shows. */
     val sportsReconnecting: Boolean = false,
+    /** A Sports & Live link is starting (#138): the starting card shows; null once it plays. */
+    val sportsStarting: SportsLiveStartingInfo? = null,
     val showSwitchToMpvErrorAction: Boolean = false,
     val playbackIssueReportStatus: PlaybackIssueReportStatus = PlaybackIssueReportStatus.Idle,
     val playbackIssueReportId: String? = null,
@@ -390,6 +392,8 @@ sealed class PlayerEvent {
     data object OnShowSourcesPanel : PlayerEvent()
     /** From the error overlay of a sports stream: clear the error and open the Sources panel. */
     data object OnRecoverToSources : PlayerEvent()
+    /** "Try next link" on the sports starting card (#138): drop the link still starting, try the next. */
+    data object OnSportsTryNextLink : PlayerEvent()
     /** From the error overlay: clear the error and re-attempt the current stream. */
     data object OnRetryPlayback : PlayerEvent()
     data object OnDismissSourcesPanel : PlayerEvent()
@@ -483,4 +487,14 @@ data class StreamInfoData(
     val subtitleSource: String? = null,
     val playerEngine: String? = null,
     val serverPlayback: String? = null
+)
+
+/**
+ * The sports starting card (#138): link [linkNumber] (of the game's links this player started) from
+ * [sourceName] began loading at [startedAtMs].
+ */
+data class SportsLiveStartingInfo(
+    val linkNumber: Int,
+    val sourceName: String?,
+    val startedAtMs: Long
 )

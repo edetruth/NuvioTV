@@ -250,4 +250,125 @@ class SportsLiveDualRecoveryTest {
         assertEquals(c, left)
         assertEquals(b, viewModel.current().right.item)
     }
+
+    // --- Start-up (#138) ---
+
+    @Test
+    fun `a pane with no first frame in 15 s moves on to the next link`() = runTest(mainDispatcherRule.dispatcher) {
+        nextLinks["a"] = ArrayDeque(listOf(streamA2))
+        val viewModel = newViewModel()
+        runCurrent()
+
+        advanceTimeBy(SportsLiveDualViewModel.FIRST_FRAME_TIMEOUT_MS - 1)
+        runCurrent()
+        assertEquals(streamA, viewModel.current().left.stream)
+        advanceTimeBy(2)
+        runCurrent()
+
+        val left = viewModel.current().left
+        assertEquals(streamA2, left.stream)
+        assertEquals(PaneStatus.Loading, left.status)
+        assertEquals(2, left.linkNumber)
+        assertTrue(links.isQuarantined(a.id, streamA.url))
+    }
+
+    @Test
+    fun `a pane whose request failed moves on after 8 s`() = runTest(mainDispatcherRule.dispatcher) {
+        nextLinks["a"] = ArrayDeque(listOf(streamA2))
+        val viewModel = newViewModel()
+        runCurrent()
+
+        advanceTimeBy(2_000)
+        viewModel.onRequestFailed(a)
+        advanceTimeBy(5_999)
+        runCurrent()
+        assertEquals(streamA, viewModel.current().left.stream)
+        advanceTimeBy(2)
+        runCurrent()
+        assertEquals(streamA2, viewModel.current().left.stream)
+        // The other pane keeps its full start-up time.
+        assertEquals(streamB, viewModel.current().right.stream)
+        assertEquals(PaneStatus.Loading, viewModel.current().right.status)
+    }
+
+    @Test
+    fun `a start-up timeout is a ladder step and spends the game's budget`() = runTest(mainDispatcherRule.dispatcher) {
+        nextLinks["a"] = ArrayDeque(listOf(streamA2, streamA3, dualStream("a4")))
+        val viewModel = newViewModel()
+        runCurrent()
+
+        repeat(3) {
+            advanceTimeBy(SportsLiveDualViewModel.FIRST_FRAME_TIMEOUT_MS + 1)
+            runCurrent()
+        }
+        assertEquals(dualStream("a4"), viewModel.current().left.stream)
+        assertEquals(PaneStatus.Loading, viewModel.current().left.status)
+        // Three recoveries spent: the fourth timeout offers the choices.
+        advanceTimeBy(SportsLiveDualViewModel.FIRST_FRAME_TIMEOUT_MS + 1)
+        runCurrent()
+        assertEquals(dualStream("a4"), viewModel.current().left.stream)
+        assertEquals(PaneStatus.Error, viewModel.current().left.status)
+    }
+
+    @Test
+    fun `try next link leaves the starting link behind without holding it against it`() = runTest(mainDispatcherRule.dispatcher) {
+        nextLinks["a"] = ArrayDeque(listOf(streamA2))
+        val viewModel = newViewModel()
+        runCurrent()
+        viewModel.highlight(Side.LEFT)
+
+        assertTrue(viewModel.tryNextLink())
+        runCurrent()
+
+        assertEquals(streamA2, viewModel.current().left.stream)
+        assertFalse(links.isQuarantined(a.id, streamA.url))
+        assertEquals(setOf(SportsLiveWorkingLinks.linkKey(streamA.url)!!), lookups.last().second)
+        // The other pane is untouched.
+        assertEquals(streamB, viewModel.current().right.stream)
+    }
+
+    @Test
+    fun `a late first frame of a cancelled start does not win`() = runTest(mainDispatcherRule.dispatcher) {
+        nextLinks["a"] = ArrayDeque(listOf(streamA2))
+        val viewModel = newViewModel()
+        runCurrent()
+        viewModel.highlight(Side.LEFT)
+        viewModel.tryNextLink()
+        runCurrent()
+
+        // The old link's first frame and error arrive after the pane moved on: both are ignored.
+        viewModel.onFirstFrame(a, streamA)
+        viewModel.onPlayerError(a, decoderInit = false, stream = streamA)
+        assertEquals(PaneStatus.Loading, viewModel.current().left.status)
+        assertEquals(streamA2, viewModel.current().left.stream)
+
+        viewModel.onFirstFrame(a, streamA2)
+        assertEquals(PaneStatus.Playing, viewModel.current().left.status)
+    }
+
+    @Test
+    fun `try next link does nothing on a playing pane`() = runTest(mainDispatcherRule.dispatcher) {
+        val viewModel = newViewModel()
+        runCurrent()
+        viewModel.playing()
+        viewModel.highlight(Side.LEFT)
+
+        assertFalse(viewModel.tryNextLink())
+        assertTrue(lookups.isEmpty())
+    }
+
+    @Test
+    fun `an unknown host at start goes straight to the next link with no retry`() = runTest(mainDispatcherRule.dispatcher) {
+        nextLinks["a"] = ArrayDeque(listOf(streamA2))
+        val viewModel = newViewModel()
+        runCurrent()
+
+        viewModel.onPlayerError(a, decoderInit = false, problem = Problem.DEAD_LINK)
+        runCurrent()
+
+        val left = viewModel.current().left
+        assertEquals(streamA2, left.stream)
+        assertEquals(0, left.attempt)
+        assertTrue(links.isQuarantined(a.id, streamA.url))
+    }
 }

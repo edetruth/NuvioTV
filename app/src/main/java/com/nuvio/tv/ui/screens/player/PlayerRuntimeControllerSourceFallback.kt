@@ -24,6 +24,8 @@ private const val SOURCE_FALLBACK_POLL_INTERVAL_MS = 500L
  */
 internal fun PlayerRuntimeController.scheduleSourceStartupTimeout() {
     sourceStartupTimeoutJob?.cancel()
+    // Sports & Live has its own start-up timeout, a step of its recovery ladder (#138).
+    if (SportsLiveExtraSources.isSportsPlayback(contentId)) return
     val url = currentStreamUrl
     sourceStartupTimeoutJob = scope.launch {
         val timeoutSeconds = streamAutoPlayFallbackStartupTimeoutSeconds

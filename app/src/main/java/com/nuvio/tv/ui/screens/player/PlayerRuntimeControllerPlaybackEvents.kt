@@ -1952,6 +1952,9 @@ fun PlayerRuntimeController.onEvent(
             _uiState.update { it.copy(error = null) }
             showSourcesPanel()
         }
+        PlayerEvent.OnSportsTryNextLink -> {
+            sportsTryNextLink()
+        }
         PlayerEvent.OnRetryPlayback -> {
             _uiState.update { it.copy(error = null) }
             reinitializeCurrentStream()

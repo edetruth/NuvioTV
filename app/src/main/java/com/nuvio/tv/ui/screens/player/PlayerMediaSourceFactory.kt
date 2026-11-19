@@ -65,7 +65,13 @@ import javax.net.ssl.X509TrustManager
 internal class PlayerMediaSourceFactory(private val context: Context) {
     private var customExtractorsFactory: ExtractorsFactory? = null
     private var customSubtitleParserFactory: SubtitleParser.Factory? = null
-    private val loadErrorHandlingPolicy = PlayerLoadErrorHandlingPolicy()
+    private val loadErrorHandlingPolicy = PlayerLoadErrorHandlingPolicy(deadHostIsFatal = { failFastOnDeadHost })
+
+    /**
+     * Sports & Live (#138): a link whose host does not exist (unknown host, DNS failure) fails at
+     * once instead of being retried, so the next link is tried. Off for movies and shows.
+     */
+    @Volatile var failFastOnDeadHost: Boolean = false
 
     @Volatile private var currentVodCacheUrl: String? = null
     @Volatile private var currentVodCacheResolvedUrl: String? = null
@@ -1168,7 +1174,9 @@ internal class PlayerMediaSourceFactory(private val context: Context) {
     }
 }
 
-private class PlayerLoadErrorHandlingPolicy : DefaultLoadErrorHandlingPolicy(6) {
+private class PlayerLoadErrorHandlingPolicy(
+    private val deadHostIsFatal: () -> Boolean = { false }
+) : DefaultLoadErrorHandlingPolicy(6) {
     override fun getFallbackSelectionFor(
         fallbackOptions: LoadErrorHandlingPolicy.FallbackOptions,
         loadErrorInfo: LoadErrorHandlingPolicy.LoadErrorInfo
@@ -1196,6 +1204,9 @@ private class PlayerLoadErrorHandlingPolicy : DefaultLoadErrorHandlingPolicy(6) 
     }
 
     override fun getRetryDelayMsFor(loadErrorInfo: LoadErrorHandlingPolicy.LoadErrorInfo): Long {
+        if (deadHostIsFatal() && com.nuvio.tv.core.sportslive.SportsLiveLinkErrors.isDeadHost(loadErrorInfo.exception)) {
+            return androidx.media3.common.C.TIME_UNSET
+        }
         val httpException = loadErrorInfo.exception.findCause<androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException>()
         if (httpException != null) {
             val code = httpException.responseCode

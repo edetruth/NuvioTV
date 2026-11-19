@@ -4,6 +4,7 @@ import androidx.annotation.VisibleForTesting
 import com.nuvio.tv.core.debrid.DirectDebridResolver
 import com.nuvio.tv.core.network.NetworkResult
 import com.nuvio.tv.core.player.StreamAutoPlaySelector
+import com.nuvio.tv.core.sportslive.SportsLiveAddonFetch
 import com.nuvio.tv.core.sportslive.SportsLiveNoticeEntries
 import com.nuvio.tv.core.sportslive.SportsLiveRecoveryCandidates
 import com.nuvio.tv.core.sportslive.SportsLiveSourceCooldown
@@ -233,8 +234,12 @@ class SportsLiveZapResolver @Inject constructor(
         }
     }
 
-    /** [item]'s streams from every addon but those cooling down after a rate limit (C1). */
+    /**
+     * [item]'s streams from every addon but those cooling down after a rate limit (C1); each addon
+     * answers within a few seconds, its meta fallback asked alongside (#138, [SportsLiveAddonFetch]).
+     */
     private fun streamsOf(item: SportsLiveItem): Flow<NetworkResult<List<AddonStreams>>> {
+        SportsLiveAddonFetch.shared.markSports(item.id)
         val cooling = cooldown.coolingBaseUrls()
         return if (cooling.isEmpty()) {
             streamRepository.getStreamsFromAllAddons(item.apiType, item.id)
@@ -277,6 +282,21 @@ class SportsLiveZapResolver @Inject constructor(
             throw e
         } catch (_: Exception) {
             null
+        }
+
+    /**
+     * How many distinct links recent searches hold for [item] and its other sources (#138), for a
+     * starting card's "link N of M"; no request is made. 0 when none is cached.
+     */
+    suspend fun cachedLinkCount(item: SportsLiveItem): Int =
+        try {
+            (listOf(item) + item.alternates).flatMap { source ->
+                streamRepository.getCachedStreamsFromAllAddons(source.apiType, source.id).orEmpty().flatMap { it.streams }
+            }.filterNot(::isNonStream).mapNotNull { it.getStreamUrl() }.distinct().size
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            0
         }
 
     /**

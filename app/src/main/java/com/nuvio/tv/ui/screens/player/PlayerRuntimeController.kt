@@ -294,6 +294,13 @@ class PlayerRuntimeController(
     internal val sportsHealth = com.nuvio.tv.core.sportslive.SportsLiveStreamHealth()
     internal val sportsRecoveryLadder = com.nuvio.tv.core.sportslive.SportsLiveRecoveryLadder()
 
+    /** The sports link loading now: its first-frame timeout (#138), and whether one of its requests failed. */
+    internal var sportsStartupJob: Job? = null
+    @Volatile internal var sportsStartRequestFailed = false
+
+    /** The sports links this player started, in order: the starting card's "link N" (#138). */
+    internal val sportsStartedLinks = LinkedHashSet<String>()
+
     /** When the current stream started loading, for its source's time to first frame (#40). */
     internal var sportsAttemptStartedAtMs = System.currentTimeMillis()
 

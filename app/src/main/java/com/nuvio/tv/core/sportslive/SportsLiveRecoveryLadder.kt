@@ -10,8 +10,8 @@ import com.nuvio.tv.domain.model.Stream
  */
 class SportsLiveRecoveryBudget(private val nowMs: () -> Long = { System.currentTimeMillis() }) {
     companion object {
-        const val MAX_RECOVERIES = 3
-        const val WINDOW_MS = 10L * 60 * 1000
+        const val MAX_RECOVERIES = SportsLiveStreamThresholds.MAX_RECOVERIES
+        const val WINDOW_MS = SportsLiveStreamThresholds.RECOVERY_WINDOW_MS
         private const val MAX_GAMES = 200
 
         /** The process-wide budget the app uses. */
@@ -40,7 +40,8 @@ class SportsLiveRecoveryBudget(private val nowMs: () -> Long = { System.currentT
  * problem it says what to do, spending one of the game's [SportsLiveRecoveryBudget] recoveries:
  * 1. [Step.RETRY_SAME]: the same link once more, at the live edge (a transient failure, the way
  *    switching away and back works), unless it was already retried within the budget window or the
- *    errors come in a burst;
+ *    problem rules a retry out ([SportsLiveStreamHealth.Problem.retriesSameLink]: an error burst, a
+ *    link that never started, a dead host);
  * 2. [Step.NEXT_LINK]: the next best link for the game, then other sources ([SportsLiveRecoveryCandidates]);
  *    the player asks the viewer when none is left;
  * 3. [Step.CHOICES]: the budget is used up; the player asks the viewer (Choose stream / Next live game).
@@ -59,7 +60,7 @@ class SportsLiveRecoveryLadder(
         val link = SportsLiveWorkingLinks.linkKey(url) ?: return Step.NEXT_LINK
         val now = nowMs()
         retried.values.removeAll { now - it >= SportsLiveRecoveryBudget.WINDOW_MS }
-        if (problem == SportsLiveStreamHealth.Problem.ERROR_BURST || link in retried) return Step.NEXT_LINK
+        if (!problem.retriesSameLink || link in retried) return Step.NEXT_LINK
         retried[link] = now
         return Step.RETRY_SAME
     }
