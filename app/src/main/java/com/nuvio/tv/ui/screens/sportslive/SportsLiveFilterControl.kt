@@ -259,9 +259,13 @@ fun SportsLiveFilterDropdown(
     onSelect: (String?) -> Unit,
     title: String,
     modifier: Modifier = Modifier,
-    actions: List<Pair<String, () -> Unit>> = emptyList()
+    actions: List<Pair<String, () -> Unit>> = emptyList(),
+    /** The options opened (true) or closed (false). */
+    onOpenChange: (Boolean) -> Unit = {}
 ) {
     var open by remember { mutableStateOf(false) }
+    val currentOnOpenChange by rememberUpdatedState(onOpenChange)
+    LaunchedEffect(open) { currentOnOpenChange(open) }
     val face = sportsLiveDropdownFace(options, selected)
     val shape = SportsLiveTokens.Radius.PillShape
     Surface(

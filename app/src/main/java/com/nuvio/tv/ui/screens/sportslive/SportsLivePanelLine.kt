@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -56,8 +55,9 @@ internal enum class PanelLineKind { GAME, EVENT, CHANNEL }
 /**
  * A row of the in-player panel on one line (#140), [Size.PanelLine] tall: a [PanelLineKind.GAME] is its two
  * teams' short names ([first], [second]) around the [scores] ("ORL 97–92 PHI"); an [PanelLineKind.EVENT] or a
- * [PanelLineKind.CHANNEL] its clean [title]. Then the status: the [clock] (the kickoff time, the final word)
- * and, for a game in play ([live], the red dot), its [period]. Never a second line.
+ * [PanelLineKind.CHANNEL] its clean [title]. A game or an event leads with its compact league or sport [tag]
+ * ("NBA", "HOCKEY", #167), as Live Now's rows do; empty when none is known. Then the status: the [clock] (the
+ * kickoff time, the final word) and, for a game in play ([live], the red dot), its [period]. Never a second line.
  */
 @Immutable
 internal data class PanelLine(
@@ -68,7 +68,8 @@ internal data class PanelLine(
     val title: String? = null,
     val clock: String? = null,
     val period: String? = null,
-    val live: Boolean = false
+    val live: Boolean = false,
+    val tag: String = ""
 ) {
     /** Always one line: the row is [Size.PanelLine] tall. */
     val lines: Int get() = 1
@@ -79,7 +80,7 @@ internal data class PanelLine(
  * same groups, scores (spoiler setting applied) and status words ([scoreboardStatusLines]); [kickoff] words
  * its start. A live game keeps its period beside the clock; any other row only the first status line.
  */
-internal fun panelLineOf(row: ScoreboardRow, strings: GameStatusStrings, kickoff: String?): PanelLine {
+internal fun panelLineOf(row: ScoreboardRow, strings: GameStatusStrings, kickoff: String?, tag: String = ""): PanelLine {
     val status = scoreboardStatusLines(row, strings, kickoff)
     val period = status.secondary.takeIf { status.live }
     val art = row.art
@@ -97,9 +98,10 @@ internal fun panelLineOf(row: ScoreboardRow, strings: GameStatusStrings, kickoff
             scores = scoreboardScoresOf(row.chip),
             clock = status.primary,
             period = period,
-            live = status.live
+            live = status.live,
+            tag = tag
         )
-        else -> PanelLine(PanelLineKind.EVENT, title = singleLineTitle(row.item), clock = status.primary, period = period, live = status.live)
+        else -> PanelLine(PanelLineKind.EVENT, title = singleLineTitle(row.item), clock = status.primary, period = period, live = status.live, tag = tag)
     }
 }
 
@@ -133,7 +135,8 @@ internal fun SportsLivePanelLine(
 ) {
     val strings = rememberGameStatusStrings()
     val kickoff = row.art?.let { kickoffText(it) }
-    val line = remember(row, strings, kickoff) { panelLineOf(row, strings, kickoff) }
+    val tag = rowTagText(row)
+    val line = remember(row, strings, kickoff, tag) { panelLineOf(row, strings, kickoff, tag) }
     val shape = RoundedCornerShape(PANEL_LINE_RADIUS)
     var focused by remember { mutableStateOf(false) }
     val (longPress, click) = if (onLongClick != null) rememberSportsLiveLongPress(menuOpen, onLongClick, onClick) else Modifier to onClick
@@ -183,7 +186,7 @@ internal fun SportsLivePanelLine(
                     ) {
                         when (line.kind) {
                             PanelLineKind.GAME -> GameLine(row, line)
-                            PanelLineKind.EVENT -> EventLine(row, line)
+                            PanelLineKind.EVENT -> EventLine(line)
                             PanelLineKind.CHANNEL -> LineText(line.title.orEmpty(), Modifier.weight(1f, fill = false))
                         }
                     }
@@ -227,12 +230,15 @@ internal fun SportsLivePanelLine(
     }
 }
 
-/** "[logo] ORL 97–92 PHI [logo]": the leader's score in real bold, the hidden mark or "vs" when none shows. */
+/**
+ * "NBA ORL 97–92 PHI" (V2 `Player.dc.html` 3): the tag, the abbreviations around the score, the leader's score in
+ * real bold, the hidden mark or "vs" when none shows. No logos: the names give way (ellipsis) before the score and
+ * the clock ever do.
+ */
 @Composable
-private fun GameLine(row: ScoreboardRow, line: PanelLine) {
-    val logos = rememberTeamLogoPair(row.art)?.takeIf { !it.failed }
-    if (logos != null) TeamLogoSlot(logos.first, logos.shown, Size.PanelLogo)
-    LineText(line.first.orEmpty())
+private fun RowScope.GameLine(row: ScoreboardRow, line: PanelLine) {
+    LineTag(line.tag)
+    LineText(line.first.orEmpty(), Modifier.weight(1f, fill = false))
     when (val scores = line.scores) {
         is ScoreboardScores.Shown -> {
             val text = stringResource(R.string.sports_live_chip_score, scores.first, scores.second)
@@ -253,29 +259,34 @@ private fun GameLine(row: ScoreboardRow, line: PanelLine) {
         )
         ScoreboardScores.None -> LineText(stringResource(R.string.sports_live_panel_vs), color = Colors.TextMuted)
     }
-    LineText(line.second.orEmpty())
-    if (logos != null) TeamLogoSlot(logos.second, logos.shown, Size.PanelLogo)
+    LineText(line.second.orEmpty(), Modifier.weight(1f, fill = false))
     if (row.followed) Icon(imageVector = Icons.Rounded.Star, contentDescription = null, tint = Colors.FollowedGold, modifier = Modifier.size(10.dp))
 }
 
-/** A single-line event's sport tag ("TENNIS"); nothing when none is known. */
+/**
+ * A row's league or sport tag ("NBA", "TENNIS") in one right-aligned column, so names start at one x on every
+ * line (V2 `Player.dc.html` 3); the column stays, empty, when no tag is known.
+ */
 @Composable
-private fun EventTag(tag: String) {
-    if (tag.isEmpty()) return
-    Text(
-        text = tag,
-        style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag),
-        color = Colors.TextSecondary,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-        modifier = Modifier.widthIn(max = PANEL_TAG_MAX)
-    )
+private fun LineTag(tag: String) {
+    Box(modifier = Modifier.width(PANEL_TAG_COLUMN), contentAlignment = Alignment.CenterEnd) {
+        if (tag.isNotEmpty()) {
+            Text(
+                text = tag,
+                style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag),
+                color = Colors.TextSecondary,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
 }
 
 /** A single-line event: its sport tag, then its clean title. */
 @Composable
-private fun RowScope.EventLine(row: ScoreboardRow, line: PanelLine) {
-    EventTag(rowTagText(row))
+private fun RowScope.EventLine(line: PanelLine) {
+    LineTag(line.tag)
     LineText(line.title.orEmpty(), Modifier.weight(1f, fill = false))
 }
 
@@ -379,5 +390,5 @@ internal fun SportsLivePanelHeader(group: ScoreboardGroup, count: Int) {
 
 private val PANEL_LINE_RADIUS = 6.dp
 private val PANEL_LINE_ACCENT = 2.dp
-private val PANEL_TAG_MAX = 64.dp
+private val PANEL_TAG_COLUMN = 52.dp
 private const val JUST_ENDED_LINE_ALPHA = 0.6f

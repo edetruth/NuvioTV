@@ -121,8 +121,23 @@ enum class AlertKeyAction {
     PEEK_STAY,
 
     /** Back during a peek: the game from before, at its live edge. */
-    PEEK_RETURN
+    PEEK_RETURN,
+
+    /** OK on the kickoff prompt with Watch chosen (#173): its game plays here. */
+    PROMPT_WATCH,
+
+    /** OK with Later chosen, or Back, on the kickoff prompt (#173): ask again later. */
+    PROMPT_LATER,
+
+    /** ← on the kickoff prompt: Watch is chosen. */
+    PROMPT_CHOOSE_WATCH,
+
+    /** → on the kickoff prompt: Later is chosen. */
+    PROMPT_CHOOSE_LATER
 }
+
+/** The kickoff prompt's two buttons (#173), left to right; OK presses the one chosen. */
+enum class PromptChoice { WATCH, LATER }
 
 /**
  * Who gets a fresh key press (#136). [cardActionable]: a score or full-time card shows over a screen
@@ -130,9 +145,43 @@ enum class AlertKeyAction {
  * (controls, the live games panel, a dialog) are closed, so OK is not needed by anything else.
  * [canPeek]: that screen can peek (the full player). [peeking]: a peek plays.
  */
-data class AlertKeyContext(val cardActionable: Boolean, val canPeek: Boolean, val peeking: Boolean)
-
+data class AlertKeyContext(
+    val cardActionable: Boolean,
+    val canPeek: Boolean,
+    val peeking: Boolean,
+    /**
+     * A kickoff prompt shows over a screen that can play its game here (#173), with this button chosen: it
+     * takes OK, ← →, Back and every zap key until it closes, whatever else is up. Null: no such prompt.
+     */
+    val prompt: PromptChoice? = null
+)
 object SportsLiveAlertKeys {
+
+    /**
+     * Who takes keys now: [card] (null once it closed, a timeout too) over a screen that can play its game
+     * here ([canActHere]: the full player of a game, dual screen) and registered as a surface ([surfaceBusy]
+     * null when none is). A score card is actionable only while the screen's own overlays are closed
+     * ([surfaceBusy] false); a kickoff prompt always is, with [promptChoice] chosen (#173). [canPeek]: the
+     * screen could peek (the full player).
+     */
+    fun context(
+        card: AlertCard?,
+        canActHere: Boolean,
+        surfaceBusy: Boolean?,
+        canPeek: Boolean,
+        peeking: Boolean,
+        promptChoice: PromptChoice = PromptChoice.WATCH
+    ): AlertKeyContext {
+        val onSurface = card != null && canActHere && surfaceBusy != null
+        val prompt = onSurface && card?.first is SportsLiveAlert.Kickoff
+        val actionable = onSurface && !prompt && surfaceBusy == false
+        return AlertKeyContext(
+            cardActionable = actionable,
+            canPeek = actionable && canPeek,
+            peeking = peeking,
+            prompt = promptChoice.takeIf { prompt }
+        )
+    }
 
     /** The action of a key's first press (repeats and the release follow it: see the host's dispatcher). */
     fun route(keyCode: Int, context: AlertKeyContext): AlertKeyAction {
@@ -145,6 +194,7 @@ object SportsLiveAlertKeys {
                 else -> AlertKeyAction.CONSUME
             }
         }
+        context.prompt?.let { return routePrompt(keyCode, it) }
         if (!context.cardActionable) return AlertKeyAction.PASS
         return when {
             isOk(keyCode) -> AlertKeyAction.WATCH
@@ -154,10 +204,28 @@ object SportsLiveAlertKeys {
         }
     }
 
+    /** A key while the kickoff prompt is up (#173): ▲ ▼ and CH± never zap under it; the volume and the rest pass. */
+    private fun routePrompt(keyCode: Int, choice: PromptChoice): AlertKeyAction = when {
+        isOk(keyCode) -> if (choice == PromptChoice.WATCH) AlertKeyAction.PROMPT_WATCH else AlertKeyAction.PROMPT_LATER
+        keyCode == KeyEvent.KEYCODE_BACK || keyCode == KeyEvent.KEYCODE_ESCAPE -> AlertKeyAction.PROMPT_LATER
+        keyCode == KeyEvent.KEYCODE_DPAD_LEFT -> AlertKeyAction.PROMPT_CHOOSE_WATCH
+        keyCode == KeyEvent.KEYCODE_DPAD_RIGHT -> AlertKeyAction.PROMPT_CHOOSE_LATER
+        keyCode in ZAP_KEYS -> AlertKeyAction.CONSUME
+        else -> AlertKeyAction.PASS
+    }
+
     fun isOk(keyCode: Int): Boolean =
         keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
 
     private val SYSTEM_KEYS = setOf(KeyEvent.KEYCODE_VOLUME_UP, KeyEvent.KEYCODE_VOLUME_DOWN, KeyEvent.KEYCODE_VOLUME_MUTE)
+
+    /** Every key that zaps in the player or dual screen (the D-pad's ▲ ▼, CH±, next and previous). */
+    private val ZAP_KEYS = setOf(
+        KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN,
+        KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_CHANNEL_DOWN,
+        KeyEvent.KEYCODE_PAGE_UP, KeyEvent.KEYCODE_PAGE_DOWN,
+        KeyEvent.KEYCODE_MEDIA_NEXT, KeyEvent.KEYCODE_MEDIA_PREVIOUS
+    )
 }
 
 /** A peek's phase (#136): its stream is looked up and starting, it plays, or OK was pressed and the zap runs. */

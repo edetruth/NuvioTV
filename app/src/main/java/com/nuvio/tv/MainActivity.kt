@@ -1469,6 +1469,8 @@ open class MainActivity : ComponentActivity() {
         if (BuildConfig.IS_DEBUG_BUILD) {
             val count = intent.getIntExtra("debugSportsAlerts", 0)
             if (count > 0) lifecycleScope.launch { sportsLiveAlerts.debugRaise(count) }
+            // `--ez debugSportsKickoff true`: a kickoff prompt for a live game, for checking #173.
+            if (intent.getBooleanExtra("debugSportsKickoff", false)) lifecycleScope.launch { sportsLiveAlerts.debugKickoff() }
             // `--es debugSportsProbe <sport>`: measures sports lookups and link starts (#158).
             intent.getStringExtra("debugSportsProbe")?.let { filter ->
                 sportsLiveDebugProbe.run(

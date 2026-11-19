@@ -574,6 +574,15 @@ class SportsLiveZapResolverTest {
     }
 
     @Test
+    fun `a link known to play the game is served first, with no search (#173 Watch)`() = runTest {
+        streams.response = { result(SD, HD) }
+        links.noteLaunch(ITEM.id, HD)
+        links.markGood(ITEM.id, HD.url)
+        assertEquals(HD, newResolver().resolve(ITEM))
+        assertTrue(streams.calls.isEmpty())
+    }
+
+    @Test
     fun `a cached link quarantined since is looked up again`() = runTest {
         streams.response = { result(SD, HD) }
         val resolver = newResolver()

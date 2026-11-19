@@ -1462,11 +1462,12 @@ fun PlayerScreen(
                             viewModel.onEvent(PlayerEvent.OnSportsTryNextLink)
                         com.nuvio.tv.ui.screens.sportslive.SportsLiveStartingAction.SOURCES ->
                             viewModel.onEvent(PlayerEvent.OnShowSourcesPanel)
-                        com.nuvio.tv.ui.screens.sportslive.SportsLiveStartingAction.BACK -> handleBackPress()
                     }
                 },
+                // V2: a bottom-left card, not a modal, so the game's first frames show beside it.
                 modifier = Modifier
-                    .align(Alignment.Center)
+                    .align(Alignment.BottomStart)
+                    .padding(start = 48.dp, bottom = 48.dp)
                     .zIndex(2.5f)
             )
         }

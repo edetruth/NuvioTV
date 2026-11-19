@@ -173,11 +173,13 @@ class SportsLiveZapResolver @Inject constructor(
 
     private suspend fun lookupNow(item: SportsLiveItem, forceRefresh: Boolean): SportsLiveLookup =
         try {
-            // A cached link that has since failed is not served again, unless a search already found
-            // nothing better than a quarantined link: that one is served until its window ends, so a
-            // game with only failed links is searched at most once per quarantine window.
+            // A link known to play this game (#162, #173: Watch on a kickoff prompt) comes first. A cached
+            // link that has since failed is not served again, unless a search already found nothing better
+            // than a quarantined link: that one is served until its window ends, so a game with only failed
+            // links is searched at most once per quarantine window.
             val cached = if (forceRefresh) null else {
-                resolveCache.get(item.streamKey)?.takeUnless { workingLinks.isQuarantined(item.id, it) }
+                workingLinks.goodStream(item.id)
+                    ?: resolveCache.get(item.streamKey)?.takeUnless { workingLinks.isQuarantined(item.id, it) }
                     ?: workingLinks.fallback(item.id)
             }
             if (cached != null) {

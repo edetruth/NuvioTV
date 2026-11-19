@@ -171,8 +171,6 @@ object SportsLiveTokens {
         val PanelWidth = 280.dp
         val PanelLine = 22.dp
         val PanelLineGap = 2.dp
-        /** A panel row's team logos: 28 px. */
-        val PanelLogo = 14.dp
 
         /** Buttons: 72 px tall; the primary at least 200 px wide. */
         val ButtonHeight = 36.dp

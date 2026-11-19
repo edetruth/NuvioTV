@@ -180,6 +180,92 @@ class SportsLiveAlertCardsTest {
         assertEquals(AlertKeyAction.PEEK_STAY, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_CENTER, peeking.copy(cardActionable = true)))
     }
 
+    // The kickoff prompt over the player or dual screen (#173)
+
+    private val prompt = AlertKeyContext(cardActionable = false, canPeek = false, peeking = false, prompt = PromptChoice.WATCH)
+
+    @Test
+    fun `on the kickoff prompt OK watches at once, with Watch chosen first`() {
+        assertEquals(AlertKeyAction.PROMPT_WATCH, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_CENTER, prompt))
+        assertEquals(AlertKeyAction.PROMPT_WATCH, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_ENTER, prompt))
+        assertEquals(AlertKeyAction.PROMPT_WATCH, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_NUMPAD_ENTER, prompt))
+    }
+
+    @Test
+    fun `left and right choose Watch or Later, and OK presses the one chosen`() {
+        assertEquals(AlertKeyAction.PROMPT_CHOOSE_LATER, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_RIGHT, prompt))
+        assertEquals(AlertKeyAction.PROMPT_CHOOSE_WATCH, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_LEFT, prompt))
+        val later = prompt.copy(prompt = PromptChoice.LATER)
+        assertEquals(AlertKeyAction.PROMPT_LATER, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_CENTER, later))
+    }
+
+    @Test
+    fun `Back on the kickoff prompt is Later`() {
+        assertEquals(AlertKeyAction.PROMPT_LATER, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_BACK, prompt))
+        assertEquals(AlertKeyAction.PROMPT_LATER, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_ESCAPE, prompt))
+    }
+
+    @Test
+    fun `while the kickoff prompt is up no zap key reaches the player, the volume still does`() {
+        listOf(
+            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN,
+            KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_CHANNEL_DOWN,
+            KeyEvent.KEYCODE_PAGE_UP, KeyEvent.KEYCODE_PAGE_DOWN,
+            KeyEvent.KEYCODE_MEDIA_NEXT, KeyEvent.KEYCODE_MEDIA_PREVIOUS
+        ).forEach { code ->
+            assertEquals("key $code", AlertKeyAction.CONSUME, SportsLiveAlertKeys.route(code, prompt))
+        }
+        assertEquals(AlertKeyAction.PASS, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_VOLUME_UP, prompt))
+    }
+
+    @Test
+    fun `a kickoff prompt over the player takes the keys even with the player's own overlays up`() {
+        val kickoff = AlertCard(1, listOf(SportsLiveAlert.Kickoff(lakers, null)), shownAtMs = START)
+        listOf(false, true).forEach { busy ->
+            val context = SportsLiveAlertKeys.context(kickoff, canActHere = true, surfaceBusy = busy, canPeek = true, peeking = false)
+            assertEquals(PromptChoice.WATCH, context.prompt)
+            assertFalse(context.cardActionable)
+            assertFalse(context.canPeek)
+        }
+        // Over a movie or show, or anywhere it cannot play here, the prompt keeps its own focus: keys pass.
+        val elsewhere = SportsLiveAlertKeys.context(kickoff, canActHere = false, surfaceBusy = false, canPeek = false, peeking = false)
+        assertEquals(null, elsewhere.prompt)
+        assertEquals(AlertKeyAction.PASS, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_CHANNEL_UP, elsewhere))
+    }
+
+    @Test
+    fun `once the kickoff prompt times out the zap keys are the player's again`() {
+        val kickoff = AlertCard(1, listOf(SportsLiveAlert.Kickoff(lakers, null)), shownAtMs = START)
+        val up = SportsLiveAlertKeys.context(kickoff, canActHere = true, surfaceBusy = false, canPeek = true, peeking = false)
+        assertEquals(AlertKeyAction.CONSUME, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_CHANNEL_UP, up))
+        // The prompt closed (its 15 s ran out, or it was answered): no card, so nothing is taken.
+        val closed = SportsLiveAlertKeys.context(null, canActHere = true, surfaceBusy = false, canPeek = true, peeking = false)
+        listOf(
+            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_CHANNEL_DOWN,
+            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_BACK
+        ).forEach { code ->
+            assertEquals("key $code", AlertKeyAction.PASS, SportsLiveAlertKeys.route(code, closed))
+        }
+    }
+
+    @Test
+    fun `a score card's context is unchanged - actionable only with the screen's overlays closed`() {
+        val card = AlertCard(1, listOf(score()), shownAtMs = START)
+        val open = SportsLiveAlertKeys.context(card, canActHere = true, surfaceBusy = false, canPeek = true, peeking = false)
+        assertEquals(AlertKeyContext(cardActionable = true, canPeek = true, peeking = false), open)
+        val busy = SportsLiveAlertKeys.context(card, canActHere = true, surfaceBusy = true, canPeek = true, peeking = false)
+        assertEquals(AlertKeyContext(cardActionable = false, canPeek = false, peeking = false), busy)
+        val noSurface = SportsLiveAlertKeys.context(card, canActHere = true, surfaceBusy = null, canPeek = true, peeking = false)
+        assertFalse(noSurface.cardActionable)
+    }
+
+    @Test
+    fun `a peek keeps every key even with a kickoff prompt up`() {
+        val peekingPrompt = prompt.copy(peeking = true)
+        assertEquals(AlertKeyAction.PEEK_STAY, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_CENTER, peekingPrompt))
+        assertEquals(AlertKeyAction.PEEK_RETURN, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_BACK, peekingPrompt))
+    }
+
     // The peek
 
     @Test

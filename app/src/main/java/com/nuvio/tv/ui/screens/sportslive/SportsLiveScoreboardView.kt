@@ -281,7 +281,13 @@ private fun GameCells(row: ScoreboardRow, reminded: Boolean, hasReplay: Boolean,
 
 /** The row's tag: ESPN's league, the card's sport, else the sport its text tells ("TENNIS", "CRICKET"). */
 @Composable
-internal fun rowTagText(row: ScoreboardRow): String {
+internal fun rowTagText(row: ScoreboardRow): String = rowTagOf(row, row.sportTag?.let { sportKindLabel(it) })
+
+/**
+ * [rowTagText] with the sport its text tells already worded ([sportLabel]): ESPN's league, the card's sport, else
+ * [sportLabel] in capitals; empty when none is known. The same for a two-team row as for a single-line one (#167).
+ */
+internal fun rowTagOf(row: ScoreboardRow, sportLabel: String?): String {
     val item = row.item
     // A non-sport tag ("OTHER", #145) says nothing about the game: the sport its title names, else none.
     val tag = scoreboardRowTag(
@@ -290,7 +296,7 @@ internal fun rowTagText(row: ScoreboardRow): String {
         item.catalogName.takeUnless(SportsLiveTeams::isNonSportTag).orEmpty()
     )
     if (tag.isNotEmpty()) return tag
-    return row.sportTag?.let { sportKindLabel(it).uppercase(Locale.getDefault()) }.orEmpty()
+    return sportLabel?.uppercase(Locale.getDefault()).orEmpty()
 }
 
 /**

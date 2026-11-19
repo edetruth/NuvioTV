@@ -3997,6 +3997,7 @@
     <string name="sports_live_alert_starting_toast">%1$s is starting · open Sports &amp; Live to watch</string>
     <string name="sports_live_alert_full_time_names">%1$s vs %2$s · Full time</string>
     <string name="sports_live_alert_hint_watch">OK Watch</string>
+    <string name="sports_live_alert_prompt_hint">OK Watch · Back Later</string>
     <string name="sports_live_alert_hint_peek">▼ Peek</string>
     <string name="sports_live_alert_peeking">Peeking · %1$s</string>
     <string name="sports_live_alert_peek_hint">OK Stay · Back Return · %1$d s</string>
@@ -4079,8 +4080,10 @@
     <string name="sports_live_dual_recovery_choices">OK  Choose stream · ▼  Next live game · BACK  Close this side</string>
     <string name="sports_live_reconnecting">Reconnecting…</string>
     <string name="sports_live_next_live_game">Next live game</string>
-    <string name="sports_live_starting_link">Starting link %1$d</string>
-    <string name="sports_live_starting_link_of">Starting link %1$d of %2$d</string>
+    <string name="sports_live_starting_game">Starting %1$s</string>
+    <string name="sports_live_starting_untitled">Starting the stream</string>
+    <string name="sports_live_starting_link_short">Link %1$d</string>
+    <string name="sports_live_starting_link_short_of">Link %1$d of %2$d</string>
     <string name="sports_live_try_next_link">Try next link</string>
     <string name="sports_live_link_slow">That link was slow to start</string>
     <string name="sports_live_link_not_working">This link isn\'t working</string>

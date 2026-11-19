@@ -339,6 +339,18 @@ class SportsLiveAlerts @Inject constructor(
         if (alerts.isNotEmpty()) enqueue(alerts, System.currentTimeMillis())
     }
 
+    /**
+     * Debug builds only (the #173 emulator check): a kickoff prompt ("Watch now?") for a live game now listed
+     * and not playing, as if its reminder fired. Nothing in a release build.
+     */
+    suspend fun debugKickoff() {
+        if (!BuildConfig.IS_DEBUG_BUILD) return
+        val card = candidates(repo.latest.value, repo.claimedCatalogs.first(), repo.followedTeams.first())
+            .firstOrNull { it.isLive && it.teams != null && !SportsLiveAlertEngine.isPlaying(it, watching.value) }
+        android.util.Log.d("SportsLiveAlerts", "debugKickoff: ${card != null}")
+        if (card != null) enqueue(listOf(SportsLiveAlert.Kickoff(card, null)), System.currentTimeMillis())
+    }
+
     private fun ticks(): Flow<Unit> = flow {
         while (true) {
             emit(Unit)

@@ -32,6 +32,9 @@ import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -75,14 +78,16 @@ import com.nuvio.tv.ui.screens.sportslive.LiveWindow
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveRewind
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapBanner
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapPanelState
-import com.nuvio.tv.ui.screens.sportslive.SportsLiveScoreChip
+import com.nuvio.tv.core.sportslive.scores.ScoreChip
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveDrawnButton
+import com.nuvio.tv.ui.screens.sportslive.rememberScoreChipStrings
+import com.nuvio.tv.ui.screens.sportslive.scoreChipParts
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveUiState
-import com.nuvio.tv.ui.screens.sportslive.sportsLiveChipText
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveGameArt
 import com.nuvio.tv.ui.screens.sportslive.panelBoards
 import com.nuvio.tv.ui.screens.sportslive.LocalOpenSportsLiveGame
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveCardMenu
-import com.nuvio.tv.ui.screens.sportslive.SportsLiveFilterControl
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveFilterDropdown
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveFilterOption
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveGameRequests
 import com.nuvio.tv.ui.screens.sportslive.SportsLivePanelHeader
@@ -168,9 +173,10 @@ internal fun BoxScope.SportsLiveZapOverlay(
         visible = banner != null,
         enter = fadeIn(tween(150)),
         exit = fadeOut(tween(250)),
+        // V2: the top-left corner of the safe area (`Player.dc.html` 5).
         modifier = Modifier
-            .align(Alignment.TopCenter)
-            .padding(top = 32.dp)
+            .align(Alignment.TopStart)
+            .padding(top = SportsLiveTokens.Size.SafeTop, start = SportsLiveTokens.Size.SafeEnd)
             .zIndex(3f)
     ) {
         (banner ?: lastBanner)?.let { ZapBanner(it) }
@@ -430,103 +436,104 @@ private fun BoxScope.BehindLiveIndicator(
 }
 
 /**
- * The zap banner (#76): both logos around the matchup (or the channel's name), the score chip under
- * the Scores setting, "league · source", "4 of 13", the next game and, once arrived, "▼ All games".
+ * The zap banner (#76) in the V2 language (`Player.dc.html` 5): a slim top-left card. The league tag, both logos
+ * around the clean matchup (or the channel's name); a status line, the red dot with the clock and score under the
+ * Scores setting; then "3 of 9 · Next: …" and, once arrived, "▼ All games". Never the source's name.
  */
 @Composable
 private fun ZapBanner(banner: SportsLiveZapBanner) {
+    val shape = RoundedCornerShape(SportsLiveTokens.Alert.Radius)
+    val separator = stringResource(R.string.sports_live_game_info_separator)
     Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(SportsLiveTokens.Alert.Gap),
         modifier = Modifier
-            .widthIn(max = 720.dp)
-            .clip(RoundedCornerShape(NuvioTheme.radii.xl))
-            .background(NuvioTheme.colors.BackgroundElevated.copy(alpha = 0.92f))
-            .padding(horizontal = 28.dp, vertical = 14.dp)
+            .widthIn(max = BANNER_MAX_WIDTH)
+            .clip(shape)
+            .background(SportsLiveTokens.Colors.SurfaceRaised.copy(alpha = SportsLiveTokens.Alert.FILL_ALPHA))
+            .border(1.dp, SportsLiveTokens.Alert.Border, shape)
+            .padding(SportsLiveTokens.Alert.Padding)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            banner.tag?.let { tag ->
+                Text(
+                    text = tag,
+                    style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag),
+                    color = SportsLiveTokens.Colors.TextSecondary,
+                    maxLines = 1,
+                    softWrap = false
+                )
+            }
             // Logos only when both teams have one and both loaded (#130); never letters.
             val logos = rememberTeamLogoPair(banner.art)
-            if (logos != null) TeamLogoSlot(logos.first, logos.shown, 36.dp)
+            if (logos != null) TeamLogoSlot(logos.first, logos.shown, SportsLiveTokens.Alert.Logo)
             Text(
                 text = if (banner.switching) {
                     stringResource(R.string.sports_live_zap_switching, banner.name)
                 } else {
                     banner.name
                 },
-                style = MaterialTheme.typography.titleLarge,
-                color = NuvioTheme.colors.TextPrimary,
+                style = SportsLiveTokens.style(SportsLiveTokens.Toast.Title),
+                color = SportsLiveTokens.Colors.TextPrimary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f, fill = false)
             )
-            if (logos != null) TeamLogoSlot(logos.second, logos.shown, 36.dp)
+            if (logos != null) TeamLogoSlot(logos.second, logos.shown, SportsLiveTokens.Alert.Logo)
         }
         banner.chip?.let { chip ->
-            Spacer(modifier = Modifier.height(4.dp))
-            SportsLiveScoreChip(chip)
+            val (lead, score) = scoreChipParts(chip, rememberScoreChipStrings())
+            val live = chip is ScoreChip.Live
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (live) Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(SportsLiveTokens.Colors.LiveRed))
+                Text(
+                    text = listOfNotNull(lead.takeIf(String::isNotEmpty), score).joinToString(" "),
+                    style = SportsLiveTokens.style(SportsLiveTokens.Toast.Line).copy(fontFeatureSettings = "tnum"),
+                    color = if (live) SportsLiveTokens.Colors.TextPrimary else SportsLiveTokens.Colors.TextSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
-        Spacer(modifier = Modifier.height(4.dp))
+        val position = stringResource(R.string.sports_live_zap_position, banner.position, banner.total)
+        val next = banner.next?.let { stringResource(R.string.sports_live_zap_next, it) }
+        val downHint = stringResource(R.string.sports_live_zap_down_hint).takeIf { !banner.switching }
         Text(
-            text = banner.detail,
-            style = MaterialTheme.typography.bodyMedium,
-            color = NuvioTheme.extendedColors.textSecondary,
+            text = listOfNotNull(position, next, downHint).joinToString(separator),
+            style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag),
+            color = SportsLiveTokens.Colors.TextMuted,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
-        Spacer(modifier = Modifier.height(2.dp))
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            Text(
-                text = stringResource(R.string.sports_live_zap_position, banner.position, banner.total),
-                style = MaterialTheme.typography.labelLarge,
-                color = NuvioTheme.colors.Primary
-            )
-            banner.next?.let { next ->
-                Text(
-                    text = stringResource(R.string.sports_live_zap_next, next),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = NuvioTheme.extendedColors.textSecondary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false)
-                )
-            }
-            if (!banner.switching) {
-                Text(
-                    text = stringResource(R.string.sports_live_zap_down_hint),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = NuvioTheme.colors.TextPrimary,
-                    maxLines = 1
-                )
-            }
-        }
         if (banner.looking) {
-            // #158: a CH± zap's slow lookup; Skip is the card's one action (OK), drawn selected.
-            Spacer(modifier = Modifier.height(10.dp))
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            // #158: a CH± zap's slow lookup; Skip is the card's one action (OK), drawn focused (never a white slab).
+            Row(
+                modifier = Modifier.padding(top = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
                 Text(
                     text = stringResource(R.string.sports_live_zap_looking),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = NuvioTheme.extendedColors.textSecondary,
+                    style = SportsLiveTokens.style(SportsLiveTokens.Toast.Line),
+                    color = SportsLiveTokens.Colors.TextSecondary,
                     maxLines = 1
                 )
-                Text(
+                SportsLiveDrawnButton(
                     text = stringResource(R.string.sports_live_zap_skip),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = Color.Black,
-                    maxLines = 1,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(NuvioTheme.radii.sm))
-                        .background(Color.White)
-                        .padding(horizontal = 14.dp, vertical = 4.dp)
+                    primary = true,
+                    focused = true,
+                    height = 28.dp
                 )
             }
         }
     }
 }
 
+/** The banner's widest: 720 px, clear of the game's own scorebug. */
+private val BANNER_MAX_WIDTH = 360.dp
+
 /**
  * The games live now, from the left edge (#140): a slim column of one-line rows over a soft fade, so the game
- * stays visible beside it. Under one compact filter (#68: on it Left and Right move along the options), the
+ * stays visible beside it. Under one filter dropdown (V2: "My sports ▾", OK opens its options), the
  * game playing is pinned as **Now playing**, where focus opens; below it the lineup in its own order, the game
  * playing listed in its place too, marked ▶ Watching ([SportsLiveZapPanelState.guide]), so CH− (the game after
  * it) and CH+ (the one before it) read off the list. Under My sports the list may end with "N more hidden by My
@@ -576,6 +583,8 @@ private fun LiveGamesPanel(
     val firstKey = guide.firstFocusableKey
     // While the filter has focus, an option that empties (or fills) the list leaves focus on it.
     var filterFocused by remember { mutableStateOf(false) }
+    // The filter's options are open (a dialog has focus): focus is not lost meanwhile.
+    var filterMenuOpen by remember { mutableStateOf(false) }
     // The line with focus, by key (a game's stream key, the pinned row's too; null on the filter), and the list
     // index it was last at, where focus falls back to should its line go.
     var focusedKey by remember { mutableStateOf<String?>(null) }
@@ -630,8 +639,8 @@ private fun LiveGamesPanel(
     // #167: focus never stays lost while the panel is open (a removed node, a dialog gone): it comes back to the
     // line it was on, else the nearest one, else Now playing. A move between lines never leaves the panel focusless
     // for a frame, so two frames without focus is a loss.
-    LaunchedEffect(panelHasFocus, open, menuOpen) {
-        if (panelHasFocus || !open || menuOpen) return@LaunchedEffect
+    LaunchedEffect(panelHasFocus, open, menuOpen, filterMenuOpen) {
+        if (panelHasFocus || !open || menuOpen || filterMenuOpen) return@LaunchedEffect
         withFrameNanos { }
         withFrameNanos { }
         val key = focusedKey
@@ -726,20 +735,15 @@ private fun LiveGamesPanel(
                         SportsLiveUiState.ALL_SPORTS_FILTER -> allSportsLabel
                         else -> sportFilterLabel(chip)
                     }
-                    SportsLiveFilterOption(chip, sportsLiveChipText(name, state.counts[chip] ?: 0), gold = chip == SportsLiveUiState.MY_TEAMS_FILTER)
+                    SportsLiveFilterOption(chip, name, gold = chip == SportsLiveUiState.MY_TEAMS_FILTER)
                 }
-                // #140: one compact control in the V2 focus language (the selection tinted, the cursor outlined).
-                SportsLiveFilterControl(
+                // V2 (`Player.dc.html` 1): one dropdown, "My sports ▾", no counts; OK opens its options.
+                SportsLiveFilterDropdown(
                     options = options,
                     selected = state.chip,
                     onSelect = onChip,
-                    onOpenList = {
-                        if (nowRow != null) {
-                            runCatching { nowFocusRequester.requestFocus() }
-                        } else if (firstKey != null) {
-                            scope.launch { focusLine(firstKey) }
-                        }
-                    },
+                    title = stringResource(R.string.sports_live_zap_panel_title),
+                    onOpenChange = { filterMenuOpen = it },
                     modifier = Modifier
                         .padding(horizontal = PANEL_ROW_ROOM)
                         .onFocusChanged {

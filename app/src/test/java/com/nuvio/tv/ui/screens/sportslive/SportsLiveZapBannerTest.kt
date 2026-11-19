@@ -51,10 +51,10 @@ class SportsLiveZapBannerTest {
     private val scores = mapOf(pacers.streamKey to live(pacersEvent))
 
     @Test
-    fun `the banner names the game, its league and source, its place and the next game`() {
+    fun `the banner names the game, its league tag but never the source, its place and the next game`() {
         val banner = session.banner(switching = false, scores = scores, mode = ScoresMode.SHOW)
         assertEquals("Pacers @ 76ers", banner.name)
-        assertEquals("NBA · Source A", banner.detail)
+        assertEquals("NBA", banner.tag)
         assertEquals(2 to 3, banner.position to banner.total)
         assertEquals("Knicks vs Celtics", banner.next)
         // Logos and names come from the matched game, in the card's order.
@@ -79,7 +79,8 @@ class SportsLiveZapBannerTest {
         val banner = onChannel.banner(switching = true, scores = scores, mode = ScoresMode.SHOW, endedKeys = setOf(pacers.streamKey))
         assertNull(banner.art)
         assertNull(banner.chip)
-        assertEquals("Sports · Source A", banner.detail)
+        // A catch-all sport ("Sports") names no sport: no tag.
+        assertNull(banner.tag)
         assertEquals("Knicks vs Celtics", banner.next)
         // A session of one game has no next game.
         val single = SportsLiveZapSession.of(listOf(pacers), pacers.streamKey, SportsLiveTab.LIVE_NOW, null, false)!!

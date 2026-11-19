@@ -94,8 +94,8 @@ internal fun SportsLiveZapSession.pickFromPanel(
 data class SportsLiveZapBanner(
     /** The matchup or the channel, as the card names it. */
     val name: String,
-    /** "league · source". */
-    val detail: String,
+    /** The compact league or sport tag ("NBA", "SOCCER", V2); null when none names a sport. Never the source. */
+    val tag: String?,
     val position: Int,
     val total: Int,
     val switching: Boolean,
@@ -121,7 +121,7 @@ internal fun SportsLiveZapSession.banner(
     val art = GameArt.of(item, event, known)
     return SportsLiveZapBanner(
         name = item.displayName,
-        detail = listOfNotNull(art?.league ?: SportsLiveTeams.sportLabelOf(item), item.addonName).joinToString(" · "),
+        tag = (art?.league ?: SportsLiveTeams.sportLabelOf(item)?.takeUnless(SportsLiveTeams::isGenericSport))?.let(::scoreboardTag),
         position = position,
         total = total,
         switching = switching,

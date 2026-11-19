@@ -269,7 +269,6 @@ fun SportsLiveDualScreen(
                                 when (startingSelection) {
                                     SportsLiveStartingAction.TRY_NEXT_LINK -> viewModel.tryNextLink()
                                     SportsLiveStartingAction.SOURCES -> playViewModel.chooseStream(dual.pane(dual.highlighted).item)
-                                    SportsLiveStartingAction.BACK -> handleBack()
                                 }
                             }
                             return@onKeyEvent true

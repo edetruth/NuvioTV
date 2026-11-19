@@ -4,6 +4,7 @@ import com.nuvio.tv.core.sportslive.EndedGame
 import com.nuvio.tv.core.sportslive.EndedSignal
 import com.nuvio.tv.core.sportslive.GameStatus
 import com.nuvio.tv.core.sportslive.GameStatusStrings
+import com.nuvio.tv.core.sportslive.SportsLiveSportKind
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.scores.ChipScore
 import com.nuvio.tv.core.sportslive.scores.GameArt
@@ -233,7 +234,7 @@ class SportsLiveSlimPanelTest {
     }
 
     @Test
-    fun `a panel row is one compact line - logos, short names and score, then the clock`() {
+    fun `a panel row is one compact line - tag, short names and score, then the clock`() {
         assertEquals(22.dp, SportsLiveTokens.Size.PanelLine)
         assertTrue(SportsLiveTokens.Size.PanelWidth in 270.dp..290.dp)
 
@@ -262,6 +263,34 @@ class SportsLiveSlimPanelTest {
         assertEquals(PanelLineKind.CHANNEL, channelLine.kind)
         assertFalse(channelLine.live)
         assertEquals(1, channelLine.lines)
+    }
+
+    @Test
+    fun `every panel row leads with its compact sport or league tag, a two-team row too`() {
+        // #167: "Ak Bars Kazan vs CSKA" is a known hockey game; its line says so.
+        val art = GameArt(GameArtTeam("Ak Bars Kazan", "", null), GameArtTeam("CSKA Moscow", "", null), null, null, false)
+        val hockey = ScoreboardRow(
+            item = game("k", now - minute, sport = "Hockey"), group = ScoreboardGroup.LIVE, chip = null, art = art,
+            firstFollowed = false, secondFollowed = false, probablyEnded = false,
+            status = GameStatus.Live(null), twoSided = true
+        )
+        assertEquals("HOCKEY", rowTagOf(hockey, sportLabel = null))
+        val line = panelLineOf(hockey, strings, kickoff = null, tag = rowTagOf(hockey, sportLabel = null))
+        assertEquals(PanelLineKind.GAME, line.kind)
+        assertEquals("HOCKEY", line.tag)
+
+        // ESPN's league comes first.
+        assertEquals("NBA", rowTagOf(hockey.copy(art = art.copy(league = "NBA")), sportLabel = "Hockey"))
+        // A non-sport addon tag says nothing: the sport the title tells, else no tag.
+        val other = hockey.copy(item = game("o", now - minute, sport = "OTHER"), sportTag = SportsLiveSportKind.HOCKEY)
+        assertEquals("HOCKEY", rowTagOf(other, sportLabel = "Hockey"))
+        assertEquals("", rowTagOf(other.copy(sportTag = null), sportLabel = null))
+
+        // A single-line event carries it the same way; a channel never has one.
+        val event = hockey.copy(art = null, twoSided = false)
+        assertEquals("HOCKEY", panelLineOf(event, strings, kickoff = null, tag = "HOCKEY").tag)
+        val channel = hockey.copy(item = ch, group = ScoreboardGroup.CHANNELS, art = null, twoSided = false, status = GameStatus.Channel)
+        assertEquals("", panelLineOf(channel, strings, kickoff = null, tag = "TV").tag)
     }
 
     private val strings = GameStatusStrings(
