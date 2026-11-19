@@ -3913,7 +3913,7 @@
     <string name="sports_live_section_status">Status</string>
     <string name="sports_live_section_more">More</string>
     <string name="sports_live_section_more_row">More settings</string>
-    <string name="sports_live_section_more_subtitle">Data saver, stream memory and addon catalogs. Rarely needed</string>
+    <string name="sports_live_section_more_subtitle">Data saver, stream memory, hidden titles and addon catalogs. Rarely needed</string>
     <string name="sports_live_my_teams_subtitle">Their games come first, get a gold ★ and get alerts</string>
     <!-- Team search (#149): Settings → My teams → + Add a team, and first-run step 3. -->
     <string name="sports_live_my_teams_add">+ Add a team</string>
@@ -3974,6 +3974,9 @@
     <string name="sports_live_my_sports_league_help">OK turns this league on or off.</string>
     <string name="sports_live_my_sports_all_competitions_help">Every soccer game. Pick competitions below to narrow it down.</string>
     <string name="sports_live_my_teams_add_hint">Search by name, city or nickname</string>
+    <string name="sports_live_setting_hidden_none">Nothing hidden</string>
+    <string name="sports_live_setting_hidden_row_help">Titles you hid from Live Now. OK lists them, so you can bring one back</string>
+    <string name="sports_live_setting_catalogs_row_help">Which addon catalogs feed Sports &amp; Live. OK lists them</string>
     <string name="sports_live_more_show">Show</string>
     <string name="sports_live_more_hide">Hide</string>
     <string name="sports_live_catalog_filter_help">Pins one filter value of this catalog, so Sports &amp; Live loads only that</string>

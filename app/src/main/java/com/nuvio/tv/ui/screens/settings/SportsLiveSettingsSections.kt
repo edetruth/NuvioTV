@@ -50,8 +50,8 @@ internal enum class SportsLiveSetting(
     DATA_SAVER(SportsLiveSettingsSection.MORE, R.string.sports_live_setting_data_saver, R.string.sports_live_setting_data_saver_subtitle),
     RESET_STREAM_MEMORY(SportsLiveSettingsSection.MORE, R.string.sports_live_setting_reset_stream_memory, R.string.sports_live_setting_reset_stream_memory_subtitle),
     /** Titles hidden from Live Now (#134): a summary row opening its page, where OK shows one again. */
-    HIDDEN(SportsLiveSettingsSection.MORE, R.string.sports_live_setting_hidden, R.string.sports_live_setting_hidden_subtitle),
-    CATALOGS(SportsLiveSettingsSection.MORE, R.string.sports_live_setting_catalogs, R.string.sports_live_setting_catalogs_subtitle);
+    HIDDEN(SportsLiveSettingsSection.MORE, R.string.sports_live_setting_hidden, R.string.sports_live_setting_hidden_row_help),
+    CATALOGS(SportsLiveSettingsSection.MORE, R.string.sports_live_setting_catalogs, R.string.sports_live_setting_catalogs_row_help);
 
     /**
      * Whether the row can be used. A row that can't stays focusable, so the help line can say why (#89),
@@ -161,7 +161,7 @@ internal sealed interface SportsLiveSettingsItem {
         override val key get() = "hidden_$title"
     }
 
-    /** Nothing hidden: a plain note, never focused. */
+    /** Nothing hidden: one row that says how to hide a title (it keeps focus on the page; OK does nothing). */
     data object NoHidden : SportsLiveSettingsItem {
         override val key get() = "no_hidden"
     }
@@ -234,9 +234,9 @@ internal fun myTeamsItems(teams: List<FollowedTeam>): List<SportsLiveSettingsIte
 internal fun hiddenItems(titles: List<String>): List<SportsLiveSettingsItem> =
     if (titles.isEmpty()) listOf(SportsLiveSettingsItem.NoHidden) else titles.map { SportsLiveSettingsItem.HiddenTitle(it) }
 
-/** True for an item the D-pad can land on (headers and notes are plain text). */
+/** True for an item the D-pad can land on (headers and the My teams note are plain text). */
 internal val SportsLiveSettingsItem.isFocusable: Boolean
-    get() = this !is SportsLiveSettingsItem.Header && this != SportsLiveSettingsItem.NoTeams && this != SportsLiveSettingsItem.NoHidden
+    get() = this !is SportsLiveSettingsItem.Header && this != SportsLiveSettingsItem.NoTeams
 
 /** My sports' page: one row per sport, in picker order. */
 internal fun mySportsItems(): List<SportsLiveSettingsItem> = MySport.entries.map { SportsLiveSettingsItem.Sport(it) }
@@ -266,7 +266,8 @@ internal fun sportsLiveHelpFor(
     state: SportsLiveSettingsUiState,
     pipSupported: Boolean = true
 ): SportsLiveHelp? = when (item) {
-    is SportsLiveSettingsItem.Header, SportsLiveSettingsItem.NoTeams, SportsLiveSettingsItem.NoHidden -> null
+    is SportsLiveSettingsItem.Header, SportsLiveSettingsItem.NoTeams -> null
+    SportsLiveSettingsItem.NoHidden -> SportsLiveHelp(R.string.sports_live_setting_hidden_empty)
     is SportsLiveSettingsItem.Setting -> {
         val reason = item.setting.offReason(state, pipSupported)
         SportsLiveHelp(

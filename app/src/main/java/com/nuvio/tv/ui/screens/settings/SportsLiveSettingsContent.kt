@@ -22,6 +22,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
@@ -117,7 +118,8 @@ internal fun SportsLiveSettingsContent(
     }
     val pipSystemSetting = remember(context) { pipSystemSettingIntent(context) }
 
-    var page by remember { mutableStateOf(rootPage) }
+    // Saved, so the pane comes back on the same page after Team search (+ Add a team) returns.
+    var page by rememberSaveable(stateSaver = PageSaver) { mutableStateOf(rootPage) }
     var moreExpanded by rememberSaveable { mutableStateOf(SPORTS_LIVE_MORE_EXPANDED_BY_DEFAULT) }
     var streamMemoryReset by remember { mutableStateOf(false) }
     var picker by remember { mutableStateOf<ScorePicker?>(null) }
@@ -186,7 +188,7 @@ internal fun SportsLiveSettingsContent(
 
     // The pane opens on Scores; while the section is hidden, on its Show switch, scrolled into view.
     val initialKey = when {
-        rootPage != SportsLiveSettingsPage.Main -> items.firstOrNull { it.isFocusable }?.key
+        rootPage != SportsLiveSettingsPage.Main || page != rootPage -> items.firstOrNull { it.isFocusable }?.key
         state.showSection -> Item.Setting(SportsLiveSetting.SCORES).key
         else -> Item.Setting(SportsLiveSetting.SHOW_SECTION).key
     }
@@ -199,7 +201,7 @@ internal fun SportsLiveSettingsContent(
 
     fun rowModifier(item: Item): Modifier {
         val own = Modifier.focusRequester(requester(item.key))
-        return if (initialFocusRequester != null && page == rootPage && item.key == initialKey) {
+        return if (initialFocusRequester != null && item.key == initialKey) {
             own.focusRequester(initialFocusRequester)
         } else {
             own
@@ -300,7 +302,13 @@ internal fun SportsLiveSettingsContent(
                 modifier = modifier,
                 onFocused = onFocused
             )
-            Item.NoHidden -> SportsLiveSettingsNote(stringResource(R.string.sports_live_setting_hidden_empty))
+            Item.NoHidden -> SportsLiveSettingRow(
+                title = stringResource(R.string.sports_live_setting_hidden_none),
+                onClick = {},
+                enabled = false,
+                modifier = modifier,
+                onFocused = onFocused
+            )
             is Item.Team -> SportsLiveSettingRow(
                 title = item.team.name,
                 tag = teamTag(item.team)?.uppercase(),
@@ -469,6 +477,33 @@ internal fun SportsLiveSettingsContent(
         )
     }
 }
+
+/** A page as a saved token: "main", "teams", "leagues:soccer"… (unknown tokens fall back to Main). */
+internal val SportsLiveSettingsPage.token: String
+    get() = when (this) {
+        SportsLiveSettingsPage.Main -> "main"
+        SportsLiveSettingsPage.MyTeams -> "teams"
+        SportsLiveSettingsPage.MySports -> "sports"
+        is SportsLiveSettingsPage.Leagues -> LEAGUES_PREFIX + sport.id
+        SportsLiveSettingsPage.Catalogs -> "catalogs"
+        SportsLiveSettingsPage.Hidden -> "hidden"
+    }
+
+internal fun sportsLiveSettingsPageOf(token: String): SportsLiveSettingsPage = when (token) {
+    "teams" -> SportsLiveSettingsPage.MyTeams
+    "sports" -> SportsLiveSettingsPage.MySports
+    "catalogs" -> SportsLiveSettingsPage.Catalogs
+    "hidden" -> SportsLiveSettingsPage.Hidden
+    else -> if (token.startsWith(LEAGUES_PREFIX)) {
+        MySport.ofId(token.removePrefix(LEAGUES_PREFIX))?.let { SportsLiveSettingsPage.Leagues(it) } ?: SportsLiveSettingsPage.Main
+    } else {
+        SportsLiveSettingsPage.Main
+    }
+}
+
+private const val LEAGUES_PREFIX = "leagues:"
+
+private val PageSaver = Saver<SportsLiveSettingsPage, String>(save = { it.token }, restore = ::sportsLiveSettingsPageOf)
 
 /** The dialog open: scores mode, score delay, "When I open a game", or Scores status. */
 private enum class ScorePicker { MODE, DELAY, OPEN_GAME, STATUS }

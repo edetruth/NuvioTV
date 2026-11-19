@@ -123,10 +123,22 @@ class SportsLiveSettingsHelpTest {
     }
 
     @Test
-    fun `hidden lists the titles or a note that never takes focus`() {
+    fun `hidden lists the titles or one row that keeps focus on the page`() {
         assertEquals(listOf(Item.NoHidden), hiddenItems(emptyList()))
-        assertFalse(Item.NoHidden.isFocusable)
+        assertTrue(Item.NoHidden.isFocusable)
+        assertFalse(Item.NoTeams.isFocusable)
         assertEquals(listOf(Item.HiddenTitle("A"), Item.HiddenTitle("B")), hiddenItems(listOf("A", "B")))
+    }
+
+    @Test
+    fun `every page survives its saved token`() {
+        val pages = listOf(
+            SportsLiveSettingsPage.Main, SportsLiveSettingsPage.MyTeams, SportsLiveSettingsPage.MySports,
+            SportsLiveSettingsPage.Catalogs, SportsLiveSettingsPage.Hidden
+        ) + MySport.entries.map { SportsLiveSettingsPage.Leagues(it) }
+        for (page in pages) assertEquals(page, sportsLiveSettingsPageOf(page.token))
+        assertEquals(SportsLiveSettingsPage.Main, sportsLiveSettingsPageOf("leagues:curling"))
+        assertEquals(SportsLiveSettingsPage.Main, sportsLiveSettingsPageOf("something else"))
     }
 
     @Test
@@ -251,7 +263,7 @@ class SportsLiveSettingsHelpTest {
         assertEquals(R.string.sports_live_section_more_subtitle, sportsLiveHelpFor(Item.MoreToggle, state)?.text)
         assertEquals(R.string.sports_live_setting_pip_system_subtitle, sportsLiveHelpFor(Item.PipSystem, state)?.text)
         assertNull(sportsLiveHelpFor(Item.NoTeams, state))
-        assertNull(sportsLiveHelpFor(Item.NoHidden, state))
+        assertEquals(R.string.sports_live_setting_hidden_empty, sportsLiveHelpFor(Item.NoHidden, state)?.text)
         assertEquals(R.string.sports_live_team_search_placeholder, sportsLiveHelpFor(Item.AddTeam, state)?.text)
         assertEquals(R.string.sports_live_setting_hidden_subtitle, sportsLiveHelpFor(Item.HiddenTitle("Talk show"), state)?.text)
         assertEquals(R.string.sports_live_setting_catalogs_subtitle, sportsLiveHelpFor(Item.Catalog("k"), state)?.text)
