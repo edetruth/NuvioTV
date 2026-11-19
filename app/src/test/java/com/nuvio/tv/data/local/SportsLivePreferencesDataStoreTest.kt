@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -50,6 +51,52 @@ class SportsLivePreferencesDataStoreTest {
         assertTrue(store.showHomeRow.first())
         assertTrue(store.hoverPreview.first())
         assertEquals(emptyMap<String, SportsLiveOverride>(), store.overrides.first())
+    }
+
+    @Test
+    fun `first-run setup shows once for a new profile, per profile`() = runTest {
+        val store = SportsLivePreferencesDataStore(factory, profiles)
+        assertTrue(store.claimFirstRunSetup())
+        assertEquals(true, profile1Store.data.first()[booleanPreferencesKey("sports_live_setup_done")])
+        assertFalse(store.claimFirstRunSetup())
+
+        activeProfile.value = 2
+        assertTrue(store.claimFirstRunSetup())
+    }
+
+    @Test
+    fun `a profile that changed My sports is marked done without setup showing`() = runTest {
+        val store = SportsLivePreferencesDataStore(factory, profiles)
+        store.updateMySports { MySports(mapOf(MySport.SOCCER to emptySet())) }
+        assertFalse(store.claimFirstRunSetup())
+        assertEquals(true, profile1Store.data.first()[booleanPreferencesKey("sports_live_setup_done")])
+        assertFalse(store.claimFirstRunSetup())
+    }
+
+    @Test
+    fun `a profile that follows a team is marked done without setup showing`() = runTest {
+        val store = SportsLivePreferencesDataStore(factory, profiles)
+        store.follow(FollowedTeam("Boston Celtics", "Basketball"))
+        assertFalse(store.claimFirstRunSetup())
+        assertEquals(true, profile1Store.data.first()[booleanPreferencesKey("sports_live_setup_done")])
+    }
+
+    @Test
+    fun `a profile already done never sees setup again, whatever it changes`() = runTest {
+        profile1Store.updateData { mutablePreferencesOf(booleanPreferencesKey("sports_live_setup_done") to true) }
+        val store = SportsLivePreferencesDataStore(factory, profiles)
+        assertFalse(store.claimFirstRunSetup())
+        store.unfollow(FollowedTeam("Nobody", null))
+        assertFalse(store.claimFirstRunSetup())
+    }
+
+    @Test
+    fun `the first-run decision`() {
+        assertEquals(FirstRunSetup.SHOW, firstRunSetup(done = false, changedMySports = false, followsTeam = false))
+        assertEquals(FirstRunSetup.MARK_DONE, firstRunSetup(done = false, changedMySports = true, followsTeam = false))
+        assertEquals(FirstRunSetup.MARK_DONE, firstRunSetup(done = false, changedMySports = false, followsTeam = true))
+        assertEquals(FirstRunSetup.NONE, firstRunSetup(done = true, changedMySports = false, followsTeam = false))
+        assertEquals(FirstRunSetup.NONE, firstRunSetup(done = true, changedMySports = true, followsTeam = true))
     }
 
     @Test

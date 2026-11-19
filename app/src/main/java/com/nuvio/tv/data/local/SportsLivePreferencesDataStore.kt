@@ -71,6 +71,8 @@ class SportsLivePreferencesDataStore @Inject constructor(
     private val hiddenTitlesKey = stringSetPreferencesKey("sports_live_hidden_titles")
     private val dualHintShownKey = intPreferencesKey("sports_live_dual_hint_shown")
     private val newSportsHintSeenKey = booleanPreferencesKey("sports_live_new_sports_hint_seen")
+    // First-run setup (#134 phase 7): set once the profile has had its chance at it (shown, or set up already).
+    private val setupDoneKey = booleanPreferencesKey("sports_live_setup_done")
     private val scoresModeKey = stringPreferencesKey("sports_live_scores_mode")
     private val scoreDelayKey = intPreferencesKey("sports_live_score_delay_seconds")
     // Leagues seen on cards (scores S3), no longer used: cleared on the next My sports save.
@@ -356,6 +358,26 @@ class SportsLivePreferencesDataStore @Inject constructor(
         return show
     }
 
+    /**
+     * Called when Sports & Live opens: true when first-run setup shows now ([firstRunSetup]). The profile is
+     * marked done either way, so it is offered once; Settings → Setup runs it again.
+     */
+    suspend fun claimFirstRunSetup(): Boolean {
+        val store = store()
+        if (store.data.first()[setupDoneKey] == true) return false
+        var show = false
+        store.edit { prefs ->
+            val decision = firstRunSetup(
+                done = prefs[setupDoneKey] == true,
+                changedMySports = !prefs[mySportsKey].isNullOrEmpty(),
+                followsTeam = decodeFollowed(prefs[followedTeamsKey]).isNotEmpty()
+            )
+            show = decision == FirstRunSetup.SHOW
+            if (decision != FirstRunSetup.NONE) prefs[setupDoneKey] = true
+        }
+        return show
+    }
+
     suspend fun setShowSection(v: Boolean) {
         store().edit { it[showSectionKey] = v }
     }
@@ -493,6 +515,28 @@ class SportsLivePreferencesDataStore @Inject constructor(
  */
 fun shouldShowNewSportsHint(savedTokens: Set<String>?): Boolean =
     !savedTokens.isNullOrEmpty() && MySports.decode(savedTokens).sports.keys.none { it.kind == SportKind.INDIVIDUAL }
+
+/** What opening Sports & Live does about first-run setup (#134 phase 7). */
+enum class FirstRunSetup {
+    /** Show it (and mark the profile done). */
+    SHOW,
+
+    /** Mark the profile done without showing it: it is set up already. */
+    MARK_DONE,
+
+    /** Nothing: it was offered before. */
+    NONE
+}
+
+/**
+ * First-run setup for a profile: once [done], nothing; a profile that already [changedMySports] or
+ * [followsTeam] is set up, so it is marked done silently; else it shows.
+ */
+fun firstRunSetup(done: Boolean, changedMySports: Boolean, followsTeam: Boolean): FirstRunSetup = when {
+    done -> FirstRunSetup.NONE
+    changedMySports || followsTeam -> FirstRunSetup.MARK_DONE
+    else -> FirstRunSetup.SHOW
+}
 
 /** Between a stored reminder's source keys (a unit separator: never in an addon or item id). */
 private const val REMINDER_KEY_SEPARATOR = "\u001F"

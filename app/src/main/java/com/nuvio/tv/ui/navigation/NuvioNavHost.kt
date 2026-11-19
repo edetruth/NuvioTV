@@ -63,7 +63,11 @@ import com.nuvio.tv.ui.screens.search.SearchScreen
 import com.nuvio.tv.ui.screens.settings.AboutScreen
 import com.nuvio.tv.ui.screens.settings.LayoutSettingsScreen
 import com.nuvio.tv.ui.screens.settings.SportsLiveMySportsScreen
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveSetupGate
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveSetupScreen
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveSetupExitTarget
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveTeamSearchScreen
+import com.nuvio.tv.ui.screens.sportslive.sportsLiveSetupExitTarget
 import com.nuvio.tv.ui.screens.settings.LicensesAttributionsScreen
 import com.nuvio.tv.ui.screens.settings.PlaybackSettingsScreen
 import com.nuvio.tv.ui.screens.settings.SettingsScreen
@@ -1539,6 +1543,14 @@ private fun PlaybackNavHost(
         }
 
         rootComposable(Screen.SportsLive.route) {
+            // First-run setup (#134 phase 7): the first time a profile opens the section.
+            SportsLiveSetupGate(
+                onShow = {
+                    if (navController.currentDestination?.route == Screen.SportsLive.route) {
+                        navController.navigate(Screen.SportsLiveSetup.createRoute(fromSettings = false))
+                    }
+                }
+            )
             SportsLiveScreen(
                 onPlay = { item, manual ->
                     navController.navigate(streamRouteFor(item, returnToHomeOnBack = false, manualSelection = manual))
@@ -1636,6 +1648,31 @@ private fun PlaybackNavHost(
             )
         }
 
+        composable(
+            route = Screen.SportsLiveSetup.route,
+            arguments = listOf(
+                navArgument("fromSettings") {
+                    type = NavType.BoolType
+                    defaultValue = false
+                }
+            )
+        ) { backStackEntry ->
+            val fromSettings = backStackEntry.arguments?.getBoolean("fromSettings") ?: false
+            SportsLiveSetupScreen(
+                onExit = { exit ->
+                    // Once only, as the other pushed pages.
+                    if (navController.currentDestination?.route != Screen.SportsLiveSetup.route) return@SportsLiveSetupScreen
+                    when (sportsLiveSetupExitTarget(exit, fromSettings)) {
+                        SportsLiveSetupExitTarget.BACK -> navController.popBackStack()
+                        SportsLiveSetupExitTarget.LIVE_NOW -> navController.navigate(Screen.SportsLive.route) {
+                            popUpTo(navController.graph.startDestinationId)
+                            launchSingleTop = true
+                        }
+                    }
+                }
+            )
+        }
+
         composable(Screen.SportsLiveDual.route) {
             SportsLiveDualScreen(
                 onBack = {
@@ -1672,7 +1709,8 @@ private fun PlaybackNavHost(
                     navController.navigate(Screen.LicensesAttributions.route)
                 },
                 onNavigateToWatchParty = { navController.navigate(Screen.WatchParty.createRoute()) },
-                onNavigateToSportsLiveTeamSearch = { navController.navigate(Screen.SportsLiveTeamSearch.route) }
+                onNavigateToSportsLiveTeamSearch = { navController.navigate(Screen.SportsLiveTeamSearch.route) },
+                onNavigateToSportsLiveSetup = { navController.navigate(Screen.SportsLiveSetup.createRoute(fromSettings = true)) }
             )
         }
 

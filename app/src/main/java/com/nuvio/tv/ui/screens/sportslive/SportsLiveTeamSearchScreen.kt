@@ -37,6 +37,7 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
@@ -116,14 +117,15 @@ fun SportsLiveTeamSearchScreen(
 
 /**
  * Team search as a block (#149): the screen above and first-run step 3 both draw it. Focus starts on the
- * grid's "a" when [focusOnOpen].
+ * grid's "a" when [focusOnOpen]. [downFocus]: where ↓ from the grid's bottom row goes (first-run's Next).
  */
 @Composable
 fun SportsLiveTeamSearch(
     viewModel: SportsLiveTeamSearchViewModel,
     modifier: Modifier = Modifier,
     showTitle: Boolean = true,
-    focusOnOpen: Boolean = true
+    focusOnOpen: Boolean = true,
+    downFocus: FocusRequester? = null
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val voice = rememberSportsLiveVoiceInput(onResult = viewModel::setQuery)
@@ -149,6 +151,7 @@ fun SportsLiveTeamSearch(
                 Spacer(Modifier.height(10.dp))
                 LetterGrid(
                     firstKey = firstKey,
+                    downFocus = downFocus,
                     onKey = viewModel::type,
                     onDelete = viewModel::deleteLetter,
                     onClear = viewModel::clear
@@ -168,7 +171,7 @@ fun SportsLiveTeamSearch(
             }
             Spacer(Modifier.width(SearchSize.ColumnGap))
             Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                SportFilter(selected = state.sport, sports = state.sports, onSelect = viewModel::selectSport)
+                SportFilter(selected = state.sport, sports = state.sports, scoped = state.scoped, onSelect = viewModel::selectSport)
                 Spacer(Modifier.height(12.dp))
                 ResultsPane(state = state, onToggle = viewModel::toggle, onRetry = viewModel::refill)
             }
@@ -210,7 +213,14 @@ private fun SearchField(query: String, listening: Boolean) {
 }
 
 @Composable
-private fun LetterGrid(firstKey: FocusRequester, onKey: (String) -> Unit, onDelete: () -> Unit, onClear: () -> Unit) {
+private fun LetterGrid(
+    firstKey: FocusRequester,
+    downFocus: FocusRequester?,
+    onKey: (String) -> Unit,
+    onDelete: () -> Unit,
+    onClear: () -> Unit
+) {
+    val bottom = if (downFocus != null) Modifier.focusProperties { down = downFocus } else Modifier
     Column(verticalArrangement = Arrangement.spacedBy(SearchSize.KeyGap)) {
         KEYS.chunked(SearchSize.KEYS_PER_ROW).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(SearchSize.KeyGap)) {
@@ -226,15 +236,15 @@ private fun LetterGrid(firstKey: FocusRequester, onKey: (String) -> Unit, onDele
         Row(horizontalArrangement = Arrangement.spacedBy(SearchSize.KeyGap)) {
             val wide = SearchSize.KeyWidth * 3 + SearchSize.KeyGap * 2
             val rest = (SearchSize.GridWidth - wide - SearchSize.KeyGap * 2) / 2
-            GridKey(onClick = { onKey(" ") }, width = wide) { KeyLabel(stringResource(R.string.sports_live_team_search_space)) }
-            GridKey(onClick = onDelete, width = rest) {
+            GridKey(onClick = { onKey(" ") }, width = wide, modifier = bottom) { KeyLabel(stringResource(R.string.sports_live_team_search_space)) }
+            GridKey(onClick = onDelete, width = rest, modifier = bottom) {
                 Icon(
                     Icons.AutoMirrored.Rounded.Backspace,
                     contentDescription = stringResource(R.string.sports_live_team_search_delete),
                     modifier = Modifier.size(14.dp)
                 )
             }
-            GridKey(onClick = onClear, width = rest) { KeyLabel(stringResource(R.string.sports_live_team_search_clear)) }
+            GridKey(onClick = onClear, width = rest, modifier = bottom) { KeyLabel(stringResource(R.string.sports_live_team_search_clear)) }
         }
     }
 }
@@ -266,10 +276,13 @@ private fun GridKey(onClick: () -> Unit, width: Dp, modifier: Modifier = Modifie
     }
 }
 
-/** The sport filter: one focus stop; ← → pick while it has focus (at either end they move focus on). */
+/**
+ * The sport filter: one focus stop; ← → pick while it has focus (at either end they move focus on). Its first
+ * option is All, or "★ My sports" while [scoped] (first-run step 3).
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun SportFilter(selected: MySport?, sports: List<MySport>, onSelect: (MySport?) -> Unit) {
+private fun SportFilter(selected: MySport?, sports: List<MySport>, scoped: Boolean, onSelect: (MySport?) -> Unit) {
     val options: List<MySport?> = listOf<MySport?>(null) + sports
     val index = options.indexOf(selected).coerceAtLeast(0)
     val shape = SportsLiveTokens.Radius.PillShape
@@ -311,7 +324,8 @@ private fun SportFilter(selected: MySport?, sports: List<MySport>, onSelect: (My
                 val inView = remember { BringIntoViewRequester() }
                 if (on) LaunchedEffect(Unit) { inView.bringIntoView() }
                 Text(
-                    text = option?.let { mySportLabel(it) } ?: stringResource(R.string.sports_live_team_search_all),
+                    text = option?.let { mySportLabel(it) }
+                        ?: if (scoped) "★ " + stringResource(R.string.sports_live_filter_my_sports) else stringResource(R.string.sports_live_team_search_all),
                     style = SportsLiveTokens.style(if (on) SportsLiveTokens.Type.ControlSelected else SportsLiveTokens.Type.Control),
                     color = if (on) Colors.TextPrimary else Colors.TextInactive,
                     maxLines = 1,

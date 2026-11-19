@@ -182,6 +182,8 @@ fun SettingsScreen(
     onNavigateToLicensesAttributions: () -> Unit = {},
     onNavigateToWatchParty: () -> Unit = {},
     onNavigateToSportsLiveTeamSearch: () -> Unit = {},
+    /** Settings → Sports & Live → Setup → Run setup again (#134 phase 7). */
+    onNavigateToSportsLiveSetup: () -> Unit = {},
     profileViewModel: ProfileSettingsViewModel = hiltViewModel(),
     experienceModeViewModel: ExperienceModeSettingsViewModel = hiltViewModel(),
     partyViewModel: PartyViewModel = hiltViewModel()
@@ -666,7 +668,8 @@ fun SettingsScreen(
                                 onNavigateToSupportersContributors = onNavigateToSupportersContributors,
                                 onNavigateToLicensesAttributions = onNavigateToLicensesAttributions,
                                 onNavigateToWatchParty = onNavigateToWatchParty,
-                                onNavigateToSportsLiveTeamSearch = onNavigateToSportsLiveTeamSearch
+                                onNavigateToSportsLiveTeamSearch = onNavigateToSportsLiveTeamSearch,
+                                onNavigateToSportsLiveSetup = onNavigateToSportsLiveSetup
                             )
                         }
                     }
@@ -827,7 +830,8 @@ fun SettingsScreen(
                         onNavigateToSupportersContributors = onNavigateToSupportersContributors,
                         onNavigateToLicensesAttributions = onNavigateToLicensesAttributions,
                         onNavigateToWatchParty = onNavigateToWatchParty,
-                        onNavigateToSportsLiveTeamSearch = onNavigateToSportsLiveTeamSearch
+                        onNavigateToSportsLiveTeamSearch = onNavigateToSportsLiveTeamSearch,
+                        onNavigateToSportsLiveSetup = onNavigateToSportsLiveSetup
                     )
                 }
             }
@@ -858,7 +862,8 @@ private fun SettingsDetailPane(
     onNavigateToSupportersContributors: () -> Unit,
     onNavigateToLicensesAttributions: () -> Unit,
     onNavigateToWatchParty: () -> Unit,
-    onNavigateToSportsLiveTeamSearch: () -> Unit
+    onNavigateToSportsLiveTeamSearch: () -> Unit,
+    onNavigateToSportsLiveSetup: () -> Unit
 ) {
     when (selectedCategory) {
         SettingsCategory.EXPERIENCE -> EssentialAdvancedSettingsContent(
@@ -977,7 +982,8 @@ private fun SettingsDetailPane(
             } else {
                 null
             },
-            onAddTeam = onNavigateToSportsLiveTeamSearch
+            onAddTeam = onNavigateToSportsLiveTeamSearch,
+            onRunSetup = onNavigateToSportsLiveSetup
         )
         SettingsCategory.ACCOUNT -> AccountSettingsInline(
             onNavigateToAuthQrSignIn = onNavigateToAuthQrSignIn,

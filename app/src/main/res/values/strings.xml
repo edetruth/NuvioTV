@@ -3956,6 +3956,44 @@
     <string name="sports_live_section_setup">Setup</string>
     <string name="sports_live_setting_run_setup">Run setup again</string>
     <string name="sports_live_setting_run_setup_subtitle">Pick your sports, teams and how scores show, one step at a time</string>
+    <!-- First-run setup (#134 phase 7). -->
+    <string name="sports_live_setup_step">Sports &amp; Live setup · step %1$d of %2$d</string>
+    <string name="sports_live_setup_skip">Skip setup</string>
+    <string name="sports_live_setup_back">Back</string>
+    <string name="sports_live_setup_next">Next</string>
+    <string name="sports_live_setup_get_started">Get started</string>
+    <string name="sports_live_setup_go_live_now">Go to Live Now</string>
+    <string name="sports_live_setup_welcome_title">Set up Sports &amp; Live</string>
+    <string name="sports_live_setup_welcome_subtitle">Three quick choices. Skip any of them; everything stays in Settings.</string>
+    <string name="sports_live_setup_welcome_live">Live games, schedules and results from your addons</string>
+    <string name="sports_live_setup_welcome_teams">Your teams first, with a reminder at kickoff</string>
+    <string name="sports_live_setup_welcome_scores">Scores your way: show them, hide them until you look, or turn them off</string>
+    <string name="sports_live_setup_sports_title">Pick your sports</string>
+    <string name="sports_live_setup_sports_subtitle">Results, Upcoming and alerts follow these. Leagues for the sport you are on show on the right.</string>
+    <string name="sports_live_setup_sports_leagues">%1$s leagues</string>
+    <string name="sports_live_setup_teams_title">Pick your teams</string>
+    <string name="sports_live_setup_scores_title">How should scores show?</string>
+    <string name="sports_live_setup_scores_subtitle">If you often watch later, hide them. You can change this any time.</string>
+    <string name="sports_live_setup_scores_show_help">Live and final scores everywhere.</string>
+    <string name="sports_live_setup_scores_hide_help">A score shows after you rest on its game for 1 s.</string>
+    <string name="sports_live_setup_scores_off_help">No scores, and no score checks at all.</string>
+    <string name="sports_live_setup_sample_home" translatable="false">Celtics</string>
+    <string name="sports_live_setup_sample_away" translatable="false">Knicks</string>
+    <string name="sports_live_setup_delay_seconds">%1$d s</string>
+    <string name="sports_live_setup_delay_help">Holds scores back so they never run ahead of a stream that is behind live.</string>
+    <string name="sports_live_setup_done_title">You\'re set</string>
+    <plurals name="sports_live_setup_done_sports">
+        <item quantity="one">%d sport</item>
+        <item quantity="other">%d sports</item>
+    </plurals>
+    <plurals name="sports_live_setup_done_teams">
+        <item quantity="one">%d team</item>
+        <item quantity="other">%d teams</item>
+    </plurals>
+    <string name="sports_live_setup_done_scores">Scores: %1$s</string>
+    <string name="sports_live_setup_done_delay">Delay: %1$s</string>
+    <string name="sports_live_setup_done_reminders">Kickoff reminders are on for your teams.</string>
+    <string name="sports_live_setup_done_rerun">Run setup again any time: Settings → Sports &amp; Live → Setup.</string>
     <string name="sports_live_switch_on">On</string>
     <string name="sports_live_switch_off">Off</string>
     <string name="sports_live_off_section_hidden">Off because \"Show Sports &amp; Live section\" is off. Turn it on under Home &amp; rows to use this.</string>

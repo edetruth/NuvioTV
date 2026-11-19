@@ -166,6 +166,10 @@ sealed class Screen(val route: String) {
     data object LayoutSettings : Screen("layout_settings")
     data object SportsLiveMySports : Screen("sports_live_my_sports")
     data object SportsLiveTeamSearch : Screen("sports_live_team_search")
+    /** First-run setup (#134 phase 7); [fromSettings]: run again from Settings, so Skip returns there. */
+    data object SportsLiveSetup : Screen("sports_live_setup?fromSettings={fromSettings}") {
+        fun createRoute(fromSettings: Boolean): String = "sports_live_setup?fromSettings=$fromSettings"
+    }
     data object Account : Screen("account")
     data object ManageProfiles : Screen("manage_profiles")
     data object AuthSignIn : Screen("auth_sign_in")

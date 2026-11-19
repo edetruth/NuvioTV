@@ -35,8 +35,10 @@ import kotlin.coroutines.CoroutineContext
 /** Team search (#149): what the screen draws. */
 data class TeamSearchUiState(
     val query: String = "",
-    /** The sport filter; null = All. */
+    /** The sport filter; null = All (or My sports, while [scoped]). */
     val sport: MySport? = null,
+    /** First-run step 3: the filter's first option is My sports, the team sports picked in step 2. */
+    val scoped: Boolean = false,
     /** The filter's sports after All. */
     val sports: List<MySport> = TeamSearch.SPORTS,
     /** The matches while the field has text. */
@@ -78,12 +80,33 @@ internal object TeamSearchState {
         return TeamSearch.SPORTS.filter { it in mine }.ifEmpty { TeamSearch.SPORTS }
     }
 
-    /** The order leagues are filled in: My sports' leagues first, then the rest. */
-    fun fillOrder(sport: MySport?, mySports: MySports): List<MyLeague> {
+    /** The order leagues are filled in: My sports' leagues first, then the rest; only [scope]'s sports under My sports. */
+    fun fillOrder(sport: MySport?, mySports: MySports, scope: Set<MySport>? = null): List<MyLeague> {
         val mine = mySports.effectiveSports.flatMapTo(HashSet()) { mySports.leaguesOf(it) }
-        val leagues = TeamSearch.leaguesOf(sport)
+        val leagues = inScope(TeamSearch.leaguesOf(sport), sport, scope) { it.sport }
         return leagues.filter { it in mine } + leagues.filterNot { it in mine }
     }
+
+    /**
+     * The "My sports" filter option (first-run step 3, #134): the team sports picked in My sports; null when
+     * every sport is (nothing picked) or none has teams to list, and the option is All.
+     */
+    fun scope(mySports: MySports): Set<MySport>? {
+        if (mySports.isDefault) return null
+        return TeamSearch.SPORTS.filterTo(LinkedHashSet()) { it in mySports.effectiveSports }.ifEmpty { null }
+    }
+
+    /** The matches for [query] under the filter: [sport], else [scope]'s sports, else every sport. */
+    fun search(index: TeamSearchIndex, query: String, sport: MySport?, scope: Set<MySport>?): List<TeamHit> =
+        if (sport != null || scope == null) TeamSearch.search(index, query, sport)
+        else TeamSearch.search(index, query, null, limit = Int.MAX_VALUE).filter { it.league.sport in scope }.take(TeamSearch.MAX_RESULTS)
+
+    /** The teams A–Z by league under the filter, as [search]. */
+    fun browse(index: TeamSearchIndex, sport: MySport?, scope: Set<MySport>?): List<TeamGroup> =
+        inScope(TeamSearch.browse(index, sport), sport, scope) { it.league.sport }
+
+    private fun <T> inScope(items: List<T>, sport: MySport?, scope: Set<MySport>?, sportOf: (T) -> MySport): List<T> =
+        if (sport != null || scope == null) items else items.filter { sportOf(it) in scope }
 
     /** Logos for [followed] entries stored without one: their ESPN id's team in [index]. */
     fun logos(followed: List<FollowedTeam>, index: TeamSearchIndex): Map<String, String> {
@@ -119,20 +142,33 @@ class SportsLiveTeamSearchViewModel internal constructor(
     private val filling = MutableStateFlow<MyLeague?>(null)
     private val failed = MutableStateFlow(false)
     private val newKeys = MutableStateFlow<Set<String>>(emptySet())
+    private val mySportsOnly = MutableStateFlow(false)
     private var fillJob: Job? = null
 
+    /** The "My sports" option's sports ([TeamSearchState.scope]); null while the option is All. */
+    private val scope: Flow<Set<MySport>?> =
+        combine(mySportsOnly, prefs.mySports) { only, mine -> if (only) TeamSearchState.scope(mine) else null }
+
     /** The query and filter with what they list, worked out together off the main thread. */
-    private class Listed(val query: String, val sport: MySport?, val hits: List<TeamHit>, val groups: List<TeamGroup>, val any: Boolean)
+    private class Listed(
+        val query: String,
+        val sport: MySport?,
+        val scoped: Boolean,
+        val hits: List<TeamHit>,
+        val groups: List<TeamGroup>,
+        val any: Boolean
+    )
 
     private val listed: Flow<Listed> =
-        combine(query, sport, index) { q, s, idx ->
+        combine(query, sport, index, scope) { q, s, idx, sc ->
             val browsing = q.isBlank()
             Listed(
                 query = q,
                 sport = s,
-                hits = if (browsing) emptyList() else TeamSearch.search(idx, q, s),
-                groups = if (browsing) TeamSearch.browse(idx, s) else emptyList(),
-                any = idx.hasTeams(s)
+                scoped = sc != null,
+                hits = if (browsing) emptyList() else TeamSearchState.search(idx, q, s, sc),
+                groups = if (browsing) TeamSearchState.browse(idx, s, sc) else emptyList(),
+                any = idx.hasTeams(s, sc)
             )
         }.flowOn(work)
 
@@ -148,6 +184,7 @@ class SportsLiveTeamSearchViewModel internal constructor(
         TeamSearchUiState(
             query = list.query,
             sport = list.sport,
+            scoped = list.scoped,
             sports = TeamSearchState.filterSports(mySports),
             hits = list.hits,
             groups = list.groups,
@@ -180,6 +217,16 @@ class SportsLiveTeamSearchViewModel internal constructor(
         query.value = text.take(MAX_QUERY)
     }
 
+    /**
+     * First-run step 3 (#134): the filter's first option becomes My sports, the team sports just picked, and
+     * only their leagues are fetched while it is chosen. Called each time the step shows, so sports changed on
+     * step 2 since are fetched too (lists already kept are not fetched again).
+     */
+    fun scopeToMySports() {
+        mySportsOnly.value = true
+        refill()
+    }
+
     fun selectSport(next: MySport?) {
         if (sport.value == next) return
         sport.value = next
@@ -192,7 +239,8 @@ class SportsLiveTeamSearchViewModel internal constructor(
         fillJob = viewModelScope.launch {
             failed.value = false
             index.value = withContext(work) { TeamSearch.index(directory) }
-            val order = TeamSearchState.fillOrder(sport.value, prefs.mySports.first())
+            val mySports = prefs.mySports.first()
+            val order = TeamSearchState.fillOrder(sport.value, mySports, if (mySportsOnly.value) TeamSearchState.scope(mySports) else null)
             for (league in order) {
                 filling.value = league
                 val result = fill.ensure(TeamSearch.teamList(league))
@@ -224,8 +272,11 @@ class SportsLiveTeamSearchViewModel internal constructor(
         viewModelScope.launch { prefs.unfollow(team) }
     }
 
-    private fun TeamSearchIndex.hasTeams(sport: MySport?): Boolean =
-        if (sport == null) !isEmpty else leagues.any { it.sport == sport }
+    private fun TeamSearchIndex.hasTeams(sport: MySport?, scope: Set<MySport>?): Boolean = when {
+        sport != null -> leagues.any { it.sport == sport }
+        scope != null -> leagues.any { it.sport in scope }
+        else -> !isEmpty
+    }
 
     companion object {
         const val MAX_QUERY = 40
