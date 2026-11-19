@@ -388,14 +388,15 @@ private fun StageButtonLabel(text: String) {
     Text(text = text, style = SportsLiveTokens.style(SportsLiveTokens.Type.Button), maxLines = 1, softWrap = false)
 }
 
-/** The key-hint footer (V2 Upcoming): "↑ ↓ games   ← → time slots   CH +/− day   OK remind / watch". */
+/** The key-hint footer (V2 Upcoming): "↑ ↓ games   ⏪ ⏩ time slots   CH +/− day   OK remind / watch   → more". */
 @Composable
 internal fun SportsLiveAgendaKeyHints(modifier: Modifier = Modifier) {
     val hints = listOf(
         R.string.sports_live_hint_keys_games to R.string.sports_live_hint_games,
         R.string.sports_live_hint_keys_slots to R.string.sports_live_hint_slots,
         R.string.sports_live_hint_keys_day to R.string.sports_live_hint_day,
-        R.string.sports_live_hint_keys_ok to R.string.sports_live_hint_ok
+        R.string.sports_live_hint_keys_ok to R.string.sports_live_hint_ok,
+        R.string.sports_live_hint_keys_stage to R.string.sports_live_hint_stage
     )
     Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         hints.forEach { (keys, label) ->

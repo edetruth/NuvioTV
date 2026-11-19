@@ -127,7 +127,7 @@ class SportsLiveUpcomingV2Test {
     // Slot and day navigation
 
     @Test
-    fun `left and right jump to the previous or next time slot's first game`() {
+    fun `rewind and fast-forward jump to the previous or next time slot's first game`() {
         val agenda = agendaOf(week)
         assertEquals(1, agenda.target(0, AgendaKey.SLOT_FORWARD))
         // From the middle of the 6 PM slot: back to 3:30 PM, on to Tomorrow.
@@ -147,8 +147,13 @@ class SportsLiveUpcomingV2Test {
         assertNull(agenda.target(0, AgendaKey.DAY_BACK))
         assertEquals(AgendaKey.DAY_FORWARD, agendaKeyOf(KeyEvent.KEYCODE_CHANNEL_DOWN))
         assertEquals(AgendaKey.DAY_BACK, agendaKeyOf(KeyEvent.KEYCODE_CHANNEL_UP))
-        assertEquals(AgendaKey.SLOT_BACK, agendaKeyOf(KeyEvent.KEYCODE_DPAD_LEFT))
-        assertEquals(AgendaKey.SLOT_FORWARD, agendaKeyOf(KeyEvent.KEYCODE_DPAD_RIGHT))
+        // Time slots on the media keys (#134); ← → are left to focus, so → reaches the stage from any row.
+        assertEquals(AgendaKey.SLOT_BACK, agendaKeyOf(KeyEvent.KEYCODE_MEDIA_REWIND))
+        assertEquals(AgendaKey.SLOT_BACK, agendaKeyOf(KeyEvent.KEYCODE_MEDIA_PREVIOUS))
+        assertEquals(AgendaKey.SLOT_FORWARD, agendaKeyOf(KeyEvent.KEYCODE_MEDIA_FAST_FORWARD))
+        assertEquals(AgendaKey.SLOT_FORWARD, agendaKeyOf(KeyEvent.KEYCODE_MEDIA_NEXT))
+        assertNull(agendaKeyOf(KeyEvent.KEYCODE_DPAD_LEFT))
+        assertNull(agendaKeyOf(KeyEvent.KEYCODE_DPAD_RIGHT))
         assertNull(agendaKeyOf(KeyEvent.KEYCODE_DPAD_DOWN))
     }
 

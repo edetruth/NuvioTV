@@ -4045,12 +4045,14 @@
     <string name="sports_live_season_post">Postseason</string>
     <string name="sports_live_hint_keys_games">↑ ↓</string>
     <string name="sports_live_hint_games">games</string>
-    <string name="sports_live_hint_keys_slots">← →</string>
+    <string name="sports_live_hint_keys_slots">⏪ ⏩</string>
     <string name="sports_live_hint_slots">time slots</string>
     <string name="sports_live_hint_keys_day">CH +/−</string>
     <string name="sports_live_hint_day">day</string>
     <string name="sports_live_hint_keys_ok">OK</string>
     <string name="sports_live_hint_ok">remind/watch</string>
+    <string name="sports_live_hint_keys_stage">→</string>
+    <string name="sports_live_hint_stage">more</string>
     <string name="sports_live_sport_football">Football</string>
     <string name="sports_live_sport_soccer">Soccer</string>
     <string name="sports_live_sport_basketball">Basketball</string>

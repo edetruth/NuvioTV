@@ -1360,8 +1360,6 @@ private fun SportsLiveContent(
                                             item(key = item.listKey) {
                                                 Column {
                                                     if (agenda.opensSlot(gameIndex)) SportsLiveAgendaSlotHeader(agenda.slots[game.slot], uiState.nowMs)
-                                                    // The last slot's Right goes into the stage (nothing further along the list).
-                                                    val lastSlot = agenda.slotJump(gameIndex, forward = true) == null
                                                     SportsLiveScoreboardRow(
                                                         row = game.row,
                                                         selected = paneHasFocus && item.listKey == selected.listKey,
@@ -1373,7 +1371,8 @@ private fun SportsLiveContent(
                                                         modifier = Modifier
                                                             .focusRequester(cardFocusRequester(item))
                                                             .focusProperties {
-                                                                if (lastSlot) right = watchFocusRequester
+                                                                // → enters the stage from any row (#134), as on Live Now; Hold OK opens More….
+                                                                right = watchFocusRequester
                                                                 if (gameIndex == 0) up = aboveListFocusRequester
                                                             }
                                                             .onPreviewKeyEvent { event ->
@@ -1381,8 +1380,8 @@ private fun SportsLiveContent(
                                                                 val key = agendaKeyOf(event.nativeKeyEvent.keyCode) ?: return@onPreviewKeyEvent false
                                                                 val target = agenda.target(gameIndex, key)
                                                                 if (target != null) agendaJump(target)
-                                                                // A day key at either end does nothing; a slot key there moves on as usual.
-                                                                target != null || key == AgendaKey.DAY_BACK || key == AgendaKey.DAY_FORWARD
+                                                                // A day or slot key at either end does nothing (media keys never move focus).
+                                                                true
                                                             }
                                                     )
                                                 }
@@ -1546,10 +1545,13 @@ private val LIST_FADE = 40.dp
 /** Focus keeps about two rows from the list's top and bottom edges (V2). */
 private val LIST_EDGE_KEEP = 100.dp
 
-/** The Agenda's move for a remote [keyCode]: ← → a time slot, CH+ (up) / CH− (down) a day, as CH zaps in the player. */
+/**
+ * The Agenda's move for a remote [keyCode]: ⏪ ⏩ (rewind / fast-forward, previous / next) a time slot, CH+ (up) /
+ * CH− (down) a day, as CH zaps in the player. ← → are left to focus (#134): → enters the stage from any row.
+ */
 internal fun agendaKeyOf(keyCode: Int): AgendaKey? = when (keyCode) {
-    AndroidKeyEvent.KEYCODE_DPAD_LEFT -> AgendaKey.SLOT_BACK
-    AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> AgendaKey.SLOT_FORWARD
+    AndroidKeyEvent.KEYCODE_MEDIA_REWIND, AndroidKeyEvent.KEYCODE_MEDIA_PREVIOUS -> AgendaKey.SLOT_BACK
+    AndroidKeyEvent.KEYCODE_MEDIA_FAST_FORWARD, AndroidKeyEvent.KEYCODE_MEDIA_NEXT -> AgendaKey.SLOT_FORWARD
     AndroidKeyEvent.KEYCODE_CHANNEL_UP, AndroidKeyEvent.KEYCODE_PAGE_UP -> AgendaKey.DAY_BACK
     AndroidKeyEvent.KEYCODE_CHANNEL_DOWN, AndroidKeyEvent.KEYCODE_PAGE_DOWN -> AgendaKey.DAY_FORWARD
     else -> null
