@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.sportslive.dual
 
+import com.nuvio.tv.core.sportslive.SportsLiveTriedGames
 import com.nuvio.tv.core.sportslive.displayName
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -347,21 +348,25 @@ class SportsLiveDualViewModel internal constructor(
     }
 
     /**
-     * "Next live game" on a pane whose recovery gave up (#138): the highlighted pane moves to the game
-     * "Watch with another game" would pick (#57: a followed team's, else by start time), never the other
-     * pane's or one known to be over; a plain zap when there is none. False when nothing is left.
+     * "Next live game" on a pane whose recovery gave up (#138): the same rule as the player's error screen
+     * ([SportsLiveSecondGame.nextAfterFailure]): the pane's game counts as tried and failed, and the pane moves
+     * forward to the next live game never tried this session, a known-good one first, never the other pane's or
+     * one known to be over. False when nothing is left (never back to a game that failed).
      */
     fun nextLiveGame(): Boolean {
         val state = _state.value ?: return false
         val side = state.highlighted
         val current = state.pane(side).item
         val other = state.pane(side.other).item
-        val pick = SportsLiveSecondGame.pick(
-            first = current,
-            items = items.filterNot { it.sharesSourceWith(other) },
+        SportsLiveTriedGames.shared.noteFailed(current)
+        val pick = SportsLiveSecondGame.nextAfterFailure(
+            current = current,
+            lineup = items.filterNot { it.sharesSourceWith(other) },
             scores = emptyMap(),
-            finishedKeys = endedKeys() + finishedKeys
-        ) ?: return zap(forward = true)
+            finishedKeys = endedKeys() + finishedKeys,
+            tried = SportsLiveTriedGames.shared.ids(),
+            knownGood = { item -> SportsLiveWorkingLinks.shared.goodStream(item.id) != null }
+        ) ?: return false
         settle(current)
         forgetRecovery(pick)
         load(side, pick)

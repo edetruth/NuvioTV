@@ -37,6 +37,8 @@ class PlayerZapController(
     private val onSkipped: (SportsLiveItem) -> Unit = {},
     /** Stream keys of the games known to have ended, which zaps skip. */
     private val endedKeys: () -> Set<String> = { emptySet() },
+    /** Ids of the games tried and failed this session ([com.nuvio.tv.core.sportslive.SportsLiveTriedGames]): auto-skips pass them. */
+    private val triedIds: () -> Set<String> = { emptySet() },
     /**
      * The live games panel's one ordered list (#142), as the panel shows it (or would, while closed); null
      * while it is not known. Zaps and picks walk it ([SportsLiveZapSession.withLineup]).
@@ -182,7 +184,7 @@ class PlayerZapController(
                     item.alternates.mapTo(skipped) { it.streamKey }
                     val next = direction
                         ?.takeIf { skips < SportsLiveStreamThresholds.MAX_ZAP_SKIPS }
-                        ?.let { landed.step(it, endedKeys() + skipped) }
+                        ?.let { landed.step(it, endedKeys() + skipped + triedKeysOf(landed)) }
                         ?.takeUnless { it.current.streamKey == playing?.current?.streamKey }
                     if (next == null || SportsLiveZapSessions.current() !== landed) {
                         revertIfCurrent(lookup)
@@ -232,6 +234,14 @@ class PlayerZapController(
             if (skipRequest === skipped) skipRequest = null
             _looking.value = null
         }
+    }
+
+    /** The stream keys of [session]'s games tried and failed this session. */
+    private fun triedKeysOf(session: SportsLiveZapSession): Set<String> {
+        val ids = triedIds()
+        if (ids.isEmpty()) return emptySet()
+        return session.items.filter { item -> item.id in ids || item.alternates.any { it.id in ids } }
+            .flatMapTo(HashSet()) { item -> listOf(item.streamKey) + item.alternates.map { it.streamKey } }
     }
 
     /** Back to the game playing (with any chip picked since), unless a newer zap moved the session on. */

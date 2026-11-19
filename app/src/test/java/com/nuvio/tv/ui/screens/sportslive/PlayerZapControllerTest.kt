@@ -36,6 +36,7 @@ class PlayerZapControllerTest {
     private val noStream = mutableListOf<String>()
     private val skipped = mutableListOf<String>()
     private var ended = emptySet<String>()
+    private var tried = emptySet<String>()
 
     @After
     fun tearDown() {
@@ -61,6 +62,7 @@ class PlayerZapControllerTest {
         onNoStream = { item -> noStream += item.id },
         onSkipped = { item -> skipped += item.id },
         endedKeys = { ended },
+        triedIds = { tried },
         settleMs = settleMs
     )
 
@@ -349,6 +351,21 @@ class PlayerZapControllerTest {
         // The pick waits for the lookup's own 20 s cap (Watch, OK), the CH zap for 8 s.
         assertEquals(20_000L, SportsLiveZapResolver.TIMEOUT_MS)
         assertEquals(8_000L, SportsLiveStreamThresholds.ZAP_SKIP_WAIT_MS)
+    }
+
+    @Test
+    fun `the auto-skip passes games tried and failed this session`() = runTest {
+        startOn("a")
+        tried = setOf("c")
+        val controller = controller()
+
+        controller.zap("a", forward = true)
+        runCurrent()
+        pending.getValue("b").complete(null)
+        runCurrent()
+        // b had no stream: the skip goes past c (failed earlier) straight to d.
+        assertEquals(listOf("b"), skipped)
+        assertEquals("d", controller.resolving.value?.current?.id)
     }
 
     @Test

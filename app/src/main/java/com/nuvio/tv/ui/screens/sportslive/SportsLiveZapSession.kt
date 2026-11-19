@@ -164,6 +164,8 @@ internal object SportsLiveZapSessions {
     fun start(session: SportsLiveZapSession) {
         this.session = session
         zapArrivalPending = false
+        // A new session tries every game afresh (#138 follow-up).
+        com.nuvio.tv.core.sportslive.SportsLiveTriedGames.shared.clear()
     }
 
     fun current(): SportsLiveZapSession? = session

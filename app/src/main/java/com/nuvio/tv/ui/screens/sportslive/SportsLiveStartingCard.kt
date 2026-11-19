@@ -156,3 +156,45 @@ fun SportsLiveStartingCard(
         }
     }
 }
+
+/**
+ * "No other live game is playing right now" (#138 follow-up): Next live game found every other game tried and
+ * failed this session. **Try again** (focused first) forgets the tried games and looks again; **Back to Live Now**
+ * leaves the player. Never a loop back to a dead game.
+ */
+@Composable
+fun SportsLiveNoLiveGameCard(
+    onTryAgain: () -> Unit,
+    onBackToLiveNow: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val firstFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { firstFocus.requestFocus() } }
+    Column(
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier
+            .widthIn(max = 420.dp)
+            .clip(RoundedCornerShape(NuvioTheme.radii.md))
+            .background(Color.Black.copy(alpha = 0.85f))
+            .padding(horizontal = 24.dp, vertical = 20.dp)
+    ) {
+        Text(
+            text = stringResource(R.string.sports_live_no_other_live_game),
+            style = MaterialTheme.typography.titleMedium,
+            color = NuvioTheme.colors.TextPrimary
+        )
+        PlayerOverlayButton(
+            text = stringResource(R.string.sports_live_state_try_again),
+            onClick = onTryAgain,
+            primary = true,
+            modifier = Modifier.fillMaxWidth().focusRequester(firstFocus)
+        )
+        PlayerOverlayButton(
+            text = stringResource(R.string.sports_live_back_to_live_now),
+            onClick = onBackToLiveNow,
+            primary = false,
+            modifier = Modifier.fillMaxWidth()
+        )
+    }
+}

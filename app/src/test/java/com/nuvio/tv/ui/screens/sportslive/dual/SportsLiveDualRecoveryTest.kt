@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.sportslive.dual
 
+import com.nuvio.tv.core.sportslive.SportsLiveTriedGames
 import com.nuvio.tv.MainDispatcherRule
 import com.nuvio.tv.core.sportslive.SportsLiveRecoveryBudget
 import com.nuvio.tv.core.sportslive.SportsLiveStreamHealth.Problem
@@ -48,6 +49,7 @@ class SportsLiveDualRecoveryTest {
     @After
     fun tearDown() {
         SportsLiveDualSessions.clear()
+        SportsLiveTriedGames.shared.clear()
     }
 
     private fun newViewModel() = SportsLiveDualViewModel(
@@ -260,6 +262,27 @@ class SportsLiveDualRecoveryTest {
         val left: SportsLiveItem = viewModel.current().left.item
         assertEquals(c, left)
         assertEquals(b, viewModel.current().right.item)
+    }
+
+    @Test
+    fun `next live game never takes a pane back to a game that already failed`() = runTest(mainDispatcherRule.dispatcher) {
+        val viewModel = newViewModel()
+        runCurrent()
+        // c failed earlier in this session: the pane has nowhere left to go but never goes back.
+        SportsLiveTriedGames.shared.noteFailed(c)
+        viewModel.playing()
+        viewModel.onUnhealthy(a, Problem.FROZEN)
+        viewModel.onUnhealthy(a, Problem.FROZEN)
+        runCurrent()
+        assertEquals(PaneStatus.Error, viewModel.current().left.status)
+        val others = viewModel.current().let { listOf(it.left.item, it.right.item) }
+        val moved = viewModel.nextLiveGame()
+        if (moved) {
+            val left = viewModel.current().left.item
+            assertFalse(left == c || left == a || left in others)
+        } else {
+            assertEquals(a, viewModel.current().left.item)
+        }
     }
 
     // --- Start-up (#138) ---

@@ -7,6 +7,7 @@ import com.nuvio.tv.core.sportslive.scores.FollowTargets
 import com.nuvio.tv.core.sportslive.scores.GameSection
 import com.nuvio.tv.core.sportslive.SportsLiveSportInference
 import com.nuvio.tv.core.sportslive.SportsLiveMySportsScope
+import com.nuvio.tv.core.sportslive.SportsLiveTriedGames
 import com.nuvio.tv.core.sportslive.scores.MySports
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import com.nuvio.tv.core.sportslive.scores.TeamDirectory
@@ -120,7 +121,9 @@ class SportsLiveZapViewModel internal constructor(
     // Games whose link check found them over (#60): "Next live game" never goes to one while that stands.
     private val linkVerdicts: SportsLiveLinkVerdicts = SportsLiveLinkVerdicts.shared,
     // My sports (#146): the panel and CH+/CH- list only its games, unless the panel's All sports is picked.
-    private val mySports: Flow<MySports> = flowOf(MySports.DEFAULT)
+    private val mySports: Flow<MySports> = flowOf(MySports.DEFAULT),
+    // Games tried and failed this session (#138 follow-up): Next live game and the CH± auto-skip never go back to one.
+    private val tried: SportsLiveTriedGames = SportsLiveTriedGames.shared
 ) : ViewModel() {
 
     @Inject constructor(
@@ -161,9 +164,16 @@ class SportsLiveZapViewModel internal constructor(
             SportsLiveZapSessions.markZapArrival()
             _events.send(SportsLiveZapEvent.Navigate(target))
         },
-        onNoStream = { item -> _events.trySend(SportsLiveZapEvent.NoStream(item.displayName)) },
-        onSkipped = { item -> _events.trySend(SportsLiveZapEvent.Skipped(item.displayName)) },
+        onNoStream = { item ->
+            tried.noteFailed(item)
+            _events.trySend(SportsLiveZapEvent.NoStream(item.displayName))
+        },
+        onSkipped = { item ->
+            tried.noteFailed(item)
+            _events.trySend(SportsLiveZapEvent.Skipped(item.displayName))
+        },
         endedKeys = { repo.endedKeys.value },
+        triedIds = { tried.ids() },
         // #142: CH+/CH- walk the panel's own list.
         lineup = { lineup.value?.rows }
     )
@@ -483,14 +493,53 @@ class SportsLiveZapViewModel internal constructor(
         return controller.pick(contentId, next, session.items)
     }
 
+    private val _nextExhausted = MutableStateFlow(false)
+
     /**
-     * "Next live game" on the player's recovery panel (#138), once the stream could not be recovered:
-     * zaps to #57's pick, as the full-time toast does. False when there is none (or no zap session).
+     * Next live game found every other game used up (#138 follow-up): "No other live game is playing right now",
+     * with Try again ([retryNextLiveGame]) and Back to Live Now.
+     */
+    val nextExhausted: StateFlow<Boolean> = _nextExhausted.asStateFlow()
+
+    /**
+     * "Next live game" on the player's recovery panel (#138), once the stream could not be recovered: the game
+     * playing counts as tried and failed, and the zap goes forward in the lineup to the next live game never tried
+     * this session, a known-good one first ([SportsLiveSecondGame.nextAfterFailure]). False, with [nextExhausted]
+     * set, when none is left (or false with no zap session).
      */
     internal fun nextLiveGameAfterFailure(): Boolean {
         val session = controller.session(contentId) ?: return false
-        val next = nextLiveGameFor(session) ?: return false
-        return controller.pick(contentId, next, session.items)
+        tried.noteFailed(session.current)
+        val lineupItems = lineup.value?.rows?.map { it.item } ?: session.items
+        val scores = liveScores.scores.value
+        val finished = repo.endedKeys.value + panelEndedKeys() + linkVerdicts.deadKeys +
+            SportsLiveEndedGames.shared.confirmedEndedSourceKeys(lineupItems, scores, System.currentTimeMillis())
+        val next = SportsLiveSecondGame.nextAfterFailure(
+            current = session.current,
+            lineup = lineupItems,
+            scores = scores,
+            finishedKeys = finished,
+            tried = tried.ids(),
+            knownGood = { item -> workingLinks.goodStream(item.id) != null }
+        )
+        if (next == null) {
+            _nextExhausted.value = true
+            return false
+        }
+        _nextExhausted.value = false
+        return controller.pick(contentId, next, lineupItems)
+    }
+
+    /** Try again on "No other live game is playing right now": the tried games may be tried again. */
+    internal fun retryNextLiveGame(): Boolean {
+        tried.clear()
+        _nextExhausted.value = false
+        return nextLiveGameAfterFailure()
+    }
+
+    /** The exhausted card was left (Back to Live Now). */
+    internal fun dismissNextExhausted() {
+        _nextExhausted.value = false
     }
 
     /** #57's pick after the game playing in [session], never a finished game. */

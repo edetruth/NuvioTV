@@ -4000,6 +4000,8 @@
     <string name="sports_live_hidden_by_my_sports">%1$d more hidden by My sports · Show all</string>
     <string name="sports_live_zap_looking">Looking for streams…</string>
     <string name="sports_live_zap_skip">Skip</string>
+    <string name="sports_live_no_other_live_game">No other live game is playing right now</string>
+    <string name="sports_live_back_to_live_now">Back to Live Now</string>
     <string name="sports_live_dual_stream_error">Couldn\'t play this stream</string>
     <string name="sports_live_dual_recovery_choices">OK  Choose stream · ▼  Next live game · BACK  Close this side</string>
     <string name="sports_live_reconnecting">Reconnecting…</string>

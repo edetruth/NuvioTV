@@ -56,7 +56,11 @@ internal fun PlayerRuntimeController.recordSportsSourceFirstFrame() {
     sportsFailoverAttempts = 0
     // The stream playing now, for dual screen to take over as is (#65).
     if (SportsLiveExtraSources.isSportsPlayback(contentId)) {
-        currentSportsStream()?.let { SportsLiveWorkingLinks.shared.startedPlaying(contentId.orEmpty(), it) }
+        currentSportsStream()?.let {
+            SportsLiveWorkingLinks.shared.startedPlaying(contentId.orEmpty(), it)
+            // A game tried and failed plays after all: the tried games may be offered again (#138 follow-up).
+            com.nuvio.tv.core.sportslive.SportsLiveTriedGames.shared.onPlaying(contentId.orEmpty())
+        }
     }
     val key = currentSportsSourceKey() ?: return
     SportsLiveSourceReliability.record(
@@ -329,7 +333,10 @@ internal fun PlayerRuntimeController.scheduleSportsStallWatchdog() {
             if (_uiState.value.sportsReconnecting) {
                 // Recovered as is: the link plays again for dual screen and the link memory.
                 _uiState.update { it.copy(sportsReconnecting = false) }
-                currentSportsStream()?.let { SportsLiveWorkingLinks.shared.startedPlaying(contentId.orEmpty(), it) }
+                currentSportsStream()?.let {
+                    SportsLiveWorkingLinks.shared.startedPlaying(contentId.orEmpty(), it)
+                    com.nuvio.tv.core.sportslive.SportsLiveTriedGames.shared.onPlaying(contentId.orEmpty())
+                }
             }
         }
     }

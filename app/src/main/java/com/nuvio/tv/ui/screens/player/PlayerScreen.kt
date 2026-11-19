@@ -1604,6 +1604,20 @@ fun PlayerScreen(
                 onBack = exitPlayerFromError
             )
         }
+        // Sports & Live (#138 follow-up): Next live game found every other game tried and failed: say so, no loop.
+        val sportsNextExhausted by sportsLiveZap.nextExhausted.collectAsState()
+        if (uiState.error != null && sportsNextExhausted) {
+            com.nuvio.tv.ui.screens.sportslive.SportsLiveNoLiveGameCard(
+                onTryAgain = { sportsLiveZap.retryNextLiveGame() },
+                onBackToLiveNow = {
+                    sportsLiveZap.dismissNextExhausted()
+                    exitPlayerFromError()
+                },
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .zIndex(5f)
+            )
+        }
 
         val endPromptEpisode = nextEpisodeForEndPrompt.takeIf { shouldConfirmNextEpisodeOnEnd }
         if (endPromptEpisode != null) {

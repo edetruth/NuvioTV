@@ -57,6 +57,34 @@ internal object SportsLiveSecondGame {
         }
     }
 
+    /**
+     * "Next live game" after [current] failed (#138 follow-up; the player's error screen, a dual pane): the next of
+     * [lineup]'s live games forward from [current] (wrapping), never one over ([finishedKeys]: ended games and those
+     * marked with no working stream) nor one [tried] and failed this session ([current] included), so two dead games
+     * never send the viewer back and forth. A game with a known-good link ([knownGood]) goes first. Null when every
+     * game is used up: the viewer is told so, never looped.
+     */
+    fun nextAfterFailure(
+        current: SportsLiveItem,
+        lineup: List<SportsLiveItem>,
+        scores: Map<String, ScoreSnapshot>,
+        finishedKeys: Set<String>,
+        tried: Set<String>,
+        knownGood: (SportsLiveItem) -> Boolean = { false }
+    ): SportsLiveItem? {
+        val left = candidates(current, lineup, scores, finishedKeys)
+            .filter { item -> item.id !in tried && item.alternates.none { it.id in tried } }
+        if (left.isEmpty()) return null
+        val here = lineup.indexOfFirst { it.streamKey == current.streamKey }
+        val forward = if (here < 0) {
+            left
+        } else {
+            val position = lineup.withIndex().associate { (index, item) -> item.streamKey to index }
+            left.sortedBy { item -> ((position[item.streamKey] ?: 0) - here - 1 + lineup.size) % lineup.size }
+        }
+        return forward.firstOrNull(knownGood) ?: forward.first()
+    }
+
     /** ESPN's delayed view shows [item]'s strict match over (final) or off (postponed, suspended). */
     private fun espnOver(item: SportsLiveItem, snapshot: ScoreSnapshot?): Boolean {
         val state = ScoreChips.matchedEvent(item, snapshot)?.state ?: return false
