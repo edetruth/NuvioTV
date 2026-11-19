@@ -16,7 +16,11 @@ data class SportsLiveLoad(
     /** Keys of the catalogs this load fetched. */
     val claimedKeys: Set<String>,
     /** The pinned option each catalog was loaded with, by catalog key; catalogs loaded with All are absent. */
-    val catalogOptions: Map<String, CatalogOption> = emptyMap()
+    val catalogOptions: Map<String, CatalogOption> = emptyMap(),
+    /** The sources (addon id → display name) this load asked, not carried over (#170). */
+    val fetchedSources: Map<String, String> = emptyMap(),
+    /** Every claimed source's addon id (#170). */
+    val claimedSources: Set<String> = emptySet()
 )
 
 data class SportsLiveFailure(val catalog: ClaimedCatalog, val message: String)

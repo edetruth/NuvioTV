@@ -168,7 +168,11 @@ class SportsLiveRepositoryImpl @Inject constructor(
                 stats[catalog.key] = SportsLiveItemBucketer.stats(catalogItems, now)
             }
         }
-        val load = SportsLiveLoad(items, failures, loadedAtMs = now, claimedKeys = claimedKeys, catalogOptions = options)
+        val load = SportsLiveLoad(
+            items, failures, loadedAtMs = now, claimedKeys = claimedKeys, catalogOptions = options,
+            fetchedSources = claimed.filter { it.key in fetched }.associate { it.addon.id to it.addon.displayName },
+            claimedSources = claimed.mapTo(HashSet()) { it.addon.id }
+        )
         val claimedNow = claimedCatalogs.first()
         if (claimedNow.map { it.key }.toSet() == claimedKeys && optionsOf(claimedNow) == options) {
             _latest.value = load

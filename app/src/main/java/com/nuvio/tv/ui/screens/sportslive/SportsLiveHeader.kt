@@ -1,5 +1,14 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import android.text.format.DateFormat
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
+import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveButton
+import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveButtonRole
+import java.util.Date
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,7 +21,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -29,7 +37,6 @@ import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
 import com.nuvio.tv.R
 import com.nuvio.tv.domain.model.SportsLiveTab
-import com.nuvio.tv.domain.repository.SportsLiveFailure
 import com.nuvio.tv.ui.components.NuvioDialog
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveHeaderControl
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTextTab
@@ -59,8 +66,8 @@ internal data class SportsLiveHeaderDate(val label: String, val canOlder: Boolea
 
 private val FILTER_TABS = setOf(SportsLiveTab.UPCOMING, SportsLiveTab.CHANNELS, SportsLiveTab.REPLAYS)
 
-/** The header's focus stops, left to right: the active tab, Results' day arrows, the filter, "⚠ N", Refresh. */
-internal enum class SportsLiveHeaderStop { TAB, DAY_OLDER, DAY_NEWER, FILTER, FAILURES, REFRESH }
+/** The header's focus stops, left to right: the active tab, Results' day arrows, the filter, Refresh. */
+internal enum class SportsLiveHeaderStop { TAB, DAY_OLDER, DAY_NEWER, FILTER, REFRESH }
 
 /**
  * The stop ← ([right] false) or → ([right] true) moves to from [stop] (#153): the next stop shown that way, or
@@ -71,14 +78,12 @@ internal fun sportsLiveHeaderNeighbour(
     stop: SportsLiveHeaderStop,
     right: Boolean,
     hasDate: Boolean,
-    hasFilter: Boolean,
-    hasFailures: Boolean
+    hasFilter: Boolean
 ): SportsLiveHeaderStop? {
     val shown = SportsLiveHeaderStop.entries.filter {
         when (it) {
             SportsLiveHeaderStop.DAY_OLDER, SportsLiveHeaderStop.DAY_NEWER -> hasDate
             SportsLiveHeaderStop.FILTER -> hasFilter
-            SportsLiveHeaderStop.FAILURES -> hasFailures
             else -> true
         }
     }
@@ -88,11 +93,11 @@ internal fun sportsLiveHeaderNeighbour(
 
 /**
  * The section's one-line header (V2, #99): text tabs (selected = white with an underline, the rest 70 %
- * white; no counts) on the left; on the right the tab's filter (one focus stop), the amber "⚠ N" when
- * sources failed (OK lists them) and Refresh. Tabs select on focus; entering the header lands on the
- * active tab. Down goes to [downFocusRequester] (the list); Up from the list's first row goes to the filter
- * when shown. Left from the filter goes back to the active tab, never to the nearest one (which would
- * switch tabs).
+ * white; no counts) on the left; on the right the tab's filter (one focus stop) and Refresh, with a dot on it
+ * while a source keeps failing ([sourceBadge], #170: OK then opens the sources sheet). Tabs select on focus;
+ * entering the header lands on the active tab. In columns (#170): the tabs and day arrows go Down to
+ * [downFocusRequester] (the list), the controls to [controlsDownFocusRequester] (the stage's primary). Left
+ * from the filter goes back to the active tab, never to the nearest one (which would switch tabs).
  */
 @Composable
 internal fun SportsLiveHeader(
@@ -108,7 +113,12 @@ internal fun SportsLiveHeader(
     filterFocusRequester: FocusRequester,
     selectedFilter: String?,
     onSelectFilter: (String?) -> Unit,
-    failures: Int,
+    /** The dot on Refresh (#170). */
+    sourceBadge: SportsLiveSourceBadge,
+    /** The first control over the stage (the filter, else Refresh): the stage's Up lands on it (#170). */
+    controlsFocusRequester: FocusRequester,
+    /** Where the controls' Down lands: the stage's primary; null goes to [downFocusRequester]. */
+    controlsDownFocusRequester: FocusRequester?,
     /** Draws the filter as one dropdown (P4); null keeps the inline pill. */
     filterDropdown: SportsLiveHeaderDropdown? = null,
     /** Results' day in the title (P4), right after the tabs; null for none. */
@@ -120,20 +130,22 @@ internal fun SportsLiveHeader(
 ) {
     val activeTabFocusRequester = tabFocusRequesters.getValue(selectedTab)
     val downModifier = Modifier.focusProperties { downFocusRequester?.let { down = it } }
+    val controlsDown = controlsDownFocusRequester ?: downFocusRequester
+    val controlsStop = sportsLiveHeaderControlsStop(hasFilter = filterOptions != null)
+    fun controlsModifier(stop: SportsLiveHeaderStop) =
+        if (stop == controlsStop) Modifier.focusRequester(controlsFocusRequester) else Modifier
     // F6 (#133): Right past the filter's last option goes to the next header control, never down into the stage.
-    val failuresFocusRequester = remember { FocusRequester() }
     val refreshFocusRequester = remember { FocusRequester() }
     val dayNewerFocusRequester = remember { FocusRequester() }
     fun requesterOf(stop: SportsLiveHeaderStop?): FocusRequester = when (stop) {
         SportsLiveHeaderStop.DAY_OLDER -> dateFocusRequester
         SportsLiveHeaderStop.DAY_NEWER -> dayNewerFocusRequester
         SportsLiveHeaderStop.FILTER -> filterFocusRequester
-        SportsLiveHeaderStop.FAILURES -> failuresFocusRequester
         SportsLiveHeaderStop.REFRESH -> refreshFocusRequester
         SportsLiveHeaderStop.TAB, null -> activeTabFocusRequester
     }
     fun neighbour(stop: SportsLiveHeaderStop, right: Boolean): FocusRequester = requesterOf(
-        sportsLiveHeaderNeighbour(stop, right, hasDate = date != null, hasFilter = filterOptions != null, hasFailures = failures > 0)
+        sportsLiveHeaderNeighbour(stop, right, hasDate = date != null, hasFilter = filterOptions != null)
     )
     Row(
         modifier = modifier
@@ -152,7 +164,7 @@ internal fun SportsLiveHeader(
             horizontalArrangement = Arrangement.spacedBy(Size.TabGap - Size.TabPaddingHorizontal * 2),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            tabs.forEach { tab ->
+            tabs.forEachIndexed { index, tab ->
                 SportsLiveTextTab(
                     label = stringResource(tab.labelRes()),
                     selected = tab == selectedTab,
@@ -161,6 +173,8 @@ internal fun SportsLiveHeader(
                     modifier = Modifier
                         .focusRequester(tabFocusRequesters.getValue(tab))
                         .then(downModifier)
+                        // #170: → past the last tab walks on to the day arrows, then the controls.
+                        .then(if (index == tabs.lastIndex) Modifier.focusProperties { right = neighbour(SportsLiveHeaderStop.TAB, right = true) } else Modifier)
                 )
             }
         }
@@ -188,10 +202,11 @@ internal fun SportsLiveHeader(
             if (filterOptions != null) {
                 val filterModifier = Modifier
                     .focusRequester(filterFocusRequester)
+                    .then(controlsModifier(SportsLiveHeaderStop.FILTER))
                     .focusProperties {
                         left = neighbour(SportsLiveHeaderStop.FILTER, right = false)
                         right = neighbour(SportsLiveHeaderStop.FILTER, right = true)
-                        downFocusRequester?.let { down = it }
+                        controlsDown?.let { down = it }
                     }
                 if (filterDropdown != null) {
                     SportsLiveFilterDropdown(
@@ -213,40 +228,41 @@ internal fun SportsLiveHeader(
                 }
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(Size.ControlGap), verticalAlignment = Alignment.CenterVertically) {
-            if (failures > 0) {
-                val description = pluralStringResource(R.plurals.sports_live_partial_failure, failures, failures)
-                SportsLiveHeaderControl(
-                    onClick = onShowFailures,
-                    round = false,
-                    outline = Colors.WarningAmberOutline,
-                    modifier = downModifier.focusRequester(failuresFocusRequester)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.WarningAmber,
-                        contentDescription = description,
-                        tint = Colors.WarningAmber,
-                        modifier = Modifier.size(Size.ControlIcon)
-                    )
-                    Text(
-                        text = failures.toString(),
-                        style = SportsLiveTokens.style(SportsLiveTokens.Type.ControlSelected),
-                        color = Colors.WarningAmber,
-                        maxLines = 1
-                    )
-                }
-            }
-            SportsLiveHeaderControl(onClick = onRefresh, modifier = downModifier.focusRequester(refreshFocusRequester)) {
+        // #170: while a source keeps failing, a dot on Refresh (grey, or amber when it matters); OK then opens the sheet.
+        val badged = sourceBadge != SportsLiveSourceBadge.NONE
+        Box {
+            SportsLiveHeaderControl(
+                onClick = if (badged) onShowFailures else onRefresh,
+                modifier = Modifier
+                    .focusRequester(refreshFocusRequester)
+                    .then(controlsModifier(SportsLiveHeaderStop.REFRESH))
+                    .focusProperties {
+                        left = neighbour(SportsLiveHeaderStop.REFRESH, right = false)
+                        controlsDown?.let { down = it }
+                    }
+            ) {
                 Icon(
                     imageVector = Icons.Rounded.Refresh,
-                    contentDescription = stringResource(R.string.sports_live_refresh),
+                    contentDescription = stringResource(if (badged) R.string.sports_live_sources_status else R.string.sports_live_refresh),
                     tint = Colors.TextSecondary,
                     modifier = Modifier.size(Size.ControlIcon)
+                )
+            }
+            if (badged) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .size(SOURCE_DOT)
+                        .clip(CircleShape)
+                        .background(if (sourceBadge == SportsLiveSourceBadge.AMBER) Colors.WarningAmber else Colors.TextMuted)
                 )
             }
         }
     }
 }
+
+/** The dot on Refresh (#170). */
+private val SOURCE_DOT = 9.dp
 
 /**
  * Results' day in the title (V2 P4): "· Yesterday ‹ ›". The day is a label; ‹ and › are two focus stops, OK
@@ -290,30 +306,59 @@ private fun SportsLiveHeaderDayArrow(glyph: Int, enabled: Boolean, onStep: () ->
     }
 }
 
-/** The sources that did not respond on the last load (the header's "⚠ N"): catalog, addon and why. */
+/**
+ * The sources sheet (#170), from OK on Refresh while it has a dot: "‹Source› hasn't responded since 7:42 PM" for each
+ * [flagged] source (its display name only, never a host or URL), then **Retry** and **Sources** (the addons screen).
+ */
 @Composable
-internal fun SportsLiveSourceFailuresDialog(failures: List<SportsLiveFailure>, onDismiss: () -> Unit) {
+internal fun SportsLiveSourcesSheet(
+    flagged: List<SportsLiveSourceHealth>,
+    onRetry: () -> Unit,
+    onOpenSources: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val timeFormat = remember(context) { DateFormat.getTimeFormat(context) }
+    val retryFocusRequester = remember { FocusRequester() }
     NuvioDialog(
         onDismiss = onDismiss,
-        title = pluralStringResource(R.plurals.sports_live_partial_failure, failures.size, failures.size)
+        title = pluralStringResource(R.plurals.sports_live_partial_failure, flagged.size, flagged.size)
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(Size.RowGap)) {
-            failures.forEach { failure ->
+            flagged.forEach { source ->
                 Text(
-                    text = stringResource(
-                        R.string.sports_live_source_failure_line,
-                        failure.catalog.catalog.name,
-                        failure.catalog.addon.displayName,
-                        failure.message
-                    ),
+                    text = source.silentSinceMs
+                        ?.let { stringResource(R.string.sports_live_source_silent_since, source.name, timeFormat.format(Date(it))) }
+                        ?: source.name,
                     style = SportsLiveTokens.style(SportsLiveTokens.Type.Meta),
                     color = Colors.TextSecondary,
-                    maxLines = 3,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
             }
         }
+        Row(horizontalArrangement = Arrangement.spacedBy(SportsLiveTokens.Size.ButtonGap)) {
+            SportsLiveButton(
+                onClick = {
+                    onDismiss()
+                    onRetry()
+                },
+                role = SportsLiveButtonRole.PRIMARY,
+                modifier = Modifier.focusRequester(retryFocusRequester)
+            ) {
+                Text(text = stringResource(R.string.sports_live_source_retry), style = SportsLiveTokens.style(SportsLiveTokens.Type.Button), maxLines = 1)
+            }
+            SportsLiveButton(
+                onClick = {
+                    onDismiss()
+                    onOpenSources()
+                }
+            ) {
+                Text(text = stringResource(R.string.sports_live_state_sources), style = SportsLiveTokens.style(SportsLiveTokens.Type.Button), maxLines = 1)
+            }
+        }
     }
+    LaunchedEffect(Unit) { runCatching { retryFocusRequester.requestFocus() } }
 }
 
 internal fun SportsLiveTab.labelRes(): Int = when (this) {

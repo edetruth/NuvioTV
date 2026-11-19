@@ -272,10 +272,13 @@ class SportsLiveV2P4Test {
     }
 
     @Test
-    fun `the Results stage offers Watch replay only with a strict replay, More always, nothing for individual sports`() {
+    fun `the Results stage leads with Watch replay on a strict replay, else Game stats, More last, nothing for individual sports`() {
         val replayItem = replay("Team A vs Team B", at(17, 20))
-        assertEquals(listOf(ResultsStageButton.WATCH_REPLAY, ResultsStageButton.MORE), resultsStageButtons(result("1"), replayItem))
-        assertEquals(listOf(ResultsStageButton.MORE), resultsStageButtons(result("1"), null))
+        assertEquals(
+            listOf(ResultsStageButton.WATCH_REPLAY, ResultsStageButton.GAME_STATS, ResultsStageButton.MORE),
+            resultsStageButtons(result("1"), replayItem)
+        )
+        assertEquals(listOf(ResultsStageButton.GAME_STATS, ResultsStageButton.MORE), resultsStageButtons(result("1"), null))
         assertEquals(emptyList<ResultsStageButton>(), resultsStageButtons(result("2", individual = true), replayItem))
     }
 

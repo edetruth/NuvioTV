@@ -539,9 +539,12 @@ fun SportsLiveMiniPlayerHost(
                             SportsLiveMiniKey.EXPAND -> controller.requestExpand()
                             SportsLiveMiniKey.CLOSE -> close()
                             SportsLiveMiniKey.RELEASE -> {
-                                // The element the content last had focused (saved as focus left it), else
+                                // Up: the header controls over the stage (#170's columns), when the screen names them.
+                                val up = SportsLiveMiniFocus.up?.takeIf { native.keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP }
+                                // Else the element the content last had focused (saved as focus left it), else
                                 // the content's default entry.
-                                val restored = contentFocusRequester != null && runCatching {
+                                val restored = (up != null && runCatching { up.requestFocus(FocusDirection.Enter) }.getOrDefault(false)) ||
+                                    contentFocusRequester != null && runCatching {
                                     contentFocusRequester.restoreFocusedChild() ||
                                         contentFocusRequester.requestFocus(FocusDirection.Enter)
                                 }.getOrDefault(false)

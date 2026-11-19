@@ -4,6 +4,7 @@ import com.nuvio.tv.core.sportslive.SportsLiveToastKind
 import com.nuvio.tv.core.sportslive.SportsLiveToasts
 import com.nuvio.tv.core.sportslive.scores.FollowTarget
 import com.nuvio.tv.core.sportslive.scores.FollowTargets
+import com.nuvio.tv.core.sportslive.scores.GameSection
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens
 import com.nuvio.tv.core.sportslive.GameStatus
 import com.nuvio.tv.core.sportslive.GameStatusText
@@ -30,6 +31,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.collectAsState
@@ -407,9 +409,10 @@ fun SportsLiveScreen(
             onExpandResultsGroup = resultsViewModel::expandGroup,
             onEditMySports = onOpenMySports,
             onResultFocus = resultsViewModel::onRowFocus,
-            onOpenResult = { row ->
-                // The Game page (#18), which carries the strict replay match (Watch replay) and Follow.
-                SportsLiveGameRequests.open(resultsState.gameRequestFor(row))
+            onOpenResult = { row, section ->
+                // The Game page (#18), which carries the strict replay match (Watch replay) and Follow; the
+                // stage's Game stats opens it on its Box score.
+                SportsLiveGameRequests.open(resultsState.gameRequestFor(row).copy(section = section))
                 onOpenGame()
             },
             onToggleResultFollow = resultsViewModel::toggleFollow,
@@ -518,7 +521,8 @@ private fun SportsLiveContent(
     onExpandResultsGroup: (String) -> Unit,
     onEditMySports: () -> Unit,
     onResultFocus: (String?) -> Unit,
-    onOpenResult: (ResultRow) -> Unit,
+    /** A result's Game page, on [GameSection] when given (the stage's Game stats: the Box score). */
+    onOpenResult: (ResultRow, GameSection?) -> Unit,
     onToggleResultFollow: (ResultRow, ScoreSide) -> Unit,
     /** Watch replay (Results, Replays): [SportsLiveItem] plays at once as the clean title [String]. */
     onWatchReplay: (SportsLiveItem, String) -> Unit,
@@ -685,9 +689,24 @@ private fun SportsLiveContent(
         entryCardFocusRequester ?: emptyStateFocusRequester.takeIf { selected == null && uiState.selectedTab != SportsLiveTab.RESULTS }
     }
     val contentEntryFocusRequester = if (resumeShown) resumeFocusRequester else belowResumeFocusRequester
+    // Results' "N games live now →" (#170): once Live now is the composed tab and its rows are drawn, focus goes
+    // to its list (the column rule), else to its tab.
+    var focusLiveNowList by remember { mutableStateOf(false) }
+    LaunchedEffect(focusLiveNowList, uiState.selectedTab, boardPending, contentEntryFocusRequester) {
+        if (!focusLiveNowList) return@LaunchedEffect
+        if (uiState.selectedTab != SportsLiveTab.LIVE_NOW) {
+            if (uiState.selectedTab != SportsLiveTab.RESULTS) focusLiveNowList = false
+            return@LaunchedEffect
+        }
+        if (boardPending) return@LaunchedEffect
+        repeat(2) { withFrameNanos { } }
+        focusLiveNowList = false
+        runCatching { (contentEntryFocusRequester ?: activeTabFocusRequester).requestFocus() }
+    }
     // On the Results tab: the day in the title (P4), and where the header's Down lands in its content.
     val resultsDateFocusRequester = remember { FocusRequester() }
     val resultsTopFocusRequester = remember { FocusRequester() }
+    val resultsStageFocusRequester = remember { FocusRequester() }
     val showingResults = uiState.selectedTab == SportsLiveTab.RESULTS
     // The tab's filter (V2): one focus stop in the header. Upcoming inline; Channels' regions, Replays' sports
     // and Results' sports as one dropdown each (P4).
@@ -696,13 +715,12 @@ private fun SportsLiveContent(
     val allSportsOffered = SportsLiveUiState.ALL_SPORTS_FILTER in uiState.filters
     val filterShown = if (showingResults) resultsFilterShown else sportsLiveHeaderFilterShown(uiState.selectedTab, uiState.filters.size, allSportsOffered)
     val filterFocusRequester = remember { FocusRequester() }
-    // The one-line header (V2): Up from the content goes to the tab's filter (the tabs sit left of it: Right
-    // along them would switch tabs), else to the active tab; on Results, to the day in the title.
-    val aboveContentFocusRequester = when {
-        showingResults -> resultsDateFocusRequester
-        filterShown -> filterFocusRequester
-        else -> activeTabFocusRequester
-    }
+    // The columns (#170, [sportsLiveColumnTarget]): Up from the list column's top goes to the selected tab, on
+    // every tab, never to the control above it on the right.
+    val aboveContentFocusRequester = activeTabFocusRequester
+    // The stage column's Up lands on the first header control over it; the controls' Down on the stage's primary.
+    val controlsFocusRequester = remember { FocusRequester() }
+    var resultsStageShown by remember { mutableStateOf(false) }
     val aboveListFocusRequester = when {
         catchUpShown -> catchUpFocusRequester
         resumeShown -> resumeFocusRequester
@@ -790,9 +808,17 @@ private fun SportsLiveContent(
         val filter = uiState.selectedFilter
         if (uiState.selectedTab == SportsLiveTab.LIVE_NOW && filter != null && filter != SportsLiveUiState.ALL_SPORTS_FILTER) onSelectFilter(null)
     }
+    // #170: a one-off miss says nothing; a source failing on shows a dot on Refresh, whose OK opens the sheet.
+    val sourcesNowMs = uiState.nowMs.takeIf { it > 0L } ?: System.currentTimeMillis()
+    val sourceBadge = uiState.sources.badge(sourcesNowMs)
     var failuresOpen by remember { mutableStateOf(false) }
-    if (failuresOpen && uiState.failures.isNotEmpty()) {
-        SportsLiveSourceFailuresDialog(failures = uiState.failures, onDismiss = { failuresOpen = false })
+    if (failuresOpen && sourceBadge != SportsLiveSourceBadge.NONE) {
+        SportsLiveSourcesSheet(
+            flagged = uiState.sources.flagged(),
+            onRetry = onRefresh,
+            onOpenSources = onOpenAddons,
+            onDismiss = { failuresOpen = false }
+        )
     }
     // Scores Off: no Results tab at all.
     // Shown only once the setting is read, so a Scores-Off user never sees it flash in.
@@ -1093,6 +1119,9 @@ private fun SportsLiveContent(
         }
         val miniDock = rememberSportsLiveMiniDock()
         val miniDocked = nowPlaying != null && miniDock is SportsLiveMiniDock.Docked
+        // #170: Up from the docked mini player goes to the header controls over the stage.
+        SideEffect { SportsLiveMiniFocus.up = controlsFocusRequester.takeIf { miniDocked } }
+        DisposableEffect(Unit) { onDispose { SportsLiveMiniFocus.up = null } }
         // A card that goes away (idle timeout, profile switch) while focused hands focus to the active tab.
         var nowPlayingHasFocus by remember { mutableStateOf(false) }
         LaunchedEffect(nowPlaying == null) {
@@ -1103,6 +1132,8 @@ private fun SportsLiveContent(
         }
         // On the Scoreboard the Live Now / Channels stage shows (V2).
         val stageShown = scoreboard && !showingResults && uiState.selectedTab != SportsLiveTab.REPLAYS && selected != null && boardRowOf[selected.listKey] != null
+        // The stage column is drawn (#170): Live now, Channels, Upcoming and Replays with a selected row.
+        val stageColumnShown = !showingResults && selected != null && boardRowOf[selected.listKey] != null && (scoreboard || agenda != null)
         // Docked in a stage (every tab's, #157) the mini player needs no card; only in the corner (a tab with no
         // stage, after the hold) does it show, so a tab switch never flashes it.
         if (nowPlaying != null && miniDock == SportsLiveMiniDock.Corner) {
@@ -1137,7 +1168,13 @@ private fun SportsLiveContent(
             filterDropdown = filterDropdown,
             date = resultsDate,
             dateFocusRequester = resultsDateFocusRequester,
-            failures = uiState.failures.size,
+            sourceBadge = sourceBadge,
+            controlsFocusRequester = controlsFocusRequester,
+            controlsDownFocusRequester = when {
+                showingResults -> resultsStageFocusRequester.takeIf { resultsStageShown }
+                stageColumnShown -> watchFocusRequester
+                else -> null
+            },
             onShowFailures = { failuresOpen = true },
             onRefresh = onRefresh,
             modifier = Modifier.onFocusChanged { if (it.hasFocus) followedCardKey = null }
@@ -1146,20 +1183,24 @@ private fun SportsLiveContent(
             SportsLiveResultsView(
                 state = results,
                 tabFocusRequester = activeTabFocusRequester,
-                headerFocusRequester = resultsDateFocusRequester,
+                headerFocusRequester = aboveContentFocusRequester,
                 topFocusRequester = resultsTopFocusRequester,
+                controlsFocusRequester = controlsFocusRequester,
+                stageFocusRequester = resultsStageFocusRequester,
+                onStageShown = { resultsStageShown = it },
                 onSelectDay = onSelectResultsDay,
-                // Today's "N games live now →": the Live Now tab, focus on it.
+                // Today's "N games live now →": the Live Now tab, focus on its list once drawn (#170's columns).
                 onOpenLiveNow = {
+                    // Never focus the Live Now tab straight away: until the header recomposes, the tab row's
+                    // onEnter still sends focus to the Results tab, which selects Results again (the line then
+                    // seemed to do nothing). The move waits for the new tab, below.
                     onSelectTab(SportsLiveTab.LIVE_NOW)
-                    liveNowScope.launch {
-                        withFrameNanos { }
-                        runCatching { tabFocusRequesters.getValue(SportsLiveTab.LIVE_NOW).requestFocus() }
-                    }
+                    focusLiveNowList = true
                 },
                 onExpandGroup = onExpandResultsGroup,
                 onRowFocus = onResultFocus,
-                onOpen = onOpenResult,
+                onOpen = { row -> onOpenResult(row, null) },
+                onGameStats = { row -> onOpenResult(row, GameSection.BOX_SCORE) },
                 onWatchReplay = { row, replay ->
                     onWatchReplay(replay, resultsReplayTitle(row))
                 },
@@ -1313,7 +1354,8 @@ private fun SportsLiveContent(
                     onMore = { menuCardKey = selected.listKey },
                     modifier = Modifier
                         .padding(top = LIST_FOCUS_ROOM)
-                        .onFocusChanged { paneHasFocus = it.hasFocus },
+                        .onFocusChanged { paneHasFocus = it.hasFocus }
+                        .sportsLiveStageColumn(controlsFocusRequester, SportsLiveMiniFocus.requester.takeIf { miniDocked }),
                     watchModifier = Modifier
                         .focusRequester(watchFocusRequester)
                         .focusProperties {
@@ -1434,7 +1476,8 @@ private fun SportsLiveContent(
                     onMore = { menuCardKey = selected.listKey },
                     modifier = Modifier
                         .padding(top = LIST_FOCUS_ROOM)
-                        .onFocusChanged { paneHasFocus = it.hasFocus },
+                        .onFocusChanged { paneHasFocus = it.hasFocus }
+                        .sportsLiveStageColumn(controlsFocusRequester, SportsLiveMiniFocus.requester.takeIf { miniDocked }),
                     primaryModifier = Modifier
                         .focusRequester(watchFocusRequester)
                         .focusProperties {
@@ -1559,7 +1602,8 @@ private fun SportsLiveContent(
                     onMore = { menuCardKey = selected.listKey },
                     modifier = Modifier
                         .padding(top = LIST_FOCUS_ROOM)
-                        .onFocusChanged { paneHasFocus = it.hasFocus },
+                        .onFocusChanged { paneHasFocus = it.hasFocus }
+                        .sportsLiveStageColumn(controlsFocusRequester, SportsLiveMiniFocus.requester.takeIf { miniDocked }),
                     watchModifier = Modifier
                         .focusRequester(watchFocusRequester)
                         .focusProperties {

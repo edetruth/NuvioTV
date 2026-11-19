@@ -2,7 +2,6 @@ package com.nuvio.tv.ui.screens.sportslive
 
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveHeaderStop.DAY_NEWER
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveHeaderStop.DAY_OLDER
-import com.nuvio.tv.ui.screens.sportslive.SportsLiveHeaderStop.FAILURES
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveHeaderStop.FILTER
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveHeaderStop.REFRESH
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveHeaderStop.TAB
@@ -13,11 +12,11 @@ import org.junit.Test
 /** #153: the Results day arrows never trap the D-pad; Left and Right walk the header. */
 class SportsLiveHeaderFocusTest {
 
-    private fun left(stop: SportsLiveHeaderStop, date: Boolean = true, filter: Boolean = true, failures: Boolean = false) =
-        sportsLiveHeaderNeighbour(stop, right = false, hasDate = date, hasFilter = filter, hasFailures = failures)
+    private fun left(stop: SportsLiveHeaderStop, date: Boolean = true, filter: Boolean = true) =
+        sportsLiveHeaderNeighbour(stop, right = false, hasDate = date, hasFilter = filter)
 
-    private fun right(stop: SportsLiveHeaderStop, date: Boolean = true, filter: Boolean = true, failures: Boolean = false) =
-        sportsLiveHeaderNeighbour(stop, right = true, hasDate = date, hasFilter = filter, hasFailures = failures)
+    private fun right(stop: SportsLiveHeaderStop, date: Boolean = true, filter: Boolean = true) =
+        sportsLiveHeaderNeighbour(stop, right = true, hasDate = date, hasFilter = filter)
 
     @Test
     fun `left from the older day arrow goes back to the tabs`() {
@@ -29,7 +28,6 @@ class SportsLiveHeaderFocusTest {
     fun `right from the newer day arrow goes on to the next header control`() {
         assertEquals(DAY_NEWER, right(DAY_OLDER))
         assertEquals(FILTER, right(DAY_NEWER))
-        assertEquals(FAILURES, right(DAY_NEWER, filter = false, failures = true))
         assertEquals(REFRESH, right(DAY_NEWER, filter = false))
     }
 
@@ -38,7 +36,6 @@ class SportsLiveHeaderFocusTest {
         assertEquals(DAY_NEWER, left(FILTER))
         assertEquals(TAB, left(FILTER, date = false))
         assertEquals(REFRESH, right(FILTER))
-        assertEquals(FAILURES, right(FILTER, failures = true))
     }
 
     @Test

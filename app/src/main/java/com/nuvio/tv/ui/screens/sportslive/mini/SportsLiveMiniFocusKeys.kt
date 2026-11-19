@@ -9,6 +9,9 @@ import androidx.compose.ui.focus.FocusRequester
  */
 object SportsLiveMiniFocus {
     val requester = FocusRequester()
+
+    /** Where Up from the docked mini player goes (#170: the header controls over the stage); null: back to the content. */
+    var up: FocusRequester? = null
 }
 
 /** What a key does while the mini player has focus. */

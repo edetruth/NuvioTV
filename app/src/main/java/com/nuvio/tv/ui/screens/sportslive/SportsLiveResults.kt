@@ -29,6 +29,7 @@ import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -132,6 +133,8 @@ internal fun SportsLiveResultsView(
     onRowFocus: (String?) -> Unit,
     /** OK on a row: the Game page (#18). */
     onOpen: (ResultRow) -> Unit,
+    /** The stage's Game stats: the Game page on its Box score. */
+    onGameStats: (ResultRow) -> Unit,
     /** The stage's Watch replay: the row's strict replay match, played spoiler-safe. */
     onWatchReplay: (ResultRow, SportsLiveItem) -> Unit,
     /** Whether a followed team is [ScoreSide] of the row's game (the menu's Follow / Following). */
@@ -144,10 +147,14 @@ internal fun SportsLiveResultsView(
     liveGames: Int = 0,
     /** No sports picked: the state card's "My sports" (#134); null offers See Live Now instead. */
     onEditMySports: (() -> Unit)? = null,
+    /** The header control over the stage: the stage's Up lands on it (#170). */
+    controlsFocusRequester: FocusRequester = remember { FocusRequester() },
+    /** The stage's first button: Right from a row, and the header controls' Down while [onStageShown] says it is drawn. */
+    stageFocusRequester: FocusRequester = remember { FocusRequester() },
+    onStageShown: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val liveNowFocusRequester = remember { FocusRequester() }
-    val stageFocusRequester = remember { FocusRequester() }
     val ready = state.status == ResultsStatus.READY
     // Today: games being played are not listed, only counted on a line that jumps to Live Now.
     val showLiveNow = state.showsLiveNow(liveGames)
@@ -272,6 +279,11 @@ internal fun SportsLiveResultsView(
     val rows = items.mapNotNull { it as? ResultListItem.Row }
     val stageItem = rows.firstOrNull { it.key == focusedKey } ?: rows.firstOrNull()
     val stageButtons = stageItem?.let { resultsStageButtons(it.row, state.replays[it.key]) }.orEmpty()
+    // The header controls' Down needs the stage's first button drawn (#170).
+    val stageButtonShown = stageItem != null && firstFocusableKey != null && stageButtons.isNotEmpty()
+    val currentOnStageShown by rememberUpdatedState(onStageShown)
+    LaunchedEffect(stageButtonShown) { currentOnStageShown(stageButtonShown) }
+    DisposableEffect(Unit) { onDispose { currentOnStageShown(false) } }
 
     Column(modifier = modifier.fillMaxSize()) {
         Row(modifier = Modifier.fillMaxSize()) {
@@ -460,10 +472,12 @@ internal fun SportsLiveResultsView(
                     buttons = stageButtons,
                     dayName = state.dates.firstOrNull { it.daysAgo == state.daysAgo }?.let { resultsDayText(it) },
                     onWatchReplay = { state.replays[stageItem.key]?.let { onWatchReplay(stageItem.row, it) } },
+                    onGameStats = { onGameStats(stageItem.row) },
                     onMore = { menuRowKey = stageItem.key },
                     modifier = Modifier
                         .padding(top = RESULTS_FOCUS_ROOM)
-                        .onFocusChanged { stageHasFocus = it.hasFocus },
+                        .onFocusChanged { stageHasFocus = it.hasFocus }
+                        .sportsLiveStageColumn(controlsFocusRequester, SportsLiveMiniFocus.requester.takeIf { miniDocked }),
                     firstModifier = Modifier
                         .focusRequester(stageFocusRequester)
                         .focusProperties {
@@ -495,16 +509,17 @@ internal fun toggleGolf(expanded: Set<String>, key: String, showScore: Boolean):
 }
 
 /** The Results stage's buttons (V2 P4). */
-internal enum class ResultsStageButton { WATCH_REPLAY, MORE }
+internal enum class ResultsStageButton { WATCH_REPLAY, GAME_STATS, MORE }
 
 /**
- * The Results stage's buttons for [row]: **Watch replay** when it has a strict [replay] match, then **More…**
- * (Game page, Team pages, Follow); none for an individual sport (the Game page cannot show it).
+ * The Results stage's buttons for [row], the first the primary: **Watch replay** when it has a strict [replay]
+ * match, **Game stats** (the Game page on its Box score, what OK on the row opens too), then **More…** (Game page,
+ * Team pages, Follow); none for an individual sport (the Game page cannot show it).
  */
 internal fun resultsStageButtons(row: ResultRow, replay: SportsLiveItem?): List<ResultsStageButton> = when {
     row.event.individual != null -> emptyList()
-    replay != null -> listOf(ResultsStageButton.WATCH_REPLAY, ResultsStageButton.MORE)
-    else -> listOf(ResultsStageButton.MORE)
+    replay != null -> listOf(ResultsStageButton.WATCH_REPLAY, ResultsStageButton.GAME_STATS, ResultsStageButton.MORE)
+    else -> listOf(ResultsStageButton.GAME_STATS, ResultsStageButton.MORE)
 }
 
 /** The title's day name: "Today", "Yesterday", else its date ("Sun 15 Nov", the device's locale). */
@@ -759,6 +774,7 @@ private fun ResultsStage(
     buttons: List<ResultsStageButton>,
     dayName: String?,
     onWatchReplay: () -> Unit,
+    onGameStats: () -> Unit,
     onMore: () -> Unit,
     modifier: Modifier = Modifier,
     firstModifier: Modifier = Modifier
@@ -843,6 +859,9 @@ private fun ResultsStage(
                             Icon(imageVector = Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(stringResource(R.string.sports_live_game_watch_replay), style = SportsLiveTokens.style(SportsLiveTokens.Type.Button), maxLines = 1, softWrap = false)
+                        }
+                        ResultsStageButton.GAME_STATS -> SportsLiveButton(onClick = onGameStats, role = role, modifier = buttonModifier.widthIn(min = 104.dp)) {
+                            Text(stringResource(R.string.sports_live_game_stats), style = SportsLiveTokens.style(SportsLiveTokens.Type.Button), maxLines = 1, softWrap = false)
                         }
                         ResultsStageButton.MORE -> SportsLiveButton(onClick = onMore, role = role, modifier = buttonModifier.widthIn(min = 84.dp)) {
                             Text(stringResource(R.string.sports_live_more), style = SportsLiveTokens.style(SportsLiveTokens.Type.Button), maxLines = 1, softWrap = false)

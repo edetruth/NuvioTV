@@ -166,7 +166,9 @@ class SportsLiveViewModel internal constructor(
         val itemId: String? = null,
         val isRefreshing: Boolean = false,
         val failures: List<SportsLiveFailure> = emptyList(),
-        val lastRefreshedMs: Long? = null
+        val lastRefreshedMs: Long? = null,
+        /** Each source's run of refreshes (#170): the dot on Refresh. */
+        val sources: SportsLiveSources = SportsLiveSources()
     )
 
     /** A load sorted into tabs; recomputed only when the load or the claimed catalogs change. */
@@ -498,7 +500,20 @@ class SportsLiveViewModel internal constructor(
         selectionState.update { it.copy(isRefreshing = true) }
         try {
             val result = repo.load(force, includeChannels, onlyKinds)
-            selectionState.update { it.copy(failures = result.failures, lastRefreshedMs = result.loadedAtMs) }
+            selectionState.update {
+                // A cached load (no fetch) counts once (#170).
+                val sources = if (result.loadedAtMs == it.lastRefreshedMs) {
+                    it.sources
+                } else {
+                    it.sources.after(
+                        fetched = result.fetchedSources,
+                        failed = result.failures.associate { failure -> failure.catalog.addon.id to failure.catalog.addon.displayName },
+                        claimed = result.claimedSources,
+                        nowMs = result.loadedAtMs
+                    )
+                }
+                it.copy(failures = result.failures, lastRefreshedMs = result.loadedAtMs, sources = sources)
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
@@ -648,6 +663,7 @@ class SportsLiveViewModel internal constructor(
             selectedItemId = selectedId,
             failures = selection.failures,
             lastRefreshedMs = selection.lastRefreshedMs,
+            sources = selection.sources,
             justEnded = justEnded,
             noStreams = noStreams,
             nowMs = now,

@@ -40,6 +40,8 @@ data class SportsLiveUiState(
     val selectedItemId: String? = null,
     val failures: List<SportsLiveFailure> = emptyList(),
     val lastRefreshedMs: Long? = null,
+    /** Each source's run of refreshes (#170): the dot on Refresh and the sources sheet. */
+    val sources: SportsLiveSources = SportsLiveSources(),
     /**
      * Live now games that are over (#60), by card key: they sit at the end of the Live now list, after
      * the games still live, as the dimmed Just ended strip.

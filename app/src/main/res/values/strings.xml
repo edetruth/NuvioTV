@@ -3660,7 +3660,9 @@
     <string name="sports_live_filter_my_teams_star">★ My teams</string>
     <!-- #146: the header filter's All while My sports hides some games; "All sports" lifts it. -->
     <string name="sports_live_filter_my_sports">My sports</string>
-    <string name="sports_live_source_failure_line">%1$s · %2$s: %3$s</string>
+    <string name="sports_live_source_silent_since">%1$s hasn\'t responded since %2$s</string>
+    <string name="sports_live_source_retry">Retry</string>
+    <string name="sports_live_sources_status">Sources not responding. Refresh</string>
     <string name="sports_live_status_live_clock">● %1$s</string>
     <string name="sports_live_status_clock_period">%1$s · %2$s</string>
     <string name="sports_live_status_time_countdown">%1$s · %2$s</string>
