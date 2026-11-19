@@ -3940,6 +3940,7 @@
     <string name="sports_live_team_search_listening">Listening…</string>
     <string name="sports_live_league_tag_ncaam">NCAAM</string>
     <string name="sports_live_league_tag_ncaaf">NCAAF</string>
+    <string name="sports_live_league_tag_ncaaw">NCAAW</string>
     <string name="sports_live_setting_home_row_subtitle">Games on now, in a row on the Home screen</string>
     <string name="sports_live_setting_hover_preview_subtitle">Rest on a game for 2 s to watch it muted. Off under Data saver</string>
     <string name="sports_live_setting_pip_system_subtitle">Your TV\'s own picture-in-picture switch for this app</string>

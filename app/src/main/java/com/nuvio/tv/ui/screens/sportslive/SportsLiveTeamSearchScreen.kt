@@ -584,6 +584,7 @@ private fun TeamLogo(logo: String?, size: Dp) {
 private fun leagueTag(league: MyLeague): String = when (league) {
     MyLeague.COLLEGE_BASKETBALL -> stringResource(R.string.sports_live_league_tag_ncaam)
     MyLeague.COLLEGE_FOOTBALL -> stringResource(R.string.sports_live_league_tag_ncaaf)
+    MyLeague.WOMENS_COLLEGE_BASKETBALL -> stringResource(R.string.sports_live_league_tag_ncaaw)
     else -> myLeagueLabel(league)
 }
 
@@ -591,5 +592,6 @@ private fun leagueTag(league: MyLeague): String = when (league) {
 @Composable
 private fun sportWord(league: MyLeague): String = when (league) {
     MyLeague.COLLEGE_BASKETBALL, MyLeague.COLLEGE_FOOTBALL -> myLeagueLabel(league)
+    MyLeague.WOMENS_COLLEGE_BASKETBALL -> myLeagueLabel(MyLeague.COLLEGE_BASKETBALL)
     else -> mySportLabel(league.sport)
 }
