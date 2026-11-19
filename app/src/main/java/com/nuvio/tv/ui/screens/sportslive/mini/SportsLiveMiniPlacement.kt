@@ -46,8 +46,25 @@ object SportsLiveMiniPlacement {
     }
 }
 
+/** Where the mini player's caption ("‹game› · Play/Pause to expand") goes: under the video, or a chip at its top-left. */
+enum class SportsLiveMiniCaptionSpot { BELOW, TOP_START }
+
 /** The mini player's corner geometry in dp, for a window [windowWidthDp] wide (N3). */
 object SportsLiveMiniGeometry {
+    /**
+     * The caption's place (V2 P3): in the corner it sits under the video; in the stage's media box (whose
+     * score block sits right under it) a small chip at the video's top-left, so it never covers the bottom
+     * 20 % where a broadcast draws its scorebug.
+     */
+    fun captionSpot(inStage: Boolean): SportsLiveMiniCaptionSpot =
+        if (inStage) SportsLiveMiniCaptionSpot.TOP_START else SportsLiveMiniCaptionSpot.BELOW
+
+    /** The share of the video's height, from its bottom, the caption must never cover (a broadcast's scorebug). */
+    const val SCOREBUG_SHARE = 0.2f
+
+    /** True when a caption [top]..[bottom] px inside a video [height] px tall stays clear of its scorebug band. */
+    fun clearOfScorebug(top: Float, bottom: Float, height: Float): Boolean = top >= 0f && bottom <= height * (1f - SCOREBUG_SHARE)
+
     /** Its distance from the window's right and bottom edges. */
     const val EDGE_DP = 24f
 

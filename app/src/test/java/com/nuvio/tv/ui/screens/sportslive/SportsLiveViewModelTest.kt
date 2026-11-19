@@ -130,7 +130,7 @@ class SportsLiveViewModelTest {
         assertEquals(listOf("u"), state.tabs.getValue(SportsLiveTab.UPCOMING).map { it.id })
         assertEquals(SportsLiveTab.LIVE_NOW, state.selectedTab)
         assertEquals(listOf("a", "b"), state.visibleItems.map { it.id })
-        assertEquals(listOf("Basketball", "Soccer"), state.filters)
+        assertEquals(listOf(sportKey("Basketball"), sportKey("Soccer")), state.filters)
         assertNull(state.selectedFilter)
         assertEquals("a", state.selectedItemId)
         assertEquals(NOW, state.lastRefreshedMs)
@@ -247,11 +247,11 @@ class SportsLiveViewModelTest {
         runCurrent()
         assertEquals("a", viewModel.uiState.value.selectedItemId)
 
-        viewModel.selectFilter("Soccer")
+        viewModel.selectFilter(sportKey("Soccer"))
         runCurrent()
 
         val filtered = viewModel.uiState.value
-        assertEquals("Soccer", filtered.selectedFilter)
+        assertEquals(sportKey("Soccer"), filtered.selectedFilter)
         assertEquals(listOf("b", "c"), filtered.visibleItems.map { it.id })
         assertEquals("b", filtered.selectedItemId)
 
@@ -276,9 +276,9 @@ class SportsLiveViewModelTest {
         )
         val viewModel = newViewModel()
         advanceUntilIdle()
-        viewModel.selectFilter("Golf")
+        viewModel.selectFilter(sportKey("Golf"))
         runCurrent()
-        assertEquals("Golf", viewModel.uiState.value.selectedFilter)
+        assertEquals(sportKey("Golf"), viewModel.uiState.value.selectedFilter)
 
         viewModel.selectTab(SportsLiveTab.UPCOMING)
         runCurrent()
@@ -287,7 +287,7 @@ class SportsLiveViewModelTest {
         assertEquals(SportsLiveTab.UPCOMING, state.selectedTab)
         assertNull(state.selectedFilter)
         assertEquals(listOf("soon", "mid", "late"), state.visibleItems.map { it.id })
-        assertEquals(listOf("Soccer", "Tennis"), state.filters)
+        assertEquals(listOf(sportKey("Soccer"), sportKey("Tennis")), state.filters)
         assertEquals("soon", state.selectedItemId)
     }
 
@@ -527,7 +527,7 @@ class SportsLiveViewModelTest {
         val viewModel = newViewModel()
         advanceUntilIdle()
 
-        assertEquals(listOf("Soccer", "Tennis"), viewModel.uiState.value.filters)
+        assertEquals(listOf(sportKey("Soccer"), sportKey("Tennis")), viewModel.uiState.value.filters)
     }
 
     @Test
@@ -616,11 +616,11 @@ class SportsLiveViewModelTest {
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
-        assertEquals(listOf("Basketball", "Soccer"), state.filters)
+        assertEquals(listOf(sportKey("Basketball"), sportKey("Soccer")), state.filters)
         assertEquals(3, state.filterCounts[null])
-        assertEquals(2, state.filterCounts["Soccer"])
-        assertEquals(1, state.filterCounts["Basketball"])
-        assertNull(state.filterCounts["Tennis"])
+        assertEquals(2, state.filterCounts[sportKey("Soccer")])
+        assertEquals(1, state.filterCounts[sportKey("Basketball")])
+        assertNull(state.filterCounts[sportKey("Tennis")])
     }
 
     @Test
@@ -635,14 +635,14 @@ class SportsLiveViewModelTest {
         )
         val viewModel = newViewModel()
         advanceUntilIdle()
-        viewModel.selectFilter("Tennis")
+        viewModel.selectFilter(sportKey("Tennis"))
         viewModel.selectTab(SportsLiveTab.CHANNELS)
         viewModel.selectFilter("UK")
         runCurrent()
 
         viewModel.selectTab(SportsLiveTab.LIVE_NOW)
         runCurrent()
-        assertEquals("Tennis", viewModel.uiState.value.selectedFilter)
+        assertEquals(sportKey("Tennis"), viewModel.uiState.value.selectedFilter)
         viewModel.selectTab(SportsLiveTab.CHANNELS)
         runCurrent()
         assertEquals("UK", viewModel.uiState.value.selectedFilter)
@@ -754,7 +754,7 @@ class SportsLiveViewModelTest {
         advanceUntilIdle()
 
         val my = SportsLiveUiState.MY_TEAMS_FILTER
-        assertEquals(listOf(my, "Basketball", "Soccer"), viewModel.uiState.value.filters)
+        assertEquals(listOf(my, sportKey("Basketball"), sportKey("Soccer")), viewModel.uiState.value.filters)
 
         viewModel.selectFilter(my)
         runCurrent()
@@ -764,7 +764,7 @@ class SportsLiveViewModelTest {
         // No followed game on Upcoming, and never on Channels.
         viewModel.selectTab(SportsLiveTab.UPCOMING)
         runCurrent()
-        assertEquals(listOf("Soccer"), viewModel.uiState.value.filters)
+        assertEquals(listOf(sportKey("Soccer")), viewModel.uiState.value.filters)
         viewModel.selectTab(SportsLiveTab.CHANNELS)
         runCurrent()
         assertEquals(listOf("UK", "US"), viewModel.uiState.value.filters)
@@ -780,7 +780,7 @@ class SportsLiveViewModelTest {
         assertTrue(viewModel.onUserMoved())
         runCurrent()
         assertNull(viewModel.uiState.value.selectedFilter)
-        assertEquals(listOf("Basketball", "Soccer"), viewModel.uiState.value.filters)
+        assertEquals(listOf(sportKey("Basketball"), sportKey("Soccer")), viewModel.uiState.value.filters)
         assertEquals(listOf("s", "a", "b"), viewModel.uiState.value.visibleItems.map { it.id })
     }
 
@@ -919,7 +919,7 @@ class SportsLiveViewModelTest {
         settle()
         assertEquals(playing, viewModel.preview.value)
 
-        viewModel.selectFilter("Soccer")
+        viewModel.selectFilter(sportKey("Soccer"))
         assertEquals("filter changed", SportsLivePreviewState.Idle, viewModel.preview.value)
         viewModel.setPreviewFocus(a)
         settle()

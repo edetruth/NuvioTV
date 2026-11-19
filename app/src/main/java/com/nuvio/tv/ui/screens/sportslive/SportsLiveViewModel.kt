@@ -14,6 +14,7 @@ import com.nuvio.tv.core.sportslive.SportsLiveLinkVerdicts
 import com.nuvio.tv.core.sportslive.SportsLiveManifestVerdict
 import com.nuvio.tv.core.sportslive.SportsLiveItemBucketer
 import com.nuvio.tv.core.sportslive.SportsLiveLiveDuration
+import com.nuvio.tv.core.sportslive.SportsLiveSportKind
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.scores.ExcitementHistory
 import com.nuvio.tv.core.sportslive.scores.LiveScoresRepository
@@ -550,9 +551,10 @@ class SportsLiveViewModel internal constructor(
             }
         }
         val tabItems = tabs[selection.tab].orEmpty()
-        // Channels are filtered by group, every other tab by sport.
+        // Channels are filtered by group, every other tab by sport: one value per sport ("American Football" and
+        // "NFL" are both Football), a catch-all ("Sports", a catalog's name) only under All (V2 P3).
         val filterOf: (SportsLiveItem) -> String? =
-            if (selection.tab == SportsLiveTab.CHANNELS) SportsLiveItem::group else SportsLiveItem::sport
+            if (selection.tab == SportsLiveTab.CHANNELS) SportsLiveItem::group else ({ item -> SportsLiveSportKind.filterKeyOf(item) })
         val values = tabItems.mapNotNull(filterOf).distinct()
         // The chips' counts (#79): Live now leaves its Just ended strip out, as its tab count does.
         val counted = if (selection.tab == SportsLiveTab.LIVE_NOW) tabItems.filter { it.streamKey !in justEnded } else tabItems

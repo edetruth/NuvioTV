@@ -10,6 +10,7 @@ import com.nuvio.tv.core.sportslive.scores.WhyTag
 import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveTab
+import java.time.ZoneId
 
 /** The scores, setting and reveals the screen has: what the Scoreboard and drawn cards read. */
 data class SportsLiveBoardScores(
@@ -52,7 +53,9 @@ data class SportsLiveBoard(
     /** The Scoreboard's rows; null on the tabs that list cards (Channels, Replays). */
     val rows: List<ScoreboardRow>?,
     /** Each item's drawn card by `addonId|id` (null: the addon's art). */
-    val arts: Map<String, GameArt?>
+    val arts: Map<String, GameArt?>,
+    /** Upcoming's Agenda (V2, P3): [rows] by day and time slot; null on the other tabs. */
+    val agenda: SportsLiveAgenda? = null
 ) {
     /** True when this board shows [tab] with [filter]. */
     fun shows(tab: SportsLiveTab, filter: String?): Boolean = this.tab == tab && this.filter == filter
@@ -60,11 +63,11 @@ data class SportsLiveBoard(
     val rowOf: Map<String, ScoreboardRow> by lazy { rows?.associateBy { it.item.streamKey }.orEmpty() }
 
     companion object {
-        /** The tabs drawn as the Scoreboard (V2, #132): Live now, and Upcoming until its Agenda (P3). */
+        /** The tabs drawn from Scoreboard rows (V2, #132): Live now, and Upcoming (as its Agenda). */
         fun isScoreboard(tab: SportsLiveTab): Boolean = tab == SportsLiveTab.LIVE_NOW || tab == SportsLiveTab.UPCOMING
 
         /** Builds the board for [inputs]: pure, and slow for a large list, so callers run it off the main thread. */
-        fun build(inputs: SportsLiveBoardInputs): SportsLiveBoard {
+        fun build(inputs: SportsLiveBoardInputs, zone: ZoneId = ZoneId.systemDefault()): SportsLiveBoard {
             val tab = inputs.tab
             val scores = inputs.scores
             val rows = if (isScoreboard(tab)) {
@@ -82,14 +85,15 @@ data class SportsLiveBoard(
             } else {
                 null
             }
-            val items = rows?.map { it.item } ?: inputs.items
+            val agenda = if (tab == SportsLiveTab.UPCOMING && rows != null) SportsLiveAgenda.of(rows, inputs.clockMs, zone) else null
+            val items = agenda?.items ?: rows?.map { it.item } ?: inputs.items
             // The cards' drawn art; a row already carries its own.
             val arts = HashMap<String, GameArt?>(items.size * 2)
             rows?.forEach { arts[it.item.streamKey] = it.art }
             for (item in items) {
                 if (item.streamKey !in arts) arts[item.streamKey] = GameArt.of(item, scores.scores[item.streamKey])
             }
-            return SportsLiveBoard(tab = tab, filter = inputs.filter, items = items, rows = rows, arts = arts)
+            return SportsLiveBoard(tab = tab, filter = inputs.filter, items = items, rows = rows, arts = arts, agenda = agenda)
         }
     }
 }

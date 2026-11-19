@@ -371,14 +371,16 @@ fun SportsLiveMiniPlayerHost(
                     onRelease = { playback.attach(null) },
                     modifier = Modifier.fillMaxSize()
                 )
-                // In the stage the caption sits inside the video, so it never covers the score block below.
-                if (stageSlot != null) {
+                // In the stage the caption is a small chip at the video's top-left (V2 P3): never over the
+                // broadcast's own scorebug along the bottom, nor over the score block below the box.
+                if (stageSlot != null && SportsLiveMiniGeometry.captionSpot(inStage = true) == SportsLiveMiniCaptionSpot.TOP_START) {
                     MiniCaption(
                         text = stringResource(
                             if (focused) R.string.sports_live_mini_ok_hint else R.string.sports_live_mini_hint,
                             playing.item.displayName
                         ),
-                        modifier = Modifier.align(Alignment.BottomStart).padding(6.dp)
+                        small = true,
+                        modifier = Modifier.align(Alignment.TopStart).padding(6.dp)
                     )
                 }
             }
@@ -397,10 +399,10 @@ fun SportsLiveMiniPlayerHost(
 
 /** The mini player's caption ("<game> · Play/Pause to expand"), on a dark chip. */
 @Composable
-private fun MiniCaption(text: String, modifier: Modifier = Modifier) {
+private fun MiniCaption(text: String, modifier: Modifier = Modifier, small: Boolean = false) {
     Text(
         text = text,
-        style = MaterialTheme.typography.labelMedium,
+        style = if (small) MaterialTheme.typography.labelSmall else MaterialTheme.typography.labelMedium,
         color = NuvioTheme.colors.TextPrimary,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,

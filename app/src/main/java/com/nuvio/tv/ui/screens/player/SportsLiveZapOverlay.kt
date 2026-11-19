@@ -2,6 +2,10 @@
 
 package com.nuvio.tv.ui.screens.player
 
+import com.nuvio.tv.ui.screens.sportslive.panelPreviewCornerShown
+import com.nuvio.tv.ui.screens.sportslive.sportFilterLabel
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.drawWithContent
 import android.view.KeyEvent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -553,32 +557,20 @@ private fun LiveGamesPanel(
                 modifier = Modifier.padding(horizontal = PANEL_ROW_ROOM),
                 horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md)
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = stringResource(R.string.sports_live_zap_panel_title),
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = NuvioTheme.colors.TextPrimary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    if (onLongPick != null) {
-                        Text(
-                            text = stringResource(R.string.sports_live_dual_hold_hint),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = NuvioTheme.extendedColors.textSecondary,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(top = NuvioTheme.spacing.xs)
-                        )
-                    }
-                }
-                // #83: the focused game (the one playing when none is) in the top-right corner.
-                val cornerKey = focusedKey ?: state.currentKey
-                PanelPreviewCorner(
-                    row = state.rows.firstOrNull { it.item.streamKey == cornerKey },
-                    preview = preview?.takeIf { it.item.streamKey == focusedKey },
-                    player = previewPlayer
+                // One line (V2 P3): the hold hint moved to the panel's foot.
+                Text(
+                    text = stringResource(R.string.sports_live_zap_panel_title),
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = NuvioTheme.colors.TextPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f).align(Alignment.CenterVertically)
                 )
+                // #83, V2 P3: the corner holds only the focused game's preview video; nothing while none plays.
+                val cornerPreview = preview?.takeIf { it.item.streamKey == focusedKey }
+                if (panelPreviewCornerShown(cornerPreview != null)) {
+                    PanelPreviewCorner(preview = cornerPreview, player = previewPlayer)
+                }
             }
             // F12: full width under the title and preview, so its label never truncates.
             if (onWatchWith != null) {
@@ -633,7 +625,7 @@ private fun LiveGamesPanel(
                     verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm),
                     // Room for the rows' focus ring and lift, so neither is clipped.
                     contentPadding = PaddingValues(horizontal = PANEL_ROW_ROOM, vertical = NuvioTheme.spacing.xs),
-                    modifier = Modifier.fillMaxHeight()
+                    modifier = Modifier.weight(1f)
                 ) {
                     state.rows.forEachIndexed { index, row ->
                         if (index == 0 || state.rows[index - 1].group != row.group) {
@@ -660,6 +652,17 @@ private fun LiveGamesPanel(
                     }
                 }
             }
+            // The hold hint, as a small footer line (V2 P3).
+            if (onLongPick != null) {
+                Text(
+                    text = stringResource(R.string.sports_live_dual_hold_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = NuvioTheme.extendedColors.textSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(start = PANEL_ROW_ROOM, top = NuvioTheme.spacing.xs)
+                )
+            }
         }
     }
 }
@@ -681,6 +684,7 @@ private fun PanelChipRow(
     var focused by remember { mutableStateOf(false) }
     var highlighted by remember { mutableStateOf(selected) }
     val cursor = SportsLiveChipCursor(chips, selected, if (highlighted in chips) highlighted else selected)
+    val scroll = rememberScrollState()
     Row(
         horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs),
         verticalAlignment = Alignment.CenterVertically,
@@ -714,7 +718,9 @@ private fun PanelChipRow(
             }
             .focusRequester(focusRequester)
             .focusable()
-            .horizontalScroll(rememberScrollState())
+            // V2 P3: a row longer than the panel fades at the edge it continues past, never a hard cut.
+            .panelChipFade(scroll, PANEL_CHIP_FADE)
+            .horizontalScroll(scroll)
             .padding(NuvioTheme.spacing.xs)
     ) {
         chips.forEach { chip ->
@@ -722,7 +728,7 @@ private fun PanelChipRow(
                 name = when (chip) {
                     null -> stringResource(R.string.sports_live_filter_all)
                     SportsLiveUiState.MY_TEAMS_FILTER -> stringResource(R.string.sports_live_filter_my_teams)
-                    else -> com.nuvio.tv.core.sportslive.SportsLiveDisplayText.label(chip) ?: chip
+                    else -> sportFilterLabel(chip)
                 },
                 count = counts[chip] ?: 0,
                 icon = sportsLiveChipIconOf(chip),
@@ -815,38 +821,47 @@ private fun LiveGameItem(
 }
 
 /**
- * The panel's top-right corner (#83): the focused game's muted 16:9 preview once its first frame is
- * drawn, otherwise its logos art (or its poster when it names no two teams). Never focusable.
+ * The panel's top-right corner (#83, V2 P3): the focused game's muted 16:9 preview, shown only while one
+ * loads or plays ([panelPreviewCornerShown]); no logos or time card in its place. Never focusable.
  */
 @Composable
-private fun PanelPreviewCorner(row: ZapPanelRow?, preview: SportsLivePreviewState.Playing?, player: SportsLivePreviewPlayer) {
+private fun PanelPreviewCorner(preview: SportsLivePreviewState.Playing?, player: SportsLivePreviewPlayer) {
     Box(
         modifier = Modifier
             .width(PANEL_PREVIEW_WIDTH)
             .aspectRatio(16f / 9f)
             .clip(RoundedCornerShape(NuvioTheme.radii.md))
-            .background(NuvioTheme.colors.PosterFallback)
+            .background(if (preview?.rendering == true) NuvioTheme.colors.PosterFallback else Color.Transparent)
     ) {
-        // The video is laid out while the stream loads, so its first frame can arrive; the art covers it until then.
+        // The video is laid out while the stream loads, so its first frame can arrive.
         if (preview != null) SportsLivePreviewVideo(player, overVideo = true)
-        if (preview?.rendering != true && row != null) {
-            val teams = row.teams
-            if (teams != null) {
-                SportsLiveGameArt(art = teams, compact = true, chip = row.chip, modifier = Modifier.fillMaxSize())
-            } else {
-                AsyncImage(
-                    model = row.item.meta.backdropUrl,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
-        }
         if (preview?.rendering == true) {
             SportsLivePreviewLabel(modifier = Modifier.align(Alignment.TopStart).padding(NuvioTheme.spacing.xs))
         }
     }
 }
+
+/** The chip row's edges fade over [fade] where it scrolls on (V2 P3), as Live Now's list does. */
+private fun Modifier.panelChipFade(scroll: androidx.compose.foundation.ScrollState, fade: androidx.compose.ui.unit.Dp): Modifier = this
+    .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+    .drawWithContent {
+        drawContent()
+        val start = scroll.canScrollBackward
+        val end = scroll.canScrollForward
+        if (!start && !end) return@drawWithContent
+        val share = (fade.toPx() / size.width).coerceIn(0f, 0.5f)
+        drawRect(
+            brush = Brush.horizontalGradient(
+                0f to (if (start) Color.Transparent else Color.Black),
+                share to Color.Black,
+                1f - share to Color.Black,
+                1f to (if (end) Color.Transparent else Color.Black)
+            ),
+            blendMode = androidx.compose.ui.graphics.BlendMode.DstIn
+        )
+    }
+
+private val PANEL_CHIP_FADE = 24.dp
 
 /**
  * A focusable row of the live games panel. With [onLongClick], the Card's own long press (OK held)

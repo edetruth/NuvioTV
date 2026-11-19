@@ -113,7 +113,9 @@ class SportsLiveChipsTest {
         assertEquals(3, counts["NBA"])
         // Channels never count ★ My teams; the panel counts as the section does.
         assertNull(sportsLiveFilterCounts(items, SportsLiveItem::sport, myTeams = false)[SportsLiveUiState.MY_TEAMS_FILTER])
-        assertEquals(counts, panelChipCounts(items))
+        // The panel counts one value per sport (V2 P3): "NBA" is Basketball.
+        assertEquals(sportsLiveFilterCounts(items, { com.nuvio.tv.core.sportslive.SportsLiveSportKind.filterKeyOf(it) }), panelChipCounts(items))
+        assertEquals(3, panelChipCounts(items)[sportKey("Basketball")])
         assertEquals("Soccer 2", sportsLiveChipText("Soccer", counts["Soccer"]))
         assertEquals("Edit", sportsLiveChipText("Edit", null))
     }

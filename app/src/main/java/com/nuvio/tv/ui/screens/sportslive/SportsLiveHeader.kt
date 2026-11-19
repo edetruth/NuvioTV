@@ -14,6 +14,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -73,6 +74,9 @@ internal fun SportsLiveHeader(
 ) {
     val activeTabFocusRequester = tabFocusRequesters.getValue(selectedTab)
     val downModifier = Modifier.focusProperties { downFocusRequester?.let { down = it } }
+    // F6 (#133): Right past the filter's last option goes to the next header control, never down into the stage.
+    val failuresFocusRequester = remember { FocusRequester() }
+    val refreshFocusRequester = remember { FocusRequester() }
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -118,6 +122,7 @@ internal fun SportsLiveHeader(
                         .focusRequester(filterFocusRequester)
                         .focusProperties {
                         left = activeTabFocusRequester
+                        right = if (failures > 0) failuresFocusRequester else refreshFocusRequester
                         downFocusRequester?.let { down = it }
                     }
                 )
@@ -130,7 +135,7 @@ internal fun SportsLiveHeader(
                     onClick = onShowFailures,
                     round = false,
                     outline = Colors.WarningAmberOutline,
-                    modifier = downModifier
+                    modifier = downModifier.focusRequester(failuresFocusRequester)
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.WarningAmber,
@@ -146,7 +151,7 @@ internal fun SportsLiveHeader(
                     )
                 }
             }
-            SportsLiveHeaderControl(onClick = onRefresh, modifier = downModifier) {
+            SportsLiveHeaderControl(onClick = onRefresh, modifier = downModifier.focusRequester(refreshFocusRequester)) {
                 Icon(
                     imageVector = Icons.Rounded.Refresh,
                     contentDescription = stringResource(R.string.sports_live_refresh),

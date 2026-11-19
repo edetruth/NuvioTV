@@ -349,7 +349,8 @@ class EspnScoreProvider internal constructor(
                 mayResume = state == ScoreState.OFF && type?.state != "post" && type?.completed != true &&
                     type?.name?.let { RESUMABLE.containsMatchIn(it.uppercase()) } == true,
                 // Only while in play: a final's leftover last play is not a situation.
-                situation = if (state == ScoreState.IN) situation(competition.situation, homeTeam.id, awayTeam.id) else null
+                situation = if (state == ScoreState.IN) situation(competition.situation, homeTeam.id, awayTeam.id) else null,
+                seasonType = event.season?.type
             )
         }
 
@@ -419,7 +420,9 @@ class EspnScoreProvider internal constructor(
                 location = team.location?.takeIf { it.isNotBlank() },
                 logo = team.logo?.takeIf { it.isNotBlank() },
                 score = competitor.score?.trim()?.toIntOrNull(),
-                linescores = competitor.linescores.orEmpty().mapNotNull { it.value?.toInt() }
+                linescores = competitor.linescores.orEmpty().mapNotNull { it.value?.toInt() },
+                record = competitor.records.orEmpty().let { records -> records.firstOrNull { it.type == "total" } ?: records.firstOrNull() }
+                    ?.summary?.trim()?.takeIf { it.isNotEmpty() }
             )
         }
 

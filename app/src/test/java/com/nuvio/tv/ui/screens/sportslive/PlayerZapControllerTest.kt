@@ -63,7 +63,7 @@ class PlayerZapControllerTest {
 
     private fun startOn(id: String) {
         SportsLiveZapSessions.start(
-            SportsLiveZapSession.of(items, "addon|$id", SportsLiveTab.LIVE_NOW, "Football", false)!!
+            SportsLiveZapSession.of(items, "addon|$id", SportsLiveTab.LIVE_NOW, sportKey("Football"), false)!!
         )
     }
 
@@ -345,18 +345,18 @@ class PlayerZapControllerTest {
 
         controller.zap("a", forward = true)
         runCurrent()
-        controller.pickChip("a", "Soccer")
+        controller.pickChip("a", sportKey("Soccer"))
         runCurrent()
 
         assertTrue(cancelled.isEmpty())
         assertEquals("b", controller.resolving.value?.current?.id)
         assertEquals("b", SportsLiveZapSessions.current()?.current?.id)
-        assertEquals(ZapPanelChip("Soccer"), SportsLiveZapSessions.current()?.panelChip)
+        assertEquals(ZapPanelChip(sportKey("Soccer")), SportsLiveZapSessions.current()?.panelChip)
         pending.getValue("b").complete(STREAM)
         runCurrent()
 
         assertEquals(listOf("b" to STREAM), navigated)
-        assertEquals(ZapPanelChip("Soccer"), SportsLiveZapSessions.activeFor("b")?.panelChip)
+        assertEquals(ZapPanelChip(sportKey("Soccer")), SportsLiveZapSessions.activeFor("b")?.panelChip)
     }
 
     @Test
@@ -378,11 +378,11 @@ class PlayerZapControllerTest {
         val second = controller(playerScope)
         second.zap("a", forward = false)
         runCurrent()
-        second.pickChip("a", "Soccer")
+        second.pickChip("a", sportKey("Soccer"))
         assertEquals("d", SportsLiveZapSessions.current()?.current?.id)
         playerScope.cancel()
         runCurrent()
-        assertEquals(ZapPanelChip("Soccer"), SportsLiveZapSessions.activeFor("a")?.panelChip)
+        assertEquals(ZapPanelChip(sportKey("Soccer")), SportsLiveZapSessions.activeFor("a")?.panelChip)
     }
 
     private companion object {

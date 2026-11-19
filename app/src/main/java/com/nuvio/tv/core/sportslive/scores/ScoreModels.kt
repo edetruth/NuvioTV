@@ -24,7 +24,9 @@ data class ScoreTeam(
     val logo: String?,
     val score: Int?,
     /** Points per period (quarters, halves, periods, innings); empty when the feed has none. */
-    val linescores: List<Int>
+    val linescores: List<Int>,
+    /** The season record ESPN's scoreboard gives ("18-9", soccer "2-1-7"); null when none. */
+    val record: String? = null
 )
 
 /** A soccer goal from the scoreboard's `details`. */
@@ -72,7 +74,9 @@ data class ScoreSnapshot(
      * An individual sport's result (tennis, UFC, F1, golf: #55 part 2); null for a team game. Such an
      * event has no sides: [home] and [away] are empty, and it never matches a card, team or replay.
      */
-    val individual: IndividualResult? = null
+    val individual: IndividualResult? = null,
+    /** ESPN's season type: 1 preseason, 2 regular season, 3 postseason; null when not given. */
+    val seasonType: Int? = null
 ) {
     val homeAbbr: String? get() = home.abbreviation
     val awayAbbr: String? get() = away.abbreviation

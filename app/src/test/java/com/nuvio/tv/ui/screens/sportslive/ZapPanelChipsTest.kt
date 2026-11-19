@@ -68,9 +68,9 @@ class ZapPanelChipsTest {
         val state = viewModel.panel.first { it != null }!!
 
         assertNull(state.chip)
-        assertEquals(listOf(my, null, "Basketball", "Soccer"), state.chips)
+        assertEquals(listOf(my, null, sportKey("Basketball"), sportKey("Soccer")), state.chips)
         // #79: each chip counts its games.
-        assertEquals(mapOf(null to 3, my to 1, "Basketball" to 2, "Soccer" to 1), state.counts)
+        assertEquals(mapOf(null to 3, my to 1, sportKey("Basketball") to 2, sportKey("Soccer") to 1), state.counts)
         assertEquals(setOf("k", "b", "a"), state.items.map { it.id }.toSet())
         assertEquals("k", state.rows.first().item.id)
         assertTrue(state.rows.first().item.followed)
@@ -78,13 +78,13 @@ class ZapPanelChipsTest {
         assertNull(SportsLiveZapSessions.current()!!.panelChip)
 
         // A chip filters the rows and the zap order, and is remembered for the session.
-        viewModel.onPanelChip("Soccer")
-        val soccer = viewModel.panel.first { it?.chip == "Soccer" }!!
+        viewModel.onPanelChip(sportKey("Soccer"))
+        val soccer = viewModel.panel.first { it?.chip == sportKey("Soccer") }!!
 
         assertEquals(listOf("a"), soccer.items.map { it.id })
         assertEquals(setOf("k", "b", "a"), soccer.allItems.map { it.id }.toSet())
         val session = SportsLiveZapSessions.current()!!
-        assertEquals(ZapPanelChip("Soccer"), session.panelChip)
+        assertEquals(ZapPanelChip(sportKey("Soccer")), session.panelChip)
         assertEquals("a", session.step(forward = true, endedKeys = emptySet())!!.current.id)
         assertEquals("a", session.step(forward = false, endedKeys = emptySet())!!.current.id)
 
@@ -92,14 +92,14 @@ class ZapPanelChipsTest {
         viewModel.onPanelChip(null)
         assertEquals(3, viewModel.panel.first { it != null && it.chip == null && it.items.size == 3 }!!.items.size)
         assertEquals(ZapPanelChip(null), SportsLiveZapSessions.current()!!.panelChip)
-        viewModel.onPanelChip("Soccer")
+        viewModel.onPanelChip(sportKey("Soccer"))
 
         // Reopened in the same playback: the chip picked.
         viewModel.closePanel()
         runCurrent()
         viewModel.openPanel()
         runCurrent()
-        assertEquals("Soccer", viewModel.panel.first { it != null }!!.chip)
+        assertEquals(sportKey("Soccer"), viewModel.panel.first { it != null }!!.chip)
         viewModel.closePanel()
         runCurrent()
 
@@ -114,14 +114,14 @@ class ZapPanelChipsTest {
         // A pick under a chip keeps zapping by that chip.
         viewModel.openPanel()
         viewModel.panel.first { it != null }
-        viewModel.onPanelChip("Basketball")
-        viewModel.panel.first { it?.chip == "Basketball" }
+        viewModel.onPanelChip(sportKey("Basketball"))
+        viewModel.panel.first { it?.chip == sportKey("Basketball") }
 
         viewModel.onPanelPick(bulls)
 
         val moved = SportsLiveZapSessions.current()!!
         assertEquals("b", moved.current.id)
-        assertEquals(ZapPanelChip("Basketball"), moved.panelChip)
+        assertEquals(ZapPanelChip(sportKey("Basketball")), moved.panelChip)
         assertEquals("k", moved.step(forward = true, endedKeys = emptySet())!!.current.id)
     }
 

@@ -10,7 +10,14 @@ import java.util.Locale
  * One side of a drawn game card: [name] for large cards, [short] (an abbreviation when known) for small
  * ones, and [shortName] (ESPN's short name, "Auburn" for "Auburn Tigers") between the two, for rows.
  */
-data class GameArtTeam(val name: String, val short: String, val logo: String?, val shortName: String = name)
+data class GameArtTeam(
+    val name: String,
+    val short: String,
+    val logo: String?,
+    val shortName: String = name,
+    /** ESPN's season record ("18-9") when the game is matched; null otherwise. */
+    val record: String? = null
+)
 
 /**
  * The card Nuvio draws for a game in place of the addon's poster (whose painted-in "13:00 UTC" never
@@ -25,7 +32,9 @@ data class GameArt(
     val second: GameArtTeam,
     val league: String?,
     val startMs: Long?,
-    val hasTimeOfDay: Boolean
+    val hasTimeOfDay: Boolean,
+    /** ESPN's season type of the matched game (1 preseason, 2 regular season, 3 postseason); null otherwise. */
+    val seasonType: Int? = null
 ) {
     /** Logos are drawn only when both teams have one (#130); otherwise the names are set in large type. */
     val hasLogos: Boolean get() = TeamMarks.pair(first.logo, second.logo) != null
@@ -52,7 +61,8 @@ data class GameArt(
                 second = team(second, secondTeam, remembered?.second),
                 league = event?.leagueName?.takeIf { it.isNotBlank() } ?: item.sport?.takeIf { it.isNotBlank() },
                 startMs = eventStart ?: item.startMs,
-                hasTimeOfDay = if (eventStart != null) true else item.startHasTimeOfDay
+                hasTimeOfDay = if (eventStart != null) true else item.startHasTimeOfDay,
+                seasonType = event?.seasonType
             )
         }
 
@@ -75,7 +85,8 @@ data class GameArt(
                 name = name,
                 short = team.abbreviation?.takeIf { it.isNotBlank() } ?: team.shortDisplayName?.takeIf { it.isNotBlank() } ?: name,
                 logo = team.logo?.takeIf { it.isNotBlank() },
-                shortName = team.shortDisplayName?.takeIf { it.isNotBlank() } ?: name
+                shortName = team.shortDisplayName?.takeIf { it.isNotBlank() } ?: name,
+                record = team.record
             )
         }
 
@@ -92,7 +103,8 @@ data class GameArt(
                 name = name,
                 short = short,
                 logo = espn?.logo?.takeIf { it.isNotBlank() } ?: known?.logo,
-                shortName = espn?.shortDisplayName?.takeIf { it.isNotBlank() } ?: name
+                shortName = espn?.shortDisplayName?.takeIf { it.isNotBlank() } ?: name,
+                record = espn?.record
             )
         }
 

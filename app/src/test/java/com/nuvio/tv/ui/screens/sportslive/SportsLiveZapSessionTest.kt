@@ -140,7 +140,7 @@ class SportsLiveZapSessionTest {
         assertEquals(listOf("s1", "f2", "b1", "f1"), all.zapIds(4))
         assertEquals(1 to 4, all.positionLabelArgs)
         // A sport: only its games; from a game outside it, the first (or last) of them.
-        val soccer = session.copy(panelChip = ZapPanelChip("Soccer"))
+        val soccer = session.copy(panelChip = ZapPanelChip(sportKey("Soccer")))
         assertEquals(listOf("s1", "f2", "s1"), soccer.zapIds(3))
         assertEquals(listOf("f2", "s1", "f2"), soccer.zapIds(3, forward = false))
         assertEquals("f2", soccer.moveTo(s1.streamKey)!!.step(true, emptySet())!!.current.id)
@@ -148,11 +148,11 @@ class SportsLiveZapSessionTest {
         val mine = session.copy(panelChip = ZapPanelChip(SportsLiveUiState.MY_TEAMS_FILTER))
         assertEquals(listOf("f2", "f1", "f2"), mine.zapIds(3))
         // The chip survives zaps.
-        assertEquals(ZapPanelChip("Soccer"), soccer.step(true, emptySet())!!.panelChip)
+        assertEquals(ZapPanelChip(sportKey("Soccer")), soccer.step(true, emptySet())!!.panelChip)
         // A chip whose only game is the one playing: no zap.
-        assertNull(SportsLiveZapSession(listOf(f1, s1, b1), 1, SportsLiveTab.LIVE_NOW, null, false, ZapPanelChip("Soccer")).step(true, emptySet()))
+        assertNull(SportsLiveZapSession(listOf(f1, s1, b1), 1, SportsLiveTab.LIVE_NOW, null, false, ZapPanelChip(sportKey("Soccer"))).step(true, emptySet()))
         // A chip with no games in the session: every game, as under All.
-        val tennis = session.copy(panelChip = ZapPanelChip("Tennis"))
+        val tennis = session.copy(panelChip = ZapPanelChip(sportKey("Tennis")))
         assertEquals(listOf("s1", "f2", "b1", "f1"), tennis.zapIds(4))
         assertEquals(1 to 4, tennis.positionLabelArgs)
     }
@@ -161,10 +161,10 @@ class SportsLiveZapSessionTest {
     fun `a chip sets the zap order of a session from any tab, by sport`() {
         // A Channels session: the chip is a sport, never a channel group of the same name.
         val grouped = f1.copy(group = "Soccer")
-        val channels = SportsLiveZapSession(listOf(grouped, s1, b1), 0, SportsLiveTab.CHANNELS, null, false, ZapPanelChip("Soccer"))
+        val channels = SportsLiveZapSession(listOf(grouped, s1, b1), 0, SportsLiveTab.CHANNELS, null, false, ZapPanelChip(sportKey("Soccer")))
         assertEquals(listOf("s1"), channels.zapIds(3))
         listOf(SportsLiveTab.UPCOMING, SportsLiveTab.REPLAYS).forEach { tab ->
-            val session = SportsLiveZapSession(listOf(f1, s1, f2, b1), 0, tab, null, false, ZapPanelChip("Basketball"))
+            val session = SportsLiveZapSession(listOf(f1, s1, f2, b1), 0, tab, null, false, ZapPanelChip(sportKey("Basketball")))
             assertEquals(listOf("b1", "f1", "b1"), session.zapIds(3))
             assertEquals(1 to 2, session.positionLabelArgs)
             val mine = session.copy(panelChip = ZapPanelChip(SportsLiveUiState.MY_TEAMS_FILTER))
@@ -176,8 +176,8 @@ class SportsLiveZapSessionTest {
     fun `the picked chip lasts for its session only (#68)`() {
         SportsLiveZapSessions.start(myTeamsSession())
         val current = SportsLiveZapSessions.current()!!
-        SportsLiveZapSessions.update(current.copy(panelChip = ZapPanelChip("Soccer")))
-        assertEquals(ZapPanelChip("Soccer"), SportsLiveZapSessions.current()!!.panelChip)
+        SportsLiveZapSessions.update(current.copy(panelChip = ZapPanelChip(sportKey("Soccer"))))
+        assertEquals(ZapPanelChip(sportKey("Soccer")), SportsLiveZapSessions.current()!!.panelChip)
 
         SportsLiveZapSessions.start(myTeamsSession(on = f2))
 

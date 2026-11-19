@@ -198,12 +198,20 @@ fun SportsLiveFilterControl(
     }
 }
 
-/** The filter's options from a tab's [filters] ("★ My teams" first when listed, then All, then the rest). */
-internal fun sportsLiveFilterOptions(filters: List<String>, myTeamsLabel: String, allLabel: String): List<SportsLiveFilterOption> {
+/**
+ * The filter's options from a tab's [filters] ("★ My teams" first when listed, then All, then the rest), each
+ * named by [labelOf] (a sport's short name, "Football" not "American Football").
+ */
+internal fun sportsLiveFilterOptions(
+    filters: List<String>,
+    myTeamsLabel: String,
+    allLabel: String,
+    labelOf: (String) -> String = { SportsLiveDisplayText.label(it) ?: it }
+): List<SportsLiveFilterOption> {
     val myTeams = SportsLiveUiState.MY_TEAMS_FILTER
     return buildList {
         if (myTeams in filters) add(SportsLiveFilterOption(myTeams, myTeamsLabel, gold = true))
         add(SportsLiveFilterOption(null, allLabel))
-        filters.filter { it != myTeams }.forEach { add(SportsLiveFilterOption(it, SportsLiveDisplayText.label(it) ?: it)) }
+        filters.filter { it != myTeams }.forEach { add(SportsLiveFilterOption(it, labelOf(it))) }
     }
 }

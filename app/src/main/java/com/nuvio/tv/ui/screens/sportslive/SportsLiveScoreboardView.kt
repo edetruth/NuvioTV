@@ -19,10 +19,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -51,6 +53,8 @@ import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
 import com.nuvio.tv.R
 import com.nuvio.tv.core.sportslive.SportsLiveDisplayText
+import com.nuvio.tv.core.sportslive.SportsLiveSportKind
+import java.util.Locale
 import com.nuvio.tv.core.sportslive.displayName
 import com.nuvio.tv.core.sportslive.scores.GameSituationStrings
 import com.nuvio.tv.core.sportslive.scores.ScoreChip
@@ -98,13 +102,21 @@ internal fun SportsLiveScoreboardHeader(group: ScoreboardGroup, count: Int, modi
     )
 }
 
-/** A row's height by its group (board px ÷ 2): live 56, starting soon / later 48, channel 36, just ended 40. */
-internal fun scoreboardRowHeight(group: ScoreboardGroup): Dp = when (group) {
-    ScoreboardGroup.LIVE -> Size.RowLive
-    ScoreboardGroup.STARTING_SOON, ScoreboardGroup.LATER -> Size.RowSoon
-    ScoreboardGroup.CHANNELS -> Size.RowChannel
-    ScoreboardGroup.JUST_ENDED -> Size.RowJustEnded
+/**
+ * A row's height by its group (board px ÷ 2): live 56, starting soon / later 48, channel 36, just ended 40;
+ * a single-line row (not a two-sided match, V2 P3) 40.
+ */
+internal fun scoreboardRowHeight(group: ScoreboardGroup, twoSided: Boolean = true): Dp = when {
+    group == ScoreboardGroup.CHANNELS -> Size.RowChannel
+    !twoSided -> SINGLE_LINE_ROW_HEIGHT
+    group == ScoreboardGroup.LIVE -> Size.RowLive
+    group == ScoreboardGroup.JUST_ENDED -> Size.RowJustEnded
+    else -> Size.RowSoon
 }
+
+/** The right side of an Agenda row (V2 Upcoming): "● Stream listed" when an addon lists it, and the reminder bell. */
+@Immutable
+internal data class AgendaRowSide(val streamListed: Boolean, val bell: AgendaBell)
 
 /**
  * A Scoreboard row (V2 Live Now, #132), the same in the list and in the player's panel (F12): fixed
@@ -132,7 +144,9 @@ internal fun SportsLiveScoreboardRow(
     /** The game playing (the in-player panel): a white left bar, as selected. */
     nowPlaying: Boolean = false,
     /** Team names start from the short name (the panel's narrower rows). */
-    shortNames: Boolean = false
+    shortNames: Boolean = false,
+    /** An Agenda row (Upcoming): its right side shows the listing and the bell, never scores or a status. */
+    agenda: AgendaRowSide? = null
 ) {
     val shape = SportsLiveTokens.Radius.RowShape
     var focused by remember { mutableStateOf(false) }
@@ -142,7 +156,7 @@ internal fun SportsLiveScoreboardRow(
         onClick = click,
         modifier = modifier
             .fillMaxWidth()
-            .height(scoreboardRowHeight(row.group))
+            .height(if (agenda != null && row.twoSided) Size.RowSoon else scoreboardRowHeight(row.group, row.twoSided))
             .then(if (row.dimmed(focused)) Modifier.alpha(JUST_ENDED_ALPHA) else Modifier)
             .onFocusChanged {
                 focused = it.isFocused
@@ -162,7 +176,12 @@ internal fun SportsLiveScoreboardRow(
         border = ClickableSurfaceDefaults.border(focusedBorder = SportsLiveFocus.ring(shape), pressedBorder = SportsLiveFocus.ring(shape))
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            if (row.group == ScoreboardGroup.CHANNELS) ChannelCells(row) else GameCells(row, reminded, hasReplay, shortNames)
+            when {
+                row.group == ScoreboardGroup.CHANNELS -> ChannelCells(row)
+                agenda != null -> AgendaCells(row, agenda, shortNames)
+                !row.twoSided -> SingleLineCells(row, hasReplay)
+                else -> GameCells(row, reminded, hasReplay, shortNames)
+            }
             // The left bar: white while selected (focus in the stage) or playing, else gold for a followed team.
             val bar = when {
                 (selected || nowPlaying) && !focused -> Colors.FocusWhite
@@ -198,7 +217,7 @@ private fun GameCells(row: ScoreboardRow, reminded: Boolean, hasReplay: Boolean,
         horizontalArrangement = Arrangement.spacedBy(COLUMN_GAP),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        LeagueTag(scoreboardRowTag(row.art?.league, item.sport, item.catalogName), live)
+        LeagueTag(rowTagText(row), live)
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
             val art = row.art
             if (art != null) {
@@ -221,6 +240,135 @@ private fun GameCells(row: ScoreboardRow, reminded: Boolean, hasReplay: Boolean,
         StatusCell(row, hasReplay)
     }
 }
+
+/** The row's tag: ESPN's league, the card's sport, else the sport its text tells ("TENNIS", "CRICKET"). */
+@Composable
+private fun rowTagText(row: ScoreboardRow): String {
+    val item = row.item
+    val tag = scoreboardRowTag(row.art?.league, item.sport, item.catalogName)
+    if (tag.isNotEmpty()) return tag
+    return row.sportTag?.let { sportKindLabel(it).uppercase(Locale.getDefault()) }.orEmpty()
+}
+
+/**
+ * A single-line row (V2 P3): not a two-sided match ("ATP 250 - Stockholm Open", "Tennis"): the sport tag, the
+ * clean title on one line, and the status (the red dot and LIVE, or the kickoff).
+ */
+@Composable
+private fun SingleLineCells(row: ScoreboardRow, hasReplay: Boolean) {
+    Row(
+        modifier = Modifier.fillMaxSize().padding(start = 4.dp, end = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(COLUMN_GAP),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        LeagueTag(rowTagText(row), row.group == ScoreboardGroup.LIVE)
+        // The logo slot's width, so the title starts where team names do.
+        Spacer(modifier = Modifier.width(ROW_LOGO_SIZE))
+        Text(
+            text = singleLineTitle(row.item),
+            style = nameStyle(bold = false, compact = false),
+            color = Colors.TextPrimary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
+        StatusCell(row, hasReplay)
+    }
+}
+
+/**
+ * An Agenda row's cells (V2 Upcoming): the league tag, the two teams (or the one-line title), then "● Stream
+ * listed" and the bell: outline when off, filled blue when set. Never a score or a live mark.
+ */
+@Composable
+private fun AgendaCells(row: ScoreboardRow, side: AgendaRowSide, shortNames: Boolean) {
+    val item = row.item
+    Row(
+        modifier = Modifier.fillMaxSize().padding(start = 4.dp, end = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(COLUMN_GAP),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        LeagueTag(rowTagText(row), live = false)
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
+            val art = row.art
+            if (art != null && row.twoSided) {
+                val firstChoices = remember(art.first) { scoreboardNameChoices(art.first) }
+                val secondChoices = remember(art.second) { scoreboardNameChoices(art.second) }
+                var level by remember(firstChoices, secondChoices, shortNames) { mutableIntStateOf(if (shortNames) 1 else 0) }
+                val maxLevel = maxOf(firstChoices.lastIndex, secondChoices.lastIndex)
+                val tooLong: () -> Unit = { if (level < maxLevel) level++ }
+                val logos = rememberTeamLogoPair(art)?.takeIf { !it.failed }
+                TeamLine(firstChoices, level, logos?.first, logos?.shown == true, row.firstFollowed, false, false, tooLong)
+                TeamLine(secondChoices, level, logos?.second, logos?.shown == true, row.secondFollowed, false, false, tooLong)
+            } else {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Spacer(modifier = Modifier.width(ROW_LOGO_SIZE + 6.dp))
+                    NameText(singleLineTitle(item), bold = false, compact = false, maxLines = 1)
+                }
+            }
+        }
+        if (side.streamListed) {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(Colors.ReplayGreen))
+                Text(
+                    text = stringResource(R.string.sports_live_stream_listed),
+                    style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag),
+                    color = Colors.ReplayGreen,
+                    maxLines = 1
+                )
+            }
+        }
+        AgendaBellIcon(side.bell, Modifier.size(16.dp))
+    }
+}
+
+/** The reminder bell (#44): outline when off, filled blue when set; nothing when no reminder can be set. */
+@Composable
+internal fun AgendaBellIcon(bell: AgendaBell, modifier: Modifier = Modifier, offTint: Color = Colors.TextMuted) {
+    when (bell) {
+        AgendaBell.NONE -> Spacer(modifier = modifier)
+        AgendaBell.OFF -> Icon(
+            imageVector = Icons.Outlined.Notifications,
+            contentDescription = stringResource(R.string.sports_live_remind_me),
+            tint = offTint,
+            modifier = modifier
+        )
+        AgendaBell.ON -> Icon(
+            imageVector = Icons.Rounded.Notifications,
+            contentDescription = stringResource(R.string.sports_live_reminder_on),
+            tint = Colors.WhyTagBlue,
+            modifier = modifier
+        )
+    }
+}
+
+/** A sport's short name ("Football", "Soccer", "Tennis"). */
+@Composable
+internal fun sportKindLabel(kind: SportsLiveSportKind): String = stringResource(
+    when (kind) {
+        SportsLiveSportKind.FOOTBALL -> R.string.sports_live_sport_football
+        SportsLiveSportKind.SOCCER -> R.string.sports_live_sport_soccer
+        SportsLiveSportKind.BASKETBALL -> R.string.sports_live_sport_basketball
+        SportsLiveSportKind.HOCKEY -> R.string.sports_live_sport_hockey
+        SportsLiveSportKind.BASEBALL -> R.string.sports_live_sport_baseball
+        SportsLiveSportKind.TENNIS -> R.string.sports_live_sport_tennis
+        SportsLiveSportKind.CRICKET -> R.string.sports_live_sport_cricket
+        SportsLiveSportKind.RUGBY -> R.string.sports_live_sport_rugby
+        SportsLiveSportKind.GOLF -> R.string.sports_live_sport_golf
+        SportsLiveSportKind.MMA -> R.string.sports_live_sport_mma
+        SportsLiveSportKind.BOXING -> R.string.sports_live_sport_boxing
+        SportsLiveSportKind.MOTORSPORT -> R.string.sports_live_sport_motorsport
+        SportsLiveSportKind.DARTS -> R.string.sports_live_sport_darts
+        SportsLiveSportKind.SNOOKER -> R.string.sports_live_sport_snooker
+        SportsLiveSportKind.WRESTLING -> R.string.sports_live_sport_wrestling
+        SportsLiveSportKind.CYCLING -> R.string.sports_live_sport_cycling
+    }
+)
+
+/** A sport filter option's label: the short name of a [SportsLiveSportKind] value, else the addon's text cleaned. */
+@Composable
+internal fun sportFilterLabel(value: String): String =
+    SportsLiveSportKind.ofFilterKey(value)?.let { sportKindLabel(it) } ?: (SportsLiveDisplayText.label(value) ?: value)
 
 /** A channel's cells: its small logo in the league column, then its clean name, quality and "Now: …". */
 @Composable
@@ -341,9 +489,9 @@ private fun NameText(text: String, bold: Boolean, compact: Boolean, maxLines: In
 @Composable
 private fun nameStyle(bold: Boolean, compact: Boolean): TextStyle =
     SportsLiveTokens.style(SportsLiveTokens.Type.RowName).copy(
-        fontWeight = if (bold) FontWeight.SemiBold else FontWeight.Normal,
+        fontWeight = FontWeight.Normal,
         lineHeight = if (compact) 17.sp else 20.sp
-    )
+    ).let { if (bold) it.sportsLiveBold() else it }
 
 @Composable
 private fun StarMark() {
@@ -356,7 +504,8 @@ private fun ScoresCell(scores: ScoreboardScores, reminded: Boolean) {
     Column(modifier = Modifier.width(Size.ColumnScores), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.Center) {
         when (scores) {
             is ScoreboardScores.Shown -> {
-                val style = SportsLiveTokens.style(SportsLiveTokens.Type.RowScore)
+                // Real bold (the app's variable fonts ignore FontWeight alone).
+                val style = SportsLiveTokens.style(SportsLiveTokens.Type.RowScore).sportsLiveBold()
                 Text(text = scores.first.toString(), style = style, color = if (scores.leader == 1) Colors.TextMuted else Colors.TextPrimary, maxLines = 1)
                 Text(text = scores.second.toString(), style = style, color = if (scores.leader == 0) Colors.TextMuted else Colors.TextPrimary, maxLines = 1)
             }
@@ -482,6 +631,7 @@ private const val TAG_MAX_CHARS = 10
 private const val TAG_MAX_WORDS = 4
 
 private val ROW_LOGO_SIZE = 18.dp
+private val SINGLE_LINE_ROW_HEIGHT = 40.dp
 private val CHANNEL_LOGO_HEIGHT = 27.dp
 private val COLUMN_GAP = 6.dp
 private val BAR_WIDTH = 2.dp

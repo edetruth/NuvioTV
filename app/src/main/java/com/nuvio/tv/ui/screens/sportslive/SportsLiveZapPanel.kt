@@ -5,6 +5,7 @@ import com.nuvio.tv.core.sportslive.EndedGame
 import com.nuvio.tv.core.sportslive.GameStatus
 import com.nuvio.tv.core.sportslive.SportsLiveEndedGames
 import com.nuvio.tv.core.sportslive.SportsLiveItemBucketer
+import com.nuvio.tv.core.sportslive.SportsLiveSportKind
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.scores.GameArt
 import com.nuvio.tv.core.sportslive.scores.GameSituation
@@ -40,7 +41,8 @@ internal fun liveGamesPanelItems(
  * then each sport, A to Z. The [selected] chip stays listed when its games are gone, so it still shows.
  */
 internal fun panelChips(items: List<SportsLiveItem>, selected: String?): List<String?> {
-    val sports = items.mapNotNull { it.sport }.toMutableSet()
+    // One chip per sport; a catch-all ("Sports", "⚡ Live Events") is only All again, so it gets none (V2 P3).
+    val sports = items.mapNotNull({ SportsLiveSportKind.filterKeyOf(it) }).toMutableSet()
     if (selected != null && selected != SportsLiveUiState.MY_TEAMS_FILTER) sports += selected
     val myTeams = items.any { it.followed } || selected == SportsLiveUiState.MY_TEAMS_FILTER
     return listOfNotNull(SportsLiveUiState.MY_TEAMS_FILTER.takeIf { myTeams }) + null +
@@ -48,7 +50,7 @@ internal fun panelChips(items: List<SportsLiveItem>, selected: String?): List<St
 }
 
 /** The live games panel's chip counts over [items] (#79): All, "★ My teams" and each sport, as the section counts them. */
-internal fun panelChipCounts(items: List<SportsLiveItem>): Map<String?, Int> = sportsLiveFilterCounts(items, SportsLiveItem::sport)
+internal fun panelChipCounts(items: List<SportsLiveItem>): Map<String?, Int> = sportsLiveFilterCounts(items, { SportsLiveSportKind.filterKeyOf(it) })
 
 /** The panel games under [chip] (null is All, otherwise a sport or "★ My teams"). */
 internal fun filterPanelItems(items: List<SportsLiveItem>, chip: String?): List<SportsLiveItem> =
@@ -312,3 +314,9 @@ data class SportsLiveZapPanelState(
 ) {
     val items: List<SportsLiveItem> = rows.map { it.item }
 }
+
+/**
+ * Whether the panel's top-right corner shows (V2 P3): only while the focused game's preview video loads or
+ * plays ([previewPlaying]); never a logos-and-time card in its place.
+ */
+internal fun panelPreviewCornerShown(previewPlaying: Boolean): Boolean = previewPlaying

@@ -6,7 +6,11 @@ import com.nuvio.tv.core.sportslive.EndedSignal
 import com.nuvio.tv.core.sportslive.GameStatus
 import com.nuvio.tv.core.sportslive.GameStatusStrings
 import com.nuvio.tv.core.sportslive.GameStatusText
+import com.nuvio.tv.core.sportslive.SportsLiveDisplayText
 import com.nuvio.tv.core.sportslive.SportsLiveProgress
+import com.nuvio.tv.core.sportslive.displayName
+import com.nuvio.tv.core.sportslive.SportsLiveSportKind
+import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.scores.ChipScore
 import com.nuvio.tv.core.sportslive.scores.GameArt
 import com.nuvio.tv.core.sportslive.scores.GameArtTeam
@@ -47,7 +51,14 @@ data class ScoreboardRow(
     /** The share of regulation played (0..1) of a live game ([SportsLiveProgress]); null draws no bar. */
     val progress: Float? = null,
     /** The excitement badge under the period (#43, F2): "Close · 2 min left", "OT"; null for none. */
-    val excitement: WhyTag? = null
+    val excitement: WhyTag? = null,
+    /**
+     * A real two-sided match (V2 P3): an ESPN match, or two parsed sides that both read as teams. Anything
+     * else ("ATP 250 - Stockholm Open", a bare "Tennis") is drawn as a single-line row.
+     */
+    val twoSided: Boolean = art != null,
+    /** The sport its title, genres or catalog name tell, for the tag when no league is known ("TENNIS"). */
+    val sportTag: SportsLiveSportKind? = null
 ) {
     /** A followed team plays in it: the gold left bar. */
     val followed: Boolean get() = firstFollowed || secondFollowed || item.followed
@@ -100,6 +111,7 @@ internal fun scoreboardRowOf(
     val group = scoreboardGroupOf(status, item, tab)
     val estimate = endedGame?.signal == EndedSignal.ESTIMATE
     val sides = ScoreChips.orderedSides(item)
+    val matched = ScoreChips.matchedEvent(item, snapshot) != null
     return ScoreboardRow(
         item = item,
         group = group,
@@ -114,9 +126,28 @@ internal fun scoreboardRowOf(
             SportsLiveProgress.share(item, status.event, nowMs)
         } else {
             null
-        }
+        },
+        twoSided = scoreboardTwoSided(art, matched),
+        sportTag = SportsLiveSportKind.tagOf(item)
     )
 }
+
+/**
+ * A single-line row's title (V2 P3): the clean title, its two written parts joined by " · " when the addon
+ * wrote a non-team pair as a game ("ATP 250 vs Stockholm Open" → "ATP 250 · Stockholm Open").
+ */
+internal fun singleLineTitle(item: SportsLiveItem): String {
+    val written = if (item.isChannel) null else SportsLiveTeams.writtenOrder(item.meta.name)
+    return written?.let { (first, second) -> "${SportsLiveDisplayText.name(first)} · ${SportsLiveDisplayText.name(second)}" }
+        ?: item.displayName
+}
+
+/**
+ * Whether a row draws two teams (V2 P3): only for a real two-sided match, an ESPN match ([matched]) or two
+ * sides of [art] that both read as teams ([SportsLiveTeams.isTeamLike]).
+ */
+internal fun scoreboardTwoSided(art: GameArt?, matched: Boolean): Boolean =
+    art != null && (matched || (SportsLiveTeams.isTeamLike(art.first.name) && SportsLiveTeams.isTeamLike(art.second.name)))
 
 /**
  * The Scoreboard group of [item] with [status] on [tab]: a channel always sits under CHANNELS; on Live

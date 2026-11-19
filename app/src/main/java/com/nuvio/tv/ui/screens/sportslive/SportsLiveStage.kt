@@ -38,6 +38,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
@@ -91,8 +92,13 @@ internal fun SportsLiveStage(
         verticalArrangement = Arrangement.spacedBy(SportsLiveStageLayout.GAP_DP.dp)
     ) {
         StageMedia(row, preview, previewShowing, miniInStage)
-        Box(modifier = Modifier.fillMaxWidth().height(SportsLiveStageLayout.SCORE_BLOCK_HEIGHT_DP.dp)) {
-            if (row.group == ScoreboardGroup.CHANNELS) ChannelBlock(row) else GameBlock(row, details, situation, noStream)
+        if (row.group == ScoreboardGroup.CHANNELS) {
+            // A channel's text block takes its own height, so the buttons sit right under it (no empty block).
+            ChannelBlock(row, noStream)
+        } else {
+            Box(modifier = Modifier.fillMaxWidth().height(SportsLiveStageLayout.SCORE_BLOCK_HEIGHT_DP.dp)) {
+                GameBlock(row, details, situation, noStream)
+            }
         }
         Row(
             modifier = Modifier.height(SportsLiveStageLayout.BUTTON_ROW_HEIGHT_DP.dp),
@@ -130,13 +136,17 @@ private fun ButtonLabel(text: String) {
     Text(text = text, style = SportsLiveTokens.style(SportsLiveTokens.Type.Button), maxLines = 1, softWrap = false)
 }
 
-/** The 360×203 media box: preview, mini player or drawn art, never another size. */
+/**
+ * The 360×203 media box: preview, mini player or drawn art, never another size. [agendaArt]: Upcoming's
+ * drawn matchup (league and season on top, records under the teams, "at" or "vs" between).
+ */
 @Composable
-private fun StageMedia(
+internal fun StageMedia(
     row: ScoreboardRow,
     preview: (@Composable () -> Unit)?,
     previewShowing: Boolean,
-    miniInStage: Boolean
+    miniInStage: Boolean,
+    agendaArt: Boolean = false
 ) {
     val token = remember { Any() }
     // The mini player takes this slot while it plays; the corner again once the stage leaves.
@@ -163,9 +173,11 @@ private fun StageMedia(
         // The video is laid out while the stream loads, so its first frame can arrive; the art covers it until then.
         if (!miniInStage) preview?.invoke()
         if (!previewShowing || miniInStage) {
-            val art = row.art
+            val art = row.art?.takeIf { row.twoSided }
             when {
+                art != null && agendaArt -> AgendaStageArt(art, row.item)
                 art != null -> StageArt(art, row.item.catalogName)
+                row.group == ScoreboardGroup.CHANNELS -> ChannelArt(row)
                 else -> {
                     val image = row.item.meta.backdropUrl ?: row.item.meta.logo ?: row.item.meta.poster
                     if (image != null) {
@@ -201,6 +213,109 @@ private fun StageMedia(
         }
     }
 }
+
+/**
+ * Upcoming's drawn matchup (V2 P3) at the media box's size: the league and season on top, the two teams
+ * with big logos, their names and ESPN records under them, "at" or "vs" between; without both logos the
+ * names are set large, stacked (never letters).
+ */
+@Composable
+private fun AgendaStageArt(art: GameArt, item: com.nuvio.tv.domain.model.SportsLiveItem) {
+    val logos = rememberTeamLogoPair(art, TeamLogoUrls.LARGE_PX)?.takeIf { !it.failed }
+    val league = sportsLiveLeagueLabel(art.league, item.catalogName)
+    val season = art.seasonType?.let { seasonLabelRes(it) }?.let { stringResource(it) }
+    val top = listOfNotNull(league, season).joinToString(" · ").uppercase(Locale.getDefault())
+    val word = stringResource(if (agendaWrittenAt(item.meta.name)) R.string.sports_live_art_at else R.string.sports_live_art_vs)
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Brush.verticalGradient(listOf(Colors.SurfaceRaised, Colors.Surface)))
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically)
+    ) {
+        if (top.isNotEmpty()) {
+            Text(
+                text = top,
+                style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag).copy(letterSpacing = 0.08.em),
+                color = Colors.TextMuted,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        if (logos != null) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                AgendaArtTeam(art.first, Modifier.weight(1f)) { TeamLogoSlot(logos.first, logos.shown, STAGE_LOGO_SIZE) }
+                ArtCaption(word, bold = false)
+                AgendaArtTeam(art.second, Modifier.weight(1f)) { TeamLogoSlot(logos.second, logos.shown, STAGE_LOGO_SIZE) }
+            }
+        } else {
+            StackedNameWithRecord(art.first)
+            ArtCaption(word, bold = false)
+            StackedNameWithRecord(art.second)
+        }
+    }
+}
+
+/** One team of [AgendaStageArt]: its logo, its short name in bold and its record under it. */
+@Composable
+private fun AgendaArtTeam(team: GameArtTeam, modifier: Modifier, logo: @Composable () -> Unit) {
+    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        logo()
+        Text(
+            text = team.shortName,
+            style = SportsLiveTokens.style(SportsLiveTokens.Type.RowName).sportsLiveBold(),
+            color = Colors.TextPrimary,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        team.record?.let { record ->
+            Text(
+                text = sportsLiveRecordText(record),
+                style = SportsLiveTokens.style(SportsLiveTokens.Type.Meta).copy(fontFeatureSettings = "tnum"),
+                color = Colors.TextSecondary,
+                maxLines = 1
+            )
+        }
+    }
+}
+
+@Composable
+private fun StackedNameWithRecord(team: GameArtTeam) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Bottom) {
+        Text(
+            text = team.name,
+            style = SportsLiveTokens.style(SportsLiveTokens.Type.RowName).copy(fontSize = 22.sp, lineHeight = 26.sp).sportsLiveBold(),
+            color = Colors.TextPrimary,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false)
+        )
+        team.record?.let { record ->
+            Text(text = sportsLiveRecordText(record), style = SportsLiveTokens.style(SportsLiveTokens.Type.Meta), color = Colors.TextSecondary, maxLines = 1)
+        }
+    }
+}
+
+/** A record as the board writes it: "18–9", "12–8–14" (en dashes, not ESPN's hyphens). */
+internal fun sportsLiveRecordText(record: String): String = record.trim().replace('-', '\u2013')
+
+/** ESPN's season type as words: 1 preseason, 2 regular season, 3 postseason; null for any other. */
+internal fun seasonLabelRes(type: Int): Int? = when (type) {
+    1 -> R.string.sports_live_season_pre
+    2 -> R.string.sports_live_season_regular
+    3 -> R.string.sports_live_season_post
+    else -> null
+}
+
+/** The title writes the game "A at B" or "A @ B" (away first): the stage says "at", else "vs". */
+internal fun agendaWrittenAt(title: String): Boolean = title.contains(" at ", ignoreCase = true) || title.contains(" @ ")
 
 /** The drawn matchup at the media box's size: big logos round the league and kickoff, or the names stacked when logos are missing (#130). */
 @Composable
@@ -279,13 +394,14 @@ private fun GameBlock(row: ScoreboardRow, details: ScoreDetails?, situation: Str
     val shown = details as? ScoreDetails.Shown
     val headline = when {
         shown != null -> ScoreDetailsBuilder.scorelineText(shown, detailStrings)
-        art != null -> stringResource(R.string.sports_live_matchup, art.first.shortName, art.second.shortName)
-        else -> row.item.displayName
+        art != null && row.twoSided -> stringResource(R.string.sports_live_matchup, art.first.shortName, art.second.shortName)
+        else -> singleLineTitle(row.item)
     }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         BasicText(
             text = headline,
-            style = SportsLiveTokens.style(SportsLiveTokens.Type.StageScore).copy(color = Colors.TextPrimary),
+            // Real bold (the app's variable fonts ignore FontWeight alone).
+            style = SportsLiveTokens.style(SportsLiveTokens.Type.StageScore).sportsLiveBold().copy(color = Colors.TextPrimary),
             maxLines = 1,
             softWrap = false,
             autoSize = TextAutoSize.StepBased(minFontSize = 18.sp, maxFontSize = SportsLiveTokens.Type.StageScore.fontSize, stepSize = 1.sp)
@@ -326,15 +442,19 @@ private fun GameBlock(row: ScoreboardRow, details: ScoreDetails?, situation: Str
     }
 }
 
-/** A channel's block: its logo-free clean name and quality, and "Now: …" when known. Nothing else. */
+/**
+ * A channel's block: its clean name and quality, then "Now: …" and "Next: …" when known ([channelStageLines]).
+ * It takes only the height its lines need, so the buttons follow right under it.
+ */
 @Composable
-private fun ChannelBlock(row: ScoreboardRow) {
+private fun ChannelBlock(row: ScoreboardRow, noStream: Boolean) {
     val title = SportsLiveDisplayText.of(row.item.meta.name)
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    val lines = channelStageLines(now = channelNowText(row.item), next = null)
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             BasicText(
                 text = title.name,
-                style = SportsLiveTokens.style(SportsLiveTokens.Type.StageScore).copy(color = Colors.TextPrimary),
+                style = SportsLiveTokens.style(SportsLiveTokens.Type.StageScore).sportsLiveBold().copy(color = Colors.TextPrimary),
                 maxLines = 1,
                 softWrap = false,
                 modifier = Modifier.weight(1f, fill = false),
@@ -342,13 +462,59 @@ private fun ChannelBlock(row: ScoreboardRow) {
             )
             title.quality?.let { SportsLiveBadge(it) }
         }
-        channelNowText(row.item)?.let { now ->
+        lines.forEach { line ->
             Text(
-                text = stringResource(R.string.sports_live_channel_now, now),
+                text = when (line) {
+                    is ChannelStageLine.Now -> stringResource(R.string.sports_live_channel_now, line.text)
+                    is ChannelStageLine.Next -> stringResource(R.string.sports_live_zap_next, line.text)
+                },
                 style = SportsLiveTokens.style(SportsLiveTokens.Type.Meta),
-                color = Colors.TextSecondary,
+                color = if (line is ChannelStageLine.Now) Colors.TextSecondary else Colors.TextMuted,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
+            )
+        }
+        if (noStream) {
+            Text(
+                text = stringResource(R.string.sports_live_no_streams_now),
+                style = SportsLiveTokens.style(SportsLiveTokens.Type.Meta),
+                color = Colors.TextPrimary,
+                maxLines = 1
+            )
+        }
+    }
+}
+
+/** A line under a channel's name on the stage. */
+internal sealed interface ChannelStageLine {
+    data class Now(val text: String) : ChannelStageLine
+    data class Next(val text: String) : ChannelStageLine
+}
+
+/** The lines under a channel's name (V2 P3): "Now: …" and "Next: …", each only when known; none leaves no gap. */
+internal fun channelStageLines(now: String?, next: String?): List<ChannelStageLine> = listOfNotNull(
+    now?.takeIf { it.isNotBlank() }?.let { ChannelStageLine.Now(it) },
+    next?.takeIf { it.isNotBlank() }?.let { ChannelStageLine.Next(it) }
+)
+
+/** A channel's art in the media box: its logo large on the stage's gradient (or its backdrop, filling the box). */
+@Composable
+private fun ChannelArt(row: ScoreboardRow) {
+    val meta = row.item.meta
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Brush.verticalGradient(listOf(Colors.SurfaceRaised, Colors.Surface))),
+        contentAlignment = Alignment.Center
+    ) {
+        val logo = meta.logo ?: meta.poster
+        val image = logo ?: meta.backdropUrl
+        if (image != null) {
+            AsyncImage(
+                model = rememberSizedImage(image, SportsLiveStageLayout.WIDTH_DP.dp, SportsLiveStageLayout.MEDIA_HEIGHT_DP.dp),
+                contentDescription = null,
+                contentScale = if (logo != null) ContentScale.Fit else ContentScale.Crop,
+                modifier = if (logo != null) Modifier.fillMaxSize().padding(horizontal = 48.dp, vertical = 32.dp) else Modifier.fillMaxSize()
             )
         }
     }

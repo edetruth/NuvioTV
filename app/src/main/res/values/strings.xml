@@ -3635,6 +3635,7 @@
     <string name="sports_live_zap_group_soon">Starting soon</string>
     <string name="sports_live_zap_group_other">More games</string>
     <string name="sports_live_art_vs">vs</string>
+    <string name="sports_live_art_at">at</string>
     <!-- Drawn game card footer: kickoff · league. -->
     <string name="sports_live_art_footer">%1$s · %2$s</string>
     <string name="sports_live_results_no_leagues">Pick sports under Settings, Sports &amp; Live, My sports</string>
@@ -3946,4 +3947,45 @@
     <string name="sports_live_source_rate_limited">%1$s is rate-limited, try again in %2$d min</string>
     <string name="sports_live_sources_rate_limited">%1$s are rate-limited, try again in %2$d min</string>
     <string name="sports_live_nothing_playing">Nothing is playing. Choose a stream or go back.</string>
+    <!-- V2 Upcoming: Agenda + Stage (#132, P3) -->
+    <string name="sports_live_agenda_today">Today</string>
+    <string name="sports_live_agenda_tomorrow">Tomorrow</string>
+    <string name="sports_live_agenda_any_time">Any time</string>
+    <plurals name="sports_live_agenda_games">
+        <item quantity="one">%1$d game</item>
+        <item quantity="other">%1$d games</item>
+    </plurals>
+    <string name="sports_live_stream_listed">Stream listed</string>
+    <plurals name="sports_live_stream_listed_by">
+        <item quantity="one">Stream listed by %1$d source</item>
+        <item quantity="other">Stream listed by %1$d sources</item>
+    </plurals>
+    <string name="sports_live_matchup_at">%1$s at %2$s</string>
+    <string name="sports_live_season_pre">Preseason</string>
+    <string name="sports_live_season_regular">Regular season</string>
+    <string name="sports_live_season_post">Postseason</string>
+    <string name="sports_live_hint_keys_games">↑ ↓</string>
+    <string name="sports_live_hint_games">games</string>
+    <string name="sports_live_hint_keys_slots">← →</string>
+    <string name="sports_live_hint_slots">time slots</string>
+    <string name="sports_live_hint_keys_day">CH +/−</string>
+    <string name="sports_live_hint_day">day</string>
+    <string name="sports_live_hint_keys_ok">OK</string>
+    <string name="sports_live_hint_ok">remind/watch</string>
+    <string name="sports_live_sport_football">Football</string>
+    <string name="sports_live_sport_soccer">Soccer</string>
+    <string name="sports_live_sport_basketball">Basketball</string>
+    <string name="sports_live_sport_hockey">Hockey</string>
+    <string name="sports_live_sport_baseball">Baseball</string>
+    <string name="sports_live_sport_tennis">Tennis</string>
+    <string name="sports_live_sport_cricket">Cricket</string>
+    <string name="sports_live_sport_rugby">Rugby</string>
+    <string name="sports_live_sport_golf">Golf</string>
+    <string name="sports_live_sport_mma">MMA</string>
+    <string name="sports_live_sport_boxing">Boxing</string>
+    <string name="sports_live_sport_motorsport">Motorsport</string>
+    <string name="sports_live_sport_darts">Darts</string>
+    <string name="sports_live_sport_snooker">Snooker</string>
+    <string name="sports_live_sport_wrestling">Wrestling</string>
+    <string name="sports_live_sport_cycling">Cycling</string>
 </resources>

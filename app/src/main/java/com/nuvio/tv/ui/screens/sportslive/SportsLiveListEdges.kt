@@ -40,12 +40,15 @@ internal fun SportsLiveKeepFromEdge(margin: Dp, content: @Composable () -> Unit)
     CompositionLocalProvider(LocalBringIntoViewSpec provides spec, content = content)
 }
 
-/** The list's top and bottom edges fade over [fade] while there is more to scroll that way (V2), never a hard cut. */
-internal fun Modifier.sportsLiveFadingEdges(state: LazyListState, fade: Dp): Modifier = this
+/**
+ * The list's top and bottom edges fade over [fade] while there is more to scroll that way (V2), never a hard
+ * cut. [top] false keeps the top edge sharp (the Agenda's sticky day header sits there).
+ */
+internal fun Modifier.sportsLiveFadingEdges(state: LazyListState, fade: Dp, top: Boolean = true): Modifier = this
     .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
     .drawWithContent {
         drawContent()
-        val top = state.canScrollBackward
+        val top = top && state.canScrollBackward
         val bottom = state.canScrollForward
         if (!top && !bottom) return@drawWithContent
         val share = (fade.toPx() / size.height).coerceIn(0f, 0.5f)

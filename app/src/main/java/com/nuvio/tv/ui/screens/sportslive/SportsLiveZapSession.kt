@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import com.nuvio.tv.core.sportslive.SportsLiveSportKind
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveTab
 
@@ -104,7 +105,7 @@ data class ZapPanelChip(val filter: String?)
 internal fun SportsLiveItem.matchesZapFilter(filter: String?, tab: SportsLiveTab): Boolean = when (filter) {
     null -> true
     SportsLiveUiState.MY_TEAMS_FILTER -> followed
-    else -> if (tab == SportsLiveTab.CHANNELS) group == filter else sport == filter
+    else -> if (tab == SportsLiveTab.CHANNELS) group == filter else SportsLiveSportKind.filterKeyOf(this) == filter
 }
 
 /**

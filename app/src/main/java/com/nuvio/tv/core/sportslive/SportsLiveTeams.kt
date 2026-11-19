@@ -54,18 +54,53 @@ object SportsLiveTeams {
         return written?.let { it.first to it.second }
     }
 
-    /** First side, second side, and whether the separator puts the away side first (" at ", " @ "). */
+    /**
+     * First side, second side, and whether the separator puts the away side first (" at ", " @ "). A
+     * tournament written before the game ("Premier League - Arsenal vs Chelsea") or after it ("Arsenal vs
+     * Chelsea - Matchday 5") is not part of a side; " - " alone splits only two team-like sides, so "ATP 250 -
+     * Stockholm Open" names no game ([isTeamLike]).
+     */
     private fun parseWritten(name: String): Triple<String, String, Boolean>? {
         for (separator in SEPARATORS) {
             val index = name.indexOf(separator, ignoreCase = true)
             if (index < 0) continue
-            val first = display(name.substring(0, index))
-            val second = display(name.substring(index + separator.length))
+            val dash = separator == DASH
+            var firstText = name.substring(0, index)
+            var secondText = name.substring(index + separator.length)
+            if (!dash) {
+                // A tournament before the first side, or a stage after the second, is dropped.
+                firstText = firstText.substringAfterLast(DASH)
+                secondText = secondText.substringBefore(DASH)
+            }
+            val first = display(firstText)
+            val second = display(secondText)
             if (first.isEmpty() || second.isEmpty()) continue
+            if (dash && (!isTeamLike(first) || !isTeamLike(second))) continue
             return Triple(first, second, separator in AWAY_FIRST)
         }
         return null
     }
+
+    private const val DASH = " - "
+
+    /**
+     * Whether [side] reads as a team or player rather than a tournament, round or session: it has a letter,
+     * no event word ("Open", "Cup", "Grand Prix", "Round", "Qualifying"...) and no long number ("250", "2026").
+     */
+    fun isTeamLike(side: String): Boolean {
+        val text = side.trim()
+        if (text.none { it.isLetter() }) return false
+        val lower = text.lowercase()
+        if (EVENT_WORDS.containsMatchIn(lower)) return false
+        return lower.split(WHITESPACE).none { token -> token.length >= 3 && token.all(Char::isDigit) }
+    }
+
+    private val EVENT_WORDS = Regex(
+        """\b(atp|wta|itf|challenger|open|masters|grand prix|gp|championships?|tournament|tour|trophy|cup|series|""" +
+            """round|qualifying|qualifiers?|finals?|semi-?finals?|quarter-?finals?|stage|group|matchday|week|day|""" +
+            """race|practice|session|sprint|highlights|replay|league|ufc|wwe|pga|lpga|f1|formula|nascar|motogp|""" +
+            """olympics?|world|games)\b"""
+    )
 
     /**
      * A team name for comparison: lowercase; small raised letters made plain ("ᴸᴵⱽᴱ" marks dropped);

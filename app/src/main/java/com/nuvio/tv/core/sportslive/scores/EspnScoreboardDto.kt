@@ -25,8 +25,14 @@ data class EspnEventDto(
     /** Golf: the final round's day (US Eastern midnight); tennis and F1: the last day. */
     val endDate: String? = null,
     /** Tennis: the tournament's draws, each with every match of the tournament. */
-    val groupings: List<EspnGroupingDto>? = null
+    val groupings: List<EspnGroupingDto>? = null,
+    /** The season and its type (regular season, postseason). */
+    val season: EspnSeasonDto? = null
 )
+
+/** An event's season: [type] 1 preseason, 2 regular season, 3 postseason. */
+@JsonClass(generateAdapter = true)
+data class EspnSeasonDto(val year: Int? = null, val type: Int? = null)
 
 /** A tennis draw ("mens-singles") and its matches. */
 @JsonClass(generateAdapter = true)
@@ -88,7 +94,9 @@ data class EspnCompetitorDto(
     val roster: EspnRosterDto? = null,
     val winner: Boolean? = null,
     /** Tennis/UFC: the listing order (not the result); F1 and golf: the finishing position. */
-    val order: Int? = null
+    val order: Int? = null,
+    /** Team records: "total" ("18-9"), "home", "road". */
+    val records: List<EspnRecordDto>? = null
 )
 
 @JsonClass(generateAdapter = true)

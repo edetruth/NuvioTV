@@ -52,16 +52,16 @@ class SportsLiveZapPanelTest {
         val items = listOf(mine, football1, football2)
         val my = SportsLiveUiState.MY_TEAMS_FILTER
 
-        assertEquals(listOf(my, null, "Basketball", "Football"), panelChips(items, null))
-        assertEquals(listOf(null, "Football"), panelChips(listOf(football1), null))
+        assertEquals(listOf(my, null, sportKey("Basketball"), sportKey("Football")), panelChips(items, null))
+        assertEquals(listOf(null, sportKey("Football")), panelChips(listOf(football1), null))
         // A chip picked earlier stays listed when its games are gone.
-        assertEquals(listOf(null, "Football", "Tennis"), panelChips(listOf(football1), "Tennis"))
-        assertEquals(listOf(my, null, "Football"), panelChips(listOf(football1), my))
+        assertEquals(listOf(null, sportKey("Football"), sportKey("Tennis")), panelChips(listOf(football1), sportKey("Tennis")))
+        assertEquals(listOf(my, null, sportKey("Football")), panelChips(listOf(football1), my))
 
         assertEquals(items, filterPanelItems(items, null))
         assertEquals(listOf(mine), filterPanelItems(items, my))
-        assertEquals(listOf(football1, football2), filterPanelItems(items, "Football"))
-        assertTrue(filterPanelItems(items, "Tennis").isEmpty())
+        assertEquals(listOf(football1, football2), filterPanelItems(items, sportKey("Football")))
+        assertTrue(filterPanelItems(items, sportKey("Tennis")).isEmpty())
     }
 
     @Test

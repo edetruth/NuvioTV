@@ -7,6 +7,7 @@ import com.nuvio.tv.core.sportslive.displayName
 import android.view.KeyEvent as AndroidKeyEvent
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -437,6 +438,7 @@ private fun NoAddonsState(onOpenAddons: () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun SportsLiveContent(
     uiState: SportsLiveUiState,
@@ -519,6 +521,8 @@ private fun SportsLiveContent(
     val boardPending = shownBoard == null
     // V2 (#132): Live now and Upcoming are the Scoreboard + stage; Channels and Replays list cards.
     val scoreboard = shownBoard?.rows != null
+    // V2 Upcoming (P3): the Agenda, whose list has a sticky day header above each day's games.
+    val agenda = shownBoard?.agenda
     val filterKey = "${uiState.selectedTab.name}|${uiState.selectedFilter.orEmpty()}"
     val listState = rememberSaveable(filterKey, saver = LazyListState.Saver) { LazyListState() }
     val baseStateLabelOf = rememberSportsLiveStateLabeler(uiState.selectedTab)
@@ -564,17 +568,22 @@ private fun SportsLiveContent(
     // Brings the card [key] (at [index] in [items]) on screen.
     suspend fun scrollToCard(@Suppress("UNUSED_PARAMETER") key: String, index: Int, onlyIfHidden: Boolean = true) {
         if (index < 0) return
-        if (!onlyIfHidden || listState.layoutInfo.visibleItemsInfo.none { it.index == index }) listState.scrollToItem(index)
+        // The Agenda's list position counts its day headers too.
+        val listIndex = agenda?.listIndexOf(index) ?: index
+        if (!onlyIfHidden || listState.layoutInfo.visibleItemsInfo.none { it.index == listIndex }) listState.scrollToItem(listIndex)
     }
     // Where a move into the list lands: the focused card while on screen, else the first card on
     // screen. Read from the layout, so Down never aims at a card scrolled away (which traps focus).
     val currentItemKeys by rememberUpdatedState(items.map { it.listKey })
+    val currentAgenda by rememberUpdatedState(agenda)
     val entryKey by remember(listState) {
         derivedStateOf {
+            val positions = listState.layoutInfo.visibleItemsInfo.map { it.index }
             sportsLiveListEntryKey(
                 keys = currentItemKeys,
                 focusedKey = focusedCardKey,
-                visibleIndices = listState.layoutInfo.visibleItemsInfo.map { it.index }
+                // The Agenda's positions include its day headers: read back as game indices.
+                visibleIndices = currentAgenda?.let { agenda -> positions.mapNotNull(agenda::gameAt) } ?: positions
             )
         }
     }
@@ -601,8 +610,10 @@ private fun SportsLiveContent(
     val aboveListFocusRequester = if (catchUpShown) catchUpFocusRequester else aboveContentFocusRequester
     val myTeamsLabel = stringResource(R.string.sports_live_filter_my_teams_star)
     val allLabel = stringResource(R.string.sports_live_filter_all)
-    val filterOptions = remember(filterShown, uiState.filters, myTeamsLabel, allLabel) {
-        if (filterShown) sportsLiveFilterOptions(uiState.filters, myTeamsLabel, allLabel) else null
+    // Short sport names (V2 P3): "Football", "Soccer"; a channel group keeps its own name.
+    val filterLabels = uiState.filters.associateWith { sportFilterLabel(it) }
+    val filterOptions = remember(filterShown, uiState.filters, myTeamsLabel, allLabel, filterLabels) {
+        if (filterShown) sportsLiveFilterOptions(uiState.filters, myTeamsLabel, allLabel) { filterLabels[it] ?: it } else null
     }
     // Live now has no filter (V2): a filter left from earlier falls back to All.
     LaunchedEffect(uiState.selectedTab, uiState.selectedFilter) {
@@ -970,6 +981,127 @@ private fun SportsLiveContent(
 
         val selectedPreview = preview?.takeIf { it.item.listKey == selected.listKey }
         val selectedRow = boardRowOf[selected.listKey]
+        val agendaRow = selectedRow
+        if (agenda != null && agendaRow != null) {
+            // V2 Upcoming (#132, P3): the Agenda (sticky day headers, time-slot headers) and the fixed 360 dp stage.
+            // OK on a row does the stage's primary: Remind me while the start is over 15 min away, else Watch.
+            fun agendaOk(item: SportsLiveItem, row: ScoreboardRow) {
+                if (upcomingStageButtons(item, agendaStartOf(row), uiState.nowMs).first() == UpcomingStageButton.REMIND) {
+                    onToggleReminder(item)
+                } else {
+                    cardClick(item)
+                }
+            }
+            // ← → a time slot, CH+ / CH− a day: focus moves to that slot's or day's first game, scrolled in first.
+            fun agendaJump(target: Int) {
+                val item = agenda.games.getOrNull(target)?.row?.item ?: return
+                liveNowScope.launch {
+                    val listIndex = agenda.listIndexOf(target)
+                    if (listState.layoutInfo.visibleItemsInfo.none { it.index == listIndex }) listState.scrollToItem(listIndex)
+                    withFrameNanos { }
+                    runCatching { cardFocusRequester(item).requestFocus() }
+                }
+            }
+            Row(modifier = Modifier.fillMaxSize()) {
+                Column(
+                    modifier = Modifier
+                        .width(SportsLiveTokens.Size.ListWidth + LIST_FOCUS_ROOM * 2)
+                        .offset(x = -LIST_FOCUS_ROOM)
+                        .fillMaxHeight()
+                ) {
+                    key(filterKey) {
+                        SportsLiveKeepFromEdge(margin = LIST_EDGE_KEEP) {
+                            LazyColumn(
+                                state = listState,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxWidth()
+                                    .sportsLiveFadingEdges(listState, LIST_FADE, top = false)
+                                    .onFocusChanged {
+                                        listHasFocus = it.hasFocus
+                                        if (!it.hasFocus) onCardFocus(null)
+                                    }
+                                    .focusRestorer(entryCardFocusRequester ?: selectedCardFocusRequester)
+                                    .dpadRepeatThrottle(),
+                                contentPadding = PaddingValues(horizontal = LIST_FOCUS_ROOM, vertical = LIST_FOCUS_ROOM),
+                                verticalArrangement = Arrangement.spacedBy(SportsLiveTokens.Size.RowGap)
+                            ) {
+                                agenda.entries.forEach { entry ->
+                                    when (entry) {
+                                        is AgendaEntry.Day -> stickyHeader(key = "day_${entry.day}") {
+                                            SportsLiveAgendaDayHeader(agenda.days[entry.day])
+                                        }
+                                        is AgendaEntry.Game -> {
+                                            val gameIndex = entry.game
+                                            val game = agenda.games[gameIndex]
+                                            val item = game.row.item
+                                            item(key = item.listKey) {
+                                                Column {
+                                                    if (agenda.opensSlot(gameIndex)) SportsLiveAgendaSlotHeader(agenda.slots[game.slot], uiState.nowMs)
+                                                    // The last slot's Right goes into the stage (nothing further along the list).
+                                                    val lastSlot = agenda.slotJump(gameIndex, forward = true) == null
+                                                    SportsLiveScoreboardRow(
+                                                        row = game.row,
+                                                        selected = paneHasFocus && item.listKey == selected.listKey,
+                                                        onClick = { agendaOk(item, game.row) },
+                                                        onLongClick = { cardLongClick(item) },
+                                                        onFocus = { cardFocused(item) },
+                                                        menuOpen = item.listKey == menuCardKey,
+                                                        agenda = AgendaRowSide(
+                                                            streamListed = !item.isChannel,
+                                                            bell = agendaBellOf(remindable(item), reminders.isReminded(item))
+                                                        ),
+                                                        modifier = Modifier
+                                                            .focusRequester(cardFocusRequester(item))
+                                                            .focusProperties {
+                                                                if (lastSlot) right = watchFocusRequester
+                                                                if (gameIndex == 0) up = aboveListFocusRequester
+                                                            }
+                                                            .onPreviewKeyEvent { event ->
+                                                                if (event.nativeKeyEvent.action != AndroidKeyEvent.ACTION_DOWN) return@onPreviewKeyEvent false
+                                                                val key = agendaKeyOf(event.nativeKeyEvent.keyCode) ?: return@onPreviewKeyEvent false
+                                                                val target = agenda.target(gameIndex, key)
+                                                                if (target != null) agendaJump(target)
+                                                                // A day key at either end does nothing; a slot key there moves on as usual.
+                                                                target != null || key == AgendaKey.DAY_BACK || key == AgendaKey.DAY_FORWARD
+                                                            }
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.width(SportsLiveTokens.Size.StageGap - LIST_FOCUS_ROOM * 2))
+                SportsLiveUpcomingStage(
+                    row = agendaRow,
+                    nowMs = uiState.nowMs,
+                    reminded = remindedCard(selected),
+                    preview = if (selectedPreview != null) {
+                        { SportsLivePreviewVideo(previewPlayer) }
+                    } else {
+                        null
+                    },
+                    previewShowing = selectedPreview?.rendering == true,
+                    miniInStage = nowPlaying != null,
+                    noStream = noStreamKey == selected.listKey,
+                    onRemind = { onToggleReminder(selected) },
+                    onWatch = { open(selected) },
+                    onMore = { menuCardKey = selected.listKey },
+                    modifier = Modifier
+                        .padding(top = LIST_FOCUS_ROOM)
+                        .onFocusChanged { paneHasFocus = it.hasFocus },
+                    primaryModifier = Modifier
+                        .focusRequester(watchFocusRequester)
+                        .focusProperties { left = entryCardFocusRequester ?: selectedCardFocusRequester }
+                )
+            }
+            return@Column
+        }
+
         if (scoreboard && selectedRow != null) {
             // V2 Live Now (#132): the Scoreboard list (400 dp, faded edges) and the fixed 360 dp stage.
             Row(modifier = Modifier.fillMaxSize()) {
@@ -1183,6 +1315,15 @@ private val LIST_EDGE_KEEP = 100.dp
 /** The two sides in the order the title names them ("Patriots at Jets": Patriots, then Jets). */
 private fun TeamPair.inTitleOrder(title: String): List<String> =
     listOf(home, away).sortedBy { side -> title.indexOf(side, ignoreCase = true).let { if (it < 0) Int.MAX_VALUE else it } }
+
+/** The Agenda's move for a remote [keyCode]: ← → a time slot, CH+ (up) / CH− (down) a day, as CH zaps in the player. */
+internal fun agendaKeyOf(keyCode: Int): AgendaKey? = when (keyCode) {
+    AndroidKeyEvent.KEYCODE_DPAD_LEFT -> AgendaKey.SLOT_BACK
+    AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> AgendaKey.SLOT_FORWARD
+    AndroidKeyEvent.KEYCODE_CHANNEL_UP, AndroidKeyEvent.KEYCODE_PAGE_UP -> AgendaKey.DAY_BACK
+    AndroidKeyEvent.KEYCODE_CHANNEL_DOWN, AndroidKeyEvent.KEYCODE_PAGE_DOWN -> AgendaKey.DAY_FORWARD
+    else -> null
+}
 
 /** Unique within a tab: the bucketer keeps one copy of an item per addon. */
 private val SportsLiveItem.listKey: String get() = "$addonId|$id"
