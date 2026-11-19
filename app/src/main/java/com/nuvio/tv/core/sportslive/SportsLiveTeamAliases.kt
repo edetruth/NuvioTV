@@ -30,7 +30,7 @@ object SportsLiveTeamAliases {
         "scotland" to listOf("sco"),
         "netherlands" to listOf("ned", "nl", "holland"),
         "namibia" to listOf("nam"),
-        "hong kong" to listOf("hk"),
+        "hong kong" to listOf("hk", "hong kong china"),
         "nepal" to listOf("nep"),
         "cameroon" to listOf("cmr"),
         "cote d ivoire" to listOf("civ", "ivory coast", "côte d ivoire"),

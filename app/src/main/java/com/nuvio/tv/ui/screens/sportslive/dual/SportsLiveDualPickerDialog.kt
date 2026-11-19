@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.sportslive.dual
 
+import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.displayName
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
@@ -115,7 +116,7 @@ internal fun SportsLiveDualPickerDialog(
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(item.displayName, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 Text(
-                                    text = "${item.sport ?: item.catalogName} · ${item.addonName}",
+                                    text = listOfNotNull(SportsLiveTeams.sportLabelOf(item), item.addonName).joinToString(" · "),
                                     style = MaterialTheme.typography.bodySmall,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis

@@ -252,7 +252,7 @@ class SportsLiveZapViewModel internal constructor(
             val split = SportsLiveEndedGames.shared.split(list, scores, nowMs, canEstimate)
             // The chips count live, zappable games (#145): finals and just ended games of every chip are left out.
             val allSplit = if (list === panelList.all) split else SportsLiveEndedGames.shared.split(panelList.all, scores, nowMs, canEstimate)
-            val finished = allSplit.ended.keys + allSplit.finals.keys
+            val splitFinished = allSplit.ended.keys + allSplit.finals.keys
             // A final in its grace is grouped (and chipped) as the final it is, never as live (C3).
             val boardScores = split.scoresWithFinals(scores)
             val grouped = groupPanelRows(split.live + split.justEnded, boardScores, scoresMode, revealed, nowMs, split.ended, logos)
@@ -264,6 +264,8 @@ class SportsLiveZapViewModel internal constructor(
                 panelLineup(grouped, shownOrder)
             }
             shownOrder = rows.map { it.item.streamKey }
+            // The rows CH± passes over count as finished too, so the chip's count is the banner's "of N".
+            val finished = splitFinished + rows.filterNot { it.zappable }.map { it.item.streamKey }
             PanelLineup(panelList, rows, scoresMode, boardScores, split.ended, revealed, nowMs, loaded, finished)
         }.flowOn(computeDispatcher)
             // A player whose sources cannot be read keeps the session's own order.

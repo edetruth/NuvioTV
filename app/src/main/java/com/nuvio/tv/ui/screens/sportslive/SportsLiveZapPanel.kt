@@ -117,7 +117,7 @@ internal fun SportsLiveZapSession.banner(
     val art = GameArt.of(item, event, known)
     return SportsLiveZapBanner(
         name = item.displayName,
-        detail = "${art?.league ?: item.sport ?: item.catalogName} · ${item.addonName}",
+        detail = listOfNotNull(art?.league ?: SportsLiveTeams.sportLabelOf(item), item.addonName).joinToString(" · "),
         position = position,
         total = total,
         switching = switching,

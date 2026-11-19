@@ -142,6 +142,17 @@ class SportsLiveAddonNoiseTest {
         assertFalse(SportsLiveMySportsScope.shows(coded, basketball))
     }
 
+    @Test
+    fun `detail lines never name a non-sport tag and Hong Kong China is Hong Kong`() {
+        assertNull(SportsLiveTeams.sportLabelOf(claimedEvent("OTHER", "other")))
+        assertEquals("Events", SportsLiveTeams.sportLabelOf(claimedEvent("OTHER", "Events")))
+        assertEquals("Cricket", SportsLiveTeams.sportLabelOf(claimedEvent("Cricket", "other")))
+        assertTrue(SportsLiveTeams.matches("Hong Kong China", "HK"))
+    }
+
+    private fun claimedEvent(genre: String, catalogName: String) =
+        SportsLiveItemBucketer.describe(meta("x", "A vs B", "LIVE", listOf(genre)), claimed("a", "c", catalogName, SportsLiveKind.EVENTS), now)
+
     // Wrestling
 
     @Test

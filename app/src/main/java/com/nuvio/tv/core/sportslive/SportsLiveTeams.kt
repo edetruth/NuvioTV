@@ -232,6 +232,13 @@ object SportsLiveTeams {
 
     private fun isGenericSport(sport: String): Boolean = sport.trim().lowercase() in GENERIC_SPORTS
 
+    /**
+     * What a detail line names [item]'s sport by: its sport, else its catalog's name, never a non-sport tag
+     * ("OTHER", #145); null when neither says anything.
+     */
+    fun sportLabelOf(item: SportsLiveItem): String? =
+        listOfNotNull(item.sport, item.catalogName).firstOrNull { it.isNotBlank() && !isNonSportTag(it) }
+
     /** True for an addon tag that names no sport ("OTHER", "Entertainment", "NETWORKS"); see [NON_SPORT_TAGS]. */
     fun isNonSportTag(tag: String): Boolean = tag.trim().lowercase() in NON_SPORT_TAGS
 
