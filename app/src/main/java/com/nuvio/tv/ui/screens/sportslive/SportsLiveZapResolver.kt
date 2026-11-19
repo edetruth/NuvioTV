@@ -5,6 +5,7 @@ import com.nuvio.tv.core.debrid.DirectDebridResolver
 import com.nuvio.tv.core.network.NetworkResult
 import com.nuvio.tv.core.player.StreamAutoPlaySelector
 import com.nuvio.tv.core.sportslive.SportsLiveNoticeEntries
+import com.nuvio.tv.core.sportslive.SportsLiveRecoveryCandidates
 import com.nuvio.tv.core.sportslive.SportsLiveSourceCooldown
 import com.nuvio.tv.core.sportslive.SportsLiveSourceLabels
 import com.nuvio.tv.core.sportslive.SportsLiveSourceReliability
@@ -247,6 +248,36 @@ class SportsLiveZapResolver @Inject constructor(
 
     /** Drops cached resolves for content id [contentId] (the full player knows only the content id). */
     fun invalidateByContentId(contentId: String) = resolveCache.invalidateByContentId(contentId)
+
+    /**
+     * The next link a light player (a dual pane, the mini player) may switch to for [item] after its
+     * links in [tried] ([SportsLiveWorkingLinks.linkKey]s) failed (#138), or null when none is left.
+     * First what recent searches already hold for the game and then its other sources (a merged
+     * card's siblings), with no request; only when nothing usable is cached, one lookup (which joins a
+     * search still running and leaves out sources cooling down). Ordered and filtered by
+     * [SportsLiveRecoveryCandidates]; a link the light player cannot play as is is skipped.
+     */
+    suspend fun recoveryStream(item: SportsLiveItem, tried: Set<String>): Stream? =
+        try {
+            val installed = installedOrder()
+            val cached = (listOf(item) + item.alternates).map { source ->
+                StreamAutoPlaySelector.orderAddonStreams(
+                    streamRepository.getCachedStreamsFromAllAddons(source.apiType, source.id).orEmpty(),
+                    installed
+                ).flatMap { it.streams }
+            }
+            val pick: suspend (List<Stream>, List<Stream>) -> Stream? = { primary, siblings ->
+                SportsLiveRecoveryCandidates.order(item.id, primary, siblings, tried, workingLinks, cooldown.coolingNames())
+                    .firstOrNull { sportsLiveLightPlayable(it, directDebridResolver) }
+            }
+            pick(cached.first(), cached.drop(1).flatten())
+                ?: (lookup(item, forceRefresh = true) as? SportsLiveLookup.Found)?.stream
+                    ?.let { pick(listOf(it), emptyList()) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null
+        }
 
     /**
      * Every stream of [item] and its alternates, fetched in parallel (each within [timeoutMs]):

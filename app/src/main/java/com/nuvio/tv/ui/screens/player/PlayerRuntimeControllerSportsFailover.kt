@@ -2,19 +2,23 @@ package com.nuvio.tv.ui.screens.player
 
 import android.util.Log
 import androidx.media3.common.PlaybackException
-import androidx.media3.common.Player
 import com.nuvio.tv.R
 import com.nuvio.tv.core.debrid.DirectDebridPlayableResult
 import com.nuvio.tv.core.sportslive.SportsLiveFailover
+import com.nuvio.tv.core.sportslive.SportsLiveRecoveryCandidates
+import com.nuvio.tv.core.sportslive.SportsLiveRecoveryLadder
+import com.nuvio.tv.core.sportslive.SportsLiveSourceCooldown
 import com.nuvio.tv.core.sportslive.SportsLiveSourceReliability
-import com.nuvio.tv.core.sportslive.SportsLiveStallWatchdog
+import com.nuvio.tv.core.sportslive.SportsLiveStreamHealth
 import com.nuvio.tv.core.sportslive.SportsLiveWorkingLinks
 import com.nuvio.tv.domain.model.ProxyHeaders
 import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.domain.model.StreamBehaviorHints
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveExtraSources
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapResolver
+import com.nuvio.tv.ui.screens.sportslive.retrySportsLiveLink
 import com.nuvio.tv.ui.screens.sportslive.sportsLiveFallbackCandidate
+import com.nuvio.tv.ui.screens.sportslive.sportsLiveHealthSample
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
@@ -35,7 +39,6 @@ internal val SPORTS_FAILOVER_MAX_SOURCES get() = SportsLiveFailover.MAX_SOURCES
 
 private const val SPORTS_FAILOVER_POLL_COUNT = 30
 private const val SPORTS_FAILOVER_POLL_INTERVAL_MS = 500L
-private const val SPORTS_STALL_POLL_INTERVAL_MS = 2_000L
 
 /**
  * Remembers ([SportsLiveSourceReliability]) that the sports source playing reached its first frame,
@@ -95,15 +98,18 @@ private fun PlayerRuntimeController.currentSportsSourceKey(): String? =
 
 /**
  * Auto-fails over to the next untried sports source after [errorMessage], or shows the recovery
- * overlay when the cap is reached or nothing untried remains. Returns true when sports handled the
- * error (so the generic error chain stops); false for non-sports playback. The failed source is
- * remembered as a failure, or a stall when [stalled] (the stall watchdog fired); a [decoderInit]
- * failure (the device's fault, not the source's) is not held against it.
+ * overlay when the cap is reached, nothing untried remains or [autoTry] is false (the stream-health
+ * recovery budget is used up, #138). Returns true when sports handled the error (so the generic error
+ * chain stops); false for non-sports playback. The failed source is remembered as a failure, or a
+ * stall when [stalled] (the stream-health monitor fired), and its link as failed for the game (#65:
+ * quarantined unless known good); a [decoderInit] failure (the device's fault, not the source's) is
+ * not held against it.
  */
 internal fun PlayerRuntimeController.trySportsLiveFailoverAfterError(
     errorMessage: String,
     stalled: Boolean = false,
-    decoderInit: Boolean = false
+    decoderInit: Boolean = false,
+    autoTry: Boolean = true
 ): Boolean {
     if (!SportsLiveExtraSources.isSportsPlayback(contentId)) return false
     // Nothing that works plays now (also a Sources panel pick failing before its first frame): dual
@@ -117,9 +123,9 @@ internal fun PlayerRuntimeController.trySportsLiveFailoverAfterError(
             currentSportsSourceKey(),
             if (stalled) SportsLiveSourceReliability.Outcome.STALL else SportsLiveSourceReliability.Outcome.FAILURE
         )
-        // A link that failed to start or hit a fatal error is skipped for this game for a while,
-        // unless it is known to work and this is its only recent failure (#65).
-        if (!stalled) SportsLiveWorkingLinks.shared.failed(contentId.orEmpty(), currentSportsStream()?.getStreamUrl())
+        // A link that failed to start, hit a fatal error or froze is skipped for this game for a
+        // while, unless it is known to work and this is its only recent failure (#65, #138).
+        SportsLiveWorkingLinks.shared.failed(contentId.orEmpty(), currentSportsStream()?.getStreamUrl())
     }
     cancelSportsStallWatchdog()
 
@@ -128,7 +134,7 @@ internal fun PlayerRuntimeController.trySportsLiveFailoverAfterError(
     val failedInfoHash = _uiState.value.currentStreamInfoHash ?: navigationArgs.infoHash
     sportsFailoverTriedKeys += "url:$failedUrl"
     val videoId = currentVideoId ?: contentId
-    if (videoId == null || !SportsLiveFailover.canAutoTry(sportsFailoverAttempts)) {
+    if (videoId == null || !autoTry || !SportsLiveFailover.canAutoTry(sportsFailoverAttempts)) {
         surfaceSportsFailoverError(errorMessage)
         return true
     }
@@ -147,16 +153,21 @@ internal fun PlayerRuntimeController.trySportsLiveFailoverAfterError(
             val sources = _uiState.value
             val searchDone = !sources.isLoadingSourceStreams &&
                 (sources.sourceAllStreams.isNotEmpty() || sources.sourceStreamsError != null)
-            // Links known to work for this game first, quarantined ones last (#65); an addon's
-            // informational entries and junk links are never tried (C1).
+            // Links known to work for this game first (#65); quarantined links, sources cooling down
+            // after a rate limit, an addon's informational entries and junk links are never tried (C1, #138).
+            val cooling = SportsLiveSourceCooldown.shared.coolingNames()
             val next = sportsLiveFallbackCandidate(
-                streams = SportsLiveWorkingLinks.shared.order(
+                streams = SportsLiveRecoveryCandidates.eligible(
                     contentId.orEmpty(),
-                    sources.sourceAllStreams.filterNot(SportsLiveZapResolver::isNonStream)
+                    sources.sourceAllStreams.filterNot(SportsLiveZapResolver::isNonStream),
+                    SportsLiveWorkingLinks.shared,
+                    cooling
                 ),
-                extras = SportsLiveWorkingLinks.shared.order(
+                extras = SportsLiveRecoveryCandidates.eligible(
                     contentId.orEmpty(),
-                    SportsLiveExtraSources.availableStreamsFor(contentId).filterNot(SportsLiveZapResolver::isNonStream)
+                    SportsLiveExtraSources.availableStreamsFor(contentId).filterNot(SportsLiveZapResolver::isNonStream),
+                    SportsLiveWorkingLinks.shared,
+                    cooling
                 ),
                 extrasAllowed = searchDone || polls >= SPORTS_FAILOVER_POLL_COUNT,
                 settings = settings,
@@ -236,13 +247,14 @@ internal fun PlayerRuntimeController.restoreSportsRecoveryIfNothingPlays() {
     surfaceSportsFailoverError(context.getString(R.string.sports_live_nothing_playing))
 }
 
-/** Shows the standalone, focusable recovery overlay (Try another source / Retry / Back). */
+/** Shows the standalone, focusable recovery overlay (Choose stream / Next live game / Retry / Back). */
 private fun PlayerRuntimeController.surfaceSportsFailoverError(errorMessage: String) {
     streamCacheKey?.let { key -> scope.launch { streamLinkCacheDataStore.remove(key) } }
     _uiState.update {
         it.copy(
             error = errorMessage,
             canChooseAnotherSource = true,
+            sportsReconnecting = false,
             isBuffering = false,
             showLoadingOverlay = false,
             showPauseOverlay = false
@@ -251,47 +263,86 @@ private fun PlayerRuntimeController.surfaceSportsFailoverError(errorMessage: Str
 }
 
 /**
- * After the first frame, watches for a stale source (endless buffering / position not advancing) and
- * triggers the same auto-failover. Sports only; it never runs during startup. Idempotent.
+ * After the first frame, watches the sports stream's health (#138, [SportsLiveStreamHealth]): a long
+ * buffering, a stream frozen while playing (no new frame and no position advance) or an unexpected
+ * end of a live stream starts the recovery ladder ([recoverSportsHealth]). Its progress also marks the
+ * link as working for the game (#65). Sports only; it never runs during startup. Idempotent.
  */
 internal fun PlayerRuntimeController.scheduleSportsStallWatchdog() {
     if (!SportsLiveExtraSources.isSportsPlayback(contentId)) return
-    // Cancel-and-restart so each new source's first frame rebaselines the progress tracking.
+    // Cancel-and-restart so each first frame rebaselines the health tracking (a new link forgets its errors).
     cancelSportsStallWatchdog()
+    sportsHealth.onFirstFrame(link = currentStreamUrl)
     sportsStallWatchdogJob = scope.launch {
-        var lastPosition = currentPlaybackPositionMs() ?: 0L
-        var lastProgressAtMs = System.currentTimeMillis()
         var markedGood = false
         while (true) {
-            delay(SPORTS_STALL_POLL_INTERVAL_MS)
-            if (_uiState.value.error != null || isInBackground || !hasRenderedFirstFrame) {
-                lastProgressAtMs = System.currentTimeMillis()
-                continue
-            }
+            delay(SportsLiveStreamHealth.POLL_INTERVAL_MS)
             val player = _exoPlayer
-            val position = currentPlaybackPositionMs() ?: lastPosition
-            val buffering = player?.playbackState == Player.STATE_BUFFERING
-            val advancing = position > lastPosition
-            val paused = player?.playWhenReady == false || userPausedManually
-            // 30 s of actual progress (not paused, not buffering) mark the link as working for this game (#65).
-            if (advancing && !paused && !markedGood) {
-                markedGood = SportsLiveWorkingLinks.shared.progressed(contentId.orEmpty(), SPORTS_STALL_POLL_INTERVAL_MS)
-            }
-            if (advancing || paused) {
-                lastPosition = position
-                lastProgressAtMs = System.currentTimeMillis()
+            if (player == null || _uiState.value.error != null || isInBackground || !hasRenderedFirstFrame ||
+                sourceFallbackJob?.isActive == true
+            ) {
+                sportsHealth.rebaseline()
                 continue
             }
-            val stalledForMs = System.currentTimeMillis() - lastProgressAtMs
-            // Only a buffering/no-progress state counts; a paused-but-ready player is left alone above.
-            if (buffering && SportsLiveStallWatchdog.isStalled(hasStartedPlaying = true, stalledForMs = stalledForMs)) {
-                Log.w(PlayerRuntimeController.TAG, "Sports source stalled ${stalledForMs}ms after start, failing over")
-                val message = context.getString(R.string.player_error_source_stalled)
-                trySportsLiveFailoverAfterError(message, stalled = true)
-                return@launch
+            val problem = sportsHealth.sample(
+                player.sportsLiveHealthSample(playWhenReady = player.playWhenReady && !userPausedManually)
+            )
+            if (problem != null) {
+                Log.w(PlayerRuntimeController.TAG, "Sports stream unhealthy after start: $problem")
+                recoverSportsHealth(problem, context.getString(R.string.player_error_source_stalled))
+                continue
+            }
+            if (!sportsHealth.isProgressing) continue
+            // 30 s of actual progress (not paused, not buffering) mark the link as working for this game (#65).
+            if (!markedGood) {
+                markedGood = SportsLiveWorkingLinks.shared.progressed(contentId.orEmpty(), SportsLiveStreamHealth.POLL_INTERVAL_MS)
+            }
+            if (_uiState.value.sportsReconnecting) {
+                // Recovered as is: the link plays again for dual screen and the link memory.
+                _uiState.update { it.copy(sportsReconnecting = false) }
+                currentSportsStream()?.let { SportsLiveWorkingLinks.shared.startedPlaying(contentId.orEmpty(), it) }
             }
         }
     }
+}
+
+/**
+ * A playback error after the first frame of a sports stream (#138): the stream-health recovery
+ * ladder handles it ([recoverSportsHealth]). False for movies/shows, at start-up (the start-up
+ * failover handles that), for a decoder failure (the device's, not the link's) and while a failover runs.
+ */
+internal fun PlayerRuntimeController.trySportsHealthRecoveryAfterError(errorMessage: String, decoderInit: Boolean): Boolean {
+    if (!SportsLiveExtraSources.isSportsPlayback(contentId)) return false
+    if (decoderInit || !hasRenderedFirstFrame || sourceFallbackJob?.isActive == true) return false
+    recoverSportsHealth(sportsHealth.onError(), errorMessage)
+    return true
+}
+
+/**
+ * The recovery ladder of this player for [problem] (#138): the same link loaded again from the live
+ * edge once (last frame kept, "Reconnecting…"), else the next best link and other sources (the
+ * sports failover), else, with the game's recovery budget used up, the recovery overlay's choices.
+ */
+private fun PlayerRuntimeController.recoverSportsHealth(problem: SportsLiveStreamHealth.Problem, message: String) {
+    val gameKey = contentId.orEmpty()
+    val url = currentSportsStream()?.getStreamUrl() ?: currentStreamUrl
+    val step = sportsRecoveryLadder.decide(gameKey, url, problem)
+    Log.i(PlayerRuntimeController.TAG, "Sports stream recovery: $problem -> $step")
+    val player = _exoPlayer
+    if (step == SportsLiveRecoveryLadder.Step.RETRY_SAME && player != null) {
+        SportsLiveSourceReliability.record(
+            currentSportsSourceKey(),
+            if (problem.isStall) SportsLiveSourceReliability.Outcome.STALL else SportsLiveSourceReliability.Outcome.FAILURE
+        )
+        SportsLiveWorkingLinks.shared.failed(gameKey, url)
+        _uiState.update { it.copy(sportsReconnecting = true) }
+        sportsHealth.rebaseline()
+        player.retrySportsLiveLink()
+        return
+    }
+    val autoTry = step != SportsLiveRecoveryLadder.Step.CHOICES
+    _uiState.update { it.copy(sportsReconnecting = autoTry) }
+    trySportsLiveFailoverAfterError(message, stalled = problem.isStall, autoTry = autoTry)
 }
 
 internal fun PlayerRuntimeController.cancelSportsStallWatchdog() {

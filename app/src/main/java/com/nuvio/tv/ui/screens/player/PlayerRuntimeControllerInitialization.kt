@@ -1665,6 +1665,11 @@ internal fun PlayerRuntimeController.initializePlayer(
                         if (tryRefreshExpiredLinkAfterError(detailedError)) {
                             return
                         }
+                        // Sports & Live, mid-game: the stream-health recovery ladder (#138) retries the same
+                        // link once before failing over. Returns false for movies/shows and at start-up.
+                        if (trySportsHealthRecoveryAfterError(detailedError, decoderInit = error.isDecoderInitFailure())) {
+                            return
+                        }
                         // Sports & Live: auto-fail over to the next untried source (capped), or show the
                         // standalone recovery overlay. Scoped to sports; returns false for movies/shows.
                         if (trySportsLiveFailoverAfterError(detailedError, decoderInit = error.isDecoderInitFailure())) {

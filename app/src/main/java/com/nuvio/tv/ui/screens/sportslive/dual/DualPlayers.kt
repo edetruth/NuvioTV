@@ -13,16 +13,20 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import com.nuvio.tv.core.sportslive.SportsLiveSourceReliability
 import com.nuvio.tv.core.sportslive.SportsLiveSourceReliability.Outcome
+import com.nuvio.tv.core.sportslive.SportsLiveStreamHealth
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.ui.screens.player.PlayerMediaSourceFactory
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveAwakeHolds
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveExtraSources
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveHealthTicker
 import com.nuvio.tv.ui.screens.sportslive.buildSportsLiveLightPlayer
 import com.nuvio.tv.ui.screens.sportslive.isDecoderInitFailure
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniPlayers
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniStop
 import com.nuvio.tv.ui.screens.sportslive.playSportsLiveStream
+import com.nuvio.tv.ui.screens.sportslive.retrySportsLiveLink
+import com.nuvio.tv.ui.screens.sportslive.sportsLiveHealthSample
 
 /**
  * The dual screen's two ExoPlayers. [sync] plays each pane of a [DualState] (a pane keeps its
@@ -38,18 +42,29 @@ import com.nuvio.tv.ui.screens.sportslive.playSportsLiveStream
  *
  * The FFmpeg audio renderer is always on as a fallback (EXTENSION_RENDERER_MODE_ON): the user's
  * decoder priority setting of the full player is not applied here.
+ *
+ * Each player has its own [SportsLiveStreamHealth] (#138), sampled every second: a pane whose stream
+ * freezes, buffers too long or ends while live is reported ([onUnhealthy]) for that pane only, and
+ * whenever a pane's stream moves, [onMoving] (a recovery is over).
  */
 @OptIn(UnstableApi::class)
 internal class DualPlayers(
     context: Context,
     private val onFirstFrame: (SportsLiveItem) -> Unit,
-    /** [decoderInit]: the player could not get a decoder. */
-    private val onError: (item: SportsLiveItem, decoderInit: Boolean) -> Unit,
+    /**
+     * [decoderInit]: the player could not get a decoder. [problem]: [SportsLiveStreamHealth.Problem.ERROR],
+     * or [SportsLiveStreamHealth.Problem.ERROR_BURST] when errors come in a burst.
+     */
+    private val onError: (item: SportsLiveItem, decoderInit: Boolean, problem: SportsLiveStreamHealth.Problem) -> Unit,
     /**
      * Whether [item]'s pane is playing (advancing: not paused, buffering or stopped). A stop or
      * release reports false, so time away from the screen never counts as played (#65).
      */
-    private val onIsPlaying: (item: SportsLiveItem, playing: Boolean) -> Unit = { _, _ -> }
+    private val onIsPlaying: (item: SportsLiveItem, playing: Boolean) -> Unit = { _, _ -> },
+    /** [item]'s stream went bad after its first frame (#138). */
+    private val onUnhealthy: (item: SportsLiveItem, problem: SportsLiveStreamHealth.Problem) -> Unit = { _, _ -> },
+    /** [item]'s stream moves (a new frame or position), checked every second (#138). */
+    private val onMoving: (item: SportsLiveItem) -> Unit = {}
 ) {
     private val appContext = context.applicationContext
 
@@ -65,6 +80,12 @@ internal class DualPlayers(
 
         /** The game and stream this player plays; null when it is stopped. */
         var loaded: Pair<SportsLiveItem, Stream>? = null
+
+        /** [DualPane.attempt] of [loaded]: a higher one loads the same stream again (#138). */
+        private var loadedAttempt = 0
+
+        /** This player's stream health (#138). */
+        private val health = SportsLiveStreamHealth()
 
         /** [Player.isPlaying] of the current load, as Compose state; false between loads. */
         var isPlaying by mutableStateOf(false)
@@ -103,6 +124,7 @@ internal class DualPlayers(
             listener = object : Player.Listener {
                 override fun onRenderedFirstFrame() {
                     if (load != loads) return
+                    health.onFirstFrame()
                     if (!rendered) {
                         rendered = true
                         SportsLiveSourceReliability.record(sourceKey, Outcome.SUCCESS, System.currentTimeMillis() - startedAtMs)
@@ -115,7 +137,7 @@ internal class DualPlayers(
                     // A missing decoder is the device's fault, not the source's.
                     val decoderInit = error.isDecoderInitFailure()
                     if (!decoderInit) SportsLiveSourceReliability.record(sourceKey, Outcome.FAILURE)
-                    onError(item, decoderInit)
+                    onError(item, decoderInit, health.onError())
                 }
 
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -128,6 +150,20 @@ internal class DualPlayers(
             loads++
             report(null, false)
             player.release()
+        }
+
+        /** Samples this player's health (#138): reports a problem, or that a recovering stream moves. */
+        fun checkHealth() {
+            val (item, stream) = loaded ?: return
+            val problem = health.sample(player.sportsLiveHealthSample())
+            if (problem != null) {
+                if (problem.isStall) {
+                    SportsLiveSourceReliability.record(SportsLiveExtraSources.sourceKeyFor(item, stream), Outcome.STALL)
+                }
+                onUnhealthy(item, problem)
+            } else if (health.isProgressing) {
+                onMoving(item)
+            }
         }
 
         /** Whether this player holds audio focus; null before the first [setAudible]. */
@@ -150,7 +186,15 @@ internal class DualPlayers(
 
         fun show(pane: DualPane) {
             val wanted = pane.playable()
-            if (wanted == loaded) return
+            if (wanted == loaded) {
+                // The same stream, retried as is (#138): loaded again from the live edge, last frame kept.
+                if (wanted != null && pane.attempt != loadedAttempt) {
+                    loadedAttempt = pane.attempt
+                    health.rebaseline()
+                    player.retrySportsLiveLink()
+                }
+                return
+            }
             val url = wanted?.second?.getStreamUrl()
             if (wanted == null || url == null) {
                 loaded = null
@@ -161,6 +205,8 @@ internal class DualPlayers(
                 return
             }
             loaded = wanted
+            loadedAttempt = pane.attempt
+            health.reset()
             listenToLoad(wanted.first, wanted.second)
             player.playSportsLiveStream(appContext, mediaSourceFactory, wanted.second, url)
         }
@@ -170,6 +216,8 @@ internal class DualPlayers(
     // Compose state, so [isPlaying] follows a swap.
     private var bySide: Map<Side, Slot> by mutableStateOf(mapOf(Side.LEFT to slots[0], Side.RIGHT to slots[1]))
     private var released = false
+
+    private val ticker = SportsLiveHealthTicker { slots.forEach(Slot::checkHealth) }.also { it.start() }
 
     /** The player showing [side]'s pane, for its video surface; null once released. */
     fun player(side: Side): ExoPlayer? = if (released) null else bySide.getValue(side).player
@@ -203,6 +251,7 @@ internal class DualPlayers(
     fun release() {
         if (released) return
         released = true
+        ticker.stop()
         slots.forEach {
             it.loaded = null
             it.release()

@@ -24,7 +24,11 @@ sealed interface PaneStatus {
 data class DualPane(
     val item: SportsLiveItem,
     val stream: Stream? = null,
-    val status: PaneStatus = PaneStatus.Loading
+    val status: PaneStatus = PaneStatus.Loading,
+    /** A recovery runs (#138): "Reconnecting…" shows over the last frame. */
+    val reconnecting: Boolean = false,
+    /** Counts retries of [stream] as is (#138): a change makes the pane's player load it again. */
+    val attempt: Int = 0
 )
 
 /** Two games side by side; only the [audibleSide] pane has sound. */
@@ -72,7 +76,11 @@ data class DualState(
             else pane.copy(stream = action.stream)
         }
         is DualAction.FirstFrame -> updatePaneOf(action.item) { pane ->
-            if (pane.status == PaneStatus.Loading && pane.stream != null) pane.copy(status = PaneStatus.Playing) else null
+            if (pane.status == PaneStatus.Loading && pane.stream != null) {
+                pane.copy(status = PaneStatus.Playing, reconnecting = false)
+            } else {
+                null
+            }
         }
         is DualAction.Restarted -> updatePaneOf(action.item) { pane ->
             if (pane.status == PaneStatus.Playing && pane.stream != null) pane.copy(status = PaneStatus.Loading) else null
@@ -86,10 +94,32 @@ data class DualState(
         }
         is DualAction.DeviceLimit -> updatePaneOf(action.item) { pane ->
             if (pane.stream == null || pane.status == PaneStatus.Error || pane.status == PaneStatus.DeviceLimit) null
-            else pane.copy(status = PaneStatus.DeviceLimit)
+            else pane.copy(status = PaneStatus.DeviceLimit, reconnecting = false)
+        }
+        is DualAction.RetrySame -> updatePaneOf(action.item) { pane ->
+            if (pane.stream == null || !pane.isRecoverable) null
+            else pane.copy(reconnecting = true, attempt = pane.attempt + 1)
+        }
+        is DualAction.Reconnecting -> updatePaneOf(action.item) { pane ->
+            if (!pane.isRecoverable) null else pane.copy(reconnecting = true)
+        }
+        is DualAction.Switched -> updatePaneOf(action.item) { pane ->
+            if (!pane.isRecoverable) null
+            else pane.copy(stream = action.stream, status = PaneStatus.Loading, reconnecting = true)
+        }
+        is DualAction.Recovered -> updatePaneOf(action.item) { pane ->
+            if (pane.reconnecting && pane.status == PaneStatus.Playing) pane.copy(reconnecting = false) else null
+        }
+        is DualAction.Exhausted -> updatePaneOf(action.item) { pane ->
+            if (pane.status == PaneStatus.DeviceLimit) null
+            else pane.copy(status = PaneStatus.Error, reconnecting = false)
         }
     }
 }
+
+/** A pane a recovery may act on (#138): starting or playing, not already failed. */
+private val DualPane.isRecoverable: Boolean
+    get() = status == PaneStatus.Loading || status == PaneStatus.Playing
 
 /**
  * The stream OK hands to the full player as is: the one this pane is playing. Null while it is
@@ -144,4 +174,19 @@ sealed interface DualAction {
     data class TimedOut(val item: SportsLiveItem) : DualAction
     data class Failed(val item: SportsLiveItem) : DualAction
     data class DeviceLimit(val item: SportsLiveItem) : DualAction
+
+    /** [item]'s stream is loaded again as is, from the live edge (#138). */
+    data class RetrySame(val item: SportsLiveItem) : DualAction
+
+    /** A recovery looks for another link for [item] (#138). */
+    data class Reconnecting(val item: SportsLiveItem) : DualAction
+
+    /** [item]'s pane switches to [stream], another link for the same game (#138). */
+    data class Switched(val item: SportsLiveItem, val stream: Stream) : DualAction
+
+    /** [item]'s stream moves again after a recovery (#138). */
+    data class Recovered(val item: SportsLiveItem) : DualAction
+
+    /** Every recovery for [item] failed or its budget is used up: the pane offers the choices (#138). */
+    data class Exhausted(val item: SportsLiveItem) : DualAction
 }

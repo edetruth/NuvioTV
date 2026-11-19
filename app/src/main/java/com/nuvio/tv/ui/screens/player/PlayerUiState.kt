@@ -194,6 +194,8 @@ data class PlayerUiState(
     val error: String? = null,
     /** A Sports & Live game with alternate sources: a playback error offers "Choose another source". */
     val canChooseAnotherSource: Boolean = false,
+    /** A Sports & Live stream is being recovered (#138): "Reconnecting…" shows. */
+    val sportsReconnecting: Boolean = false,
     val showSwitchToMpvErrorAction: Boolean = false,
     val playbackIssueReportStatus: PlaybackIssueReportStatus = PlaybackIssueReportStatus.Idle,
     val playbackIssueReportId: String? = null,

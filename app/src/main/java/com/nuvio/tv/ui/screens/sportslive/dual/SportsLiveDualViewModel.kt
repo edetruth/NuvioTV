@@ -4,6 +4,9 @@ import com.nuvio.tv.core.sportslive.displayName
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nuvio.tv.core.debrid.DirectDebridResolver
+import com.nuvio.tv.core.sportslive.SportsLiveRecoveryBudget
+import com.nuvio.tv.core.sportslive.SportsLiveRecoveryLadder
+import com.nuvio.tv.core.sportslive.SportsLiveStreamHealth
 import com.nuvio.tv.core.sportslive.SportsLiveWorkingLinks
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import com.nuvio.tv.domain.model.SportsLiveItem
@@ -141,7 +144,14 @@ class SportsLiveDualViewModel internal constructor(
     /** Whether a pane can play the full player's stream as is (a plain url); else the pane looks one up. */
     private val handOffPlayable: suspend (Stream) -> Boolean = { true },
     /** Which links work for each game (#65): the panes' outcomes are remembered here. */
-    private val workingLinks: SportsLiveWorkingLinks = SportsLiveWorkingLinks.shared
+    private val workingLinks: SportsLiveWorkingLinks = SportsLiveWorkingLinks.shared,
+    /**
+     * The next link a recovering pane may switch to for a game, given the links already tried there
+     * (#138); null when none is left.
+     */
+    private val recoveryLookup: suspend (item: SportsLiveItem, tried: Set<String>) -> Stream? = { _, _ -> null },
+    /** Automatic recoveries each game may have (#138). */
+    private val recoveryBudget: SportsLiveRecoveryBudget = SportsLiveRecoveryBudget()
 ) : ViewModel() {
 
     @Inject
@@ -158,7 +168,9 @@ class SportsLiveDualViewModel internal constructor(
         endedKeys = { repo.endedKeys.value },
         session = SportsLiveDualSessions.take(),
         claimKeysHint = preferences::claimDualKeysHint,
-        handOffPlayable = { stream -> sportsLiveLightPlayable(stream, directDebridResolver) }
+        handOffPlayable = { stream -> sportsLiveLightPlayable(stream, directDebridResolver) },
+        recoveryLookup = resolver::recoveryStream,
+        recoveryBudget = SportsLiveRecoveryBudget.shared
     )
 
     private val items: List<SportsLiveItem> = session?.items.orEmpty()
@@ -212,6 +224,12 @@ class SportsLiveDualViewModel internal constructor(
 
     /** Each pane game's play clock, by stream key; kept across a swap, a restart and a decoder retry. */
     private val clocks = mutableMapOf<String, PlayClock>()
+
+    /** Each pane game's recovery steps (#138), by stream key: a pane's recovery never touches the other. */
+    private val ladders = mutableMapOf<String, SportsLiveRecoveryLadder>()
+
+    /** The links each pane game's recoveries have given up on (#138), by stream key. */
+    private val tried = mutableMapOf<String, MutableSet<String>>()
 
     init {
         session?.let { s -> s.leftStream?.let { handOffs[s.left.streamKey] = it } }
@@ -270,6 +288,7 @@ class SportsLiveDualViewModel internal constructor(
         val state = _state.value ?: return
         if (item.sharesSourceWith(state.left.item) || item.sharesSourceWith(state.right.item)) return
         settle(state.right.item)
+        forgetRecovery(item)
         load(Side.RIGHT, item)
     }
 
@@ -292,8 +311,108 @@ class SportsLiveDualViewModel internal constructor(
         val side = state.highlighted
         val target = zapTarget(state.pane(side).item, state.pane(side.other).item, forward) ?: return false
         settle(state.pane(side).item)
+        forgetRecovery(target)
         load(side, target)
         return true
+    }
+
+    /**
+     * "Next live game" on a pane whose recovery gave up (#138): the highlighted pane moves to the game
+     * "Watch with another game" would pick (#57: a followed team's, else by start time), never the other
+     * pane's or one known to be over; a plain zap when there is none. False when nothing is left.
+     */
+    fun nextLiveGame(): Boolean {
+        val state = _state.value ?: return false
+        val side = state.highlighted
+        val current = state.pane(side).item
+        val other = state.pane(side.other).item
+        val pick = SportsLiveSecondGame.pick(
+            first = current,
+            items = items.filterNot { it.sharesSourceWith(other) },
+            scores = emptyMap(),
+            finishedKeys = endedKeys() + finishedKeys
+        ) ?: return zap(forward = true)
+        settle(current)
+        forgetRecovery(pick)
+        load(side, pick)
+        return true
+    }
+
+    /**
+     * "Close this side" on the highlighted pane once its recovery gave up (#138): the other pane's game
+     * and playing stream, for the full player; null when the highlighted pane has not failed or the
+     * other pane does not play (Back leaves then, as before).
+     */
+    fun closeFailedSide(): Pair<SportsLiveItem, Stream>? {
+        val state = _state.value ?: return null
+        if (state.pane(state.highlighted).status != PaneStatus.Error) return null
+        val other = state.pane(state.highlighted.other)
+        return other.okStream?.let { other.item to it }
+    }
+
+    /**
+     * [item]'s pane stream went bad (#138): after its first frame (a freeze, a long buffering, an
+     * unexpected end, an error), or a link a recovery tried did not start. The link counts as failed
+     * (#65), then the pane's ladder says what to do: load it again as is, switch to the next link for
+     * the game, or offer the choices. The other pane is never touched.
+     */
+    fun onUnhealthy(item: SportsLiveItem, problem: SportsLiveStreamHealth.Problem) {
+        val state = _state.value ?: return
+        val side = state.sideOf(item) ?: return
+        val pane = state.pane(side)
+        val stream = pane.stream ?: return
+        if (pane.status != PaneStatus.Playing && !pane.reconnecting) return
+        linkFailed(item, stream)
+        SportsLiveWorkingLinks.linkKey(stream.getStreamUrl())?.let { tried.getOrPut(item.streamKey) { mutableSetOf() } += it }
+        val ladder = ladders.getOrPut(item.streamKey) { SportsLiveRecoveryLadder(recoveryBudget, workingLinks.nowMs) }
+        when (ladder.decide(item.id, stream.getStreamUrl(), problem)) {
+            SportsLiveRecoveryLadder.Step.RETRY_SAME -> {
+                dispatch(DualAction.RetrySame(item))
+                // A link that has not started yet gets its first-frame timeout again.
+                if (pane.status == PaneStatus.Loading) startTimeout(side, item)
+            }
+            SportsLiveRecoveryLadder.Step.NEXT_LINK -> switchLink(side, item)
+            SportsLiveRecoveryLadder.Step.CHOICES -> {
+                jobs.remove(side)?.cancel()
+                dispatch(DualAction.Exhausted(item))
+            }
+        }
+    }
+
+    /** [item]'s pane stream moves again: a recovery is over (#138). */
+    fun onMoving(item: SportsLiveItem) {
+        val pane = _state.value?.let { state -> state.sideOf(item)?.let(state::pane) } ?: return
+        if (pane.reconnecting) dispatch(DualAction.Recovered(item))
+    }
+
+    /** The next link for [item]'s pane (#138), already-found links first; the choices when none is left. */
+    private fun switchLink(side: Side, item: SportsLiveItem) {
+        jobs.remove(side)?.cancel()
+        dispatch(DualAction.Reconnecting(item))
+        jobs[side] = viewModelScope.launch {
+            val next = recoveryLookup(item, tried[item.streamKey].orEmpty().toSet())
+            if (next == null) {
+                dispatch(DualAction.Exhausted(item))
+                return@launch
+            }
+            dispatch(DualAction.Switched(item, next))
+            delay(FIRST_FRAME_TIMEOUT_MS)
+            timeOut(item)
+        }
+    }
+
+    private fun startTimeout(side: Side, item: SportsLiveItem) {
+        jobs.remove(side)?.cancel()
+        jobs[side] = viewModelScope.launch {
+            delay(FIRST_FRAME_TIMEOUT_MS)
+            timeOut(item)
+        }
+    }
+
+    /** A game a pane moves to starts with a fresh recovery ladder (its budget stays, per game). */
+    private fun forgetRecovery(item: SportsLiveItem) {
+        ladders.remove(item.streamKey)
+        tried.remove(item.streamKey)
     }
 
     /**
@@ -351,10 +470,23 @@ class SportsLiveDualViewModel internal constructor(
         }
     }
 
-    /** A pane's player failed; [decoderInit] when it could not get a decoder. */
-    fun onPlayerError(item: SportsLiveItem, decoderInit: Boolean) {
+    /**
+     * A pane's player failed; [decoderInit] when it could not get a decoder. After the first frame (or
+     * on a link a recovery tries), the pane recovers ([onUnhealthy]) with [problem]: a burst of errors
+     * skips the retry of the same link.
+     */
+    fun onPlayerError(
+        item: SportsLiveItem,
+        decoderInit: Boolean,
+        problem: SportsLiveStreamHealth.Problem = SportsLiveStreamHealth.Problem.ERROR
+    ) {
         val state = _state.value ?: return
         val side = state.sideOf(item) ?: return
+        val pane = state.pane(side)
+        if (!decoderInit && (pane.status == PaneStatus.Playing || pane.reconnecting)) {
+            onUnhealthy(item, problem)
+            return
+        }
         // No decoder while the other pane holds one (starting or playing): the device cannot play two at once.
         val other = state.pane(side.other)
         val otherActive = other.stream != null &&
@@ -431,6 +563,11 @@ class SportsLiveDualViewModel internal constructor(
     /** No first frame in time: the pane shows an error, and its link is quarantined for the game. */
     private fun timeOut(item: SportsLiveItem) {
         val pane = _state.value?.let { state -> state.sideOf(item)?.let(state::pane) }
+        // A link a recovery tried that did not start: the recovery goes on (#138).
+        if (pane?.status == PaneStatus.Loading && pane.reconnecting) {
+            onUnhealthy(item, SportsLiveStreamHealth.Problem.NO_START)
+            return
+        }
         if (pane?.status == PaneStatus.Loading) linkFailed(item, pane.stream)
         dispatch(DualAction.TimedOut(item))
     }

@@ -25,6 +25,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -65,19 +66,31 @@ import androidx.tv.material3.Text
 import com.nuvio.tv.R
 import com.nuvio.tv.core.debrid.DirectDebridResolver
 import com.nuvio.tv.core.profile.ProfileManager
+import com.nuvio.tv.core.sportslive.SportsLiveRecoveryLadder
+import com.nuvio.tv.core.sportslive.SportsLiveSourceReliability
+import com.nuvio.tv.core.sportslive.SportsLiveStreamHealth
+import com.nuvio.tv.core.sportslive.SportsLiveWorkingLinks
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.ui.screens.player.PlayerMediaSourceFactory
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveAwakeHolds
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveExtraSources
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveHealthTicker
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveReconnectingChip
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveResolvingDialog
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapResolver
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapTarget
 import com.nuvio.tv.ui.screens.sportslive.buildSportsLiveLightPlayer
+import com.nuvio.tv.ui.screens.sportslive.isDecoderInitFailure
 import com.nuvio.tv.ui.screens.sportslive.playSportsLiveStream
+import com.nuvio.tv.ui.screens.sportslive.retrySportsLiveLink
+import com.nuvio.tv.ui.screens.sportslive.sportsLiveHealthSample
 import com.nuvio.tv.ui.screens.sportslive.sportsLiveZapTarget
 import com.nuvio.tv.ui.theme.NuvioTheme
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.drop
@@ -87,9 +100,20 @@ import javax.inject.Inject
 /**
  * The mini player's one ExoPlayer, built like a dual screen pane's and audible (it holds audio
  * focus like the full player). It exists only while a mini player plays; [release] frees it.
+ *
+ * Its stream health is watched (#138): a stream that freezes, buffers too long, ends while live or
+ * fails after its first frame is loaded again once as is, then replaced by the next link for the
+ * game ([lookup], with [onStreamReplaced]), keeping the last frame with "Reconnecting…"; when nothing
+ * is left (or the game's recovery budget is used up) the mini player stops quietly ([onError]).
  */
 @OptIn(UnstableApi::class)
-internal class SportsLiveMiniPlayback(context: Context, private val onError: (sessionId: Long) -> Unit) {
+internal class SportsLiveMiniPlayback(
+    context: Context,
+    private val onError: (sessionId: Long) -> Unit,
+    private val scope: CoroutineScope? = null,
+    private val lookup: suspend (item: SportsLiveItem, tried: Set<String>) -> Stream? = { _, _ -> null },
+    private val onStreamReplaced: (sessionId: Long, stream: Stream) -> Unit = { _, _ -> }
+) {
     private val appContext = context.applicationContext
     private var player: ExoPlayer? = null
     private var view: PlayerView? = null
@@ -100,22 +124,47 @@ internal class SportsLiveMiniPlayback(context: Context, private val onError: (se
         SportsLiveAwakeHolds.shared.set(this, playing)
     }
 
+    /** A recovery runs (#138): "Reconnecting…" shows over the last frame. */
+    var reconnecting by mutableStateOf(false)
+        private set
+
+    private val health = SportsLiveStreamHealth()
+    private var ladder = SportsLiveRecoveryLadder()
+    private val tried = mutableSetOf<String>()
+    private var item: SportsLiveItem? = null
+    private var stream: Stream? = null
+    private var rendered = false
+    private var recoveryJob: Job? = null
+    private val ticker = SportsLiveHealthTicker(::checkHealth)
+
     fun attach(view: PlayerView?) {
         if (this.view !== view) this.view?.player = null
         this.view = view
         view?.player = player
     }
 
-    fun play(sessionId: Long, stream: Stream) {
+    fun play(playing: SportsLiveMiniState.Playing) {
+        val sessionId = playing.sessionId
         if (loadedSessionId == sessionId && player != null) return
         release()
+        val stream = playing.stream
         val url = stream.getStreamUrl() ?: return onError(sessionId)
         val built = buildSportsLiveLightPlayer(appContext).apply {
             setAudioAttributes(MEDIA_AUDIO, /* handleAudioFocus = */ true)
             addListener(object : Player.Listener {
+                override fun onRenderedFirstFrame() {
+                    if (player !== this@apply) return
+                    rendered = true
+                    reconnecting = false
+                    health.onFirstFrame()
+                }
+
                 override fun onPlayerError(error: PlaybackException) {
                     // Only this load's errors count: a released or replaced player is ignored.
-                    if (player === this@apply) onError(sessionId)
+                    if (player !== this@apply) return
+                    val problem = health.onError()
+                    // After its first frame, or on a link a recovery tries, the stream recovers (#138).
+                    if ((rendered || reconnecting) && !error.isDecoderInitFailure()) recover(problem) else onError(sessionId)
                 }
 
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -125,17 +174,83 @@ internal class SportsLiveMiniPlayback(context: Context, private val onError: (se
         }
         player = built
         loadedSessionId = sessionId
+        item = playing.item
+        this.stream = stream
+        rendered = false
+        tried.clear()
+        ladder = SportsLiveRecoveryLadder()
+        health.reset()
         view?.player = built
         built.playSportsLiveStream(appContext, PlayerMediaSourceFactory(appContext), stream, url)
+        ticker.start()
     }
 
     fun release() {
         val current = player ?: return
+        ticker.stop()
+        recoveryJob?.cancel()
+        recoveryJob = null
         player = null
         loadedSessionId = null
+        item = null
+        stream = null
         reportPlaying(false)
+        reconnecting = false
         view?.player = null
         current.release()
+    }
+
+    /** Samples the stream's health (#138): a problem starts a recovery; moving again ends one. */
+    private fun checkHealth() {
+        val current = player ?: return
+        val problem = health.sample(current.sportsLiveHealthSample())
+        if (problem != null) {
+            recover(problem)
+        } else if (reconnecting && health.isProgressing) {
+            reconnecting = false
+        }
+    }
+
+    /** The recovery ladder for [problem] (#138): retry as is, next link, or stop. */
+    private fun recover(problem: SportsLiveStreamHealth.Problem) {
+        val current = player ?: return
+        val sessionId = loadedSessionId ?: return
+        val game = item ?: return
+        val failed = stream ?: return
+        val url = failed.getStreamUrl()
+        SportsLiveSourceReliability.record(
+            SportsLiveExtraSources.sourceKeyFor(game, failed),
+            if (problem.isStall) SportsLiveSourceReliability.Outcome.STALL else SportsLiveSourceReliability.Outcome.FAILURE
+        )
+        SportsLiveWorkingLinks.shared.failed(game.id, url)
+        SportsLiveWorkingLinks.linkKey(url)?.let(tried::add)
+        when (ladder.decide(game.id, url, problem)) {
+            SportsLiveRecoveryLadder.Step.RETRY_SAME -> {
+                reconnecting = true
+                health.rebaseline()
+                current.retrySportsLiveLink()
+            }
+            SportsLiveRecoveryLadder.Step.NEXT_LINK -> {
+                val recoveryScope = scope ?: return onError(sessionId)
+                reconnecting = true
+                recoveryJob?.cancel()
+                recoveryJob = recoveryScope.launch {
+                    val next = lookup(game, tried.toSet())
+                    val nextUrl = next?.getStreamUrl()
+                    if (player !== current) return@launch
+                    if (next == null || nextUrl == null) {
+                        onError(sessionId)
+                        return@launch
+                    }
+                    stream = next
+                    rendered = false
+                    health.reset()
+                    current.playSportsLiveStream(appContext, PlayerMediaSourceFactory(appContext), next, nextUrl)
+                    onStreamReplaced(sessionId, next)
+                }
+            }
+            SportsLiveRecoveryLadder.Step.CHOICES -> onError(sessionId)
+        }
     }
 
     private companion object {
@@ -152,7 +267,7 @@ internal class SportsLiveMiniPlayback(context: Context, private val onError: (se
  */
 @HiltViewModel
 class SportsLiveMiniPlayerViewModel @Inject constructor(
-    resolver: SportsLiveZapResolver,
+    private val resolver: SportsLiveZapResolver,
     private val directDebridResolver: DirectDebridResolver,
     private val profileManager: ProfileManager,
     prefs: SportsLivePreferencesDataStore
@@ -195,6 +310,9 @@ class SportsLiveMiniPlayerViewModel @Inject constructor(
 
     /** Back on the progress dialog: the mini player plays on. */
     fun cancelExpand() = expander.cancel()
+
+    /** The next link the mini player may switch to for [item] after [tried] failed (#138). */
+    suspend fun recoveryStream(item: SportsLiveItem, tried: Set<String>): Stream? = resolver.recoveryStream(item, tried)
 }
 
 /**
@@ -222,7 +340,16 @@ fun SportsLiveMiniPlayerHost(
     val context = LocalContext.current
     val state by controller.state.collectAsStateWithLifecycle()
     val playing = state as? SportsLiveMiniState.Playing
-    val playback = remember { SportsLiveMiniPlayback(context, controller::onStreamError) }
+    val recoveryScope = rememberCoroutineScope()
+    val playback = remember {
+        SportsLiveMiniPlayback(
+            context = context,
+            onError = controller::onStreamError,
+            scope = recoveryScope,
+            lookup = viewModel::recoveryStream,
+            onStreamReplaced = controller::onStreamReplaced
+        )
+    }
     val currentOnExpand by rememberUpdatedState(onExpand)
     val focusManager = LocalFocusManager.current
     var focused by remember { mutableStateOf(false) }
@@ -241,7 +368,7 @@ fun SportsLiveMiniPlayerHost(
             // Removed while focused: the next mini player starts without the focus ring.
             focused = false
         } else {
-            playback.play(playing.sessionId, playing.stream)
+            playback.play(playing)
         }
     }
     LaunchedEffect(viewModel) {
@@ -361,6 +488,8 @@ fun SportsLiveMiniPlayerHost(
                             useController = false
                             resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                             setShutterBackgroundColor(android.graphics.Color.BLACK)
+                            // A recovery switching links keeps the last frame (#138).
+                            setKeepContentOnPlayerReset(true)
                             isFocusable = false
                             isFocusableInTouchMode = false
                             descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
@@ -369,9 +498,15 @@ fun SportsLiveMiniPlayerHost(
                     onRelease = { playback.attach(null) },
                     modifier = Modifier.fillMaxSize()
                 )
+                // A recovery (#138): a small chip at the video's top-left, over the last frame.
+                if (playback.reconnecting) {
+                    SportsLiveReconnectingChip(small = true, modifier = Modifier.align(Alignment.TopStart).padding(6.dp))
+                }
                 // In the stage the caption is a small chip at the video's top-left (V2 P3): never over the
                 // broadcast's own scorebug along the bottom, nor over the score block below the box.
-                if (stageSlot != null && SportsLiveMiniGeometry.captionSpot(inStage = true) == SportsLiveMiniCaptionSpot.TOP_START) {
+                if (!playback.reconnecting && stageSlot != null &&
+                    SportsLiveMiniGeometry.captionSpot(inStage = true) == SportsLiveMiniCaptionSpot.TOP_START
+                ) {
                     MiniCaption(
                         text = stringResource(
                             if (focused) R.string.sports_live_mini_ok_hint else R.string.sports_live_mini_hint,

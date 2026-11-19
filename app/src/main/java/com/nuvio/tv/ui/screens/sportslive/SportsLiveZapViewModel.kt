@@ -435,13 +435,28 @@ class SportsLiveZapViewModel internal constructor(
         // Only while the toast is on screen: Right does nothing for a toast that is not showing.
         if (_fullTime.value == null || !fullTimeClaimed || !fullTimeVisible) return false
         val session = controller.session(contentId) ?: return false
+        val next = nextLiveGameFor(session) ?: return false
+        dismissFullTime()
+        return controller.pick(contentId, next, session.items)
+    }
+
+    /**
+     * "Next live game" on the player's recovery panel (#138), once the stream could not be recovered:
+     * zaps to #57's pick, as the full-time toast does. False when there is none (or no zap session).
+     */
+    internal fun nextLiveGameAfterFailure(): Boolean {
+        val session = controller.session(contentId) ?: return false
+        val next = nextLiveGameFor(session) ?: return false
+        return controller.pick(contentId, next, session.items)
+    }
+
+    /** #57's pick after the game playing in [session], never a finished game. */
+    private fun nextLiveGameFor(session: SportsLiveZapSession): SportsLiveItem? {
         val scores = liveScores.scores.value
         // Never a finished game: the probe's, the panel's Just ended, ESPN finals, and dead link checks.
         val finished = repo.endedKeys.value + panelEndedKeys() + linkVerdicts.deadKeys +
             SportsLiveEndedGames.shared.confirmedEndedSourceKeys(session.items, scores, System.currentTimeMillis())
-        val next = SportsLiveSecondGame.pick(session.current, session.items, scores, finished) ?: return false
-        dismissFullTime()
-        return controller.pick(contentId, next, session.items)
+        return SportsLiveSecondGame.pick(session.current, session.items, scores, finished)
     }
 
     /**

@@ -85,6 +85,12 @@ class SportsLiveSourceCooldown(internal val nowMs: () -> Long = { System.current
         entries.keys.toSet()
     }
 
+    /** Display names of the addons cooling down now, for a recovery to skip their streams (#138). */
+    fun coolingNames(): Set<String> = synchronized(this) {
+        val now = nowMs()
+        entries.values.filter { it.untilMs > now }.mapTo(HashSet()) { it.name }
+    }
+
     /** Whole minutes left of [baseUrl]'s cool-down, rounded up; 0 when it is not cooling down. */
     fun remainingMinutes(baseUrl: String): Int {
         val left = synchronized(this) { (entries[keyOf(baseUrl)]?.untilMs ?: 0L) - nowMs() }

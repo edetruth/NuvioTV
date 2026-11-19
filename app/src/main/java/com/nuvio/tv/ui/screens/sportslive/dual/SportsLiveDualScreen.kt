@@ -19,6 +19,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
@@ -70,6 +71,7 @@ import com.nuvio.tv.ui.components.LoadingIndicator
 import com.nuvio.tv.ui.screens.sportslive.SportsLivePlayHost
 import com.nuvio.tv.ui.screens.sportslive.SportsLivePlayState
 import com.nuvio.tv.ui.screens.sportslive.SportsLivePlayViewModel
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveReconnectingChip
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapTarget
 import com.nuvio.tv.ui.screens.sportslive.zapDirection
 import com.nuvio.tv.ui.theme.NuvioTheme
@@ -134,7 +136,9 @@ fun SportsLiveDualScreen(
                         context = context,
                         onFirstFrame = viewModel::onFirstFrame,
                         onError = viewModel::onPlayerError,
-                        onIsPlaying = viewModel::onIsPlayingChanged
+                        onIsPlaying = viewModel::onIsPlayingChanged,
+                        onUnhealthy = viewModel::onUnhealthy,
+                        onMoving = viewModel::onMoving
                     )
                     viewModel.onPlayersCreated()
                 }
@@ -181,6 +185,12 @@ fun SportsLiveDualScreen(
     // of dual screen as OK does (#27); a second Back while it starts, or dual opened elsewhere, leaves.
     var backPlayed by remember { mutableStateOf(false) }
     BackHandler {
+        // "Close this side" (#138): the highlighted pane gave up; the other game plays full screen.
+        viewModel.closeFailedSide()?.takeUnless { backPlayed }?.let { (item, stream) ->
+            backPlayed = true
+            playViewModel.playResolved(item, stream)
+            return@BackHandler
+        }
         val back = viewModel.backToPlayer()?.takeUnless { backPlayed }
         if (back == null) {
             currentOnBack()
@@ -215,14 +225,20 @@ fun SportsLiveDualScreen(
                     KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER ->
                         if (native.repeatCount == 0) {
                             val pane = dual.pane(dual.highlighted)
-                            // A playing pane's stream goes straight to the full player.
+                            // A playing pane's stream goes straight to the full player; a pane whose
+                            // recovery gave up offers its streams to choose from (#138).
                             val stream = pane.okStream
                             if (stream != null) playViewModel.playResolved(pane.item, stream)
+                            else if (pane.status == PaneStatus.Error) playViewModel.chooseStream(pane.item)
                             else playViewModel.play(pane.item)
                         }
                     else -> {
                         val forward = zapDirection(native.keyCode, partyActive = false) ?: return@onKeyEvent false
-                        if (native.repeatCount == 0) viewModel.zap(forward)
+                        // On a pane whose recovery gave up, Down is "Next live game" (#138).
+                        if (native.repeatCount == 0) {
+                            if (forward && dual.pane(dual.highlighted).status == PaneStatus.Error) viewModel.nextLiveGame()
+                            else viewModel.zap(forward)
+                        }
                     }
                 }
                 true
@@ -340,11 +356,13 @@ private fun DualPaneView(
                         descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
                         // The TV stays awake while the panes are on screen.
                         keepScreenOn = true
+                        // A recovery switching links keeps the last frame, not a black pane (#138).
+                        setKeepContentOnPlayerReset(true)
                     }.also(onViewCreated)
                 },
                 modifier = Modifier.fillMaxSize()
             )
-            PaneStatusOverlay(pane.status)
+            PaneStatusOverlay(pane)
         }
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -411,13 +429,23 @@ private fun SoundBars(color: Color, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun PaneStatusOverlay(status: PaneStatus) {
-    when (status) {
+private fun BoxScope.PaneStatusOverlay(pane: DualPane) {
+    // A recovery (#138): the last frame stays, with a small chip at its top-left, clear of the scorebug.
+    if (pane.reconnecting && (pane.status == PaneStatus.Loading || pane.status == PaneStatus.Playing)) {
+        SportsLiveReconnectingChip(
+            small = true,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(8.dp)
+        )
+        return
+    }
+    when (pane.status) {
         PaneStatus.Loading -> LoadingIndicator()
         PaneStatus.Playing -> Unit
         PaneStatus.Error -> PaneMessage(
             text = stringResource(R.string.sports_live_dual_stream_error),
-            hint = stringResource(R.string.sports_live_dual_stream_error_hint)
+            hint = stringResource(R.string.sports_live_dual_recovery_choices)
         )
         PaneStatus.DeviceLimit -> PaneMessage(text = stringResource(R.string.sports_live_dual_device_limit), hint = null)
     }

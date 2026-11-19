@@ -830,6 +830,8 @@ private val STALL_WATCHDOG_SKIP_PAST_BUFFERED_MS = PlayerStallWatchdogPolicy.SKI
 /** Re-seeks past the buffered edge when bufferedPosition stops advancing during buffering. */
 internal fun PlayerRuntimeController.maybeScheduleStallWatchdog() {
     if (stallWatchdogJob?.isActive == true) return
+    // Sports & Live has its own stream-health monitor (#138); movies and shows keep this one.
+    if (com.nuvio.tv.ui.screens.sportslive.SportsLiveExtraSources.isSportsPlayback(contentId)) return
     val player = _exoPlayer ?: return
     if (player.playbackState != Player.STATE_BUFFERING) return
 

@@ -75,6 +75,27 @@ class SportsLiveMiniPlayerStateTest {
     }
 
     @Test
+    fun `a recovery's next link replaces the stream of the same mini player only`() = runTest {
+        val mini = controller()
+        var released = 0
+        mini.onStopped = { released++ }
+        mini.onBackFromPlayer("a", session, stream)
+        val sessionId = mini.playing().sessionId
+        released = 0
+        val next = dualStream("a2")
+
+        // A late replacement for an earlier mini player is ignored.
+        mini.onStreamReplaced(sessionId - 1, dualStream("old"))
+        assertEquals(stream, mini.playing().stream)
+
+        mini.onStreamReplaced(sessionId, next)
+        assertEquals(next, mini.playing().stream)
+        // Same session: the player is not restarted, and an expand plays the new link.
+        assertEquals(sessionId, mini.playing().sessionId)
+        assertEquals(0, released)
+    }
+
+    @Test
     fun `2 h without interaction stops it`() = runTest {
         val mini = controller()
         mini.onBackFromPlayer("a", session, stream)

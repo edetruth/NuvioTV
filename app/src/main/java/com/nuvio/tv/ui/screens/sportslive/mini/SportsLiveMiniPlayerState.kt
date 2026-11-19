@@ -102,6 +102,15 @@ class SportsLiveMiniPlayerController(
         if ((_state.value as? SportsLiveMiniState.Playing)?.sessionId == sessionId) stop(SportsLiveMiniStop.STREAM_ERROR)
     }
 
+    /**
+     * Mini player [sessionId] switched to [stream], another link for its game, after its stream went
+     * bad (#138): an expand plays that one. The session stays the same, so the player is not restarted.
+     */
+    fun onStreamReplaced(sessionId: Long, stream: Stream) {
+        val playing = _state.value as? SportsLiveMiniState.Playing ?: return
+        if (playing.sessionId == sessionId) _state.value = playing.copy(stream = stream)
+    }
+
     /** A key press anywhere in the app: the idle timeout starts over. */
     fun onInteraction() {
         if (isActive) restartIdleTimer()

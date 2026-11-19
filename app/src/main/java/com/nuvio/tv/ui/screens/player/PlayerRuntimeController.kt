@@ -290,6 +290,10 @@ class PlayerRuntimeController(
     internal val sportsFailoverTriedKeys = mutableSetOf<String>()
     internal var sportsStallWatchdogJob: Job? = null
 
+    /** Sports & Live stream health and recovery steps of this player (#138). */
+    internal val sportsHealth = com.nuvio.tv.core.sportslive.SportsLiveStreamHealth()
+    internal val sportsRecoveryLadder = com.nuvio.tv.core.sportslive.SportsLiveRecoveryLadder()
+
     /** When the current stream started loading, for its source's time to first frame (#40). */
     internal var sportsAttemptStartedAtMs = System.currentTimeMillis()
 

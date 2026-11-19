@@ -154,6 +154,7 @@ import com.nuvio.tv.ui.screens.party.ConfirmDialog
 import com.nuvio.tv.ui.screens.party.PartyPanel
 import com.nuvio.tv.ui.screens.party.PartyStatusPill
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveShortPress
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveReconnectingChip
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapTarget
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapViewModel
 import com.nuvio.tv.ui.screens.sportslive.liveWindow
@@ -1500,6 +1501,16 @@ fun PlayerScreen(
             modifier = playerControlsDim
         )
 
+        // Sports & Live stream recovery (#138): a small chip top-left, never over the scorebug.
+        if (uiState.sportsReconnecting && uiState.error == null) {
+            SportsLiveReconnectingChip(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(top = NuvioTheme.spacing.lg, start = NuvioTheme.spacing.lg)
+                    .zIndex(2.7f)
+            )
+        }
+
         // Error state
         if (uiState.error != null) {
             ErrorOverlay(
@@ -1511,6 +1522,12 @@ fun PlayerScreen(
                 },
                 onRetry = if (uiState.canChooseAnotherSource) {
                     { viewModel.onEvent(PlayerEvent.OnRetryPlayback) }
+                } else {
+                    null
+                },
+                // Sports & Live (#138): the stream could not be recovered; zap to #57's next live game.
+                onNextLiveGame = if (uiState.canChooseAnotherSource && sportsLiveZap.hasSession) {
+                    { sportsLiveZap.nextLiveGameAfterFailure(); Unit }
                 } else {
                     null
                 },
@@ -4151,6 +4168,7 @@ private fun ErrorOverlay(
     message: String,
     onChooseSource: (() -> Unit)? = null,
     onRetry: (() -> Unit)? = null,
+    onNextLiveGame: (() -> Unit)? = null,
     showSwitchToMpvAction: Boolean = false,
     onSwitchToMpv: (() -> Unit)? = null,
     showReportAction: Boolean,
@@ -4165,6 +4183,7 @@ private fun ErrorOverlay(
     val mpvFocusRequester = remember { FocusRequester() }
     val chooseSourceFocusRequester = remember { FocusRequester() }
     val retryFocusRequester = remember { FocusRequester() }
+    val nextLiveGameFocusRequester = remember { FocusRequester() }
     val onSwitchMpvAction = onSwitchToMpv.takeIf { showSwitchToMpvAction }
     // The recovery action is the primary one when present, so it takes focus first.
     val targetFocusRequester = when {
@@ -4176,10 +4195,11 @@ private fun ErrorOverlay(
     var targetButtonPlaced by remember(onSwitchMpvAction != null, onChooseSource != null) { mutableStateOf(false) }
     var chooseSourceFocused by remember(onSwitchMpvAction != null, onChooseSource != null) { mutableStateOf(false) }
     var retryFocused by remember(onSwitchMpvAction != null, onChooseSource != null) { mutableStateOf(false) }
+    var nextLiveGameFocused by remember(onSwitchMpvAction != null, onChooseSource != null) { mutableStateOf(false) }
     var mpvFocused by remember(onSwitchMpvAction != null, onChooseSource != null) { mutableStateOf(false) }
     var reportFocused by remember(onSwitchMpvAction != null, onChooseSource != null) { mutableStateOf(false) }
     var exitFocused by remember(onSwitchMpvAction != null, onChooseSource != null) { mutableStateOf(false) }
-    val hasOverlayFocus = chooseSourceFocused || retryFocused || mpvFocused || reportFocused || exitFocused
+    val hasOverlayFocus = chooseSourceFocused || retryFocused || nextLiveGameFocused || mpvFocused || reportFocused || exitFocused
 
     LaunchedEffect(targetButtonPlaced, onSwitchMpvAction != null, onChooseSource != null) {
         if (!targetButtonPlaced) return@LaunchedEffect
@@ -4268,6 +4288,26 @@ private fun ErrorOverlay(
                             .onFocusChanged { chooseSourceFocused = it.isFocused }
                             .focusProperties {
                                 right = when {
+                                    onNextLiveGame != null -> nextLiveGameFocusRequester
+                                    onRetry != null -> retryFocusRequester
+                                    onSwitchMpvAction != null -> mpvFocusRequester
+                                    showReportAction -> reportFocusRequester
+                                    else -> exitFocusRequester
+                                }
+                            }
+                    )
+                }
+                if (onNextLiveGame != null) {
+                    PlayerOverlayButton(
+                        text = stringResource(R.string.sports_live_next_live_game),
+                        onClick = onNextLiveGame,
+                        primary = false,
+                        modifier = Modifier
+                            .focusRequester(nextLiveGameFocusRequester)
+                            .onFocusChanged { nextLiveGameFocused = it.isFocused }
+                            .focusProperties {
+                                if (onChooseSource != null) left = chooseSourceFocusRequester
+                                right = when {
                                     onRetry != null -> retryFocusRequester
                                     onSwitchMpvAction != null -> mpvFocusRequester
                                     showReportAction -> reportFocusRequester
@@ -4285,7 +4325,8 @@ private fun ErrorOverlay(
                             .focusRequester(retryFocusRequester)
                             .onFocusChanged { retryFocused = it.isFocused }
                             .focusProperties {
-                                if (onChooseSource != null) left = chooseSourceFocusRequester
+                                if (onNextLiveGame != null) left = nextLiveGameFocusRequester
+                                else if (onChooseSource != null) left = chooseSourceFocusRequester
                                 right = when {
                                     onSwitchMpvAction != null -> mpvFocusRequester
                                     showReportAction -> reportFocusRequester
