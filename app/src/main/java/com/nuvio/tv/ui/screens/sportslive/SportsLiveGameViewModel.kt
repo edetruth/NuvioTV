@@ -58,6 +58,12 @@ data class SportsLiveGameRequest(
 internal fun sportsLiveGameHomeFirst(item: SportsLiveItem, event: ScoreSnapshot): Boolean =
     ScoreChips.orderedSides(item)?.let { (first, second) -> ScoreMatcher.firstIsHome(first, second, event) } == true
 
+/**
+ * Opens the Game page on the request just put in [SportsLiveGameRequests], from the player (its live games
+ * panel's Game stats, #140); provided around the player by the nav host, null elsewhere (not offered).
+ */
+val LocalOpenSportsLiveGame = androidx.compose.runtime.staticCompositionLocalOf<(() -> Unit)?> { null }
+
 /** Hands the request to the Game page's ViewModel, once (like dual screen's session). */
 internal object SportsLiveGameRequests {
     @Volatile

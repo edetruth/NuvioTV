@@ -26,6 +26,11 @@ class PlayerZapController(
     /** Stream keys of the games known to have ended, which zaps skip. */
     private val endedKeys: () -> Set<String> = { emptySet() },
     /**
+     * The live games panel's one ordered list (#142), as the panel shows it (or would, while closed); null
+     * while it is not known. Zaps and picks walk it ([SportsLiveZapSession.withLineup]).
+     */
+    private val lineup: () -> List<ZapPanelRow>? = { null },
+    /**
      * How long a flip must settle before its stream is resolved. Flipping on cancels the previous
      * flip's job during this window, so skipping past channels to land on one costs a single resolve
      * instead of one per channel.
@@ -65,7 +70,7 @@ class PlayerZapController(
      */
     fun zap(contentId: String?, forward: Boolean): Boolean {
         val inFlight = job?.isActive == true
-        val base = session(contentId) ?: return false
+        val base = session(contentId)?.let(::ordered) ?: return false
         val target = base.step(forward, endedKeys()) ?: return false
         if (!inFlight) playing = base
         return zapTo(target)
@@ -77,7 +82,7 @@ class PlayerZapController(
      */
     fun pick(contentId: String?, item: SportsLiveItem, panelItems: List<SportsLiveItem>): Boolean {
         val inFlight = job?.isActive == true
-        val base = session(contentId) ?: return false
+        val base = session(contentId)?.let(::ordered) ?: return false
         if (!inFlight) playing = base
         if (item.streamKey == playing?.current?.streamKey) {
             job?.cancel()
@@ -103,6 +108,22 @@ class PlayerZapController(
         val base = SportsLiveZapSessions.activeFor(contentId) ?: return
         SportsLiveZapSessions.update(base.copy(panelChip = chip))
     }
+
+    /**
+     * "Choose stream" on [item] in the live games panel listing [panelItems] (#140): any lookup stops and the
+     * session moves to [item], whose Stream screen the player then opens. Null when that player has no session.
+     */
+    fun chooseStream(contentId: String?, item: SportsLiveItem, panelItems: List<SportsLiveItem>): SportsLiveZapSession? {
+        val base = session(contentId)?.let(::ordered) ?: return null
+        val moved = base.pickFromPanel(item, panelItems) ?: return null
+        job?.cancel()
+        SportsLiveZapSessions.update(moved)
+        return moved
+    }
+
+    /** [session] on the panel's ordered list, when it is known (#142). */
+    private fun ordered(session: SportsLiveZapSession): SportsLiveZapSession =
+        lineup()?.let(session::withLineup) ?: session
 
     private fun zapTo(target: SportsLiveZapSession): Boolean {
         if (playing == null) return false

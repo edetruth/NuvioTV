@@ -137,8 +137,24 @@ data class ZapPanelRow(
     val art: GameArt?,
     val teams: GameArt? = null,
     /** Where the game stands ([GameStatus.of]): [group] is read from it. */
-    val status: GameStatus = GameStatus.Channel
-)
+    val status: GameStatus = GameStatus.Channel,
+    /**
+     * The row's V2 group (#142, the Scoreboard's [scoreboardGroupOf]): the panel heads and orders its rows by
+     * it, and CH+/CH− walk them in that order. [groupPanelRows] sets it from [status].
+     */
+    val section: ScoreboardGroup = sectionOf(group)
+) {
+    /** CH+/CH− stop on it (F11): every row but a final or just ended game, which the panel still lists. */
+    val zappable: Boolean get() = section != ScoreboardGroup.JUST_ENDED
+}
+
+/** A row built with no status (tests, the fallback row): its V2 group from its panel [group]. */
+private fun sectionOf(group: ZapPanelGroup): ScoreboardGroup = when (group) {
+    ZapPanelGroup.LIVE_NOW -> ScoreboardGroup.LIVE
+    ZapPanelGroup.STARTING_SOON -> ScoreboardGroup.STARTING_SOON
+    ZapPanelGroup.OTHER -> ScoreboardGroup.LATER
+    ZapPanelGroup.JUST_ENDED -> ScoreboardGroup.JUST_ENDED
+}
 
 /**
  * The panel's [items] grouped by game state (#17): **Live now** first, the game furthest in (earliest
@@ -178,7 +194,7 @@ internal fun groupPanelRows(
         val chip = ScoreChips.of(item, event, mode, item.streamKey in revealed)
         val teams = PanelArt.of(item, event, known)
         val art = teams.takeIf { group == ZapPanelGroup.STARTING_SOON }
-        Entry(ZapPanelRow(item, group, chip, art, teams, status), start, index)
+        Entry(ZapPanelRow(item, group, chip, art, teams, status, scoreboardGroupOf(status, item)), start, index)
     }
     val order = compareBy<Entry> { it.row.group.ordinal }
         .thenByDescending { it.row.item.followed }
@@ -206,7 +222,18 @@ internal fun stabilizePanelRows(fresh: List<ZapPanelRow>, previous: List<String>
     val rank = HashMap<String, Int>(previous.size * 2)
     previous.forEachIndexed { index, key -> rank.putIfAbsent(key, index) }
     // Stable: rows new to the list keep their fresh order after the known ones.
-    return fresh.sortedWith(compareBy<ZapPanelRow> { it.group.ordinal }.thenBy { rank[it.item.streamKey] ?: Int.MAX_VALUE })
+    return fresh.sortedWith(compareBy<ZapPanelRow> { it.section.ordinal }.thenBy { rank[it.item.streamKey] ?: Int.MAX_VALUE })
+}
+
+/**
+ * The panel's one ordered list (#142), the list the panel shows and CH+/CH− walk: [grouped] ([groupPanelRows]
+ * order) listed by V2 group ([ZapPanelRow.section]: live, starting soon, channels, just ended), followed teams'
+ * games first inside each group, then as grouped. While a row has focus, [previous] (the order last shown)
+ * keeps each group as it was ([stabilizePanelRows]); null takes the fresh order.
+ */
+internal fun panelLineup(grouped: List<ZapPanelRow>, previous: List<String>? = null): List<ZapPanelRow> {
+    val fresh = grouped.sortedWith(compareBy<ZapPanelRow> { it.section.ordinal }.thenByDescending { it.item.followed })
+    return stabilizePanelRows(fresh, previous)
 }
 
 /**
@@ -223,7 +250,7 @@ internal const val PANEL_REORDER_MS = 60_000L
 internal fun panelListIndex(rows: List<ZapPanelRow>, key: String?): Int {
     var index = 0
     rows.forEachIndexed { i, row ->
-        if (i == 0 || rows[i - 1].group != row.group) index++
+        if (i == 0 || rows[i - 1].section != row.section) index++
         if (row.item.streamKey == key) return index
         index++
     }
@@ -320,3 +347,27 @@ data class SportsLiveZapPanelState(
  * plays ([previewPlaying]); never a logos-and-time card in its place.
  */
 internal fun panelPreviewCornerShown(previewPlaying: Boolean): Boolean = previewPlaying
+
+/**
+ * What Hold OK on a panel row lists (#140), in order: **Watch both** first (the game playing beside the one
+ * held, where dual screen pairs them: [watchBoth]), then **Choose stream** ([chooseStream]), **Game stats** (a
+ * strict ESPN match only: [strictMatch]) and **Follow ‹team›** once per side ([sides]). The More… menu's
+ * entries ([sportsLiveMoreEntries]) without Details or Remind me, which the player has no room for.
+ */
+internal fun panelMenuEntries(watchBoth: Boolean, chooseStream: Boolean, strictMatch: Boolean, sides: Int): List<SportsLiveMoreEntry> =
+    sportsLiveMoreEntries(watchBoth, chooseStream, strictMatch, sides, remindable = false)
+        .filter { it != SportsLiveMoreEntry.DETAILS && it != SportsLiveMoreEntry.REMIND }
+
+/**
+ * The Hold OK menu of a panel row (#140): its [entries] ([panelMenuEntries]), each side with whether a
+ * followed team plays it, and the strict ESPN [game] Game stats opens (null: not offered).
+ */
+internal data class SportsLivePanelMenu(
+    val item: SportsLiveItem,
+    val entries: List<SportsLiveMoreEntry>,
+    val sides: List<Pair<String, Boolean>>,
+    val game: ScoreSnapshot?
+) {
+    val watchBoth: Boolean get() = SportsLiveMoreEntry.WATCH_WITH in entries
+    val chooseStream: Boolean get() = SportsLiveMoreEntry.CHOOSE_STREAM in entries
+}

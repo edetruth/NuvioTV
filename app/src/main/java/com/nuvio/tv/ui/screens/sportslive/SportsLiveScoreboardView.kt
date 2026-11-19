@@ -258,7 +258,7 @@ private fun GameCells(row: ScoreboardRow, reminded: Boolean, hasReplay: Boolean,
 
 /** The row's tag: ESPN's league, the card's sport, else the sport its text tells ("TENNIS", "CRICKET"). */
 @Composable
-private fun rowTagText(row: ScoreboardRow): String {
+internal fun rowTagText(row: ScoreboardRow): String {
     val item = row.item
     val tag = scoreboardRowTag(row.art?.league, item.sport, item.catalogName)
     if (tag.isNotEmpty()) return tag

@@ -319,15 +319,7 @@ class SportsLiveViewModel internal constructor(
      * follow matches the team in every addon.
      */
     fun toggleFollow(item: SportsLiveItem, side: String) {
-        viewModelScope.launch {
-            val matching = repo.followedTeams.first().filter { SportsLiveTeams.followsSideOfAnySource(it, side, item) }
-            if (matching.isEmpty()) {
-                val sport = if (item.isChannel) null else (listOf(item) + item.alternates).firstNotNullOfOrNull(SportsLiveTeams::knownSport)
-                repo.follow(FollowedTeam(side, sport))
-            } else {
-                matching.forEach { repo.unfollow(it) }
-            }
-        }
+        viewModelScope.launch { repo.toggleFollowSide(item, side) }
     }
 
     fun selectTab(tab: SportsLiveTab) {
@@ -634,5 +626,20 @@ internal data class SportsLiveRefreshPlan(
             SportsLiveTab.REPLAYS -> SportsLiveRefreshPlan(setOf(SportsLiveKind.REPLAY), everyMs = null, openStaleMs = REPLAYS_OPEN_STALE_MS)
             SportsLiveTab.CHANNELS, SportsLiveTab.RESULTS -> null
         }
+    }
+}
+
+/**
+ * Follow ‹side› of [item] (the section's and the player panel's menus): unfollows every followed team that is
+ * [side] of [item] or of any of its alternates, or, when none is, follows [side] with the first known sport of
+ * its sources ([SportsLiveTeams.knownSport]; none for a channel or a catalog-named sport).
+ */
+internal suspend fun SportsLiveRepository.toggleFollowSide(item: SportsLiveItem, side: String) {
+    val matching = followedTeams.first().filter { SportsLiveTeams.followsSideOfAnySource(it, side, item) }
+    if (matching.isEmpty()) {
+        val sport = if (item.isChannel) null else (listOf(item) + item.alternates).firstNotNullOfOrNull(SportsLiveTeams::knownSport)
+        follow(FollowedTeam(side, sport))
+    } else {
+        matching.forEach { unfollow(it) }
     }
 }

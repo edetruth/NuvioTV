@@ -84,6 +84,7 @@ import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapSessions
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapTarget
 import com.nuvio.tv.ui.screens.sportslive.streamRouteFor
 import com.nuvio.tv.ui.screens.sportslive.dual.LocalOpenSportsLiveDual
+import com.nuvio.tv.ui.screens.sportslive.LocalOpenSportsLiveGame
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualPopTarget
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualScreen
 import com.nuvio.tv.ui.screens.sportslive.dual.sportsLiveDualEntryPopTarget
@@ -115,9 +116,12 @@ fun NuvioNavHost(
             ?: checkNotNull(LocalViewModelStoreOwner.current)
         // The player's live games panel opens dual screen through this.
         val openSportsLiveDual: () -> Unit = remember(navController) { { openSportsLiveDualFromPlayer(navController) } }
+        // ...and the Game page (Game stats in its Hold OK menu, #140), above the player: Back returns to it.
+        val openSportsLiveGame: () -> Unit = remember(navController) { { navController.navigate(Screen.SportsLiveGame.route) } }
         CompositionLocalProvider(
             LocalViewModelStoreOwner provides navViewModelStoreOwner,
-            LocalOpenSportsLiveDual provides openSportsLiveDual
+            LocalOpenSportsLiveDual provides openSportsLiveDual,
+            LocalOpenSportsLiveGame provides openSportsLiveGame
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
                 LocalBackgroundTrailerController.current?.let { controller ->
@@ -196,7 +200,7 @@ private fun sportsLivePlayerRoute(target: SportsLiveZapTarget): String? {
 
 /** The route that plays a Sports & Live target: its Player route, else its Stream screen. */
 fun sportsLiveTargetRoute(target: SportsLiveZapTarget): String =
-    sportsLivePlayerRoute(target) ?: streamRouteFor(target.item, target.returnToHomeOnBack)
+    sportsLivePlayerRoute(target) ?: streamRouteFor(target.item, target.returnToHomeOnBack, target.manualSelection)
 
 /**
  * Replaces the playing Player with the zap target's. The first game's Stream screen (when it is
@@ -205,7 +209,7 @@ fun sportsLiveTargetRoute(target: SportsLiveZapTarget): String =
  */
 internal fun navigateToSportsLiveZapTarget(navController: NavHostController, target: SportsLiveZapTarget) {
     val playerRoute = sportsLivePlayerRoute(target)
-    val route = playerRoute ?: streamRouteFor(target.item, target.returnToHomeOnBack)
+    val route = playerRoute ?: streamRouteFor(target.item, target.returnToHomeOnBack, target.manualSelection)
     val popUpToRoute = if (navController.previousIsStreamScreen()) Screen.Stream.route else Screen.Player.route
     navController.navigate(route) {
         popUpTo(popUpToRoute) { inclusive = true }

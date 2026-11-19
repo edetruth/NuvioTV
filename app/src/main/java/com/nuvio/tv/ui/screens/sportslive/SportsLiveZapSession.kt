@@ -9,8 +9,10 @@ import com.nuvio.tv.domain.model.SportsLiveTab
  * game. The list is a snapshot taken at launch: on Live now every game of the tab, whatever the filter
  * (#68), so the player's live games panel and its chips can reach them all.
  *
- * Zap order ([zapOrder]): once a chip is picked in the panel ([panelChip]), only that chip's games,
- * whichever tab the session started from (all of them when the session has none of its games);
+ * Zap order ([zapOrder]): on Live now, the player panel's one ordered list ([lineup], #142: same chip,
+ * groups and order as the panel shows), once the player knows it ([withLineup]). Otherwise (another tab, or
+ * before the panel's list is known): once a chip is picked in the panel ([panelChip]), only that chip's
+ * games, whichever tab the session started from (all of them when the session has none of its games);
  * before that, the games of the [filter] the game was started under first, then the rest.
  */
 data class SportsLiveZapSession(
@@ -20,7 +22,11 @@ data class SportsLiveZapSession(
     val filter: String?,
     val returnToHomeOnBack: Boolean,
     /** The live games panel's chip picked during this playback (#68); null until one is picked. */
-    val panelChip: ZapPanelChip? = null
+    val panelChip: ZapPanelChip? = null,
+    /** The panel's rows (stream keys) in the order it lists them (#142); null until [withLineup]. */
+    val lineup: List<String>? = null,
+    /** Rows of [lineup] CH+/CH− pass over (F11): finals and just ended games, which the panel still lists. */
+    val skipped: Set<String> = emptySet()
 ) {
     init {
         require(index in items.indices) { "index $index outside ${items.size} items" }
@@ -31,7 +37,12 @@ data class SportsLiveZapSession(
     /** Indices of [items] in the order Up/Down zap through them. */
     internal val zapOrder: List<Int> by lazy {
         val chip = panelChip
-        if (chip != null) {
+        val listed = lineup
+        if (listed != null) {
+            // The panel's list (#142): items were set to it, in its order ([withLineup]).
+            val indexOf = items.withIndex().associate { (index, item) -> item.streamKey to index }
+            listed.mapNotNull { indexOf[it] }
+        } else if (chip != null) {
             // The panel's chips are Live now's (a sport or My teams), whatever tab the session is on.
             items.indices.filter { items[it].matchesZapFilter(chip.filter, SportsLiveTab.LIVE_NOW) }
                 .ifEmpty { items.indices.toList() }
@@ -65,9 +76,29 @@ data class SportsLiveZapSession(
         repeat(if (start >= 0) order.size - 1 else order.size) {
             position = Math.floorMod(position + if (forward) 1 else -1, order.size)
             val moved = copy(index = order[position])
-            if (!moved.current.hasEnded(endedKeys)) return moved
+            if (!moved.current.hasEnded(endedKeys) && moved.current.streamKey !in skipped) return moved
         }
         return null
+    }
+
+    /**
+     * The session on the player panel's one ordered list (#142): [rows] as the panel lists them (its chip,
+     * V2 groups, followed first, the order frozen under focus), so the next zap (CH− / ▼) lands on the row
+     * below the game playing and the previous one (CH+ / ▲) on the row above; finals stay listed but are passed over. The game playing stays
+     * current: when the list leaves it out (a chip without it), it is kept after the list, outside the
+     * order, so CH+/CH− go to the list's first or last game. Only a Live now session takes it (the panel
+     * lists Live now's games); with no rows, unchanged.
+     */
+    internal fun withLineup(rows: List<ZapPanelRow>): SportsLiveZapSession {
+        if (tab != SportsLiveTab.LIVE_NOW || rows.isEmpty()) return this
+        val listed = rows.map { it.item }
+        val here = listed.indexOfFirst { it.streamKey == current.streamKey }
+        return copy(
+            items = if (here >= 0) listed else listed + current,
+            index = if (here >= 0) here else listed.size,
+            lineup = listed.map { it.streamKey },
+            skipped = rows.filterNot { it.zappable }.mapTo(HashSet()) { it.item.streamKey }
+        )
     }
 
     /** The session moved to the item whose [SportsLiveItem.streamKey] is [itemKey], or null if absent. */

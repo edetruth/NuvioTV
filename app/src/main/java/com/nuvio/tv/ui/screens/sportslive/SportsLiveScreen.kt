@@ -1407,7 +1407,7 @@ private val LIST_FADE = 40.dp
 private val LIST_EDGE_KEEP = 100.dp
 
 /** The two sides in the order the title names them ("Patriots at Jets": Patriots, then Jets). */
-private fun TeamPair.inTitleOrder(title: String): List<String> =
+internal fun TeamPair.inTitleOrder(title: String): List<String> =
     listOf(home, away).sortedBy { side -> title.indexOf(side, ignoreCase = true).let { if (it < 0) Int.MAX_VALUE else it } }
 
 /** The Agenda's move for a remote [keyCode]: ← → a time slot, CH+ (up) / CH− (down) a day, as CH zaps in the player. */

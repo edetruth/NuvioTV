@@ -186,28 +186,44 @@ fun SportsLiveFilterControl(
         ) {
             options.forEach { option ->
                 val isSelected = option.value == state.selected
-                val underCursor = focused && option.value == cursor && !isSelected
+                val look = sportsLiveFilterLook(isSelected, underCursor = focused && option.value == cursor, gold = option.gold)
                 val optionShape = RoundedCornerShape(10.dp)
                 Text(
                     text = option.label,
                     style = SportsLiveTokens.style(if (isSelected) SportsLiveTokens.Type.ControlSelected else SportsLiveTokens.Type.Control),
-                    color = when {
-                        option.gold -> Colors.FollowedGold
-                        isSelected || underCursor -> Colors.TextPrimary
-                        else -> Colors.TextInactive
-                    },
+                    color = look.text,
                     maxLines = 1,
                     softWrap = false,
                     modifier = Modifier
                         .bringIntoViewRequester(requesters.getValue(option.value))
-                        .background(if (isSelected) SportsLiveFocus.selectedFill else Color.Transparent, optionShape)
-                        .border(1.dp, if (underCursor) Colors.TextPrimary else Color.Transparent, optionShape)
+                        .background(look.fill, optionShape)
+                        .border(1.dp, look.outline, optionShape)
                         .padding(horizontal = 6.dp, vertical = 5.dp)
                 )
             }
         }
     }
 }
+
+/** How a filter option is drawn: its [fill], its [text] colour and its [outline] (transparent: none). */
+internal data class SportsLiveFilterLook(val fill: Color, val text: Color, val outline: Color)
+
+/**
+ * A filter option's look (#93, #140): the [selected] option has the tinted fill (never white) with white text;
+ * the option under the focused cursor ([underCursor]) a thin white outline, on the selected one too, so the
+ * cursor always shows; the rest 70 % white on no fill. "★ My teams" ([gold]) keeps its gold text. Text never
+ * matches its fill, so no option is ever a blank pill.
+ */
+internal fun sportsLiveFilterLook(selected: Boolean, underCursor: Boolean, gold: Boolean): SportsLiveFilterLook =
+    SportsLiveFilterLook(
+        fill = if (selected) SportsLiveFocus.selectedFill else Color.Transparent,
+        text = when {
+            gold -> Colors.FollowedGold
+            selected || underCursor -> Colors.TextPrimary
+            else -> Colors.TextInactive
+        },
+        outline = if (underCursor) Colors.TextPrimary else Color.Transparent
+    )
 
 /**
  * The filter's options from a tab's [filters] ("★ My teams" first when listed, then All, then the rest), each

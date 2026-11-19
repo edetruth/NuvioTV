@@ -103,6 +103,12 @@ object SportsLiveTokens {
         val ControlSelected = Control.copy(fontWeight = FontWeight.SemiBold)
         /** Buttons (Watch, More…): 28 px semibold. */
         val Button = TextStyle(fontSize = 14.sp, lineHeight = 17.sp, fontWeight = FontWeight.SemiBold)
+        /** The in-player panel's one-line rows (#140), the row scale in compact form: 26 px names and status. */
+        val PanelLine = TextStyle(fontSize = 13.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium)
+        /** Their scores: 26 px tabular; the leader's set in real bold. */
+        val PanelScore = TextStyle(fontSize = 13.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium, fontFeatureSettings = "tnum")
+        /** The panel's title: 32 px semibold. */
+        val PanelTitle = TextStyle(fontSize = 16.sp, lineHeight = 20.sp, fontWeight = FontWeight.SemiBold)
     }
 
     /** Frame, rows, columns and controls (board px → dp). */
@@ -148,6 +154,13 @@ object SportsLiveTokens {
         val ListWidth = 400.dp
         val StageWidth = 360.dp
         val StageGap = 24.dp
+
+        /** The in-player panel (#140): 560 px wide (29 % of 1080p), one-line rows 44 px tall, 4 px apart. */
+        val PanelWidth = 280.dp
+        val PanelLine = 22.dp
+        val PanelLineGap = 2.dp
+        /** A panel row's team logos: 28 px. */
+        val PanelLogo = 14.dp
 
         /** Buttons: 72 px tall; the primary at least 200 px wide. */
         val ButtonHeight = 36.dp

@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import androidx.annotation.StringRes
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveBadge
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveButton
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveButtonRole
@@ -452,6 +453,8 @@ internal fun SportsLiveCardMenu(
     onDismiss: () -> Unit,
     /** "Watch with another game"; null hides it. */
     onWatchWith: (() -> Unit)? = null,
+    /** [onWatchWith]'s label: the in-player panel's says "Watch both" (#140). */
+    @StringRes watchWithText: Int = R.string.sports_live_dual_watch_with,
     /** "Choose stream": the card's streams to pick from; null hides it (live games and channels offer it). */
     onChooseStream: (() -> Unit)? = null,
     /** "Game stats": the Game page (#18); null hides it (only a game with a strict ESPN match offers it). */
@@ -474,7 +477,7 @@ internal fun SportsLiveCardMenu(
         var firstTaken = false
         fun first(): Modifier = if (firstTaken) Modifier else Modifier.focusRequester(firstFocusRequester).also { firstTaken = true }
         if (onWatchWith != null) {
-            SportsLiveMenuButton(text = stringResource(R.string.sports_live_dual_watch_with), onClick = onWatchWith, modifier = first())
+            SportsLiveMenuButton(text = stringResource(watchWithText), onClick = onWatchWith, modifier = first())
         }
         if (onChooseStream != null) {
             SportsLiveMenuButton(text = stringResource(R.string.sports_live_choose_stream_menu), onClick = onChooseStream, modifier = first())
