@@ -3780,7 +3780,7 @@
     <string name="sports_live_follow">Follow %1$s</string>
     <string name="sports_live_unfollow">Unfollow %1$s</string>
     <string name="sports_live_my_teams_title">My teams</string>
-    <string name="sports_live_my_teams_empty">Choose More… on a game to follow a team</string>
+    <string name="sports_live_my_teams_empty">Choose More… on a game to follow a team, or add one here</string>
     <!-- Game page (#18): ESPN stats for one game; Follow from Results and the Game page (#54). -->
     <string name="sports_live_game_stats">Game stats</string>
     <string name="sports_live_results_menu_title">%1$s at %2$s</string>
@@ -3912,6 +3912,31 @@
     <string name="sports_live_section_more_row">More settings</string>
     <string name="sports_live_section_more_subtitle">Data saver, stream memory and addon catalogs. Rarely needed</string>
     <string name="sports_live_my_teams_subtitle">Their games come first and get alerts. OK on a team stops following it</string>
+    <!-- Team search (#149): Settings → My teams → + Add a team, and first-run step 3. -->
+    <string name="sports_live_my_teams_add">+ Add a team</string>
+    <string name="sports_live_team_search_title">Add a team</string>
+    <string name="sports_live_team_search_placeholder">Type a team, a city or a nickname</string>
+    <string name="sports_live_team_search_all">All</string>
+    <string name="sports_live_team_search_results">Results · %1$d</string>
+    <string name="sports_live_team_search_league_header">%1$s · %2$d</string>
+    <string name="sports_live_team_search_your_teams">Your teams · %1$d</string>
+    <string name="sports_live_team_search_your_teams_empty">Teams you follow show here. OK on one stops following it.</string>
+    <string name="sports_live_team_search_new">New</string>
+    <string name="sports_live_team_search_follow">☆ Follow</string>
+    <string name="sports_live_team_search_following">★ Following</string>
+    <string name="sports_live_team_search_matches">matches “%1$s”</string>
+    <string name="sports_live_team_search_getting">Getting %1$s teams…</string>
+    <string name="sports_live_team_search_offline">Can\'t list teams right now. Teams you follow are kept.</string>
+    <string name="sports_live_team_search_retry">Try again</string>
+    <string name="sports_live_team_search_no_match">No team matches “%1$s”. Try a city or a nickname.</string>
+    <string name="sports_live_team_search_not_meant">Not the team you meant? Try the city or the nickname.</string>
+    <string name="sports_live_team_search_mic">Or hold the remote\'s mic button and say a team</string>
+    <string name="sports_live_team_search_space">Space</string>
+    <string name="sports_live_team_search_clear">Clear</string>
+    <string name="sports_live_team_search_delete">Delete a letter</string>
+    <string name="sports_live_team_search_listening">Listening…</string>
+    <string name="sports_live_league_tag_ncaam">NCAAM</string>
+    <string name="sports_live_league_tag_ncaaf">NCAAF</string>
     <string name="sports_live_setting_home_row_subtitle">Games on now, in a row on the Home screen</string>
     <string name="sports_live_setting_hover_preview_subtitle">Rest on a game for 2 s to watch it muted. Off under Data saver</string>
     <string name="sports_live_setting_pip_system_subtitle">Your TV\'s own picture-in-picture switch for this app</string>

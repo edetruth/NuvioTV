@@ -30,7 +30,9 @@ data class FollowedTeam(
     val sport: String? = null,
     val espnId: String? = null,
     val abbreviation: String? = null,
-    val league: String? = null
+    val league: String? = null,
+    /** ESPN's logo for the team (#149), drawn in My teams and team search; null when not known. */
+    val logo: String? = null
 )
 
 /** A pinned catalog extra value, e.g. `genre` = "United States". */

@@ -24,9 +24,38 @@ object TeamFollows {
             espnId = side.id,
             abbreviation = side.abbreviation,
             // The feed the event came from ("basketball/nba", "soccer/all"): the card side matches by it.
-            league = event.league.path
+            league = event.league.path,
+            logo = side.logo?.trim()?.takeIf { it.isNotEmpty() }
         )
     }
+
+    /**
+     * The team to store for [team] of [league]'s ESPN team list (team search, #149): the same fields as
+     * [teamToFollow], so a team followed from search matches its games exactly as one followed from a game.
+     */
+    fun teamToFollow(league: EspnLeague, team: DirectoryTeam): FollowedTeam = FollowedTeam(
+        name = team.displayName,
+        sport = sportWord(league),
+        espnId = team.id,
+        abbreviation = team.abbreviation,
+        league = league.path,
+        logo = team.logo
+    )
+
+    /**
+     * The followed entries that are [team] of [league]: by ESPN id within the league (soccer: the sport, as
+     * club ids are shared across competitions), else a name-only entry with the same full name and sport word.
+     */
+    fun followersOf(followed: List<FollowedTeam>, league: EspnLeague, team: DirectoryTeam): List<FollowedTeam> =
+        followed.filter { f ->
+            val stored = f.league?.split('/')
+            if (f.espnId != null && stored?.getOrNull(0) == league.sport) {
+                f.espnId == team.id && (league.sport == SOCCER || stored.getOrNull(1) == league.league)
+            } else {
+                f.espnId == null && f.name.equals(team.displayName, ignoreCase = true) &&
+                    (f.sport ?: "").equals(sportWord(league) ?: "", ignoreCase = true)
+            }
+        }
 
     /**
      * The stored sport word for an ESPN feed, chosen so [EspnLeagueMap] routes it back to that feed:

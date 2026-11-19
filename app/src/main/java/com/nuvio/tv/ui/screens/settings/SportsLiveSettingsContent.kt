@@ -54,6 +54,7 @@ import com.nuvio.tv.ui.theme.NuvioTheme
 @Composable
 internal fun SportsLiveSettingsContent(
     initialFocusRequester: FocusRequester?,
+    onAddTeam: () -> Unit = {},
     viewModel: SportsLiveSettingsViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -115,6 +116,12 @@ internal fun SportsLiveSettingsContent(
                 title = stringResource(R.string.sports_live_my_teams_title),
                 subtitle = stringResource(R.string.sports_live_my_teams_subtitle)
             ) {
+                // #149: a team can be added without finding one of its games first.
+                SettingsActionRow(
+                    title = stringResource(R.string.sports_live_my_teams_add),
+                    subtitle = null,
+                    onClick = onAddTeam
+                )
                 if (state.followedTeams.isEmpty()) {
                     Text(
                         text = stringResource(R.string.sports_live_my_teams_empty),

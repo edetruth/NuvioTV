@@ -63,6 +63,7 @@ import com.nuvio.tv.ui.screens.search.SearchScreen
 import com.nuvio.tv.ui.screens.settings.AboutScreen
 import com.nuvio.tv.ui.screens.settings.LayoutSettingsScreen
 import com.nuvio.tv.ui.screens.settings.SportsLiveMySportsScreen
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveTeamSearchScreen
 import com.nuvio.tv.ui.screens.settings.LicensesAttributionsScreen
 import com.nuvio.tv.ui.screens.settings.PlaybackSettingsScreen
 import com.nuvio.tv.ui.screens.settings.SettingsScreen
@@ -1624,6 +1625,15 @@ private fun PlaybackNavHost(
             SportsLiveMySportsScreen(onBackPress = { navController.popBackStack() })
         }
 
+        composable(Screen.SportsLiveTeamSearch.route) {
+            SportsLiveTeamSearchScreen(
+                onBack = {
+                    // Once only: a second Back during the exit transition must not also pop the screen below.
+                    if (navController.currentDestination?.route == Screen.SportsLiveTeamSearch.route) navController.popBackStack()
+                }
+            )
+        }
+
         composable(Screen.SportsLiveDual.route) {
             SportsLiveDualScreen(
                 onBack = {
@@ -1659,7 +1669,8 @@ private fun PlaybackNavHost(
                 onNavigateToLicensesAttributions = {
                     navController.navigate(Screen.LicensesAttributions.route)
                 },
-                onNavigateToWatchParty = { navController.navigate(Screen.WatchParty.createRoute()) }
+                onNavigateToWatchParty = { navController.navigate(Screen.WatchParty.createRoute()) },
+                onNavigateToSportsLiveTeamSearch = { navController.navigate(Screen.SportsLiveTeamSearch.route) }
             )
         }
 

@@ -402,7 +402,7 @@ class SportsLivePreferencesDataStore @Inject constructor(
     private fun encodeFollowed(teams: List<FollowedTeam>): String =
         gson.toJson(
             teams.map {
-                mapOf("name" to it.name, "sport" to it.sport, "espnId" to it.espnId, "abbreviation" to it.abbreviation, "league" to it.league)
+                mapOf("name" to it.name, "sport" to it.sport, "espnId" to it.espnId, "abbreviation" to it.abbreviation, "league" to it.league, "logo" to it.logo)
             }
         )
 
@@ -416,7 +416,8 @@ class SportsLivePreferencesDataStore @Inject constructor(
                     sport = stored["sport"]?.takeIf { it.isNotBlank() },
                     espnId = stored["espnId"]?.takeIf { it.isNotBlank() },
                     abbreviation = stored["abbreviation"]?.takeIf { it.isNotBlank() },
-                    league = stored["league"]?.takeIf { it.isNotBlank() }
+                    league = stored["league"]?.takeIf { it.isNotBlank() },
+                    logo = stored["logo"]?.takeIf { it.isNotBlank() }
                 )
             }
         }.getOrDefault(emptyList())

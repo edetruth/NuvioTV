@@ -137,6 +137,14 @@ object SportsLiveTeamAliases {
         }
     }
 
+    private val GROUP_OF: Map<String, Set<String>> = GROUPS.associate { (canonical, aliases) -> canonical to (setOf(canonical) + aliases) }
+
+    /**
+     * Every name of the team [normalisedName] stands for, itself included ("connecticut" → uconn,
+     * connecticut), for team search (#149); empty when it is not a listed name.
+     */
+    fun group(normalisedName: String): Set<String> = TO_CANONICAL[normalisedName]?.let(GROUP_OF::get).orEmpty()
+
     /**
      * The canonical team for a normalised name (lowercase, no club suffix, no qualifier), or null when
      * the name is not a known abbreviation/alias. A canonical name resolves to itself, so a full name
