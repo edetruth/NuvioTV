@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
-import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.rounded.Notifications
@@ -136,7 +135,7 @@ internal data class AgendaRowSide(val bell: AgendaBell, val trailing: String? = 
 
 /**
  * A Scoreboard row (V2 Live Now, #132), the same in the list and in the player's panel (F12): fixed
- * columns (league tag 48 dp, the two teams, stacked scores 48 dp, status 75 dp), so nothing shifts row to
+ * columns (league tag 80 dp on every row type, #134, the two teams, stacked scores 48 dp, status 75 dp), so nothing shifts row to
  * row; a channel puts its logo in the league column and its clean name, quality and "Now: …" in the names
  * column. A live row draws the elapsed share of regulation as a 2 dp red bar along its bottom and, with
  * scores shown, its excitement badge under the period. A followed team's game gets a gold left bar;
@@ -293,7 +292,8 @@ private fun SingleLineCells(row: ScoreboardRow, hasReplay: Boolean) {
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f)
         )
-        StatusCell(row, hasReplay)
+        // One line (#134): a live event with no clock says "● LIVE" at the tag's size, not the clock's.
+        StatusCell(row, hasReplay, singleLine = true)
     }
 }
 
@@ -310,7 +310,7 @@ private fun AgendaCells(row: ScoreboardRow, side: AgendaRowSide, shortNames: Boo
         verticalAlignment = Alignment.CenterVertically
     ) {
         // No score column here: the tag gets the room to read at its full size, as on every other row.
-        LeagueTag(rowTagText(row), live = false, width = AGENDA_LEAGUE_WIDTH)
+        LeagueTag(rowTagText(row), live = false)
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
             val art = row.art
             if (art != null && row.twoSided) {
@@ -442,10 +442,13 @@ private fun ChannelCells(row: ScoreboardRow) {
     }
 }
 
-/** The league column: the tag, right-aligned, shrinking to fit [width] (48 dp) rather than cut. */
+/**
+ * The league column (#134): the tag, right-aligned, at the Tag size on every row type. The column (80 dp) fits a
+ * ten-letter sport word ("BASKETBALL"), so a tag is never shrunk; anything longer is already initials ([scoreboardTag]).
+ */
 @Composable
-private fun LeagueTag(tag: String, live: Boolean, width: Dp = Size.ColumnLeague) {
-    Box(modifier = Modifier.width(width), contentAlignment = Alignment.CenterEnd) {
+private fun LeagueTag(tag: String, live: Boolean) {
+    Box(modifier = Modifier.width(Size.ColumnLeague), contentAlignment = Alignment.CenterEnd) {
         BasicText(
             text = tag,
             style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag).copy(
@@ -454,7 +457,7 @@ private fun LeagueTag(tag: String, live: Boolean, width: Dp = Size.ColumnLeague)
             ),
             maxLines = 1,
             softWrap = false,
-            autoSize = TextAutoSize.StepBased(minFontSize = 7.sp, maxFontSize = SportsLiveTokens.Type.Tag.fontSize, stepSize = 0.5.sp)
+            overflow = TextOverflow.Ellipsis
         )
     }
 }
@@ -550,18 +553,20 @@ private fun ScoresCell(scores: ScoreboardScores, reminded: Boolean, compact: Boo
 
 /** The status column (75 dp): the red dot and clock over the period, or the kickoff over its countdown; then the badge. */
 @Composable
-private fun StatusCell(row: ScoreboardRow, hasReplay: Boolean) {
+private fun StatusCell(row: ScoreboardRow, hasReplay: Boolean, singleLine: Boolean = false) {
     val strings = rememberGameStatusStrings()
     val kickoff = row.art?.let { kickoffText(it) }
     val lines = scoreboardStatusLines(row, strings, kickoff)
+    // A one-line live event with no clock: the red dot and LIVE at the tag's size (#134).
+    val liveMark = singleLine && lines.live && lines.secondary == null && lines.primary == strings.live
     Column(modifier = Modifier.width(Size.ColumnStatus), verticalArrangement = Arrangement.spacedBy(1.dp, Alignment.CenterVertically)) {
         lines.primary?.let { primary ->
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (lines.live) Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(Colors.LiveRed))
                 Text(
                     text = primary,
-                    style = SportsLiveTokens.style(STATUS_STYLE),
-                    color = Colors.TextPrimary,
+                    style = if (liveMark) SportsLiveTokens.style(SportsLiveTokens.Type.Tag) else SportsLiveTokens.style(STATUS_STYLE),
+                    color = if (liveMark) Colors.LiveText else Colors.TextPrimary,
                     maxLines = if (lines.secondary == null && !lines.live) 2 else 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -636,15 +641,19 @@ internal fun sportsLiveLeagueLabel(league: String?, catalogName: String): String
 private fun scoreboardTagText(name: String): String = SportsLiveDisplayText.label(name).orEmpty()
 
 /**
- * A row's tag from what is known of its game: ESPN's [league], else the card's [sport], else its
- * [catalogName] only when that is short enough to read whole (a long catalog name's initials say nothing).
+ * A row's tag from what is known of its game: ESPN's [league], else the card's [sport]. Never the catalog's name
+ * ("LIVE NOW", "Live Events") and never a word that names no sport ("Live", "Sports", #134): such a row takes
+ * the sport its text tells ([rowTagText]), else no tag.
  */
 internal fun scoreboardRowTag(league: String?, sport: String?, catalogName: String): String {
-    // A sport that is only the catalog's name (the addon gave none) reads as the catalog's.
+    // A sport that is only the catalog's name (the addon gave none) says nothing about the game.
     val catalog = catalogName.trim()
     league?.takeIf { it.isNotBlank() && it.trim() != catalog }?.let { return scoreboardTag(it) }
-    sport?.takeIf { it.trim() != catalog }?.let(::scoreboardTag)?.takeIf { it.isNotEmpty() }?.let { return it }
-    return scoreboardTagText(catalogName).uppercase().takeIf { it.length <= TAG_MAX_CHARS }.orEmpty()
+    return sport
+        ?.takeIf { it.trim() != catalog }
+        ?.takeUnless { raw -> SportsLiveTeams.isGenericSport(SportsLiveDisplayText.label(raw) ?: raw) }
+        ?.let(::scoreboardTag)
+        .orEmpty()
 }
 
 
@@ -653,11 +662,6 @@ private const val TAG_MAX_WORDS = 4
 
 private val ROW_LOGO_SIZE = 18.dp
 
-/**
- * The Agenda rows' (Upcoming, Replays) league column: wide enough for a ten-letter tag ("EUROLEAGUE",
- * "BASKETBALL") at the Tag size, so it never shrinks below the other rows' tags.
- */
-private val AGENDA_LEAGUE_WIDTH = 80.dp
 private val SINGLE_LINE_ROW_HEIGHT = 40.dp
 private val CHANNEL_LOGO_HEIGHT = 27.dp
 private val COLUMN_GAP = 6.dp

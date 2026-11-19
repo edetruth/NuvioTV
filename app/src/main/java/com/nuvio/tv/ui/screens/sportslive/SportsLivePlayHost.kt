@@ -1,6 +1,5 @@
 package com.nuvio.tv.ui.screens.sportslive
 
-import android.widget.Toast
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -13,6 +12,8 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import com.nuvio.tv.R
+import com.nuvio.tv.core.sportslive.SportsLiveToastKind
+import com.nuvio.tv.core.sportslive.SportsLiveToasts
 import com.nuvio.tv.domain.model.SportsLiveItem
 
 /**
@@ -42,7 +43,11 @@ fun SportsLivePlayHost(
                 when (event) {
                     is SportsLivePlayEvent.OpenStreamScreen -> {
                         if (event.noStreamFound) {
-                            Toast.makeText(context, context.getString(R.string.sports_live_open_choose_stream), Toast.LENGTH_SHORT).show()
+                            SportsLiveToasts.show(
+                                SportsLiveToastKind.PROBLEM,
+                                context.getString(R.string.sports_live_open_choose_stream_title),
+                                context.getString(R.string.sports_live_open_choose_stream_line)
+                            )
                         }
                         currentOnOpenStreamScreen(event.item, event.manualSelection)
                     }
@@ -50,19 +55,18 @@ fun SportsLivePlayHost(
                         currentOnPlayTarget(event.target)
                         // Shown over the player for a few seconds: where the auto-picked stream comes from.
                         event.source?.let { source ->
-                            Toast.makeText(context, context.getString(R.string.sports_live_playing_from, source), Toast.LENGTH_LONG).show()
+                            SportsLiveToasts.show(SportsLiveToastKind.INFO, context.getString(R.string.sports_live_playing_from, source))
                         }
                     }
-                    SportsLivePlayEvent.NothingFound -> Toast.makeText(
-                        context,
+                    SportsLivePlayEvent.NothingFound -> SportsLiveToasts.show(
+                        SportsLiveToastKind.PROBLEM,
                         context.getString(R.string.sports_live_no_streams_found),
-                        Toast.LENGTH_SHORT
-                    ).show()
-                    is SportsLivePlayEvent.NoStream -> Toast.makeText(
-                        context,
-                        context.getString(R.string.sports_live_zap_no_stream, event.name),
-                        Toast.LENGTH_SHORT
-                    ).show()
+                        context.getString(R.string.sports_live_no_streams_found_line)
+                    )
+                    is SportsLivePlayEvent.NoStream -> SportsLiveToasts.show(
+                        SportsLiveToastKind.PROBLEM,
+                        context.getString(R.string.sports_live_zap_no_stream, event.name)
+                    )
                 }
             }
         }

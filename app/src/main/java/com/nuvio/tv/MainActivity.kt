@@ -1349,6 +1349,8 @@ open class MainActivity : ComponentActivity() {
                                 navController = navController,
                                 contentFocusRequester = sportsLiveContentFocus
                             )
+                            // Sports & Live's one toast card (#134): top right, never focused, newest wins.
+                            com.nuvio.tv.ui.screens.sportslive.SportsLiveToastLayer()
 
                             val autoNextOverlay by externalPlaybackTracker.autoNextOverlay.collectAsState()
                             autoNextOverlay?.let { ov ->

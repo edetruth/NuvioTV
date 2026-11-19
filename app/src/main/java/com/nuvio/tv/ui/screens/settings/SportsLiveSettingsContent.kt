@@ -59,6 +59,7 @@ internal fun SportsLiveSettingsContent(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val alerts by viewModel.alertSettings.collectAsStateWithLifecycle()
     val newSportsHint by viewModel.newSportsHint.collectAsStateWithLifecycle()
+    val hiddenTitles by viewModel.hiddenTitles.collectAsStateWithLifecycle()
     var filterKey by remember { mutableStateOf<String?>(null) }
     var scorePicker by remember { mutableStateOf<ScorePicker?>(null) }
     // Scores status (#70): worked out on a 30 s clock, so a feed no longer in use drops out.
@@ -228,6 +229,29 @@ internal fun SportsLiveSettingsContent(
                 },
                 enabled = enabled
             )
+            // Hidden from Live Now (#134): a simple list; OK shows the title on Live Now again.
+            SportsLiveSetting.HIDDEN -> SettingsGroupCard(
+                modifier = Modifier.fillMaxWidth(),
+                title = stringResource(R.string.sports_live_setting_hidden),
+                subtitle = stringResource(R.string.sports_live_setting_hidden_subtitle)
+            ) {
+                if (hiddenTitles.isEmpty()) {
+                    Text(
+                        text = stringResource(R.string.sports_live_setting_hidden_empty),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = NuvioTheme.colors.TextSecondary,
+                        modifier = Modifier.padding(NuvioTheme.spacing.sm)
+                    )
+                }
+                hiddenTitles.forEach { title ->
+                    SettingsActionRow(
+                        title = title,
+                        subtitle = null,
+                        value = stringResource(R.string.sports_live_setting_hidden_show),
+                        onClick = { viewModel.unhide(title) }
+                    )
+                }
+            }
             SportsLiveSetting.CATALOGS -> if (state.catalogs.isNotEmpty()) {
                 SettingsGroupCard(
                     modifier = Modifier.fillMaxWidth(),

@@ -106,6 +106,34 @@ class TeamDirectory(private val maxLeagues: Int = MAX_LEAGUES) {
         return KnownTeam(a.logo, a.abbreviation) to KnownTeam(b.logo, b.abbreviation)
     }
 
+    /**
+     * A stand-in game for [item] from this directory (#62, #134): its two teams (first away, second home, in the
+     * card's order) and its start, when every league the card can be on has a list and exactly one of them
+     * names both sides. Team pages and Follow read real ESPN teams (ids, short names) from it; null otherwise.
+     */
+    fun standInEvent(item: SportsLiveItem): ScoreSnapshot? {
+        val (first, second) = ScoreChips.orderedSides(item) ?: return null
+        val leagues = leaguesFor(item)
+        if (leagues.isEmpty() || leagues.any { fetchedAt(it) == null }) return null
+        val found = leagues.mapNotNull { league ->
+            val a = resolve(league, first) ?: return@mapNotNull null
+            val b = resolve(league, second) ?: return@mapNotNull null
+            if (a.id == b.id) null else Triple(league, a, b)
+        }
+        val (league, away, home) = found.singleOrNull() ?: return null
+        return ScoreSnapshot(
+            eventId = "",
+            league = league,
+            startMs = item.startMs,
+            timeValid = item.startHasTimeOfDay,
+            state = ScoreState.PRE,
+            clockText = null,
+            isFinal = false,
+            home = home.asScoreTeam(),
+            away = away.asScoreTeam()
+        )
+    }
+
     companion object {
         /** Leagues kept in memory and on disk. */
         const val MAX_LEAGUES = 48

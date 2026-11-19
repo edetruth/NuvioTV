@@ -1,5 +1,9 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import com.nuvio.tv.core.sportslive.SportsLiveToastKind
+import com.nuvio.tv.core.sportslive.SportsLiveToasts
+import com.nuvio.tv.core.sportslive.scores.FollowTarget
+import com.nuvio.tv.core.sportslive.scores.FollowTargets
 import com.nuvio.tv.core.sportslive.scores.GameSection
 import com.nuvio.tv.core.sportslive.SportsLiveSportInference
 import com.nuvio.tv.core.sportslive.SportsLiveMySportsScope
@@ -9,7 +13,6 @@ import com.nuvio.tv.core.sportslive.scores.TeamDirectory
 import com.nuvio.tv.core.sportslive.displayName
 import android.os.SystemClock
 import android.view.KeyEvent
-import android.widget.Toast
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -25,7 +28,6 @@ import com.nuvio.tv.core.debrid.DirectDebridResolver
 import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.core.sportslive.EndedGame
 import com.nuvio.tv.core.sportslive.FullTimeToast
-import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.scores.ScoreChips
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.SportsLiveEndedGames
@@ -637,9 +639,9 @@ class SportsLiveZapViewModel internal constructor(
         val game = current?.let { strictGame(it, item) }
         val row = current?.rows?.firstOrNull { it.item.streamKey == item.streamKey }
         val followed = lineup.value?.list?.followed.orEmpty()
-        val sides = item.teams?.inTitleOrder(item.meta.name).orEmpty().map { side ->
-            side to followed.any { SportsLiveTeams.followsSideOfAnySource(it, side, item) }
-        }
+        // Follow only real teams (#134): the strict game's, else the team directory's; never a raw title's side.
+        val targets = FollowTargets.of(item, game, homeFirst = game?.let { sportsLiveGameHomeFirst(item, it) } ?: false)
+        val sides = targets.map { it.label to it.isFollowed(followed) }
         val entries = panelMenuEntries(
             watchBoth = dualSessionWith(item) != null,
             chooseStream = sportsLiveAutoPlayEligible(item),
@@ -647,7 +649,7 @@ class SportsLiveZapViewModel internal constructor(
             sides = sides.size
         )
         val postgame = row != null && panelRowOk(row, game) == PanelRowOk.BOX_SCORE
-        return SportsLivePanelMenu(item, entries, sides, game, postgame)
+        return SportsLivePanelMenu(item, entries, sides, game, postgame, targets)
     }
 
     /**
@@ -717,9 +719,9 @@ class SportsLiveZapViewModel internal constructor(
     /** True once after [onGameOpened] over a playing game: the player should play again now. */
     fun consumeResumeOnReturn(): Boolean = resumeOnReturn.also { resumeOnReturn = false }
 
-    /** Follow (or unfollow) [side] of [item] from the panel's Hold OK menu (#140). */
-    fun onPanelToggleFollow(item: SportsLiveItem, side: String) {
-        viewModelScope.launch { repo.toggleFollowSide(item, side) }
+    /** Follow (or unfollow) [target]'s team from the panel's Hold OK menu (#140, #134). */
+    fun onPanelToggleFollow(target: FollowTarget) {
+        viewModelScope.launch { repo.toggleFollowTarget(target) }
     }
 
     override fun onCleared() {
@@ -818,16 +820,15 @@ fun rememberSportsLiveZapKeyHandler(
         viewModel.events.collect { event ->
             when (event) {
                 is SportsLiveZapEvent.Navigate -> currentOnZap(event.target)
-                is SportsLiveZapEvent.NoStream -> Toast.makeText(
-                    context,
+                is SportsLiveZapEvent.NoStream -> SportsLiveToasts.show(
+                    SportsLiveToastKind.PROBLEM,
+                    context.getString(R.string.sports_live_zap_no_stream, event.name)
+                )
+                is SportsLiveZapEvent.Skipped -> SportsLiveToasts.show(
+                    SportsLiveToastKind.PROBLEM,
                     context.getString(R.string.sports_live_zap_no_stream, event.name),
-                    Toast.LENGTH_SHORT
-                ).show()
-                is SportsLiveZapEvent.Skipped -> Toast.makeText(
-                    context,
-                    context.getString(R.string.sports_live_zap_skipped, event.name),
-                    Toast.LENGTH_SHORT
-                ).show()
+                    context.getString(R.string.sports_live_zap_skipped_line)
+                )
             }
         }
     }

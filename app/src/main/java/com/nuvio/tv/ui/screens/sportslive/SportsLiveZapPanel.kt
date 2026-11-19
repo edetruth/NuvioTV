@@ -7,6 +7,7 @@ import com.nuvio.tv.core.sportslive.SportsLiveEndedGames
 import com.nuvio.tv.core.sportslive.SportsLiveItemBucketer
 import com.nuvio.tv.core.sportslive.SportsLiveSportKind
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
+import com.nuvio.tv.core.sportslive.scores.FollowTarget
 import com.nuvio.tv.core.sportslive.scores.GameArt
 import com.nuvio.tv.core.sportslive.scores.GameSituation
 import com.nuvio.tv.core.sportslive.scores.GameSituations
@@ -451,7 +452,9 @@ internal data class SportsLivePanelMenu(
     val sides: List<Pair<String, Boolean>>,
     val game: ScoreSnapshot?,
     /** OK on the row opens its box score ([PanelRowOk.BOX_SCORE]): **Watch postgame** leads the menu, so its stream stays one press away. */
-    val postgame: Boolean = false
+    val postgame: Boolean = false,
+    /** The real teams Follow offers (#134), one per entry of [sides]. */
+    val targets: List<FollowTarget> = emptyList()
 ) {
     val watchBoth: Boolean get() = SportsLiveMoreEntry.WATCH_WITH in entries
     val chooseStream: Boolean get() = SportsLiveMoreEntry.CHOOSE_STREAM in entries

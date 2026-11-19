@@ -1,6 +1,5 @@
 package com.nuvio.tv.ui.screens.sportslive
 
-import android.widget.Toast
 import android.view.KeyEvent as AndroidKeyEvent
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -66,6 +65,8 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
 import com.nuvio.tv.R
+import com.nuvio.tv.core.sportslive.SportsLiveToastKind
+import com.nuvio.tv.core.sportslive.SportsLiveToasts
 import com.nuvio.tv.ui.components.AutoResizeText
 import com.nuvio.tv.core.sportslive.scores.BoxScoreTeam
 import com.nuvio.tv.core.sportslive.scores.GameHighlight
@@ -227,7 +228,7 @@ fun SportsLiveGameScreen(
             onWatchWith = {
                 val session = viewModel.watchWithSession()
                 if (session == null) {
-                    Toast.makeText(context, context.getString(R.string.sports_live_dual_no_pair), Toast.LENGTH_SHORT).show()
+                    SportsLiveToasts.show(SportsLiveToastKind.PROBLEM, context.getString(R.string.sports_live_dual_no_pair))
                 } else {
                     SportsLiveDualSessions.start(session)
                     onOpenDual()

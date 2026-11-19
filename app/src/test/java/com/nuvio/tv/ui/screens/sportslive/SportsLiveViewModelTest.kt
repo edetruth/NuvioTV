@@ -13,6 +13,8 @@ import com.nuvio.tv.core.sportslive.SportsLiveItemBucketer
 import com.nuvio.tv.core.sportslive.scores.EspnFixtures
 import com.nuvio.tv.core.sportslive.scores.EspnLeagueMap
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
+import com.nuvio.tv.core.sportslive.scores.ScoreTeam
+import com.nuvio.tv.core.sportslive.scores.FollowTarget
 import com.nuvio.tv.core.sportslive.scores.ScoreState
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
@@ -901,66 +903,52 @@ class SportsLiveViewModelTest {
     }
 
     @Test
-    fun `toggleFollow follows a side with the item's sport, none for a channel, and unfollows every match`() = runTest {
-        val game = item("g", isLive = true, sport = "American Football", name = "Jets vs New England Patriots")
-            .copy(teams = teamsOf("Jets vs New England Patriots"))
-        val viewModel = newViewModel()
-        advanceUntilIdle()
-
-        viewModel.toggleFollow(game, "New England Patriots")
-        advanceUntilIdle()
-        assertEquals(listOf(FollowedTeam("New England Patriots", "American Football")), followedFlow.value)
-
-        // A channel's sport is only its catalog name, so none is stored.
-        val ppv = channel("ch", "US", sport = "EasyPlay Live TV").copy(teams = teamsOf("Celtics vs 76ers"))
-        viewModel.toggleFollow(ppv, "Celtics")
-        advanceUntilIdle()
-        assertEquals(FollowedTeam("Celtics", null), followedFlow.value.last())
-
-        // A shorter follow ("Patriots") of the same side is removed too; Celtics stays.
-        followedFlow.value = followedFlow.value + FollowedTeam("Patriots", null)
-        viewModel.toggleFollow(game, "New England Patriots")
-        advanceUntilIdle()
-        assertEquals(listOf(FollowedTeam("Celtics", null)), followedFlow.value)
-    }
-
-    @Test
-    fun `toggleFollow stores no catalog-name sport, so the follow matches the team in every addon`() = runTest {
-        // This addon has no genres: the item's sport is its catalog's name.
-        val game = item("g", isLive = true, sport = CLAIMED.catalog.name, name = "Celtics vs 76ers")
-        val viewModel = newViewModel()
-        advanceUntilIdle()
-
-        viewModel.toggleFollow(game, "Celtics")
-        advanceUntilIdle()
-
-        assertEquals(listOf(FollowedTeam("Celtics", null)), followedFlow.value)
-        val otherAddon = item("o", isLive = true, sport = "Basketball", name = "Boston Celtics vs Philadelphia 76ers")
-        assertTrue(SportsLiveTeams.isFollowed(otherAddon, followedFlow.value))
-    }
-
-    @Test
-    fun `toggleFollow on a merged card follows with an alternate's sport and unfollows every matching entry`() = runTest {
-        val primary = item("p", isLive = true, sport = CLAIMED.catalog.name, name = "Celtics vs 76ers")
-        val alternate = item("a", isLive = true, sport = "Basketball", name = "Boston Celtics vs Philadelphia 76ers")
-            .let { it.copy(addonId = "other.addon", meta = it.meta.copy(genres = listOf("Basketball"))) }
-        val merged = primary.copy(alternates = listOf(alternate))
-        val viewModel = newViewModel()
-        advanceUntilIdle()
-
-        viewModel.toggleFollow(merged, "Celtics")
-        advanceUntilIdle()
-        assertEquals(listOf(FollowedTeam("Celtics", "Basketball")), followedFlow.value)
-
-        // Duplicates from earlier follows (another addon's label, no sport) all go; other teams stay.
-        followedFlow.value = listOf(
-            FollowedTeam("Celtics", "Basketball"),
-            FollowedTeam("Boston Celtics", null),
-            FollowedTeam("Lakers", null)
+    fun `toggleFollow follows a matched side's ESPN team and unfollows every follow of that team`() = runTest {
+        val celtics = ScoreTeam("2", "BOS", "Boston Celtics", "Celtics", "Celtics", "Boston", null, null, emptyList())
+        val knicks = ScoreTeam("18", "NY", "New York Knicks", "Knicks", "Knicks", "New York", null, null, emptyList())
+        val event = ScoreSnapshot(
+            eventId = "1", league = EspnLeagueMap.NBA, leagueName = "NBA", startMs = NOW, state = ScoreState.IN,
+            clockText = null, isFinal = false, home = celtics, away = knicks
         )
-        viewModel.toggleFollow(merged, "Celtics")
+        val target = FollowTarget("Celtics", event, celtics)
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+
+        viewModel.toggleFollow(target)
+        advanceUntilIdle()
+        // ESPN's name, sport word, id and league: never the addon's raw side.
+        assertEquals(listOf(FollowedTeam("Boston Celtics", "Basketball", "2", "BOS", "basketball/nba")), followedFlow.value)
+
+        // An older name-only follow of the same team goes too; other teams stay.
+        followedFlow.value = followedFlow.value + FollowedTeam("Celtics", "Basketball") + FollowedTeam("Lakers", null)
+        viewModel.toggleFollow(target)
         advanceUntilIdle()
         assertEquals(listOf(FollowedTeam("Lakers", null)), followedFlow.value)
+    }
+
+    @Test
+    fun `hidden titles leave Live Now only, and Hide stores the clean title`() = runTest {
+        val hidden = MutableStateFlow<Set<String>>(emptySet())
+        val stored = mutableListOf<String>()
+        val show = item("show", isLive = true, sport = "Soccer", name = "LIVE: Matchday Studio")
+        val game = item("game", isLive = true, sport = "Soccer", name = "Arsenal vs Chelsea")
+        nextLoad = load(listOf(show, game))
+        val viewModel = SportsLiveViewModel(
+            repo, hiddenTitles = hidden, hideTitle = { stored += it }, computeDispatcher = compute
+        )
+        viewModel.nowMs = { NOW }
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+        assertEquals(setOf("show", "game"), viewModel.uiState.value.visibleItems.map { it.id }.toSet())
+
+        viewModel.hideFromLiveNow(show)
+        advanceUntilIdle()
+        assertEquals(listOf("Matchday Studio"), stored)
+
+        hidden.value = setOf("Matchday Studio")
+        advanceUntilIdle()
+        assertEquals(listOf("game"), viewModel.uiState.value.visibleItems.map { it.id })
+        assertEquals(1, viewModel.uiState.value.countOf(SportsLiveTab.LIVE_NOW))
     }
 
     @Test

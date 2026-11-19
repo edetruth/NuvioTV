@@ -3728,8 +3728,55 @@
     <string name="sports_live_choose_stream">Choose stream</string>
     <string name="sports_live_choose_stream_menu">Choose stream…</string>
     <string name="sports_live_no_streams_found">No streams found for this game right now</string>
-    <string name="sports_live_open_choose_stream">No stream played automatically. Choose one.</string>
     <string name="sports_live_playing_from">Playing from %1$s</string>
+    <!-- The one toast card (#134): title and one line. -->
+    <string name="sports_live_toast_final_mark">FT</string>
+    <string name="sports_live_scores_outage_line">Streams still play · scores come back on their own</string>
+    <string name="sports_live_open_choose_stream_title">No stream played automatically</string>
+    <string name="sports_live_open_choose_stream_line">Choose one from the list</string>
+    <string name="sports_live_no_streams_found_line">Try again in a few minutes</string>
+    <string name="sports_live_zap_skipped_line">Skipped to the next live game</string>
+    <string name="sports_live_source_busy">%1$s is busy</string>
+    <string name="sports_live_sources_busy">%1$s are busy</string>
+    <string name="sports_live_sources_busy_line">Try again in %1$d min · other sources still work</string>
+    <!-- The one empty / error card (#134): it always offers the next step. -->
+    <string name="sports_live_state_nothing_live">Nothing live right now</string>
+    <string name="sports_live_state_nothing_live_line">Upcoming lists what starts next</string>
+    <string name="sports_live_state_next">Next: %1$s · %2$s</string>
+    <string name="sports_live_state_see_upcoming">See Upcoming</string>
+    <string name="sports_live_state_see_live_now">See Live Now</string>
+    <string name="sports_live_state_see_results">See Results</string>
+    <string name="sports_live_state_nothing_upcoming">Nothing coming up yet</string>
+    <string name="sports_live_state_nothing_upcoming_line">Your sources list games a few hours before they start</string>
+    <string name="sports_live_state_no_channels">No channels listed</string>
+    <string name="sports_live_state_no_channels_line">Your sources list no live channels right now</string>
+    <string name="sports_live_state_no_replays">No replays yet</string>
+    <string name="sports_live_state_no_replays_line">Finished games show here once your sources post them</string>
+    <string name="sports_live_state_filter_empty">Nothing under this filter</string>
+    <string name="sports_live_state_filter_empty_line">Its games have ended or moved to another tab</string>
+    <string name="sports_live_state_show_all">Show all</string>
+    <string name="sports_live_state_unreachable">Couldn\'t reach your sources</string>
+    <string name="sports_live_state_unreachable_line">Try again, or check the addons in Settings</string>
+    <string name="sports_live_state_try_again">Try again</string>
+    <string name="sports_live_state_sources">Sources</string>
+    <string name="sports_live_state_no_sports">No sports picked</string>
+    <string name="sports_live_state_my_sports">My sports</string>
+    <string name="sports_live_state_results_failed_line">The scores service didn\'t answer. Live games still play.</string>
+    <string name="sports_live_state_my_sports_empty">Nothing from My sports this day</string>
+    <string name="sports_live_state_my_sports_empty_line">Pick a sport above to see its games</string>
+    <string name="sports_live_state_last_night_line">Last night\'s games are under Yesterday</string>
+    <string name="sports_live_state_no_finals_line">Games show here as they finish</string>
+    <string name="sports_live_state_empty_day_line">No finals were played that day</string>
+    <!-- More… as a sheet over the stage (#134). -->
+    <string name="sports_live_team_pages">Team pages…</string>
+    <string name="sports_live_hide_from_live_now">Hide from Live Now</string>
+    <string name="sports_live_hidden_toast">Hidden from Live Now: %1$s</string>
+    <string name="sports_live_hidden_toast_line">Settings → Sports &amp; Live → More → Hidden brings it back</string>
+    <!-- Settings → More → Hidden (#134). -->
+    <string name="sports_live_setting_hidden">Hidden from Live Now</string>
+    <string name="sports_live_setting_hidden_subtitle">OK shows a title on Live Now again</string>
+    <string name="sports_live_setting_hidden_empty">Nothing hidden. More… → Hide from Live Now takes a title off Live Now.</string>
+    <string name="sports_live_setting_hidden_show">Show</string>
     <string name="sports_live_follow">Follow %1$s</string>
     <string name="sports_live_unfollow">Unfollow %1$s</string>
     <string name="sports_live_my_teams_title">My teams</string>
@@ -3959,15 +4006,12 @@
     <string name="sports_live_try_next_link">Try next link</string>
     <string name="sports_live_link_slow">That link was slow to start</string>
     <string name="sports_live_link_not_working">This link isn\'t working</string>
-    <string name="sports_live_zap_skipped">No streams for %1$s — skipped</string>
     <string name="sports_live_dual_device_limit">This device can\'t play two streams at once</string>
     <string name="sports_live_dual_sound_on">Sound on</string>
     <string name="sports_live_dual_sound_off">Muted</string>
     <string name="sports_live_dual_keys_hint">←/→ sound · ↑/↓ change game · OK full screen · Menu swap</string>
     <string name="sports_live_source_loading">%1$s · loading…</string>
     <string name="sports_live_source_notice">Message from the source · not a stream</string>
-    <string name="sports_live_source_rate_limited">%1$s is rate-limited, try again in %2$d min</string>
-    <string name="sports_live_sources_rate_limited">%1$s are rate-limited, try again in %2$d min</string>
     <string name="sports_live_nothing_playing">Nothing is playing. Choose a stream or go back.</string>
     <!-- V2 Upcoming: Agenda + Stage (#132, P3) -->
     <string name="sports_live_agenda_today">Today</string>

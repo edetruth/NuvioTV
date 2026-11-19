@@ -1,12 +1,15 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import com.nuvio.tv.core.sportslive.SportsLiveToastKind
+import com.nuvio.tv.core.sportslive.SportsLiveToasts
+import com.nuvio.tv.core.sportslive.scores.FollowTarget
+import com.nuvio.tv.core.sportslive.scores.FollowTargets
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens
 import com.nuvio.tv.core.sportslive.GameStatus
 import com.nuvio.tv.core.sportslive.GameStatusText
 import androidx.compose.foundation.background
 import com.nuvio.tv.core.sportslive.displayName
 import android.view.KeyEvent as AndroidKeyEvent
-import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
@@ -63,8 +66,6 @@ import androidx.lifecycle.compose.currentStateAsState
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.nuvio.tv.R
-import com.nuvio.tv.core.sportslive.SportsLiveTeams
-import com.nuvio.tv.core.sportslive.TeamPair
 import com.nuvio.tv.core.sportslive.SportsLiveEndedGames
 import com.nuvio.tv.core.sportslive.alerts.GameReminders
 import com.nuvio.tv.core.sportslive.alerts.RemindersState
@@ -91,8 +92,6 @@ import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveKind
 import com.nuvio.tv.domain.model.SportsLiveTab
 import com.nuvio.tv.domain.model.Stream
-import com.nuvio.tv.ui.components.EmptyScreenState
-import com.nuvio.tv.ui.components.LoadingIndicator
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualSession
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualSessions
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniGeometry
@@ -319,11 +318,8 @@ fun SportsLiveScreen(
     when {
         showNoAddons -> NoAddonsState(onOpenAddons)
         // Until the first refresh completes, "no claimed catalogs" may only mean addons are still resolving.
-        uiState.isLoading || !uiState.hasClaimedCatalogs -> {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                LoadingIndicator()
-            }
-        }
+        // Skeleton rows where the list and the stage will be (#134), never a lone spinner.
+        uiState.isLoading || !uiState.hasClaimedCatalogs -> SportsLiveLoadingSkeleton()
         else -> SportsLiveContent(
             uiState = uiState,
             followedTeams = followedTeams,
@@ -385,7 +381,7 @@ fun SportsLiveScreen(
             dialogOpen = playState != SportsLivePlayState.Idle || dualPick != null,
             onPreviewFocus = viewModel::setPreviewFocus,
             onOpenDetail = onOpenDetail,
-            onToggleFollow = viewModel::toggleFollow,
+            onToggleFollow = { _, target -> viewModel.toggleFollow(target) },
             canWatchWith = canWatchWith,
             onWatchWith = { item ->
                 // Always the picker (F13): the viewer sees and picks what goes beside the game or channel.
@@ -393,7 +389,7 @@ fun SportsLiveScreen(
                 if (pick != null) {
                     dualPick = pick
                 } else {
-                    Toast.makeText(context, context.getString(R.string.sports_live_dual_no_pair), Toast.LENGTH_SHORT).show()
+                    SportsLiveToasts.show(SportsLiveToastKind.PROBLEM, context.getString(R.string.sports_live_dual_no_pair))
                 }
             },
             results = resultsState,
@@ -435,28 +431,31 @@ fun SportsLiveScreen(
                 SportsLiveGameRequests.open(catchUpGameRequest(item))
                 onOpenGame()
             },
-            onMarkCatchUpWatched = catchUpViewModel::markWatched
+            onMarkCatchUpWatched = catchUpViewModel::markWatched,
+            onOpenAddons = onOpenAddons,
+            onHide = viewModel::hideFromLiveNow
         )
     }
 }
 
 @Composable
 private fun NoAddonsState(onOpenAddons: () -> Unit) {
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        EmptyScreenState(
-            title = stringResource(R.string.sports_live_no_addons_title),
-            subtitle = stringResource(R.string.sports_live_no_addons_subtitle),
-            height = NuvioTheme.spacing.huge * 2
-        )
-        Spacer(modifier = Modifier.height(NuvioTheme.spacing.lg))
-        SportsLivePaneButton(onClick = onOpenAddons) {
-            Text(stringResource(R.string.sports_live_open_addons))
-        }
+    // The one state card (#134), where the list would start: what is missing, and the way to fix it.
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        withFrameNanos { }
+        runCatching { focusRequester.requestFocus() }
     }
+    SportsLiveStateCard(
+        title = stringResource(R.string.sports_live_no_addons_title),
+        line = stringResource(R.string.sports_live_no_addons_subtitle),
+        primary = SportsLiveStateAction(stringResource(R.string.sports_live_open_addons), onOpenAddons),
+        primaryModifier = Modifier.focusRequester(focusRequester),
+        modifier = Modifier.padding(
+            start = SportsLiveTokens.Size.SafeStart,
+            top = SportsLiveTokens.Size.SafeTop + SportsLiveTokens.Size.HeaderHeight + SportsLiveTokens.Size.HeaderBottomGap
+        )
+    )
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -498,7 +497,8 @@ private fun SportsLiveContent(
     dialogOpen: Boolean,
     onPreviewFocus: (SportsLiveItem?) -> Unit,
     onOpenDetail: (SportsLiveItem) -> Unit,
-    onToggleFollow: (SportsLiveItem, String) -> Unit,
+    /** More… → Follow ‹team› (#134): a side matched to a real team. */
+    onToggleFollow: (SportsLiveItem, FollowTarget) -> Unit,
     /** "Watch with another game" is offered on a card (#57). */
     canWatchWith: (SportsLiveItem) -> Boolean,
     /** "Watch with another game": dual screen with the card in slot 1 and a game picked for it (#57). */
@@ -526,7 +526,11 @@ private fun SportsLiveContent(
     catchUpItems: List<CatchUpItem>,
     onPlayCatchUp: (CatchUpItem) -> Unit,
     onOpenCatchUpGame: (CatchUpItem) -> Unit,
-    onMarkCatchUpWatched: (CatchUpItem) -> Unit
+    onMarkCatchUpWatched: (CatchUpItem) -> Unit,
+    /** The empty card's "Sources" (#134): the addons screen. */
+    onOpenAddons: () -> Unit = {},
+    /** More… → Hide from Live Now (#134). */
+    onHide: (SportsLiveItem) -> Unit = {}
 ) {
     val context = LocalContext.current
     val tabFocusRequesters = remember { SportsLiveTab.entries.associateWith { FocusRequester() } }
@@ -664,7 +668,13 @@ private fun SportsLiveContent(
         withFrameNanos { }
         runCatching { (if (catchUpShown) catchUpFocusRequester else entryCardFocusRequester ?: activeTabFocusRequester).requestFocus() }
     }
-    val belowResumeFocusRequester = if (catchUpShown) catchUpFocusRequester else entryCardFocusRequester
+    // An empty tab (#134): Down lands on its card's first button.
+    val emptyStateFocusRequester = remember { FocusRequester() }
+    val belowResumeFocusRequester = if (catchUpShown) {
+        catchUpFocusRequester
+    } else {
+        entryCardFocusRequester ?: emptyStateFocusRequester.takeIf { selected == null && uiState.selectedTab != SportsLiveTab.RESULTS }
+    }
     val contentEntryFocusRequester = if (resumeShown) resumeFocusRequester else belowResumeFocusRequester
     // On the Results tab: the day in the title (P4), and where the header's Down lands in its content.
     val resultsDateFocusRequester = remember { FocusRequester() }
@@ -841,26 +851,37 @@ private fun SportsLiveContent(
         onSelectItem(item.id)
     }
     items.firstOrNull { it.listKey == menuCardKey }?.let { item ->
-        val teams = item.teams
         // Replays (P4): Game stats and the Team pages from the replay's strict ESPN game; no Follow there or on
         // Channels, whose More… is Watch with another game, Choose stream and Details.
         val replayGame = if (uiState.selectedTab == SportsLiveTab.REPLAYS) replayMatches[item.streamKey] else null
         val game = gameOf(item) ?: replayGame
         val followSides = uiState.selectedTab != SportsLiveTab.REPLAYS && !item.isChannel
+        // Follow ‹team› only for sides matched to a real team (#134): the strict ESPN game's, else the team
+        // directory's, named as ESPN names them; never a side read from the raw title.
+        val targets = remember(item, game, uiState.selectedTab) {
+            if (!followSides) emptyList() else FollowTargets.of(item, gameOf(item), homeFirst = gameOf(item)?.let { sportsLiveGameHomeFirst(item, it) } ?: false)
+        }
         val entries = sportsLiveMoreEntries(
             watchWith = canWatchWith(item),
             chooseStream = sportsLiveAutoPlayEligible(item),
             strictMatch = game != null,
-            sides = if (followSides) teams?.let { 2 } ?: 0 else 0,
-            remindable = remindable(item)
+            sides = targets.size,
+            remindable = remindable(item),
+            hide = sportsLiveOffersHide(uiState.selectedTab, item, strictMatch = game != null, followable = targets.isNotEmpty())
         )
         val watchWith = SportsLiveMoreEntry.WATCH_WITH in entries
         val canRemind = SportsLiveMoreEntry.REMIND in entries
+        val heading = rememberMoreHeading(item, boardRowOf[item.listKey])
+        // Gone from the list (hidden), or followed under ★ My teams: focus goes to the card in its place.
+        fun refocusAfter() {
+            followedCardKey = item.listKey
+            followedCardIndex = items.indexOf(item).coerceAtLeast(0)
+        }
         SportsLiveCardMenu(
-            title = item.displayName,
-            sides = teams?.takeIf { followSides }?.inTitleOrder(item.meta.name).orEmpty().map { side ->
-                side to followedTeams.any { SportsLiveTeams.followsSideOfAnySource(it, side, item) }
-            },
+            title = heading.title,
+            status = heading.status,
+            statusLive = heading.live,
+            sides = targets.map { it.label to it.isFollowed(followedTeams) },
             onWatchWith = if (watchWith) {
                 {
                     menuCardKey = null
@@ -883,11 +904,10 @@ private fun SportsLiveContent(
                     if (replayGame != null) onOpenReplayGame(item, event) else onOpenGame(item, event)
                 }
             },
-            onToggleFollow = { side ->
+            onToggleFollow = { index ->
                 menuCardKey = null
-                followedCardKey = item.listKey
-                followedCardIndex = items.indexOf(item).coerceAtLeast(0)
-                onToggleFollow(item, side)
+                refocusAfter()
+                targets.getOrNull(index)?.let { onToggleFollow(item, it) }
             },
             onDetails = {
                 menuCardKey = null
@@ -914,7 +934,22 @@ private fun SportsLiveContent(
                         menuCardKey = null
                         onOpenTeam(ref)
                     }
+                },
+            onHide = if (SportsLiveMoreEntry.HIDE in entries) {
+                {
+                    menuCardKey = null
+                    refocusAfter()
+                    onHide(item)
+                    // Where to undo it: the one place hidden titles are listed.
+                    SportsLiveToasts.show(
+                        SportsLiveToastKind.INFO,
+                        context.getString(R.string.sports_live_hidden_toast, heading.title),
+                        context.getString(R.string.sports_live_hidden_toast_line)
+                    )
                 }
+            } else {
+                null
+            }
         )
     }
 
@@ -1117,6 +1152,7 @@ private fun SportsLiveContent(
                 onToggleFollow = onToggleResultFollow,
                 onOpenTeam = onOpenTeam,
                 liveGames = uiState.liveGameCount,
+                onEditMySports = onEditMySports,
                 modifier = Modifier.padding(top = SportsLiveTokens.Size.HeaderBottomGap)
             )
             return@Column
@@ -1143,7 +1179,22 @@ private fun SportsLiveContent(
         // The board is being built (#71): nothing to draw for a moment, and never "nothing here".
         if (boardPending && uiState.visibleItems.isNotEmpty()) return@Column
         if (selected == null || selectedCardFocusRequester == null) {
-            EmptyScreenState(title = stringResource(R.string.sports_live_empty_tab))
+            // One empty card (#134) that always offers the next step.
+            SportsLiveEmptyCard(
+                empty = sportsLiveEmptyState(uiState, uiState.nowMs.takeIf { it > 0L } ?: System.currentTimeMillis()),
+                nowMs = uiState.nowMs.takeIf { it > 0L } ?: System.currentTimeMillis(),
+                reminders = reminders,
+                onSelectTab = onSelectTab,
+                onShowAll = {
+                    onSelectFilter(if (uiState.selectedFilter == null && uiState.mySportsScoped) SportsLiveUiState.ALL_SPORTS_FILTER else null)
+                },
+                onRetry = onRefresh,
+                onOpenAddons = onOpenAddons,
+                onToggleReminder = onToggleReminder,
+                primaryModifier = Modifier
+                    .focusRequester(emptyStateFocusRequester)
+                    .focusProperties { up = aboveListFocusRequester }
+            )
             return@Column
         }
 
@@ -1494,10 +1545,6 @@ private val LIST_FADE = 40.dp
 
 /** Focus keeps about two rows from the list's top and bottom edges (V2). */
 private val LIST_EDGE_KEEP = 100.dp
-
-/** The two sides in the order the title names them ("Patriots at Jets": Patriots, then Jets). */
-internal fun TeamPair.inTitleOrder(title: String): List<String> =
-    listOf(home, away).sortedBy { side -> title.indexOf(side, ignoreCase = true).let { if (it < 0) Int.MAX_VALUE else it } }
 
 /** The Agenda's move for a remote [keyCode]: ← → a time slot, CH+ (up) / CH− (down) a day, as CH zaps in the player. */
 internal fun agendaKeyOf(keyCode: Int): AgendaKey? = when (keyCode) {

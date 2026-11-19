@@ -296,9 +296,9 @@ internal fun BoxScope.SportsLiveZapOverlay(
         SportsLiveCardMenu(
             title = item.displayName,
             sides = shown.sides,
-            onToggleFollow = { side ->
+            onToggleFollow = { index ->
                 menu = null
-                viewModel.onPanelToggleFollow(item, side)
+                shown.targets.getOrNull(index)?.let(viewModel::onPanelToggleFollow)
             },
             onDetails = null,
             onDismiss = { menu = null },

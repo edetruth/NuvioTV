@@ -25,6 +25,7 @@ import com.nuvio.tv.ui.screens.sportslive.SportsLiveMoreEntry.CHOOSE_STREAM
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveMoreEntry.DETAILS
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveMoreEntry.FOLLOW
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveMoreEntry.GAME_STATS
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveMoreEntry.HIDE
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveMoreEntry.REMIND
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveMoreEntry.WATCH_WITH
 import org.junit.Assert.assertEquals
@@ -199,9 +200,13 @@ class SportsLiveLiveNowV2Test {
         assertEquals("Live Events", com.nuvio.tv.core.sportslive.SportsLiveDisplayText.label("⚡ Live Events (tv)"))
         assertNull(com.nuvio.tv.core.sportslive.SportsLiveDisplayText.label("⚡ (x)"))
         assertEquals("TENNIS", scoreboardTag("⚡ Tennis"))
-        // A sport that is only the catalog's name: whole when short, else no tag (never initials like "LE").
+        // A sport that is only the catalog's name is no tag (#134): never "LIVE NOW", "EVENTS" or initials like "LE".
         assertEquals("", scoreboardRowTag(null, "⚡ Live Events (tv)", "⚡ Live Events (tv)"))
-        assertEquals("EVENTS", scoreboardRowTag(null, "⚡ Events", "⚡ Events"))
+        assertEquals("", scoreboardRowTag(null, "⚡ Events", "⚡ Events"))
+        // Nor a genre that names no sport.
+        assertEquals("", scoreboardRowTag(null, "LIVE NOW", "Sports"))
+        assertEquals("", scoreboardRowTag(null, "⚡ Live", "Sports"))
+        assertEquals("CRICKET", scoreboardRowTag(null, "Cricket", "LIVE NOW"))
         assertEquals("NBA", scoreboardRowTag("NBA", "Basketball", "Live"))
         assertEquals("BASKETBALL", scoreboardRowTag(null, "Basketball", "Live"))
         // The stage names no catalog as the league; a real league is cleaned.
@@ -229,20 +234,33 @@ class SportsLiveLiveNowV2Test {
         val liveNow = SportsLiveUiState(selectedTab = SportsLiveTab.LIVE_NOW, tabs = mapOf(SportsLiveTab.LIVE_NOW to listOf(pacers, channel)))
         // A matched live game: everything but Remind me.
         assertEquals(
-            listOf(WATCH_WITH, CHOOSE_STREAM, GAME_STATS, DETAILS, FOLLOW, FOLLOW),
+            listOf(WATCH_WITH, CHOOSE_STREAM, GAME_STATS, FOLLOW, FOLLOW, DETAILS),
             entriesFor(pacers, liveNow, scores[pacers.streamKey])
         )
         // An unmatched live game: no Game stats.
         val unmatched = item("Hawks @ Spurs", NOW - HOUR)
-        assertEquals(listOf(WATCH_WITH, CHOOSE_STREAM, DETAILS, FOLLOW, FOLLOW), entriesFor(unmatched, liveNow, null))
+        assertEquals(listOf(WATCH_WITH, CHOOSE_STREAM, FOLLOW, FOLLOW, DETAILS), entriesFor(unmatched, liveNow, null))
         // A channel: no Follow (no sides), no Game stats.
         assertEquals(listOf(WATCH_WITH, CHOOSE_STREAM, DETAILS), entriesFor(channel, liveNow, null))
         // An upcoming game on Upcoming: Details, Follow and Remind me.
         val upcoming = SportsLiveUiState(selectedTab = SportsLiveTab.UPCOMING)
         val game = item("Bulls @ Heat", NOW + 5 * HOUR, isLive = false)
-        assertEquals(listOf(DETAILS, FOLLOW, FOLLOW, REMIND), entriesFor(game, upcoming, null))
+        assertEquals(listOf(FOLLOW, FOLLOW, REMIND, DETAILS), entriesFor(game, upcoming, null))
         // Details is always there: the raw source text lives only there.
         assertTrue(sportsLiveMoreEntries(false, false, false, 0, false) == listOf(DETAILS))
+    }
+
+    @Test
+    fun `Hide from Live Now is offered only on unmatched Live Now events and comes last`() {
+        assertEquals(listOf(WATCH_WITH, CHOOSE_STREAM, DETAILS, HIDE), sportsLiveMoreEntries(true, true, false, 0, false, hide = true))
+        val show = item("Late Night Talk Show", NOW - HOUR)
+        assertTrue(sportsLiveOffersHide(SportsLiveTab.LIVE_NOW, show, strictMatch = false, followable = false))
+        // A game ESPN matches, or one with real teams to follow, is never hidden this way.
+        assertFalse(sportsLiveOffersHide(SportsLiveTab.LIVE_NOW, show, strictMatch = true, followable = false))
+        assertFalse(sportsLiveOffersHide(SportsLiveTab.LIVE_NOW, show, strictMatch = false, followable = true))
+        // Live Now only, and never a channel.
+        assertFalse(sportsLiveOffersHide(SportsLiveTab.UPCOMING, show, strictMatch = false, followable = false))
+        assertFalse(sportsLiveOffersHide(SportsLiveTab.LIVE_NOW, channel, strictMatch = false, followable = false))
     }
 
     // ---- Stage ----

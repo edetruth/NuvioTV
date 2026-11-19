@@ -145,9 +145,12 @@ object SportsLiveTokens {
         val RowChannel = 36.dp
         val RowJustEnded = 40.dp
         val RowGap = 6.dp
-        /** Row columns: league 96, names 440, scores 96, status 150 px. */
-        val ColumnLeague = 48.dp
-        val ColumnNames = 220.dp
+        /**
+         * Row columns: league 160, names 376, scores 96, status 150 px. One tag column on every row type (#134):
+         * a ten-letter sport word ("BASKETBALL") fits at the Tag size, and names start at the same x on every row.
+         */
+        val ColumnLeague = 80.dp
+        val ColumnNames = 188.dp
         val ColumnScores = 48.dp
         val ColumnStatus = 75.dp
         /** The list (800 px) and the stage (720 px). */
@@ -228,6 +231,52 @@ object SportsLiveTokens {
         const val LIFT = 1.03f
         /** Focused: the fill 8 % lighter. */
         const val FILL_LIGHTEN = 0.08f
+    }
+
+    /**
+     * The one toast card (#134, `SportsLiveToast`): 640 px wide on the raised surface, an icon column whose colour
+     * carries the meaning, a 28 px title over a 26 px line, each one line with an ellipsis. It sits top right, in
+     * the same spot as the alert cards (#136), on every screen: inside the stage's top right on browse screens.
+     */
+    object Toast {
+        val Width = 320.dp
+        val Top = Size.SafeTop + Size.HeaderHeight + 16.dp
+        val End = Size.SafeEnd
+        val PaddingHorizontal = 12.dp
+        val PaddingVertical = 9.dp
+        val IconColumn = 20.dp
+        val IconGap = 10.dp
+        val Radius = 10.dp
+        /** 28 px semibold title, 26 px line. */
+        val Title = TextStyle(fontSize = 14.sp, lineHeight = 18.sp, fontWeight = FontWeight.SemiBold)
+        val Line = TextStyle(fontSize = 13.sp, lineHeight = 16.sp, fontWeight = FontWeight.Normal)
+        /** "FT" in the icon column. */
+        val FinalMark = TextStyle(fontSize = 11.sp, lineHeight = 14.sp, fontWeight = FontWeight.Bold)
+        /** It fades and slides in this fast. */
+        const val ENTER_MS = 200
+    }
+
+    /** More… as a sheet over the stage (#134): 720 px wide, 72 px entries, its title and one status line. */
+    object Sheet {
+        val Width = 360.dp
+        val Top = Size.SafeTop + Size.HeaderHeight + Size.HeaderBottomGap
+        val End = Size.SafeEnd
+        val Bottom = Size.SafeBottom
+        val Padding = 16.dp
+        val Entry = 36.dp
+        val Radius = 12.dp
+        /** 36 px semibold title. */
+        val Title = TextStyle(fontSize = 18.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold)
+    }
+
+    /** One empty / error card (#134) and the skeleton rows that stand in while a list loads. */
+    object State {
+        val Padding = 16.dp
+        val Gap = 6.dp
+        /** 32 px title. */
+        val Title = TextStyle(fontSize = 16.sp, lineHeight = 20.sp, fontWeight = FontWeight.SemiBold)
+        val Skeleton = Color(0xFF161D27)
+        val SkeletonRows = 5
     }
 
     /** [base] with focus: each sRGB channel 8 % of the way to white (#93); alpha kept. */

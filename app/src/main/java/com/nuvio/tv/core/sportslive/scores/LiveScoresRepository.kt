@@ -1,10 +1,10 @@
 package com.nuvio.tv.core.sportslive.scores
 
 import android.content.Context
-import android.widget.Toast
-import androidx.core.content.ContextCompat
 import com.nuvio.tv.R
 import com.nuvio.tv.core.sportslive.SportsLiveSportInference
+import com.nuvio.tv.core.sportslive.SportsLiveToastKind
+import com.nuvio.tv.core.sportslive.SportsLiveToasts
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import com.nuvio.tv.domain.model.SportsLiveItem
@@ -120,9 +120,11 @@ class LiveScoresRepository internal constructor(
         prefetch = { urls -> TeamLogoPrefetch.enqueue(context, urls) },
         health = health,
         notifyOutage = {
-            ContextCompat.getMainExecutor(context).execute {
-                Toast.makeText(context, R.string.sports_live_scores_outage_toast, Toast.LENGTH_LONG).show()
-            }
+            SportsLiveToasts.show(
+                SportsLiveToastKind.PROBLEM,
+                context.getString(R.string.sports_live_scores_outage_toast),
+                context.getString(R.string.sports_live_scores_outage_line)
+            )
         },
         directoryStore = TeamDirectoryStore(File(context.filesDir, "sportslive/team_directory")),
         followedLeagues = prefs.followedTeams.map { teams -> teams.mapNotNull { leagueOfPath(it.league) } }

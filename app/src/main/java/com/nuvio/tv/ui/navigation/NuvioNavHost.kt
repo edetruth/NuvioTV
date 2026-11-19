@@ -1,5 +1,7 @@
 package com.nuvio.tv.ui.navigation
 
+import com.nuvio.tv.core.sportslive.SportsLiveToastKind
+import com.nuvio.tv.core.sportslive.SportsLiveToasts
 import com.nuvio.tv.ui.theme.NuvioMotion
 import com.nuvio.tv.ui.components.PlaybackAvailabilityProvider
 import com.nuvio.tv.ui.components.LocalPlaybackAvailability
@@ -18,7 +20,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavGraphBuilder
-
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -1094,7 +1095,7 @@ private fun PlaybackNavHost(
                 if (navController.currentBackStackEntry?.id != backStackEntry.id) return
                 val step = advance()
                 if (step.failedClipId != null) {
-                    Toast.makeText(highlightContext, R.string.sports_live_game_highlight_skipped, Toast.LENGTH_SHORT).show()
+                    SportsLiveToasts.show(SportsLiveToastKind.PROBLEM, highlightContext.getString(R.string.sports_live_game_highlight_skipped))
                 }
                 when (step) {
                     is HighlightStep.Play -> navController.navigate(highlightPlayerRoute(step.clip, SystemClock.elapsedRealtime())) {

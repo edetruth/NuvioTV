@@ -312,30 +312,41 @@ internal fun splitClock(clockText: String): Pair<String, String?> {
 
 private val QUARTER_CLOCK = Regex("""^(Q\d|OT\d?)\s+(\d{1,2}:\d{2})$""", RegexOption.IGNORE_CASE)
 
-/** An entry of the More… menu (V2, #132), in the order it lists them. */
-internal enum class SportsLiveMoreEntry { WATCH_WITH, CHOOSE_STREAM, GAME_STATS, DETAILS, FOLLOW, REMIND }
+/** An entry of the More… sheet (V2, #132, #134), in the order it lists them. */
+internal enum class SportsLiveMoreEntry { WATCH_WITH, CHOOSE_STREAM, GAME_STATS, FOLLOW, REMIND, DETAILS, HIDE }
 
 /**
- * What More… (or Hold OK on a row) lists for one item: **Watch with another game** where dual screen is
- * offered ([watchWith]: a live game on Live now, or a channel; it always opens the picker, F13), **Choose
- * stream** for what plays live ([chooseStream]), **Game stats** only for a strict ESPN match ([strictMatch]),
- * **Details** always (the raw addon text lives only there), **Follow ‹team›** once per side ([sides]),
- * and **Remind me** only for a game not started ([remindable]).
+ * What More… (or Hold OK on a row) lists for one item (#134 order): **Watch with another game** where dual screen
+ * is offered ([watchWith]: a live game on Live now, or a channel; it always opens the picker, F13), **Choose
+ * stream…** for what plays live ([chooseStream]), **Game stats** only for a strict ESPN match ([strictMatch]),
+ * **Follow ‹team›** once per side matched to a real team ([sides], [com.nuvio.tv.core.sportslive.scores.FollowTargets]),
+ * **Remind me** only for a game not started ([remindable]), **Details** always (the raw addon text lives only
+ * there), and **Hide from Live Now** for an unmatched item on Live Now ([hide]). The team pages sit between
+ * Remind me and Details.
  */
 internal fun sportsLiveMoreEntries(
     watchWith: Boolean,
     chooseStream: Boolean,
     strictMatch: Boolean,
     sides: Int,
-    remindable: Boolean
+    remindable: Boolean,
+    hide: Boolean = false
 ): List<SportsLiveMoreEntry> = buildList {
     if (watchWith) add(SportsLiveMoreEntry.WATCH_WITH)
     if (chooseStream) add(SportsLiveMoreEntry.CHOOSE_STREAM)
     if (strictMatch) add(SportsLiveMoreEntry.GAME_STATS)
-    add(SportsLiveMoreEntry.DETAILS)
     repeat(sides) { add(SportsLiveMoreEntry.FOLLOW) }
     if (remindable) add(SportsLiveMoreEntry.REMIND)
+    add(SportsLiveMoreEntry.DETAILS)
+    if (hide) add(SportsLiveMoreEntry.HIDE)
 }
+
+/**
+ * "Hide from Live Now" (#134) is offered on [item]: a Live now event (not a channel) that matches no ESPN game
+ * ([strictMatch]) and no real team ([followable]): a talk show, a series, a sport ESPN does not carry.
+ */
+internal fun sportsLiveOffersHide(tab: SportsLiveTab, item: SportsLiveItem, strictMatch: Boolean, followable: Boolean): Boolean =
+    tab == SportsLiveTab.LIVE_NOW && !item.isChannel && !strictMatch && !followable
 
 /** The stage's buttons: always **Watch** (primary) and **More…** (outlined), one row, never wrapping. */
 internal enum class SportsLiveStageButton { WATCH, MORE }

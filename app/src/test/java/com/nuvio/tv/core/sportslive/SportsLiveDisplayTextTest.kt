@@ -98,6 +98,18 @@ class SportsLiveDisplayTextTest {
     }
 
     @Test
+    fun `a LIVE prefix comes off, as the row's red dot already says it`() {
+        assertEquals("Bowls: New Zealand vs India", of("LIVE: Bowls: New Zealand vs India").name)
+        assertEquals("Late Night Talk Show", of("Live - Late Night Talk Show").name)
+        // The Resume row (#148) reads the same clean title.
+        assertEquals("PIF Saudi International", of("LIVE: PIF Saudi International").name)
+        assertEquals("Celtics vs Knicks", of("● LIVE | Celtics vs Knicks").name)
+        // "Live" as a word of the name stays.
+        assertEquals("Live on Saturday", of("Live on Saturday").name)
+        assertEquals("Live Aid", of("Live Aid").name)
+    }
+
+    @Test
     fun `a live on phrase without an id is part of the name`() {
         assertEquals("Live on Saturday", of("Live on Saturday").name)
     }

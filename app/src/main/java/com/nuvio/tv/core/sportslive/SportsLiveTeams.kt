@@ -287,9 +287,12 @@ object SportsLiveTeams {
      */
     private val NON_SPORT_TAGS = setOf("other", "others", "misc", "general", "entertainment", "network", "networks")
 
-    private val GENERIC_SPORTS = setOf("sports", "live tv", "live", "tv", "events") + NON_SPORT_TAGS
+    private val GENERIC_SPORTS = setOf(
+        "sports", "live tv", "live", "tv", "events", "live now", "live events", "live sport", "live sports", "now"
+    ) + NON_SPORT_TAGS
 
-    private fun isGenericSport(sport: String): Boolean = sport.trim().lowercase() in GENERIC_SPORTS
+    /** True for a genre that names no sport ("Sports", "Live", "LIVE NOW", "Live Events", #134), or a non-sport tag. */
+    fun isGenericSport(sport: String): Boolean = sport.trim().lowercase() in GENERIC_SPORTS
 
     /**
      * What a detail line names [item]'s sport by: its sport, else its catalog's name, never a non-sport tag

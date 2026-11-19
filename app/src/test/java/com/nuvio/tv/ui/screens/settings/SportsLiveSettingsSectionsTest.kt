@@ -6,6 +6,7 @@ import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.CATALOGS
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.CATCH_UP_ROW
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.DATA_SAVER
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.FULL_TIME_ALERTS
+import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.HIDDEN
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.HOME_ROW
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.HOVER_PREVIEW
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.MY_SPORTS
@@ -53,7 +54,7 @@ class SportsLiveSettingsSectionsTest {
                 HOME_AND_ROWS to listOf(SHOW_SECTION, HOME_ROW, CATCH_UP_ROW, HOVER_PREVIEW),
                 ALERTS to listOf(REMIND_MY_TEAMS, SCORE_ALERTS, FULL_TIME_ALERTS),
                 STATUS to listOf(SCORES_STATUS),
-                MORE to listOf(DATA_SAVER, RESET_STREAM_MEMORY, CATALOGS)
+                MORE to listOf(DATA_SAVER, RESET_STREAM_MEMORY, HIDDEN, CATALOGS)
             ),
             sportsLiveSettingsLayout()
         )
@@ -67,7 +68,7 @@ class SportsLiveSettingsSectionsTest {
             setOf(
                 SHOW_SECTION, HOME_ROW, HOVER_PREVIEW, DATA_SAVER, OPEN_GAME, RESET_STREAM_MEMORY,
                 PICTURE_IN_PICTURE, SCORES, SCORE_DELAY, SCORES_STATUS, REMIND_MY_TEAMS, SCORE_ALERTS,
-                FULL_TIME_ALERTS, MY_SPORTS, MY_TEAMS, CATCH_UP_ROW, CATALOGS
+                FULL_TIME_ALERTS, MY_SPORTS, MY_TEAMS, CATCH_UP_ROW, HIDDEN, CATALOGS
             ),
             shown.toSet()
         )
@@ -85,9 +86,9 @@ class SportsLiveSettingsSectionsTest {
     }
 
     @Test
-    fun `section off greys out everything but the show switch, stream memory and my teams`() {
+    fun `section off greys out everything but the show switch, stream memory, my teams and hidden titles`() {
         assertEquals(
-            setOf(SHOW_SECTION, RESET_STREAM_MEMORY, MY_TEAMS),
+            setOf(SHOW_SECTION, RESET_STREAM_MEMORY, MY_TEAMS, HIDDEN),
             enabledIn(SportsLiveSettingsUiState(showSection = false))
         )
     }

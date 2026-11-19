@@ -1,6 +1,5 @@
 package com.nuvio.tv.ui.screens.sportslive
 
-import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -22,6 +21,8 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.nuvio.tv.R
 import com.nuvio.tv.core.sportslive.SportsLiveNoticeEntries
 import com.nuvio.tv.core.sportslive.SportsLiveSourceCooldown
+import com.nuvio.tv.core.sportslive.SportsLiveToastKind
+import com.nuvio.tv.core.sportslive.SportsLiveToasts
 import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.ui.theme.NuvioTheme
 
@@ -94,12 +95,16 @@ internal fun SportsLiveCooldownToasts(cooldown: SportsLiveSourceCooldown = Sport
     LaunchedEffect(cooldown, lifecycleOwner) {
         lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
             cooldown.announcements.collect { notice ->
-                val text = if (notice.sources.size == 1) {
-                    context.getString(R.string.sports_live_source_rate_limited, notice.sources.single(), notice.minutes)
+                val title = if (notice.sources.size == 1) {
+                    context.getString(R.string.sports_live_source_busy, notice.sources.single())
                 } else {
-                    context.getString(R.string.sports_live_sources_rate_limited, notice.sources.joinToString(", "), notice.minutes)
+                    context.getString(R.string.sports_live_sources_busy, notice.sources.joinToString(", "))
                 }
-                Toast.makeText(context, text, Toast.LENGTH_LONG).show()
+                SportsLiveToasts.show(
+                    SportsLiveToastKind.PROBLEM,
+                    title,
+                    context.getString(R.string.sports_live_sources_busy_line, notice.minutes)
+                )
             }
         }
     }

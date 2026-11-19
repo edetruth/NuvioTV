@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nuvio.tv.core.sportslive.SportsLiveCatalogOptions
 import com.nuvio.tv.core.sportslive.SportsLiveCatalogPolicy
+import com.nuvio.tv.core.sportslive.SportsLiveHiddenTitles
 import com.nuvio.tv.core.sportslive.SportsLiveOpenGame
 import com.nuvio.tv.core.sportslive.SportsLiveSourceReliability
 import com.nuvio.tv.core.sportslive.alerts.SportsLiveAlertSettings
@@ -35,6 +36,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -158,7 +160,7 @@ class SportsLiveSettingsViewModel @Inject constructor(
             // Not switches: pickers, lists and actions with their own calls.
             SportsLiveSetting.MY_SPORTS, SportsLiveSetting.MY_TEAMS, SportsLiveSetting.SCORES,
             SportsLiveSetting.SCORE_DELAY, SportsLiveSetting.OPEN_GAME, SportsLiveSetting.SCORES_STATUS,
-            SportsLiveSetting.RESET_STREAM_MEMORY, SportsLiveSetting.CATALOGS -> Unit
+            SportsLiveSetting.RESET_STREAM_MEMORY, SportsLiveSetting.HIDDEN, SportsLiveSetting.CATALOGS -> Unit
         }
     }
 
@@ -193,6 +195,15 @@ class SportsLiveSettingsViewModel @Inject constructor(
     /** Alerts (#42, #44): Remind me for my teams, Score alerts, Full-time alerts. */
     val alertSettings: StateFlow<SportsLiveAlertSettings> =
         prefs.alertSettings.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SportsLiveAlertSettings())
+
+    /** Titles hidden from Live Now (#134), A–Z: Settings → More → Hidden lists them, and OK shows one again. */
+    val hiddenTitles: StateFlow<List<String>> = prefs.hiddenTitles
+        .map(SportsLiveHiddenTitles::sorted)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    fun unhide(title: String) {
+        viewModelScope.launch { prefs.unhideTitle(title) }
+    }
 
     fun setRemindMyTeams(enabled: Boolean) {
         viewModelScope.launch { prefs.setRemindMyTeams(enabled) }

@@ -35,10 +35,12 @@ internal enum class SportsLiveSetting(val section: SportsLiveSettingsSection) {
     SCORES_STATUS(SportsLiveSettingsSection.STATUS),
     DATA_SAVER(SportsLiveSettingsSection.MORE),
     RESET_STREAM_MEMORY(SportsLiveSettingsSection.MORE),
+    /** Titles hidden from Live Now (#134): OK shows one again. */
+    HIDDEN(SportsLiveSettingsSection.MORE),
     CATALOGS(SportsLiveSettingsSection.MORE);
 
     /** Drawn as its own card (it has a title and a list); the others share their section's card. */
-    val ownCard: Boolean get() = this == MY_SPORTS || this == MY_TEAMS || this == CATALOGS
+    val ownCard: Boolean get() = this == MY_SPORTS || this == MY_TEAMS || this == HIDDEN || this == CATALOGS
 
     /**
      * Whether the row can be used (greyed out and skipped by the D-pad otherwise). Unchanged from the
@@ -48,7 +50,7 @@ internal enum class SportsLiveSetting(val section: SportsLiveSettingsSection) {
         val section = state.showSection
         val scores = state.scores.mode
         return when (this) {
-            SHOW_SECTION, RESET_STREAM_MEMORY, MY_TEAMS -> true
+            SHOW_SECTION, RESET_STREAM_MEMORY, MY_TEAMS, HIDDEN -> true
             SCORE_DELAY, FULL_TIME_ALERTS -> section && scores != ScoresMode.OFF
             SCORE_ALERTS -> section && scores == ScoresMode.SHOW
             // Scores Off means no score data at all, and the row needs the section's Home row: off with either.

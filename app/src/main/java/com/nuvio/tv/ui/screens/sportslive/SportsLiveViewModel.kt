@@ -9,6 +9,7 @@ import com.nuvio.tv.core.sportslive.EndedInputs
 import com.nuvio.tv.core.sportslive.EndedSignal
 import com.nuvio.tv.core.sportslive.SportsLiveEndedGames
 import com.nuvio.tv.core.sportslive.LinkCheckRequest
+import com.nuvio.tv.core.sportslive.SportsLiveHiddenTitles
 import com.nuvio.tv.core.sportslive.SportsLiveLinkChecker
 import com.nuvio.tv.core.sportslive.SportsLiveLinkVerdicts
 import com.nuvio.tv.core.sportslive.SportsLiveManifestVerdict
@@ -16,13 +17,14 @@ import com.nuvio.tv.core.sportslive.SportsLiveItemBucketer
 import com.nuvio.tv.core.sportslive.SportsLiveLiveDuration
 import com.nuvio.tv.core.sportslive.SportsLiveSportKind
 import com.nuvio.tv.core.sportslive.SportsLiveMySportsScope
+import com.nuvio.tv.core.sportslive.scores.FollowTarget
 import com.nuvio.tv.core.sportslive.scores.MySports
-import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.scores.ExcitementHistory
 import com.nuvio.tv.core.sportslive.scores.LiveScoresRepository
 import com.nuvio.tv.core.sportslive.scores.ScoreChips
 import com.nuvio.tv.core.sportslive.scores.ScoreState
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
+import com.nuvio.tv.core.sportslive.scores.TeamFollows
 import com.nuvio.tv.core.sportslive.scores.TeamLogoBook
 import com.nuvio.tv.core.sportslive.scores.TeamDirectory
 import com.nuvio.tv.core.sportslive.SportsLiveSportInference
@@ -98,6 +100,10 @@ class SportsLiveViewModel internal constructor(
     private val inferSport: (SportsLiveItem) -> SportsLiveItem = { it },
     /** My sports (#146): Live now, Upcoming and Replays list only its games, unless All sports is picked. */
     mySports: Flow<MySports> = flowOf(MySports.DEFAULT),
+    /** Titles hidden from Live Now (#134): left off Live Now's list. */
+    hiddenTitles: Flow<Set<String>> = flowOf(emptySet()),
+    /** Hides a title from Live Now for the profile (#134). */
+    private val hideTitle: suspend (String) -> Unit = {},
     /** The catalog refresh cadence's clock (#71), monotonic; tests pass virtual time. */
     private val refreshClock: () -> Long = { System.nanoTime() / 1_000_000L },
     // Where the list is bucketed and pinned, and the boards built; tests pass their dispatcher, so it runs in virtual time.
@@ -147,6 +153,8 @@ class SportsLiveViewModel internal constructor(
         logoRevision = TeamLogoBook.shared.revision,
         inferSport = { item -> SportsLiveSportInference.infer(item, TeamDirectory.shared) },
         mySports = prefs.mySports,
+        hiddenTitles = prefs.hiddenTitles,
+        hideTitle = prefs::hideTitle,
         computeDispatcher = Dispatchers.Default
     )
 
@@ -217,9 +225,11 @@ class SportsLiveViewModel internal constructor(
     // card star); a follow change does not re-bucket.
     // Live now's, Upcoming's and Replays' unrouted two-team cards take the league their teams name (#132 P4),
     // again whenever the team directory changes (it bumps the logo revision). Channels are never inferred.
-    private val pinned = combine(bucketed, repo.followedTeams, logoRevision) { bucketed, followed, _ ->
+    // Titles hidden from Live Now (#134) are left off its list only.
+    private val pinned = combine(bucketed, repo.followedTeams, logoRevision, hiddenTitles) { bucketed, followed, _, hidden ->
         bucketed.copy(
-            tabs = bucketed.tabs.mapValues { (tab, listed) ->
+            tabs = bucketed.tabs.mapValues { (tab, all) ->
+                val listed = if (tab == SportsLiveTab.LIVE_NOW) SportsLiveHiddenTitles.filter(all, hidden) else all
                 val items = if (tab in INFERRED_TABS) listed.map(inferSport) else listed
                 if (tab == SportsLiveTab.CHANNELS) {
                     SportsLiveItemBucketer.markFollowed(items, followed)
@@ -323,14 +333,14 @@ class SportsLiveViewModel internal constructor(
     /** [item]'s preview when it is playing on screen, stopped so the full player can take its stream over. */
     fun takeOverPreview(item: SportsLiveItem): SportsLivePreviewState.Playing? = previewController.takeOver(item)
 
-    /**
-     * Unfollows every followed team that is [side] of [item] or of any of its alternates ("Patriots"
-     * for "New England Patriots"), or, when none is, follows [side] with the first known sport of
-     * its sources ([SportsLiveTeams.knownSport]; none for a channel or a catalog-named sport), so the
-     * follow matches the team in every addon.
-     */
-    fun toggleFollow(item: SportsLiveItem, side: String) {
-        viewModelScope.launch { repo.toggleFollowSide(item, side) }
+    /** More… → Follow ‹team› (#134): follows [target]'s ESPN team, or unfollows every followed team that is it. */
+    fun toggleFollow(target: FollowTarget) {
+        viewModelScope.launch { repo.toggleFollowTarget(target) }
+    }
+
+    /** More… → Hide from Live Now (#134): [item]'s title leaves Live Now; Settings → More → Hidden brings it back. */
+    fun hideFromLiveNow(item: SportsLiveItem) {
+        viewModelScope.launch { hideTitle(SportsLiveHiddenTitles.titleOf(item.meta.name)) }
     }
 
     fun selectTab(tab: SportsLiveTab) {
@@ -674,15 +684,14 @@ internal data class SportsLiveRefreshPlan(
 }
 
 /**
- * Follow ‹side› of [item] (the section's and the player panel's menus): unfollows every followed team that is
- * [side] of [item] or of any of its alternates, or, when none is, follows [side] with the first known sport of
- * its sources ([SportsLiveTeams.knownSport]; none for a channel or a catalog-named sport).
+ * Follow ‹team› (the section's and the player panel's menus, #134): unfollows every followed team that is
+ * [target]'s team ([TeamFollows.followersOf]), or, when none is, follows it by ESPN's name, id and league
+ * ([TeamFollows.teamToFollow]). Only real teams ([FollowTargets]) are ever offered, never a raw title's side.
  */
-internal suspend fun SportsLiveRepository.toggleFollowSide(item: SportsLiveItem, side: String) {
-    val matching = followedTeams.first().filter { SportsLiveTeams.followsSideOfAnySource(it, side, item) }
+internal suspend fun SportsLiveRepository.toggleFollowTarget(target: FollowTarget) {
+    val matching = TeamFollows.followersOf(followedTeams.first(), target.event, target.side)
     if (matching.isEmpty()) {
-        val sport = if (item.isChannel) null else (listOf(item) + item.alternates).firstNotNullOfOrNull(SportsLiveTeams::knownSport)
-        follow(FollowedTeam(side, sport))
+        TeamFollows.teamToFollow(target.event, target.side)?.let { follow(it) }
     } else {
         matching.forEach { unfollow(it) }
     }

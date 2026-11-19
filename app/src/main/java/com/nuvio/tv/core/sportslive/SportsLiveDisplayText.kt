@@ -78,6 +78,12 @@ object SportsLiveDisplayText {
                 text = text.substring(m.range.last + 1)
                 continue
             }
+            // "LIVE: Bowls", "LIVE - Name", "● LIVE | Name": the addon's live marker, which the row's red dot already says (#134).
+            val live = LIVE_PREFIX.find(text)
+            if (live != null) {
+                text = text.substring(live.range.last + 1)
+                continue
+            }
             val r = REGION_PREFIX.find(text)
             if (r != null && isRegion(r.groupValues[1])) {
                 region = region ?: r.groupValues[1].uppercase(Locale.ROOT)
@@ -198,6 +204,9 @@ object SportsLiveDisplayText {
     /** "24/7 -", "24/7-EN -", "24-7 EN |" at the start, before the name. */
     private val ALWAYS_ON_PREFIX =
         Regex("""^24\s*[/\-]\s*7(?:\s*[-:|]?\s*([A-Za-z]{2,3}))?\s*[-:|–—]\s*(?=\S)""", RegexOption.IGNORE_CASE)
+
+    /** "LIVE:", "Live -", "● LIVE |" at the start, before the name. */
+    private val LIVE_PREFIX = Regex("""^[●•🔴]?\s*live\s*[:|\-–—]\s*(?=\S)""", RegexOption.IGNORE_CASE)
 
     /** "US :", "UK|", "CA -" at the start: a two- or three-letter code and a separator. */
     private val REGION_PREFIX = Regex("""^([A-Za-z]{2,3})\s*[:|]\s*(?=\S)""")

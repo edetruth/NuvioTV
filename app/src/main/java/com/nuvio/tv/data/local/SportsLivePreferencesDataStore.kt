@@ -10,6 +10,7 @@ import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.nuvio.tv.core.profile.ProfileManager
+import com.nuvio.tv.core.sportslive.SportsLiveHiddenTitles
 import com.nuvio.tv.core.sportslive.SportsLiveOpenGame
 import com.nuvio.tv.core.sportslive.alerts.GameReminder
 import com.nuvio.tv.core.sportslive.alerts.GameReminders
@@ -66,6 +67,7 @@ class SportsLivePreferencesDataStore @Inject constructor(
     private val overridesKey = stringPreferencesKey("sports_live_overrides")
     private val catalogOptionsKey = stringPreferencesKey("sports_live_catalog_options")
     private val followedTeamsKey = stringPreferencesKey("sports_live_followed_teams")
+    private val hiddenTitlesKey = stringSetPreferencesKey("sports_live_hidden_titles")
     private val dualHintShownKey = intPreferencesKey("sports_live_dual_hint_shown")
     private val newSportsHintSeenKey = booleanPreferencesKey("sports_live_new_sports_hint_seen")
     private val scoresModeKey = stringPreferencesKey("sports_live_scores_mode")
@@ -134,6 +136,21 @@ class SportsLivePreferencesDataStore @Inject constructor(
     /** Followed teams of the active profile, in the order they were followed. */
     val followedTeams: Flow<List<FollowedTeam>> = profileManager.activeProfileId.flatMapLatest { pid ->
         factory.get(pid, FEATURE).data.map { decodeFollowed(it[followedTeamsKey]) }
+    }
+
+    /** Titles hidden from Live Now (#134), by clean name ([SportsLiveHiddenTitles]); Settings → More → Hidden lists them. */
+    val hiddenTitles: Flow<Set<String>> = profileManager.activeProfileId.flatMapLatest { pid ->
+        factory.get(pid, FEATURE).data.map { it[hiddenTitlesKey].orEmpty() }
+    }
+
+    /** Hides [title] from Live Now for the active profile. */
+    suspend fun hideTitle(title: String) {
+        store().edit { it[hiddenTitlesKey] = SportsLiveHiddenTitles.add(it[hiddenTitlesKey].orEmpty(), title) }
+    }
+
+    /** Lists [title] on Live Now again. */
+    suspend fun unhideTitle(title: String) {
+        store().edit { it[hiddenTitlesKey] = SportsLiveHiddenTitles.remove(it[hiddenTitlesKey].orEmpty(), title) }
     }
 
     /** Scores: Show (default) / Hide until focused / Off; and the score delay in seconds (Off = 0). */

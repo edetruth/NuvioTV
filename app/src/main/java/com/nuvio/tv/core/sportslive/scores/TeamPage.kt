@@ -103,27 +103,8 @@ object TeamPages {
      * a stand-in game with the card's two teams (first away, second home) and its start.
      */
     fun refsForCard(item: SportsLiveItem, directory: TeamDirectory = TeamDirectory.shared): List<TeamRef> {
-        val (first, second) = ScoreChips.orderedSides(item) ?: return emptyList()
-        val leagues = TeamDirectory.leaguesFor(item)
-        if (leagues.isEmpty() || leagues.any { directory.fetchedAt(it) == null }) return emptyList()
-        val found = leagues.mapNotNull { league ->
-            val a = directory.resolve(league, first) ?: return@mapNotNull null
-            val b = directory.resolve(league, second) ?: return@mapNotNull null
-            if (a.id == b.id) null else Triple(league, a, b)
-        }
-        val (league, away, home) = found.singleOrNull() ?: return emptyList()
-        val event = ScoreSnapshot(
-            eventId = "",
-            league = league,
-            leagueName = PRO[league],
-            startMs = item.startMs,
-            timeValid = item.startHasTimeOfDay,
-            state = ScoreState.PRE,
-            clockText = null,
-            isFinal = false,
-            home = home.asScoreTeam(),
-            away = away.asScoreTeam()
-        )
+        val found = directory.standInEvent(item) ?: return emptyList()
+        val event = found.copy(leagueName = PRO[found.league])
         if (leagueOf(event) == null) return emptyList()
         return refsOf(event, homeFirst = false)
     }

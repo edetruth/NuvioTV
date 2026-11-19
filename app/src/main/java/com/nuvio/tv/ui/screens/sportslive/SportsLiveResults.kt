@@ -79,8 +79,6 @@ import com.nuvio.tv.core.sportslive.scores.SportsResults
 import com.nuvio.tv.core.sportslive.scores.TeamPages
 import com.nuvio.tv.core.sportslive.scores.TeamRef
 import com.nuvio.tv.domain.model.SportsLiveItem
-import com.nuvio.tv.ui.components.EmptyScreenState
-import com.nuvio.tv.ui.components.LoadingIndicator
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveButton
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveButtonRole
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveFocus
@@ -103,46 +101,6 @@ internal fun resultsTodayEmpty(localHour: Int): ResultsTodayEmpty =
 
 /** Whether the list offers "See yesterday's results" (#78): Today, with nothing listed. */
 internal fun resultsOffersYesterday(daysAgo: Int?, hasRows: Boolean): Boolean = daysAgo == SportsResults.TODAY && !hasRows
-
-/** An empty Today: its note and a button that opens Yesterday (#78). */
-@Composable
-private fun ResultsEmptyToday(
-    empty: ResultsTodayEmpty,
-    onSeeYesterday: () -> Unit,
-    focusRequester: FocusRequester,
-    upFocusRequester: FocusRequester,
-    /** The header's Down target, when nothing sits above this. */
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = Modifier.padding(horizontal = NuvioTheme.spacing.sm),
-        verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md)
-    ) {
-        Text(
-            text = stringResource(
-                when (empty) {
-                    ResultsTodayEmpty.LAST_NIGHT -> R.string.sports_live_results_last_night
-                    ResultsTodayEmpty.NO_FINALS_YET -> R.string.sports_live_results_no_finals_yet
-                }
-            ),
-            style = MaterialTheme.typography.titleMedium,
-            color = NuvioTheme.colors.TextSecondary
-        )
-        SportsLivePaneButton(
-            onClick = onSeeYesterday,
-            modifier = modifier
-                .focusRequester(focusRequester)
-                .focusProperties {
-                    up = upFocusRequester
-                    left = FocusRequester.Cancel
-                    right = FocusRequester.Cancel
-                    down = FocusRequester.Cancel
-                }
-        ) {
-            PaneButtonLabel(stringResource(R.string.sports_live_results_see_yesterday))
-        }
-    }
-}
 
 /**
  * The Results tab (V2 P4): the day sits in the header's title ("Results · Yesterday ‹ ›", OK on an arrow changes it) and
@@ -178,6 +136,8 @@ internal fun SportsLiveResultsView(
     onOpenTeam: (TeamRef) -> Unit = {},
     /** Live now's live games ([SportsLiveUiState.liveGameCount]): the "N games live now →" line's count. */
     liveGames: Int = 0,
+    /** No sports picked: the state card's "My sports" (#134); null offers See Live Now instead. */
+    onEditMySports: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val liveNowFocusRequester = remember { FocusRequester() }
@@ -219,7 +179,10 @@ internal fun SportsLiveResultsView(
     val yesterdayFocusRequester = remember { FocusRequester() }
     val offersYesterday = ready && resultsOffersYesterday(state.daysAgo, firstFocusableKey != null) &&
         !(state.selectedSport == null && state.sports.isNotEmpty())
-    val entryFocusRequester = entryKey?.let(::itemFocusRequester) ?: yesterdayFocusRequester.takeIf { offersYesterday }
+    // An empty or failed day shows the state card (#134): its first button is the list's entry.
+    val stateCardShown = state.status == ResultsStatus.NO_LEAGUES || state.status == ResultsStatus.FAILED ||
+        (ready && firstFocusableKey == null)
+    val entryFocusRequester = entryKey?.let(::itemFocusRequester) ?: yesterdayFocusRequester.takeIf { stateCardShown }
     // Up from the list's top: the live line when shown, else the header's date.
     val aboveListFocusRequester = if (showLiveNow) liveNowFocusRequester else headerFocusRequester
 
@@ -279,9 +242,9 @@ internal fun SportsLiveResultsView(
         SportsLiveCardMenu(
             title = stringResource(R.string.sports_live_results_menu_title, row.event.away.listName, row.event.home.listName),
             sides = sides.map { (side, team) -> team.listName to isFollowed(row, side) },
-            onToggleFollow = { name ->
+            onToggleFollow = { index ->
                 menuRowKey = null
-                sides.firstOrNull { it.second.listName == name }?.let { (side, _) -> onToggleFollow(row, side) }
+                sides.getOrNull(index)?.let { (side, _) -> onToggleFollow(row, side) }
             },
             onDetails = null,
             onDismiss = { menuRowKey = null },
@@ -332,31 +295,62 @@ internal fun SportsLiveResultsView(
                             }
                     )
                 }
+                // The state card's first button (#134): the header's Down target when nothing sits above it.
+                val cardButton = Modifier
+                    .focusRequester(yesterdayFocusRequester)
+                    .then(if (showLiveNow) Modifier else Modifier.focusRequester(topFocusRequester))
+                    .focusProperties {
+                        up = aboveListFocusRequester
+                        left = FocusRequester.Cancel
+                        down = FocusRequester.Cancel
+                    }
+                val cardModifier = Modifier.padding(start = RESULTS_FOCUS_ROOM, top = RESULTS_FOCUS_ROOM)
+                val seeLiveNow = SportsLiveStateAction(stringResource(R.string.sports_live_state_see_live_now), onOpenLiveNow)
                 when {
                     state.status == ResultsStatus.OFF -> Unit
-                    state.status == ResultsStatus.LOADING -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        LoadingIndicator()
-                    }
-                    state.status == ResultsStatus.NO_LEAGUES ->
-                        EmptyScreenState(title = stringResource(R.string.sports_live_results_no_leagues))
-                    state.status == ResultsStatus.FAILED -> Text(
-                        text = stringResource(R.string.sports_live_results_unavailable),
-                        style = SportsLiveTokens.style(SportsLiveTokens.Type.Meta),
-                        color = Colors.TextMuted,
-                        modifier = Modifier.padding(horizontal = RESULTS_FOCUS_ROOM)
+                    // Skeleton rows (#134), never a lone spinner.
+                    state.status == ResultsStatus.LOADING -> SportsLiveSkeletonRows(modifier = cardModifier)
+                    state.status == ResultsStatus.NO_LEAGUES -> SportsLiveStateCard(
+                        title = stringResource(R.string.sports_live_state_no_sports),
+                        line = stringResource(R.string.sports_live_results_no_leagues),
+                        primary = onEditMySports?.let { SportsLiveStateAction(stringResource(R.string.sports_live_state_my_sports), it) } ?: seeLiveNow,
+                        modifier = cardModifier,
+                        primaryModifier = cardButton
+                    )
+                    state.status == ResultsStatus.FAILED -> SportsLiveStateCard(
+                        title = stringResource(R.string.sports_live_results_unavailable),
+                        line = stringResource(R.string.sports_live_state_results_failed_line),
+                        primary = seeLiveNow,
+                        problem = true,
+                        modifier = cardModifier,
+                        primaryModifier = cardButton
                     )
                     // ★ My sports has nothing that day but other sports do: point at the dropdown.
-                    firstFocusableKey == null && state.selectedSport == null && state.sports.isNotEmpty() ->
-                        EmptyScreenState(title = stringResource(R.string.sports_live_results_my_sports_empty))
-                    // Today before its first final: after midnight, last night's games are under Yesterday (#78).
-                    offersYesterday -> ResultsEmptyToday(
-                        empty = resultsTodayEmpty(remember(selectedDate) { LocalTime.now().hour }),
-                        onSeeYesterday = { onSelectDay(SportsResults.YESTERDAY) },
-                        focusRequester = yesterdayFocusRequester,
-                        upFocusRequester = aboveListFocusRequester,
-                        modifier = if (showLiveNow) Modifier else Modifier.focusRequester(topFocusRequester)
+                    firstFocusableKey == null && state.selectedSport == null && state.sports.isNotEmpty() -> SportsLiveStateCard(
+                        title = stringResource(R.string.sports_live_state_my_sports_empty),
+                        line = stringResource(R.string.sports_live_state_my_sports_empty_line),
+                        primary = seeLiveNow,
+                        modifier = cardModifier,
+                        primaryModifier = cardButton
                     )
-                    firstFocusableKey == null -> EmptyScreenState(title = stringResource(R.string.sports_live_results_empty_day))
+                    // Today before its first final: after midnight, last night's games are under Yesterday (#78).
+                    offersYesterday -> SportsLiveStateCard(
+                        title = stringResource(R.string.sports_live_results_no_finals_yet),
+                        line = when (resultsTodayEmpty(remember(selectedDate) { LocalTime.now().hour })) {
+                            ResultsTodayEmpty.LAST_NIGHT -> stringResource(R.string.sports_live_state_last_night_line)
+                            ResultsTodayEmpty.NO_FINALS_YET -> stringResource(R.string.sports_live_state_no_finals_line)
+                        },
+                        primary = SportsLiveStateAction(stringResource(R.string.sports_live_results_see_yesterday), { onSelectDay(SportsResults.YESTERDAY) }),
+                        modifier = cardModifier,
+                        primaryModifier = cardButton
+                    )
+                    firstFocusableKey == null -> SportsLiveStateCard(
+                        title = stringResource(R.string.sports_live_results_empty_day),
+                        line = stringResource(R.string.sports_live_state_empty_day_line),
+                        primary = seeLiveNow,
+                        modifier = cardModifier,
+                        primaryModifier = cardButton
+                    )
                     else -> androidx.compose.runtime.key(listKey) {
                         SportsLiveKeepFromEdge(margin = RESULTS_EDGE_KEEP) {
                             LazyColumn(

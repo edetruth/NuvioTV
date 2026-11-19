@@ -35,10 +35,19 @@ class SportsLiveTokensTest {
     @Test
     fun `rows, columns and frame are the board's in dp`() {
         assertEquals(listOf(112, 96, 72, 80).map(SportsLiveTokens::pxToDp), listOf(Size.RowLive, Size.RowSoon, Size.RowChannel, Size.RowJustEnded))
-        assertEquals(listOf(96, 440, 96, 150).map(SportsLiveTokens::pxToDp), listOf(Size.ColumnLeague, Size.ColumnNames, Size.ColumnScores, Size.ColumnStatus))
+        assertEquals(listOf(160, 376, 96, 150).map(SportsLiveTokens::pxToDp), listOf(Size.ColumnLeague, Size.ColumnNames, Size.ColumnScores, Size.ColumnStatus))
         assertEquals(SportsLiveTokens.pxToDp(720), Size.StageWidth)
         assertEquals(SportsLiveTokens.pxToDp(80), Size.HeaderHeight)
         assertEquals(SportsLiveTokens.pxToDp(54), Size.SafeTop)
+    }
+
+    @Test
+    fun `the toast card and the More sheet are the board's in dp`() {
+        assertEquals(SportsLiveTokens.pxToDp(640), SportsLiveTokens.Toast.Width)
+        assertEquals(SportsLiveTokens.pxToSp(28), SportsLiveTokens.Toast.Title.fontSize)
+        assertEquals(SportsLiveTokens.pxToSp(26), SportsLiveTokens.Toast.Line.fontSize)
+        assertEquals(SportsLiveTokens.pxToDp(720), SportsLiveTokens.Sheet.Width)
+        assertEquals(SportsLiveTokens.pxToDp(72), SportsLiveTokens.Sheet.Entry)
     }
 
     @Test

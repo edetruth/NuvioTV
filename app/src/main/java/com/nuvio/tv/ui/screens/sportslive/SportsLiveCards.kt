@@ -4,7 +4,6 @@ import androidx.annotation.StringRes
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveBadge
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveButton
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveButtonRole
-import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveFocus
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens
 import com.nuvio.tv.core.sportslive.displayName
 import com.nuvio.tv.core.sportslive.SportsLiveDisplayText
@@ -41,10 +40,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.pluralStringResource
@@ -53,8 +49,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Border
-import androidx.tv.material3.Button
-import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
@@ -70,7 +64,6 @@ import com.nuvio.tv.core.sportslive.scores.WhyTag
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveTab
 import com.nuvio.tv.ui.components.LightweightCard
-import com.nuvio.tv.ui.components.NuvioDialog
 import com.nuvio.tv.ui.screens.sportslive.preview.SportsLivePreviewLabel
 import com.nuvio.tv.ui.theme.NuvioTheme
 import com.nuvio.tv.ui.util.rememberLongPressKeyTracker
@@ -433,119 +426,6 @@ internal fun SportsLiveDetailsPane(
                 PaneButtonLabel(stringResource(R.string.sports_live_details))
             }
         }
-    }
-}
-
-/**
- * The More… menu (V2, #132; also Hold OK on a row): **Watch with another game** (always the picker, F13),
- * **Choose stream**, **Game stats** (a strict ESPN match only), **Details** (the raw addon text lives only
- * there), **Follow ‹team›** for each side ([sides] holds each side's display name and whether a followed
- * team is that side), the team pages, then **Remind me** (upcoming games only). The first entry shown takes
- * focus. A Results row uses it too, with Game stats and the sides only.
- */
-@Composable
-internal fun SportsLiveCardMenu(
-    title: String,
-    sides: List<Pair<String, Boolean>>,
-    onToggleFollow: (String) -> Unit,
-    /** Details (the addon's page); null hides it (a Results row has none). */
-    onDetails: (() -> Unit)?,
-    onDismiss: () -> Unit,
-    /** "Watch with another game"; null hides it. */
-    onWatchWith: (() -> Unit)? = null,
-    /** [onWatchWith]'s label: the in-player panel's says "Watch both" (#140). */
-    @StringRes watchWithText: Int = R.string.sports_live_dual_watch_with,
-    /** "Choose stream": the card's streams to pick from; null hides it (live games and channels offer it). */
-    onChooseStream: (() -> Unit)? = null,
-    /** "Game stats": the Game page (#18); null hides it (only a game with a strict ESPN match offers it). */
-    onGameStats: (() -> Unit)? = null,
-    /** "Following ‹team›" in place of "Unfollow ‹team›" (the Results / Game page wording). */
-    followingLabel: Boolean = false,
-    /** "Remind me" / "Cancel reminder" (#44) by [reminded]; null hides it (only upcoming games offer it). */
-    onToggleReminder: (() -> Unit)? = null,
-    reminded: Boolean = false,
-    /**
-     * "Team page ‹A›" / "Team page ‹B›" (#62): each team's name and its opener; only with [onGameStats]
-     * (a strict ESPN match) and a pro team with ESPN's id ([com.nuvio.tv.core.sportslive.scores.TeamPages.refsOf]).
-     */
-    teamPages: List<Pair<String, () -> Unit>> = emptyList(),
-    /** "Watch postgame" (#140): the in-player panel's Just ended game, whose OK opens its box score; null hides it. */
-    onWatchPostgame: (() -> Unit)? = null
-) {
-    val firstFocusRequester = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { firstFocusRequester.requestFocus() } }
-    NuvioDialog(onDismiss = onDismiss, title = title) {
-        // The first entry shown takes the first focus (worked out on each pass of this content).
-        var firstTaken = false
-        fun first(): Modifier = if (firstTaken) Modifier else Modifier.focusRequester(firstFocusRequester).also { firstTaken = true }
-        if (onWatchPostgame != null) {
-            SportsLiveMenuButton(text = stringResource(R.string.sports_live_watch_postgame), onClick = onWatchPostgame, modifier = first())
-        }
-        if (onWatchWith != null) {
-            SportsLiveMenuButton(text = stringResource(watchWithText), onClick = onWatchWith, modifier = first())
-        }
-        if (onChooseStream != null) {
-            SportsLiveMenuButton(text = stringResource(R.string.sports_live_choose_stream_menu), onClick = onChooseStream, modifier = first())
-        }
-        if (onGameStats != null) {
-            SportsLiveMenuButton(text = stringResource(R.string.sports_live_game_stats), onClick = onGameStats, modifier = first())
-        }
-        if (onDetails != null) {
-            SportsLiveMenuButton(text = stringResource(R.string.sports_live_details), onClick = onDetails, modifier = first())
-        }
-        sides.forEach { (side, followed) ->
-            val label = when {
-                !followed -> R.string.sports_live_follow
-                followingLabel -> R.string.sports_live_game_following
-                else -> R.string.sports_live_unfollow
-            }
-            SportsLiveMenuButton(
-                text = stringResource(label, side),
-                onClick = { onToggleFollow(side) },
-                modifier = first(),
-                followed = followed
-            )
-        }
-        teamPages.forEach { (name, open) ->
-            SportsLiveMenuButton(text = stringResource(R.string.sports_live_team_page, name), onClick = open, modifier = first())
-        }
-        if (onToggleReminder != null) {
-            SportsLiveMenuButton(
-                text = stringResource(if (reminded) R.string.sports_live_cancel_reminder else R.string.sports_live_remind_me),
-                onClick = onToggleReminder,
-                modifier = first()
-            )
-        }
-    }
-}
-
-/**
- * A menu entry in the one focus language (#93): plain text at rest, the white ring, lift and 8 % lighter
- * fill when focused; never a white slab. [followed] sets a Follow entry's ★ in gold.
- */
-@Composable
-internal fun SportsLiveMenuButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, followed: Boolean = false) {
-    val shape = SportsLiveTokens.Radius.ButtonShape
-    Button(
-        onClick = onClick,
-        modifier = modifier.fillMaxWidth(),
-        scale = ButtonDefaults.scale(focusedScale = SportsLiveTokens.Focus.LIFT),
-        shape = ButtonDefaults.shape(shape),
-        colors = ButtonDefaults.colors(
-            containerColor = Color.Transparent,
-            contentColor = if (followed) SportsLiveTokens.Colors.FollowedGold else SportsLiveTokens.Colors.TextPrimary,
-            focusedContainerColor = SportsLiveFocus.focusedFill(SportsLiveTokens.Colors.Surface),
-            focusedContentColor = if (followed) SportsLiveTokens.Colors.FollowedGold else SportsLiveTokens.Colors.TextPrimary,
-            pressedContainerColor = SportsLiveFocus.focusedFill(SportsLiveTokens.Colors.Surface),
-            pressedContentColor = SportsLiveTokens.Colors.TextPrimary
-        ),
-        border = ButtonDefaults.border(
-            border = Border.None,
-            focusedBorder = SportsLiveFocus.ring(shape),
-            pressedBorder = SportsLiveFocus.ring(shape)
-        )
-    ) {
-        Text(text, style = SportsLiveTokens.style(SportsLiveTokens.Type.RowName), maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
