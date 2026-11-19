@@ -52,6 +52,7 @@ import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
 import com.nuvio.tv.R
 import com.nuvio.tv.core.sportslive.SportsLiveDisplayText
+import com.nuvio.tv.core.sportslive.SportsLiveLeagueTags
 import com.nuvio.tv.core.sportslive.SportsLiveSportKind
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import java.util.Locale
@@ -654,7 +655,8 @@ private fun scoreboardTagText(name: String): String = SportsLiveDisplayText.labe
 internal fun scoreboardRowTag(league: String?, sport: String?, catalogName: String): String {
     // A sport that is only the catalog's name (the addon gave none) says nothing about the game.
     val catalog = catalogName.trim()
-    league?.takeIf { it.isNotBlank() && it.trim() != catalog }?.let { return scoreboardTag(it) }
+    // ESPN's raw abbreviation ("FU17W") gives way to a readable short tag ("U17 WC") when one is known.
+    league?.takeIf { it.isNotBlank() && it.trim() != catalog }?.let { return SportsLiveLeagueTags.of(it) ?: scoreboardTag(it) }
     return sport
         ?.takeIf { it.trim() != catalog }
         ?.takeUnless { raw -> SportsLiveTeams.isGenericSport(SportsLiveDisplayText.label(raw) ?: raw) }
