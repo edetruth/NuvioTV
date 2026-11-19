@@ -401,6 +401,8 @@ data class SportsLiveZapPanelState(
     val counts: Map<String?, Int> = panelChipCounts(allItems),
     /** [rows] as Scoreboard rows (#83), by stream key: what each row draws. */
     val boards: Map<String, ZapPanelBoard> = emptyMap(),
+    /** Rows whose OK opens the box score ([PanelRowOk.BOX_SCORE]), by stream key: they hint "Box score ›" under focus. */
+    val boxScores: Set<String> = emptySet(),
     /**
      * The game playing as a row (#140), for the pinned Now playing row: its row in [rows], else built on its
      * own (the chip or My sports leaves it out of the list). Null when it is not known at all.
@@ -418,6 +420,16 @@ data class SportsLiveZapPanelState(
  * plays ([previewPlaying]); never a logos-and-time card in its place.
  */
 internal fun panelPreviewCornerShown(previewPlaying: Boolean): Boolean = previewPlaying
+
+/** What OK on a panel row does (#140): play its stream, or open its Game page on the box score. */
+internal enum class PanelRowOk { PLAY, BOX_SCORE }
+
+/**
+ * OK on [row] (#140): a Just ended game with a strict ESPN match ([game], null without one) opens its Game page,
+ * the box score, as Game stats in its menu does; every other row (a Just ended game ESPN does not know too) plays.
+ */
+internal fun panelRowOk(row: ZapPanelRow, game: ScoreSnapshot?): PanelRowOk =
+    if (row.section == ScoreboardGroup.JUST_ENDED && game != null) PanelRowOk.BOX_SCORE else PanelRowOk.PLAY
 
 /**
  * What Hold OK on a panel row lists (#140), in order: **Watch both** first (the game playing beside the one
@@ -437,7 +449,9 @@ internal data class SportsLivePanelMenu(
     val item: SportsLiveItem,
     val entries: List<SportsLiveMoreEntry>,
     val sides: List<Pair<String, Boolean>>,
-    val game: ScoreSnapshot?
+    val game: ScoreSnapshot?,
+    /** OK on the row opens its box score ([PanelRowOk.BOX_SCORE]): **Watch postgame** leads the menu, so its stream stays one press away. */
+    val postgame: Boolean = false
 ) {
     val watchBoth: Boolean get() = SportsLiveMoreEntry.WATCH_WITH in entries
     val chooseStream: Boolean get() = SportsLiveMoreEntry.CHOOSE_STREAM in entries

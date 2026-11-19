@@ -253,6 +253,7 @@ internal fun BoxScope.SportsLiveZapOverlay(
     }
     // Hold OK on a row (#140): the V2 action menu, Watch both first.
     var menu by remember { mutableStateOf<SportsLivePanelMenu?>(null) }
+    val openGame = LocalOpenSportsLiveGame.current
     LaunchedEffect(panelOpen) { if (!panelOpen) menu = null }
     AnimatedVisibility(
         visible = panelOpen,
@@ -265,9 +266,13 @@ internal fun BoxScope.SportsLiveZapOverlay(
         panel?.let { state ->
             LiveGamesPanel(
                 state = state,
+                // OK: a matched Just ended game opens its box score (#140); any other row zaps to its game.
                 onPick = { item ->
                     previewViewModel.onPick()
-                    viewModel.onPanelPick(item)
+                    viewModel.onPanelOk(item, canOpenGame = openGame != null)?.let { request ->
+                        SportsLiveGameRequests.open(request)
+                        openGame?.invoke()
+                    }
                 },
                 onLongPick = { item -> menu = viewModel.panelMenu(item) },
                 menuOpen = menu != null,
@@ -282,7 +287,6 @@ internal fun BoxScope.SportsLiveZapOverlay(
         }
     }
 
-    val openGame = LocalOpenSportsLiveGame.current
     menu?.let { shown ->
         val item = shown.item
         SportsLiveCardMenu(
@@ -309,6 +313,16 @@ internal fun BoxScope.SportsLiveZapOverlay(
                 null
             },
             watchWithText = R.string.sports_live_watch_both,
+            // OK opens this Just ended game's box score: its postgame stream stays here (#140).
+            onWatchPostgame = if (shown.postgame) {
+                {
+                    menu = null
+                    previewViewModel.onPick()
+                    viewModel.onPanelPick(item)
+                }
+            } else {
+                null
+            },
             onChooseStream = if (shown.chooseStream) {
                 {
                     menu = null
@@ -537,6 +551,7 @@ private fun LiveGamesPanel(
         withFrameNanos { }
         if (!listState.isFullyVisible(index)) runCatching { listState.centerOn(index) }
     }
+    val boxScoreHint = stringResource(R.string.sports_live_panel_box_score_hint)
     val rowFocus: (SportsLiveItem) -> Unit = { item ->
         focusedKey = item.streamKey
         onRowFocus(item.streamKey)
@@ -687,6 +702,7 @@ private fun LiveGamesPanel(
                                         onClick = { onPick(item) },
                                         onLongClick = { onLongPick(item) },
                                         onFocus = { rowFocus(item) },
+                                        okHint = boxScoreHint.takeIf { item.streamKey in state.boxScores },
                                         // I3: Up from the first game reaches Now playing (else the filter), never past it.
                                         modifier = if (first) {
                                             Modifier.focusRequester(firstRowFocusRequester).focusProperties {

@@ -121,7 +121,9 @@ internal fun SportsLivePanelLine(
     onLongClick: (() -> Unit)?,
     onFocus: () -> Unit,
     modifier: Modifier = Modifier,
-    menuOpen: Boolean = false
+    menuOpen: Boolean = false,
+    /** What OK does, hinted at the row's end while it has focus ("Box score ›" on a matched Just ended game); null: none. */
+    okHint: String? = null
 ) {
     val strings = rememberGameStatusStrings()
     val kickoff = row.art?.let { kickoffText(it) }
@@ -180,6 +182,15 @@ internal fun SportsLivePanelLine(
                         }
                     }
                     StatusText(line)
+                    if (focused && okHint != null) {
+                        Text(
+                            text = okHint,
+                            style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag),
+                            color = Colors.TextSecondary,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                    }
                 }
                 if (nowPlaying) {
                     Box(

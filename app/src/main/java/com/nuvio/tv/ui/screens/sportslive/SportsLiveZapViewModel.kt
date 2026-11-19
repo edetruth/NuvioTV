@@ -290,6 +290,9 @@ class SportsLiveZapViewModel internal constructor(
                 // #83: each row drawn as the Scoreboard draws it.
                 boards = panelBoards(drawn, current.boardScores, current.mode, current.revealed, current.nowMs, current.ended, current.list.followed)
                     .associateBy { it.board.item.streamKey },
+                boxScores = current.rows
+                    .filter { panelRowOk(it, strictGame(current, it.item)) == PanelRowOk.BOX_SCORE }
+                    .mapTo(HashSet()) { it.item.streamKey },
                 nowPlayingRow = nowRow
             )
             ShownPanel(current, state, session)
@@ -588,8 +591,9 @@ class SportsLiveZapViewModel internal constructor(
      * the game playing, then Choose stream, Game stats (a strict ESPN match) and Follow for each side.
      */
     internal fun panelMenu(item: SportsLiveItem): SportsLivePanelMenu {
-        val scoresOn = lineup.value?.mode?.let { it != ScoresMode.OFF } == true
-        val game = ScoreChips.matchedEvent(item, liveScores.scores.value[item.streamKey]).takeIf { scoresOn }
+        val current = lineup.value
+        val game = current?.let { strictGame(it, item) }
+        val row = current?.rows?.firstOrNull { it.item.streamKey == item.streamKey }
         val followed = lineup.value?.list?.followed.orEmpty()
         val sides = item.teams?.inTitleOrder(item.meta.name).orEmpty().map { side ->
             side to followed.any { SportsLiveTeams.followsSideOfAnySource(it, side, item) }
@@ -600,7 +604,34 @@ class SportsLiveZapViewModel internal constructor(
             strictMatch = game != null,
             sides = sides.size
         )
-        return SportsLivePanelMenu(item, entries, sides, game)
+        val postgame = row != null && panelRowOk(row, game) == PanelRowOk.BOX_SCORE
+        return SportsLivePanelMenu(item, entries, sides, game, postgame)
+    }
+
+    /**
+     * OK on [item] in the panel (#140): a Just ended game with a strict ESPN match opens its box score (the Game
+     * page's request is returned, the panel closed) where the player can open it ([canOpenGame]); any other row
+     * zaps to its game as before ([onPanelPick]) and null is returned.
+     */
+    internal fun onPanelOk(item: SportsLiveItem, canOpenGame: Boolean): SportsLiveGameRequest? {
+        val current = lineup.value
+        val row = current?.rows?.firstOrNull { it.item.streamKey == item.streamKey }
+        val game = current?.let { strictGame(it, item) }
+        if (canOpenGame && row != null && panelRowOk(row, game) == PanelRowOk.BOX_SCORE) {
+            return panelGameRequest(SportsLivePanelMenu(item, emptyList(), emptyList(), game))
+        }
+        onPanelPick(item)
+        return null
+    }
+
+    /**
+     * [item]'s strict ESPN match in [current] (a final's own event included), the one Game stats and the box
+     * score open; null without one or under Scores Off.
+     */
+    private fun strictGame(current: PanelLineup, item: SportsLiveItem): ScoreSnapshot? {
+        if (current.mode == ScoresMode.OFF) return null
+        val snapshot = current.boardScores[item.streamKey] ?: liveScores.scores.value[item.streamKey]
+        return ScoreChips.matchedEvent(item, snapshot)
     }
 
     /** Choose stream on [item] in the panel (#140): the panel closes and [item]'s Stream screen opens, to pick from. */

@@ -9,6 +9,7 @@ import com.nuvio.tv.core.sportslive.scores.GameArt
 import com.nuvio.tv.core.sportslive.scores.GameArtTeam
 import com.nuvio.tv.core.sportslive.scores.ScoreChip
 import com.nuvio.tv.core.sportslive.scores.ScoreChipStrings
+import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.TeamLogoBook
 import com.nuvio.tv.domain.model.ContentType
 import com.nuvio.tv.domain.model.MetaPreview
@@ -21,6 +22,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import io.mockk.mockk
 import org.junit.Test
 
 /** Small fixes found on the emulator: the dual picker's order, Replays' rows and stage, Live Now's stage art; All sports' place. */
@@ -103,6 +105,18 @@ class SportsLiveEmulatorFixesTest {
         assertFalse(sportsLiveHeaderFilterShown(SportsLiveTab.CHANNELS, 1))
         // Every game is listed under All sports, on any tab.
         assertTrue(item("x", "India vs Australia").copy(sport = "Cricket").matchesZapFilter(allSports, SportsLiveTab.LIVE_NOW))
+    }
+
+    @Test
+    fun `OK on a Just ended game opens its box score only with a strict ESPN match, else it plays`() {
+        val matched = mockk<ScoreSnapshot>(relaxed = true)
+        val ended = ZapPanelRow(item("e", "Lakers vs Celtics"), ZapPanelGroup.JUST_ENDED, chip = null, art = null)
+        assertEquals(PanelRowOk.BOX_SCORE, panelRowOk(ended, matched))
+        assertEquals(PanelRowOk.PLAY, panelRowOk(ended, game = null))
+        // A game still on plays, matched or not.
+        val live = ZapPanelRow(item("l", "Bulls vs Knicks"), ZapPanelGroup.LIVE_NOW, chip = null, art = null)
+        assertEquals(PanelRowOk.PLAY, panelRowOk(live, matched))
+        assertEquals(PanelRowOk.PLAY, panelRowOk(live, game = null))
     }
 
     private val strings = GameStatusStrings(

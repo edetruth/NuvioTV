@@ -468,7 +468,9 @@ internal fun SportsLiveCardMenu(
      * "Team page ‹A›" / "Team page ‹B›" (#62): each team's name and its opener; only with [onGameStats]
      * (a strict ESPN match) and a pro team with ESPN's id ([com.nuvio.tv.core.sportslive.scores.TeamPages.refsOf]).
      */
-    teamPages: List<Pair<String, () -> Unit>> = emptyList()
+    teamPages: List<Pair<String, () -> Unit>> = emptyList(),
+    /** "Watch postgame" (#140): the in-player panel's Just ended game, whose OK opens its box score; null hides it. */
+    onWatchPostgame: (() -> Unit)? = null
 ) {
     val firstFocusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { firstFocusRequester.requestFocus() } }
@@ -476,6 +478,9 @@ internal fun SportsLiveCardMenu(
         // The first entry shown takes the first focus (worked out on each pass of this content).
         var firstTaken = false
         fun first(): Modifier = if (firstTaken) Modifier else Modifier.focusRequester(firstFocusRequester).also { firstTaken = true }
+        if (onWatchPostgame != null) {
+            SportsLiveMenuButton(text = stringResource(R.string.sports_live_watch_postgame), onClick = onWatchPostgame, modifier = first())
+        }
         if (onWatchWith != null) {
             SportsLiveMenuButton(text = stringResource(watchWithText), onClick = onWatchWith, modifier = first())
         }
