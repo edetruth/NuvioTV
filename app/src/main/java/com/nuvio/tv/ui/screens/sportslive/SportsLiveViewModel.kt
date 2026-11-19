@@ -240,6 +240,8 @@ class SportsLiveViewModel internal constructor(
         ) { pinned, endedKeys, (selection, mode, sports), (inputs, linkDead), _ ->
             buildState(pinned, endedKeys, selection, inputs, mode, linkDead, sports)
         }
+            // A focus move rebuilds the state: never on the main thread (#143).
+            .flowOn(computeDispatcher)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SportsLiveUiState())
 
     private val boardScores = MutableStateFlow(SportsLiveBoardScores())

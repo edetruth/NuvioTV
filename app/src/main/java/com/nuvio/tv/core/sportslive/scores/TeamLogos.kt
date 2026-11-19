@@ -1,5 +1,6 @@
 package com.nuvio.tv.core.sportslive.scores
 
+import com.nuvio.tv.core.sportslive.Memo
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.domain.model.SportsLiveItem
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -146,6 +147,10 @@ class TeamLogoBook(
     companion object {
         const val MAX_ENTRIES = 2_000
 
+        // A card side or a directory name is folded on every lookup, for the same names each load (#152).
+        // Before [shared], so it is set before the book is built.
+        private val keys = Memo(8_192) { name: String -> keysOfUncached(name) }
+
         /** The app's book: filled by [LiveScoresRepository], read by [GameArt.of]. */
         val shared = TeamLogoBook(directory = TeamDirectory.shared)
 
@@ -159,7 +164,9 @@ class TeamLogoBook(
         private fun fold(text: String): String =
             Normalizer.normalize(text.replace('’', '\''), Normalizer.Form.NFD).replace(MARKS, "").trim()
 
-        private fun keysOf(name: String): Set<String> {
+        private fun keysOf(name: String): Set<String> = keys(name)
+
+        private fun keysOfUncached(name: String): Set<String> {
             val folded = fold(name)
             // "St. John's" and "St Johns" are one name (P4): the apostrophe joins its word rather than splitting it.
             val joined = folded.replace("'", "")

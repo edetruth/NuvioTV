@@ -1,8 +1,13 @@
 package com.nuvio.tv.core.sportslive.scores
 
+import androidx.annotation.VisibleForTesting
+import com.nuvio.tv.core.sportslive.Memo
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.domain.model.SportsLiveItem
 import java.text.Normalizer
+
+/** A card's sport, its own texts (title, genres) and its routing-only texts (catalog name). */
+private typealias CardTexts = Triple<String?, List<String>, List<String>>
 
 /**
  * Picks the ESPN scoreboard feed(s) for a card from its sport and the competition keywords in its title,
@@ -12,6 +17,19 @@ import java.text.Normalizer
  * the pro feeds whose teams share their names or cities; [ScoreMatcher] still requires both teams to match.
  */
 object EspnLeagueMap {
+    // Every card is routed on each load and again on each team directory update (#152): the answers for a
+    // card's texts (sport, title and genres, catalog name) are kept. First, so they are set before any other initialiser runs.
+    private const val CARD_CACHE_SIZE = 8_192
+    private val routed = Memo(CARD_CACHE_SIZE) { (sport, hints, routing): CardTexts -> leaguesForUncached(sport, hints, routing) }
+    private val collegeFallback = Memo(CARD_CACHE_SIZE) { (sport, hints, routing): CardTexts ->
+        collegeFallbackForUncached(sport, hints, routing)
+    }
+    private val inferableTexts = Memo(CARD_CACHE_SIZE) { (sport, hints, routing): CardTexts ->
+        val own = (listOfNotNull(sport) + hints).map(::fold)
+        val texts = own + routing.map(::fold)
+        own.none { EXCLUDED.containsMatchIn(it) } && texts.none { COLLEGE.containsMatchIn(it) }
+    }
+
     val NBA = EspnLeague("basketball", "nba")
     val NFL = EspnLeague("football", "nfl")
     val NHL = EspnLeague("hockey", "nhl")
@@ -117,7 +135,11 @@ object EspnLeagueMap {
      * gets both college feeds; [ScoreMatcher]'s two-team match picks the one its game is on.
      * [routingHints] (the catalog name) route only.
      */
-    fun leaguesFor(sport: String?, hints: List<String>, routingHints: List<String> = emptyList()): List<EspnLeague> {
+    fun leaguesFor(sport: String?, hints: List<String>, routingHints: List<String> = emptyList()): List<EspnLeague> =
+        routed(Triple(sport, hints, routingHints))
+
+    @VisibleForTesting
+    internal fun leaguesForUncached(sport: String?, hints: List<String>, routingHints: List<String>): List<EspnLeague> {
         val own = (listOfNotNull(sport) + hints).map(::fold).filter { it.isNotEmpty() }
         if (own.any { EXCLUDED.containsMatchIn(it) }) return emptyList()
         val texts = own + routingHints.map(::fold).filter { it.isNotEmpty() }
@@ -138,11 +160,8 @@ object EspnLeagueMap {
      * Whether [item]'s league may be inferred from its teams (#132 P4): it names no excluded sport or league
      * (women's, minor, individual sports) and no college competition, whose teams share pro teams' names.
      */
-    fun inferable(item: SportsLiveItem): Boolean {
-        val own = (listOfNotNull(SportsLiveTeams.knownSport(item)) + item.meta.name + item.meta.genres).map(::fold)
-        val texts = own + fold(item.catalogName)
-        return own.none { EXCLUDED.containsMatchIn(it) } && texts.none { COLLEGE.containsMatchIn(it) }
-    }
+    fun inferable(item: SportsLiveItem): Boolean =
+        inferableTexts(Triple(SportsLiveTeams.knownSport(item), listOf(item.meta.name) + item.meta.genres, listOf(item.catalogName)))
 
     /**
      * The college feed an ambiguous card may also be on (#66), tried only when its pro feed has no match:
@@ -158,7 +177,11 @@ object EspnLeagueMap {
         )
 
     /** See [collegeFallbackFor]; the same texts as [leaguesFor]. */
-    fun collegeFallbackFor(sport: String?, hints: List<String>, routingHints: List<String> = emptyList()): EspnLeague? {
+    fun collegeFallbackFor(sport: String?, hints: List<String>, routingHints: List<String> = emptyList()): EspnLeague? =
+        collegeFallback(Triple(sport, hints, routingHints))
+
+    @VisibleForTesting
+    internal fun collegeFallbackForUncached(sport: String?, hints: List<String>, routingHints: List<String>): EspnLeague? {
         val own = (listOfNotNull(sport) + hints).map(::fold).filter { it.isNotEmpty() }
         if (own.any { EXCLUDED.containsMatchIn(it) }) return null
         val texts = own + routingHints.map(::fold).filter { it.isNotEmpty() }

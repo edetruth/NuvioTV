@@ -1,5 +1,6 @@
 package com.nuvio.tv.core.sportslive
 
+import androidx.annotation.VisibleForTesting
 import com.nuvio.tv.core.sportslive.scores.EspnLeague
 import com.nuvio.tv.core.sportslive.scores.EspnLeagueMap
 import com.nuvio.tv.domain.model.FollowedTeam
@@ -10,6 +11,9 @@ data class TeamPair(val home: String, val away: String)
 
 /** Parses and matches team names in event titles; shared by My Teams and one-card-per-game. */
 object SportsLiveTeams {
+    // Every load folds the same few thousand names many times over (#152). First, so it is set before any other initialiser runs.
+    private val normalised = Memo(8_192) { team: String -> normaliseUncached(team) }
+
     // In order of preference. " at " / " @ " put the home side second.
     private val SEPARATORS = listOf(" vs ", " vs. ", " v ", " at ", " @ ", " - ")
     private val AWAY_FIRST = setOf(" at ", " @ ")
@@ -107,7 +111,10 @@ object SportsLiveTeams {
      * "&" read as "and" and other punctuation as a space ("St. Louis" = "St Louis"); leading rank and
      * club tags/suffixes removed; a (W)/U21 qualifier kept at the end.
      */
-    fun normalise(team: String): String {
+    fun normalise(team: String): String = normalised(team)
+
+    @VisibleForTesting
+    internal fun normaliseUncached(team: String): String {
         val cleaned = SportsLiveSmallLetters.plain(clean(team)).lowercase()
         // A qualifier is set aside so "Arsenal FC (W)" still loses its club suffix: "arsenal (w)".
         val qualifier = QUALIFIER.find(cleaned)

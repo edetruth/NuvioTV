@@ -2,6 +2,7 @@ package com.nuvio.tv.core.sportslive.scores
 
 import android.util.Log
 import com.nuvio.tv.BuildConfig
+import com.nuvio.tv.core.sportslive.Memo
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.TeamPair
 import com.nuvio.tv.domain.model.SportsLiveItem
@@ -180,8 +181,8 @@ class ScoreMatcher(
      */
     private fun score(home: Side, away: Side, event: ScoreSnapshot): Int? {
         val slugQualifier = leagueQualifier(event.leagueSlug, event.leagueName)
-        val eventHome = Competitor(event.home, slugQualifier)
-        val eventAway = Competitor(event.away, slugQualifier)
+        val eventHome = competitor(event.home, slugQualifier)
+        val eventAway = competitor(event.away, slugQualifier)
         val least = if (unknownLeague(event, eventHome, eventAway)) BOTH_STRONG else minScore
         return listOfNotNull(
             pairScore(eventHome.score(home), eventAway.score(away), least),
@@ -198,7 +199,7 @@ class ScoreMatcher(
 
     private fun unknownLeague(event: ScoreSnapshot): Boolean {
         val qualifier = leagueQualifier(event.leagueSlug, event.leagueName)
-        return unknownLeague(event, Competitor(event.home, qualifier), Competitor(event.away, qualifier))
+        return unknownLeague(event, competitor(event.home, qualifier), competitor(event.away, qualifier))
     }
 
     /**
@@ -285,7 +286,16 @@ class ScoreMatcher(
         // Youth: "fifa.friendly_u21", "uefa.euro_u21_qual", "fifa.world.u17".
         private val YOUTH_SLUG = Regex("""(?<![a-z])u(\d{1,2})(?!\d)""")
 
-        private fun sideOf(name: String): Side {
+        // A card is scored against every event of its feeds on every poll, and each card side and each
+        // team folds the same names every time (#152): the folded forms are kept.
+        private val sides = Memo(4_096) { name: String -> sideOfUncached(name) }
+        private val competitors = Memo(4_096) { (team, qualifier): Pair<ScoreTeam, String?> -> Competitor(team, qualifier) }
+
+        private fun competitor(team: ScoreTeam, qualifier: String?): Competitor = competitors(team to qualifier)
+
+        private fun sideOf(name: String): Side = sides(name)
+
+        private fun sideOfUncached(name: String): Side {
             val (base, qualifier) = splitQualifier(fold(name))
             val keys = setOf(SportsLiveTeams.normalise(base), SportsLiveTeams.canonicalise(base)) - ""
             return Side(base, keys, qualifier, collegeAlternates(SportsLiveTeams.normalise(base)) - keys)
@@ -326,7 +336,7 @@ class ScoreMatcher(
          * none. "Arsenal" is not "Arsenal Women", "Lakers" alone is not "Los Angeles Lakers".
          */
         fun isStrongSide(name: String, team: ScoreTeam, leagueSlug: String, leagueName: String? = null): Boolean =
-            Competitor(team, leagueQualifier(leagueSlug, leagueName)).score(sideOf(name)) == STRONG
+            competitor(team, leagueQualifier(leagueSlug, leagueName)).score(sideOf(name)) == STRONG
 
         /**
          * Which way a matched card's sides sit on [event]: true when [first] is its home team and [second]
@@ -336,8 +346,8 @@ class ScoreMatcher(
          */
         fun firstIsHome(first: String, second: String, event: ScoreSnapshot): Boolean? {
             val qualifier = leagueQualifier(event.leagueSlug, event.leagueName)
-            val home = Competitor(event.home, qualifier)
-            val away = Competitor(event.away, qualifier)
+            val home = competitor(event.home, qualifier)
+            val away = competitor(event.away, qualifier)
             val firstSide = sideOf(first)
             val secondSide = sideOf(second)
             fun total(a: Int, b: Int) = if (a > 0 && b > 0) a + b else 0

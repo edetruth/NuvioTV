@@ -30,7 +30,12 @@ object SportsLiveTimeParser {
     fun parseStartMs(releaseInfo: String?, released: String?, nowMs: Long): Long? =
         parseStart(releaseInfo, released)?.startMs
 
-    fun parseStart(releaseInfo: String?, released: String?): SportsLiveStart? {
+    fun parseStart(releaseInfo: String?, released: String?): SportsLiveStart? = starts(releaseInfo to released)
+
+    // Every card's start is parsed on each load, from the same few thousand strings (#152).
+    private val starts = Memo(8_192) { (releaseInfo, released): Pair<String?, String?> -> parseStartUncached(releaseInfo, released) }
+
+    private fun parseStartUncached(releaseInfo: String?, released: String?): SportsLiveStart? {
         val info = releaseInfo?.let(::normalize).orEmpty()
         val iso = released?.trim().orEmpty()
         return parseOrNull(info, hasTimeOfDay = true) {

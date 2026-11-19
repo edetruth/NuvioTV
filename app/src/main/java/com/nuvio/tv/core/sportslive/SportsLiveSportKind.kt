@@ -1,5 +1,6 @@
 package com.nuvio.tv.core.sportslive
 
+import androidx.annotation.VisibleForTesting
 import com.nuvio.tv.domain.model.SportsLiveItem
 import java.text.Normalizer
 
@@ -13,6 +14,12 @@ enum class SportsLiveSportKind {
     DARTS, SNOOKER, WRESTLING, CYCLING;
 
     companion object {
+        // Asked for every card's sport, title, genres and catalog name on every load (#152).
+        private const val TEXT_CACHE_SIZE = 8_192
+        private val sportOf = Memo(TEXT_CACHE_SIZE) { text: String -> ofUncached(text) }
+        private val wrestlingShow = Memo(TEXT_CACHE_SIZE) { title: String -> WRESTLING_SHOW.containsMatchIn(fold(title)) }
+        private val promotion = Memo(TEXT_CACHE_SIZE) { title: String -> PROMOTION.containsMatchIn(fold(title)) }
+
         /** A filter value standing for a [SportsLiveSportKind] (never an addon's own text). */
         private const val FILTER_PREFIX = "\u0000sport:"
 
@@ -37,7 +44,10 @@ enum class SportsLiveSportKind {
         ).map { (kind, pattern) -> kind to Regex(pattern) }
 
         /** The sport [text] names ("American Football" → FOOTBALL, "Football" → SOCCER); null when none. */
-        fun of(text: String?): SportsLiveSportKind? {
+        fun of(text: String?): SportsLiveSportKind? = text?.let(sportOf::invoke)
+
+        @VisibleForTesting
+        internal fun ofUncached(text: String?): SportsLiveSportKind? {
             val folded = fold(text ?: return null).takeIf { it.isNotEmpty() } ?: return null
             return RULES.firstOrNull { (_, regex) -> regex.containsMatchIn(folded) }?.first
         }
@@ -78,14 +88,12 @@ enum class SportsLiveSportKind {
          * "SmackDown") under MMA or no known sport, or a weekly show's name ("Raw", "Dynamite", "Collision",
          * "Rampage") under MMA or wrestling only, as those words mean other things elsewhere.
          */
-        fun isWrestlingShow(title: String, sport: String?): Boolean {
-            val folded = fold(title)
-            return when (of(sport)) {
-                MMA, WRESTLING -> WRESTLING_SHOW.containsMatchIn(folded)
-                null -> PROMOTION.containsMatchIn(folded)
+        fun isWrestlingShow(title: String, sport: String?): Boolean =
+            when (of(sport)) {
+                MMA, WRESTLING -> wrestlingShow(title)
+                null -> promotion(title)
                 else -> false
             }
-        }
 
         /**
          * The one sport [text] names (#146); null when it names none or several ("Live Sports (Soccer, Tennis,
