@@ -455,7 +455,7 @@ private fun GameBlock(row: ScoreboardRow, details: ScoreDetails?, situation: Str
             // Real bold (the app's variable fonts ignore FontWeight alone).
             style = SportsLiveTokens.style(SportsLiveTokens.Type.StageScore).sportsLiveBold().copy(color = Colors.TextPrimary),
             maxLines = 1,
-            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
             autoSize = TextAutoSize.StepBased(minFontSize = 18.sp, maxFontSize = SportsLiveTokens.Type.StageScore.fontSize, stepSize = 1.sp)
         )
         val lines = scoreboardStatusLines(row, strings, art?.let { kickoffText(it) })
@@ -508,7 +508,7 @@ private fun ChannelBlock(row: ScoreboardRow, noStream: Boolean) {
                 text = title.name,
                 style = SportsLiveTokens.style(SportsLiveTokens.Type.StageScore).sportsLiveBold().copy(color = Colors.TextPrimary),
                 maxLines = 1,
-                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f, fill = false),
                 autoSize = TextAutoSize.StepBased(minFontSize = 18.sp, maxFontSize = SportsLiveTokens.Type.StageScore.fontSize, stepSize = 1.sp)
             )
