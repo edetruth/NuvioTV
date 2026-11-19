@@ -770,8 +770,11 @@ internal fun PlayerRuntimeController.clearPendingInitialResumePosition() {
 @androidx.annotation.OptIn(UnstableApi::class)
 @OptIn(UnstableApi::class)
 internal fun PlayerRuntimeController.retryCurrentStreamFromStartAfter416() {
-    if (hasRetriedCurrentStreamAfter416) return
+    if (hasRetriedCurrentStreamAfter416 || retried416Url == currentStreamUrl) return
     hasRetriedCurrentStreamAfter416 = true
+    // Once per link: the reload resets the flag above, so a link that answers 416 again would
+    // otherwise be rebuilt forever (#138: the endless "Starting stream…").
+    retried416Url = currentStreamUrl
     pendingResumeProgress = null
     scheduleDeferredPlayerReinitialize(fromPositionMs = 0L, clearResumeProgress = true)
 }

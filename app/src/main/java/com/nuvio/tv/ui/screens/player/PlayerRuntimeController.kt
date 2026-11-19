@@ -736,6 +736,9 @@ class PlayerRuntimeController(
         }
     internal var pendingResumeProgress: WatchProgress? = null
     internal var hasRetriedCurrentStreamAfter416: Boolean = false
+
+    /** The link already retried from the start after a 416; it is not retried again (#138). */
+    internal var retried416Url: String? = null
     internal var isReleasingPlayer: Boolean = false
     internal var cachedDecoderPriority: Int = 1
     internal var hasTriedAudioPcmFallback: Boolean = false
