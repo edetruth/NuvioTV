@@ -231,13 +231,15 @@ internal fun SportsLivePanelLine(
 }
 
 /**
- * "NBA ORL 97–92 PHI" (V2 `Player.dc.html` 3): the tag, the abbreviations around the score, the leader's score in
- * real bold, the hidden mark or "vs" when none shows. No logos: the names give way (ellipsis) before the score and
- * the clock ever do.
+ * "NBA [logo] ORL 97–92 PHI [logo]" (V2 `Player.dc.html` 3): the tag, a matched game's logos or flags beside the
+ * abbreviations around the score (none when they are not both known), the leader's score in real bold, the hidden
+ * mark or "vs" when none shows. The names give way (ellipsis) first: the tag, the score and the clock always fit.
  */
 @Composable
 private fun RowScope.GameLine(row: ScoreboardRow, line: PanelLine) {
     LineTag(line.tag)
+    val logos = rememberTeamLogoPair(row.art)?.takeIf { !it.failed }
+    if (logos != null) TeamLogoSlot(logos.first, logos.shown, Size.PanelLogo)
     LineText(line.first.orEmpty(), Modifier.weight(1f, fill = false))
     when (val scores = line.scores) {
         is ScoreboardScores.Shown -> {
@@ -260,6 +262,7 @@ private fun RowScope.GameLine(row: ScoreboardRow, line: PanelLine) {
         ScoreboardScores.None -> LineText(stringResource(R.string.sports_live_panel_vs), color = Colors.TextMuted)
     }
     LineText(line.second.orEmpty(), Modifier.weight(1f, fill = false))
+    if (logos != null) TeamLogoSlot(logos.second, logos.shown, Size.PanelLogo)
     if (row.followed) Icon(imageVector = Icons.Rounded.Star, contentDescription = null, tint = Colors.FollowedGold, modifier = Modifier.size(10.dp))
 }
 
@@ -390,5 +393,5 @@ internal fun SportsLivePanelHeader(group: ScoreboardGroup, count: Int) {
 
 private val PANEL_LINE_RADIUS = 6.dp
 private val PANEL_LINE_ACCENT = 2.dp
-private val PANEL_TAG_COLUMN = 52.dp
+private val PANEL_TAG_COLUMN = 48.dp
 private const val JUST_ENDED_LINE_ALPHA = 0.6f

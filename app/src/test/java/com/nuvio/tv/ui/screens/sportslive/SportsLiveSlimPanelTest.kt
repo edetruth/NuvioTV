@@ -234,7 +234,7 @@ class SportsLiveSlimPanelTest {
     }
 
     @Test
-    fun `a panel row is one compact line - tag, short names and score, then the clock`() {
+    fun `a panel row is one compact line - tag, logos, short names and score, then the clock`() {
         assertEquals(22.dp, SportsLiveTokens.Size.PanelLine)
         assertTrue(SportsLiveTokens.Size.PanelWidth in 270.dp..290.dp)
 
