@@ -66,6 +66,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
 import com.nuvio.tv.R
+import com.nuvio.tv.ui.components.AutoResizeText
 import com.nuvio.tv.core.sportslive.scores.BoxScoreTeam
 import com.nuvio.tv.core.sportslive.scores.GameHighlight
 import com.nuvio.tv.core.sportslive.scores.GameSection
@@ -544,14 +545,13 @@ private fun HeaderTeam(side: HeaderSide, logo: Painter?, logoShown: Boolean, sho
 @Composable
 private fun TeamNameBlock(side: HeaderSide, showRecord: Boolean, alignEnd: Boolean, modifier: Modifier) {
     Column(horizontalAlignment = if (alignEnd) Alignment.End else Alignment.Start, modifier = modifier) {
-        // A long name (soccer) wraps to a second line, then ends in "…".
-        Text(
+        // One line, never broken mid-word ("Mammo/th", #145): a long name shrinks to fit, down to a floor.
+        AutoResizeText(
             text = side.name,
-            style = MaterialTheme.typography.titleMedium.sportsLiveBold(),
             color = NuvioTheme.colors.TextPrimary,
-            textAlign = if (alignEnd) TextAlign.End else TextAlign.Start,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
+            style = MaterialTheme.typography.titleMedium.sportsLiveBold(),
+            minFontSize = TEAM_NAME_MIN_SIZE,
+            textAlign = if (alignEnd) TextAlign.End else TextAlign.Start
         )
         // The record after the game would tell how it ended: hidden with the score.
         if (showRecord && side.record != null) {
@@ -1212,3 +1212,6 @@ private val GAME_STAR_COLOR = Color(0xFFFFC107)
 private val STAT_BETTER_COLOR = Color(0xFF9AC2FF)
 private val STAT_OTHER_COLOR = Color(0xFF4B5A6E)
 private val HIGHLIGHT_BADGE_COLOR = Color(0xD90A0D12)
+
+/** The smallest a header team name shrinks to before it is clipped (#145). */
+private val TEAM_NAME_MIN_SIZE = 12.sp

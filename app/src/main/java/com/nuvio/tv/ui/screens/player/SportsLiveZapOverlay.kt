@@ -12,6 +12,7 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
@@ -120,7 +121,9 @@ internal fun BoxScope.SportsLiveZapOverlay(
     playerFocusRequester: FocusRequester,
     liveWindow: () -> LiveWindow?,
     engine: () -> InternalPlayerEngine,
-    playerOverlayVisible: Boolean
+    playerOverlayVisible: Boolean,
+    /** Whether the game is playing now: a Game page opened over it resumes it on return (#145). */
+    isPlaying: () -> Boolean = { false }
 ) {
     if (!viewModel.hasSession) return
     // In picture-in-picture only the video shows: no banner, indicator or panel.
@@ -248,7 +251,7 @@ internal fun BoxScope.SportsLiveZapOverlay(
             .align(Alignment.CenterStart)
             .zIndex(3.1f)
     ) {
-        // #140: a soft dark fade behind the panel only, clear soon after its edge, so the game stays visible.
+        // #140/#145: a strong dark fade behind the panel, so its rows read over bright video; clear soon past its edge.
         Box(modifier = Modifier.fillMaxHeight().width(PANEL_WIDTH + PANEL_FADE).background(PANEL_SCRIM))
     }
     // Hold OK on a row (#140): the V2 action menu, Watch both first.
@@ -271,6 +274,7 @@ internal fun BoxScope.SportsLiveZapOverlay(
                     previewViewModel.onPick()
                     viewModel.onPanelOk(item, canOpenGame = openGame != null)?.let { request ->
                         SportsLiveGameRequests.open(request)
+                        viewModel.onGameOpened(wasPlaying = isPlaying())
                         openGame?.invoke()
                     }
                 },
@@ -338,6 +342,7 @@ internal fun BoxScope.SportsLiveZapOverlay(
                     viewModel.panelGameRequest(shown)?.let { request ->
                         previewViewModel.onPick()
                         SportsLiveGameRequests.open(request)
+                        viewModel.onGameOpened(wasPlaying = isPlaying())
                         openGame.invoke()
                     }
                 }
@@ -662,7 +667,16 @@ private fun LiveGamesPanel(
                         .then(if (filterShown) Modifier.focusProperties { up = filterFocusRequester } else Modifier),
                     menuOpen = menuOpen
                 )
-                Spacer(modifier = Modifier.height(NuvioTheme.spacing.xs))
+                // #145: a 6 dp gap and a thin rule, so the scrolled rows never butt into the pinned row.
+                Spacer(modifier = Modifier.height(NOW_PLAYING_GAP))
+                Box(
+                    modifier = Modifier
+                        .padding(horizontal = PANEL_ROW_ROOM)
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(SportsLiveTokens.Colors.TextSecondary.copy(alpha = 0.35f))
+                )
+                Spacer(modifier = Modifier.height(NOW_PLAYING_GAP))
             }
             if (guide.rows.isEmpty()) {
                 // Nothing else on: Now playing alone, or the empty line when even that is unknown.
@@ -798,12 +812,18 @@ private val PANEL_ROW_ROOM = 6.dp
 /** The corner preview: 16:9 at this width (#83), beside the title, inside the panel's width (F12). */
 private val PANEL_PREVIEW_WIDTH = 150.dp
 
-/** How far past the panel its fade runs out (#140). */
-private val PANEL_FADE = 200.dp
+/** Above and below the rule under the pinned Now playing row (#145). */
+private val NOW_PLAYING_GAP = 6.dp
 
-/** Behind the panel (#140): a soft dark fade, about 70 % black at the left edge, clear soon past the panel. */
+/** How far past the panel its fade runs out (#140, #145). */
+private val PANEL_FADE = 80.dp
+
+/**
+ * Behind the panel (#145): about 85 % black at the left edge, still about 75 % at the panel's edge (rows stay
+ * readable over a yellow or white scene), then clear over the [PANEL_FADE] past it.
+ */
 private val PANEL_SCRIM = Brush.horizontalGradient(
-    0f to Color.Black.copy(alpha = 0.7f),
-    0.55f to Color.Black.copy(alpha = 0.5f),
+    0f to Color.Black.copy(alpha = 0.85f),
+    0.75f to Color.Black.copy(alpha = 0.75f),
     1f to Color.Transparent
 )

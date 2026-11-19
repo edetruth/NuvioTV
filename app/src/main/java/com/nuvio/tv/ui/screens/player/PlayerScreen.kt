@@ -520,6 +520,10 @@ fun PlayerScreen(
                     // Re-create the MediaSession so media controls work in foreground.
                     // Don't auto-resume playback — let the user press play.
                     viewModel.resumeForLifecycle()
+                    // Back from a Game page opened over the game playing (#145): it plays on.
+                    if (sportsLiveZap.consumeResumeOnReturn() && !viewModel.uiState.value.isPlaying) {
+                        viewModel.onEvent(PlayerEvent.OnPlayPause)
+                    }
                 }
                 else -> {}
             }
@@ -2323,7 +2327,8 @@ fun PlayerScreen(
                 uiState.showSourcesPanel || uiState.showPartyPanel || uiState.showChaptersPanel ||
                 uiState.showAudioOverlay || uiState.showSubtitleOverlay || uiState.showSubtitleStylePanel ||
                 uiState.showSpeedDialog || uiState.showSubtitleDelayOverlay ||
-                uiState.showSubtitleTimingDialog || uiState.showMoreDialog
+                uiState.showSubtitleTimingDialog || uiState.showMoreDialog,
+            isPlaying = { viewModel.uiState.value.isPlaying }
         )
     }
 }

@@ -330,9 +330,14 @@ object SportsLiveItemBucketer {
         releaseInfo?.split(nonLetters)?.any { it.equals("LIVE", ignoreCase = true) } == true
 
     // MetaPreview does not carry the addon's "category" field, so the fallback goes straight to the catalog name.
-    fun sportOf(meta: MetaPreview, catalogName: String): String? =
-        meta.genres.firstOrNull { it.isNotBlank() }?.trim()
+    // Pro wrestling an addon files under MMA ("AEW Dynamite", #145) is wrestling.
+    fun sportOf(meta: MetaPreview, catalogName: String): String? {
+        val sport = meta.genres.firstOrNull { it.isNotBlank() }?.trim()
             ?: catalogName.trim().takeIf { it.isNotEmpty() }
+        return if (SportsLiveSportKind.isWrestlingShow(meta.name, sport)) WRESTLING else sport
+    }
+
+    private const val WRESTLING = "Wrestling"
 
     private fun belongsTo(item: SportsLiveItem, tab: SportsLiveTab, nowMs: Long): Boolean {
         val replay = item.kind == SportsLiveKind.REPLAY

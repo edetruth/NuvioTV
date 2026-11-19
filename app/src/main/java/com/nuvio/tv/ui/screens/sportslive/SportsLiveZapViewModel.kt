@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import com.nuvio.tv.core.sportslive.scores.GameSection
 import com.nuvio.tv.core.sportslive.SportsLiveSportInference
 import com.nuvio.tv.core.sportslive.SportsLiveMySportsScope
 import com.nuvio.tv.core.sportslive.scores.MySports
@@ -249,6 +250,9 @@ class SportsLiveZapViewModel internal constructor(
             // Ended games (#60) go to the last group; ESPN finals leave the panel half an hour on.
             val canEstimate = SportsLiveEndedGames.estimateGate(scoresMode == ScoresMode.OFF, unmatched)
             val split = SportsLiveEndedGames.shared.split(list, scores, nowMs, canEstimate)
+            // The chips count live, zappable games (#145): finals and just ended games of every chip are left out.
+            val allSplit = if (list === panelList.all) split else SportsLiveEndedGames.shared.split(panelList.all, scores, nowMs, canEstimate)
+            val finished = allSplit.ended.keys + allSplit.finals.keys
             // A final in its grace is grouped (and chipped) as the final it is, never as live (C3).
             val boardScores = split.scoresWithFinals(scores)
             val grouped = groupPanelRows(split.live + split.justEnded, boardScores, scoresMode, revealed, nowMs, split.ended, logos)
@@ -260,7 +264,7 @@ class SportsLiveZapViewModel internal constructor(
                 panelLineup(grouped, shownOrder)
             }
             shownOrder = rows.map { it.item.streamKey }
-            PanelLineup(panelList, rows, scoresMode, boardScores, split.ended, revealed, nowMs, loaded)
+            PanelLineup(panelList, rows, scoresMode, boardScores, split.ended, revealed, nowMs, loaded, finished)
         }.flowOn(computeDispatcher)
             // A player whose sources cannot be read keeps the session's own order.
             .catch { }
@@ -290,7 +294,10 @@ class SportsLiveZapViewModel internal constructor(
                 chips = panelChips(current.list.all, current.list.chip, current.list.scoped),
                 chip = current.list.chip,
                 allItems = current.list.all,
-                counts = panelChipCounts(current.list.all, current.list.scoped),
+                counts = panelChipCounts(
+                    current.list.all.filterNot { it.streamKey in current.finished },
+                    current.list.scoped.filterNot { it.streamKey in current.finished }
+                ),
                 // #83: each row drawn as the Scoreboard draws it.
                 boards = panelBoards(drawn, current.boardScores, current.mode, current.revealed, current.nowMs, current.ended, current.list.followed)
                     .associateBy { it.board.item.streamKey },
@@ -637,7 +644,8 @@ class SportsLiveZapViewModel internal constructor(
         val row = current?.rows?.firstOrNull { it.item.streamKey == item.streamKey }
         val game = current?.let { strictGame(it, item) }
         if (canOpenGame && row != null && panelRowOk(row, game) == PanelRowOk.BOX_SCORE) {
-            return panelGameRequest(SportsLivePanelMenu(item, emptyList(), emptyList(), game))
+            // "Box score ›" (#145): the page opens on its Box Score tab.
+            return panelGameRequest(SportsLivePanelMenu(item, emptyList(), emptyList(), game), GameSection.BOX_SCORE)
         }
         onPanelPick(item)
         return null
@@ -668,7 +676,7 @@ class SportsLiveZapViewModel internal constructor(
     }
 
     /** Game stats on [menu]'s game (#140): the panel closes; the Game page's request, null with no strict ESPN match. */
-    internal fun panelGameRequest(menu: SportsLivePanelMenu): SportsLiveGameRequest? {
+    internal fun panelGameRequest(menu: SportsLivePanelMenu, section: GameSection? = null): SportsLiveGameRequest? {
         val event = menu.game ?: return null
         val item = menu.item
         val current = lineup.value
@@ -677,9 +685,21 @@ class SportsLiveZapViewModel internal constructor(
             event,
             revealed = current?.mode == ScoresMode.SHOW || item.streamKey in current?.revealed.orEmpty(),
             homeFirst = sportsLiveGameHomeFirst(item, event),
-            card = item
+            card = item,
+            section = section
         )
     }
+
+    // The Game page was opened over the game while it played (#145): coming back to the player resumes it.
+    private var resumeOnReturn = false
+
+    /** The Game page opens over the player; [wasPlaying]: the game was playing, so the return resumes it. */
+    fun onGameOpened(wasPlaying: Boolean) {
+        resumeOnReturn = wasPlaying
+    }
+
+    /** True once after [onGameOpened] over a playing game: the player should play again now. */
+    fun consumeResumeOnReturn(): Boolean = resumeOnReturn.also { resumeOnReturn = false }
 
     /** Follow (or unfollow) [side] of [item] from the panel's Hold OK menu (#140). */
     fun onPanelToggleFollow(item: SportsLiveItem, side: String) {
@@ -726,7 +746,9 @@ private data class PanelLineup(
     val ended: Map<String, EndedGame>,
     val revealed: Set<String>,
     val nowMs: Long,
-    val logosLoaded: Boolean
+    val logosLoaded: Boolean,
+    /** Finals and just ended games among every game listed (stream keys): not counted on the chips (#145). */
+    val finished: Set<String> = emptySet()
 )
 
 /** The open panel's [state], built from [lineup] for [session]. */

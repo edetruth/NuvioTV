@@ -52,11 +52,19 @@ data class SportsLiveZapSession(
         }
     }
 
-    /** (1-based position, list size) in the zap order, for the "%1$d of %2$d" label. */
+    /**
+     * (1-based position, count) for the "%1$d of %2$d" label: among the games CH± stops on (#145), so finished
+     * ones ([skipped]) are not counted and the count is the panel's and the section's. A finished game playing
+     * takes the place after the zappable games before it.
+     */
     val positionLabelArgs: Pair<Int, Int>
         get() {
-            val position = zapOrder.indexOf(index)
-            return if (position >= 0) (position + 1) to zapOrder.size else (index + 1) to items.size
+            val order = zapOrder
+            val at = order.indexOf(index)
+            if (at < 0) return (index + 1) to items.size
+            val counted = order.filter { items[it].streamKey !in skipped }
+            val before = order.subList(0, at).count { items[it].streamKey !in skipped }
+            return (before + 1) to counted.size
         }
 
     fun next(): SportsLiveZapSession = copy(index = (index + 1) % items.size)

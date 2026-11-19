@@ -278,6 +278,23 @@ class SportsLiveGameViewModelTest {
     }
 
     @Test
+    fun `a page opened for its box score opens on the Box Score tab when it has one`() = runTest(mainDispatcherRule.dispatcher) {
+        nextLoad = { GameSummaryLoad.Loaded(nbaSummary, final = true) }
+        val vm = viewModel(SportsLiveGameRequest(palaceGame, section = GameSection.BOX_SCORE))
+        vm.setVisible(true)
+        runCurrent()
+        assertTrue(GameSection.BOX_SCORE in vm.uiState.value.sections)
+        assertEquals(GameSection.BOX_SCORE, vm.uiState.value.section)
+
+        // A summary with no box score opens on its first section.
+        nextLoad = { GameSummaryLoad.Loaded(palaceSummary, final = true) }
+        val soccer = viewModel(SportsLiveGameRequest(palaceGame, section = GameSection.BOX_SCORE))
+        soccer.setVisible(true)
+        runCurrent()
+        assertEquals(GameSection.GAME, soccer.uiState.value.section)
+    }
+
+    @Test
     fun `Results OK opens the Game page with the row's strict replay and its reveal state`() {
         val row = ResultRow(palaceGame, followed = false, note = FinalNote.FT)
         val replay = replayItem()

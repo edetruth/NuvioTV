@@ -5,6 +5,7 @@ import com.nuvio.tv.core.network.NetworkResult
 import com.nuvio.tv.core.sportslive.SportsLiveCatalogOptions
 import com.nuvio.tv.core.sportslive.SportsLiveCatalogPolicy
 import com.nuvio.tv.core.sportslive.SportsLiveItemBucketer
+import com.nuvio.tv.core.sportslive.SportsLiveMySportsScope
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import com.nuvio.tv.domain.model.CatalogOption
 import com.nuvio.tv.domain.model.CatalogRow
@@ -229,8 +230,8 @@ class SportsLiveRepositoryImpl @Inject constructor(
             combine(prefs.showHomeRow, enabled) { showHomeRow, enabled -> showHomeRow && enabled },
             claimedCatalogs,
             endedKeys,
-            followedTeams
-        ) { load, shown, claimed, ended, followed ->
+            combine(followedTeams, prefs.mySports) { followed, mySports -> followed to mySports }
+        ) { load, shown, claimed, ended, (followed, mySports) ->
             if (load == null || !shown) {
                 emptyList()
             } else {
@@ -239,7 +240,9 @@ class SportsLiveRepositoryImpl @Inject constructor(
                 // The user's addon order picks a merged game's primary.
                 val addonOrder = claimed.map { it.addon.id }.distinct()
                 val live = SportsLiveItemBucketer.bucketTab(items, SportsLiveTab.LIVE_NOW, nowMs(), addonOrder)
-                SportsLiveItemBucketer.pinFollowed(live, followed)
+                // My sports scopes the row as it does the section (#146): followed teams' games, channels and games
+                // of no known sport stay.
+                SportsLiveMySportsScope.scope(SportsLiveItemBucketer.pinFollowed(live, followed), mySports)
                     .filterNot { it.hasEnded(ended) }
                     .take(limit)
             }

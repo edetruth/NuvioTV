@@ -89,7 +89,7 @@ object EspnLeagueMap {
     // A card that mentions any of these anywhere gets no feed: sports scores v1 does not cover, and
     // women's / minor leagues whose teams share names or cities with the pro feeds (WNBA, PWHL, AHL...).
     private val EXCLUDED = Regex(
-        """\b(cricket|icc|t20|odi|ipl|tennis|ufc|mma|boxing|golf|f1|formula 1|motogp|nascar|rugby|wwe|wrestling|""" +
+        """\b(cricket|icc|t20|odi|ipl|w?bbl|big bash|test match|tennis|ufc|mma|boxing|golf|f1|formula 1|motogp|nascar|rugby|wwe|aew|wrestling|""" +
             """darts|snooker|wnba|pwhl|ahl|echl|g[- ]?league|women'?s|womens)\b"""
     )
 

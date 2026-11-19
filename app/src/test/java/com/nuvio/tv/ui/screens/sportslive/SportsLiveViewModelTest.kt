@@ -462,6 +462,8 @@ class SportsLiveViewModelTest {
         assertEquals(listOf("a", "b"), state.tabs.getValue(SportsLiveTab.LIVE_NOW).map { it.id })
         assertEquals(listOf("a", "b"), state.visibleItems.map { it.id })
         assertEquals(setOf(empty.streamKey), state.noStreams)
+        // Counted as the player counts: live and zappable games only.
+        assertEquals(1, state.filterCounts[null])
         assertTrue(state.justEnded.isEmpty())
         assertEquals(listOf("u"), state.tabs.getValue(SportsLiveTab.UPCOMING).map { it.id })
 

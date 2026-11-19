@@ -51,7 +51,9 @@ data class SportsLiveGameRequest(
     val card: SportsLiveItem? = null,
     val spoilerSafe: Boolean = false,
     /** Opened on a live Live now game: "Watch with another game" pairs it when pressed (#57); null: not offered. */
-    val watchWith: (() -> SportsLiveDualSession?)? = null
+    val watchWith: (() -> SportsLiveDualSession?)? = null,
+    /** The section the page opens on when it has one (a Just ended panel row's "Box score ›", #145); null: the first. */
+    val section: GameSection? = null
 )
 
 /** Whether [item]'s card names [event]'s home team first (N10); away first when that is not known. */
@@ -152,7 +154,7 @@ class SportsLiveGameViewModel internal constructor(
         val selected: GameSection? = null
     )
 
-    private val page = MutableStateFlow(Page(revealed = request?.revealed == true))
+    private val page = MutableStateFlow(Page(revealed = request?.revealed == true, selected = request?.section))
     private val visible = MutableStateFlow(false)
     private val revealRequested = MutableStateFlow(request?.revealed == true)
 
@@ -188,7 +190,8 @@ class SportsLiveGameViewModel internal constructor(
             homeFirst = request?.homeFirst == true,
             card = request?.card,
             spoilerSafe = request?.spoilerSafe == true,
-            offersWatchWith = request?.watchWith != null && request.event.state == ScoreState.IN
+            offersWatchWith = request?.watchWith != null && request.event.state == ScoreState.IN,
+            selected = request?.section
         )
     )
 

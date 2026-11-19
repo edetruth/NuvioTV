@@ -23,7 +23,7 @@ enum class SportsLiveSportKind {
             HOCKEY to """hockey|\bnhl\b|\bkhl\b""",
             BASEBALL to """baseball|\bmlb\b""",
             TENNIS to """tennis|\batp\b|\bwta\b|\bitf\b""",
-            CRICKET to """cricket|\bicc\b|\bt20\b|\bodi\b|\bipl\b|test match|big bash""",
+            CRICKET to """cricket|\bicc\b|\bt20\b|\bodi\b|\bipl\b|\bw?bbl\b|test match|big bash""",
             RUGBY to """rugby|\bnrl\b|six nations""",
             GOLF to """golf|\bpga\b|\blpga\b|\bliv golf\b""",
             MMA to """\bmma\b|\bufc\b|\bpfl\b|bellator""",
@@ -31,7 +31,7 @@ enum class SportsLiveSportKind {
             MOTORSPORT to """motorsport|motor sport|formula 1|formula one|\bf1\b|motogp|nascar|indycar|grand prix""",
             DARTS to """darts""",
             SNOOKER to """snooker""",
-            WRESTLING to """wrestling|\bwwe\b|\baew\b""",
+            WRESTLING to """wrestling|\bwwe\b|\baew\b|\bnxt\b|smackdown""",
             CYCLING to """cycling|tour de france""",
             SOCCER to """soccer|football|futbol|futebol|premier league|la liga|bundesliga|serie a|ligue 1|\bmls\b|\buefa\b|champions league"""
         ).map { (kind, pattern) -> kind to Regex(pattern) }
@@ -67,6 +67,25 @@ enum class SportsLiveSportKind {
          */
         fun tagOf(item: SportsLiveItem): SportsLiveSportKind? =
             (listOf(item.sport, item.meta.name) + item.meta.genres + item.meta.description + item.catalogName).firstNotNullOfOrNull(::of)
+                ?: CRICKET.takeIf { SportsLiveCricket.isCricketGame(item.teams) }
+
+        // A promotion or its weekly show ("AEW Dynamite", "WWE Raw"): addons file these under MMA (#145).
+        private val WRESTLING_SHOW = Regex("""\b(wwe|aew|nxt|smackdown|raw|dynamite|collision|rampage)\b""")
+        private val PROMOTION = Regex("""\b(wwe|aew|nxt|smackdown)\b""")
+
+        /**
+         * True when [title] is pro wrestling filed under [sport] (#145): a promotion's name ("AEW", "WWE", "NXT",
+         * "SmackDown") under MMA or no known sport, or a weekly show's name ("Raw", "Dynamite", "Collision",
+         * "Rampage") under MMA or wrestling only, as those words mean other things elsewhere.
+         */
+        fun isWrestlingShow(title: String, sport: String?): Boolean {
+            val folded = fold(title)
+            return when (of(sport)) {
+                MMA, WRESTLING -> WRESTLING_SHOW.containsMatchIn(folded)
+                null -> PROMOTION.containsMatchIn(folded)
+                else -> false
+            }
+        }
 
         /**
          * The one sport [text] names (#146); null when it names none or several ("Live Sports (Soccer, Tennis,

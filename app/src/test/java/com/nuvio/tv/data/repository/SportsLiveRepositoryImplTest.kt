@@ -1,5 +1,7 @@
 package com.nuvio.tv.data.repository
 
+import com.nuvio.tv.core.sportslive.scores.MySport
+import com.nuvio.tv.core.sportslive.scores.MySports
 import com.nuvio.tv.MainDispatcherRule
 import com.nuvio.tv.TestPreferencesStore
 import com.nuvio.tv.core.network.NetworkResult
@@ -371,6 +373,24 @@ class SportsLiveRepositoryImplTest {
         assertEquals(listOf("b", "a", "c"), live.map { it.id })
         assertEquals(listOf(true, false, false), live.map { it.followed })
         assertEquals(listOf(FollowedTeam("Boston Celtics", null)), repository.followedTeams.first())
+    }
+
+    @Test
+    fun `liveNow follows My sports, keeping followed teams' games and games of no known sport`() = runTest {
+        catalogRepository.results["sports" to "live"] = success(
+            "sports", "live",
+            meta("soccer", live = true, name = "Arsenal vs Chelsea").copy(genres = listOf("Soccer")),
+            meta("nba", live = true, name = "Bulls vs Celtics").copy(genres = listOf("Basketball")),
+            meta("unknown", live = true, name = "Clippers vs Lakers"),
+            meta("followed", live = true, name = "Spurs vs Liverpool").copy(genres = listOf("Soccer"))
+        )
+        val repository = newRepository()
+        repository.load()
+        prefs.follow(FollowedTeam("Liverpool", null))
+
+        prefs.updateMySports { MySports(mapOf(MySport.BASKETBALL to emptySet())) }
+
+        assertEquals(setOf("nba", "unknown", "followed"), repository.liveNow().first().map { it.id }.toSet())
     }
 
     @Test

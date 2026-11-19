@@ -181,6 +181,21 @@ class SportsLiveZapViewModelTest {
     }
 
     @Test
+    fun `a Game page opened over a playing game resumes it once on return`() = runTest(mainDispatcherRule.dispatcher) {
+        val pacers = game("Indiana Pacers at Philadelphia 76ers")
+        val viewModel = fullTimeViewModel(MutableStateFlow(emptyMap()), ScoresMode.SHOW, pacers, emptyList())
+
+        assertFalse(viewModel.consumeResumeOnReturn())
+        viewModel.onGameOpened(wasPlaying = true)
+        assertTrue(viewModel.consumeResumeOnReturn())
+        // Once only: a later return (or another screen) does not resume it again.
+        assertFalse(viewModel.consumeResumeOnReturn())
+        // Paused when the page opened: it stays paused.
+        viewModel.onGameOpened(wasPlaying = false)
+        assertFalse(viewModel.consumeResumeOnReturn())
+    }
+
+    @Test
     fun `nothing is scored or raised while the player is stopped`() = runTest(mainDispatcherRule.dispatcher) {
         val pacers = game("Indiana Pacers at Philadelphia 76ers")
         val scores = MutableStateFlow(mapOf(pacers.streamKey to inPlay))

@@ -510,6 +510,7 @@ class SportsLiveViewModel internal constructor(
         val now = nowMs()
         var justEnded = emptyMap<String, EndedGame>()
         var noStreams = emptySet<String>()
+        var finals = emptySet<String>()
         excitementHistory.observe(inputs.scores.values, now)
         var whyTags = emptyMap<String, WhyTag>()
         val tabs = bucketed.tabs.mapValues { (tab, tabItems) ->
@@ -517,6 +518,7 @@ class SportsLiveViewModel internal constructor(
                 val scores = inputs.scores
                 noStreams = tabItems.filter { it.hasEnded(endedKeys) }.mapTo(HashSet()) { it.streamKey }
                 val split = endedGames.split(tabItems, scores, now, inputs.canEstimate)
+                finals = split.finals.keys
                 // Live far longer than its sport runs: moved to the strip, never hidden (a time estimate
                 // never hides a game), unless links were found lately or ESPN shows it in play.
                 val (overdue, notOverdue) = split.live.partition {
@@ -585,8 +587,13 @@ class SportsLiveViewModel internal constructor(
         val filterOf: (SportsLiveItem) -> String? =
             if (channels) SportsLiveChannelRegions::regionOf else ({ item -> SportsLiveSportKind.filterKeyOf(item) })
         val values = scopedItems.mapNotNull(filterOf).distinct()
-        // The chips' counts (#79): Live now leaves its Just ended strip out, as its tab count does.
-        fun counted(items: List<SportsLiveItem>) = if (selection.tab == SportsLiveTab.LIVE_NOW) items.filter { it.streamKey !in justEnded } else items
+        // The chips' counts (#79): Live now counts live, zappable games (#145), as the player's panel and CH banner
+        // do: its Just ended strip, finals in their grace and "no streams yet" games are left out.
+        fun counted(items: List<SportsLiveItem>) = if (selection.tab == SportsLiveTab.LIVE_NOW) {
+            items.filter { it.streamKey !in justEnded && it.streamKey !in finals && it.streamKey !in noStreams }
+        } else {
+            items
+        }
         val counts = sportsLiveFilterCounts(counted(scopedItems), filterOf, myTeams = selection.tab != SportsLiveTab.CHANNELS)
             .let { if (mySportsScoped) it + (SportsLiveUiState.ALL_SPORTS_FILTER to counted(fullItems).size) else it }
         // "★ My teams" leads whenever a followed team plays in the tab (never on Channels); chips with no

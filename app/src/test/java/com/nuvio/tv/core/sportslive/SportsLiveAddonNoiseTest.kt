@@ -105,6 +105,49 @@ class SportsLiveAddonNoiseTest {
         assertNull(SportsLiveSportKind.of("COLLEGE"))
     }
 
+    // Cricket
+
+    @Test
+    fun `cricket competition words name cricket and route no ESPN feed`() {
+        listOf("WBBL", "BBL 2026", "Big Bash League", "IPL", "T20 Blast", "ODI series", "Test match").forEach {
+            assertEquals(it, SportsLiveSportKind.CRICKET, SportsLiveSportKind.of(it))
+        }
+        assertEquals(emptyList<Any>(), EspnLeagueMap.leaguesFor("WBBL", listOf("Hobart Hurricanes vs Sydney Sixers")))
+    }
+
+    @Test
+    fun `untagged cricket is told from the teams only where no other sport uses them`() {
+        fun tag(name: String) = SportsLiveSportKind.tagOf(event("a", name, name, "LIVE"))
+
+        assertEquals(SportsLiveSportKind.CRICKET, tag("Hobart Hurricanes Women vs Sydney Sixers Women"))
+        assertEquals(SportsLiveSportKind.CRICKET, tag("Mumbai Indians vs Chennai Super Kings"))
+        assertEquals(SportsLiveSportKind.CRICKET, tag("Bangladesh A vs Hong Kong"))
+        assertEquals(SportsLiveSportKind.CRICKET, tag("India A vs SA A"))
+        // Two plain nations are never guessed (rugby, hockey and football play them too); an A side needs cricket nations.
+        assertNull(tag("NZ vs IND"))
+        assertNull(tag("Brazil A vs Argentina"))
+        assertNull(tag("Hobart Hurricanes vs Carolina Hurricanes"))
+    }
+
+    // Wrestling
+
+    @Test
+    fun `wrestling an addon files under MMA is wrestling`() {
+        val events = claimed("a", "mma", "MMA", SportsLiveKind.EVENTS)
+        fun sport(name: String, genres: List<String>) =
+            SportsLiveItemBucketer.describe(meta(name, name, "LIVE", genres), events, now).sport
+
+        assertEquals("Wrestling", sport("AEW Dynamite", listOf("MMA")))
+        assertEquals("Wrestling", sport("WWE Monday Night Raw", listOf("MMA")))
+        assertEquals("Wrestling", sport("NXT", emptyList()))
+        assertEquals("Wrestling", sport("SmackDown", listOf("MMA")))
+        assertEquals("Wrestling", sport("AEW Collision", listOf("Sports")))
+        // A real MMA card stays MMA; a show word under another sport is left alone.
+        assertEquals("MMA", sport("UFC 310: Pantoja vs Asakura", listOf("MMA")))
+        assertEquals("Soccer", sport("Dynamo Kyiv vs Rampage FC", listOf("Soccer")))
+        assertEquals(SportsLiveSportKind.WRESTLING, SportsLiveSportKind.of("SmackDown"))
+    }
+
     // TBD placeholders
 
     @Test

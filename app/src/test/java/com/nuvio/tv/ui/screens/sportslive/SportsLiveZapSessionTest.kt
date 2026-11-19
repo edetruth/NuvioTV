@@ -184,6 +184,26 @@ class SportsLiveZapSessionTest {
         assertNull(SportsLiveZapSessions.current()!!.panelChip)
     }
 
+    @Test
+    fun `the of N count leaves finished games out`() {
+        val items = listOf(item("a"), item("b"), item("f"), item("c"))
+        val lineup = SportsLiveZapSession(
+            items = items,
+            index = 3,
+            tab = SportsLiveTab.LIVE_NOW,
+            filter = null,
+            returnToHomeOnBack = false,
+            lineup = items.map { it.streamKey },
+            skipped = setOf(items[2].streamKey)
+        )
+
+        // c is the third of three games CH plus and minus stop on; the final f is not counted.
+        assertEquals(3 to 3, lineup.positionLabelArgs)
+        assertEquals(1 to 3, lineup.moveTo(items[0].streamKey)!!.positionLabelArgs)
+        // A finished game playing takes the place after the games before it.
+        assertEquals(3 to 3, lineup.moveTo(items[2].streamKey)!!.positionLabelArgs)
+    }
+
     private fun session(items: List<SportsLiveItem>, index: Int) = SportsLiveZapSession(
         items = items,
         index = index,
