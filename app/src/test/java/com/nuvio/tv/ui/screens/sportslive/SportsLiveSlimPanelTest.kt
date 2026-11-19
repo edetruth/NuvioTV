@@ -85,8 +85,9 @@ class SportsLiveSlimPanelTest {
 
         val session = sessionOn(a, rows)
         assertEquals(rows.map { it.item.streamKey }, session.zapOrder.map { session.items[it].streamKey })
-        // The banner's position is the row's place in the panel.
-        assertEquals(rows.indexOfFirst { it.item == a } + 1 to rows.size, session.positionLabelArgs)
+        // The banner's position is the row's place in the panel; "of N" counts the games CH stops on (#145),
+        // so the game just ended is not counted.
+        assertEquals(rows.indexOfFirst { it.item == a } + 1 to rows.count { it.zappable }, session.positionLabelArgs)
     }
 
     @Test
