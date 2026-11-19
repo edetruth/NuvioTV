@@ -45,6 +45,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
@@ -271,7 +272,7 @@ internal fun SportsLiveSheet(
                 if (!status.isNullOrBlank()) {
                     Text(
                         text = buildAnnotatedString {
-                            if (statusLive) withStyle(SpanStyle(color = Colors.LiveRed)) { append("● ") }
+                            if (statusLive) withStyle(SpanStyle(color = Colors.LiveRed, fontSize = 9.sp)) { append("● ") }
                             withStyle(SpanStyle(color = if (statusLive) Colors.LiveText else Colors.TextSecondary)) {
                                 append(status)
                             }

@@ -200,6 +200,10 @@ class SportsLiveViewModel internal constructor(
     // Live now as last built, so the focused card is kept when a load drops it (#145).
     private var shownLiveNow: List<SportsLiveItem> = emptyList()
 
+    // The titles hidden from Live Now (#134), as last read.
+    @Volatile
+    private var hiddenNow: Set<String> = emptySet()
+
 
     // The section is on screen (resumed): only then are links checked (#60 phase 2).
     @Volatile
@@ -227,6 +231,7 @@ class SportsLiveViewModel internal constructor(
     // again whenever the team directory changes (it bumps the logo revision). Channels are never inferred.
     // Titles hidden from Live Now (#134) are left off its list only.
     private val pinned = combine(bucketed, repo.followedTeams, logoRevision, hiddenTitles) { bucketed, followed, _, hidden ->
+        hiddenNow = hidden
         bucketed.copy(
             tabs = bucketed.tabs.mapValues { (tab, all) ->
                 val listed = if (tab == SportsLiveTab.LIVE_NOW) SportsLiveHiddenTitles.filter(all, hidden) else all
@@ -577,7 +582,8 @@ class SportsLiveViewModel internal constructor(
                 val built = live + split.justEnded + overdueEnded.map { it.first } + linkEnded
                 // The focused card is never taken from under the user: kept in place until focus moves on.
                 val focusedId = selection.itemId.takeIf { selection.tab == SportsLiveTab.LIVE_NOW }
-                sportsLiveKeepFocused(shownLiveNow, built, focusedId).also { shownLiveNow = it }
+                // A title just hidden (#134) leaves at once, even with focus on it: the keep step must not bring it back.
+                SportsLiveHiddenTitles.filter(sportsLiveKeepFocused(shownLiveNow, built, focusedId), hiddenNow).also { shownLiveNow = it }
             } else {
                 tabItems
             }

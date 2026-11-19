@@ -239,7 +239,8 @@ object SportsLiveTokens {
      * the same spot as the alert cards (#136), on every screen: inside the stage's top right on browse screens.
      */
     object Toast {
-        val Width = 320.dp
+        /** The alert cards' width (#136), so a toast stacked under one lines up with it (the board's 640 px + 40). */
+        val Width = Alert.Width
         val Top = Size.SafeTop + Size.HeaderHeight + 16.dp
         val End = Size.SafeEnd
         val PaddingHorizontal = 12.dp

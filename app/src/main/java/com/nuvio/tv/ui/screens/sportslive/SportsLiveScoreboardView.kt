@@ -179,16 +179,21 @@ internal fun SportsLiveScoreboardRow(
             }
             .then(longPress),
         shape = ClickableSurfaceDefaults.shape(shape),
-        scale = ClickableSurfaceDefaults.scale(focusedScale = SportsLiveTokens.Focus.LIFT),
+        // While its More… sheet is open (#134) the row reads as selected (the white bar), not focused (ring and lift).
+        scale = ClickableSurfaceDefaults.scale(focusedScale = if (menuOpen) 1f else SportsLiveTokens.Focus.LIFT),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = base,
             contentColor = Colors.TextPrimary,
-            focusedContainerColor = SportsLiveFocus.focusedFill(base),
+            focusedContainerColor = if (menuOpen) base else SportsLiveFocus.focusedFill(base),
             focusedContentColor = Colors.TextPrimary,
             pressedContainerColor = SportsLiveFocus.focusedFill(base),
             pressedContentColor = Colors.TextPrimary
         ),
-        border = ClickableSurfaceDefaults.border(focusedBorder = SportsLiveFocus.ring(shape), pressedBorder = SportsLiveFocus.ring(shape))
+        border = if (menuOpen) {
+            ClickableSurfaceDefaults.border()
+        } else {
+            ClickableSurfaceDefaults.border(focusedBorder = SportsLiveFocus.ring(shape), pressedBorder = SportsLiveFocus.ring(shape))
+        }
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             when {
@@ -200,6 +205,7 @@ internal fun SportsLiveScoreboardRow(
             // The left bar: white while selected (focus in the stage) or playing, else gold for a followed team.
             val bar = when {
                 (selected || nowPlaying) && !focused -> Colors.FocusWhite
+                menuOpen -> Colors.FocusWhite
                 row.followed -> Colors.FollowedGold
                 else -> null
             }

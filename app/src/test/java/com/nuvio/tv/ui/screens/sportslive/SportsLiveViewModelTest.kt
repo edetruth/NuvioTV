@@ -945,6 +945,9 @@ class SportsLiveViewModelTest {
         advanceUntilIdle()
         assertEquals(listOf("Matchday Studio"), stored)
 
+        // Even the focused card leaves at once (the keep-focused step never brings a hidden title back).
+        viewModel.selectItem(show.id)
+        advanceUntilIdle()
         hidden.value = setOf("Matchday Studio")
         advanceUntilIdle()
         assertEquals(listOf("game"), viewModel.uiState.value.visibleItems.map { it.id })

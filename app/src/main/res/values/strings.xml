@@ -3771,7 +3771,7 @@
     <string name="sports_live_team_pages">Team pages…</string>
     <string name="sports_live_hide_from_live_now">Hide from Live Now</string>
     <string name="sports_live_hidden_toast">Hidden from Live Now: %1$s</string>
-    <string name="sports_live_hidden_toast_line">Settings → Sports &amp; Live → More → Hidden brings it back</string>
+    <string name="sports_live_hidden_toast_line">Undo in Settings → More → Hidden</string>
     <!-- Settings → More → Hidden (#134). -->
     <string name="sports_live_setting_hidden">Hidden from Live Now</string>
     <string name="sports_live_setting_hidden_subtitle">OK shows a title on Live Now again</string>
@@ -4045,14 +4045,12 @@
     <string name="sports_live_season_post">Postseason</string>
     <string name="sports_live_hint_keys_games">↑ ↓</string>
     <string name="sports_live_hint_games">games</string>
-    <string name="sports_live_hint_keys_slots">⏪ ⏩</string>
+    <string name="sports_live_hint_keys_slots">◂◂ ▸▸</string>
     <string name="sports_live_hint_slots">time slots</string>
     <string name="sports_live_hint_keys_day">CH +/−</string>
     <string name="sports_live_hint_day">day</string>
     <string name="sports_live_hint_keys_ok">OK</string>
     <string name="sports_live_hint_ok">remind/watch</string>
-    <string name="sports_live_hint_keys_stage">→</string>
-    <string name="sports_live_hint_stage">more</string>
     <string name="sports_live_sport_football">Football</string>
     <string name="sports_live_sport_soccer">Soccer</string>
     <string name="sports_live_sport_basketball">Basketball</string>

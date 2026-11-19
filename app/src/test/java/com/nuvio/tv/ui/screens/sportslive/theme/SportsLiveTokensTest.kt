@@ -42,8 +42,9 @@ class SportsLiveTokensTest {
     }
 
     @Test
-    fun `the toast card and the More sheet are the board's in dp`() {
-        assertEquals(SportsLiveTokens.pxToDp(640), SportsLiveTokens.Toast.Width)
+    fun `the toast card and the More sheet keep their sizes`() {
+        // The toast lines up with the alert cards it stacks under (#136).
+        assertEquals(SportsLiveTokens.Alert.Width, SportsLiveTokens.Toast.Width)
         assertEquals(SportsLiveTokens.pxToSp(28), SportsLiveTokens.Toast.Title.fontSize)
         assertEquals(SportsLiveTokens.pxToSp(26), SportsLiveTokens.Toast.Line.fontSize)
         assertEquals(SportsLiveTokens.pxToDp(720), SportsLiveTokens.Sheet.Width)

@@ -21,7 +21,8 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Star
 import android.view.SurfaceView
 import android.view.ViewGroup
-import android.widget.Toast
+import com.nuvio.tv.core.sportslive.SportsLiveToastKind
+import com.nuvio.tv.core.sportslive.SportsLiveToasts
 import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.MutableTransitionState
@@ -265,7 +266,7 @@ fun SportsLiveAlertsHost(
             PeekCommand.RETURN -> session.host.restore()
             PeekCommand.RETURN_FAILED -> {
                 session.host.restore()
-                Toast.makeText(context, context.getString(R.string.sports_live_zap_no_stream, state.item.displayName), Toast.LENGTH_SHORT).show()
+                SportsLiveToasts.show(SportsLiveToastKind.PROBLEM, context.getString(R.string.sports_live_zap_no_stream, state.item.displayName))
             }
         }
     }
@@ -613,6 +614,7 @@ private fun KickoffPrompt(
     val logoSize = if (compact) 36.dp else 52.dp
     Column(
         modifier = modifier
+            .claimsTopRight()
             .widthIn(max = if (compact) 460.dp else 620.dp)
             .clip(shape)
             .background(ArtColors.Panel.copy(alpha = 0.96f))
@@ -705,6 +707,7 @@ private fun AlertCardView(
     ) {
         Column(
             modifier = Modifier
+                .claimsTopRight()
                 .width(SportsLiveTokens.Alert.Width)
                 .clip(shape)
                 .background(ArtColors.Panel.copy(alpha = SportsLiveTokens.Alert.FILL_ALPHA))
@@ -804,6 +807,7 @@ private fun ReminderToast(notice: ReminderNotice, modifier: Modifier) {
     val game = notice.title ?: stringResource(R.string.sports_live_results_menu_title, notice.away.orEmpty(), notice.home.orEmpty())
     Row(
         modifier = modifier
+            .claimsTopRight()
             .widthIn(max = 520.dp)
             .clip(shape)
             .background(ArtColors.Panel.copy(alpha = 0.96f))

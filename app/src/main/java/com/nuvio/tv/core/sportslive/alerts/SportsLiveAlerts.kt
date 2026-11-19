@@ -2,6 +2,7 @@ package com.nuvio.tv.core.sportslive.alerts
 
 import androidx.annotation.VisibleForTesting
 import com.nuvio.tv.BuildConfig
+import com.nuvio.tv.core.sportslive.SportsLiveDisplayText
 import com.nuvio.tv.core.sportslive.SportsLiveItemBucketer
 import com.nuvio.tv.core.sportslive.scores.EspnLeague
 import com.nuvio.tv.core.sportslive.scores.LiveScoresRepository
@@ -100,7 +101,7 @@ class SportsLiveAlerts @Inject constructor(
 
     /** Shows "Reminder set" ([on]) or "Reminder removed" for [item]'s game. */
     fun noticeReminder(item: SportsLiveItem, on: Boolean) {
-        reminderNoticeFlow.value = ReminderNotice(++reminderNoticeCount, on, item.startMs, title = item.meta.name, item = item)
+        reminderNoticeFlow.value = ReminderNotice(++reminderNoticeCount, on, item.startMs, title = SportsLiveDisplayText.name(item.meta.name), item = item)
     }
 
     /** Shows "Reminder set" ([on]) or "Reminder removed" for an ESPN game no card plays yet. */
