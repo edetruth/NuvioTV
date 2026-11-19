@@ -48,6 +48,16 @@ data class SportsLiveSources(
             .filter { it.failuresInRow >= FLAG_AFTER_FAILURES || (allFailed && it.failuresInRow >= 1) }
             .sortedBy { it.silentSinceMs ?: Long.MAX_VALUE }
 
+    /**
+     * The source to name after a refresh (#170): the first [flagged] one that failed this refresh too, compared with
+     * the sources [before] it; null when every flagged source answered or none is flagged.
+     */
+    fun stillFailing(before: SportsLiveSources): SportsLiveSourceHealth? =
+        health.entries
+            .filter { (id, now) -> now.failuresInRow > (before.health[id]?.failuresInRow ?: 0) }
+            .map { it.value }
+            .let { failedNow -> flagged().firstOrNull { it in failedNow } }
+
     /** The dot on Refresh (#170): none, a calm grey, or amber when a source has been silent over 10 min or all failed. */
     fun badge(nowMs: Long): SportsLiveSourceBadge {
         val flagged = flagged()

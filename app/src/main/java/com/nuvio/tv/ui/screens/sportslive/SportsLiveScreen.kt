@@ -811,11 +811,29 @@ private fun SportsLiveContent(
     // #170: a one-off miss says nothing; a source failing on shows a dot on Refresh, whose OK opens the sheet.
     val sourcesNowMs = uiState.nowMs.takeIf { it > 0L } ?: System.currentTimeMillis()
     val sourceBadge = uiState.sources.badge(sourcesNowMs)
+    // A refresh the user asked for (Refresh, Retry): when a flagged source still fails, a toast says so (#170).
+    var refreshedFrom by remember { mutableStateOf<SportsLiveSources?>(null) }
+    val userRefresh: () -> Unit = {
+        refreshedFrom = uiState.sources
+        onRefresh()
+    }
+    LaunchedEffect(uiState.sources) {
+        val before = refreshedFrom ?: return@LaunchedEffect
+        if (before == uiState.sources) return@LaunchedEffect
+        refreshedFrom = null
+        uiState.sources.stillFailing(before)?.let { source ->
+            SportsLiveToasts.show(
+                SportsLiveToastKind.INFO,
+                context.getString(R.string.sports_live_source_still_failing, source.name),
+                context.getString(R.string.sports_live_source_still_failing_hint)
+            )
+        }
+    }
     var failuresOpen by remember { mutableStateOf(false) }
     if (failuresOpen && sourceBadge != SportsLiveSourceBadge.NONE) {
         SportsLiveSourcesSheet(
             flagged = uiState.sources.flagged(),
-            onRetry = onRefresh,
+            onRetry = userRefresh,
             onOpenSources = onOpenAddons,
             onDismiss = { failuresOpen = false }
         )
@@ -1176,7 +1194,7 @@ private fun SportsLiveContent(
                 else -> null
             },
             onShowFailures = { failuresOpen = true },
-            onRefresh = onRefresh,
+            onRefresh = userRefresh,
             modifier = Modifier.onFocusChanged { if (it.hasFocus) followedCardKey = null }
         )
         if (showingResults) {

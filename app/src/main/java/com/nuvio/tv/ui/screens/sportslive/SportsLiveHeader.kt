@@ -94,7 +94,7 @@ internal fun sportsLiveHeaderNeighbour(
 /**
  * The section's one-line header (V2, #99): text tabs (selected = white with an underline, the rest 70 %
  * white; no counts) on the left; on the right the tab's filter (one focus stop) and Refresh, with a dot on it
- * while a source keeps failing ([sourceBadge], #170: OK then opens the sources sheet). Tabs select on focus;
+ * while a source keeps failing ([sourceBadge], #170: OK still refreshes, Hold OK opens the sources sheet). Tabs select on focus;
  * entering the header lands on the active tab. In columns (#170): the tabs and day arrows go Down to
  * [downFocusRequester] (the list), the controls to [controlsDownFocusRequester] (the stage's primary). Left
  * from the filter goes back to the active tab, never to the nearest one (which would switch tabs).
@@ -228,11 +228,13 @@ internal fun SportsLiveHeader(
                 }
             }
         }
-        // #170: while a source keeps failing, a dot on Refresh (grey, or amber when it matters); OK then opens the sheet.
+        // #170: while a source keeps failing, a dot on Refresh (grey, or amber when it matters). OK always refreshes;
+        // Hold OK opens the sources sheet, as Hold OK means more options elsewhere.
         val badged = sourceBadge != SportsLiveSourceBadge.NONE
         Box {
             SportsLiveHeaderControl(
-                onClick = if (badged) onShowFailures else onRefresh,
+                onClick = onRefresh,
+                onLongClick = if (badged) onShowFailures else null,
                 modifier = Modifier
                     .focusRequester(refreshFocusRequester)
                     .then(controlsModifier(SportsLiveHeaderStop.REFRESH))
@@ -307,7 +309,7 @@ private fun SportsLiveHeaderDayArrow(glyph: Int, enabled: Boolean, onStep: () ->
 }
 
 /**
- * The sources sheet (#170), from OK on Refresh while it has a dot: "‹Source› hasn't responded since 7:42 PM" for each
+ * The sources sheet (#170), from Hold OK on Refresh while it has a dot: "‹Source› hasn't responded since 7:42 PM" for each
  * [flagged] source (its display name only, never a host or URL), then **Retry** and **Sources** (the addons screen).
  */
 @Composable

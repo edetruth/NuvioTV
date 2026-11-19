@@ -1,6 +1,7 @@
 package com.nuvio.tv.ui.screens.sportslive
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -69,6 +70,28 @@ class SportsLiveSourceHealthTest {
     fun `a refresh that asked nothing keeps whether all failed`() {
         val sources = SportsLiveSources().refresh(0, failed = both).refresh(minute, fetched = emptyMap())
         assertTrue(sources.allFailed)
+    }
+
+    @Test
+    fun `after a refresh a flagged source that failed again is named for the toast`() {
+        val before = SportsLiveSources().refresh(0).refresh(minute, failed = mapOf(a))
+        val after = before.refresh(2 * minute, failed = mapOf(a))
+        assertEquals("Source A", after.stillFailing(before)?.name)
+    }
+
+    @Test
+    fun `no toast for a one-off miss or once the source answers`() {
+        val start = SportsLiveSources().refresh(0)
+        val oneOff = start.refresh(minute, failed = mapOf(a))
+        assertNull(oneOff.stillFailing(start))
+        val flagged = oneOff.refresh(2 * minute, failed = mapOf(a))
+        assertNull(flagged.refresh(3 * minute).stillFailing(flagged))
+    }
+
+    @Test
+    fun `no toast for a flagged source the refresh did not ask`() {
+        val flagged = SportsLiveSources().refresh(0, failed = mapOf(a)).refresh(minute, failed = mapOf(a))
+        assertNull(flagged.refresh(2 * minute, fetched = mapOf(b)).stillFailing(flagged))
     }
 
     @Test

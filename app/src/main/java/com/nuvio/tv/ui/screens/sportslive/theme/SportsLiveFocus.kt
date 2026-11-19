@@ -177,6 +177,7 @@ fun SportsLiveTextTab(
 fun SportsLiveHeaderControl(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    onLongClick: (() -> Unit)? = null,
     outline: Color = Colors.Outline,
     round: Boolean = true,
     content: @Composable RowScope.() -> Unit
@@ -184,6 +185,7 @@ fun SportsLiveHeaderControl(
     val shape = SportsLiveTokens.Radius.PillShape
     Surface(
         onClick = onClick,
+        onLongClick = onLongClick,
         modifier = modifier.height(Size.ControlHeight).then(if (round) Modifier.width(Size.ControlHeight) else Modifier),
         shape = ClickableSurfaceDefaults.shape(shape),
         scale = ClickableSurfaceDefaults.scale(focusedScale = Focus.LIFT),
