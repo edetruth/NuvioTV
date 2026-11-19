@@ -376,12 +376,12 @@ class SportsLiveRepositoryImplTest {
     }
 
     @Test
-    fun `liveNow follows My sports, keeping followed teams' games and games of no known sport`() = runTest {
+    fun `liveNow follows My sports, keeping followed teams' games and hiding games of no known sport`() = runTest {
         catalogRepository.results["sports" to "live"] = success(
             "sports", "live",
             meta("soccer", live = true, name = "Arsenal vs Chelsea").copy(genres = listOf("Soccer")),
             meta("nba", live = true, name = "Bulls vs Celtics").copy(genres = listOf("Basketball")),
-            meta("unknown", live = true, name = "Clippers vs Lakers"),
+            meta("unknown", live = true, name = "Norwid Czestochowa vs ONICO Warszawa"),
             meta("followed", live = true, name = "Spurs vs Liverpool").copy(genres = listOf("Soccer"))
         )
         val repository = newRepository()
@@ -390,7 +390,8 @@ class SportsLiveRepositoryImplTest {
 
         prefs.updateMySports { MySports(mapOf(MySport.BASKETBALL to emptySet())) }
 
-        assertEquals(setOf("nba", "unknown", "followed"), repository.liveNow().first().map { it.id }.toSet())
+        // #167: a game whose sport cannot be told leaves the Home row under My sports.
+        assertEquals(setOf("nba", "followed"), repository.liveNow().first().map { it.id }.toSet())
     }
 
     @Test
