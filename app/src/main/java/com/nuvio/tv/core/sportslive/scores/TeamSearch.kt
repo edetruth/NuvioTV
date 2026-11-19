@@ -53,8 +53,8 @@ object TeamSearch {
 
     /** The leagues with an ESPN team list, in picker order. Soccer's cups and internationals have none here. */
     val LEAGUES: List<MyLeague> = listOf(
-        MyLeague.NBA, MyLeague.COLLEGE_BASKETBALL, MyLeague.NFL, MyLeague.COLLEGE_FOOTBALL, MyLeague.NHL, MyLeague.MLB,
-        MyLeague.PREMIER_LEAGUE, MyLeague.LA_LIGA, MyLeague.BUNDESLIGA, MyLeague.SERIE_A, MyLeague.LIGUE_1, MyLeague.MLS
+        MyLeague.NBA, MyLeague.COLLEGE_BASKETBALL, MyLeague.WOMENS_COLLEGE_BASKETBALL, MyLeague.WNBA, MyLeague.NFL, MyLeague.COLLEGE_FOOTBALL, MyLeague.NHL, MyLeague.MLB,
+        MyLeague.PREMIER_LEAGUE, MyLeague.LA_LIGA, MyLeague.BUNDESLIGA, MyLeague.SERIE_A, MyLeague.LIGUE_1, MyLeague.MLS, MyLeague.NWSL
     )
 
     /** The sports team search can filter by (team sports with a list), in picker order. */

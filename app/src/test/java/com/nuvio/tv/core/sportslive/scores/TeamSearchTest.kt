@@ -170,6 +170,11 @@ class TeamSearchTest {
         assertEquals(EspnLeague("soccer", "eng.1"), TeamSearch.teamList(MyLeague.PREMIER_LEAGUE))
         assertEquals(EspnLeagueMap.COLLEGE_BASKETBALL, TeamSearch.teamList(MyLeague.COLLEGE_BASKETBALL))
         assertNull(TeamSearch.LEAGUES.firstOrNull { it == MyLeague.CHAMPIONS_LEAGUE })
+        // Women's leagues (#163): searchable on their own ESPN lists.
+        assertEquals(EspnLeagueMap.COLLEGE_BASKETBALL_WOMEN, TeamSearch.teamList(MyLeague.WOMENS_COLLEGE_BASKETBALL))
+        assertEquals(EspnLeagueMap.WNBA, TeamSearch.teamList(MyLeague.WNBA))
+        assertEquals(EspnLeagueMap.NWSL, TeamSearch.teamList(MyLeague.NWSL))
+        assertTrue(TeamSearch.LEAGUES.containsAll(listOf(MyLeague.WOMENS_COLLEGE_BASKETBALL, MyLeague.WNBA, MyLeague.NWSL)))
     }
 
     @Test
