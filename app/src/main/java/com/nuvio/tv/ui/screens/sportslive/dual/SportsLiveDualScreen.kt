@@ -67,7 +67,6 @@ import androidx.tv.material3.Text
 import com.nuvio.tv.R
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.ui.components.LoadingIndicator
-import com.nuvio.tv.ui.screens.sportslive.SportsLiveKeepScreenOn
 import com.nuvio.tv.ui.screens.sportslive.SportsLivePlayHost
 import com.nuvio.tv.ui.screens.sportslive.SportsLivePlayState
 import com.nuvio.tv.ui.screens.sportslive.SportsLivePlayViewModel
@@ -155,10 +154,6 @@ fun SportsLiveDualScreen(
         if (state == null) currentOnBack()
     }
     val dual = state ?: return
-
-    // The TV's screensaver must not start while a pane plays; released when none does or dual leaves.
-    val awakePlayers = players
-    SportsLiveKeepScreenOn(awakePlayers != null && Side.entries.any(awakePlayers::isPlaying))
 
     LaunchedEffect(players, dual) {
         val current = players ?: return@LaunchedEffect

@@ -16,6 +16,7 @@ import com.nuvio.tv.core.sportslive.SportsLiveSourceReliability.Outcome
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.ui.screens.player.PlayerMediaSourceFactory
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveAwakeHolds
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveExtraSources
 import com.nuvio.tv.ui.screens.sportslive.buildSportsLiveLightPlayer
 import com.nuvio.tv.ui.screens.sportslive.isDecoderInitFailure
@@ -78,6 +79,7 @@ internal class DualPlayers(
         /** Sets [isPlaying] and reports a change of the game playing ([item] when [playing]). */
         private fun report(item: SportsLiveItem?, playing: Boolean) {
             isPlaying = playing
+            SportsLiveAwakeHolds.shared.set(this, playing)
             val now = item.takeIf { playing }
             val before = reported
             if (before == now) return

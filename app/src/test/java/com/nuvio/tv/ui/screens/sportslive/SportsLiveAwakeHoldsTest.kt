@@ -6,26 +6,63 @@ import org.junit.Test
 
 class SportsLiveAwakeHoldsTest {
 
-    @Test
-    fun `the screen stays on while anyone holds it`() {
-        val holds = SportsLiveAwakeHolds()
-        val dual = Any()
-        val mini = Any()
+    private val holds = SportsLiveAwakeHolds()
+    private val leftPane = Any()
+    private val rightPane = Any()
+    private val miniPlayer = Any()
 
-        assertTrue(holds.set(dual, awake = true))
-        assertTrue(holds.set(mini, awake = true))
-        assertTrue("the mini player stopping leaves dual's hold", holds.set(mini, awake = false))
-        assertFalse(holds.set(dual, awake = false))
+    @Test
+    fun `dual with both panes playing holds the screen`() {
+        holds.set(leftPane, playing = true)
+        assertTrue(holds.set(rightPane, playing = true))
+        assertTrue(holds.anyPlaying.value)
     }
 
     @Test
-    fun `releasing twice or without a hold is harmless`() {
-        val holds = SportsLiveAwakeHolds()
-        val dual = Any()
-        assertFalse(holds.set(dual, awake = false))
-        assertTrue(holds.set(dual, awake = true))
-        assertTrue(holds.set(dual, awake = true))
-        assertFalse(holds.set(dual, awake = false))
-        assertFalse(holds.set(dual, awake = false))
+    fun `one pane paused and the other playing still holds the screen`() {
+        holds.set(leftPane, playing = true)
+        holds.set(rightPane, playing = true)
+        assertTrue(holds.set(leftPane, playing = false))
+        assertTrue(holds.anyPlaying.value)
+    }
+
+    @Test
+    fun `both panes paused release the screen`() {
+        holds.set(leftPane, playing = true)
+        holds.set(rightPane, playing = true)
+        holds.set(leftPane, playing = false)
+        assertFalse(holds.set(rightPane, playing = false))
+        assertFalse(holds.anyPlaying.value)
+    }
+
+    @Test
+    fun `the mini player playing holds the screen`() {
+        assertTrue(holds.set(miniPlayer, playing = true))
+        assertTrue(holds.anyPlaying.value)
+    }
+
+    @Test
+    fun `nothing playing releases the screen`() {
+        assertFalse(holds.anyPlaying.value)
+        holds.set(miniPlayer, playing = true)
+        assertFalse(holds.set(miniPlayer, playing = false))
+        assertFalse(holds.anyPlaying.value)
+    }
+
+    @Test
+    fun `the mini player stopping leaves the dual panes hold`() {
+        holds.set(leftPane, playing = true)
+        holds.set(miniPlayer, playing = true)
+        assertTrue(holds.set(miniPlayer, playing = false))
+        assertFalse(holds.set(leftPane, playing = false))
+    }
+
+    @Test
+    fun `reporting the same state twice or releasing without a hold is harmless`() {
+        assertFalse(holds.set(leftPane, playing = false))
+        assertTrue(holds.set(leftPane, playing = true))
+        assertTrue(holds.set(leftPane, playing = true))
+        assertFalse(holds.set(leftPane, playing = false))
+        assertFalse(holds.set(leftPane, playing = false))
     }
 }

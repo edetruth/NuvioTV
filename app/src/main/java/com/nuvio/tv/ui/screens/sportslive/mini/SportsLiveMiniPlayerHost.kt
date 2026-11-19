@@ -69,7 +69,7 @@ import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.ui.screens.player.PlayerMediaSourceFactory
-import com.nuvio.tv.ui.screens.sportslive.SportsLiveKeepScreenOn
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveAwakeHolds
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveResolvingDialog
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapResolver
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapTarget
@@ -95,9 +95,10 @@ internal class SportsLiveMiniPlayback(context: Context, private val onError: (se
     private var view: PlayerView? = null
     private var loadedSessionId: Long? = null
 
-    /** [Player.isPlaying] of the current player, as Compose state; false while none plays. */
-    var isPlaying by mutableStateOf(false)
-        private set
+    /** Reports [Player.isPlaying] of the current player (false once none plays): the screen stays awake meanwhile. */
+    private fun reportPlaying(playing: Boolean) {
+        SportsLiveAwakeHolds.shared.set(this, playing)
+    }
 
     fun attach(view: PlayerView?) {
         if (this.view !== view) this.view?.player = null
@@ -118,7 +119,7 @@ internal class SportsLiveMiniPlayback(context: Context, private val onError: (se
                 }
 
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
-                    if (player === this@apply) this@SportsLiveMiniPlayback.isPlaying = isPlaying
+                    if (player === this@apply) reportPlaying(isPlaying)
                 }
             })
         }
@@ -132,7 +133,7 @@ internal class SportsLiveMiniPlayback(context: Context, private val onError: (se
         val current = player ?: return
         player = null
         loadedSessionId = null
-        isPlaying = false
+        reportPlaying(false)
         view?.player = null
         current.release()
     }
@@ -253,9 +254,6 @@ fun SportsLiveMiniPlayerHost(
 
     val expanding by viewModel.expanding.collectAsStateWithLifecycle()
     expanding?.let { SportsLiveResolvingDialog(it, onDismiss = viewModel::cancelExpand) }
-
-    // The TV's screensaver must not start while the mini player's video actually plays.
-    SportsLiveKeepScreenOn(playing != null && playback.isPlaying)
 
     if (playing == null) return
     // In picture-in-picture only the video shows, filling the window.

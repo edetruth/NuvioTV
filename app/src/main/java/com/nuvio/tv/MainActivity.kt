@@ -195,6 +195,8 @@ import com.nuvio.tv.ui.navigation.LocalNavViewModelStoreOwner
 import com.nuvio.tv.ui.navigation.NuvioNavHost
 import com.nuvio.tv.ui.navigation.sportsLiveTargetRoute
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveAlertsHost
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveAwakeHolds
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveKeepScreenOn
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniPlayerHost
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniPlayers
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniStop
@@ -1359,11 +1361,19 @@ open class MainActivity : ComponentActivity() {
                             LaunchedEffect(isTrailerPlaying) {
                                 if (!isTrailerPlaying) ambientIdleController.onInteraction()
                             }
+                            // Sports video playing outside the full player (dual screen, the mini player)
+                            // keeps the screen awake and ambient mode away; the idle time restarts when it stops (#38).
+                            val sportsVideoPlaying by SportsLiveAwakeHolds.shared.anyPlaying.collectAsState()
+                            SportsLiveKeepScreenOn(sportsVideoPlaying)
+                            LaunchedEffect(sportsVideoPlaying) {
+                                if (!sportsVideoPlaying) ambientIdleController.onInteraction()
+                            }
                             AmbientModeHost(
                                 controller = ambientIdleController,
                                 allowed = currentRoute?.startsWith("player/") != true &&
                                     autoNextOverlay == null &&
-                                    !isTrailerPlaying,
+                                    !isTrailerPlaying &&
+                                    !sportsVideoPlaying,
                                 onShown = { trailerPlayerPool.stop() }
                             )
                         }
