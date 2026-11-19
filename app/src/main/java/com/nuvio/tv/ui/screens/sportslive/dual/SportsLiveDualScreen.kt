@@ -69,6 +69,11 @@ import androidx.tv.material3.Text
 import com.nuvio.tv.R
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.ui.components.LoadingIndicator
+import com.nuvio.tv.core.sportslive.alerts.DualPanes
+import com.nuvio.tv.ui.screens.sportslive.RegisterSportsLiveAlertSurface
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveAlertSurface
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveAlertSurfaces
+import com.nuvio.tv.ui.screens.sportslive.SportsLivePeekHost
 import com.nuvio.tv.ui.screens.sportslive.SportsLivePlayHost
 import com.nuvio.tv.ui.screens.sportslive.SportsLivePlayState
 import com.nuvio.tv.ui.screens.sportslive.SportsLivePlayViewModel
@@ -77,6 +82,7 @@ import com.nuvio.tv.ui.screens.sportslive.SportsLiveStartingAction
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveStartingCard
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapTarget
 import com.nuvio.tv.ui.screens.sportslive.zapDirection
+import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens
 import com.nuvio.tv.ui.theme.NuvioTheme
 import kotlin.math.PI
 import kotlin.math.abs
@@ -214,6 +220,24 @@ fun SportsLiveDualScreen(
     // Focus starts on the screen and comes back to it when OK's lookup or stream picker closes.
     val focusRequester = remember { FocusRequester() }
     val playState by playViewModel.state.collectAsStateWithLifecycle()
+
+    // Alerts (#136): a card sits over the pane it is not about, and OK on it plays its game in the
+    // highlighted pane, unless the picker, OK's lookup or a starting card is up.
+    LaunchedEffect(dual.left.item, dual.right.item, dual.highlighted) {
+        SportsLiveAlertSurfaces.setDualPanes(DualPanes(dual.left.item, dual.right.item, dual.highlighted == Side.LEFT))
+    }
+    DisposableEffect(Unit) { onDispose { SportsLiveAlertSurfaces.setDualPanes(null) } }
+    val alertBusy by rememberUpdatedState(
+        pairPicker != null || playState != SportsLivePlayState.Idle || dual.pane(dual.highlighted).isStarting
+    )
+    val alertSurface = remember(viewModel) {
+        object : SportsLiveAlertSurface {
+            override fun watch(item: SportsLiveItem): Boolean = viewModel.watchFromAlert(item)
+            override fun busy(): Boolean = alertBusy
+            override val peek: SportsLivePeekHost? = null
+        }
+    }
+    RegisterSportsLiveAlertSurface(alertSurface)
     LaunchedEffect(playState == SportsLivePlayState.Idle, pairPicker == null) {
         if (playState == SportsLivePlayState.Idle && pairPicker == null) runCatching { focusRequester.requestFocus() }
     }
@@ -282,8 +306,8 @@ fun SportsLiveDualScreen(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 32.dp),
-            horizontalArrangement = Arrangement.spacedBy(24.dp),
+                .padding(horizontal = SportsLiveTokens.Size.DualSideMargin),
+            horizontalArrangement = Arrangement.spacedBy(SportsLiveTokens.Size.DualGap),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Side.entries.forEach { side ->

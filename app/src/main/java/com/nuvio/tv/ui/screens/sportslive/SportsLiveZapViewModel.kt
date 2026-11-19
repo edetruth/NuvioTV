@@ -617,6 +617,18 @@ class SportsLiveZapViewModel internal constructor(
     }
 
     /**
+     * OK on an alert card (or during its peek) for [item] (#136): the player zaps to it as a panel pick does,
+     * over the panel's list (with [item] added when the list leaves it out). False with no zap session.
+     */
+    fun watchFromAlert(item: SportsLiveItem): Boolean {
+        val session = controller.session(contentId) ?: return false
+        val listed = panel.value?.allItems ?: lineup.value?.list?.all ?: session.items
+        val items = if (listed.any { it.streamKey == item.streamKey }) listed else listed + item
+        closePanel()
+        return controller.pick(contentId, item, items)
+    }
+
+    /**
      * Hold OK on [item] in the live games panel (#140): **Watch both** first where dual screen pairs it with
      * the game playing, then Choose stream, Game stats (a strict ESPN match) and Follow for each side.
      */

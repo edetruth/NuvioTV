@@ -309,6 +309,9 @@ open class MainActivity : ComponentActivity() {
     lateinit var sportsLiveRepository: SportsLiveRepository
 
     @Inject
+    lateinit var sportsLiveAlerts: com.nuvio.tv.core.sportslive.alerts.SportsLiveAlerts
+
+    @Inject
     lateinit var trackingProgressRefreshCoordinator: TrackingProgressRefreshCoordinator
 
     @Inject
@@ -1457,6 +1460,11 @@ open class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        // Debug builds only: `--ei debugSportsAlerts N` raises N score alerts, for checking #136 on a device.
+        if (BuildConfig.DEBUG) {
+            val count = intent.getIntExtra("debugSportsAlerts", 0)
+            if (count > 0) lifecycleScope.launch { sportsLiveAlerts.debugRaise(count) }
+        }
         captureDeepLinkIntent(intent)
         captureLaunchIntent(intent)
     }
@@ -1497,6 +1505,9 @@ open class MainActivity : ComponentActivity() {
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (ambientIdleController.consumeKeyEvent(event)) return true
+        // A Sports & Live alert card takes OK / ▼ / Back only while it is up and actionable; a peek takes
+        // every key but the volume (#136). Before the screens, so the player never sees those presses.
+        if (com.nuvio.tv.ui.screens.sportslive.SportsLiveAlertSurfaces.dispatch(event)) return true
         // Play/Pause while the Sports & Live mini player plays expands it; otherwise upstream behavior.
         if ((event.keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE || event.keyCode == KeyEvent.KEYCODE_MEDIA_PLAY) &&
             SportsLiveMiniPlayers.controller.isActive

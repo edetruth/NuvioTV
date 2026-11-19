@@ -17,8 +17,47 @@ import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.NotificationsOff
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Star
+import android.view.SurfaceView
+import android.view.ViewGroup
+import android.widget.Toast
+import androidx.annotation.OptIn
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.ui.AspectRatioFrameLayout
+import androidx.media3.ui.PlayerView
+import com.nuvio.tv.core.debrid.DirectDebridResolver
+import com.nuvio.tv.core.sportslive.alerts.AlertKeyAction
+import com.nuvio.tv.core.sportslive.alerts.AlertKeyContext
+import com.nuvio.tv.core.sportslive.alerts.AlertSpot
+import com.nuvio.tv.core.sportslive.alerts.PeekCommand
+import com.nuvio.tv.core.sportslive.alerts.PeekEvent
+import com.nuvio.tv.core.sportslive.alerts.PeekPhase
+import com.nuvio.tv.core.sportslive.alerts.PeekState
+import com.nuvio.tv.core.sportslive.alerts.SportsLiveAlertCards
+import com.nuvio.tv.core.sportslive.alerts.SportsLiveAlertPlacement
+import com.nuvio.tv.core.sportslive.alerts.SportsLivePeek
+import com.nuvio.tv.core.sportslive.displayName
+import com.nuvio.tv.domain.model.SportsLiveItem
+import com.nuvio.tv.domain.model.Stream
+import com.nuvio.tv.ui.components.LoadingIndicator
+import com.nuvio.tv.ui.screens.sportslive.preview.SportsLivePreviewPlayer
+import kotlinx.coroutines.CancellationException
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -76,14 +115,38 @@ import java.util.Date
 import java.util.Locale
 import javax.inject.Inject
 
-/** Hands the app-wide [SportsLiveAlerts] to the host. */
+/** Hands the app-wide [SportsLiveAlerts] to the host, and looks a peek's stream up (#136). */
 @HiltViewModel
-class SportsLiveAlertsViewModel @Inject constructor(val alerts: SportsLiveAlerts) : ViewModel()
+class SportsLiveAlertsViewModel @Inject constructor(
+    val alerts: SportsLiveAlerts,
+    private val resolver: SportsLiveZapResolver,
+    private val directDebridResolver: DirectDebridResolver
+) : ViewModel() {
+
+    /** [item]'s stream for a peek: one a light player plays as is (a plain url), else null. */
+    suspend fun peekStream(item: SportsLiveItem): Stream? = try {
+        resolver.resolve(item)?.takeIf { sportsLiveLightPlayable(it, directDebridResolver) }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (_: Exception) {
+        null
+    }
+}
+
+/** The player under a peek (#136): it went quiet and gets its sound back; [entryId], its back stack entry. */
+private class PeekSession(val surface: SportsLiveAlertSurface, val host: SportsLivePeekHost, val entryId: String?)
 
 /**
  * Reminders' "Watch now?" prompt (#44) and followed teams' toasts (#42), over every screen while the
- * app is in the foreground. Over the player the prompt is the small one; toasts never take focus. The
- * prompt takes focus (Watch first) and gives it back to [contentFocusRequester] when it closes.
+ * app is in the foreground. Over the player the prompt is the small one. The prompt takes focus (Watch
+ * first) and gives it back to [contentFocusRequester] when it closes.
+ *
+ * Toasts never take focus (#136): toasts raised close together share one slim card at the top right that
+ * cycles through them. Over the full player of a game or dual screen, while that screen's own overlays are
+ * closed, the card takes OK (its game plays here: a zap, or the highlighted pane), ▼ (a peek: its game
+ * full screen with sound for a few seconds, the game from before kept playing quietly underneath) and
+ * Back (it goes); every other key, and every key while not actionable, goes to the screen as usual
+ * ([SportsLiveAlertSurfaces.dispatch], [SportsLiveAlertKeys]).
  */
 @Composable
 fun SportsLiveAlertsHost(
@@ -102,20 +165,26 @@ fun SportsLiveAlertsHost(
     val entry by navController.currentBackStackEntryAsState()
     val route = entry?.destination?.route
     val inPlayer = route == Screen.Player.route
+    val dualRoute = route == Screen.SportsLiveDual.route
     val miniState by SportsLiveMiniPlayers.controller.state.collectAsState()
     val streamStartedAt = remember(entry?.id) { if (inPlayer) System.currentTimeMillis() else null }
     val playerContentId = entry?.arguments?.getString("contentId")?.takeIf { inPlayer }
     val playerTitle = entry?.arguments?.getString("title")?.takeIf { inPlayer }
     val miniItem = (miniState as? SportsLiveMiniState.Playing)?.item
-    LaunchedEffect(inPlayer, playerContentId, playerTitle, miniItem, streamStartedAt, route) {
+    val dualPanes by SportsLiveAlertSurfaces.dualPanes.collectAsState()
+    val panes = dualPanes?.takeIf { dualRoute }
+    LaunchedEffect(inPlayer, playerContentId, playerTitle, miniItem, streamStartedAt, route, panes) {
+        // In dual screen the highlighted pane's game is the one watched; the other pane's may still alert (#136).
+        val heard = panes?.let { if (it.leftHighlighted) it.left else it.right }
         alerts.setWatching(
             SportsLiveWatching(
-                playingIds = setOfNotNull(playerContentId) + listOfNotNull(miniItem).flatMap { listOf(it) + it.alternates }.map { it.id },
+                playingIds = setOfNotNull(playerContentId) + listOfNotNull(miniItem, heard).flatMap { listOf(it) + it.alternates }.map { it.id },
                 inPlayer = inPlayer,
                 // A game or channel played from Sports & Live; anything else is a movie or show.
                 sportsPlayback = inPlayer && SportsLiveExtraSources.isSportsPlayback(playerContentId),
                 streamStartedAtMs = streamStartedAt,
-                dual = route == Screen.SportsLiveDual.route,
+                dual = dualRoute,
+                miniPlaying = miniItem != null,
                 playingTitle = playerTitle
             )
         )
@@ -161,45 +230,166 @@ fun SportsLiveAlertsHost(
         }
     }
 
-    val alert by alerts.current.collectAsState()
+    val card by alerts.current.collectAsState()
     val watching by alerts.watchingNow.collectAsState()
-    val current = alert ?: return
-    val content = remember(current) { SportsLiveAlertContent.of(current) }
-    if (content == null) {
-        LaunchedEffect(current) { alerts.close(current, AlertAnswer.DISMISS) }
-        return
-    }
+    val surface by SportsLiveAlertSurfaces.surface.collectAsState()
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     fun giveFocusBack() {
         runCatching { contentFocusRequester.restoreFocusedChild() || contentFocusRequester.requestFocus(FocusDirection.Enter) }
     }
-    // Each alert is its own overlay: its countdown and first focus start afresh.
-    key(current) {
-    Box(modifier = Modifier.fillMaxSize()) {
-        val style = (current as? SportsLiveAlert.Kickoff)?.let { SportsLiveAlertEngine.kickoffStyle(watching) }
-        when {
-            // Over a movie or show: a toast that never takes focus or Back, so OK cannot replace that player.
-            current is SportsLiveAlert.Kickoff && style == KickoffStyle.TOAST -> {
-                LaunchedEffect(current) {
-                    delay(TOAST_MS)
-                    alerts.close(current, AlertAnswer.DISMISS)
-                }
-                AlertToast(
-                    content = content,
-                    followed = current.item.followed,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .then(toastPlace)
-                )
+
+    /** [item] plays here: [on]'s own way (a zap, the highlighted pane), else as Watch on a prompt. */
+    fun playHere(item: SportsLiveItem, on: SportsLiveAlertSurface?) {
+        if (on?.watch(item) != true) scope.launch { playViewModel.play(alerts.cardToWatch(item)) }
+    }
+
+    // The peek (#136): its state machine ([SportsLivePeek]) and the player under it.
+    var peek by remember { mutableStateOf<PeekState?>(null) }
+    var peekSession by remember { mutableStateOf<PeekSession?>(null) }
+    var peekStream by remember { mutableStateOf<Pair<SportsLiveItem, Stream>?>(null) }
+    fun onPeek(event: PeekEvent) {
+        val state = peek ?: return
+        val session = peekSession ?: return
+        val (next, command) = SportsLivePeek.step(state, event)
+        peek = next
+        if (next == null) {
+            peekSession = null
+            peekStream = null
+        }
+        when (command) {
+            PeekCommand.NONE, PeekCommand.END -> Unit
+            PeekCommand.ZAP -> playHere(state.item, session.surface)
+            PeekCommand.RETURN -> session.host.restore()
+            PeekCommand.RETURN_FAILED -> {
+                session.host.restore()
+                Toast.makeText(context, context.getString(R.string.sports_live_zap_no_stream, state.item.displayName), Toast.LENGTH_SHORT).show()
             }
-            current is SportsLiveAlert.Kickoff -> KickoffPrompt(
-                content = content as AlertContent.Kickoff,
+        }
+    }
+    fun startPeek(item: SportsLiveItem, on: SportsLiveAlertSurface) {
+        val host = on.peek ?: return
+        host.quiet()
+        peekSession = PeekSession(on, host, entry?.id)
+        peekStream = null
+        peek = SportsLivePeek.start(item, System.currentTimeMillis())
+    }
+    val peekKey = peek?.item?.streamKey
+    LaunchedEffect(peekKey) {
+        val item = peek?.item ?: return@LaunchedEffect
+        val stream = viewModel.peekStream(item)
+        if (peek?.item?.streamKey != item.streamKey) return@LaunchedEffect
+        if (stream == null) onPeek(PeekEvent.Failed) else peekStream = item to stream
+    }
+    LaunchedEffect(peekKey != null) {
+        while (peek != null) {
+            onPeek(PeekEvent.Tick(System.currentTimeMillis()))
+            delay(PEEK_TICK_MS)
+        }
+    }
+    // The zap of OK arrived (or the player went another way): nothing under the peek to give back.
+    LaunchedEffect(entry?.id) {
+        val session = peekSession ?: return@LaunchedEffect
+        if (session.entryId != entry?.id) onPeek(PeekEvent.PlayerReplaced)
+    }
+    // The app leaves the foreground: the peek ends, the game from before gets its sound back.
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP && peek != null) {
+                peekSession?.host?.restore()
+                peek = null
+                peekSession = null
+                peekStream = null
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    // Who takes a key (#136): a toast card over a screen that can play its game here, with that screen's
+    // own overlays closed; a peek takes every key but the volume.
+    val currentCard by rememberUpdatedState(card)
+    val currentSurface by rememberUpdatedState(surface)
+    val canActHere by rememberUpdatedState((inPlayer && watching.sportsPlayback) || dualRoute)
+    val currentInPlayer by rememberUpdatedState(inPlayer)
+    fun keyContext(): AlertKeyContext {
+        val shown = currentCard
+        val on = currentSurface
+        val actionable = shown != null && shown.first !is SportsLiveAlert.Kickoff && canActHere && on != null && !on.busy()
+        return AlertKeyContext(
+            cardActionable = actionable,
+            canPeek = actionable && currentInPlayer && on?.peek?.canPeek() == true,
+            peeking = peek != null
+        )
+    }
+    val keyHandler = remember {
+        object : AlertKeyHandler {
+            override fun context(): AlertKeyContext = keyContext()
+
+            override fun onAction(action: AlertKeyAction) {
+                val nowMs = System.currentTimeMillis()
+                when (action) {
+                    AlertKeyAction.PASS, AlertKeyAction.CONSUME -> Unit
+                    AlertKeyAction.PEEK_STAY -> onPeek(PeekEvent.Ok(nowMs))
+                    AlertKeyAction.PEEK_RETURN -> onPeek(PeekEvent.Back)
+                    AlertKeyAction.WATCH, AlertKeyAction.PEEK, AlertKeyAction.DISMISS -> {
+                        val shown = currentCard ?: return
+                        // OK acts on the alert the card shows now (of those it shows: the ones with words).
+                        val worded = shown.alerts.filter { SportsLiveAlertContent.of(it) != null }.ifEmpty { shown.alerts }
+                        val alert = worded[SportsLiveAlertCards.showingIndex(shown.copy(alerts = worded), nowMs)]
+                        val on = currentSurface
+                        when (action) {
+                            AlertKeyAction.WATCH -> {
+                                alerts.close(shown, AlertAnswer.WATCH)
+                                playHere(alert.item, on)
+                            }
+                            AlertKeyAction.PEEK -> {
+                                alerts.close(shown, AlertAnswer.WATCH)
+                                on?.let { startPeek(alert.item, it) }
+                            }
+                            else -> alerts.close(shown, AlertAnswer.DISMISS)
+                        }
+                    }
+                }
+            }
+        }
+    }
+    DisposableEffect(keyHandler) {
+        SportsLiveAlertSurfaces.keys = keyHandler
+        onDispose { if (SportsLiveAlertSurfaces.keys === keyHandler) SportsLiveAlertSurfaces.keys = null }
+    }
+
+    // Back reaches the screens by the back callback too on recent Android: during a peek it is the peek's.
+    BackHandler(enabled = peek != null) { onPeek(PeekEvent.Back) }
+    peek?.let { state ->
+        SportsLivePeekLayer(
+            state = state,
+            stream = peekStream?.takeIf { it.first.streamKey == state.item.streamKey }?.second,
+            onFirstFrame = { onPeek(PeekEvent.FirstFrame(System.currentTimeMillis())) },
+            onError = { onPeek(PeekEvent.Failed) }
+        )
+    }
+
+    val current = card ?: return
+    // Each card is its own overlay: its countdown and first focus start afresh.
+    key(current.id) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        val first = current.first
+        val style = (first as? SportsLiveAlert.Kickoff)?.let { SportsLiveAlertEngine.kickoffStyle(watching) }
+        if (first is SportsLiveAlert.Kickoff && style != KickoffStyle.TOAST) {
+            val content = remember(first) { SportsLiveAlertContent.of(first) as? AlertContent.Kickoff }
+            if (content == null) {
+                LaunchedEffect(current.id) { alerts.close(current, AlertAnswer.DISMISS) }
+                return@Box
+            }
+            KickoffPrompt(
+                content = content,
                 compact = style == KickoffStyle.COMPACT,
                 watchingTitle = playerTitle,
-                kickoffLabel = rememberSportsLiveStateLabeler(SportsLiveTab.UPCOMING)(current.item.copy(isLive = false)),
+                kickoffLabel = rememberSportsLiveStateLabeler(SportsLiveTab.UPCOMING)(first.item.copy(isLive = false)),
                 onWatch = {
                     alerts.close(current, AlertAnswer.WATCH)
-                    scope.launch { playViewModel.play(alerts.cardToWatch(current.item)) }
+                    scope.launch { playViewModel.play(alerts.cardToWatch(first.item)) }
                 },
                 onLater = {
                     alerts.close(current, AlertAnswer.LATER)
@@ -217,21 +407,149 @@ fun SportsLiveAlertsHost(
                     .align(Alignment.TopEnd)
                     .then(toastPlace)
             )
-            else -> {
-                LaunchedEffect(current) {
-                    delay(TOAST_MS)
-                    alerts.close(current, AlertAnswer.TIMEOUT)
+            return@Box
+        }
+        // A toast card: the alerts that have words, cycled through; it leaves when its time is up. Over a
+        // movie or show (a kickoff toast) it never takes a key, so OK can never replace that player.
+        val shownCard by rememberUpdatedState(current)
+        val worded = remember(current) {
+            current.alerts.mapNotNull { alert -> SportsLiveAlertContent.of(alert)?.let { alert to it } }
+        }
+        var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
+        LaunchedEffect(Unit) {
+            while (true) {
+                nowMs = System.currentTimeMillis()
+                val live = shownCard
+                if (nowMs >= SportsLiveAlertCards.endsAtMs(live)) {
+                    alerts.close(live, if (live.first is SportsLiveAlert.Kickoff) AlertAnswer.DISMISS else AlertAnswer.TIMEOUT)
+                    break
                 }
-                AlertToast(
-                    content = content,
-                    followed = current.item.followed,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .then(toastPlace)
+                delay(CARD_TICK_MS)
+            }
+        }
+        if (worded.isEmpty()) {
+            LaunchedEffect(current) { alerts.close(current, AlertAnswer.DISMISS) }
+            return@Box
+        }
+        val index = SportsLiveAlertCards.showingIndex(current.copy(alerts = worded.map { it.first }), nowMs)
+        val (alert, content) = worded[index]
+        // The hint shows only while the card takes the keys (read again with every tick).
+        val keys = keyContext()
+        val hint = when {
+            peek != null || !keys.cardActionable -> null
+            keys.canPeek -> stringResource(R.string.sports_live_alert_hint_watch) + HINT_SEPARATOR + stringResource(R.string.sports_live_alert_hint_peek)
+            else -> stringResource(R.string.sports_live_alert_hint_watch)
+        }
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            val (end, top) = alertCardOffset(SportsLiveAlertPlacement.spot(alert, panes), maxWidth, maxHeight)
+            AlertCardView(
+                cardId = current.id,
+                content = content,
+                followed = alert.item.followed,
+                hint = hint,
+                index = index,
+                count = worded.size,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = top, end = end)
+            )
+        }
+    }
+    }
+}
+
+/**
+ * Where a card's top right corner sits, as (end, top) insets of the screen (#136): the screen's alert spot,
+ * or [SportsLiveTokens.Alert.PaneInset] inside a dual screen pane's top right corner (the panes as dual
+ * screen lays them out: side margins, the gap, 16:9 video, a caption row under each, centred).
+ */
+internal fun alertCardOffset(spot: AlertSpot, width: Dp, height: Dp): Pair<Dp, Dp> {
+    if (spot == AlertSpot.SCREEN) return SportsLiveTokens.Alert.End to SportsLiveTokens.Alert.Top
+    val margin = SportsLiveTokens.Size.DualSideMargin
+    val paneWidth = (width - margin * 2 - SportsLiveTokens.Size.DualGap) / 2
+    val videoHeight = paneWidth * 9f / 16f
+    val top = ((height - videoHeight - SportsLiveTokens.Size.DualCaption) / 2).coerceAtLeast(0.dp) + SportsLiveTokens.Alert.PaneInset
+    val end = if (spot == AlertSpot.RIGHT_PANE) margin else margin + paneWidth + SportsLiveTokens.Size.DualGap
+    return (end + SportsLiveTokens.Alert.PaneInset) to top
+}
+
+/**
+ * The peek (#136): the peeked game full screen with sound, over the player whose game plays on quietly
+ * underneath. Its label says what to press; the countdown runs from the first frame.
+ */
+@OptIn(UnstableApi::class)
+@Composable
+private fun SportsLivePeekLayer(state: PeekState, stream: Stream?, onFirstFrame: () -> Unit, onError: () -> Unit) {
+    val context = LocalContext.current
+    val currentFirstFrame by rememberUpdatedState(onFirstFrame)
+    val currentError by rememberUpdatedState(onError)
+    val player = remember {
+        SportsLivePreviewPlayer(
+            context = context,
+            onFirstFrame = { currentFirstFrame() },
+            onError = { currentError() },
+            lowBitrate = false,
+            withSound = true
+        )
+    }
+    DisposableEffect(player) { onDispose { player.release() } }
+    LaunchedEffect(stream) { if (stream != null) player.play(state.item, stream) }
+    var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            nowMs = System.currentTimeMillis()
+            delay(CARD_TICK_MS)
+        }
+    }
+    Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+        AndroidView(
+            factory = { ctx ->
+                PlayerView(ctx).apply {
+                    layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                    useController = false
+                    resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                    setShutterBackgroundColor(android.graphics.Color.BLACK)
+                    isFocusable = false
+                    descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+                    keepScreenOn = true
+                    // Above the full player's own video surface, which keeps playing underneath.
+                    (videoSurfaceView as? SurfaceView)?.setZOrderMediaOverlay(true)
+                }.also(player::attach)
+            },
+            onRelease = { player.attach(null) },
+            modifier = Modifier.fillMaxSize()
+        )
+        if (state.phase == PeekPhase.LOADING) LoadingIndicator(modifier = Modifier.align(Alignment.Center))
+        val secondsLeft = if (state.phase == PeekPhase.PLAYING) {
+            ((SportsLivePeek.PEEK_MS - (nowMs - state.sinceMs)).coerceAtLeast(0L) + 999L) / 1_000L
+        } else {
+            null
+        }
+        Column(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = SportsLiveTokens.Size.SafeTop)
+                .clip(RoundedCornerShape(SportsLiveTokens.Alert.Radius))
+                .background(SportsLiveTokens.Alert.PeekLabelFill)
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = stringResource(R.string.sports_live_alert_peeking, state.item.displayName),
+                style = MaterialTheme.typography.titleSmall.sportsLiveBold(),
+                color = ArtColors.Text,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (secondsLeft != null) {
+                Text(
+                    text = stringResource(R.string.sports_live_alert_peek_hint, secondsLeft.toInt()),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = SportsLiveTokens.Alert.Hint,
+                    maxLines = 1
                 )
             }
         }
-    }
     }
 }
 
@@ -338,67 +656,110 @@ private fun KickoffPrompt(
     }
 }
 
+/**
+ * A toast card (#136): slim, slightly see-through, sliding in from the right. A grouped card shows a dot
+ * for each of its alerts; [hint] ("OK Watch · ▼ Peek") only while the card takes those keys.
+ */
 @Composable
-private fun AlertToast(content: AlertContent, followed: Boolean, modifier: Modifier) {
-    val shape = RoundedCornerShape(14.dp)
-    Column(
+private fun AlertCardView(
+    cardId: Long,
+    content: AlertContent,
+    followed: Boolean,
+    hint: String?,
+    index: Int,
+    count: Int,
+    modifier: Modifier
+) {
+    val visible = remember(cardId) { MutableTransitionState(false).apply { targetState = true } }
+    val shape = RoundedCornerShape(SportsLiveTokens.Alert.Radius)
+    AnimatedVisibility(
+        visibleState = visible,
+        enter = slideInHorizontally(tween(SportsLiveTokens.Alert.SLIDE_MS)) { it / 2 } + fadeIn(tween(SportsLiveTokens.Alert.SLIDE_MS)),
         modifier = modifier
-            .widthIn(max = 440.dp)
-            .clip(shape)
-            .background(ArtColors.Panel.copy(alpha = 0.96f))
-            .border(1.dp, PANEL_BORDER, shape)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        when (content) {
-            is AlertContent.Score -> {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    if (followed) StarIcon()
-                    Text(
-                        text = content.scorer?.let { stringResource(R.string.sports_live_alert_scored, it.name) }
-                            ?: stringResource(R.string.sports_live_alert_score_update),
-                        style = MaterialTheme.typography.titleMedium.sportsLiveBold(),
-                        color = ArtColors.Text,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+        Column(
+            modifier = Modifier
+                .width(SportsLiveTokens.Alert.Width)
+                .clip(shape)
+                .background(ArtColors.Panel.copy(alpha = SportsLiveTokens.Alert.FILL_ALPHA))
+                .border(1.dp, SportsLiveTokens.Alert.Border, shape)
+                .padding(SportsLiveTokens.Alert.Padding),
+            verticalArrangement = Arrangement.spacedBy(SportsLiveTokens.Alert.Gap)
+        ) {
+            AlertBody(content, followed)
+            if (count > 1 || hint != null) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (count > 1) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(SportsLiveTokens.Alert.Dot)) {
+                            repeat(count) { at ->
+                                Box(
+                                    modifier = Modifier
+                                        .size(SportsLiveTokens.Alert.Dot)
+                                        .clip(RoundedCornerShape(50))
+                                        .background(if (at == index) SportsLiveTokens.Alert.DotOn else SportsLiveTokens.Alert.DotOff)
+                                )
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.weight(1f))
+                    hint?.let { SmallLine(it, SportsLiveTokens.Alert.Hint) }
                 }
-                ScoreLine(content.first, content.second)
+            }
+        }
+    }
+}
+
+@Composable
+private fun AlertBody(content: AlertContent, followed: Boolean) {
+    when (content) {
+        is AlertContent.Score -> {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (followed) StarIcon()
+                Text(
+                    text = content.scorer?.let { stringResource(R.string.sports_live_alert_scored, it.name) }
+                        ?: stringResource(R.string.sports_live_alert_score_update),
+                    style = MaterialTheme.typography.titleSmall.sportsLiveBold(),
+                    color = ArtColors.Text,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
                 content.clock?.let { SmallLine(it, ArtColors.LiveText) }
             }
-            is AlertContent.FullTime -> {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = stringResource(R.string.sports_live_alert_full_time),
-                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                        color = ArtColors.Secondary
-                    )
-                    content.league?.let { SmallLine(it, ArtColors.Muted) }
-                }
-                ScoreLine(content.first, content.second)
-                content.note?.let { SmallLine(it, ArtColors.Secondary) }
+            ScoreLine(content.first, content.second)
+        }
+        is AlertContent.FullTime -> {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = stringResource(R.string.sports_live_alert_full_time),
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                    color = ArtColors.Secondary
+                )
+                val details = listOfNotNull(content.league, content.note)
+                if (details.isNotEmpty()) SmallLine(details.joinToString(HINT_SEPARATOR), ArtColors.Muted)
             }
-            is AlertContent.FullTimeNamesOnly -> Text(
-                text = stringResource(R.string.sports_live_alert_full_time_names, content.first.name, content.second.name),
-                style = MaterialTheme.typography.titleMedium,
+            ScoreLine(content.first, content.second)
+        }
+        is AlertContent.FullTimeNamesOnly -> Text(
+            text = stringResource(R.string.sports_live_alert_full_time_names, content.first.name, content.second.name),
+            style = MaterialTheme.typography.titleSmall,
+            color = ArtColors.Text,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+        // Over a movie or show ([KickoffStyle.TOAST]): no actions, so nothing to press by accident.
+        is AlertContent.Kickoff -> Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (followed) StarIcon()
+            Text(
+                text = stringResource(
+                    R.string.sports_live_alert_starting_toast,
+                    stringResource(R.string.sports_live_alert_matchup, content.first.name, content.second.name)
+                ),
+                style = MaterialTheme.typography.titleSmall,
                 color = ArtColors.Text,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
-            // Over a movie or show ([KickoffStyle.TOAST]): no actions, so nothing to press by accident.
-            is AlertContent.Kickoff -> Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (followed) StarIcon()
-                Text(
-                    text = stringResource(
-                        R.string.sports_live_alert_starting_toast,
-                        stringResource(R.string.sports_live_alert_matchup, content.first.name, content.second.name)
-                    ),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = ArtColors.Text,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
         }
     }
 }
@@ -457,14 +818,14 @@ private fun ScoreLine(first: AlertSide, second: AlertSide) {
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
         // Logos only when both teams have one and both loaded (#130); never letters.
         val logos = rememberTeamLogoPair(first.logo, second.logo)
-        logos?.let { TeamLogoSlot(it.first, it.shown, 32.dp) }
+        logos?.let { TeamLogoSlot(it.first, it.shown, SportsLiveTokens.Alert.Logo) }
         Text(
             text = stringResource(R.string.sports_live_alert_score_line, first.short, firstScore, secondScore, second.short),
-            style = MaterialTheme.typography.headlineSmall.sportsLiveBold().copy(fontFeatureSettings = "tnum"),
+            style = MaterialTheme.typography.titleMedium.sportsLiveBold().copy(fontFeatureSettings = "tnum"),
             color = ArtColors.Text,
             maxLines = 1
         )
-        logos?.let { TeamLogoSlot(it.second, it.shown, 32.dp) }
+        logos?.let { TeamLogoSlot(it.second, it.shown, SportsLiveTokens.Alert.Logo) }
     }
 }
 
@@ -480,8 +841,13 @@ private fun StarIcon() {
 
 private val PANEL_BORDER = Color(0xFF1E2632)
 
-/** Toasts hide after this long (the design's 8 s). */
-private const val TOAST_MS = 8_000L
+/** A toast card and a peek check their time this often. */
+private const val CARD_TICK_MS = 250L
+
+/** The peek's state machine is stepped this often. */
+private const val PEEK_TICK_MS = 500L
+
+private const val HINT_SEPARATOR = " · "
 
 /**
  * How far below the top every toast and prompt sits, at the top right (#101, P4): under the section's header,

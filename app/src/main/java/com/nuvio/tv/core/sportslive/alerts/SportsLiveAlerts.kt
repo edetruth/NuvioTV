@@ -1,6 +1,9 @@
 package com.nuvio.tv.core.sportslive.alerts
 
+import androidx.annotation.VisibleForTesting
+import com.nuvio.tv.BuildConfig
 import com.nuvio.tv.core.sportslive.SportsLiveItemBucketer
+import com.nuvio.tv.core.sportslive.scores.EspnLeague
 import com.nuvio.tv.core.sportslive.scores.LiveScoresRepository
 import com.nuvio.tv.core.sportslive.scores.ScoreChips
 import com.nuvio.tv.core.sportslive.scores.ScoreSide
@@ -65,11 +68,15 @@ class SportsLiveAlerts @Inject constructor(
 
     /** Waiting overlays with when they were raised; guarded by [lock]. */
     private val queue = ArrayList<Pair<SportsLiveAlert, Long>>()
-    private val currentFlow = MutableStateFlow<SportsLiveAlert?>(null)
+    private val currentFlow = MutableStateFlow<AlertCard?>(null)
     private val watching = MutableStateFlow(SportsLiveWatching())
+    private var cardCount = 0L
 
-    /** The overlay to show now; null: none. */
-    val current: StateFlow<SportsLiveAlert?> = currentFlow.asStateFlow()
+    /**
+     * The overlay to show now; null: none. Toasts raised close together share one card that cycles
+     * through them (#136, [SportsLiveAlertCards]); a kickoff prompt is a card of its own.
+     */
+    val current: StateFlow<AlertCard?> = currentFlow.asStateFlow()
 
     /** What plays now, as the host last said. */
     val watchingNow: StateFlow<SportsLiveWatching> = watching.asStateFlow()
@@ -215,8 +222,15 @@ class SportsLiveAlerts @Inject constructor(
         if (raised.isNotEmpty()) enqueue(raised, nowMs)
     }
 
-    private fun enqueue(alerts: List<SportsLiveAlert>, nowMs: Long) = synchronized(lock) {
+    @VisibleForTesting
+    internal fun enqueue(alerts: List<SportsLiveAlert>, nowMs: Long) = synchronized(lock) {
         for (alert in alerts) {
+            // A toast arriving while a toast card shows joins it (#136), when it may show at all.
+            val card = currentFlow.value
+            if (card != null && SportsLiveAlertCards.canJoin(card, alert, nowMs)) {
+                showable(alert, nowMs, raisedAt = nowMs)?.let { currentFlow.value = SportsLiveAlertCards.join(card, it, nowMs) }
+                continue
+            }
             if (alert is SportsLiveAlert.Kickoff) {
                 // Kickoff prompts go before toasts, in the order raised.
                 val at = queue.indexOfFirst { it.first !is SportsLiveAlert.Kickoff }.let { if (it < 0) queue.size else it }
@@ -228,34 +242,52 @@ class SportsLiveAlerts @Inject constructor(
         if (currentFlow.value == null) showNextLocked(nowMs)
     }
 
-    /** The overlay showing [alert] closed with [answer]; the next one shows. */
-    fun close(alert: SportsLiveAlert, answer: AlertAnswer) = synchronized(lock) {
+    /** The overlay showing [card] closed with [answer]; the next one shows. */
+    fun close(card: AlertCard, answer: AlertAnswer) = synchronized(lock) {
         val nowMs = System.currentTimeMillis()
+        val alert = card.first
         if (alert is SportsLiveAlert.Kickoff) {
             when (answer) {
                 AlertAnswer.WATCH, AlertAnswer.DISMISS -> engine.answered(alert.item)
                 AlertAnswer.LATER, AlertAnswer.TIMEOUT -> engine.later(alert.item, nowMs)
             }
         }
-        if (currentFlow.value == alert) currentFlow.value = null
+        // By id: alerts may have joined the card since the host read it.
+        if (currentFlow.value?.id == card.id) currentFlow.value = null
         showNextLocked(nowMs)
     }
 
+    /**
+     * [queued] as it may show now, or null: the Scores setting or a switch may have changed while it
+     * waited; a toast that waited too long is old news; nothing about the game now playing; a full time
+     * already announced (the toast for the game playing, #60) is dropped.
+     */
+    private fun showable(queued: SportsLiveAlert, nowMs: Long, raisedAt: Long): SportsLiveAlert? {
+        val next = SportsLiveAlertEngine.stillShowable(queued, lastMode, lastSettings) ?: return null
+        if (next !is SportsLiveAlert.Kickoff && nowMs - raisedAt > TOAST_STALE_MS) return null
+        if (SportsLiveAlertEngine.isPlaying(next.item, watching.value)) {
+            if (next is SportsLiveAlert.Kickoff) engine.answered(next.item)
+            return null
+        }
+        if (!SportsLiveAlertEngine.claimToShow(next)) return null
+        return next
+    }
+
     private fun showNextLocked(nowMs: Long) {
-        val now = watching.value
         while (queue.isNotEmpty()) {
             val (queued, raisedAt) = queue.removeAt(0)
-            // The Scores setting or a switch may have changed while it waited.
-            val next = SportsLiveAlertEngine.stillShowable(queued, lastMode, lastSettings) ?: continue
-            // A toast that waited too long is old news; nothing about the game now playing.
-            if (next !is SportsLiveAlert.Kickoff && nowMs - raisedAt > TOAST_STALE_MS) continue
-            if (SportsLiveAlertEngine.isPlaying(next.item, now)) {
-                if (next is SportsLiveAlert.Kickoff) engine.answered(next.item)
-                continue
+            val next = showable(queued, nowMs, raisedAt) ?: continue
+            var card = AlertCard(++cardCount, listOf(next), nowMs)
+            // Toasts that waited together show together (#136): the ones raised within the window of the last taken.
+            var lastRaisedAt = raisedAt
+            while (SportsLiveAlertCards.groupable(next) && queue.isNotEmpty()) {
+                val (waiting, waitingRaisedAt) = queue.first()
+                if (!SportsLiveAlertCards.groupable(waiting) || waitingRaisedAt - lastRaisedAt > SportsLiveAlertCards.GROUP_WINDOW_MS) break
+                queue.removeAt(0)
+                lastRaisedAt = waitingRaisedAt
+                showable(waiting, nowMs, waitingRaisedAt)?.let { card = SportsLiveAlertCards.join(card, it, nowMs) }
             }
-            // Its game's full time already announced (the toast for the game playing, #60): dropped.
-            if (!SportsLiveAlertEngine.claimToShow(next)) continue
-            currentFlow.value = next
+            currentFlow.value = card
             return
         }
         currentFlow.value = null
@@ -280,6 +312,29 @@ class SportsLiveAlerts @Inject constructor(
         }
         val card = fresh ?: item
         return if (card.isLive) card else card.copy(isLive = true)
+    }
+
+    /**
+     * Debug builds only (the #136 emulator check, when no followed team is scoring): [count] score toasts,
+     * close together, for live games now listed and not playing, the second a lead change. Each game's
+     * strict ESPN match is used when one is known, else a made-up 1–0. Nothing in a release build.
+     */
+    suspend fun debugRaise(count: Int) {
+        if (!BuildConfig.DEBUG) return
+        val cards = candidates(repo.latest.value, repo.claimedCatalogs.first(), repo.followedTeams.first())
+            .filter { it.isLive && it.teams != null && !SportsLiveAlertEngine.isPlaying(it, watching.value) }
+            .take(count)
+        val scores = liveScores.scores.value
+        val alerts = cards.mapIndexed { index, card ->
+            val teams = checkNotNull(card.teams)
+            fun side(name: String, score: Int) = ScoreTeam(null, null, name, name, name, null, null, score, emptyList())
+            val snapshot = ScoreChips.matchedEvent(card, scores[card.streamKey]) ?: ScoreSnapshot(
+                eventId = "debug-${card.streamKey}", league = EspnLeague("debug", "debug"), startMs = card.startMs,
+                state = ScoreState.IN, clockText = null, isFinal = false, home = side(teams.home, 1), away = side(teams.away, 0)
+            )
+            SportsLiveAlert.ScoreChange(card, snapshot, ScoreSide.HOME, leadChange = index == 1)
+        }
+        if (alerts.isNotEmpty()) enqueue(alerts, System.currentTimeMillis())
     }
 
     private fun ticks(): Flow<Unit> = flow {

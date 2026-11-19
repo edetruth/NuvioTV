@@ -166,6 +166,42 @@ object SportsLiveTokens {
         val ButtonHeight = 36.dp
         val ButtonMinWidth = 100.dp
         val ButtonGap = 11.dp
+
+        /** Dual screen: the panes' side margins, the gap between them and the caption row under each. */
+        val DualSideMargin = 32.dp
+        val DualGap = 24.dp
+        val DualCaption = 28.dp
+    }
+
+    /**
+     * Followed teams' alert cards (#136): one slim, slightly translucent card at the top right, the same
+     * spot over the full player and the mini player (clear of the section's header, and of broadcast score
+     * bugs, which sit top left or along the bottom); in dual screen, the top right of a pane.
+     */
+    object Alert {
+        val Top = Size.SafeTop + Size.HeaderHeight + 16.dp
+        val End = Size.SafeEnd
+        /** Inside a dual screen pane, from its top right corner. */
+        val PaneInset = 12.dp
+        val Width = 340.dp
+        val Padding = 12.dp
+        val Gap = 4.dp
+        val Logo = 22.dp
+        val Radius = 12.dp
+        /** The card's fill: the panel colour, slightly see-through. */
+        const val FILL_ALPHA = 0.86f
+        val Border = Colors.Divider
+        /** The hint line ("OK Watch · ▼ Peek"). */
+        val Hint = Colors.TextMuted
+        /** A grouped card's dots: the one showing, the others. */
+        val DotOn = Colors.TextPrimary
+        val DotOff = Colors.TextMuted.copy(alpha = 0.4f)
+        val Dot = 5.dp
+        /** It slides in from the right this fast. */
+        const val SLIDE_MS = 220
+
+        /** The peek's label over the peeked game. */
+        val PeekLabelFill = Color.Black.copy(alpha = 0.6f)
     }
 
     /** Corner radii (board px → dp). */

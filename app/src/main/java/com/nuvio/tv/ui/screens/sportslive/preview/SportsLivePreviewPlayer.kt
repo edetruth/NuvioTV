@@ -24,7 +24,7 @@ import com.nuvio.tv.ui.screens.sportslive.playSportsLiveStream
 /**
  * The hover preview's one player, built like a dual screen pane's. It exists only while a preview
  * plays: [play] releases any previous player before building the next, and [release] frees it, so
- * there is never more than one. It is muted for good: the audio track type is disabled before the
+ * there is never more than one. It is muted for good (unless [withSound], the alerts' peek): the audio track type is disabled before the
  * stream is prepared (volume 0 alone does not mute AC3/EAC3 passthrough, and a disabled track uses
  * no audio decoder), and it never asks for audio focus. Video is capped at about 480p ([capPreviewVideo]) unless [lowBitrate] is turned off. While [suspended] (the screen is paused) [play]
  * does nothing, so a late call cannot build a player after the pause released it. A stream that
@@ -39,7 +39,9 @@ internal class SportsLivePreviewPlayer(
     /** The device gave this player no decoder (another video holds it), before [onError]. */
     private val onDecoderInitFailure: () -> Unit = {},
     /** Ask for the lowest bitrate, at most about 480p ([capPreviewVideo]): every preview by default (#71, #83). */
-    private val lowBitrate: Boolean = true
+    private val lowBitrate: Boolean = true,
+    /** The alerts' peek (#136): full screen with sound, so the audio track stays on. */
+    private val withSound: Boolean = false
 ) {
     private val appContext = context.applicationContext
     private var player: ExoPlayer? = null
@@ -67,11 +69,13 @@ internal class SportsLivePreviewPlayer(
         val sourceKey = SportsLiveExtraSources.sourceKeyFor(item, stream)
         val startedAtMs = System.currentTimeMillis()
         val built = buildSportsLiveLightPlayer(appContext).apply {
-            volume = 0f
-            trackSelectionParameters = trackSelectionParameters.buildUpon()
-                .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true)
-                .build()
-                .let { if (lowBitrate) it.capPreviewVideo() else it }
+            if (!withSound) {
+                volume = 0f
+                trackSelectionParameters = trackSelectionParameters.buildUpon()
+                    .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true)
+                    .build()
+            }
+            if (lowBitrate) trackSelectionParameters = trackSelectionParameters.capPreviewVideo()
             addListener(object : Player.Listener {
                 override fun onRenderedFirstFrame() {
                     if (player !== this@apply) return

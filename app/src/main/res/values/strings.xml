@@ -3882,6 +3882,10 @@
     <string name="sports_live_alert_full_time">FULL TIME</string>
     <string name="sports_live_alert_starting_toast">%1$s is starting · open Sports &amp; Live to watch</string>
     <string name="sports_live_alert_full_time_names">%1$s vs %2$s · Full time</string>
+    <string name="sports_live_alert_hint_watch">OK Watch</string>
+    <string name="sports_live_alert_hint_peek">▼ Peek</string>
+    <string name="sports_live_alert_peeking">Peeking · %1$s</string>
+    <string name="sports_live_alert_peek_hint">OK Stay · Back Return · %1$d s</string>
     <string name="sports_live_why_just_scored">Just scored</string>
     <string name="sports_live_why_red_zone">Red zone</string>
     <string name="sports_live_why_bases_loaded">Bases loaded</string>

@@ -131,7 +131,7 @@ class SportsLiveAlertEngineTest {
     fun `a followed team's game scoring shows a toast naming the side that scored`() {
         step(START + 10 * MINUTE, live(10, 8), reminded = false)
         val alerts = step(START + 11 * MINUTE, live(10, 11), reminded = false)
-        assertEquals(listOf(SportsLiveAlert.ScoreChange(card, live(10, 11), ScoreSide.AWAY)), alerts)
+        assertEquals(listOf(SportsLiveAlert.ScoreChange(card, live(10, 11), ScoreSide.AWAY, leadChange = true)), alerts)
     }
 
     @Test
@@ -195,7 +195,7 @@ class SportsLiveAlertEngineTest {
         at += delayMs - 5_000
         assertEquals(0, step(at, shown(at, live(10, 11)), reminded = false).size)
         at += 5_000
-        assertEquals(listOf(SportsLiveAlert.ScoreChange(card, live(10, 11), ScoreSide.AWAY)), step(at, shown(at, live(10, 11)), reminded = false))
+        assertEquals(listOf(SportsLiveAlert.ScoreChange(card, live(10, 11), ScoreSide.AWAY, leadChange = true)), step(at, shown(at, live(10, 11)), reminded = false))
     }
 
     // Full time

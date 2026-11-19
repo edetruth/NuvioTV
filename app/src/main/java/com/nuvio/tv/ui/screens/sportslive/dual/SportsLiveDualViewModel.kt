@@ -300,6 +300,25 @@ class SportsLiveDualViewModel internal constructor(
         load(Side.RIGHT, item)
     }
 
+    /**
+     * OK on an alert card (#136): a game a pane shows gets the highlight (and the sound); any other game
+     * replaces the highlighted pane's, as the pane's own zap does. False when it cannot (it shares a
+     * source with the other pane, or there is no session).
+     */
+    fun watchFromAlert(item: SportsLiveItem): Boolean {
+        val state = _state.value ?: return false
+        val side = state.highlighted
+        if (item.sharesSourceWith(state.pane(side).item)) return true
+        if (item.sharesSourceWith(state.pane(side.other).item)) {
+            highlight(side.other)
+            return true
+        }
+        settle(state.pane(side).item)
+        forgetRecovery(item)
+        load(side, item)
+        return true
+    }
+
     /** MENU: the panes trade places, each keeping its lookup. */
     fun swap() {
         if (_state.value == null) return

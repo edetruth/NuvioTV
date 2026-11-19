@@ -159,6 +159,8 @@ import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapTarget
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapViewModel
 import com.nuvio.tv.ui.screens.sportslive.liveWindow
 import com.nuvio.tv.ui.screens.sportslive.rememberSportsLiveZapKeyHandler
+import com.nuvio.tv.ui.screens.sportslive.RegisterSportsLiveAlertSurface
+import com.nuvio.tv.ui.screens.sportslive.sportsLivePlayerAlertSurface
 import com.nuvio.tv.ui.screens.sportslive.seekWithinSportsLiveWindow
 import com.nuvio.tv.core.player.PlayerWindowBackdrop
 import com.nuvio.tv.ui.util.keepLtr
@@ -2318,6 +2320,26 @@ fun PlayerScreen(
             )
         }
 
+        // Alerts (#136): OK on a card zaps here, ▼ peeks at its game while this one goes quiet. The card takes
+        // OK only while none of the player's own overlays is up.
+        val alertOverlayUp by rememberUpdatedState(
+            postPlayRecommendationState.isVisible || shouldConfirmNextEpisodeOnEnd || sportsStartingVisible
+        )
+        val currentPartyActive by rememberUpdatedState(partyActive)
+        val alertSurface = remember(sportsLiveZap, viewModel) {
+            sportsLivePlayerAlertSurface(
+                zap = sportsLiveZap,
+                isBusy = { alertOverlayUp || sportsLiveZap.panelOpen.value || sportsLivePlayerOverlayUp(viewModel.uiState.value) },
+                exoPlayer = {
+                    viewModel.exoPlayer?.takeIf {
+                        viewModel.controller.currentInternalPlayerEngine == com.nuvio.tv.data.local.InternalPlayerEngine.EXOPLAYER
+                    }
+                },
+                partyActive = { currentPartyActive }
+            )
+        }
+        RegisterSportsLiveAlertSurface(alertSurface)
+
         SportsLiveZapOverlay(
             viewModel = sportsLiveZap,
             playerFocusRequester = containerFocusRequester,
@@ -2332,6 +2354,14 @@ fun PlayerScreen(
         )
     }
 }
+
+/** The player's own overlays an alert card must leave OK to (#136): controls, panels, dialogs, an error. */
+internal fun sportsLivePlayerOverlayUp(state: PlayerUiState): Boolean =
+    state.showControls || state.showPauseOverlay || state.showEpisodesPanel || state.showSourcesPanel ||
+        state.showPartyPanel || state.showChaptersPanel || state.showAudioOverlay || state.showSubtitleOverlay ||
+        state.showSubtitleStylePanel || state.showSpeedDialog || state.showSubtitleDelayOverlay ||
+        state.showSubtitleTimingDialog || state.showMoreDialog || state.postPlayMode is PostPlayMode.StillWatching ||
+        state.error != null
 
 @Composable
 private fun MpvPlayerSurface(
