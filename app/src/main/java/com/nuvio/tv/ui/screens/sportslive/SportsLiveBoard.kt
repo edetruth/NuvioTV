@@ -50,11 +50,11 @@ data class SportsLiveBoard(
     val tab: SportsLiveTab,
     val filter: String?,
     val items: List<SportsLiveItem>,
-    /** The Scoreboard's rows; null on the tabs that list cards (Channels, Replays). */
+    /** The list's rows: the Scoreboard's (Live now, Upcoming), Channels' by region, Replays' (V2 P4); null for Results. */
     val rows: List<ScoreboardRow>?,
     /** Each item's drawn card by `addonId|id` (null: the addon's art). */
     val arts: Map<String, GameArt?>,
-    /** Upcoming's Agenda (V2, P3): [rows] by day and time slot; null on the other tabs. */
+    /** Upcoming's Agenda (V2, P3) or Replays' days (P4): [rows] by day; null on the other tabs. */
     val agenda: SportsLiveAgenda? = null
 ) {
     /** True when this board shows [tab] with [filter]. */
@@ -83,9 +83,19 @@ data class SportsLiveBoard(
                     excitement = inputs.excitement
                 )
             } else {
-                null
+                when (tab) {
+                    // V2 P4: Channels by region, Replays under their spoiler-free titles, by day.
+                    SportsLiveTab.CHANNELS -> channelRows(inputs.items)
+                    SportsLiveTab.REPLAYS -> replayRows(inputs.items)
+                    else -> null
+                }
             }
-            val agenda = if (tab == SportsLiveTab.UPCOMING && rows != null) SportsLiveAgenda.of(rows, inputs.clockMs, zone) else null
+            val agenda = when {
+                rows == null -> null
+                tab == SportsLiveTab.UPCOMING -> SportsLiveAgenda.of(rows, inputs.clockMs, zone)
+                tab == SportsLiveTab.REPLAYS -> SportsLiveAgenda.ofReplays(rows, inputs.clockMs, zone)
+                else -> null
+            }
             val items = agenda?.items ?: rows?.map { it.item } ?: inputs.items
             // The cards' drawn art; a row already carries its own.
             val arts = HashMap<String, GameArt?>(items.size * 2)

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -29,7 +30,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Icon
@@ -61,8 +64,10 @@ internal fun agendaTimeText(startMs: Long, zone: ZoneId = ZoneId.systemDefault()
 internal fun agendaDayName(day: AgendaDay): String = when (day.kind) {
     AgendaDayKind.TODAY -> stringResource(R.string.sports_live_agenda_today)
     AgendaDayKind.TOMORROW -> stringResource(R.string.sports_live_agenda_tomorrow)
+    AgendaDayKind.YESTERDAY -> stringResource(R.string.sports_live_agenda_yesterday)
     AgendaDayKind.DATE -> day.date?.let { agendaDateText(it) }.orEmpty()
     AgendaDayKind.ANY_TIME -> stringResource(R.string.sports_live_agenda_any_time)
+    AgendaDayKind.UNDATED -> stringResource(R.string.sports_live_replays_undated)
 }
 
 /** The sticky day header (V2 Upcoming): "Today  Wed 18 Nov" over a hairline; opaque, so rows scroll under it. */
@@ -80,8 +85,8 @@ internal fun SportsLiveAgendaDayHeader(day: AgendaDay, modifier: Modifier = Modi
                 color = Colors.TextPrimary,
                 maxLines = 1
             )
-            // Today and Tomorrow carry their date too.
-            if (day.kind == AgendaDayKind.TODAY || day.kind == AgendaDayKind.TOMORROW) {
+            // Today, Tomorrow and Yesterday carry their date too.
+            if (day.kind == AgendaDayKind.TODAY || day.kind == AgendaDayKind.TOMORROW || day.kind == AgendaDayKind.YESTERDAY) {
                 day.date?.let { date ->
                     Text(
                         text = agendaDateText(date),
@@ -153,6 +158,129 @@ internal fun agendaStageTitle(row: ScoreboardRow): String {
     )
 }
 
+/** [agendaStageTitle] outside composition (the player's title for a replay, P4). */
+internal fun agendaStageTitleText(row: ScoreboardRow, context: android.content.Context): String {
+    val art = row.art?.takeIf { row.twoSided } ?: return singleLineTitle(row.item)
+    return context.getString(
+        if (agendaWrittenAt(row.item.meta.name)) R.string.sports_live_matchup_at else R.string.sports_live_matchup,
+        art.first.shortName,
+        art.second.shortName
+    )
+}
+
+/** A replay row's time ("8:30 PM", the locale's short time); null for a replay dated without a time. */
+internal fun replayTimeText(item: com.nuvio.tv.domain.model.SportsLiveItem, zone: ZoneId = ZoneId.systemDefault(), locale: Locale = Locale.getDefault()): String? =
+    item.startMs?.takeIf { item.startHasTimeOfDay }?.let { agendaTimeText(it, zone, locale) }
+
+/** A replay's "When" on its stage: "Yesterday · 8:30 PM", "Mon 16 Nov" (the device's locale, never "11/16/26"). */
+@Composable
+internal fun replayWhenText(item: com.nuvio.tv.domain.model.SportsLiveItem, nowMs: Long): String? {
+    val start = item.startMs ?: return null
+    val zone = ZoneId.systemDefault()
+    val today = Instant.ofEpochMilli(nowMs).atZone(zone).toLocalDate()
+    val date = Instant.ofEpochMilli(start).atZone(zone).toLocalDate()
+    val day = when (java.time.temporal.ChronoUnit.DAYS.between(date, today)) {
+        in Long.MIN_VALUE..0L -> stringResource(R.string.sports_live_agenda_today)
+        1L -> stringResource(R.string.sports_live_agenda_yesterday)
+        else -> agendaDateText(date)
+    }
+    return listOfNotNull(day, replayTimeText(item, zone)).joinToString(" · ")
+}
+
+/**
+ * The Replays stage (V2 P4, #90): the same fixed 360 dp. Drawn matchup art (never the addon's poster, which may
+ * carry the score); the clean [title], the date, and **Watch replay** and **More…** (Game stats on a strict
+ * match, Team page, Details). No tagline, description or score: those live only under Details.
+ */
+@Composable
+internal fun SportsLiveReplayStage(
+    row: ScoreboardRow,
+    title: String,
+    nowMs: Long,
+    onWatch: () -> Unit,
+    onMore: () -> Unit,
+    modifier: Modifier = Modifier,
+    watchModifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier.width(SportsLiveStageLayout.WIDTH_DP.dp).fillMaxHeight(),
+        verticalArrangement = Arrangement.spacedBy(SportsLiveStageLayout.GAP_DP.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .width(SportsLiveStageLayout.WIDTH_DP.dp)
+                .height(SportsLiveStageLayout.MEDIA_HEIGHT_DP.dp)
+                .clip(SportsLiveTokens.Radius.RowShape)
+                .background(Colors.Surface)
+        ) {
+            val art = row.art?.takeIf { row.twoSided }
+            val league = sportsLiveLeagueLabel(art?.league ?: row.item.sport, row.item.catalogName)
+                ?: row.sportTag?.let { sportKindLabel(it) }
+            if (art != null) {
+                MatchupStageArt(art, top = league.orEmpty().uppercase(Locale.getDefault()), at = agendaWrittenAt(row.item.meta.name))
+            } else {
+                // No two sides: the clean title drawn large on the stage's gradient, never the addon's art.
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Brush.verticalGradient(listOf(Colors.SurfaceRaised, Colors.Surface)))
+                        .padding(horizontal = 20.dp, vertical = 16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically)
+                ) {
+                    league?.let {
+                        Text(text = it.uppercase(Locale.getDefault()), style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag), color = Colors.TextMuted, maxLines = 1)
+                    }
+                    Text(
+                        text = title,
+                        style = SportsLiveTokens.style(TITLE_STYLE).sportsLiveBold(),
+                        color = Colors.TextPrimary,
+                        textAlign = TextAlign.Center,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+        Column(
+            modifier = Modifier.fillMaxWidth().height(SportsLiveStageLayout.SCORE_BLOCK_HEIGHT_DP.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            BasicText(
+                text = title,
+                style = SportsLiveTokens.style(TITLE_STYLE).sportsLiveBold().copy(color = Colors.TextPrimary),
+                maxLines = 1,
+                softWrap = false,
+                autoSize = TextAutoSize.StepBased(minFontSize = 15.sp, maxFontSize = TITLE_STYLE.fontSize, stepSize = 1.sp)
+            )
+            replayWhenText(row.item, nowMs)?.let { whenText ->
+                Text(text = whenText, style = SportsLiveTokens.style(WHEN_STYLE), color = Colors.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+        Row(
+            modifier = Modifier.height(SportsLiveStageLayout.BUTTON_ROW_HEIGHT_DP.dp),
+            horizontalArrangement = Arrangement.spacedBy(SportsLiveTokens.Size.ButtonGap),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            SportsLiveButton(onClick = onWatch, role = SportsLiveButtonRole.PRIMARY, modifier = watchModifier.widthIn(min = PRIMARY_MIN_WIDTH)) {
+                Icon(imageVector = Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                StageButtonLabel(stringResource(R.string.sports_live_game_watch_replay))
+            }
+            SportsLiveButton(onClick = onMore, role = SportsLiveButtonRole.SECONDARY, modifier = Modifier.widthIn(min = MORE_MIN_WIDTH)) {
+                StageButtonLabel(stringResource(R.string.sports_live_more))
+            }
+        }
+    }
+}
+
+/**
+ * The stage's "Stream listed by N sources" (P4): only when two or more addons list the game; one source is
+ * every game's case, so it says nothing. Null hides the line (and for a channel).
+ */
+internal fun upcomingListedSources(item: com.nuvio.tv.domain.model.SportsLiveItem): Int? =
+    item.sourceCount.takeIf { !item.isChannel && it >= 2 }
+
 /**
  * Upcoming's stage (V2, P3): the same fixed 360 dp as Live Now's. The drawn matchup (or the preview, or the
  * mini player) in the media box; the title, "When" and "Stream listed by N sources"; then **Remind me**
@@ -200,11 +328,11 @@ internal fun SportsLiveUpcomingStage(
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            if (!row.item.isChannel) {
+            upcomingListedSources(row.item)?.let { sources ->
                 Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(Colors.ReplayGreen))
                     Text(
-                        text = pluralStringResource(R.plurals.sports_live_stream_listed_by, row.item.sourceCount, row.item.sourceCount),
+                        text = pluralStringResource(R.plurals.sports_live_stream_listed_by, sources, sources),
                         style = SportsLiveTokens.style(SportsLiveTokens.Type.Meta),
                         color = Colors.ReplayGreen,
                         maxLines = 1

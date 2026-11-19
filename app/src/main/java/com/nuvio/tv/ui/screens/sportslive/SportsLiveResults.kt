@@ -4,16 +4,17 @@ import com.nuvio.tv.core.sportslive.GameStatusText
 import android.view.KeyEvent as AndroidKeyEvent
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.focusGroup
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -21,11 +22,12 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -41,33 +43,34 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.tv.material3.Border
+import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import com.nuvio.tv.R
 import com.nuvio.tv.core.sportslive.scores.FinalNote
+import com.nuvio.tv.core.sportslive.scores.GameArt
 import com.nuvio.tv.core.sportslive.scores.GolfResult
-import com.nuvio.tv.core.sportslive.scores.MySport
 import com.nuvio.tv.core.sportslive.scores.ResultDay
 import com.nuvio.tv.core.sportslive.scores.ResultRow
 import com.nuvio.tv.core.sportslive.scores.ScoreSide
@@ -75,16 +78,18 @@ import com.nuvio.tv.core.sportslive.scores.ScoreTeam
 import com.nuvio.tv.core.sportslive.scores.SportsResults
 import com.nuvio.tv.core.sportslive.scores.TeamPages
 import com.nuvio.tv.core.sportslive.scores.TeamRef
+import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.ui.components.EmptyScreenState
-import com.nuvio.tv.ui.components.LightweightCard
 import com.nuvio.tv.ui.components.LoadingIndicator
-import com.nuvio.tv.ui.components.SourceStatusFilterChip
+import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveButton
+import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveButtonRole
+import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveFocus
+import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens
+import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens.Colors
 import com.nuvio.tv.ui.theme.NuvioTheme
 import com.nuvio.tv.ui.util.dpadRepeatThrottle
 import kotlinx.coroutines.launch
-import java.time.LocalDate
 import java.time.LocalTime
-import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 /** What an empty Today says (#78): until [LAST_NIGHT_UNTIL_HOUR] local, last night's games are under Yesterday. */
@@ -105,7 +110,9 @@ private fun ResultsEmptyToday(
     empty: ResultsTodayEmpty,
     onSeeYesterday: () -> Unit,
     focusRequester: FocusRequester,
-    upFocusRequester: FocusRequester
+    upFocusRequester: FocusRequester,
+    /** The header's Down target, when nothing sits above this. */
+    modifier: Modifier = Modifier
 ) {
     Column(
         modifier = Modifier.padding(horizontal = NuvioTheme.spacing.sm),
@@ -123,7 +130,7 @@ private fun ResultsEmptyToday(
         )
         SportsLivePaneButton(
             onClick = onSeeYesterday,
-            modifier = Modifier
+            modifier = modifier
                 .focusRequester(focusRequester)
                 .focusProperties {
                     up = upFocusRequester
@@ -138,47 +145,44 @@ private fun ResultsEmptyToday(
 }
 
 /**
- * The Results tab: the date rail (Today · Yesterday · Earlier ▸, which opens the 5 older days), the
- * ★ My sports / sport chips, the chosen sport's league chips, on Today a "N games live now →" line, and
- * the day's finals under league headers (YOUR TEAMS first, long tails collapsed). Focus only highlights a chip; OK picks it (#79), and OK on the picked one opens the list. Down from a chip row lands on
- * the active chip below or the list's entry row; a new day, sport or league opens the list at the top.
+ * The Results tab (V2 P4): the day sits in the header's title ("Results · Yesterday ‹ ›", ← → change it) and
+ * the sport in its one dropdown, so the list starts right under the header. On Today a small "N games live
+ * now →" line leads. The list (400 dp, league section headers, YOUR TEAMS first, long tails collapsed) uses
+ * fixed columns as in Live Now, so a score sits right after its names; the stage on the right shows the
+ * focused game's drawn matchup, its final score (spoiler rules applied), and **Watch replay** (a strict replay
+ * match) and **More…** (Game page, Team page, Follow). OK on a row opens the Game page.
  */
 @Composable
 internal fun SportsLiveResultsView(
     state: SportsLiveResultsUiState,
-    /** The active tab: Up from the date chips, Back from the list. */
+    /** The active tab: Back from the list. */
     tabFocusRequester: FocusRequester,
-    /** On the selected date chip: the tab row's Down. */
-    dateFocusRequester: FocusRequester,
+    /** The header's date (the title): Up from the top of the content. */
+    headerFocusRequester: FocusRequester,
+    /** Where the header's Down lands: the live line, the list's entry row, or "See yesterday's results". */
+    topFocusRequester: FocusRequester,
     onSelectDay: (Int) -> Unit,
-    /** OK on Earlier: opens or closes the older days. */
-    onToggleEarlier: () -> Unit,
     /** OK on "N games live now →": the Live Now tab. */
     onOpenLiveNow: () -> Unit,
-    onSelectSport: (MySport?) -> Unit,
-    onSelectLeague: (String?) -> Unit,
     onExpandGroup: (String) -> Unit,
-    /** "Edit my sports": Settings → Sports & Live → My sports. */
-    onEditMySports: () -> Unit,
     onRowFocus: (String?) -> Unit,
     /** OK on a row: the Game page (#18). */
     onOpen: (ResultRow) -> Unit,
+    /** The stage's Watch replay: the row's strict replay match, played spoiler-safe. */
+    onWatchReplay: (ResultRow, SportsLiveItem) -> Unit,
     /** Whether a followed team is [ScoreSide] of the row's game (the menu's Follow / Following). */
     isFollowed: (ResultRow, ScoreSide) -> Boolean = { _, _ -> false },
-    /** Hold OK → Follow / Following ‹team› (#54). */
+    /** Hold OK or More… → Follow / Following ‹team› (#54). */
     onToggleFollow: (ResultRow, ScoreSide) -> Unit = { _, _ -> },
-    /** Hold OK → Team page ‹team› (#62), for a pro team with ESPN's id. */
+    /** Hold OK or More… → Team page ‹team› (#62), for a pro team with ESPN's id. */
     onOpenTeam: (TeamRef) -> Unit = {},
     /** Live now's live games ([SportsLiveUiState.liveGameCount]): the "N games live now →" line's count. */
     liveGames: Int = 0,
     modifier: Modifier = Modifier
 ) {
-    val sportFocusRequester = remember { FocusRequester() }
-    val leagueFocusRequester = remember { FocusRequester() }
     val liveNowFocusRequester = remember { FocusRequester() }
+    val stageFocusRequester = remember { FocusRequester() }
     val ready = state.status == ResultsStatus.READY
-    val showSportRow = ready && state.sports.isNotEmpty()
-    val showLeagueRow = showSportRow && state.selectedSport != null && state.leagues.isNotEmpty()
     // Today: games being played are not listed, only counted on a line that jumps to Live Now.
     val showLiveNow = state.showsLiveNow(liveGames)
     val itemFocusRequesters = remember { mutableMapOf<String, FocusRequester>() }
@@ -188,6 +192,7 @@ internal fun SportsLiveResultsView(
     // Saved with the back stack entry, so returning from a replay refocuses its row.
     var focusedKey by rememberSaveable { mutableStateOf<String?>(null) }
     var listHasFocus by remember { mutableStateOf(false) }
+    var stageHasFocus by remember { mutableStateOf(false) }
     // The date too: at US Eastern midnight Today becomes a new day, a new list.
     val selectedDate = state.dates.firstOrNull { it.daysAgo == state.daysAgo }?.date
     val listKey = "${state.daysAgo}|$selectedDate|${state.selectedSport?.id.orEmpty()}|${state.selectedLeague.orEmpty()}"
@@ -210,20 +215,13 @@ internal fun SportsLiveResultsView(
         }
     }
     val firstFocusableKey = items.firstOrNull { it.isFocusable }?.key
-    // An empty Today offers Yesterday's results (#78); Down from the chips lands on that button.
+    // An empty Today offers Yesterday's results (#78).
     val yesterdayFocusRequester = remember { FocusRequester() }
     val offersYesterday = ready && resultsOffersYesterday(state.daysAgo, firstFocusableKey != null) &&
         !(state.selectedSport == null && state.sports.isNotEmpty())
     val entryFocusRequester = entryKey?.let(::itemFocusRequester) ?: yesterdayFocusRequester.takeIf { offersYesterday }
-    val chipsAboveFocusRequester = when {
-        showLeagueRow -> leagueFocusRequester
-        showSportRow -> sportFocusRequester
-        else -> dateFocusRequester
-    }
-    val aboveListFocusRequester = if (showLiveNow) liveNowFocusRequester else chipsAboveFocusRequester
-    // Down from the lowest chip row: the live line when shown, else the list.
-    val belowChipsFocusRequester = if (showLiveNow) liveNowFocusRequester else entryFocusRequester
-    val openList: () -> Unit = { runCatching { entryFocusRequester?.requestFocus() } }
+    // Up from the list's top: the live line when shown, else the header's date.
+    val aboveListFocusRequester = if (showLiveNow) liveNowFocusRequester else headerFocusRequester
 
     // A real day, sport or league change starts the new list at its top; the saved key survives navigation.
     var listedKey by rememberSaveable { mutableStateOf(listKey) }
@@ -232,15 +230,14 @@ internal fun SportsLiveResultsView(
         listedKey = listKey
         focusedKey = null
         listState.scrollToItem(0)
-        // The list in focus was replaced under it (the day moved on at midnight): focus goes to the date rail.
+        // The list in focus was replaced under it (the day moved on at midnight): focus goes to the date.
         if (focusedListKey != null && focusedListKey != listKey) {
             focusedListKey = null
             withFrameNanos { }
-            runCatching { dateFocusRequester.requestFocus() }
+            runCatching { headerFocusRequester.requestFocus() }
         }
     }
-    // Back from a replay: focus returns to the row that opened it, once its day has loaded. Once per
-    // entry (not saved), so every return restores, like the section's cards.
+    // Back from a replay or the Game page: focus returns to the row that opened it, once its day has loaded.
     var restored by remember { mutableStateOf(false) }
     LaunchedEffect(items) {
         if (restored) return@LaunchedEffect
@@ -261,37 +258,19 @@ internal fun SportsLiveResultsView(
         withFrameNanos { }
         runCatching { itemFocusRequesters[key]?.requestFocus() }
     }
-    // A reload or a new sport can drop a chip row while one of its chips holds focus: focus goes to
-    // the row above instead of being lost. Losing focus because the row is being removed keeps the flag.
-    var sportRowHasFocus by remember { mutableStateOf(false) }
-    var leagueRowHasFocus by remember { mutableStateOf(false) }
-    val currentShowSportRow by rememberUpdatedState(showSportRow)
-    val currentShowLeagueRow by rememberUpdatedState(showLeagueRow)
-    LaunchedEffect(showSportRow) {
-        if (showSportRow || !sportRowHasFocus) return@LaunchedEffect
-        sportRowHasFocus = false
-        withFrameNanos { }
-        runCatching { dateFocusRequester.requestFocus() }
-    }
-    LaunchedEffect(showLeagueRow) {
-        if (showLeagueRow || !leagueRowHasFocus) return@LaunchedEffect
-        leagueRowHasFocus = false
-        withFrameNanos { }
-        runCatching { (if (currentShowSportRow) sportFocusRequester else dateFocusRequester).requestFocus() }
-    }
-    // A refresh with no game left live drops the live line: focus goes to the chip row above it.
+    // A refresh with no game left live drops the live line: focus goes to the header's date.
     var liveLineHasFocus by remember { mutableStateOf(false) }
     val currentShowLiveNow by rememberUpdatedState(showLiveNow)
     LaunchedEffect(showLiveNow) {
         if (showLiveNow || !liveLineHasFocus) return@LaunchedEffect
         liveLineHasFocus = false
         withFrameNanos { }
-        runCatching { chipsAboveFocusRequester.requestFocus() }
+        runCatching { headerFocusRequester.requestFocus() }
     }
-    BackHandler(enabled = listHasFocus) {
+    BackHandler(enabled = listHasFocus || stageHasFocus) {
         runCatching { tabFocusRequester.requestFocus() }
     }
-    // Hold OK on a row: Game stats and Follow / Following for each side (away first, as listed).
+    // Hold OK on a row, or More…: Game page, Team pages and Follow / Following for each side (away first, as listed).
     var menuRowKey by remember { mutableStateOf<String?>(null) }
     // Golf rows whose top five OK has listed.
     var expandedGolf by remember { mutableStateOf<Set<String>>(emptySet()) }
@@ -320,172 +299,172 @@ internal fun SportsLiveResultsView(
             }
         )
     }
+    // The stage follows the focused row; before any, the list's first game.
+    val rows = items.mapNotNull { it as? ResultListItem.Row }
+    val stageItem = rows.firstOrNull { it.key == focusedKey } ?: rows.firstOrNull()
+    val stageButtons = stageItem?.let { resultsStageButtons(it.row, state.replays[it.key]) }.orEmpty()
 
     Column(modifier = modifier.fillMaxSize()) {
-        ResultsDateRow(
-            state = state,
-            dateFocusRequester = dateFocusRequester,
-            upFocusRequester = tabFocusRequester,
-            downFocusRequester = if (showSportRow) sportFocusRequester else belowChipsFocusRequester,
-            onSelectDay = onSelectDay,
-            onToggleEarlier = onToggleEarlier,
-            onOpen = openList,
-            modifier = Modifier.padding(top = NuvioTheme.spacing.xs)
-        )
-        if (showSportRow) {
-            ResultsSportRow(
-                state = state,
-                sportFocusRequester = sportFocusRequester,
-                upFocusRequester = dateFocusRequester,
-                downFocusRequester = if (showLeagueRow) leagueFocusRequester else belowChipsFocusRequester,
-                onSelectSport = onSelectSport,
-                onEditMySports = onEditMySports,
-                onOpen = openList,
+        Row(modifier = Modifier.fillMaxSize()) {
+            Column(
                 modifier = Modifier
-                    .padding(top = NuvioTheme.spacing.xs)
-                    .onFocusChanged { focus ->
-                        if (focus.hasFocus) sportRowHasFocus = true else if (currentShowSportRow) sportRowHasFocus = false
-                    }
-            )
-        }
-        if (showLeagueRow) {
-            ResultsLeagueRow(
-                state = state,
-                leagueFocusRequester = leagueFocusRequester,
-                upFocusRequester = sportFocusRequester,
-                downFocusRequester = belowChipsFocusRequester,
-                onSelectLeague = onSelectLeague,
-                onOpen = openList,
-                modifier = Modifier
-                    .padding(top = NuvioTheme.spacing.xs)
-                    .onFocusChanged { focus ->
-                        if (focus.hasFocus) leagueRowHasFocus = true else if (currentShowLeagueRow) leagueRowHasFocus = false
-                    }
-            )
-        }
-        if (showLiveNow) {
-            ResultsLiveNowLine(
-                count = liveGames,
-                onClick = onOpenLiveNow,
-                modifier = Modifier
-                    .padding(start = NuvioTheme.spacing.sm, top = NuvioTheme.spacing.sm)
-                    .onFocusChanged { focus ->
-                        if (focus.hasFocus) liveLineHasFocus = true else if (currentShowLiveNow) liveLineHasFocus = false
-                    }
-                    .focusRequester(liveNowFocusRequester)
-                    .focusProperties {
-                        up = chipsAboveFocusRequester
-                        down = entryFocusRequester ?: FocusRequester.Cancel
-                        left = FocusRequester.Cancel
-                        right = FocusRequester.Cancel
-                    }
-            )
-        }
-        Spacer(modifier = Modifier.height(NuvioTheme.spacing.lg))
-        when {
-            state.status == ResultsStatus.OFF -> Unit
-            state.status == ResultsStatus.LOADING -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                LoadingIndicator()
-            }
-            state.status == ResultsStatus.NO_LEAGUES ->
-                EmptyScreenState(title = stringResource(R.string.sports_live_results_no_leagues))
-            state.status == ResultsStatus.FAILED -> Text(
-                text = stringResource(R.string.sports_live_results_unavailable),
-                style = MaterialTheme.typography.bodyMedium,
-                color = NuvioTheme.colors.TextTertiary,
-                modifier = Modifier.padding(horizontal = NuvioTheme.spacing.sm)
-            )
-            // ★ My sports has nothing that day but other sports do: point at their chips.
-            firstFocusableKey == null && state.selectedSport == null && state.sports.isNotEmpty() ->
-                EmptyScreenState(title = stringResource(R.string.sports_live_results_my_sports_empty))
-            // Today before its first final: after midnight, last night's games are under Yesterday (#78).
-            offersYesterday -> ResultsEmptyToday(
-                empty = resultsTodayEmpty(remember(selectedDate) { LocalTime.now().hour }),
-                onSeeYesterday = { onSelectDay(SportsResults.YESTERDAY) },
-                focusRequester = yesterdayFocusRequester,
-                upFocusRequester = aboveListFocusRequester
-            )
-            firstFocusableKey == null -> EmptyScreenState(title = stringResource(R.string.sports_live_results_empty_day))
-            else -> androidx.compose.runtime.key(listKey) {
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier
-                        .widthIn(max = 880.dp)
-                        .fillMaxWidth()
-                        .onFocusChanged { focus ->
-                            listHasFocus = focus.hasFocus
-                            if (focus.hasFocus) focusedListKey = listKey else if (currentListKey == listKey) focusedListKey = null
-                            if (!focus.hasFocus) onRowFocus(null)
-                        }
-                        .focusRestorer(entryFocusRequester ?: itemFocusRequester(firstFocusableKey))
-                        .dpadRepeatThrottle(),
-                    verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)
-                ) {
-                    itemsIndexed(items, key = { _, item -> item.key }) { index, item ->
-                        val focusModifier = Modifier
-                            .focusRequester(itemFocusRequester(item.key))
-                            // Up from the first row: the live line when shown, never past it; else the chips.
-                            .then(if (item.key == firstFocusableKey) Modifier.upTo(aboveListFocusRequester) else Modifier)
+                    .width(SportsLiveTokens.Size.ListWidth + RESULTS_FOCUS_ROOM * 2)
+                    .offset(x = -RESULTS_FOCUS_ROOM)
+                    .fillMaxHeight()
+            ) {
+                // The live line sits at the top of the list's column, so the stage keeps its place (V2).
+                if (showLiveNow) {
+                    ResultsLiveNowLine(
+                        count = liveGames,
+                        onClick = onOpenLiveNow,
+                        modifier = Modifier
+                            .padding(start = RESULTS_FOCUS_ROOM, top = RESULTS_FOCUS_ROOM, bottom = 2.dp)
+                            .onFocusChanged { focus ->
+                                if (focus.hasFocus) liveLineHasFocus = true else if (currentShowLiveNow) liveLineHasFocus = false
+                            }
+                            .focusRequester(liveNowFocusRequester)
+                            .focusRequester(topFocusRequester)
                             .focusProperties {
-                                if (item.key == firstFocusableKey) up = aboveListFocusRequester
-                                // No pane to the right: Left/Right stay on the row.
+                                up = headerFocusRequester
+                                down = entryFocusRequester ?: FocusRequester.Cancel
                                 left = FocusRequester.Cancel
                                 right = FocusRequester.Cancel
                             }
-                        when (item) {
-                            is ResultListItem.Header -> ResultsHeader(item, first = index == 0)
-                            // Tennis, UFC, F1, golf: the Game page cannot show them. OK on golf lists
-                            // its top five; on the others OK does nothing (no toast). No Follow menu.
-                            is ResultListItem.Row -> if (item.row.event.individual != null) {
-                                val individual = item.row.event.individual
-                                IndividualResultCard(
-                                    row = item.row,
-                                    result = individual,
-                                    showScore = state.showsScore(item.row),
-                                    expanded = item.key in expandedGolf,
-                                    onClick = {
-                                        if (individual is GolfResult) {
-                                            expandedGolf = toggleGolf(expandedGolf, item.key, showScore = state.showsScore(item.row))
+                    )
+                }
+                when {
+                    state.status == ResultsStatus.OFF -> Unit
+                    state.status == ResultsStatus.LOADING -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        LoadingIndicator()
+                    }
+                    state.status == ResultsStatus.NO_LEAGUES ->
+                        EmptyScreenState(title = stringResource(R.string.sports_live_results_no_leagues))
+                    state.status == ResultsStatus.FAILED -> Text(
+                        text = stringResource(R.string.sports_live_results_unavailable),
+                        style = SportsLiveTokens.style(SportsLiveTokens.Type.Meta),
+                        color = Colors.TextMuted,
+                        modifier = Modifier.padding(horizontal = RESULTS_FOCUS_ROOM)
+                    )
+                    // ★ My sports has nothing that day but other sports do: point at the dropdown.
+                    firstFocusableKey == null && state.selectedSport == null && state.sports.isNotEmpty() ->
+                        EmptyScreenState(title = stringResource(R.string.sports_live_results_my_sports_empty))
+                    // Today before its first final: after midnight, last night's games are under Yesterday (#78).
+                    offersYesterday -> ResultsEmptyToday(
+                        empty = resultsTodayEmpty(remember(selectedDate) { LocalTime.now().hour }),
+                        onSeeYesterday = { onSelectDay(SportsResults.YESTERDAY) },
+                        focusRequester = yesterdayFocusRequester,
+                        upFocusRequester = aboveListFocusRequester,
+                        modifier = if (showLiveNow) Modifier else Modifier.focusRequester(topFocusRequester)
+                    )
+                    firstFocusableKey == null -> EmptyScreenState(title = stringResource(R.string.sports_live_results_empty_day))
+                    else -> androidx.compose.runtime.key(listKey) {
+                        SportsLiveKeepFromEdge(margin = RESULTS_EDGE_KEEP) {
+                            LazyColumn(
+                                state = listState,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxWidth()
+                                    .sportsLiveFadingEdges(listState, RESULTS_FADE, top = false)
+                                    .onFocusChanged { focus ->
+                                        listHasFocus = focus.hasFocus
+                                        if (focus.hasFocus) focusedListKey = listKey else if (currentListKey == listKey) focusedListKey = null
+                                        if (!focus.hasFocus) onRowFocus(null)
+                                    }
+                                    .focusRestorer(entryFocusRequester ?: itemFocusRequester(firstFocusableKey))
+                                    .dpadRepeatThrottle(),
+                                contentPadding = PaddingValues(horizontal = RESULTS_FOCUS_ROOM, vertical = RESULTS_FOCUS_ROOM),
+                                verticalArrangement = Arrangement.spacedBy(SportsLiveTokens.Size.RowGap)
+                            ) {
+                                itemsIndexed(items, key = { _, item -> item.key }) { index, item ->
+                                    val isRow = item is ResultListItem.Row
+                                    val hasStage = isRow && resultsStageButtons((item as ResultListItem.Row).row, state.replays[item.key]).isNotEmpty()
+                                    val focusModifier = Modifier
+                                        .focusRequester(itemFocusRequester(item.key))
+                                        .then(if (item.key == entryKey && !showLiveNow) Modifier.focusRequester(topFocusRequester) else Modifier)
+                                        // Up from the first row: the live line when shown, never past it; else the header.
+                                        .then(if (item.key == firstFocusableKey) Modifier.upTo(aboveListFocusRequester) else Modifier)
+                                        .focusProperties {
+                                            if (item.key == firstFocusableKey) up = aboveListFocusRequester
+                                            left = FocusRequester.Cancel
+                                            // Right goes into the stage's first button, when the game has one.
+                                            right = if (hasStage) stageFocusRequester else FocusRequester.Cancel
                                         }
-                                    },
-                                    onFocus = {
-                                        focusedKey = item.key
-                                        onRowFocus(item.key)
-                                        if (item.key == firstFocusableKey) scope.launch { listState.scrollToItem(0) }
-                                    },
-                                    modifier = focusModifier
-                                )
-                            } else ResultRowCard(
-                                row = item.row,
-                                showScore = state.showsScore(item.row),
-                                hasReplay = item.hasReplay,
-                                onClick = { onOpen(item.row) },
-                                onLongClick = { menuRowKey = item.key },
-                                menuOpen = menuRowKey == item.key,
-                                onFocus = {
-                                    focusedKey = item.key
-                                    onRowFocus(item.key)
-                                    // The first row shows its section header too (Up from it leaves the list).
-                                    if (item.key == firstFocusableKey) scope.launch { listState.scrollToItem(0) }
-                                },
-                                modifier = focusModifier
-                            )
-                            is ResultListItem.More -> ResultsMoreRow(
-                                item = item,
-                                onClick = {
-                                    expandFocusKey = item.firstHiddenKey
-                                    focusedKey = item.firstHiddenKey
-                                    onExpandGroup(item.groupKey)
-                                },
-                                onFocus = {
-                                    focusedKey = item.key
-                                    onRowFocus(null)
-                                },
-                                modifier = focusModifier
-                            )
+                                    val rowFocused: (String) -> Unit = { key ->
+                                        focusedKey = key
+                                        if (key == firstFocusableKey) scope.launch { listState.scrollToItem(0) }
+                                    }
+                                    when (item) {
+                                        is ResultListItem.Header -> ResultsHeader(item, first = index == 0)
+                                        // Tennis, UFC, F1, golf: the Game page cannot show them. OK on golf lists
+                                        // its top five; on the others OK does nothing (no toast). No Follow menu.
+                                        is ResultListItem.Row -> if (item.row.event.individual != null) {
+                                            val individual = item.row.event.individual
+                                            IndividualResultCard(
+                                                row = item.row,
+                                                result = individual,
+                                                showScore = state.showsScore(item.row),
+                                                expanded = item.key in expandedGolf,
+                                                onClick = {
+                                                    if (individual is GolfResult) {
+                                                        expandedGolf = toggleGolf(expandedGolf, item.key, showScore = state.showsScore(item.row))
+                                                    }
+                                                },
+                                                onFocus = {
+                                                    rowFocused(item.key)
+                                                    onRowFocus(item.key)
+                                                },
+                                                modifier = focusModifier
+                                            )
+                                        } else ResultBoardRow(
+                                            row = item.row,
+                                            showScore = state.showsScore(item.row),
+                                            hasReplay = item.hasReplay,
+                                            selected = stageHasFocus && item.key == stageItem?.key,
+                                            onClick = { onOpen(item.row) },
+                                            onLongClick = { menuRowKey = item.key },
+                                            menuOpen = menuRowKey == item.key,
+                                            onFocus = {
+                                                rowFocused(item.key)
+                                                onRowFocus(item.key)
+                                            },
+                                            modifier = focusModifier
+                                        )
+                                        is ResultListItem.More -> ResultsMoreRow(
+                                            item = item,
+                                            onClick = {
+                                                expandFocusKey = item.firstHiddenKey
+                                                focusedKey = item.firstHiddenKey
+                                                onExpandGroup(item.groupKey)
+                                            },
+                                            onFocus = {
+                                                focusedKey = item.key
+                                                onRowFocus(null)
+                                            },
+                                            modifier = focusModifier
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
+            }
+            Spacer(modifier = Modifier.width(SportsLiveTokens.Size.StageGap - RESULTS_FOCUS_ROOM * 2))
+            if (stageItem != null && firstFocusableKey != null) {
+                ResultsStage(
+                    row = stageItem.row,
+                    showScore = state.showsScore(stageItem.row),
+                    buttons = stageButtons,
+                    dayName = state.dates.firstOrNull { it.daysAgo == state.daysAgo }?.let { resultsDayText(it) },
+                    onWatchReplay = { state.replays[stageItem.key]?.let { onWatchReplay(stageItem.row, it) } },
+                    onMore = { menuRowKey = stageItem.key },
+                    modifier = Modifier
+                        .padding(top = RESULTS_FOCUS_ROOM)
+                        .onFocusChanged { stageHasFocus = it.hasFocus },
+                    firstModifier = Modifier
+                        .focusRequester(stageFocusRequester)
+                        .focusProperties { left = itemFocusRequesters[stageItem.key] ?: FocusRequester.Default }
+                )
             }
         }
     }
@@ -508,215 +487,60 @@ internal fun toggleGolf(expanded: Set<String>, key: String, showScore: Boolean):
     else -> expanded + key
 }
 
-@Composable
-private fun ResultsDateRow(
-    state: SportsLiveResultsUiState,
-    dateFocusRequester: FocusRequester,
-    upFocusRequester: FocusRequester,
-    downFocusRequester: FocusRequester?,
-    onSelectDay: (Int) -> Unit,
-    onToggleEarlier: () -> Unit,
-    onOpen: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val today = stringResource(R.string.sports_live_results_today)
-    val yesterday = stringResource(R.string.sports_live_results_yesterday)
-    val dayFormat = remember { DateTimeFormatter.ofPattern("EEE d", Locale.getDefault()) }
-    // Until the opening day is worked out, Today holds the rail's focus.
-    val focusDay = state.daysAgo ?: SportsResults.TODAY
-    val dayChip: @Composable (ResultDay) -> Unit = { day ->
-        val days = day.daysAgo
-        val isSelected = days == state.daysAgo
-        SportsLiveFilterChip(
-            // "Today" / "Yesterday" only when the ESPN (US Eastern) day is also the device's; else its date.
-            name = when {
-                day.isDeviceToday -> today
-                day.isDeviceYesterday -> yesterday
-                else -> day.date.dayLabel(dayFormat)
-            },
-            isSelected = isSelected,
-            // #79: focus only highlights; OK picks the day, OK on the picked one opens the list.
-            onClick = sportsLiveChipClick(isSelected, onSelect = { onSelectDay(days) }, onOpenList = onOpen),
-            modifier = Modifier
-                .then(if (days == focusDay) Modifier.focusRequester(dateFocusRequester) else Modifier)
-                .focusProperties {
-                    up = upFocusRequester
-                    down = downFocusRequester ?: FocusRequester.Cancel
-                }
-        )
-    }
-    ResultsChipRow(focusRequester = dateFocusRequester, modifier = modifier) {
-        state.dates.filter { it.daysAgo !in SportsResults.EARLIER }.forEach { dayChip(it) }
-        // A toggle, not a day: OK opens the older days after it, in place.
-        SportsLiveFilterChip(
-            name = stringResource(if (state.earlierOpen) R.string.sports_live_results_earlier_open else R.string.sports_live_results_earlier),
-            isSelected = false,
-            onClick = onToggleEarlier,
-            modifier = Modifier.focusProperties {
-                up = upFocusRequester
-                down = downFocusRequester ?: FocusRequester.Cancel
-            }
-        )
-        state.dates.filter { it.daysAgo in SportsResults.EARLIER }.forEach { dayChip(it) }
-    }
+/** The Results stage's buttons (V2 P4). */
+internal enum class ResultsStageButton { WATCH_REPLAY, MORE }
+
+/**
+ * The Results stage's buttons for [row]: **Watch replay** when it has a strict [replay] match, then **More…**
+ * (Game page, Team pages, Follow); none for an individual sport (the Game page cannot show it).
+ */
+internal fun resultsStageButtons(row: ResultRow, replay: SportsLiveItem?): List<ResultsStageButton> = when {
+    row.event.individual != null -> emptyList()
+    replay != null -> listOf(ResultsStageButton.WATCH_REPLAY, ResultsStageButton.MORE)
+    else -> listOf(ResultsStageButton.MORE)
 }
 
-/** "3 games live now →" above Today's results: OK opens the Live Now tab. */
+/** The title's day name: "Today", "Yesterday", else its date ("Sun 15 Nov", the device's locale). */
+@Composable
+internal fun resultsDayText(day: ResultDay): String = when (resultsDayName(day)) {
+    ResultsDayName.TODAY -> stringResource(R.string.sports_live_results_today)
+    ResultsDayName.YESTERDAY -> stringResource(R.string.sports_live_results_yesterday)
+    ResultsDayName.DATE -> agendaDateText(day.date)
+}
+
+/** "● 3 games live now →" under the header on Today: a small line; OK opens the Live Now tab. */
 @Composable
 private fun ResultsLiveNowLine(count: Int, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val shape = RoundedCornerShape(NuvioTheme.radii.md)
-    LightweightCard(
+    val shape = SportsLiveTokens.Radius.PillShape
+    Surface(
         onClick = onClick,
         modifier = modifier,
-        shape = shape,
-        containerColor = LIVE_NOW_LINE_BACKGROUND,
-        focusedBorder = Border(border = NuvioTheme.focusRing.border(NuvioTheme.spacing.xxs), shape = shape)
+        shape = ClickableSurfaceDefaults.shape(shape),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = SportsLiveTokens.Focus.LIFT),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = Color.Transparent,
+            contentColor = Colors.LiveText,
+            focusedContainerColor = SportsLiveFocus.focusedFill(Colors.Background),
+            focusedContentColor = Colors.LiveText
+        ),
+        border = ClickableSurfaceDefaults.border(focusedBorder = SportsLiveFocus.ring(shape))
     ) {
         Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm),
-            modifier = Modifier.padding(horizontal = NuvioTheme.spacing.md, vertical = NuvioTheme.spacing.sm)
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(Modifier.size(10.dp).clip(CircleShape).background(LIVE_NOW_DOT))
+            Box(Modifier.size(6.dp).clip(CircleShape).background(Colors.LiveRed))
             Text(
                 text = pluralStringResource(R.plurals.sports_live_results_live_now, count, count),
-                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                color = LIVE_NOW_TEXT,
+                style = SportsLiveTokens.style(SportsLiveTokens.Type.Meta),
                 maxLines = 1
             )
         }
     }
 }
 
-// The design's live line: dark red card, red dot, light red text.
-private val LIVE_NOW_LINE_BACKGROUND = Color(0xFF1A1012)
-private val LIVE_NOW_DOT = Color(0xFFFF4D57)
-private val LIVE_NOW_TEXT = Color(0xFFFFB3B8)
-
-/**
- * A chip of a Results chip row (#79): focus only highlights it; OK selects it, and OK on the selected
- * one opens the list. The selected one takes [activeFocusRequester]; [count] follows its name.
- */
-@Composable
-private fun ResultsChip(
-    name: String,
-    isSelected: Boolean,
-    activeFocusRequester: FocusRequester,
-    upFocusRequester: FocusRequester,
-    downFocusRequester: FocusRequester?,
-    onSelect: () -> Unit,
-    onOpen: () -> Unit,
-    count: Int? = null,
-    icon: SportsLiveChipIcon = SportsLiveChipIcon.NONE
-) {
-    SportsLiveFilterChip(
-        name = name,
-        isSelected = isSelected,
-        count = count,
-        icon = icon,
-        onClick = sportsLiveChipClick(isSelected, onSelect = onSelect, onOpenList = onOpen),
-        modifier = Modifier
-            .then(if (isSelected) Modifier.focusRequester(activeFocusRequester) else Modifier)
-            .focusProperties {
-                up = upFocusRequester
-                down = downFocusRequester ?: FocusRequester.Cancel
-            }
-    )
-}
-
-/** ★ My sports, then the user's sports with results that day. */
-@Composable
-private fun ResultsSportRow(
-    state: SportsLiveResultsUiState,
-    sportFocusRequester: FocusRequester,
-    upFocusRequester: FocusRequester,
-    downFocusRequester: FocusRequester?,
-    onSelectSport: (MySport?) -> Unit,
-    onEditMySports: () -> Unit,
-    onOpen: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        ResultsChipRow(focusRequester = sportFocusRequester, modifier = Modifier.weight(1f)) {
-            ResultsChip(
-                name = stringResource(R.string.sports_live_results_my_sports),
-                isSelected = state.selectedSport == null,
-                count = state.sportCounts[null],
-                // A grid, not the star of ★ My teams (#79): these are sports, not followed teams.
-                icon = SportsLiveChipIcon.MY_SPORTS,
-                activeFocusRequester = sportFocusRequester,
-                upFocusRequester = upFocusRequester,
-                downFocusRequester = downFocusRequester,
-                onSelect = { onSelectSport(null) },
-                onOpen = onOpen
-            )
-            state.sports.forEach { sport ->
-                ResultsChip(
-                    name = mySportLabel(sport),
-                    isSelected = sport == state.selectedSport,
-                    count = state.sportCounts[sport],
-                    activeFocusRequester = sportFocusRequester,
-                    upFocusRequester = upFocusRequester,
-                    downFocusRequester = downFocusRequester,
-                    onSelect = { onSelectSport(sport) },
-                    onOpen = onOpen
-                )
-            }
-        }
-        // A link, not a filter: OK opens My sports in Settings. Outside the
-        // scrolling chips, so its label always shows whole.
-        SourceStatusFilterChip(
-            name = stringResource(R.string.sports_live_results_edit_my_sports),
-            isSelected = false,
-            onClick = onEditMySports,
-            modifier = Modifier
-                .padding(start = NuvioTheme.spacing.sm, end = NuvioTheme.spacing.sm)
-                .focusProperties {
-                    up = upFocusRequester
-                    down = downFocusRequester ?: FocusRequester.Cancel
-                }
-        )
-    }
-}
-
-/** The chosen sport's leagues present that day, after All (#52). */
-@Composable
-private fun ResultsLeagueRow(
-    state: SportsLiveResultsUiState,
-    leagueFocusRequester: FocusRequester,
-    upFocusRequester: FocusRequester,
-    downFocusRequester: FocusRequester?,
-    onSelectLeague: (String?) -> Unit,
-    onOpen: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    ResultsChipRow(focusRequester = leagueFocusRequester, modifier = modifier) {
-        ResultsChip(
-            name = stringResource(R.string.sports_live_filter_all),
-            isSelected = state.selectedLeague == null,
-            count = state.leagueCounts[null],
-            activeFocusRequester = leagueFocusRequester,
-            upFocusRequester = upFocusRequester,
-            downFocusRequester = downFocusRequester,
-            onSelect = { onSelectLeague(null) },
-            onOpen = onOpen
-        )
-        state.leagues.forEach { league ->
-            ResultsChip(
-                name = league.name ?: sportLabel(league.sport),
-                isSelected = league.key == state.selectedLeague,
-                count = state.leagueCounts[league.key],
-                activeFocusRequester = leagueFocusRequester,
-                upFocusRequester = upFocusRequester,
-                downFocusRequester = downFocusRequester,
-                onSelect = { onSelectLeague(league.key) },
-                onOpen = onOpen
-            )
-        }
-    }
-}
-
-/** A section header: YOUR TEAMS (gold) or the competition's name. */
+/** A section header: YOUR TEAMS (gold) or the competition's name, in the Scoreboard's group style. */
 @Composable
 private fun ResultsHeader(item: ResultListItem.Header, first: Boolean) {
     val text = when {
@@ -726,14 +550,11 @@ private fun ResultsHeader(item: ResultListItem.Header, first: Boolean) {
     }
     Text(
         text = text.uppercase(Locale.getDefault()),
-        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-        color = if (item.yourTeams) RESULT_STAR_COLOR else NuvioTheme.colors.TextSecondary,
+        style = SportsLiveTokens.style(SportsLiveTokens.Type.SectionHeader),
+        color = if (item.yourTeams) Colors.FollowedGold else Colors.TextPrimary.copy(alpha = 0.6f),
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
-        modifier = Modifier.padding(
-            start = NuvioTheme.spacing.xs,
-            top = if (first) 0.dp else NuvioTheme.spacing.md
-        )
+        modifier = Modifier.padding(top = if (first) 0.dp else 8.dp, bottom = 2.dp)
     )
 }
 
@@ -745,10 +566,10 @@ private fun ResultsMoreRow(
     onFocus: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val shape = RoundedCornerShape(NuvioTheme.radii.md)
-    val dashColor = NuvioTheme.colors.TextTertiary
+    val shape = SportsLiveTokens.Radius.RowShape
+    val dashColor = Colors.TextMuted
     val league = item.name ?: sportLabel(item.sport)
-    LightweightCard(
+    Surface(
         onClick = onClick,
         modifier = modifier
             .fillMaxWidth()
@@ -760,138 +581,281 @@ private fun ResultsMoreRow(
                     color = dashColor,
                     topLeft = Offset(stroke / 2, stroke / 2),
                     size = Size(size.width - stroke, size.height - stroke),
-                    cornerRadius = CornerRadius(12.dp.toPx()),
+                    cornerRadius = CornerRadius(10.dp.toPx()),
                     style = Stroke(width = stroke, pathEffect = PathEffect.dashPathEffect(floatArrayOf(8.dp.toPx(), 6.dp.toPx())))
                 )
             },
-        shape = shape,
-        containerColor = Color.Transparent,
-        focusedBorder = Border(border = NuvioTheme.focusRing.border(NuvioTheme.spacing.xxs), shape = shape)
+        shape = ClickableSurfaceDefaults.shape(shape),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = SportsLiveTokens.Focus.LIFT),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = Color.Transparent,
+            contentColor = Colors.TextSecondary,
+            focusedContainerColor = SportsLiveFocus.focusedFill(Color.Transparent),
+            focusedContentColor = Colors.TextPrimary
+        ),
+        border = ClickableSurfaceDefaults.border(focusedBorder = SportsLiveFocus.ring(shape))
     ) {
         Text(
             text = pluralStringResource(R.plurals.sports_live_results_more, item.count, item.count, league),
-            style = MaterialTheme.typography.titleSmall,
-            color = NuvioTheme.colors.TextSecondary,
+            style = SportsLiveTokens.style(SportsLiveTokens.Type.Meta),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = NuvioTheme.spacing.md, vertical = NuvioTheme.spacing.sm)
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
         )
     }
 }
 
-/** A chip row that, entered from elsewhere, lands on its active chip ([focusRequester]), never the nearest. */
+/**
+ * A Results row (V2 P4) in fixed columns as in Live Now ([ResultRowColumns]): the two teams (logos, the winner
+ * in real bold) in a names column, the stacked scores right after it, then the note ("Final", "FT", "OT") and
+ * the green Replay pill. Under spoiler rules "Score hidden" takes the scores and the note. A followed team's
+ * game gets the gold left bar; [selected] (focus in the stage) a white one.
+ */
 @Composable
-private fun ResultsChipRow(focusRequester: FocusRequester, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .focusProperties { onEnter = { focusRequester.requestFocus() } }
-            .focusGroup()
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = NuvioTheme.spacing.sm, vertical = NuvioTheme.spacing.xs),
-        horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm),
-        verticalAlignment = Alignment.CenterVertically
-    ) { content() }
-}
-
-@Composable
-private fun ResultRowCard(
+private fun ResultBoardRow(
     row: ResultRow,
     showScore: Boolean,
     hasReplay: Boolean,
+    selected: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     menuOpen: Boolean,
     onFocus: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val shape = RoundedCornerShape(NuvioTheme.radii.md)
+    val shape = SportsLiveTokens.Radius.RowShape
     val event = row.event
     // The winner bold (name and score), never while the score is hidden.
     val homeWon = sportsLiveWinnerBold(showScore, event.homeScore, event.awayScore)
     val awayWon = sportsLiveWinnerBold(showScore, event.awayScore, event.homeScore)
     val (longPress, click) = rememberSportsLiveLongPress(menuOpen = menuOpen, onLongClick = onLongClick, onClick = onClick)
-    LightweightCard(
+    var focused by remember { mutableStateOf(false) }
+    Surface(
         onClick = click,
         modifier = modifier
             .fillMaxWidth()
-            .onFocusChanged { if (it.isFocused) onFocus() }
+            .height(ResultRowMetrics.HEIGHT_DP.dp)
+            .onFocusChanged {
+                focused = it.isFocused
+                if (it.isFocused) onFocus()
+            }
             .then(longPress),
-        shape = shape,
-        containerColor = NuvioTheme.colors.BackgroundCard,
-        focusedBorder = Border(border = NuvioTheme.focusRing.border(NuvioTheme.spacing.xxs), shape = shape)
+        shape = ClickableSurfaceDefaults.shape(shape),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = SportsLiveTokens.Focus.LIFT),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = Colors.Row,
+            contentColor = Colors.TextPrimary,
+            focusedContainerColor = SportsLiveFocus.focusedFill(Colors.Row),
+            focusedContentColor = Colors.TextPrimary,
+            pressedContainerColor = SportsLiveFocus.focusedFill(Colors.Row),
+            pressedContentColor = Colors.TextPrimary
+        ),
+        border = ClickableSurfaceDefaults.border(focusedBorder = SportsLiveFocus.ring(shape), pressedBorder = SportsLiveFocus.ring(shape))
     ) {
-        // About 70 px at 1080p (ResultRowMetrics): the league is the section's header, so the row is the two
-        // teams and their scores, with the note and the Replay pill beside them (QA pass 3).
-        Row(
-            modifier = Modifier.padding(horizontal = NuvioTheme.spacing.md, vertical = ResultRowMetrics.PADDING_DP.dp),
-            horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            if (row.followed) {
-                Icon(
-                    imageVector = Icons.Rounded.Star,
-                    contentDescription = null,
-                    tint = RESULT_STAR_COLOR,
-                    modifier = Modifier.size(16.dp)
-                )
-            }
-            Column(modifier = Modifier.weight(1f)) {
-                // Away first, as ESPN and US scoreboards list them.
-                // Logos only when both teams have one and both loaded (#130); never an empty circle.
-                val logos = rememberTeamLogoPair(event.away.logo, event.home.logo)
-                TeamLine(event.away, logos?.first, logos?.shown == true, bold = awayWon)
-                TeamLine(event.home, logos?.second, logos?.shown == true, bold = homeWon)
-            }
-            Column(horizontalAlignment = Alignment.End) {
-                if (showScore) {
-                    Text(
-                        text = event.awayScore?.toString() ?: "–",
-                        style = resultLineStyle().let { if (awayWon) it.sportsLiveBold() else it },
-                        color = NuvioTheme.colors.TextPrimary
-                    )
-                    Text(
-                        text = event.homeScore?.toString() ?: "–",
-                        style = resultLineStyle().let { if (homeWon) it.sportsLiveBold() else it },
-                        color = NuvioTheme.colors.TextPrimary
-                    )
-                } else {
-                    Text(
-                        text = stringResource(R.string.sports_live_results_score_hidden),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = NuvioTheme.colors.TextTertiary
-                    )
-                }
-            }
+        Box(modifier = Modifier.fillMaxSize()) {
             Row(
-                modifier = Modifier.width(RESULT_NOTE_WIDTH),
-                horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs, Alignment.End),
+                modifier = Modifier.fillMaxSize().padding(horizontal = ResultRowColumns.PAD_DP.dp),
+                horizontalArrangement = Arrangement.spacedBy(ResultRowColumns.GAP_DP.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // The note ("AET", "Pens", "OT") tells how the game ended, so it hides with the score.
-                Text(
-                    // A plain end reads per sport (#102): "FT" for soccer, "Final" for the US sports.
-                    text = stringResource(if (showScore) row.note.labelRes(row.event.league.sport) else FinalNote.FT.labelRes(row.event.league.sport)),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = NuvioTheme.colors.TextSecondary,
-                    maxLines = 1
-                )
-                // Only a strict replay match gets the tag (#51); it stays visible while a score is hidden.
-                if (hasReplay) ReplayPill()
+                Column(modifier = Modifier.width(ResultRowColumns.NAMES_DP.dp), verticalArrangement = Arrangement.Center) {
+                    // Away first, as ESPN and US scoreboards list them.
+                    // Logos only when both teams have one and both loaded (#130); never an empty circle.
+                    val logos = rememberTeamLogoPair(event.away.logo, event.home.logo)
+                    TeamLine(event.away, logos?.first, logos?.shown == true, bold = awayWon)
+                    TeamLine(event.home, logos?.second, logos?.shown == true, bold = homeWon)
+                }
+                if (showScore) {
+                    Column(modifier = Modifier.width(ResultRowColumns.SCORES_DP.dp), horizontalAlignment = Alignment.End) {
+                        val style = SportsLiveTokens.style(SportsLiveTokens.Type.RowScore)
+                        Text(
+                            text = event.awayScore?.toString() ?: "–",
+                            style = if (awayWon) style.sportsLiveBold() else style.copy(fontWeight = FontWeight.Normal),
+                            color = if (homeWon) Colors.TextMuted else Colors.TextPrimary,
+                            maxLines = 1
+                        )
+                        Text(
+                            text = event.homeScore?.toString() ?: "–",
+                            style = if (homeWon) style.sportsLiveBold() else style.copy(fontWeight = FontWeight.Normal),
+                            color = if (awayWon) Colors.TextMuted else Colors.TextPrimary,
+                            maxLines = 1
+                        )
+                    }
+                }
+                Column(
+                    modifier = Modifier.width(
+                        if (showScore) ResultRowColumns.NOTE_DP.dp else (ResultRowColumns.SCORES_DP + ResultRowColumns.GAP_DP + ResultRowColumns.NOTE_DP).dp
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically)
+                ) {
+                    Text(
+                        // The note ("AET", "Pens", "OT") tells how the game ended, so it hides with the score; a
+                        // plain end reads per sport (#102): "FT" for soccer, "Final" for the US sports.
+                        text = if (showScore) {
+                            stringResource(row.note.labelRes(event.league.sport))
+                        } else {
+                            stringResource(R.string.sports_live_results_score_hidden)
+                        },
+                        style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag).copy(fontWeight = FontWeight.Medium),
+                        color = Colors.TextSecondary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    // Only a strict replay match gets the tag (#51); it stays visible while a score is hidden.
+                    if (hasReplay) ReplayPill()
+                }
+            }
+            val bar = when {
+                selected && !focused -> Colors.FocusWhite
+                row.followed -> Colors.FollowedGold
+                else -> null
+            }
+            if (bar != null) {
+                Box(modifier = Modifier.align(Alignment.CenterStart).width(2.dp).fillMaxHeight().background(bar))
             }
         }
     }
 }
 
 /**
- * A Results row's size (QA pass 3, `Results.dc.html`): two team lines of [LINE_SP] and [PADDING_DP] above
- * and below, about 70 px at 1080p (2 px a dp), so about nine rows fit as drawn.
+ * The Results row's fixed columns (V2 P4, §3.8): inside the 400 dp list, a names column, the scores right
+ * after it (about 520 px from the row's start at 1080p, not 1 200 px), then the note. In dp.
+ */
+internal object ResultRowColumns {
+    const val PAD_DP = 8
+    const val GAP_DP = 6
+    const val SCORES_DP = 40
+    const val NOTE_DP = 75
+
+    /** The row's width: the list's. */
+    const val ROW_DP = 400
+
+    /** The names column: what is left of the row. */
+    const val NAMES_DP = ROW_DP - 2 * PAD_DP - SCORES_DP - NOTE_DP - 2 * GAP_DP
+
+    /** Where the scores column starts, from the row's left edge. */
+    const val SCORES_START_DP = PAD_DP + NAMES_DP + GAP_DP
+
+    /** Where the note column starts. */
+    const val NOTE_START_DP = SCORES_START_DP + SCORES_DP + GAP_DP
+}
+
+/**
+ * The Results stage (V2 P4): the same fixed 360 dp as the other tabs'. The drawn matchup (logos, league, never
+ * a poster); the final score ("BOS 91–88 NYK") or "Score hidden" under spoiler rules; "Final · NBA ·
+ * Yesterday"; then **Watch replay** (a strict match) and **More…**.
+ */
+@Composable
+private fun ResultsStage(
+    row: ResultRow,
+    showScore: Boolean,
+    buttons: List<ResultsStageButton>,
+    dayName: String?,
+    onWatchReplay: () -> Unit,
+    onMore: () -> Unit,
+    modifier: Modifier = Modifier,
+    firstModifier: Modifier = Modifier
+) {
+    val event = row.event
+    Column(
+        modifier = modifier.width(SportsLiveStageLayout.WIDTH_DP.dp),
+        verticalArrangement = Arrangement.spacedBy(SportsLiveStageLayout.GAP_DP.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .width(SportsLiveStageLayout.WIDTH_DP.dp)
+                .height(SportsLiveStageLayout.MEDIA_HEIGHT_DP.dp)
+                .clip(SportsLiveTokens.Radius.RowShape)
+                .background(Colors.Surface)
+        ) {
+            val league = event.leagueName?.uppercase(Locale.getDefault()).orEmpty()
+            if (event.individual == null) {
+                MatchupStageArt(GameArt.ofEvent(event), top = league, at = event.league.sport != "soccer")
+            } else {
+                Column(
+                    modifier = Modifier.fillMaxSize().padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically)
+                ) {
+                    Text(text = league, style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag), color = Colors.TextMuted, maxLines = 1)
+                    Text(
+                        text = event.individual.title ?: event.leagueName.orEmpty(),
+                        style = SportsLiveTokens.style(SportsLiveTokens.Type.RowName).sportsLiveBold(),
+                        color = Colors.TextPrimary,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+        Column(
+            modifier = Modifier.fillMaxWidth().height(SportsLiveStageLayout.SCORE_BLOCK_HEIGHT_DP.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            val away = event.away.abbreviation ?: event.away.listName
+            val home = event.home.abbreviation ?: event.home.listName
+            val awayScore = event.awayScore
+            val homeScore = event.homeScore
+            val headline = when {
+                event.individual != null -> event.individual.title ?: event.leagueName.orEmpty()
+                showScore && awayScore != null && homeScore != null ->
+                    stringResource(R.string.sports_live_details_scoreline, away, awayScore, homeScore, home)
+                else -> stringResource(R.string.sports_live_matchup_at, event.away.shortDisplayName ?: away, event.home.shortDisplayName ?: home)
+            }
+            BasicText(
+                text = headline,
+                style = SportsLiveTokens.style(SportsLiveTokens.Type.StageScore).sportsLiveBold().copy(color = Colors.TextPrimary),
+                maxLines = 1,
+                softWrap = false,
+                autoSize = TextAutoSize.StepBased(minFontSize = 16.sp, maxFontSize = SportsLiveTokens.Type.StageScore.fontSize, stepSize = 1.sp)
+            )
+            val note = if (showScore) stringResource(row.note.labelRes(event.league.sport)) else stringResource(R.string.sports_live_results_score_hidden)
+            Text(
+                text = listOfNotNull(note, event.leagueName, dayName).joinToString(" · "),
+                style = SportsLiveTokens.style(SportsLiveTokens.Type.Meta),
+                color = Colors.TextSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        if (buttons.isNotEmpty()) {
+            Row(
+                modifier = Modifier.height(SportsLiveStageLayout.BUTTON_ROW_HEIGHT_DP.dp),
+                horizontalArrangement = Arrangement.spacedBy(SportsLiveTokens.Size.ButtonGap),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                buttons.forEachIndexed { index, button ->
+                    val role = if (index == 0) SportsLiveButtonRole.PRIMARY else SportsLiveButtonRole.SECONDARY
+                    val buttonModifier = if (index == 0) firstModifier else Modifier
+                    when (button) {
+                        ResultsStageButton.WATCH_REPLAY -> SportsLiveButton(onClick = onWatchReplay, role = role, modifier = buttonModifier.widthIn(min = 110.dp)) {
+                            Icon(imageVector = Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(stringResource(R.string.sports_live_game_watch_replay), style = SportsLiveTokens.style(SportsLiveTokens.Type.Button), maxLines = 1, softWrap = false)
+                        }
+                        ResultsStageButton.MORE -> SportsLiveButton(onClick = onMore, role = role, modifier = buttonModifier.widthIn(min = 84.dp)) {
+                            Text(stringResource(R.string.sports_live_more), style = SportsLiveTokens.style(SportsLiveTokens.Type.Button), maxLines = 1, softWrap = false)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private val RESULTS_FOCUS_ROOM = 8.dp
+private val RESULTS_FADE = 40.dp
+private val RESULTS_EDGE_KEEP = 100.dp
+
+/**
+ * A Results row's size (V2 P4): two team lines of [LINE_SP] at the V2 row-name size, and [PADDING_DP] above
+ * and below: 96 px at 1080p (2 px a dp), as Live Now's two-team rows.
  */
 internal object ResultRowMetrics {
-    const val LINE_SP = 16
-    const val FONT_SP = 14
-    const val LOGO_DP = 16
-    const val PADDING_DP = 2
+    const val LINE_SP = 20
+    const val FONT_SP = 15
+    const val LOGO_DP = 18
+    const val PADDING_DP = 4
 
     /** The row's height in dp. */
     const val HEIGHT_DP = 2 * LINE_SP + 2 * PADDING_DP
@@ -899,9 +863,7 @@ internal object ResultRowMetrics {
 
 @Composable
 private fun resultLineStyle() =
-    MaterialTheme.typography.titleSmall.copy(fontSize = ResultRowMetrics.FONT_SP.sp, lineHeight = ResultRowMetrics.LINE_SP.sp)
-
-private val RESULT_NOTE_WIDTH = 120.dp
+    SportsLiveTokens.style(SportsLiveTokens.Type.RowName).copy(fontSize = ResultRowMetrics.FONT_SP.sp, lineHeight = ResultRowMetrics.LINE_SP.sp)
 
 /** The green "Replay" tag of a result with a replay. */
 @Composable
@@ -921,14 +883,17 @@ internal fun ReplayPill() {
 @Composable
 private fun TeamLine(team: ScoreTeam, logo: Painter?, logoShown: Boolean, bold: Boolean) {
     Row(
-        horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        if (logo != null) TeamLogoSlot(logo, logoShown, ResultRowMetrics.LOGO_DP.dp)
+        // The logo slot keeps its room without logos, so names line up row to row (#130).
+        Box(modifier = Modifier.size(ResultRowMetrics.LOGO_DP.dp), contentAlignment = Alignment.Center) {
+            if (logo != null) TeamLogoSlot(logo, logoShown, ResultRowMetrics.LOGO_DP.dp)
+        }
         Text(
             text = team.listName,
             style = resultLineStyle().let { if (bold) it.sportsLiveBold() else it },
-            color = NuvioTheme.colors.TextPrimary,
+            color = Colors.TextPrimary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
@@ -961,9 +926,5 @@ private fun FinalNote.labelRes(sport: String): Int = when (this) {
     FinalNote.PENS -> R.string.sports_live_results_note_pens
 }
 
-/** "Mon 15" in the device locale. */
-private fun LocalDate.dayLabel(format: DateTimeFormatter): String = format.format(this)
-
-private val RESULT_STAR_COLOR = Color(0xFFFFC107)
 private val REPLAY_PILL_COLOR = Color(0xFF7EE0A1)
 private val REPLAY_PILL_TEXT = Color(0xFF0B1F12)

@@ -67,6 +67,8 @@ object EspnLeagueMap {
         Rule("""(?<!concacaf )nations league""", soccer("uefa.nations")),
         Rule("""(?<![a-z] )premier league|english premier league|\bepl\b""", soccer("eng.1")),
         Rule("""\bla ?liga\b(?! ?2)""", soccer("esp.1")),
+        // Brazil's top flight before Italy's: "Brazil Serie A" names it, as ESPN does (#132 P4).
+        Rule("""\bbrazil(ian)? serie a\b|\bbrasileir(a|ao)\b""", soccer("bra.1")),
         Rule("""\bserie a\b""", soccer("ita.1")),
         Rule("""(?<!2\. )(?<!2 )\bbundesliga\b""", soccer("ger.1")),
         Rule("""\bligue 1\b""", soccer("fra.1")),
@@ -120,6 +122,16 @@ object EspnLeagueMap {
         val leagues = (firstCompetition(texts) ?: firstSport(texts)).orEmpty()
         val college = texts.any { COLLEGE.containsMatchIn(it) }
         return if (college && leagues.none { it in COLLEGE_FEEDS }) emptyList() else leagues
+    }
+
+    /**
+     * Whether [item]'s league may be inferred from its teams (#132 P4): it names no excluded sport or league
+     * (women's, minor, individual sports) and no college competition, whose teams share pro teams' names.
+     */
+    fun inferable(item: SportsLiveItem): Boolean {
+        val own = (listOfNotNull(SportsLiveTeams.knownSport(item)) + item.meta.name + item.meta.genres).map(::fold)
+        val texts = own + fold(item.catalogName)
+        return own.none { EXCLUDED.containsMatchIn(it) } && texts.none { COLLEGE.containsMatchIn(it) }
     }
 
     /**

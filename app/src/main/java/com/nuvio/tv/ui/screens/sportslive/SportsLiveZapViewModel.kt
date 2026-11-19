@@ -1,5 +1,7 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import com.nuvio.tv.core.sportslive.SportsLiveSportInference
+import com.nuvio.tv.core.sportslive.scores.TeamDirectory
 import com.nuvio.tv.core.sportslive.displayName
 import android.os.SystemClock
 import android.view.KeyEvent
@@ -193,7 +195,8 @@ class SportsLiveZapViewModel internal constructor(
                     followed = followed,
                     nowMs = System.currentTimeMillis(),
                     addonOrder = claimed.map { it.addon.id }.distinct()
-                ) to followed
+                    // Unrouted two-team games take their teams' league here too (P4), as in the section's lists.
+                ).map { SportsLiveSportInference.infer(it, TeamDirectory.shared) } to followed
             }.flowOn(computeDispatcher)
             // The games under the chip are the ones listed and tracked.
             val items = combine(all, panelChip) { (list, followed), chip -> PanelList(list, chip, filterPanelItems(list, chip), followed) }

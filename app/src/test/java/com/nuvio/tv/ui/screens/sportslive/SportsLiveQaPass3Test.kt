@@ -170,10 +170,10 @@ class SportsLiveQaPass3Test {
     }
 
     @Test
-    fun `a Results row is about 70 px at 1080p`() {
-        // 1080p at density 320: two pixels a dp.
+    fun `a Results row is 96 px at 1080p, as Live Now's two-team rows`() {
+        // 1080p at density 320: two pixels a dp. V2 P4 sets Results' rows at Live Now's size.
         val px = ResultRowMetrics.HEIGHT_DP * 2
-        assertTrue("row is $px px", px in 64..80)
+        assertTrue("row is $px px", px in 90..100)
     }
 
     private companion object {

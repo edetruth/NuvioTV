@@ -1,6 +1,7 @@
 package com.nuvio.tv.core.sportslive.scores
 
 import com.nuvio.tv.core.sportslive.SportsLivePillTime
+import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveKind
 import java.time.ZoneId
@@ -63,6 +64,24 @@ data class GameArt(
                 startMs = eventStart ?: item.startMs,
                 hasTimeOfDay = if (eventStart != null) true else item.startHasTimeOfDay,
                 seasonType = event?.seasonType
+            )
+        }
+
+        /**
+         * A replay's drawn card (#90, P4): the two sides its spoiler-free [title] names (never the addon's poster,
+         * which may carry the score), each with its own name and the logos its league's directory or earlier
+         * matches know; the replay's date. Null when the title names no two sides.
+         */
+        fun ofReplay(item: SportsLiveItem, title: String, known: TeamLogoBook = TeamLogoBook.shared): GameArt? {
+            if (item.isChannel) return null
+            val (first, second) = SportsLiveTeams.writtenOrder(title) ?: return null
+            val remembered = known.forCard(item, first, second)
+            return GameArt(
+                first = team(first, null, remembered?.first),
+                second = team(second, null, remembered?.second),
+                league = item.sport?.takeIf { it.isNotBlank() },
+                startMs = item.startMs,
+                hasTimeOfDay = item.startHasTimeOfDay
             )
         }
 

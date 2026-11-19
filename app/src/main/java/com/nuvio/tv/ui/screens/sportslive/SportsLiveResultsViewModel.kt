@@ -9,6 +9,7 @@ import com.nuvio.tv.core.sportslive.scores.ResultRow
 import com.nuvio.tv.core.sportslive.scores.ResultsLoad
 import com.nuvio.tv.core.sportslive.scores.ResultsRepository
 import com.nuvio.tv.core.sportslive.scores.ScoreSide
+import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.core.sportslive.scores.TeamFollows
 import com.nuvio.tv.core.sportslive.scores.SportsResults
@@ -30,6 +31,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -63,7 +65,7 @@ sealed interface ResultListItem {
 data class SportsLiveResultsUiState(
     /** 0 = today, 1 = yesterday … 6; null until the opening day is worked out ([defaultResultsDay]). */
     val daysAgo: Int? = null,
-    /** The date chips shown (ESPN days, counted back from today in US Eastern time): Today, Yesterday, and the older days while Earlier is open. */
+    /** The days the title's ‹ › steps through (ESPN days, counted back from today in US Eastern time): Today, Yesterday and the 5 before. */
     val dates: List<ResultDay> = emptyList(),
     /** Earlier ▸ is open: the 5 older days follow it. */
     val earlierOpen: Boolean = false,
@@ -179,7 +181,8 @@ class SportsLiveResultsViewModel internal constructor(
     ) { (days, load, earlier), mode, revealed, listing ->
         SportsLiveResultsUiState(
             daysAgo = days,
-            dates = resultRailDays(results.days(), earlier),
+            // Every day (P4): the title's ‹ › steps through them, so no Earlier toggle hides any.
+            dates = results.days(),
             earlierOpen = earlier,
             liveNow = (load as? ResultsLoad.Loaded)?.liveNow ?: 0,
             status = if (mode == ScoresMode.OFF) ResultsStatus.OFF else statusOf(load),
@@ -196,6 +199,35 @@ class SportsLiveResultsViewModel internal constructor(
             replays = listing.replays
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SportsLiveResultsUiState())
+
+    private val replaysShown = MutableStateFlow(false)
+
+    /**
+     * Replays' strict ESPN matches (V2 P4, #90): each replay's game by its stream key, from Today's and
+     * Yesterday's finals (the days a replay is most often wanted), worked out while Replays is the selected tab
+     * and Scores is not Off. Never a score on Replays: only "Game stats" and the Team pages read it.
+     */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val replayMatches: StateFlow<Map<String, ScoreSnapshot>> =
+        combine(replaysShown, mode, replayItems, ::Triple)
+            .distinctUntilChanged()
+            .mapLatest { (shown, mode, replays) ->
+                if (!shown || mode == ScoresMode.OFF || replays.isEmpty()) return@mapLatest emptyMap()
+                val now = System.currentTimeMillis()
+                buildMap {
+                    for (days in listOf(SportsResults.TODAY, SportsResults.YESTERDAY)) {
+                        val loaded = results.load(days) as? ResultsLoad.Loaded ?: continue
+                        putAll(replayMatchesOf(loaded.events, loaded.date, replays, now))
+                    }
+                }
+            }
+            .flowOn(computeDispatcher)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    /** True while Replays is the selected tab and on screen: its replays' games are matched then. */
+    fun setReplaysActive(isActive: Boolean) {
+        replaysShown.value = isActive
+    }
 
     init {
         // A day loads while Results is the selected tab and on screen, after the date chip settles (quick
@@ -331,12 +363,42 @@ class SportsLiveResultsViewModel internal constructor(
     }
 }
 
+/** Each replay's strictly matched game ([SportsResults.replayCandidatesByEvent]), by the replay's stream key. */
+internal fun replayMatchesOf(events: List<ScoreSnapshot>, date: java.time.LocalDate, replays: List<SportsLiveItem>, nowMs: Long): Map<String, ScoreSnapshot> {
+    val byId = events.associateBy { it.eventId }
+    return buildMap {
+        SportsResults.replayCandidatesByEvent(events, date, replays, nowMs).forEach { (eventId, matched) ->
+            val event = byId[eventId] ?: return@forEach
+            matched.forEach { putIfAbsent(it.streamKey, event) }
+        }
+    }
+}
+
 /**
  * The day Results opens on when none was chosen (#67): Today once ★ My sports has a final today, else
  * Yesterday (Today then reads "No finals yet").
  */
 internal fun defaultResultsDay(today: ResultsLoad): Int =
     if ((today as? ResultsLoad.Loaded)?.hasMyFinals == true) SportsResults.TODAY else SportsResults.YESTERDAY
+
+/**
+ * The day ‹ (older) or › ([newer]) steps to from [current] among [days] (V2 P4: ← → on the title's date);
+ * null at either end, so the key moves focus on instead.
+ */
+internal fun resultsDayStep(days: List<ResultDay>, current: Int?, newer: Boolean): Int? {
+    val ordered = days.map { it.daysAgo }.sorted()
+    val index = ordered.indexOf(current ?: return null).takeIf { it >= 0 } ?: return null
+    return ordered.getOrNull(if (newer) index - 1 else index + 1)
+}
+
+/** How the title names a day (P4): Today and Yesterday only when the ESPN day is also the device's, else its date. */
+internal enum class ResultsDayName { TODAY, YESTERDAY, DATE }
+
+internal fun resultsDayName(day: ResultDay): ResultsDayName = when {
+    day.isDeviceToday -> ResultsDayName.TODAY
+    day.isDeviceYesterday -> ResultsDayName.YESTERDAY
+    else -> ResultsDayName.DATE
+}
 
 /** The date rail's days: Today and Yesterday, then the older days while Earlier is open. */
 internal fun resultRailDays(days: List<ResultDay>, earlierOpen: Boolean): List<ResultDay> =

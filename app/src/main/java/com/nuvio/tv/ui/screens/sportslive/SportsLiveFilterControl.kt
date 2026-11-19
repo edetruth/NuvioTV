@@ -7,6 +7,17 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ArrowDropDown
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.res.stringResource
+import androidx.tv.material3.Icon
+import com.nuvio.tv.R
+import com.nuvio.tv.ui.components.NuvioDialog
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.relocation.BringIntoViewRequester
@@ -213,5 +224,99 @@ internal fun sportsLiveFilterOptions(
         if (myTeams in filters) add(SportsLiveFilterOption(myTeams, myTeamsLabel, gold = true))
         add(SportsLiveFilterOption(null, allLabel))
         filters.filter { it != myTeams }.forEach { add(SportsLiveFilterOption(it, labelOf(it))) }
+    }
+}
+
+/** The dropdown's face: the selected option's label, else the first option's (All). */
+internal fun sportsLiveDropdownFace(options: List<SportsLiveFilterOption>, selected: String?): SportsLiveFilterOption? =
+    options.firstOrNull { it.value == selected } ?: options.firstOrNull()
+
+/**
+ * The header's filter as one dropdown (V2 P4: Channels' regions, Replays' and Results' sports): a pill naming
+ * the selected option with a ▾, one focus stop; ← → move on along the header as usual. OK opens the menu of
+ * [options] (the selected one marked and focused first), then any [actions] ("Edit my sports") after them.
+ */
+@Composable
+fun SportsLiveFilterDropdown(
+    options: List<SportsLiveFilterOption>,
+    selected: String?,
+    onSelect: (String?) -> Unit,
+    title: String,
+    modifier: Modifier = Modifier,
+    actions: List<Pair<String, () -> Unit>> = emptyList()
+) {
+    var open by remember { mutableStateOf(false) }
+    val face = sportsLiveDropdownFace(options, selected)
+    val shape = SportsLiveTokens.Radius.PillShape
+    Surface(
+        onClick = { open = true },
+        modifier = modifier.height(SportsLiveTokens.Size.ControlHeight),
+        shape = ClickableSurfaceDefaults.shape(shape),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = SportsLiveTokens.Focus.LIFT),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = Color.Transparent,
+            contentColor = Colors.TextPrimary,
+            focusedContainerColor = SportsLiveFocus.focusedFill(Color.Transparent),
+            focusedContentColor = Colors.TextPrimary,
+            pressedContainerColor = SportsLiveFocus.focusedFill(Color.Transparent),
+            pressedContentColor = Colors.TextPrimary
+        ),
+        border = ClickableSurfaceDefaults.border(
+            border = SportsLiveFocus.outline(shape),
+            focusedBorder = SportsLiveFocus.ring(shape),
+            pressedBorder = SportsLiveFocus.ring(shape)
+        )
+    ) {
+        Row(
+            modifier = Modifier.align(Alignment.Center).padding(start = 12.dp, end = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = face?.label.orEmpty(),
+                style = SportsLiveTokens.style(SportsLiveTokens.Type.ControlSelected),
+                color = if (face?.gold == true) Colors.FollowedGold else Colors.TextPrimary,
+                maxLines = 1,
+                softWrap = false
+            )
+            Icon(
+                imageVector = Icons.Rounded.ArrowDropDown,
+                contentDescription = null,
+                tint = Colors.TextSecondary,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+    }
+    if (open) {
+        val firstFocus = remember { FocusRequester() }
+        LaunchedEffect(Unit) { runCatching { firstFocus.requestFocus() } }
+        NuvioDialog(onDismiss = { open = false }, title = title, width = 420.dp) {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                val focusValue = face?.value
+                options.forEach { option ->
+                    val isSelected = option.value == face?.value
+                    SportsLiveMenuButton(
+                        text = if (isSelected) stringResource(R.string.sports_live_dropdown_selected, option.label) else option.label,
+                        onClick = {
+                            open = false
+                            if (option.value != selected) onSelect(option.value)
+                        },
+                        followed = option.gold,
+                        modifier = if (option.value == focusValue) Modifier.focusRequester(firstFocus) else Modifier
+                    )
+                }
+                actions.forEach { (label, action) ->
+                    SportsLiveMenuButton(
+                        text = label,
+                        onClick = {
+                            open = false
+                            action()
+                        }
+                    )
+                }
+            }
+        }
     }
 }

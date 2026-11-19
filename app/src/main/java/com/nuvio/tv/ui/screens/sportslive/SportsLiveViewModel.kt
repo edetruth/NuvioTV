@@ -22,6 +22,9 @@ import com.nuvio.tv.core.sportslive.scores.ScoreChips
 import com.nuvio.tv.core.sportslive.scores.ScoreState
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.core.sportslive.scores.TeamLogoBook
+import com.nuvio.tv.core.sportslive.scores.TeamDirectory
+import com.nuvio.tv.core.sportslive.SportsLiveSportInference
+import com.nuvio.tv.core.sportslive.SportsLiveChannelRegions
 import com.nuvio.tv.core.sportslive.scores.WhyTag
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import com.nuvio.tv.data.repository.SportsLiveManifestFetcher
@@ -89,6 +92,8 @@ class SportsLiveViewModel internal constructor(
     private val linkCheckOf: (SportsLiveItem) -> LinkCheckRequest? = { null },
     /** Learned logos' revision (#66): the drawn cards are built again when it moves. */
     logoRevision: Flow<Int> = flowOf(0),
+    /** A two-team card with no league, as its league's card when its teams name exactly one (#132 P4). */
+    private val inferSport: (SportsLiveItem) -> SportsLiveItem = { it },
     /** The catalog refresh cadence's clock (#71), monotonic; tests pass virtual time. */
     private val refreshClock: () -> Long = { System.nanoTime() / 1_000_000L },
     // Where the list is bucketed and pinned, and the boards built; tests pass their dispatcher, so it runs in virtual time.
@@ -136,6 +141,7 @@ class SportsLiveViewModel internal constructor(
             }
         },
         logoRevision = TeamLogoBook.shared.revision,
+        inferSport = { item -> SportsLiveSportInference.infer(item, TeamDirectory.shared) },
         computeDispatcher = Dispatchers.Default
     )
 
@@ -201,9 +207,12 @@ class SportsLiveViewModel internal constructor(
 
     // Followed teams' games first in every tab but Channels, where they are only marked (for the
     // card star); a follow change does not re-bucket.
-    private val pinned = combine(bucketed, repo.followedTeams) { bucketed, followed ->
+    // Live now's and Upcoming's unrouted two-team cards take the league their teams name (#132 P4), again
+    // whenever the team directory changes (it bumps the logo revision).
+    private val pinned = combine(bucketed, repo.followedTeams, logoRevision) { bucketed, followed, _ ->
         bucketed.copy(
-            tabs = bucketed.tabs.mapValues { (tab, items) ->
+            tabs = bucketed.tabs.mapValues { (tab, listed) ->
+                val items = if (tab == SportsLiveTab.LIVE_NOW || tab == SportsLiveTab.UPCOMING) listed.map(inferSport) else listed
                 if (tab == SportsLiveTab.CHANNELS) {
                     SportsLiveItemBucketer.markFollowed(items, followed)
                 } else {
@@ -551,10 +560,12 @@ class SportsLiveViewModel internal constructor(
             }
         }
         val tabItems = tabs[selection.tab].orEmpty()
-        // Channels are filtered by group, every other tab by sport: one value per sport ("American Football" and
-        // "NFL" are both Football), a catch-all ("Sports", a catalog's name) only under All (V2 P3).
+        // Channels are filtered by region (P4: country codes, long names, the rest under Other), every other tab
+        // by sport: one value per sport ("American Football" and "NFL" are both Football), a catch-all
+        // ("Sports", a catalog's name) only under All (V2 P3).
+        val channels = selection.tab == SportsLiveTab.CHANNELS
         val filterOf: (SportsLiveItem) -> String? =
-            if (selection.tab == SportsLiveTab.CHANNELS) SportsLiveItem::group else ({ item -> SportsLiveSportKind.filterKeyOf(item) })
+            if (channels) SportsLiveChannelRegions::regionOf else ({ item -> SportsLiveSportKind.filterKeyOf(item) })
         val values = tabItems.mapNotNull(filterOf).distinct()
         // The chips' counts (#79): Live now leaves its Just ended strip out, as its tab count does.
         val counted = if (selection.tab == SportsLiveTab.LIVE_NOW) tabItems.filter { it.streamKey !in justEnded } else tabItems
@@ -562,7 +573,7 @@ class SportsLiveViewModel internal constructor(
         // "★ My teams" leads whenever a followed team plays in the tab (never on Channels); chips with no
         // games hide, except the selected one, kept with 0 until the user moves (onUserMoved).
         val filter = selection.filter
-        val filters = sportsLiveShownFilters(values, counts, filter)
+        val filters = sportsLiveShownFilters(values, counts, filter).let { if (channels) SportsLiveChannelRegions.ordered(it) else it }
         val visible = when (filter) {
             null -> tabItems
             SportsLiveUiState.MY_TEAMS_FILTER -> tabItems.filter { it.followed }

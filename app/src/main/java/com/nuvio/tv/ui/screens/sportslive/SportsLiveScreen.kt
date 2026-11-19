@@ -235,6 +235,11 @@ fun SportsLiveScreen(
     LaunchedEffect(uiState.tabs) {
         resultsViewModel.setReplays(uiState.tabs[SportsLiveTab.REPLAYS].orEmpty())
     }
+    // Replays' strict ESPN games (P4): Game stats and the Team pages in More…, never a score.
+    LaunchedEffect(uiState.selectedTab, screenStarted) {
+        resultsViewModel.setReplaysActive(uiState.selectedTab == SportsLiveTab.REPLAYS && screenStarted)
+    }
+    val replayMatches by resultsViewModel.replayMatches.collectAsStateWithLifecycle()
 
     // The hover preview's one player: it plays while the preview does, and is freed the moment the
     // screen pauses or leaves, or OK hands its stream to the full player.
@@ -386,9 +391,7 @@ fun SportsLiveScreen(
             },
             results = resultsState,
             onSelectResultsDay = resultsViewModel::selectDay,
-            onToggleResultsEarlier = resultsViewModel::toggleEarlier,
             onSelectResultsSport = resultsViewModel::selectSport,
-            onSelectResultsLeague = resultsViewModel::selectLeague,
             onExpandResultsGroup = resultsViewModel::expandGroup,
             onEditMySports = onOpenMySports,
             onResultFocus = resultsViewModel::onRowFocus,
@@ -398,6 +401,17 @@ fun SportsLiveScreen(
                 onOpenGame()
             },
             onToggleResultFollow = resultsViewModel::toggleFollow,
+            // Results' and Replays' Watch replay (P4): the replay plays at once under a clean title, never through
+            // the addon's page or Stream screen (spoilers).
+            onWatchReplay = { replay, title ->
+                previewPlayer.release()
+                playViewModel.playReplay(listOf(replay) + replay.alternates, title)
+            },
+            replayMatches = replayMatches,
+            onOpenReplayGame = { replay, event ->
+                SportsLiveGameRequests.open(SportsLiveGameRequest(event = event, replay = replay, revealed = false, spoilerSafe = true))
+                onOpenGame()
+            },
             onOpenTeam = { ref ->
                 SportsLiveTeamRequests.open(SportsLiveTeamRequest(ref))
                 onOpenTeam()
@@ -482,14 +496,18 @@ private fun SportsLiveContent(
     onWatchWith: (SportsLiveItem) -> Unit,
     results: SportsLiveResultsUiState,
     onSelectResultsDay: (Int) -> Unit,
-    onToggleResultsEarlier: () -> Unit,
     onSelectResultsSport: (MySport?) -> Unit,
-    onSelectResultsLeague: (String?) -> Unit,
     onExpandResultsGroup: (String) -> Unit,
     onEditMySports: () -> Unit,
     onResultFocus: (String?) -> Unit,
     onOpenResult: (ResultRow) -> Unit,
     onToggleResultFollow: (ResultRow, ScoreSide) -> Unit,
+    /** Watch replay (Results, Replays): [SportsLiveItem] plays at once as the clean title [String]. */
+    onWatchReplay: (SportsLiveItem, String) -> Unit,
+    /** Replays' strict ESPN games by the replay's stream key (P4). */
+    replayMatches: Map<String, ScoreSnapshot>,
+    /** Replays' More… → Game stats: the replay's game, spoiler-safe. */
+    onOpenReplayGame: (SportsLiveItem, ScoreSnapshot) -> Unit,
     /** Hold OK → Team page ‹team› (#62) on a card or Results row with a strict ESPN match. */
     onOpenTeam: (TeamRef) -> Unit = {},
     /** Reminders (#44): the bell on upcoming games, and Remind me / Cancel reminder. */
@@ -501,6 +519,7 @@ private fun SportsLiveContent(
     onOpenCatchUpGame: (CatchUpItem) -> Unit,
     onMarkCatchUpWatched: (CatchUpItem) -> Unit
 ) {
+    val context = LocalContext.current
     val tabFocusRequesters = remember { SportsLiveTab.entries.associateWith { FocusRequester() } }
     val liveNowScope = rememberCoroutineScope()
     val activeTabFocusRequester = tabFocusRequesters.getValue(uiState.selectedTab)
@@ -601,19 +620,65 @@ private fun SportsLiveContent(
         runCatching { (entryCardFocusRequester ?: activeTabFocusRequester).requestFocus() }
     }
     val contentEntryFocusRequester = if (catchUpShown) catchUpFocusRequester else entryCardFocusRequester
-    // The tab's filter (V2): one focus stop in the header; Upcoming, Channels and Replays only.
-    val filterShown = sportsLiveHeaderFilterShown(uiState.selectedTab, uiState.filters.size)
+    // On the Results tab: the day in the title (P4), and where the header's Down lands in its content.
+    val resultsDateFocusRequester = remember { FocusRequester() }
+    val resultsTopFocusRequester = remember { FocusRequester() }
+    val showingResults = uiState.selectedTab == SportsLiveTab.RESULTS
+    // The tab's filter (V2): one focus stop in the header. Upcoming inline; Channels' regions, Replays' sports
+    // and Results' sports as one dropdown each (P4).
+    val resultsFilterShown = showingResults && results.status == ResultsStatus.READY && results.sports.isNotEmpty()
+    val filterShown = if (showingResults) resultsFilterShown else sportsLiveHeaderFilterShown(uiState.selectedTab, uiState.filters.size)
     val filterFocusRequester = remember { FocusRequester() }
     // The one-line header (V2): Up from the content goes to the tab's filter (the tabs sit left of it: Right
-    // along them would switch tabs), else to the active tab.
-    val aboveContentFocusRequester = if (filterShown) filterFocusRequester else activeTabFocusRequester
+    // along them would switch tabs), else to the active tab; on Results, to the day in the title.
+    val aboveContentFocusRequester = when {
+        showingResults -> resultsDateFocusRequester
+        filterShown -> filterFocusRequester
+        else -> activeTabFocusRequester
+    }
     val aboveListFocusRequester = if (catchUpShown) catchUpFocusRequester else aboveContentFocusRequester
     val myTeamsLabel = stringResource(R.string.sports_live_filter_my_teams_star)
-    val allLabel = stringResource(R.string.sports_live_filter_all)
-    // Short sport names (V2 P3): "Football", "Soccer"; a channel group keeps its own name.
-    val filterLabels = uiState.filters.associateWith { sportFilterLabel(it) }
-    val filterOptions = remember(filterShown, uiState.filters, myTeamsLabel, allLabel, filterLabels) {
-        if (filterShown) sportsLiveFilterOptions(uiState.filters, myTeamsLabel, allLabel) { filterLabels[it] ?: it } else null
+    val allLabel = stringResource(
+        when (uiState.selectedTab) {
+            SportsLiveTab.CHANNELS -> R.string.sports_live_filter_all_regions
+            SportsLiveTab.REPLAYS -> R.string.sports_live_filter_all_sports
+            else -> R.string.sports_live_filter_all
+        }
+    )
+    // Short sport names (V2 P3): "Football", "Soccer"; a channel region by its code or name (P4).
+    val otherRegionLabel = stringResource(R.string.sports_live_region_other)
+    val filterLabels = uiState.filters.associateWith { value ->
+        if (uiState.selectedTab == SportsLiveTab.CHANNELS) channelRegionLabel(value, otherRegionLabel) else sportFilterLabel(value)
+    }
+    val mySportsLabel = stringResource(R.string.sports_live_results_my_sports_star)
+    val resultsSportLabels = results.sports.associateWith { mySportLabel(it) }
+    val filterOptions = remember(filterShown, showingResults, uiState.filters, myTeamsLabel, allLabel, filterLabels, results.sports, resultsSportLabels, mySportsLabel) {
+        when {
+            !filterShown -> null
+            showingResults -> listOf(SportsLiveFilterOption(null, mySportsLabel, gold = true)) +
+                results.sports.map { SportsLiveFilterOption(it.id, resultsSportLabels[it] ?: it.id) }
+            else -> sportsLiveFilterOptions(uiState.filters, myTeamsLabel, allLabel) { filterLabels[it] ?: it }
+        }
+    }
+    val editMySportsLabel = stringResource(R.string.sports_live_results_edit_my_sports)
+    val filterDropdown = when (uiState.selectedTab) {
+        SportsLiveTab.CHANNELS -> SportsLiveHeaderDropdown(stringResource(R.string.sports_live_filter_title_region))
+        SportsLiveTab.REPLAYS -> SportsLiveHeaderDropdown(stringResource(R.string.sports_live_filter_title_sport))
+        // "Edit my sports" closes the menu (F7: no chip runs under it any more).
+        SportsLiveTab.RESULTS -> SportsLiveHeaderDropdown(stringResource(R.string.sports_live_filter_title_sport), listOf(editMySportsLabel to onEditMySports))
+        else -> null
+    }
+    // Results' day in the title: ← older, → newer, while it has focus.
+    val resultsDay = results.dates.firstOrNull { it.daysAgo == results.daysAgo }
+    val resultsDate = if (showingResults && resultsDay != null) {
+        SportsLiveHeaderDate(
+            label = resultsDayText(resultsDay),
+            canOlder = resultsDayStep(results.dates, results.daysAgo, newer = false) != null,
+            canNewer = resultsDayStep(results.dates, results.daysAgo, newer = true) != null,
+            onStep = { newer -> resultsDayStep(results.dates, results.daysAgo, newer)?.let(onSelectResultsDay) }
+        )
+    } else {
+        null
     }
     // Live now has no filter (V2): a filter left from earlier falls back to All.
     LaunchedEffect(uiState.selectedTab, uiState.selectedFilter) {
@@ -623,9 +688,6 @@ private fun SportsLiveContent(
     if (failuresOpen && uiState.failures.isNotEmpty()) {
         SportsLiveSourceFailuresDialog(failures = uiState.failures, onDismiss = { failuresOpen = false })
     }
-    // On the Results tab, the selected date chip (the tab row's Down).
-    val resultsDateFocusRequester = remember { FocusRequester() }
-    val showingResults = uiState.selectedTab == SportsLiveTab.RESULTS
     // Scores Off: no Results tab at all.
     // Shown only once the setting is read, so a Scores-Off user never sees it flash in.
     val shownTabs = SportsLiveTab.entries.filter { it != SportsLiveTab.RESULTS || (results.modeKnown && results.mode != ScoresMode.OFF) }
@@ -675,6 +737,9 @@ private fun SportsLiveContent(
     }
     // OK on a card (list card or Scoreboard row).
     fun cardClick(item: SportsLiveItem) = openCard(item)
+    // Results' Watch replay names the player after ESPN's matchup, never the addon's title.
+    fun resultsReplayTitle(row: ResultRow): String =
+        context.getString(R.string.sports_live_results_menu_title, row.event.away.catchUpName, row.event.home.catchUpName)
     // "Remind me" (#44) on a game not started yet; the bell on its card while reminded.
     fun remindable(item: SportsLiveItem) = GameReminders.canRemind(item, uiState.nowMs)
     fun remindedCard(item: SportsLiveItem) = remindable(item) && reminders.isReminded(item)
@@ -690,18 +755,23 @@ private fun SportsLiveContent(
     }
     items.firstOrNull { it.listKey == menuCardKey }?.let { item ->
         val teams = item.teams
+        // Replays (P4): Game stats and the Team pages from the replay's strict ESPN game; no Follow there or on
+        // Channels, whose More… is Watch with another game, Choose stream and Details.
+        val replayGame = if (uiState.selectedTab == SportsLiveTab.REPLAYS) replayMatches[item.streamKey] else null
+        val game = gameOf(item) ?: replayGame
+        val followSides = uiState.selectedTab != SportsLiveTab.REPLAYS && !item.isChannel
         val entries = sportsLiveMoreEntries(
             watchWith = canWatchWith(item),
             chooseStream = sportsLiveAutoPlayEligible(item),
-            strictMatch = gameOf(item) != null,
-            sides = teams?.let { 2 } ?: 0,
+            strictMatch = game != null,
+            sides = if (followSides) teams?.let { 2 } ?: 0 else 0,
             remindable = remindable(item)
         )
         val watchWith = SportsLiveMoreEntry.WATCH_WITH in entries
         val canRemind = SportsLiveMoreEntry.REMIND in entries
         SportsLiveCardMenu(
             title = item.displayName,
-            sides = teams?.inTitleOrder(item.meta.name).orEmpty().map { side ->
+            sides = teams?.takeIf { followSides }?.inTitleOrder(item.meta.name).orEmpty().map { side ->
                 side to followedTeams.any { SportsLiveTeams.followsSideOfAnySource(it, side, item) }
             },
             onWatchWith = if (watchWith) {
@@ -720,10 +790,10 @@ private fun SportsLiveContent(
             } else {
                 null
             },
-            onGameStats = gameOf(item)?.takeIf { SportsLiveMoreEntry.GAME_STATS in entries }?.let { event ->
+            onGameStats = game?.takeIf { SportsLiveMoreEntry.GAME_STATS in entries }?.let { event ->
                 {
                     menuCardKey = null
-                    onOpenGame(item, event)
+                    if (replayGame != null) onOpenReplayGame(item, event) else onOpenGame(item, event)
                 }
             },
             onToggleFollow = { side ->
@@ -749,7 +819,8 @@ private fun SportsLiveContent(
             // Team page ‹team› (Decision 6): from the strict ESPN game, else (no game listed yet) from the team
             // directory, for pro leagues with ESPN's team id.
             teamPages = (
-                gameOf(item)?.let { event -> TeamPages.refsOf(event, sportsLiveGameHomeFirst(item, event)) }
+                replayGame?.let { event -> TeamPages.refsOf(event, homeFirst = false) }
+                    ?: gameOf(item)?.let { event -> TeamPages.refsOf(event, sportsLiveGameHomeFirst(item, event)) }
                     ?: TeamPages.refsForCard(item)
                 ).map { ref ->
                     (ref.team.shortDisplayName ?: ref.name) to {
@@ -893,7 +964,8 @@ private fun SportsLiveContent(
             runCatching { activeTabFocusRequester.requestFocus() }
         }
         // On the Scoreboard the mini player sits in the stage (V2), so this card is not needed there.
-        val stageShown = scoreboard && !showingResults && selected != null && boardRowOf[selected.listKey] != null
+        // Replays' stage draws no media slot for it (P4): the card stays there.
+        val stageShown = scoreboard && !showingResults && uiState.selectedTab != SportsLiveTab.REPLAYS && selected != null && boardRowOf[selected.listKey] != null
         if (nowPlaying != null && !stageShown) {
             SportsLiveNowPlayingCard(
                 name = nowPlaying.displayName,
@@ -912,13 +984,20 @@ private fun SportsLiveContent(
             tabs = shownTabs,
             selectedTab = uiState.selectedTab,
             tabFocusRequesters = tabFocusRequesters,
-            downFocusRequester = if (showingResults) resultsDateFocusRequester else contentEntryFocusRequester,
+            downFocusRequester = if (showingResults) resultsTopFocusRequester else contentEntryFocusRequester,
             onSelectTab = onSelectTab,
             onOpenTab = openList,
             filterOptions = filterOptions,
             filterFocusRequester = filterFocusRequester,
-            selectedFilter = uiState.selectedFilter,
-            onSelectFilter = onSelectFilter,
+            selectedFilter = if (showingResults) results.selectedSport?.id else uiState.selectedFilter,
+            onSelectFilter = if (showingResults) {
+                { id -> onSelectResultsSport(MySport.entries.firstOrNull { it.id == id }) }
+            } else {
+                onSelectFilter
+            },
+            filterDropdown = filterDropdown,
+            date = resultsDate,
+            dateFocusRequester = resultsDateFocusRequester,
             failures = uiState.failures.size,
             onShowFailures = { failuresOpen = true },
             onRefresh = onRefresh,
@@ -928,9 +1007,9 @@ private fun SportsLiveContent(
             SportsLiveResultsView(
                 state = results,
                 tabFocusRequester = activeTabFocusRequester,
-                dateFocusRequester = resultsDateFocusRequester,
+                headerFocusRequester = resultsDateFocusRequester,
+                topFocusRequester = resultsTopFocusRequester,
                 onSelectDay = onSelectResultsDay,
-                onToggleEarlier = onToggleResultsEarlier,
                 // Today's "N games live now →": the Live Now tab, focus on it.
                 onOpenLiveNow = {
                     onSelectTab(SportsLiveTab.LIVE_NOW)
@@ -939,18 +1018,19 @@ private fun SportsLiveContent(
                         runCatching { tabFocusRequesters.getValue(SportsLiveTab.LIVE_NOW).requestFocus() }
                     }
                 },
-                onSelectSport = onSelectResultsSport,
-                onSelectLeague = onSelectResultsLeague,
                 onExpandGroup = onExpandResultsGroup,
-                onEditMySports = onEditMySports,
                 onRowFocus = onResultFocus,
                 onOpen = onOpenResult,
+                onWatchReplay = { row, replay ->
+                    onWatchReplay(replay, resultsReplayTitle(row))
+                },
                 isFollowed = { row, side ->
                     TeamFollows.followersOf(followedTeams, row.event, if (side == ScoreSide.HOME) row.event.home else row.event.away).isNotEmpty()
                 },
                 onToggleFollow = onToggleResultFollow,
                 onOpenTeam = onOpenTeam,
-                liveGames = uiState.liveGameCount
+                liveGames = uiState.liveGameCount,
+                modifier = Modifier.padding(top = SportsLiveTokens.Size.HeaderBottomGap)
             )
             return@Column
         }
@@ -982,6 +1062,109 @@ private fun SportsLiveContent(
         val selectedPreview = preview?.takeIf { it.item.listKey == selected.listKey }
         val selectedRow = boardRowOf[selected.listKey]
         val agendaRow = selectedRow
+        if (uiState.selectedTab == SportsLiveTab.REPLAYS && agenda != null && selectedRow != null) {
+            // V2 Replays (P4, #90): by day under sticky headers, spoiler-free rows, and the fixed stage.
+            // A strict ESPN game names the teams as ESPN does, with its logos and league (never its score).
+            val replayRowOf: (ScoreboardRow) -> ScoreboardRow = { row ->
+                replayMatches[row.item.streamKey]?.let { event -> row.copy(art = GameArt.ofEvent(event), twoSided = true) } ?: row
+            }
+            val replayTitleOf: (ScoreboardRow) -> String = { row -> agendaStageTitleText(replayRowOf(row), context) }
+            fun replayJump(target: Int) {
+                val item = agenda.games.getOrNull(target)?.row?.item ?: return
+                liveNowScope.launch {
+                    val listIndex = agenda.listIndexOf(target)
+                    if (listState.layoutInfo.visibleItemsInfo.none { it.index == listIndex }) listState.scrollToItem(listIndex)
+                    withFrameNanos { }
+                    runCatching { cardFocusRequester(item).requestFocus() }
+                }
+            }
+            val watchReplay: (SportsLiveItem) -> Unit = { item ->
+                // A team folder lists its videos on the detail page; a replay plays at once, spoiler-safe.
+                if (item.apiType == "series") onOpenDetail(item) else onWatchReplay(item, replayTitleOf(boardRowOf[item.listKey] ?: selectedRow))
+            }
+            Row(modifier = Modifier.fillMaxSize()) {
+                Column(
+                    modifier = Modifier
+                        .width(SportsLiveTokens.Size.ListWidth + LIST_FOCUS_ROOM * 2)
+                        .offset(x = -LIST_FOCUS_ROOM)
+                        .fillMaxHeight()
+                ) {
+                    key(filterKey) {
+                        SportsLiveKeepFromEdge(margin = LIST_EDGE_KEEP) {
+                            LazyColumn(
+                                state = listState,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxWidth()
+                                    .sportsLiveFadingEdges(listState, LIST_FADE, top = false)
+                                    .onFocusChanged {
+                                        listHasFocus = it.hasFocus
+                                        if (!it.hasFocus) onCardFocus(null)
+                                    }
+                                    .focusRestorer(entryCardFocusRequester ?: selectedCardFocusRequester)
+                                    .dpadRepeatThrottle(),
+                                contentPadding = PaddingValues(horizontal = LIST_FOCUS_ROOM, vertical = LIST_FOCUS_ROOM),
+                                verticalArrangement = Arrangement.spacedBy(SportsLiveTokens.Size.RowGap)
+                            ) {
+                                agenda.entries.forEach { entry ->
+                                    when (entry) {
+                                        is AgendaEntry.Day -> stickyHeader(key = "day_${entry.day}") {
+                                            SportsLiveAgendaDayHeader(agenda.days[entry.day])
+                                        }
+                                        is AgendaEntry.Game -> {
+                                            val gameIndex = entry.game
+                                            val row = replayRowOf(agenda.games[gameIndex].row)
+                                            val item = row.item
+                                            item(key = item.listKey) {
+                                                SportsLiveScoreboardRow(
+                                                    row = row,
+                                                    selected = paneHasFocus && item.listKey == selected.listKey,
+                                                    onClick = { watchReplay(item) },
+                                                    onLongClick = { cardLongClick(item) },
+                                                    onFocus = { cardFocused(item) },
+                                                    menuOpen = item.listKey == menuCardKey,
+                                                    agenda = AgendaRowSide(bell = AgendaBell.NONE, trailing = replayTimeText(item)),
+                                                    modifier = Modifier
+                                                        .focusRequester(cardFocusRequester(item))
+                                                        .focusProperties {
+                                                            right = watchFocusRequester
+                                                            if (gameIndex == 0) up = aboveListFocusRequester
+                                                        }
+                                                        .onPreviewKeyEvent { event ->
+                                                            if (event.nativeKeyEvent.action != AndroidKeyEvent.ACTION_DOWN) return@onPreviewKeyEvent false
+                                                            // CH+ / CH− a day, as on Upcoming; ← → are left alone (→ the stage).
+                                                            val key = agendaKeyOf(event.nativeKeyEvent.keyCode)
+                                                                ?.takeIf { it == AgendaKey.DAY_BACK || it == AgendaKey.DAY_FORWARD } ?: return@onPreviewKeyEvent false
+                                                            agenda.target(gameIndex, key)?.let(::replayJump)
+                                                            true
+                                                        }
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.width(SportsLiveTokens.Size.StageGap - LIST_FOCUS_ROOM * 2))
+                val stageRow = replayRowOf(selectedRow)
+                SportsLiveReplayStage(
+                    row = stageRow,
+                    title = replayTitleOf(selectedRow),
+                    nowMs = uiState.nowMs,
+                    onWatch = { watchReplay(selected) },
+                    onMore = { menuCardKey = selected.listKey },
+                    modifier = Modifier
+                        .padding(top = LIST_FOCUS_ROOM)
+                        .onFocusChanged { paneHasFocus = it.hasFocus },
+                    watchModifier = Modifier
+                        .focusRequester(watchFocusRequester)
+                        .focusProperties { left = entryCardFocusRequester ?: selectedCardFocusRequester }
+                )
+            }
+            return@Column
+        }
         if (agenda != null && agendaRow != null) {
             // V2 Upcoming (#132, P3): the Agenda (sticky day headers, time-slot headers) and the fixed 360 dp stage.
             // OK on a row does the stage's primary: Remind me while the start is over 15 min away, else Watch.
@@ -1047,10 +1230,7 @@ private fun SportsLiveContent(
                                                         onLongClick = { cardLongClick(item) },
                                                         onFocus = { cardFocused(item) },
                                                         menuOpen = item.listKey == menuCardKey,
-                                                        agenda = AgendaRowSide(
-                                                            streamListed = !item.isChannel,
-                                                            bell = agendaBellOf(remindable(item), reminders.isReminded(item))
-                                                        ),
+                                                        agenda = AgendaRowSide(bell = agendaBellOf(remindable(item), reminders.isReminded(item))),
                                                         modifier = Modifier
                                                             .focusRequester(cardFocusRequester(item))
                                                             .focusProperties {
@@ -1127,6 +1307,9 @@ private fun SportsLiveContent(
                         )
                     }
                     val groupCounts = remember(shownBoard) { shownBoard?.rows.orEmpty().groupingBy { it.group }.eachCount() }
+                    // Channels (P4): one list, under a header per region while more than one region shows.
+                    val channelsTab = uiState.selectedTab == SportsLiveTab.CHANNELS
+                    val sectionCounts = remember(shownBoard) { shownBoard?.rows.orEmpty().mapNotNull { it.section }.groupingBy { it }.eachCount() }
                     // Recreated per tab and filter, so its focus restorer never brings back another list's card.
                     key(filterKey) {
                         SportsLiveKeepFromEdge(margin = LIST_EDGE_KEEP) {
@@ -1149,7 +1332,12 @@ private fun SportsLiveContent(
                                     val boardRow = boardRowOf[item.listKey] ?: return@itemsIndexed
                                     // The group's heading rides on its first row, so list indices stay the rows' own.
                                     Column {
-                                        if (index == 0 || boardRowOf[items[index - 1].listKey]?.group != boardRow.group) {
+                                        if (channelsTab) {
+                                            val section = boardRow.section
+                                            if (section != null && sectionCounts.size > 1 && (index == 0 || boardRowOf[items[index - 1].listKey]?.section != section)) {
+                                                SportsLiveSectionHeader(channelRegionLabel(section, otherRegionLabel), sectionCounts[section] ?: 0)
+                                            }
+                                        } else if (index == 0 || boardRowOf[items[index - 1].listKey]?.group != boardRow.group) {
                                             SportsLiveScoreboardHeader(boardRow.group, groupCounts[boardRow.group] ?: 0)
                                         }
                                         SportsLiveScoreboardRow(
@@ -1199,100 +1387,6 @@ private fun SportsLiveContent(
                 )
             }
             return@Column
-        }
-
-        // Channels and Replays (until their own V2 views): the card list and the details pane.
-        // The mini player in its corner keeps the pane's lower buttons clear (QA pass 3): the pane ends above it.
-        val paneMiniReserve = if (nowPlaying == null) 0.dp else SportsLiveMiniGeometry.cornerReserveBottomDp(
-            windowWidthDp = LocalConfiguration.current.screenWidthDp.toFloat(),
-            screenBottomPaddingDp = NuvioTheme.spacing.screen.vertical.value
-        ).dp
-        Row(
-            modifier = Modifier.fillMaxSize(),
-            horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xl)
-        ) {
-            // Recreated per tab and filter, so its focus restorer never brings back another list's card.
-            key(filterKey) {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier
-                    .weight(0.45f)
-                    .fillMaxHeight()
-                    .onFocusChanged {
-                        listHasFocus = it.hasFocus
-                        if (!it.hasFocus) onCardFocus(null)
-                    }
-                    .focusRestorer(entryCardFocusRequester ?: selectedCardFocusRequester)
-                    .dpadRepeatThrottle(),
-                verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)
-            ) {
-                itemsIndexed(items, key = { _, item -> item.listKey }) { index, item ->
-                    SportsLiveListCard(
-                        item = item,
-                        stateLabel = stateLabelOf(item),
-                        selected = item.listKey == selected.listKey,
-                        ended = uiState.endedOf(item) != null,
-                        final = espnFinalOf(item),
-                        hasReplay = false,
-                        reminded = remindedCard(item),
-                        onClick = { cardClick(item) },
-                        onLongClick = { cardLongClick(item) },
-                        menuOpen = item.listKey == menuCardKey,
-                        art = artOf(item),
-                        chip = chipOf(item),
-                        onFocus = { cardFocused(item) },
-                        modifier = Modifier
-                            .focusRequester(cardFocusRequester(item))
-                            .focusProperties {
-                                right = watchFocusRequester
-                                if (index == 0) up = aboveListFocusRequester
-                            }
-                    )
-                }
-            }
-            }
-            SportsLiveDetailsPane(
-                item = selected,
-                stateLabel = stateLabelOf(selected),
-                over = uiState.endedOf(selected) != null || espnFinalOf(selected),
-                onWatch = { open(selected) },
-                onDetails = { onOpenDetail(selected) },
-                onChooseStream = if (sportsLiveAutoPlayEligible(selected)) {
-                    { onChooseStream(selected) }
-                } else {
-                    null
-                },
-                onGameStats = gameOf(selected)?.let { event -> { onOpenGame(selected, event) } },
-                onWatchWith = if (canWatchWith(selected)) {
-                    { onWatchWith(selected) }
-                } else {
-                    null
-                },
-                preview = if (selectedPreview != null) {
-                    { SportsLivePreviewVideo(previewPlayer) }
-                } else {
-                    null
-                },
-                previewShowing = selectedPreview?.rendering == true,
-                noStream = noStreamKey == selected.listKey,
-                art = artOf(selected),
-                chip = chipOf(selected),
-                scoreDetails = detailsOf(selected),
-                onToggleReminder = if (remindable(selected)) {
-                    { onToggleReminder(selected) }
-                } else {
-                    null
-                },
-                reminded = remindedCard(selected),
-                modifier = Modifier
-                    .weight(0.55f)
-                    .fillMaxHeight()
-                    .padding(bottom = paneMiniReserve)
-                    .onFocusChanged { paneHasFocus = it.hasFocus },
-                watchModifier = Modifier
-                    .focusRequester(watchFocusRequester)
-                    .focusProperties { left = entryCardFocusRequester ?: selectedCardFocusRequester }
-            )
         }
     }
 }

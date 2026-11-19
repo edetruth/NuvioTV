@@ -14,9 +14,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import android.view.KeyEvent as AndroidKeyEvent
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
@@ -36,12 +41,21 @@ import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens.Colors
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens.Size
 
 /**
- * Whether [tab] shows the header's filter control (V2): Upcoming (and, until P4 gives them their own
- * dropdowns, Channels and Replays) with two or more values. Live now has no filter; Results has its own
- * rows below the header for now.
+ * Whether [tab] shows the header's addon filter (V2): Upcoming (inline), Channels (regions) and Replays
+ * (sports) as a dropdown (P4), with two or more values. Live now has no filter; Results has its own sports
+ * dropdown ([SportsLiveHeaderDropdown]).
  */
 internal fun sportsLiveHeaderFilterShown(tab: SportsLiveTab, filterCount: Int): Boolean =
     tab in FILTER_TABS && filterCount >= 2
+
+/** The header's filter drawn as one dropdown (V2 P4: Channels, Replays, Results): the menu's [title] and [actions]. */
+internal data class SportsLiveHeaderDropdown(val title: String, val actions: List<Pair<String, () -> Unit>> = emptyList())
+
+/**
+ * The day in Results' title (V2 P4): "· Yesterday ‹ ›". While it has focus ← steps to an older day and → to a
+ * newer one ([onStep], true for newer); at either end the key moves focus on along the header.
+ */
+internal data class SportsLiveHeaderDate(val label: String, val canOlder: Boolean, val canNewer: Boolean, val onStep: (Boolean) -> Unit)
 
 private val FILTER_TABS = setOf(SportsLiveTab.UPCOMING, SportsLiveTab.CHANNELS, SportsLiveTab.REPLAYS)
 
@@ -68,6 +82,11 @@ internal fun SportsLiveHeader(
     selectedFilter: String?,
     onSelectFilter: (String?) -> Unit,
     failures: Int,
+    /** Draws the filter as one dropdown (P4); null keeps the inline pill. */
+    filterDropdown: SportsLiveHeaderDropdown? = null,
+    /** Results' day in the title (P4), right after the tabs; null for none. */
+    date: SportsLiveHeaderDate? = null,
+    dateFocusRequester: FocusRequester = remember { FocusRequester() },
     onShowFailures: () -> Unit,
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier
@@ -106,6 +125,21 @@ internal fun SportsLiveHeader(
                 )
             }
         }
+        if (date != null) {
+            SportsLiveHeaderDateControl(
+                date = date,
+                // OK on the day goes into its list, as OK on a tab does.
+                onOk = { runCatching { downFocusRequester?.requestFocus() } },
+                modifier = Modifier
+                    .focusRequester(dateFocusRequester)
+                    .focusProperties {
+                        left = activeTabFocusRequester
+                        right = if (filterOptions != null) filterFocusRequester else if (failures > 0) failuresFocusRequester else refreshFocusRequester
+                        up = activeTabFocusRequester
+                        downFocusRequester?.let { down = it }
+                    }
+            )
+        }
         Box(
             modifier = Modifier
                 .weight(1f)
@@ -113,19 +147,31 @@ internal fun SportsLiveHeader(
             contentAlignment = Alignment.CenterEnd
         ) {
             if (filterOptions != null) {
-                SportsLiveFilterControl(
-                    options = filterOptions,
-                    selected = selectedFilter,
-                    onSelect = onSelectFilter,
-                    onOpenList = { runCatching { downFocusRequester?.requestFocus() } },
-                    modifier = Modifier
-                        .focusRequester(filterFocusRequester)
-                        .focusProperties {
-                        left = activeTabFocusRequester
+                val filterModifier = Modifier
+                    .focusRequester(filterFocusRequester)
+                    .focusProperties {
+                        left = if (date != null) dateFocusRequester else activeTabFocusRequester
                         right = if (failures > 0) failuresFocusRequester else refreshFocusRequester
                         downFocusRequester?.let { down = it }
                     }
-                )
+                if (filterDropdown != null) {
+                    SportsLiveFilterDropdown(
+                        options = filterOptions,
+                        selected = selectedFilter,
+                        onSelect = onSelectFilter,
+                        title = filterDropdown.title,
+                        actions = filterDropdown.actions,
+                        modifier = filterModifier
+                    )
+                } else {
+                    SportsLiveFilterControl(
+                        options = filterOptions,
+                        selected = selectedFilter,
+                        onSelect = onSelectFilter,
+                        onOpenList = { runCatching { downFocusRequester?.requestFocus() } },
+                        modifier = filterModifier
+                    )
+                }
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(Size.ControlGap), verticalAlignment = Alignment.CenterVertically) {
@@ -159,6 +205,59 @@ internal fun SportsLiveHeader(
                     modifier = Modifier.size(Size.ControlIcon)
                 )
             }
+        }
+    }
+}
+
+/**
+ * Results' day in the title (V2 P4): "· Yesterday ‹ ›", one focus stop. ← and → step the day while it has focus
+ * (an arrow is dimmed where no day is left that way); at either end the key is left to move focus on.
+ */
+@Composable
+private fun SportsLiveHeaderDateControl(date: SportsLiveHeaderDate, onOk: () -> Unit, modifier: Modifier = Modifier) {
+    val currentDate by rememberUpdatedState(date)
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text = stringResource(R.string.sports_live_title_separator),
+            style = SportsLiveTokens.style(SportsLiveTokens.Type.Tab),
+            color = Colors.TextInactive,
+            maxLines = 1
+        )
+        SportsLiveHeaderControl(
+            onClick = onOk,
+            round = false,
+            outline = Color.Transparent,
+            modifier = modifier.onPreviewKeyEvent { event ->
+                val native = event.nativeKeyEvent
+                val newer = when (native.keyCode) {
+                    AndroidKeyEvent.KEYCODE_DPAD_LEFT -> false
+                    AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> true
+                    else -> return@onPreviewKeyEvent false
+                }
+                val can = if (newer) currentDate.canNewer else currentDate.canOlder
+                if (!can) return@onPreviewKeyEvent false
+                if (native.action == AndroidKeyEvent.ACTION_DOWN) currentDate.onStep(newer)
+                true
+            }
+        ) {
+            Text(
+                text = date.label,
+                style = SportsLiveTokens.style(SportsLiveTokens.Type.Tab),
+                color = Colors.TextPrimary,
+                maxLines = 1
+            )
+            Text(
+                text = stringResource(R.string.sports_live_day_older),
+                style = SportsLiveTokens.style(SportsLiveTokens.Type.Tab),
+                color = if (date.canOlder) Colors.TextSecondary else Colors.TextInactive.copy(alpha = 0.35f),
+                maxLines = 1
+            )
+            Text(
+                text = stringResource(R.string.sports_live_day_newer),
+                style = SportsLiveTokens.style(SportsLiveTokens.Type.Tab),
+                color = if (date.canNewer) Colors.TextSecondary else Colors.TextInactive.copy(alpha = 0.35f),
+                maxLines = 1
+            )
         }
     }
 }

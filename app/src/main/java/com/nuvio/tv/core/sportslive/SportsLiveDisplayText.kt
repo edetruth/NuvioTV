@@ -127,12 +127,44 @@ object SportsLiveDisplayText {
         val upper = letters.uppercase(Locale.ROOT)
         return when {
             upper in ACRONYMS -> word
+            // An all-caps word of 2 to 4 letters reads as an acronym ("AEW", "ROH", "PFL") unless it is a
+            // common word ("NEWS", "LIVE"), so a show or promotion keeps its own name's caps.
+            isAcronymLike(word, letters) -> word
             // "F1", "4K", "ESPN2": a token with digits is a code; it keeps its case.
             word.any { it.isDigit() } -> word
             !first && upper in SMALL_WORDS -> word.lowercase(Locale.ROOT)
             else -> word.lowercase(Locale.ROOT).replaceFirstChar { it.titlecase(Locale.ROOT) }
         }
     }
+
+    private fun isAcronymLike(word: String, letters: String): Boolean =
+        letters.length in 2..4 && word.none { it.isLowerCase() } &&
+            letters.uppercase(Locale.ROOT).let { it !in COMMON_WORDS && it !in SMALL_WORDS }
+
+    /**
+     * A title without its result (#90, Replays): scorelines ("110-102", "2–1", "(3-2)") go, so a replay
+     * never tells the score; dates ("11-16-2026"), seasons ("2025-26") and times ("20:00") stay. Then
+     * [name]'s cleaning. Generic: it knows no addon.
+     */
+    fun spoilerFree(raw: String): String {
+        val removed = collapse(SCORELINE.replace(raw, " "))
+        // "A 2-1 B": the score stood for the separator, so the sides keep one.
+        val cut = if (GAME_SEPARATOR.containsMatchIn(removed)) {
+            removed
+        } else {
+            collapse(SCORELINE.replace(raw) { match ->
+                val before = raw.substring(0, match.range.first).trimEnd()
+                val after = raw.substring(match.range.last + 1).trimStart()
+                if (before.lastOrNull()?.isLetter() == true && after.firstOrNull()?.isLetter() == true) " vs " else " "
+            })
+        }
+        return name(trimSeparators(cut).ifEmpty { raw })
+    }
+
+    private val GAME_SEPARATOR = Regex("""\s(?:vs\.?|v\.?|@|at|[-–—])\s""", RegexOption.IGNORE_CASE)
+
+    /** A scoreline: 1-3 digits, a dash, 1-3 digits; never part of a longer number run (a date or a season). */
+    private val SCORELINE = Regex("""[(\[]?(?<![\d/.\-–])\d{1,3}\s*[-–]\s*\d{1,3}(?![\d/.]|\s*[-–]\s*\d)[)\]]?""")
 
     private const val QUALITY = """(?:FHD|UHD|HD|SD|4K|8K)"""
     private val SEPARATORS = charArrayOf(':', '|', '-', '–', '—', '·', '•', '/', ',', ' ')
@@ -151,7 +183,7 @@ object SportsLiveDisplayText {
     /** "US :", "UK|", "CA -" at the start: a two- or three-letter code and a separator. */
     private val REGION_PREFIX = Regex("""^([A-Za-z]{2,3})\s*[:|]\s*(?=\S)""")
 
-    private val WHITESPACE = Regex("""\s+""")
+    private val WHITESPACE = Regex("""[\s   ]+""")
 
     private val TAGLINES = listOf(
         Regex("""\blive\s+iptv\s+recording\b""", RegexOption.IGNORE_CASE),
@@ -173,6 +205,16 @@ object SportsLiveDisplayText {
         "HQ", "UK", "US", "USA", "EU", "TV", "BBC", "ITV", "CBS", "NBC", "ABC", "BT", "TSN", "RTL", "ZDF", "ARD",
         "EPL", "UEFA", "FIFA", "MMA", "PPV", "NOW", "TBS", "HBO", "AMC", "FX", "DAZN", "II", "III", "IV",
         "HD", "FHD", "UHD", "SD"
+    )
+
+    /** Short common words that stay Title Case (not acronyms) in a Title-Cased name. */
+    private val COMMON_WORDS = setOf(
+        "NEWS", "LIVE", "GAME", "CLUB", "CITY", "TEAM", "PLUS", "ONE", "TWO", "SIX", "TEN", "MAIN", "SHOW", "BEST",
+        "GOLF", "RACE", "CUP", "OPEN", "TOUR", "HOME", "AWAY", "FREE", "KIDS", "MAX", "MORE", "GOLD", "BLUE", "RED",
+        "BIG", "TOP", "NEW", "OLD", "ALL", "DAY", "WEEK", "YEAR", "FULL", "TIME", "PLAY", "STAR", "STARS", "FIRE",
+        "BALL", "BOX", "RING", "WAR", "KING", "LIFE", "WILD", "FAST", "WEST", "EAST", "NORTH", "SOUTH", "REAL",
+        "FOR", "BY", "TO", "UP", "OFF", "OUT", "NO", "YES", "MY", "OUR", "ARE", "IS", "IT", "WE", "BE", "OR", "AN",
+        "HOUR", "ZONE", "ROAD", "PARK", "LINE", "BACK", "FILM", "MOVIE", "ARTS", "FOOD", "WIN", "WINS", "NET"
     )
 
     /** Kept lower case inside a Title-Cased name. */

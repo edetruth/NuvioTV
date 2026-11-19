@@ -112,13 +112,15 @@ object SportsLiveTeams {
         // A qualifier is set aside so "Arsenal FC (W)" still loses its club suffix: "arsenal (w)".
         val qualifier = QUALIFIER.find(cleaned)
         val base = if (qualifier == null) cleaned else cleaned.substring(0, qualifier.range.first)
-        val words = base.replace("&", " and ").replace(PUNCTUATION, " ").trim()
+        // A possessive joins its word ("St. John's" is "st johns", as addons write it), before punctuation splits.
+        val words = base.replace("&", " and ").replace(POSSESSIVE, "s").replace(PUNCTUATION, " ").trim()
         val tokens = words.replace(LEADING_RANK, "").split(WHITESPACE).filter { it.isNotEmpty() }.toMutableList()
         while (tokens.size > 1 && tokens.first() in CLUB_PREFIXES) tokens.removeAt(0)
         while (tokens.size > 1 && tokens.last() in CLUB_SUFFIXES) tokens.removeAt(tokens.lastIndex)
         return (tokens.joinToString(" ") + " " + qualifier?.let(::qualifierText).orEmpty()).trim()
     }
 
+    private val POSSESSIVE = Regex("""['\u2019]s(?![\p{L}\p{N}])""")
     private val PUNCTUATION = Regex("""[^\p{L}\p{N}\s]+""")
 
     // "(w)" and "[u21]" as written; an unbracketed youth form as "u21".

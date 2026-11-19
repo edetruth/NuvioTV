@@ -4,6 +4,7 @@ import android.content.Context
 import android.widget.Toast
 import androidx.core.content.ContextCompat
 import com.nuvio.tv.R
+import com.nuvio.tv.core.sportslive.SportsLiveSportInference
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import com.nuvio.tv.domain.model.SportsLiveItem
@@ -611,7 +612,8 @@ class LiveScoresRepository internal constructor(
         followed: List<EspnLeague>
     ): List<EspnLeague> {
         val onScreen = cards.values.flatten().flatMap { it.leagues + listOfNotNull(it.fallback) }
-        return (onScreen + picked.feeds() + followed).filter(TeamDirectory::covers).distinct()
+        // The leagues an unrouted two-team card may be inferred into (#132 P4) come last: small lists, kept a week.
+        return (onScreen + picked.feeds() + followed + SportsLiveSportInference.leagues).filter(TeamDirectory::covers).distinct()
     }
 
     /** Both ESPN teams of a matched game: their logos, abbreviations and names, by ESPN identity. */

@@ -102,6 +102,18 @@ internal fun SportsLiveScoreboardHeader(group: ScoreboardGroup, count: Int, modi
     )
 }
 
+/** A list section's heading (P4: a Channels region): "US · 3", in the group heading's style. */
+@Composable
+internal fun SportsLiveSectionHeader(label: String, count: Int, modifier: Modifier = Modifier) {
+    Text(
+        text = stringResource(R.string.sports_live_section_count, label.uppercase(Locale.getDefault()), count),
+        style = SportsLiveTokens.style(SportsLiveTokens.Type.SectionHeader),
+        color = Colors.TextPrimary.copy(alpha = 0.6f),
+        maxLines = 1,
+        modifier = modifier.padding(top = 8.dp, bottom = 4.dp)
+    )
+}
+
 /**
  * A row's height by its group (board px ÷ 2): live 56, starting soon / later 48, channel 36, just ended 40;
  * a single-line row (not a two-sided match, V2 P3) 40.
@@ -114,9 +126,12 @@ internal fun scoreboardRowHeight(group: ScoreboardGroup, twoSided: Boolean = tru
     else -> Size.RowSoon
 }
 
-/** The right side of an Agenda row (V2 Upcoming): "● Stream listed" when an addon lists it, and the reminder bell. */
+/**
+ * The right side of an Agenda row (V2 Upcoming, and Replays in P4): an optional [trailing] word (a replay's
+ * time), then the reminder bell. No "Stream listed" dot (P4): every listed game comes from an addon.
+ */
 @Immutable
-internal data class AgendaRowSide(val streamListed: Boolean, val bell: AgendaBell)
+internal data class AgendaRowSide(val bell: AgendaBell, val trailing: String? = null)
 
 /**
  * A Scoreboard row (V2 Live Now, #132), the same in the list and in the player's panel (F12): fixed
@@ -236,7 +251,7 @@ private fun GameCells(row: ScoreboardRow, reminded: Boolean, hasReplay: Boolean,
                 NameText(item.displayName, bold = false, compact = compact, maxLines = 2)
             }
         }
-        ScoresCell(scores, reminded)
+        ScoresCell(scores, reminded, compact)
         StatusCell(row, hasReplay)
     }
 }
@@ -277,8 +292,8 @@ private fun SingleLineCells(row: ScoreboardRow, hasReplay: Boolean) {
 }
 
 /**
- * An Agenda row's cells (V2 Upcoming): the league tag, the two teams (or the one-line title), then "● Stream
- * listed" and the bell: outline when off, filled blue when set. Never a score or a live mark.
+ * An Agenda row's cells (V2 Upcoming, Replays): the league tag, the two teams (or the one-line title), then the
+ * trailing word and the bell: outline when off, filled blue when set. Never a score or a live mark.
  */
 @Composable
 private fun AgendaCells(row: ScoreboardRow, side: AgendaRowSide, shortNames: Boolean) {
@@ -307,18 +322,15 @@ private fun AgendaCells(row: ScoreboardRow, side: AgendaRowSide, shortNames: Boo
                 }
             }
         }
-        if (side.streamListed) {
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(Colors.ReplayGreen))
-                Text(
-                    text = stringResource(R.string.sports_live_stream_listed),
-                    style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag),
-                    color = Colors.ReplayGreen,
-                    maxLines = 1
-                )
-            }
+        side.trailing?.let { trailing ->
+            Text(
+                text = trailing,
+                style = SportsLiveTokens.style(STATUS_STYLE),
+                color = Colors.TextSecondary,
+                maxLines = 1
+            )
         }
-        AgendaBellIcon(side.bell, Modifier.size(16.dp))
+        if (side.bell != AgendaBell.NONE) AgendaBellIcon(side.bell, Modifier.size(16.dp))
     }
 }
 
@@ -500,12 +512,14 @@ private fun StarMark() {
 
 /** The scores column (48 dp): stacked, tabular, right-aligned; the hidden mark under Hide until focused; a bell when reminded. */
 @Composable
-private fun ScoresCell(scores: ScoreboardScores, reminded: Boolean) {
+private fun ScoresCell(scores: ScoreboardScores, reminded: Boolean, compact: Boolean = false) {
     Column(modifier = Modifier.width(Size.ColumnScores), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.Center) {
         when (scores) {
             is ScoreboardScores.Shown -> {
                 // Real bold (the app's variable fonts ignore FontWeight alone).
+                // A Just ended row is 40 dp: its two scores step down so both fit (P4), never clipped.
                 val style = SportsLiveTokens.style(SportsLiveTokens.Type.RowScore).sportsLiveBold()
+                    .let { if (compact) it.copy(fontSize = scoreboardScoreSize(compact), lineHeight = JUST_ENDED_SCORE_LINE) else it }
                 Text(text = scores.first.toString(), style = style, color = if (scores.leader == 1) Colors.TextMuted else Colors.TextPrimary, maxLines = 1)
                 Text(text = scores.second.toString(), style = style, color = if (scores.leader == 0) Colors.TextMuted else Colors.TextPrimary, maxLines = 1)
             }
@@ -639,5 +653,18 @@ private val BAR_WIDTH = 2.dp
 /** The status column's first line: the clock or the kickoff, 28 px semibold, tabular. */
 private val STATUS_STYLE = TextStyle(fontSize = 14.sp, lineHeight = 17.sp, fontWeight = FontWeight.SemiBold, fontFeatureSettings = "tnum")
 
+/** The stacked scores' size: Just ended rows (40 dp) use a smaller one, so two lines fit (P4). */
+internal fun scoreboardScoreSize(compact: Boolean) = if (compact) 16.sp else SportsLiveTokens.Type.RowScore.fontSize
+
+/** Two Just ended score lines, 2 × 17 sp, fit its 40 dp row. */
+internal val JUST_ENDED_SCORE_LINE = 17.sp
+
 /** A Just ended row is dimmed until focused (#60). */
 private const val JUST_ENDED_ALPHA = 0.6f
+
+/** A Channels region's label (P4): its country code as is, a long group name cleaned, else [other] ("Other"). */
+internal fun channelRegionLabel(value: String, other: String): String = when {
+    value == com.nuvio.tv.core.sportslive.SportsLiveChannelRegions.OTHER -> other
+    value.length <= 3 -> value
+    else -> SportsLiveDisplayText.name(value)
+}

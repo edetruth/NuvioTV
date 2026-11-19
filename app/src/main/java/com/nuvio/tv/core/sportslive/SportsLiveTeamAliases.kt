@@ -81,7 +81,11 @@ object SportsLiveTeamAliases {
             "vcu" to listOf("virginia commonwealth"),
             "uab" to listOf("alabama birmingham"),
             "utep" to listOf("texas el paso"),
-            "utsa" to listOf("texas san antonio")
+            "utsa" to listOf("texas san antonio"),
+            // ESPN writes these by their short names; addons often by the state (P4). One school each.
+            "uconn" to listOf("connecticut"),
+            "umass" to listOf("massachusetts"),
+            "ole miss" to listOf("mississippi")
         )
 
     /**

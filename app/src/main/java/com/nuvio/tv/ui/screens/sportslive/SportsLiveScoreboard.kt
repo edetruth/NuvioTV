@@ -7,6 +7,7 @@ import com.nuvio.tv.core.sportslive.GameStatus
 import com.nuvio.tv.core.sportslive.GameStatusStrings
 import com.nuvio.tv.core.sportslive.GameStatusText
 import com.nuvio.tv.core.sportslive.SportsLiveDisplayText
+import com.nuvio.tv.core.sportslive.SportsLiveChannelRegions
 import com.nuvio.tv.core.sportslive.SportsLiveProgress
 import com.nuvio.tv.core.sportslive.displayName
 import com.nuvio.tv.core.sportslive.SportsLiveSportKind
@@ -58,7 +59,9 @@ data class ScoreboardRow(
      */
     val twoSided: Boolean = art != null,
     /** The sport its title, genres or catalog name tell, for the tag when no league is known ("TENNIS"). */
-    val sportTag: SportsLiveSportKind? = null
+    val sportTag: SportsLiveSportKind? = null,
+    /** The list section it sits under (P4): a channel's region ([SportsLiveChannelRegions]); null for none. */
+    val section: String? = null
 ) {
     /** A followed team plays in it: the gold left bar. */
     val followed: Boolean get() = firstFollowed || secondFollowed || item.followed
@@ -133,14 +136,60 @@ internal fun scoreboardRowOf(
 }
 
 /**
+ * The Channels tab's rows (V2 P4): one per channel, grouped by region ([SportsLiveChannelRegions.grouped]:
+ * country codes, long names, then Other), each region's channels as listed.
+ */
+internal fun channelRows(items: List<SportsLiveItem>): List<ScoreboardRow> =
+    SportsLiveChannelRegions.grouped(items).flatMap { (region, channels) ->
+        channels.map { item ->
+            ScoreboardRow(
+                item = item, group = ScoreboardGroup.CHANNELS, chip = null, art = null,
+                firstFollowed = false, secondFollowed = false, probablyEnded = false,
+                status = GameStatus.Channel, twoSided = false, section = region
+            )
+        }
+    }
+
+/**
+ * The Replays tab's rows (V2 P4, #90): each replay under its spoiler-free title ([SportsLiveDisplayText.spoilerFree])
+ * with no description, so neither the row nor the stage can tell a result; a two-team row with drawn logos when
+ * the title names a match ([GameArt.ofReplay]), else a single-line row. Never a score.
+ */
+internal fun replayRows(items: List<SportsLiveItem>, art: (SportsLiveItem, String) -> GameArt? = { item, title -> GameArt.ofReplay(item, title) }): List<ScoreboardRow> =
+    items.map { raw ->
+        val title = SportsLiveDisplayText.spoilerFree(raw.meta.name)
+        val item = raw.copy(meta = raw.meta.copy(name = title, description = null))
+        val drawn = art(item, title)
+        ScoreboardRow(
+            item = item, group = ScoreboardGroup.LATER, chip = null, art = drawn,
+            firstFollowed = false, secondFollowed = false, probablyEnded = false,
+            status = GameStatus.Channel,
+            twoSided = scoreboardTwoSided(drawn, matched = false),
+            sportTag = SportsLiveSportKind.tagOf(item)
+        )
+    }
+
+/**
  * A single-line row's title (V2 P3): the clean title, its two written parts joined by " · " when the addon
  * wrote a non-team pair as a game ("ATP 250 vs Stockholm Open" → "ATP 250 · Stockholm Open").
  */
 internal fun singleLineTitle(item: SportsLiveItem): String {
-    val written = if (item.isChannel) null else SportsLiveTeams.writtenOrder(item.meta.name)
+    if (item.isChannel) return item.displayName
+    // The clean title too (P4): its spaces are plain ones, so a pair written with odd spacing reads the same in
+    // the list and in the player's panel.
+    val clean = item.displayName
+    val written = SportsLiveTeams.writtenOrder(item.meta.name) ?: SportsLiveTeams.writtenOrder(clean) ?: splitVersus(clean)
     return written?.let { (first, second) -> "${SportsLiveDisplayText.name(first)} · ${SportsLiveDisplayText.name(second)}" }
-        ?: item.displayName
+        ?: clean
 }
+
+/** "A vs B" / "A v B" in any case: its two parts; null when it is not written that way. */
+private fun splitVersus(title: String): Pair<String, String>? {
+    val parts = VERSUS.split(title, limit = 2).map { it.trim() }
+    return if (parts.size == 2 && parts.all { it.isNotEmpty() }) parts[0] to parts[1] else null
+}
+
+private val VERSUS = Regex("""\s+v(?:s\.?|\.)?\s+""", RegexOption.IGNORE_CASE)
 
 /**
  * Whether a row draws two teams (V2 P3): only for a real two-sided match, an ESPN match ([matched]) or two

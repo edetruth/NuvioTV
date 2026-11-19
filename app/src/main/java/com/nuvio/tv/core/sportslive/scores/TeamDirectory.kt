@@ -79,7 +79,10 @@ class TeamDirectory(private val maxLeagues: Int = MAX_LEAGUES) {
             val full = found(TeamLogoBook.sideKeys(opened))
             if (full.isNotEmpty()) return full.singleOrNull()?.let(entry.teams::get)
         }
-        val keys = TeamLogoBook.sideKeys(cardSide)
+        // College lists also take "St" for "State" and the reverse, as the score matcher does (P4).
+        val keys = TeamLogoBook.sideKeys(cardSide).let { own ->
+            if (league in COLLEGE_LEAGUES) own + own.flatMap { ScoreMatcher.collegeAlternates(it) + stateInside(it) } else own
+        }
         if (keys.isEmpty()) return null
         return found(keys).singleOrNull()?.let(entry.teams::get)
     }
@@ -105,12 +108,27 @@ class TeamDirectory(private val maxLeagues: Int = MAX_LEAGUES) {
 
     companion object {
         /** Leagues kept in memory and on disk. */
-        const val MAX_LEAGUES = 32
+        const val MAX_LEAGUES = 48
 
         /** A list is fetched again after a week. */
         const val REFRESH_MS = 7L * 24 * 60 * 60 * 1000
 
         private val SLUG = Regex("""[a-z0-9._-]+""")
+        /** "michigan st spartans" ↔ "michigan state spartans": "St" after the first word is "State" (a first "St" is Saint). */
+        internal fun stateInside(key: String): Set<String> {
+            val words = key.split(' ')
+            if (words.size < 3) return emptySet()
+            return buildSet {
+                for (i in 1 until words.lastIndex) {
+                    when (words[i]) {
+                        "st" -> add((words.take(i) + "state" + words.drop(i + 1)).joinToString(" "))
+                        "state" -> add((words.take(i) + "st" + words.drop(i + 1)).joinToString(" "))
+                    }
+                }
+            }
+        }
+
+        private val COLLEGE_LEAGUES = setOf(EspnLeagueMap.COLLEGE_BASKETBALL, EspnLeagueMap.COLLEGE_FOOTBALL)
         private val BRACKETS = Regex("""[\[\]()]""")
 
         // Team sports ESPN lists teams for; individual sports (tennis, golf, MMA, racing) have none.

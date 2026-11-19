@@ -146,4 +146,46 @@ class SportsLiveDisplayTextTest {
         // A name that merely starts with digits stays.
         assertEquals("24 Hours of Le Mans", SportsLiveDisplayText.name("24 Hours of Le Mans"))
     }
+
+    // P4 B5: show and promotion names keep their acronym caps
+
+    @Test
+    fun `an all caps word of two to four letters keeps its caps`() {
+        assertEquals("AEW", of("AEW").name)
+        assertEquals("ROH Wrestling", of("ROH WRESTLING").name)
+        assertEquals("PFL Fight Night", of("PFL FIGHT NIGHT").name)
+    }
+
+    @Test
+    fun `common short words in a caps title still read as words`() {
+        assertEquals("Sports News Live", of("SPORTS NEWS LIVE").name)
+        assertEquals("The Big Game", of("THE BIG GAME").name)
+        assertEquals("Team A vs Team B", of("TEAM A VS TEAM B").name)
+    }
+
+    @Test
+    fun `a long caps word is still title cased`() {
+        assertEquals("Wrestling", of("WRESTLING").name)
+    }
+
+    // P4 #90: replay titles never carry a score
+
+    @Test
+    fun `spoiler free drops a scoreline between the teams`() {
+        assertEquals("Team A vs Team B", SportsLiveDisplayText.spoilerFree("Team A 110-102 Team B"))
+        assertEquals("Team A vs Team B", SportsLiveDisplayText.spoilerFree("Team A vs Team B (2-1)"))
+        assertEquals("Team A vs Team B", SportsLiveDisplayText.spoilerFree("Team A vs Team B 3 – 0"))
+    }
+
+    @Test
+    fun `spoiler free keeps dates seasons and times`() {
+        assertEquals("Team A vs Team B 11-16-2026", SportsLiveDisplayText.spoilerFree("Team A vs Team B 11-16-2026"))
+        assertEquals("League 2025-26 Team A vs Team B", SportsLiveDisplayText.spoilerFree("League 2025-26 Team A vs Team B"))
+        assertEquals("Team A vs Team B 20:00", SportsLiveDisplayText.spoilerFree("Team A vs Team B 20:00"))
+    }
+
+    @Test
+    fun `spoiler free also cleans the title`() {
+        assertEquals("Team A vs Team B", SportsLiveDisplayText.spoilerFree("TEAM A VS TEAM B 1-0 Live IPTV Recording"))
+    }
 }

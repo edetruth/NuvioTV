@@ -161,7 +161,12 @@ class TeamLogoBook(
 
         private fun keysOf(name: String): Set<String> {
             val folded = fold(name)
-            return setOf(SportsLiveTeams.normalise(folded), SportsLiveTeams.canonicalise(folded)) - ""
+            // "St. John's" and "St Johns" are one name (P4): the apostrophe joins its word rather than splitting it.
+            val joined = folded.replace("'", "")
+            return setOf(
+                SportsLiveTeams.normalise(folded), SportsLiveTeams.canonicalise(folded),
+                SportsLiveTeams.normalise(joined), SportsLiveTeams.canonicalise(joined)
+            ) - ""
         }
 
         /**

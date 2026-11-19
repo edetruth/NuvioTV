@@ -37,6 +37,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
@@ -49,6 +50,7 @@ import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.nuvio.tv.R
+import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens
 import com.nuvio.tv.core.sportslive.alerts.AlertAnswer
 import com.nuvio.tv.core.sportslive.alerts.AlertContent
 import com.nuvio.tv.core.sportslive.alerts.AlertSide
@@ -135,7 +137,12 @@ fun SportsLiveAlertsHost(
         cooldownToasts = false
     )
 
-    // "Reminder set" / "Reminder removed" (#44): the app's dark toast card, bottom left, never taking focus.
+    // "Reminder set" / "Reminder removed" (#44): the app's dark toast card, never taking focus. Every toast
+    // and prompt sits in one spot (#101, P4): top right, over the stage, clear of the list and the rail.
+    // Outside the player no wider than the stage, so it never covers the list.
+    val toastPlace = Modifier
+        .padding(top = sportsLiveToastTop(inPlayer), end = TOAST_END)
+        .then(if (inPlayer) Modifier else Modifier.widthIn(max = TOAST_MAX_WIDTH))
     val notice by alerts.reminderNotice.collectAsState()
     notice?.let { shown ->
         key(shown.id) {
@@ -147,8 +154,8 @@ fun SportsLiveAlertsHost(
                 ReminderToast(
                     notice = shown,
                     modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(horizontal = 48.dp, vertical = 40.dp)
+                        .align(Alignment.TopEnd)
+                        .then(toastPlace)
                 )
             }
         }
@@ -182,7 +189,7 @@ fun SportsLiveAlertsHost(
                     followed = current.item.followed,
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(horizontal = 48.dp, vertical = 40.dp)
+                        .then(toastPlace)
                 )
             }
             current is SportsLiveAlert.Kickoff -> KickoffPrompt(
@@ -207,8 +214,8 @@ fun SportsLiveAlertsHost(
                     giveFocusBack()
                 },
                 modifier = Modifier
-                    .align(if (inPlayer) Alignment.TopEnd else Alignment.BottomStart)
-                    .padding(horizontal = 48.dp, vertical = 40.dp)
+                    .align(Alignment.TopEnd)
+                    .then(toastPlace)
             )
             else -> {
                 LaunchedEffect(current) {
@@ -220,7 +227,7 @@ fun SportsLiveAlertsHost(
                     followed = current.item.followed,
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(horizontal = 48.dp, vertical = 40.dp)
+                        .then(toastPlace)
                 )
             }
         }
@@ -475,6 +482,16 @@ private val PANEL_BORDER = Color(0xFF1E2632)
 
 /** Toasts hide after this long (the design's 8 s). */
 private const val TOAST_MS = 8_000L
+
+/**
+ * How far below the top every toast and prompt sits, at the top right (#101, P4): under the section's header,
+ * over the stage, so it never covers the list or the side rail; in the player, just under its top edge.
+ */
+internal fun sportsLiveToastTop(inPlayer: Boolean): Dp =
+    if (inPlayer) 40.dp else SportsLiveTokens.Size.SafeTop + SportsLiveTokens.Size.HeaderHeight + 16.dp
+
+private val TOAST_END = 48.dp
+private val TOAST_MAX_WIDTH = 360.dp
 
 /** "Reminder set" / "Reminder removed" hides after this long. */
 private const val REMINDER_TOAST_MS = 5_000L

@@ -220,12 +220,22 @@ internal fun StageMedia(
  * names are set large, stacked (never letters).
  */
 @Composable
-private fun AgendaStageArt(art: GameArt, item: com.nuvio.tv.domain.model.SportsLiveItem) {
-    val logos = rememberTeamLogoPair(art, TeamLogoUrls.LARGE_PX)?.takeIf { !it.failed }
+internal fun AgendaStageArt(art: GameArt, item: com.nuvio.tv.domain.model.SportsLiveItem) {
     val league = sportsLiveLeagueLabel(art.league, item.catalogName)
     val season = art.seasonType?.let { seasonLabelRes(it) }?.let { stringResource(it) }
     val top = listOfNotNull(league, season).joinToString(" · ").uppercase(Locale.getDefault())
-    val word = stringResource(if (agendaWrittenAt(item.meta.name)) R.string.sports_live_art_at else R.string.sports_live_art_vs)
+    MatchupStageArt(art, top, at = agendaWrittenAt(item.meta.name))
+}
+
+/**
+ * The drawn matchup at the media box's size (V2): [top] (league · season) over the two teams with big logos,
+ * their names and records, "at" ([at]) or "vs" between; without both logos the names are set large, stacked.
+ * Upcoming, Replays and Results draw it; it never shows a score.
+ */
+@Composable
+internal fun MatchupStageArt(art: GameArt, top: String, at: Boolean) {
+    val logos = rememberTeamLogoPair(art, TeamLogoUrls.LARGE_PX)?.takeIf { !it.failed }
+    val word = stringResource(if (at) R.string.sports_live_art_at else R.string.sports_live_art_vs)
     Column(
         modifier = Modifier
             .fillMaxSize()

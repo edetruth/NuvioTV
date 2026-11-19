@@ -403,10 +403,10 @@ class SportsLiveViewModelTest {
         advanceUntilIdle()
         assertEquals("a focus move builds nothing", built, ranOn.size)
 
-        // Channels lists cards: no Scoreboard rows.
+        // Channels (V2 P4): channel rows by region, still built on the compute dispatcher.
         viewModel.selectTab(SportsLiveTab.CHANNELS)
         advanceUntilIdle()
-        assertNull(viewModel.board.value!!.rows)
+        assertTrue(viewModel.board.value!!.rows!!.all { it.group == ScoreboardGroup.CHANNELS })
         assertTrue(ranOn.all { it === boardDispatcher })
     }
 
