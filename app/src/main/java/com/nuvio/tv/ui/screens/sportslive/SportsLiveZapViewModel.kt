@@ -86,7 +86,9 @@ data class SportsLiveZapTarget(
     val returnToHomeOnBack: Boolean,
     val autoPicked: Boolean = false,
     /** "Choose stream" (#140): the item's Stream screen opens to pick from, with no autoplay. */
-    val manualSelection: Boolean = false
+    val manualSelection: Boolean = false,
+    /** Live now's Resume (#148): the player starts at the live edge, never at a saved position. */
+    val liveEdge: Boolean = false
 )
 
 sealed interface SportsLiveZapEvent {

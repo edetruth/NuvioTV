@@ -193,7 +193,8 @@ private fun sportsLivePlayerRoute(target: SportsLiveZapTarget): String? {
         autoPlayNav = target.autoPicked,
         returnToDetailOnBack = false,
         returnToHomeOnBack = target.returnToHomeOnBack,
-        startFromBeginning = false,
+        // No saved position: a live stream then opens at its live edge (Resume, #148).
+        startFromBeginning = target.liveEdge,
         fromLinkCache = false
     )
 }
@@ -266,7 +267,8 @@ private fun clearSportsLiveZapSessionOnPlayerBack(navController: NavHostControll
 /**
  * Back from a player whose content has a Sports & Live zap session starts the mini player on the
  * stream that player plays now (its url and headers, after any source fallback); any other
- * player (movies, series) leaves it alone. Runs before the session is cleared.
+ * player (movies, series) leaves it alone. A paused player starts none: Live now offers Resume
+ * instead (#148). Runs before the session is cleared.
  */
 private fun startSportsLiveMiniPlayerOnBack(contentId: String?, player: PlayerViewModel) {
     // An exit for an in-app launch (external player, browser) is not the user going back to browse.
@@ -283,7 +285,8 @@ private fun startSportsLiveMiniPlayerOnBack(contentId: String?, player: PlayerVi
             filename = playing.currentFilename,
             name = null,
             addonName = playing.currentAddonName
-        )
+        ),
+        paused = player.isPausedByUser()
     )
 }
 
@@ -1132,6 +1135,8 @@ private fun PlaybackNavHost(
             // Any player opening stops the Sports & Live mini player, before it starts its own sound.
             DisposableEffect(backStackEntry.id) {
                 SportsLiveMiniPlayers.controller.stop(SportsLiveMiniStop.OTHER_PLAYER)
+                // Something plays again: Live now's Resume chip (#148) has had its turn.
+                SportsLiveMiniPlayers.controller.dismissResume()
                 // Home can put this player in picture-in-picture when it plays a zap session;
                 // closing that window stops it and leaves the player, as Back does.
                 val contentId = backStackEntry.arguments?.getString("contentId")

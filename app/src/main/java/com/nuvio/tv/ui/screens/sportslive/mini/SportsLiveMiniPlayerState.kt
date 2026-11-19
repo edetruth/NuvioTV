@@ -34,6 +34,15 @@ sealed interface SportsLiveMiniState {
     ) : SportsLiveMiniState
 }
 
+/**
+ * Back from a paused player (#148): no mini player, but Live now offers "▶ Resume <game>" for
+ * [SportsLiveMiniPlayerController.RESUME_TTL_MS]. OK rejoins [stream] (the same link) at the live edge.
+ * [atMs] is when it was offered.
+ */
+data class SportsLiveResumeOffer(val item: SportsLiveItem, val stream: Stream, val atMs: Long) {
+    fun expiredAt(nowMs: Long): Boolean = nowMs - atMs >= SportsLiveMiniPlayerController.RESUME_TTL_MS
+}
+
 /** Why the mini player stopped. */
 enum class SportsLiveMiniStop {
     OTHER_PLAYER, PROFILE_SWITCH, USER_STOP, IDLE_TIMEOUT, DUAL_SCREEN, EXPANDED, STREAM_ERROR, APP_FINISH, APP_BACKGROUND, PIP_CLOSED
@@ -52,6 +61,9 @@ class SportsLiveMiniPlayerController(
 ) {
     companion object {
         const val IDLE_TIMEOUT_MS = 2 * 60 * 60 * 1000L
+
+        /** How long Live now offers Resume after Back from a paused player (#148). */
+        const val RESUME_TTL_MS = 30 * 60 * 1000L
     }
 
     private val _state = MutableStateFlow<SportsLiveMiniState>(SportsLiveMiniState.Idle)
@@ -75,14 +87,32 @@ class SportsLiveMiniPlayerController(
     private var nextSessionId = 0L
     private var idleJob: Job? = null
 
+    private val _resume = MutableStateFlow<SportsLiveResumeOffer?>(null)
+
+    /** Live now's Resume chip (#148): the paused game left, until dismissed, used or expired. */
+    val resume: StateFlow<SportsLiveResumeOffer?> = _resume.asStateFlow()
+    private var resumeJob: Job? = null
+
     val isActive: Boolean get() = _state.value is SportsLiveMiniState.Playing
 
     /**
      * Back from a player of [contentId]: with [session] on that content and a [stream] the mini
-     * player can play, it starts; otherwise nothing changes.
+     * player can play, it starts; otherwise nothing changes. A player the user left [paused] (#148)
+     * starts no mini player: Live now offers Resume instead, for [RESUME_TTL_MS].
      */
-    fun onBackFromPlayer(contentId: String?, session: SportsLiveZapSession?, stream: Stream?) {
+    fun onBackFromPlayer(
+        contentId: String?,
+        session: SportsLiveZapSession?,
+        stream: Stream?,
+        paused: Boolean = false,
+        nowMs: Long = System.currentTimeMillis()
+    ) {
         if (session == null || stream == null || contentId == null || session.current.id != contentId) return
+        if (paused) {
+            offerResume(SportsLiveResumeOffer(session.current, stream, nowMs))
+            return
+        }
+        dismissResume()
         onStopped?.invoke()
         _state.value = SportsLiveMiniState.Playing(session.current, stream, ++nextSessionId, session)
         restartIdleTimer()
@@ -126,6 +156,22 @@ class SportsLiveMiniPlayerController(
     /** True while [playing] is still the mini player on screen (an expand may go on). */
     fun isCurrent(playing: SportsLiveMiniState.Playing): Boolean =
         (_state.value as? SportsLiveMiniState.Playing)?.sessionId == playing.sessionId
+
+    /** Back or ✕ on the Resume chip, OK on it, another player or a profile switch: the offer ends. */
+    fun dismissResume() {
+        resumeJob?.cancel()
+        resumeJob = null
+        _resume.value = null
+    }
+
+    private fun offerResume(offer: SportsLiveResumeOffer) {
+        resumeJob?.cancel()
+        _resume.value = offer
+        resumeJob = scope.launch {
+            delay(RESUME_TTL_MS)
+            if (_resume.value === offer) _resume.value = null
+        }
+    }
 
     private fun restartIdleTimer() {
         idleJob?.cancel()

@@ -345,7 +345,10 @@ class SportsLiveMiniPlayerViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            profileManager.activeProfileId.drop(1).collect { controller.stop(SportsLiveMiniStop.PROFILE_SWITCH) }
+            profileManager.activeProfileId.drop(1).collect {
+                controller.stop(SportsLiveMiniStop.PROFILE_SWITCH)
+                controller.dismissResume()
+            }
         }
         viewModelScope.launch { controller.expandRequests.collect(expander::expand) }
         // Home reads the picture-in-picture setting synchronously, so it is mirrored here (this

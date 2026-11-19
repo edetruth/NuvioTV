@@ -2,6 +2,7 @@ package com.nuvio.tv.ui.screens.sportslive
 
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens
 import com.nuvio.tv.core.sportslive.GameStatus
+import com.nuvio.tv.core.sportslive.GameStatusText
 import androidx.compose.foundation.background
 import com.nuvio.tv.core.sportslive.displayName
 import android.view.KeyEvent as AndroidKeyEvent
@@ -89,6 +90,7 @@ import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveKind
 import com.nuvio.tv.domain.model.SportsLiveTab
+import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.ui.components.EmptyScreenState
 import com.nuvio.tv.ui.components.LoadingIndicator
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualSession
@@ -354,6 +356,11 @@ fun SportsLiveScreen(
                 )
                 onOpenGame()
             },
+            onRejoin = { item, stream ->
+                // Freed before the full player starts, so the two never hold decoders together.
+                previewPlayer.release()
+                playViewModel.rejoin(item, stream)
+            },
             onCardFocus = scoresViewModel::onCardFocus,
             onSelectTab = viewModel::selectTab,
             onSelectFilter = viewModel::selectFilter,
@@ -470,6 +477,8 @@ private fun SportsLiveContent(
     /** A card's strictly matched ESPN game (Live now / Upcoming only); null offers no "Game stats". */
     gameOf: (SportsLiveItem) -> ScoreSnapshot?,
     onOpenGame: (SportsLiveItem, ScoreSnapshot) -> Unit,
+    /** OK on Live now's Resume chip (#148): the game's link again, at the live edge. */
+    onRejoin: (SportsLiveItem, Stream) -> Unit,
     /** The focused card's key (null: none), for Hide until focused. */
     onCardFocus: (String?) -> Unit,
     onSelectTab: (SportsLiveTab) -> Unit,
@@ -993,7 +1002,49 @@ private fun SportsLiveContent(
                     .onFocusChanged { if (it.hasFocus || miniPlayer.isActive) nowPlayingHasFocus = it.hasFocus }
             )
         }
+        // Back from a paused game (#148): Resume in the header while it is live, its final once it ended.
+        val resumeOffer by miniPlayer.resume.collectAsStateWithLifecycle()
+        val liveNowItems = uiState.tabs[SportsLiveTab.LIVE_NOW]
+        val resumeListed = remember(resumeOffer, liveNowItems) {
+            resumeOffer?.let { offer ->
+                liveNowItems.orEmpty().let { list ->
+                    list.firstOrNull { it.streamKey == offer.item.streamKey } ?: list.firstOrNull { it.id == offer.item.id }
+                }
+            }
+        }
+        val resumeChip = if (uiState.selectedTab == SportsLiveTab.LIVE_NOW) {
+            sportsLiveResumeChip(resumeOffer, resumeListed, statusOf, uiState.nowMs)
+        } else {
+            null
+        }
+        val statusStrings = rememberGameStatusStrings()
+        val resumeLabel = when (resumeChip) {
+            is SportsLiveResumeChip.Live -> stringResource(R.string.sports_live_resume_live, resumeChip.item.displayName)
+            is SportsLiveResumeChip.Final -> stringResource(
+                R.string.sports_live_resume_final,
+                resumeChip.item.displayName,
+                // The one status formatter: "Final 2–3", "FT 2–1", or "Score hidden" under Hide until focused.
+                GameStatusText.of(resumeChip.status, chipOf(resumeChip.item), statusStrings, { _, _ -> "" })
+            )
+            null -> null
+        }
         SportsLiveHeader(
+            resume = if (resumeChip != null && resumeLabel != null) {
+                SportsLiveHeaderResume(
+                    label = resumeLabel,
+                    live = resumeChip is SportsLiveResumeChip.Live,
+                    onOpen = {
+                        miniPlayer.dismissResume()
+                        when (val ok = sportsLiveResumeOk(resumeChip)) {
+                            is SportsLiveResumeOk.RejoinLiveEdge -> onRejoin(ok.item, ok.stream)
+                            is SportsLiveResumeOk.OpenGame -> onOpenGame(ok.item, ok.event)
+                        }
+                    },
+                    onDismiss = miniPlayer::dismissResume
+                )
+            } else {
+                null
+            },
             tabs = shownTabs,
             selectedTab = uiState.selectedTab,
             tabFocusRequesters = tabFocusRequesters,

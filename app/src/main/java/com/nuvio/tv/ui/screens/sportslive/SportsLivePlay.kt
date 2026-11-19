@@ -246,6 +246,14 @@ class SportsLivePlayViewModel @Inject constructor(
      * user choose, [takeOverPreview] hands over the preview's stream, which plays at once (instant
      * start); otherwise as [play]. The setting is read from storage first, never assumed.
      */
+    /** OK on Live now's Resume chip (#148): [stream], the link the paused player had, at the live edge. */
+    fun rejoin(item: SportsLiveItem, stream: Stream) {
+        job?.cancel()
+        returnToHomeOnBack = false
+        _state.value = SportsLivePlayState.Idle
+        job = viewModelScope.launch { playStream(item, stream, liveEdge = true) }
+    }
+
     fun playCard(item: SportsLiveItem, takeOverPreview: () -> Stream?) {
         job?.cancel()
         returnToHomeOnBack = false
@@ -365,7 +373,8 @@ class SportsLivePlayViewModel @Inject constructor(
         item: SportsLiveItem,
         stream: Stream,
         autoPicked: Boolean = false,
-        announce: Boolean = false
+        announce: Boolean = false,
+        liveEdge: Boolean = false
     ) {
         val target = sportsLiveZapTarget(
             item = item,
@@ -374,7 +383,7 @@ class SportsLivePlayViewModel @Inject constructor(
             returnToHomeOnBack = returnToHomeOnBack,
             directDebridResolver = directDebridResolver,
             autoPicked = autoPicked
-        )
+        ).copy(liveEdge = liveEdge)
         // The player (or the primary's Stream screen) gets the other addons' streams for fallback and Sources.
         SportsLiveExtraSources.register(item.id, item)
         // A stream that opens the Stream screen for preparation is not announced: it is not playing yet.

@@ -226,6 +226,16 @@ class PlayerViewModel @Inject constructor(
 
     fun getCurrentHeaders(): Map<String, String> = controller.getCurrentHeaders()
 
+    /**
+     * The user paused playback and has not resumed it (#148): a pause, or the buffering after one.
+     * A player still loading, or buffering with play intent, is not paused. Once released, the
+     * answer it had just before (Back releases the player before leaving).
+     */
+    fun isPausedByUser(): Boolean =
+        pausedAtRelease ?: playerPausedByUser(controller.userPausedManually, controller.hasActivePlayIntent())
+
+    private var pausedAtRelease: Boolean? = null
+
     fun getCurrentFileSizeBytes(): Long? = controller.currentVideoSize
 
     @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
@@ -235,6 +245,7 @@ class PlayerViewModel @Inject constructor(
     }
 
     fun stopAndRelease() {
+        if (pausedAtRelease == null) pausedAtRelease = isPausedByUser()
         postPlayRecommendationController.stop()
         controller.stopAndRelease()
     }
@@ -423,3 +434,10 @@ class PlayerViewModel @Inject constructor(
         }
     }
 }
+
+/**
+ * Paused by the user (#148): they paused ([userPausedManually]) and playback has no play intent, so a
+ * pause, or the buffering after one. A resume from a media key restores the play intent.
+ */
+internal fun playerPausedByUser(userPausedManually: Boolean, playIntent: Boolean): Boolean =
+    userPausedManually && !playIntent
