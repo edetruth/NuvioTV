@@ -83,7 +83,7 @@ class SportsLivePlayerCardViewModelTest {
     }
 
     @Test
-    fun `Hide until focused - season stats show, the last games wait for Reveal`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `Hide until focused - season stats show, each last game shows while its row has focus`() = runTest(mainDispatcherRule.dispatcher) {
         settings.value = ScoreSettings(mode = ScoresMode.HIDE_UNTIL_FOCUSED)
         val vm = viewModel()
         runCurrent()
@@ -91,7 +91,11 @@ class SportsLivePlayerCardViewModelTest {
         assertEquals(PlayerCardStatus.READY, vm.uiState.value.status)
         assertEquals(embiid.season, vm.uiState.value.card!!.season)
         assertFalse(vm.uiState.value.showsLastGames)
-        assertTrue(vm.uiState.value.showsReveal)
+        // No Reveal button: focus reveals one row at a time (#134).
+        assertFalse(vm.uiState.value.showsReveal)
+        assertTrue(vm.uiState.value.revealsOnFocus)
+        assertFalse(vm.uiState.value.showsGame(focused = false))
+        assertTrue(vm.uiState.value.showsGame(focused = true))
 
         vm.reveal()
         runCurrent()
@@ -105,6 +109,8 @@ class SportsLivePlayerCardViewModelTest {
         val vm = viewModel(SportsLivePlayerCardRequest(target, spoilerSafe = true))
         runCurrent()
         assertFalse(vm.uiState.value.showsLastGames)
+        assertTrue(vm.uiState.value.showsReveal)
+        assertFalse(vm.uiState.value.showsGame(focused = true))
         vm.reveal()
         runCurrent()
         assertTrue(vm.uiState.value.showsLastGames)

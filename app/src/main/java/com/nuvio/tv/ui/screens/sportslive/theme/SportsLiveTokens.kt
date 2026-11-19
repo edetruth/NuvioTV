@@ -79,6 +79,9 @@ object SportsLiveTokens {
         /** The primary button's fill and its text. */
         val PrimaryFill = TextPrimary
         val OnPrimary = Background
+        /** Team stats bars (#134): the side with the better value, and the other side. */
+        val StatBetter = Color(0xFF9AC2FF)
+        val StatOther = Color(0xFF4B5A6E)
     }
 
     /** The TV type scale (board px → sp). Merge with the app font: [SportsLiveTokens.style]. */
@@ -109,6 +112,10 @@ object SportsLiveTokens {
         val PanelScore = TextStyle(fontSize = 13.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium, fontFeatureSettings = "tnum")
         /** The panel's title: 32 px semibold. */
         val PanelTitle = TextStyle(fontSize = 16.sp, lineHeight = 20.sp, fontWeight = FontWeight.SemiBold)
+        /** The Game page's hero score (#134): 96 px bold, tabular. */
+        val HeroScore = TextStyle(fontSize = 48.sp, lineHeight = 52.sp, fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum")
+        /** A pushed page's title (a team or player name, #134): 52 px bold. */
+        val PageTitle = TextStyle(fontSize = 26.sp, lineHeight = 31.sp, fontWeight = FontWeight.Bold)
     }
 
     /** Frame, rows, columns and controls (board px → dp). */

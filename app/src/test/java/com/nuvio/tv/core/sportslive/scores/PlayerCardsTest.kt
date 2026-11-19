@@ -52,6 +52,23 @@ class PlayerCardsTest {
     }
 
     @Test
+    fun `a last game's opponent keeps its id and logo, and takes its short name from the team directory`() {
+        val card = card("nba_3059318", "basketball")
+        val last = card.lastGames.first()
+        assertEquals("17", last.opponentId)
+        assertEquals("https://a.espncdn.com/i/teamlogos/nba/500/bkn.png", last.opponentLogo)
+        assertNull(last.opponentName)
+
+        val nets = DirectoryTeam("17", "Brooklyn Nets", "Nets", "BKN", "Brooklyn", "Nets", "https://a.espncdn.com/i/teamlogos/nba/500/bkn.png")
+        val named = PlayerCards.namedOpponents(card, listOf(nets))
+        assertEquals("Nets", named.lastGames.first().opponentName)
+        // An opponent the directory does not list keeps its abbreviation only.
+        named.lastGames.filter { it.opponentId != "17" }.forEach { assertNull(it.opponentName) }
+        // No directory for the league: the card as it was.
+        assertEquals(card, PlayerCards.namedOpponents(card, emptyList()))
+    }
+
+    @Test
     fun `the last games are ordered by date, whatever the order ESPN lists them in`() {
         val log = log("nba_3059318")
         val shuffled = log.copy(events = log.events!!.entries.reversed().associate { it.key to it.value })

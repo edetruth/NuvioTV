@@ -39,18 +39,8 @@ class SportsLiveGameOrderTest {
     }
 
     @Test
-    fun `header sides and Follow buttons follow that order`() {
+    fun `header sides follow that order`() {
         assertEquals("away" to "home", inCardOrder("away", "home", homeFirst = false))
         assertEquals("home" to "away", inCardOrder("away", "home", homeFirst = true))
-        assertEquals(
-            listOf(GameHeaderButton.FOLLOW_HOME, GameHeaderButton.FOLLOW_AWAY),
-            gameHeaderRows(showsScore = true, hasReplay = false, homeFirst = true).last()
-        )
-        assertEquals(
-            listOf(GameHeaderButton.FOLLOW_AWAY, GameHeaderButton.FOLLOW_HOME),
-            gameHeaderRows(showsScore = true, hasReplay = false).last()
-        )
-        // First focus: the card's first team's Follow when nothing comes before it.
-        assertEquals(GameHeaderButton.FOLLOW_HOME, gameHeaderFirstFocus(gameHeaderRows(showsScore = true, hasReplay = false, homeFirst = true)))
     }
 }

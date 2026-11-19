@@ -251,6 +251,15 @@ class TeamPagesTest {
     }
 
     @Test
+    fun `a last result shows while its row has focus under Hide until focused only`() {
+        assertFalse(TeamPageSpoilers.showsResult(ScoresMode.HIDE_UNTIL_FOCUSED, revealed = false, focused = false))
+        assertTrue(TeamPageSpoilers.showsResult(ScoresMode.HIDE_UNTIL_FOCUSED, revealed = false, focused = true))
+        assertFalse(TeamPageSpoilers.showsResult(ScoresMode.OFF, revealed = false, focused = true))
+        assertTrue(TeamPageSpoilers.showsResult(ScoresMode.OFF, revealed = true, focused = false))
+        assertTrue(TeamPageSpoilers.showsResult(ScoresMode.SHOW, revealed = false, focused = false))
+    }
+
+    @Test
     fun `Off loads and shows nothing until Reveal`() {
         assertFalse(TeamPageSpoilers.mayLoad(ScoresMode.OFF, false))
         assertFalse(TeamPageSpoilers.showsRecord(ScoresMode.OFF, false))

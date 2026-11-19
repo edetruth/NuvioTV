@@ -1,43 +1,94 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import android.view.KeyEvent
+import com.nuvio.tv.core.sportslive.scores.GameSection
+import com.nuvio.tv.core.sportslive.scores.GameSection.BOX_SCORE
+import com.nuvio.tv.core.sportslive.scores.GameSection.GAME
+import com.nuvio.tv.core.sportslive.scores.GameSection.HIGHLIGHTS
 import com.nuvio.tv.core.sportslive.scores.StandingsRow
 import com.nuvio.tv.core.sportslive.scores.StandingsTable
-import com.nuvio.tv.ui.screens.sportslive.GameHeaderButton.FOLLOW_AWAY
-import com.nuvio.tv.ui.screens.sportslive.GameHeaderButton.FOLLOW_HOME
-import com.nuvio.tv.ui.screens.sportslive.GameHeaderButton.REPLAY
-import com.nuvio.tv.ui.screens.sportslive.GameHeaderButton.REVEAL
+import com.nuvio.tv.ui.screens.sportslive.GameAction.REMIND
+import com.nuvio.tv.ui.screens.sportslive.GameAction.REPLAY
+import com.nuvio.tv.ui.screens.sportslive.GameAction.REVEAL
+import com.nuvio.tv.ui.screens.sportslive.GameAction.WATCH
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
+/** The Game page's one action row and its text tabs (#134, phase 3). */
 class SportsLiveGameHeaderTest {
 
     @Test
-    fun `hidden score with a replay - Reveal, then Watch replay, then both Follow buttons on one row`() {
-        val rows = gameHeaderRows(showsScore = false, hasReplay = true)
-
-        assertEquals(listOf(listOf(REVEAL), listOf(REPLAY), listOf(FOLLOW_AWAY, FOLLOW_HOME)), rows)
-        assertEquals(REVEAL, gameHeaderFirstFocus(rows))
+    fun `a live game a card plays - Watch is the primary`() {
+        assertEquals(listOf(WATCH), gameActions(showsScore = true, hasReplay = false, canWatchLive = true))
     }
 
     @Test
-    fun `first focus is Watch replay once the score shows, else the away Follow`() {
-        assertEquals(REPLAY, gameHeaderFirstFocus(gameHeaderRows(showsScore = true, hasReplay = true)))
-        assertEquals(FOLLOW_AWAY, gameHeaderFirstFocus(gameHeaderRows(showsScore = true, hasReplay = false)))
-        assertEquals(REVEAL, gameHeaderFirstFocus(gameHeaderRows(showsScore = false, hasReplay = false)))
+    fun `an upcoming game - Remind me is the primary`() {
+        assertEquals(listOf(REMIND), gameActions(showsScore = true, hasReplay = false, canRemind = true))
     }
 
     @Test
-    fun `only the Follow row leaves the header on Down, so Follow home is reachable`() {
-        val rows = gameHeaderRows(showsScore = false, hasReplay = true)
+    fun `a final with a replay - Watch replay is the primary`() {
+        assertEquals(listOf(REPLAY), gameActions(showsScore = true, hasReplay = true))
+    }
 
-        assertFalse(gameHeaderDownLeaves(rows, REVEAL))
-        assertFalse(gameHeaderDownLeaves(rows, REPLAY))
-        assertTrue(gameHeaderDownLeaves(rows, FOLLOW_AWAY))
-        assertTrue(gameHeaderDownLeaves(rows, FOLLOW_HOME))
-        // Every button is laid out once.
-        assertEquals(4, rows.flatten().toSet().size)
+    @Test
+    fun `a final with no replay - only More shows`() {
+        assertEquals(emptyList<GameAction>(), gameActions(showsScore = true, hasReplay = false))
+    }
+
+    @Test
+    fun `scores hidden with a replay - Watch replay leads and Reveal sits beside it`() {
+        assertEquals(listOf(REPLAY, REVEAL), gameActions(showsScore = false, hasReplay = true))
+    }
+
+    @Test
+    fun `scores hidden without a replay - Reveal score is the primary`() {
+        assertEquals(listOf(REVEAL), gameActions(showsScore = false, hasReplay = false))
+        // A live game stays watchable, behind Reveal.
+        assertEquals(listOf(REVEAL, WATCH), gameActions(showsScore = false, hasReplay = false, canWatchLive = true))
+    }
+
+    @Test
+    fun `scores hidden on an upcoming game - Remind me keeps the lead, Reveal beside it`() {
+        assertEquals(listOf(REMIND, REVEAL), gameActions(showsScore = false, hasReplay = false, canRemind = true))
+    }
+
+    @Test
+    fun `every action is laid out once`() {
+        listOf(true, false).forEach { shows ->
+            listOf(true, false).forEach { replay ->
+                val actions = gameActions(showsScore = shows, hasReplay = replay, canWatchLive = true, canRemind = true)
+                assertEquals(actions.toSet().size, actions.size)
+            }
+        }
+    }
+
+    private val sections = listOf(GAME, BOX_SCORE, HIGHLIGHTS)
+
+    @Test
+    fun `left and right step through the tabs`() {
+        assertEquals(GameTabKey.Move(BOX_SCORE), gameTabKey(sections, GAME, KeyEvent.KEYCODE_DPAD_RIGHT))
+        assertEquals(GameTabKey.Move(GAME), gameTabKey(sections, BOX_SCORE, KeyEvent.KEYCODE_DPAD_LEFT))
+    }
+
+    @Test
+    fun `left on the first tab and right on the last stay on the tabs`() {
+        assertEquals(GameTabKey.Stay, gameTabKey(sections, GAME, KeyEvent.KEYCODE_DPAD_LEFT))
+        assertEquals(GameTabKey.Stay, gameTabKey(sections, HIGHLIGHTS, KeyEvent.KEYCODE_DPAD_RIGHT))
+    }
+
+    @Test
+    fun `up, down and OK are left to the usual focus handling`() {
+        listOf(KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_CENTER).forEach { key ->
+            assertEquals(GameTabKey.Pass, gameTabKey(sections, BOX_SCORE, key))
+        }
+    }
+
+    @Test
+    fun `a section that is gone moves to the first tab, and no tabs stay put`() {
+        assertEquals(GameTabKey.Move(GAME), gameTabKey(sections, GameSection.STANDINGS, KeyEvent.KEYCODE_DPAD_RIGHT))
+        assertEquals(GameTabKey.Stay, gameTabKey(emptyList(), null, KeyEvent.KEYCODE_DPAD_RIGHT))
     }
 
     @Test

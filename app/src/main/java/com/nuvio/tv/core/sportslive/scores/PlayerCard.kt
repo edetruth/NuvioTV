@@ -26,7 +26,12 @@ data class PlayerGame(
     val opponent: String,
     val result: String?,
     val score: String?,
-    val line: List<PlayerStat>
+    val line: List<PlayerStat>,
+    /** ESPN's team id and logo of the opponent: the row's logo, and its short name from the team directory. */
+    val opponentId: String? = null,
+    val opponentLogo: String? = null,
+    /** "Lions" (the Team page's wording, #134), when the team directory knows the opponent; else [opponent]. */
+    val opponentName: String? = null
 )
 
 /** Everything a Player card (#63) shows. [lastGames] is newest first, at most [PlayerCards.LAST_GAMES]. */
@@ -74,6 +79,19 @@ object PlayerCards {
         val id = leader.athleteId?.trim()?.takeIf { it.isNotEmpty() } ?: return null
         if (!supports(team.league, team.event.leagueSlug)) return null
         return PlayerCardTarget(team.league, id, leader.player, team.name.takeIf { it.isNotBlank() })
+    }
+
+    /**
+     * [card] with each last game's opponent by its short name ("@ Lions", as the Team page, #134), from [teams]
+     * (the league's team directory) by ESPN id; a game whose opponent is not listed keeps its abbreviation.
+     */
+    fun namedOpponents(card: PlayerCard, teams: List<DirectoryTeam>): PlayerCard {
+        if (teams.isEmpty() || card.lastGames.none { it.opponentId != null }) return card
+        val byId = teams.associateBy { it.id }
+        return card.copy(lastGames = card.lastGames.map { game ->
+            val team = game.opponentId?.let(byId::get) ?: return@map game
+            game.copy(opponentName = team.shortName ?: team.nickname ?: game.opponent)
+        })
     }
 
     /** The card, or null when the athlete response names no player. [gameLog] null: no last games. */
@@ -127,6 +145,8 @@ object PlayerCards {
                 opponent = opponent,
                 result = event.gameResult.clean(),
                 score = event.score.clean()?.let { ownScoreFirst(event.gameResult.clean(), it) },
+                opponentId = event.opponent?.id.clean(),
+                opponentLogo = event.opponent?.logo.clean(),
                 line = columns.mapNotNull { index ->
                     val label = labels.getOrNull(index).clean() ?: return@mapNotNull null
                     val value = stats.getOrNull(index).clean() ?: return@mapNotNull null

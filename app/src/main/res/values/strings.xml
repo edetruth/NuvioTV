@@ -3786,10 +3786,12 @@
     <string name="sports_live_results_menu_title">%1$s at %2$s</string>
     <string name="sports_live_game_watch_replay">Watch replay</string>
     <string name="sports_live_game_following">Following %1$s</string>
-    <string name="sports_live_game_reveal">Reveal score and stats</string>
+    <string name="sports_live_game_reveal">Reveal score</string>
     <string name="sports_live_game_hidden">Score and stats are hidden</string>
+    <string name="sports_live_game_hidden_reveal_note">Reveal shows the score, records, box score and highlights for this game.</string>
+    <string name="sports_live_game_hidden_replay_note">Watch replay starts the game without showing the score.</string>
     <string name="sports_live_game_section_game">Game</string>
-    <string name="sports_live_game_section_box_score">Box Score</string>
+    <string name="sports_live_game_section_box_score">Box score</string>
     <string name="sports_live_game_section_standings">Standings</string>
     <string name="sports_live_game_section_highlights">Highlights</string>
     <string name="sports_live_game_top_performers">Top performers</string>
@@ -3800,6 +3802,7 @@
     <string name="sports_live_game_percent">%1$s%%</string>
     <string name="sports_live_game_performer_stat">%1$s %2$s</string>
     <string name="sports_live_game_team">Team</string>
+    <string name="sports_live_game_player">Player</string>
     <string name="sports_live_game_totals">Totals</string>
     <string name="sports_live_game_duration">%1$d:%2$02d</string>
     <string name="sports_live_game_highlights_note">OK plays a clip · clips that fail to play are skipped</string>
@@ -3813,7 +3816,6 @@
     <string name="sports_live_team_last">Last %1$d</string>
     <string name="sports_live_team_next">Next games</string>
     <string name="sports_live_team_leaders">Leaders</string>
-    <string name="sports_live_team_reveal_results">Reveal results</string>
     <string name="sports_live_team_reveal_all">Reveal record and results</string>
     <string name="sports_live_team_hidden_off">Scores are off · Reveal to load this team\'s record and games</string>
     <string name="sports_live_team_unavailable">This team\'s page is unavailable right now</string>
@@ -3829,11 +3831,9 @@
     <string name="sports_live_team_streak_won">Won %1$d</string>
     <string name="sports_live_team_streak_lost">Lost %1$d</string>
     <string name="sports_live_team_home_record">Home %1$s</string>
-    <string name="sports_live_team_live">LIVE</string>
+    <string name="sports_live_team_live">Live</string>
     <string name="sports_live_team_reminder_set">Reminder set</string>
     <string name="sports_live_team_leader_player">%1$s · %2$s</string>
-    <string name="sports_live_team_keys">↑ ↓ sections · ← → games · OK open · Back to return</string>
-    <string name="sports_live_game_keys">← → sections · ↑ ↓ scroll · Back to return</string>
     <string name="sports_live_player_season">Season stats</string>
     <string name="sports_live_player_last_games">Last 5 games</string>
     <string name="sports_live_player_last_games_hidden">Results and stat lines are hidden</string>
@@ -3844,7 +3844,6 @@
     <string name="sports_live_player_no_games">No recent games</string>
     <string name="sports_live_player_jersey">#%1$s</string>
     <string name="sports_live_player_opponent">%1$s %2$s</string>
-    <string name="sports_live_player_keys">Back to return</string>
     <string name="sports_live_stat_fg_pct" formatted="false">Field goal %</string>
     <string name="sports_live_stat_three_pct" formatted="false">3-point %</string>
     <string name="sports_live_stat_rebounds">Rebounds</string>

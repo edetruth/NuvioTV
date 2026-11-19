@@ -6,10 +6,13 @@ import com.nuvio.tv.core.sportslive.scores.EspnLeague
 import com.nuvio.tv.core.sportslive.scores.PlayerCard
 import com.nuvio.tv.core.sportslive.scores.PlayerCardRepository
 import com.nuvio.tv.core.sportslive.scores.PlayerCardTarget
+import com.nuvio.tv.core.sportslive.scores.PlayerCards
 import com.nuvio.tv.core.sportslive.scores.ScoreSettings
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
+import com.nuvio.tv.core.sportslive.scores.TeamDirectory
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -20,6 +23,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 /**
@@ -60,8 +64,14 @@ data class SportsLivePlayerCardUiState(
     /** The last games' results and stat lines show: Scores Show (unless [spoilerSafe]), or revealed. */
     val showsLastGames: Boolean get() = (mode == ScoresMode.SHOW && !spoilerSafe) || revealed
 
-    /** Reveal is offered while something is hidden and not known to be unavailable. */
-    val showsReveal: Boolean get() = !showsLastGames && status != PlayerCardStatus.FAILED
+    /** Hide until focused (#134): each last game's result and line show while its row has focus; no Reveal needed. */
+    val revealsOnFocus: Boolean get() = mode == ScoresMode.HIDE_UNTIL_FOCUSED && !spoilerSafe && !revealed
+
+    /** Whether a last game's result and stat line show, its row [focused] or not. */
+    fun showsGame(focused: Boolean): Boolean = showsLastGames || (revealsOnFocus && focused)
+
+    /** Reveal is offered while something is hidden (Off, or spoiler-safe) and not known to be unavailable. */
+    val showsReveal: Boolean get() = !showsLastGames && !revealsOnFocus && status != PlayerCardStatus.FAILED
 }
 
 /**
@@ -79,7 +89,12 @@ class SportsLivePlayerCardViewModel internal constructor(
     @Inject
     constructor(cards: PlayerCardRepository, prefs: SportsLivePreferencesDataStore) : this(
         request = SportsLivePlayerCardRequests.take(),
-        loadCard = cards::load,
+        // The athlete and game log JSON parse off the main thread (#107).
+        loadCard = { league, athleteId ->
+            withContext(Dispatchers.Default) {
+                cards.load(league, athleteId)?.let { PlayerCards.namedOpponents(it, TeamDirectory.shared.teams(league)) }
+            }
+        },
         settings = prefs.scoreSettings
     )
 

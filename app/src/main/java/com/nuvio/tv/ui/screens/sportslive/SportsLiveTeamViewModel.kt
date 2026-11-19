@@ -23,6 +23,7 @@ import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveTab
 import com.nuvio.tv.domain.repository.SportsLiveRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -31,10 +32,14 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
+import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.EmptyCoroutineContext
 
 /** What opens a Team page (#62): the team and the game it was opened from. */
 data class SportsLiveTeamRequest(val team: TeamRef)
@@ -89,7 +94,9 @@ class SportsLiveTeamViewModel internal constructor(
     private val unfollow: suspend (FollowedTeam) -> Unit,
     /** The section's items (claimed catalogs) from its latest load. */
     items: Flow<List<SportsLiveItem>>,
-    private val now: () -> Long
+    private val now: () -> Long,
+    /** Where the replay and card matching runs: off the main thread in the app (#107). */
+    matchContext: CoroutineContext = EmptyCoroutineContext
 ) : ViewModel() {
 
     @Inject
@@ -99,7 +106,8 @@ class SportsLiveTeamViewModel internal constructor(
         sportsLive: SportsLiveRepository
     ) : this(
         request = SportsLiveTeamRequests.take(),
-        loadTeam = repository::load,
+        // The team and schedule JSON parse off the main thread (#107).
+        loadTeam = { league, teamId -> withContext(Dispatchers.Default) { repository.load(league, teamId) } },
         settings = prefs.scoreSettings,
         followedTeams = prefs.followedTeams,
         follow = prefs::follow,
@@ -108,7 +116,8 @@ class SportsLiveTeamViewModel internal constructor(
             val keys = claimed.mapTo(HashSet()) { it.key }
             load?.items.orEmpty().filter { it.catalogKey in keys }
         },
-        now = System::currentTimeMillis
+        now = System::currentTimeMillis,
+        matchContext = Dispatchers.Default
     )
 
     private data class Page(
@@ -139,7 +148,7 @@ class SportsLiveTeamViewModel internal constructor(
             replays = data?.let { TeamPages.replaysFor(it.recent, SportsLiveItemBucketer.bucketTab(items, SportsLiveTab.REPLAYS, nowMs), nowMs) }.orEmpty(),
             cards = data?.let { teamPageCards(it.upcoming, items, isFollowed, nowMs) }.orEmpty()
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SportsLiveTeamUiState(team = request?.team))
+    }.flowOn(matchContext).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SportsLiveTeamUiState(team = request?.team))
 
     init {
         val team = request?.team
