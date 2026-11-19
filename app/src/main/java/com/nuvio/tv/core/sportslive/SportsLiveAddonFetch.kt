@@ -3,6 +3,7 @@ package com.nuvio.tv.core.sportslive
 import com.nuvio.tv.core.network.NetworkResult
 import com.nuvio.tv.domain.model.Stream
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withTimeoutOrNull
@@ -50,7 +51,7 @@ class SportsLiveAddonFetch(private val timeoutMs: Long = SportsLiveStreamThresho
     ): NetworkResult<List<Stream>>? = withTimeoutOrNull(timeoutMs) {
         coroutineScope {
             val askMeta = synchronized(noInlineStreams) { addonKey !in noInlineStreams }
-            val meta = if (askMeta) {
+            val meta: Deferred<List<Stream>>? = if (askMeta) {
                 async {
                     try {
                         inlineFromMeta()

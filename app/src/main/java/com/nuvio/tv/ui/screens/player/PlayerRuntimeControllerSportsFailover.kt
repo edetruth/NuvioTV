@@ -360,16 +360,27 @@ private fun PlayerRuntimeController.recoverSportsHealth(problem: SportsLiveStrea
  * ladder. Not sports: the card is cleared and nothing is scheduled. Called for every new load.
  */
 internal fun PlayerRuntimeController.scheduleSportsStartupTimeout() {
-    sportsStartupJob?.cancel()
-    sportsStartRequestFailed = false
     val sports = SportsLiveExtraSources.isSportsPlayback(contentId)
     // A sports link whose host does not exist fails at once instead of being retried (#138).
     mediaSourceFactory.failFastOnDeadHost = sports
+    val url = currentStreamUrl
+    // The player's own retries (a rebuild, a timeout retry) load the same link again: its start-up
+    // time keeps running, or retrying would hold a dead link on "Starting stream…" forever.
+    if (sports && url == sportsStartupUrl && sportsStartupJob?.isActive == true && !hasRenderedFirstFrame) return
+    sportsStartupJob?.cancel()
+    sportsStartRequestFailed = false
+    sportsStartupUrl = url
+    // Another game in the same player (a zap): its links and its failover tries start from zero.
+    if (contentId != sportsStartupGame) {
+        sportsStartupGame = contentId
+        sportsStartedLinks.clear()
+        sportsFailoverAttempts = 0
+        sportsFailoverTriedKeys.clear()
+    }
     if (!sports) {
         if (_uiState.value.sportsStarting != null) _uiState.update { it.copy(sportsStarting = null) }
         return
     }
-    val url = currentStreamUrl
     if (url.isNotBlank()) sportsStartedLinks += url
     val number = sportsStartedLinks.indexOf(url) + 1
     _uiState.update {
@@ -412,6 +423,8 @@ internal fun PlayerRuntimeController.finishSportsStartup() {
 private fun PlayerRuntimeController.stopPendingSportsStart() {
     sportsStartupJob?.cancel()
     sportsStartupJob = null
+    // A retry of the same link the player scheduled must not bring it back.
+    errorRetryJob?.cancel()
     if (!hasRenderedFirstFrame) _exoPlayer?.stop()
 }
 

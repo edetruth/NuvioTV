@@ -298,6 +298,12 @@ class PlayerRuntimeController(
     internal var sportsStartupJob: Job? = null
     @Volatile internal var sportsStartRequestFailed = false
 
+    /** The link [sportsStartupJob] times; a reload of the same link keeps its timer (#138). */
+    internal var sportsStartupUrl: String? = null
+
+    /** The game the sports failover counters belong to; another game resets them (#138). */
+    internal var sportsStartupGame: String? = null
+
     /** The sports links this player started, in order: the starting card's "link N" (#138). */
     internal val sportsStartedLinks = LinkedHashSet<String>()
 

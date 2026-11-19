@@ -1412,14 +1412,17 @@ fun PlayerScreen(
             visible = (uiState.showLoadingOverlay || uiState.showEpisodeAutoPlayLoadingOverlay) &&
                 uiState.error == null && !postPlayRecommendationState.isVisible,
             backdropUrl = uiState.backdrop,
-            logoUrl = uiState.logo,
-            title = uiState.title,
-            message = if (uiState.isEpisodeAutoPlaySearching) {
+            // Sports & Live (#138): the starting card says it all; only the backdrop stays behind it.
+            logoUrl = uiState.logo.takeUnless { sportsStartingVisible },
+            title = uiState.title.takeUnless { sportsStartingVisible },
+            message = if (sportsStartingVisible) {
+                null
+            } else if (uiState.isEpisodeAutoPlaySearching) {
                 stringResource(R.string.stream_finding_source).takeIf { uiState.showPlayerLoadingStatus }
             } else {
                 uiState.loadingMessage.takeIf { uiState.showPlayerLoadingStatus || uiState.isTorrentStream }
             },
-            progress = uiState.loadingProgress.takeUnless { uiState.isEpisodeAutoPlaySearching },
+            progress = uiState.loadingProgress.takeUnless { uiState.isEpisodeAutoPlaySearching || sportsStartingVisible },
             modifier = Modifier
                 .fillMaxSize()
                 .zIndex(2f)

@@ -543,11 +543,14 @@ class SportsLiveDualViewModel internal constructor(
         val side = state.sideOf(item) ?: return
         val pane = state.pane(side)
         if (stream != null && !sameLink(pane.stream, stream)) return
-        // A dead host (#138) moves on to the next link even before the first frame, with no retry.
-        if (!decoderInit && (pane.status == PaneStatus.Playing || pane.reconnecting ||
-                problem == SportsLiveStreamHealth.Problem.DEAD_LINK)
-        ) {
+        if (!decoderInit && (pane.status == PaneStatus.Playing || pane.reconnecting)) {
             onUnhealthy(item, problem)
+            return
+        }
+        // A link that fails to start (#138) moves on to the next link, with no retry, as the full player does.
+        if (!decoderInit && pane.status == PaneStatus.Loading && pane.stream != null) {
+            val startProblem = if (problem == SportsLiveStreamHealth.Problem.DEAD_LINK) problem else SportsLiveStreamHealth.Problem.NO_START
+            onUnhealthy(item, startProblem)
             return
         }
         // No decoder while the other pane holds one (starting or playing): the device cannot play two at once.

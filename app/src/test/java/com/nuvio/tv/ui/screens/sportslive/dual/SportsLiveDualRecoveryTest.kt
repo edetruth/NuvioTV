@@ -227,12 +227,22 @@ class SportsLiveDualRecoveryTest {
     }
 
     @Test
-    fun `a start-up error without a recovery keeps the old behaviour`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `a start-up error moves to the next link, and with none left the pane offers the choices`() = runTest(mainDispatcherRule.dispatcher) {
+        nextLinks["a"] = ArrayDeque(listOf(streamA2))
         val viewModel = newViewModel()
         runCurrent()
         viewModel.onPlayerError(a, decoderInit = false)
+        runCurrent()
+        assertEquals(streamA2, viewModel.current().left.stream)
+        assertEquals(0, viewModel.current().left.attempt)
+
+        // The new link's start error is retried once as is, then nothing is left: the choices.
+        viewModel.onPlayerError(a, decoderInit = false)
+        assertEquals(1, viewModel.current().left.attempt)
+        viewModel.onPlayerError(a, decoderInit = false)
+        runCurrent()
         assertEquals(PaneStatus.Error, viewModel.current().left.status)
-        assertTrue(lookups.isEmpty())
+        assertEquals(2, lookups.size)
     }
 
     @Test

@@ -3948,7 +3948,7 @@
     <string name="sports_live_starting_link">Starting link %1$d</string>
     <string name="sports_live_starting_link_of">Starting link %1$d of %2$d</string>
     <string name="sports_live_try_next_link">Try next link</string>
-    <string name="sports_live_link_slow">That link was slow to start. Trying the next one…</string>
+    <string name="sports_live_link_slow">That link was slow to start</string>
     <string name="sports_live_link_not_working">This link isn\'t working</string>
     <string name="sports_live_zap_skipped">No streams for %1$s — skipped</string>
     <string name="sports_live_dual_device_limit">This device can\'t play two streams at once</string>

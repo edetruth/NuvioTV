@@ -269,7 +269,7 @@ class PlayerZapControllerTest {
             SportsLiveZapSession.of(many, "addon|g0", SportsLiveTab.LIVE_NOW, sportKey("Football"), false)!!
         )
         val controller = controller()
-        many.forEach { pending[it.id] = CompletableDeferred<Stream?>(null) }
+        many.forEach { pending[it.id] = CompletableDeferred<Stream?>().apply { complete(null) } }
 
         controller.zap("g0", forward = true)
         runCurrent()

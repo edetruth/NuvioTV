@@ -105,6 +105,7 @@ class SportsLiveDualHandOffTest {
             val viewModel = newViewModel()
             runCurrent()
             viewModel.onPlayerError(a, decoderInit = false)
+            runCurrent()
 
             assertEquals(PaneStatus.Error, viewModel.current().left.status)
             assertTrue(links.isQuarantined(a.id, playing.url))
