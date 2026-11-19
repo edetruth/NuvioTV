@@ -412,7 +412,7 @@ data class SportsLiveZapPanelState(
     val items: List<SportsLiveItem> = rows.map { it.item }
 
     /** The list under Now playing, wrapped round from the game after the current one (#140). */
-    val guide: PanelGuide by lazy { panelGuide(rows, currentKey) }
+    internal val guide: PanelGuide by lazy { panelGuide(rows, currentKey) }
 }
 
 /**
