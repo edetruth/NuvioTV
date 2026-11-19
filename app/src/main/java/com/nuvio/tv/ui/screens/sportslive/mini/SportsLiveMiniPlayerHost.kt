@@ -3,6 +3,7 @@ package com.nuvio.tv.ui.screens.sportslive.mini
 import com.nuvio.tv.core.sportslive.displayName
 import android.content.Context
 import android.view.ViewGroup
+import androidx.activity.compose.BackHandler
 import androidx.annotation.OptIn
 import androidx.compose.animation.core.animateIntOffsetAsState
 import androidx.compose.animation.core.animateIntSizeAsState
@@ -488,6 +489,26 @@ fun SportsLiveMiniPlayerHost(
     ) {
         // A stage at another place or size: the video glides there (its first dock lands at once).
         val docked = (stageSlot ?: lastDocked)?.let { animatedDockBounds(it, hostX, hostY) }
+        // Back or the close key on the focused mini player: it stops, and focus goes back to the content first, as
+        // the Now playing card's Stop; docked, to where it was in the stage or list (#157), whose preview resumes.
+        val close: () -> Unit = {
+            if (controller.isActive) {
+                val restored = stageSlot != null && contentFocusRequester != null && runCatching {
+                    contentFocusRequester.restoreFocusedChild() ||
+                        contentFocusRequester.requestFocus(FocusDirection.Enter)
+                }.getOrDefault(false)
+                if (!restored &&
+                    !focusManager.moveFocus(FocusDirection.Up) &&
+                    !focusManager.moveFocus(FocusDirection.Left)
+                ) {
+                    focusManager.clearFocus()
+                }
+                controller.stop(SportsLiveMiniStop.USER_STOP)
+            }
+        }
+        // With predictive back (target SDK 36) Back also reaches the back callbacks, where a screen's would leave
+        // Sports Live: while the mini player has focus its own callback, added last, takes Back first (#157).
+        if (focused && !inPip) BackHandler { close() }
         val placement = when {
             inPip -> Modifier.fillMaxSize()
             stageSlot != null && docked != null -> with(density) {
@@ -516,21 +537,7 @@ fun SportsLiveMiniPlayerHost(
                         ) ?: return@onKeyEvent false
                         when (key) {
                             SportsLiveMiniKey.EXPAND -> controller.requestExpand()
-                            SportsLiveMiniKey.CLOSE -> {
-                                // Focus goes back to the content first, as the Now playing card's Stop: docked, to
-                                // where it was in the stage or list (#157), whose preview then resumes.
-                                val restored = stageSlot != null && contentFocusRequester != null && runCatching {
-                                    contentFocusRequester.restoreFocusedChild() ||
-                                        contentFocusRequester.requestFocus(FocusDirection.Enter)
-                                }.getOrDefault(false)
-                                if (!restored &&
-                                    !focusManager.moveFocus(FocusDirection.Up) &&
-                                    !focusManager.moveFocus(FocusDirection.Left)
-                                ) {
-                                    focusManager.clearFocus()
-                                }
-                                controller.stop(SportsLiveMiniStop.USER_STOP)
-                            }
+                            SportsLiveMiniKey.CLOSE -> close()
                             SportsLiveMiniKey.RELEASE -> {
                                 // The element the content last had focused (saved as focus left it), else
                                 // the content's default entry.
