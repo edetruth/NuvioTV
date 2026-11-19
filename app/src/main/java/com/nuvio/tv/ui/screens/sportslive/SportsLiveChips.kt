@@ -98,6 +98,17 @@ internal fun sportsLiveShownFilters(values: Collection<String>, counts: Map<Stri
     return listOfNotNull(myTeams.takeIf(::shown)) + sorted
 }
 
+/**
+ * [filters] with "All sports" (#146) after "★ My teams" (first otherwise), so the options read ★ My teams, My
+ * sports (All), All sports, then the sports: offered while My sports hides some of the tab's games.
+ */
+internal fun withAllSports(filters: List<String>): List<String> {
+    val allSports = SportsLiveUiState.ALL_SPORTS_FILTER
+    val rest = filters.filter { it != allSports }
+    val myTeams = rest.takeWhile { it == SportsLiveUiState.MY_TEAMS_FILTER }
+    return myTeams + allSports + rest.drop(myTeams.size)
+}
+
 /** The leading icon of a "My …" chip (#79): a star for followed teams, a grid for Results' My sports. */
 internal enum class SportsLiveChipIcon { NONE, MY_TEAMS, MY_SPORTS }
 

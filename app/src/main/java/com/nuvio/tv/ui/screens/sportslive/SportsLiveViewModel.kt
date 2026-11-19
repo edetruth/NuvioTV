@@ -15,6 +15,8 @@ import com.nuvio.tv.core.sportslive.SportsLiveManifestVerdict
 import com.nuvio.tv.core.sportslive.SportsLiveItemBucketer
 import com.nuvio.tv.core.sportslive.SportsLiveLiveDuration
 import com.nuvio.tv.core.sportslive.SportsLiveSportKind
+import com.nuvio.tv.core.sportslive.SportsLiveMySportsScope
+import com.nuvio.tv.core.sportslive.scores.MySports
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.scores.ExcitementHistory
 import com.nuvio.tv.core.sportslive.scores.LiveScoresRepository
@@ -94,6 +96,8 @@ class SportsLiveViewModel internal constructor(
     logoRevision: Flow<Int> = flowOf(0),
     /** A two-team card with no league, as its league's card when its teams name exactly one (#132 P4). */
     private val inferSport: (SportsLiveItem) -> SportsLiveItem = { it },
+    /** My sports (#146): Live now, Upcoming and Replays list only its games, unless All sports is picked. */
+    mySports: Flow<MySports> = flowOf(MySports.DEFAULT),
     /** The catalog refresh cadence's clock (#71), monotonic; tests pass virtual time. */
     private val refreshClock: () -> Long = { System.nanoTime() / 1_000_000L },
     // Where the list is bucketed and pinned, and the boards built; tests pass their dispatcher, so it runs in virtual time.
@@ -142,6 +146,7 @@ class SportsLiveViewModel internal constructor(
         },
         logoRevision = TeamLogoBook.shared.revision,
         inferSport = { item -> SportsLiveSportInference.infer(item, TeamDirectory.shared) },
+        mySports = prefs.mySports,
         computeDispatcher = Dispatchers.Default
     )
 
@@ -226,11 +231,11 @@ class SportsLiveViewModel internal constructor(
         combine(
             pinned,
             repo.endedKeys,
-            combine(selectionState, scoresMode) { selection, mode -> selection to mode },
+            combine(selectionState, scoresMode, mySports) { selection, mode, sports -> Triple(selection, mode, sports) },
             combine(endedInputs, linkChecker?.dead ?: flowOf(emptyMap())) { inputs, linkDead -> inputs to linkDead },
             clock
-        ) { pinned, endedKeys, (selection, mode), (inputs, linkDead), _ ->
-            buildState(pinned, endedKeys, selection, inputs, mode, linkDead)
+        ) { pinned, endedKeys, (selection, mode, sports), (inputs, linkDead), _ ->
+            buildState(pinned, endedKeys, selection, inputs, mode, linkDead, sports)
         }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SportsLiveUiState())
 
@@ -489,7 +494,9 @@ class SportsLiveViewModel internal constructor(
         /** The Scores setting: only Show draws the excitement badges. */
         mode: ScoresMode? = null,
         /** Cards whose link check found them dead (#60 phase 2), with when. */
-        linkDead: Map<String, SportsLiveLinkVerdicts.Dead> = emptyMap()
+        linkDead: Map<String, SportsLiveLinkVerdicts.Dead> = emptyMap(),
+        /** My sports (#146): scopes Live now, Upcoming and Replays. */
+        mySports: MySports = MySports.DEFAULT
     ): SportsLiveUiState {
         val hasClaimed = bucketed.hasClaimed
         // Live items whose streams are gone have ended; the other tabs are left as they are. Games found
@@ -551,23 +558,36 @@ class SportsLiveViewModel internal constructor(
                 tabItems
             }
         }
-        val tabItems = tabs[selection.tab].orEmpty()
+        // #146: My sports scopes Live now, Upcoming and Replays (never Channels): followed teams' games and games of
+        // no known sport stay. All sports lifts it on the tab it is picked on; the chips and counts follow My sports.
+        val allSports = selection.filter == SportsLiveUiState.ALL_SPORTS_FILTER
+        val scopedTabs = tabs.mapValues { (tab, items) ->
+            if (tab in SCOPED_TABS) SportsLiveMySportsScope.scope(items, mySports) else items
+        }
+        val fullItems = tabs[selection.tab].orEmpty()
+        val scopedItems = scopedTabs[selection.tab].orEmpty()
+        val mySportsScoped = scopedItems.size < fullItems.size
+        val tabItems = if (allSports) fullItems else scopedItems
         // Channels are filtered by region (P4: country codes, long names, the rest under Other), every other tab
         // by sport: one value per sport ("American Football" and "NFL" are both Football), a catch-all
         // ("Sports", a catalog's name) only under All (V2 P3).
         val channels = selection.tab == SportsLiveTab.CHANNELS
         val filterOf: (SportsLiveItem) -> String? =
             if (channels) SportsLiveChannelRegions::regionOf else ({ item -> SportsLiveSportKind.filterKeyOf(item) })
-        val values = tabItems.mapNotNull(filterOf).distinct()
+        val values = scopedItems.mapNotNull(filterOf).distinct()
         // The chips' counts (#79): Live now leaves its Just ended strip out, as its tab count does.
-        val counted = if (selection.tab == SportsLiveTab.LIVE_NOW) tabItems.filter { it.streamKey !in justEnded } else tabItems
-        val counts = sportsLiveFilterCounts(counted, filterOf, myTeams = selection.tab != SportsLiveTab.CHANNELS)
+        fun counted(items: List<SportsLiveItem>) = if (selection.tab == SportsLiveTab.LIVE_NOW) items.filter { it.streamKey !in justEnded } else items
+        val counts = sportsLiveFilterCounts(counted(scopedItems), filterOf, myTeams = selection.tab != SportsLiveTab.CHANNELS)
+            .let { if (mySportsScoped) it + (SportsLiveUiState.ALL_SPORTS_FILTER to counted(fullItems).size) else it }
         // "★ My teams" leads whenever a followed team plays in the tab (never on Channels); chips with no
-        // games hide, except the selected one, kept with 0 until the user moves (onUserMoved).
+        // games hide, except the selected one, kept with 0 until the user moves (onUserMoved). All sports
+        // follows it while My sports hides any of the tab's games (#146).
         val filter = selection.filter
-        val filters = sportsLiveShownFilters(values, counts, filter).let { if (channels) SportsLiveChannelRegions.ordered(it) else it }
+        val filters = sportsLiveShownFilters(values, counts, filter.takeIf { !allSports })
+            .let { if (channels) SportsLiveChannelRegions.ordered(it) else it }
+            .let { shown -> if (mySportsScoped || allSports) withAllSports(shown) else shown }
         val visible = when (filter) {
-            null -> tabItems
+            null, SportsLiveUiState.ALL_SPORTS_FILTER -> tabItems
             SportsLiveUiState.MY_TEAMS_FILTER -> tabItems.filter { it.followed }
             else -> tabItems.filter { filterOf(it) == filter }
         }
@@ -577,10 +597,11 @@ class SportsLiveViewModel internal constructor(
             // Only a load with no data yet shows as loading, so a refresh does not blank the list.
             isLoading = hasClaimed && !bucketed.hasLoad && selection.isRefreshing,
             hasClaimedCatalogs = hasClaimed,
-            tabs = tabs,
+            tabs = if (allSports) scopedTabs + (selection.tab to fullItems) else scopedTabs,
             selectedTab = selection.tab,
             filters = filters,
             selectedFilter = filter,
+            mySportsScoped = mySportsScoped || allSports,
             filterCounts = counts,
             visibleItems = visible,
             selectedItemId = selectedId,
@@ -596,6 +617,9 @@ class SportsLiveViewModel internal constructor(
         const val MINUTE_MS = 60_000L
         const val FOCUS_PROBE_DELAY_MS = 700L
         const val ENDED_TICK_MS = 30_000L
+
+        /** The tabs My sports scopes (#146); never Channels or Results (which has its own My sports). */
+        val SCOPED_TABS = setOf(SportsLiveTab.LIVE_NOW, SportsLiveTab.UPCOMING, SportsLiveTab.REPLAYS)
 
         /** The tabs whose game cards take the league their teams name; never Channels or Results. */
         val INFERRED_TABS = setOf(SportsLiveTab.LIVE_NOW, SportsLiveTab.UPCOMING, SportsLiveTab.REPLAYS)

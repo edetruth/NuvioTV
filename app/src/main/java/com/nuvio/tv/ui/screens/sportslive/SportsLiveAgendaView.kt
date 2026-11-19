@@ -250,7 +250,8 @@ internal fun SportsLiveReplayStage(
                 text = title,
                 style = SportsLiveTokens.style(TITLE_STYLE).sportsLiveBold().copy(color = Colors.TextPrimary),
                 maxLines = 1,
-                softWrap = false,
+                // Still too long at the smallest size: cut with an ellipsis, never mid-letter.
+                overflow = TextOverflow.Ellipsis,
                 autoSize = TextAutoSize.StepBased(minFontSize = 15.sp, maxFontSize = TITLE_STYLE.fontSize, stepSize = 1.sp)
             )
             replayWhenText(row.item, nowMs)?.let { whenText ->

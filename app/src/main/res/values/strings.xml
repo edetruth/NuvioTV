@@ -3657,6 +3657,8 @@
     <string name="sports_live_filter_all">All</string>
     <string name="sports_live_filter_my_teams">My teams</string>
     <string name="sports_live_filter_my_teams_star">★ My teams</string>
+    <!-- #146: the header filter's All while My sports hides some games; "All sports" lifts it. -->
+    <string name="sports_live_filter_my_sports">My sports</string>
     <string name="sports_live_source_failure_line">%1$s · %2$s: %3$s</string>
     <string name="sports_live_status_live_clock">● %1$s</string>
     <string name="sports_live_status_clock_period">%1$s · %2$s</string>
@@ -3936,6 +3938,7 @@
     <string name="sports_live_panel_now_playing">NOW PLAYING</string>
     <string name="sports_live_panel_vs">vs</string>
     <string name="sports_live_panel_clock">%1$s %2$s</string>
+    <string name="sports_live_panel_from_the_top">From the top</string>
     <string name="sports_live_dual_stream_error">Couldn\'t play this stream</string>
     <string name="sports_live_dual_stream_error_hint">Press OK to open it in the full player, which can prepare more kinds of streams</string>
     <string name="sports_live_dual_device_limit">This device can\'t play two streams at once</string>

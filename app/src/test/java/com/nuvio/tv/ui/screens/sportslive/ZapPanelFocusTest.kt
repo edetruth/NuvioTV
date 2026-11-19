@@ -76,9 +76,9 @@ class ZapPanelFocusTest {
         assertEquals(listOf("a", "b", "c", "d"), stable.map { it.item.id })
         // The focused row (b) is found by key at the same list index (one header above the group).
         val focused = shown[1].item.streamKey
-        assertEquals(panelListIndex(shown, focused), panelListIndex(stable, focused))
-        assertEquals(2, panelListIndex(stable, focused))
-        assertEquals(-1, panelListIndex(stable, "missing"))
+        assertEquals(panelGuide(shown, null).indexOf(focused), panelGuide(stable, null).indexOf(focused))
+        assertEquals(2, panelGuide(stable, null).indexOf(focused))
+        assertEquals(-1, panelGuide(stable, null).indexOf("missing"))
     }
 
     @Test
@@ -90,7 +90,7 @@ class ZapPanelFocusTest {
         assertEquals(listOf("b", "c", "a"), stable.map { it.item.id })
         assertEquals(listOf(ZapPanelGroup.LIVE_NOW, ZapPanelGroup.LIVE_NOW, ZapPanelGroup.JUST_ENDED), stable.map { it.group })
         // Two groups: headers at 0 and 3, a at index 4.
-        assertEquals(4, panelListIndex(stable, stable[2].item.streamKey))
+        assertEquals(4, panelGuide(stable, null).indexOf(stable[2].item.streamKey))
         assertEquals(fresh, stabilizePanelRows(fresh, null))
     }
 
@@ -103,13 +103,6 @@ class ZapPanelFocusTest {
         assertTrue(panelMayReorder(focusedKey = "a|b", nowMs = (minute + 1) * PANEL_REORDER_MS, lastMinute = minute))
         // Nothing shown yet: the first list is taken as is.
         assertTrue(panelMayReorder(focusedKey = "a|b", nowMs = inMinute, lastMinute = null))
-    }
-
-    @Test
-    fun `Up from the first game row reaches the chips, other rows keep the default`() {
-        assertEquals(ZapPanelStop.CHIPS, zapPanelUpFrom(0))
-        assertNull(zapPanelUpFrom(1))
-        assertNull(zapPanelUpFrom(7))
     }
 
     @Test

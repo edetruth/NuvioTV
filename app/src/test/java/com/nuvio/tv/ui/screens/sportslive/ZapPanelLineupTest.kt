@@ -8,6 +8,8 @@ import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.scores.EspnLeague
 import com.nuvio.tv.core.sportslive.scores.LiveScoresRepository
+import com.nuvio.tv.core.sportslive.scores.MySport
+import com.nuvio.tv.core.sportslive.scores.MySports
 import com.nuvio.tv.core.sportslive.scores.ScoreProvider
 import com.nuvio.tv.core.sportslive.scores.ScoreSettings
 import com.nuvio.tv.core.sportslive.scores.ScoreboardResult
@@ -34,6 +36,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -97,7 +100,42 @@ class ZapPanelLineupTest {
         runCurrent()
     }
 
-    private fun TestScope.panelViewModel(latest: MutableStateFlow<SportsLiveLoad>, playing: SportsLiveItem): SportsLiveZapViewModel {
+    @Test
+    fun `the lineup and the panel follow My sports, and All sports in the panel brings every game back`() = runTest(mainDispatcherRule.dispatcher) {
+        // Earliest start first: a (basketball), c (cricket), b (basketball).
+        val a = item("a", now - 90 * MINUTE)
+        val c = item("c", now - 60 * MINUTE, sport = "Cricket")
+        val b = item("b", now - 45 * MINUTE)
+        val latest = MutableStateFlow(SportsLiveLoad(listOf(a, c, b), emptyList(), 0L, setOf(CATALOG)))
+        val viewModel = panelViewModel(latest, playing = a, mySports = MySports(mapOf(MySport.BASKETBALL to emptySet())))
+        runCurrent()
+
+        // CH- and CH+ never land on the cricket game.
+        assertEquals("b", zap(viewModel, KeyEvent.KEYCODE_CHANNEL_DOWN))
+        assertEquals("b", zap(viewModel, KeyEvent.KEYCODE_CHANNEL_UP))
+
+        viewModel.openPanel()
+        val panel = viewModel.panel.first { it != null }!!
+        assertEquals(listOf("a", "b"), panel.items.map { it.id })
+        assertEquals(listOf("b"), panel.guide.rows.map { it.item.id })
+        assertTrue(SportsLiveUiState.ALL_SPORTS_FILTER in panel.chips)
+        assertEquals(2, panel.counts[null])
+        assertEquals(3, panel.counts[SportsLiveUiState.ALL_SPORTS_FILTER])
+
+        // All sports: the panel lists every game, and the zaps walk them all.
+        viewModel.onPanelChip(SportsLiveUiState.ALL_SPORTS_FILTER)
+        val everything = viewModel.panel.first { it?.items?.size == 3 }!!
+        assertEquals(listOf("c", "b"), everything.guide.rows.map { it.item.id })
+        viewModel.closePanel()
+        runCurrent()
+        assertEquals("c", zap(viewModel, KeyEvent.KEYCODE_CHANNEL_DOWN))
+    }
+
+    private fun TestScope.panelViewModel(
+        latest: MutableStateFlow<SportsLiveLoad>,
+        playing: SportsLiveItem,
+        mySports: MySports = MySports.DEFAULT
+    ): SportsLiveZapViewModel {
         SportsLiveZapSessions.start(
             SportsLiveZapSession.of(latest.value.items, playing.streamKey, SportsLiveTab.LIVE_NOW, null, returnToHomeOnBack = false)!!
         )
@@ -121,11 +159,11 @@ class ZapPanelLineupTest {
         coEvery { resolver.resolve(any()) } returns null
         return SportsLiveZapViewModel(
             SavedStateHandle(mapOf("contentId" to playing.id)), resolver, mockk<DirectDebridResolver>(relaxed = true),
-            profiles, repo, scores, mainDispatcherRule.dispatcher
+            profiles, repo, scores, mainDispatcherRule.dispatcher, mySports = flowOf(mySports)
         )
     }
 
-    private fun item(id: String, startMs: Long?) = SportsLiveItem(
+    private fun item(id: String, startMs: Long?, sport: String = "Basketball") = SportsLiveItem(
         meta = MetaPreview(
             id = id, type = ContentType.UNKNOWN, rawType = "tv", name = "Team $id vs Other $id", poster = null,
             posterShape = PosterShape.LANDSCAPE, background = null, logo = null, description = null,
@@ -133,7 +171,7 @@ class ZapPanelLineupTest {
         ),
         addonId = "addon", addonName = "Sports", addonBaseUrl = "https://example.invalid", catalogKey = CATALOG,
         catalogName = "Live", kind = SportsLiveKind.EVENTS, isLive = true, isChannel = false,
-        startMs = startMs, sport = "Basketball", startHasTimeOfDay = startMs != null,
+        startMs = startMs, sport = sport, startHasTimeOfDay = startMs != null,
         teams = SportsLiveTeams.parse("Team $id vs Other $id")
     )
 

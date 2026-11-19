@@ -627,7 +627,9 @@ private fun SportsLiveContent(
     // The tab's filter (V2): one focus stop in the header. Upcoming inline; Channels' regions, Replays' sports
     // and Results' sports as one dropdown each (P4).
     val resultsFilterShown = showingResults && results.status == ResultsStatus.READY && results.sports.isNotEmpty()
-    val filterShown = if (showingResults) resultsFilterShown else sportsLiveHeaderFilterShown(uiState.selectedTab, uiState.filters.size)
+    // #146: while My sports hides games, All sports is offered (on Live now too, as its only option).
+    val allSportsOffered = SportsLiveUiState.ALL_SPORTS_FILTER in uiState.filters
+    val filterShown = if (showingResults) resultsFilterShown else sportsLiveHeaderFilterShown(uiState.selectedTab, uiState.filters.size, allSportsOffered)
     val filterFocusRequester = remember { FocusRequester() }
     // The one-line header (V2): Up from the content goes to the tab's filter (the tabs sit left of it: Right
     // along them would switch tabs), else to the active tab; on Results, to the day in the title.
@@ -639,29 +641,39 @@ private fun SportsLiveContent(
     val aboveListFocusRequester = if (catchUpShown) catchUpFocusRequester else aboveContentFocusRequester
     val myTeamsLabel = stringResource(R.string.sports_live_filter_my_teams_star)
     val allLabel = stringResource(
-        when (uiState.selectedTab) {
-            SportsLiveTab.CHANNELS -> R.string.sports_live_filter_all_regions
-            SportsLiveTab.REPLAYS -> R.string.sports_live_filter_all_sports
+        when {
+            // #146: All is My sports' games while it scopes the tab; All sports is its own option.
+            uiState.mySportsScoped -> R.string.sports_live_filter_my_sports
+            uiState.selectedTab == SportsLiveTab.CHANNELS -> R.string.sports_live_filter_all_regions
+            uiState.selectedTab == SportsLiveTab.REPLAYS -> R.string.sports_live_filter_all_sports
             else -> R.string.sports_live_filter_all
         }
     )
+    val allSportsLabel = stringResource(R.string.sports_live_filter_all_sports)
     // Short sport names (V2 P3): "Football", "Soccer"; a channel region by its code or name (P4).
     val otherRegionLabel = stringResource(R.string.sports_live_region_other)
     val filterLabels = uiState.filters.associateWith { value ->
-        if (uiState.selectedTab == SportsLiveTab.CHANNELS) channelRegionLabel(value, otherRegionLabel) else sportFilterLabel(value)
+        when {
+            value == SportsLiveUiState.ALL_SPORTS_FILTER -> allSportsLabel
+            uiState.selectedTab == SportsLiveTab.CHANNELS -> channelRegionLabel(value, otherRegionLabel)
+            else -> sportFilterLabel(value)
+        }
     }
+    // Live now has no sport filter (V2): only My sports and All sports (#146).
+    val headerFilters = if (uiState.selectedTab == SportsLiveTab.LIVE_NOW) uiState.filters.filter { it == SportsLiveUiState.ALL_SPORTS_FILTER } else uiState.filters
     val mySportsLabel = stringResource(R.string.sports_live_results_my_sports_star)
     val resultsSportLabels = results.sports.associateWith { mySportLabel(it) }
-    val filterOptions = remember(filterShown, showingResults, uiState.filters, myTeamsLabel, allLabel, filterLabels, results.sports, resultsSportLabels, mySportsLabel) {
+    val filterOptions = remember(filterShown, showingResults, headerFilters, myTeamsLabel, allLabel, filterLabels, results.sports, resultsSportLabels, mySportsLabel) {
         when {
             !filterShown -> null
             showingResults -> listOf(SportsLiveFilterOption(null, mySportsLabel, gold = true)) +
                 results.sports.map { SportsLiveFilterOption(it.id, resultsSportLabels[it] ?: it.id) }
-            else -> sportsLiveFilterOptions(uiState.filters, myTeamsLabel, allLabel) { filterLabels[it] ?: it }
+            else -> sportsLiveFilterOptions(headerFilters, myTeamsLabel, allLabel) { filterLabels[it] ?: it }
         }
     }
     val editMySportsLabel = stringResource(R.string.sports_live_results_edit_my_sports)
     val filterDropdown = when (uiState.selectedTab) {
+        SportsLiveTab.LIVE_NOW -> SportsLiveHeaderDropdown(stringResource(R.string.sports_live_filter_title_sport))
         SportsLiveTab.CHANNELS -> SportsLiveHeaderDropdown(stringResource(R.string.sports_live_filter_title_region))
         SportsLiveTab.REPLAYS -> SportsLiveHeaderDropdown(stringResource(R.string.sports_live_filter_title_sport))
         // "Edit my sports" closes the menu (F7: no chip runs under it any more).
@@ -680,9 +692,10 @@ private fun SportsLiveContent(
     } else {
         null
     }
-    // Live now has no filter (V2): a filter left from earlier falls back to All.
+    // Live now has no sport filter (V2): a filter left from earlier falls back to All; All sports stays (#146).
     LaunchedEffect(uiState.selectedTab, uiState.selectedFilter) {
-        if (uiState.selectedTab == SportsLiveTab.LIVE_NOW && uiState.selectedFilter != null) onSelectFilter(null)
+        val filter = uiState.selectedFilter
+        if (uiState.selectedTab == SportsLiveTab.LIVE_NOW && filter != null && filter != SportsLiveUiState.ALL_SPORTS_FILTER) onSelectFilter(null)
     }
     var failuresOpen by remember { mutableStateOf(false) }
     if (failuresOpen && uiState.failures.isNotEmpty()) {

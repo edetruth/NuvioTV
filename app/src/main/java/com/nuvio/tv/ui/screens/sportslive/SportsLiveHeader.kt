@@ -44,9 +44,12 @@ import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens.Size
  * Whether [tab] shows the header's addon filter (V2): Upcoming (inline), Channels (regions) and Replays
  * (sports) as a dropdown (P4), with two or more values. Live now has no filter; Results has its own sports
  * dropdown ([SportsLiveHeaderDropdown]).
+ *
+ * While My sports hides some of the tab's games ([allSports], #146), the filter shows whatever its count, so
+ * All sports is one press away: on Live now too, as a dropdown of just My sports and All sports.
  */
-internal fun sportsLiveHeaderFilterShown(tab: SportsLiveTab, filterCount: Int): Boolean =
-    tab in FILTER_TABS && filterCount >= 2
+internal fun sportsLiveHeaderFilterShown(tab: SportsLiveTab, filterCount: Int, allSports: Boolean = false): Boolean =
+    if (tab == SportsLiveTab.LIVE_NOW) allSports else tab in FILTER_TABS && (filterCount >= 2 || allSports)
 
 /** The header's filter drawn as one dropdown (V2 P4: Channels, Replays, Results): the menu's [title] and [actions]. */
 internal data class SportsLiveHeaderDropdown(val title: String, val actions: List<Pair<String, () -> Unit>> = emptyList())

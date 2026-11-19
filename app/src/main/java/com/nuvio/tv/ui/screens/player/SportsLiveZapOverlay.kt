@@ -95,9 +95,7 @@ import com.nuvio.tv.ui.screens.sportslive.preview.SportsLivePreviewVideo
 import com.nuvio.tv.ui.screens.sportslive.preview.previewKey
 import coil3.compose.AsyncImage
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapViewModel
-import com.nuvio.tv.ui.screens.sportslive.ZapPanelStop
-import com.nuvio.tv.ui.screens.sportslive.panelListIndex
-import com.nuvio.tv.ui.screens.sportslive.zapPanelUpFrom
+import com.nuvio.tv.ui.screens.sportslive.PanelGuideEntry
 import com.nuvio.tv.core.sportslive.FullTimeToast
 import com.nuvio.tv.core.sportslive.FullTimeToastStrings
 import com.nuvio.tv.core.sportslive.SportsLiveFullTimeToasts
@@ -473,9 +471,11 @@ private fun ZapBanner(banner: SportsLiveZapBanner) {
 
 /**
  * The games live now, from the left edge (#140): a slim column of one-line rows over a soft fade, so the game
- * stays visible beside it. Focus opens on the game playing; Left or Right closes the panel (Back is handled
- * by the player), and Up/Down stay inside it. OK on a game zaps to it; Hold OK opens its menu ([onLongPick]).
- * Above the games, one compact filter (#68): on it Left and Right move along the options instead.
+ * stays visible beside it. Under one compact filter (#68: on it Left and Right move along the options), the
+ * game playing is pinned as **Now playing**, where focus opens; below it the lineup like a cable guide, from
+ * the game after it (down / CH-) round to the one before it (CH+), with "From the top" where it wraps
+ * ([SportsLiveZapPanelState.guide]). Left or Right closes the panel (Back is handled by the player), and
+ * Up/Down stay inside it. OK on a game zaps to it; Hold OK opens its menu ([onLongPick]).
  */
 @Composable
 private fun LiveGamesPanel(
@@ -498,45 +498,48 @@ private fun LiveGamesPanel(
     /** Any key pressed inside the panel (Hide until focused reveals only after one). */
     onKey: () -> Unit
 ) {
+    // #140: the list starts at its top (the game after the one playing), never scrolled to centre one.
     val listState = rememberLazyListState()
-    val focusRequester = remember { FocusRequester() }
+    val nowFocusRequester = remember { FocusRequester() }
+    val firstRowFocusRequester = remember { FocusRequester() }
     val emptyFocusRequester = remember { FocusRequester() }
     val filterFocusRequester = remember { FocusRequester() }
-    // Focus starts on the game playing, found by key so a regroup (scores arriving) never moves it to
-    // another row; the first row when the game playing is not listed.
-    val startKey = state.items.firstOrNull { it.streamKey == state.currentKey }?.streamKey ?: state.items.firstOrNull()?.streamKey
+    val guide = state.guide
+    val nowRow = guide.nowPlaying ?: state.nowPlayingRow
+    val firstRowKey = guide.rows.firstOrNull()?.item?.streamKey
     // While the filter has focus, an option that empties (or fills) the list leaves focus on it.
     var filterFocused by remember { mutableStateOf(false) }
     // The game row with focus, by stream key (null on the filter).
     var focusedKey by remember { mutableStateOf<String?>(null) }
     val currentOnPreviewFocus by rememberUpdatedState(onPreviewFocus)
     // The preview follows the focused row; none while the filter has focus (#83).
-    val focusedItem = state.items.firstOrNull { it.streamKey == focusedKey }
+    val focusedItem = (state.items + listOfNotNull(nowRow?.item)).firstOrNull { it.streamKey == focusedKey }
     LaunchedEffect(focusedItem?.streamKey) { currentOnPreviewFocus(focusedItem) }
-    val currentRows by rememberUpdatedState(state.rows)
-    val sectionCounts = remember(state.rows) { state.rows.groupingBy { it.section }.eachCount() }
     // One option (All) filters nothing: no filter then.
     val filterShown = state.chips.size > 1
 
-    LaunchedEffect(state.items.isEmpty()) {
+    // #140: focus opens on Now playing; on the first game when the game playing is unknown, else the empty line.
+    LaunchedEffect(nowRow == null, guide.rows.isEmpty()) {
         if (filterFocused) return@LaunchedEffect
         runCatching {
-            if (state.items.isEmpty()) {
-                emptyFocusRequester.requestFocus()
-            } else {
-                // I3: the game playing is scrolled to the middle of the list before focus lands on it.
-                listState.centerOn(panelListIndex(currentRows, startKey).coerceAtLeast(0))
-                focusRequester.requestFocus()
+            when {
+                nowRow != null -> nowFocusRequester.requestFocus()
+                guide.rows.isNotEmpty() -> firstRowFocusRequester.requestFocus()
+                else -> emptyFocusRequester.requestFocus()
             }
         }
     }
     // I3: rows regrouped by a score or a tick keep focus on the same game (by key) and keep it in view;
     // the list scrolls only when that row left the view, and only to it.
-    LaunchedEffect(state.rows) {
-        val index = panelListIndex(state.rows, focusedKey ?: return@LaunchedEffect)
+    LaunchedEffect(guide) {
+        val index = guide.indexOf(focusedKey ?: return@LaunchedEffect)
         if (index < 0) return@LaunchedEffect
         withFrameNanos { }
         if (!listState.isFullyVisible(index)) runCatching { listState.centerOn(index) }
+    }
+    val rowFocus: (SportsLiveItem) -> Unit = { item ->
+        focusedKey = item.streamKey
+        onRowFocus(item.streamKey)
     }
 
     // Left or Right closes the panel on release, only when its press reached the panel: the filter uses its own.
@@ -589,12 +592,16 @@ private fun LiveGamesPanel(
             }
             if (filterShown) {
                 Spacer(modifier = Modifier.height(NuvioTheme.spacing.sm))
-                val allLabel = stringResource(R.string.sports_live_filter_all)
+                // #146: All is My sports' games while it scopes the panel; All sports lifts it.
+                val scoped = SportsLiveUiState.ALL_SPORTS_FILTER in state.chips
+                val allLabel = stringResource(if (scoped) R.string.sports_live_filter_my_sports else R.string.sports_live_filter_all)
+                val allSportsLabel = stringResource(R.string.sports_live_filter_all_sports)
                 val myTeamsLabel = stringResource(R.string.sports_live_filter_my_teams)
                 val options = state.chips.map { chip ->
                     val name = when (chip) {
                         null -> allLabel
                         SportsLiveUiState.MY_TEAMS_FILTER -> myTeamsLabel
+                        SportsLiveUiState.ALL_SPORTS_FILTER -> allSportsLabel
                         else -> sportFilterLabel(chip)
                     }
                     SportsLiveFilterOption(chip, sportsLiveChipText(name, state.counts[chip] ?: 0), gold = chip == SportsLiveUiState.MY_TEAMS_FILTER)
@@ -604,7 +611,11 @@ private fun LiveGamesPanel(
                     options = options,
                     selected = state.chip,
                     onSelect = onChip,
-                    onOpenList = { if (state.items.isNotEmpty()) runCatching { focusRequester.requestFocus() } },
+                    onOpenList = {
+                        runCatching {
+                            if (nowRow != null) nowFocusRequester.requestFocus() else if (guide.rows.isNotEmpty()) firstRowFocusRequester.requestFocus()
+                        }
+                    },
                     modifier = Modifier
                         .padding(horizontal = PANEL_ROW_ROOM)
                         .onFocusChanged {
@@ -619,16 +630,38 @@ private fun LiveGamesPanel(
                 )
             }
             Spacer(modifier = Modifier.height(NuvioTheme.spacing.xs))
-            if (state.items.isEmpty()) {
-                Text(
-                    text = stringResource(R.string.sports_live_zap_panel_empty),
-                    style = SportsLiveTokens.style(SportsLiveTokens.Type.PanelLine),
-                    color = SportsLiveTokens.Colors.TextSecondary,
+            // #140: the game playing, pinned under the filter. Up goes to the filter, Down to the list's first
+            // game (what CH- plays).
+            nowRow?.let { row ->
+                val item = row.item
+                SportsLivePanelLine(
+                    row = state.boards[item.streamKey]?.board
+                        ?: panelBoards(listOf(row), emptyMap(), null, emptySet(), 0L).single().board,
+                    nowPlaying = true,
+                    onClick = { onPick(item) },
+                    onLongClick = { onLongPick(item) },
+                    onFocus = { rowFocus(item) },
                     modifier = Modifier
                         .padding(horizontal = PANEL_ROW_ROOM)
-                        .focusRequester(emptyFocusRequester)
-                        .focusable()
+                        .focusRequester(nowFocusRequester)
+                        .then(if (filterShown) Modifier.focusProperties { up = filterFocusRequester } else Modifier),
+                    menuOpen = menuOpen
                 )
+                Spacer(modifier = Modifier.height(NuvioTheme.spacing.xs))
+            }
+            if (guide.rows.isEmpty()) {
+                // Nothing else on: Now playing alone, or the empty line when even that is unknown.
+                if (nowRow == null) {
+                    Text(
+                        text = stringResource(R.string.sports_live_zap_panel_empty),
+                        style = SportsLiveTokens.style(SportsLiveTokens.Type.PanelLine),
+                        color = SportsLiveTokens.Colors.TextSecondary,
+                        modifier = Modifier
+                            .padding(horizontal = PANEL_ROW_ROOM)
+                            .focusRequester(emptyFocusRequester)
+                            .focusable()
+                    )
+                }
                 Spacer(modifier = Modifier.weight(1f))
             } else {
                 LazyColumn(
@@ -638,28 +671,38 @@ private fun LiveGamesPanel(
                     contentPadding = PaddingValues(horizontal = PANEL_ROW_ROOM, vertical = NuvioTheme.spacing.xs),
                     modifier = Modifier.weight(1f)
                 ) {
-                    state.rows.forEachIndexed { index, row ->
-                        if (index == 0 || state.rows[index - 1].section != row.section) {
-                            item(key = "group_${row.section}") { SportsLivePanelHeader(row.section, sectionCounts[row.section] ?: 0) }
-                        }
-                        val item = row.item
-                        // I3: Up from the first game reaches the filter, never past it.
-                        val upToFilter = filterShown && zapPanelUpFrom(index) == ZapPanelStop.CHIPS
-                        item(key = item.streamKey) {
-                            SportsLivePanelLine(
-                                row = state.boards[item.streamKey]?.board
-                                    ?: panelBoards(listOf(row), emptyMap(), null, emptySet(), 0L).single().board,
-                                nowPlaying = item.streamKey == state.currentKey,
-                                onClick = { onPick(item) },
-                                onLongClick = { onLongPick(item) },
-                                onFocus = {
-                                    focusedKey = item.streamKey
-                                    onRowFocus(item.streamKey)
-                                },
-                                modifier = (if (item.streamKey == startKey) Modifier.focusRequester(focusRequester) else Modifier)
-                                    .then(if (upToFilter) Modifier.focusProperties { up = filterFocusRequester } else Modifier),
-                                menuOpen = menuOpen
-                            )
+                    guide.entries.forEach { entry ->
+                        when (entry) {
+                            is PanelGuideEntry.Header -> item(key = entry.key) { SportsLivePanelHeader(entry.section, entry.count) }
+                            PanelGuideEntry.FromTheTop -> item(key = entry.key) { FromTheTopDivider() }
+                            is PanelGuideEntry.Game -> {
+                                val row = entry.row
+                                val item = row.item
+                                val first = item.streamKey == firstRowKey
+                                item(key = entry.key) {
+                                    SportsLivePanelLine(
+                                        row = state.boards[item.streamKey]?.board
+                                            ?: panelBoards(listOf(row), emptyMap(), null, emptySet(), 0L).single().board,
+                                        nowPlaying = false,
+                                        onClick = { onPick(item) },
+                                        onLongClick = { onLongPick(item) },
+                                        onFocus = { rowFocus(item) },
+                                        // I3: Up from the first game reaches Now playing (else the filter), never past it.
+                                        modifier = if (first) {
+                                            Modifier.focusRequester(firstRowFocusRequester).focusProperties {
+                                                if (nowRow != null) {
+                                                    up = nowFocusRequester
+                                                } else if (filterShown) {
+                                                    up = filterFocusRequester
+                                                }
+                                            }
+                                        } else {
+                                            Modifier
+                                        },
+                                        menuOpen = menuOpen
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -695,6 +738,24 @@ private fun PanelPreviewCorner(preview: SportsLivePreviewState.Playing?, player:
         if (preview?.rendering == true) {
             SportsLivePreviewLabel(modifier = Modifier.align(Alignment.TopStart).padding(NuvioTheme.spacing.xs))
         }
+    }
+}
+
+/** "From the top" (#140): a thin rule and its words where the cable-guide lineup wraps to its first game. */
+@Composable
+private fun FromTheTopDivider() {
+    Row(
+        modifier = Modifier.padding(start = 8.dp, end = 6.dp, top = 4.dp, bottom = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = stringResource(R.string.sports_live_panel_from_the_top),
+            style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag),
+            color = SportsLiveTokens.Colors.TextMuted,
+            maxLines = 1
+        )
+        Box(modifier = Modifier.weight(1f).height(1.dp).background(SportsLiveTokens.Colors.TextMuted.copy(alpha = 0.4f)))
     }
 }
 

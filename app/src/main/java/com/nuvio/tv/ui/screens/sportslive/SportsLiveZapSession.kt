@@ -130,11 +130,12 @@ data class SportsLiveZapSession(
 data class ZapPanelChip(val filter: String?)
 
 /**
- * True when this item is listed under [filter] on [tab]: null is All, [SportsLiveUiState.MY_TEAMS_FILTER]
- * a followed team's game, otherwise a channel group on Channels and a sport on every other tab.
+ * True when this item is listed under [filter] on [tab]: null (and All sports, #146) is All,
+ * [SportsLiveUiState.MY_TEAMS_FILTER] a followed team's game, otherwise a channel group on Channels and a
+ * sport on every other tab.
  */
 internal fun SportsLiveItem.matchesZapFilter(filter: String?, tab: SportsLiveTab): Boolean = when (filter) {
-    null -> true
+    null, SportsLiveUiState.ALL_SPORTS_FILTER -> true
     SportsLiveUiState.MY_TEAMS_FILTER -> followed
     else -> if (tab == SportsLiveTab.CHANNELS) group == filter else SportsLiveSportKind.filterKeyOf(this) == filter
 }

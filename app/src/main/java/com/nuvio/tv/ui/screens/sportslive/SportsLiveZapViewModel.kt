@@ -1,6 +1,9 @@
 package com.nuvio.tv.ui.screens.sportslive
 
 import com.nuvio.tv.core.sportslive.SportsLiveSportInference
+import com.nuvio.tv.core.sportslive.SportsLiveMySportsScope
+import com.nuvio.tv.core.sportslive.scores.MySports
+import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import com.nuvio.tv.core.sportslive.scores.TeamDirectory
 import com.nuvio.tv.core.sportslive.displayName
 import android.os.SystemClock
@@ -36,6 +39,7 @@ import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.domain.repository.SportsLiveRepository
+import com.nuvio.tv.domain.model.SportsLiveTab
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualPick
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualSession
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveSecondGame
@@ -106,7 +110,9 @@ class SportsLiveZapViewModel internal constructor(
     // The persistent logo map the rows draw from; observed, so logos learned while the panel is open appear.
     private val logos: TeamLogoBook = TeamLogoBook.shared,
     // Games whose link check found them over (#60): "Next live game" never goes to one while that stands.
-    private val linkVerdicts: SportsLiveLinkVerdicts = SportsLiveLinkVerdicts.shared
+    private val linkVerdicts: SportsLiveLinkVerdicts = SportsLiveLinkVerdicts.shared,
+    // My sports (#146): the panel and CH+/CH- list only its games, unless the panel's All sports is picked.
+    private val mySports: Flow<MySports> = flowOf(MySports.DEFAULT)
 ) : ViewModel() {
 
     @Inject constructor(
@@ -115,8 +121,13 @@ class SportsLiveZapViewModel internal constructor(
         directDebridResolver: DirectDebridResolver,
         profileManager: ProfileManager,
         repo: SportsLiveRepository,
-        liveScores: LiveScoresRepository
-    ) : this(savedStateHandle, resolver, directDebridResolver, profileManager, repo, liveScores, Dispatchers.Default)
+        liveScores: LiveScoresRepository,
+        // My sports (#146); null in tests that do not scope.
+        prefs: SportsLivePreferencesDataStore? = null
+    ) : this(
+        savedStateHandle, resolver, directDebridResolver, profileManager, repo, liveScores, Dispatchers.Default,
+        mySports = prefs?.mySports ?: flowOf(MySports.DEFAULT)
+    )
 
     private val contentId: String? = savedStateHandle.get<String>("contentId").also { id ->
         // A player for other content ends the session; zap targets match because the
@@ -176,7 +187,7 @@ class SportsLiveZapViewModel internal constructor(
 
     // The panel's chip (null is All): the session's picked chip, or All until one is picked (#68). Kept while the
     // panel is closed, since CH+/CH- walk the panel's list under it (#142).
-    private val panelChip = MutableStateFlow(SportsLiveZapSessions.activeFor(contentId)?.panelChip?.filter)
+    private val panelChip = MutableStateFlow(SportsLiveZapSessions.activeFor(contentId)?.let(::openingChip))
 
     private val _panelOpen = MutableStateFlow(false)
     val panelOpen: StateFlow<Boolean> = _panelOpen.asStateFlow()
@@ -218,8 +229,12 @@ class SportsLiveZapViewModel internal constructor(
                 // Unrouted two-team games take their teams' league here too (P4), as in the section's lists.
             ).map { SportsLiveSportInference.infer(it, TeamDirectory.shared) } to followed
         }.flowOn(computeDispatcher)
-        // The games under the chip are the ones listed and tracked.
-        val items = combine(all, panelChip) { (list, followed), chip -> PanelList(list, chip, filterPanelItems(list, chip), followed) }
+        // The games under the chip are the ones listed and tracked: My sports' (#146), or every game under All sports.
+        val items = combine(all, panelChip, mySports) { (list, followed), chip, sports ->
+            val scoped = SportsLiveMySportsScope.scope(list, sports)
+            val base = if (chip == SportsLiveUiState.ALL_SPORTS_FILTER) list else scoped
+            PanelList(list, chip, filterPanelItems(base, chip), followed, scoped)
+        }
         // Ticks while the panel is open, so a grace or an estimate running out regroups its games.
         // A logo learned while open (a score feed answering, the map loading) redraws the rows.
         val ticks = _panelOpen.flatMapLatest { open -> if (open) panelTicks() else flowOf(Unit) }
@@ -257,15 +272,25 @@ class SportsLiveZapViewModel internal constructor(
         if (session == null || current == null || !current.logosLoaded) {
             null
         } else {
+            val playingKey = session.current.streamKey
+            // #140: Now playing is pinned above the list; a game the chip or My sports leaves out gets its own row.
+            val nowRow = current.rows.firstOrNull { it.item.streamKey == playingKey }
+                ?: groupPanelRows(
+                    listOf(current.list.all.firstOrNull { it.streamKey == playingKey } ?: session.current),
+                    current.boardScores, current.mode, current.revealed, current.nowMs, current.ended, logos
+                ).firstOrNull()
+            val drawn = if (nowRow == null || nowRow in current.rows) current.rows else current.rows + nowRow
             val state = SportsLiveZapPanelState(
                 rows = current.rows,
-                currentKey = session.current.streamKey,
-                chips = panelChips(current.list.all, current.list.chip),
+                currentKey = playingKey,
+                chips = panelChips(current.list.all, current.list.chip, current.list.scoped),
                 chip = current.list.chip,
                 allItems = current.list.all,
+                counts = panelChipCounts(current.list.all, current.list.scoped),
                 // #83: each row drawn as the Scoreboard draws it.
-                boards = panelBoards(current.rows, current.boardScores, current.mode, current.revealed, current.nowMs, current.ended, current.list.followed)
-                    .associateBy { it.board.item.streamKey }
+                boards = panelBoards(drawn, current.boardScores, current.mode, current.revealed, current.nowMs, current.ended, current.list.followed)
+                    .associateBy { it.board.item.streamKey },
+                nowPlayingRow = nowRow
             )
             ShownPanel(current, state, session)
         }
@@ -451,7 +476,7 @@ class SportsLiveZapViewModel internal constructor(
         // The panel takes over from the arrival banner (#76).
         arrival.value = null
         // Opens on All, or on the chip picked earlier in this playback (#68).
-        panelChip.value = session.panelChip?.filter
+        panelChip.value = openingChip(session)
         panelSession.value = session
         _panelOpen.value = true
         viewModelScope.launch {
@@ -662,8 +687,17 @@ private data class PanelList(
     val all: List<SportsLiveItem>,
     val chip: String?,
     val shown: List<SportsLiveItem>,
-    val followed: List<FollowedTeam> = emptyList()
+    val followed: List<FollowedTeam> = emptyList(),
+    /** [all] as My sports lists them (#146). */
+    val scoped: List<SportsLiveItem> = all
 )
+
+/**
+ * The chip the panel opens on (#68): the one picked earlier in this playback, else All sports when the game was
+ * started under All sports in the section (#146), else All (My sports).
+ */
+private fun openingChip(session: SportsLiveZapSession): String? =
+    session.panelChip?.filter ?: session.filter.takeIf { it == SportsLiveUiState.ALL_SPORTS_FILTER && session.tab == SportsLiveTab.LIVE_NOW }
 
 /**
  * Whether [keyCode] opens the live games panel from the zap banner (#76): ▼ (the D-pad, not CH−) while

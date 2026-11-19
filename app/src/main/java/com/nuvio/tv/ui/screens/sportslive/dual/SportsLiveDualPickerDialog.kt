@@ -78,37 +78,50 @@ internal fun SportsLiveDualPickerDialog(
             )
             return@NuvioDialog
         }
+        // Live games first, channels last under their own heading (the games are what is picked most).
+        val (games, channels) = remember(candidates) { dualPickerSections(candidates) }
+        val ordered = games + channels
         LazyColumn(
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(max = 420.dp),
             verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)
         ) {
-            itemsIndexed(candidates, key = { _, item -> item.streamKey }) { index, item ->
-                Button(
-                    onClick = { onPick(item) },
-                    modifier = (if (index == 0) firstModifier else Modifier).fillMaxWidth(),
-                    colors = ButtonDefaults.colors(
-                        containerColor = NuvioTheme.colors.BackgroundCard,
-                        contentColor = NuvioTheme.colors.TextPrimary
-                    )
-                ) {
-                    val row = rows[item.streamKey]
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md)
+            itemsIndexed(ordered, key = { _, item -> item.streamKey }) { index, item ->
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    if (index == games.size && games.isNotEmpty()) {
+                        Text(
+                            text = stringResource(R.string.sports_live_tab_channels),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = NuvioTheme.colors.TextSecondary,
+                            modifier = Modifier.padding(top = NuvioTheme.spacing.sm, bottom = NuvioTheme.spacing.xxs)
+                        )
+                    }
+                    Button(
+                        onClick = { onPick(item) },
+                        modifier = (if (index == 0) firstModifier else Modifier).fillMaxWidth(),
+                        colors = ButtonDefaults.colors(
+                            containerColor = NuvioTheme.colors.BackgroundCard,
+                            contentColor = NuvioTheme.colors.TextPrimary
+                        )
                     ) {
-                        // Logos only when both teams have one and both loaded (#130); never letters.
-                        rememberTeamLogoPair(row?.teams)?.let { logos -> TeamLogoPairSlot(logos, 28.dp, NuvioTheme.spacing.xs) }
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(item.displayName, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(
-                                text = "${item.sport ?: item.catalogName} · ${item.addonName}",
-                                style = MaterialTheme.typography.bodySmall,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            row?.chip?.let { SportsLiveScoreChip(chip = it, modifier = Modifier.padding(top = NuvioTheme.spacing.xxs)) }
+                        val row = rows[item.streamKey]
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.md)
+                        ) {
+                            // Logos only when both teams have one and both loaded (#130); never letters.
+                            rememberTeamLogoPair(row?.teams)?.let { logos -> TeamLogoPairSlot(logos, 28.dp, NuvioTheme.spacing.xs) }
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(item.displayName, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(
+                                    text = "${item.sport ?: item.catalogName} · ${item.addonName}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                row?.chip?.let { SportsLiveScoreChip(chip = it, modifier = Modifier.padding(top = NuvioTheme.spacing.xxs)) }
+                            }
                         }
                     }
                 }
@@ -116,3 +129,10 @@ internal fun SportsLiveDualPickerDialog(
         }
     }
 }
+
+/**
+ * The picker's candidates in two sections: the games first, then the channels, each in the order given (the
+ * games are what a second pick is for; channels go last, under their own heading).
+ */
+internal fun dualPickerSections(candidates: List<SportsLiveItem>): Pair<List<SportsLiveItem>, List<SportsLiveItem>> =
+    candidates.partition { !it.isChannel }

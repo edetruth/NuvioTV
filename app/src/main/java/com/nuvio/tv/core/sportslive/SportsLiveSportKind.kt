@@ -68,6 +68,17 @@ enum class SportsLiveSportKind {
         fun tagOf(item: SportsLiveItem): SportsLiveSportKind? =
             (listOf(item.sport, item.meta.name) + item.meta.genres + item.meta.description + item.catalogName).firstNotNullOfOrNull(::of)
 
+        /**
+         * The one sport [text] names (#146); null when it names none or several ("Live Sports (Soccer, Tennis,
+         * F1)"). "American football" is football alone, not soccer as well.
+         */
+        fun single(text: String?): SportsLiveSportKind? {
+            val folded = fold(text ?: return null).takeIf { it.isNotEmpty() } ?: return null
+            val kinds = RULES.filter { (_, regex) -> regex.containsMatchIn(folded) }.mapTo(LinkedHashSet()) { it.first }
+            if (FOOTBALL in kinds) kinds -= SOCCER
+            return kinds.singleOrNull()
+        }
+
         private val MARKS = Regex("""\p{Mn}+""")
 
         private fun fold(text: String): String =

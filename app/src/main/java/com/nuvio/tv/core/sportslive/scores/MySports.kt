@@ -85,6 +85,16 @@ enum class MyLeague(
             (names != null && event.leagueName?.let(names::containsMatchIn) == true)
     }
 
+    /**
+     * True when a card routed to the ESPN [league] (#146: an addon game, [EspnLeagueMap.leaguesFor]) is a game
+     * of this league: its feed, or for soccer a competition slug this league names.
+     */
+    fun coversLeague(league: EspnLeague): Boolean {
+        if (league.sport != sport.espnSport) return false
+        feed?.let { return league == it }
+        return slugs?.containsMatchIn(league.league) == true
+    }
+
     /** The stored token: "basketball/nba". */
     val token: String get() = "${sport.id}/$id"
 

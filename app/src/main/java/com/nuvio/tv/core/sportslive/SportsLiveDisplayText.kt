@@ -146,6 +146,17 @@ object SportsLiveDisplayText {
      * never tells the score; dates ("11-16-2026"), seasons ("2025-26") and times ("20:00") stay. Then
      * [name]'s cleaning. Generic: it knows no addon.
      */
+    /**
+     * A side of a game written with its competition after it ("Real Madrid Euroleague", "Lakers (NBA)"): the
+     * team's name without it, and the competition as written ("Euroleague"), for the row's league tag. Null when
+     * [side] ends in no known competition, or is nothing but one. Generic: a list of competitions, no addon.
+     */
+    fun competitionSuffix(side: String): Pair<String, String>? {
+        val match = COMPETITION_SUFFIX.find(side) ?: return null
+        val team = trimSeparators(collapse(side.substring(0, match.range.first))).takeIf { it.isNotEmpty() } ?: return null
+        return team to collapse(match.groupValues[1])
+    }
+
     fun spoilerFree(raw: String): String {
         val removed = collapse(SCORELINE.replace(raw, " "))
         // "A 2-1 B": the score stood for the separator, so the sides keep one.
@@ -167,6 +178,14 @@ object SportsLiveDisplayText {
     private val SCORELINE = Regex("""[(\[]?(?<![\d/.\-–])\d{1,3}\s*[-–]\s*\d{1,3}(?![\d/.]|\s*[-–]\s*\d)[)\]]?""")
 
     private const val QUALITY = """(?:FHD|UHD|HD|SD|4K|8K)"""
+    // A competition written after a team's name: basketball and soccer leagues addons append to sides.
+    private val COMPETITION_SUFFIX = Regex(
+        """(?:\s+[-|·]?\s*|\s*[(\[])((?:euro ?league|euro ?cup|liga (?:acb|endesa)|lega basket|basketball champions league|""" +
+            """nba|wnba|ncaa[mbfw]?|nhl|khl|nfl|mlb|mls|premier league|la ?liga|serie a|bundesliga|ligue 1|eredivisie|""" +
+            """champions league|europa league|conference league|super lig|primeira liga))[)\]]?\s*$""",
+        RegexOption.IGNORE_CASE
+    )
+
     private val SEPARATORS = charArrayOf(':', '|', '-', '–', '—', '·', '•', '/', ',', ' ')
 
     /** "(FHD) :", "[HD]", "HD :", "4K |" at the start: bracketed, or followed by a separator ("HDTV" is a name). */

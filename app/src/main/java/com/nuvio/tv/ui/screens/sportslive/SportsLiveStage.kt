@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.TextAutoSize
@@ -46,6 +47,7 @@ import coil3.compose.AsyncImage
 import com.nuvio.tv.R
 import com.nuvio.tv.core.sportslive.SportsLiveDisplayText
 import com.nuvio.tv.core.sportslive.displayName
+import com.nuvio.tv.core.sportslive.GameStatusStrings
 import com.nuvio.tv.core.sportslive.scores.GameArt
 import com.nuvio.tv.core.sportslive.scores.GameArtTeam
 import com.nuvio.tv.core.sportslive.scores.ScoreDetails
@@ -176,7 +178,7 @@ internal fun StageMedia(
             val art = row.art?.takeIf { row.twoSided }
             when {
                 art != null && agendaArt -> AgendaStageArt(art, row.item)
-                art != null -> StageArt(art, row.item.catalogName)
+                art != null -> StageArt(art, row)
                 row.group == ScoreboardGroup.CHANNELS -> ChannelArt(row)
                 else -> {
                     val image = row.item.meta.backdropUrl ?: row.item.meta.logo ?: row.item.meta.poster
@@ -327,12 +329,28 @@ internal fun seasonLabelRes(type: Int): Int? = when (type) {
 /** The title writes the game "A at B" or "A @ B" (away first): the stage says "at", else "vs". */
 internal fun agendaWrittenAt(title: String): Boolean = title.contains(" at ", ignoreCase = true) || title.contains(" @ ")
 
-/** The drawn matchup at the media box's size: big logos round the league and kickoff, or the names stacked when logos are missing (#130). */
+/**
+ * What the drawn matchup says under "vs" (Live Now's stage before its preview plays): [row]'s status in the one
+ * status format ([scoreboardStatusLines], from [GameStatus]): a live game's [score] (the Scores setting and
+ * spoilers applied) and its clock and period, a final's word, else the kickoff and countdown. Never the start
+ * time of a game in play.
+ */
+internal data class StageArtStatus(val score: ScoreboardScores, val status: String?, val live: Boolean)
+
+internal fun stageArtStatus(row: ScoreboardRow, strings: GameStatusStrings, kickoff: String?): StageArtStatus {
+    val lines = scoreboardStatusLines(row, strings, kickoff)
+    val status = listOfNotNull(lines.primary, lines.secondary).joinToString(" · ").ifEmpty { null }
+    return StageArtStatus(scoreboardScoresOf(row.chip), status, lines.live)
+}
+
+/** The drawn matchup at the media box's size: big logos round the league and the game's status, or the names stacked when logos are missing (#130). */
 @Composable
-private fun StageArt(art: GameArt, catalogName: String) {
+private fun StageArt(art: GameArt, row: ScoreboardRow) {
     val logos = rememberTeamLogoPair(art, TeamLogoUrls.LARGE_PX)?.takeIf { !it.failed }
+    val strings = rememberGameStatusStrings()
     val kickoff = kickoffText(art)
-    val league = sportsLiveLeagueLabel(art.league, catalogName)?.uppercase(Locale.getDefault())
+    val status = remember(row, strings, kickoff) { stageArtStatus(row, strings, kickoff) }
+    val league = sportsLiveLeagueLabel(art.league, row.item.catalogName)?.uppercase(Locale.getDefault())
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -349,7 +367,7 @@ private fun StageArt(art: GameArt, catalogName: String) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     league?.let { ArtCaption(it, bold = true) }
                     ArtCaption(stringResource(R.string.sports_live_art_vs), bold = false)
-                    kickoff?.let { ArtCaption(it, bold = false) }
+                    StageArtStatusLines(status)
                 }
                 TeamLogoSlot(logos.second, logos.shown, STAGE_LOGO_SIZE)
             }
@@ -363,9 +381,33 @@ private fun StageArt(art: GameArt, catalogName: String) {
                 StackedName(art.first)
                 ArtCaption(stringResource(R.string.sports_live_art_vs), bold = false)
                 StackedName(art.second)
-                kickoff?.let { ArtCaption(it, bold = false) }
+                StageArtStatusLines(status)
             }
         }
+    }
+}
+
+/** [status] under the matchup: the score in bold (when one shows), then the red dot and clock, or the kickoff. */
+@Composable
+private fun StageArtStatusLines(status: StageArtStatus) {
+    (status.score as? ScoreboardScores.Shown)?.let { score ->
+        Text(
+            text = stringResource(R.string.sports_live_chip_score, score.first, score.second),
+            style = SportsLiveTokens.style(SportsLiveTokens.Type.RowName).copy(fontSize = 22.sp, lineHeight = 26.sp, fontFeatureSettings = "tnum").sportsLiveBold(),
+            color = Colors.TextPrimary,
+            maxLines = 1
+        )
+    }
+    val text = status.status ?: return
+    Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (status.live) Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(Colors.LiveRed))
+        Text(
+            text = text,
+            style = SportsLiveTokens.style(SportsLiveTokens.Type.Meta),
+            color = if (status.live) Colors.LiveText else Colors.TextMuted,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 

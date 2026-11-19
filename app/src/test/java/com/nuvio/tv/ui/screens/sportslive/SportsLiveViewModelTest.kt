@@ -16,6 +16,8 @@ import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.ScoreState
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
+import com.nuvio.tv.core.sportslive.scores.MySport
+import com.nuvio.tv.core.sportslive.scores.MySports
 import com.nuvio.tv.core.sportslive.scores.WhyKind
 import com.nuvio.tv.core.sportslive.scores.WhyTag
 import com.nuvio.tv.domain.model.Addon
@@ -1002,6 +1004,56 @@ class SportsLiveViewModelTest {
     }
 
     private fun teamsOf(name: String) = SportsLiveTeams.parse(name)
+
+    @Test
+    fun `My sports scopes Live now and Upcoming, keeps followed and unknown games, and All sports shows everything`() = runTest {
+        val nba = item("nba", isLive = true, sport = "Basketball", name = "Lakers vs Celtics", startMs = NOW - HOUR)
+        val cricket = item("cri", isLive = true, sport = "Cricket", name = "India vs Australia", startMs = NOW - HOUR)
+        val followedCricket = item("fc", isLive = true, sport = "Cricket", name = "England vs Pakistan", startMs = NOW - HOUR)
+        val unknown = item("unk", isLive = true, sport = null, startMs = NOW - HOUR)
+        val laterCricket = item("ucri", isLive = false, sport = "Cricket", name = "New Zealand vs South Africa", startMs = NOW + 3 * HOUR)
+        val laterNba = item("unba", isLive = false, sport = "Basketball", name = "Bulls vs Knicks", startMs = NOW + 3 * HOUR)
+        nextLoad = load(listOf(nba, cricket, followedCricket, unknown, laterCricket, laterNba))
+        followedFlow.value = listOf(FollowedTeam("England", "Cricket"))
+        val viewModel = SportsLiveViewModel(
+            repo,
+            mySports = flowOf(MySports(mapOf(MySport.BASKETBALL to emptySet()))),
+            computeDispatcher = compute
+        )
+        viewModel.nowMs = { NOW }
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        val liveNow = viewModel.uiState.value
+        assertEquals(setOf("nba", "fc", "unk"), liveNow.visibleItems.map { it.id }.toSet())
+        assertTrue(liveNow.mySportsScoped)
+        assertTrue(SportsLiveUiState.ALL_SPORTS_FILTER in liveNow.filters)
+        // The counts follow My sports; All sports counts every game.
+        assertEquals(3, liveNow.filterCounts[null])
+        assertEquals(4, liveNow.filterCounts[SportsLiveUiState.ALL_SPORTS_FILTER])
+        assertEquals(3, liveNow.countOf(SportsLiveTab.LIVE_NOW))
+
+        viewModel.selectFilter(SportsLiveUiState.ALL_SPORTS_FILTER)
+        runCurrent()
+        assertEquals(setOf("nba", "cri", "fc", "unk"), viewModel.uiState.value.visibleItems.map { it.id }.toSet())
+        // The session started here carries every game, so the player can reach them all.
+        assertTrue(viewModel.uiState.value.zapItems.any { it.id == "cri" })
+
+        viewModel.selectTab(SportsLiveTab.UPCOMING)
+        runCurrent()
+        assertEquals(listOf("unba"), viewModel.uiState.value.visibleItems.map { it.id })
+        assertEquals(null, viewModel.uiState.value.selectedFilter)
+    }
+
+    @Test
+    fun `with nothing picked in My sports nothing is scoped and All sports is not offered`() = runTest {
+        nextLoad = load(listOf(item("cri", isLive = true, sport = "Cricket", name = "India vs Australia", startMs = NOW - HOUR)))
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+        assertEquals(listOf("cri"), viewModel.uiState.value.visibleItems.map { it.id })
+        assertFalse(viewModel.uiState.value.mySportsScoped)
+        assertFalse(SportsLiveUiState.ALL_SPORTS_FILTER in viewModel.uiState.value.filters)
+    }
 
     private fun channel(id: String, group: String, isLive: Boolean = false, sport: String? = null) =
         item(id, isLive = isLive, sport = sport, name = "Channel $id").copy(isChannel = true, group = group)

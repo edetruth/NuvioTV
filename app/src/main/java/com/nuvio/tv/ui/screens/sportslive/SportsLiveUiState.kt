@@ -24,8 +24,10 @@ data class SportsLiveUiState(
      * led by [MY_TEAMS_FILTER] when a followed team plays in the tab.
      */
     val filters: List<String> = emptyList(),
-    /** null means All. */
+    /** null means All (My sports' games, #146, while it scopes the tab). */
     val selectedFilter: String? = null,
+    /** My sports hides games of [selectedTab] (#146): All reads "My sports" and [ALL_SPORTS_FILTER] is offered. */
+    val mySportsScoped: Boolean = false,
     /**
      * Each chip's game count (#79): All (null), "★ My teams" and each value of [filters], over the tab's
      * list (Live now leaves its Just ended strip out, as its tab count does); a chip missing here has none.
@@ -76,6 +78,12 @@ data class SportsLiveUiState(
     companion object {
         /** The "★ My teams" filter: followed teams' games only. Not a sport or group name. */
         const val MY_TEAMS_FILTER = "\u0000my_teams"
+
+        /**
+         * "All sports" (#146): every game, My sports' scoping off. Offered only while My sports hides some of the
+         * tab's games; kept for this visit only, so the next one opens on My sports (All, null) again.
+         */
+        const val ALL_SPORTS_FILTER = "\u0000all_sports"
     }
 }
 

@@ -303,7 +303,8 @@ private fun AgendaCells(row: ScoreboardRow, side: AgendaRowSide, shortNames: Boo
         horizontalArrangement = Arrangement.spacedBy(COLUMN_GAP),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        LeagueTag(rowTagText(row), live = false)
+        // No score column here: the tag gets the room to read at its full size, as on every other row.
+        LeagueTag(rowTagText(row), live = false, width = AGENDA_LEAGUE_WIDTH)
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
             val art = row.art
             if (art != null && row.twoSided) {
@@ -435,10 +436,10 @@ private fun ChannelCells(row: ScoreboardRow) {
     }
 }
 
-/** The league column: the tag, right-aligned, shrinking to fit 48 dp rather than cut. */
+/** The league column: the tag, right-aligned, shrinking to fit [width] (48 dp) rather than cut. */
 @Composable
-private fun LeagueTag(tag: String, live: Boolean) {
-    Box(modifier = Modifier.width(Size.ColumnLeague), contentAlignment = Alignment.CenterEnd) {
+private fun LeagueTag(tag: String, live: Boolean, width: Dp = Size.ColumnLeague) {
+    Box(modifier = Modifier.width(width), contentAlignment = Alignment.CenterEnd) {
         BasicText(
             text = tag,
             style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag).copy(
@@ -645,6 +646,12 @@ private const val TAG_MAX_CHARS = 10
 private const val TAG_MAX_WORDS = 4
 
 private val ROW_LOGO_SIZE = 18.dp
+
+/**
+ * The Agenda rows' (Upcoming, Replays) league column: wide enough for a ten-letter tag ("EUROLEAGUE",
+ * "BASKETBALL") at the Tag size, so it never shrinks below the other rows' tags.
+ */
+private val AGENDA_LEAGUE_WIDTH = 76.dp
 private val SINGLE_LINE_ROW_HEIGHT = 40.dp
 private val CHANNEL_LOGO_HEIGHT = 27.dp
 private val COLUMN_GAP = 6.dp

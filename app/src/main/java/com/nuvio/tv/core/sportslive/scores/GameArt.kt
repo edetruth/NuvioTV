@@ -1,5 +1,6 @@
 package com.nuvio.tv.core.sportslive.scores
 
+import com.nuvio.tv.core.sportslive.SportsLiveDisplayText
 import com.nuvio.tv.core.sportslive.SportsLivePillTime
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.domain.model.SportsLiveItem
@@ -74,12 +75,18 @@ data class GameArt(
          */
         fun ofReplay(item: SportsLiveItem, title: String, known: TeamLogoBook = TeamLogoBook.shared): GameArt? {
             if (item.isChannel) return null
-            val (first, second) = SportsLiveTeams.writtenOrder(title) ?: return null
+            val (writtenFirst, writtenSecond) = SportsLiveTeams.writtenOrder(title) ?: return null
+            // "Real Madrid Euroleague": the competition comes off the team's name and becomes the league.
+            val firstSplit = SportsLiveDisplayText.competitionSuffix(writtenFirst)
+            val secondSplit = SportsLiveDisplayText.competitionSuffix(writtenSecond)
+            val first = firstSplit?.first ?: writtenFirst
+            val second = secondSplit?.first ?: writtenSecond
+            val competition = secondSplit?.second ?: firstSplit?.second
             val remembered = known.forCard(item, first, second)
             return GameArt(
                 first = team(first, null, remembered?.first),
                 second = team(second, null, remembered?.second),
-                league = item.sport?.takeIf { it.isNotBlank() },
+                league = competition ?: item.sport?.takeIf { it.isNotBlank() },
                 startMs = item.startMs,
                 hasTimeOfDay = item.startHasTimeOfDay
             )

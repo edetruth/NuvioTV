@@ -39,20 +39,30 @@ internal fun liveGamesPanelItems(
 /**
  * The live games panel's chips over [items] (#68): "★ My teams" when a followed team plays, All (null),
  * then each sport, A to Z. The [selected] chip stays listed when its games are gone, so it still shows.
+ * With My sports scoping the panel (#146), the chips and sports are [scoped]'s, and **All sports** follows
+ * All while My sports hides any of [items] (or is picked).
  */
-internal fun panelChips(items: List<SportsLiveItem>, selected: String?): List<String?> {
+internal fun panelChips(items: List<SportsLiveItem>, selected: String?, scoped: List<SportsLiveItem> = items): List<String?> {
+    val allSports = SportsLiveUiState.ALL_SPORTS_FILTER
     // One chip per sport; a catch-all ("Sports", "⚡ Live Events") is only All again, so it gets none (V2 P3).
-    val sports = items.mapNotNull({ SportsLiveSportKind.filterKeyOf(it) }).toMutableSet()
-    if (selected != null && selected != SportsLiveUiState.MY_TEAMS_FILTER) sports += selected
-    val myTeams = items.any { it.followed } || selected == SportsLiveUiState.MY_TEAMS_FILTER
+    val sports = scoped.mapNotNull({ SportsLiveSportKind.filterKeyOf(it) }).toMutableSet()
+    if (selected != null && selected != SportsLiveUiState.MY_TEAMS_FILTER && selected != allSports) sports += selected
+    val myTeams = scoped.any { it.followed } || selected == SportsLiveUiState.MY_TEAMS_FILTER
+    val offersAllSports = scoped.size < items.size || selected == allSports
     return listOfNotNull(SportsLiveUiState.MY_TEAMS_FILTER.takeIf { myTeams }) + null +
-        sports.sortedWith(String.CASE_INSENSITIVE_ORDER)
+        listOfNotNull(allSports.takeIf { offersAllSports }) + sports.sortedWith(String.CASE_INSENSITIVE_ORDER)
 }
 
-/** The live games panel's chip counts over [items] (#79): All, "★ My teams" and each sport, as the section counts them. */
-internal fun panelChipCounts(items: List<SportsLiveItem>): Map<String?, Int> = sportsLiveFilterCounts(items, { SportsLiveSportKind.filterKeyOf(it) })
+/**
+ * The live games panel's chip counts (#79): All, "★ My teams" and each sport over [scoped] (My sports' games,
+ * #146), as the section counts them, and All sports over [items] while My sports hides some.
+ */
+internal fun panelChipCounts(items: List<SportsLiveItem>, scoped: List<SportsLiveItem> = items): Map<String?, Int> {
+    val counts = sportsLiveFilterCounts(scoped, { SportsLiveSportKind.filterKeyOf(it) })
+    return if (scoped.size < items.size) counts + (SportsLiveUiState.ALL_SPORTS_FILTER to items.size) else counts
+}
 
-/** The panel games under [chip] (null is All, otherwise a sport or "★ My teams"). */
+/** The panel games under [chip] (null and All sports are All, otherwise a sport or "★ My teams"). */
 internal fun filterPanelItems(items: List<SportsLiveItem>, chip: String?): List<SportsLiveItem> =
     if (chip == null) items else items.filter { it.matchesZapFilter(chip, SportsLiveTab.LIVE_NOW) }
 
@@ -246,22 +256,75 @@ internal fun panelMayReorder(focusedKey: String?, nowMs: Long, lastMinute: Long?
 
 internal const val PANEL_REORDER_MS = 60_000L
 
-/** The index of [key]'s row in the panel's list, which has a header above each group; -1 when not listed. */
-internal fun panelListIndex(rows: List<ZapPanelRow>, key: String?): Int {
-    var index = 0
-    rows.forEachIndexed { i, row ->
-        if (i == 0 || rows[i - 1].section != row.section) index++
-        if (row.item.streamKey == key) return index
-        index++
+/**
+ * A line of the panel's list under its pinned **Now playing** row (#140): a group's [Header] (its [count] of
+ * games in that run), the thin [FromTheTop] divider where the lineup wraps, or a [Game] row.
+ */
+internal sealed interface PanelGuideEntry {
+    val key: String
+
+    data class Header(val section: ScoreboardGroup, val count: Int, val segment: Int) : PanelGuideEntry {
+        override val key: String get() = "group_${segment}_$section"
     }
-    return -1
+
+    data object FromTheTop : PanelGuideEntry {
+        override val key: String get() = "from_the_top"
+    }
+
+    data class Game(val row: ZapPanelRow) : PanelGuideEntry {
+        override val key: String get() = row.item.streamKey
+    }
 }
 
-/** A focus stop of the live games panel outside its list. */
-internal enum class ZapPanelStop { CHIPS }
+/**
+ * The in-player panel as a cable guide (#140): [nowPlaying] (the game playing, pinned above the list; null
+ * when the lineup leaves it out) and the list [entries] under it.
+ */
+internal data class PanelGuide(val nowPlaying: ZapPanelRow?, val entries: List<PanelGuideEntry>) {
+    /** The list's game rows, top to bottom. */
+    val rows: List<ZapPanelRow> get() = entries.mapNotNull { (it as? PanelGuideEntry.Game)?.row }
 
-/** Where Up goes from the panel's game row at [rowIndex]: from the first one, the chips (I3); null is the default. */
-internal fun zapPanelUpFrom(rowIndex: Int): ZapPanelStop? = if (rowIndex == 0) ZapPanelStop.CHIPS else null
+    /** [key]'s index in [entries] (the LazyColumn's item index); -1 when not listed. */
+    fun indexOf(key: String?): Int = entries.indexOfFirst { it is PanelGuideEntry.Game && it.row.item.streamKey == key }
+}
+
+/**
+ * The panel's [lineup] (#142, the one list CH± walk) laid out under Now playing (#140), the way a cable guide
+ * starts at your channel: the game after [currentKey] first (what CH− / ▼ plays), on to the lineup's end, then
+ * a "From the top" divider and the lineup's first game on to the one just before the current one (what CH+ /
+ * ▲ plays). The current game is pinned, never repeated. Games CH± pass over (finals, [ZapPanelRow.zappable])
+ * stay listed, in their own group after the wrapped ones, so the list's game rows down to them are exactly
+ * the zap order. Each group's header starts its run within a segment. With the current game not in [lineup],
+ * the lineup in its own order (CH− plays its first game, CH+ its last).
+ */
+internal fun panelGuide(lineup: List<ZapPanelRow>, currentKey: String?): PanelGuide {
+    val here = lineup.indexOfFirst { it.item.streamKey == currentKey }
+    val after = if (here < 0) lineup else lineup.subList(here + 1, lineup.size)
+    val before = if (here < 0) emptyList() else lineup.subList(0, here)
+    val ahead = after.filter { it.zappable }
+    val wrapped = before.filter { it.zappable }
+    val passedOver = lineup.filterIndexed { index, row -> index != here && !row.zappable }
+    val entries = buildList {
+        addSegment(ahead, segment = 0)
+        if (ahead.isNotEmpty() && wrapped.isNotEmpty()) add(PanelGuideEntry.FromTheTop)
+        addSegment(wrapped, segment = 1)
+        addSegment(passedOver, segment = 2)
+    }
+    return PanelGuide(lineup.getOrNull(here), entries)
+}
+
+/** [rows] with a header above each run of one group. */
+private fun MutableList<PanelGuideEntry>.addSegment(rows: List<ZapPanelRow>, segment: Int) {
+    var start = 0
+    while (start < rows.size) {
+        val section = rows[start].section
+        var end = start
+        while (end < rows.size && rows[end].section == section) end++
+        add(PanelGuideEntry.Header(section, end - start, segment))
+        for (i in start until end) add(PanelGuideEntry.Game(rows[i]))
+        start = end
+    }
+}
 
 /** The panel rows' drawn teams, kept per game, event and logo-map revision: the rows are regrouped on every tick and score (#66). */
 private object PanelArt {
@@ -337,9 +400,17 @@ data class SportsLiveZapPanelState(
     /** Each chip's game count over [allItems] (#79): All (null), "★ My teams" and each sport. */
     val counts: Map<String?, Int> = panelChipCounts(allItems),
     /** [rows] as Scoreboard rows (#83), by stream key: what each row draws. */
-    val boards: Map<String, ZapPanelBoard> = emptyMap()
+    val boards: Map<String, ZapPanelBoard> = emptyMap(),
+    /**
+     * The game playing as a row (#140), for the pinned Now playing row: its row in [rows], else built on its
+     * own (the chip or My sports leaves it out of the list). Null when it is not known at all.
+     */
+    val nowPlayingRow: ZapPanelRow? = rows.firstOrNull { it.item.streamKey == currentKey }
 ) {
     val items: List<SportsLiveItem> = rows.map { it.item }
+
+    /** The list under Now playing, wrapped round from the game after the current one (#140). */
+    val guide: PanelGuide by lazy { panelGuide(rows, currentKey) }
 }
 
 /**
