@@ -150,7 +150,10 @@ fun SportsLivePlayerCardScreen(
                             GameRow(
                                 game = game,
                                 showsGame = state::showsGame,
-                                modifier = if (index == 0) Modifier.focusRequester(firstGameFocus) else Modifier
+                                // The board's rows: about 62 % of the page, never stretched edge to edge.
+                                modifier = Modifier
+                                    .widthIn(max = LAST_GAMES_WIDTH)
+                                    .then(if (index == 0) Modifier.focusRequester(firstGameFocus) else Modifier)
                             )
                         }
                     }
@@ -180,7 +183,7 @@ private fun PlayerHeader(card: PlayerCard?, fallbackName: String, fallbackTeam: 
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
                 name,
-                style = SportsLiveTokens.style(SportsLiveTokens.Type.PageTitle),
+                style = SportsLiveTokens.style(SportsLiveTokens.Type.PageTitle).sportsLiveBold(),
                 color = Colors.TextPrimary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -197,11 +200,12 @@ private fun PlayerHeader(card: PlayerCard?, fallbackName: String, fallbackTeam: 
                         AsyncImage(model = rememberSizedImage(logo, 14.dp, 14.dp), contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.size(14.dp))
                     }
                     team?.let {
-                        Text(it, style = SportsLiveTokens.style(SportsLiveTokens.Type.Control).copy(fontWeight = FontWeight.SemiBold), color = Colors.TextPrimary, maxLines = 1)
+                        Text(it, style = SportsLiveTokens.style(SportsLiveTokens.Type.Control).sportsLiveBold(), color = Colors.TextPrimary, maxLines = 1)
                     }
                     if (details.isNotEmpty()) {
                         Text(
-                            (if (team != null) separator else "") + details.joinToString(separator),
+                            // The Row's gap already spaces it from the team name.
+                            (if (team != null) separator.trimStart() else "") + details.joinToString(separator),
                             style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag),
                             color = Colors.TextMuted,
                             maxLines = 1,
@@ -231,7 +235,7 @@ private fun SeasonTiles(stats: List<PlayerStat>) {
                 SportsLivePageHeading(stat.label)
                 Text(
                     stat.value,
-                    style = SportsLiveTokens.style(TILE_VALUE),
+                    style = SportsLiveTokens.style(TILE_VALUE).sportsLiveBold(),
                     color = Colors.TextPrimary,
                     maxLines = 1,
                     softWrap = false,
@@ -266,7 +270,7 @@ private fun GameRow(game: PlayerGame, showsGame: (Boolean) -> Boolean, modifier:
             val opponent = game.opponentName ?: game.opponent
             Text(
                 game.atVs?.let { stringResource(R.string.sports_live_player_opponent, it, opponent) } ?: opponent,
-                style = SportsLiveTokens.style(SportsLiveTokens.Type.RowName).copy(fontWeight = FontWeight.SemiBold),
+                style = SportsLiveTokens.style(SportsLiveTokens.Type.RowName).sportsLiveBold(),
                 color = Colors.TextPrimary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -277,8 +281,8 @@ private fun GameRow(game: PlayerGame, showsGame: (Boolean) -> Boolean, modifier:
             if (!shown) stringResource(R.string.sports_live_results_score_hidden)
             else if (game.result != null && game.score != null) String.format(statFormat, game.result, game.score)
             else game.result ?: game.score.orEmpty(),
-            style = SportsLiveTokens.style(SportsLiveTokens.Type.RowName)
-                .copy(fontFeatureSettings = "tnum", fontWeight = if (shown && win) FontWeight.Bold else FontWeight.Normal),
+            style = SportsLiveTokens.style(if (shown) SportsLiveTokens.Type.RowName else SportsLiveTokens.Type.Meta)
+                .copy(fontFeatureSettings = "tnum").let { if (shown && win) it.sportsLiveBold() else it },
             color = when {
                 !shown -> Colors.TextMuted
                 win -> Colors.TextPrimary
@@ -332,3 +336,4 @@ private val DATE_WIDTH = 84.dp
 private val OPPONENT_WIDTH = 160.dp
 private val RESULT_WIDTH = 96.dp
 private val LOGO = 14.dp
+private val LAST_GAMES_WIDTH = 640.dp

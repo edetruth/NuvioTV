@@ -44,7 +44,6 @@ import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
 import com.nuvio.tv.R
-import com.nuvio.tv.core.sportslive.scores.BoxScoreTeam
 import com.nuvio.tv.core.sportslive.scores.GameHighlight
 import com.nuvio.tv.core.sportslive.scores.GameSection
 import com.nuvio.tv.core.sportslive.scores.GameStat
@@ -105,6 +104,10 @@ internal fun GameBody(
                     // clip or a Player card) is let through.
                     .focusProperties {
                         onEnter = { if (requestedFocusDirection != FocusDirection.Enter) entryFocus.requestFocus() }
+                        // ← → never leave the body for a tab: that would switch section (#134).
+                        onExit = {
+                            if (requestedFocusDirection == FocusDirection.Left || requestedFocusDirection == FocusDirection.Right) cancelFocusChange()
+                        }
                     }
                     .dpadRepeatThrottle(),
                 verticalArrangement = Arrangement.spacedBy(SportsLiveTokens.Size.RowGap),
@@ -119,7 +122,7 @@ internal fun GameBody(
                     GameSection.GAME -> gameTab(summary, first, state.homeFirst, gamePlayerTarget(state), { modifier, index -> modifier.returning(performerKey(index)) }) { index, target ->
                         onOpenPlayer(performerKey(index), target)
                     }
-                    GameSection.BOX_SCORE -> boxScoreTab(summary.boxScore, first)
+                    GameSection.BOX_SCORE -> boxScoreTab(summary, first)
                     GameSection.STANDINGS -> standingsTab(summary.standings, first)
                     GameSection.HIGHLIGHTS -> highlightsTab(summary.highlights, first, { modifier, key -> modifier.returning(key) }, onPlayHighlights)
                 }
@@ -299,7 +302,7 @@ private fun GameLinescore(details: ScoreDetails.Shown, homeFirst: Boolean) {
                 Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         side.short,
-                        style = SportsLiveTokens.style(SportsLiveTokens.Type.RowName).copy(fontWeight = FontWeight.Bold),
+                        style = SportsLiveTokens.style(SportsLiveTokens.Type.RowName).sportsLiveBold(),
                         color = Colors.TextSecondary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -310,7 +313,7 @@ private fun GameLinescore(details: ScoreDetails.Shown, homeFirst: Boolean) {
                     }
                     Text(
                         side.score?.toString().orEmpty(),
-                        style = cell.copy(fontWeight = FontWeight.Bold),
+                        style = cell.sportsLiveBold(),
                         color = Colors.TextPrimary,
                         textAlign = TextAlign.Center,
                         maxLines = 1,
@@ -345,7 +348,7 @@ private fun PerformerCard(performer: Performer, modifier: Modifier, onClick: (()
             SportsLivePageHeading(performer.team, color = Colors.TextMuted)
             Text(
                 performer.player,
-                style = SportsLiveTokens.style(SportsLiveTokens.Type.RowName).copy(fontWeight = FontWeight.SemiBold),
+                style = SportsLiveTokens.style(SportsLiveTokens.Type.RowName).sportsLiveBold(),
                 color = Colors.TextPrimary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -380,7 +383,7 @@ private fun StatBar(comparison: StatComparison, homeFirst: Boolean) {
     val value = SportsLiveTokens.style(SportsLiveTokens.Type.RowName).copy(fontFeatureSettings = "tnum")
     Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(shown(leftText), style = value.copy(fontWeight = if (leftBetter) FontWeight.Bold else FontWeight.Normal), color = Colors.TextPrimary, maxLines = 1)
+            Text(shown(leftText), style = if (leftBetter) value.sportsLiveBold() else value, color = Colors.TextPrimary, maxLines = 1)
             Text(
                 stringResource(comparison.stat.labelRes()),
                 style = SportsLiveTokens.style(SportsLiveTokens.Type.Control),
@@ -390,7 +393,7 @@ private fun StatBar(comparison: StatComparison, homeFirst: Boolean) {
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
             )
-            Text(shown(rightText), style = value.copy(fontWeight = if (rightBetter) FontWeight.Bold else FontWeight.Normal), color = Colors.TextPrimary, maxLines = 1)
+            Text(shown(rightText), style = if (rightBetter) value.sportsLiveBold() else value, color = Colors.TextPrimary, maxLines = 1)
         }
         val (leftWeight, rightWeight) = statBarWeights(leftValue, rightValue)
         Row(modifier = Modifier.fillMaxWidth().height(3.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -450,16 +453,18 @@ private fun TableHeads(first: String, labels: List<String>, column: Dp) {
 }
 
 /** Board ⑥ (F8): "New England · Passing", the "Player" heads, then a focusable 56 px row per player and the totals. */
-private fun LazyListScope.boxScoreTab(teams: List<BoxScoreTeam>, first: Modifier) {
+private fun LazyListScope.boxScoreTab(summary: GameSummary, first: Modifier) {
     var firstUsed = false
-    teams.forEach { team ->
+    summary.boxScore.forEach { team ->
+        // "Milwaukee Bucks · Passing": the team's full name, not the feed's abbreviation.
+        val teamName = (if (team.side == ScoreSide.HOME) summary.home else summary.away).displayName ?: team.team
         team.tables.forEachIndexed { tableIndex, table ->
             item(key = "h|${team.side}|$tableIndex") {
                 val separator = stringResource(R.string.sports_live_game_info_separator)
                 Column(modifier = Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
-                        listOfNotNull(team.team, table.title).joinToString(separator),
-                        style = SportsLiveTokens.style(SportsLiveTokens.Type.RowName).copy(fontWeight = FontWeight.SemiBold),
+                        listOfNotNull(teamName, table.title).joinToString(separator),
+                        style = SportsLiveTokens.style(SportsLiveTokens.Type.RowName).sportsLiveBold(),
                         color = Colors.TextPrimary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -470,15 +475,15 @@ private fun LazyListScope.boxScoreTab(teams: List<BoxScoreTeam>, first: Modifier
             table.rows.forEachIndexed { rowIndex, row ->
                 val modifier = if (firstUsed) Modifier else first.also { firstUsed = true }
                 item(key = "r|${team.side}|$tableIndex|$rowIndex") {
-                    SportsLivePageRow(height = PAGE_TABLE_ROW, modifier = modifier) {
+                    SportsLivePageRow(height = PAGE_TABLE_ROW, modifier = modifier, lift = false) {
                         TableCells(listOfNotNull(row.player, row.position).joinToString(" "), row.values, tableStyle(), Colors.TextPrimary, BOX_COLUMN)
                     }
                 }
             }
             table.totals?.let { totals ->
                 item(key = "t|${team.side}|$tableIndex") {
-                    SportsLivePageRow(height = PAGE_TABLE_ROW, container = Colors.Surface) {
-                        TableCells(stringResource(R.string.sports_live_game_totals), totals, tableStyle().copy(fontWeight = FontWeight.Bold), Colors.TextPrimary, BOX_COLUMN)
+                    SportsLivePageRow(height = PAGE_TABLE_ROW, container = Colors.Surface, lift = false) {
+                        TableCells(stringResource(R.string.sports_live_game_totals), totals, tableStyle().sportsLiveBold(), Colors.TextPrimary, BOX_COLUMN)
                     }
                 }
             }
@@ -507,7 +512,7 @@ private fun LazyListScope.standingsTab(tables: List<StandingsTable>, first: Modi
                     Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(
                             table.title.orEmpty(),
-                            style = SportsLiveTokens.style(SportsLiveTokens.Type.RowName).copy(fontWeight = FontWeight.SemiBold),
+                            style = SportsLiveTokens.style(SportsLiveTokens.Type.RowName).sportsLiveBold(),
                             color = Colors.TextPrimary,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
@@ -527,12 +532,13 @@ private fun LazyListScope.standingsTab(tables: List<StandingsTable>, first: Modi
                                 SportsLivePageRow(
                                     height = PAGE_TABLE_ROW,
                                     modifier = if (tableIndex == 0 && rowIndex == 0) groupFirst else Modifier,
-                                    container = if (row.inGame) Colors.SelectedTint else Colors.Row
+                                    container = if (row.inGame) Colors.SelectedTint else Colors.Row,
+                                    lift = false
                                 ) {
                                     TableCells(
                                         row.team,
                                         row.values,
-                                        tableStyle().let { if (row.inGame) it.copy(fontWeight = FontWeight.Bold) else it },
+                                        tableStyle().let { if (row.inGame) it.sportsLiveBold() else it },
                                         Colors.TextPrimary,
                                         column
                                     )

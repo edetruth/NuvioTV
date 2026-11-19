@@ -72,9 +72,11 @@ internal fun SportsLivePageRow(
     container: Color = Colors.Row,
     /** A white bar at the left edge: "selected", not focus (this team in a standings snippet). */
     selectedBar: Boolean = false,
+    /** The 1.03 lift; off for full-width table rows, whose numbers would shift sideways under focus. */
+    lift: Boolean = true,
     content: @Composable RowScope.() -> Unit
 ) {
-    SportsLivePageSurface(modifier = modifier.fillMaxWidth().height(height), onClick = onClick, container = container) {
+    SportsLivePageSurface(modifier = modifier.fillMaxWidth().height(height), onClick = onClick, container = container, lift = lift) {
         Box(modifier = Modifier.fillMaxSize()) {
             Row(
                 modifier = Modifier.fillMaxSize().padding(horizontal = PAGE_ROW_PADDING),
@@ -125,7 +127,7 @@ internal fun SportsLivePageMessage(text: String, modifier: Modifier = Modifier) 
 internal fun SportsLiveReplayPill() {
     Text(
         text = stringResource(R.string.sports_live_results_replay),
-        style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag).copy(fontWeight = FontWeight.Bold),
+        style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag).sportsLiveBold(),
         color = Colors.ReplayGreenText,
         maxLines = 1,
         modifier = Modifier

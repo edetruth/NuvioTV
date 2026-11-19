@@ -315,11 +315,11 @@ internal fun headerSides(summary: GameSummary?, event: ScoreSnapshot): Pair<Head
     if (summary != null) {
         // The short name ("Celtics", as the design): the summary's, else the scoreboard's for the same side.
         fun side(team: GameTeam, listed: ScoreTeam) =
-            HeaderSide(team.shortDisplayName ?: listed.shortDisplayName ?: team.fullName, team.logo, team.record, team.score)
+            HeaderSide((team.shortDisplayName ?: listed.shortDisplayName ?: team.fullName).trim(), team.logo, team.record, team.score)
         return side(summary.away, event.away) to side(summary.home, event.home)
     }
     fun side(team: ScoreTeam) = HeaderSide(
-        name = team.shortDisplayName ?: team.displayName ?: team.name ?: team.abbreviation.orEmpty(),
+        name = (team.shortDisplayName ?: team.displayName ?: team.name ?: team.abbreviation.orEmpty()).trim(),
         logo = team.logo,
         record = null,
         score = team.score
@@ -363,7 +363,7 @@ private fun GameHero(state: SportsLiveGameUiState, event: ScoreSnapshot, first: 
                         else -> stringResource(R.string.sports_live_art_vs)
                     },
                     style = SportsLiveTokens.style(if (scoreShown) SportsLiveTokens.Type.HeroScore else SportsLiveTokens.Type.StageScore)
-                        .let { if (scoreShown) it else it.copy(fontWeight = FontWeight.Medium) },
+                        .let { if (scoreShown) it.sportsLiveBold() else it.copy(fontWeight = FontWeight.Medium) },
                     color = if (scoreShown) Colors.TextPrimary else Colors.TextMuted,
                     maxLines = 1,
                     softWrap = false
@@ -387,7 +387,7 @@ private fun HeroTeam(side: HeaderSide, logo: Painter?, logoShown: Boolean, showR
         AutoResizeText(
             text = side.name,
             color = Colors.TextPrimary,
-            style = SportsLiveTokens.style(HERO_NAME),
+            style = SportsLiveTokens.style(HERO_NAME).sportsLiveBold(),
             minFontSize = HERO_NAME_MIN,
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth()

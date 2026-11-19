@@ -305,7 +305,7 @@ private fun TeamHeader(
             team.event.leagueName?.takeIf { it.isNotBlank() }?.let { SportsLivePageHeading(it, color = Colors.TextMuted) }
             Text(
                 text = name,
-                style = SportsLiveTokens.style(SportsLiveTokens.Type.PageTitle),
+                style = SportsLiveTokens.style(SportsLiveTokens.Type.PageTitle).sportsLiveBold(),
                 color = Colors.TextPrimary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -379,7 +379,7 @@ private fun OpponentName(event: ScoreSnapshot, teamId: String, modifier: Modifie
         }
         Text(
             text = stringResource(if (TeamPages.isHome(event, teamId)) R.string.sports_live_team_vs else R.string.sports_live_team_at, name),
-            style = SportsLiveTokens.style(SportsLiveTokens.Type.RowName).copy(fontWeight = FontWeight.SemiBold),
+            style = SportsLiveTokens.style(SportsLiveTokens.Type.RowName).sportsLiveBold(),
             color = Colors.TextPrimary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
@@ -491,8 +491,9 @@ private fun RecentRow(
             } else {
                 stringResource(R.string.sports_live_results_score_hidden)
             },
-            style = SportsLiveTokens.style(SportsLiveTokens.Type.RowName)
-                .copy(fontFeatureSettings = "tnum", fontWeight = if (win) FontWeight.Bold else FontWeight.Normal),
+            // Hidden: the quieter 26 px, so "Score hidden" fits the result column.
+            style = SportsLiveTokens.style(if (shown) SportsLiveTokens.Type.RowName else SportsLiveTokens.Type.Meta)
+                .copy(fontFeatureSettings = "tnum").let { if (win) it.sportsLiveBold() else it },
             color = when {
                 !shown -> Colors.TextMuted
                 win -> Colors.TextPrimary
@@ -524,7 +525,7 @@ private fun LeaderRow(leader: TeamLeader, modifier: Modifier, onClick: (() -> Un
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 leader.player,
-                style = SportsLiveTokens.style(SportsLiveTokens.Type.RowName).copy(fontWeight = FontWeight.SemiBold),
+                style = SportsLiveTokens.style(SportsLiveTokens.Type.RowName).sportsLiveBold(),
                 color = Colors.TextPrimary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -550,6 +551,6 @@ private val NEXT_ROW = 48.dp
 private val RECENT_ROW = 36.dp
 private val LEADER_ROW = 44.dp
 private val DATE_COLUMN = 84.dp
-private val RESULT_COLUMN = 96.dp
+private val RESULT_COLUMN = 104.dp
 private val PILL_COLUMN = 56.dp
 private val POSITION_COLUMN = 24.dp
