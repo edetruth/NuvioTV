@@ -31,4 +31,10 @@ interface ScoreProvider {
 interface GameSummarySource {
     /** ESPN's summary JSON of [eventId] on [league]'s feed, or null on any failure. */
     suspend fun summary(league: EspnLeague, eventId: String): String?
+
+    /**
+     * [summary] read under Scores Off, after Reveal (live.20): the same request, but a failure never counts
+     * toward the feeds' health in Scores status (no score is kept on disk either way).
+     */
+    suspend fun unrecordedSummary(league: EspnLeague, eventId: String): String? = summary(league, eventId)
 }

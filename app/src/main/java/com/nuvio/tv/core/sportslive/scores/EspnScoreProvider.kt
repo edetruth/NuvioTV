@@ -186,7 +186,13 @@ class EspnScoreProvider internal constructor(
      * stored in the HTTP cache (a summary is ~500 KB): finals have their own trimmed disk copy. A failure
      * is recorded in [health] here; a success once the body is read ([GameSummaryRepository]).
      */
-    override suspend fun summary(league: EspnLeague, eventId: String): String? =
+    override suspend fun summary(league: EspnLeague, eventId: String): String? = fetchSummary(league, eventId, record = true)
+
+    /** Scores Off (live.20): [summary] with nothing recorded in [health]. */
+    override suspend fun unrecordedSummary(league: EspnLeague, eventId: String): String? =
+        fetchSummary(league, eventId, record = false)
+
+    private suspend fun fetchSummary(league: EspnLeague, eventId: String, record: Boolean): String? =
         withContext(Dispatchers.IO) {
             val url = "$baseUrl${league.path}/summary?event=$eventId"
             try {
@@ -197,7 +203,7 @@ class EspnScoreProvider internal constructor(
                     val body = response.body?.string()
                     if (!response.isSuccessful || body == null) {
                         debugLog("${league.path} summary $eventId: HTTP ${response.code}")
-                        health.recordFailure(EspnFeedKey.SUMMARY, FeedFailureKind.HTTP, response.code)
+                        if (record) health.recordFailure(EspnFeedKey.SUMMARY, FeedFailureKind.HTTP, response.code)
                         null
                     } else {
                         body
@@ -207,7 +213,7 @@ class EspnScoreProvider internal constructor(
                 throw e
             } catch (e: Exception) {
                 debugLog("${league.path} summary $eventId: ${e.javaClass.simpleName}")
-                health.recordFailure(EspnFeedKey.SUMMARY, FeedFailureKind.of(e))
+                if (record) health.recordFailure(EspnFeedKey.SUMMARY, FeedFailureKind.of(e))
                 null
             }
         }

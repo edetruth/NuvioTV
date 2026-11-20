@@ -171,7 +171,9 @@ class SportsLiveGameViewModel internal constructor(
     /** Watch replay pressed: played to its end, it ends the game's protection. */
     private val replayStarted: suspend (SportsLiveItem, ScoreSnapshot) -> Unit = { _, _ -> },
     /** A college league's AP ranks by team id (BUG18), for every standings row. */
-    private val loadRanks: suspend (EspnLeague) -> Map<String, Int> = { emptyMap() }
+    private val loadRanks: suspend (EspnLeague) -> Map<String, Int> = { emptyMap() },
+    /** The summary read under Scores Off after Reveal (live.20): no feed-health entry, no disk copy. */
+    private val loadSummaryScoresOff: suspend (EspnLeague, String) -> GameSummaryLoad = loadSummary
 ) : ViewModel() {
 
     @Inject
@@ -193,7 +195,10 @@ class SportsLiveGameViewModel internal constructor(
         endProtection = protection::reveal,
         saveForLater = protection::saveForLater,
         replayStarted = { replay, event -> protection.onReplayStarted(listOf(replay) + replay.alternates, event) },
-        loadRanks = rankings::ranks
+        loadRanks = rankings::ranks,
+        loadSummaryScoresOff = { league, eventId ->
+            withContext(Dispatchers.Default) { summaries.load(league, eventId, scoresOff = true) }
+        }
     )
 
     private val ranks = MutableStateFlow<Map<String, Int>>(emptyMap())
@@ -291,7 +296,7 @@ class SportsLiveGameViewModel internal constructor(
                         }
                         if (page.value.status == GameLoadStatus.WAITING_REVEAL) page.update { it.copy(status = GameLoadStatus.LOADING) }
                         if (!isVisible) return@collectLatest
-                        refreshWhileVisible(event, settings.effectiveDelayMs)
+                        refreshWhileVisible(event, settings.effectiveDelayMs, scoresOff = settings.mode == ScoresMode.OFF)
                     }
             }
         }
@@ -302,12 +307,13 @@ class SportsLiveGameViewModel internal constructor(
      * The delay is decided per summary from its own state: every summary not final is held [delayMs]
      * (a card opened right after kick-off may still say "scheduled" while ESPN says "in play").
      */
-    private suspend fun refreshWhileVisible(event: ScoreSnapshot, delayMs: Long) {
+    private suspend fun refreshWhileVisible(event: ScoreSnapshot, delayMs: Long, scoresOff: Boolean) {
+        val fetch: suspend (EspnLeague, String) -> GameSummaryLoad = if (scoresOff) loadSummaryScoresOff else loadSummary
         val values = buffer
         var nextFetchAt = now()
         while (true) {
             if (now() >= nextFetchAt) {
-                val live = when (val load = loadSummary(event.league, event.eventId)) {
+                val live = when (val load = fetch(event.league, event.eventId)) {
                     is GameSummaryLoad.Loaded -> {
                         val hold = !load.final || sawUnfinished
                         if (!load.final) sawUnfinished = true
