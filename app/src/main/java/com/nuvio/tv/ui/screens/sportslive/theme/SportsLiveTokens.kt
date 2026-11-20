@@ -198,21 +198,12 @@ object SportsLiveTokens {
     }
 
     /**
-     * Followed teams' alert cards (#136): one slim, slightly translucent card at the top right, the same
-     * spot over the full player and the mini player (clear of the section's header, and of broadcast score
-     * bugs, which sit top left or along the bottom); in dual screen, the top right of a pane.
+     * Followed teams' alert cards (#136): one slim, slightly translucent card in the toasts' corner (live.20: one
+     * corner for everything, [Toast]'s bottom left, the toast stacked above the card); in dual screen split, the
+     * bottom left of the pane the card is not about.
      */
     object Alert {
-        /** Score and full-time cards' screen spot, top right (they move to the toast corner with dual in live.20 W2). */
-        val Top = Size.SafeTop + Size.HeaderHeight + 16.dp
-        val End = Size.SafeEnd
-        /** Bottom left of the safe area on every screen (the board: x 256, bottom 1026 px), clear of the side rail (F8). */
-        val Start = 128.dp
-        val Bottom = Size.SafeBottom
-        /** Over full-screen video: the player's corner, lined up with its starting card. */
-        val StartOverVideo = Player.CornerStart
-        val BottomOverVideo = Player.CornerBottom
-        /** Inside a dual screen pane, from its top right corner. */
+        /** Inside a dual screen pane, from its bottom left corner. */
         val PaneInset = 12.dp
         val Width = 340.dp
         val Padding = 12.dp
@@ -291,6 +282,8 @@ object SportsLiveTokens {
     object Player {
         val CornerStart = 48.dp
         val CornerBottom = 48.dp
+        /** Clear of the player's seek bar and controls while they show (upstream lifts its skip button to 122 dp). */
+        val ControlsClearance = 122.dp
     }
 
     object Toast {

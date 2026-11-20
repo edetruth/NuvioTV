@@ -40,6 +40,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.media3.common.util.UnstableApi
@@ -231,12 +232,10 @@ fun SportsLiveAlertsHost(
     )
 
     // "Reminder set" / "Reminder removed" (#44): the one toast card (#134, live.19 QA F8), bottom left, never
-    // taking focus. The kickoff prompt sits in the same corner; over video, in the player's.
-    val overVideo = inPlayer || dualRoute
-    val promptPlace = Modifier.padding(
-        start = if (overVideo) SportsLiveTokens.Toast.StartOverVideo else SportsLiveTokens.Toast.Start,
-        bottom = if (overVideo) SportsLiveTokens.Toast.BottomOverVideo else SportsLiveTokens.Toast.Bottom
-    )
+    // taking focus. The kickoff prompt and the score cards sit in the same corner (live.20): over video, the
+    // player's (above its controls while they show) or dual screen's left tile.
+    val corner = SportsLiveToastPlace.corner.collectAsState().value ?: SportsLiveCorner.SCREEN
+    val promptPlace = Modifier.padding(start = corner.start, bottom = corner.bottom)
     val notice by alerts.reminderNotice.collectAsState()
     val toastContext = LocalContext.current
     val reminderLabelOf = rememberSportsLiveStateLabeler(SportsLiveTab.UPCOMING)
@@ -421,9 +420,11 @@ fun SportsLiveAlertsHost(
                             AlertKeyAction.BOTH -> {
                                 alerts.close(shown, AlertAnswer.WATCH)
                                 when {
+                                    // A kickoff's fresh card (its live link, #162) goes beside the game, as Watch takes it.
+                                    shown.first is SportsLiveAlert.Kickoff -> scope.launch {
+                                        sportsLiveKickoffBoth(alert.item, alerts::cardToWatch, { on?.watchBoth(it) == true }) { playHere(it, on) }
+                                    }
                                     on?.watchBoth(alert.item) == true -> Unit
-                                    // A kickoff's fresh card plays its live link (#162), as Watch on the prompt.
-                                    shown.first is SportsLiveAlert.Kickoff -> scope.launch { playHere(alerts.cardToWatch(alert.item), on) }
                                     else -> playHere(alert.item, on)
                                 }
                             }
@@ -483,7 +484,7 @@ fun SportsLiveAlertsHost(
                 onBoth = surface?.takeIf { inPlayer && !dualRoute && style == KickoffStyle.COMPACT && !first.noStreamYet && it.offersBoth() }?.let { on ->
                     {
                         alerts.close(current, AlertAnswer.WATCH)
-                        if (!on.watchBoth(first.item)) scope.launch { playViewModel.play(alerts.cardToWatch(first.item)) }
+                        scope.launch { sportsLiveKickoffBoth(first.item, alerts::cardToWatch, on::watchBoth) { playViewModel.play(it) } }
                     }
                 },
                 watchingTitle = playerTitle?.let(::sportsLivePlainTitle),
@@ -553,7 +554,17 @@ fun SportsLiveAlertsHost(
             ).joinToString(HINT_SEPARATOR)
         }
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-            val (end, top) = alertCardOffset(SportsLiveAlertPlacement.spot(alert, panes), maxWidth, maxHeight, bigSmall = panes?.bigSmall == true)
+            // One corner for everything (live.20): above the player's card or the prompt, the toast above this card.
+            val density = LocalDensity.current
+            val baseTopPx by SportsLiveBottomLeft.baseTopPx.collectAsState()
+            val place = alertCardPlace(
+                spot = SportsLiveAlertPlacement.spot(alert, panes),
+                width = maxWidth,
+                height = maxHeight,
+                corner = corner,
+                bigSmall = panes?.bigSmall == true,
+                claimedTop = baseTopPx?.let { with(density) { it.toDp() } }
+            )
             AlertCardView(
                 cardId = current.id,
                 content = content,
@@ -562,12 +573,27 @@ fun SportsLiveAlertsHost(
                 index = index,
                 count = worded.size,
                 modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(top = top, end = end)
+                    .align(Alignment.BottomStart)
+                    .padding(start = place.start, bottom = place.bottom)
+                    .claimsBottomLeft(stacked = true, enabled = place.holdsCorner)
             )
         }
     }
     }
+}
+
+/**
+ * ▲ Both on a kickoff prompt (live.20): the game's fresh card ([freshCard], the one Watch plays: the newest load's copy,
+ * live, with its live link) goes beside the game playing ([both]); when dual screen cannot open, it plays as Watch.
+ */
+internal suspend fun sportsLiveKickoffBoth(
+    item: SportsLiveItem,
+    freshCard: suspend (SportsLiveItem) -> SportsLiveItem,
+    both: (SportsLiveItem) -> Boolean,
+    watch: (SportsLiveItem) -> Unit
+) {
+    val fresh = freshCard(item)
+    if (!both(fresh)) watch(fresh)
 }
 
 /**
@@ -593,20 +619,32 @@ private fun TakeBack(active: Boolean, onBack: () -> Unit) {
 }
 
 /**
- * Where a card's top right corner sits, as (end, top) insets of the screen (#136): the screen's alert spot,
- * or [SportsLiveTokens.Alert.PaneInset] inside a dual screen pane's top right corner, the tiles placed as
- * dual screen places them ([DualGeometry]). In big + small (#123) the small tile is narrower than a card,
- * so a card goes to the column under it (its strip), clear of both videos' top right corners.
+ * Where a score or full-time card sits (live.20: one corner for everything): its bottom left corner as [start] and
+ * [bottom] insets of the screen. [holdsCorner]: it is in the toasts' corner, so the toast stacks above it.
  */
-internal fun alertCardOffset(spot: AlertSpot, width: Dp, height: Dp, bigSmall: Boolean = false): Pair<Dp, Dp> {
-    if (spot == AlertSpot.SCREEN) return SportsLiveTokens.Alert.End to SportsLiveTokens.Alert.Top
-    val inset = SportsLiveTokens.Alert.PaneInset
-    if (bigSmall) {
-        val small = DualGeometry.tile(Side.RIGHT, DualLayout.BIG_SMALL, width, height)
-        return (width - small.end) to (small.bottom + SportsLiveTokens.Size.DualCaption + inset)
+internal data class AlertCardPlace(val start: Dp, val bottom: Dp, val holdsCorner: Boolean)
+
+/**
+ * Where a card sits (#136, live.20): the toasts' [corner] (the screen's, the player's, dual screen's left tile),
+ * [SportsLiveTokens.Size.RowGap] above a card already there (its top edge at [claimedTop]: the player's one card or
+ * the kickoff prompt); the toast then stacks above it. In dual screen split a card about the left game goes to the
+ * bottom left of the right pane instead, [SportsLiveTokens.Alert.PaneInset] inside, so it never covers the game it is
+ * about. Big + small (#123): the small tile is narrower than a card, so every card takes the corner (the big tile).
+ */
+internal fun alertCardPlace(
+    spot: AlertSpot,
+    width: Dp,
+    height: Dp,
+    corner: SportsLiveCorner,
+    bigSmall: Boolean = false,
+    claimedTop: Dp? = null
+): AlertCardPlace {
+    if (spot == AlertSpot.RIGHT_PANE && !bigSmall) {
+        val pane = DualGeometry.corner(Side.RIGHT, DualLayout.SPLIT, width, height)
+        return AlertCardPlace(pane.start, pane.bottom, holdsCorner = false)
     }
-    val tile = DualGeometry.tile(if (spot == AlertSpot.RIGHT_PANE) Side.RIGHT else Side.LEFT, DualLayout.SPLIT, width, height)
-    return (width - tile.end + inset) to (tile.top + inset)
+    val bottom = sportsLiveToastBottom(corner.bottom, height, claimedTop, SportsLiveTokens.Size.RowGap)
+    return AlertCardPlace(corner.start, bottom, holdsCorner = true)
 }
 
 /**
@@ -872,8 +910,8 @@ private fun KickoffPrompt(
 }
 
 /**
- * A toast card (#136): slim, slightly see-through, sliding in from the right. A grouped card shows a dot
- * for each of its alerts; [hint] ("OK Watch · ▼ Peek") only while the card takes those keys.
+ * A toast card (#136): slim, slightly see-through, sliding in from the left as the toasts do (live.20). A grouped
+ * card shows a dot for each of its alerts; [hint] ("OK Watch · ▼ Peek") only while the card takes those keys.
  */
 @Composable
 private fun AlertCardView(
@@ -889,7 +927,7 @@ private fun AlertCardView(
     val shape = RoundedCornerShape(SportsLiveTokens.Alert.Radius)
     AnimatedVisibility(
         visibleState = visible,
-        enter = slideInHorizontally(tween(SportsLiveTokens.Alert.SLIDE_MS)) { it / 2 } + fadeIn(tween(SportsLiveTokens.Alert.SLIDE_MS)),
+        enter = slideInHorizontally(tween(SportsLiveTokens.Alert.SLIDE_MS)) { -it / 2 } + fadeIn(tween(SportsLiveTokens.Alert.SLIDE_MS)),
         modifier = modifier
     ) {
         Column(

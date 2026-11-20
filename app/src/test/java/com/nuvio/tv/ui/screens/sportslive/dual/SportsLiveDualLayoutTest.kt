@@ -5,7 +5,8 @@ import com.nuvio.tv.MainDispatcherRule
 import com.nuvio.tv.core.sportslive.alerts.AlertSpot
 import com.nuvio.tv.domain.model.SportsLiveTab
 import com.nuvio.tv.domain.model.Stream
-import com.nuvio.tv.ui.screens.sportslive.alertCardOffset
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveCorner
+import com.nuvio.tv.ui.screens.sportslive.alertCardPlace
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runCurrent
@@ -159,23 +160,36 @@ class SportsLiveDualLayoutTest {
     }
 
     @Test
-    fun `alert cards sit in the other pane's corner in split, and under the small tile in big and small`() {
-        // Split: as before, the top right corner of the pane the card is not about.
-        val right = DualGeometry.tile(Side.RIGHT, DualLayout.SPLIT, 960.dp, 540.dp)
-        val (endRight, topRight) = alertCardOffset(AlertSpot.RIGHT_PANE, 960.dp, 540.dp)
-        assertEquals(28f, endRight.value, 0.01f)
-        assertEquals((right.top + 12.dp).value, topRight.value, 0.01f)
-        val (endLeft, _) = alertCardOffset(AlertSpot.LEFT_PANE, 960.dp, 540.dp)
-        assertEquals((960.dp - 16.dp - 456.dp + 12.dp).value, endLeft.value, 0.01f)
-        // Big and small: below the corner tile and its strip, whichever game the card is about.
-        val small = DualGeometry.tile(Side.RIGHT, DualLayout.BIG_SMALL, 960.dp, 540.dp)
-        listOf(AlertSpot.LEFT_PANE, AlertSpot.RIGHT_PANE).forEach { spot ->
-            val (end, top) = alertCardOffset(spot, 960.dp, 540.dp, bigSmall = true)
-            assertEquals(24f, end.value, 0.01f)
-            assertEquals((small.bottom + 32.dp + 12.dp).value, top.value, 0.01f)
+    fun `alert cards share the toasts' bottom left corner, the left tile's over dual screen, the right pane's for the left game`() {
+        // live.20: over dual screen the toasts' corner is 12 dp inside the left tile's bottom left.
+        val left = DualGeometry.tile(Side.LEFT, DualLayout.SPLIT, 960.dp, 540.dp)
+        val dualCorner = DualGeometry.corner(Side.LEFT, DualLayout.SPLIT, 960.dp, 540.dp)
+        assertEquals((left.start + 12.dp).value, dualCorner.start.value, 0.01f)
+        assertEquals((540.dp - left.bottom + 12.dp).value, dualCorner.bottom.value, 0.01f)
+        // A card about the right game (it sits over the left pane), or about neither: the corner, holding it.
+        listOf(AlertSpot.LEFT_PANE, AlertSpot.SCREEN).forEach { spot ->
+            val place = alertCardPlace(spot, 960.dp, 540.dp, dualCorner)
+            assertEquals(dualCorner.start, place.start)
+            assertEquals(dualCorner.bottom, place.bottom)
+            assertTrue(place.holdsCorner)
         }
-        // The whole screen's spot does not move.
-        assertEquals(alertCardOffset(AlertSpot.SCREEN, 960.dp, 540.dp), alertCardOffset(AlertSpot.SCREEN, 960.dp, 540.dp, bigSmall = true))
+        // A card about the left game: the right pane's bottom left, never over its own game, and not the toasts' corner.
+        val right = DualGeometry.tile(Side.RIGHT, DualLayout.SPLIT, 960.dp, 540.dp)
+        val onRight = alertCardPlace(AlertSpot.RIGHT_PANE, 960.dp, 540.dp, dualCorner)
+        assertEquals((right.start + 12.dp).value, onRight.start.value, 0.01f)
+        assertEquals((540.dp - right.bottom + 12.dp).value, onRight.bottom.value, 0.01f)
+        assertFalse(onRight.holdsCorner)
+        // The card fits inside the right tile.
+        assertTrue((onRight.start + 340.dp).value <= right.end.value)
+        // Big and small: the small tile is narrower than a card, so every card takes the big tile's corner.
+        val bigCorner = DualGeometry.corner(Side.LEFT, DualLayout.BIG_SMALL, 960.dp, 540.dp)
+        val big = DualGeometry.tile(Side.LEFT, DualLayout.BIG_SMALL, 960.dp, 540.dp)
+        assertEquals((540.dp - big.bottom + 12.dp).value, bigCorner.bottom.value, 0.01f)
+        listOf(AlertSpot.LEFT_PANE, AlertSpot.RIGHT_PANE).forEach { spot ->
+            val place = alertCardPlace(spot, 960.dp, 540.dp, bigCorner, bigSmall = true)
+            assertEquals(bigCorner, SportsLiveCorner(place.start, place.bottom))
+            assertTrue(place.holdsCorner)
+        }
     }
 
     // The profile's layout

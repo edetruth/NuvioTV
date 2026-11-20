@@ -103,6 +103,7 @@ import com.nuvio.tv.ui.screens.sportslive.SportsLiveReconnectingChip
 import com.nuvio.tv.ui.screens.sportslive.sportsLiveEndActions
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveStartingAction
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveStartingCard
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveToastsAt
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapTarget
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens
 import com.nuvio.tv.ui.theme.NuvioTheme
@@ -413,6 +414,8 @@ fun SportsLiveDualScreen(
         // Both layouts place the same two pane views (#123): only their size and spot change, so the
         // players keep playing through a layout change.
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            // Toasts and alert cards (live.20): one corner, over video, the left (big) tile's bottom left.
+            SportsLiveToastsAt(DualGeometry.corner(Side.LEFT, dual.layout, maxWidth, maxHeight))
             val chipStrings = rememberScoreChipStrings()
             val detailsStrings = rememberScoreDetailsStrings()
             // Not before the layout is known: a pane view is first laid out at its real tile (see layoutReady).

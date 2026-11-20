@@ -2,6 +2,8 @@ package com.nuvio.tv.ui.screens.sportslive.dual
 
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveCorner
+import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens.Alert
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens.Size
 
 /** A pane's 16:9 tile on the dual screen, from the screen's top left corner. */
@@ -35,5 +37,14 @@ object DualGeometry {
             if (side == Side.LEFT) DualTile(Size.DualBigMargin, top, big)
             else DualTile(Size.DualBigMargin + big + Size.DualGap, top, row - big)
         }
+    }
+
+    /**
+     * The bottom left corner, [Alert.PaneInset] inside [side]'s tile, as insets from the screen's left and bottom
+     * edges (live.20): over dual screen, the toasts' and alert cards' corner is the left (big) tile's.
+     */
+    fun corner(side: Side, layout: DualLayout, width: Dp, height: Dp): SportsLiveCorner {
+        val tile = tile(side, layout, width, height)
+        return SportsLiveCorner(start = tile.start + Alert.PaneInset, bottom = height - tile.bottom + Alert.PaneInset)
     }
 }
