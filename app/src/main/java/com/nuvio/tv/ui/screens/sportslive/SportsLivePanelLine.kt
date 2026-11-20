@@ -241,8 +241,13 @@ internal fun SportsLivePanelLine(
 private fun RowScope.GameLine(row: ScoreboardRow, line: PanelLine) {
     LineTag(line.tag)
     val logos = rememberTeamLogoPair(row.art)?.takeIf { !it.failed }
+    // With both logos shown, abbreviations that no longer fit (a revealed score and clock) go whole, never as
+    // "B…": the logos name the teams. Taken afresh for each new line.
+    var namesFit by remember(line) { mutableStateOf(true) }
+    val logosShown = logos?.shown == true
+    val onOverflow: (() -> Unit)? = if (logosShown) ({ namesFit = false }) else null
     if (logos != null) TeamLogoSlot(logos.first, logos.shown, Size.PanelLogo)
-    LineText(line.first.orEmpty(), Modifier.weight(1f, fill = false))
+    if (namesFit || !logosShown) LineText(line.first.orEmpty(), Modifier.weight(1f, fill = false), onOverflow = onOverflow)
     when (val scores = line.scores) {
         is ScoreboardScores.Shown -> {
             val text = stringResource(R.string.sports_live_chip_score, scores.first, scores.second)
@@ -263,7 +268,7 @@ private fun RowScope.GameLine(row: ScoreboardRow, line: PanelLine) {
         )
         ScoreboardScores.None -> LineText(stringResource(R.string.sports_live_panel_vs), color = Colors.TextMuted)
     }
-    LineText(line.second.orEmpty(), Modifier.weight(1f, fill = false))
+    if (namesFit || !logosShown) LineText(line.second.orEmpty(), Modifier.weight(1f, fill = false), onOverflow = onOverflow)
     if (logos != null) TeamLogoSlot(logos.second, logos.shown, Size.PanelLogo)
     if (row.followed) Icon(imageVector = Icons.Rounded.Star, contentDescription = null, tint = Colors.FollowedGold, modifier = Modifier.size(10.dp))
 }
@@ -296,14 +301,21 @@ private fun RowScope.EventLine(line: PanelLine) {
 }
 
 @Composable
-private fun LineText(text: String, modifier: Modifier = Modifier, color: Color = Colors.TextPrimary) {
+private fun LineText(
+    text: String,
+    modifier: Modifier = Modifier,
+    color: Color = Colors.TextPrimary,
+    /** Called when [text] does not fit whole. */
+    onOverflow: (() -> Unit)? = null
+) {
     Text(
         text = text,
         style = SportsLiveTokens.style(SportsLiveTokens.Type.PanelLine),
         color = color,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
-        modifier = modifier
+        modifier = modifier,
+        onTextLayout = { if (onOverflow != null && it.hasVisualOverflow) onOverflow() }
     )
 }
 
