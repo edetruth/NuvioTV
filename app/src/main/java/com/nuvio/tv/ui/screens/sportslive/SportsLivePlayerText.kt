@@ -20,7 +20,7 @@ internal fun sportsLivePlainTitle(raw: String): String {
         var at = 0
         while (at < name.length) {
             val point = name.codePointAt(at)
-            if (!isPictograph(point)) appendCodePoint(point)
+            if (!sportsLiveIsPictograph(point)) appendCodePoint(point)
             at += Character.charCount(point)
         }
     }
@@ -28,7 +28,8 @@ internal fun sportsLivePlainTitle(raw: String): String {
     return plain.ifEmpty { name }
 }
 
-private fun isPictograph(point: Int): Boolean {
+/** An emoji, pictograph or joiner: the TV font draws some as blank boxes (F24), so plain text leaves them out. */
+internal fun sportsLiveIsPictograph(point: Int): Boolean {
     if (point == ZERO_WIDTH_JOINER || point == VARIATION_SELECTOR || point == KEYCAP) return true
     val type = Character.getType(point)
     return type == Character.OTHER_SYMBOL.toInt() || type == Character.PRIVATE_USE.toInt() || type == Character.SURROGATE.toInt()

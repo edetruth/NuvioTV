@@ -4215,6 +4215,9 @@
     <string name="sports_live_source_notice">Message from the source · not a stream</string>
     <!-- #156: marks on links that already failed or played for this game, in every stream list. -->
     <string name="sports_live_links_didnt_work">Didn\'t work</string>
+    <!-- live.20: the Sources panel's groups for a game: its working and untried links, and the sources' messages. -->
+    <string name="sports_live_sources_links">Links</string>
+    <string name="sports_live_sources_notices">From the sources</string>
     <string name="sports_live_link_played">Played before</string>
     <string name="sports_live_link_didnt_start">Didn\'t start</string>
     <string name="sports_live_link_stopped">Stopped playing</string>

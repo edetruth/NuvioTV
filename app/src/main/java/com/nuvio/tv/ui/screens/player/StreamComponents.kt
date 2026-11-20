@@ -89,10 +89,13 @@ internal fun StreamItem(
     /** Sports & Live (#156): what this link did for the game, and the time its age is read at. */
     linkMark: SportsLiveLinkMark? = null,
     linkMarkNowMs: Long = 0L,
+    /** Sports & Live (live.20): a game's link, drawn as the V2 row (same keys and focus). */
+    sportsLive: Boolean = false,
     onClick: () -> Unit,
     onFocusChanged: ((Boolean) -> Unit)? = null,
     onUpKey: (() -> Unit)? = null
 ) {
+    if (sportsLive) return com.nuvio.tv.ui.screens.sportslive.SportsLiveSourceRow(stream, focusRequester, requestInitialFocus, isCurrentStream, nowPlayingAnimates, linkMark, linkMarkNowMs, onClick, onFocusChanged, onUpKey)
     val context = LocalContext.current
     var isFocused by remember { mutableStateOf(false) }
     // A link that failed for this game is dimmed, except while focused (#156).
@@ -280,7 +283,9 @@ internal fun AddonFilterChips(
     onUpKey: (() -> Unit)? = null,
     onFocusIndexChanged: (Int) -> Unit = {},
     chipListState: LazyListState = rememberLazyListState(),
-    debugTag: String = "AddonFilterChips"
+    debugTag: String = "AddonFilterChips",
+    /** How a source's chip names it (Sports & Live: in words, without emoji); the filter still uses the name. */
+    chipLabel: (String) -> String = { it }
 ) {
     val isRtl = androidx.compose.ui.platform.LocalLayoutDirection.current == androidx.compose.ui.unit.LayoutDirection.Rtl
     val chipMap = sourceChips.associateBy { it.name }
@@ -480,7 +485,7 @@ internal fun AddonFilterChips(
             val isSelectable = addon in addons && chipStatus == SourceChipStatus.SUCCESS
             val requesterIdx = if (hasRefresh) i + 2 else i + 1
             SourceStatusFilterChip(
-                name = addon,
+                name = chipLabel(addon),
                 isSelected = selectedAddon == addon,
                 status = chipStatus,
                 isSelectable = isSelectable,

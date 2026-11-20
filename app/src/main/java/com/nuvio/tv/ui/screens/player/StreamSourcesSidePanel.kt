@@ -61,7 +61,9 @@ import androidx.compose.ui.res.stringResource
 import com.nuvio.tv.R
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveSourceNoticeRow
 import com.nuvio.tv.core.sportslive.SportsLiveLinkMark
-import com.nuvio.tv.ui.screens.sportslive.SportsLiveDidntWorkHeader
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveSourceGroupHeader
+import com.nuvio.tv.ui.screens.sportslive.sportsLivePlainSourceName
+import com.nuvio.tv.ui.screens.sportslive.sportsLiveSourceGroupHeaders
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveLinkMarksView
 import com.nuvio.tv.ui.screens.sportslive.sportsLivePlainTitle
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens
@@ -148,12 +150,11 @@ internal fun StreamSourcesSidePanel(
     val shownStreams = remember(orderedStreams, playingIndex) { pinPlayingFirst(orderedStreams, playingIndex) }
     val currentStreamIndex = if (playingIndex >= 0) 0 else -1
     val noticeIndices = remember(shownStreams) { shownStreams.indices.filter { isNotice(shownStreams[it]) }.toSet() }
-    // The "Didn't work" header sits over the first failed link after the pinned playing one.
-    val didntWorkIndex = remember(shownStreams, linkMarks, currentStreamIndex, noticeIndices) {
-        if (linkMarks == null) -1 else shownStreams.indices.firstOrNull { index ->
-            index != currentStreamIndex && index !in noticeIndices &&
-                linkMarks.markOf(shownStreams[index]) is SportsLiveLinkMark.Failed
-        } ?: -1
+    // Sports & Live (#156, live.20): a header over each group's first row (Now playing, Links, Didn't work, notices).
+    val sportsGroups = remember(shownStreams, linkMarks, currentStreamIndex, noticeIndices) {
+        linkMarks?.let { marks ->
+            sportsLiveSourceGroupHeaders(shownStreams.size, currentStreamIndex, { it in noticeIndices }) { marks.markOf(shownStreams[it]) is SportsLiveLinkMark.Failed }
+        }
     }
     val streamKeys = remember(shownStreams) {
         val seen = mutableMapOf<String, Int>()
@@ -401,7 +402,8 @@ internal fun StreamSourcesSidePanel(
                         onFocusIndexChanged = { index ->
                             if (index != 1) userMovedFromFirstResult = true
                         },
-                        debugTag = "SourcesSidePanel"
+                        debugTag = "SourcesSidePanel",
+                        chipLabel = if (linkMarks != null) ::sportsLivePlainSourceName else { name -> name }
                     )
                 }
             }
@@ -525,12 +527,15 @@ internal fun StreamSourcesSidePanel(
                             streamKeys[index]
                         }) { index, stream ->
                             if (index in noticeIndices) {
-                                SportsLiveSourceNoticeRow(stream)
+                                SportsLiveSourceNoticeRow(stream, header = sportsGroups?.get(index))
                                 return@itemsIndexed
                             }
                             Column {
-                                if (index == currentStreamIndex) NowPlayingHeader()
-                                if (index == didntWorkIndex) SportsLiveDidntWorkHeader()
+                                if (sportsGroups != null) {
+                                    sportsGroups[index]?.let { SportsLiveSourceGroupHeader(it) }
+                                } else if (index == currentStreamIndex) {
+                                    NowPlayingHeader()
+                                }
                                 StreamItem(
                                     stream = stream,
                                     focusRequester = if (index == 0) {
@@ -545,6 +550,7 @@ internal fun StreamSourcesSidePanel(
                                     badgePlacement = uiState.streamBadgePlacement,
                                     linkMark = linkMarks?.markOf(stream),
                                     linkMarkNowMs = linkMarks?.nowMs ?: 0L,
+                                    sportsLive = linkMarks != null,
                                     onClick = { onStreamSelected(stream) },
                                     onFocusChanged = { focused ->
                                         if (focused) {
