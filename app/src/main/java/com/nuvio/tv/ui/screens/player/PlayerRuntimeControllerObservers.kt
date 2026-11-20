@@ -978,6 +978,8 @@ internal fun PlayerRuntimeController.handleVc1PlaybackFailure(errorMessage: Stri
     errorRetryJob?.cancel()
     errorRetryJob = null
     releasePlayer(flushPlaybackState = false)
+    // Sports & Live (live.19 QA VC-1): the sports recovery ladder first; the device's decoder, not the link, is at fault.
+    if (trySportsRecoveryAfterError(displayMessage, decoderInit = true)) return
     // An auto-selected source tries the next matching one before showing the VC-1 error.
     if (tryFallbackToNextSourceAfterError(displayMessage)) return
     cancelNextEpisodeAutoPlayOnFatalError()
