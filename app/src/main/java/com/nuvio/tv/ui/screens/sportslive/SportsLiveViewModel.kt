@@ -98,6 +98,8 @@ class SportsLiveViewModel internal constructor(
     hoverPreviewEnabled: Flow<Boolean> = flowOf(false),
     /** The mini player plays: it takes priority, so no preview starts meanwhile. */
     miniPlayerActive: Flow<Boolean> = flowOf(false),
+    /** The mini player's game (its card id) while it plays: never taken off Live now meanwhile (TV QA BUG7). */
+    miniPlayingId: Flow<String?> = flowOf(null),
     /** Data saver: when on, the on-focus ended-probe is skipped (hover preview is already gated off). */
     dataSaver: Flow<Boolean> = flowOf(false),
     /** Drops [item]'s cached resolve after its preview failed, so the next play/preview re-resolves. */
@@ -170,6 +172,7 @@ class SportsLiveViewModel internal constructor(
             SportsLiveDataSaver.hoverPreviewAllowed(hover, saver)
         },
         miniPlayerActive = SportsLiveMiniPlayers.controller.state.map { it is SportsLiveMiniState.Playing },
+        miniPlayingId = SportsLiveMiniPlayers.controller.state.map { (it as? SportsLiveMiniState.Playing)?.item?.id },
         dataSaver = prefs.dataSaver,
         onResolveFailed = resolver::invalidate,
         endedInputs = combine(liveScores.scores, liveScores.mode, liveScores.unmatched) { scores, mode, unmatched ->
@@ -219,8 +222,10 @@ class SportsLiveViewModel internal constructor(
         /** The last chip picked on each tab (#79), for this session: a tab opens on it while it has games. */
         val filterByTab: Map<SportsLiveTab, String> = emptyMap(),
         val itemId: String? = null,
-        /** Live now's list holds focus (F6): the rows a load dropped stay until it lets go. */
+        /** Live now is browsed (F6, TV QA BUG7): its rows, order and count hold until it is left or Refresh shows the new. */
         val browsing: Boolean = false,
+        /** Bumped by "N new" on Refresh ([showNewRows]): the next build shows Live now as it is now, once. */
+        val thaw: Int = 0,
         val isRefreshing: Boolean = false,
         val failures: List<SportsLiveFailure> = emptyList(),
         val lastRefreshedMs: Long? = null,
@@ -260,6 +265,13 @@ class SportsLiveViewModel internal constructor(
 
     // Live now as last built, so the focused card is kept when a load drops it (#145).
     private var shownLiveNow: List<SportsLiveItem> = emptyList()
+
+    // The last "N new" press applied ([Selection.thaw]).
+    private var thawApplied = 0
+
+    // The mini player's game while it plays (TV QA BUG7): it stays listed.
+    @Volatile
+    private var miniPlayingNow: String? = null
 
     // The titles hidden from Live Now (#134), as last read.
     @Volatile
@@ -538,6 +550,7 @@ class SportsLiveViewModel internal constructor(
             combine(hoverPreviewEnabled, miniPlayerActive) { enabled, mini -> enabled && !mini }
                 .collect(previewController::onEnabled)
         }
+        viewModelScope.launch { miniPlayingId.collect { miniPlayingNow = it } }
         viewModelScope.launch { dataSaver.collect { dataSaverActive = it } }
         viewModelScope.launch { runCatching { dropRetiredPrefs() } }
     }
@@ -616,9 +629,17 @@ class SportsLiveViewModel internal constructor(
         return true
     }
 
-    /** Live now's list holds focus ([focused]) or lets it go (F6): rows a load dropped stay put meanwhile. */
+    /**
+     * Live now's content (list, strip, stage) holds focus ([focused]) or lets it go (F6, TV QA BUG7): while it does,
+     * the list keeps its rows, order and count; new rows wait behind "N new" on Refresh ([showNewRows]).
+     */
     fun setBrowsing(focused: Boolean) {
         if (selectionState.value.browsing != focused) selectionState.update { it.copy(browsing = focused) }
+    }
+
+    /** "N new" on Refresh (TV QA Q5): Live now as it is now, the waiting rows in their places; then frozen again. */
+    fun showNewRows() {
+        selectionState.update { it.copy(thaw = it.thaw + 1) }
     }
 
     /**
@@ -682,6 +703,8 @@ class SportsLiveViewModel internal constructor(
         // The preview stops while the screen is hidden; coming back, it waits for a fresh settle.
         previewController.onVisible(visible)
         if (!visible) prefetcher?.stop()
+        // Leaving the screen ends browsing (TV QA BUG7): Live now is as built when it comes back.
+        if (!visible) setBrowsing(false)
         if (visible == screenVisible) return
         screenVisible = visible
         restartAutoRefresh(returning = visible)
@@ -831,6 +854,7 @@ class SportsLiveViewModel internal constructor(
         // ones stay (playable) until their addon drops them or six hours pass.
         val now = nowMs()
         var justEnded = emptyMap<String, EndedGame>()
+        var heldBack = emptyList<SportsLiveItem>()
         var noStreams = emptySet<String>()
         var finals = emptySet<String>()
         excitementHistory.observe(inputs.scores.values, now)
@@ -888,13 +912,19 @@ class SportsLiveViewModel internal constructor(
                 }
                 val built = live + split.justEnded + overdueEnded.map { it.first } + linkEnded
                 lastBuiltLiveNow = built
-                // The focused card is never taken from under the user: kept in place until focus moves on. While the list
-                // holds focus no row leaves at all (F6): they go once it lets focus go.
+                // The focused card is never taken from under the user: kept in place until focus moves on. While Live now
+                // is browsed nothing moves at all (F6, TV QA BUG7): no row leaves, none re-orders, new ones wait for
+                // "N new" on Refresh; once the user leaves it (or asks), the list is as built.
                 val focusedId = selection.itemId.takeIf { selection.tab == SportsLiveTab.LIVE_NOW }
-                val kept = if (selection.browsing && selection.tab == SportsLiveTab.LIVE_NOW) {
-                    sportsLiveKeepShown(shownLiveNow, built)
+                val thawed = selection.thaw != thawApplied
+                thawApplied = selection.thaw
+                val kept = if (selection.browsing && selection.tab == SportsLiveTab.LIVE_NOW && !thawed) {
+                    sportsLiveFreeze(shownLiveNow, built).also { heldBack = it.heldBack }.items
                 } else {
                     sportsLiveKeepFocused(shownLiveNow, built, focusedId)
+                }.let { listed ->
+                    // The game playing in the mini player stays listed while it plays (BUG7: its row vanished).
+                    sportsLiveKeepFocused(shownLiveNow, listed, miniPlayingNow)
                 }
                 // A title just hidden (#134) leaves at once, even with focus on it: the keep step must not bring it back.
                 SportsLiveHiddenTitles.filter(kept, hiddenNow).also { shownLiveNow = it }
@@ -945,6 +975,17 @@ class SportsLiveViewModel internal constructor(
         }
         val selectedId = selection.itemId?.takeIf { id -> visible.any { it.id == id } }
             ?: visible.firstOrNull()?.id
+        // "N new" (TV QA Q5): the waiting rows this tab and filter would list.
+        val newRows = if (heldBack.isEmpty() || selection.tab != SportsLiveTab.LIVE_NOW) {
+            0
+        } else {
+            val scoped = if (allSports) heldBack else SportsLiveMySportsScope.scope(heldBack, mySports)
+            when (filter) {
+                null, SportsLiveUiState.ALL_SPORTS_FILTER -> scoped
+                SportsLiveUiState.MY_TEAMS_FILTER -> scoped.filter { it.followed }
+                else -> scoped.filter { filterOf(it) == filter }
+            }.size
+        }
         return SportsLiveUiState(
             // Only a load with no data yet shows as loading, so a refresh does not blank the list.
             isLoading = hasClaimed && !bucketed.hasLoad && selection.isRefreshing,
@@ -971,7 +1012,8 @@ class SportsLiveViewModel internal constructor(
             nowMs = now,
             whyTags = whyTags,
             // Stale-while-revalidate (live.20 B1): a list over 5 minutes old shown while the refresh runs says when it is from.
-            staleListAtMs = bucketed.listAtMs?.takeIf { selection.isRefreshing && now - it >= STALE_MARK_MS }
+            staleListAtMs = bucketed.listAtMs?.takeIf { selection.isRefreshing && now - it >= STALE_MARK_MS },
+            newLiveRows = newRows
         ).also { state ->
             if (!state.isLoading && hasClaimed && firstStateLogged.compareAndSet(false, true)) {
                 SportsLiveDebugTiming.log {

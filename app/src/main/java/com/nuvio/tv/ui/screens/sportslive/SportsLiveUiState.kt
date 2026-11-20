@@ -60,7 +60,9 @@ data class SportsLiveUiState(
      * Stale-while-revalidate (live.20 B1): when the list shown was loaded, while a refresh runs over a list over 5 minutes
      * old (the one saved on the device, or the last load); the header reads "Updated ‹time›". Null otherwise.
      */
-    val staleListAtMs: Long? = null
+    val staleListAtMs: Long? = null,
+    /** Live now's new rows waiting while it is browsed (TV QA BUG7 / Q5): "N new" on Refresh shows them. */
+    val newLiveRows: Int = 0
 ) {
     /** The selected chip has no games left (#79): it stays shown with 0 until the user moves, then All. */
     val selectedFilterEmpty: Boolean get() = selectedFilter != null && (filterCounts[selectedFilter] ?: 0) == 0

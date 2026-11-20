@@ -265,15 +265,17 @@ internal fun SportsLiveYourTeamsStrip(
             style = SportsLiveTokens.style(SportsLiveTokens.Type.SectionHeader),
             color = Colors.TextMuted,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(start = FOCUS_ROOM)
         )
         BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
             // Four across the list column (live.20 1c), never narrower than the logos need nor wider than Home's look.
-            val cardWidth = ((maxWidth - CARD_GAP * (CARDS_ACROSS - 1)) / CARDS_ACROSS).coerceIn(CARD_MIN_WIDTH, CARD_MAX_WIDTH)
+            val cardWidth = ((maxWidth - FOCUS_ROOM * 2 - CARD_GAP * (CARDS_ACROSS - 1)) / CARDS_ACROSS).coerceIn(CARD_MIN_WIDTH, CARD_MAX_WIDTH)
             LazyRow(
                 state = listState,
                 horizontalArrangement = Arrangement.spacedBy(CARD_GAP),
-                contentPadding = PaddingValues(vertical = FOCUS_ROOM),
+                // Room on every side for the ring and lift: the first card's left edge was clipped (TV QA BUG10).
+                contentPadding = PaddingValues(horizontal = FOCUS_ROOM, vertical = FOCUS_ROOM),
                 // Focus leaving for a menu keeps the card; leaving for anything else forgets it.
                 modifier = Modifier.onFocusChanged { if (!it.hasFocus && !menuOpen && focusedKey?.let { key -> key in keys } == true) focusedKey = null }
             ) {

@@ -4194,6 +4194,10 @@
     <string name="sports_live_ready_pill">▶ Ready</string>
     <string name="sports_live_stage_stream_ready">▶ Stream ready</string>
     <string name="sports_live_agenda_earlier">‹ Earlier</string>
+    <plurals name="sports_live_new_rows">
+        <item quantity="one">%1$d new</item>
+        <item quantity="other">%1$d new</item>
+    </plurals>
     <string name="sports_live_agenda_later">Later ›</string>
     <string name="sports_live_no_stream_yet_mark">No stream yet</string>
     <string name="sports_live_kickoff_stream_ready">Stream ready · Watch now?</string>

@@ -68,15 +68,24 @@ class SportsLiveListFocusTest {
     }
 
     @Test
-    fun `while the list holds focus every row a load dropped stays in place (F6)`() {
+    fun `while browsed the list keeps its rows, order and count, and new rows wait (F6, BUG7)`() {
         val before = cards("a", "b", "c", "d", "e")
-        assertEquals(listOf("a", "b", "c", "d", "e"), ids(sportsLiveKeepShown(before, cards("a", "c", "e"))))
-        assertEquals(listOf("a", "b", "c", "d"), ids(sportsLiveKeepShown(before.take(4), cards("c"))))
-        // The dropped ones follow the rows they followed; a new row comes after them.
-        assertEquals(listOf("a", "b", "new", "c", "d", "e"), ids(sportsLiveKeepShown(before, cards("a", "new", "c", "e"))))
-        // Nothing dropped, or an emptied list: the list as it is.
-        assertEquals(listOf("e", "a"), ids(sportsLiveKeepShown(cards("a", "e"), cards("e", "a"))))
-        assertEquals(emptyList<String>(), ids(sportsLiveKeepShown(before, emptyList())))
+        // Dropped rows stay in place.
+        assertEquals(listOf("a", "b", "c", "d", "e"), ids(sportsLiveFreeze(before, cards("a", "c", "e")).items))
+        // A load that re-orders and adds: the order shown stays, the new row waits for the user.
+        val frozen = sportsLiveFreeze(before, cards("e", "new", "a", "c", "later"))
+        assertEquals(listOf("a", "b", "c", "d", "e"), ids(frozen.items))
+        assertEquals(listOf("new", "later"), ids(frozen.heldBack))
+        // Nothing shown yet (the first load), or an emptied list: the list as it is.
+        assertEquals(listOf("e", "a"), ids(sportsLiveFreeze(emptyList(), cards("e", "a")).items))
+        assertEquals(emptyList<String>(), ids(sportsLiveFreeze(before, emptyList()).items))
+    }
+
+    @Test
+    fun `a frozen row still shows its latest data`() {
+        val before = cards("a", "b")
+        val updated = cards("b", "a").map { it.copy(isLive = !it.isLive) }
+        assertEquals(updated.reversed(), sportsLiveFreeze(before, updated).items)
     }
 
     private fun ids(items: List<SportsLiveItem>) = items.map { it.id }

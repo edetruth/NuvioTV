@@ -478,7 +478,8 @@ fun SportsLiveScreen(
             protection = protection,
             onSaveForLater = scoresViewModel::saveForLater,
             onRevealResult = scoresViewModel::revealResult,
-            onBrowsing = viewModel::setBrowsing
+            onBrowsing = viewModel::setBrowsing,
+            onShowNewRows = viewModel::showNewRows
         )
     }
 }
@@ -586,8 +587,10 @@ private fun SportsLiveContent(
     protection: SpoilerProtection = SpoilerProtection(),
     onSaveForLater: (ScoreSnapshot) -> Unit = {},
     onRevealResult: (ScoreSnapshot) -> Unit = {},
-    /** The list holds focus (F6): rows a load dropped stay put meanwhile. */
-    onBrowsing: (Boolean) -> Unit = {}
+    /** Live now's content holds focus (F6, TV QA BUG7): its rows, order and count hold meanwhile. */
+    onBrowsing: (Boolean) -> Unit = {},
+    /** "N new" on Refresh (TV QA Q5): the rows that waited while Live now was browsed. */
+    onShowNewRows: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val tabFocusRequesters = remember { SportsLiveTab.entries.associateWith { FocusRequester() } }
@@ -1229,9 +1232,12 @@ private fun SportsLiveContent(
     BackHandler(enabled = listHasFocus) {
         runCatching { activeTabFocusRequester.requestFocus() }
     }
-    // F6: while the list holds focus no row is taken from under the user; the rows a load dropped leave once it lets go.
+    // F6, TV QA BUG7 / Q5: once the user moves into Live now's content (the list, the strip, the Resume row, the stage)
+    // nothing moves under them, on the tabs too (no row leaves, none re-orders, new ones wait behind "N new" on
+    // Refresh); Refresh, another tab or leaving the screen lets it go. Before that (the first loads) rows land freely.
     val currentOnBrowsing by rememberUpdatedState(onBrowsing)
-    LaunchedEffect(listHasFocus) { currentOnBrowsing(listHasFocus) }
+    val contentHasFocus = listHasFocus || paneHasFocus || catchUpHoldsFocus || resumeHoldsFocus
+    LaunchedEffect(contentHasFocus) { if (contentHasFocus) currentOnBrowsing(true) }
     // The preview follows the focused card (in the list, or its pane's buttons) while no menu or
     // dialog is open; anything else stops it.
     // A live Your teams card previews its game too; a later-today or replay stage has no preview (#155).
@@ -1406,7 +1412,13 @@ private fun SportsLiveContent(
             selectedTab = uiState.selectedTab,
             tabFocusRequesters = tabFocusRequesters,
             downFocusRequester = if (showingResults) resultsTopFocusRequester else contentEntryFocusRequester,
-            onSelectTab = onSelectTab,
+            onSelectTab = { tab ->
+                // TV QA BUG8 / Q12: focus on the tab row shows the list's own first game (or the mini player's), never
+                // the strip card or row focused last, whose stage (a Remind me) was one stray OK from a toggle.
+                stripStageKey = null
+                if (tab == uiState.selectedTab) focusedCardKey = null
+                onSelectTab(tab)
+            },
             onOpenTab = openList,
             filterOptions = filterOptions,
             filterFocusRequester = filterFocusRequester,
@@ -1427,7 +1439,17 @@ private fun SportsLiveContent(
                 else -> null
             },
             onShowFailures = { failuresOpen = true },
-            onRefresh = userRefresh,
+            // "N new" (Q5): OK shows the rows that waited, at once (no reload); otherwise Refresh as before.
+            newRows = if (uiState.selectedTab == SportsLiveTab.LIVE_NOW) uiState.newLiveRows else 0,
+            onRefresh = if (uiState.selectedTab == SportsLiveTab.LIVE_NOW && uiState.newLiveRows > 0) {
+                onShowNewRows
+            } else {
+                {
+                    // A refresh asked for shows its result as it lands, until the user moves into the list again.
+                    onBrowsing(false)
+                    userRefresh()
+                }
+            },
             modifier = Modifier.onFocusChanged { if (it.hasFocus) followedCardKey = null },
             updatedAtMs = uiState.staleListAtMs.takeIf { !showingResults }
         )
@@ -1790,7 +1812,8 @@ private fun SportsLiveContent(
                 ) {
                     ResumeRow(Modifier.padding(start = LIST_FOCUS_ROOM, end = LIST_FOCUS_ROOM, bottom = NuvioTheme.spacing.sm))
                     if (catchUpShown) {
-                        YourTeamsStrip(stageShown = true, modifier = Modifier.padding(start = LIST_FOCUS_ROOM, bottom = NuvioTheme.spacing.xs))
+                        // The strip keeps its own room for the focus ring (BUG10): its cards line up with the rows.
+                        YourTeamsStrip(stageShown = true, modifier = Modifier.padding(start = LIST_FOCUS_ROOM - YOUR_TEAMS_FOCUS_ROOM, bottom = NuvioTheme.spacing.xs))
                     }
                     val groupCounts = remember(shownBoard) { shownBoard?.rows.orEmpty().groupingBy { it.group }.eachCount() }
                     // Channels (P4): one list, under a header per region while more than one region shows.
@@ -1949,6 +1972,9 @@ private const val LIVE_NOW_SCROLL_MS = 300L
 
 /** On return to Live Now the card that had focus keeps it while among this many first rows (F3). */
 private const val RETURN_ROWS_ON_SCREEN = 4
+
+/** The Your teams strip's own room round its cards ([SportsLiveYourTeamsStrip]'s FOCUS_ROOM). */
+private val YOUR_TEAMS_FOCUS_ROOM = 4.dp
 
 /** Room round the list's rows for the focus ring and lift, so neither is clipped. */
 private val LIST_FOCUS_ROOM = 8.dp

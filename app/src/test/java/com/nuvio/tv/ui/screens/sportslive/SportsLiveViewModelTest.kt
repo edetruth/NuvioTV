@@ -545,6 +545,49 @@ class SportsLiveViewModelTest {
     }
 
     @Test
+    fun `while Live now is browsed new rows wait behind N new, which shows them once (BUG7, Q5)`() = runTest {
+        val items = listOf("a", "b", "c").map { item(it, isLive = true, sport = "Soccer", name = it.uppercase()) }
+        nextLoad = load(items)
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+        viewModel.setBrowsing(true)
+        runCurrent()
+
+        // A load re-orders the rows, drops one and adds two: nothing moves, the count holds.
+        val new = listOf("n1", "n2").map { item(it, isLive = true, sport = "Soccer", name = it.uppercase()) }
+        latestFlow.value = load(listOf(items[2], new[0], items[0], new[1]))
+        runCurrent()
+        assertEquals(listOf("a", "b", "c"), viewModel.uiState.value.visibleItems.map { it.id })
+        assertEquals(2, viewModel.uiState.value.newLiveRows)
+
+        // "N new" on Refresh: the list as loaded, at once.
+        viewModel.showNewRows()
+        runCurrent()
+        assertEquals(setOf("c", "n1", "a", "n2"), viewModel.uiState.value.visibleItems.map { it.id }.toSet())
+        assertEquals(0, viewModel.uiState.value.newLiveRows)
+    }
+
+    @Test
+    fun `the game playing in the mini player stays on Live now when a load drops it (BUG7)`() = runTest {
+        val items = listOf("a", "b").map { item(it, isLive = true, sport = "Soccer", name = it.uppercase()) }
+        nextLoad = load(items)
+        val viewModel = SportsLiveViewModel(
+            repo,
+            miniPlayingId = flowOf("b"),
+            endedInputs = flowOf(EndedInputs()),
+            endedGames = SportsLiveEndedGames(),
+            computeDispatcher = compute
+        )
+        viewModel.nowMs = { NOW }
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+
+        latestFlow.value = load(listOf(items[0]))
+        runCurrent()
+        assertEquals(listOf("a", "b"), viewModel.uiState.value.visibleItems.map { it.id })
+    }
+
+    @Test
     fun `focus returning to the selected tab keeps the selection (F23)`() = runTest {
         nextLoad = load(listOf(channel("uk1", "UK"), channel("ca1", "CA"), channel("us1", "US")))
         val viewModel = newViewModel()

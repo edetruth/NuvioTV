@@ -32,28 +32,22 @@ fun sportsLiveKeepFocused(previous: List<SportsLiveItem>, current: List<SportsLi
 }
 
 /**
- * [current] with every card of [previous] it no longer has put back in place (F6): while the user moves through the
- * list, a load or a merge never makes rows vanish under focus (the rows above it would shift and focus land
- * elsewhere). Each goes back after the nearest card before it in [previous] (first when none is); they leave on the
- * first build after the list lets focus go ([sportsLiveKeepFocused] then keeps only the focused card). An emptied
- * list keeps nothing.
+ * Live now while the user browses it (F6, extended by TV QA BUG7 / Q5: "rows never re-order under focus"): [previous]
+ * as shown, in its order and with its count, each row refreshed from [current] (its score, its state) and a row a load
+ * dropped kept in place; the rows [current] adds are held back ([SportsLiveFrozenList.heldBack]) for the "N new" on
+ * Refresh, which shows them. The list changes only when the user asks, or once they leave it. Nothing shown yet (the
+ * first load) or an emptied list: [current] as it is.
  */
-fun sportsLiveKeepShown(previous: List<SportsLiveItem>, current: List<SportsLiveItem>): List<SportsLiveItem> {
-    if (current.isEmpty()) return current
-    val listed = current.mapTo(HashSet()) { it.id }
-    if (previous.all { it.id in listed }) return current
-    val result = current.toMutableList()
-    var insertAt = 0
-    for (card in previous) {
-        if (card.id in listed) {
-            insertAt = result.indexOfFirst { it.id == card.id } + 1
-        } else if (result.none { it.id == card.id }) {
-            result.add(insertAt, card)
-            insertAt++
-        }
-    }
-    return result
+fun sportsLiveFreeze(previous: List<SportsLiveItem>, current: List<SportsLiveItem>): SportsLiveFrozenList {
+    if (previous.isEmpty() || current.isEmpty()) return SportsLiveFrozenList(current, emptyList())
+    val byId = current.associateBy { it.id }
+    val shown = previous.map { byId[it.id] ?: it }
+    val shownIds = previous.mapTo(HashSet()) { it.id }
+    return SportsLiveFrozenList(shown, current.filter { it.id !in shownIds })
 }
+
+/** Live now frozen while browsed: the [items] shown, and the new rows [heldBack] until the user asks for them. */
+data class SportsLiveFrozenList(val items: List<SportsLiveItem>, val heldBack: List<SportsLiveItem>)
 
 /**
  * The card that takes [selectedKey]'s place after the list changed under the same tab and filter:
