@@ -181,12 +181,12 @@ class SportsLivePreferencesDataStore @Inject constructor(
         store().edit { it[hiddenTitlesKey] = SportsLiveHiddenTitles.remove(it[hiddenTitlesKey].orEmpty(), title) }
     }
 
-    /** Scores: Show (default) / Hide until focused / Off; and the score delay in seconds (Off = 0). */
+    /** Scores: Show (default) / Hide until I reveal / Never show; and the score delay in seconds (Off = 0; 60 until set). */
     val scoreSettings: Flow<ScoreSettings> = profileManager.activeProfileId.flatMapLatest { pid ->
         factory.get(pid, FEATURE).data.map { prefs ->
             ScoreSettings(
                 mode = ScoresMode.entries.firstOrNull { it.name == prefs[scoresModeKey] } ?: ScoresMode.SHOW,
-                delaySeconds = ScoreDelayChoices.coerce(prefs[scoreDelayKey])
+                delaySeconds = ScoreDelayChoices.coerce(prefs[scoreDelayKey] ?: ScoreDelayChoices.DEFAULT_SECONDS)
             )
         }
     }

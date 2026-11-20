@@ -52,6 +52,12 @@ data class ScoresChoice(val mode: ScoresMode = ScoresMode.SHOW, val myTeamsOnly:
 object ScoreDelayChoices {
     val SECONDS = listOf(0, 15, 30, 60, 90)
 
+    /**
+     * A profile that never set Score delay (live.20, #85): addon streams run about a minute behind ESPN (TV QA saw
+     * the chip and "Just scored" ahead of the picture), so scores wait 60 s. A stored Off (0) stays Off.
+     */
+    const val DEFAULT_SECONDS = 60
+
     /** [seconds] if it is a choice, else Off (0). */
     fun coerce(seconds: Int?): Int = seconds?.takeIf { it in SECONDS } ?: 0
 }

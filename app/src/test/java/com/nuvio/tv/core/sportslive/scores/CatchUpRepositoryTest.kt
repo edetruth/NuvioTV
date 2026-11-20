@@ -17,6 +17,7 @@ import io.mockk.mockk
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
@@ -91,7 +92,8 @@ class CatchUpRepositoryTest {
     private fun TestScope.repository(): CatchUpRepository {
         val results = ResultsRepository(
             provider = provider,
-            settings = prefs.scoreSettings,
+            // These tests are about what Catch up lists, not Score delay (its 60 s default would hold just-ended finals).
+            settings = prefs.scoreSettings.map { it.copy(delaySeconds = 0) },
             followedTeams = prefs.followedTeams,
             mySports = prefs.mySports,
             now = { clock },

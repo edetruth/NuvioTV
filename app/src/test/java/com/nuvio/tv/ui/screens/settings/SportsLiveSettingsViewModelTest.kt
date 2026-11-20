@@ -14,6 +14,7 @@ import com.nuvio.tv.core.sportslive.scores.LiveScoresRepository
 import com.nuvio.tv.core.sportslive.scores.MyLeague
 import com.nuvio.tv.core.sportslive.scores.MySport
 import com.nuvio.tv.core.sportslive.scores.MySports
+import com.nuvio.tv.core.sportslive.scores.ScoreDelayChoices
 import com.nuvio.tv.core.sportslive.scores.ScoreSettings
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.data.local.PlayerSettings
@@ -123,7 +124,7 @@ class SportsLiveSettingsViewModelTest {
     fun `scores and score delay settings are shown and saved`() = runTest {
         val viewModel = newViewModel()
         advanceUntilIdle()
-        assertEquals(ScoreSettings(), viewModel.uiState.value.scores)
+        assertEquals(ScoreSettings(delaySeconds = ScoreDelayChoices.DEFAULT_SECONDS), viewModel.uiState.value.scores)
         viewModel.setScoresMode(ScoresMode.HIDE_UNTIL_FOCUSED)
         viewModel.setScoreDelaySeconds(90)
         advanceUntilIdle()

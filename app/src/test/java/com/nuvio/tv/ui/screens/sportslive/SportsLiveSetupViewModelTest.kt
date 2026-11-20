@@ -6,6 +6,7 @@ import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.core.sportslive.scores.MyLeague
 import com.nuvio.tv.core.sportslive.scores.MySport
 import com.nuvio.tv.core.sportslive.scores.MySports
+import com.nuvio.tv.core.sportslive.scores.ScoreDelayChoices
 import com.nuvio.tv.core.sportslive.scores.ScoreSettings
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.data.local.ProfileDataStoreFactory
@@ -53,7 +54,8 @@ class SportsLiveSetupViewModelTest {
         assertEquals(SetupStep.WELCOME, state.step)
         assertEquals(MySports.DEFAULT, state.sports)
         assertEquals(ScoresMode.SHOW, state.scoresMode)
-        assertEquals(0, state.delaySeconds)
+        // Score delay never set: the 60 s default (#85).
+        assertEquals(60, state.delaySeconds)
         assertNull(state.exit)
     }
 
@@ -97,7 +99,7 @@ class SportsLiveSetupViewModelTest {
 
         vm.selectScoresMode(ScoresMode.HIDE_UNTIL_FOCUSED)
         vm.selectDelay(30)
-        assertEquals(ScoreSettings(), prefs.scoreSettings.first())
+        assertEquals(ScoreSettings(delaySeconds = ScoreDelayChoices.DEFAULT_SECONDS), prefs.scoreSettings.first())
 
         vm.next()
         advanceUntilIdle()
@@ -132,7 +134,7 @@ class SportsLiveSetupViewModelTest {
         assertEquals(SetupExit.SKIPPED, vm.uiState.value.exit)
         assertEquals(afterSports, prefs.mySports.first())
         assertFalse(MySport.GOLF in prefs.mySports.first().effectiveSports)
-        assertEquals(ScoreSettings(), prefs.scoreSettings.first())
+        assertEquals(ScoreSettings(delaySeconds = ScoreDelayChoices.DEFAULT_SECONDS), prefs.scoreSettings.first())
     }
 
     @Test
@@ -142,7 +144,7 @@ class SportsLiveSetupViewModelTest {
         advanceUntilIdle()
         assertEquals(SetupExit.SKIPPED, vm.uiState.value.exit)
         assertEquals(MySports.DEFAULT, prefs.mySports.first())
-        assertEquals(ScoreSettings(), prefs.scoreSettings.first())
+        assertEquals(ScoreSettings(delaySeconds = ScoreDelayChoices.DEFAULT_SECONDS), prefs.scoreSettings.first())
         assertEquals(emptyList<FollowedTeam>(), prefs.followedTeams.first())
     }
 

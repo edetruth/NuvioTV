@@ -15,6 +15,7 @@ import com.nuvio.tv.core.sportslive.scores.CatchUpMarks
 import com.nuvio.tv.core.sportslive.scores.MyLeague
 import com.nuvio.tv.core.sportslive.scores.MySport
 import com.nuvio.tv.core.sportslive.scores.MySports
+import com.nuvio.tv.core.sportslive.scores.ScoreDelayChoices
 import com.nuvio.tv.core.sportslive.scores.ScoreSettings
 import com.nuvio.tv.core.sportslive.scores.ScoresChoice
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
@@ -341,16 +342,19 @@ class SportsLivePreferencesDataStoreTest {
     }
 
     @Test
-    fun `score settings default to Show with no delay and are per profile`() = runTest {
+    fun `score settings default to Show with a 60 s delay and are per profile`() = runTest {
         val store = SportsLivePreferencesDataStore(factory, profiles)
-        assertEquals(ScoreSettings(ScoresMode.SHOW, 0), store.scoreSettings.first())
+        assertEquals(ScoreSettings(ScoresMode.SHOW, 60), store.scoreSettings.first())
         store.setScoresMode(ScoresMode.HIDE_UNTIL_FOCUSED)
         store.setScoreDelaySeconds(60)
         assertEquals(ScoreSettings(ScoresMode.HIDE_UNTIL_FOCUSED, 60), store.scoreSettings.first())
         store.setScoreDelaySeconds(45) // not a choice: Off
         assertEquals(0, store.scoreSettings.first().delaySeconds)
         activeProfile.value = 2
-        assertEquals(ScoreSettings(), store.scoreSettings.first())
+        assertEquals(ScoreSettings(delaySeconds = ScoreDelayChoices.DEFAULT_SECONDS), store.scoreSettings.first())
+        // A stored Off stays Off: only a profile that never set it gets the default.
+        store.setScoreDelaySeconds(0)
+        assertEquals(0, store.scoreSettings.first().delaySeconds)
         store.setScoresMode(ScoresMode.OFF)
         assertEquals(ScoresMode.OFF, store.scoreSettings.first().mode)
         activeProfile.value = 1
