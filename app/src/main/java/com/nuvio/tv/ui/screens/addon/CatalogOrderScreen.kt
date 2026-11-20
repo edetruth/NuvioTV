@@ -161,11 +161,21 @@ fun CatalogOrderScreen(
                         bottom = NuvioTheme.spacing.xxxl,
                     ),
                     header = {
-                        CatalogOrderHeader(
-                            followAddonsOrder = uiState.followAddonsOrder,
-                            movingKey = uiState.movingKey,
-                            onToggleFollowAddons = viewModel::toggleFollowAddonsOrder,
-                        )
+                        Column {
+                            CatalogOrderHeader(
+                                followAddonsOrder = uiState.followAddonsOrder,
+                                movingKey = uiState.movingKey,
+                                onToggleFollowAddons = viewModel::toggleFollowAddonsOrder,
+                            )
+                            // Fork: catalogs claimed by Sports & Live are not in this list.
+                            if (uiState.sportsLiveCatalogCount > 0) {
+                                Text(
+                                    text = stringResource(R.string.sports_live_catalog_order_note, uiState.sportsLiveCatalogCount),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = NuvioTheme.colors.TextSecondary
+                                )
+                            }
+                        }
                     },
                     useHeaderAwareBringIntoView = true,
                     scrollToTopOnEdgeItem = true,
@@ -225,16 +235,6 @@ fun CatalogOrderScreen(
                         text = visibleMessage,
                         style = MaterialTheme.typography.bodyMedium,
                         color = NuvioTheme.colors.TextPrimary,
-                    )
-                }
-            }
-
-            if (uiState.sportsLiveCatalogCount > 0) {
-                item {
-                    Text(
-                        text = stringResource(R.string.sports_live_catalog_order_note, uiState.sportsLiveCatalogCount),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = NuvioTheme.colors.TextSecondary
                     )
                 }
             }
