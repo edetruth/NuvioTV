@@ -489,6 +489,17 @@ class SportsLiveSlimPanelTest {
     }
 
     @Test
+    fun `a running check shows its faint mark only where no readiness mark shows`() {
+        assertTrue(panelCheckingShown(null, focused = false, checking = true))
+        assertFalse(panelCheckingShown(null, focused = false, checking = false))
+        // Ready keeps its pill while it is verified again.
+        assertFalse(panelCheckingShown(SportsLiveReadyMark.READY, focused = false, checking = true))
+        // No stream yet: the words under focus, the faint mark on the dimmed row otherwise.
+        assertFalse(panelCheckingShown(SportsLiveReadyMark.NO_STREAM, focused = true, checking = true))
+        assertTrue(panelCheckingShown(SportsLiveReadyMark.NO_STREAM, focused = false, checking = true))
+    }
+
+    @Test
     fun `rows of one title each say what tells them apart, rows with their own title say nothing`() {
         fun motogp(id: String, name: String = "MotoGP", description: String? = null, catalog: String = "Live", addon: String = "Sports") =
             game(id, now - minute, sport = "Motorsport").let {

@@ -121,4 +121,28 @@ class SportsLiveGameReadinessTest {
 
         assertEquals(setOf("https://slow.example.invalid"), fetch.slowAddonKeys())
     }
+
+    @Test
+    fun `a game is checking only while its check runs, a refresh inside a check included`() = kotlinx.coroutines.test.runTest {
+        val merged = item("a").copy(alternates = listOf(item("b")))
+        assertTrue(readiness.checking.value.isEmpty())
+        readiness.whileChecking("b") {
+            // A merged card reads as checking while any of its sources is.
+            assertTrue(readiness.isChecking(merged))
+            assertEquals(false, readiness.isChecking(item("c")))
+            readiness.whileChecking("b") { assertEquals(setOf("b"), readiness.checking.value) }
+            // The inner check ended, the outer one still runs.
+            assertEquals(setOf("b"), readiness.checking.value)
+        }
+        assertTrue(readiness.checking.value.isEmpty())
+        assertEquals(false, readiness.isChecking(merged))
+    }
+
+    @Test
+    fun `a failed check stops reading as checking`() = kotlinx.coroutines.test.runTest {
+        runCatching { readiness.whileChecking<Unit>("c") { error("probe failed") } }
+        assertTrue(readiness.checking.value.isEmpty())
+        // A checked game keeps its verdict apart: no mark is not the same as checking.
+        assertNull(readiness.of(item("c")))
+    }
 }

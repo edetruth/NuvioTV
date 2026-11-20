@@ -11,6 +11,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Text
@@ -69,6 +71,31 @@ fun SportsLiveNoStreamYet(modifier: Modifier = Modifier) {
 }
 
 /**
+ * A link check of the row's game is running (live.20): a faint "…" at tag size, quieter than "No stream yet", so a game
+ * not checked yet reads apart from one checked with no stream. Still (no animation): a check takes seconds, and a
+ * pulsing mark on many rows would pull the eye on a 10-ft screen. Never larger than the marks it stands in for.
+ */
+@Composable
+fun SportsLiveCheckingMark(modifier: Modifier = Modifier) {
+    val description = stringResource(R.string.sports_live_checking_description)
+    Text(
+        text = stringResource(R.string.sports_live_checking_mark),
+        style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag),
+        color = Colors.TextMuted.copy(alpha = CHECKING_ALPHA),
+        maxLines = 1,
+        softWrap = false,
+        modifier = modifier.semantics { contentDescription = description }
+    )
+}
+
+/** True while a link check of [item] runs ([SportsLiveGameReadiness.checking]), kept fresh as checks start and end. */
+@Composable
+fun rememberSportsLiveChecking(item: SportsLiveItem, readiness: SportsLiveGameReadiness = SportsLiveGameReadiness.shared): Boolean {
+    val checking by readiness.checking.collectAsState()
+    return remember(checking, item) { readiness.isChecking(item) }
+}
+
+/**
  * [mark] drawn: "▶ Ready" for READY; "No stream yet" for NO_STREAM only where [showNoStream] (the in-player panel,
  * the kickoff prompt); nothing otherwise.
  */
@@ -102,3 +129,4 @@ fun sportsLiveMyGamesTodayText(today: SportsLiveMyGamesToday): String {
 
 private const val READY_TINT_ALPHA = 0.16f
 private const val READY_OUTLINE_ALPHA = 0.6f
+private const val CHECKING_ALPHA = 0.7f

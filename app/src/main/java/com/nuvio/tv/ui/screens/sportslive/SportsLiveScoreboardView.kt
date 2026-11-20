@@ -382,7 +382,8 @@ private fun AgendaCells(row: ScoreboardRow, side: AgendaRowSide, shortNames: Boo
                 }
             }
         }
-        if (ready) SportsLiveReadyPill()
+        // A link check running (live.20): the faint mark where "▶ Ready" would be.
+        if (ready) SportsLiveReadyPill() else if (rememberSportsLiveChecking(item)) SportsLiveCheckingMark()
         if (side.bigGame) BigGameBadge()
         side.trailing?.let { trailing ->
             Text(
@@ -663,7 +664,8 @@ private fun StatusCell(row: ScoreboardRow, hasReplay: Boolean, singleLine: Boole
             RowBadge.NO_STREAM -> SportsLiveNoStreamYet()
             RowBadge.EXCITEMENT -> excitement?.let { ExcitementBadge(whyTagText(it)) }
             RowBadge.CLOSE_GAME -> ExcitementBadge(stringResource(R.string.sports_live_close_game))
-            RowBadge.NONE -> Unit
+            // A link check running (live.20), with no other badge to show: the faint mark in the badge's place.
+            RowBadge.NONE -> if (rememberSportsLiveChecking(row.item)) SportsLiveCheckingMark()
         }
         if (hasReplay && row.group == ScoreboardGroup.JUST_ENDED) ReplayPill()
     }

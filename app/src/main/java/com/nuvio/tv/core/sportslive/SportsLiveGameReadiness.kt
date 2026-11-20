@@ -38,6 +38,40 @@ class SportsLiveGameReadiness(
     /** The marks standing now, by game id; expired ones leave at the next change or [prune]. Read a card through [of]. */
     val marks: StateFlow<Map<String, SportsLiveReadyMark>> = _marks.asStateFlow()
 
+    // Game id -> checks of it running now (a refresh runs a full check inside it).
+    private val running = HashMap<String, Int>()
+    private val _checking = MutableStateFlow<Set<String>>(emptySet())
+
+    /**
+     * The game ids whose link check runs now (live.20): rows show a faint "checking" mark meanwhile, so "not checked
+     * yet" reads apart from "checked: no stream". Read a card through [isChecking].
+     */
+    val checking: StateFlow<Set<String>> = _checking.asStateFlow()
+
+    /** Runs [block], a link check of [gameId], with [gameId] in [checking] meanwhile (also when it fails or is cancelled). */
+    suspend fun <T> whileChecking(gameId: String, block: suspend () -> T): T {
+        if (gameId.isBlank()) return block()
+        synchronized(this) {
+            running[gameId] = (running[gameId] ?: 0) + 1
+            _checking.value = running.keys.toSet()
+        }
+        try {
+            return block()
+        } finally {
+            synchronized(this) {
+                val left = (running[gameId] ?: 1) - 1
+                if (left > 0) running[gameId] = left else running.remove(gameId)
+                _checking.value = running.keys.toSet()
+            }
+        }
+    }
+
+    /** True while a link check of [item] (or, merged card, any of its sources) runs. */
+    fun isChecking(item: SportsLiveItem): Boolean {
+        val ids = _checking.value
+        return ids.isNotEmpty() && (listOf(item) + item.alternates).any { it.id in ids }
+    }
+
     /** [link] was verified for [gameId] now (a probe proved it live, or it reached its first frame): "▶ Ready", holding it. */
     fun ready(gameId: String, link: Stream) = put(gameId, Entry(SportsLiveReadyMark.READY, nowMs(), link))
 

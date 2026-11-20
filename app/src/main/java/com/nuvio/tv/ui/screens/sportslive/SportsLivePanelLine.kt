@@ -351,6 +351,7 @@ internal fun SportsLivePanelLine(
     }
     val shape = RoundedCornerShape(PANEL_LINE_RADIUS)
     var focused by remember { mutableStateOf(false) }
+    val checking = rememberSportsLiveChecking(row.item)
     val (longPress, click) = if (onLongClick != null) rememberSportsLiveLongPress(menuOpen, onLongClick, onClick) else Modifier to onClick
     Column(modifier = Modifier.fillMaxWidth()) {
         if (nowPlaying) {
@@ -404,6 +405,7 @@ internal fun SportsLivePanelLine(
                     }
                     StatusText(line)
                     panelReadyMarkShown(readyMark, focused)?.let { ReadyMark(it) }
+                    if (panelCheckingShown(readyMark, focused, checking)) SportsLiveCheckingMark()
                     val tag = if (isNew) stringResource(R.string.sports_live_panel_new) else null
                     if (tag != null) {
                         Text(
@@ -446,6 +448,13 @@ internal fun SportsLivePanelLine(
  */
 internal fun panelReadyMarkShown(mark: SportsLiveReadyMark?, focused: Boolean): SportsLiveReadyMark? =
     mark?.takeIf { it != SportsLiveReadyMark.NO_STREAM || focused }
+
+/**
+ * The faint "checking" mark on a panel row (live.20): while its link check runs and no readiness mark shows, so "not
+ * checked yet" reads apart from "checked: no stream". A "▶ Ready" (or a focused "No stream yet") keeps its place.
+ */
+internal fun panelCheckingShown(mark: SportsLiveReadyMark?, focused: Boolean, checking: Boolean): Boolean =
+    checking && panelReadyMarkShown(mark, focused) == null
 
 /** A row with no working stream found (live.20), dimmed until focused, where its "No stream yet" shows. */
 internal fun panelNoStreamDimmed(mark: SportsLiveReadyMark?, focused: Boolean): Boolean =

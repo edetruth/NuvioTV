@@ -139,9 +139,12 @@ class SportsLiveReadyKeeper internal constructor(
             if (index > 0) delay(SportsLiveStreamThresholds.READY_GAP_MS)
             lastCheckAt[item.id] = nowMs()
             quietly {
-                when (action) {
-                    SportsLiveReadySchedule.Action.REFRESH -> refresh(item)
-                    else -> check(item)
+                // Rows show the check running (live.20), so an unchecked game reads apart from one with no stream.
+                readiness.whileChecking(item.id) {
+                    when (action) {
+                        SportsLiveReadySchedule.Action.REFRESH -> refresh(item)
+                        else -> check(item)
+                    }
                 }
             }
         }

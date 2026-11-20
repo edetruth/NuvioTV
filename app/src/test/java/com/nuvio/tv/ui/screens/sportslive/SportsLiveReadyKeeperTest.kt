@@ -14,6 +14,7 @@ import com.nuvio.tv.domain.model.Stream
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -23,6 +24,8 @@ class SportsLiveReadyKeeperTest {
     private var now = START - 10 * MINUTE
     private val readiness = SportsLiveGameReadiness(nowMs = { now })
     private val checks = ArrayList<String>()
+    // What rows read of each check while it ran (live.20: the faint checking mark).
+    private val checkingDuring = ArrayList<Set<String>>()
     private val refreshes = ArrayList<String>()
     private val skipped = HashSet<String>()
     private var saved: Set<String> = emptySet()
@@ -47,6 +50,7 @@ class SportsLiveReadyKeeperTest {
         savedForLater = { { it.id in saved } },
         check = { item ->
             checks += item.id
+            checkingDuring += readiness.checking.value
             verified(item)?.let { readiness.ready(item.id, it) }
         },
         refresh = { item ->
@@ -112,6 +116,14 @@ class SportsLiveReadyKeeperTest {
         assertTrue(refreshes.isNotEmpty() && refreshes.all { it == "mine" })
         // A held game is refreshed, never searched again meanwhile.
         assertEquals(1, checks.count { it == "mine" })
+    }
+
+    @Test
+    fun `a game reads as checking only while its check runs`() = runTest {
+        keeper.tick()
+        assertEquals(listOf(setOf("mine"), setOf("reminded")), checkingDuring.sortedBy { it.firstOrNull() })
+        assertTrue(readiness.checking.value.isEmpty())
+        assertFalse(readiness.isChecking(followed))
     }
 
     @Test
