@@ -8,7 +8,6 @@ import com.nuvio.tv.core.sportslive.SportsLiveAddonFetch
 import com.nuvio.tv.core.sportslive.ProbeVerdict
 import com.nuvio.tv.core.sportslive.SportsLiveDebugTiming
 import com.nuvio.tv.core.sportslive.SportsLiveLinkMarks
-import com.nuvio.tv.core.sportslive.SportsLiveReadyMark
 import com.nuvio.tv.core.sportslive.SportsLiveGameReadiness
 import com.nuvio.tv.core.sportslive.SportsLiveLinkRace
 import com.nuvio.tv.core.sportslive.SportsLiveLinkSpeed
@@ -152,7 +151,7 @@ class SportsLiveZapResolver @Inject constructor(
     @VisibleForTesting
     internal var linkSpeed: SportsLiveLinkSpeed = SportsLiveLinkSpeed.shared
 
-    /** The ✓ / ⚠ marks (#147) a race or a check-ahead sets. */
+    /** The "▶ Ready" / "No stream yet" marks (#147, 1b) a race or a check sets; a READY game's held link plays first. */
     @VisibleForTesting
     internal var readiness: SportsLiveGameReadiness = SportsLiveGameReadiness.shared
 
@@ -214,12 +213,14 @@ class SportsLiveZapResolver @Inject constructor(
 
     private suspend fun lookupNow(item: SportsLiveItem, forceRefresh: Boolean): SportsLiveLookup =
         try {
-            // A link known to play this game (#162, #173: Watch on a kickoff prompt) comes first. A cached
+            // HARD RULE (1b): a game shown "▶ Ready" plays the verified link it holds, at once (no search, no race).
+            // Then a link known to play this game (#162, #173: Watch on a kickoff prompt). A cached
             // link that has since failed is not served again, unless a search already found nothing better
             // than a quarantined link: that one is served until its window ends, so a game with only failed
             // links is searched at most once per quarantine window.
             val cached = if (forceRefresh) null else {
-                workingLinks.goodStream(item.id)
+                readiness.heldLink(item)?.takeUnless { workingLinks.isQuarantined(item.id, it) }
+                    ?: workingLinks.goodStream(item.id)
                     ?: resolveCache.get(item.streamKey)?.takeUnless { workingLinks.isQuarantined(item.id, it) }
                     ?: workingLinks.fallback(item.id)
             }
@@ -681,7 +682,7 @@ class SportsLiveZapResolver @Inject constructor(
                 "first=${winner == picked} " + results.joinToString(" ") { "${SportsLiveDebugTiming.label(it.stream.addonName)}=${it.verdict}/${it.ms}" }
         }
         if (winner != null) {
-            readiness.set(item.id, SportsLiveReadyMark.READY)
+            readiness.ready(item.id, winner)
             return winner
         }
         return SportsLiveLinkRace.afterNoWinner(ordered, results, picked)
@@ -715,23 +716,24 @@ class SportsLiveZapResolver @Inject constructor(
         }
     }
 
-    /** Addon keys ([SportsLiveSourceCooldown.keyOf]) the check-ahead leaves alone (#147): rate-limited or slow (#158). */
+    /** Addon keys ([SportsLiveSourceCooldown.keyOf]) a readiness check leaves alone (#147): rate-limited or slow (#158). */
     private fun checkAheadSkipped(): Set<String> =
         cooldown.coolingBaseUrls().mapTo(HashSet(), SportsLiveSourceCooldown::keyOf) + SportsLiveAddonFetch.shared.slowAddonKeys()
 
-    /** True when every source of [item] is on an addon the check-ahead leaves alone: it is not checked (#147). */
+    /** True when every source of [item] is on an addon a readiness check leaves alone: it is not checked (#147). */
     fun checkAheadSkips(item: SportsLiveItem): Boolean {
         val skipped = checkAheadSkipped()
         return (listOf(item) + item.alternates).all { SportsLiveSourceCooldown.keyOf(it.addonBaseUrl) in skipped }
     }
 
     /**
-     * The in-player panel's check of [item] (#147): sets its ✓ ready or ⚠ no working stream mark, or none when the
-     * check says nothing for sure. What a lookup already holds (the resolve cache, a search from Live now, a preview
-     * or a zap) costs no request; otherwise its sources not on a rate-limited or slow addon are searched, each for
-     * [SportsLiveStreamThresholds.CHECK_AHEAD_LOOKUP_MS]. The best link of each addon is probed; a live one is
-     * cached for the game, so OK or CH± starts on it. ⚠ only when every source was searched to the end and nothing
-     * playable came back, or every addon's best link was probed dead.
+     * A readiness check of [item] (#147; 1b: my games only, [SportsLiveReadyKeeper]): sets its "▶ Ready" mark holding
+     * the verified link, or "No stream yet", or none when the check says nothing for sure. What a lookup already
+     * holds (the resolve cache, a search from Live now, a preview or a zap) costs no request; otherwise its sources
+     * not on a rate-limited or slow addon are searched, each for [SportsLiveStreamThresholds.CHECK_AHEAD_LOOKUP_MS].
+     * The best link of each addon is probed (one probe per addon; a DRM playlist this TV cannot play is dead, #166);
+     * a live one is held for the game, so OK or CH± starts on it. "No stream yet" only when every source was
+     * searched to the end and nothing playable came back, or every addon's best link was probed dead.
      */
     suspend fun checkAhead(item: SportsLiveItem) {
         val skipped = checkAheadSkipped()
@@ -763,7 +765,7 @@ class SportsLiveZapResolver @Inject constructor(
         val picked = preferredStream(ordered, settings, installedOrder.toSet())
             ?: ordered.firstOrNull()?.takeUnless { honoursAutoPlayFilters(settings) }
         if (picked == null) {
-            if (complete) readiness.set(item.id, SportsLiveReadyMark.NO_STREAM)
+            if (complete) readiness.noStream(item.id)
             return
         }
         val probe = probe ?: return
@@ -776,13 +778,53 @@ class SportsLiveZapResolver @Inject constructor(
             "checkAhead entrants=${entrants.size} outcome=${if (winner != null) "ready" else results.joinToString(",") { it.verdict.name }}"
         }
         when {
-            winner != null -> {
-                readiness.set(item.id, SportsLiveReadyMark.READY)
-                resolveCache.put(item.streamKey, winner)
-            }
+            winner != null -> hold(item, winner)
             complete && results.size == entrants.size && results.all { it.verdict == ProbeVerdict.DEAD } ->
-                readiness.set(item.id, SportsLiveReadyMark.NO_STREAM)
+                readiness.noStream(item.id)
         }
+    }
+
+    /** [link], just verified, is held for [item] (1b): "▶ Ready", and the resolve cache serves it too. */
+    private fun hold(item: SportsLiveItem, link: Stream) {
+        readiness.ready(item.id, link)
+        resolveCache.put(item.streamKey, link)
+    }
+
+    /**
+     * Keeps a "▶ Ready" game's link verified before its hold lapses (1b): one probe of the held link, no search and no
+     * addon request. Still live: held afresh. Otherwise its mark goes and a full check ([checkAhead]) follows. With no
+     * held link, a full check.
+     */
+    suspend fun refreshReady(item: SportsLiveItem) {
+        val held = readiness.heldLink(item)
+        if (held != null) {
+            val verdict = verifyAndHold(item, held)
+            if (verdict == ProbeVerdict.OK) return
+            readiness.linkFailed(item.id, held.getStreamUrl())
+            item.alternates.forEach { readiness.linkFailed(it.id, held.getStreamUrl()) }
+            // The held link must not be served again by the check's cache path without its own probe.
+            resolveCache.invalidate(item.streamKey)
+        }
+        checkAhead(item)
+    }
+
+    /**
+     * Probes [link] for [item] as the player would open it (the DRM rule included, #166) and holds it when it proves
+     * live (1b). UNKNOWN when no probe is set or none answered in time. A dead link is learned (#147).
+     */
+    suspend fun verifyAndHold(item: SportsLiveItem, link: Stream): ProbeVerdict {
+        val probe = probe ?: return ProbeVerdict.UNKNOWN
+        if (isNonStream(link) || !SportsLiveLinkRace.probeable(link)) return ProbeVerdict.UNKNOWN
+        val verdict = try {
+            withTimeoutOrNull(SportsLiveStreamThresholds.RACE_PROBE_TIMEOUT_MS) { probe(link) } ?: ProbeVerdict.UNKNOWN
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            ProbeVerdict.UNKNOWN
+        }
+        learn(item, listOf(SportsLiveLinkRace.Result(link, verdict, 0L)))
+        if (verdict == ProbeVerdict.OK) hold(item, link)
+        return verdict
     }
 
     /**

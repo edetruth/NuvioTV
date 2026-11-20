@@ -16,7 +16,8 @@ class SportsLiveKickoffHoldsTest {
     private var now = START
     private val probes = ArrayList<SportsLiveItem>()
     private var outcome: SportsLiveLiveCheck.Outcome? = SportsLiveLiveCheck.Outcome(live = null, checkable = true)
-    private val holds = SportsLiveKickoffHolds(probe = { item -> probes += item; outcome }, nowMs = { now })
+    private var verified: Stream? = null
+    private val holds = SportsLiveKickoffHolds(probe = { item -> probes += item; outcome }, nowMs = { now }, heldLink = { verified })
     private val alert = SportsLiveAlert.Kickoff(item(followed = true), null)
     private val link = Stream(
         name = "A", title = null, description = null, url = "https://h.invalid/live.m3u8", ytId = null, infoHash = null,
@@ -26,7 +27,8 @@ class SportsLiveKickoffHoldsTest {
     @Test
     fun `the alert is held while no link is live, then fires with the live link`() = runTest {
         holds.hold(alert)
-        assertEquals(emptyList<SportsLiveKickoffHolds.Event>(), holds.tick())
+        // Kickoff with nothing live: the tip-off heads-up, once (1b).
+        assertEquals(listOf(SportsLiveKickoffHolds.Event.HeadsUp(alert)), holds.tick())
         assertEquals(1, probes.size)
         // Not due yet: no new probe.
         now += 30_000L
@@ -48,7 +50,7 @@ class SportsLiveKickoffHoldsTest {
             events = events + holds.tick()
             now += SportsLiveKickoffHolds.RECHECK_MS
         }
-        assertEquals(listOf(SportsLiveKickoffHolds.Event.GiveUp(alert)), events)
+        assertEquals(listOf(SportsLiveKickoffHolds.Event.HeadsUp(alert), SportsLiveKickoffHolds.Event.GiveUp(alert)), events)
         // Re-checked every minute, from the kickoff to the 20th minute.
         assertEquals(21, probes.size)
         assertTrue(holds.isEmpty)
@@ -84,6 +86,35 @@ class SportsLiveKickoffHoldsTest {
         assertEquals(emptyList<SportsLiveKickoffHolds.Event>(), holds.tick())
         now += SportsLiveKickoffHolds.RECHECK_MS
         assertEquals(emptyList<SportsLiveKickoffHolds.Event>(), holds.tick { true })
+        assertEquals(1, probes.size)
+        assertTrue(holds.isEmpty)
+    }
+
+    @Test
+    fun `the heads-up comes once, never for a Remind me in 10 min probe nor a failed probe`() = runTest {
+        holds.hold(alert)
+        assertEquals(listOf(SportsLiveKickoffHolds.Event.HeadsUp(alert)), holds.tick())
+        now += SportsLiveKickoffHolds.RECHECK_MS
+        assertEquals(emptyList<SportsLiveKickoffHolds.Event>(), holds.tick())
+
+        val other = SportsLiveKickoffHolds(probe = { null }, nowMs = { now })
+        other.hold(alert)
+        assertEquals(emptyList<SportsLiveKickoffHolds.Event>(), other.tick())
+
+        val later = SportsLiveKickoffHolds(probe = { outcome }, nowMs = { now })
+        later.remindLater(alert)
+        now += SportsLiveKickoffHolds.REMIND_LATER_MS
+        assertEquals(emptyList<SportsLiveKickoffHolds.Event>(), later.tick())
+    }
+
+    @Test
+    fun `a link verified meanwhile turns the heads-up into the Watch now prompt at once`() = runTest {
+        holds.hold(alert)
+        assertEquals(listOf(SportsLiveKickoffHolds.Event.HeadsUp(alert)), holds.tick())
+        // The my-games checks verify a link 10 s later: the prompt fires on the next tick, with no probe of its own.
+        now += 10_000L
+        verified = link
+        assertEquals(listOf(SportsLiveKickoffHolds.Event.Fire(alert, link)), holds.tick())
         assertEquals(1, probes.size)
         assertTrue(holds.isEmpty)
     }

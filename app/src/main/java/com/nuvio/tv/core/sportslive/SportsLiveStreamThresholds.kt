@@ -110,14 +110,29 @@ object SportsLiveStreamThresholds {
     /** A live media playlist whose newest segment is older than this is not live (#110, #147). */
     const val MEDIA_PLAYLIST_STALE_MS = 10L * 60 * 1000
 
-    /** Check-ahead (#147): the in-player panel checks its other games one at a time, this far apart. */
-    const val CHECK_AHEAD_TRICKLE_MS = 5_000L
-
-    /** Check-ahead: a ✓ or ⚠ (and a check with no verdict) stands this long, then the game is checked again. */
+    /** "No stream yet" (#147) stands this long. */
     const val CHECK_AHEAD_CACHE_MS = 3L * 60 * 1000
 
-    /** Check-ahead: the focused game is checked once focus rested on it this long (not on every row scrolled past). */
-    const val CHECK_AHEAD_FOCUS_DWELL_MS = 600L
+    /**
+     * "▶ Ready" (1b) stands this long after its link was last verified, the resolve cache's life
+     * ([com.nuvio.tv.ui.screens.sportslive.SportsLiveResolveCache.TTL_MS]): the mark lives exactly as long as the held link.
+     */
+    const val READY_HOLD_MS = 5L * 60 * 1000
+
+    /** My games' checks (1b): a held link is verified again this long after the last time, before it lapses. */
+    const val READY_REFRESH_MS = 4L * 60 * 1000
+
+    /** My games' checks (1b): a game with no held link is checked again this long after its last check. */
+    const val READY_RECHECK_MS = 5L * 60 * 1000
+
+    /** My games' checks (1b) start this long before kickoff. */
+    const val READY_LEAD_MS = 10L * 60 * 1000
+
+    /** My games' checks (1b) stop this long after kickoff when nothing says the game ended sooner. */
+    const val READY_MAX_GAME_MS = 5L * 60 * 60 * 1000
+
+    /** My games' checks (1b) run one game at a time, at least this far apart. */
+    const val READY_GAP_MS = 5_000L
 
     /** Check-ahead: a game's lookup waits this long for its addons; slower ones are skipped (#158). */
     const val CHECK_AHEAD_LOOKUP_MS = 6_000L

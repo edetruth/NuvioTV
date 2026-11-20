@@ -1,6 +1,7 @@
 package com.nuvio.tv.data.repository
 
 import com.nuvio.tv.core.network.NetworkResult
+import com.nuvio.tv.core.sportslive.ProbeVerdict
 import com.nuvio.tv.core.sportslive.SportsLiveLiveCheck
 import com.nuvio.tv.core.sportslive.SportsLiveNoticeEntries
 import com.nuvio.tv.core.sportslive.SportsLiveSourceCooldown
@@ -18,18 +19,23 @@ import javax.inject.Singleton
 /**
  * The kickoff alerts' link probe (#162): a fresh stream search for the game (and its merged sources), one
  * request per addon as any search, then one manifest probe per addon ([SportsLiveLiveCheck]). A live
- * link found goes to the resolve cache, so Watch plays it first. Addons cooling down after a rate limit
- * are left out. Null when the search itself failed (no verdict).
+ * link found is verified once more as the player opens it ([SportsLiveZapResolver.verifyAndHold], the DRM rule
+ * of #166 included): then it is held, the game is "▶ Ready" (1b) and Watch plays that link first. One found dead
+ * there (a DRM playlist this TV cannot play) counts as no live link. Addons cooling down after a rate limit are
+ * left out. Null when the search itself failed (no verdict).
  */
 @Singleton
 class SportsLiveKickoffProbe @Inject constructor(
     private val streamRepository: StreamRepository,
-    private val resolveCache: SportsLiveResolveCache
+    private val resolveCache: SportsLiveResolveCache,
+    private val resolver: SportsLiveZapResolver
 ) {
     suspend fun probe(item: SportsLiveItem): SportsLiveLiveCheck.Outcome? {
         val streams = streamsOf(item) ?: return null
         val outcome = liveCheck.firstLive(streams)
-        outcome.live?.let { resolveCache.put(item.streamKey, it) }
+        val live = outcome.live ?: return outcome
+        if (resolver.verifyAndHold(item, live) == ProbeVerdict.DEAD) return outcome.copy(live = null)
+        resolveCache.put(item.streamKey, live)
         return outcome
     }
 

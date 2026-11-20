@@ -104,6 +104,8 @@ import com.nuvio.tv.core.sportslive.alerts.AlertContent
 import com.nuvio.tv.core.sportslive.alerts.AlertSide
 import com.nuvio.tv.core.sportslive.alerts.KickoffStyle
 import com.nuvio.tv.core.sportslive.SportsLiveDisplayText
+import com.nuvio.tv.core.sportslive.SportsLiveGameReadiness
+import com.nuvio.tv.core.sportslive.SportsLiveReadyMark
 import com.nuvio.tv.core.sportslive.SportsLiveGameWatch
 import com.nuvio.tv.core.sportslive.alerts.ReminderNotice
 import com.nuvio.tv.core.sportslive.alerts.SportsLiveAlert
@@ -130,6 +132,8 @@ import javax.inject.Inject
 @HiltViewModel
 class SportsLiveAlertsViewModel @Inject constructor(
     val alerts: SportsLiveAlerts,
+    /** My games' readiness checks (1b): run beside the alerts while the app is in the foreground. */
+    val readyKeeper: SportsLiveReadyKeeper,
     private val resolver: SportsLiveZapResolver,
     private val directDebridResolver: DirectDebridResolver
 ) : ViewModel() {
@@ -169,7 +173,11 @@ fun SportsLiveAlertsHost(
     val alerts = viewModel.alerts
     val lifecycleOwner = LocalLifecycleOwner.current
     LaunchedEffect(alerts, lifecycleOwner) {
-        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) { alerts.runInForeground() }
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            // 1b: my games are kept "▶ Ready" on every screen while the app is in the foreground, never in the background.
+            launch { viewModel.readyKeeper.runInForeground() }
+            alerts.runInForeground()
+        }
     }
 
     // What plays: the full player's content (its first seconds wait), the mini player's game, dual screen.
@@ -254,8 +262,22 @@ fun SportsLiveAlertsHost(
         alerts.closeReminderNotice(shown)
     }
 
+    // The tip-off heads-up (1b), my games only: kickoff and no working stream yet; the prompt follows once one is verified.
+    val headsUp by alerts.headsUp.collectAsState()
+    LaunchedEffect(headsUp?.id) {
+        val shown = headsUp ?: return@LaunchedEffect
+        SportsLiveToasts.show(
+            SportsLiveToastKind.REMINDER,
+            title = toastContext.getString(R.string.sports_live_heads_up_title, SportsLiveDisplayText.name(shown.item.meta.name)),
+            line = toastContext.getString(R.string.sports_live_heads_up_line)
+        )
+        alerts.closeHeadsUp(shown)
+    }
+
     val card by alerts.current.collectAsState()
     val watching by alerts.watchingNow.collectAsState()
+    // 1b: the kickoff prompt says whether a verified link is held ("Stream ready · Watch now?").
+    val readyMarks by SportsLiveGameReadiness.shared.marks.collectAsState()
     val surface by SportsLiveAlertSurfaces.surface.collectAsState()
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -456,6 +478,7 @@ fun SportsLiveAlertsHost(
                 content = content,
                 compact = style == KickoffStyle.COMPACT,
                 noStreamYet = first.noStreamYet,
+                streamReady = remember(readyMarks, first) { SportsLiveGameReadiness.shared.of(first.item) == SportsLiveReadyMark.READY },
                 // ▲ Both (the full player only, never dual screen): this game and the kickoff's side by side.
                 onBoth = surface?.takeIf { inPlayer && !dualRoute && style == KickoffStyle.COMPACT && !first.noStreamYet && it.offersBoth() }?.let { on ->
                     {
@@ -677,6 +700,8 @@ private fun KickoffPrompt(
     compact: Boolean,
     /** The quiet note (#162): no link came up within 20 minutes; Remind me in 10 min / Dismiss, no Watch. */
     noStreamYet: Boolean,
+    /** 1b: a verified link is held, so Watch plays it at once: "▶ Ready · Stream ready · Watch now?"; else "Waiting for a working stream…". */
+    streamReady: Boolean,
     /** ▲ Both over the full player; null where dual screen cannot open. */
     onBoth: (() -> Unit)?,
     watchingTitle: String?,
@@ -778,6 +803,18 @@ private fun KickoffPrompt(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+        }
+        if (!noStreamYet) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (streamReady) SportsLiveReadyPill()
+                Text(
+                    text = stringResource(if (streamReady) R.string.sports_live_kickoff_stream_ready else R.string.sports_live_kickoff_waiting_stream),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (streamReady) ArtColors.Text else ArtColors.Muted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
             if (keyChoice != null) {

@@ -15,7 +15,6 @@ import com.nuvio.tv.core.sportslive.SportsLiveGameWatch
 import com.nuvio.tv.core.sportslive.SportsLiveKickoffWait
 import com.nuvio.tv.data.repository.SportsLiveKickoffProbe
 import com.nuvio.tv.core.sportslive.SportsLiveLinkErrors
-import com.nuvio.tv.core.sportslive.SportsLiveReadyMark
 import com.nuvio.tv.core.sportslive.SportsLiveGameReadiness
 import com.nuvio.tv.core.sportslive.SportsLiveLinkSpeed
 import com.nuvio.tv.core.sportslive.SportsLiveRecoveryCandidates
@@ -74,9 +73,9 @@ internal fun PlayerRuntimeController.recordSportsSourceFirstFrame() {
             SportsLiveWorkingLinks.shared.startedPlaying(contentId.orEmpty(), it)
             // A game tried and failed plays after all: the tried games may be offered again (#138 follow-up).
             com.nuvio.tv.core.sportslive.SportsLiveTriedGames.shared.onPlaying(contentId.orEmpty())
-            // #147: this addon's links start this fast for the game; the game is ✓ ready.
+            // #147: this addon's links start this fast for the game; a first frame makes it "▶ Ready" on this link (1b, no probe).
             SportsLiveLinkSpeed.shared.recordStart(contentId, it.addonName, System.currentTimeMillis() - sportsAttemptStartedAtMs)
-            SportsLiveGameReadiness.shared.set(contentId.orEmpty(), SportsLiveReadyMark.READY)
+            SportsLiveGameReadiness.shared.ready(contentId.orEmpty(), it)
         }
     }
     val key = currentSportsSourceKey() ?: return
@@ -274,12 +273,12 @@ private fun PlayerRuntimeController.canTrySportsLink(manual: Boolean): Boolean =
     SportsLiveFailover.canTryNext(sportsFailoverRunStartedAtMs, System.currentTimeMillis(), sportsFailoverAttempts, manual)
 
 /**
- * The failover run gave up with no link playing (F1): the game is marked ⚠ no working stream (#147), so
+ * The failover run gave up with no link playing (F1): the game is marked "No stream yet" (#147), so
  * "Next live game", the end card's Up next and the panel pass it over while the mark stands.
  */
 private fun PlayerRuntimeController.markSportsGameNoStream() {
     if (hasRenderedFirstFrame) return
-    contentId?.takeIf(String::isNotBlank)?.let { SportsLiveGameReadiness.shared.set(it, SportsLiveReadyMark.NO_STREAM) }
+    contentId?.takeIf(String::isNotBlank)?.let { SportsLiveGameReadiness.shared.noStream(it) }
 }
 
 /**

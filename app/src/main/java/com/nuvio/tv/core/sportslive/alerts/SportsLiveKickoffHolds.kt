@@ -12,12 +12,18 @@ import com.nuvio.tv.domain.model.Stream
  * - otherwise it is held and probed again every [RECHECK_MS], for up to [GIVE_UP_MS]; then a quiet note
  *   ([Event.GiveUp]) "‹game› started, but no stream is live yet", whose Remind me in 10 min asks for one
  *   more probe ([remindLater]).
+ * - The tip-off heads-up (1b): the first probe of a hold that finds nothing live says so once ([Event.HeadsUp],
+ *   "No working stream yet for ‹game› — I'll tell you when one is up").
+ * - A held game with a verified link held elsewhere ([heldLink]: the my-games checks, 1b) fires on the next tick,
+ *   unprobed: the prompt comes the moment a link is verified, not at the next minute's probe.
  * A probe that failed outright is retried on the next tick. One game is held once. Main-thread or
  * otherwise serialised use only; [tick] may suspend for the probes.
  */
 class SportsLiveKickoffHolds(
     private val probe: suspend (SportsLiveItem) -> SportsLiveLiveCheck.Outcome?,
-    private val nowMs: () -> Long = { System.currentTimeMillis() }
+    private val nowMs: () -> Long = { System.currentTimeMillis() },
+    /** The verified link [SportsLiveItem] holds now ("▶ Ready", 1b); null: none. */
+    private val heldLink: (SportsLiveItem) -> Stream? = { null }
 ) {
     sealed interface Event {
         val alert: SportsLiveAlert.Kickoff
@@ -27,6 +33,9 @@ class SportsLiveKickoffHolds(
 
         /** Nothing came up within [GIVE_UP_MS]: the quiet note. */
         data class GiveUp(override val alert: SportsLiveAlert.Kickoff) : Event
+
+        /** The tip-off heads-up (1b): kickoff, and no working stream yet; the hold goes on. Once per hold. */
+        data class HeadsUp(override val alert: SportsLiveAlert.Kickoff) : Event
     }
 
     private class Held(
@@ -34,7 +43,9 @@ class SportsLiveKickoffHolds(
         val sinceMs: Long,
         var nextAtMs: Long,
         /** A last probe asked by Remind me in 10 min: nothing more after it. */
-        val last: Boolean = false
+        val last: Boolean = false,
+        /** The heads-up was given (or is not for this hold). */
+        var headsUpGiven: Boolean = last
     )
 
     private val held = LinkedHashMap<String, Held>()
@@ -70,6 +81,12 @@ class SportsLiveKickoffHolds(
     suspend fun tick(onScreen: (SportsLiveAlert.Kickoff) -> Boolean = { false }): List<Event> {
         val events = ArrayList<Event>()
         held.values.removeAll { onScreen(it.alert) }
+        // A link verified meanwhile (1b): the prompt fires now, with that link.
+        for ((key, entry) in held.entries.toList()) {
+            val link = heldLink(entry.alert.item) ?: continue
+            held.remove(key)
+            events += Event.Fire(entry.alert, link)
+        }
         val due = held.filterValues { nowMs() >= it.nextAtMs }
         for ((key, entry) in due) {
             val outcome = probe(entry.alert.item)
@@ -89,7 +106,13 @@ class SportsLiveKickoffHolds(
                     held.remove(key)
                     events += Event.GiveUp(entry.alert)
                 }
-                else -> entry.nextAtMs = now + RECHECK_MS
+                else -> {
+                    entry.nextAtMs = now + RECHECK_MS
+                    if (outcome != null && !entry.headsUpGiven) {
+                        entry.headsUpGiven = true
+                        events += Event.HeadsUp(entry.alert)
+                    }
+                }
             }
         }
         return events

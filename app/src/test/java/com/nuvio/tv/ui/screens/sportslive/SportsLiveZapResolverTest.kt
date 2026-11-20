@@ -762,6 +762,90 @@ class SportsLiveZapResolverTest {
         assertNull(readiness.of(ITEM))
     }
 
+    // ---- live.20 1b: the HARD RULE, "▶ Ready" holds its verified link and OK plays it ----
+
+    @Test
+    fun `OK on a Ready game plays the verified link`() = runTest {
+        streams.response = { twoAddons() }
+        val resolver = racingResolver(mapOf(raceSd to (200L to ProbeVerdict.DEAD), raceOther to (400L to ProbeVerdict.OK)))
+        resolver.checkAhead(ITEM)
+        assertEquals(SportsLiveReadyMark.READY, readiness.of(ITEM))
+        assertEquals(raceOther, readiness.heldLink(ITEM))
+
+        // Even with the resolve cache emptied and another link known good for the game, OK plays the held link,
+        // at once: no search and no race.
+        resolveCache.clear()
+        links.startedPlaying(ITEM.id, raceHd)
+        links.markGood(ITEM.id, raceHd.url)
+        val searches = streams.calls.size
+        val probes = probed.size
+        assertEquals(SportsLiveLookup.Found(raceOther), resolver.lookup(ITEM))
+        assertEquals(searches, streams.calls.size)
+        assertEquals(probes, probed.size)
+    }
+
+    @Test
+    fun `a Ready game whose held link failed is no longer Ready and is looked up again`() = runTest {
+        streams.response = { twoAddons() }
+        val resolver = racingResolver(mapOf(raceOther to (100L to ProbeVerdict.OK)))
+        resolver.checkAhead(ITEM)
+        assertEquals(raceOther, readiness.heldLink(ITEM))
+
+        readiness.linkFailed(ITEM.id, raceOther.url)
+        links.failed(ITEM.id, raceOther.url)
+        assertNull(readiness.of(ITEM))
+        assertTrue(resolver.lookup(ITEM) is SportsLiveLookup.Found)
+        assertTrue((resolver.lookup(ITEM) as SportsLiveLookup.Found).stream != raceOther)
+    }
+
+    @Test
+    fun `refreshing a Ready game probes only its held link and keeps it held`() = runTest {
+        streams.response = { twoAddons() }
+        val resolver = racingResolver(mapOf(raceSd to (100L to ProbeVerdict.DEAD), raceOther to (100L to ProbeVerdict.OK)))
+        resolver.checkAhead(ITEM)
+        val searches = streams.calls.size
+        probed.clear()
+
+        resolver.refreshReady(ITEM)
+
+        assertEquals(listOf("Other"), probed)
+        assertEquals(searches, streams.calls.size)
+        assertEquals(raceOther, readiness.heldLink(ITEM))
+        assertEquals(raceOther, resolveCache.get(ITEM.streamKey))
+    }
+
+    @Test
+    fun `a held link that no longer proves live loses Ready and the game is checked afresh`() = runTest {
+        streams.response = { twoAddons() }
+        var otherVerdict = ProbeVerdict.OK
+        val resolver = racingResolver(emptyMap())
+        resolver.probe = { link ->
+            probed += link.addonName
+            if (link == raceOther) otherVerdict else ProbeVerdict.DEAD
+        }
+        resolver.checkAhead(ITEM)
+        assertEquals(raceOther, readiness.heldLink(ITEM))
+
+        otherVerdict = ProbeVerdict.DEAD
+        resolver.refreshReady(ITEM)
+
+        assertNull(readiness.heldLink(ITEM))
+        assertEquals(SportsLiveReadyMark.NO_STREAM, readiness.of(ITEM))
+        assertTrue(links.isQuarantined(ITEM.id, raceOther.url))
+    }
+
+    @Test
+    fun `a kickoff link verified as the player opens it is held, a dead one is not`() = runTest {
+        val resolver = racingResolver(mapOf(raceSd to (10L to ProbeVerdict.OK), raceOther to (10L to ProbeVerdict.DEAD)))
+
+        assertEquals(ProbeVerdict.DEAD, resolver.verifyAndHold(ITEM, raceOther))
+        assertNull(readiness.of(ITEM))
+        assertEquals(ProbeVerdict.OK, resolver.verifyAndHold(ITEM, raceSd))
+        assertEquals(raceSd, readiness.heldLink(ITEM))
+        assertEquals(SportsLiveLookup.Found(raceSd), resolver.lookup(ITEM))
+        assertTrue(streams.calls.isEmpty())
+    }
+
     @Test
     fun `a check-ahead leaves a game on a rate-limited addon alone`() = runTest {
         streams.response = { twoAddons() }

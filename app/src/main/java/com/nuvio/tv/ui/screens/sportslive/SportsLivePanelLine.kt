@@ -267,17 +267,10 @@ internal fun SportsLivePanelLine(
     }
 }
 
-/** The check-ahead's mark (#147): a green ✓ when a link is ready, an amber ⚠ when no working stream was found. */
+/** The game's readiness in words (#147, 1b): "▶ Ready" while a verified link is held, "No stream yet" (muted) when none was found. */
 @Composable
 private fun ReadyMark(mark: SportsLiveReadyMark) {
-    val ready = mark == SportsLiveReadyMark.READY
-    Text(
-        text = stringResource(if (ready) R.string.sports_live_panel_mark_ready else R.string.sports_live_panel_mark_no_stream),
-        style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag),
-        color = if (ready) Colors.ReplayGreen else Colors.WarningAmber,
-        maxLines = 1,
-        softWrap = false
-    )
+    SportsLiveReadyMarkView(mark, showNoStream = true)
 }
 
 /**

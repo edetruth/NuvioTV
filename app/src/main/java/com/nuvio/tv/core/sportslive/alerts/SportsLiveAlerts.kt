@@ -8,6 +8,7 @@ import com.nuvio.tv.core.sportslive.scores.BigGame
 import androidx.annotation.VisibleForTesting
 import com.nuvio.tv.BuildConfig
 import com.nuvio.tv.core.sportslive.SportsLiveDisplayText
+import com.nuvio.tv.core.sportslive.SportsLiveGameReadiness
 import com.nuvio.tv.core.sportslive.SportsLiveItemBucketer
 import com.nuvio.tv.core.sportslive.SportsLiveLiveCheck
 import com.nuvio.tv.data.repository.SportsLiveKickoffProbe
@@ -28,6 +29,7 @@ import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveTab
 import com.nuvio.tv.domain.repository.SportsLiveLoad
 import com.nuvio.tv.domain.repository.SportsLiveRepository
+import com.nuvio.tv.ui.screens.sportslive.dual.sportsLiveSavedForLater
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
@@ -94,7 +96,9 @@ class SportsLiveAlerts @Inject constructor(
             } else {
                 kickoffProbe?.probe(item) ?: SportsLiveLiveCheck.Outcome(live = null, checkable = false)
             }
-        }
+        },
+        // 1b: a link the my-games checks verified fires the prompt at once ("Stream ready · Watch now?").
+        heldLink = { item -> if (System.currentTimeMillis() < debugNotLiveUntilMs) null else SportsLiveGameReadiness.shared.heldLink(item) }
     )
 
     /** Debug builds only: until then the kickoff probe finds no live link (the #162 emulator check). */
@@ -143,6 +147,21 @@ class SportsLiveAlerts @Inject constructor(
 
     /** "Reminder set" / "Reminder removed" after the last bell press, as the app's toast card; null: none. */
     val reminderNotice: StateFlow<ReminderNotice?> = reminderNoticeFlow.asStateFlow()
+
+    private val headsUpFlow = MutableStateFlow<KickoffHeadsUp?>(null)
+    private var headsUpCount = 0L
+
+    /**
+     * The tip-off heads-up (1b), my games only (a held kickoff prompt's game, never one saved for later): "No working
+     * stream yet for ‹game› — I'll tell you when one is up", as the app's toast; null: none. The prompt follows with
+     * "Stream ready" once a link is verified (the kickoff hold, #162).
+     */
+    val headsUp: StateFlow<KickoffHeadsUp?> = headsUpFlow.asStateFlow()
+
+    /** [shown] has been shown: it goes, unless a newer one took its place. */
+    fun closeHeadsUp(shown: KickoffHeadsUp) {
+        headsUpFlow.compareAndSet(shown, null)
+    }
 
     /** Shows "Reminder set" ([on]) or "Reminder removed" for [item]'s game. */
     fun noticeReminder(item: SportsLiveItem, on: Boolean) {
@@ -211,8 +230,13 @@ class SportsLiveAlerts @Inject constructor(
                         val alert = when (event) {
                             is SportsLiveKickoffHolds.Event.Fire -> event.alert
                             is SportsLiveKickoffHolds.Event.GiveUp -> event.alert.copy(noStreamYet = true)
+                            is SportsLiveKickoffHolds.Event.HeadsUp -> {
+                                val saved = sportsLiveSavedForLater(liveScores.protection.value, liveScores.scores.value)
+                                if (!saved(event.alert.item)) headsUpFlow.value = KickoffHeadsUp(++headsUpCount, event.alert.item)
+                                null
+                            }
                         }
-                        enqueue(listOf(alert), System.currentTimeMillis())
+                        if (alert != null) enqueue(listOf(alert), System.currentTimeMillis())
                     }
                     delay(TICK_MS)
                 }
@@ -574,6 +598,9 @@ class SportsLiveAlerts @Inject constructor(
         }
     }
 }
+
+/** The tip-off heads-up (1b) for [item]'s game; [id] tells two apart. */
+data class KickoffHeadsUp(val id: Long, val item: SportsLiveItem)
 
 /**
  * The toast card after a bell press (#44, `Prompts.dc.html`): "Reminder set" ([on]) or "Reminder removed",

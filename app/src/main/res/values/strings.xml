@@ -4178,8 +4178,18 @@
     <string name="sports_live_panel_clock">%1$s %2$s</string>
     <string name="sports_live_panel_watching">▶ Watching</string>
     <string name="sports_live_panel_new">New</string>
-    <string name="sports_live_panel_mark_ready">✓</string>
-    <string name="sports_live_panel_mark_no_stream">⚠</string>
+    <!-- live.20 1b: readiness in words (✓ means Watched / Selected in Nuvio). -->
+    <string name="sports_live_ready_pill">▶ Ready</string>
+    <string name="sports_live_no_stream_yet_mark">No stream yet</string>
+    <string name="sports_live_kickoff_stream_ready">Stream ready · Watch now?</string>
+    <string name="sports_live_kickoff_waiting_stream">Waiting for a working stream…</string>
+    <string name="sports_live_heads_up_title">No working stream yet for %1$s</string>
+    <string name="sports_live_heads_up_line">I\'ll tell you when one is up</string>
+    <plurals name="sports_live_my_games_tonight">
+        <item quantity="one">%1$d game tonight</item>
+        <item quantity="other">%1$d games tonight</item>
+    </plurals>
+    <string name="sports_live_my_games_ready">%1$d ready</string>
     <string name="sports_live_hidden_by_my_sports">%1$d more hidden by My sports · Show all</string>
     <string name="sports_live_zap_looking">Looking for streams…</string>
     <string name="sports_live_zap_skip">Skip</string>

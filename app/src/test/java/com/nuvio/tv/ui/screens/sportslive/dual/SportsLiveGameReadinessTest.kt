@@ -5,13 +5,19 @@ import com.nuvio.tv.core.sportslive.SportsLiveReadyMark
 import com.nuvio.tv.core.sportslive.SportsLiveGameReadiness
 import com.nuvio.tv.core.sportslive.SportsLiveStreamThresholds
 import com.nuvio.tv.domain.model.SportsLiveItem
+import com.nuvio.tv.domain.model.Stream
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** #147: the check-ahead's ✓ / ⚠ marks, and how they feed "Next live game". */
+/** #147, 1b: the "▶ Ready" / "No stream yet" marks, the held link, and how they feed "Next live game". */
 class SportsLiveGameReadinessTest {
+
+    private fun link(name: String) = Stream(
+        name = name, title = null, description = null, url = "https://cdn.example.invalid/$name.m3u8", ytId = null, infoHash = null,
+        fileIdx = null, externalUrl = null, behaviorHints = null, addonName = "addon", addonLogo = null
+    )
 
     private val lineup = listOf("a", "b", "c", "d").map(::dualItem)
     private fun item(id: String) = lineup.first { it.id == id }
@@ -31,32 +37,35 @@ class SportsLiveGameReadinessTest {
 
     @Test
     fun `next live game goes to a game marked ready first`() {
-        readiness.set("d", SportsLiveReadyMark.READY)
+        readiness.ready("d", link("d"))
         assertEquals("d", next(item("a"))?.id)
     }
 
     @Test
     fun `next live game passes over a game with no working stream`() {
-        readiness.set("b", SportsLiveReadyMark.NO_STREAM)
+        readiness.noStream("b")
         assertEquals("c", next(item("a"))?.id)
     }
 
     @Test
     fun `a game with no working stream is still offered when no other is left`() {
-        listOf("b", "c", "d").forEach { readiness.set(it, SportsLiveReadyMark.NO_STREAM) }
+        listOf("b", "c", "d").forEach { readiness.noStream(it) }
         assertEquals("b", next(item("a"))?.id)
     }
 
     @Test
-    fun `marks stand about three minutes`() {
-        readiness.set("b", SportsLiveReadyMark.NO_STREAM)
-        readiness.set("c", SportsLiveReadyMark.READY)
-        now += SportsLiveStreamThresholds.CHECK_AHEAD_CACHE_MS - 1
+    fun `No stream yet stands about three minutes and Ready as long as its held link`() {
+        readiness.noStream("b")
+        readiness.ready("c", link("c"))
+        now += SportsLiveStreamThresholds.CHECK_AHEAD_CACHE_MS
+        assertNull(readiness.of(item("b")))
         assertEquals(SportsLiveReadyMark.READY, readiness.of(item("c")))
+        assertEquals(link("c"), readiness.heldLink(item("c")))
 
-        now += 1
+        now = 5_000_000L + SportsLiveStreamThresholds.READY_HOLD_MS
         assertNull(readiness.of(item("c")))
-        assertNull(readiness.markedAt("b"))
+        assertNull(readiness.heldLink(item("c")))
+        assertNull(readiness.heldAt("c"))
         readiness.prune()
         assertTrue(readiness.marks.value.isEmpty())
         // With the marks gone, b is the next game again.
@@ -64,10 +73,44 @@ class SportsLiveGameReadinessTest {
     }
 
     @Test
+    fun `Ready shows only while its verified link is held`() {
+        readiness.ready("c", link("c"))
+        assertEquals(SportsLiveReadyMark.READY, readiness.of(item("c")))
+
+        // Another link of the game failing leaves it Ready; its held link failing takes the mark away at once.
+        readiness.linkFailed("c", "https://cdn.example.invalid/other.m3u8")
+        assertEquals(link("c"), readiness.heldLink(item("c")))
+        readiness.linkFailed("c", link("c").url)
+        assertNull(readiness.of(item("c")))
+        assertNull(readiness.heldLink(item("c")))
+        assertTrue(readiness.marks.value.isEmpty())
+    }
+
+    @Test
+    fun `verifying the held link again keeps it Ready from then on`() {
+        readiness.ready("c", link("c"))
+        now += SportsLiveStreamThresholds.READY_REFRESH_MS
+        readiness.ready("c", link("c"))
+        assertEquals(now, readiness.heldAt("c"))
+        now += SportsLiveStreamThresholds.READY_HOLD_MS - 1
+        assertEquals(SportsLiveReadyMark.READY, readiness.of(item("c")))
+    }
+
+    @Test
+    fun `a link failing in the shared working links takes its Ready mark away`() {
+        val links = com.nuvio.tv.core.sportslive.SportsLiveWorkingLinks(nowMs = { now }, readiness = readiness)
+        readiness.ready("c", link("c"))
+        links.failed("c", link("c").url)
+        assertNull(readiness.of(item("c")))
+    }
+
+    @Test
     fun `a merged card is ready when any of its sources is`() {
         val merged = item("a").copy(alternates = listOf(item("b")))
-        readiness.set("b", SportsLiveReadyMark.READY)
+        readiness.noStream("a")
+        readiness.ready("b", link("b"))
         assertEquals(SportsLiveReadyMark.READY, readiness.of(merged))
+        assertEquals(link("b"), readiness.heldLink(merged))
     }
 
     @Test

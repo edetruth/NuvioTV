@@ -23,7 +23,9 @@ import com.nuvio.tv.domain.model.Stream
 class SportsLiveWorkingLinks(
     internal val nowMs: () -> Long = { System.currentTimeMillis() },
     /** The stream lists' marks (#156): a failure and a first frame are told to them too. */
-    private val marks: SportsLiveLinkMarks? = null
+    private val marks: SportsLiveLinkMarks? = null,
+    /** "▶ Ready" (1b): a failure of a game's held link takes its mark away. */
+    private val readiness: SportsLiveGameReadiness? = null
 ) {
     companion object {
         const val GOOD_AFTER_MS = 30_000L
@@ -37,7 +39,7 @@ class SportsLiveWorkingLinks(
         private val USER_INFO = Regex("^([A-Za-z][A-Za-z0-9+.-]*://)[^/?#@]*@")
 
         /** The process-wide memory the app uses. */
-        val shared = SportsLiveWorkingLinks(marks = SportsLiveLinkMarks.shared)
+        val shared = SportsLiveWorkingLinks(marks = SportsLiveLinkMarks.shared, readiness = SportsLiveGameReadiness.shared)
 
         /** How long a link that failed with [problem] stays quarantined (#158); null: a plain failure. */
         fun quarantineMsFor(problem: SportsLiveStreamHealth.Problem?): Long =
@@ -186,6 +188,7 @@ class SportsLiveWorkingLinks(
     fun failed(gameKey: String, url: String?, problem: SportsLiveStreamHealth.Problem? = null): Boolean {
         val key = linkKey(url) ?: return false
         marks?.failed(gameKey, url, problem)
+        readiness?.linkFailed(gameKey, url)
         synchronized(this) {
             val game = game(gameKey)
             if (key in game.good && key !in game.strikes) {
