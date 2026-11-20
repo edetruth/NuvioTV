@@ -103,6 +103,10 @@ class ResultsRepository internal constructor(
     @Volatile
     var chosenDay: Int? = null
 
+    /** When Results was last left (another tab, the player, another screen); null while shown or never shown. */
+    @Volatile
+    var resultsLeftAtMs: Long? = null
+
     /** The clock the days and the score delay go by. */
     fun nowMs(): Long = now()
 

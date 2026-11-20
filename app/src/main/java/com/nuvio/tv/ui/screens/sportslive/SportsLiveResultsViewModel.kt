@@ -66,6 +66,8 @@ sealed interface ResultListItem {
 data class SportsLiveResultsUiState(
     /** 0 = today, 1 = yesterday … 6; null until the opening day is worked out ([defaultResultsDay]). */
     val daysAgo: Int? = null,
+    /** Counts the times Results opened afresh ([resultsDayExpired]): each starts the list at its top. */
+    val freshOpens: Int = 0,
     /** The days the title's ‹ › steps through (ESPN days, counted back from today in US Eastern time): Today, Yesterday and the 5 before. */
     val dates: List<ResultDay> = emptyList(),
     /** Earlier ▸ is open: the 5 older days follow it. */
@@ -141,6 +143,7 @@ class SportsLiveResultsViewModel internal constructor(
     /** Earlier is open. */
     internal val earlierShown: StateFlow<Boolean> = earlierOpen.asStateFlow()
     private val selection = MutableStateFlow(Selection())
+    private val freshOpens = MutableStateFlow(0)
     private val replayItems = MutableStateFlow<List<SportsLiveItem>>(emptyList())
     private val load = MutableStateFlow<ResultsLoad?>(null)
 
@@ -177,15 +180,18 @@ class SportsLiveResultsViewModel internal constructor(
         Listing(sports, sport, leagues, league, items, replays, resultChipCounts(rows, mySports, sports, sport))
     }.flowOn(computeDispatcher)
 
+    private data class DayShown(val days: Int?, val load: ResultsLoad?, val earlier: Boolean, val freshOpens: Int)
+
     val uiState: StateFlow<SportsLiveResultsUiState> = combine(
-        combine(daysAgo, load, earlierOpen, ::Triple),
+        combine(daysAgo, load, earlierOpen, freshOpens, ::DayShown),
         mode,
         reveal.revealed,
         listing,
         prefs.spoilerProtection
-    ) { (days, load, earlier), mode, revealed, listing, protection ->
+    ) { (days, load, earlier, fresh), mode, revealed, listing, protection ->
         SportsLiveResultsUiState(
             daysAgo = days,
+            freshOpens = fresh,
             // Every day (P4): the title's ‹ › steps through them, so no Earlier toggle hides any.
             dates = results.days(),
             earlierOpen = earlier,
@@ -288,10 +294,35 @@ class SportsLiveResultsViewModel internal constructor(
         }
     }
 
-    /** True while Results is the selected tab. */
+    /**
+     * True while Results is the selected tab. Back on it after [RESULTS_DAY_KEPT_MS] away or on a new day
+     * ([resultsDayExpired]), it opens afresh: the opening day, ★ My sports, the list at its top. A quick hop
+     * keeps the chosen day.
+     */
     fun setActive(isActive: Boolean) {
+        if (isActive == active.value) return
+        if (isActive) {
+            val leftAt = results.resultsLeftAtMs
+            results.resultsLeftAtMs = null
+            if (leftAt != null && resultsDayExpired(leftAt, results.nowMs())) openAfresh()
+        } else {
+            results.resultsLeftAtMs = results.nowMs()
+        }
         active.value = isActive
         if (!isActive) reveal.onFocus(null)
+    }
+
+    private fun openAfresh() {
+        results.chosenDay = null
+        daysAgo.value = null
+        earlierOpen.value = false
+        selection.value = Selection()
+        freshOpens.update { it + 1 }
+    }
+
+    override fun onCleared() {
+        // Left with the screen itself: the next Results remembers when.
+        if (active.value) results.resultsLeftAtMs = results.nowMs()
     }
 
     /**
@@ -386,6 +417,23 @@ internal fun replayMatchesOf(events: List<ScoreSnapshot>, date: java.time.LocalD
  */
 internal fun defaultResultsDay(today: ResultsLoad): Int =
     if ((today as? ResultsLoad.Loaded)?.hasMyFinals == true) SportsResults.TODAY else SportsResults.YESTERDAY
+
+/**
+ * How long a day chosen on Results stays chosen while the user is elsewhere (live.20 user report): a quick
+ * hop to Live now and back keeps it; watching a game does not. 10 min, as Replays refreshes on opening
+ * after 10 min ([SportsLiveRefreshPlan.REPLAYS_OPEN_STALE_MS]).
+ */
+internal const val RESULTS_DAY_KEPT_MS = 10 * 60_000L
+
+/**
+ * Back on Results [nowMs], left at [leftAtMs]: it opens afresh once [RESULTS_DAY_KEPT_MS] have passed or
+ * ESPN's day (US Eastern, what "Yesterday" counts from) has moved on.
+ */
+internal fun resultsDayExpired(leftAtMs: Long, nowMs: Long): Boolean {
+    if (nowMs - leftAtMs >= RESULTS_DAY_KEPT_MS) return true
+    fun espnDay(ms: Long) = java.time.Instant.ofEpochMilli(ms).atZone(SportsResults.EASTERN).toLocalDate()
+    return espnDay(leftAtMs) != espnDay(nowMs)
+}
 
 /**
  * The day ‹ (older) or › ([newer]) steps to from [current] among [days] (V2 P4: ← → on the title's date);

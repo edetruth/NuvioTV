@@ -178,7 +178,7 @@ internal fun SportsLiveResultsView(
     var stageHasFocus by remember { mutableStateOf(false) }
     // The date too: at US Eastern midnight Today becomes a new day, a new list.
     val selectedDate = state.dates.firstOrNull { it.daysAgo == state.daysAgo }?.date
-    val listKey = "${state.daysAgo}|$selectedDate|${state.selectedSport?.id.orEmpty()}|${state.selectedLeague.orEmpty()}"
+    val listKey = "${state.daysAgo}|$selectedDate|${state.selectedSport?.id.orEmpty()}|${state.selectedLeague.orEmpty()}|${state.freshOpens}"
     val currentListKey by rememberUpdatedState(listKey)
     // The list (by its key) that holds focus; kept when that list goes because its key changed.
     var focusedListKey by remember { mutableStateOf<String?>(null) }
