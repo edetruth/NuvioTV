@@ -175,7 +175,9 @@ class SportsLiveGameViewModel internal constructor(
     /** A college league's AP ranks by team id (BUG18), for every standings row. */
     private val loadRanks: suspend (EspnLeague) -> Map<String, Int> = { emptyMap() },
     /** The summary read under Scores Off after Reveal (live.20): no feed-health entry, no disk copy. */
-    private val loadSummaryScoresOff: suspend (EspnLeague, String) -> GameSummaryLoad = loadSummary
+    private val loadSummaryScoresOff: suspend (EspnLeague, String) -> GameSummaryLoad = loadSummary,
+    /** Saves a report (#172) asked for by its trigger: [SportsLiveReporter.report]. */
+    private val report: (String) -> Unit = {}
 ) : ViewModel() {
 
     @Inject
@@ -183,7 +185,8 @@ class SportsLiveGameViewModel internal constructor(
         summaries: GameSummaryRepository,
         prefs: SportsLivePreferencesDataStore,
         protection: SpoilerProtectionStore,
-        rankings: CollegeRankingsRepository
+        rankings: CollegeRankingsRepository,
+        reporter: SportsLiveReporter
     ) : this(
         request = SportsLiveGameRequests.take(),
         // Parsing a summary (hundreds of KB of JSON) stays off the main thread (#107).
@@ -200,7 +203,8 @@ class SportsLiveGameViewModel internal constructor(
         loadRanks = rankings::ranks,
         loadSummaryScoresOff = { league, eventId ->
             withContext(Dispatchers.Default) { summaries.load(league, eventId, scoresOff = true) }
-        }
+        },
+        report = reporter::report
     )
 
     private val ranks = MutableStateFlow<Map<String, Int>>(emptyMap())
@@ -368,6 +372,11 @@ class SportsLiveGameViewModel internal constructor(
 
     fun selectSection(section: GameSection) {
         page.update { it.copy(selected = section) }
+    }
+
+    /** More… → Report a problem on the Game page (TV QA: remotes with no Play/Pause or Info to hold). */
+    fun reportProblem() {
+        report("Hold OK › More… › Report a problem (game page)")
     }
 
     /** Follow [side]'s team, or unfollow every followed team that is that side. */

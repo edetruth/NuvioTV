@@ -387,6 +387,11 @@ fun SportsLiveGameScreen(
                         onOpenTeam()
                     }
                 }
+            },
+            // TV QA: the one way to report on a remote with no Play/Pause or Info to hold.
+            onReport = {
+                menuOpen = false
+                viewModel.reportProblem()
             }
         )
     }

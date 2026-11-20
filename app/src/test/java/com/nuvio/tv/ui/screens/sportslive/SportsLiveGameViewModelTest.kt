@@ -56,6 +56,8 @@ class SportsLiveGameViewModelTest {
     private val requests = mutableListOf<String>()
     private var nextLoad: () -> GameSummaryLoad = { GameSummaryLoad.Loaded(palaceSummary, final = true) }
 
+    private val reports = mutableListOf<String>()
+
     private fun TestScope.viewModel(request: SportsLiveGameRequest?) = SportsLiveGameViewModel(
         request = request,
         loadSummary = { league: EspnLeague, id: String ->
@@ -72,8 +74,17 @@ class SportsLiveGameViewModelTest {
         loadSummaryScoresOff = { league: EspnLeague, id: String ->
             requests += "off ${league.path}/$id"
             nextLoad()
-        }
+        },
+        report = { reports += it }
     ).also { vm -> backgroundScope.launch { vm.uiState.collect {} } }
+
+    @Test
+    fun `Report a problem in the Game page's More saves one report through the reporter`() = runTest(mainDispatcherRule.dispatcher) {
+        val viewModel = viewModel(null)
+        viewModel.reportProblem()
+        runCurrent()
+        assertEquals(listOf("Hold OK › More… › Report a problem (game page)"), reports)
+    }
 
     @Test
     fun `Watch with another game shows for a live game and pairs only when pressed`() = runTest(mainDispatcherRule.dispatcher) {
