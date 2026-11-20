@@ -29,6 +29,11 @@ internal object EspnFixtures {
     /** Hand-trimmed SAMPLE (labelled in the file): a playoff round of TBD slots, scheduled, without competitors (#70). */
     const val NFL_TBD_PLAYOFFS_SAMPLE = "espn_nfl_tbd_playoffs_sample.json"
 
+    /** ger.1, esp.2 and soccer/all (four games, goal details dropped) on 2026-11-20, captured ~20:45Z: Bayern 1-1 Cologne and FC Andorra 1-3 Leganés final. */
+    const val GER1_20261120 = "espn_ger1_20261120.json"
+    const val ESP2_20261120 = "espn_esp2_20261120.json"
+    const val SOCCER_ALL_20261120 = "espn_soccer_all_20261120.json"
+
     val CAF_QUAL = EspnLeague("soccer", "caf.nations_qual")
     val ENG1 = EspnLeague("soccer", "eng.1")
 

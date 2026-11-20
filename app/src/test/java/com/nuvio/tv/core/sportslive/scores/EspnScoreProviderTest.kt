@@ -349,4 +349,44 @@ class EspnScoreProviderTest {
         assertEquals(listOf("https://example.invalid/apis/site/v2/sports/basketball/nba/scoreboard?dates=20261115&limit=1000"), requested)
     }
 
+    @Test
+    fun `a game ESPN sends with odds null is read and never fails its feed`() = runTest {
+        // TV report, live.20 (2026-11-20 ~21:50Z): ESPN sends "odds": [null] on these finished games; the parse threw,
+        // so ger.1, esp.2 and soccer/all failed whole and their games stayed LIVE with no score.
+        val friday = LocalDate.of(2026, 11, 20)
+        val ger1 = EspnLeague("soccer", "ger.1")
+        val bundesliga = provider(respond(200, EspnFixtures.json(EspnFixtures.GER1_20261120))).scoreboard(ger1, friday)
+        assertFalse(bundesliga.failed)
+        val bayern = bundesliga.events.single { it.eventId == "401884736" }
+        assertEquals("Bayern Munich", bayern.homeName)
+        assertEquals("FC Cologne", bayern.awayName)
+        assertEquals(ScoreState.POST, bayern.state)
+        assertTrue(bayern.isFinal)
+        assertEquals(1, bayern.homeScore)
+        assertEquals(1, bayern.awayScore)
+        assertNull(bayern.spread)
+
+        val esp2 = EspnLeague("soccer", "esp.2")
+        val andorra = provider(respond(200, EspnFixtures.json(EspnFixtures.ESP2_20261120))).scoreboard(esp2, friday)
+            .events.single { it.eventId == "401883112" }
+        assertEquals("FC Andorra", andorra.homeName)
+        assertEquals(1, andorra.homeScore)
+        assertEquals(3, andorra.awayScore)
+        assertEquals(ScoreState.POST, andorra.state)
+
+        val all = provider(respond(200, EspnFixtures.json(EspnFixtures.SOCCER_ALL_20261120))).scoreboard(EspnLeagueMap.SOCCER_ALL, friday)
+        assertFalse(all.failed)
+        assertEquals(setOf("401882805", "401884736", "401876395", "401883112"), all.events.map { it.eventId }.toSet())
+        assertEquals("esp.2", all.events.single { it.eventId == "401883112" }.leagueSlug)
+    }
+
+    @Test
+    fun `one event ESPN sends in an unreadable shape is skipped, its feed's other games kept`() {
+        // The first game's competitors list starts with a null entry: reading it throws; the other three games stay.
+        val json = EspnFixtures.json(EspnFixtures.SOCCER_ALL_20261120).replaceFirst("\"competitors\": [", "\"competitors\": [null, ")
+        val dto = EspnFixtures.moshi.adapter(EspnScoreboardDto::class.java).fromJson(json)!!
+        val events = EspnScoreProvider.toSnapshots(dto, EspnLeagueMap.SOCCER_ALL)
+        assertEquals(3, events.size)
+        assertTrue(events.none { it.eventId == dto.events!!.first().id })
+    }
 }

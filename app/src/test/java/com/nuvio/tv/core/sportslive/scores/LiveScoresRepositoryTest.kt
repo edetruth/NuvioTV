@@ -1519,4 +1519,45 @@ class LiveScoresRepositoryTest {
         assertNull(stripped.home.record)
         assertNull(stripped.home.form)
     }
+
+    // --- TV QA live.20 (2026-11-20): finished soccer games left LIVE with no score ---
+
+    private val ger1 = EspnLeague("soccer", "ger.1")
+    private val esp2 = EspnLeague("soccer", "esp.2")
+
+    private fun nov20Feeds(feed: ScoreFeed): ScoreboardResult = when (feed.league) {
+        EspnLeagueMap.SOCCER_ALL -> ScoreboardResult(EspnFixtures.events(EspnFixtures.SOCCER_ALL_20261120, EspnLeagueMap.SOCCER_ALL))
+        ger1 -> ScoreboardResult(EspnFixtures.events(EspnFixtures.GER1_20261120, ger1))
+        esp2 -> ScoreboardResult(EspnFixtures.events(EspnFixtures.ESP2_20261120, esp2))
+        else -> ScoreboardResult(emptyList())
+    }
+
+    @Test
+    fun `Bayern vs Koln and Andorra vs Leganes listed live get ESPN's finals and leave Live`() = runTest {
+        // TV report, live.20 (2026-11-20 ~21:50Z): both final on ESPN, both listed live by their addon, no score shown.
+        provider.respond = ::nov20Feeds
+        val repo = repository("2026-11-20T21:50:00Z")
+        collect(repo)
+        // As the section lists them: the team directory's league tag (Bundesliga), the identified sport word (Soccer).
+        val bayern = item("Bayern vs Köln", "Bundesliga", "2026-11-20T19:30:00Z")
+        val andorra = item("Andorra vs Leganés", "Soccer", "2026-11-20T19:30:00Z", addon = "b")
+        repo.track(SECTION, listOf(bayern, andorra))
+        runCurrent()
+
+        val bayernFinal = repo.scores.value.getValue(bayern.streamKey)
+        assertEquals("401884736", bayernFinal.eventId)
+        assertEquals(ScoreState.POST, bayernFinal.state)
+        assertEquals(ScoreChip.Final("FT", ChipScore(1, 1)), ScoreChips.of(bayern, bayernFinal, ScoresMode.SHOW, revealed = false))
+        val andorraFinal = repo.scores.value.getValue(andorra.streamKey)
+        assertEquals("401883112", andorraFinal.eventId)
+        // "Andorra" is ESPN's home side "FC Andorra": 1-3, never the other way round.
+        assertEquals(ScoreChip.Final("FT", ChipScore(1, 3)), ScoreChips.of(andorra, andorraFinal, ScoresMode.SHOW, revealed = false))
+
+        // Seen final now, past the grace later: both leave Live now (Just ended / Results), as any final does.
+        val ended = com.nuvio.tv.core.sportslive.SportsLiveEndedGames()
+        val seen = ms("2026-11-20T21:50:00Z")
+        ended.confirmedEndedKeys(listOf(bayern, andorra), repo.scores.value, seen)
+        val later = seen + com.nuvio.tv.core.sportslive.SportsLiveEndedGames.GRACE_MS + 60_000L
+        assertEquals(setOf(bayern.streamKey, andorra.streamKey), ended.confirmedEndedKeys(listOf(bayern, andorra), repo.scores.value, later))
+    }
 }

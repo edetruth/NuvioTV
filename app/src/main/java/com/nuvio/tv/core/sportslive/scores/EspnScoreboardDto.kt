@@ -84,8 +84,11 @@ data class EspnCompetitionDto(
     val broadcasts: List<EspnBroadcastDto>? = null,
     /** The event's name (#137): "Players Era 8 - Championship", a rivalry, a tournament round. */
     val notes: List<EspnNoteDto>? = null,
-    /** The betting line where ESPN lists one (#137): a close [EspnOddsDto.spread] means an expected-close game. */
-    val odds: List<EspnOddsDto>? = null
+    /**
+     * The betting line where ESPN lists one (#137): a close [EspnOddsDto.spread] means an expected-close game. ESPN
+     * sends `"odds": [null]` for many games (2026-11-20: finished ger.1, esp.2 and soccer/all games), so an entry may be null.
+     */
+    val odds: List<EspnOddsDto?>? = null
 )
 
 @JsonClass(generateAdapter = true)

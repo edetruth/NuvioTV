@@ -335,7 +335,11 @@ class EspnScoreProvider internal constructor(
             }
             .build()
 
-        /** Maps a parsed scoreboard to snapshots; an event without an id or two named sides is skipped. */
+        /**
+         * Maps a parsed scoreboard to snapshots; an event without an id or two named sides is skipped, as is one ESPN
+         * sent in a shape it cannot be read in (live.20 TV report: one game's `"odds": [null]` failed the whole feed, so
+         * every game on it, soccer/all included, kept LIVE with no score).
+         */
         internal fun toSnapshots(dto: EspnScoreboardDto, league: EspnLeague): List<ScoreSnapshot> {
             // The feed's own league names ("NBA", "Premier League"); soccer/all lists none.
             val names = dto.leagues.orEmpty().mapNotNull { dtoLeague ->
@@ -343,7 +347,13 @@ class EspnScoreProvider internal constructor(
                 val name = (dtoLeague.abbreviation ?: dtoLeague.name)?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
                 slug to name
             }.toMap()
-            val snapshots = dto.events.orEmpty().mapNotNull { event -> toSnapshot(event, league, names) }
+            val snapshots = dto.events.orEmpty().mapNotNull { event ->
+                try {
+                    toSnapshot(event, league, names)
+                } catch (e: RuntimeException) {
+                    null
+                }
+            }
             // Some soccer/all events carry no league link; a sibling of the same ESPN league names the
             // slug, so a women's or youth game without a link keeps its qualifier ("Liga F" → esp.w.1).
             val slugs = snapshots.asSequence()
@@ -399,7 +409,7 @@ class EspnScoreProvider internal constructor(
                 seasonType = event.season?.type,
                 broadcasts = broadcastsOf(competition),
                 headline = competition.notes.orEmpty().firstNotNullOfOrNull { it.headline?.trim()?.takeIf(String::isNotEmpty) },
-                spread = competition.odds.orEmpty().firstNotNullOfOrNull { it.spread }
+                spread = competition.odds.orEmpty().firstNotNullOfOrNull { it?.spread }
             )
         }
 
