@@ -27,6 +27,11 @@ class SportsLiveDuplicateCorpusTest {
 
     private val nba = TeamDirectory().apply {
         put(EspnLeagueMap.NBA, TeamDirectory.parse(EspnFixtures.json("espn_teams_nba_20261118.json"), EspnFixtures.moshi)!!, fetchedAt = 1L)
+        put(
+            EspnLeagueMap.COLLEGE_BASKETBALL,
+            TeamDirectory.parse(EspnFixtures.json("espn_teams_cbb_20261118.json"), EspnFixtures.moshi)!!,
+            fetchedAt = 1L
+        )
     }
 
     /** One case: copies as (title, genres), and how many rows they must make. */
@@ -40,6 +45,13 @@ class SportsLiveDuplicateCorpusTest {
         // Seen on the emulator (Seattle vs Salt Lake, MLS and untagged): ids from one copy's league, names decide.
         Case("one copy tagged, the other untagged", 1,
             copy("LA Clippers vs San Antonio Spurs", "NBA"), copy("LA Clippers vs San Antonio Spurs")),
+        // The emulator sweep (live.18): an NCAAM copy and an unmarked College copy of the same two schools.
+        Case("NCAAM and College", 1, copy("Duke vs Gonzaga", "NCAAM"), copy("LIVE: Duke Blue Devils vs Gonzaga Bulldogs", "COLLEGE")),
+        Case("KK Crvena zvezda and FC Barcelona Basquet", 1,
+            copy("FC Barcelona Basquet vs KK Crvena zvezda", "Basketball", "Euroleague"),
+            copy("Barcelona vs Crvena Zvezda Beograd", "BASKETBALL")),
+        Case("East Texas A and M under its old name", 1,
+            copy("California Golden Bears vs Texas A&M–Commerce Lions", "Basketball"), copy("California vs East Texas A and M", "NCAAM")),
         Case("Qatar and Panama Sub-17 and U17", 1,
             copy("Qatar Sub-17 vs Panamá Sub-17", "Football"), copy("LIVE: Qatar U17 x Panamá U17"), copy("Qatar U17 vs Panama U17", "Soccer")),
         Case("Argentina U17", 1,

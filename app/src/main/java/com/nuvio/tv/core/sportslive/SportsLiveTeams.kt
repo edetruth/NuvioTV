@@ -24,7 +24,8 @@ object SportsLiveTeams {
     private val CLUB_SUFFIXES = setOf("fc", "sc", "cf", "afc")
     // Leading club tags ("AC Milan", "AS Roma", "VfB Stuttgart", "1. FC Köln"): addons and ESPN differ
     // on them. "SC" and "CA" are left alone ("SC State" is a college).
-    private val CLUB_PREFIXES = setOf("fc", "afc", "cf", "ac", "as", "ss", "ssc", "rc", "cd", "sv", "vfb", "vfl", "tsg")
+    // Basketball clubs' "KK", "BC", "BK" (live.18: "KK Crvena zvezda" is "Crvena Zvezda Beograd"'s club).
+    private val CLUB_PREFIXES = setOf("fc", "afc", "cf", "ac", "as", "ss", "ssc", "rc", "cd", "sv", "vfb", "vfl", "tsg", "kk", "bc", "bk")
     // "Celtics [HD]", "76ers (2026-11-10 19:00:05)": a trailing bracketed group is not part of the name.
     private val TRAILING_GROUP = Regex("""\s*[\[(][^\[\]()]*[\])]\s*$""")
 

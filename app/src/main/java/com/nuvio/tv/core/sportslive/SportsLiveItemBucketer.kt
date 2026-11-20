@@ -352,9 +352,11 @@ object SportsLiveItemBucketer {
         val viewB = idView(b, directory)
         if (SportsLiveTeams.knownSport(viewA) == null || SportsLiveTeams.knownSport(viewB) == null) return SPORT_UNKNOWN
         if (!sportsAgree(viewA, viewB)) return "sport mismatch"
-        val genders = EspnLeagueMap.saysWomen(viewA) != EspnLeagueMap.saysWomen(viewB) ||
-            saysWomenCompetition(viewA) != saysWomenCompetition(viewB) || saysMen(viewA) != saysMen(viewB)
-        if (genders) return "gender rule"
+        // A women's copy is never one game with a copy that does not say women's; "NCAAM" and an unmarked "College"
+        // copy of the same two schools are (live.18: the sweep's most common split).
+        val womenA = EspnLeagueMap.saysWomen(viewA) || saysWomenCompetition(viewA)
+        val womenB = EspnLeagueMap.saysWomen(viewB) || saysWomenCompetition(viewB)
+        if (womenA != womenB || EspnLeagueMap.otherGender(viewA, viewB)) return "gender rule"
         if (!sameTime(viewA, viewB, nowMs)) return "start window"
         return null
     }
@@ -379,7 +381,7 @@ object SportsLiveItemBucketer {
             IdVerdict.UNKNOWN -> when {
                 sameGame(a, b, nowMs) -> null
                 !sportsAgree(a, b) -> "no team id, sport mismatch"
-                EspnLeagueMap.otherGender(a, b) || saysMen(a) != saysMen(b) -> "no team id, gender rule"
+                EspnLeagueMap.otherGender(a, b) -> "no team id, gender rule"
                 !sameTime(a, b, nowMs) -> "no team id, start window"
                 else -> "no team id, names differ"
             }

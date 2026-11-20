@@ -97,7 +97,9 @@ object SportsLiveTeamAliases {
             "fgcu" to listOf("florida gulf coast"),
             "uic" to listOf("illinois chicago"),
             "umbc" to listOf("maryland baltimore county"),
-            "utrgv" to listOf("texas rio grande valley", "ut rio grande valley")
+            "utrgv" to listOf("texas rio grande valley", "ut rio grande valley"),
+            // Renamed in 2024: addons still write the old name (live.18).
+            "east texas a and m" to listOf("texas a and m commerce", "east texas a and m lions", "texas a and m commerce lions")
         )
 
     /**
