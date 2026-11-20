@@ -267,7 +267,7 @@ fun SportsLiveScreen(
     val replaysTabItems = uiState.tabs[SportsLiveTab.REPLAYS].orEmpty()
     LaunchedEffect(scores, scoresMode, revealed, protection, replayMatches, replaysTabItems) {
         val saved = protection.savedReplayKeys(replaysTabItems, replayMatches)
-        viewModel.setBoardScores(SportsLiveBoardScores(scores, scoresMode, revealed, protection, saved))
+        viewModel.setBoardScores(SportsLiveBoardScores(scores, scoresMode, revealed, protection, saved, replayMatches))
     }
 
     // The hover preview's one player: it plays while the preview does, and is freed the moment the

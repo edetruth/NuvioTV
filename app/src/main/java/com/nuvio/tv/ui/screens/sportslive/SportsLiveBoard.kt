@@ -17,6 +17,7 @@ import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.core.sportslive.scores.SpoilerProtection
 import com.nuvio.tv.core.sportslive.scores.WhyTag
 import com.nuvio.tv.domain.model.FollowedTeam
+import com.nuvio.tv.core.sportslive.scores.GameDay
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveTab
 import java.time.ZoneId
@@ -29,7 +30,9 @@ data class SportsLiveBoardScores(
     /** Spoiler protection (#151): a Just ended game's kept final is stamped with it too. */
     val protection: SpoilerProtection = SpoilerProtection(),
     /** Replays of games saved for later, by card key: listed first under Saved for later (#151). */
-    val savedReplays: Set<String> = emptySet()
+    val savedReplays: Set<String> = emptySet(),
+    /** Replays' own ESPN games, by card key: the day a replay is listed under (BUG14, [GameDay]). */
+    val replayMatches: Map<String, ScoreSnapshot> = emptyMap()
 )
 
 /**
@@ -134,7 +137,9 @@ data class SportsLiveBoard(
             val agenda = when {
                 rows == null -> null
                 tab == SportsLiveTab.UPCOMING -> SportsLiveAgenda.of(rows, inputs.clockMs, zone)
-                tab == SportsLiveTab.REPLAYS -> SportsLiveAgenda.ofReplays(rows, inputs.clockMs, zone, scores.savedReplays)
+                tab == SportsLiveTab.REPLAYS -> SportsLiveAgenda.ofReplays(rows, inputs.clockMs, zone, scores.savedReplays) {
+                    scores.replayMatches[it.streamKey] ?: scores.scores[it.streamKey]
+                }
                 else -> null
             }
             val items = agenda?.items ?: rows?.map { it.item } ?: inputs.items

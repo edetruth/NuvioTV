@@ -3,7 +3,9 @@ package com.nuvio.tv.ui.screens.sportslive
 import androidx.compose.runtime.Immutable
 import com.nuvio.tv.core.sportslive.GameStatus
 import com.nuvio.tv.core.sportslive.alerts.GameReminders
+import com.nuvio.tv.core.sportslive.scores.GameDay
 import com.nuvio.tv.core.sportslive.scores.GamesToWatch
+import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.domain.model.SportsLiveItem
 import java.time.Instant
 import java.time.LocalDate
@@ -168,9 +170,16 @@ data class SportsLiveAgenda(val days: List<AgendaDay>, val slots: List<AgendaSlo
          * Replays by day (V2 P4, #90): Today, Yesterday, then each earlier date, newest first, and within a day
          * newest first (by time, then as listed); replays with no date close the list under Other replays.
          * One slot per day: replays have no time-slot headers. The replays of games saved for later ([saved], by
-         * card key, #151) come first, under Saved for later, newest first.
+         * card key, #151) come first, under Saved for later, newest first. A replay's day is [GameDay]'s (BUG14): its
+         * ESPN game's ([matchOf]) when matched, as on its Game page and Results.
          */
-        fun ofReplays(rows: List<ScoreboardRow>, nowMs: Long, zone: ZoneId, saved: Set<String> = emptySet()): SportsLiveAgenda {
+        fun ofReplays(
+            rows: List<ScoreboardRow>,
+            nowMs: Long,
+            zone: ZoneId,
+            saved: Set<String> = emptySet(),
+            matchOf: (SportsLiveItem) -> ScoreSnapshot? = { null }
+        ): SportsLiveAgenda {
             val today = Instant.ofEpochMilli(nowMs).atZone(zone).toLocalDate()
             val days = ArrayList<AgendaDay>()
             val slots = ArrayList<AgendaSlot>()
@@ -183,14 +192,19 @@ data class SportsLiveAgenda(val days: List<AgendaDay>, val slots: List<AgendaSlo
                 savedRows.forEach { games += AgendaGame(it, days.lastIndex, slots.lastIndex) }
             }
             val rest = if (savedRows.isEmpty()) rows else rows.filterNot { it.item.streamKey in saved }
-            val dated = rest.withIndex().filter { it.value.item.startMs != null }
-                .sortedWith(compareByDescending<IndexedValue<ScoreboardRow>> { it.value.item.startMs }.thenBy { it.index })
+            // A replay dated ahead (a clock or zone slip) still reads as Today.
+            val dayOf = rest.associate { row -> row.item.streamKey to GameDay.of(row.item, matchOf(row.item), zone)?.let { minOf(it, today) } }
+            val dated = rest.withIndex().filter { dayOf[it.value.item.streamKey] != null }
+                .sortedWith(
+                    compareByDescending<IndexedValue<ScoreboardRow>> { dayOf[it.value.item.streamKey] }
+                        .thenByDescending { it.value.item.startMs }
+                        .thenBy { it.index }
+                )
                 .map { it.value }
-            val undated = rest.filter { it.item.startMs == null }
+            val undated = rest.filter { dayOf[it.item.streamKey] == null }
             var lastDate: LocalDate? = null
             dated.forEach { row ->
-                // A replay dated ahead (a clock or zone slip) still reads as Today.
-                val date = minOf(Instant.ofEpochMilli(row.item.startMs!!).atZone(zone).toLocalDate(), today)
+                val date = dayOf.getValue(row.item.streamKey)!!
                 if (date != lastDate) {
                     days += AgendaDay(replayDayKindOf(date, today), date)
                     slots += AgendaSlot(days.lastIndex, null, 0)
