@@ -980,6 +980,8 @@ internal fun PlayerRuntimeController.saveWatchProgressInternal(position: Long, d
     }
     val parentContentId = contentId?.takeIf { it.isNotEmpty() } ?: return
     val parentContentType = contentType?.takeIf { it.isNotEmpty() } ?: return
+    // Sports & Live games and replays are not movies: no Continue Watching entry (BUG15, see sportsLiveKeepsWatchProgress).
+    if (!com.nuvio.tv.ui.screens.sportslive.sportsLiveKeepsWatchProgress(parentContentId)) return
 
     if (position < 1000) return
 

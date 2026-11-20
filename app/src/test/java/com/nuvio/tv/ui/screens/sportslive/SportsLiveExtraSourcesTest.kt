@@ -51,6 +51,15 @@ class SportsLiveExtraSourcesTest {
     @After
     fun tearDown() = SportsLiveExtraSources.reset()
 
+    @Test
+    fun `a Sports and Live playback keeps no upstream watch progress, other content does`() {
+        SportsLiveExtraSources.markSportsPlayback("replay")
+
+        assertFalse(sportsLiveKeepsWatchProgress("replay"))
+        assertTrue(sportsLiveKeepsWatchProgress("tt0111161"))
+        assertTrue(sportsLiveKeepsWatchProgress(null))
+    }
+
     // --- holder ---
 
     @Test

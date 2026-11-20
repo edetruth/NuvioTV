@@ -501,3 +501,11 @@ internal fun honoursAutoPlayFilters(settings: PlayerSettings): Boolean =
         settings.streamAutoPlaySource != StreamAutoPlaySource.ALL_SOURCES ||
         settings.streamAutoPlaySelectedAddons.isNotEmpty() ||
         settings.streamAutoPlaySelectedPlugins.isNotEmpty()
+
+/**
+ * BUG15: whether the full player keeps upstream watch progress (Continue Watching, sync, Google TV's Watch Next) for
+ * [contentId]. Not for a Sports & Live game or replay: it would go in as a "Movie" under the addon's id, and Home would
+ * fill it from the addon's own name, blurb and art (which may carry the score, and mislabeled a tennis replay as
+ * MotoGP). Live streams have no duration, so they also saved a fake 5%. Sports has its own resume and replay places.
+ */
+fun sportsLiveKeepsWatchProgress(contentId: String?): Boolean = !SportsLiveExtraSources.isSportsPlayback(contentId)
