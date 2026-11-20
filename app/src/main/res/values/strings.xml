@@ -485,7 +485,7 @@
     <string name="sports_live_setting_real_time_scores_help">Scores the moment ESPN has them, with no delay, also while a game plays. Your stream runs about a minute behind, so other games\' scores can come before the picture. The game you watch never shows our score.</string>
     <string name="sports_live_scores_title">Scores</string>
     <string name="sports_live_setting_scores">Scores</string>
-    <string name="sports_live_setting_scores_subtitle">Live and final scores on game cards. Never show stops all score checks.</string>
+    <string name="sports_live_setting_scores_subtitle">Live and final scores on game cards. Never show: no scores are shown or kept; only start times are checked.</string>
     <string name="sports_live_scores_show">Show</string>
     <string name="sports_live_scores_hide_until_focused">Hide until I reveal</string>
     <string name="sports_live_scores_off">Never show</string>
@@ -3811,14 +3811,14 @@
     <string name="sports_live_state_empty_day_line">No finals were played that day</string>
     <!-- More… as a sheet over the stage (#134). -->
     <string name="sports_live_team_pages">Team pages…</string>
-    <string name="sports_live_hide_from_live_now">Hide from Live Now</string>
+    <string name="sports_live_hide_from_live_now">Hide this</string>
     <string name="sports_live_hidden_toast">Hidden: %1$s</string>
     <string name="sports_live_hidden_toast_line">Undo in Settings → More → Hidden titles</string>
     <string name="sports_live_hide_this">Hide this</string>
     <!-- Settings → More → Hidden (#134). -->
     <string name="sports_live_setting_hidden">Hidden titles</string>
     <string name="sports_live_setting_hidden_subtitle">OK shows the title again</string>
-    <string name="sports_live_setting_hidden_empty">Nothing hidden. More… → Hide from Live Now takes a title off Live Now.</string>
+    <string name="sports_live_setting_hidden_empty">Nothing hidden. More… → Hide this takes a title off your lists.</string>
     <string name="sports_live_setting_hidden_show">Show</string>
     <string name="sports_live_follow">Follow %1$s</string>
     <string name="sports_live_unfollow">Unfollow %1$s</string>
@@ -4020,7 +4020,7 @@
     <string name="sports_live_setting_pip_system_subtitle">Your TV\'s own picture-in-picture switch for this app</string>
     <string name="sports_live_setting_catalogs_subtitle">Which addon catalogs feed Sports &amp; Live. OK cycles Auto, Included, Excluded</string>
     <!-- Settings → Sports & Live V2 (#134 phase 6): one help line, On/Off switches, why a row is off (#89). -->
-    <string name="sports_live_setting_scores_help">Show: scores everywhere · Hide until I reveal: a score shows when you rest on its game for 1 s or pick Reveal · Never show: no scores on lists or alerts, and no score checks; a game\'s page still shows its result if you pick Reveal.</string>
+    <string name="sports_live_setting_scores_help">Show: scores everywhere · Hide until I reveal: a score shows when you rest on its game for 1 s or pick Reveal · Never show: no scores are shown or kept, only start times are checked; a game\'s page still shows its result if you pick Reveal.</string>
     <string name="sports_live_section_setup">Setup</string>
     <string name="sports_live_setting_run_setup">Run setup again</string>
     <string name="sports_live_setting_run_setup_subtitle">Pick your sports, teams and how scores show, one step at a time</string>
@@ -4046,7 +4046,7 @@
     <string name="sports_live_setup_scores_my_teams">Only my teams</string>
     <string name="sports_live_setup_scores_my_teams_help">Your teams\' scores stay hidden until you watch or pick Reveal result. Other games show theirs.</string>
     <string name="sports_live_setup_scores_hide_help">Hidden until you rest on a game for 1 s or pick Reveal.</string>
-    <string name="sports_live_setup_scores_off_help">No scores on lists or alerts, and no score checks. A game\'s page shows its result only if you pick Reveal.</string>
+    <string name="sports_live_setup_scores_off_help">No scores are shown or kept; only start times are checked. A game\'s page shows its result only if you pick Reveal.</string>
     <string name="sports_live_setup_sample_home" translatable="false">Celtics</string>
     <string name="sports_live_setup_sample_away" translatable="false">Knicks</string>
     <string name="sports_live_setup_delay_seconds">%1$d s</string>
