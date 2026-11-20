@@ -15,6 +15,9 @@ import com.nuvio.tv.core.sportslive.SportsLiveGameWatch
 import com.nuvio.tv.core.sportslive.SportsLiveKickoffWait
 import com.nuvio.tv.data.repository.SportsLiveKickoffProbe
 import com.nuvio.tv.core.sportslive.SportsLiveLinkErrors
+import com.nuvio.tv.core.sportslive.SportsLiveReadyMark
+import com.nuvio.tv.core.sportslive.SportsLiveGameReadiness
+import com.nuvio.tv.core.sportslive.SportsLiveLinkSpeed
 import com.nuvio.tv.core.sportslive.SportsLiveRecoveryCandidates
 import com.nuvio.tv.core.sportslive.SportsLiveRecoveryLadder
 import com.nuvio.tv.core.sportslive.SportsLiveSourceCooldown
@@ -68,6 +71,9 @@ internal fun PlayerRuntimeController.recordSportsSourceFirstFrame() {
             SportsLiveWorkingLinks.shared.startedPlaying(contentId.orEmpty(), it)
             // A game tried and failed plays after all: the tried games may be offered again (#138 follow-up).
             com.nuvio.tv.core.sportslive.SportsLiveTriedGames.shared.onPlaying(contentId.orEmpty())
+            // #147: this addon's links start this fast for the game; the game is ✓ ready.
+            SportsLiveLinkSpeed.shared.recordStart(contentId, it.addonName, System.currentTimeMillis() - sportsAttemptStartedAtMs)
+            SportsLiveGameReadiness.shared.set(contentId.orEmpty(), SportsLiveReadyMark.READY)
         }
     }
     val key = currentSportsSourceKey() ?: return
@@ -153,6 +159,8 @@ internal fun PlayerRuntimeController.trySportsLiveFailoverAfterError(
         // A link that failed to start, hit a fatal error or froze is skipped for this game for a
         // while, unless it is known to work and this is its only recent failure (#65, #138).
         SportsLiveWorkingLinks.shared.failed(contentId.orEmpty(), currentSportsStream()?.getStreamUrl(), problem)
+        // #147: a link that never showed a frame counts against its addon's starts for this game.
+        if (!hasRenderedFirstFrame) SportsLiveLinkSpeed.shared.recordFailure(contentId, currentAddonName)
     } else if (recordFailure) {
         // No decoder for it: not held against the link, but the stream lists still say it didn't work (#156).
         SportsLiveLinkMarks.shared.failed(contentId.orEmpty(), currentSportsStream()?.getStreamUrl(), problem)

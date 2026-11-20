@@ -285,6 +285,9 @@ class SportsLiveSettingsViewModel @Inject constructor(
     fun resetStreamMemory() {
         SportsLiveSourceReliability.clear()
         com.nuvio.tv.core.sportslive.SportsLiveLinkMarks.shared.clear()
+        // #147: which links start fast, and which games were checked ready or without a working stream.
+        com.nuvio.tv.core.sportslive.SportsLiveLinkSpeed.shared.clear()
+        com.nuvio.tv.core.sportslive.SportsLiveGameReadiness.shared.clear()
     }
 
     fun unfollow(team: FollowedTeam) {

@@ -61,7 +61,8 @@ internal object SportsLiveSecondGame {
      * "Next live game" after [current] failed (#138 follow-up; the player's error screen, a dual pane): the next of
      * [lineup]'s live games forward from [current] (wrapping), never one over ([finishedKeys]: ended games and those
      * marked with no working stream) nor one [tried] and failed this session ([current] included), so two dead games
-     * never send the viewer back and forth. A game with a known-good link ([knownGood]) goes first. Null when every
+     * never send the viewer back and forth. A game with a known-good link ([knownGood]: ✓ ready) goes first; one
+     * checked with no working stream ([noStream] game ids: ⚠, #147) only when no other is left. Null when every
      * game is used up: the viewer is told so, never looped.
      */
     fun nextAfterFailure(
@@ -70,11 +71,13 @@ internal object SportsLiveSecondGame {
         scores: Map<String, ScoreSnapshot>,
         finishedKeys: Set<String>,
         tried: Set<String>,
-        knownGood: (SportsLiveItem) -> Boolean = { false }
+        knownGood: (SportsLiveItem) -> Boolean = { false },
+        noStream: Set<String> = emptySet()
     ): SportsLiveItem? {
-        val left = candidates(current, lineup, scores, finishedKeys)
+        val untried = candidates(current, lineup, scores, finishedKeys)
             .filter { item -> item.id !in tried && item.alternates.none { it.id in tried } }
-        if (left.isEmpty()) return null
+        if (untried.isEmpty()) return null
+        val left = untried.filterNot { it.id in noStream }.ifEmpty { untried }
         val here = lineup.indexOfFirst { it.streamKey == current.streamKey }
         val forward = if (here < 0) {
             left

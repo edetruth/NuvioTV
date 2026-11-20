@@ -11,6 +11,8 @@ import com.nuvio.tv.ui.screens.sportslive.SportsLiveEndCard
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import com.nuvio.tv.core.sportslive.SportsLiveReadyMark
+import com.nuvio.tv.core.sportslive.SportsLiveGameReadiness
 import com.nuvio.tv.core.sportslive.displayName
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -413,7 +415,11 @@ class SportsLiveDualViewModel internal constructor(
             scores = emptyMap(),
             finishedKeys = endedKeys() + finishedKeys,
             tried = SportsLiveTriedGames.shared.ids(),
-            knownGood = { item -> SportsLiveWorkingLinks.shared.goodStream(item.id) != null }
+            // #147: ✓ ready first; ⚠ no working stream only when no other is left.
+            knownGood = { item ->
+                SportsLiveGameReadiness.shared.of(item) == SportsLiveReadyMark.READY || SportsLiveWorkingLinks.shared.goodStream(item.id) != null
+            },
+            noStream = SportsLiveGameReadiness.shared.marks.value.filterValues { it == SportsLiveReadyMark.NO_STREAM }.keys
         ) ?: return false
         settle(current)
         forgetRecovery(pick)

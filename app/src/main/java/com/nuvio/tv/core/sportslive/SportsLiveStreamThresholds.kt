@@ -88,4 +88,32 @@ object SportsLiveStreamThresholds {
 
     /** The starting card shows its elapsed time from this long after a link starts loading. */
     const val STARTING_ELAPSED_AFTER_MS = 3_000L
+
+    /**
+     * A start's probe race (#147): each addon's best link has this long for its manifest (and its first
+     * media playlist). Manifests opened in 0.85 s (median) and 3.3 s (p90) on 2026-11-18.
+     */
+    const val RACE_PROBE_TIMEOUT_MS = 3_000L
+
+    /** At most this many addons race for one start (#147), one link each. */
+    const val RACE_MAX_ADDONS = 4
+
+    /** A live media playlist whose newest segment is older than this is not live (#110, #147). */
+    const val MEDIA_PLAYLIST_STALE_MS = 10L * 60 * 1000
+
+    /** Check-ahead (#147): the in-player panel checks its other games one at a time, this far apart. */
+    const val CHECK_AHEAD_TRICKLE_MS = 5_000L
+
+    /** Check-ahead: a ✓ or ⚠ (and a check with no verdict) stands this long, then the game is checked again. */
+    const val CHECK_AHEAD_CACHE_MS = 3L * 60 * 1000
+
+    /** Check-ahead: the focused game is checked once focus rested on it this long (not on every row scrolled past). */
+    const val CHECK_AHEAD_FOCUS_DWELL_MS = 600L
+
+    /** Check-ahead: a game's lookup waits this long for its addons; slower ones are skipped (#158). */
+    const val CHECK_AHEAD_LOOKUP_MS = 6_000L
+
+    /** An addon whose median lookup over its last [SLOW_ADDON_SAMPLES] lookups took longer than this is slow (#158). */
+    const val SLOW_ADDON_MS = 6_000L
+    const val SLOW_ADDON_SAMPLES = 5
 }

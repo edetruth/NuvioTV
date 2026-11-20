@@ -12,6 +12,9 @@ import com.nuvio.tv.core.sportslive.identify.SportsLiveTeamIdentity
 import com.nuvio.tv.core.sportslive.identify.TeamIdentityBook
 import com.nuvio.tv.core.sportslive.SportsLiveMySportsScope
 import com.nuvio.tv.core.sportslive.SportsLiveTriedGames
+import com.nuvio.tv.core.sportslive.SportsLiveCheckAhead
+import com.nuvio.tv.core.sportslive.SportsLiveReadyMark
+import com.nuvio.tv.core.sportslive.SportsLiveGameReadiness
 import com.nuvio.tv.core.sportslive.scores.MySports
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import com.nuvio.tv.core.sportslive.scores.TeamDirectory
@@ -147,7 +150,11 @@ class SportsLiveZapViewModel internal constructor(
     // The nothing-live state's Remind me on the upcoming game (#161): reminded now?
     private val toggleReminder: suspend (SportsLiveItem) -> Boolean = { false },
     // What every sports player knows about its game (#161): its snapshot, and a stream stopping at the game's end.
-    private val gameWatch: SportsLiveGameWatch = SportsLiveGameWatch.shared
+    private val gameWatch: SportsLiveGameWatch = SportsLiveGameWatch.shared,
+    // #147: the panel's check-ahead checks with these; null (tests that do not check) checks nothing.
+    checks: SportsLiveCheckAheadChecks? = null,
+    // #147: ✓ ready / ⚠ no working stream, shown on the panel's rows and read by Next live game.
+    private val readiness: SportsLiveGameReadiness = SportsLiveGameReadiness.shared
 ) : ViewModel() {
 
     @Inject constructor(
@@ -158,14 +165,17 @@ class SportsLiveZapViewModel internal constructor(
         repo: SportsLiveRepository,
         liveScores: LiveScoresRepository,
         // My sports (#146); null in tests that do not scope.
-        prefs: SportsLivePreferencesDataStore? = null
+        prefs: SportsLivePreferencesDataStore? = null,
+        // The panel's check-ahead (#147); null in tests that do not check.
+        checks: SportsLiveCheckAheadChecks? = null
     ) : this(
         savedStateHandle, resolver, directDebridResolver, profileManager, repo, liveScores, Dispatchers.Default,
         mySports = prefs?.mySports ?: flowOf(MySports.DEFAULT),
         gameEndAction = prefs?.gameEndAction ?: flowOf(SportsLiveGameEndAction.DEFAULT),
         toggleReminder = { item ->
             prefs?.updateReminders { GameReminders.toggle(it, item, System.currentTimeMillis()) }?.isReminded(item) == true
-        }
+        },
+        checks = checks
     )
 
     private val contentId: String? = savedStateHandle.get<String>("contentId").also { id ->
@@ -245,6 +255,20 @@ class SportsLiveZapViewModel internal constructor(
             ?.let { banner -> if (looking != null && looking.streamKey == resolving.current.streamKey) banner.copy(looking = true) else banner }
             ?: arrived?.banner(switching = false, scores = scores, mode = mode, endedKeys = ended, known = logos)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /**
+     * Check-ahead (#147): while the panel is open, the focused game and the one CH− plays next are checked first, then
+     * the rest one at a time, so rows show ✓ / ⚠ and OK or CH± start on a link known to work.
+     */
+    private val checkAhead: SportsLiveCheckAhead? = checks?.let { c ->
+        SportsLiveCheckAhead(
+            scope = viewModelScope,
+            check = c::check,
+            skip = c::skips,
+            markedAt = { readiness.markedAt(it.id) },
+            onTick = readiness::prune
+        )
+    }
 
     /** OK (or Skip) on the Looking for streams card (#158): the zap moves on now. False when no card shows. */
     fun skipLookup(): Boolean = controller.skip()
@@ -414,8 +438,16 @@ class SportsLiveZapViewModel internal constructor(
         // the next open would start tracking this session's list.
         if (panelSession.value !== shown.session) return@map null
         scoreTracker.update(shown.lineup.list.shown, enabled = shown.lineup.mode != ScoresMode.OFF)
+        // #147: the open panel's playable games, in its order, for the check-ahead (the game playing left out).
+        checkAhead?.update(shown.state.rows.filter { it.zappable && it.item.streamKey != shown.state.currentKey }.map { it.item })
+        checkAhead?.next(controller.nextTarget(contentId, forward = true))
         shown.state
     }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /** The open panel's ✓ ready / ⚠ no working stream marks (#147), by stream key; none for a game with no mark. */
+    val panelReadiness: StateFlow<Map<String, SportsLiveReadyMark>> = combine(panel, readiness.marks) { state, _ ->
+        state?.rows.orEmpty().mapNotNull { row -> readiness.of(row.item)?.let { row.item.streamKey to it } }.toMap()
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
 
     // Hide until focused: rows reveal only once the user has pressed a key in the panel, so opening it
     // (focus lands on the game playing) never reveals a score by itself.
@@ -424,6 +456,10 @@ class SportsLiveZapViewModel internal constructor(
     fun onPanelRowFocus(key: String?) {
         focusedRowKey = key
         if (panelKeyPressed) reveal.onFocus(key)
+        // #147: the focused game is checked first (never the game playing).
+        val state = panel.value
+        val current = state?.currentKey
+        checkAhead?.focus(state?.rows?.firstOrNull { it.item.streamKey == key && key != current }?.item)
     }
 
     /** Panel rows revealed under Hide until focused (for tests). */
@@ -710,7 +746,9 @@ class SportsLiveZapViewModel internal constructor(
             scores = scores,
             finishedKeys = finished,
             tried = tried.ids(),
-            knownGood = { item -> workingLinks.goodStream(item.id) != null }
+            // #147: ✓ ready (a check, a race, a first frame) or a link that played; ⚠ only when no other is left.
+            knownGood = { item -> readiness.of(item) == SportsLiveReadyMark.READY || workingLinks.goodStream(item.id) != null },
+            noStream = noStreamIds()
         )
         if (next == null) {
             _nextExhausted.value = true
@@ -719,6 +757,9 @@ class SportsLiveZapViewModel internal constructor(
         _nextExhausted.value = false
         return controller.pick(contentId, next, lineupItems)
     }
+
+    /** Game ids marked ⚠ no working stream (#147). */
+    private fun noStreamIds(): Set<String> = readiness.marks.value.filterValues { it == SportsLiveReadyMark.NO_STREAM }.keys
 
     /** Try again on "No other live game is playing right now": the tried games may be tried again. */
     internal fun retryNextLiveGame(): Boolean {
@@ -773,6 +814,7 @@ class SportsLiveZapViewModel internal constructor(
         panelChip.value = openingChip(session)
         panelSession.value = session
         _panelOpen.value = true
+        checkAhead?.open()
         viewModelScope.launch {
             try {
                 repo.load(force = false, includeChannels = false)
@@ -789,6 +831,8 @@ class SportsLiveZapViewModel internal constructor(
         if (!_panelOpen.value) return false
         _panelOpen.value = false
         panelSession.value = null
+        // #147: no check runs while the panel is closed.
+        checkAhead?.close()
         // #164: the next open (and CH± meanwhile) takes the fresh order.
         frozenOrder = null
         // Untracked now, and the next open starts from no cards rather than this list.

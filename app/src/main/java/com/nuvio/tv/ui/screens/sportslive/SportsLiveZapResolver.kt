@@ -5,19 +5,26 @@ import com.nuvio.tv.core.debrid.DirectDebridResolver
 import com.nuvio.tv.core.network.NetworkResult
 import com.nuvio.tv.core.player.StreamAutoPlaySelector
 import com.nuvio.tv.core.sportslive.SportsLiveAddonFetch
+import com.nuvio.tv.core.sportslive.ProbeVerdict
 import com.nuvio.tv.core.sportslive.SportsLiveDebugTiming
 import com.nuvio.tv.core.sportslive.SportsLiveLinkMarks
+import com.nuvio.tv.core.sportslive.SportsLiveReadyMark
+import com.nuvio.tv.core.sportslive.SportsLiveGameReadiness
+import com.nuvio.tv.core.sportslive.SportsLiveLinkRace
+import com.nuvio.tv.core.sportslive.SportsLiveLinkSpeed
 import com.nuvio.tv.core.sportslive.SportsLiveNoticeEntries
 import com.nuvio.tv.core.sportslive.SportsLiveRecoveryCandidates
 import com.nuvio.tv.core.sportslive.SportsLiveSourceCooldown
 import com.nuvio.tv.core.sportslive.SportsLiveSourceLabels
 import com.nuvio.tv.core.sportslive.SportsLiveSourceReliability
+import com.nuvio.tv.core.sportslive.SportsLiveStreamHealth
 import com.nuvio.tv.core.sportslive.SportsLiveStreamThresholds
 import com.nuvio.tv.core.sportslive.SportsLiveWorkingLinks
 import com.nuvio.tv.core.streams.UnplayableStreamFilter
 import com.nuvio.tv.data.local.PlayerSettings
 import com.nuvio.tv.data.local.PlayerSettingsDataStore
 import com.nuvio.tv.data.local.StreamAutoPlayMode
+import com.nuvio.tv.data.repository.SportsLiveLinkProber
 import com.nuvio.tv.data.repository.SportsLiveStreamProbe
 import com.nuvio.tv.domain.model.AddonStreams
 import com.nuvio.tv.domain.model.SportsLiveItem
@@ -25,6 +32,7 @@ import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.domain.model.enabledAddons
 import com.nuvio.tv.domain.repository.AddonRepository
 import com.nuvio.tv.domain.repository.StreamRepository
+import com.nuvio.tv.ui.screens.player.PlayerMediaSourceFactory
 import com.nuvio.tv.ui.screens.sportslive.preview.SportsLivePreviewLookup
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -76,7 +84,9 @@ class SportsLiveZapResolver @Inject constructor(
     private val addonRepository: AddonRepository,
     private val streamProbe: SportsLiveStreamProbe,
     private val directDebridResolver: DirectDebridResolver,
-    private val resolveCache: SportsLiveResolveCache
+    private val resolveCache: SportsLiveResolveCache,
+    // #147: probes a start's best links; null (tests) races nothing.
+    linkProber: SportsLiveLinkProber? = null
 ) {
     companion object {
         /** A lookup with nothing to play gives up after this long (#158); the search goes on in the background. */
@@ -97,6 +107,17 @@ class SportsLiveZapResolver @Inject constructor(
         /** A preview resolve cancelled sooner than this (the hover moved on) spends no budget (C1). */
         const val PREVIEW_FREE_CANCEL_MS = 2_000L
         private const val MAX_PREVIEW_ENTRIES = 200
+
+        /** [prober] probing a link with the url and headers the player opens it with (credentials moved into headers). */
+        private fun probeWith(prober: SportsLiveLinkProber): suspend (Stream) -> ProbeVerdict = { stream ->
+            val url = stream.getStreamUrl()
+            if (url == null) {
+                ProbeVerdict.UNKNOWN
+            } else {
+                val request = PlayerMediaSourceFactory.normalizePlaybackRequest(url, stream.behaviorHints?.proxyHeaders?.request)
+                prober.probe(request.url, request.headers)
+            }
+        }
 
         /**
          * An addon's informational entry, a junk link, or a DRM-protected link this TV cannot play (#166):
@@ -126,6 +147,18 @@ class SportsLiveZapResolver @Inject constructor(
 
     @VisibleForTesting
     internal var nowMs: () -> Long = { System.currentTimeMillis() }
+
+    /** Which links start fast (#147): a game's links are tried in that order. */
+    @VisibleForTesting
+    internal var linkSpeed: SportsLiveLinkSpeed = SportsLiveLinkSpeed.shared
+
+    /** The ✓ / ⚠ marks (#147) a race or a check-ahead sets. */
+    @VisibleForTesting
+    internal var readiness: SportsLiveGameReadiness = SportsLiveGameReadiness.shared
+
+    /** Probes one link (#147), as the player would open it; null: no probes (no race, no check-ahead probe). */
+    @VisibleForTesting
+    internal var probe: (suspend (Stream) -> ProbeVerdict)? = linkProber?.let { probeWith(it) }
 
     /** Per game ([SportsLiveItem.streamKey]): when a hover preview last resolved it. Guarded by [previewLock]. */
     private val previewResolvedAtMs = HashMap<String, Long>()
@@ -457,14 +490,21 @@ class SportsLiveZapResolver @Inject constructor(
         val fetched = mutableListOf<List<Stream>>()
         for ((source, fetch) in sources.zip(fetches)) {
             val streams = try {
-                workingLinks.order(item.id, playablePerSource(item, source, fetch.await().streams))
+                workingLinks.order(item.id, linkSpeed.order(item.id, playablePerSource(item, source, fetch.await().streams)))
             } catch (e: CancellationException) {
                 // A newer game cancelled this fetch: unless this lookup is cancelled too, it found nothing.
                 currentCoroutineContext().ensureActive()
                 emptyList()
             }
-            preferredStream(workingLinks.withoutQuarantined(item.id, streams), settings, installedOrder.toSet())
-                ?.let { return SportsLiveLookup.Found(it) }
+            val fresh = workingLinks.withoutQuarantined(item.id, streams)
+            preferredStream(fresh, settings, installedOrder.toSet())?.let { picked ->
+                // #147: the other sources that already answered race too, one link per addon.
+                val answered = sources.zip(fetches).filter { (other, done) -> other !== source && done.isCompleted && !done.isCancelled }
+                    .flatMap { (other, done) ->
+                        workingLinks.withoutQuarantined(item.id, linkSpeed.order(item.id, playablePerSource(item, other, done.await().streams)))
+                    }
+                return SportsLiveLookup.Found(raced(item, picked, fresh + answered, settings))
+            }
             fetched += streams
         }
         // Then, only when the user's settings do not narrow what may play, the first playable stream.
@@ -560,6 +600,7 @@ class SportsLiveZapResolver @Inject constructor(
         var earlyPickAllowed = false
         var softPassed = false
         var finished = false
+        var fresh: List<Stream> = emptyList()
         // Never forced: a forced fetch cancels other collectors of the same stream session.
         val events = merge(
             streamsOf(item)
@@ -578,14 +619,18 @@ class SportsLiveZapResolver @Inject constructor(
                 }
                 // Links known to work for this game first; quarantined ones only when nothing else plays (#65).
                 // An informational entry or junk link is never picked (C1).
+                // #147: within that, the links that start fastest for this game (or addon) first.
                 val ordered = workingLinks.order(
                     item.id,
-                    StreamAutoPlaySelector.orderAddonStreams(
-                        (last as? NetworkResult.Success)?.data.orEmpty(),
-                        installedOrder
-                    ).flatMap { it.streams }.filterNot(::isNonStream)
+                    linkSpeed.order(
+                        item.id,
+                        StreamAutoPlaySelector.orderAddonStreams(
+                            (last as? NetworkResult.Success)?.data.orEmpty(),
+                            installedOrder
+                        ).flatMap { it.streams }.filterNot(::isNonStream)
+                    )
                 )
-                val fresh = workingLinks.withoutQuarantined(item.id, ordered)
+                fresh = workingLinks.withoutQuarantined(item.id, ordered)
                 val preferred = preferredStream(fresh, settings, installedOrder.toSet())
                 when {
                     finished -> Decision(
@@ -603,7 +648,7 @@ class SportsLiveZapResolver @Inject constructor(
         // A timeout is inconclusive, so it is not reported; the probe would keep the old verdict anyway.
         if (decision != null) last?.let { streamProbe.recordResult(item, it) }
         (last as? NetworkResult.Success)?.data?.let(cooldown::noteNotices)
-        decision?.stream?.let { return SportsLiveLookup.Found(it) }
+        decision?.stream?.let { return SportsLiveLookup.Found(raced(item, it, fresh, settings)) }
         val came = StreamAutoPlaySelector.orderAddonStreams(
             (last as? NetworkResult.Success)?.data.orEmpty(),
             installedOrder
@@ -612,6 +657,152 @@ class SportsLiveZapResolver @Inject constructor(
     }
 
     private class Decision(val stream: Stream?)
+
+    /**
+     * The link a start plays (#147): [picked], unless a race of the best link of each addon among [candidates]
+     * finds another live first. No race when no probe is set, the user's autoplay settings narrow the pick, the
+     * pick is known to work, or fewer than two addons have a link. Every probe result is learned ([learn]).
+     */
+    private suspend fun raced(item: SportsLiveItem, picked: Stream, candidates: List<Stream>, settings: PlayerSettings): Stream {
+        val probe = probe ?: return picked
+        if (honoursAutoPlayFilters(settings) || workingLinks.isGood(item.id, picked.getStreamUrl())) return picked
+        // Only links the player opens as they are; one the app prepares first (debrid, a server) is never probed.
+        val ordered = probeableOf(listOf(picked) + candidates.filter { it != picked && StreamAutoPlaySelector.isPlayable(it) })
+        if (ordered.firstOrNull() != picked) return picked
+        val entrants = SportsLiveLinkRace.entrants(ordered, SportsLiveLinkRace::probeable)
+        if (entrants.isEmpty()) return picked
+        val (winner, results) = SportsLiveLinkRace.race(entrants, SportsLiveStreamThresholds.RACE_PROBE_TIMEOUT_MS, nowMs, probe)
+        learn(item, results)
+        SportsLiveDebugTiming.log {
+            "race entrants=${entrants.size} winner=${winner?.let { SportsLiveDebugTiming.label(it.addonName) } ?: "none"} " +
+                "first=${winner == picked} " + results.joinToString(" ") { "${SportsLiveDebugTiming.label(it.stream.addonName)}=${it.verdict}/${it.ms}" }
+        }
+        if (winner != null) {
+            readiness.set(item.id, SportsLiveReadyMark.READY)
+            return winner
+        }
+        return SportsLiveLinkRace.afterNoWinner(ordered, results, picked)
+    }
+
+    /** [streams] the player opens as they are (#147), in order: only those may be probed. */
+    private suspend fun probeableOf(streams: List<Stream>): List<Stream> = streams.filter { stream ->
+        try {
+            sportsLiveLightPlayable(stream, directDebridResolver)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /**
+     * Probe [results] for [item] teach the link order (#147), losers included; a link probed dead is skipped for a
+     * short while, as one only slow to start is ([SportsLiveWorkingLinks.failed]).
+     */
+    private fun learn(item: SportsLiveItem, results: List<SportsLiveLinkRace.Result>) {
+        results.forEach { result ->
+            when (result.verdict) {
+                ProbeVerdict.OK -> linkSpeed.recordProbe(item.id, result.stream.addonName, ok = true)
+                ProbeVerdict.DEAD -> {
+                    linkSpeed.recordProbe(item.id, result.stream.addonName, ok = false)
+                    workingLinks.failed(item.id, result.stream.getStreamUrl(), SportsLiveStreamHealth.Problem.NO_START)
+                }
+                ProbeVerdict.UNKNOWN -> Unit
+            }
+        }
+    }
+
+    /** Addon keys ([SportsLiveSourceCooldown.keyOf]) the check-ahead leaves alone (#147): rate-limited or slow (#158). */
+    private fun checkAheadSkipped(): Set<String> =
+        cooldown.coolingBaseUrls().mapTo(HashSet(), SportsLiveSourceCooldown::keyOf) + SportsLiveAddonFetch.shared.slowAddonKeys()
+
+    /** True when every source of [item] is on an addon the check-ahead leaves alone: it is not checked (#147). */
+    fun checkAheadSkips(item: SportsLiveItem): Boolean {
+        val skipped = checkAheadSkipped()
+        return (listOf(item) + item.alternates).all { SportsLiveSourceCooldown.keyOf(it.addonBaseUrl) in skipped }
+    }
+
+    /**
+     * The in-player panel's check of [item] (#147): sets its ✓ ready or ⚠ no working stream mark, or none when the
+     * check says nothing for sure. What a lookup already holds (the resolve cache, a search from Live now, a preview
+     * or a zap) costs no request; otherwise its sources not on a rate-limited or slow addon are searched, each for
+     * [SportsLiveStreamThresholds.CHECK_AHEAD_LOOKUP_MS]. The best link of each addon is probed; a live one is
+     * cached for the game, so OK or CH± starts on it. ⚠ only when every source was searched to the end and nothing
+     * playable came back, or every addon's best link was probed dead.
+     */
+    suspend fun checkAhead(item: SportsLiveItem) {
+        val skipped = checkAheadSkipped()
+        val sources = listOf(item) + item.alternates
+        val checkable = sources.filter { SportsLiveSourceCooldown.keyOf(it.addonBaseUrl) !in skipped }
+        if (checkable.isEmpty()) return
+        val settings = playerSettingsDataStore.playerSettings.first()
+        val installedOrder = installedOrder()
+        val cached = resolveCache.get(item.streamKey)?.takeUnless { workingLinks.isQuarantined(item.id, it) }
+        // Only a search of every source can prove no working stream; a cached link alone cannot.
+        var complete = cached == null && checkable.size == sources.size
+        val streams = if (cached != null) {
+            listOf(cached)
+        } else {
+            checkable.flatMap { source ->
+                // A search still running with nothing yet is not reused: it proves nothing.
+                val held = streamRepository.getCachedStreamsFromAllAddons(source.apiType, source.id)
+                    ?.takeIf { answered -> answered.any { it.streams.isNotEmpty() } }
+                val answer = held ?: checkSearch(source, skipped).let { (found, finished) ->
+                    if (!finished) complete = false
+                    found
+                }
+                StreamAutoPlaySelector.orderAddonStreams(answer, installedOrder).flatMap { it.streams }.filterNot(::isNonStream)
+            }
+        }
+        val ordered = workingLinks.withoutQuarantined(item.id, workingLinks.order(item.id, linkSpeed.order(item.id, streams)))
+            .filter(StreamAutoPlaySelector::isPlayable)
+        val picked = preferredStream(ordered, settings, installedOrder.toSet())
+            ?: ordered.firstOrNull()?.takeUnless { honoursAutoPlayFilters(settings) }
+        if (picked == null) {
+            if (complete) readiness.set(item.id, SportsLiveReadyMark.NO_STREAM)
+            return
+        }
+        val probe = probe ?: return
+        val candidates = if (honoursAutoPlayFilters(settings)) listOf(picked) else listOf(picked) + ordered.filter { it != picked }
+        val entrants = SportsLiveLinkRace.entrants(probeableOf(candidates), SportsLiveLinkRace::probeable, minAddons = 1)
+        if (entrants.isEmpty()) return
+        val (winner, results) = SportsLiveLinkRace.race(entrants, SportsLiveStreamThresholds.RACE_PROBE_TIMEOUT_MS, nowMs, probe)
+        learn(item, results)
+        SportsLiveDebugTiming.log {
+            "checkAhead entrants=${entrants.size} outcome=${if (winner != null) "ready" else results.joinToString(",") { it.verdict.name }}"
+        }
+        when {
+            winner != null -> {
+                readiness.set(item.id, SportsLiveReadyMark.READY)
+                resolveCache.put(item.streamKey, winner)
+            }
+            complete && results.size == entrants.size && results.all { it.verdict == ProbeVerdict.DEAD } ->
+                readiness.set(item.id, SportsLiveReadyMark.NO_STREAM)
+        }
+    }
+
+    /**
+     * [source]'s streams for a check-ahead (#147), leaving out the [skipped] addons, within
+     * [SportsLiveStreamThresholds.CHECK_AHEAD_LOOKUP_MS]; and whether the search finished. With nothing to leave
+     * out it is the shared search Live now and the zaps use.
+     */
+    private suspend fun checkSearch(source: SportsLiveItem, skipped: Set<String>): Pair<List<AddonStreams>, Boolean> {
+        SportsLiveAddonFetch.shared.markSports(source.id)
+        val streams = if (skipped.isEmpty()) {
+            streamRepository.getStreamsFromAllAddons(source.apiType, source.id)
+        } else {
+            streamRepository.getStreamsFromAllAddonsExcept(source.apiType, source.id, skipped)
+        }
+        var last: NetworkResult<List<AddonStreams>>? = null
+        val finished = withTimeoutOrNull(SportsLiveStreamThresholds.CHECK_AHEAD_LOOKUP_MS) {
+            streams.collect { last = it }
+            true
+        } == true
+        val result = last
+        if (finished && result != null) streamProbe.recordResult(source, result)
+        (result as? NetworkResult.Success)?.data?.let(cooldown::noteNotices)
+        return (result as? NetworkResult.Success)?.data.orEmpty() to finished
+    }
 
     /** The user's autoplay choice; in MANUAL mode (no autoplay choice exists) the first playable stream. */
     private fun preferredStream(streams: List<Stream>, settings: PlayerSettings, installedNames: Set<String>): Stream? =

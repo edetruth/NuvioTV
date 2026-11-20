@@ -40,6 +40,11 @@ import org.junit.After
 import org.junit.Test
 import com.nuvio.tv.core.sportslive.SportsLiveSourceReliability
 import com.nuvio.tv.core.sportslive.SportsLiveWorkingLinks
+import com.nuvio.tv.core.sportslive.ProbeVerdict
+import com.nuvio.tv.core.sportslive.SportsLiveReadyMark
+import com.nuvio.tv.core.sportslive.SportsLiveGameReadiness
+import com.nuvio.tv.core.sportslive.SportsLiveLinkSpeed
+import com.nuvio.tv.core.sportslive.SportsLiveSourceCooldown
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SportsLiveZapResolverTest {
@@ -51,6 +56,8 @@ class SportsLiveZapResolverTest {
     private var preparationCheckThrows = false
     private var linkNow = 0L
     private val links = SportsLiveWorkingLinks(nowMs = { linkNow })
+    private val speed = SportsLiveLinkSpeed()
+    private val readiness = SportsLiveGameReadiness()
     private val debrid = mockk<DirectDebridResolver>().also {
         coEvery { it.shouldResolveToPlayableStream(any()) } answers {
             if (preparationCheckThrows && firstArg<Stream>() == PREPARE_ALT) error("debrid check failed")
@@ -68,6 +75,8 @@ class SportsLiveZapResolverTest {
         return SportsLiveZapResolver(streams, dataStore, addons, probe, debrid, resolveCache).also {
             it.fetchScope = backgroundScope
             it.workingLinks = links
+            it.linkSpeed = speed
+            it.readiness = readiness
         }
     }
 
@@ -632,6 +641,137 @@ class SportsLiveZapResolverTest {
         links.quarantine(MERGED.id, SD.url)
 
         assertEquals(SD, newResolver().resolve(MERGED))
+    }
+
+    // ---- #147: learned order, the probe race and the check-ahead ----
+
+    private val raceSd = stream(url = "https://cdn.example.invalid/sd.m3u8", name = "Sports 720p")
+    private val raceHd = stream(url = "https://cdn.example.invalid/hd.m3u8", name = "Sports 1080p")
+    private val raceOther = stream(url = "https://other.example.invalid/live.m3u8", name = "Other live", addonName = "Other")
+
+    private fun twoAddons(): Flow<NetworkResult<List<AddonStreams>>> = flowOf(
+        NetworkResult.Loading,
+        NetworkResult.Success(
+            listOf(
+                AddonStreams(addonName = "Sports", addonLogo = null, streams = listOf(raceSd, raceHd)),
+                AddonStreams(addonName = "Other", addonLogo = null, streams = listOf(raceOther))
+            )
+        )
+    )
+
+    /** Probes answer per link after the given delay; every probe started is counted per addon. */
+    private val probed = mutableListOf<String>()
+
+    private fun TestScope.racingResolver(answers: Map<Stream, Pair<Long, ProbeVerdict>>): SportsLiveZapResolver {
+        settings = PlayerSettings(streamAutoPlayMode = StreamAutoPlayMode.MANUAL)
+        return newResolver().also { resolver ->
+            resolver.probe = { link ->
+                probed += link.addonName
+                val (wait, verdict) = answers[link] ?: (0L to ProbeVerdict.UNKNOWN)
+                delay(wait)
+                verdict
+            }
+        }
+    }
+
+    @Test
+    fun `a start races one link per addon and plays the first that proves live`() = runTest {
+        streams.response = { twoAddons() }
+        val resolver = racingResolver(mapOf(raceSd to (1_500L to ProbeVerdict.OK), raceOther to (300L to ProbeVerdict.OK)))
+
+        assertEquals(raceOther, resolver.resolve(ITEM))
+        assertEquals(listOf("Other", "Sports"), probed.sorted())
+        assertEquals(SportsLiveReadyMark.READY, readiness.of(ITEM))
+        // The winner's probe teaches the order; the cancelled loser teaches nothing.
+        assertTrue(speed.rank(ITEM.id, "Other").rate > 0.5)
+        assertEquals(0.5, speed.rank(ITEM.id, "Sports").rate, 1e-9)
+    }
+
+    @Test
+    fun `a dead first link is skipped for a link that may play`() = runTest {
+        streams.response = { twoAddons() }
+        val resolver = racingResolver(mapOf(raceSd to (50L to ProbeVerdict.DEAD), raceOther to (3_500L to ProbeVerdict.OK)))
+
+        // Other never answered in time and Sports' best was dead: the start goes to the next link not found dead.
+        assertEquals(raceHd, resolver.resolve(ITEM))
+        assertTrue(links.isQuarantined(ITEM.id, raceSd.url))
+        assertTrue(speed.rank(ITEM.id, "Sports").rate < 0.5)
+    }
+
+    @Test
+    fun `no race with one addon, under autoplay filters, or for a link known to work`() = runTest {
+        streams.response = { result(raceSd, raceHd) }
+        assertEquals(raceSd, racingResolver(emptyMap()).resolve(ITEM))
+        assertTrue(probed.isEmpty())
+
+        streams.response = { twoAddons() }
+        val filtered = racingResolver(emptyMap())
+        settings = PlayerSettings(streamAutoPlayMode = StreamAutoPlayMode.REGEX_MATCH, streamAutoPlayRegex = "720p")
+        assertEquals(raceSd, filtered.resolve(ITEM))
+        assertTrue(probed.isEmpty())
+
+        val known = racingResolver(emptyMap())
+        links.markGood(ITEM.id, raceSd.url)
+        assertEquals(raceSd, known.resolve(ITEM))
+        assertTrue(probed.isEmpty())
+    }
+
+    @Test
+    fun `links of the addon that starts fastest are tried first`() = runTest {
+        settings = PlayerSettings(streamAutoPlayMode = StreamAutoPlayMode.MANUAL)
+        streams.response = { twoAddons() }
+        val resolver = newResolver()
+        speed.recordFailure("yesterday", "Sports")
+        speed.recordStart("yesterday", "Other", 1_200)
+
+        assertEquals(raceOther, resolver.resolve(ITEM))
+    }
+
+    @Test
+    fun `a check-ahead marks a game ready and caches the live link for OK and CH`() = runTest {
+        streams.response = { twoAddons() }
+        val resolver = racingResolver(mapOf(raceSd to (200L to ProbeVerdict.DEAD), raceOther to (400L to ProbeVerdict.OK)))
+
+        resolver.checkAhead(ITEM)
+
+        assertEquals(SportsLiveReadyMark.READY, readiness.of(ITEM))
+        assertEquals(raceOther, resolveCache.get(ITEM.streamKey))
+        // The zap that follows plays it with no new search.
+        val searches = streams.calls.size
+        assertEquals(raceOther, resolver.resolve(ITEM))
+        assertEquals(searches, streams.calls.size)
+    }
+
+    @Test
+    fun `a check-ahead marks no working stream only after a full search`() = runTest {
+        streams.response = { flowOf(NetworkResult.Loading, success()) }
+        racingResolver(emptyMap()).checkAhead(ITEM)
+        assertEquals(SportsLiveReadyMark.NO_STREAM, readiness.of(ITEM))
+
+        // Every best link probed dead: no working stream either.
+        readiness.clear()
+        streams.response = { twoAddons() }
+        racingResolver(mapOf(raceSd to (10L to ProbeVerdict.DEAD), raceOther to (10L to ProbeVerdict.DEAD))).checkAhead(ITEM)
+        assertEquals(SportsLiveReadyMark.NO_STREAM, readiness.of(ITEM))
+
+        // A search that did not finish says nothing.
+        readiness.clear()
+        streams.response = { flow { emit(NetworkResult.Loading); awaitCancellation() } }
+        racingResolver(emptyMap()).checkAhead(ITEM)
+        assertNull(readiness.of(ITEM))
+    }
+
+    @Test
+    fun `a check-ahead leaves a game on a rate-limited addon alone`() = runTest {
+        streams.response = { twoAddons() }
+        val resolver = racingResolver(mapOf(raceSd to (10L to ProbeVerdict.OK)))
+        resolver.cooldown = SportsLiveSourceCooldown(nowMs = { 0L }).also { it.note(ITEM.addonBaseUrl, "Sports", 5) }
+
+        assertTrue(resolver.checkAheadSkips(ITEM))
+        resolver.checkAhead(ITEM)
+        assertTrue(streams.calls.isEmpty())
+        assertTrue(probed.isEmpty())
+        assertNull(readiness.of(ITEM))
     }
 
     private class FakeStreamRepository : StreamRepository {

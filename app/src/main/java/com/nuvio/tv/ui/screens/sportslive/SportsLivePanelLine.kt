@@ -42,6 +42,7 @@ import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import com.nuvio.tv.R
 import com.nuvio.tv.core.sportslive.GameStatusStrings
+import com.nuvio.tv.core.sportslive.SportsLiveReadyMark
 import com.nuvio.tv.core.sportslive.SportsLiveDisplayText
 import com.nuvio.tv.core.sportslive.scores.GameArtTeam
 import com.nuvio.tv.core.sportslive.scores.TeamDirectory
@@ -160,7 +161,9 @@ internal fun SportsLivePanelLine(
     /** Listed since the panel opened (#164): a "New" tag at its end. */
     isNew: Boolean = false,
     /** Gone from the list since the panel opened (#164): kept in place, dimmed. */
-    gone: Boolean = false
+    gone: Boolean = false,
+    /** What the check-ahead found (#147): ✓ ready or ⚠ no working stream; null: not known, no mark. */
+    readyMark: SportsLiveReadyMark? = null
 ) {
     val strings = rememberGameStatusStrings()
     val kickoff = row.art?.let { kickoffText(it) }
@@ -224,6 +227,7 @@ internal fun SportsLivePanelLine(
                         }
                     }
                     StatusText(line)
+                    if (readyMark != null) ReadyMark(readyMark)
                     val tag = when {
                         watching -> stringResource(R.string.sports_live_panel_watching)
                         isNew -> stringResource(R.string.sports_live_panel_new)
@@ -261,6 +265,19 @@ internal fun SportsLivePanelLine(
             }
         }
     }
+}
+
+/** The check-ahead's mark (#147): a green ✓ when a link is ready, an amber ⚠ when no working stream was found. */
+@Composable
+private fun ReadyMark(mark: SportsLiveReadyMark) {
+    val ready = mark == SportsLiveReadyMark.READY
+    Text(
+        text = stringResource(if (ready) R.string.sports_live_panel_mark_ready else R.string.sports_live_panel_mark_no_stream),
+        style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag),
+        color = if (ready) Colors.ReplayGreen else Colors.WarningAmber,
+        maxLines = 1,
+        softWrap = false
+    )
 }
 
 /**

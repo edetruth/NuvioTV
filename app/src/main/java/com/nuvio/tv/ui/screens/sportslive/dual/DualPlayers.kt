@@ -16,6 +16,7 @@ import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.source.LoadEventInfo
 import androidx.media3.exoplayer.source.MediaLoadData
 import java.io.IOException
+import com.nuvio.tv.core.sportslive.SportsLiveLinkSpeed
 import com.nuvio.tv.core.sportslive.SportsLiveSourceReliability
 import com.nuvio.tv.core.sportslive.SportsLiveSourceReliability.Outcome
 import com.nuvio.tv.core.sportslive.SportsLiveLinkErrors
@@ -146,6 +147,8 @@ internal class DualPlayers(
                     if (!rendered) {
                         rendered = true
                         SportsLiveSourceReliability.record(sourceKey, Outcome.SUCCESS, System.currentTimeMillis() - startedAtMs)
+                        // #147: how fast this addon's link started for the game.
+                        SportsLiveLinkSpeed.shared.recordStart(item.id, stream.addonName, System.currentTimeMillis() - startedAtMs)
                     }
                     onFirstFrame(item, stream)
                 }
@@ -169,6 +172,7 @@ internal class DualPlayers(
                     // A missing decoder is the device's fault, not the source's.
                     val decoderInit = error.isDecoderInitFailure()
                     if (!decoderInit) SportsLiveSourceReliability.record(sourceKey, Outcome.FAILURE)
+                    if (!decoderInit && !rendered) SportsLiveLinkSpeed.shared.recordFailure(item.id, stream.addonName)
                     // A link whose host does not exist is dead: the next link, no retry (#138).
                     val problem = if (!decoderInit && SportsLiveLinkErrors.isDeadHost(error)) {
                         SportsLiveStreamHealth.Problem.DEAD_LINK

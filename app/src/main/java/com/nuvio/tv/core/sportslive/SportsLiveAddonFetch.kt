@@ -32,6 +32,28 @@ class SportsLiveAddonFetch(private val timeoutMs: Long = SportsLiveStreamThresho
     /** Addons (by key) whose meta fallback came back without streams last time: it is not asked again. */
     private val noInlineStreams = HashSet<String>()
 
+    /** Each addon's latest lookup times (#147), by [SportsLiveSourceCooldown.keyOf] its key, the latest last. */
+    private val lookupMs = HashMap<String, ArrayDeque<Long>>()
+
+    /** The addon at [addonKey] answered a sports lookup in [ms] (a timeout counts its whole limit). */
+    fun noteLookupMs(addonKey: String, ms: Long) {
+        if (addonKey.isBlank()) return
+        synchronized(lookupMs) {
+            val times = lookupMs.getOrPut(SportsLiveSourceCooldown.keyOf(addonKey)) { ArrayDeque() }
+            times.addLast(ms)
+            while (times.size > SportsLiveStreamThresholds.SLOW_ADDON_SAMPLES) times.removeFirst()
+        }
+    }
+
+    /**
+     * Keys ([SportsLiveSourceCooldown.keyOf] the base url) of the addons whose median lookup over their last
+     * [SportsLiveStreamThresholds.SLOW_ADDON_SAMPLES] took longer than [SportsLiveStreamThresholds.SLOW_ADDON_MS]
+     * (#158): the in-player check-ahead skips them (#147).
+     */
+    fun slowAddonKeys(): Set<String> = synchronized(lookupMs) {
+        lookupMs.filterValues { times -> times.sorted()[times.size / 2] > SportsLiveStreamThresholds.SLOW_ADDON_MS }.keys.toSet()
+    }
+
     /** [videoId] is a Sports & Live game's: its stream searches use [fetch]. */
     fun markSports(videoId: String) = synchronized(sportsIds) {
         sportsIds.remove(videoId)
@@ -56,6 +78,7 @@ class SportsLiveAddonFetch(private val timeoutMs: Long = SportsLiveStreamThresho
             ?.let { if (it <= 0) Long.MAX_VALUE else it } ?: timeoutMs
         val startedAt = System.currentTimeMillis()
         val result = withTimeoutOrNull(limit) { fetchNow(addonKey, streams, inlineFromMeta) }
+        noteLookupMs(addonKey, System.currentTimeMillis() - startedAt)
         SportsLiveDebugTiming.log {
             val count = (result as? NetworkResult.Success)?.data?.size
             "lookup addon=${SportsLiveDebugTiming.label(label)} ms=${System.currentTimeMillis() - startedAt} " +

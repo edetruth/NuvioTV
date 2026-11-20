@@ -109,6 +109,7 @@ import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapViewModel
 import com.nuvio.tv.ui.screens.sportslive.PanelGuideEntry
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveEndAction
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveEndCardView
+import com.nuvio.tv.core.sportslive.SportsLiveReadyMark
 import com.nuvio.tv.ui.screens.sportslive.TeamLogoSlot
 import com.nuvio.tv.ui.screens.sportslive.rememberTeamLogoPair
 import com.nuvio.tv.ui.screens.sportslive.dual.LocalOpenSportsLiveDual
@@ -166,6 +167,7 @@ internal fun BoxScope.SportsLiveZapOverlay(
     val panelOpen by viewModel.panelOpen.collectAsState()
     BehindLiveIndicator(liveWindow = liveWindow, engine = engine, covered = playerOverlayVisible || panelOpen)
     val panel by viewModel.panel.collectAsState()
+    val panelReadiness by viewModel.panelReadiness.collectAsState()
     val openDual = LocalOpenSportsLiveDual.current
 
     // The last banner, kept on screen while it fades out.
@@ -334,7 +336,8 @@ internal fun BoxScope.SportsLiveZapOverlay(
                 previewsAllowed = previewsAllowed,
                 previewPlayer = previewPlayer,
                 onKey = viewModel::onPanelKey,
-                open = panelOpen
+                open = panelOpen,
+                readiness = panelReadiness
             )
         }
     }
@@ -565,7 +568,9 @@ private fun LiveGamesPanel(
     /** Any key pressed inside the panel (Hide until focused reveals only after one). */
     onKey: () -> Unit,
     /** The panel is open (false while it fades out): only then is lost focus given back. */
-    open: Boolean
+    open: Boolean,
+    /** ✓ ready / ⚠ no working stream by stream key (#147); a game with none has no mark. */
+    readiness: Map<String, SportsLiveReadyMark> = emptyMap()
 ) {
     // #140: the list starts at its top, never scrolled to centre one.
     val listState = rememberLazyListState()
@@ -853,6 +858,8 @@ private fun LiveGamesPanel(
                                         onLongClick = { onLongPick(item) },
                                         onFocus = { lineFocus(item.streamKey, item.streamKey) },
                                         okHint = boxScoreHint.takeIf { item.streamKey in state.boxScores },
+                                        // The game playing's own place shows ▶ Watching, never a mark.
+                                        readyMark = readiness[item.streamKey]?.takeUnless { entry.watching },
                                         modifier = when {
                                             // The game playing's own place: shown, never focused (Now playing is its row).
                                             entry.watching -> Modifier.focusProperties { canFocus = false }

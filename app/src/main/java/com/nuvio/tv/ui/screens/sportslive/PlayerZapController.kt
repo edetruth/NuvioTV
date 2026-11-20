@@ -153,6 +153,10 @@ class PlayerZapController(
         return moved
     }
 
+    /** The game a CH± zap ([forward]: CH−) from the player showing [contentId] would land on first (#147); null when none. */
+    fun nextTarget(contentId: String?, forward: Boolean): SportsLiveItem? =
+        session(contentId)?.let(::ordered)?.step(forward, endedKeys())?.current
+
     /** [session] on the panel's ordered list, when it is known (#142). */
     private fun ordered(session: SportsLiveZapSession): SportsLiveZapSession =
         lineup()?.let(session::withLineup) ?: session
