@@ -26,6 +26,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -39,12 +40,15 @@ import androidx.compose.ui.layout.Measurable
 import androidx.compose.ui.layout.MeasurePolicy
 import androidx.compose.ui.layout.MeasureResult
 import androidx.compose.ui.layout.MeasureScope
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.Icon
@@ -891,7 +895,7 @@ internal fun PanelSides(
  */
 @Composable
 private fun LineTag(tag: String, live: Boolean) {
-    Box(modifier = Modifier.width(PANEL_TAG_COLUMN), contentAlignment = Alignment.CenterStart) {
+    Box(modifier = Modifier.width(LocalPanelTagColumn.current), contentAlignment = Alignment.CenterStart) {
         if (tag.isNotEmpty()) {
             Text(
                 text = tag,
@@ -1078,6 +1082,31 @@ private val PANEL_LINE_RADIUS = 6.dp
 private val PANEL_LINE_ACCENT = 2.dp
 /** Fits [SportsLiveTags.MAX_CHARS] capitals at the Tag size ("FOOTBALL" is about 57 dp), never cut (live.20 F5). */
 private val PANEL_TAG_COLUMN = 62.dp
+
+/**
+ * The panel rows' tag column (TV QA BUG-C follow-up, coordinator decision): as wide as the widest tag the panel shows
+ * ([rememberPanelTagColumn]), so "NCAAM" rows do not keep "FOOTBALL"'s width; [PANEL_TAG_COLUMN] outside a panel.
+ */
+internal val LocalPanelTagColumn = staticCompositionLocalOf { PANEL_TAG_COLUMN }
+
+/**
+ * The tag column for a panel showing [rows]: the widest of their tags ([boardTagText]) at the Tag size, at most
+ * [PANEL_TAG_COLUMN] ([panelTagColumnWidth]); names start at one x on every row still.
+ */
+@Composable
+internal fun rememberPanelTagColumn(rows: List<ScoreboardRow>): Dp {
+    val tags = rows.map { boardTagText(it) }.filter { it.isNotEmpty() }.distinct()
+    val style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag)
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    return remember(tags, style, density) {
+        val widths = tags.map { measurer.measure(it, style, maxLines = 1, softWrap = false).size.width }
+        with(density) { panelTagColumnWidth(widths, PANEL_TAG_COLUMN.roundToPx()).toDp() }
+    }
+}
+
+/** The tag column's width in px: the widest tag's ([widths]), at most [max]; 0 when no row has a tag. */
+internal fun panelTagColumnWidth(widths: List<Int>, max: Int): Int = (widths.maxOrNull() ?: 0).coerceIn(0, max)
 private val PANEL_SIDE_GAP = 5.dp
 private val PANEL_PART_GAP = 5.dp
 

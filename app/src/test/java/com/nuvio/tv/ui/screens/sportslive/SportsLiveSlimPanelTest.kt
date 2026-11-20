@@ -566,6 +566,16 @@ class SportsLiveSlimPanelTest {
     }
 
     @Test
+    fun `the tag column is as wide as the widest tag shown, never wider than FOOTBALL's`() {
+        // "NCAAM" 80 px, "SOCCER" 98, "TENNIS" 90: the column is SOCCER's, not FOOTBALL's 124.
+        assertEquals(98, panelTagColumnWidth(listOf(80, 98, 90), max = 124))
+        // A tag wider than the column's most is held to it (it fits by the tag vocabulary's own rule).
+        assertEquals(124, panelTagColumnWidth(listOf(130), max = 124))
+        // No row with a tag: no column.
+        assertEquals(0, panelTagColumnWidth(emptyList(), max = 124))
+    }
+
+    @Test
     fun `the footer says Ready when the focused row had no room for the chip`() {
         assertEquals("FC Andorra vs Leganés · ▶ Ready", panelFooterText("FC Andorra vs Leganés", true, "▶ Ready", " · "))
         assertEquals("FC Andorra vs Leganés", panelFooterText("FC Andorra vs Leganés", false, "▶ Ready", " · "))
