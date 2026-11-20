@@ -26,7 +26,12 @@ data class ScoreTeam(
     /** Points per period (quarters, halves, periods, innings); empty when the feed has none. */
     val linescores: List<Int>,
     /** The season record ESPN's scoreboard gives ("18-9", soccer "2-1-7"); null when none. */
-    val record: String? = null
+    val record: String? = null,
+    /**
+     * Other names a non-ESPN feed knows the team by (#169: EuroLeague's "Maccabi", "Maccabi Tel Aviv" for
+     * "Maccabi Rapyd Tel Aviv"); matched as its own names are. Empty for ESPN teams.
+     */
+    val alternateNames: List<String> = emptyList()
 )
 
 /** A soccer goal from the scoreboard's `details`. */

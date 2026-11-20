@@ -3,8 +3,10 @@ package com.nuvio.tv.core.di
 import android.content.Context
 import com.nuvio.tv.core.sportslive.scores.EspnFeedHealth
 import com.nuvio.tv.core.sportslive.scores.EspnScoreProvider
+import com.nuvio.tv.core.sportslive.scores.EuroLeagueScoreSource
 import com.nuvio.tv.core.sportslive.scores.GameSummarySource
 import com.nuvio.tv.core.sportslive.scores.PlayerCardSource
+import com.nuvio.tv.core.sportslive.scores.RoutedScoreProvider
 import com.nuvio.tv.core.sportslive.scores.ScoreProvider
 import com.nuvio.tv.core.sportslive.scores.TeamPageSource
 import com.squareup.moshi.Moshi
@@ -42,8 +44,17 @@ object ScoresModule {
         health
     )
 
+    /** EuroLeague and EuroCup's own feed (#169), with its failures in Scores status. */
     @Provides
-    fun provideScoreProvider(espn: EspnScoreProvider): ScoreProvider = espn
+    @Singleton
+    fun provideEuroLeagueScoreSource(okHttpClient: OkHttpClient, moshi: Moshi, health: EspnFeedHealth): EuroLeagueScoreSource =
+        EuroLeagueScoreSource(okHttpClient, moshi, health)
+
+    /** Scoreboards: ESPN's, and the leagues ESPN does not cover from their own feeds (#169). */
+    @Provides
+    @Singleton
+    fun provideScoreProvider(espn: EspnScoreProvider, euroLeague: EuroLeagueScoreSource): ScoreProvider =
+        RoutedScoreProvider(espn, listOf(euroLeague))
 
     @Provides
     fun provideGameSummarySource(espn: EspnScoreProvider): GameSummarySource = espn

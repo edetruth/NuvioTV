@@ -1113,15 +1113,16 @@ class LiveScoresRepositoryTest {
     @Test
     fun `USA vs Haiti is looked up on ESPN's Eastern day and matched on the live feed`() = runTest {
         val live = EspnFixtures.events(EspnFixtures.SOCCER_ALL_LIVE_20261117, EspnLeagueMap.SOCCER_ALL)
-        provider.respond = { feed -> if (feed.league == EspnLeagueMap.SOCCER_ALL) ScoreboardResult(live) else ScoreboardResult(emptyList()) }
+        val nationsLeague = EspnLeague("soccer", "concacaf.nations.league")
+        provider.respond = { feed -> if (feed.league == nationsLeague) ScoreboardResult(live) else ScoreboardResult(emptyList()) }
         mySports.value = MySports(mapOf(MySport.SOCCER to setOf(MyLeague.PREMIER_LEAGUE)))
         val repo = repository("2026-11-18T00:50:00Z", zone = ZoneId.of("Europe/London"))
         collect(repo)
         val card = item("USA vs Haiti", "Soccer", "2026-11-18T00:00:00Z", genres = listOf("CONCACAF Nations League"))
         repo.track(SECTION, listOf(card))
         runCurrent()
-        // Kicked off 19:00 ET on the 17th: ESPN's 17th, first on soccer/all, then on its own league's feed.
-        assertEquals(ScoreFeed(EspnLeagueMap.SOCCER_ALL, LocalDate.of(2026, 11, 17)), provider.calls.first())
+        // Kicked off 19:00 ET on the 17th: ESPN's 17th, on its own league's feed (#169: ESPN's league index names it).
+        assertEquals(ScoreFeed(nationsLeague, LocalDate.of(2026, 11, 17)), provider.calls.first())
         assertTrue(provider.calls.all { it.date == LocalDate.of(2026, 11, 17) })
         assertEquals("401929766", repo.scores.value.getValue(card.streamKey).eventId)
     }

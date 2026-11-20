@@ -66,8 +66,9 @@ class EspnLeagueMapTest {
         assertEquals(listOf("soccer/all"), slugs("Soccer", "Celtic vs Rangers"))
         assertEquals(listOf("soccer/all"), slugs("Football", "Arsenal vs Chelsea"))
         assertEquals(listOf("soccer/all"), slugs(null, "Football: Egyptian Premier League"))
-        assertEquals(listOf("soccer/all"), slugs("Soccer", "2. Bundesliga: HSV vs Schalke"))
-        assertEquals(listOf("soccer/all"), slugs("Soccer", "CAF Champions League"))
+        // A competition ESPN's league index names has its own feed (#169).
+        assertEquals(listOf("soccer/ger.2"), slugs("Soccer", "2. Bundesliga: HSV vs Schalke"))
+        assertEquals(listOf("soccer/caf.champions"), slugs("Soccer", "CAF Champions League"))
     }
 
     @Test
@@ -84,12 +85,14 @@ class EspnLeagueMapTest {
         assertEquals(emptyList<String>(), slugs("Hockey", "Toronto vs Boston", "PWHL"))
         assertEquals(emptyList<String>(), slugs("Hockey", "AHL: Toronto Marlies vs Belleville"))
         assertEquals(emptyList<String>(), slugs("Ice Hockey", "ECHL"))
-        assertEquals(emptyList<String>(), slugs("Basketball", "NBA G League: Stockton vs Santa Cruz"))
+        // The G League has its own feed (#169), never the NBA's.
+        assertEquals(listOf("basketball/nba-development"), slugs("Basketball", "NBA G League: Stockton vs Santa Cruz"))
         assertEquals(
             listOf("basketball/womens-college-basketball", "basketball/wnba"),
             slugs("Basketball", "Women's Basketball: Lakers")
         )
-        assertEquals(emptyList<String>(), slugs("Soccer", "Womens Super League"))
+        // A women's competition ESPN lists (#169) is its own women's feed.
+        assertEquals(listOf("soccer/eng.w.1"), slugs("Soccer", "Womens Super League"))
         assertEquals(listOf("hockey/nhl"), slugs("Hockey", "Maple Leafs vs Bruins"))
     }
 

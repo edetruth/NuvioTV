@@ -6,6 +6,8 @@ import com.nuvio.tv.core.sportslive.scores.FollowTarget
 import com.nuvio.tv.core.sportslive.scores.FollowTargets
 import com.nuvio.tv.core.sportslive.scores.GameSection
 import com.nuvio.tv.core.sportslive.SportsLiveSportInference
+import com.nuvio.tv.core.sportslive.identify.SportsLiveTeamIdentity
+import com.nuvio.tv.core.sportslive.identify.TeamIdentityBook
 import com.nuvio.tv.core.sportslive.SportsLiveMySportsScope
 import com.nuvio.tv.core.sportslive.SportsLiveTriedGames
 import com.nuvio.tv.core.sportslive.scores.MySports
@@ -261,7 +263,10 @@ class SportsLiveZapViewModel internal constructor(
     private val lineup: StateFlow<PanelLineup?> = if (!hasSession) {
         MutableStateFlow(null)
     } else {
-        val all = combine(repo.latest, repo.claimedCatalogs, repo.endedKeys, repo.followedTeams) { load, claimed, ended, followed ->
+        // A game's teams identified in the background (#168, by the section) list it under its sport here too.
+        val all = combine(
+            repo.latest, repo.claimedCatalogs, repo.endedKeys, repo.followedTeams, TeamIdentityBook.shared.revision
+        ) { load, claimed, ended, followed, _ ->
             liveGamesPanelItems(
                 items = load?.items.orEmpty(),
                 claimedKeys = claimed.mapTo(HashSet()) { it.key },
@@ -270,10 +275,11 @@ class SportsLiveZapViewModel internal constructor(
                 nowMs = System.currentTimeMillis(),
                 addonOrder = claimed.map { it.addon.id }.distinct()
                 // Unrouted two-team games take their teams' league here too (P4), as in the section's lists.
-            ).map { SportsLiveSportInference.infer(it, TeamDirectory.shared) } to followed
+            ).map { SportsLiveTeamIdentity.identified(SportsLiveSportInference.infer(it, TeamDirectory.shared)) } to followed
         }.flowOn(computeDispatcher)
         // The games under the chip are the ones listed and tracked: My sports' (#146), or every game under All sports.
-        val items = combine(all, panelChip, mySports) { (list, followed), chip, sports ->
+        // Scoped again when the team directory changes (#159: a league's team list landing tells games apart).
+        val items = combine(all, panelChip, mySports, logos.revision) { (list, followed), chip, sports, _ ->
             val scoped = SportsLiveMySportsScope.scope(list, sports)
             val base = if (chip == SportsLiveUiState.ALL_SPORTS_FILTER) list else scoped
             PanelList(list, chip, filterPanelItems(base, chip), followed, scoped)

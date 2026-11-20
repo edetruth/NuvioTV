@@ -127,6 +127,16 @@ class TeamDirectory(private val maxLeagues: Int = MAX_LEAGUES) {
     }
 
     /**
+     * True when [name] is a team of one of [leagues] (#159: a game My sports cannot place by its league is
+     * placed by its teams). Kept per name, leagues and directory generation (no regex work per call).
+     */
+    fun holdsAny(name: String, leagues: List<EspnLeague>): Boolean = holdsAnyMemo(Triple(name, leagues, generation))
+
+    private val holdsAnyMemo = Memo<Triple<String, List<EspnLeague>, Long>, Boolean>(HOLDING_MEMO) { (name, among, _) ->
+        among.any { resolve(it, name) != null }
+    }
+
+    /**
      * Both sides' teams for [item] ([first], [second] in its title order): only when every league the card
      * can be on ([EspnLeagueMap], with its college fallback) has a list, and exactly one of them resolves
      * both sides. A card no listed league covers (`soccer/all`, individual sports) gets none.

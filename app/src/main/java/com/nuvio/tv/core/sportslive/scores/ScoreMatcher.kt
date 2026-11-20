@@ -239,7 +239,7 @@ class ScoreMatcher(
     /** A competitor's names, qualifiers removed: STRONG keys, the WEAK location key, suffix-rule names. */
     private class Competitor(team: ScoreTeam, slugQualifier: String?) {
         private val names: List<Pair<String, String?>> =
-            listOfNotNull(team.displayName, team.shortDisplayName, team.name).map { splitQualifier(fold(it)) }
+            (listOfNotNull(team.displayName, team.shortDisplayName, team.name) + team.alternateNames).map { splitQualifier(fold(it)) }
 
         val qualifier: String? = names.firstNotNullOfOrNull { it.second } ?: slugQualifier
 

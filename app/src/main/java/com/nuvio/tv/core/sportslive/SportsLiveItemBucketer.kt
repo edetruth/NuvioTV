@@ -14,6 +14,7 @@ import kotlin.math.abs
 object SportsLiveItemBucketer {
     // Every load merges the same names again (#152). First, so it is set before any other initialiser runs.
     private val sideKeysOf = Memo(8_192) { team: String -> sideKeysUncached(team) }
+    private val wordsOf = Memo(4_096) { text: String -> wordsUncached(text) }
 
     /** How long after a timed start an events-catalog item still counts as live. */
     private const val LIVE_WINDOW_MS = 4 * 60 * 60 * 1000L
@@ -184,7 +185,8 @@ object SportsLiveItemBucketer {
      * not replays) whose canonical team pairs match either way round (never a "TBD vs TBD" placeholder; youth
      * markers and accents fold, #165: "Panamá Sub-17" = "Panama U17", never "Panama"), their sports agree
      * ([sportsAgree]: aliases fold, an unknown one agrees), neither is a women's game the other's men's
-     * ([EspnLeagueMap.otherGender], #163), and they are at one time
+     * ([EspnLeagueMap.otherGender], #163; a copy on a women's competition makes an unmarked copy's sides women's,
+     * #174), and they are at one time
      * ([sameTime]). Each copy is compared with a group's primary; items that merge with nothing are
      * returned unchanged and in place. A merged card shows the first known sport
      * ([SportsLiveTeams.knownSport]) of its sources, and the first timed start among them when its
@@ -252,8 +254,18 @@ object SportsLiveItemBucketer {
         SportsLiveTeams.knownSport(primary) ?: alternates.firstNotNullOfOrNull(SportsLiveTeams::knownSport) ?: primary.sport
 
     private fun sameGame(a: SportsLiveItem, b: SportsLiveItem, nowMs: Long): Boolean {
-        val x = a.teams ?: return false
-        val y = b.teams ?: return false
+        val teamsA = a.teams ?: return false
+        val teamsB = b.teams ?: return false
+        // A copy on a women's competition is never one game with a men's copy; with a copy that names no gender, both
+        // are read as women's sides (#174): "Arsenal vs OL Lyonnes" (Football) is "Arsenal W vs OL Lyonnes W" (UWCL).
+        val menA = saysMen(a)
+        val menB = saysMen(b)
+        val womenA = saysWomenCompetition(a)
+        val womenB = saysWomenCompetition(b)
+        if ((womenA && !menA && menB && !womenB) || (womenB && !menB && menA && !womenA)) return false
+        val asWomen = (womenA || womenB) && !menA && !menB
+        val x = if (asWomen) SportsLiveTeams.asWomen(teamsA) else teamsA
+        val y = if (asWomen) SportsLiveTeams.asWomen(teamsB) else teamsB
         // Both sides must match. When both match only by prefix ("Brisbane W" / "Brisbane Heat Women" vs
         // "Hobart W" / "Hobart Hurricanes Women"), both sports must be known as well, so an unknown-sport
         // "Adelaide vs Brisbane" never takes "Adelaide United vs Brisbane Roar".
@@ -269,6 +281,42 @@ object SportsLiveItemBucketer {
         val second = SportsLiveTeams.mergeMatch(away, otherAway)
         if (second == SportsLiveTeams.MergeMatch.NONE) return false
         return first == SportsLiveTeams.MergeMatch.FULL || second == SportsLiveTeams.MergeMatch.FULL || sportsKnown
+    }
+
+    // A women's competition, as a whole word of a copy's sport, genres or catalog (#174). Not its title: there
+    // "Women" or "W" is a side's marker, which [SportsLiveTeams.mergeMatch] already compares.
+    private val WOMEN_COMPETITION_WORDS = setOf(
+        "women", "womens", "ladies", "uwcl", "nwsl", "wsl", "awsl", "ncaaw", "wbb", "wcbb", "wnba", "wbbl",
+        "frauen", "femenina", "feminino", "feminine", "femminile"
+    )
+
+    // A men's game, as a whole word anywhere on a copy, its title included.
+    private val MEN_WORDS = setOf("men", "mens", "ncaam", "mbb")
+
+    private fun saysWomenCompetition(item: SportsLiveItem): Boolean =
+        says(item.sport, WOMEN_COMPETITION_WORDS) || says(item.catalogName, WOMEN_COMPETITION_WORDS) ||
+            item.meta.genres.any { says(it, WOMEN_COMPETITION_WORDS) }
+
+    private fun saysMen(item: SportsLiveItem): Boolean =
+        says(item.meta.name, MEN_WORDS) || says(item.sport, MEN_WORDS) || says(item.catalogName, MEN_WORDS) ||
+            item.meta.genres.any { says(it, MEN_WORDS) }
+
+    private fun says(text: String?, words: Set<String>): Boolean = text != null && wordsOf(text).any { it in words }
+
+    /** [text]'s words, lowercase and without accents ("Women's" → women, s); plain string work, no regex (#152). */
+    private fun wordsUncached(text: String): Set<String> {
+        val words = HashSet<String>()
+        val word = StringBuilder()
+        for (c in SportsLiveTeams.foldAccents(text)) {
+            if (c.isLetterOrDigit()) {
+                word.append(c.lowercaseChar())
+            } else if (word.isNotEmpty()) {
+                words += word.toString()
+                word.setLength(0)
+            }
+        }
+        if (word.isNotEmpty()) words += word.toString()
+        return words
     }
 
     /**

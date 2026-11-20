@@ -28,6 +28,9 @@ import com.nuvio.tv.core.sportslive.scores.TeamFollows
 import com.nuvio.tv.core.sportslive.scores.TeamLogoBook
 import com.nuvio.tv.core.sportslive.scores.TeamDirectory
 import com.nuvio.tv.core.sportslive.SportsLiveSportInference
+import com.nuvio.tv.core.sportslive.identify.SportsLiveTeamIdentity
+import com.nuvio.tv.core.sportslive.identify.TeamIdentifier
+import com.nuvio.tv.core.sportslive.identify.TeamIdentityBook
 import com.nuvio.tv.core.sportslive.SportsLiveChannelRegions
 import com.nuvio.tv.core.sportslive.scores.WhyTag
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
@@ -98,6 +101,8 @@ class SportsLiveViewModel internal constructor(
     logoRevision: Flow<Int> = flowOf(0),
     /** A two-team card with no league, as its league's card when its teams name exactly one (#132 P4). */
     private val inferSport: (SportsLiveItem) -> SportsLiveItem = { it },
+    /** Offers the tab's games of unknown sport for a background team lookup (#168); called only while on screen. */
+    private val identify: (List<SportsLiveItem>) -> Unit = {},
     /** My sports (#146): Live now, Upcoming and Replays list only its games, unless All sports is picked. */
     mySports: Flow<MySports> = flowOf(MySports.DEFAULT),
     /** Titles hidden from Live Now (#134): left off Live Now's list. */
@@ -117,7 +122,8 @@ class SportsLiveViewModel internal constructor(
         prefs: SportsLivePreferencesDataStore,
         liveScores: LiveScoresRepository,
         resolveCache: SportsLiveResolveCache,
-        manifestFetcher: SportsLiveManifestFetcher
+        manifestFetcher: SportsLiveManifestFetcher,
+        identifier: TeamIdentifier
     ) : this(
         repo = repo,
         // The zap's pick, which joins the stream search the ended-games probe started on settle; a
@@ -150,8 +156,10 @@ class SportsLiveViewModel internal constructor(
                 SportsLiveManifestVerdict.requestFor(item, stream, resolvedAtMs)
             }
         },
-        logoRevision = TeamLogoBook.shared.revision,
-        inferSport = { item -> SportsLiveSportInference.infer(item, TeamDirectory.shared) },
+        // A game's teams identified in the background (#168) rebuild the lists as a learned logo does.
+        logoRevision = combine(TeamLogoBook.shared.revision, TeamIdentityBook.shared.revision) { logos, identities -> logos * 31 + identities },
+        inferSport = { item -> SportsLiveTeamIdentity.identified(SportsLiveSportInference.infer(item, TeamDirectory.shared)) },
+        identify = identifier::offer,
         mySports = prefs.mySports,
         hiddenTitles = prefs.hiddenTitles,
         hideTitle = prefs::hideTitle,
@@ -610,6 +618,9 @@ class SportsLiveViewModel internal constructor(
             if (tab in SCOPED_TABS) SportsLiveMySportsScope.scope(items, mySports) else items
         }
         val fullItems = tabs[selection.tab].orEmpty()
+        // #168: the listed games of unknown sport (shown under All sports, counted as hidden under My sports) are
+        // looked up in the background, only while the section is on screen and only for Live now and Upcoming.
+        if (screenVisible && (selection.tab == SportsLiveTab.LIVE_NOW || selection.tab == SportsLiveTab.UPCOMING)) identify(fullItems)
         val scopedItems = scopedTabs[selection.tab].orEmpty()
         val mySportsScoped = scopedItems.size < fullItems.size
         val tabItems = if (allSports) fullItems else scopedItems

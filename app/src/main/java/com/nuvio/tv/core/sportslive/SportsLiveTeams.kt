@@ -187,9 +187,10 @@ object SportsLiveTeams {
      * Whether [a] and [b] name one side for merging copies of a game (#153): [FULL][MergeMatch.FULL] when they
      * [match][matches] or are equal once a women's marker is folded ("Brisbane Heat W" = "Brisbane Heat Women");
      * [PREFIX][MergeMatch.PREFIX] when one's words begin the other's and the shorter has a significant word
-     * ("Adelaide" / "Adelaide 36ers", "Brisbane W" / "Brisbane Heat Women"). Never across a (W)/U21 qualifier,
-     * nor between two different known teams. "Manchester United" and "Manchester City" are [NONE][MergeMatch.NONE].
-     * Not for My Teams: a followed "Adelaide 36ers" must not star every "Adelaide".
+     * ("Adelaide" / "Adelaide 36ers", "Brisbane W" / "Brisbane Heat Women"), or every word of the shorter is in
+     * the other and two of them are significant ("Virtus Bologna" / "Virtus Pallacanestro Bologna", #174). Never
+     * across a (W)/U21 qualifier, nor between two different known teams. "Manchester United" and "Manchester
+     * City" are [NONE][MergeMatch.NONE]. Not for My Teams: a followed "Adelaide 36ers" must not star every "Adelaide".
      */
     fun mergeMatch(a: String, b: String): MergeMatch {
         val x = mergeForms(a)
@@ -200,8 +201,19 @@ object SportsLiveTeams {
         val (shorter, longer) = if (x.words.size <= y.words.size) x to y else y to x
         val prefix = shorter.words == longer.words.subList(0, shorter.words.size) &&
             shorter.words.any(::isSignificantWord)
-        return if (prefix) MergeMatch.PREFIX else MergeMatch.NONE
+        // One word set inside the other (#174). Two significant words, so filler alone ("Racing Club") never stands
+        // for a club; two clubs of one city differ by a word ("City" / "United"), so neither is inside the other.
+        val subset = shorter.words.count(::isSignificantWord) >= 2 && longer.words.containsAll(shorter.words)
+        return if (prefix || subset) MergeMatch.PREFIX else MergeMatch.NONE
     }
+
+    /**
+     * [teams] read as a women's game (#174): a side with no (W)/U21 qualifier gets the women's marker ("Arsenal"
+     * as "Arsenal W"). For a copy of a game on a women's competition, compared with one that names no gender.
+     */
+    fun asWomen(teams: TeamPair): TeamPair = TeamPair(asWomenSide(teams.home), asWomenSide(teams.away))
+
+    private fun asWomenSide(side: String): String = if (mergeForms(side).qualifier == null) "$side W" else side
 
     /** A side's words for [mergeMatch], its (W)/U21 qualifier ("w", "u21") apart and its known canonical team. */
     private class MergeForm(val words: List<String>, val qualifier: String?, val canonical: String?)
@@ -221,6 +233,8 @@ object SportsLiveTeams {
             else -> null
         }
         if (qualifier != null) words.removeAt(words.lastIndex)
+        // A club suffix before the marker ("Arsenal FC W", #174) goes as it does before "(W)".
+        while (words.size > 1 && words.last() in CLUB_SUFFIXES) words.removeAt(words.lastIndex)
         return MergeForm(words, qualifier, canonicalOrNull(normalised))
     }
 

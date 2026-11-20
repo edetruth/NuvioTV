@@ -68,11 +68,16 @@ object SportsLiveLeagueTags {
         tag("SPL", "Scottish Premiership", "sco.1"),
         tag("SUPER LIG", "Turkish Super Lig", "tur.1"),
         tag("SAUDI PRO", "Saudi Pro League", "ksa.1"),
+        tag("LIGA 1 ROU", "Romanian Liga 1", "Romanian Liga I", "rou.1"),
         tag("LIGA MX", "Mexican Liga MX", "mex.1"),
         tag("BRAZIL A", "Brazilian Serie A", "Brasileirão", "Brasileirao", "bra.1"),
         tag("ARG LIGA", "Argentine Liga Profesional de Fútbol", "Argentine Liga Profesional", "arg.1"),
         tag("MLS", "Major League Soccer", "usa.1"),
         tag("NWSL", "National Women's Soccer League", "usa.nwsl"),
-        tag("WSL", "English Women's Super League", "Women's Super League", "eng.w.1")
+        tag("WSL", "English Women's Super League", "Women's Super League", "eng.w.1"),
+        // Basketball (#169)
+        tag("EUROLEAGUE", "EuroLeague", "Turkish Airlines EuroLeague", "euroleague"),
+        tag("EUROCUP", "EuroCup", "BKT EuroCup", "eurocup"),
+        tag("G LEAGUE", "NBA G League", "nba-development")
     ).flatten().toMap()
 }

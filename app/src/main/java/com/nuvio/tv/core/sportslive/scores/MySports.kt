@@ -99,6 +99,13 @@ enum class MyLeague(
         return slugs?.containsMatchIn(league.league) == true
     }
 
+    /**
+     * The ESPN league whose team list holds this league's teams (#159): its feed, or a soccer competition's own
+     * slug ("soccer/eng.1"); null for Internationals (many competitions) and for leagues ESPN lists no teams for.
+     */
+    val teamList: EspnLeague?
+        get() = (feed ?: if (this == INTERNATIONALS) null else EspnLeague(sport.espnSport, id))?.takeIf(TeamDirectory::covers)
+
     /** The stored token: "basketball/nba". */
     val token: String get() = "${sport.id}/$id"
 
@@ -138,6 +145,13 @@ data class MySports(val sports: Map<MySport, Set<MyLeague>>) {
         val soccer = if (MySport.SOCCER in effectiveSports) listOf(EspnLeagueMap.SOCCER_ALL) else emptyList()
         return soccer + effectiveSports.filter { it != MySport.SOCCER }.flatMap { leaguesOf(it) }.mapNotNull { it.feed }
     }
+
+    /**
+     * The team lists of the leagues named in My sports (#159): what tells a game with no league whether it is
+     * one of them. Only named leagues (precision): a sport with no league named lets every game through.
+     */
+    fun teamListLeagues(): List<EspnLeague> =
+        effectiveSports.flatMap { namedLeagues(it) }.mapNotNull { it.teamList }.distinct()
 
     /**
      * True when [event] is in My sports: its sport is in and, when that sport names leagues, one of them

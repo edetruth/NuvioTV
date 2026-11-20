@@ -2,6 +2,7 @@ package com.nuvio.tv.core.sportslive
 
 import com.nuvio.tv.core.sportslive.scores.EspnLeague
 import com.nuvio.tv.core.sportslive.scores.EspnLeagueMap
+import com.nuvio.tv.core.sportslive.scores.MyLeague
 import com.nuvio.tv.core.sportslive.scores.MySport
 import com.nuvio.tv.core.sportslive.scores.MySports
 import com.nuvio.tv.core.sportslive.scores.TeamDirectory
@@ -18,8 +19,10 @@ import com.nuvio.tv.domain.model.SportsLiveItem
  *   takes their league's sport.
  * - A known sport My sports cannot hold (cricket, rugby, darts...) is out once the user has picked sports.
  * - A sport ticked without naming leagues takes all of its games, college ones included (its default leagues
- *   only choose the Results feeds). With leagues named, a game whose league is known must be one of them; a
- *   game whose league is unknown (a bare "Basketball") shows.
+ *   only choose the Results feeds). With leagues named, a game whose league is known must be one of them. A
+ *   game whose league is unknown (a bare "Basketball" or "Football") is told by its teams (#159): hidden when
+ *   neither is a team of a named league, by those leagues' ESPN team lists ([MyLeague.teamList], kept in the
+ *   [TeamDirectory]); shown while a list is not loaded yet, or when no named league has one (Internationals).
  */
 object SportsLiveMySportsScope {
 
@@ -39,7 +42,7 @@ object SportsLiveMySportsScope {
         val source = sources.firstOrNull { kindOf(it) != null }
         if (source != null) {
             val sports = sportsOf(source)
-            return sports.any { sport -> sport in mySports.effectiveSports && leagueAllowed(source, sport, mySports) }
+            return sports.any { sport -> sport in mySports.effectiveSports && leagueAllowed(source, sport, mySports, directory) }
         }
         // None tells one (#167): its teams may, through the team directory; otherwise it is unidentified, hidden.
         val leagues = sources.firstNotNullOfOrNull { directoryLeaguesOf(it, directory).ifEmpty { null } } ?: return false
@@ -98,14 +101,32 @@ object SportsLiveMySportsScope {
         else -> null
     }
 
-    /** [item]'s league against the leagues named for [sport]: none named, or its league unknown, lets it through. */
-    private fun leagueAllowed(item: SportsLiveItem, sport: MySport, mySports: MySports): Boolean {
+    /**
+     * [item]'s league against the leagues named for [sport]: none named lets it through; a known league must be
+     * one of them; an unknown one is told by the teams ([teamsInNamed]).
+     */
+    private fun leagueAllowed(item: SportsLiveItem, sport: MySport, mySports: MySports, directory: TeamDirectory): Boolean {
         val named = mySports.namedLeagues(sport)
         if (named.isEmpty()) return true
         // A bare sport word routes to its pro league but may be college: the league is not known.
-        if (EspnLeagueMap.collegeFallbackFor(item) != null) return true
         val routed = EspnLeagueMap.leaguesFor(item).filter { it.sport == sport.espnSport && it != EspnLeagueMap.SOCCER_ALL }
-        if (routed.isEmpty()) return true
-        return routed.any { league -> named.any { it.coversLeague(league) } }
+        if (EspnLeagueMap.collegeFallbackFor(item) == null && routed.isNotEmpty()) {
+            return routed.any { league -> named.any { it.coversLeague(league) } }
+        }
+        return teamsInNamed(item, named, directory) != false
+    }
+
+    /**
+     * Whether a game of unknown league is one of [named]'s (#159): true when either side is a team of a named
+     * league's list, false when every named list is loaded and holds neither, null when it cannot be told (no
+     * two sides, no named league with a list, or a list not loaded yet).
+     */
+    internal fun teamsInNamed(item: SportsLiveItem, named: Set<MyLeague>, directory: TeamDirectory): Boolean? {
+        val lists = named.mapNotNull { it.teamList }.distinct()
+        if (lists.isEmpty() || item.teams == null) return null
+        val (first, second) = SportsLiveTeams.writtenOrder(item.meta.name) ?: return null
+        val loaded = lists.filter { directory.fetchedAt(it) != null }
+        if (directory.holdsAny(first, loaded) || directory.holdsAny(second, loaded)) return true
+        return if (loaded.size == lists.size) false else null
     }
 }

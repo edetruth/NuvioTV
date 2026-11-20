@@ -44,9 +44,21 @@ object EspnLeagueMap {
     val WNBA = EspnLeague("basketball", "wnba")
     val NWSL = EspnLeague("soccer", "usa.nwsl")
 
+    // Leagues routed since #169: the NBA G League and NCAA volleyball on ESPN, EuroLeague and EuroCup on their
+    // own feed ([EuroLeagueScoreSource]; ESPN's euroleague scoreboard lists no games).
+    val G_LEAGUE = EspnLeague("basketball", "nba-development")
+    val EUROLEAGUE = EspnLeague("basketball", "euroleague")
+    val EUROCUP = EspnLeague("basketball", "eurocup")
+    val COLLEGE_VOLLEYBALL_WOMEN = EspnLeague("volleyball", "womens-college-volleyball")
+    val COLLEGE_VOLLEYBALL = EspnLeague("volleyball", "mens-college-volleyball")
+    val RUGBY_WORLD_CUP_WOMEN = EspnLeague("rugby", "289237")
+
     /** The women's feeds: a game on one is a women's game, whatever its teams are called. */
-    val WOMEN_FEEDS = setOf(COLLEGE_BASKETBALL_WOMEN, WNBA, NWSL)
+    val WOMEN_FEEDS = setOf(COLLEGE_BASKETBALL_WOMEN, WNBA, NWSL, COLLEGE_VOLLEYBALL_WOMEN, RUGBY_WORLD_CUP_WOMEN)
     val SOCCER_ALL = EspnLeague("soccer", "all")
+
+    // A women's feed here or a women's competition of the league index (#169).
+    private fun isWomenFeed(league: EspnLeague) = league in WOMEN_FEEDS || EspnLeagueIndex.isWomen(league)
 
     // Individual sports (#55 part 2): Results only, never routed from a card (see EXCLUDED).
     val ATP = EspnLeague("tennis", "atp")
@@ -83,6 +95,11 @@ object EspnLeagueMap {
             listOf(COLLEGE_BASKETBALL_WOMEN)
         ),
         Rule("""\bnwsl\b|national women'?s? soccer league""", listOf(NWSL)),
+        Rule("""\buwcl\b|women'?s? champions league""", soccer("uefa.wchampions")),
+        // #169: the G League before the NBA ("NBA G League"); EuroLeague and EuroCup basketball.
+        Rule("""\bg[- ]?league\b|\bnba development\b""", listOf(G_LEAGUE)),
+        Rule("""\beuro ?league\b""", listOf(EUROLEAGUE)),
+        Rule("""\beurocup\b""", listOf(EUROCUP)),
         Rule("""\bnba\b""", listOf(NBA)),
         Rule("""\bnfl\b""", listOf(NFL)),
         Rule("""\bnhl\b""", listOf(NHL)),
@@ -105,7 +122,8 @@ object EspnLeagueMap {
         // Brazil's top flight before Italy's: "Brazil Serie A" names it, as ESPN does (#132 P4).
         Rule("""\bbrazil(ian)? serie a\b|\bbrasileir(a|ao)\b""", soccer("bra.1")),
         Rule("""\bserie a\b""", soccer("ita.1")),
-        Rule("""(?<!2\. )(?<!2 )\bbundesliga\b""", soccer("ger.1")),
+        // Austria's Bundesliga is its own (#169: ESPN's league index routes it).
+        Rule("""(?<!2\. )(?<!2 )(?<!austrian )(?<!admiral )\bbundesliga\b""", soccer("ger.1")),
         Rule("""\bligue 1\b""", soccer("fra.1")),
         Rule("""\bmls\b|major league soccer""", soccer("usa.1")),
         Rule("""\bfriendl(y|ies)\b""", soccer("fifa.friendly"))
@@ -118,15 +136,78 @@ object EspnLeagueMap {
         Rule("""\bbasketball\b""", listOf(NBA)),
         Rule("""\b(ice )?hockey\b""", listOf(NHL)),
         Rule("""\bbaseball\b""", listOf(MLB)),
+        // College only (#169): a pro volleyball card gets none ([leaguesForUncached]).
+        Rule("""\bvolleyball\b""", listOf(COLLEGE_VOLLEYBALL_WOMEN, COLLEGE_VOLLEYBALL)),
         Rule("""\bsoccer\b|\bfootball\b""", listOf(SOCCER_ALL))
     )
 
+    private val VOLLEYBALL_FEEDS = setOf(COLLEGE_VOLLEYBALL_WOMEN, COLLEGE_VOLLEYBALL)
+
+    /**
+     * Rugby union competitions on ESPN (#169), by ESPN's league id. Rugby stays an excluded sport for every
+     * other feed; a card naming one of these gets its feed. The general names (cups, test matches) need the
+     * card to say rugby; rugby league (NRL, Super League) and sevens never route here.
+     */
+    private val RUGBY: List<Pair<Regex, String>> = listOf(
+        Regex("""women'?s? rugby world cup""") to "289237",
+        Regex("""united rugby championship|\burc\b""") to "270557",
+        Regex("""rugby championship""") to "244293",
+        Regex("""\bsix nations\b|\b6 nations\b""") to "180659",
+        Regex("""gallagher prem|premiership rugby|\bprem rugby\b|rugby premiership""") to "267979",
+        Regex("""\btop ?14\b""") to "270559",
+        Regex("""\bsuper rugby\b""") to "242041",
+        Regex("""major league rugby|\bmlr\b""") to "289262",
+        Regex("""lions tour|british (and|&) irish lions""") to "268565"
+    )
+    // Only when the card says rugby: these names mean other things in other sports.
+    private val RUGBY_IN_CONTEXT: List<Pair<Regex, String>> = listOf(
+        Regex("""\bchampions cup\b""") to "271937",
+        Regex("""\bchallenge cup\b""") to "272073",
+        Regex("""\bpremiership\b""") to "267979",
+        Regex("""\bnations championship\b""") to "17567",
+        Regex("""\bnpc\b|mitre 10|bunnings""") to "270563",
+        Regex("""\btest\b|\binternational\b|autumn nations|nations series|\bfriendly\b""") to "289234"
+    )
+    private val RUGBY_WORD = Regex("""\brugby\b""")
+    private val NOT_RUGBY_UNION = Regex("""rugby league|\bnrl\b|\bsevens\b|\b7s\b|super league""")
+
+    /**
+     * The rugby union feed [texts] name (#169), or null: a named competition, or a general one on a card that
+     * says rugby. A women's card goes only to the women's World Cup; any other card never does.
+     */
+    private fun rugbyLeague(texts: List<String>, women: Boolean): List<EspnLeague>? {
+        if (texts.any { NOT_RUGBY_UNION.containsMatchIn(it) }) return null
+        val saysRugby = texts.any { RUGBY_WORD.containsMatchIn(it) }
+        val rules = if (saysRugby) RUGBY + RUGBY_IN_CONTEXT else RUGBY
+        for (text in texts) {
+            val id = rules.firstOrNull { (regex, _) -> regex.containsMatchIn(text) }?.second ?: continue
+            val league = EspnLeague("rugby", id)
+            return if (women == (league in WOMEN_FEEDS)) listOf(league) else emptyList()
+        }
+        return null
+    }
+
+    /**
+     * The competition of ESPN's league index ([EspnLeagueIndex]) the first text names, when its sport is the
+     * card's (#169): a "Basketball" card is never moved onto a soccer league. [sport] is the card's sport rule's
+     * feeds ([firstSport]); null when the card names no sport.
+     */
+    private fun indexedLeague(texts: List<String>, sport: List<EspnLeague>?): List<EspnLeague>? {
+        val sports = sport?.mapTo(HashSet()) { it.sport }
+        for (text in texts) {
+            val league = EspnLeagueIndex.find(text) ?: continue
+            return if (sports == null || league.sport in sports) listOf(league) else null
+        }
+        return null
+    }
+
     // A card that mentions any of these anywhere gets no feed: sports scores v1 does not cover, and
     // minor leagues whose teams share names or cities with the pro feeds (PWHL, AHL...). A women's card goes
-    // to the women's feeds only, and to none where there is no women's feed ([forGender], #163).
+    // to the women's feeds only, and to none where there is no women's feed ([forGender], #163). The G League
+    // has its own feed since #169; rugby union's named competitions do too ([rugbyLeague]).
     private val EXCLUDED = Regex(
         """\b(cricket|icc|t20|odi|ipl|w?bbl|big bash|test match|tennis|ufc|mma|boxing|golf|f1|formula 1|motogp|nascar|rugby|wwe|aew|wrestling|""" +
-            """darts|snooker|pwhl|ahl|echl|g[- ]?league)\b"""
+            """darts|snooker|pwhl|ahl|echl)\b"""
     )
 
     /** Whose game a card is (#163), when it says. */
@@ -134,7 +215,7 @@ object EspnLeagueMap {
 
     // "Women's", "WBB", "NCAAW", "WNBA", "NWSL", or a "(W)" / " W" side ("Purdue W vs Florida State W").
     private val WOMEN_MARK = Regex(
-        """\bwomen'?s?\b|\bwbb\b|\bwcbb\b|\bncaaw\b|\bwnba\b|\bnwsl\b|\(w\)|\bw(?=\s+(?:vs?\.?|at|@|x)\s)|\sw$"""
+        """\bwomen'?s?\b|\bwbb\b|\bwcbb\b|\bncaaw\b|\bwnba\b|\bnwsl\b|\buwcl\b|\(w\)|\bw(?=\s+(?:vs?\.?|at|@|x)\s)|\sw$"""
     )
     // The word itself: a card that says "Women's" and has no women's feed gets none, as before #163.
     private val WOMEN_WORD = Regex("""\bwomen'?s?\b""")
@@ -159,10 +240,10 @@ object EspnLeagueMap {
      */
     private fun forGender(leagues: List<EspnLeague>, gender: Gender?, saysWomen: Boolean): List<EspnLeague> = when (gender) {
         null -> leagues
-        Gender.MEN -> leagues.filter { it !in WOMEN_FEEDS }
+        Gender.MEN -> leagues.filter { !isWomenFeed(it) }
         Gender.WOMEN -> leagues.flatMap { league ->
             when {
-                league in WOMEN_FEEDS -> listOf(league)
+                isWomenFeed(league) -> listOf(league)
                 league == NBA -> listOf(COLLEGE_BASKETBALL_WOMEN, WNBA)
                 league == COLLEGE_BASKETBALL -> listOf(COLLEGE_BASKETBALL_WOMEN)
                 saysWomen -> emptyList()
@@ -173,7 +254,7 @@ object EspnLeagueMap {
 
     // A college card routes only to a college feed, never to the pro league of the same sport.
     private val COLLEGE = Regex("""\bncaa\w*|\bcollege\b""")
-    private val COLLEGE_FEEDS = setOf(COLLEGE_FOOTBALL, COLLEGE_BASKETBALL, COLLEGE_BASKETBALL_WOMEN)
+    private val COLLEGE_FEEDS = setOf(COLLEGE_FOOTBALL, COLLEGE_BASKETBALL, COLLEGE_BASKETBALL_WOMEN) + VOLLEYBALL_FEEDS
 
     /**
      * Feeds for [item]: its sport, title, genres and catalog name. Empty when none applies. The catalog
@@ -203,14 +284,19 @@ object EspnLeagueMap {
     @VisibleForTesting
     internal fun leaguesForUncached(sport: String?, hints: List<String>, routingHints: List<String>): List<EspnLeague> {
         val own = (listOfNotNull(sport) + hints).map(::fold).filter { it.isNotEmpty() }
-        if (own.any { EXCLUDED.containsMatchIn(it) }) return emptyList()
         val texts = own + routingHints.map(::fold).filter { it.isNotEmpty() }
         val gender = genders(Triple(sport, hints, routingHints))
-        val named = firstCompetition(texts) ?: firstSport(texts)
+        // Rugby union's named competitions (#169) before the exclusions, which still keep every other rugby card out.
+        rugbyLeague(texts, women = gender == Gender.WOMEN)?.let { return it }
+        if (own.any { EXCLUDED.containsMatchIn(it) }) return emptyList()
+        val sportRule = firstSport(texts)
+        // A competition ESPN's league index names comes after the known ones, before the bare sport word (#169).
+        val named = firstCompetition(texts) ?: indexedLeague(texts, sportRule) ?: sportRule
         val leagues = forGender(named.orEmpty(), gender, saysWomen = own.any { WOMEN_WORD.containsMatchIn(it) })
         val college = texts.any { COLLEGE.containsMatchIn(it) }
         return when {
-            !college -> leagues
+            // NCAA volleyball is the only volleyball ESPN lists: a pro volleyball card gets none.
+            !college -> leagues.filter { it !in VOLLEYBALL_FEEDS }
             // A women's college card naming no sport: NCAAW alone (there is no women's college football feed).
             named == null -> forGender(COLLEGE_ONLY, gender, saysWomen = true)
             else -> leagues.filter { it in COLLEGE_FEEDS }
@@ -263,6 +349,7 @@ object EspnLeagueMap {
         if (own.any { EXCLUDED.containsMatchIn(it) }) return null
         val texts = own + routingHints.map(::fold).filter { it.isNotEmpty() }
         if (firstCompetition(texts) != null || texts.any { SOCCER_WORD.containsMatchIn(it) }) return null
+        if (indexedLeague(texts, firstSport(texts)) != null) return null
         // A women's card already goes to both women's basketball feeds ([leaguesFor]).
         if (genders(Triple(sport, hints, routingHints)) == Gender.WOMEN) return null
         return when (firstSport(texts)) {

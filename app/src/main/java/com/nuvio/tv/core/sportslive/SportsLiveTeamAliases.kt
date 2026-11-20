@@ -87,7 +87,17 @@ object SportsLiveTeamAliases {
             // ESPN writes these by their short names; addons often by the state (P4). One school each.
             "uconn" to listOf("connecticut"),
             "umass" to listOf("massachusetts"),
-            "ole miss" to listOf("mississippi")
+            "ole miss" to listOf("mississippi"),
+            // Initials for a state's name, as ESPN and addons both write them ("NC State", "North Carolina State", #174).
+            "nc state" to listOf("north carolina state", "n c state", "nc st"),
+            "sc state" to listOf("south carolina state"),
+            "nc central" to listOf("north carolina central"),
+            "fiu" to listOf("florida international"),
+            "fau" to listOf("florida atlantic"),
+            "fgcu" to listOf("florida gulf coast"),
+            "uic" to listOf("illinois chicago"),
+            "umbc" to listOf("maryland baltimore county"),
+            "utrgv" to listOf("texas rio grande valley", "ut rio grande valley")
         )
 
     /**
