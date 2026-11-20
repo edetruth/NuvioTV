@@ -32,6 +32,30 @@ fun sportsLiveKeepFocused(previous: List<SportsLiveItem>, current: List<SportsLi
 }
 
 /**
+ * [current] with every card of [previous] it no longer has put back in place (F6): while the user moves through the
+ * list, a load or a merge never makes rows vanish under focus (the rows above it would shift and focus land
+ * elsewhere). Each goes back after the nearest card before it in [previous] (first when none is); they leave on the
+ * first build after the list lets focus go ([sportsLiveKeepFocused] then keeps only the focused card). An emptied
+ * list keeps nothing.
+ */
+fun sportsLiveKeepShown(previous: List<SportsLiveItem>, current: List<SportsLiveItem>): List<SportsLiveItem> {
+    if (current.isEmpty()) return current
+    val listed = current.mapTo(HashSet()) { it.id }
+    if (previous.all { it.id in listed }) return current
+    val result = current.toMutableList()
+    var insertAt = 0
+    for (card in previous) {
+        if (card.id in listed) {
+            insertAt = result.indexOfFirst { it.id == card.id } + 1
+        } else if (result.none { it.id == card.id }) {
+            result.add(insertAt, card)
+            insertAt++
+        }
+    }
+    return result
+}
+
+/**
  * The card that takes [selectedKey]'s place after the list changed under the same tab and filter:
  * [selectedKey] itself while it is still listed; otherwise the nearest card after it in
  * [previousKeys] that is still listed, else the nearest before it, else the first card; null for an

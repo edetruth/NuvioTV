@@ -71,6 +71,8 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.nuvio.tv.R
 import com.nuvio.tv.core.sportslive.SportsLiveEndedGames
+import com.nuvio.tv.core.sportslive.SportsLiveGameReadiness
+import com.nuvio.tv.core.sportslive.SportsLiveReadyMark
 import com.nuvio.tv.core.sportslive.alerts.GameReminders
 import com.nuvio.tv.core.sportslive.alerts.RemindersState
 import com.nuvio.tv.core.sportslive.scores.GameSituations
@@ -475,7 +477,8 @@ fun SportsLiveScreen(
             onHide = viewModel::hideFromLiveNow,
             protection = protection,
             onSaveForLater = scoresViewModel::saveForLater,
-            onRevealResult = scoresViewModel::revealResult
+            onRevealResult = scoresViewModel::revealResult,
+            onBrowsing = viewModel::setBrowsing
         )
     }
 }
@@ -495,7 +498,7 @@ private fun NoAddonsState(onOpenAddons: () -> Unit) {
         primaryModifier = Modifier.focusRequester(focusRequester),
         modifier = Modifier.padding(
             start = SportsLiveTokens.Size.SafeStart,
-            top = SportsLiveTokens.Size.SafeTop + SportsLiveTokens.Size.HeaderHeight + SportsLiveTokens.Size.HeaderBottomGap
+            top = SportsLiveTokens.Size.HeaderTop + SportsLiveTokens.Size.HeaderHeight + SportsLiveTokens.Size.HeaderBottomGap
         )
     )
 }
@@ -582,7 +585,9 @@ private fun SportsLiveContent(
     /** Spoiler protection (#151): More… offers Watch later (no spoilers), or Reveal result on a saved game. */
     protection: SpoilerProtection = SpoilerProtection(),
     onSaveForLater: (ScoreSnapshot) -> Unit = {},
-    onRevealResult: (ScoreSnapshot) -> Unit = {}
+    onRevealResult: (ScoreSnapshot) -> Unit = {},
+    /** The list holds focus (F6): rows a load dropped stay put meanwhile. */
+    onBrowsing: (Boolean) -> Unit = {}
 ) {
     val context = LocalContext.current
     val tabFocusRequesters = remember { SportsLiveTab.entries.associateWith { FocusRequester() } }
@@ -645,11 +650,27 @@ private fun SportsLiveContent(
     // The Scoreboard's rows come ready from the view model (#71), grouped LIVE → STARTING SOON → CHANNELS → JUST ENDED.
     val boardRowOf = shownBoard?.rowOf.orEmpty()
     val items = shownBoard?.items.orEmpty()
-    // Nothing focused yet: the list's first row (the first live game), not the first item in addon order.
-    val selected = items.firstOrNull { it.listKey == focusedCardKey && it.id == uiState.selectedItemId }
-        ?: (if (focusedCardKey == null) items.firstOrNull() else null)
-        ?: items.firstOrNull { it.id == uiState.selectedItemId }
-        ?: items.firstOrNull()
+    // The tab and filter the list was last opened on: until the change below resets [focusedCardKey], it names a row
+    // of the list before.
+    var listedFilterKey by rememberSaveable { mutableStateOf(filterKey) }
+    // The mini player's game (playing, else the one last stopped), which the stage falls back to (F23).
+    val stageMiniState by SportsLiveMiniPlayers.controller.state.collectAsStateWithLifecycle()
+    val playingKey = (stageMiniState as? SportsLiveMiniState.Playing)?.item?.listKey
+    var lastMiniKey by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(playingKey) { if (playingKey != null) lastMiniKey = playingKey }
+    // F23: the focused row, else the mini player's game, else the first row (the first live game); never the view
+    // model's selection alone, which a tab focus once reset to the addon's first item.
+    val stageKey = sportsLiveStageKey(
+        keys = items.map { it.listKey },
+        focusedKey = focusedCardKey.takeIf { listedFilterKey == filterKey },
+        miniKey = playingKey ?: lastMiniKey
+    )
+    val selected = items.firstOrNull { it.listKey == stageKey }
+    // "▶ Ready" (live.20 1b) on my games' rows and stage: read once per change of the marks.
+    val readyMarks by SportsLiveGameReadiness.shared.marks.collectAsStateWithLifecycle()
+    val readyOf: (SportsLiveItem) -> Boolean = remember(readyMarks) {
+        { item -> SportsLiveGameReadiness.shared.of(item) == SportsLiveReadyMark.READY }
+    }
     val selectedCardFocusRequester = selected?.let(::cardFocusRequester)
     // Brings the card [key] (at [index] in [items]) on screen.
     suspend fun scrollToCard(@Suppress("UNUSED_PARAMETER") key: String, index: Int, onlyIfHidden: Boolean = true) {
@@ -895,6 +916,8 @@ private fun SportsLiveContent(
     val editMySportsLabel = stringResource(R.string.sports_live_results_edit_my_sports)
     val filterDropdown = when (uiState.selectedTab) {
         SportsLiveTab.LIVE_NOW -> SportsLiveHeaderDropdown(stringResource(R.string.sports_live_filter_title_sport))
+        // F16: Upcoming's sports as one dropdown too; the inline strip clipped its last option ("G…").
+        SportsLiveTab.UPCOMING -> SportsLiveHeaderDropdown(stringResource(R.string.sports_live_filter_title_sport))
         SportsLiveTab.CHANNELS -> SportsLiveHeaderDropdown(stringResource(R.string.sports_live_filter_title_region))
         SportsLiveTab.REPLAYS -> SportsLiveHeaderDropdown(stringResource(R.string.sports_live_filter_title_sport))
         // "Edit my sports" closes the menu (F7: no chip runs under it any more).
@@ -1185,6 +1208,9 @@ private fun SportsLiveContent(
     BackHandler(enabled = listHasFocus) {
         runCatching { activeTabFocusRequester.requestFocus() }
     }
+    // F6: while the list holds focus no row is taken from under the user; the rows a load dropped leave once it lets go.
+    val currentOnBrowsing by rememberUpdatedState(onBrowsing)
+    LaunchedEffect(listHasFocus) { currentOnBrowsing(listHasFocus) }
     // The preview follows the focused card (in the list, or its pane's buttons) while no menu or
     // dialog is open; anything else stops it.
     // A live Your teams card previews its game too; a later-today or replay stage has no preview (#155).
@@ -1268,10 +1294,11 @@ private fun SportsLiveContent(
     }
 
     // Only a real tab or filter change scrolls to the top; the saved value survives navigation.
-    var listedFilterKey by rememberSaveable { mutableStateOf(filterKey) }
     LaunchedEffect(filterKey) {
         if (filterKey == listedFilterKey) return@LaunchedEffect
         listedFilterKey = filterKey
+        // A stopped mini player's game is the stage's fallback only on the list it was stopped on (F23).
+        lastMiniKey = null
         // A follow refocus still pending means the change came from the unfollow itself (it cleared
         // "★ My teams"), not from a chip, so focus goes to the new list's first card.
         val refocus = followedCardKey != null
@@ -1298,7 +1325,8 @@ private fun SportsLiveContent(
             }
             .padding(
                 start = SportsLiveTokens.Size.SafeStart,
-                top = SportsLiveTokens.Size.SafeTop,
+                // live.20 (the user's TV photos): the tab labels sit on the 5 % safe line, not below it.
+                top = SportsLiveTokens.Size.HeaderTop,
                 end = SportsLiveTokens.Size.SafeEnd,
                 bottom = SportsLiveTokens.Size.SafeBottom
             )
@@ -1316,7 +1344,12 @@ private fun SportsLiveContent(
         val miniDocked = nowPlaying != null && miniDock is SportsLiveMiniDock.Docked
         // #170: Up from the docked mini player goes to the header controls over the stage.
         SideEffect { SportsLiveMiniFocus.up = controlsFocusRequester.takeIf { miniDocked } }
-        DisposableEffect(Unit) { onDispose { SportsLiveMiniFocus.up = null } }
+        DisposableEffect(Unit) {
+            onDispose {
+                SportsLiveMiniFocus.up = null
+                SportsLiveMiniFocus.back = null
+            }
+        }
         // A card that goes away (idle timeout, profile switch) while focused hands focus to the active tab.
         var nowPlayingHasFocus by remember { mutableStateOf(false) }
         LaunchedEffect(nowPlaying == null) {
@@ -1329,6 +1362,8 @@ private fun SportsLiveContent(
         val stageShown = scoreboard && !showingResults && uiState.selectedTab != SportsLiveTab.REPLAYS && selected != null && boardRowOf[selected.listKey] != null
         // The stage column is drawn (#170): Live now, Channels, Upcoming and Replays with a selected row.
         val stageColumnShown = !showingResults && selected != null && boardRowOf[selected.listKey] != null && (scoreboard || agenda != null)
+        // F23: Back on the docked mini player stops it and gives focus back to the stage's Watch it was reached from.
+        SideEffect { SportsLiveMiniFocus.back = watchFocusRequester.takeIf { miniDocked && stageColumnShown } }
         // Docked in a stage (every tab's, #157) the mini player needs no card; only in the corner (a tab with no
         // stage, after the hold) does it show, so a tab switch never flashes it.
         if (nowPlaying != null && miniDock == SportsLiveMiniDock.Corner) {
@@ -1626,6 +1661,7 @@ private fun SportsLiveContent(
                                                             bigGame = !game.pick && game.row.bigGame != null
                                                         ),
                                                         watching = item.listKey == nowPlaying?.listKey,
+                                                        ready = readyOf(item),
                                                         modifier = Modifier
                                                             .focusRequester(if (game.pick) pickFocusRequester(item) else cardFocusRequester(item))
                                                             .focusProperties {
@@ -1666,6 +1702,7 @@ private fun SportsLiveContent(
                     previewShowing = selectedPreview?.rendering == true,
                     miniInStage = nowPlaying != null,
                     noStream = noStreamKey == selected.listKey,
+                    ready = readyOf(selected),
                     onRemind = { onToggleReminder(selected) },
                     onWatch = stageWatch,
                     onMore = { menuCardKey = selected.listKey },
@@ -1744,6 +1781,7 @@ private fun SportsLiveContent(
                                             reminded = remindedCard(item),
                                             hasReplay = item.streamKey in replayKeys,
                                             watching = item.listKey == nowPlaying?.listKey,
+                                            ready = readyOf(item),
                                             modifier = Modifier
                                                 .focusRequester(cardFocusRequester(item))
                                                 .focusProperties {
@@ -1786,6 +1824,7 @@ private fun SportsLiveContent(
                         previewShowing = false,
                         miniInStage = nowPlaying != null,
                         noStream = false,
+                        ready = readyOf(stage.row.item),
                         onRemind = { onToggleReminder(stage.row.item) },
                         onWatch = { open(stage.row.item) },
                         onMore = { menuCardKey = stage.row.item.listKey },
@@ -1824,6 +1863,7 @@ private fun SportsLiveContent(
                         noStream = noStreamKey == selected.listKey,
                         onWatch = stageWatch,
                         onMore = { menuCardKey = selected.listKey },
+                        facts = sportsLiveStageFacts(selectedRow, readyOf(selected), uiState.nowMs),
                         modifier = Modifier
                             .padding(top = LIST_FOCUS_ROOM)
                             .onFocusChanged { paneHasFocus = it.hasFocus }

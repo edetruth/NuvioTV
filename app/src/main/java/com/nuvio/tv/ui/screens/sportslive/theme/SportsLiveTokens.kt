@@ -135,6 +135,13 @@ object SportsLiveTokens {
          */
         val SafeStart = 74.dp
 
+        /**
+         * Where the header row starts (live.20, the user's TV photos: too much room above the tabs): 36 px, so the tab
+         * labels (their underline room and the row's slack above them) sit on the 5 % safe line ([SafeTop], 54 px) and
+         * only a focused tab's ring reaches into the margin.
+         */
+        val HeaderTop = 18.dp
+
         /** The one-line header: 80 px. */
         val HeaderHeight = 40.dp
         /** Header gap between text tabs (32 px), and the tab's own focus padding. */
@@ -312,7 +319,7 @@ object SportsLiveTokens {
     /** More… as a sheet over the stage (#134): 720 px wide, 72 px entries, its title and one status line. */
     object Sheet {
         val Width = 360.dp
-        val Top = Size.SafeTop + Size.HeaderHeight + Size.HeaderBottomGap
+        val Top = Size.HeaderTop + Size.HeaderHeight + Size.HeaderBottomGap
         val End = Size.SafeEnd
         val Bottom = Size.SafeBottom
         val Padding = 16.dp

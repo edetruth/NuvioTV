@@ -4,7 +4,6 @@ import com.nuvio.tv.core.sportslive.scores.BigGameText
 import com.nuvio.tv.core.sportslive.scores.BigGameStrings
 import com.nuvio.tv.core.sportslive.scores.BigGameRating
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,12 +13,12 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material.icons.Icons
@@ -301,7 +300,7 @@ internal fun SportsLiveReplayStage(
         }
         if (miniPlaying) SportsLiveStageSelectedHeading()
         Column(
-            modifier = Modifier.fillMaxWidth().height(SportsLiveStageLayout.SCORE_BLOCK_HEIGHT_DP.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(max = SportsLiveStageLayout.INFO_MAX_DP.dp),
             verticalArrangement = Arrangement.spacedBy(5.dp)
         ) {
             BasicText(
@@ -344,7 +343,6 @@ internal fun upcomingListedSources(item: com.nuvio.tv.domain.model.SportsLiveIte
  * Upcoming's stage (V2, P3): the same fixed 360 dp as Live Now's. The drawn matchup (or the preview, or the
  * mini player) in the media box; the title, "When" and "Stream listed by N sources"; then **Remind me**
  * (primary while the start is over 15 minutes away, the bell showing its state) or **Watch**, and **More…**.
- * The remote's keys are hinted at its foot.
  */
 @Composable
 internal fun SportsLiveUpcomingStage(
@@ -361,7 +359,9 @@ internal fun SportsLiveUpcomingStage(
     modifier: Modifier = Modifier,
     primaryModifier: Modifier = Modifier,
     /** How the stage reads with the mini player in its media box (#157). */
-    header: SportsLiveStageHeader = SportsLiveStageHeader.NO_MINI
+    header: SportsLiveStageHeader = SportsLiveStageHeader.NO_MINI,
+    /** "▶ Ready" (live.20 1b): my game holds a verified link. */
+    ready: Boolean = false
 ) {
     val buttons = upcomingStageButtons(row.item, agendaStartOf(row), nowMs)
     Column(
@@ -370,8 +370,9 @@ internal fun SportsLiveUpcomingStage(
     ) {
         StageMedia(row, preview, previewShowing, miniInStage, agendaArt = true)
         if (header == SportsLiveStageHeader.SELECTED) SportsLiveStageSelectedHeading()
+        // live.20 (the user's TV photos): the info takes the height it needs, so the buttons sit right under it.
         Column(
-            modifier = Modifier.fillMaxWidth().height(SportsLiveStageLayout.SCORE_BLOCK_HEIGHT_DP.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(max = SportsLiveStageLayout.INFO_MAX_DP.dp),
             verticalArrangement = Arrangement.spacedBy(5.dp)
         ) {
             BasicText(
@@ -400,15 +401,21 @@ internal fun SportsLiveUpcomingStage(
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            upcomingListedSources(row.item)?.let { sources ->
-                Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(Colors.ReplayGreen))
-                    Text(
-                        text = pluralStringResource(R.plurals.sports_live_stream_listed_by, sources, sources),
-                        style = SportsLiveTokens.style(SportsLiveTokens.Type.Meta),
-                        color = Colors.ReplayGreen,
-                        maxLines = 1
-                    )
+            val sources = upcomingListedSources(row.item)
+            if (ready || sources != null) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (ready) SportsLiveReadyPill()
+                    sources?.let { count ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(Colors.ReplayGreen))
+                            Text(
+                                text = pluralStringResource(R.plurals.sports_live_stream_listed_by, count, count),
+                                style = SportsLiveTokens.style(SportsLiveTokens.Type.Meta),
+                                color = Colors.ReplayGreen,
+                                maxLines = 1
+                            )
+                        }
+                    }
                 }
             }
             if (noStream) {
@@ -449,41 +456,12 @@ internal fun SportsLiveUpcomingStage(
                 }
             }
         }
-        Spacer(modifier = Modifier.weight(1f))
-        SportsLiveAgendaKeyHints()
     }
 }
 
 @Composable
 private fun StageButtonLabel(text: String) {
     Text(text = text, style = SportsLiveTokens.style(SportsLiveTokens.Type.Button), maxLines = 1, softWrap = false)
-}
-
-/** The key-hint footer (V2 Upcoming): "↑ ↓ games   ◂◂ ▸▸ (rewind / fast-forward) time slots   CH +/− day   OK remind / watch". */
-@Composable
-internal fun SportsLiveAgendaKeyHints(modifier: Modifier = Modifier) {
-    val hints = listOf(
-        R.string.sports_live_hint_keys_games to R.string.sports_live_hint_games,
-        R.string.sports_live_hint_keys_slots to R.string.sports_live_hint_slots,
-        R.string.sports_live_hint_keys_day to R.string.sports_live_hint_day,
-        R.string.sports_live_hint_keys_ok to R.string.sports_live_hint_ok
-    )
-    Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        hints.forEach { (keys, label) ->
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = stringResource(keys),
-                    style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag),
-                    color = Colors.TextSecondary,
-                    maxLines = 1,
-                    modifier = Modifier
-                        .border(1.dp, Colors.OutlineStrong, RoundedCornerShape(SportsLiveTokens.Radius.Badge))
-                        .padding(horizontal = 3.dp, vertical = 1.dp)
-                )
-                Text(text = stringResource(label), style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag).copy(fontWeight = FontWeight.Normal), color = Colors.TextMuted, maxLines = 1)
-            }
-        }
-    }
 }
 
 /** The day header: 34 px. */

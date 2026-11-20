@@ -522,6 +522,43 @@ class SportsLiveViewModelTest {
     }
 
     @Test
+    fun `while the Live now list holds focus no dropped row leaves, and they go once it lets focus go (F6)`() = runTest {
+        val items = listOf("a", "b", "c", "d").map { item(it, isLive = true, sport = "Soccer", name = it.uppercase()) }
+        nextLoad = load(items)
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+        viewModel.setBrowsing(true)
+        viewModel.selectItem("c")
+        runCurrent()
+
+        latestFlow.value = load(listOf(items[0], items[3]))
+        runCurrent()
+        // Moving on to another row keeps them too: nothing shifts under the user.
+        viewModel.selectItem("d")
+        runCurrent()
+        assertEquals(listOf("a", "b", "c", "d"), viewModel.uiState.value.visibleItems.map { it.id })
+
+        viewModel.setBrowsing(false)
+        runCurrent()
+        // Only the focused row stays once focus leaves the list (the #145 rule).
+        assertEquals(listOf("a", "d"), viewModel.uiState.value.visibleItems.map { it.id })
+    }
+
+    @Test
+    fun `focus returning to the selected tab keeps the selection (F23)`() = runTest {
+        nextLoad = load(listOf(channel("uk1", "UK"), channel("ca1", "CA"), channel("us1", "US")))
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+        viewModel.selectTab(SportsLiveTab.CHANNELS)
+        viewModel.selectItem("us1")
+        runCurrent()
+
+        viewModel.selectTab(SportsLiveTab.CHANNELS)
+        runCurrent()
+        assertEquals("us1", viewModel.uiState.value.selectedItemId)
+    }
+
+    @Test
     fun `a team directory change merges the current load again after 2 s without moving the focused row`() = runTest {
         val items = listOf("a", "b", "c").map { item(it, isLive = true, sport = "Soccer", name = it.uppercase()) }
         nextLoad = load(items)

@@ -526,7 +526,10 @@ fun SportsLiveMiniPlayerHost(
         // the Now playing card's Stop; docked, to where it was in the stage or list (#157), whose preview resumes.
         val close: () -> Unit = {
             if (controller.isActive) {
-                val restored = stageSlot != null && contentFocusRequester != null && runCatching {
+                // F23: docked, the stage's Watch the mini player was reached from (Up from it), else the content.
+                val back = SportsLiveMiniFocus.back?.takeIf { stageSlot != null }
+                val restored = (back != null && runCatching { back.requestFocus(FocusDirection.Enter) }.getOrDefault(false)) ||
+                    stageSlot != null && contentFocusRequester != null && runCatching {
                     contentFocusRequester.restoreFocusedChild() ||
                         contentFocusRequester.requestFocus(FocusDirection.Enter)
                 }.getOrDefault(false)

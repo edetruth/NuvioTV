@@ -75,7 +75,6 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
@@ -196,6 +195,8 @@ class SportsLiveViewModel internal constructor(
         /** The last chip picked on each tab (#79), for this session: a tab opens on it while it has games. */
         val filterByTab: Map<SportsLiveTab, String> = emptyMap(),
         val itemId: String? = null,
+        /** Live now's list holds focus (F6): the rows a load dropped stay until it lets go. */
+        val browsing: Boolean = false,
         val isRefreshing: Boolean = false,
         val failures: List<SportsLiveFailure> = emptyList(),
         val lastRefreshedMs: Long? = null,
@@ -354,7 +355,11 @@ class SportsLiveViewModel internal constructor(
             )
         }
             .distinctUntilChanged()
-            .mapLatest { inputs -> withContext(computeDispatcher) { buildBoard(inputs) } }
+            // F21: an update of the same tab and filter lets the board being built finish (the newest follows); another
+            // tab or filter cancels it.
+            .mapFinishing({ running, next -> running.tab != next.tab || running.filter != next.filter }) { inputs ->
+                withContext(computeDispatcher) { buildBoard(inputs) }
+            }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     /** The active profile's followed teams, for the card menu's Follow / Unfollow labels. */
@@ -415,7 +420,10 @@ class SportsLiveViewModel internal constructor(
             tabItems.any { it.matchesZapFilter(value, tab) }
         }
         val changed = tab != selectionState.value.tab
-        selectionState.update { it.copy(tab = tab, filter = remembered, itemId = null) }
+        // F23: focus coming back to the tab already selected changes nothing (it used to clear the selection, and the
+        // stage jumped to the addon's first item).
+        if (!changed) return
+        selectionState.update { it.copy(tab = tab, filter = remembered, itemId = null, browsing = false) }
         previewController.onTab(tab)
         // The new tab's catalogs on its own cadence (#71).
         if (changed) restartAutoRefresh()
@@ -439,6 +447,11 @@ class SportsLiveViewModel internal constructor(
         if (!uiState.value.selectedFilterEmpty) return false
         selectFilter(null)
         return true
+    }
+
+    /** Live now's list holds focus ([focused]) or lets it go (F6): rows a load dropped stay put meanwhile. */
+    fun setBrowsing(focused: Boolean) {
+        if (selectionState.value.browsing != focused) selectionState.update { it.copy(browsing = focused) }
     }
 
     /**
@@ -656,10 +669,16 @@ class SportsLiveViewModel internal constructor(
                     }
                 }
                 val built = live + split.justEnded + overdueEnded.map { it.first } + linkEnded
-                // The focused card is never taken from under the user: kept in place until focus moves on.
+                // The focused card is never taken from under the user: kept in place until focus moves on. While the list
+                // holds focus no row leaves at all (F6): they go once it lets focus go.
                 val focusedId = selection.itemId.takeIf { selection.tab == SportsLiveTab.LIVE_NOW }
+                val kept = if (selection.browsing && selection.tab == SportsLiveTab.LIVE_NOW) {
+                    sportsLiveKeepShown(shownLiveNow, built)
+                } else {
+                    sportsLiveKeepFocused(shownLiveNow, built, focusedId)
+                }
                 // A title just hidden (#134) leaves at once, even with focus on it: the keep step must not bring it back.
-                SportsLiveHiddenTitles.filter(sportsLiveKeepFocused(shownLiveNow, built, focusedId), hiddenNow).also { shownLiveNow = it }
+                SportsLiveHiddenTitles.filter(kept, hiddenNow).also { shownLiveNow = it }
             } else {
                 tabItems
             }

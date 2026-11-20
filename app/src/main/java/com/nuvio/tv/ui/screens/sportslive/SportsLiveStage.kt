@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -29,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInWindow
@@ -68,11 +70,12 @@ import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens.Colors
 import java.util.Locale
 
 /**
- * Live Now's stage (V2, #132): fixed at 360 dp, the same size for every row, so nothing re-flows as focus
- * moves (F4). The media box (360×203) holds the muted preview, else the drawn matchup at the same size,
- * and the mini player when one plays ([miniInStage]: it takes this slot instead of floating over the
- * screen). Under it the score block (the 32 sp scoreline, the status line, the linescore) or, for a
- * channel, its clean name and "Now: …"; then one row of two buttons: **Watch** and **More…**.
+ * Live Now's stage (V2, #132): 360 dp wide for every row. The media box (360×203) holds the muted preview, else
+ * the drawn matchup (or our drawn event card, [stageArtKind]) at the same size, and the mini player when one plays
+ * ([miniInStage]: it takes this slot instead of floating over the screen). Under it the score block (the 32 sp
+ * scoreline, the status line, the facts line: "▶ Ready · Started 7:30 PM · Stream listed by 5 sources", the
+ * linescore) or, for a channel, its clean name and "Now: …"; then, right under it (live.20), one row of two
+ * buttons: **Watch** and **More…**.
  */
 @Composable
 internal fun SportsLiveStage(
@@ -91,13 +94,13 @@ internal fun SportsLiveStage(
     watchModifier: Modifier = Modifier,
     moreModifier: Modifier = Modifier,
     /** How the stage reads with the mini player in its media box (#157). */
-    header: SportsLiveStageHeader = SportsLiveStageHeader.NO_MINI
+    header: SportsLiveStageHeader = SportsLiveStageHeader.NO_MINI,
+    /** The facts line under the status (live.20): "▶ Ready", the start of a game in play, its sources. */
+    facts: StageFacts = StageFacts(ready = false, startedAtMs = null, sources = null)
 ) {
     val headed = header == SportsLiveStageHeader.SELECTED
     Column(
-        modifier = modifier
-            .width(SportsLiveStageLayout.WIDTH_DP.dp)
-            .height(SportsLiveStageLayout.HEIGHT_DP.dp + if (headed) SportsLiveStageSelectedHeading.HEIGHT + SportsLiveStageLayout.GAP_DP.dp else 0.dp),
+        modifier = modifier.width(SportsLiveStageLayout.WIDTH_DP.dp),
         verticalArrangement = Arrangement.spacedBy(SportsLiveStageLayout.GAP_DP.dp)
     ) {
         StageMedia(row, preview, previewShowing, miniInStage)
@@ -106,8 +109,9 @@ internal fun SportsLiveStage(
             // A channel's text block takes its own height, so the buttons sit right under it (no empty block).
             ChannelBlock(row, noStream)
         } else {
-            Box(modifier = Modifier.fillMaxWidth().height(SportsLiveStageLayout.SCORE_BLOCK_HEIGHT_DP.dp)) {
-                GameBlock(row, details, situation, noStream)
+            // live.20 (the user's TV photos): the block takes the height it needs, so the buttons sit right under it.
+            Box(modifier = Modifier.fillMaxWidth().heightIn(max = SportsLiveStageLayout.INFO_MAX_DP.dp).clipToBounds()) {
+                GameBlock(row, details, situation, noStream, facts)
             }
         }
         Row(
@@ -231,22 +235,13 @@ internal fun StageMedia(
         // The video is laid out while the stream loads, so its first frame can arrive; the art covers it until then.
         if (!miniInStage) preview?.invoke()
         if (!previewShowing || miniInStage) {
-            val art = row.art?.takeIf { row.twoSided }
-            when {
-                art != null && agendaArt -> AgendaStageArt(art, row.item)
-                art != null -> StageArt(art, row)
-                row.group == ScoreboardGroup.CHANNELS -> ChannelArt(row)
-                else -> {
-                    val image = row.item.meta.backdropUrl ?: row.item.meta.logo ?: row.item.meta.poster
-                    if (image != null) {
-                        AsyncImage(
-                            model = rememberSizedImage(image, SportsLiveStageLayout.WIDTH_DP.dp, SportsLiveStageLayout.MEDIA_HEIGHT_DP.dp),
-                            contentDescription = null,
-                            contentScale = if (row.item.meta.backdropUrl != null) ContentScale.Crop else ContentScale.Fit,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
-                }
+            // F7 / live.20 item 5: a game or event never shows the addon's art (its name painted in, letters in a
+            // circle, an oversized crop); our drawn matchup or event card does. A channel keeps its own logo.
+            when (stageArtKind(row)) {
+                StageArtKind.MATCHUP -> row.art?.let { art -> if (agendaArt) AgendaStageArt(art, row.item) else StageArt(art, row) }
+                StageArtKind.CHANNEL_ART -> ChannelArt(row)
+                StageArtKind.CHANNEL_NAME -> SportsLiveChannelNameArt(row.item)
+                StageArtKind.EVENT -> SportsLiveEventStageArt(row)
             }
         }
         if (previewShowing && !miniInStage) {
@@ -495,7 +490,7 @@ private fun ArtCaption(text: String, bold: Boolean) {
  * ("● 4:12 · Q4 · NBA" and the situation); the linescore at 13 sp.
  */
 @Composable
-private fun GameBlock(row: ScoreboardRow, details: ScoreDetails?, situation: String, noStream: Boolean) {
+private fun GameBlock(row: ScoreboardRow, details: ScoreDetails?, situation: String, noStream: Boolean, facts: StageFacts) {
     val detailStrings = rememberScoreDetailsStrings()
     val strings = rememberGameStatusStrings()
     val art = row.art
@@ -537,6 +532,7 @@ private fun GameBlock(row: ScoreboardRow, details: ScoreDetails?, situation: Str
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
+        SportsLiveStageFactsLine(facts)
         // Ranks and the round (#137, #160): "#1 Sinner vs #8 Alcaraz · Semifinal", "#3 UConn vs #12 Arizona".
         stageRanksLine(row)?.let { line ->
             Text(

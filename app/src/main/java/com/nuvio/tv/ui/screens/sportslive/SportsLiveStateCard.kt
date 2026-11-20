@@ -142,7 +142,7 @@ internal fun SportsLiveLoadingSkeleton() {
             .fillMaxHeight()
             .padding(
                 start = SportsLiveTokens.Size.SafeStart,
-                top = SportsLiveTokens.Size.SafeTop + SportsLiveTokens.Size.HeaderHeight + SportsLiveTokens.Size.HeaderBottomGap
+                top = SportsLiveTokens.Size.HeaderTop + SportsLiveTokens.Size.HeaderHeight + SportsLiveTokens.Size.HeaderBottomGap
             ),
         stage = true
     )

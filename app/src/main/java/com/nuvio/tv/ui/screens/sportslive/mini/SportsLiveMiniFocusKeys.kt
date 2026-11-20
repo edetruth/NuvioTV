@@ -12,6 +12,9 @@ object SportsLiveMiniFocus {
 
     /** Where Up from the docked mini player goes (#170: the header controls over the stage); null: back to the content. */
     var up: FocusRequester? = null
+
+    /** Where focus goes when Back stops the docked mini player (F23: the stage's Watch); null: back to the content. */
+    var back: FocusRequester? = null
 }
 
 /** What a key does while the mini player has focus. */

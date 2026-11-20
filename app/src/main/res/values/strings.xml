@@ -4156,6 +4156,8 @@
     <string name="sports_live_mini_watching_hint">Play/Pause full screen</string>
     <string name="sports_live_mini_watching_ok_hint">OK full screen · Back stop</string>
     <string name="sports_live_stage_selected">Selected</string>
+    <!-- live.20: the stage's facts line, a game in play's start ("Started 7:30 PM"). -->
+    <string name="sports_live_stage_started">Started %1$s</string>
     <string name="sports_live_row_watching">▶ Watching</string>
     <!-- #148: Live now's header chip after Back from a paused game. -->
     <string name="sports_live_resume_live">Resume %1$s · Live</string>
@@ -4266,14 +4268,6 @@
     <string name="sports_live_season_pre">Preseason</string>
     <string name="sports_live_season_regular">Regular season</string>
     <string name="sports_live_season_post">Postseason</string>
-    <string name="sports_live_hint_keys_games">↑ ↓</string>
-    <string name="sports_live_hint_games">games</string>
-    <string name="sports_live_hint_keys_slots">◂◂ ▸▸</string>
-    <string name="sports_live_hint_slots">time slots</string>
-    <string name="sports_live_hint_keys_day">CH +/−</string>
-    <string name="sports_live_hint_day">day</string>
-    <string name="sports_live_hint_keys_ok">OK</string>
-    <string name="sports_live_hint_ok">remind/watch</string>
     <string name="sports_live_sport_football">Football</string>
     <string name="sports_live_sport_soccer">Soccer</string>
     <string name="sports_live_sport_basketball">Basketball</string>

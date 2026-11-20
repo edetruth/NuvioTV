@@ -67,6 +67,18 @@ class SportsLiveListFocusTest {
         assertEquals(emptyList<String>(), ids(sportsLiveKeepFocused(before, emptyList(), "b")))
     }
 
+    @Test
+    fun `while the list holds focus every row a load dropped stays in place (F6)`() {
+        val before = cards("a", "b", "c", "d", "e")
+        assertEquals(listOf("a", "b", "c", "d", "e"), ids(sportsLiveKeepShown(before, cards("a", "c", "e"))))
+        assertEquals(listOf("a", "b", "c", "d"), ids(sportsLiveKeepShown(before.take(4), cards("c"))))
+        // The dropped ones follow the rows they followed; a new row comes after them.
+        assertEquals(listOf("a", "b", "new", "c", "d", "e"), ids(sportsLiveKeepShown(before, cards("a", "new", "c", "e"))))
+        // Nothing dropped, or an emptied list: the list as it is.
+        assertEquals(listOf("e", "a"), ids(sportsLiveKeepShown(cards("a", "e"), cards("e", "a"))))
+        assertEquals(emptyList<String>(), ids(sportsLiveKeepShown(before, emptyList())))
+    }
+
     private fun ids(items: List<SportsLiveItem>) = items.map { it.id }
 
     private fun cards(vararg ids: String) = ids.map { id ->

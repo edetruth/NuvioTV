@@ -381,18 +381,20 @@ internal fun sportsLiveOffersHide(tab: SportsLiveTab, item: SportsLiveItem, stri
 internal enum class SportsLiveStageButton { WATCH, MORE }
 
 /**
- * The stage's fixed layout (V2, F4): one size for every row, so nothing re-flows as focus moves and the
- * buttons never leave the screen. Board px ÷ 2.
+ * The stage's layout (V2, F4): one width and one media box for every row. Since live.20 (the user's TV photos) the
+ * info under the media takes only the height it needs, up to [INFO_MAX_DP], and the buttons follow right under it,
+ * so they never sit far below a short block and never leave the screen. Board px ÷ 2.
  */
 internal object SportsLiveStageLayout {
     const val WIDTH_DP = 360
     const val MEDIA_HEIGHT_DP = 203
-    const val SCORE_BLOCK_HEIGHT_DP = 132
+    /** The most the info block (headline, status, facts, ranks, linescore) may take. */
+    const val INFO_MAX_DP = 160
     const val GAP_DP = 10
     const val BUTTON_ROW_HEIGHT_DP = 40
 
-    /** The stage's whole height: media, score block, buttons and the gaps between. */
-    const val HEIGHT_DP = MEDIA_HEIGHT_DP + GAP_DP + SCORE_BLOCK_HEIGHT_DP + GAP_DP + BUTTON_ROW_HEIGHT_DP
+    /** The stage's tallest: media, the fullest info block, buttons and the gaps between. */
+    const val HEIGHT_DP = MEDIA_HEIGHT_DP + GAP_DP + INFO_MAX_DP + GAP_DP + BUTTON_ROW_HEIGHT_DP
 
     /** The buttons of the stage, whatever is focused: the same two for a game, an upcoming game or a channel. */
     fun buttons(@Suppress("UNUSED_PARAMETER") row: ScoreboardRow?): List<SportsLiveStageButton> =
