@@ -28,6 +28,7 @@ import com.nuvio.tv.ui.screens.sportslive.SportsLiveMoreEntry.FOLLOW
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveMoreEntry.GAME_STATS
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveMoreEntry.HIDE
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveMoreEntry.REMIND
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveMoreEntry.REPORT
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveMoreEntry.WATCH_WITH
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -235,25 +236,39 @@ class SportsLiveLiveNowV2Test {
         val liveNow = SportsLiveUiState(selectedTab = SportsLiveTab.LIVE_NOW, tabs = mapOf(SportsLiveTab.LIVE_NOW to listOf(pacers, channel)))
         // A matched live game: everything but Remind me.
         assertEquals(
-            listOf(WATCH_WITH, CHOOSE_STREAM, GAME_STATS, FOLLOW, FOLLOW, DETAILS),
+            listOf(WATCH_WITH, CHOOSE_STREAM, GAME_STATS, FOLLOW, FOLLOW, DETAILS, REPORT),
             entriesFor(pacers, liveNow, scores[pacers.streamKey])
         )
         // An unmatched live game: no Game stats.
         val unmatched = item("Hawks @ Spurs", NOW - HOUR)
-        assertEquals(listOf(WATCH_WITH, CHOOSE_STREAM, FOLLOW, FOLLOW, DETAILS), entriesFor(unmatched, liveNow, null))
+        assertEquals(listOf(WATCH_WITH, CHOOSE_STREAM, FOLLOW, FOLLOW, DETAILS, REPORT), entriesFor(unmatched, liveNow, null))
         // A channel: no Follow (no sides), no Game stats.
-        assertEquals(listOf(WATCH_WITH, CHOOSE_STREAM, DETAILS), entriesFor(channel, liveNow, null))
+        assertEquals(listOf(WATCH_WITH, CHOOSE_STREAM, DETAILS, REPORT), entriesFor(channel, liveNow, null))
         // An upcoming game on Upcoming: Details, Follow and Remind me.
         val upcoming = SportsLiveUiState(selectedTab = SportsLiveTab.UPCOMING)
         val game = item("Bulls @ Heat", NOW + 5 * HOUR, isLive = false)
-        assertEquals(listOf(FOLLOW, FOLLOW, REMIND, DETAILS), entriesFor(game, upcoming, null))
+        assertEquals(listOf(FOLLOW, FOLLOW, REMIND, DETAILS, REPORT), entriesFor(game, upcoming, null))
         // Details is always there: the raw source text lives only there.
-        assertTrue(sportsLiveMoreEntries(false, false, false, 0, false) == listOf(DETAILS))
+        assertTrue(sportsLiveMoreEntries(false, false, false, 0, false) == listOf(DETAILS, REPORT))
     }
 
     @Test
-    fun `Hide from Live Now is offered only on unmatched Live Now events and comes last`() {
-        assertEquals(listOf(WATCH_WITH, CHOOSE_STREAM, DETAILS, HIDE), sportsLiveMoreEntries(true, true, false, 0, false, hide = true))
+    fun `More always ends with Report a problem, for remotes with no Play or Pause or Info to hold`() {
+        val all = listOf(
+            sportsLiveMoreEntries(false, false, false, 0, false),
+            sportsLiveMoreEntries(true, true, true, 2, true),
+            sportsLiveMoreEntries(true, true, false, 0, false, hide = true),
+            sportsLiveMoreEntries(true, true, false, 0, false, hide = true, hideFirst = true)
+        )
+        all.forEach { entries ->
+            assertEquals(REPORT, entries.last())
+            assertEquals(1, entries.count { it == REPORT })
+        }
+    }
+
+    @Test
+    fun `Hide from Live Now is offered only on unmatched Live Now events and comes after Details`() {
+        assertEquals(listOf(WATCH_WITH, CHOOSE_STREAM, DETAILS, HIDE, REPORT), sportsLiveMoreEntries(true, true, false, 0, false, hide = true))
         val show = item("Late Night Talk Show", NOW - HOUR)
         assertTrue(sportsLiveOffersHide(SportsLiveTab.LIVE_NOW, show, strictMatch = false, followable = false))
         // A game ESPN matches, or one with real teams to follow, is never hidden this way.
@@ -267,7 +282,7 @@ class SportsLiveLiveNowV2Test {
     @Test
     fun `a row no source gives a sport lists Hide this first, on Live Now and Upcoming`() {
         assertEquals(
-            listOf(HIDE, WATCH_WITH, CHOOSE_STREAM, DETAILS),
+            listOf(HIDE, WATCH_WITH, CHOOSE_STREAM, DETAILS, REPORT),
             sportsLiveMoreEntries(true, true, false, 0, false, hide = true, hideFirst = true)
         )
         val mystery = item("Northfield vs Eastbrook", NOW + HOUR, isLive = false, sport = null)

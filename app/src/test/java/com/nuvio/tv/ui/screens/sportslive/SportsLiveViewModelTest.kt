@@ -1103,6 +1103,15 @@ class SportsLiveViewModelTest {
     }
 
     @Test
+    fun `Report a problem in a row's More sheet saves one report through the reporter`() = runTest {
+        val triggers = mutableListOf<String>()
+        val viewModel = SportsLiveViewModel(repo, report = { triggers += it }, computeDispatcher = compute)
+        viewModel.reportProblem()
+        advanceUntilIdle()
+        assertEquals(listOf("Hold OK › More… › Report a problem (row)"), triggers)
+    }
+
+    @Test
     fun `tab, filter, visibility and the setting each reach the hover preview`() = runTest {
         nextLoad = load(listOf(item("a", isLive = true, sport = "Soccer"), item("b", isLive = true, sport = "Tennis")))
         val enabled = MutableStateFlow(false)

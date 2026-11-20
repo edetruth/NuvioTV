@@ -342,7 +342,7 @@ internal fun splitClock(clockText: String): Pair<String, String?> {
 private val QUARTER_CLOCK = Regex("""^(Q\d|OT\d?)\s+(\d{1,2}:\d{2})$""", RegexOption.IGNORE_CASE)
 
 /** An entry of the More… sheet (V2, #132, #134), in the order it lists them. */
-internal enum class SportsLiveMoreEntry { WATCH_WITH, CHOOSE_STREAM, GAME_STATS, FOLLOW, REMIND, DETAILS, HIDE }
+internal enum class SportsLiveMoreEntry { WATCH_WITH, CHOOSE_STREAM, GAME_STATS, FOLLOW, REMIND, DETAILS, HIDE, REPORT }
 
 /**
  * What More… (or Hold OK on a row) lists for one item (#134 order): **Watch with another game** where dual screen
@@ -352,6 +352,8 @@ internal enum class SportsLiveMoreEntry { WATCH_WITH, CHOOSE_STREAM, GAME_STATS,
  * **Remind me** only for a game not started ([remindable]), **Details** always (the raw addon text lives only
  * there), and **Hide from Live Now** for an unmatched item on Live Now ([hide]). The team pages sit between
  * Remind me and Details. With [hideFirst] (an item no source gives a sport, live.20) Hide comes first, as "Hide this".
+ * **Report a problem** is always last (TV QA: the onn remote has no Play/Pause or Info to hold, and Google TV takes ★
+ * and TV, so Hold OK → More… is the one way every remote has).
  */
 internal fun sportsLiveMoreEntries(
     watchWith: Boolean,
@@ -370,6 +372,7 @@ internal fun sportsLiveMoreEntries(
     if (remindable) add(SportsLiveMoreEntry.REMIND)
     add(SportsLiveMoreEntry.DETAILS)
     if (hide && !hideFirst) add(SportsLiveMoreEntry.HIDE)
+    add(SportsLiveMoreEntry.REPORT)
 }
 
 /**

@@ -574,8 +574,8 @@ internal fun panelRowOk(row: ZapPanelRow, game: ScoreSnapshot?): PanelRowOk =
 /**
  * What Hold OK on a panel row lists (#140), in order: **Watch both** first (the game playing beside the one
  * held, where dual screen pairs them: [watchBoth]), then **Choose stream** ([chooseStream]), **Game stats** (a
- * strict ESPN match only: [strictMatch]) and **Follow ‹team›** once per side ([sides]). The More… menu's
- * entries ([sportsLiveMoreEntries]) without Details or Remind me, which the player has no room for.
+ * strict ESPN match only: [strictMatch]), **Follow ‹team›** once per side ([sides]) and **Report a problem** last.
+ * The More… menu's entries ([sportsLiveMoreEntries]) without Details or Remind me, which the player has no room for.
  */
 internal fun panelMenuEntries(watchBoth: Boolean, chooseStream: Boolean, strictMatch: Boolean, sides: Int): List<SportsLiveMoreEntry> =
     sportsLiveMoreEntries(watchBoth, chooseStream, strictMatch, sides, remindable = false)

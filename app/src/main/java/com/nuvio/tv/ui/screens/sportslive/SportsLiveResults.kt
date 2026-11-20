@@ -161,6 +161,8 @@ internal fun SportsLiveResultsView(
     /** More… → Watch later (no spoilers) (#151); Reveal result on a game already saved. */
     onSaveForLater: (ScoreSnapshot) -> Unit = {},
     onRevealResult: (ScoreSnapshot) -> Unit = {},
+    /** More… → Report a problem (#172, TV QA), always last. */
+    onReport: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -297,6 +299,10 @@ internal fun SportsLiveResultsView(
                     menuRowKey = null
                     onOpenTeam(ref)
                 }
+            },
+            onReport = {
+                menuRowKey = null
+                onReport()
             }
         )
     }

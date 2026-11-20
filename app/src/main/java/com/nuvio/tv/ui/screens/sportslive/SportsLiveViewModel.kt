@@ -149,7 +149,9 @@ class SportsLiveViewModel internal constructor(
     // Where the list is bucketed and pinned, and the boards built; tests pass their dispatcher, so it runs in virtual time.
     private val computeDispatcher: CoroutineDispatcher,
     /** live.20 B2: looks up a Live now row rested on, ahead of OK; null (tests): none. */
-    prefetchHooks: SportsLivePrefetchHooks? = null
+    prefetchHooks: SportsLivePrefetchHooks? = null,
+    /** Saves a report (#172) asked for by its trigger: [SportsLiveReporter.report]. */
+    private val report: (String) -> Unit = {}
 ) : ViewModel() {
 
     @Inject
@@ -162,7 +164,8 @@ class SportsLiveViewModel internal constructor(
         manifestFetcher: SportsLiveManifestFetcher,
         identifier: TeamIdentifier,
         standingsRepository: StandingsRepository,
-        listStore: SportsLiveListSnapshotStore
+        listStore: SportsLiveListSnapshotStore,
+        reporter: SportsLiveReporter
     ) : this(
         repo = repo,
         // The zap's pick, which joins the stream search the ended-games probe started on settle; a
@@ -213,7 +216,8 @@ class SportsLiveViewModel internal constructor(
         directoryStamp = { SportsLiveSharedBuckets.currentStamp() },
         sharedBuckets = SportsLiveSharedBuckets.shared,
         computeDispatcher = Dispatchers.Default,
-        prefetchHooks = SportsLivePrefetchHooks.of(resolver)
+        prefetchHooks = SportsLivePrefetchHooks.of(resolver),
+        report = reporter::report
     )
 
     private data class Selection(
@@ -594,6 +598,11 @@ class SportsLiveViewModel internal constructor(
     /** More… → Hide from Live Now (#134): [item]'s title leaves Live Now; Settings → More → Hidden brings it back. */
     fun hideFromLiveNow(item: SportsLiveItem) {
         viewModelScope.launch { hideTitle(SportsLiveHiddenTitles.titleOf(item.meta.name)) }
+    }
+
+    /** Hold OK → More… → Report a problem on a row (TV QA: remotes with no Play/Pause or Info to hold). */
+    fun reportProblem() {
+        report(REPORT_TRIGGER)
     }
 
     fun selectTab(tab: SportsLiveTab) {
@@ -1034,6 +1043,9 @@ class SportsLiveViewModel internal constructor(
         const val MINUTE_MS = 60_000L
         const val FOCUS_PROBE_DELAY_MS = 700L
         const val ENDED_TICK_MS = 30_000L
+
+        /** The trigger a row's Report a problem writes in the report. */
+        const val REPORT_TRIGGER = "Hold OK › More… › Report a problem (row)"
 
         /** After a tip-off, how long before the list is bucketed again (live.20 C1): clear of the start itself. */
         const val KICKOFF_SLACK_MS = 1_000L

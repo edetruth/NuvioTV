@@ -97,8 +97,8 @@ internal fun rememberMoreHeading(item: SportsLiveItem, row: ScoreboardRow?): Spo
  * (always the picker, F13), **Choose stream…**, **Game stats** (a strict ESPN match only), **Follow ‹team›** for
  * each side matched to a real team ([sides]: ESPN's short name and whether it is followed), **Remind me**
  * (upcoming games), **Team pages…**, **Details** (the raw addon text lives only there) and **Hide from Live Now**
- * ([onHide]: unmatched items only; first, as **Hide this**, with [hideFirst]). The first entry takes focus; it never
- * re-orders under focus.
+ * ([onHide]: unmatched items only; first, as **Hide this**, with [hideFirst]), and **Report a problem** last
+ * ([onReport]). The first entry takes focus; it never re-orders under focus.
  */
 @Composable
 internal fun SportsLiveCardMenu(
@@ -149,7 +149,9 @@ internal fun SportsLiveCardMenu(
     onWatchLater: (() -> Unit)? = null,
     savedForLater: Boolean = false,
     /** "Scores ahead? +15 s" (live.20 Q18, #85): in the player only; null hides it. */
-    onScoresAhead: (() -> Unit)? = null
+    onScoresAhead: (() -> Unit)? = null,
+    /** "Report a problem" (#172, TV QA): saves a report as the Play/Pause hold does; always last; null hides it. */
+    onReport: (() -> Unit)? = null
 ) {
     var teamsOpen by remember { mutableStateOf(false) }
     SportsLiveSheet(
@@ -248,6 +250,9 @@ internal fun SportsLiveCardMenu(
                 icon = Icons.Rounded.Block,
                 iconTint = Colors.TextSecondary
             )
+        }
+        if (onReport != null) {
+            SportsLiveMenuButton(text = stringResource(R.string.sports_live_setting_report_problem), onClick = onReport, modifier = first())
         }
     }
 }

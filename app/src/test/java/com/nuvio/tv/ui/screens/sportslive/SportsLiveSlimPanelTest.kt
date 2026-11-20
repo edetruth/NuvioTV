@@ -28,6 +28,7 @@ import com.nuvio.tv.domain.model.SportsLiveTab
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveMoreEntry.CHOOSE_STREAM
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveMoreEntry.FOLLOW
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveMoreEntry.GAME_STATS
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveMoreEntry.REPORT
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveMoreEntry.WATCH_WITH
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens
 import androidx.compose.ui.unit.dp
@@ -261,10 +262,11 @@ class SportsLiveSlimPanelTest {
     // ---- #140: the slim panel ----
 
     @Test
-    fun `the hold OK menu lists Watch both first, then Choose stream, Game stats and Follow`() {
-        assertEquals(listOf(WATCH_WITH, CHOOSE_STREAM, GAME_STATS, FOLLOW, FOLLOW), panelMenuEntries(true, true, true, sides = 2))
-        assertEquals(listOf(CHOOSE_STREAM, FOLLOW, FOLLOW), panelMenuEntries(false, true, false, sides = 2))
+    fun `the hold OK menu lists Watch both first, then Choose stream, Game stats, Follow and Report a problem`() {
+        assertEquals(listOf(WATCH_WITH, CHOOSE_STREAM, GAME_STATS, FOLLOW, FOLLOW, REPORT), panelMenuEntries(true, true, true, sides = 2))
+        assertEquals(listOf(CHOOSE_STREAM, FOLLOW, FOLLOW, REPORT), panelMenuEntries(false, true, false, sides = 2))
         assertEquals(WATCH_WITH, panelMenuEntries(true, false, false, sides = 0).first())
+        assertEquals(listOf(REPORT), panelMenuEntries(false, false, false, sides = 0))
     }
 
     @Test

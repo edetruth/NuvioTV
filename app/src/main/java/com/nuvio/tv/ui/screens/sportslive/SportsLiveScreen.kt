@@ -491,6 +491,7 @@ fun SportsLiveScreen(
             onToggleKeep = catchUpViewModel::toggleKeep,
             onOpenAddons = onOpenAddons,
             onHide = viewModel::hideFromLiveNow,
+            onReport = viewModel::reportProblem,
             protection = protection,
             onSaveForLater = scoresViewModel::saveForLater,
             onRevealResult = scoresViewModel::revealResult,
@@ -609,6 +610,8 @@ private fun SportsLiveContent(
     onOpenAddons: () -> Unit = {},
     /** More… → Hide from Live Now (#134). */
     onHide: (SportsLiveItem) -> Unit = {},
+    /** More… → Report a problem (#172, TV QA): on Live now, Upcoming, Replays, Channels and Results rows. */
+    onReport: () -> Unit = {},
     /** Spoiler protection (#151): More… offers Watch later (no spoilers), or Reveal result on a saved game. */
     protection: SpoilerProtection = SpoilerProtection(),
     onSaveForLater: (ScoreSnapshot) -> Unit = {},
@@ -1267,7 +1270,15 @@ private fun SportsLiveContent(
             } else {
                 null
             },
-            hideFirst = hideFirst
+            hideFirst = hideFirst,
+            onReport = if (SportsLiveMoreEntry.REPORT in entries) {
+                {
+                    menuCardKey = null
+                    onReport()
+                }
+            } else {
+                null
+            }
         )
     }
 
@@ -1594,6 +1605,7 @@ private fun SportsLiveContent(
                 onEditMySports = onEditMySports,
                 onSaveForLater = onSaveForLater,
                 onRevealResult = onRevealResult,
+                onReport = onReport,
                 modifier = Modifier.padding(top = SportsLiveTokens.Size.HeaderBottomGap)
             )
             return@Column

@@ -51,8 +51,9 @@ import javax.inject.Singleton
 /**
  * Report a problem (#172): saves a privacy-safe snapshot of what the app is doing to a file the coordinator pulls over
  * adb ([SportsLiveReportFiles]), shows its summary as a QR code where adb is not at hand, and takes a short voice note.
- * Triggered by holding Play/Pause or Info ([SportsLiveReportKey], from MainActivity) or from Settings → Sports & Live →
- * More → Report a problem. Nothing leaves the TV by itself.
+ * Triggered by holding Play/Pause or Info ([SportsLiveReportKey], from MainActivity), from Hold OK → More… → Report a
+ * problem on a Sports & Live row or in the player ([report]), or from Settings → Sports & Live → More → Report a problem.
+ * Nothing leaves the TV by itself.
  */
 @Singleton
 class SportsLiveReporter @Inject constructor(
@@ -119,29 +120,33 @@ class SportsLiveReporter @Inject constructor(
     fun onKey(event: KeyEvent): Boolean {
         val action = key.onKey(event.keyCode, event.action, event.repeatCount, event.downTime, event.eventTime)
         if (action == SportsLiveReportKeyAction.REPORT) {
-            val trigger = when (event.keyCode) {
-                KeyEvent.KEYCODE_INFO -> "Hold Info"
-                else -> "Hold Play/Pause"
-            }
-            scope.launch {
-                val saved = runCatching { save(trigger) }.getOrNull()
-                val adb = adbOn()
-                val miniPlaying = com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniPlayers.controller.isActive
-                if (saved == null) {
-                    SportsLiveToasts.show(SportsLiveToastKind.PROBLEM, context.getString(R.string.sports_live_report_failed))
-                } else if (SportsLiveReportQrPrompt.opensAfterSave(adb, SportsLiveReportTrail.screen, miniPlaying)) {
-                    // adb is off and no video plays (coordinator decision 4): the QR code at once; its subtitle names the report.
-                    _qrPrompt.value = true
-                } else {
-                    SportsLiveToasts.show(
-                        SportsLiveToastKind.INFO,
-                        context.getString(R.string.sports_live_report_saved, saved.number),
-                        context.getString(if (adb) R.string.sports_live_report_saved_adb else R.string.sports_live_report_saved_qr)
-                    )
-                }
-            }
+            report(if (event.keyCode == KeyEvent.KEYCODE_INFO) "Hold Info" else "Hold Play/Pause")
         }
         return action != SportsLiveReportKeyAction.PASS
+    }
+
+    /**
+     * Saves a report asked for by [trigger] from the remote (a held key, or Hold OK → More… → Report a problem) and says
+     * so: "Report #N saved" with how to send it, or, with adb off and no video playing, the QR dialog at once.
+     */
+    fun report(trigger: String) {
+        scope.launch {
+            val saved = runCatching { save(trigger) }.getOrNull()
+            val adb = adbOn()
+            val miniPlaying = com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniPlayers.controller.isActive
+            if (saved == null) {
+                SportsLiveToasts.show(SportsLiveToastKind.PROBLEM, context.getString(R.string.sports_live_report_failed))
+            } else if (SportsLiveReportQrPrompt.opensAfterSave(adb, SportsLiveReportTrail.screen, miniPlaying)) {
+                // adb is off and no video plays (coordinator decision 4): the QR code at once; its subtitle names the report.
+                _qrPrompt.value = true
+            } else {
+                SportsLiveToasts.show(
+                    SportsLiveToastKind.INFO,
+                    context.getString(R.string.sports_live_report_saved, saved.number),
+                    context.getString(if (adb) R.string.sports_live_report_saved_adb else R.string.sports_live_report_saved_qr)
+                )
+            }
+        }
     }
 
     /** Saves a report now, asked for by [trigger]. */
