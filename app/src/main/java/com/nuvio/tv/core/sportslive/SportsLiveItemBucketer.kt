@@ -1,6 +1,7 @@
 package com.nuvio.tv.core.sportslive
 
 import com.nuvio.tv.core.sportslive.scores.EspnLeagueMap
+import com.nuvio.tv.core.sportslive.scores.TeamDirectory
 import com.nuvio.tv.domain.model.CatalogStats
 import com.nuvio.tv.domain.model.ClaimedCatalog
 import com.nuvio.tv.domain.model.FollowedTeam
@@ -191,11 +192,17 @@ object SportsLiveItemBucketer {
      * returned unchanged and in place. A merged card shows the first known sport
      * ([SportsLiveTeams.knownSport]) of its sources, and the first timed start among them when its
      * primary has none, so its reminder bell and its place in the list follow the game.
+     *
+     * Copies whose names differ beyond that ("San Antonio Spurs / Los Angeles Clippers" and "LA Clippers / San
+     * Antonio Spurs", live.18) also merge when both sides resolve to the same two ESPN teams of a league either
+     * card can be on ([sameTeams], through the [directory]); the merged row then shows the copy that names its
+     * league ("NBA") when the primary names only its sport, keeping every source.
      */
     fun merge(
         items: List<SportsLiveItem>,
         addonOrder: List<String>,
-        nowMs: Long = System.currentTimeMillis()
+        nowMs: Long = System.currentTimeMillis(),
+        directory: TeamDirectory = TeamDirectory.shared
     ): List<SportsLiveItem> {
         val rank = addonOrder.withIndex().associate { (index, id) -> id to index }
         // Copies of one game share a team-pair key, so only plausible matches are compared.
@@ -211,6 +218,8 @@ object SportsLiveItemBucketer {
         // A primary with no timed start takes its first timed copy's, by the primary's stream key.
         val adoptedStart = HashMap<String, SportsLiveItem>()
         val folded = HashSet<String>()
+        // Primaries that took a copy by ESPN team ids, and the copy whose league is named, by the primary's stream key.
+        val presentedBy = HashMap<String, SportsLiveItem>()
         for (group in candidates) {
             // Each primary as later copies are compared with it: with the start it adopted, if any.
             val primaries = mutableListOf<SportsLiveItem>()
@@ -219,9 +228,11 @@ object SportsLiveItemBucketer {
                 compareBy({ rank[it.addonId] ?: Int.MAX_VALUE }, { it.catalogName }, { it.id })
             )
             for (item in ordered) {
+                var byIds = false
                 val index = primaries.indexOfFirst { primary ->
                     val pooled = alternatesOf[primary.streamKey].orEmpty() + primary
-                    pooled.none { it.streamKey == item.streamKey } && sameGame(primary, item, nowMs)
+                    pooled.none { it.streamKey == item.streamKey } &&
+                        (sameGame(primary, item, nowMs) || sameTeams(primary, item, nowMs, directory).also { byIds = it })
                 }
                 if (index < 0) {
                     primaries += item
@@ -229,6 +240,7 @@ object SportsLiveItemBucketer {
                     val primary = primaries[index]
                     alternatesOf.getOrPut(primary.streamKey) { mutableListOf() } += item
                     folded += item.streamKey
+                    if (byIds && !namesLeague(primary) && namesLeague(item)) presentedBy.putIfAbsent(primary.streamKey, item)
                     if (timedStart(primary) == null && timedStart(item) != null) {
                         adoptedStart[primary.streamKey] = item
                         primaries[index] = primary.copy(startMs = item.startMs, startHasTimeOfDay = true)
@@ -241,12 +253,16 @@ object SportsLiveItemBucketer {
             if (item.streamKey in folded) return@mapNotNull null
             val alternates = alternatesOf[item.streamKey] ?: return@mapNotNull item
             val timed = adoptedStart[item.streamKey]
-            item.copy(
+            val merged = item.copy(
                 alternates = alternates,
                 sport = mergedSport(item, alternates),
                 startMs = timed?.startMs ?: item.startMs,
                 startHasTimeOfDay = timed != null || item.startHasTimeOfDay
             )
+            // The copy naming the league lends the row its title, sides and sport (it is the one ESPN matches).
+            presentedBy[item.streamKey]?.let { named ->
+                merged.copy(meta = merged.meta.copy(name = named.meta.name), teams = named.teams, sport = named.sport)
+            } ?: merged
         }
     }
 
@@ -273,6 +289,35 @@ object SportsLiveItemBucketer {
         val teamsMatch = sidesMatch(x.home, y.home, x.away, y.away, sportsKnown) ||
             sidesMatch(x.home, y.away, x.away, y.home, sportsKnown)
         return teamsMatch && sportsAgree(a, b) && !EspnLeagueMap.otherGender(a, b) && sameTime(a, b, nowMs)
+    }
+
+    /**
+     * Two copies of one game by ESPN team ids (live.18): their sports are both known and agree ("Basketball" and
+     * "NBA"), neither says women's unless both do, they are at one time, and in some league either card can be on
+     * ([TeamDirectory.leaguesFor]) both of each copy's sides resolve to one team ([TeamDirectory.teamId], cities
+     * short or in full), the same two teams in either order.
+     */
+    private fun sameTeams(a: SportsLiveItem, b: SportsLiveItem, nowMs: Long, directory: TeamDirectory): Boolean {
+        val teamsA = a.teams ?: return false
+        val teamsB = b.teams ?: return false
+        if (SportsLiveTeams.knownSport(a) == null || SportsLiveTeams.knownSport(b) == null || !sportsAgree(a, b)) return false
+        if (EspnLeagueMap.saysWomen(a) != EspnLeagueMap.saysWomen(b)) return false
+        if (saysWomenCompetition(a) != saysWomenCompetition(b) || saysMen(a) != saysMen(b)) return false
+        if (!sameTime(a, b, nowMs)) return false
+        val leagues = (TeamDirectory.leaguesFor(a) + TeamDirectory.leaguesFor(b)).distinct()
+        return leagues.any { league ->
+            val a1 = directory.teamId(league, teamsA.home) ?: return@any false
+            val a2 = directory.teamId(league, teamsA.away) ?: return@any false
+            val b1 = directory.teamId(league, teamsB.home) ?: return@any false
+            val b2 = directory.teamId(league, teamsB.away) ?: return@any false
+            a1 != a2 && ((a1 == b1 && a2 == b2) || (a1 == b2 && a2 == b1))
+        }
+    }
+
+    // A copy whose routing names one league ("NBA"), not only a sport word that may also be college ("Basketball").
+    private fun namesLeague(item: SportsLiveItem): Boolean {
+        val leagues = EspnLeagueMap.leaguesFor(item)
+        return leagues.size == 1 && leagues[0] != EspnLeagueMap.SOCCER_ALL && EspnLeagueMap.collegeFallbackFor(item) == null
     }
 
     private fun sidesMatch(home: String, otherHome: String, away: String, otherAway: String, sportsKnown: Boolean): Boolean {

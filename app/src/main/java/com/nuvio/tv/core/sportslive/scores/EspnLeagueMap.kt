@@ -316,6 +316,9 @@ object EspnLeagueMap {
         return first != second
     }
 
+    /** True when [item] says it is a women's game ("Women's", "W" sides, NCAAW, WNBA...), live.18. */
+    fun saysWomen(item: SportsLiveItem): Boolean = genderOf(item) == Gender.WOMEN
+
     private fun genderOf(item: SportsLiveItem): Gender? =
         genders(Triple(SportsLiveTeams.knownSport(item), listOf(item.meta.name) + item.meta.genres, listOf(item.catalogName)))
 

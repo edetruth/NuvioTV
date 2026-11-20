@@ -137,6 +137,18 @@ class TeamDirectory(private val maxLeagues: Int = MAX_LEAGUES) {
     }
 
     /**
+     * The ESPN id of the one team of [league] that [side] names, its city also tried written short or in full
+     * ("Los Angeles Clippers" is ESPN's "LA Clippers", [cityVariants]); null when the list is not loaded, or no
+     * team or more than one answers. Copies of one game naming their teams differently merge by these ids (live.18).
+     * Kept per league, side and directory generation.
+     */
+    fun teamId(league: EspnLeague, side: String): String? = teamIdMemo(Triple(league, side, generation))
+
+    private val teamIdMemo = Memo<Triple<EspnLeague, String, Long>, String?>(HOLDING_MEMO) { (league, side, _) ->
+        if (fetchedAt(league) == null) null else cityVariants(side).mapNotNull { resolve(league, it)?.id }.distinct().singleOrNull()
+    }
+
+    /**
      * Both sides' teams for [item] ([first], [second] in its title order): only when every league the card
      * can be on ([EspnLeagueMap], with its college fallback) has a list, and exactly one of them resolves
      * both sides. A card no listed league covers (`soccer/all`, individual sports) gets none.
@@ -203,6 +215,26 @@ class TeamDirectory(private val maxLeagues: Int = MAX_LEAGUES) {
                         "st" -> add((words.take(i) + "state" + words.drop(i + 1)).joinToString(" "))
                         "state" -> add((words.take(i) + "st" + words.drop(i + 1)).joinToString(" "))
                     }
+                }
+            }
+        }
+
+        // Cities addons and ESPN write either way (ESPN: "LA Clippers" but "Los Angeles Lakers").
+        private val CITIES: List<Pair<String, String>> = listOf(
+            "la" to "los angeles", "ny" to "new york", "nj" to "new jersey", "sf" to "san francisco",
+            "kc" to "kansas city", "tb" to "tampa bay", "okc" to "oklahoma city", "gs" to "golden state",
+            "sa" to "san antonio", "nola" to "new orleans", "lv" to "las vegas", "sd" to "san diego",
+            "sj" to "san jose", "philly" to "philadelphia"
+        )
+
+        /** [side] as written, then with a leading city swapped between its short and full forms ("LA Clippers" ↔ "Los Angeles Clippers"). */
+        internal fun cityVariants(side: String): List<String> {
+            val lower = side.trim().lowercase()
+            return buildList {
+                add(side)
+                for ((short, full) in CITIES) {
+                    if (lower.startsWith("$short ")) add(full + lower.substring(short.length))
+                    if (lower.startsWith("$full ")) add(short + lower.substring(full.length))
                 }
             }
         }
