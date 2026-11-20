@@ -62,9 +62,11 @@ data class GameArt(
             val remembered = if (event == null) known.forCard(item, first, second) else null
             // ESPN's own time beats an addon's, unless ESPN has none yet (TBD).
             val eventStart = event?.takeIf { it.timeValid }?.startMs
+            // A game saved for later (#151) shows no records: they move with the result.
+            val records = event?.spoilerProtected != true
             return GameArt(
-                first = team(first, firstTeam, remembered?.first, event?.league),
-                second = team(second, secondTeam, remembered?.second, event?.league),
+                first = team(first, firstTeam, remembered?.first, event?.league, records),
+                second = team(second, secondTeam, remembered?.second, event?.league, records),
                 league = event?.leagueName?.takeIf { it.isNotBlank() } ?: sportLabelOf(item),
                 startMs = eventStart ?: item.startMs,
                 hasTimeOfDay = if (eventStart != null) true else item.startHasTimeOfDay,
@@ -102,15 +104,15 @@ data class GameArt(
          * them, ESPN's names, abbreviations and logos, its league; no time and no score.
          */
         fun ofEvent(event: ScoreSnapshot): GameArt = GameArt(
-            first = espnTeam(event.away, event.league),
-            second = espnTeam(event.home, event.league),
+            first = espnTeam(event.away, event.league, records = !event.spoilerProtected),
+            second = espnTeam(event.home, event.league, records = !event.spoilerProtected),
             league = event.leagueName?.takeIf { it.isNotBlank() },
             startMs = null,
             hasTimeOfDay = false,
             ranksOnRows = RankDisplay.onRows(event.league)
         )
 
-        private fun espnTeam(team: ScoreTeam, league: EspnLeague): GameArtTeam {
+        private fun espnTeam(team: ScoreTeam, league: EspnLeague, records: Boolean): GameArtTeam {
             val name = listOf(team.displayName, team.shortDisplayName, team.name, team.abbreviation)
                 .firstOrNull { !it.isNullOrBlank() }.orEmpty()
             return GameArtTeam(
@@ -118,7 +120,7 @@ data class GameArt(
                 short = team.abbreviation?.takeIf { it.isNotBlank() } ?: team.shortDisplayName?.takeIf { it.isNotBlank() } ?: name,
                 logo = team.logo?.takeIf { it.isNotBlank() },
                 shortName = team.shortDisplayName?.takeIf { it.isNotBlank() } ?: name,
-                record = team.record,
+                record = team.record?.takeIf { records },
                 rank = RankDisplay.rank(league, team.rank)
             )
         }
@@ -127,7 +129,7 @@ data class GameArt(
         fun kickoff(art: GameArt, nowMs: Long, zone: ZoneId, locale: Locale): SportsLivePillTime? =
             art.startMs?.let { SportsLivePillTime.of(it, art.hasTimeOfDay, nowMs, zone, locale) }
 
-        private fun team(cardName: String, espn: ScoreTeam?, known: KnownTeam?, league: EspnLeague? = null): GameArtTeam {
+        private fun team(cardName: String, espn: ScoreTeam?, known: KnownTeam?, league: EspnLeague? = null, records: Boolean = true): GameArtTeam {
             val own = displayName(cardName)
             val name = espn?.displayName?.takeIf { it.isNotBlank() } ?: own
             val short = espn?.abbreviation?.takeIf { it.isNotBlank() } ?: espn?.shortDisplayName?.takeIf { it.isNotBlank() }
@@ -137,7 +139,7 @@ data class GameArt(
                 short = short,
                 logo = espn?.logo?.takeIf { it.isNotBlank() } ?: known?.logo,
                 shortName = espn?.shortDisplayName?.takeIf { it.isNotBlank() } ?: name,
-                record = espn?.record,
+                record = espn?.record?.takeIf { records },
                 rank = league?.let { RankDisplay.rank(it, espn?.rank) }
             )
         }

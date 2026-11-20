@@ -63,6 +63,24 @@ class GameArtTest {
     }
 
     @Test
+    fun `a game saved for later draws no records, which can tell the result`() {
+        val withRecords = pacers.copy(
+            home = pacers.home.copy(record = "10-5"),
+            away = pacers.away.copy(record = "1-15")
+        )
+        // The fixture's records show when the game is not protected.
+        assertEquals("1-15", GameArt.of(item("Pacers at 76ers"), withRecords)!!.first.record)
+        assertEquals("10-5", GameArt.ofEvent(withRecords).second.record)
+        val saved = withRecords.copy(spoilerProtected = true)
+        val art = GameArt.of(item("Pacers at 76ers"), saved)!!
+        assertNull(art.first.record)
+        assertNull(art.second.record)
+        val event = GameArt.ofEvent(saved)
+        assertNull(event.first.record)
+        assertNull(event.second.record)
+    }
+
+    @Test
     fun `an ESPN start without a time (TBD) keeps the card's own start`() {
         val tbd = pacers.copy(startMs = ms("2026-11-15T05:00:00Z"), timeValid = false)
         val art = GameArt.of(item("Pacers at 76ers", start = "2026-11-15T18:00:00Z"), tbd)!!
