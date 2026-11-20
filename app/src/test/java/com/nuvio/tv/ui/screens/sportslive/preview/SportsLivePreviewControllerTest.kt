@@ -108,11 +108,58 @@ class SportsLivePreviewControllerTest {
         advanceTimeBy(2)
         runCurrent()
         assertEquals(SportsLivePreviewState.Idle, preview.state.value)
-        // A key after the idle stop does not bring it back by itself.
-        preview.onKey()
-        advanceUntilIdle()
-        assertEquals(SportsLivePreviewState.Idle, preview.state.value)
         assertEquals(listOf("a"), lookups)
+    }
+
+    @Test
+    fun `after the idle stop the first key, even one that moves nothing, settles afresh and the preview comes back`() = runTest {
+        val preview = controller()
+        preview.onFocus(a)
+        advanceTimeBy(2_001)
+        runCurrent()
+        preview.onFirstFrame(a)
+        advanceTimeBy(SportsLivePreviewController.IDLE_STOP_MS)
+        runCurrent()
+        assertEquals(SportsLivePreviewState.Idle, preview.state.value)
+        // Left alone: it stays stopped.
+        advanceTimeBy(60 * 60_000L)
+        runCurrent()
+        assertEquals(listOf("a"), lookups)
+        // A key on the same card: a fresh 2 s settle, then the stream again.
+        preview.onKey()
+        advanceTimeBy(1_999)
+        runCurrent()
+        assertEquals(SportsLivePreviewState.Idle, preview.state.value)
+        advanceTimeBy(2)
+        runCurrent()
+        assertEquals(SportsLivePreviewState.Playing(a, streamA), preview.state.value)
+        assertEquals(listOf("a", "a"), lookups)
+        // Only the first key settles: later keys keep the playing preview.
+        preview.onFirstFrame(a)
+        preview.onKey()
+        runCurrent()
+        assertEquals(SportsLivePreviewState.Playing(a, streamA, rendering = true), preview.state.value)
+        assertEquals(listOf("a", "a"), lookups)
+        preview.onFocus(null)
+    }
+
+    @Test
+    fun `a key after an idle stop and a focus move settles on the new card only`() = runTest {
+        val preview = controller()
+        preview.onFocus(a)
+        advanceTimeBy(2_001)
+        runCurrent()
+        preview.onFirstFrame(a)
+        advanceTimeBy(SportsLivePreviewController.IDLE_STOP_MS)
+        runCurrent()
+        // The key that moves focus reaches the screen first, then the focus lands on b.
+        preview.onKey()
+        preview.onFocus(b)
+        advanceTimeBy(2_001)
+        runCurrent()
+        assertEquals(SportsLivePreviewState.Playing(b, streamB), preview.state.value)
+        assertEquals(listOf("a", "b"), lookups)
+        preview.onFocus(null)
     }
 
     @Test

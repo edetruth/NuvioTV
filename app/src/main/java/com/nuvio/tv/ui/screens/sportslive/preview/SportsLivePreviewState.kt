@@ -58,7 +58,8 @@ fun SportsLiveTab.offersPreview(): Boolean = this == SportsLiveTab.LIVE_NOW || t
  * at once and starts a fresh settle when the new inputs allow one, so scrolling past cards never
  * looks anything up. A stream only the full player can play, an error or a missed first frame
  * leave the art in place, silently, until the focus moves; no stream at all shows as [NoStream]
- * until then. A preview stopped for idleness also leaves the art until the focus moves.
+ * until then. A preview stopped for idleness leaves the art until the next key, which starts a fresh
+ * settle (moving or not), or until the focus moves.
  */
 class SportsLivePreviewController(
     private val scope: CoroutineScope,
@@ -88,6 +89,9 @@ class SportsLivePreviewController(
     private var ambient = false
     private var job: Job? = null
     private var idleJob: Job? = null
+
+    /** The preview stopped for idleness: the next key ([onKey]) settles again. */
+    private var idleStopped = false
 
     /** The playing preview's request check while it plays (null: nothing playing), for the idle stop. */
     private var playingCurrent: (() -> Boolean)? = null
@@ -154,9 +158,12 @@ class SportsLivePreviewController(
         return playing
     }
 
-    /** A key was pressed on the screen: a playing preview waits [idleStopMs] again before it stops. */
+    /**
+     * A key was pressed on the screen: a playing preview waits [idleStopMs] again before it stops; after an
+     * idle stop, the first key (even one that moves nothing) starts a fresh settle, so the preview comes back.
+     */
     fun onKey() {
-        playingCurrent?.let(::armIdleStop)
+        if (idleStopped) restart() else playingCurrent?.let(::armIdleStop)
     }
 
     private fun armIdleStop(current: () -> Boolean) {
@@ -164,10 +171,11 @@ class SportsLivePreviewController(
         idleJob?.cancel()
         idleJob = scope.launch {
             delay(idleStopMs)
-            // No key for that long: back to the art, with no new settle until an input changes.
+            // No key for that long: back to the art, with no new settle until a key or an input change.
             if (current() && _state.value is SportsLivePreviewState.Playing) {
                 playingCurrent = null
                 idleJob = null
+                idleStopped = true
                 _state.value = SportsLivePreviewState.Idle
             }
         }
@@ -180,6 +188,7 @@ class SportsLivePreviewController(
     }
 
     private fun stop() {
+        idleStopped = false
         gate.invalidate()
         job?.cancel()
         job = null
