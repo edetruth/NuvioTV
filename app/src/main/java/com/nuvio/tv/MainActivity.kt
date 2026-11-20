@@ -1359,6 +1359,8 @@ open class MainActivity : ComponentActivity() {
                             )
                             // Sports & Live's one toast card (#134): top right, never focused, newest wins.
                             com.nuvio.tv.ui.screens.sportslive.SportsLiveToastLayer()
+                            // Report a problem (#172): its QR dialog after a remote save while adb is off and no video plays.
+                            com.nuvio.tv.ui.screens.settings.SportsLiveReportQrHost()
 
                             val autoNextOverlay by externalPlaybackTracker.autoNextOverlay.collectAsState()
                             autoNextOverlay?.let { ov ->

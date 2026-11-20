@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -171,6 +172,18 @@ internal fun SportsLiveReportDialog(onDismiss: () -> Unit) {
             }
         }
     }
+}
+
+/** MainActivity's layer: the report dialog a remote save opens when adb is off and no video plays (#172, decision 4). */
+@Composable
+internal fun SportsLiveReportQrHost() {
+    val context = LocalContext.current
+    val reporter = remember {
+        dagger.hilt.android.EntryPointAccessors.fromApplication(context.applicationContext, SportsLiveReporterEntryPoint::class.java)
+            .sportsLiveReporter()
+    }
+    val open by reporter.qrPrompt.collectAsState()
+    if (open) SportsLiveReportDialog(onDismiss = reporter::dismissQrPrompt)
 }
 
 @Composable

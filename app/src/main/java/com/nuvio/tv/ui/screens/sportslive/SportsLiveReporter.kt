@@ -21,6 +21,7 @@ import com.nuvio.tv.core.sportslive.report.SportsLiveReportFiles
 import com.nuvio.tv.core.sportslive.report.SportsLiveReportInput
 import com.nuvio.tv.core.sportslive.report.SportsLiveReportKey
 import com.nuvio.tv.core.sportslive.report.SportsLiveReportKeyAction
+import com.nuvio.tv.core.sportslive.report.SportsLiveReportQrPrompt
 import com.nuvio.tv.core.sportslive.report.SportsLiveReportTrail
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import com.nuvio.tv.domain.model.AuthState
@@ -30,6 +31,9 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -61,6 +65,14 @@ class SportsLiveReporter @Inject constructor(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val lock = Mutex()
     private val key = SportsLiveReportKey()
+    private val _qrPrompt = MutableStateFlow(false)
+
+    /** True while the QR dialog a remote save opened is up ([SportsLiveReportQrPrompt]); MainActivity's host shows it. */
+    val qrPrompt: StateFlow<Boolean> = _qrPrompt.asStateFlow()
+
+    fun dismissQrPrompt() {
+        _qrPrompt.value = false
+    }
 
     private val dir: File
         get() = File(context.getExternalFilesDir(null) ?: context.filesDir, SportsLiveReportFiles.FOLDER)
@@ -79,13 +91,18 @@ class SportsLiveReporter @Inject constructor(
             val trigger = if (event.keyCode == KeyEvent.KEYCODE_INFO) "Hold Info" else "Hold Play/Pause"
             scope.launch {
                 val saved = runCatching { save(trigger) }.getOrNull()
+                val adb = adbOn()
+                val miniPlaying = com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniPlayers.controller.isActive
                 if (saved == null) {
                     SportsLiveToasts.show(SportsLiveToastKind.PROBLEM, context.getString(R.string.sports_live_report_failed))
+                } else if (SportsLiveReportQrPrompt.opensAfterSave(adb, SportsLiveReportTrail.screen, miniPlaying)) {
+                    // adb is off and no video plays (coordinator decision 4): the QR code at once; its subtitle names the report.
+                    _qrPrompt.value = true
                 } else {
                     SportsLiveToasts.show(
                         SportsLiveToastKind.INFO,
                         context.getString(R.string.sports_live_report_saved, saved.number),
-                        context.getString(if (adbOn()) R.string.sports_live_report_saved_adb else R.string.sports_live_report_saved_qr)
+                        context.getString(if (adb) R.string.sports_live_report_saved_adb else R.string.sports_live_report_saved_qr)
                     )
                 }
             }
