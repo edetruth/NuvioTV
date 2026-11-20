@@ -140,7 +140,7 @@ class SportsLiveDuplicateMergeTest {
     }
 
     @Test
-    fun `Wisconsin never merges with Wisconsin-Green Bay by its first word (live.20)`() {
+    fun `Wisconsin never merges with Wisconsin-Green Bay by its first word (live 20)`() {
         // "Wisconsin-Green Bay" is a known alias of ESPN's "Green Bay"; plain "Wisconsin" is another school.
         assertEquals(SportsLiveTeams.MergeMatch.NONE, SportsLiveTeams.mergeMatch("Wisconsin", "Wisconsin-Green Bay"))
         assertEquals(SportsLiveTeams.MergeMatch.NONE, SportsLiveTeams.mergeMatch("Wisconsin-Green Bay", "Wisconsin"))

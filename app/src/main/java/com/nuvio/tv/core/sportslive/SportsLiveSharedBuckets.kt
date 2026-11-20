@@ -7,6 +7,7 @@ import com.nuvio.tv.domain.model.SportsLiveTab
 import com.nuvio.tv.domain.repository.SportsLiveLoad
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
 
 /**
@@ -98,9 +99,9 @@ class SportsLiveSharedBuckets(
 
         /** Every change of [currentStamp] after the current one: what lists are built again on. */
         fun stampChanges(): Flow<Long> = merge(
-            TeamDirectory.shared.revision.drop(1),
-            TeamIdentityBook.shared.revision.drop(1),
-            SportsLiveEspnStarts.shared.revision.drop(1)
+            TeamDirectory.shared.revision.drop(1).map { it.toLong() },
+            TeamIdentityBook.shared.revision.drop(1).map { it.toLong() },
+            SportsLiveEspnStarts.shared.revision.drop(1).map { it.toLong() }
         )
     }
 }
