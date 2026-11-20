@@ -2,6 +2,7 @@ package com.nuvio.tv.core.sportslive.scores
 
 import android.content.Context
 import com.nuvio.tv.R
+import com.nuvio.tv.core.sportslive.SportsLiveEspnStarts
 import com.nuvio.tv.core.sportslive.SportsLiveSportInference
 import com.nuvio.tv.core.sportslive.SportsLiveToastKind
 import com.nuvio.tv.core.sportslive.SportsLiveToasts
@@ -105,7 +106,9 @@ class LiveScoresRepository internal constructor(
     /** What plays now (live.20 Q18, #85): its games are served masked, the others delayed ([ScoreWatch]). */
     private val watching: WatchingNow = WatchingNow(),
     /** Each stream source's "Scores ahead? +15 s" seconds, by addon id. */
-    private val nudges: Flow<Map<String, Int>> = flowOf(emptyMap())
+    private val nudges: Flow<Map<String, Int>> = flowOf(emptyMap()),
+    /** Where ESPN's start goes for a game an addon lists live that ESPN schedules later (live.20, a wrong LIVE). */
+    private val espnStarts: SportsLiveEspnStarts = SportsLiveEspnStarts.shared
 ) : LiveScoreTracking {
     @Inject
     constructor(
@@ -183,7 +186,12 @@ class LiveScoresRepository internal constructor(
         /** The college feed to try when [leagues] answer without the game (#66); null for most cards. */
         val fallback: EspnLeague?,
         /** A tennis card (#160): matched by surname on its tour's live copy ([TennisMatcher]). */
-        val tennis: Boolean = false
+        val tennis: Boolean = false,
+        /**
+         * The source keys of a game its addon lists live (not a channel), else empty: when ESPN schedules its game
+         * later, they go to [espnStarts] (live.20).
+         */
+        val liveKeys: List<String> = emptyList()
     )
 
     private class FeedState {
@@ -325,7 +333,8 @@ class LiveScoresRepository internal constructor(
                 return@mapNotNull TrackedCard(card, tennis, item.followed, fallback = null, tennis = true)
             }
             val (source, leagues) = routed
-            TrackedCard(card, leagues, item.followed, EspnLeagueMap.collegeFallbackFor(source)?.takeIf { it !in leagues })
+            val liveKeys = if (item.isLive && !item.isChannel) sources.filter { !it.isChannel }.map { it.streamKey } else emptyList()
+            TrackedCard(card, leagues, item.followed, EspnLeagueMap.collegeFallbackFor(source)?.takeIf { it !in leagues }, liveKeys = liveKeys)
         }.distinctBy { it.card.key }
         tracked.update { current -> if (entries.isEmpty()) current - screenId else current + (screenId to entries) }
     }
@@ -541,9 +550,35 @@ class LiveScoresRepository internal constructor(
         val nowMs = now()
         val deferred = ArrayList<Deferral>()
 
+        // live.20 (a wrong LIVE is worse than none): a game its addon lists live that ESPN schedules more than half an
+        // hour from now leaves Live now for Upcoming at ESPN's start. Its own match says so; with none on its own days,
+        // ESPN's today and tomorrow are asked too (budget allowing), read for the start only, never for a score.
+        fun noteStart(entry: TrackedCard, cardFeeds: List<ScoreFeed>, match: ScoreSnapshot?) {
+            val keys = entry.liveKeys
+            if (match != null) {
+                val later = SportsLiveEspnStarts.laterStart(match, nowMs)
+                when {
+                    later != null && keys.isNotEmpty() -> espnStarts.record(keys, later, nowMs)
+                    // A game moved before: kept on ESPN's start as it changes.
+                    match.timeValid && match.startMs != null && espnStarts.has(entry.card.key) ->
+                        espnStarts.record(listOf(entry.card.key), match.startMs, nowMs)
+                }
+                return
+            }
+            if (keys.isEmpty() || entry.tennis) return
+            val leagues = remembered[entry.card.key]?.let(::listOf) ?: entry.leagues
+            val extra = feedsOf(leagues, laterDates(nowMs)).filter { it !in cardFeeds }
+            if (extra.isEmpty() || !fits(extra)) return
+            needed += extra
+            val events = (cardFeeds + extra).flatMap { feed -> feeds[feed]?.takeIf { it.isFresh(nowMs) && !it.paused }?.events.orEmpty() }
+                .distinctBy { it.eventId }
+            matcher.laterMeeting(entry.card, events, nowMs)?.let { espnStarts.record(keys, it.startMs!!, nowMs) }
+        }
+
         // A card's outcome: its feeds polled, and its match published, or it confirmed unmatched.
         fun settle(entry: TrackedCard, dates: List<LocalDate>, cardFeeds: List<ScoreFeed>, match: ScoreSnapshot?) {
             val card = entry.card
+            noteStart(entry, cardFeeds, match)
             if (match == null) {
                 needed += cardFeeds
                 // Unmatched only once every feed it routes to has answered (or is paused).
@@ -797,6 +832,12 @@ class LiveScoresRepository internal constructor(
             Instant.ofEpochMilli(start - WINDOW_MS).atZone(EASTERN).toLocalDate(),
             Instant.ofEpochMilli(start + WINDOW_MS).atZone(EASTERN).toLocalDate()
         ).distinct()
+    }
+
+    /** ESPN's (US Eastern) today and tomorrow at [nowMs]: where a game listed live too early is found (live.20). */
+    private fun laterDates(nowMs: Long): List<LocalDate> {
+        val today = Instant.ofEpochMilli(nowMs).atZone(EASTERN).toLocalDate()
+        return listOf(today, today.plusDays(1))
     }
 
     private fun feedsOf(leagues: List<EspnLeague>, dates: List<LocalDate>): List<ScoreFeed> =

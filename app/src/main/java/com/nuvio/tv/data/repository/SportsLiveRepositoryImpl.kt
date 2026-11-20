@@ -8,8 +8,6 @@ import com.nuvio.tv.core.sportslive.SportsLiveDebugTiming
 import com.nuvio.tv.core.sportslive.SportsLiveSharedBuckets
 import com.nuvio.tv.core.sportslive.SportsLiveItemBucketer
 import com.nuvio.tv.core.sportslive.SportsLiveMySportsScope
-import com.nuvio.tv.core.sportslive.identify.TeamIdentityBook
-import com.nuvio.tv.core.sportslive.scores.TeamDirectory
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import com.nuvio.tv.domain.model.CatalogOption
 import com.nuvio.tv.domain.model.CatalogRow
@@ -38,8 +36,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
-import kotlinx.coroutines.flow.drop
-import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
@@ -261,7 +257,7 @@ class SportsLiveRepositoryImpl @Inject constructor(
     /** The team directory or a #168 identity changed, 2 s after the last change; once at the start (live.18). */
     @OptIn(FlowPreview::class)
     private val directoryChanges: Flow<Unit> =
-        merge(TeamDirectory.shared.revision.drop(1), TeamIdentityBook.shared.revision.drop(1))
+        SportsLiveSharedBuckets.stampChanges()
             .debounce(REBUCKET_DEBOUNCE_MS)
             .map { }
             .onStart { emit(Unit) }

@@ -10,7 +10,6 @@ import com.nuvio.tv.core.sportslive.SportsLiveSportInference
 import com.nuvio.tv.core.sportslive.SportsLiveDupes
 import com.nuvio.tv.BuildConfig
 import com.nuvio.tv.core.sportslive.identify.SportsLiveTeamIdentity
-import com.nuvio.tv.core.sportslive.identify.TeamIdentityBook
 import com.nuvio.tv.core.sportslive.SportsLiveMySportsScope
 import com.nuvio.tv.core.sportslive.SportsLiveTriedGames
 import com.nuvio.tv.core.sportslive.SportsLiveDataSaver
@@ -53,6 +52,7 @@ import com.nuvio.tv.ui.screens.sportslive.dual.sportsLiveSavedForLater
 import com.nuvio.tv.core.sportslive.scores.ScoreChips
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.SportsLiveEndedGames
+import com.nuvio.tv.core.sportslive.SportsLiveSharedBuckets
 import com.nuvio.tv.core.sportslive.SportsLiveFullTimeAnnouncements
 import com.nuvio.tv.core.sportslive.SportsLiveFullTimeToasts
 import com.nuvio.tv.core.sportslive.SportsLiveLinkVerdicts
@@ -88,9 +88,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
-import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.transform
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flatMapLatest
@@ -351,7 +349,7 @@ class SportsLiveZapViewModel internal constructor(
         // A game's teams identified in the background (#168, by the section) list it under its sport here too, and a
         // team list landing merges copies of one game by their teams (live.18): both build the list again, 2 s after
         // the last change and only once the panel is closed (an open panel keeps its snapshot).
-        val rebucket = merge(TeamDirectory.shared.revision.drop(1), TeamIdentityBook.shared.revision.drop(1))
+        val rebucket = SportsLiveSharedBuckets.stampChanges()
             .debounce(REBUCKET_DEBOUNCE_MS)
             .transform<Any, Unit> {
                 _panelOpen.first { open -> !open }

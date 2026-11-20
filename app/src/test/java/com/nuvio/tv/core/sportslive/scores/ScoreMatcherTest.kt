@@ -554,4 +554,39 @@ class ScoreMatcherTest {
         assertNull(matchTimed("Real Madrid Castilla vs Barcelona Atletic", "2026-11-16T19:45:00Z", listOf(senior)))
         assertNull(matchTimed("Castilla vs Barcelona", "2026-11-16T19:45:00Z", listOf(senior)))
     }
+
+    // --- live.20: an addon lists tomorrow's game live (user TV report, Nice / PSG) ---
+
+    private fun ligue1(id: String, start: String, state: ScoreState = ScoreState.PRE) = ScoreSnapshot(
+        eventId = id, league = EspnLeague("soccer", "fra.1"), startMs = ms(start), state = state, clockText = null,
+        isFinal = state == ScoreState.POST,
+        home = ScoreTeam(id = "nice", abbreviation = "NICE", displayName = "Nice", shortDisplayName = "Nice", name = "Nice",
+            location = "Nice", logo = null, score = null, linescores = emptyList()),
+        away = ScoreTeam(id = "psg", abbreviation = "PSG", displayName = "Paris Saint-Germain", shortDisplayName = "Paris SG",
+            name = "Paris Saint-Germain", location = "Paris Saint-Germain", logo = null, score = null, linescores = emptyList())
+    )
+
+    private val nicePsgSaturday = ligue1("nice-psg", "2026-11-21T16:15:00Z")
+    private val fridayLive = card("Nice vs PSG", "2026-11-20T15:30:00Z")
+    private val friday = ms("2026-11-20T15:40:00Z")
+
+    @Test
+    fun `the next day's meeting is found for its start but never matched as the card's score`() {
+        assertNull(matcher.match(fridayLive, listOf(nicePsgSaturday), friday))
+        assertEquals("nice-psg", matcher.laterMeeting(fridayLive, listOf(nicePsgSaturday), friday)?.eventId)
+        // A card with no start (a live catalog's) finds it too.
+        assertEquals("nice-psg", matcher.laterMeeting(card("PSG vs Nice", null), listOf(nicePsgSaturday), friday)?.eventId)
+    }
+
+    @Test
+    fun `no later meeting when ESPN has it in play, near, twice, or one side is not strong`() {
+        assertNull(matcher.laterMeeting(fridayLive, listOf(ligue1("in", "2026-11-20T15:30:00Z", ScoreState.IN)), friday))
+        assertNull(matcher.laterMeeting(fridayLive, listOf(ligue1("near", "2026-11-20T16:05:00Z")), friday))
+        assertNull(matcher.laterMeeting(fridayLive, listOf(nicePsgSaturday, ligue1("cup", "2026-11-25T20:00:00Z")), friday))
+        assertNull(matcher.laterMeeting(fridayLive, listOf(nicePsgSaturday.copy(timeValid = false)), friday))
+        // "Paris" alone is the city, never strong.
+        assertNull(matcher.laterMeeting(card("Nice vs Paris", "2026-11-20T15:30:00Z"), listOf(nicePsgSaturday), friday))
+        // A women's game never takes a card naming no women's side.
+        assertNull(matcher.laterMeeting(fridayLive, listOf(nicePsgSaturday.copy(league = EspnLeagueMap.WOMEN_FEEDS.first())), friday))
+    }
 }

@@ -229,21 +229,35 @@ object SportsLiveItemBucketer {
      * Live now at tip-off without a refresh, and leaves Live now when its window is over. Any other item is unchanged.
      */
     fun reclock(item: SportsLiveItem, nowMs: Long): SportsLiveItem {
-        if (!item.liveByClock) return item
-        val live = liveByClockAt(item, nowMs)
-        return if (live == item.isLive) item else item.copy(isLive = live)
+        val timed = withEspnStart(item, nowMs)
+        if (!timed.liveByClock) return timed
+        val live = liveByClockAt(timed, nowMs)
+        return if (live == timed.isLive) timed else timed.copy(isLive = live)
     }
 
     /** [items] reclocked ([reclock]); the same list when none changes. */
     fun reclock(items: List<SportsLiveItem>, nowMs: Long): List<SportsLiveItem> {
-        if (items.none { it.liveByClock && liveByClockAt(it, nowMs) != it.isLive }) return items
+        if (items.none { withEspnStart(it, nowMs) !== it || (it.liveByClock && liveByClockAt(it, nowMs) != it.isLive) }) return items
         return items.map { reclock(it, nowMs) }
+    }
+
+    /**
+     * [item] at ESPN's start when ESPN schedules its game later than its addon has it live ([SportsLiveEspnStarts], live.20:
+     * a wrong LIVE is worse than none): from then on its start alone says whether it is on. A channel never moves.
+     */
+    private fun withEspnStart(item: SportsLiveItem, nowMs: Long, starts: SportsLiveEspnStarts = SportsLiveEspnStarts.shared): SportsLiveItem {
+        if (item.isChannel || item.kind == SportsLiveKind.REPLAY) return item
+        val start = starts.startOf(item.streamKey, nowMs) ?: return item
+        if (item.startMs == start && item.startHasTimeOfDay && item.liveByClock) return item
+        return item.copy(startMs = start, startHasTimeOfDay = true, liveByClock = true, isLive = liveByClockAt(start, nowMs))
     }
 
     private fun liveByClockAt(item: SportsLiveItem, nowMs: Long): Boolean {
         val start = item.startMs ?: return item.isLive
-        return start > nowMs - LIVE_WINDOW_MS && start <= nowMs
+        return liveByClockAt(start, nowMs)
     }
+
+    private fun liveByClockAt(start: Long, nowMs: Long): Boolean = start > nowMs - LIVE_WINDOW_MS && start <= nowMs
 
     /**
      * The next moment after [nowMs] when one of [items] (or a merged copy) changes tab by the clock alone
@@ -251,7 +265,8 @@ object SportsLiveItemBucketer {
      */
     fun nextClockChange(items: Collection<SportsLiveItem>, nowMs: Long): Long? {
         var next = Long.MAX_VALUE
-        fun consider(item: SportsLiveItem) {
+        fun consider(raw: SportsLiveItem) {
+            val item = withEspnStart(raw, nowMs)
             if (!item.liveByClock) return
             val start = item.startMs ?: return
             if (start > nowMs && start < next) next = start

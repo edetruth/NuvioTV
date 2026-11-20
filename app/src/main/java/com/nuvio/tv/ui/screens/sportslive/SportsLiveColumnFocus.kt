@@ -23,7 +23,9 @@ internal enum class SportsLiveFocusSpot {
     /** A header control over the stage: the filter or Refresh. */
     HEADER_CONTROL,
     /** The mini player docked in the stage (#157), the stage column's top while it plays. */
-    DOCKED_MINI
+    DOCKED_MINI,
+    /** A card of the Your teams strip, between the tabs (or the Resume row) and the list (user TV report, live.20). */
+    STRIP
 }
 
 internal enum class SportsLiveFocusMove { UP, DOWN, RIGHT }
@@ -51,10 +53,14 @@ internal fun sportsLiveColumnTarget(
             SportsLiveFocusSpot.STAGE, SportsLiveFocusSpot.STAGE_LAST ->
                 if (miniDocked) SportsLiveFocusTarget.DOCKED_MINI else SportsLiveFocusTarget.HEADER_CONTROLS
             SportsLiveFocusSpot.DOCKED_MINI -> SportsLiveFocusTarget.HEADER_CONTROLS
+            // Any strip card, not only the first: the tabs (the Resume row first while it shows, as Down came).
+            SportsLiveFocusSpot.STRIP -> SportsLiveFocusTarget.SELECTED_TAB
             else -> SportsLiveFocusTarget.DEFAULT
         }
         SportsLiveFocusMove.DOWN -> when (from) {
+            // The tabs' Down enters Live now's content at its top: Resume, else the strip's first card, else the list.
             SportsLiveFocusSpot.TAB -> SportsLiveFocusTarget.LIST
+            SportsLiveFocusSpot.STRIP -> SportsLiveFocusTarget.LIST
             SportsLiveFocusSpot.HEADER_CONTROL -> if (stageShown) SportsLiveFocusTarget.STAGE_PRIMARY else SportsLiveFocusTarget.LIST
             else -> SportsLiveFocusTarget.DEFAULT
         }

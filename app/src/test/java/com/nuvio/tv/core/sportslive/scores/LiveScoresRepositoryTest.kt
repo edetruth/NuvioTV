@@ -1,5 +1,6 @@
 package com.nuvio.tv.core.sportslive.scores
 
+import com.nuvio.tv.core.sportslive.SportsLiveEspnStarts
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.domain.model.ContentType
 import com.nuvio.tv.domain.model.MetaPreview
@@ -107,7 +108,8 @@ class LiveScoresRepositoryTest {
         health: EspnFeedHealth? = null,
         notifyOutage: () -> Unit = {},
         logos: TeamLogoBook = TeamLogoBook(),
-        followedLeagues: kotlinx.coroutines.flow.Flow<List<EspnLeague>> = kotlinx.coroutines.flow.flowOf(emptyList())
+        followedLeagues: kotlinx.coroutines.flow.Flow<List<EspnLeague>> = kotlinx.coroutines.flow.flowOf(emptyList()),
+        espnStarts: SportsLiveEspnStarts = SportsLiveEspnStarts()
     ): LiveScoresRepository {
         val base = ms(start)
         return LiveScoresRepository(
@@ -125,7 +127,8 @@ class LiveScoresRepositoryTest {
             notifyOutage = notifyOutage,
             logos = logos,
             followedLeagues = followedLeagues,
-            watching = watching
+            watching = watching,
+            espnStarts = espnStarts
         )
     }
 
@@ -1323,5 +1326,64 @@ class LiveScoresRepositoryTest {
         advanceTimeBy(30_000); runCurrent()
         assertEquals(3, provider.calls.size)
         assertEquals(55, repo.scores.value.getValue(pacersCard.streamKey).homeScore)
+    }
+
+    // --- live.20: a game an addon lists live that ESPN schedules later (user TV report, Nice / PSG) ---
+
+    private fun ligue1(state: ScoreState, start: String, id: String = "nice-psg") = ScoreSnapshot(
+        eventId = id, league = EspnLeague("soccer", "fra.1"), startMs = ms(start), state = state, clockText = null,
+        isFinal = state == ScoreState.POST,
+        home = ScoreTeam(id = "nice", abbreviation = "NICE", displayName = "Nice", shortDisplayName = "Nice", name = "Nice",
+            location = "Nice", logo = null, score = if (state == ScoreState.PRE) null else 1, linescores = emptyList()),
+        away = ScoreTeam(id = "psg", abbreviation = "PSG", displayName = "Paris Saint-Germain", shortDisplayName = "Paris SG",
+            name = "Paris Saint-Germain", location = "Paris Saint-Germain", logo = null, score = if (state == ScoreState.PRE) null else 0,
+            linescores = emptyList())
+    )
+
+    @Test
+    fun `a card listed live the day before ESPN's kick-off gets ESPN's start and never a score`() = runTest {
+        val saturday = LocalDate.of(2026, 11, 21)
+        provider.respond = { feed -> ScoreboardResult(if (feed.date == saturday) listOf(ligue1(ScoreState.PRE, "2026-11-21T16:15:00Z")) else emptyList()) }
+        val starts = SportsLiveEspnStarts()
+        val repo = repository("2026-11-20T15:40:00Z", espnStarts = starts)
+        collect(repo)
+        val card = item("Nice vs PSG", "Ligue 1", "2026-11-20T15:30:00Z")
+        repo.track(SECTION, listOf(card))
+        runCurrent()
+        assertTrue(provider.calls.any { it.date == saturday })
+        assertEquals(ms("2026-11-21T16:15:00Z"), starts.startOf(card.streamKey, ms("2026-11-20T15:40:00Z")))
+        // The next day's game is never the card's score.
+        assertFalse(card.streamKey in repo.scores.value)
+    }
+
+    @Test
+    fun `a game ESPN shows in play keeps its card live, and an unmatched card stays as it is`() = runTest {
+        val friday = LocalDate.of(2026, 11, 20)
+        provider.respond = { feed -> ScoreboardResult(if (feed.date == friday) listOf(ligue1(ScoreState.IN, "2026-11-20T15:30:00Z")) else emptyList()) }
+        val starts = SportsLiveEspnStarts()
+        val repo = repository("2026-11-20T15:40:00Z", espnStarts = starts)
+        collect(repo)
+        val card = item("Nice vs PSG", "Ligue 1", "2026-11-20T15:30:00Z")
+        val other = item("Lens vs Lyon", "Ligue 1", "2026-11-20T15:30:00Z")
+        repo.track(SECTION, listOf(card, other))
+        runCurrent()
+        assertEquals("nice-psg", repo.scores.value.getValue(card.streamKey).eventId)
+        assertNull(starts.startOf(card.streamKey, ms("2026-11-20T15:40:00Z")))
+        assertNull(starts.startOf(other.streamKey, ms("2026-11-20T15:40:00Z")))
+        assertFalse(other.streamKey in repo.scores.value)
+    }
+
+    @Test
+    fun `a matched game ESPN has later the same day moves its live card too, an upcoming card is left alone`() = runTest {
+        provider.respond = { ScoreboardResult(listOf(ligue1(ScoreState.PRE, "2026-11-20T17:30:00Z"))) }
+        val starts = SportsLiveEspnStarts()
+        val repo = repository("2026-11-20T15:40:00Z", espnStarts = starts)
+        collect(repo)
+        val live = item("Nice vs PSG", "Ligue 1", "2026-11-20T15:30:00Z")
+        val upcoming = item("Nice vs PSG", "Ligue 1", "2026-11-20T16:00:00Z", addon = "b").copy(isLive = false)
+        repo.track(SECTION, listOf(live, upcoming))
+        runCurrent()
+        assertEquals(ms("2026-11-20T17:30:00Z"), starts.startOf(live.streamKey, ms("2026-11-20T15:40:00Z")))
+        assertNull(starts.startOf(upcoming.streamKey, ms("2026-11-20T15:40:00Z")))
     }
 }

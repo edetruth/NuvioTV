@@ -203,7 +203,7 @@ class SportsLiveViewModel internal constructor(
             .firstThenDebounce(LOGO_DEBOUNCE_MS),
         inferSport = { item -> SportsLiveTeamIdentity.identified(SportsLiveSportInference.infer(item, TeamDirectory.shared)) },
         identify = identifier::offer,
-        directoryChanges = merge(TeamDirectory.shared.revision.drop(1), TeamIdentityBook.shared.revision.drop(1)).map { },
+        directoryChanges = SportsLiveSharedBuckets.stampChanges().map { },
         mySports = prefs.mySports,
         hiddenTitles = prefs.hiddenTitles,
         hideTitle = prefs::hideTitle,

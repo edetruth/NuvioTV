@@ -154,6 +154,23 @@ class ScoreMatcher(
         return Pick(only)
     }
 
+    /**
+     * The pair's meeting ESPN has not started yet and has scheduled more than [LATER_LEAD_MS] after [nowMs] (live.20: an
+     * addon listed tomorrow's game live). Read for its start only, never as the card's score: it must be the pair's only
+     * meeting among [events] (a series or a home-and-home gives none), within [LATER_MAX_MS], both sides STRONG, and a
+     * women's-feed game never takes a card that names no women's side. Null otherwise.
+     */
+    fun laterMeeting(card: ScoreCard, events: List<ScoreSnapshot>, nowMs: Long): ScoreSnapshot? {
+        val home = side(card.teams.home)
+        val away = side(card.teams.away)
+        val only = events.filter { it.startMs != null && score(home, away, it) != null }.distinctBy { it.eventId }.singleOrNull() ?: return null
+        val start = only.startMs!!
+        if (only.state != ScoreState.PRE || !only.timeValid || start <= nowMs + LATER_LEAD_MS || start > nowMs + LATER_MAX_MS) return null
+        if (isWomenFeed(only) && home.qualifier != "w" && away.qualifier != "w") return null
+        if ((score(home, away, only) ?: 0) < BOTH_STRONG) return null
+        return only
+    }
+
     private fun bestOnDay(home: Side, away: Side, events: List<ScoreSnapshot>, day: LocalDate, zoneId: ZoneId): Pick? {
         val from = day.atStartOfDay(zoneId).toInstant().toEpochMilli()
         val until = day.plusDays(1).atStartOfDay(zoneId).toInstant().toEpochMilli()
@@ -310,6 +327,10 @@ class ScoreMatcher(
         private const val UNIQUE_WINDOW_MS = OFFSET_WINDOW_MS + 24 * 60 * 60 * 1000L
         /** How close to a timed card's start a game must be to win a tie with another league's game (#163). */
         private const val TIE_BREAK_MS = 45 * 60 * 1000L
+        /** A game ESPN schedules further ahead than this is not live, whatever its addon says (live.20). */
+        const val LATER_LEAD_MS = 30 * 60 * 1000L
+        /** [laterMeeting] looks this far ahead at most. */
+        private const val LATER_MAX_MS = 48 * 60 * 60 * 1000L
         private const val STRONG = 3
         private const val WEAK = 2
         private const val MIN_TOTAL = 5

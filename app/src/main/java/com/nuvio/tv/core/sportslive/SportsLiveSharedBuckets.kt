@@ -5,6 +5,9 @@ import com.nuvio.tv.core.sportslive.scores.TeamDirectory
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveTab
 import com.nuvio.tv.domain.repository.SportsLiveLoad
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.merge
 
 /**
  * One sorting of a load into tabs, shared by everything that lists it (live.20): the section's tabs, Home's live row
@@ -76,7 +79,19 @@ class SportsLiveSharedBuckets(private val maxAgeMs: Long = MAX_AGE_MS) {
         /** The one the app shares. */
         val shared = SportsLiveSharedBuckets()
 
-        /** The team directory's and identities' revisions as one number: copies merge differently once they move. */
-        fun currentStamp(): Long = TeamDirectory.shared.revision.value * 31 + TeamIdentityBook.shared.revision.value
+        /**
+         * The team directory's, identities' and ESPN starts' ([SportsLiveEspnStarts]) revisions as one number: copies
+         * merge differently once they move, and a game ESPN schedules later leaves Live now.
+         */
+        fun currentStamp(): Long =
+            (TeamDirectory.shared.revision.value * 31 + TeamIdentityBook.shared.revision.value) * 31 +
+                SportsLiveEspnStarts.shared.revision.value
+
+        /** Every change of [currentStamp] after the current one: what lists are built again on. */
+        fun stampChanges(): Flow<Long> = merge(
+            TeamDirectory.shared.revision.drop(1),
+            TeamIdentityBook.shared.revision.drop(1),
+            SportsLiveEspnStarts.shared.revision.drop(1)
+        )
     }
 }
