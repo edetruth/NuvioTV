@@ -589,4 +589,32 @@ class ScoreMatcherTest {
         // A women's game never takes a card naming no women's side.
         assertNull(matcher.laterMeeting(fridayLive, listOf(nicePsgSaturday.copy(league = EspnLeagueMap.WOMEN_FEEDS.first())), friday))
     }
+
+    // ---- TV report #5 ----
+
+    private fun espnTeam(id: String, abbr: String, display: String, short: String) =
+        ScoreTeam(id = id, abbreviation = abbr, displayName = display, shortDisplayName = short, name = display, location = display,
+            logo = null, score = 0, linescores = emptyList())
+
+    private fun soccerGame(id: String, slug: String, competition: String, home: ScoreTeam, away: ScoreTeam, start: String) = ScoreSnapshot(
+        eventId = id, league = EspnLeagueMap.SOCCER_ALL, leagueSlug = slug, leagueName = competition, startMs = ms(start),
+        state = ScoreState.IN, clockText = "10'", isFinal = false, home = home, away = away
+    )
+
+    @Test
+    fun `Troyes vs Le Havre matches ESPN's Le Havre AC and Bayern vs Koln its FC Cologne, never Leverkusen`() {
+        val ligue1 = soccerGame("t", "fra.1", "French Ligue 1", espnTeam("1", "TRY", "Troyes", "Troyes"),
+            espnTeam("2", "HAC", "Le Havre AC", "Le Havre AC"), "2026-11-20T19:45:00Z")
+        val bundesliga = soccerGame("b", "ger.1", "German Bundesliga", espnTeam("132", "MUN", "Bayern Munich", "Bayern"),
+            espnTeam("122", "KOE", "FC Cologne", "Cologne"), "2026-11-20T19:30:00Z")
+        val events = listOf(ligue1, bundesliga)
+        assertEquals("t", match("Troyes vs Le Havre", "2026-11-20T19:45:00Z", events, now = "2026-11-20T20:00:00Z"))
+        assertEquals("t", match("TRY vs Le Havre", "2026-11-20T19:45:00Z", events, now = "2026-11-20T20:00:00Z"))
+        for (title in listOf("Bayern München vs 1. FC Köln", "FC Bayern vs Koln", "Bayern Munich vs FC Koeln")) {
+            assertEquals(title, "b", match(title, "2026-11-20T19:30:00Z", events, now = "2026-11-20T20:00:00Z"))
+        }
+        // Leverkusen is not Bayern: no score.
+        assertNull(match("Bayer Leverkusen vs Köln", "2026-11-20T19:30:00Z", events, now = "2026-11-20T20:00:00Z"))
+        assertNull(match("Bayer vs Köln", "2026-11-20T19:30:00Z", events, now = "2026-11-20T20:00:00Z"))
+    }
 }

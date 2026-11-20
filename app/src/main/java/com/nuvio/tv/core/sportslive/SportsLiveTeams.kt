@@ -21,7 +21,8 @@ object SportsLiveTeams {
     private val AWAY_FIRST = setOf(" at ", " @ ")
     private val LEADING_RANK = Regex("^\\d+\\s+")
     private val WHITESPACE = Regex("\\s+")
-    private val CLUB_SUFFIXES = setOf("fc", "sc", "cf", "afc")
+    // "AC" after the name too (TV report #5: ESPN's "Le Havre AC" is the addons' "Le Havre"), as "AC Milan" before it.
+    private val CLUB_SUFFIXES = setOf("fc", "sc", "cf", "afc", "ac")
     // Leading club tags ("AC Milan", "AS Roma", "VfB Stuttgart", "1. FC Köln"): addons and ESPN differ
     // on them. "SC" and "CA" are left alone ("SC State" is a college).
     // Basketball clubs' "KK", "BC", "BK" (live.18: "KK Crvena zvezda" is "Crvena Zvezda Beograd"'s club).

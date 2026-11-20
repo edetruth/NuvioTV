@@ -362,4 +362,15 @@ class SportsLiveTeamsTest {
         assertFalse(SportsLiveTeams.matches("Bayer", "Bayern Munich"))
         assertFalse(SportsLiveTeams.matches("Bayer", "Bayer Leverkusen"))
     }
+
+    @Test
+    fun `Le Havre is ESPN's Le Havre AC and Troyes is TRY`() {
+        // TV report #5: "TRY vs Le H…" was Ligue 1's Troyes vs Le Havre; ESPN writes "Le Havre AC".
+        assertEquals("le havre", SportsLiveTeams.normalise("Le Havre AC"))
+        assertTrue(SportsLiveTeams.matches("Le Havre", "Le Havre AC"))
+        assertEquals(SportsLiveTeams.MergeMatch.FULL, SportsLiveTeams.mergeMatch("Le Havre", "Le Havre AC"))
+        assertEquals("milan", SportsLiveTeams.normalise("Milan AC"))
+        // "AC" alone is no team.
+        assertFalse(SportsLiveTeams.matches("AC", "Le Havre AC"))
+    }
 }
