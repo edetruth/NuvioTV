@@ -375,8 +375,9 @@ class SportsLiveZapResolverTest {
         assertNull(resolver.resolve(merged))
         assertEquals(emptyList<Stream>(), resolver.resolveAll(merged))
         // "Not found" is proof of an end; a throwing source records nothing and a server error is
-        // inconclusive. (The primary's raw answer still holds a URL the probe counts as alive.)
-        assertEquals(setOf(ALT1.streamKey), realProbe.ended.value)
+        // inconclusive. The primary answered with only a "Support us" entry, a notice since live.20 (F9):
+        // nothing playable, so it reads as ended like any notice-only answer (C1).
+        assertEquals(setOf(MERGED.streamKey, ALT1.streamKey), realProbe.ended.value)
     }
 
     @Test

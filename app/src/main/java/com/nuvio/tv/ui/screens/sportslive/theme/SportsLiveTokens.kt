@@ -203,6 +203,9 @@ object SportsLiveTokens {
      * bugs, which sit top left or along the bottom); in dual screen, the top right of a pane.
      */
     object Alert {
+        /** Score and full-time cards' screen spot, top right (they move to the toast corner with dual in live.20 W2). */
+        val Top = Size.SafeTop + Size.HeaderHeight + 16.dp
+        val End = Size.SafeEnd
         /** Bottom left of the safe area on every screen (the board: x 256, bottom 1026 px), clear of the side rail (F8). */
         val Start = 128.dp
         val Bottom = Size.SafeBottom
