@@ -417,38 +417,25 @@ internal object SportsLiveStageLayout {
 }
 
 /**
- * Where Live Now's focus goes on return from another screen (F3): the list opens at its top, so the LIVE
- * group shows; the card that had focus keeps it while it sits among the first [rowsOnScreen] rows, else
- * the first row takes focus. Null when the list is empty.
- */
-internal fun sportsLiveReturnFocusKey(keys: List<String>, focusedKey: String?, rowsOnScreen: Int): String? {
-    val index = focusedKey?.let(keys::indexOf) ?: -1
-    return if (index in 0 until rowsOnScreen) focusedKey else keys.firstOrNull()
-}
-
-/**
- * The row Back from another screen puts focus on (BUG9, BUG-E TV QA). The game watched in the full player
- * ([watchedKey]: playing on in the mini player, else the one Resume offers) when listed, wherever it sits (the user
- * zapped away from the card they started on, or opened the player from the mini player); when it left the list, the
- * nearest row to where it was in [previousKeys], the list as it was left ([sportsLiveKeyAfterRemoval]). Otherwise
- * [focusedKey], the card that had focus, which on Live Now ([liveNow]) keeps it only among the first [rowsOnScreen]
- * rows, else the first row takes it (F3). Null: nothing to return to (first open, an empty list).
+ * The row Back from another screen puts focus on: one rule (BUG9, BUG-E TV QA), the game you last played, else the
+ * row you left, wherever it sits. The game last played ([watchedKey]: playing on in the mini player, else the one
+ * Resume offers; the user may have zapped away from the card they started on, or opened the player from the mini
+ * player), else [focusedKey], the card that had focus. One that left the list hands focus to the nearest row to
+ * where it was in [previousKeys], the list as it was left ([sportsLiveKeyAfterRemoval]). Null: nothing to return to
+ * (a fresh open, which starts at the list's top; an empty list).
  */
 internal fun sportsLiveReturnTarget(
     keys: List<String>,
     previousKeys: List<String>,
     focusedKey: String?,
-    watchedKey: String?,
-    liveNow: Boolean,
-    rowsOnScreen: Int
+    watchedKey: String?
 ): String? {
     if (keys.isEmpty()) return null
-    if (watchedKey != null) {
-        if (watchedKey in keys) return watchedKey
-        if (watchedKey in previousKeys) return sportsLiveKeyAfterRemoval(previousKeys, keys, watchedKey)
+    for (key in listOfNotNull(watchedKey, focusedKey)) {
+        if (key in keys) return key
+        if (key in previousKeys) return sportsLiveKeyAfterRemoval(previousKeys, keys, key)
     }
-    val key = focusedKey ?: return null
-    return if (liveNow) sportsLiveReturnFocusKey(keys, key, rowsOnScreen) else key
+    return null
 }
 
 /**
