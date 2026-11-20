@@ -251,6 +251,7 @@ class AuthDiagnosticsSession(
         val line = event.toLogLine()
         events += event
         rawLogs += "${event.timeMs} $line"
+        com.nuvio.tv.core.sportslive.report.SportsLiveReportTrail.onSignInLine("${event.timeMs} $line")
         if (event.exception != null) Log.e(TAG, line) else Log.d(TAG, line)
     }
 

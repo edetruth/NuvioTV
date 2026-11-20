@@ -315,6 +315,9 @@ open class MainActivity : ComponentActivity() {
     lateinit var sportsLiveDebugProbe: com.nuvio.tv.ui.screens.sportslive.SportsLiveDebugProbe
 
     @Inject
+    lateinit var sportsLiveReporter: com.nuvio.tv.ui.screens.sportslive.SportsLiveReporter
+
+    @Inject
     lateinit var trackingProgressRefreshCoordinator: TrackingProgressRefreshCoordinator
 
     @Inject
@@ -958,6 +961,7 @@ open class MainActivity : ComponentActivity() {
                         var previousRoute: String? = null
                         navController.currentBackStackEntryFlow.collect { entry ->
                             val route = entry.destination.route
+                            com.nuvio.tv.core.sportslive.report.SportsLiveReportTrail.onScreen(route)
                             if (route == previousRoute) return@collect
                             val leftPlayer = previousRoute == Screen.Player.route
                             val returnedHome = previousRoute != null && route == Screen.Home.route
@@ -1548,6 +1552,8 @@ open class MainActivity : ComponentActivity() {
         // A Sports & Live alert card takes OK / ▼ / Back only while it is up and actionable; a peek takes
         // every key but the volume (#136). Before the screens, so the player never sees those presses.
         if (com.nuvio.tv.ui.screens.sportslive.SportsLiveAlertSurfaces.dispatch(event)) return true
+        // Report a problem (#172): a held Play/Pause or Info saves a report; the first press still does its job.
+        if (sportsLiveReporter.onKey(event)) return true
         // Play/Pause while the Sports & Live mini player plays expands it; otherwise upstream behavior.
         if ((event.keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE || event.keyCode == KeyEvent.KEYCODE_MEDIA_PLAY) &&
             SportsLiveMiniPlayers.controller.isActive
