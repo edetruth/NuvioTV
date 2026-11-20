@@ -228,6 +228,9 @@ class SportsLiveGameWatch(
     @Synchronized
     fun item(gameId: String?): SportsLiveItem? = gameId?.let { games[it]?.item }
 
+    /** The game a player watched last, while it is remembered (Report a problem, #172). */
+    fun lastWatchedItem(): SportsLiveItem? = item(lastWatched)
+
     @Synchronized
     fun snapshot(gameId: String?): ScoreSnapshot? = gameId?.let { games[it]?.snapshot }
 

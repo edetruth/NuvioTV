@@ -70,7 +70,9 @@ internal enum class SportsLiveSetting(
     RESET_STREAM_MEMORY(SportsLiveSettingsSection.MORE, R.string.sports_live_setting_reset_stream_memory, R.string.sports_live_setting_reset_stream_memory_subtitle),
     /** Titles hidden from Live Now (#134): a summary row opening its page, where OK shows one again. */
     HIDDEN(SportsLiveSettingsSection.MORE, R.string.sports_live_setting_hidden, R.string.sports_live_setting_hidden_row_help),
-    CATALOGS(SportsLiveSettingsSection.MORE, R.string.sports_live_setting_catalogs, R.string.sports_live_setting_catalogs_row_help);
+    CATALOGS(SportsLiveSettingsSection.MORE, R.string.sports_live_setting_catalogs, R.string.sports_live_setting_catalogs_row_help),
+    /** "Report a problem" (#172): opens the last report (its QR code and voice note), saving one when there is none. */
+    REPORT_PROBLEM(SportsLiveSettingsSection.MORE, R.string.sports_live_setting_report_problem, R.string.sports_live_setting_report_problem_help);
 
     /**
      * Whether the row can be used. A row that can't stays focusable, so the help line can say why (#89),
@@ -81,7 +83,7 @@ internal enum class SportsLiveSetting(
         val section = state.showSection
         val scores = state.scores.mode
         return when (this) {
-            SHOW_SECTION, RESET_STREAM_MEMORY, MY_TEAMS, RUN_SETUP, HIDDEN -> true
+            SHOW_SECTION, RESET_STREAM_MEMORY, MY_TEAMS, RUN_SETUP, HIDDEN, REPORT_PROBLEM -> true
             SCORE_DELAY, FULL_TIME_ALERTS, CLOSE_GAME_ALERTS, MY_TEAMS_SPOILERS -> section && scores != ScoresMode.OFF
             SCORE_ALERTS -> section && scores == ScoresMode.SHOW
             // Scores Off means no score data at all, and the row needs the section's Home row: off with either.

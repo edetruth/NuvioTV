@@ -170,6 +170,14 @@ class SportsLiveLinkMarks(internal val nowMs: () -> Long = { System.currentTimeM
         }
     }
 
+    /** How [gameKey]'s links fared this session as counts (Report a problem, #172): failures by reason, and how many played. */
+    fun counts(gameKey: String): Pair<Map<SportsLiveLinkFailure, Int>, Int> = synchronized(this) {
+        val now = nowMs()
+        val game = games[gameKey] ?: return@synchronized emptyMap<SportsLiveLinkFailure, Int>() to 0
+        val failed = game.failed.values.filter { now - it.atMs < MARK_FOR_MS }.groupingBy { it.reason }.eachCount()
+        failed to game.played.values.count { now - it < MARK_FOR_MS }
+    }
+
     /** Forgets every mark ("Reset stream memory"). */
     fun clear() {
         synchronized(this) {

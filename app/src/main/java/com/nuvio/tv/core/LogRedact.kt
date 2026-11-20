@@ -23,6 +23,30 @@ object LogRedact {
     /** An exception to pass to Log.w / Log.e: same class name and stack, scrubbed messages. */
     fun error(t: Throwable?): Throwable? = if (enabled && t != null) redactThrowable(t) else t
 
+    /**
+     * Text for a Report a problem file (#172), in every build (a debug build too): links (whole, with any user and
+     * password in them), hosts, IP addresses and tokens go as in [text]; then each of [secrets] left (the addons'
+     * names and ids, the account's e-mail and id) becomes `<private>`; then e-mail addresses, IPv6 addresses, UUIDs,
+     * bare query strings and long token-like words go too.
+     */
+    fun report(value: String?, secrets: Collection<String> = emptyList()): String {
+        if (value == null) return "null"
+        // Links first, whole: a secret replaced inside one would hide the rest of it from the link pattern.
+        var out: String = redactText(value)
+        for (secret in secrets.map { it.trim() }.filter { it.length >= MIN_SECRET }.distinct().sortedByDescending { it.length }) {
+            out = Regex("(?<![A-Za-z0-9])" + Regex.escape(secret) + "(?![A-Za-z0-9])", RegexOption.IGNORE_CASE).replace(out, PRIVATE)
+        }
+        out = EMAIL.replace(out, "<email>")
+        out = IPV6.replace(out) { m ->
+            val v = m.value
+            if ("::" in v || v.any { it in 'a'..'f' || it in 'A'..'F' } || v.count { it == ':' } >= 5) "<ip>" else v
+        }
+        out = UUID.replace(out, "<id>")
+        out = QUERY.replace(out, "?…")
+        out = LONG_TOKEN.replace(out, REDACTED)
+        return out
+    }
+
     internal fun redactUrl(value: String?): String {
         if (value == null) return "null"
         val trimmed = value.trim()
@@ -98,6 +122,13 @@ object LogRedact {
     }
 
     private const val REDACTED = "<redacted>"
+    private const val PRIVATE = "<private>"
+    private const val MIN_SECRET = 3
+    private val EMAIL = Regex("""[A-Za-z0-9._%+\-]+@[A-Za-z0-9\-]+(?:\.[A-Za-z0-9\-]+)+""")
+    private val IPV6 = Regex("""(?<![\w:.])[0-9A-Fa-f]{0,4}(?::[0-9A-Fa-f]{0,4}){2,7}(?![\w:])""")
+    private val UUID = Regex("""(?i)\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b""")
+    private val QUERY = Regex("""\?[^\s"'<>?]*=[^\s"'<>]*""")
+    private val LONG_TOKEN = Regex("""(?<![\w\-])(?=[\w\-]*\d)(?=[\w\-]*[A-Za-z])[\w\-]{24,}(?![\w\-])""")
     private const val MAX_CAUSES = 8
     private const val FNV_OFFSET = -0x7ee3623b // 0x811C9DC5
     private const val FNV_PRIME = 0x01000193

@@ -109,4 +109,71 @@ class LogRedactTest {
         assertNull(redacted.message)
         assertEquals("java.lang.IllegalStateException", redacted.toString())
     }
+
+    // Report a problem (#172): LogRedact.report, every build
+
+    @Test
+    fun `a report drops every link, its host, path, query and token`() {
+        val line = LogRedact.report("open https://$secretHost/$token/stream.json?sig=$token&b=1 then http://user:$token@$secretHost:8443/x")
+        assertClean(line)
+        assertFalse(line, line.contains("sig="))
+    }
+
+    @Test
+    fun `a report drops bare hosts and ip addresses of both kinds`() {
+        val line = LogRedact.report("resolve $secretHost at 192.168.1.20 or [2001:db8::8a2e:370:7334] or fe80::1 port 8096")
+        assertClean(line)
+        assertFalse(line, line.contains("192.168.1.20"))
+        assertFalse(line, line.contains("2001:db8"))
+        assertFalse(line, line.contains("fe80"))
+        assertTrue(line, line.contains("port 8096"))
+    }
+
+    @Test
+    fun `a report drops bearer tokens, jwts, secret params, bare query strings and long tokens`() {
+        val line = LogRedact.report(
+            "Authorization: Bearer $token jwt eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.abc apikey=$token " +
+                "path ?user=me&pass=x id 9f8e7d6c5b4a39281706f5e4d3c2b1a0ffee"
+        )
+        assertFalse(line, line.contains(token))
+        assertFalse(line, line.contains("eyJ"))
+        assertFalse(line, line.contains("user=me"))
+        assertFalse(line, line.contains("9f8e7d6c5b4a39281706f5e4d3c2b1a0ffee"))
+    }
+
+    @Test
+    fun `a report drops e-mail addresses and uuids`() {
+        val line = LogRedact.report("signed in as viewer.one+tv@mail.example.invalid attempt=123e4567-e89b-12d3-a456-426614174000")
+        assertFalse(line, line.contains("viewer.one"))
+        assertFalse(line, line.contains("example.invalid"))
+        assertFalse(line, line.contains("123e4567"))
+        assertTrue(line, line.contains("<email>"))
+        assertTrue(line, line.contains("attempt=<id>"))
+    }
+
+    @Test
+    fun `a report drops the addon names, ids and links and the account it is given`() {
+        val secrets = listOf("Secret Sports Addon", "org.example.secretaddon", "https://$secretHost/$token/manifest.json", "user-42-abc")
+        val line = LogRedact.report(
+            "Secret Sports Addon (org.example.secretaddon) failed for user-42-abc; secret sports addon again",
+            secrets
+        )
+        assertFalse(line, line.contains("Secret Sports", ignoreCase = true))
+        assertFalse(line, line.contains("secretaddon"))
+        assertFalse(line, line.contains("user-42-abc"))
+        assertEquals("<private> (${LogRedact.hostLabel("org.example.secretaddon")}) failed for <private>; <private> again", line)
+    }
+
+    @Test
+    fun `a secret too short to be safe or inside a word is left alone`() {
+        assertEquals("TV is on the TVs", LogRedact.report("TV is on the TVs", listOf("TV")))
+        assertEquals("Sportsline plays", LogRedact.report("Sportsline plays", listOf("Sports")))
+    }
+
+    @Test
+    fun `a report keeps plain words, times and clocks`() {
+        val plain = "Celtics vs 76ers · NBA · live at 19:42:05, Q3 4:12 ms=1200 code=404 ExoPlaybackException"
+        assertEquals(plain, LogRedact.report(plain))
+        assertEquals("null", LogRedact.report(null))
+    }
 }

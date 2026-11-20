@@ -131,6 +131,7 @@ internal fun SportsLiveSettingsContent(
     var page by rememberSaveable(stateSaver = PageSaver) { mutableStateOf(rootPage) }
     var moreExpanded by rememberSaveable { mutableStateOf(SPORTS_LIVE_MORE_EXPANDED_BY_DEFAULT) }
     var streamMemoryReset by remember { mutableStateOf(false) }
+    var reportOpen by remember { mutableStateOf(false) }
     var picker by remember { mutableStateOf<ScorePicker?>(null) }
     var filterKey by remember { mutableStateOf<String?>(null) }
     var unfollowTeam by remember { mutableStateOf<FollowedTeam?>(null) }
@@ -276,6 +277,7 @@ internal fun SportsLiveSettingsContent(
                     }
                 SportsLiveSetting.CATALOGS -> state.catalogs.size.toString() to { goTo(SportsLiveSettingsPage.Catalogs, null) }
                 SportsLiveSetting.HIDDEN -> hiddenTitles.size.toString() to { goTo(SportsLiveSettingsPage.Hidden, null) }
+                SportsLiveSetting.REPORT_PROBLEM -> null to { reportOpen = true }
                 SportsLiveSetting.RUN_SETUP -> null to {
                     returnFocusKey = Item.Setting(SportsLiveSetting.RUN_SETUP).key
                     onRunSetup?.invoke()
@@ -526,6 +528,8 @@ internal fun SportsLiveSettingsContent(
         )
         null -> Unit
     }
+
+    if (reportOpen) SportsLiveReportDialog(onDismiss = { reportOpen = false })
 
     state.catalogs.firstOrNull { it.key == filterKey }?.let { catalog ->
         val extra = catalog.filterExtra ?: return@let

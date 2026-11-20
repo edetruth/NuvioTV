@@ -3,6 +3,7 @@ package com.nuvio.tv.core.sportslive
 import android.util.Log
 import com.nuvio.tv.BuildConfig
 import com.nuvio.tv.core.LogRedact
+import com.nuvio.tv.core.sportslive.report.SportsLiveReportTrail
 import com.nuvio.tv.core.sportslive.scores.TeamDirectory
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveKind
@@ -148,7 +149,10 @@ object SportsLiveDupes {
             }
             if (!fresh) continue
             val reason = SportsLiveItemBucketer.splitReason(a, b, nowMs) ?: "would merge now"
-            Log.d(MISS_TAG, LogRedact.text("[$surface] \"${a.meta.name}\" (${tags(a)}) ~ \"${b.meta.name}\" (${tags(b)}): one side alike; $reason"))
+            val line = "[$surface] \"${a.meta.name}\" (${tags(a)}) ~ \"${b.meta.name}\" (${tags(b)}): one side alike; $reason"
+            // Report a problem (#172) attaches the latest ones.
+            SportsLiveReportTrail.onNearMiss(line)
+            Log.d(MISS_TAG, LogRedact.text(line))
         }
     }
 

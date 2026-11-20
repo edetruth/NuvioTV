@@ -521,6 +521,25 @@
     <string name="sports_live_setting_reset_stream_memory">Reset stream memory</string>
     <string name="sports_live_setting_reset_stream_memory_subtitle">Forget which stream sources worked on this device, so every source is tried fresh</string>
     <string name="sports_live_setting_reset_stream_memory_done">Cleared</string>
+    <!-- Report a problem (#172) -->
+    <string name="sports_live_setting_report_problem">Report a problem</string>
+    <string name="sports_live_setting_report_problem_help">Saves what the app is doing now, for fixing a problem, with no links, accounts or addon names. Anywhere in the app: hold Play/Pause for 2 seconds</string>
+    <string name="sports_live_report_saved">Report #%1$d saved</string>
+    <string name="sports_live_report_saved_adb">Ready to pull over adb. QR code: Settings › Sports &amp; Live › More</string>
+    <string name="sports_live_report_saved_qr">To share it: Settings › Sports &amp; Live › More › Report a problem</string>
+    <string name="sports_live_report_failed">Couldn\'t save a report</string>
+    <string name="sports_live_report_saving">Saving a report…</string>
+    <string name="sports_live_report_subtitle">Report #%1$d · saved %2$s</string>
+    <string name="sports_live_report_scan">Scan the code with your phone to read the summary.</string>
+    <string name="sports_live_report_pull">The full report is on this TV. To copy it to a computer:</string>
+    <string name="sports_live_report_no_pull">The full report is kept in this app\'s storage. Scan the code for the summary.</string>
+    <string name="sports_live_report_privacy">Links, hosts, accounts and addon names are left out. The last 20 reports are kept.</string>
+    <string name="sports_live_report_note">Add a voice note</string>
+    <string name="sports_live_report_note_listening">Listening… say what went wrong</string>
+    <string name="sports_live_report_note_added">Voice note added to the report</string>
+    <string name="sports_live_report_note_missed">Didn\'t catch that. Try again.</string>
+    <string name="sports_live_report_note_no_mic">Microphone access is off, so no voice note</string>
+    <string name="sports_live_report_new">Save a new report</string>
     <string name="sports_live_setting_data_saver_subtitle">For metered providers: no hover previews or background checks; streams load only when played. This TV only</string>
     <string name="sports_live_setting_open_game">When I open a game</string>
     <string name="sports_live_setting_open_game_subtitle">OK on a live game or channel. Choose stream in the long-press menu always lets you pick.</string>

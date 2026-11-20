@@ -18,6 +18,7 @@ import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.MY_SPORTS
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.MY_TEAMS
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.MY_TEAMS_SPOILERS
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.REAL_TIME_SCORES
+import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.REPORT_PROBLEM
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.OPEN_GAME
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.HIDE_UNPLAYABLE
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.PICTURE_IN_PICTURE
@@ -66,7 +67,7 @@ class SportsLiveSettingsSectionsTest {
                 HOME_AND_ROWS to listOf(SHOW_SECTION, HOME_ROW, CATCH_UP_ROW, HOVER_PREVIEW),
                 SETUP to listOf(RUN_SETUP),
                 STATUS to listOf(SCORES_STATUS),
-                MORE to listOf(DATA_SAVER, REAL_TIME_SCORES, RESET_STREAM_MEMORY, HIDDEN, CATALOGS)
+                MORE to listOf(DATA_SAVER, REAL_TIME_SCORES, RESET_STREAM_MEMORY, HIDDEN, CATALOGS, REPORT_PROBLEM)
             ),
             sportsLiveSettingsLayout()
         )
@@ -88,7 +89,9 @@ class SportsLiveSettingsSectionsTest {
                 // Research Q17 / Q19.
                 TIP_OFF, OK_ON_LIVE,
                 // live.20 Q18.
-                REAL_TIME_SCORES
+                REAL_TIME_SCORES,
+                // #172.
+                REPORT_PROBLEM
             ),
             shown.toSet()
         )
@@ -106,9 +109,9 @@ class SportsLiveSettingsSectionsTest {
     }
 
     @Test
-    fun `section off greys out everything but the show switch, stream memory, my teams, setup and hidden titles`() {
+    fun `section off greys out everything but the show switch, stream memory, my teams, setup, hidden titles and report`() {
         assertEquals(
-            setOf(SHOW_SECTION, RESET_STREAM_MEMORY, MY_TEAMS, RUN_SETUP, HIDDEN),
+            setOf(SHOW_SECTION, RESET_STREAM_MEMORY, MY_TEAMS, RUN_SETUP, HIDDEN, REPORT_PROBLEM),
             enabledIn(SportsLiveSettingsUiState(showSection = false))
         )
     }
