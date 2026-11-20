@@ -70,7 +70,7 @@ internal class NightlyWriter(
             for ((label, s) in stats) {
                 val info = sources.first { it.label == label }
                 val catalogs = if (info.failedCatalogs > 0) "${info.catalogs} (${info.failedCatalogs} failed)" else "${info.catalogs}"
-                appendLine("| $label | $catalogs | ${s.listedLive} | ${s.verified} | ${s.inPlay} | ${s.soon} | ${s.later} | ${s.final} | ${s.off} | " +
+                appendLine("| $label | $catalogs | ${s.listedLive} | ${s.verified} | ${s.inPlay} | ${s.soon} | ${s.later} | ${s.ended} | ${s.off} | " +
                     "${s.notFound} | ${s.unplaced} | ${s.noFeed} | ${NightlyText.percent(s.inPlay + s.soon, s.verified)} | ${rolling[label] ?: "-"} |")
             }
             appendLine()
@@ -131,7 +131,7 @@ internal class NightlyWriter(
         val upcoming = checks.filter { !it.live }
         return listOf(
             "Listed live: ${all.listedLive} games from ${sources.size} addons; ESPN knows ${all.verified}: in play ${all.inPlay}, starting soon ${all.soon}, " +
-                "scheduled later ${all.later}, final ${all.final}, postponed/cancelled ${all.off} (reliability ${NightlyText.percent(all.inPlay + all.soon, all.verified)}).",
+                "scheduled later ${all.later}, final ${all.ended}, postponed/cancelled ${all.off} (reliability ${NightlyText.percent(all.inPlay + all.soon, all.verified)}).",
             "Live disagreements: ${live.size} (the app corrects $caught, NOT ${live.size - caught}); new since earlier runs: ${fresh.size}.",
             "Upcoming checked: ${upcoming.size}; ESPN already in play or final: ${disagreements.count { !it.live }}.",
             "Not found on ESPN: ${checks.count { it.verdict == Verdict.NOT_FOUND }} (alias candidates: ${checks.sumOf { it.aliases.size }}); " +
@@ -243,7 +243,7 @@ internal class NightlyWriter(
     private fun appendReliability(stats: List<Pair<String, Stats>>) {
         if (!reliabilityFile.exists()) reliabilityFile.writeText(NightlyText.csv(RELIABILITY_COLUMNS) + "\n")
         reliabilityFile.appendText(stats.joinToString("") { (label, s) ->
-            NightlyText.csv(listOf(runId, label, s.listedLive, s.verified, s.inPlay, s.soon, s.later, s.final, s.off, s.notFound, s.noFeed, s.unplaced,
+            NightlyText.csv(listOf(runId, label, s.listedLive, s.verified, s.inPlay, s.soon, s.later, s.ended, s.off, s.notFound, s.noFeed, s.unplaced,
                 s.noTeams, s.upcoming, s.upcomingStarted)) + "\n"
         })
     }
@@ -272,10 +272,10 @@ internal class NightlyWriter(
 
     /** Counts per addon (or overall). */
     class Stats(
-        val listedLive: Int, val inPlay: Int, val soon: Int, val later: Int, val final: Int, val off: Int,
+        val listedLive: Int, val inPlay: Int, val soon: Int, val later: Int, val ended: Int, val off: Int,
         val notFound: Int, val noFeed: Int, val unplaced: Int, val noTeams: Int, val upcoming: Int, val upcomingStarted: Int
     ) {
-        val verified: Int get() = inPlay + soon + later + final + off
+        val verified: Int get() = inPlay + soon + later + ended + off
 
         companion object {
             fun of(checks: List<Check>): Stats {
@@ -284,7 +284,7 @@ internal class NightlyWriter(
                 fun count(verdict: Verdict) = live.count { it.verdict == verdict }
                 return Stats(
                     listedLive = live.size, inPlay = count(Verdict.IN_PLAY), soon = count(Verdict.STARTS_SOON),
-                    later = count(Verdict.SCHEDULED_LATER), final = count(Verdict.FINAL), off = count(Verdict.OFF),
+                    later = count(Verdict.SCHEDULED_LATER), ended = count(Verdict.FINAL), off = count(Verdict.OFF),
                     notFound = count(Verdict.NOT_FOUND), noFeed = count(Verdict.NO_FEED), unplaced = count(Verdict.UNPLACED),
                     noTeams = count(Verdict.NO_TEAMS), upcoming = upcoming.size, upcomingStarted = upcoming.count { it.verdict.disagreement }
                 )
