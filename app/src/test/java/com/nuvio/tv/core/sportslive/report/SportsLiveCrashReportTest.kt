@@ -2,6 +2,7 @@ package com.nuvio.tv.core.sportslive.report
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.ZoneId
@@ -179,5 +180,24 @@ class SportsLiveCrashReportTest {
         assertTrue(native.contains("From: native crash"))
         assertFalse(native.contains("[ANR trace"))
         assertTrue(exit(anr1, null).contains("not readable"))
+    }
+
+    @Test
+    fun `the toast tells about the newest report once when a crash, ANR or native crash made it`() {
+        val name = "report-004-20251120-194205.txt"
+        val crash = "Nuvio Live report #4\nSaved: x\nCrash: java.lang.IllegalStateException\nFrom: crash\n${SportsLiveReport.DETAILS}\n"
+        assertEquals(4, SportsLiveCrashReport.crashToastNumber(name, crash, null))
+        assertEquals(4, SportsLiveCrashReport.crashToastNumber(name, crash, "report-003-20251120-190000.txt"))
+        assertNull(SportsLiveCrashReport.crashToastNumber(name, crash, name))
+        assertEquals(4, SportsLiveCrashReport.crashToastNumber(name, exit(anr1, null), null))
+        assertEquals(4, SportsLiveCrashReport.crashToastNumber(name, exit(native2, null), null))
+    }
+
+    @Test
+    fun `no toast for a report the user saved or with no report`() {
+        val name = "report-004-20251120-194205.txt"
+        val manual = "Nuvio Live report #4\nFrom: Hold Play/Pause\n${SportsLiveReport.DETAILS}\n[Voice note]\nFrom: crash\n"
+        assertNull(SportsLiveCrashReport.crashToastNumber(name, manual, null))
+        assertNull(SportsLiveCrashReport.crashToastNumber(null, null, null))
     }
 }

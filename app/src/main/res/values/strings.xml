@@ -527,6 +527,7 @@
     <string name="sports_live_report_saved">Report #%1$d saved</string>
     <string name="sports_live_report_saved_adb">Ready to pull over adb. QR code: Settings › Sports &amp; Live › More</string>
     <string name="sports_live_report_saved_qr">To share it: Settings › Sports &amp; Live › More › Report a problem</string>
+    <string name="sports_live_report_crash_saved">Saved report #%1$d about the last crash</string>
     <string name="sports_live_report_failed">Couldn\'t save a report</string>
     <string name="sports_live_report_saving">Saving a report…</string>
     <string name="sports_live_report_subtitle">Report #%1$d · saved %2$s</string>

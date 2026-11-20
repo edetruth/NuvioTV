@@ -7,6 +7,9 @@ import android.content.Context
 import android.os.Build
 import androidx.annotation.RequiresApi
 import com.nuvio.tv.BuildConfig
+import com.nuvio.tv.R
+import com.nuvio.tv.core.sportslive.SportsLiveToastKind
+import com.nuvio.tv.core.sportslive.SportsLiveToasts
 import com.nuvio.tv.core.sportslive.report.SportsLiveCrashHandler
 import com.nuvio.tv.core.sportslive.report.SportsLiveCrashReport
 import com.nuvio.tv.core.sportslive.report.SportsLiveExitKind
@@ -29,6 +32,7 @@ object SportsLiveCrashCapture {
 
     private const val PREFS = "sports_live_reports"
     private const val KEY_EXIT_HANDLED = "exit_handled_ms"
+    private const val KEY_TOLD = "crash_report_told"
 
     /** The exit records asked for: the system keeps a few per app. */
     private const val EXIT_RECORDS = 16
@@ -51,8 +55,9 @@ object SportsLiveCrashCapture {
                     snapshot = { number, now, zone -> reporter.crashInput(number, now, zone) }
                 )
             )
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                scope.launch { runCatching { saveExitReports(app, reporter) } }
+            scope.launch {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) runCatching { saveExitReports(app, reporter) }
+                runCatching { toldAboutCrash(app, reporter) }
             }
         } catch (_: Throwable) {
             // Crash reports are a helper: the app starts the same without them.
@@ -90,6 +95,19 @@ object SportsLiveCrashCapture {
                 )
             }
         }
+    }
+
+    /** Once per report: a toast when the newest report is about the last crash, ANR or native crash. */
+    private fun toldAboutCrash(app: Application, reporter: SportsLiveReporter) {
+        val store = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val latest = reporter.files.latest() ?: return
+        val number = SportsLiveCrashReport.crashToastNumber(latest.name, latest.readText(), store.getString(KEY_TOLD, null)) ?: return
+        store.edit().putString(KEY_TOLD, latest.name).commit()
+        SportsLiveToasts.show(
+            SportsLiveToastKind.PROBLEM,
+            app.getString(R.string.sports_live_report_crash_saved, number),
+            app.getString(if (reporter.adbOn()) R.string.sports_live_report_saved_adb else R.string.sports_live_report_saved_qr)
+        )
     }
 
     @RequiresApi(Build.VERSION_CODES.R)

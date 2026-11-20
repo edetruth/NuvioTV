@@ -140,6 +140,20 @@ object SportsLiveCrashReport {
         }
     }
 
+    /**
+     * The report to tell the user about at this start ("Saved report #N about the last crash"): the newest report
+     * ([latestName], [latestText]) when a crash, ANR or native crash made it and it was not told before ([toldName]).
+     */
+    fun crashToastNumber(latestName: String?, latestText: String?, toldName: String?): Int? {
+        if (latestName == null || latestText == null || latestName == toldName) return null
+        val from = latestText.lineSequence().takeWhile { it != SportsLiveReport.DETAILS }
+            .firstOrNull { it.startsWith(FROM) }?.removePrefix(FROM)?.trim()
+        return if (from != null && from in CRASH_TRIGGERS) SportsLiveReportFiles.numberOf(latestName) else null
+    }
+
+    private const val FROM = "From: "
+    private val CRASH_TRIGGERS = setOf(TRIGGER) + SportsLiveExitKind.entries.map { it.trigger }
+
     private fun stamp(ms: Long, zone: ZoneId): String = STAMP.format(Instant.ofEpochMilli(ms).atZone(zone))
 
     private fun clean(text: String, secrets: Collection<String>): String =
