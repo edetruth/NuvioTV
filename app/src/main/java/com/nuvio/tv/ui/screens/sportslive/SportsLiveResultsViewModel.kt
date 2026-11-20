@@ -296,8 +296,8 @@ class SportsLiveResultsViewModel internal constructor(
 
     /**
      * True while Results is the selected tab. Back on it after [RESULTS_DAY_KEPT_MS] away or on a new day
-     * ([resultsDayExpired]), it opens afresh: the opening day, ★ My sports, the list at its top. A quick hop
-     * keeps the chosen day.
+     * ([resultsDayExpired]), it opens afresh: always Today (an empty Today offers Yesterday), ★ My sports, the
+     * list at its top. A quick hop keeps the chosen day. The first open still uses [defaultResultsDay].
      */
     fun setActive(isActive: Boolean) {
         if (isActive == active.value) return
@@ -313,8 +313,8 @@ class SportsLiveResultsViewModel internal constructor(
     }
 
     private fun openAfresh() {
-        results.chosenDay = null
-        daysAgo.value = null
+        results.chosenDay = SportsResults.TODAY
+        daysAgo.value = SportsResults.TODAY
         earlierOpen.value = false
         selection.value = Selection()
         freshOpens.update { it + 1 }

@@ -180,18 +180,18 @@ class SportsLiveResultsTodayTest {
         advanceTimeBy(RESULTS_DAY_KEPT_MS); runCurrent()
         vm.setActive(true)
         advanceTimeBy(1_000); runCurrent()
-        // Today (it has a final), ★ My sports, a new list (its key changes, so it starts at its top).
+        // Today, ★ My sports, a new list (its key changes, so it starts at its top).
         assertEquals(SportsResults.TODAY, vm.selectedDay.value)
-        assertNull(repo.chosenDay)
+        assertEquals(SportsResults.TODAY, repo.chosenDay)
         assertFalse(vm.earlierShown.value)
         val state = vm.uiState.value
         assertEquals(1, state.freshOpens)
         assertNull(state.selectedSport)
         assertEquals(ResultsStatus.READY, state.status)
-        // A screen built later (another visit) opens on the opening day too.
+        // A screen built soon after (another visit) opens on Today too.
         vm.setActive(false)
         vm.close()
-        assertNull(viewModel(repo).also { it.close() }.selectedDay.value)
+        assertEquals(SportsResults.TODAY, viewModel(repo).also { it.close() }.selectedDay.value)
     }
 
     @Test
@@ -210,10 +210,23 @@ class SportsLiveResultsTodayTest {
         advanceTimeBy(5 * 60_000L); runCurrent()
         vm.setActive(true)
         advanceTimeBy(1_000); runCurrent()
-        assertNull(repo.chosenDay)
         assertEquals(1, vm.uiState.value.freshOpens)
-        // The new Today has no final yet: the opening rule picks Yesterday.
+        // Always Today after a reset, even with no final yet (its empty state offers Yesterday).
+        assertEquals(SportsResults.TODAY, vm.selectedDay.value)
+        assertEquals(SportsResults.TODAY, repo.chosenDay)
+        vm.setActive(false)
+        vm.close()
+    }
+
+    @Test
+    fun `the first open still uses the opening rule`() = runTest {
+        todayHasFinal(false)
+        val repo = repository()
+        val vm = viewModel(repo)
+        vm.setActive(true)
+        runCurrent()
         assertEquals(SportsResults.YESTERDAY, vm.selectedDay.value)
+        assertNull(repo.chosenDay)
         vm.setActive(false)
         vm.close()
     }
