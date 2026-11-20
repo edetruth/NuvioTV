@@ -122,6 +122,8 @@ class SportsLiveReadyKeeper internal constructor(
         val mine = SportsLiveMyGames.of(cards(), reminders(), savedForLater(), eventOf)
         val overKeys = mine.filter { eventOf(it)?.state == ScoreState.POST }.mapTo(HashSet()) { it.streamKey }
         now.value = MyGamesNow(mine, overKeys)
+        // BUG-F: only my games' rows say "▶ Ready" (never one ESPN calls over: BUG-A2), merged sources included.
+        readiness.setMine(mine.filter { it.streamKey !in overKeys }.flatMap { listOf(it) + it.alternates }.mapTo(HashSet()) { it.id })
         val at = nowMs()
         val due = mine.mapNotNull { item ->
             val action = SportsLiveReadySchedule.next(

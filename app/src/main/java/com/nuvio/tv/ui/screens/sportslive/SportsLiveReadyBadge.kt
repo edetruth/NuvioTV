@@ -108,11 +108,15 @@ fun SportsLiveReadyMarkView(mark: SportsLiveReadyMark?, modifier: Modifier = Mod
     }
 }
 
-/** [item]'s readiness mark, kept fresh as marks change (1b); null: none. */
+/**
+ * [item]'s readiness mark on a list row or card, kept fresh as marks and my games change (1b); null: none. "▶ Ready"
+ * only on my games (BUG-F, [SportsLiveGameReadiness.rowOf]).
+ */
 @Composable
 fun rememberSportsLiveReadyMark(item: SportsLiveItem, readiness: SportsLiveGameReadiness = SportsLiveGameReadiness.shared): SportsLiveReadyMark? {
     val marks by readiness.marks.collectAsState()
-    return remember(marks, item) { readiness.of(item) }
+    val mine by readiness.mine.collectAsState()
+    return remember(marks, mine, item) { readiness.rowOf(item) }
 }
 
 /** Home's quiet line (1b extra a): "2 games tonight · 1 ready" ("· N ready" only when one is). */

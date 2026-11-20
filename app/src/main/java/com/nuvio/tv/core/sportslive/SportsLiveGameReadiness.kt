@@ -92,6 +92,31 @@ class SportsLiveGameReadiness(
         if (heldLinkLocked(item) != null) SportsLiveReadyMark.READY else standing(item.id)?.mark
     }
 
+    private val _mine = MutableStateFlow<Set<String>>(emptySet())
+
+    /**
+     * The game ids of my games ([SportsLiveMyGames]) as the my-games keeper last saw them (BUG-F, the user's decision):
+     * only their rows say "▶ Ready". Any other game may still be verified (zap-neighbour prefetch, a first frame) and
+     * plays its held link, but its row shows nothing; the selected game's stage may still say "Stream ready" ([of]).
+     */
+    val mine: StateFlow<Set<String>> = _mine.asStateFlow()
+
+    /** My games now ([SportsLiveMyGames.of]), by game id; set by the keeper on each pass. */
+    fun setMine(gameIds: Set<String>) {
+        if (gameIds != _mine.value) _mine.value = gameIds
+    }
+
+    /**
+     * [item]'s mark on a list row (Live now, Upcoming, Home, the in-player panel): [of], except "▶ Ready" shows only on
+     * my games ([mine], it or a merged source); "No stream yet" is not gated.
+     */
+    fun rowOf(item: SportsLiveItem): SportsLiveReadyMark? {
+        val mark = of(item)
+        if (mark != SportsLiveReadyMark.READY) return mark
+        val mineIds = _mine.value
+        return mark.takeIf { (listOf(item) + item.alternates).any { it.id in mineIds } }
+    }
+
     /** The verified link [item] holds while it is READY (its own, else a merged source's); null otherwise. */
     fun heldLink(item: SportsLiveItem): Stream? = synchronized(this) { heldLinkLocked(item) }
 

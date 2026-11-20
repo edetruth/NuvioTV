@@ -695,10 +695,15 @@ private fun SportsLiveContent(
         miniKey = playingKey ?: lastMiniKey
     )
     val selected = items.firstOrNull { it.listKey == stageKey }
-    // "▶ Ready" (live.20 1b) on my games' rows and stage: read once per change of the marks.
+    // "▶ Ready" (live.20 1b): the stage says it for any verified game; rows only for my games (BUG-F). Read once per
+    // change of the marks or of my games.
     val readyMarks by SportsLiveGameReadiness.shared.marks.collectAsStateWithLifecycle()
+    val myGameIds by SportsLiveGameReadiness.shared.mine.collectAsStateWithLifecycle()
     val readyOf: (SportsLiveItem) -> Boolean = remember(readyMarks) {
         { item -> SportsLiveGameReadiness.shared.of(item) == SportsLiveReadyMark.READY }
+    }
+    val rowReadyOf: (SportsLiveItem) -> Boolean = remember(readyMarks, myGameIds) {
+        { item -> SportsLiveGameReadiness.shared.rowOf(item) == SportsLiveReadyMark.READY }
     }
     val selectedCardFocusRequester = selected?.let(::cardFocusRequester)
     // Brings the card [key] (at [index] in [items]) on screen.
@@ -1828,7 +1833,7 @@ private fun SportsLiveContent(
                                                             bigGame = !game.pick && game.row.bigGame != null
                                                         ),
                                                         watching = item.listKey == nowPlaying?.listKey,
-                                                        ready = readyOf(item),
+                                                        ready = rowReadyOf(item),
                                                         modifier = Modifier
                                                             .focusRequester(if (game.pick) pickFocusRequester(item) else cardFocusRequester(item))
                                                             .focusProperties {
@@ -1950,7 +1955,7 @@ private fun SportsLiveContent(
                                             reminded = remindedCard(item),
                                             hasReplay = item.streamKey in replayKeys,
                                             watching = item.listKey == nowPlaying?.listKey,
-                                            ready = readyOf(item),
+                                            ready = rowReadyOf(item),
                                             modifier = Modifier
                                                 .focusRequester(cardFocusRequester(item))
                                                 .focusProperties {

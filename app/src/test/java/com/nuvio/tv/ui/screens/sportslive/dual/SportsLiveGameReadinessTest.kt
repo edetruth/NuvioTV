@@ -145,4 +145,17 @@ class SportsLiveGameReadinessTest {
         // A checked game keeps its verdict apart: no mark is not the same as checking.
         assertNull(readiness.of(item("c")))
     }
+
+    @Test
+    fun `a row reads Ready only for my games, merged sources included, and No stream yet is never gated`() {
+        readiness.ready("a", link("a"))
+        readiness.ready("b", link("b"))
+        readiness.noStream("c")
+        readiness.setMine(setOf("b"))
+        assertNull(readiness.rowOf(item("a")))
+        assertEquals(SportsLiveReadyMark.READY, readiness.of(item("a")))
+        assertEquals(SportsLiveReadyMark.READY, readiness.rowOf(item("b")))
+        assertEquals(SportsLiveReadyMark.READY, readiness.rowOf(item("d").copy(alternates = listOf(item("b")))))
+        assertEquals(SportsLiveReadyMark.NO_STREAM, readiness.rowOf(item("c")))
+    }
 }
