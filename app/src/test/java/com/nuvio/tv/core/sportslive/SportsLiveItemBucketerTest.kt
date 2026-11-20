@@ -33,23 +33,29 @@ class SportsLiveItemBucketerTest {
     private val cncLiveTv = claimed("tv", "cnc_EasyPlayLiveTV_tv", "EasyPlay Live TV (tv)", SportsLiveKind.CHANNELS)
 
     @Test
-    fun `highfly live fixture all land in LIVE_NOW`() {
+    fun `highfly live fixture's games land in LIVE_NOW and its broadcaster channels in CHANNELS`() {
         val metas = loadMetas("highfly_live.json", "sport")
         val items = metas.map { SportsLiveItemBucketer.describe(it, highflyLive, now) }
+        val tabs = SportsLiveItemBucketer.bucket(items, now)
+        val (channels, games) = items.partition { it.isChannel }
 
         assertTrue(items.all { it.isLive })
-        assertEquals(metas.size, SportsLiveItemBucketer.bucket(items, now).getValue(SportsLiveTab.LIVE_NOW).size)
+        // live.20 (TV report #4): a broadcaster's channel ("TSN 4", "ESPN HD") is a channel listing, never on Live now.
+        assertEquals(6, channels.size)
+        assertEquals(games.map { it.id }.toSet(), tabs.getValue(SportsLiveTab.LIVE_NOW).map { it.id }.toSet())
+        assertEquals(channels.map { it.id }.toSet(), tabs.getValue(SportsLiveTab.CHANNELS).map { it.id }.toSet())
     }
 
     @Test
-    fun `leaf items are channels and appear in CHANNELS and LIVE_NOW`() {
+    fun `leaf items are channels and appear in CHANNELS only`() {
         val items = describeAll(loadMetas("highfly_today.json", "sport"), highflyToday)
         val leaf = items.single { it.id == "leaf:ca-tsn-44343" }
         val tabs = SportsLiveItemBucketer.bucket(items, now)
 
         assertTrue(leaf.isChannel)
         assertTrue(tabs.getValue(SportsLiveTab.CHANNELS).any { it.id == leaf.id })
-        assertTrue(tabs.getValue(SportsLiveTab.LIVE_NOW).any { it.id == leaf.id })
+        // A broadcaster's channel (live.20), even marked LIVE NOW by its events catalog.
+        assertTrue(tabs.getValue(SportsLiveTab.LIVE_NOW).none { it.id == leaf.id })
     }
 
     @Test
@@ -429,13 +435,18 @@ class SportsLiveItemBucketerTest {
 
     @Test
     fun `a Live TV genre makes an events catalog item a channel, which shows live only from an events catalog`() {
-        val liveChannel = meta("ch", "Sky Sports", releaseInfo = "LIVE", genres = listOf("Live TV"))
+        val liveChannel = meta("ch", "Stadium 1", releaseInfo = "LIVE", genres = listOf("Live TV"))
         val fromEvents = SportsLiveItemBucketer.describe(liveChannel, highflyLive, now)
         val fromChannels = SportsLiveItemBucketer.describe(liveChannel, cncLiveTv, now)
 
         assertTrue(fromEvents.isChannel && fromChannels.isChannel)
         assertEquals(listOf("ch"), SportsLiveItemBucketer.bucket(listOf(fromEvents), now).getValue(SportsLiveTab.LIVE_NOW).map { it.id })
         assertTrue(SportsLiveItemBucketer.bucket(listOf(fromChannels), now).getValue(SportsLiveTab.LIVE_NOW).isEmpty())
+        // A broadcaster's channel (live.20, "Sky Sports") is on Channels only, even live from an events catalog.
+        val broadcaster = SportsLiveItemBucketer.describe(meta("sky", "Sky Sports", releaseInfo = "LIVE", genres = listOf("Live TV")), highflyLive, now)
+        val tabs = SportsLiveItemBucketer.bucket(listOf(broadcaster), now)
+        assertTrue(tabs.getValue(SportsLiveTab.LIVE_NOW).isEmpty())
+        assertEquals(listOf("sky"), tabs.getValue(SportsLiveTab.CHANNELS).map { it.id })
         assertFalse(SportsLiveItemBucketer.describe(meta("x", "X", genres = listOf("Live TVs")), highflyLive, now).isChannel)
     }
 

@@ -267,7 +267,13 @@ class ZapPanelScoresTest {
         runCurrent()
         // The Hockey chip lists the hockey game only: the basketball game playing is pinned above it, still scored.
         viewModel.onPanelChip(com.nuvio.tv.core.sportslive.SportsLiveSportKind.filterKeyOf(hockey))
-        val state = viewModel.panel.first { panel -> panel?.nowPlayingRow?.chip != null && panel.rows.none { it.item.streamKey == playing.streamKey } }!!
+        runCurrent()
+        advanceTimeBy(5_000)
+        runCurrent()
+        // Read the state, never wait on it: the open panel ticks forever, so a wait that is never met would hang the suite.
+        val state = viewModel.panel.value!!
+        viewModel.closePanel()
+        assertTrue(state.rows.none { it.item.streamKey == playing.streamKey })
         assertEquals(playing.streamKey, state.nowPlayingRow!!.item.streamKey)
         assertEquals(ScoreChip.Live("Q3 4:12", com.nuvio.tv.core.sportslive.scores.ChipScore(80, 88)), state.nowPlayingRow!!.chip)
     }

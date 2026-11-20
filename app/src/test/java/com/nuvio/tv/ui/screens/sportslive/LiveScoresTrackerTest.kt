@@ -144,14 +144,15 @@ class LiveScoresTrackerTest {
         assertTrue(requests.isEmpty())
 
         // Scores on: the NBA feed, then (it lists no game) the college feed for the bare "Basketball"
-        // card (#66); then the screen stops and nothing more is fetched.
+        // card (#66), then (still unmatched, and listed live) ESPN's NBA tomorrow once, in case it is listed live too
+        // early (live.20); then the screen stops and nothing more is fetched.
         settings.value = ScoreSettings()
         tracker.update(listOf(pacers), enabled = true)
         runCurrent()
-        assertEquals(2, requests.size)
+        assertEquals(listOf(LocalDate.of(2026, 11, 15), LocalDate.of(2026, 11, 15), LocalDate.of(2026, 11, 16)), requests)
         tracker.onStop()
         runCurrent()
         advanceTimeBy(30 * 60_000L); runCurrent()
-        assertEquals(2, requests.size)
+        assertEquals(3, requests.size)
     }
 }
