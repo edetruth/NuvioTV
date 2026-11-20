@@ -362,6 +362,29 @@ class SportsLivePreferencesDataStoreTest {
     }
 
     @Test
+    fun `Real-time scores and each source's nudge are kept per profile`() = runTest {
+        val store = SportsLivePreferencesDataStore(factory, profiles)
+        assertFalse(store.scoreSettings.first().realTime)
+        store.setRealTimeScores(true)
+        assertTrue(store.scoreSettings.first().realTime)
+        assertEquals(0L, store.scoreSettings.first().effectiveDelayMs)
+
+        assertEquals(emptyMap<String, Int>(), store.scoreNudges.first())
+        assertEquals(15, store.nudgeScores("addon-a"))
+        assertEquals(30, store.nudgeScores("addon-a"))
+        assertEquals(15, store.nudgeScores("addon-b"))
+        assertEquals(mapOf("addon-a" to 30, "addon-b" to 15), store.scoreNudges.first())
+        repeat(20) { store.nudgeScores("addon-a") }
+        assertEquals(180, store.scoreNudges.first().getValue("addon-a"))
+        store.resetScoreNudge("addon-a")
+        assertEquals(mapOf("addon-b" to 15), store.scoreNudges.first())
+
+        activeProfile.value = 2
+        assertFalse(store.scoreSettings.first().realTime)
+        assertEquals(emptyMap<String, Int>(), store.scoreNudges.first())
+    }
+
+    @Test
     fun `the scores choice reads the stored mode and my teams switch and writes both`() = runTest {
         val store = SportsLivePreferencesDataStore(factory, profiles)
         assertEquals(ScoresChoice(), store.scoresChoice.first())

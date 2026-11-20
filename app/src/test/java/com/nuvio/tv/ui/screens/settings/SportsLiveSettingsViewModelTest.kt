@@ -449,7 +449,8 @@ class SportsLiveSettingsViewModelTest {
             SportsLiveSetting.SCORE_ALERTS to "sports_live_score_alerts",
             SportsLiveSetting.FULL_TIME_ALERTS to "sports_live_full_time_alerts",
             SportsLiveSetting.CLOSE_GAME_ALERTS to "sports_live_close_game_alerts",
-            SportsLiveSetting.MY_TEAMS_SPOILERS to "sports_live_my_teams_spoilers"
+            SportsLiveSetting.MY_TEAMS_SPOILERS to "sports_live_my_teams_spoilers",
+            SportsLiveSetting.REAL_TIME_SCORES to "sports_live_real_time_scores"
         )
         keys.forEach { (setting, key) ->
             for (on in listOf(false, true)) {

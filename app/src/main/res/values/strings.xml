@@ -481,6 +481,8 @@
     <string name="sports_live_setting_home_row">Show \"Live now\" row on Home</string>
     <string name="sports_live_setting_hover_preview">Preview games on hover</string>
     <string name="sports_live_setting_data_saver">Data saver</string>
+    <string name="sports_live_setting_real_time_scores">Real-time scores</string>
+    <string name="sports_live_setting_real_time_scores_help">Scores the moment ESPN has them, with no delay, also while a game plays. Your stream runs about a minute behind, so other games\' scores can come before the picture. The game you watch never shows our score.</string>
     <string name="sports_live_scores_title">Scores</string>
     <string name="sports_live_setting_scores">Scores</string>
     <string name="sports_live_setting_scores_subtitle">Live and final scores on game cards. Never show stops all score checks.</string>
@@ -4168,7 +4170,10 @@
         <item quantity="one">%1$d source</item>
         <item quantity="other">%1$d sources</item>
     </plurals>
-    <string name="sports_live_rewind_behind">−%1$s · LIVE ▸</string>
+    <string name="sports_live_rewind_behind">LIVE · −%1$s</string>
+    <string name="sports_live_rewind_behind_go_live">LIVE · −%1$s · ▶▶ Go live</string>
+    <string name="sports_live_scores_ahead">Scores ahead? +15 s</string>
+    <string name="sports_live_scores_ahead_toast">Other games\' scores now wait %1$s more on this source</string>
     <plurals name="sports_live_partial_failure">
         <item quantity="one">%1$d source didn\'t respond</item>
         <item quantity="other">%1$d sources didn\'t respond</item>

@@ -11,6 +11,7 @@ import com.nuvio.tv.core.sportslive.SportsLiveGameEndAction
 import com.nuvio.tv.core.sportslive.SportsLiveGameWatch
 import com.nuvio.tv.core.sportslive.SportsLiveTriedGames
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
+import com.nuvio.tv.core.sportslive.scores.WatchingNow
 import com.nuvio.tv.core.sportslive.scores.LiveScoresRepository
 import com.nuvio.tv.core.sportslive.SportsLiveEndedGames
 import com.nuvio.tv.core.sportslive.SportsLiveLinkVerdicts
@@ -127,6 +128,9 @@ internal fun SportsLiveTab.offersDual(): Boolean = this == SportsLiveTab.LIVE_NO
 internal fun SportsLiveItem.sharesSourceWith(other: SportsLiveItem): Boolean = sharesSourceWith(other.sourceKeys())
 
 /** The stream keys of this card and its merged [SportsLiveItem.alternates]. */
+/** A dual pane's key in [WatchingNow] (Q18). */
+internal fun dualWatchOwner(side: Side): String = "dual:" + side.name
+
 internal fun SportsLiveItem.sourceKeys(): Set<String> = (listOf(this) + alternates).mapTo(HashSet()) { it.streamKey }
 
 /** True when this card or one of its alternates has one of [otherKeys] (see [sourceKeys]). */
@@ -320,6 +324,16 @@ class SportsLiveDualViewModel internal constructor(
     private var remindersNow = RemindersState()
 
     init {
+        // Q18 (#85): both panes' games are being watched: no score or clock from us, the others' scores wait.
+        viewModelScope.launch {
+            _state.collect { state ->
+                Side.entries.forEach { side ->
+                    val item = state?.pane(side)?.item
+                    if (item == null) WatchingNow.shared.stop(dualWatchOwner(side))
+                    else WatchingNow.shared.watch(dualWatchOwner(side), item.sourceKeys(), item.addonId)
+                }
+            }
+        }
         viewModelScope.launch { endActions.collect { endAction = it } }
         viewModelScope.launch { reminders.collect { remindersNow = it } }
         viewModelScope.launch { scoresModes.collect { scoresMode = it } }
@@ -929,6 +943,7 @@ class SportsLiveDualViewModel internal constructor(
     // Time in the background is not counted: the players report a stop when released (ON_STOP).
     override fun onCleared() {
         _state.value?.let { state -> Side.entries.forEach { settle(state.pane(it).item) } }
+        Side.entries.forEach { WatchingNow.shared.stop(dualWatchOwner(it)) }
         super.onCleared()
     }
 

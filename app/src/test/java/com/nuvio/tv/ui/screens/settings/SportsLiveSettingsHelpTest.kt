@@ -28,6 +28,7 @@ import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.HOVER_PREVIEW
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.MY_SPORTS
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.MY_TEAMS
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.MY_TEAMS_SPOILERS
+import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.REAL_TIME_SCORES
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.OPEN_GAME
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.HIDE_UNPLAYABLE
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.PICTURE_IN_PICTURE
@@ -90,7 +91,7 @@ class SportsLiveSettingsHelpTest {
         )
         assertEquals(listOf(header(SETUP), row(RUN_SETUP), header(STATUS)), items.subList(items.indexOf(header(SETUP)), items.indexOf(header(STATUS)) + 1))
         assertEquals(
-            listOf(header(MORE), Item.MoreToggle, row(DATA_SAVER), row(RESET_STREAM_MEMORY), row(HIDDEN), row(CATALOGS)),
+            listOf(header(MORE), Item.MoreToggle, row(DATA_SAVER), row(REAL_TIME_SCORES), row(RESET_STREAM_MEMORY), row(HIDDEN), row(CATALOGS)),
             items.takeLast(6)
         )
     }

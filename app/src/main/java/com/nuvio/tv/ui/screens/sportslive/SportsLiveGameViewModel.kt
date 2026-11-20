@@ -291,7 +291,7 @@ class SportsLiveGameViewModel internal constructor(
                         }
                         if (page.value.status == GameLoadStatus.WAITING_REVEAL) page.update { it.copy(status = GameLoadStatus.LOADING) }
                         if (!isVisible) return@collectLatest
-                        refreshWhileVisible(event, settings.delaySeconds * 1_000L)
+                        refreshWhileVisible(event, settings.effectiveDelayMs)
                     }
             }
         }

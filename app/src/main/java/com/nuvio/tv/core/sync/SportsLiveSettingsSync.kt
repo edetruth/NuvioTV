@@ -42,6 +42,7 @@ object SportsLiveSettingsSync {
     private val scalars: Map<String, Kind> = linkedMapOf(
         "sports_live_scores_mode" to Kind.STRING,
         "sports_live_score_delay_seconds" to Kind.INT,
+        "sports_live_real_time_scores" to Kind.BOOLEAN,
         "sports_live_open_game" to Kind.STRING,
         "sports_live_remind_my_teams" to Kind.BOOLEAN,
         "sports_live_score_alerts" to Kind.BOOLEAN,

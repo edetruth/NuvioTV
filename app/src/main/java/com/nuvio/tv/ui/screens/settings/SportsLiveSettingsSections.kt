@@ -65,6 +65,8 @@ internal enum class SportsLiveSetting(
     RUN_SETUP(SportsLiveSettingsSection.SETUP, R.string.sports_live_setting_run_setup, R.string.sports_live_setting_run_setup_subtitle),
     SCORES_STATUS(SportsLiveSettingsSection.STATUS, R.string.sports_live_setting_scores_status, R.string.sports_live_setting_scores_status_subtitle),
     DATA_SAVER(SportsLiveSettingsSection.MORE, R.string.sports_live_setting_data_saver, R.string.sports_live_setting_data_saver_subtitle),
+    /** "Real-time scores" (live.20 Q18, #85): opt-in, every score delay off, also while video plays. */
+    REAL_TIME_SCORES(SportsLiveSettingsSection.MORE, R.string.sports_live_setting_real_time_scores, R.string.sports_live_setting_real_time_scores_help),
     RESET_STREAM_MEMORY(SportsLiveSettingsSection.MORE, R.string.sports_live_setting_reset_stream_memory, R.string.sports_live_setting_reset_stream_memory_subtitle),
     /** Titles hidden from Live Now (#134): a summary row opening its page, where OK shows one again. */
     HIDDEN(SportsLiveSettingsSection.MORE, R.string.sports_live_setting_hidden, R.string.sports_live_setting_hidden_row_help),
@@ -88,7 +90,7 @@ internal enum class SportsLiveSetting(
             // The device's own picture-in-picture support is checked by the screen on top of this.
             MY_SPORTS, SCORES, OPEN_GAME, GAME_END, HIDE_UNPLAYABLE, PICTURE_IN_PICTURE, HOME_ROW, REMIND_MY_TEAMS, REMINDED_TEAMS,
             TIP_OFF, OK_ON_LIVE,
-            SCORES_STATUS, DATA_SAVER, CATALOGS -> section
+            SCORES_STATUS, DATA_SAVER, REAL_TIME_SCORES, CATALOGS -> section
         }
     }
 
@@ -99,7 +101,7 @@ internal enum class SportsLiveSetting(
     private companion object {
         val SWITCHES = setOf(
             REMIND_MY_TEAMS, SCORE_ALERTS, FULL_TIME_ALERTS, CLOSE_GAME_ALERTS, HIDE_UNPLAYABLE, PICTURE_IN_PICTURE, SHOW_SECTION, HOME_ROW,
-            CATCH_UP_ROW, HOVER_PREVIEW, DATA_SAVER, MY_TEAMS_SPOILERS
+            CATCH_UP_ROW, HOVER_PREVIEW, DATA_SAVER, MY_TEAMS_SPOILERS, REAL_TIME_SCORES
         )
     }
 }

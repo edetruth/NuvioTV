@@ -144,7 +144,7 @@ class ResultsRepository internal constructor(
         val day = daysAgo.coerceIn(SportsResults.DAYS_AGO)
         val date = dateFor(day)
         val events = dayEvents(relevant, date) ?: return ResultsLoad.Failed
-        val delayMs = settings.delaySeconds * 1_000L
+        val delayMs = settings.effectiveDelayMs
         val held = held(events, delayMs)
         val shown = if (held.isEmpty()) events else events.filter { it.eventId !in held }
         // Games being played (and finals still held) are counted, never listed. On Today in the small
@@ -171,7 +171,7 @@ class ResultsRepository internal constructor(
         if (settings.mode == ScoresMode.OFF || feeds.isEmpty()) return null
         val date = dateFor(daysAgo.coerceIn(SportsResults.DAYS_AGO))
         val events = dayEvents(feeds, date) ?: return null
-        val held = held(events, settings.delaySeconds * 1_000L)
+        val held = held(events, settings.effectiveDelayMs)
         val finals = events.filter { it.state == ScoreState.POST && it.isFinal && it.eventId !in held }
         return CatchUpDay(date, events, finals)
     }

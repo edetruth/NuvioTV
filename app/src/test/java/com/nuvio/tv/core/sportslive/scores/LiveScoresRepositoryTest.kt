@@ -15,6 +15,7 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -55,6 +56,7 @@ class LiveScoresRepositoryTest {
 
     private val provider = FakeProvider()
     private val settings = MutableStateFlow(ScoreSettings())
+    private val watching = WatchingNow()
 
     private val nbaFixture = EspnFixtures.events(EspnFixtures.NBA_20261115, EspnLeagueMap.NBA)
     private val pacers = nbaFixture.first { it.eventId == "401909985" } // IND @ PHI, 18:00Z
@@ -122,7 +124,8 @@ class LiveScoresRepositoryTest {
             health = health ?: EspnFeedHealth { base + testScheduler.currentTime },
             notifyOutage = notifyOutage,
             logos = logos,
-            followedLeagues = followedLeagues
+            followedLeagues = followedLeagues,
+            watching = watching
         )
     }
 
@@ -1248,6 +1251,50 @@ class LiveScoresRepositoryTest {
         assertEquals(53, repo.scores.value.getValue(key).homeScore)
         advanceTimeBy(30_000); runCurrent()
         assertEquals(55, repo.scores.value.getValue(key).homeScore)
+    }
+
+    // --- live.20 Q18 (#85): the game being watched, and the others while video plays ---
+
+    @Test
+    fun `the game being watched is served with no score and no clock, and gets them back once it stops`() = runTest {
+        val (repo, key) = undatedLiveGame({ 50 })
+        assertEquals(50, repo.scores.value.getValue(key).homeScore)
+        watching.watch("player", setOf(key), "addon-a")
+        runCurrent()
+        val watched = repo.scores.value.getValue(key)
+        assertTrue(watched.watched)
+        assertNull(watched.homeScore)
+        assertNull(watched.awayScore)
+        assertNull(watched.clockText)
+        // Its state stays: the end card still comes, delayed.
+        assertEquals(ScoreState.IN, watched.state)
+        watching.stop("player")
+        runCurrent()
+        assertEquals(50, repo.scores.value.getValue(key).homeScore)
+        assertFalse(repo.scores.value.getValue(key).watched)
+    }
+
+    @Test
+    fun `while video plays other games' scores wait at least 60 s, then show`() = runTest {
+        val (repo, key) = undatedLiveGame({ 50 })
+        assertEquals(50, repo.scores.value.getValue(key).homeScore)
+        // Another game plays: this one is no longer known from 60 s ago, so it waits.
+        watching.watch("player", setOf("another card"), "addon-a")
+        runCurrent()
+        assertNull(repo.scores.value.getValue(key).homeScore)
+        assertFalse(repo.scores.value.getValue(key).watched)
+        advanceTimeBy(ScoreWatch.MIN_PLAYING_DELAY_MS); runCurrent()
+        assertEquals(50, repo.scores.value.getValue(key).homeScore)
+    }
+
+    @Test
+    fun `Real-time scores turns every delay off, also while video plays`() = runTest {
+        val (repo, key) = undatedLiveGame({ 50 })
+        settings.value = ScoreSettings(realTime = true)
+        runCurrent()
+        watching.watch("player", setOf("another card"), "addon-a")
+        runCurrent()
+        assertEquals(50, repo.scores.value.getValue(key).homeScore)
     }
 
     @Test

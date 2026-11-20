@@ -25,6 +25,7 @@ import com.nuvio.tv.core.sportslive.scores.ProtectedGame
 import com.nuvio.tv.core.sportslive.scores.ScoreDelayChoices
 import com.nuvio.tv.core.sportslive.scores.ScoreSettings
 import com.nuvio.tv.core.sportslive.scores.ScoresChoice
+import com.nuvio.tv.core.sportslive.scores.ScoreWatch
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.core.sportslive.scores.SpoilerProtection
 import com.nuvio.tv.core.sportslive.scores.SportKind
@@ -83,6 +84,10 @@ class SportsLivePreferencesDataStore @Inject constructor(
     private val setupDoneKey = booleanPreferencesKey("sports_live_setup_done")
     private val scoresModeKey = stringPreferencesKey("sports_live_scores_mode")
     private val scoreDelayKey = intPreferencesKey("sports_live_score_delay_seconds")
+    // live.20 Q18 (#85): "Real-time scores" (opt-in, no delay at all), and "Scores ahead? +15 s" per stream source
+    // ({"addon id": seconds}; this TV's own, as each source's restream lag is what this TV receives).
+    private val realTimeScoresKey = booleanPreferencesKey("sports_live_real_time_scores")
+    private val scoreNudgesKey = stringPreferencesKey("sports_live_score_nudges")
     // Leagues seen on cards (scores S3), no longer used: cleared on the next My sports save.
     private val recentScoreLeaguesKey = stringPreferencesKey("sports_live_recent_score_leagues")
     private val mySportsKey = stringSetPreferencesKey("sports_live_my_sports")
@@ -186,7 +191,8 @@ class SportsLivePreferencesDataStore @Inject constructor(
         factory.get(pid, FEATURE).data.map { prefs ->
             ScoreSettings(
                 mode = ScoresMode.entries.firstOrNull { it.name == prefs[scoresModeKey] } ?: ScoresMode.SHOW,
-                delaySeconds = ScoreDelayChoices.coerce(prefs[scoreDelayKey] ?: ScoreDelayChoices.DEFAULT_SECONDS)
+                delaySeconds = ScoreDelayChoices.coerce(prefs[scoreDelayKey] ?: ScoreDelayChoices.DEFAULT_SECONDS),
+                realTime = prefs[realTimeScoresKey] ?: false
             )
         }
     }
@@ -416,6 +422,43 @@ class SportsLivePreferencesDataStore @Inject constructor(
     suspend fun setScoreDelaySeconds(seconds: Int) {
         store().edit { it[scoreDelayKey] = ScoreDelayChoices.coerce(seconds) }
     }
+
+    /** "Real-time scores" (live.20 Q18): every score delay off, also while video plays. Off by default. */
+    suspend fun setRealTimeScores(on: Boolean) {
+        store().edit { it[realTimeScoresKey] = on }
+    }
+
+    private val nudgesType = object : TypeToken<Map<String, Int>>() {}.type
+
+    /** Each stream source's "Scores ahead? +15 s" seconds (live.20 Q18, #85), by addon id. */
+    val scoreNudges: Flow<Map<String, Int>> = profileManager.activeProfileId.flatMapLatest { pid ->
+        factory.get(pid, FEATURE).data.map { prefs -> decodeNudges(prefs[scoreNudgesKey]) }
+    }
+
+    /** One "Scores ahead? +15 s" press for [sourceId] (an addon id); returns its new seconds (at most 3 min). */
+    suspend fun nudgeScores(sourceId: String): Int {
+        var seconds = 0
+        store().edit { prefs ->
+            val current = decodeNudges(prefs[scoreNudgesKey])
+            seconds = ScoreWatch.nudged(current[sourceId] ?: 0)
+            prefs[scoreNudgesKey] = gson.toJson(current + (sourceId to seconds))
+        }
+        return seconds
+    }
+
+    /** "Reset" of [sourceId]'s nudge. */
+    suspend fun resetScoreNudge(sourceId: String) {
+        store().edit { prefs ->
+            val current = decodeNudges(prefs[scoreNudgesKey])
+            if (sourceId in current) prefs[scoreNudgesKey] = gson.toJson(current - sourceId)
+        }
+    }
+
+    private fun decodeNudges(json: String?): Map<String, Int> =
+        json?.let { runCatching { gson.fromJson<Map<String, Number>>(it, nudgesType) }.getOrNull() }
+            ?.mapValues { (_, value) -> ScoreWatch.nudgeCapped(value.toInt()) }
+            ?.filterValues { it > 0 }
+            .orEmpty()
 
     /** Adds [team] unless the same name and sport are already followed (ignoring case). */
     suspend fun follow(team: FollowedTeam) {

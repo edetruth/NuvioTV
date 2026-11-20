@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.sportslive.mini
 
+import com.nuvio.tv.core.sportslive.scores.WatchingNow
 import com.nuvio.tv.ui.screens.sportslive.noteSportsLiveLinkError
 import com.nuvio.tv.core.sportslive.GameEndStrings
 import com.nuvio.tv.core.sportslive.SportsLiveToastKind
@@ -443,6 +444,13 @@ fun SportsLiveMiniPlayerHost(
     val context = LocalContext.current
     val state by controller.state.collectAsStateWithLifecycle()
     val playing = state as? SportsLiveMiniState.Playing
+    // Q18 (#85): the mini player's game is being watched too: no score or clock from us, the others' scores wait.
+    androidx.compose.runtime.DisposableEffect(playing?.sessionId) {
+        playing?.item?.let { item ->
+            WatchingNow.shared.watch(MINI_WATCH_OWNER, (listOf(item) + item.alternates).mapTo(HashSet()) { it.streamKey }, item.addonId)
+        } ?: WatchingNow.shared.stop(MINI_WATCH_OWNER)
+        onDispose { WatchingNow.shared.stop(MINI_WATCH_OWNER) }
+    }
     val recoveryScope = rememberCoroutineScope()
     val playback = remember {
         SportsLiveMiniPlayback(
@@ -734,3 +742,6 @@ private fun MiniCaption(text: String, modifier: Modifier = Modifier, small: Bool
             .padding(horizontal = 8.dp, vertical = 2.dp)
     )
 }
+
+/** The mini player's key in [WatchingNow] (live.20 Q18). */
+private const val MINI_WATCH_OWNER = "mini"

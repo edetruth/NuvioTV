@@ -144,7 +144,9 @@ internal fun SportsLiveCardMenu(
     onToggleTeamReminder: (Int) -> Unit = {},
     /** "Watch later (no spoilers)" (#151), or "Reveal result" when [savedForLater]; null hides it. */
     onWatchLater: (() -> Unit)? = null,
-    savedForLater: Boolean = false
+    savedForLater: Boolean = false,
+    /** "Scores ahead? +15 s" (live.20 Q18, #85): in the player only; null hides it. */
+    onScoresAhead: (() -> Unit)? = null
 ) {
     var teamsOpen by remember { mutableStateOf(false) }
     SportsLiveSheet(
@@ -219,6 +221,9 @@ internal fun SportsLiveCardMenu(
                 SportsLiveMenuButton(text = stringResource(R.string.sports_live_team_page, name), onClick = open, modifier = first())
             }
             else -> SportsLiveMenuButton(text = stringResource(R.string.sports_live_team_pages), onClick = { teamsOpen = true }, modifier = first())
+        }
+        if (onScoresAhead != null) {
+            SportsLiveMenuButton(text = stringResource(R.string.sports_live_scores_ahead), onClick = onScoresAhead, modifier = first())
         }
         if (onDetails != null) {
             SportsLiveMenuButton(text = stringResource(R.string.sports_live_details), onClick = onDetails, modifier = first())

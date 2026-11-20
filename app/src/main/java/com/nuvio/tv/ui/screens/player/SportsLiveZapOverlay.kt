@@ -93,6 +93,7 @@ import com.nuvio.tv.ui.screens.sportslive.panelTitleSuffixes
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveHiddenByMySportsLine
 import com.nuvio.tv.ui.util.dpadRepeatThrottle
 import com.nuvio.tv.ui.screens.sportslive.SportsLivePanelMenu
+import com.nuvio.tv.core.sportslive.scores.ScoreWatch
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens
 import com.nuvio.tv.core.sportslive.displayName
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapViewModel
@@ -167,7 +168,7 @@ internal fun BoxScope.SportsLiveZapOverlay(
         engine = engine,
         covered = panelOpen
     )
-    BehindLiveIndicator(liveWindow = liveWindow, engine = engine, covered = playerOverlayVisible || panelOpen || pausedLive)
+    BehindLiveIndicator(liveWindow = liveWindow, engine = engine, covered = playerOverlayVisible || panelOpen || pausedLive, onBehind = viewModel::onBehindLive)
     val panel by viewModel.panel.collectAsState()
     val panelReadiness by viewModel.panelReadiness.collectAsState()
     val panelKeysHint by viewModel.panelKeysHint.collectAsState()
@@ -259,6 +260,7 @@ internal fun BoxScope.SportsLiveZapOverlay(
     }
     // Hold OK on a row (#140): the V2 action menu, Watch both first.
     var menu by remember { mutableStateOf<SportsLivePanelMenu?>(null) }
+    val scoresAheadToast = stringResource(R.string.sports_live_scores_ahead_toast)
     val openGame = LocalOpenSportsLiveGame.current
     LaunchedEffect(panelOpen) { if (!panelOpen) menu = null }
     AnimatedVisibility(
@@ -304,6 +306,20 @@ internal fun BoxScope.SportsLiveZapOverlay(
             },
             onDetails = null,
             onDismiss = { menu = null },
+            // Q18 (#85): other games' scores ahead of this stream? Each press makes them wait 15 s more for its source.
+            onScoresAhead = if (viewModel.nowPlaying != null) {
+                {
+                    menu = null
+                    viewModel.onScoresAhead { seconds ->
+                        com.nuvio.tv.core.sportslive.SportsLiveToasts.show(
+                            com.nuvio.tv.core.sportslive.SportsLiveToastKind.INFO,
+                            scoresAheadToast.format(SportsLiveRewind.formatBehind(seconds * 1_000L))
+                        )
+                    }
+                }
+            } else {
+                null
+            },
             // Watch both: dual screen right away, the game playing beside the one held.
             onWatchWith = if (shown.watchBoth && openDual != null) {
                 {
@@ -399,20 +415,28 @@ private fun BoxScope.PausedLiveChip(
 private fun BoxScope.BehindLiveIndicator(
     liveWindow: () -> LiveWindow?,
     engine: () -> InternalPlayerEngine,
-    covered: Boolean
+    covered: Boolean,
+    /** The player's distance behind its live edge, for the scores (live.20 Q18, #85: other games wait that long more). */
+    onBehind: (Long?) -> Unit = {}
 ) {
     var window by remember { mutableStateOf<LiveWindow?>(null) }
     LaunchedEffect(Unit) {
         while (true) {
             window = liveWindow()
+            onBehind(window?.takeIf { it.isDynamic }?.behindEdgeMs)
             delay(500)
         }
     }
     val shown = SportsLiveRewind.indicatorBehindMs(
         hasSession = true, engine = engine(), window = window, covered = covered
     ) ?: return
+    // Q18: "LIVE · −0:45"; from 10 s behind, "▶▶ Go live" (fast-forward reaches the edge).
+    val label = ScoreWatch.liveLabel(shown)
     Text(
-        text = stringResource(R.string.sports_live_rewind_behind, SportsLiveRewind.formatBehind(shown)),
+        text = stringResource(
+            if (label.offersGoLive) R.string.sports_live_rewind_behind_go_live else R.string.sports_live_rewind_behind,
+            SportsLiveRewind.formatBehind(shown)
+        ),
         style = MaterialTheme.typography.labelLarge,
         color = NuvioTheme.colors.TextPrimary,
         modifier = Modifier

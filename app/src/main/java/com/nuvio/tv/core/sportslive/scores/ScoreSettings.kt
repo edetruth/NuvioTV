@@ -62,5 +62,11 @@ object ScoreDelayChoices {
     fun coerce(seconds: Int?): Int = seconds?.takeIf { it in SECONDS } ?: 0
 }
 
-/** The two score settings of the active profile. */
-data class ScoreSettings(val mode: ScoresMode = ScoresMode.SHOW, val delaySeconds: Int = 0)
+/**
+ * The score settings of the active profile. [realTime] ("Real-time scores", opt-in, live.20 Q18): no delay at all,
+ * not even while video plays.
+ */
+data class ScoreSettings(val mode: ScoresMode = ScoresMode.SHOW, val delaySeconds: Int = 0, val realTime: Boolean = false) {
+    /** The delay while no video plays: none under [realTime]. */
+    val effectiveDelayMs: Long get() = if (realTime) 0L else delaySeconds * 1_000L
+}

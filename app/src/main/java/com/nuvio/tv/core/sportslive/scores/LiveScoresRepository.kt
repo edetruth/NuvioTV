@@ -101,7 +101,11 @@ class LiveScoresRepository internal constructor(
     /** Followed teams' ESPN leagues ("soccer/eng.1"): their lists are kept too (#82). */
     private val followedLeagues: Flow<List<EspnLeague>> = flowOf(emptyList()),
     /** Spoiler protection (#151): every score served is stamped with it ([SpoilerProtection.stamp]). */
-    protectionSource: Flow<SpoilerProtection> = flowOf(SpoilerProtection())
+    protectionSource: Flow<SpoilerProtection> = flowOf(SpoilerProtection()),
+    /** What plays now (live.20 Q18, #85): its games are served masked, the others delayed ([ScoreWatch]). */
+    private val watching: WatchingNow = WatchingNow(),
+    /** Each stream source's "Scores ahead? +15 s" seconds, by addon id. */
+    private val nudges: Flow<Map<String, Int>> = flowOf(emptyMap())
 ) : LiveScoreTracking {
     @Inject
     constructor(
@@ -130,7 +134,9 @@ class LiveScoresRepository internal constructor(
         },
         directoryStore = TeamDirectoryStore(File(context.filesDir, "sportslive/team_directory")),
         followedLeagues = prefs.followedTeams.map { teams -> teams.mapNotNull { leagueOfPath(it.league) } },
-        protectionSource = prefs.spoilerProtection
+        protectionSource = prefs.spoilerProtection,
+        watching = WatchingNow.shared,
+        nudges = prefs.scoreNudges
     )
 
     /** What the settings screen and surfaces read: Show / Hide until focused / Off. */
@@ -209,7 +215,12 @@ class LiveScoresRepository internal constructor(
     /** A soccer/all card's own league, learned from its match, polled instead next time (by card key). */
     private val remembered = HashMap<String, EspnLeague>()
     private var raw: Map<String, ScoreSnapshot> = emptyMap()
-    private var delayMs = 0L
+    /** The profile's Score delay, and Real-time scores (Q18): the delay while no video plays. */
+    private var settingDelayMs = 0L
+    private var realTime = false
+    /** The players playing now and the sources' nudges (Q18, #85): masked games, the delay while video plays. */
+    private var playing: Collection<WatchingNow.Session> = emptyList()
+    private var nudgeSeconds: Map<String, Int> = emptyMap()
     private var sports: MySports = MySports.DEFAULT
     /** Logo URLs already handed to [prefetch]. */
     private val prefetched = HashSet<String>()
@@ -259,6 +270,18 @@ class LiveScoresRepository internal constructor(
         scope.launch(io) { directorySync.load() }
         // No learned logo is drawn before the Scores setting is known, nor while it is Off.
         scope.launch { mode.collect { logos.active = it != ScoresMode.OFF } }
+        // A player starting or stopping, its distance behind live, or a nudge: served again at once (Q18, #85).
+        scope.launch {
+            combine(watching.state, nudges) { sessions, perSource -> sessions.values.toList() to perSource }
+                .distinctUntilChanged()
+                .collect { (sessions, perSource) ->
+                    lock.withLock {
+                        playing = sessions
+                        nudgeSeconds = perSource
+                        if (scoresMode != ScoresMode.OFF && raw.isNotEmpty()) publishLocked()
+                    }
+                }
+        }
         // A game saved for later (or revealed) is stamped again at once, not at the next fetch.
         scope.launch {
             protectionSource.collect { latest ->
@@ -345,7 +368,8 @@ class LiveScoresRepository internal constructor(
             coroutineScope {
                 val pollerScope = this
                 lock.withLock {
-                    delayMs = current.delaySeconds * 1_000L
+                    settingDelayMs = current.delaySeconds * 1_000L
+                    realTime = current.realTime
                     sports = picked
                     activePollerScope = pollerScope
                 }
@@ -744,7 +768,12 @@ class LiveScoresRepository internal constructor(
             return
         }
         // Read against the clock now, so a protection's 7 days run out without a settings change.
-        output.value = protectionState.value.copy(nowMs = now()).stampAll(scoreDelay.apply(raw, delayMs, now()))
+        val delay = ScoreWatch.delayMs(settingDelayMs, realTime, playing, nudgeSeconds)
+        val shown = scoreDelay.apply(raw, delay, now())
+        // The games being watched: no score and no clock from us; the broadcast shows its own (Q18).
+        val watched = ScoreWatch.watchedEvents(playing, shown)
+        val served = if (watched.isEmpty()) shown else shown.mapValues { (_, event) -> if (event.eventId in watched) ScoreWatch.masked(event) else event }
+        output.value = protectionState.value.copy(nowMs = now()).stampAll(served)
         nextRelease.value = scoreDelay.nextChangeAt
     }
 

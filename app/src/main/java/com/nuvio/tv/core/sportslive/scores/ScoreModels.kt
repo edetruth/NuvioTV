@@ -96,7 +96,9 @@ data class ScoreSnapshot(
     /** The betting spread where ESPN lists one (#137); null when none. */
     val spread: Double? = null,
     /** Spoiler-protected (#151, [SpoilerProtection]): every surface hides the score, stats and alerts. */
-    val spoilerProtected: Boolean = false
+    val spoilerProtected: Boolean = false,
+    /** Being watched now (live.20 Q18, [ScoreWatch.masked]): served with no score and no clock; the player says LIVE. */
+    val watched: Boolean = false
 ) {
     val homeAbbr: String? get() = home.abbreviation
     val awayAbbr: String? get() = away.abbreviation

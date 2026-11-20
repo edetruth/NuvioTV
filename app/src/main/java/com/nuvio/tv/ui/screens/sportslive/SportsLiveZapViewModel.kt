@@ -3,6 +3,7 @@ package com.nuvio.tv.ui.screens.sportslive
 import com.nuvio.tv.core.sportslive.SportsLiveToastKind
 import com.nuvio.tv.core.sportslive.SportsLiveToasts
 import com.nuvio.tv.core.sportslive.scores.FollowTarget
+import com.nuvio.tv.core.sportslive.scores.WatchingNow
 import com.nuvio.tv.core.sportslive.scores.FollowTargets
 import com.nuvio.tv.core.sportslive.scores.GameSection
 import com.nuvio.tv.core.sportslive.SportsLiveSportInference
@@ -172,7 +173,9 @@ class SportsLiveZapViewModel internal constructor(
     // #161: "Are you still watching?" after a few automatic moves or hours with no key press.
     private val stillWatching: SportsLiveStillWatching = SportsLiveStillWatching.shared,
     // "OK on live" (research Q19): Show controls (default) or Pause.
-    okOnLive: Flow<SportsLiveOkOnLive> = flowOf(SportsLiveOkOnLive.DEFAULT)
+    okOnLive: Flow<SportsLiveOkOnLive> = flowOf(SportsLiveOkOnLive.DEFAULT),
+    // Q18 (#85): "Scores ahead? +15 s" for a source (addon id); its new seconds.
+    private val nudgeScores: suspend (String) -> Int = { 0 }
 ) : ViewModel() {
 
     @Inject constructor(
@@ -195,7 +198,8 @@ class SportsLiveZapViewModel internal constructor(
         prefetchHooks = SportsLivePrefetchHooks.of(resolver),
         dataSaver = prefs?.dataSaver ?: flowOf(false),
         reminders = prefs?.reminders ?: flowOf(RemindersState()),
-        okOnLive = prefs?.okOnLive ?: flowOf(SportsLiveOkOnLive.DEFAULT)
+        okOnLive = prefs?.okOnLive ?: flowOf(SportsLiveOkOnLive.DEFAULT),
+        nudgeScores = { source -> prefs?.nudgeScores(source) ?: 0 }
     )
 
     /** "OK on live" is Pause (research Q19): a bare OK pauses a live game at once, as Google's TV-PC says. */
@@ -592,6 +596,13 @@ class SportsLiveZapViewModel internal constructor(
     fun onPlayerStarted(started: Boolean) {
         if (started) nowTracker.onStart() else nowTracker.onStop()
         playerStarted.value = started
+        // Q18 (#85): while it plays, its game shows no score or clock from us and the others' scores wait.
+        val item = nowPlaying
+        if (started && item != null) {
+            WatchingNow.shared.watch(watchOwner, (listOf(item) + item.alternates).mapTo(HashSet()) { it.streamKey }, item.addonId)
+        } else {
+            WatchingNow.shared.stop(watchOwner)
+        }
         neighbourJob?.cancel()
         neighbourJob = null
         val prefetch = activePrefetcher ?: return
@@ -605,6 +616,20 @@ class SportsLiveZapViewModel internal constructor(
                     .filter(::sportsLiveAutoPlayEligible)
             )
         }
+    }
+
+    // This player's key in [WatchingNow].
+    private val watchOwner: String get() = "player:" + (contentId ?: "")
+
+    /** How far the player is behind its live edge (its live window, polled by the overlay; null: unknown). */
+    fun onBehindLive(ms: Long?) {
+        WatchingNow.shared.behindLive(watchOwner, ms)
+    }
+
+    /** "Scores ahead? +15 s" (Q18, #85): one more press for the source playing; its new seconds, or null. */
+    fun onScoresAhead(onNudged: (Int) -> Unit) {
+        val source = nowPlaying?.addonId ?: return
+        viewModelScope.launch { onNudged(nudgeScores(source)) }
     }
 
     /**
@@ -1137,6 +1162,7 @@ class SportsLiveZapViewModel internal constructor(
     override fun onCleared() {
         scoreTracker.onStop()
         nowTracker.onStop()
+        WatchingNow.shared.stop(watchOwner)
         // This player left: its stream no longer plays, so dual screen cannot take it over (#65).
         contentId?.let(workingLinks::stoppedPlaying)
         super.onCleared()
