@@ -10,6 +10,7 @@ import com.nuvio.tv.core.sportslive.scores.ScoreState
 import com.nuvio.tv.domain.model.SportsLiveItem
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SportsLiveNextGameTest {
@@ -76,6 +77,48 @@ class SportsLiveNextGameTest {
         assertEquals(nbaQuiet, SportsLiveNextGame.pick(ended, lineup, scores, emptySet(), tried = setOf(nbaClose.id)))
         assertNull(SportsLiveNextGame.pick(ended, lineup, scores, finishedKeys = setOf(nbaQuiet.streamKey), tried = setOf(nbaClose.id)))
         assertNull(SportsLiveNextGame.pick(ended, listOf(ended), scores, emptySet(), emptySet()))
+    }
+
+    @Test
+    fun `a game marked with no working stream is never Up next, and null when only such games are left`() {
+        val lineup = listOf(nbaQuiet, ended, nbaBlowout)
+        assertEquals(nbaQuiet, SportsLiveNextGame.pick(ended, lineup, scores, emptySet(), emptySet(), noStream = setOf(nbaBlowout.id)))
+        assertNull(SportsLiveNextGame.pick(ended, lineup, scores, emptySet(), emptySet(), noStream = setOf(nbaBlowout.id, nbaQuiet.id)))
+    }
+
+    @Test
+    fun `a ready game goes first within the lineup step`() {
+        val lineup = listOf(nbaQuiet, ended, nbaBlowout)
+        // Lineup order alone picks the blowout (not big); the quiet game is ready.
+        val pick = SportsLiveNextGame.pick(ended, lineup, scores, emptySet(), emptySet(), knownGood = { it == nbaQuiet })
+        assertEquals(nbaQuiet, pick)
+        // Nothing ready: lineup order as before.
+        assertEquals(nbaBlowout, SportsLiveNextGame.pick(ended, lineup, scores, emptySet(), emptySet(), knownGood = { false }))
+    }
+
+    @Test
+    fun `a ready game goes first among followed teams' games, but never over a higher step`() {
+        val followedBlowout = nbaBlowout.copy(followed = true)
+        val followedQuiet = nbaQuiet.copy(followed = true)
+        val lineup = listOf(ended, followedBlowout, followedQuiet, nbaClose)
+        assertEquals(followedBlowout, SportsLiveNextGame.pick(ended, lineup, scores, emptySet(), emptySet()))
+        assertEquals(followedQuiet, SportsLiveNextGame.pick(ended, lineup, scores, emptySet(), emptySet(), knownGood = { it == followedQuiet }))
+        // A ready game of no followed team does not beat a followed one.
+        assertEquals(followedBlowout, SportsLiveNextGame.pick(ended, lineup, scores, emptySet(), emptySet(), knownGood = { it == nbaClose }))
+        // Nor does a ready quiet game beat a big one.
+        assertEquals(nbaClose, SportsLiveNextGame.pick(ended, listOf(ended, nbaQuiet, nbaClose), scores, emptySet(), emptySet(), knownGood = { it == nbaQuiet }))
+    }
+
+    @Test
+    fun `a ready big game goes first among the big games live anywhere`() {
+        // A game no ESPN feed matches, in a sport none of these is in: the top big game live anywhere.
+        val hockey = item(name = "Rangers at Bruins", id = "hockey", sport = "Hockey")
+        val lineup = listOf(hockey, nflOvertime, nbaClose)
+        val top = SportsLiveNextGame.pick(hockey, lineup, scores, emptySet(), emptySet())
+        assertTrue(top == nflOvertime || top == nbaClose)
+        // The other big game, once it is the ready one, goes first.
+        val other = if (top == nflOvertime) nbaClose else nflOvertime
+        assertEquals(other, SportsLiveNextGame.pick(hockey, lineup, scores, emptySet(), emptySet(), knownGood = { it == other }))
     }
 
     @Test

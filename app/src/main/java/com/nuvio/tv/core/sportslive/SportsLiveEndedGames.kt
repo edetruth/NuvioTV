@@ -247,6 +247,21 @@ class SportsLiveEndedGames {
         return items.filter { it.streamKey in ended }.flatMapTo(HashSet()) { item -> (listOf(item) + item.alternates).map { it.streamKey } }
     }
 
+    /**
+     * The source keys of [items] Live now shows over at [nowMs] (live.19 QA F2): an ESPN final (in its grace
+     * too), Just ended, or "Probably ended" (an estimate), with every source of a merged card, as
+     * [SportsLiveItem.hasEnded] reads them. What the end card's Up next and "Next live game" never pick.
+     * [scores] and [canEstimate] as [split] takes them.
+     */
+    fun overSourceKeys(
+        items: List<SportsLiveItem>,
+        scores: Map<String, ScoreSnapshot>,
+        nowMs: Long,
+        canEstimate: (SportsLiveItem) -> Boolean = { true }
+    ): Set<String> =
+        items.filter { item -> verdict(item, scores[item.streamKey], nowMs, canEstimate(item)) != null }
+            .flatMapTo(HashSet()) { item -> (listOf(item) + item.alternates).map { it.streamKey } }
+
     private fun SeenFinal.toEnded() = EndedGame(EndedSignal.FINAL, atMs, event, graced)
 
     /**

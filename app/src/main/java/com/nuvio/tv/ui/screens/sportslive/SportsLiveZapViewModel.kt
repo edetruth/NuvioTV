@@ -575,9 +575,13 @@ class SportsLiveZapViewModel internal constructor(
         val lineupItems = lineup.value?.rows?.map { it.item } ?: session?.items.orEmpty()
         val scores = liveScores.scores.value
         val nowMs = System.currentTimeMillis()
-        val finished = repo.endedKeys.value + panelEndedKeys() + linkVerdicts.deadKeys +
-            SportsLiveEndedGames.shared.confirmedEndedSourceKeys(lineupItems, scores, nowMs)
-        val next = SportsLiveNextGame.pick(item, lineupItems, scores, finished, tried.ids()).takeUnless { gameWatch.debugNoNext }
+        val finished = overKeys(lineupItems, scores, nowMs)
+        // #183: a ✓ ready game first within each step; never one marked ⚠ no working stream.
+        val next = SportsLiveNextGame.pick(
+            item, lineupItems, scores, finished, tried.ids(),
+            knownGood = { game -> readiness.of(game) == SportsLiveReadyMark.READY || workingLinks.goodStream(game.id) != null },
+            noStream = noStreamIds()
+        ).takeUnless { gameWatch.debugNoNext }
         val upcoming = if (next != null) null else upcomingGame(nowMs)
         val snapshot = ScoreChips.matchedEvent(item, scores[item.streamKey]) ?: gameWatch.snapshot(item.id)
         val action = endAction
@@ -741,8 +745,7 @@ class SportsLiveZapViewModel internal constructor(
         tried.noteFailed(session.current)
         val lineupItems = lineup.value?.rows?.map { it.item } ?: session.items
         val scores = liveScores.scores.value
-        val finished = repo.endedKeys.value + panelEndedKeys() + linkVerdicts.deadKeys +
-            SportsLiveEndedGames.shared.confirmedEndedSourceKeys(lineupItems, scores, System.currentTimeMillis())
+        val finished = overKeys(lineupItems, scores, System.currentTimeMillis())
         val next = SportsLiveSecondGame.nextAfterFailure(
             current = session.current,
             lineup = lineupItems,
@@ -759,6 +762,17 @@ class SportsLiveZapViewModel internal constructor(
         }
         _nextExhausted.value = false
         return controller.pick(contentId, next, lineupItems)
+    }
+
+    /**
+     * Card keys of the games over at [nowMs] (live.19 QA F2): the probe's ended games, the open panel's Just ended,
+     * dead link checks, and every game of [lineupItems] Live now shows final, ended or "Probably ended" (an estimate,
+     * gated as the panel gates it), with every source of a merged card. Up next and "Next live game" never pick one.
+     */
+    private fun overKeys(lineupItems: List<SportsLiveItem>, scores: Map<String, ScoreSnapshot>, nowMs: Long): Set<String> {
+        val canEstimate = SportsLiveEndedGames.estimateGate(lineup.value?.mode == ScoresMode.OFF, liveScores.unmatched.value)
+        return repo.endedKeys.value + panelEndedKeys() + linkVerdicts.deadKeys +
+            SportsLiveEndedGames.shared.overSourceKeys(lineupItems, scores, nowMs, canEstimate)
     }
 
     /** Game ids marked ⚠ no working stream (#147). */

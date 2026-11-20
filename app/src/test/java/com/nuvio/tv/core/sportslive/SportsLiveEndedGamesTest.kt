@@ -442,6 +442,25 @@ class SportsLiveEndedGamesTest {
     }
 
     @Test
+    fun `Up next leaves out every game Live now shows over - a final in its grace and a Probably ended estimate too`() {
+        val games = SportsLiveEndedGames()
+        val now = START + BASKETBALL + 5 * MINUTE
+        val alternate = item(id = "alt").copy(addonId = "b")
+        val finalCard = item(id = "final").copy(alternates = listOf(alternate))
+        val estimated = item(name = "Boston Celtics at New York Knicks", id = "estimated")
+        val playing = item(name = "Los Angeles Lakers at Denver Nuggets", id = "playing", startMs = now - 30 * MINUTE)
+        val channel = item(name = "TSN 4", id = "channel", isChannel = true, startMs = null)
+        val items = listOf(finalCard, estimated, playing, channel)
+        val scores = mapOf(finalCard.streamKey to pacersFinal)
+        val over = games.overSourceKeys(items, scores, now)
+        assertEquals(setOf(finalCard.streamKey, alternate.streamKey, estimated.streamKey), over)
+        // Home's confirmed finals wait for the grace, and never take an estimate: the gap live.19 QA F2 found.
+        assertTrue(games.confirmedEndedSourceKeys(items, scores, now).isEmpty())
+        // Where Live now may not estimate a card, neither does Up next.
+        assertEquals(setOf(finalCard.streamKey, alternate.streamKey), games.overSourceKeys(items, scores, now) { false })
+    }
+
+    @Test
     fun `replayFor finds a strict replay match of an ended game`() {
         val replay = item(name = "Indiana Pacers vs Philadelphia 76ers", id = "rp", startMs = START).copy(kind = SportsLiveKind.REPLAY, isLive = false)
         assertNotNull(SportsLiveEndedGames.replayFor(pacersFinal, listOf(replay), START + 4 * HOUR))

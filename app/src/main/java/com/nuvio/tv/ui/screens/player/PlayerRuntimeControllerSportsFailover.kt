@@ -46,9 +46,10 @@ import kotlinx.coroutines.launch
  * Sports & Live two-stage error recovery (#28). On a fatal playback error — or a stall after
  * playback has started — the player automatically advances to the next untried source for this
  * game/channel (its own addon's other links plus a merged game's other addons' extras), link after
- * link while none shows a first frame, for up to [SportsLiveStreamThresholds.FAILOVER_RUN_MS]
- * ([SportsLiveFailover], #153). When that time is up or no untried source remains, the standalone,
- * focusable error overlay is shown so the user picks one by hand.
+ * link while none shows a first frame, for up to [SportsLiveStreamThresholds.MAX_FAILOVER_LINKS] links
+ * and [SportsLiveStreamThresholds.FAILOVER_RUN_MS] ([SportsLiveFailover], #153, F1). When the run gives up
+ * or no untried source remains, the game is marked ⚠ no working stream and the standalone, focusable
+ * error overlay is shown so the user picks one by hand ("Try next link" and a Sources pick still play).
  *
  * It is scoped to sports playback ([SportsLiveExtraSources.isSportsPlayback]); movies and shows keep
  * upstream behaviour. Already-tried sources are skipped, and the resolve path reuses whatever the
@@ -140,7 +141,9 @@ internal fun PlayerRuntimeController.trySportsLiveFailoverAfterError(
     /** False when the viewer skipped a link still starting (#138): it is only left behind, not held against it. */
     recordFailure: Boolean = true,
     /** What went wrong, when the health ladder knows: a slow start is quarantined for less time (#158). */
-    problem: SportsLiveStreamHealth.Problem? = null
+    problem: SportsLiveStreamHealth.Problem? = null,
+    /** The viewer's "Try next link": the next link plays even once the run's cap is reached (F1). */
+    manual: Boolean = false
 ): Boolean {
     if (!SportsLiveExtraSources.isSportsPlayback(contentId)) return false
     // The game is over (#161) or not live yet (#162): no failover, no error; the end card or the waiting card.
@@ -177,7 +180,9 @@ internal fun PlayerRuntimeController.trySportsLiveFailoverAfterError(
     sportsFailoverTriedKeys += "url:$failedUrl"
     val videoId = currentVideoId ?: contentId
     if (sportsFailoverRunStartedAtMs == null) sportsFailoverRunStartedAtMs = System.currentTimeMillis()
-    if (videoId == null || !autoTry || !canAutoTrySportsLink()) {
+    if (videoId == null || !autoTry || !canTrySportsLink(manual)) {
+        // The run gave up (F1: its cap of links or its time): no working stream for now.
+        if (videoId != null && autoTry) markSportsGameNoStream()
         surfaceSportsFailoverError(errorMessage)
         return true
     }
@@ -192,7 +197,7 @@ internal fun PlayerRuntimeController.trySportsLiveFailoverAfterError(
         val installedAddonNames = streamAddonsFor(videoId).map { it.displayName }.toSet()
 
         var polls = 0
-        while (canAutoTrySportsLink()) {
+        while (canTrySportsLink(manual)) {
             val sources = _uiState.value
             val searchDone = !sources.isLoadingSourceStreams &&
                 (sources.sourceAllStreams.isNotEmpty() || sources.sourceStreamsError != null)
@@ -245,13 +250,23 @@ internal fun PlayerRuntimeController.trySportsLiveFailoverAfterError(
             sportsFailoverTriedKeys += "url:$currentStreamUrl"
             return@launch
         }
+        markSportsGameNoStream()
         surfaceSportsFailoverError(errorMessage)
     }
     return true
 }
 
-private fun PlayerRuntimeController.canAutoTrySportsLink(): Boolean =
-    SportsLiveFailover.canAutoTry(sportsFailoverRunStartedAtMs, System.currentTimeMillis())
+private fun PlayerRuntimeController.canTrySportsLink(manual: Boolean): Boolean =
+    SportsLiveFailover.canTryNext(sportsFailoverRunStartedAtMs, System.currentTimeMillis(), sportsFailoverAttempts, manual)
+
+/**
+ * The failover run gave up with no link playing (F1): the game is marked ⚠ no working stream (#147), so
+ * "Next live game", the end card's Up next and the panel pass it over while the mark stands.
+ */
+private fun PlayerRuntimeController.markSportsGameNoStream() {
+    if (hasRenderedFirstFrame) return
+    contentId?.takeIf(String::isNotBlank)?.let { SportsLiveGameReadiness.shared.set(it, SportsLiveReadyMark.NO_STREAM) }
+}
 
 /**
  * Any playback error of a sports link that a generic recovery would otherwise turn into the error
@@ -581,7 +596,7 @@ internal fun PlayerRuntimeController.sportsTryNextLink() {
     if (!SportsLiveExtraSources.isSportsPlayback(contentId) || hasRenderedFirstFrame) return
     if (sourceFallbackJob?.isActive == true) return
     stopPendingSportsStart()
-    trySportsLiveFailoverAfterError(context.getString(R.string.sports_live_link_not_working), recordFailure = false)
+    trySportsLiveFailoverAfterError(context.getString(R.string.sports_live_link_not_working), recordFailure = false, manual = true)
 }
 
 /**

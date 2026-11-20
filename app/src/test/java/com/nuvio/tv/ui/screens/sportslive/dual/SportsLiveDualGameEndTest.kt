@@ -91,6 +91,26 @@ class SportsLiveDualGameEndTest {
         }
 
     @Test
+    fun `Up next skips a game Live now shows Probably ended`() = runTest(mainDispatcherRule.dispatcher) {
+        // live.19 QA F2: b is past its expected end, so Live now shows it Probably ended.
+        val liveNow = SportsLiveEndedGames()
+        val viewModel = SportsLiveDualViewModel(
+            resolve = { item -> dualStream(item.id) },
+            endedKeys = { emptySet() },
+            session = SportsLiveDualSession(a, d, listOf(a, b, c, d), null, SportsLiveTab.LIVE_NOW),
+            recoveryBudget = SportsLiveRecoveryBudget(),
+            gameWatch = SportsLiveGameWatch(SportsLiveEndedGames(), nowMs = { now }),
+            endActions = flowOf(SportsLiveGameEndAction.MOVE),
+            overKeys = { list, _ -> liveNow.overSourceKeys(list, emptyMap(), now) }
+        )
+        runCurrent()
+        viewModel.playing()
+        viewModel.onUnhealthy(a, SportsLiveStreamHealth.Problem.UNEXPECTED_END)
+        assertEquals(PaneStatus.Ended, viewModel.state.value!!.left.status)
+        assertEquals(c, viewModel.state.value!!.left.end!!.next)
+    }
+
+    @Test
     fun `a swap during the countdown still moves the ended game's pane, not the other one`() =
         runTest(mainDispatcherRule.dispatcher) {
             val viewModel = newViewModel(a, d)
