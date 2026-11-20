@@ -6,15 +6,16 @@
 # Only the no-argument printStackTrace: the PrintWriter/PrintStream forms build stack-trace text
 # (Kotlin stackTraceToString, auth diagnostics) and must keep working.
 # Checked by ReleaseLogStripRulesTest.
+# "return 0": calls whose int result is used (e.g. as a Kotlin expression's value) are removed too (live.20 dex check found 26 survivors).
 -assumenosideeffects class android.util.Log {
     public static boolean isLoggable(java.lang.String, int) return false;
-    public static int v(...);
-    public static int d(...);
-    public static int i(...);
-    public static int w(...);
-    public static int e(...);
-    public static int wtf(...);
-    public static int println(...);
+    public static int v(...) return 0;
+    public static int d(...) return 0;
+    public static int i(...) return 0;
+    public static int w(...) return 0;
+    public static int e(...) return 0;
+    public static int wtf(...) return 0;
+    public static int println(...) return 0;
 }
 -assumenosideeffects class java.lang.Throwable {
     public void printStackTrace();

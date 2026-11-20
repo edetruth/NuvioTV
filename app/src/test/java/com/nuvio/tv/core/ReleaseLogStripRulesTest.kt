@@ -27,7 +27,7 @@ class ReleaseLogStripRulesTest {
     fun `every android Log level is stripped and isLoggable reports false`() {
         val log = block("-assumenosideeffects class android.util.Log")
         listOf("v", "d", "i", "w", "e", "wtf", "println").forEach { level ->
-            assertTrue("Log.$level not stripped", log.contains("public static int $level(...);"))
+            assertTrue("Log.$level not stripped", log.contains("public static int $level(...) return 0;"))
         }
         assertTrue(log, log.contains("public static boolean isLoggable(java.lang.String, int) return false;"))
     }
