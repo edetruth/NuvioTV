@@ -46,32 +46,35 @@ class SportsLivePanelGuideTest {
             .withLineup(rows)
 
     @Test
-    fun `the list is the lineup in its own order, the current game in its place marked watching and pinned above`() {
+    fun `the list is the lineup in its own order, the current game pinned above and drawn there only`() {
         val rows = lineupOf(live)
         assertEquals(listOf("l1", "l2", "l3", "l4", "l5"), ids(rows))
         val guide = panelGuide(rows, live[2].streamKey)
         assertEquals("l3", guide.nowPlaying?.item?.id)
+        // CH± walk the whole lineup, the game playing's place included.
         assertEquals(listOf("l1", "l2", "l3", "l4", "l5"), ids(guide.rows))
+        // User TV report: no second "Watching" row under Now playing.
         val games = guide.entries.filterIsInstance<PanelGuideEntry.Game>()
-        assertEquals(listOf("l3"), games.filter { it.watching }.map { it.row.item.id })
-        // One header over the one run; no divider of any kind.
-        assertEquals(listOf(PanelGuideEntry.Header(ScoreboardGroup.LIVE, 5, run = 0)), guide.entries.filterIsInstance<PanelGuideEntry.Header>())
-        assertEquals(6, guide.entries.size)
-        // The watching place is never focused: Now playing is its row.
-        assertEquals(listOf("l1", "l2", "l4", "l5").map { "addon|$it" }, guide.entries.mapNotNull { (it as? PanelGuideEntry.Game)?.takeUnless { g -> g.watching }?.key })
+        assertEquals(listOf("l1", "l2", "l4", "l5"), games.map { it.row.item.id })
+        assertTrue(games.none { it.watching })
+        // One header over the one run, counting the rows drawn; no divider of any kind.
+        assertEquals(listOf(PanelGuideEntry.Header(ScoreboardGroup.LIVE, 4, run = 0)), guide.entries.filterIsInstance<PanelGuideEntry.Header>())
+        assertEquals(5, guide.entries.size)
         assertEquals("addon|l1", guide.firstFocusableKey)
         assertEquals("addon|l2", panelGuide(rows, live[0].streamKey).firstFocusableKey)
     }
 
     @Test
-    fun `the current game is pinned and listed once in its own place, whatever the game`() {
+    fun `the current game is pinned and never drawn again in the list, whatever the game`() {
         val rows = lineupOf(mix)
         rows.forEach { row ->
             val guide = panelGuide(rows, row.item.streamKey)
             assertEquals(row.item.id, guide.nowPlaying?.item?.id)
             assertEquals(ids(rows), ids(guide.rows))
-            val watching = guide.entries.filterIsInstance<PanelGuideEntry.Game>().single { it.watching }
-            assertEquals(row.item.id, watching.row.item.id)
+            val drawn = guide.entries.filterIsInstance<PanelGuideEntry.Game>().map { it.row.item.id }
+            assertEquals(ids(rows) - row.item.id, drawn)
+            // A header never stands over nothing.
+            guide.entries.filterIsInstance<PanelGuideEntry.Header>().forEach { assertTrue(it.count > 0) }
         }
         // The panel state pins the same row.
         val state = SportsLiveZapPanelState(rows = rows, currentKey = a.streamKey)
@@ -149,15 +152,44 @@ class SportsLivePanelGuideTest {
     @Test
     fun `a line that left the list hands focus to the nearest focusable one`() {
         val rows = lineupOf(live)
-        // Header 0, l1 1, l2 2 (watching), l3 3, l4 4, l5 5.
+        // Header 0, l1 1, l3 2, l4 3, l5 4 (l2 plays: pinned, not drawn).
         val guide = panelGuide(rows, live[1].streamKey)
-        assertEquals("addon|l3", guide.nearestFocusable(3))
-        // Index 2 is the watching place: its neighbours tie, the lower one wins.
+        assertEquals("addon|l4", guide.nearestFocusable(3))
         assertEquals("addon|l3", guide.nearestFocusable(2))
+        // Index 0 is the header: the line below it.
         assertEquals("addon|l1", guide.nearestFocusable(0))
         assertEquals("addon|l5", guide.nearestFocusable(40))
         assertNull(panelGuide(emptyList(), null).nearestFocusable(3))
     }
+
+    @Test
+    fun `another addon's copy of a game already drawn is not drawn again, and CH plus or minus keep the lineup`() {
+        val event = com.nuvio.tv.core.sportslive.scores.ScoreSnapshot(
+            eventId = "minn-okst", league = com.nuvio.tv.core.sportslive.scores.EspnLeagueMap.NBA, startMs = now - 60 * minute,
+            state = com.nuvio.tv.core.sportslive.scores.ScoreState.IN, clockText = "Halftime", isFinal = false,
+            home = side("Minnesota"), away = side("Oklahoma State")
+        )
+        fun row(item: SportsLiveItem, shared: Boolean) = ZapPanelRow(
+            item, ZapPanelGroup.LIVE_NOW, chip = null, art = null,
+            status = com.nuvio.tv.core.sportslive.GameStatus.Live(event.takeIf { shared })
+        )
+        val playing = row(game("minn-a", now - 60 * minute), shared = true)
+        val other = row(game("other", now - 50 * minute), shared = false)
+        val copy = row(game("minn-b", now - 60 * minute).copy(addonId = "second"), shared = true)
+        val lineup = listOf(playing, other, copy)
+        // The game playing's copy: drawn nowhere but Now playing.
+        val guide = panelGuide(lineup, playing.item.streamKey)
+        assertEquals(listOf("other"), guide.entries.filterIsInstance<PanelGuideEntry.Game>().map { it.row.item.id })
+        assertEquals(listOf("minn-a", "other", "minn-b"), ids(guide.rows))
+        // Neither copy playing: the first one only.
+        val elsewhere = panelGuide(lineup, "elsewhere|x")
+        assertEquals(listOf("minn-a", "other"), elsewhere.entries.filterIsInstance<PanelGuideEntry.Game>().map { it.row.item.id })
+    }
+
+    private fun side(name: String) = com.nuvio.tv.core.sportslive.scores.ScoreTeam(
+        id = name, abbreviation = null, displayName = name, shortDisplayName = name, name = name, location = name,
+        logo = null, score = 38, linescores = emptyList()
+    )
 
     private fun game(id: String, startMs: Long?, sport: String = "Basketball") = SportsLiveItem(
         meta = MetaPreview(

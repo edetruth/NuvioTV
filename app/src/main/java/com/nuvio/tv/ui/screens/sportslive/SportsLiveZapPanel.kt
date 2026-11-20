@@ -385,9 +385,12 @@ private fun focusKeyOf(entry: PanelGuideEntry): String? = when (entry) {
  * The in-player panel as a cable guide (#140): [nowPlaying] (the game playing, pinned above the list; null
  * when the lineup leaves it out) and the list [entries] under it.
  */
-internal data class PanelGuide(val nowPlaying: ZapPanelRow?, val entries: List<PanelGuideEntry>) {
-    /** The list's game rows, top to bottom (the game playing's own place included). */
-    val rows: List<ZapPanelRow> get() = entries.mapNotNull { (it as? PanelGuideEntry.Game)?.row }
+internal data class PanelGuide(
+    val nowPlaying: ZapPanelRow?,
+    val entries: List<PanelGuideEntry>,
+    /** The lineup, top to bottom, the game playing's own place included (CH± walk it); the list draws [entries]. */
+    val rows: List<ZapPanelRow> = entries.mapNotNull { (it as? PanelGuideEntry.Game)?.row }
+) {
 
     /** The first line focus can land on, top down; null when none. */
     val firstFocusableKey: String? get() = entries.firstNotNullOfOrNull(::focusKeyOf)
@@ -416,12 +419,18 @@ internal data class PanelGuide(val nowPlaying: ZapPanelRow?, val entries: List<P
 
 /**
  * The panel's [lineup] (#142, the one list CH± walk) laid out under Now playing (#140), in its own order: a
- * header starts each run of one group ([ZapPanelRow.placed]). The game playing ([currentKey]) is pinned above the
- * list and also listed in its own place, marked watching, so the order reads round it: CH− plays the game after
- * that place, CH+ the one before it, both wrapping at the ends. [hiddenByMySports] above 0 ends the list with the
- * "more hidden by My sports" line (#167).
+ * header starts each run of one group ([ZapPanelRow.placed]) and counts the games drawn under it. The game playing
+ * ([currentKey]) is pinned above the list and drawn there only (user TV report, live.20: a second "▶ Watching" row
+ * read as a duplicate); it keeps its place in [PanelGuide.rows], so CH− still plays the game after that place and
+ * CH+ the one before it, both wrapping at the ends. A run holding only the game playing gets no header. Another
+ * addon's copy of a game already drawn (the same ESPN event, [eventIdOf]; the game playing's too) is not drawn
+ * again either: one game, one row. [hiddenByMySports] above 0 ends the list with the "more hidden by My sports"
+ * line (#167).
  */
 internal fun panelGuide(lineup: List<ZapPanelRow>, currentKey: String?, hiddenByMySports: Int = 0): PanelGuide {
+    val current = lineup.firstOrNull { it.item.streamKey == currentKey }
+    val seenEvents = HashSet<String>()
+    current?.let(::eventIdOf)?.let(seenEvents::add)
     val entries = buildList {
         var start = 0
         var run = 0
@@ -429,13 +438,26 @@ internal fun panelGuide(lineup: List<ZapPanelRow>, currentKey: String?, hiddenBy
             val section = lineup[start].placed
             var end = start
             while (end < lineup.size && lineup[end].placed == section) end++
-            add(PanelGuideEntry.Header(section, end - start, run++))
-            for (i in start until end) add(PanelGuideEntry.Game(lineup[i], watching = lineup[i].item.streamKey == currentKey))
+            val drawn = (start until end).map { lineup[it] }.filter { row ->
+                row.item.streamKey != currentKey && eventIdOf(row)?.let(seenEvents::add) != false
+            }
+            if (drawn.isNotEmpty()) {
+                add(PanelGuideEntry.Header(section, drawn.size, run++))
+                drawn.forEach { add(PanelGuideEntry.Game(it)) }
+            }
             start = end
         }
         if (hiddenByMySports > 0) add(PanelGuideEntry.HiddenByMySports(hiddenByMySports))
     }
-    return PanelGuide(lineup.firstOrNull { it.item.streamKey == currentKey }, entries)
+    return PanelGuide(current, entries, lineup)
+}
+
+/** The ESPN event [row]'s status was read from (its strict match), or null. */
+internal fun eventIdOf(row: ZapPanelRow): String? = when (val status = row.status) {
+    is GameStatus.Live -> status.event?.eventId
+    is GameStatus.Final -> status.event.eventId
+    is GameStatus.JustEnded -> status.ended.event?.eventId
+    else -> null
 }
 
 /** The panel rows' drawn teams, kept per game, event and logo-map revision: the rows are regrouped on every tick and score (#66). */
