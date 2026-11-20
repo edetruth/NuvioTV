@@ -47,11 +47,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -61,6 +64,7 @@ import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.Lifecycle
@@ -80,7 +84,9 @@ import com.nuvio.tv.ui.screens.sportslive.rememberScoreChipStrings
 import com.nuvio.tv.ui.screens.sportslive.scoreChipParts
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveUiState
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveGameArt
+import com.nuvio.tv.ui.screens.sportslive.LocalPanelTagColumn
 import com.nuvio.tv.ui.screens.sportslive.panelBoards
+import com.nuvio.tv.ui.screens.sportslive.rememberPanelTagColumn
 import com.nuvio.tv.ui.screens.sportslive.LocalOpenSportsLiveGame
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveCardMenu
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveFilterDropdown
@@ -248,17 +254,8 @@ internal fun BoxScope.SportsLiveZapOverlay(
         wasOpen = panelOpen
     }
 
-    AnimatedVisibility(
-        visible = panelOpen,
-        enter = fadeIn(tween(120)),
-        exit = fadeOut(tween(120)),
-        modifier = Modifier
-            .align(Alignment.CenterStart)
-            .zIndex(3.1f)
-    ) {
-        // #140/#145: a strong dark fade behind the panel, so its rows read over bright video; clear soon past its edge.
-        Box(modifier = Modifier.fillMaxHeight().width(PANEL_WIDTH + PANEL_FADE).background(PANEL_SCRIM))
-    }
+    // TV QA BUG-H: the panel's backing is drawn by the panel itself ([panelScrim]), under its own rows, not by a layer of
+    // its own beside it (that layer did not show on the TV while the rows did, leaving text bare over the video).
     // Hold OK on a row (#140): the V2 action menu, Watch both first.
     var menu by remember { mutableStateOf<SportsLivePanelMenu?>(null) }
     val scoresAheadToast = stringResource(R.string.sports_live_scores_ahead_toast)
@@ -612,6 +609,8 @@ private fun LiveGamesPanel(
     var focusedKey by remember { mutableStateOf<String?>(null) }
     var focusedIndex by remember { mutableIntStateOf(-1) }
     var panelHasFocus by remember { mutableStateOf(false) }
+    // A key was pressed in the panel since it opened: from then on focus is where the user put it.
+    var userKeyed by remember { mutableStateOf(false) }
     // live.20: the footer names the focused row in full; nothing while the filter has focus.
     val focusedBoard = remember(state, focusedKey, nowRow) {
         (state.rows.firstOrNull { it.item.streamKey == focusedKey } ?: nowRow?.takeIf { it.item.streamKey == focusedKey })
@@ -637,12 +636,25 @@ private fun LiveGamesPanel(
     }
 
     // #140: focus opens on Now playing; on the first game when the game playing is unknown, else the empty line.
+    // TV QA (54-panel): the panel opened with no focus at all (no ring, blank footer). Focus is now asked for until it
+    // lands (a request in the panel's first frames can come to nothing), and once the game playing is known focus
+    // moves to it from wherever the panel put it meanwhile (the filter); only a line the user moved to is kept.
     LaunchedEffect(nowRow == null, firstKey == null) {
-        if (filterFocused) return@LaunchedEffect
-        when {
-            nowRow != null -> runCatching { nowFocusRequester.requestFocus() }
-            firstKey != null -> focusLine(firstKey)
-            else -> runCatching { emptyFocusRequester.requestFocus() }
+        repeat(PANEL_OPEN_FOCUS_FRAMES) {
+            val target = panelOpenFocus(nowRow != null, firstKey != null, userKeyed, panelHasFocus || filterFocused || filterMenuOpen)
+            val landed = when (target) {
+                PanelOpenFocus.KEEP -> true
+                PanelOpenFocus.NOW_PLAYING -> focusedKey == nowKey && panelHasFocus
+                PanelOpenFocus.FIRST_LINE, PanelOpenFocus.EMPTY_LINE -> panelHasFocus && !filterFocused
+            }
+            if (landed) return@LaunchedEffect
+            when (target) {
+                PanelOpenFocus.NOW_PLAYING -> runCatching { nowFocusRequester.requestFocus() }
+                PanelOpenFocus.FIRST_LINE -> firstKey?.let { focusLine(it) }
+                PanelOpenFocus.EMPTY_LINE -> runCatching { emptyFocusRequester.requestFocus() }
+                PanelOpenFocus.KEEP -> Unit
+            }
+            withFrameNanos { }
         }
     }
     // #164/#167: an update keeps focus on the same line, by key, and keeps it in view (scrolled only when it left
@@ -676,7 +688,7 @@ private fun LiveGamesPanel(
             key != null && key != nowKey && guide.indexOf(key) >= 0 -> focusLine(key)
             key != null && key != nowKey -> guide.nearestFocusable(focusedIndex)?.let { focusLine(it) }
                 ?: runCatching { nowFocusRequester.requestFocus() }
-            filterFocused || (key == null && filterShown && nowRow == null) -> runCatching { filterFocusRequester.requestFocus() }
+            filterFocused || (key == null && filterShown && nowRow == null && firstKey == null) -> runCatching { filterFocusRequester.requestFocus() }
             nowRow != null -> runCatching { nowFocusRequester.requestFocus() }
             firstKey != null -> focusLine(firstKey)
         }
@@ -688,17 +700,29 @@ private fun LiveGamesPanel(
         onRowFocus(rowKey)
     }
 
+    // The rows' tag column as wide as the widest tag shown (coordinator decision): "NCAAM" rows keep no "FOOTBALL" room.
+    val shownBoards = remember(state, nowRow, guide) {
+        (listOfNotNull(nowRow) + guide.entries.filterIsInstance<PanelGuideEntry.Game>().map { it.row }).map { row ->
+            state.boards[row.item.streamKey]?.board ?: panelBoards(listOf(row), emptyMap(), null, emptySet(), 0L).single().board
+        }
+    }
+    val tagColumn = rememberPanelTagColumn(shownBoards)
+
     // Left or Right closes the panel on release, only when its press reached the panel: the filter uses its own.
     var closeArmed by remember { mutableStateOf(false) }
     Box(
         modifier = Modifier
             .fillMaxHeight()
             .width(PANEL_WIDTH)
+            .panelScrim()
             .onFocusChanged { panelHasFocus = it.hasFocus }
             .focusProperties { onExit = { cancelFocusChange() } }
             .onPreviewKeyEvent {
                 val native = it.nativeKeyEvent
-                if (native.action == KeyEvent.ACTION_DOWN) onKey(native.keyCode)
+                if (native.action == KeyEvent.ACTION_DOWN) {
+                    userKeyed = true
+                    onKey(native.keyCode)
+                }
                 false
             }
             .focusGroup()
@@ -718,168 +742,170 @@ private fun LiveGamesPanel(
                 }
             }
     ) {
-        Column(modifier = Modifier.padding(horizontal = PANEL_PADDING, vertical = NuvioTheme.spacing.lg)) {
-            // V2 (`Player.dc.html` 1): "Live now" and the filter on one line; no preview (live.20, #106), the list has the room.
-            Row(
-                modifier = Modifier.padding(horizontal = PANEL_ROW_ROOM).height(PANEL_HEADER_HEIGHT),
-                horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = stringResource(R.string.sports_live_zap_panel_title),
-                    style = SportsLiveTokens.style(SportsLiveTokens.Type.PanelTitle),
-                    color = SportsLiveTokens.Colors.TextPrimary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-                if (filterShown) PanelFilter(state, onChip, onRowFocus, filterFocusRequester, { filterMenuOpen = it }) {
-                    filterFocused = it
-                    // No game row is focused while the filter is: none is revealed meanwhile.
-                    if (it) focusedKey = null
-                }
-            }
-            Spacer(modifier = Modifier.height(NuvioTheme.spacing.xs))
-            // #140: the game playing, pinned under the filter. Up goes to the filter, Down to the list's first line.
-            nowRow?.let { row ->
-                val item = row.item
-                SportsLivePanelLine(
-                    row = state.boards[item.streamKey]?.board
-                        ?: panelBoards(listOf(row), emptyMap(), null, emptySet(), 0L).single().board,
-                    nowPlaying = true,
-                    titleSuffix = suffixes[item.streamKey],
-                    onClick = { onPick(item) },
-                    onLongClick = { onLongPick(item) },
-                    onFocus = { lineFocus(item.streamKey, item.streamKey) },
-                    modifier = Modifier
-                        .padding(horizontal = PANEL_ROW_ROOM)
-                        .focusRequester(nowFocusRequester)
-                        .then(if (filterShown) Modifier.focusProperties { up = filterFocusRequester } else Modifier)
-                        .onPreviewKeyEvent { event ->
-                            // ▼: the list's first line, scrolled back into view first (#140).
-                            val native = event.nativeKeyEvent
-                            if (native.keyCode != KeyEvent.KEYCODE_DPAD_DOWN || native.action != KeyEvent.ACTION_DOWN) {
-                                return@onPreviewKeyEvent false
-                            }
-                            val first = firstKey ?: return@onPreviewKeyEvent false
-                            scope.launch { focusLine(first) }
-                            true
-                        },
-                    menuOpen = menuOpen
-                )
-                // #145: a 6 dp gap and a thin rule, so the scrolled rows never butt into the pinned row.
-                Spacer(modifier = Modifier.height(NOW_PLAYING_GAP))
-                Box(
-                    modifier = Modifier
-                        .padding(horizontal = PANEL_ROW_ROOM)
-                        .fillMaxWidth()
-                        .height(1.dp)
-                        .background(SportsLiveTokens.Colors.TextSecondary.copy(alpha = 0.35f))
-                )
-                Spacer(modifier = Modifier.height(NOW_PLAYING_GAP))
-            }
-            if (firstKey == null) {
-                // Nothing else on: Now playing alone, or the empty line when even that is unknown.
-                if (nowRow == null || state.loading) {
+        CompositionLocalProvider(LocalPanelTagColumn provides tagColumn) {
+            Column(modifier = Modifier.padding(horizontal = PANEL_PADDING, vertical = NuvioTheme.spacing.lg)) {
+                // V2 (`Player.dc.html` 1): "Live now" and the filter on one line; no preview (live.20, #106), the list has the room.
+                Row(
+                    modifier = Modifier.padding(horizontal = PANEL_ROW_ROOM).height(PANEL_HEADER_HEIGHT),
+                    horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Text(
-                        text = stringResource(if (state.loading) R.string.sports_live_zap_panel_loading else R.string.sports_live_zap_panel_empty),
-                        style = SportsLiveTokens.style(SportsLiveTokens.Type.PanelLine),
-                        color = SportsLiveTokens.Colors.TextSecondary,
+                        text = stringResource(R.string.sports_live_zap_panel_title),
+                        style = SportsLiveTokens.style(SportsLiveTokens.Type.PanelTitle),
+                        color = SportsLiveTokens.Colors.TextPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    if (filterShown) PanelFilter(state, onChip, onRowFocus, filterFocusRequester, { filterMenuOpen = it }) {
+                        filterFocused = it
+                        // No game row is focused while the filter is: none is revealed meanwhile.
+                        if (it) focusedKey = null
+                    }
+                }
+                Spacer(modifier = Modifier.height(NuvioTheme.spacing.xs))
+                // #140: the game playing, pinned under the filter. Up goes to the filter, Down to the list's first line.
+                nowRow?.let { row ->
+                    val item = row.item
+                    SportsLivePanelLine(
+                        row = state.boards[item.streamKey]?.board
+                            ?: panelBoards(listOf(row), emptyMap(), null, emptySet(), 0L).single().board,
+                        nowPlaying = true,
+                        titleSuffix = suffixes[item.streamKey],
+                        onClick = { onPick(item) },
+                        onLongClick = { onLongPick(item) },
+                        onFocus = { lineFocus(item.streamKey, item.streamKey) },
                         modifier = Modifier
                             .padding(horizontal = PANEL_ROW_ROOM)
-                            .focusRequester(emptyFocusRequester)
-                            .focusable()
+                            .focusRequester(nowFocusRequester)
+                            .then(if (filterShown) Modifier.focusProperties { up = filterFocusRequester } else Modifier)
+                            .onPreviewKeyEvent { event ->
+                                // ▼: the list's first line, scrolled back into view first (#140).
+                                val native = event.nativeKeyEvent
+                                if (native.keyCode != KeyEvent.KEYCODE_DPAD_DOWN || native.action != KeyEvent.ACTION_DOWN) {
+                                    return@onPreviewKeyEvent false
+                                }
+                                val first = firstKey ?: return@onPreviewKeyEvent false
+                                scope.launch { focusLine(first) }
+                                true
+                            },
+                        menuOpen = menuOpen
                     )
+                    // #145: a 6 dp gap and a thin rule, so the scrolled rows never butt into the pinned row.
+                    Spacer(modifier = Modifier.height(NOW_PLAYING_GAP))
+                    Box(
+                        modifier = Modifier
+                            .padding(horizontal = PANEL_ROW_ROOM)
+                            .fillMaxWidth()
+                            .height(1.dp)
+                            .background(SportsLiveTokens.Colors.TextSecondary.copy(alpha = 0.35f))
+                    )
+                    Spacer(modifier = Modifier.height(NOW_PLAYING_GAP))
                 }
-                Spacer(modifier = Modifier.weight(1f))
-            } else {
-                // Up from the list's first line reaches Now playing (else the filter), never past it.
-                val upFromFirst: FocusRequester? = if (nowRow != null) nowFocusRequester else filterFocusRequester.takeIf { filterShown }
-                LazyColumn(
-                    state = listState,
-                    verticalArrangement = Arrangement.spacedBy(SportsLiveTokens.Size.PanelLineGap),
-                    // Room for the rows' focus ring and lift, so neither is clipped.
-                    contentPadding = PaddingValues(horizontal = PANEL_ROW_ROOM, vertical = NuvioTheme.spacing.xs),
-                    // #167: held keys move focus at a steady pace instead of flooding the list.
-                    modifier = Modifier.weight(1f).dpadRepeatThrottle()
-                ) {
-                    guide.entries.forEach { entry ->
-                        when (entry) {
-                            is PanelGuideEntry.Header -> item(key = entry.key) { SportsLivePanelHeader(entry.section, entry.count) }
-                            is PanelGuideEntry.HiddenByMySports -> item(key = entry.key) {
-                                SportsLiveHiddenByMySportsLine(
-                                    count = entry.count,
-                                    onClick = { onChip(SportsLiveUiState.ALL_SPORTS_FILTER) },
-                                    onFocus = { lineFocus(entry.key, null) },
-                                    modifier = Modifier
-                                        .focusRequester(requesterOf(entry.key))
-                                        .then(
-                                            if (entry.key == firstKey && upFromFirst != null) {
-                                                Modifier.focusProperties { up = upFromFirst }
-                                            } else {
-                                                Modifier
-                                            }
-                                        )
-                                )
-                            }
-                            is PanelGuideEntry.Game -> {
-                                val row = entry.row
-                                val item = row.item
-                                item(key = entry.key) {
-                                    SportsLivePanelLine(
-                                        row = state.boards[item.streamKey]?.board
-                                            ?: panelBoards(listOf(row), emptyMap(), null, emptySet(), 0L).single().board,
-                                        nowPlaying = false,
-                                        titleSuffix = suffixes[item.streamKey],
-                                        isNew = row.isNew,
-                                        gone = row.gone,
-                                        onClick = { onPick(item) },
-                                        onLongClick = { onLongPick(item) },
-                                        onFocus = { lineFocus(item.streamKey, item.streamKey) },
-                                        okHint = boxScoreHint.takeIf { item.streamKey in state.boxScores },
-                                        readyMark = readiness[item.streamKey],
-                                        onReadyHidden = { hidden ->
-                                            readyHiddenKeys = if (hidden) readyHiddenKeys + item.streamKey else readyHiddenKeys - item.streamKey
-                                        },
-                                        modifier = when {
-                                            entry.key == firstKey && upFromFirst != null ->
-                                                Modifier.focusRequester(requesterOf(entry.key)).focusProperties { up = upFromFirst }
-                                            else -> Modifier.focusRequester(requesterOf(entry.key))
-                                        },
-                                        menuOpen = menuOpen
+                if (firstKey == null) {
+                    // Nothing else on: Now playing alone, or the empty line when even that is unknown.
+                    if (nowRow == null || state.loading) {
+                        Text(
+                            text = stringResource(if (state.loading) R.string.sports_live_zap_panel_loading else R.string.sports_live_zap_panel_empty),
+                            style = SportsLiveTokens.style(SportsLiveTokens.Type.PanelLine),
+                            color = SportsLiveTokens.Colors.TextSecondary,
+                            modifier = Modifier
+                                .padding(horizontal = PANEL_ROW_ROOM)
+                                .focusRequester(emptyFocusRequester)
+                                .focusable()
+                        )
+                    }
+                    Spacer(modifier = Modifier.weight(1f))
+                } else {
+                    // Up from the list's first line reaches Now playing (else the filter), never past it.
+                    val upFromFirst: FocusRequester? = if (nowRow != null) nowFocusRequester else filterFocusRequester.takeIf { filterShown }
+                    LazyColumn(
+                        state = listState,
+                        verticalArrangement = Arrangement.spacedBy(SportsLiveTokens.Size.PanelLineGap),
+                        // Room for the rows' focus ring and lift, so neither is clipped.
+                        contentPadding = PaddingValues(horizontal = PANEL_ROW_ROOM, vertical = NuvioTheme.spacing.xs),
+                        // #167: held keys move focus at a steady pace instead of flooding the list.
+                        modifier = Modifier.weight(1f).dpadRepeatThrottle()
+                    ) {
+                        guide.entries.forEach { entry ->
+                            when (entry) {
+                                is PanelGuideEntry.Header -> item(key = entry.key) { SportsLivePanelHeader(entry.section, entry.count) }
+                                is PanelGuideEntry.HiddenByMySports -> item(key = entry.key) {
+                                    SportsLiveHiddenByMySportsLine(
+                                        count = entry.count,
+                                        onClick = { onChip(SportsLiveUiState.ALL_SPORTS_FILTER) },
+                                        onFocus = { lineFocus(entry.key, null) },
+                                        modifier = Modifier
+                                            .focusRequester(requesterOf(entry.key))
+                                            .then(
+                                                if (entry.key == firstKey && upFromFirst != null) {
+                                                    Modifier.focusProperties { up = upFromFirst }
+                                                } else {
+                                                    Modifier
+                                                }
+                                            )
                                     )
+                                }
+                                is PanelGuideEntry.Game -> {
+                                    val row = entry.row
+                                    val item = row.item
+                                    item(key = entry.key) {
+                                        SportsLivePanelLine(
+                                            row = state.boards[item.streamKey]?.board
+                                                ?: panelBoards(listOf(row), emptyMap(), null, emptySet(), 0L).single().board,
+                                            nowPlaying = false,
+                                            titleSuffix = suffixes[item.streamKey],
+                                            isNew = row.isNew,
+                                            gone = row.gone,
+                                            onClick = { onPick(item) },
+                                            onLongClick = { onLongPick(item) },
+                                            onFocus = { lineFocus(item.streamKey, item.streamKey) },
+                                            okHint = boxScoreHint.takeIf { item.streamKey in state.boxScores },
+                                            readyMark = readiness[item.streamKey],
+                                            onReadyHidden = { hidden ->
+                                                readyHiddenKeys = if (hidden) readyHiddenKeys + item.streamKey else readyHiddenKeys - item.streamKey
+                                            },
+                                            modifier = when {
+                                                entry.key == firstKey && upFromFirst != null ->
+                                                    Modifier.focusRequester(requesterOf(entry.key)).focusProperties { up = upFromFirst }
+                                                else -> Modifier.focusRequester(requesterOf(entry.key))
+                                            },
+                                            menuOpen = menuOpen
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
                 }
-            }
-            // live.20: the focused row's full name, which its one line may cut (both sides, the whole title). The line
-            // stays, blank, while nothing is focused, so the list never jumps.
-            val vs = stringResource(R.string.sports_live_panel_vs)
-            val readyWord = stringResource(R.string.sports_live_ready_pill)
-            val separator = stringResource(R.string.sports_live_game_info_separator)
-            Text(
-                text = focusedBoard?.let {
-                    val key = it.item.streamKey
-                    panelFooterText(panelFullName(it, vs, suffixes[key]), key in readyHiddenKeys, readyWord, separator)
-                }.orEmpty(),
-                style = SportsLiveTokens.style(SportsLiveTokens.Type.PanelLine),
-                color = SportsLiveTokens.Colors.TextSecondary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.fillMaxWidth().padding(start = PANEL_FOOTER_START, end = PANEL_ROW_ROOM, top = NuvioTheme.spacing.xs)
-            )
-            // #140: the keys hint, for the profile's first few openings, after a long gap, or on Info (live.20, research 8).
-            if (keysHint) {
+                // live.20: the focused row's full name, which its one line may cut (both sides, the whole title). The line
+                // stays, blank, while nothing is focused, so the list never jumps.
+                val vs = stringResource(R.string.sports_live_panel_vs)
+                val readyWord = stringResource(R.string.sports_live_ready_pill)
+                val separator = stringResource(R.string.sports_live_game_info_separator)
                 Text(
-                    text = stringResource(R.string.sports_live_panel_footer_hint),
-                    style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag),
-                    color = SportsLiveTokens.Colors.TextMuted,
+                    text = focusedBoard?.let {
+                        val key = it.item.streamKey
+                        panelFooterText(panelFullName(it, vs, suffixes[key]), key in readyHiddenKeys, readyWord, separator)
+                    }.orEmpty(),
+                    style = SportsLiveTokens.style(SportsLiveTokens.Type.PanelLine),
+                    color = SportsLiveTokens.Colors.TextSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(start = PANEL_FOOTER_START, top = 2.dp)
+                    modifier = Modifier.fillMaxWidth().padding(start = PANEL_FOOTER_START, end = PANEL_ROW_ROOM, top = NuvioTheme.spacing.xs)
                 )
+                // #140: the keys hint, for the profile's first few openings, after a long gap, or on Info (live.20, research 8).
+                if (keysHint) {
+                    Text(
+                        text = stringResource(R.string.sports_live_panel_footer_hint),
+                        style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag),
+                        color = SportsLiveTokens.Colors.TextMuted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(start = PANEL_FOOTER_START, top = 2.dp)
+                    )
+                }
             }
         }
     }
@@ -955,18 +981,57 @@ private val PANEL_FOOTER_START = PANEL_ROW_ROOM + 8.dp
 /** Above and below the rule under the pinned Now playing row (#145). */
 private val NOW_PLAYING_GAP = 6.dp
 
+/** Where focus goes as the panel opens (#140, TV QA 54-panel): [panelOpenFocus]. */
+internal enum class PanelOpenFocus { NOW_PLAYING, FIRST_LINE, EMPTY_LINE, KEEP }
+
+/**
+ * Where focus goes as the panel opens (#140): the game playing's row once it is known ([nowPlaying]), else the list's
+ * first line ([firstLine]), else the empty line. Focus stays where it is only once the user moved it ([userKeyed]) and
+ * the panel holds it ([hasFocus]): focus the panel itself put on the filter while the game playing was unknown moves on
+ * to Now playing (TV QA: blank footer, no ring).
+ */
+internal fun panelOpenFocus(nowPlaying: Boolean, firstLine: Boolean, userKeyed: Boolean, hasFocus: Boolean): PanelOpenFocus =
+    when {
+        userKeyed && hasFocus -> PanelOpenFocus.KEEP
+        nowPlaying -> PanelOpenFocus.NOW_PLAYING
+        firstLine -> PanelOpenFocus.FIRST_LINE
+        else -> PanelOpenFocus.EMPTY_LINE
+    }
+
+/** How many frames the panel keeps asking for its opening focus before it leaves it to the loss watch below. */
+private const val PANEL_OPEN_FOCUS_FRAMES = 30
+
 /** How far past the panel its fade runs out (#140, #145). */
 private val PANEL_FADE = 80.dp
 
+/** One point of the panel's backing ([panelScrimStops]): [at] from the panel's left edge, black at [alpha]. */
+internal data class PanelScrimStop(val at: Dp, val alpha: Float)
+
 /**
  * Behind the panel (#145, TV QA P6): near-opaque black behind the rows (95 % at the left edge, still 90 % at the
- * panel's edge), so muted text keeps its contrast over a white or busy scene (10-ft text over video wants a solid
- * backing, not a tint: Android TV overlay guidance, WCAG 4.5:1 for the muted lines); then a soft fall to clear over
- * the [PANEL_FADE] past it, so the game stays visible beside the panel.
+ * panel's edge, [panelWidth]), so muted text keeps its contrast over a white or busy scene (10-ft text over video wants
+ * a solid backing, not a tint: Android TV overlay guidance, WCAG 4.5:1 for the muted lines); then a soft fall to clear
+ * over the [fade] past it, so the game stays visible beside the panel.
  */
-private val PANEL_SCRIM = Brush.horizontalGradient(
-    0f to Color.Black.copy(alpha = 0.95f),
-    PANEL_WIDTH / (PANEL_WIDTH + PANEL_FADE) to Color.Black.copy(alpha = 0.9f),
-    (PANEL_WIDTH + PANEL_FADE / 3) / (PANEL_WIDTH + PANEL_FADE) to Color.Black.copy(alpha = 0.55f),
-    1f to Color.Transparent
+internal fun panelScrimStops(panelWidth: Dp, fade: Dp): List<PanelScrimStop> = listOf(
+    PanelScrimStop(0.dp, 0.95f),
+    PanelScrimStop(panelWidth, 0.9f),
+    PanelScrimStop(panelWidth + fade / 3, 0.55f),
+    PanelScrimStop(panelWidth + fade, 0f)
 )
+
+/**
+ * The panel's backing ([panelScrimStops]), drawn by the panel's own node under its rows (TV QA BUG-H), past its right
+ * edge over the fade: wherever the rows draw, so does their backing.
+ */
+private fun Modifier.panelScrim(): Modifier = drawWithCache {
+    val stops = panelScrimStops(PANEL_WIDTH, PANEL_FADE)
+    val end = stops.last().at
+    val brush = Brush.horizontalGradient(
+        *stops.map { (it.at / end) to Color.Black.copy(alpha = it.alpha) }.toTypedArray(),
+        startX = 0f,
+        endX = end.toPx()
+    )
+    val scrimSize = Size(end.toPx(), size.height)
+    onDrawBehind { drawRect(brush = brush, size = scrimSize) }
+}
