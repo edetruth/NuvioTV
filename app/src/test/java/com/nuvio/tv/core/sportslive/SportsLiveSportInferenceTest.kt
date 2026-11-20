@@ -434,4 +434,39 @@ class SportsLiveSportInferenceTest {
         assertEquals("WIS", dir.resolve(EspnLeagueMap.COLLEGE_BASKETBALL, "Wisconsin")?.abbreviation)
         assertFalse(SportsLiveTeams.matches("Wisconsin", "Green Bay Phoenix"))
     }
+
+    @Test
+    fun `a game My sports places in several leagues of one sport shows the sport word`() {
+        // Bayern and Koln in the Bundesliga and the Champions League lists: no one league, but surely soccer (live.20).
+        val dir = TeamDirectory().apply {
+            put(EspnLeague("soccer", "ger.1"), bundesliga, 0L)
+            put(EspnLeague("soccer", "uefa.champions"), bundesliga, 0L)
+        }
+        val item = card("Bayern vs Köln")
+        assertEquals(2, SportsLiveMySportsScope.directoryLeaguesOf(item, dir).size)
+        val inferred = SportsLiveSportInference.infer(item, dir)
+        assertEquals("Soccer", inferred.sport)
+        assertEquals(SportsLiveSportKind.SOCCER, SportsLiveSportKind.plainTagOf(inferred))
+        assertEquals("SOCCER", SportsLiveTags.short("SOCCER", SportsLiveSportKind.tagOf(inferred)))
+    }
+
+    @Test
+    fun `a pair leagues of two sports hold gets no sport word`() {
+        val dir = TeamDirectory().apply {
+            put(EspnLeagueMap.NHL, nhl, 0L)
+            put(EspnLeagueMap.MLB, mlb + team("Kansas City Kings", "Kings", "Kansas City", "KCK"), 0L)
+        }
+        val item = card("Rangers vs Kings")
+        assertNull(SportsLiveSportInference.heldSport(item, dir))
+        assertSame(item, SportsLiveSportInference.infer(item, dir))
+    }
+
+    @Test
+    fun `a game with a sport already keeps it`() {
+        val dir = TeamDirectory().apply {
+            put(EspnLeague("soccer", "ger.1"), bundesliga, 0L)
+            put(EspnLeague("soccer", "uefa.champions"), bundesliga, 0L)
+        }
+        assertNull(SportsLiveSportInference.heldSport(card("Bayern vs Köln", sport = "Soccer"), dir))
+    }
 }

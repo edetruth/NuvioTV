@@ -1,6 +1,7 @@
 package com.nuvio.tv.core.sportslive
 
 import com.nuvio.tv.core.sportslive.identify.SportsLiveTeamIdentity
+import com.nuvio.tv.core.sportslive.identify.TeamIdentityRules
 import com.nuvio.tv.core.sportslive.scores.EspnLeague
 import com.nuvio.tv.core.sportslive.scores.EspnLeagueMap
 import com.nuvio.tv.core.sportslive.scores.TeamDirectory
@@ -153,7 +154,8 @@ object SportsLiveSportInference {
     fun infer(item: SportsLiveItem, directory: TeamDirectory): SportsLiveItem {
         // Two schools on a bare "Basketball" card whose gender is not known: the neutral college tag, both college feeds.
         collegeLeaguesOf(item, directory)?.takeIf { it.size > 1 }?.let { return item.copy(sport = EspnLeagueMap.COLLEGE_BASKETBALL_EITHER) }
-        val league = leagueOf(item, directory) ?: heldLeague(item, directory) ?: return item
+        val league = leagueOf(item, directory) ?: heldLeague(item, directory)
+            ?: return heldSport(item, directory)?.let { item.copy(sport = it) } ?: item
         // The league's tag ("NHL", "NCAAM"), never the generic sport word.
         val sport = (LEAGUES + COLLEGE).first { it.first == league }.second
         return item.copy(sport = sport)
@@ -173,5 +175,19 @@ object SportsLiveSportInference {
         val league = directory.leaguesHolding(first, second).singleOrNull() ?: return null
         if (EspnLeagueMap.saysWomen(item) && league !in EspnLeagueMap.WOMEN_FEEDS) return null
         return league.takeIf { held -> (LEAGUES + COLLEGE).any { it.first == held } }
+    }
+
+    /**
+     * The sport word ("Soccer") of a game no source gives a sport whose two teams several loaded leagues all hold, all
+     * of one sport (live.20: "Bayern vs Köln" in the Bundesliga and the Champions League lists): My sports places it
+     * in those leagues, so its row says their sport rather than nothing. No league is claimed: its feed stays the
+     * sport's own. Null for one league ([heldLeague]), none, or leagues of different sports ("Rangers vs Kings").
+     */
+    internal fun heldSport(item: SportsLiveItem, directory: TeamDirectory): String? {
+        if (item.isChannel || item.kind == SportsLiveKind.CHANNELS || item.teams == null) return null
+        if (!SportsLiveTeamIdentity.sportUnknown(item)) return null
+        val (first, second) = SportsLiveTeams.writtenOrder(item.meta.name) ?: return null
+        val held = directory.leaguesHolding(first, second).takeIf { it.size > 1 } ?: return null
+        return held.map { it.sport }.distinct().singleOrNull()?.let(TeamIdentityRules::sportWord)
     }
 }
