@@ -351,7 +351,7 @@ internal enum class SportsLiveMoreEntry { WATCH_WITH, CHOOSE_STREAM, GAME_STATS,
  * **Follow ‹team›** once per side matched to a real team ([sides], [com.nuvio.tv.core.sportslive.scores.FollowTargets]),
  * **Remind me** only for a game not started ([remindable]), **Details** always (the raw addon text lives only
  * there), and **Hide from Live Now** for an unmatched item on Live Now ([hide]). The team pages sit between
- * Remind me and Details.
+ * Remind me and Details. With [hideFirst] (an item no source gives a sport, live.20) Hide comes first, as "Hide this".
  */
 internal fun sportsLiveMoreEntries(
     watchWith: Boolean,
@@ -359,23 +359,38 @@ internal fun sportsLiveMoreEntries(
     strictMatch: Boolean,
     sides: Int,
     remindable: Boolean,
-    hide: Boolean = false
+    hide: Boolean = false,
+    hideFirst: Boolean = false
 ): List<SportsLiveMoreEntry> = buildList {
+    if (hide && hideFirst) add(SportsLiveMoreEntry.HIDE)
     if (watchWith) add(SportsLiveMoreEntry.WATCH_WITH)
     if (chooseStream) add(SportsLiveMoreEntry.CHOOSE_STREAM)
     if (strictMatch) add(SportsLiveMoreEntry.GAME_STATS)
     repeat(sides) { add(SportsLiveMoreEntry.FOLLOW) }
     if (remindable) add(SportsLiveMoreEntry.REMIND)
     add(SportsLiveMoreEntry.DETAILS)
-    if (hide) add(SportsLiveMoreEntry.HIDE)
+    if (hide && !hideFirst) add(SportsLiveMoreEntry.HIDE)
 }
 
 /**
  * "Hide from Live Now" (#134) is offered on [item]: a Live now event (not a channel) that matches no ESPN game
- * ([strictMatch]) and no real team ([followable]): a talk show, a series, a sport ESPN does not carry.
+ * ([strictMatch]) and no real team ([followable]): a talk show, a series, a sport ESPN does not carry. Also on a Live
+ * now or Upcoming row no source gives a sport ([sportsLiveHidesFirst]).
  */
-internal fun sportsLiveOffersHide(tab: SportsLiveTab, item: SportsLiveItem, strictMatch: Boolean, followable: Boolean): Boolean =
-    tab == SportsLiveTab.LIVE_NOW && !item.isChannel && !strictMatch && !followable
+internal fun sportsLiveOffersHide(
+    tab: SportsLiveTab,
+    item: SportsLiveItem,
+    strictMatch: Boolean,
+    followable: Boolean,
+    untagged: Boolean = false
+): Boolean = sportsLiveHidesFirst(tab, item, untagged) || (tab == SportsLiveTab.LIVE_NOW && !item.isChannel && !strictMatch && !followable)
+
+/**
+ * "Not sure what sport? Hide this" (live.20): on a Live now or Upcoming event no source gives a sport ([untagged],
+ * [com.nuvio.tv.core.sportslive.SportsLiveUnidentified.isUntagged]), More… lists the same hide first, as "Hide this".
+ */
+internal fun sportsLiveHidesFirst(tab: SportsLiveTab, item: SportsLiveItem, untagged: Boolean): Boolean =
+    (tab == SportsLiveTab.LIVE_NOW || tab == SportsLiveTab.UPCOMING) && !item.isChannel && untagged
 
 /** The stage's buttons: always **Watch** (primary) and **More…** (outlined), one row, never wrapping. */
 internal enum class SportsLiveStageButton { WATCH, MORE }

@@ -1056,7 +1056,7 @@ class SportsLiveViewModelTest {
     }
 
     @Test
-    fun `hidden titles leave Live Now only, and Hide stores the clean title`() = runTest {
+    fun `hidden titles leave Live Now, and Hide stores the clean title`() = runTest {
         val hidden = MutableStateFlow<Set<String>>(emptySet())
         val stored = mutableListOf<String>()
         val show = item("show", isLive = true, sport = "Soccer", name = "LIVE: Matchday Studio")
@@ -1081,6 +1081,25 @@ class SportsLiveViewModelTest {
         advanceUntilIdle()
         assertEquals(listOf("game"), viewModel.uiState.value.visibleItems.map { it.id })
         assertEquals(1, viewModel.uiState.value.countOf(SportsLiveTab.LIVE_NOW))
+    }
+
+    @Test
+    fun `a hidden title leaves Upcoming too`() = runTest {
+        val hidden = MutableStateFlow<Set<String>>(emptySet())
+        val mystery = item("mystery", isLive = false, sport = "Soccer", startMs = NOW + HOUR, name = "Northfield vs Eastbrook")
+        val game = item("game", isLive = false, sport = "Soccer", startMs = NOW + 2 * HOUR, name = "Arsenal vs Chelsea")
+        nextLoad = load(listOf(mystery, game))
+        val viewModel = SportsLiveViewModel(repo, hiddenTitles = hidden, hideTitle = {}, computeDispatcher = compute)
+        viewModel.nowMs = { NOW }
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+        viewModel.selectTab(SportsLiveTab.UPCOMING)
+        advanceUntilIdle()
+        assertEquals(listOf("mystery", "game"), viewModel.uiState.value.visibleItems.map { it.id })
+
+        hidden.value = setOf("Northfield vs Eastbrook")
+        advanceUntilIdle()
+        assertEquals(listOf("game"), viewModel.uiState.value.visibleItems.map { it.id })
     }
 
     @Test

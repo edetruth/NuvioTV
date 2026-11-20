@@ -4,6 +4,7 @@ import android.os.SystemClock
 import kotlinx.coroutines.withTimeoutOrNull
 import com.nuvio.tv.core.sportslive.SportsLiveToastKind
 import com.nuvio.tv.core.sportslive.SportsLiveToasts
+import com.nuvio.tv.core.sportslive.SportsLiveUnidentified
 import com.nuvio.tv.core.sportslive.scores.FollowTarget
 import com.nuvio.tv.core.sportslive.scores.FollowTargets
 import com.nuvio.tv.core.sportslive.scores.GameSection
@@ -1139,13 +1140,17 @@ private fun SportsLiveContent(
         val targets = remember(item, game, uiState.selectedTab) {
             if (!followSides) emptyList() else FollowTargets.of(item, gameOf(item), homeFirst = gameOf(item)?.let { sportsLiveGameHomeFirst(item, it) } ?: false)
         }
+        // "Not sure what sport? Hide this" (live.20): a row no source gives a sport lists Hide first.
+        val untagged = remember(item) { SportsLiveUnidentified.isUntagged(item) }
+        val hideFirst = sportsLiveHidesFirst(uiState.selectedTab, item, untagged)
         val entries = sportsLiveMoreEntries(
             watchWith = canWatchWith(item),
             chooseStream = sportsLiveAutoPlayEligible(item),
             strictMatch = game != null,
             sides = targets.size,
             remindable = remindable(item),
-            hide = sportsLiveOffersHide(uiState.selectedTab, item, strictMatch = game != null, followable = targets.isNotEmpty())
+            hide = sportsLiveOffersHide(uiState.selectedTab, item, strictMatch = game != null, followable = targets.isNotEmpty(), untagged = untagged),
+            hideFirst = hideFirst
         )
         val watchWith = SportsLiveMoreEntry.WATCH_WITH in entries
         val canRemind = SportsLiveMoreEntry.REMIND in entries
@@ -1246,13 +1251,17 @@ private fun SportsLiveContent(
                     // Where to undo it: the one place hidden titles are listed.
                     SportsLiveToasts.show(
                         SportsLiveToastKind.INFO,
-                        context.getString(R.string.sports_live_hidden_toast, heading.title),
+                        context.getString(
+                            if (uiState.selectedTab == SportsLiveTab.LIVE_NOW) R.string.sports_live_hidden_toast else R.string.sports_live_hidden_toast_any,
+                            heading.title
+                        ),
                         context.getString(R.string.sports_live_hidden_toast_line)
                     )
                 }
             } else {
                 null
-            }
+            },
+            hideFirst = hideFirst
         )
     }
 

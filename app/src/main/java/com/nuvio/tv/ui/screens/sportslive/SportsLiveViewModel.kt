@@ -400,13 +400,13 @@ class SportsLiveViewModel internal constructor(
     // card star); a follow change does not re-bucket.
     // Live now's, Upcoming's and Replays' unrouted two-team cards take the league their teams name (#132 P4),
     // again whenever the team directory changes (it bumps the logo revision). Channels are never inferred.
-    // Titles hidden from Live Now (#134) are left off its list only.
+    // Titles hidden from Live Now (#134) are left off its list, and off Upcoming's (live.20: "Hide this" there).
     private val pinned = combine(bucketed, repo.followedTeams, logoRevision, hiddenTitles) { bucketed, followed, _, hidden ->
         hiddenNow = hidden
         val startedAt = System.nanoTime()
         bucketed.copy(
             tabs = bucketed.tabs.mapValues { (tab, all) ->
-                val listed = if (tab == SportsLiveTab.LIVE_NOW) SportsLiveHiddenTitles.filter(all, hidden) else all
+                val listed = if (tab == SportsLiveTab.LIVE_NOW || tab == SportsLiveTab.UPCOMING) SportsLiveHiddenTitles.filter(all, hidden) else all
                 val items = if (tab in INFERRED_TABS) listed.map(inferSport) else listed
                 if (tab == SportsLiveTab.CHANNELS) {
                     SportsLiveItemBucketer.markFollowed(items, followed)

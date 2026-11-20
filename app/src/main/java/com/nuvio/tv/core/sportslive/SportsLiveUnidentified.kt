@@ -96,12 +96,18 @@ class SportsLiveUnidentified(private val maxEntries: Int = MAX_ENTRIES) {
         return !sportKnown(view)
     }
 
-    private fun sportKnown(item: SportsLiveItem): Boolean =
-        (listOf(item) + item.alternates).any { SportsLiveMySportsScope.kindOf(it) != null || SportsLiveTeams.knownSport(it) != null }
-
     companion object {
         const val TAG = "NuvioUnidentified"
         const val MAX_ENTRIES = 200
+
+        /**
+         * True when no source gives [item] a sport, even once placed ([placed]), and it is no channel: the row's More…
+         * offers "Hide this" first (live.20, "Not sure what sport? Hide this").
+         */
+        fun isUntagged(item: SportsLiveItem): Boolean = !item.isChannel && !sportKnown(item) && !sportKnown(placed(item))
+
+        private fun sportKnown(item: SportsLiveItem): Boolean =
+            (listOf(item) + item.alternates).any { SportsLiveMySportsScope.kindOf(it) != null || SportsLiveTeams.knownSport(it) != null }
 
         /** The one the app shares. */
         val shared = SportsLiveUnidentified()

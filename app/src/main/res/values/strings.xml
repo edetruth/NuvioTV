@@ -3814,6 +3814,8 @@
     <string name="sports_live_hide_from_live_now">Hide from Live Now</string>
     <string name="sports_live_hidden_toast">Hidden from Live Now: %1$s</string>
     <string name="sports_live_hidden_toast_line">Undo in Settings → More → Hidden</string>
+    <string name="sports_live_hide_this">Hide this</string>
+    <string name="sports_live_hidden_toast_any">Hidden: %1$s</string>
     <!-- Settings → More → Hidden (#134). -->
     <string name="sports_live_setting_hidden">Hidden from Live Now</string>
     <string name="sports_live_setting_hidden_subtitle">OK shows a title on Live Now again</string>

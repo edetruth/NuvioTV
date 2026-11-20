@@ -6,6 +6,7 @@ import com.nuvio.tv.core.sportslive.GameStatusStrings
 import com.nuvio.tv.core.sportslive.SportsLiveEndedGames
 import com.nuvio.tv.core.sportslive.SportsLiveProgress
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
+import com.nuvio.tv.core.sportslive.SportsLiveUnidentified
 import com.nuvio.tv.core.sportslive.alerts.GameReminders
 import com.nuvio.tv.core.sportslive.scores.EspnFixtures
 import com.nuvio.tv.core.sportslive.scores.EspnLeagueMap
@@ -261,6 +262,28 @@ class SportsLiveLiveNowV2Test {
         // Live Now only, and never a channel.
         assertFalse(sportsLiveOffersHide(SportsLiveTab.UPCOMING, show, strictMatch = false, followable = false))
         assertFalse(sportsLiveOffersHide(SportsLiveTab.LIVE_NOW, channel, strictMatch = false, followable = false))
+    }
+
+    @Test
+    fun `a row no source gives a sport lists Hide this first, on Live Now and Upcoming`() {
+        assertEquals(
+            listOf(HIDE, WATCH_WITH, CHOOSE_STREAM, DETAILS),
+            sportsLiveMoreEntries(true, true, false, 0, false, hide = true, hideFirst = true)
+        )
+        val mystery = item("Northfield vs Eastbrook", NOW + HOUR, isLive = false, sport = null)
+        assertTrue(SportsLiveUnidentified.isUntagged(mystery))
+        for (tab in listOf(SportsLiveTab.LIVE_NOW, SportsLiveTab.UPCOMING)) {
+            assertTrue(tab.name, sportsLiveHidesFirst(tab, mystery, untagged = true))
+            // Offered even when its sides look followable: no sport, nothing to follow it by.
+            assertTrue(tab.name, sportsLiveOffersHide(tab, mystery, strictMatch = false, followable = true, untagged = true))
+        }
+        // A tagged row, Replays, and channels never get it first.
+        val tagged = item("Hawks @ Spurs", NOW - HOUR)
+        assertFalse(SportsLiveUnidentified.isUntagged(tagged))
+        assertFalse(sportsLiveHidesFirst(SportsLiveTab.LIVE_NOW, tagged, untagged = false))
+        assertFalse(sportsLiveHidesFirst(SportsLiveTab.REPLAYS, mystery, untagged = true))
+        assertFalse(SportsLiveUnidentified.isUntagged(channel))
+        assertFalse(sportsLiveHidesFirst(SportsLiveTab.LIVE_NOW, channel, untagged = true))
     }
 
     // ---- Stage ----

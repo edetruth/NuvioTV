@@ -97,7 +97,8 @@ internal fun rememberMoreHeading(item: SportsLiveItem, row: ScoreboardRow?): Spo
  * (always the picker, F13), **Choose stream…**, **Game stats** (a strict ESPN match only), **Follow ‹team›** for
  * each side matched to a real team ([sides]: ESPN's short name and whether it is followed), **Remind me**
  * (upcoming games), **Team pages…**, **Details** (the raw addon text lives only there) and **Hide from Live Now**
- * ([onHide]: unmatched items only). The first entry takes focus; it never re-orders under focus.
+ * ([onHide]: unmatched items only; first, as **Hide this**, with [hideFirst]). The first entry takes focus; it never
+ * re-orders under focus.
  */
 @Composable
 internal fun SportsLiveCardMenu(
@@ -136,6 +137,8 @@ internal fun SportsLiveCardMenu(
     onWatchPostgame: (() -> Unit)? = null,
     /** "Hide from Live Now" (#134): an unmatched item leaves Live Now; null hides it. */
     onHide: (() -> Unit)? = null,
+    /** [onHide] first, as "Hide this" (live.20: a row no source gives a sport, "Not sure what sport? Hide this"). */
+    hideFirst: Boolean = false,
     /**
      * "Remind me for every ‹team› game" (#154): each offered side's name and whether it is on the reminder-only
      * list ("Stop reminding for ‹team› games"); [onToggleTeamReminder] gets its index.
@@ -162,6 +165,15 @@ internal fun SportsLiveCardMenu(
                 SportsLiveMenuButton(text = stringResource(R.string.sports_live_team_page, name), onClick = open, modifier = first())
             }
             return@SportsLiveSheet
+        }
+        if (onHide != null && hideFirst) {
+            SportsLiveMenuButton(
+                text = stringResource(R.string.sports_live_hide_this),
+                onClick = onHide,
+                modifier = first(),
+                icon = Icons.Rounded.Block,
+                iconTint = Colors.TextSecondary
+            )
         }
         if (onWatchPostgame != null) {
             SportsLiveMenuButton(text = stringResource(R.string.sports_live_watch_postgame), onClick = onWatchPostgame, modifier = first())
@@ -228,7 +240,7 @@ internal fun SportsLiveCardMenu(
         if (onDetails != null) {
             SportsLiveMenuButton(text = stringResource(R.string.sports_live_details), onClick = onDetails, modifier = first())
         }
-        if (onHide != null) {
+        if (onHide != null && !hideFirst) {
             SportsLiveMenuButton(
                 text = stringResource(R.string.sports_live_hide_from_live_now),
                 onClick = onHide,
