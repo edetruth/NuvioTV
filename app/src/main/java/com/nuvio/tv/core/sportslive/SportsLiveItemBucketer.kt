@@ -293,18 +293,19 @@ object SportsLiveItemBucketer {
     }
 
     /**
-     * Copies of one event that names no two sides folded into one row (F4: "MotoGP" listed five times, "UEFA Nations
+     * Copies of one event that names no two sides folded into one row (F4: "MotoGP" from two addons, "UEFA Nations
      * League Draw" tagged Soccer by one addon and Football by another): events (not channels, never replays) with
-     * no teams and the same clean title (case, accents, emoji, symbols and spacing aside), whose sports agree
-     * ([sportsAgree]) and which are both live (an upcoming listing's time cannot tell two such events apart). As
-     * in [merge], the primary is the first in [addonOrder] (then catalog name, then id) and the others become its
-     * alternates; the rest is unchanged, in place.
+     * no teams and the same specific clean title (case, accents, emoji, symbols and spacing aside; never a generic
+     * one, [isGenericTitle]), whose sports agree ([sportsAgree]), which are both live (an upcoming listing's time
+     * cannot tell two such events apart) and which come from different addons: one addon's feeds of one title are
+     * likely different courts or feeds, so they stay apart. As in [merge], the primary is the first in [addonOrder]
+     * (then catalog name, then id) and the others become its alternates; the rest is unchanged, in place.
      */
     internal fun mergeSameTitle(items: List<SportsLiveItem>, addonOrder: List<String>): List<SportsLiveItem> {
         val groups = items
             .filter { it.kind == SportsLiveKind.EVENTS && !it.isChannel && it.teams == null && it.isLive }
             .groupBy(::titleKey)
-            .filterKeys { it.isNotEmpty() }
+            .filterKeys { it.isNotEmpty() && !isGenericTitle(it) }
             .values.filter { it.size > 1 }
         if (groups.isEmpty()) return items
         val rank = addonOrder.withIndex().associate { (index, id) -> id to index }
@@ -313,7 +314,10 @@ object SportsLiveItemBucketer {
         for (group in groups) {
             val primaries = mutableListOf<SportsLiveItem>()
             for (item in group.sortedWith(compareBy({ rank[it.addonId] ?: Int.MAX_VALUE }, { it.catalogName }, { it.id }))) {
-                val primary = primaries.firstOrNull { sportsAgree(it, item) }
+                val primary = primaries.firstOrNull { primary ->
+                    sportsAgree(primary, item) &&
+                        (listOf(primary) + alternatesOf[primary.streamKey].orEmpty()).none { it.addonId == item.addonId }
+                }
                 if (primary == null) {
                     primaries += item
                 } else {
@@ -335,6 +339,18 @@ object SportsLiveItemBucketer {
     // as are "ATP 250 vs Stockholm Open" and an "ATP 250" whose description names Stockholm Open.
     private fun titleKey(item: SportsLiveItem): String =
         SportsLiveTeams.foldAccents(item.displayName).lowercase().trim()
+
+    /**
+     * True when a teamless title says too little to be one event (coordinator ruling, live.20): a sport word alone
+     * ("Tennis"), a tour alone ("ATP", "WTA"), a court, day or feed ("Court 3", "Day 6 Singles", "Main Feed").
+     */
+    internal fun isGenericTitle(key: String): Boolean =
+        SportsLiveSportKind.isPlainSportWord(key) || GENERIC_TITLE.matches(key.trim().lowercase())
+
+    private val GENERIC_TITLE = Regex(
+        """(atp|wta|itf|atp tour|wta tour|tennis|court \d+|centre court|center court|day \d+( (singles|doubles|session))?|""" +
+            """(main |live |hd )?feed( \d+)?|stream( \d+)?|live|live now|live event|highlights)"""
+    )
 
     private fun mergedSport(primary: SportsLiveItem, alternates: List<SportsLiveItem>): String? =
         SportsLiveTeams.knownSport(primary) ?: alternates.firstNotNullOfOrNull(SportsLiveTeams::knownSport) ?: primary.sport

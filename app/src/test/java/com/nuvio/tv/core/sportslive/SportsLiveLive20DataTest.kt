@@ -122,15 +122,18 @@ class SportsLiveLive20DataTest {
     }
 
     @Test
-    fun `live copies of one teamless event are one row`() {
-        val motoGp = (1..5).map { event("a", "m$it", if (it == 1) "📺 MotoGP" else "MotoGP", listOf("Motorsport")) }
+    fun `live copies of one teamless event from different addons are one row`() {
+        val motoGp = listOf(
+            event("a", "m1", "📺 MotoGP", listOf("Motorsport")),
+            event("b", "m2", "MotoGP", listOf("Motorsport"))
+        )
         val draw = listOf(
             event("a", "d1", "UEFA Nations League Draw", listOf("Football")),
             event("b", "d2", "UEFA Nations League Draw", listOf("Soccer"))
         )
         val rows = live(*(motoGp + draw).toTypedArray())
         assertEquals(listOf("d1", "m1"), rows.map { it.id }.sorted())
-        assertEquals(5, rows.single { it.id == "m1" }.sourceCount)
+        assertEquals(2, rows.single { it.id == "m1" }.sourceCount)
         val drawRow = rows.single { it.id == "d1" }
         assertEquals(2, drawRow.sourceCount)
         // One tag word for both copies: the soccer the title and the other copy say.
@@ -146,6 +149,28 @@ class SportsLiveLive20DataTest {
         assertEquals(listOf("n"), rows.map { it.id })
         assertEquals(2, rows.single().sourceCount)
         assertEquals("ATP 250 · Stockholm Open", rows.single().displayName)
+    }
+
+    @Test
+    fun `one addon's feeds of one title stay separate rows`() {
+        val rows = live(
+            event("a", "m1", "MotoGP", listOf("Motorsport")),
+            event("a", "m2", "MotoGP", listOf("Motorsport")),
+            event("b", "m3", "MotoGP", listOf("Motorsport"))
+        )
+        // The other addon's copy joins the first; the first addon's second feed stays its own row.
+        assertEquals(listOf("m1", "m2"), rows.map { it.id }.sorted())
+        assertEquals(listOf("m3"), rows.single { it.id == "m1" }.alternates.map { it.id })
+    }
+
+    @Test
+    fun `a generic title never merges, even across addons`() {
+        for (title in listOf("Tennis", "ATP", "WTA", "Court 3", "Day 6 Singles", "Main Feed")) {
+            val rows = live(event("a", "1", title, listOf("Tennis")), event("b", "2", title, listOf("Tennis")))
+            assertEquals(title, 2, rows.size)
+        }
+        assertTrue(SportsLiveItemBucketer.isGenericTitle("ice hockey"))
+        assertFalse(SportsLiveItemBucketer.isGenericTitle("atp 250 · stockholm open"))
     }
 
     @Test

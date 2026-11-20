@@ -70,8 +70,8 @@ class TeamIdentifier internal constructor(
     private var dirty = false
 
     /**
-     * Queues the two-team games of [items] whose sport (or, for soccer, competition: item 3) is unknown and that are
-     * live or start today. Cheap
+     * Queues the two-team games of [items] whose sport is unknown and that are live or start today, and soccer games
+     * naming no competition (item 3) that are live or start within 3 h. Cheap
      * and non-blocking: the lookups run on the worker.
      */
     fun offer(items: List<SportsLiveItem>) {
@@ -85,7 +85,10 @@ class TeamIdentifier internal constructor(
             if (item.isChannel || item.teams == null) continue
             val start = item.startMs
             if (!item.isLive && (start == null || start < dayStart || start >= dayEnd)) continue
-            if (!SportsLiveTeamIdentity.sportUnknown(item) && !SportsLiveTeamIdentity.soccerLeagueUnknown(item)) continue
+            val unknownSport = SportsLiveTeamIdentity.sportUnknown(item)
+            // A soccer game naming no competition (item 3): only while live or starting within 3 h.
+            val soon = item.isLive || (start != null && start >= at && start - at <= SOCCER_LOOKUP_AHEAD_MS)
+            if (!unknownSport && !(soon && SportsLiveTeamIdentity.soccerLeagueUnknown(item))) continue
             val (first, second) = SportsLiveTeamIdentity.sides(item.meta.name) ?: continue
             offerGame(first, second)
         }
@@ -253,6 +256,8 @@ class TeamIdentifier internal constructor(
         private const val LOG_TAG = "NuvioIdentify"
         /** Games queued at most; later offers come back on the next rebuild. */
         private const val MAX_PENDING = 128
+        /** How far ahead a soccer game naming no competition is looked up (item 3). */
+        private const val SOCCER_LOOKUP_AHEAD_MS = 3 * 60 * 60_000L
         private const val MAX_ESPN_MISSES = 512
     }
 }

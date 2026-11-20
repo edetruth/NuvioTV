@@ -100,6 +100,10 @@ enum class SportsLiveSportKind {
             return SOCCER.takeIf { SOCCER in kinds && FOOTBALL !in kinds }
         }
 
+        /** True when [text] is a plain sport word alone ("Tennis", "Ice Hockey", "Soccer"): no event of its own. */
+        fun isPlainSportWord(text: String?): Boolean =
+            SportsLiveDisplayText.label(text)?.let { fold(it) in PLAIN_SPORT_WORDS } == true
+
         private fun isBareFootball(text: String?): Boolean = text != null && fold(text) == "football"
 
         private val PLAIN_SPORT_WORDS = setOf(
