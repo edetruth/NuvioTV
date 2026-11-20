@@ -12,6 +12,8 @@ import com.nuvio.tv.data.local.PANEL_KEYS_HINT_GAP_MS
 import com.nuvio.tv.data.local.PANEL_KEYS_HINT_OPENS
 import com.nuvio.tv.data.local.shouldShowPanelKeysHint
 import com.nuvio.tv.core.sportslive.scores.ChipScore
+import com.nuvio.tv.core.sportslive.scores.EspnLeague
+import com.nuvio.tv.core.sportslive.scores.EspnLeagueMap
 import com.nuvio.tv.core.sportslive.scores.GameArt
 import com.nuvio.tv.core.sportslive.scores.GameArtTeam
 import com.nuvio.tv.core.sportslive.scores.ScoreChip
@@ -573,6 +575,21 @@ class SportsLiveSlimPanelTest {
         assertEquals(124, panelTagColumnWidth(listOf(130), max = 124))
         // No row with a tag: no column.
         assertEquals(0, panelTagColumnWidth(emptyList(), max = 124))
+    }
+
+    @Test
+    fun `men's college basketball reads its halves 1H and 2H, other games keep their period`() {
+        assertTrue(panelPlaysHalves(EspnLeagueMap.COLLEGE_BASKETBALL))
+        // The women's game and the pros play quarters: ESPN's "1st" stays.
+        assertFalse(panelPlaysHalves(EspnLeagueMap.COLLEGE_BASKETBALL_WOMEN))
+        assertFalse(panelPlaysHalves(EspnLeague("basketball", "nba")))
+        assertFalse(panelPlaysHalves(null))
+        // "Utah 6–7 Dayton, 15:47 1st" on the TV: "15:47 1H".
+        assertEquals("1H", panelPeriodShort("1st", halves = true))
+        assertEquals("2H", panelPeriodShort("2nd", halves = true))
+        assertEquals("OT", panelPeriodShort("OT", halves = true))
+        assertEquals("1st", panelPeriodShort("1st", halves = false))
+        assertEquals("1H", panelPeriodShort("1st half", halves = true))
     }
 
     @Test

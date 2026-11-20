@@ -55,11 +55,14 @@ import androidx.tv.material3.Icon
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import com.nuvio.tv.R
+import com.nuvio.tv.core.sportslive.GameStatus
 import com.nuvio.tv.core.sportslive.GameStatusStrings
 import com.nuvio.tv.core.sportslive.SportsLiveReadyMark
 import com.nuvio.tv.core.sportslive.SportsLiveSportKind
 import com.nuvio.tv.core.sportslive.SportsLiveTags
 import com.nuvio.tv.core.sportslive.SportsLiveDisplayText
+import com.nuvio.tv.core.sportslive.scores.EspnLeague
+import com.nuvio.tv.core.sportslive.scores.EspnLeagueMap
 import com.nuvio.tv.core.sportslive.scores.GameArtTeam
 import com.nuvio.tv.core.sportslive.scores.TeamDirectory
 import com.nuvio.tv.core.sportslive.scores.TeamLogoBook
@@ -115,7 +118,9 @@ internal fun panelLineOf(
     sideName: (String) -> String = { it }
 ): PanelLine {
     val status = scoreboardStatusLines(row, strings, kickoff)
-    val period = status.secondary.takeIf { status.live }
+    // Short beside the clock (TV QA BUG-C): "1H" for men's college basketball's halves, "Q2", "OT".
+    val halves = panelPlaysHalves((row.status as? GameStatus.Live)?.event?.league)
+    val period = status.secondary.takeIf { status.live }?.let { panelPeriodShort(it, halves) }
     // live.20 F5: a live row with no real clock shows the red dot alone; "LIVE" on every row repeats the section header.
     val clock = status.primary.takeUnless { status.live && period == null && it == strings.live }
     val art = row.art
@@ -947,14 +952,14 @@ private fun LineText(
 /**
  * The status at the row's end: the red dot and the clock with its period while live (the dot alone when no clock is
  * known: the LIVE header says the word), else the time or final word. TV QA BUG-C ("15:47 1st" crowding the score):
- * the period is short ([panelPeriodShort]) and smaller, beside the clock; where the row is tight the status steps down
+ * the period is short ([panelLineOf], [panelPeriodShort]) and smaller, beside the clock; where the row is tight the status steps down
  * ([PanelFirstFit]) to the clock alone, and a [compactClock] ("Ended?") stands in for a long word ("Probably ended").
  */
 @Composable
 private fun StatusText(line: PanelLine, compactClock: String? = null) {
     val clock = line.clock
     if (clock == null && !line.live) return
-    val period = line.period?.let(::panelPeriodShort)
+    val period = line.period
     PanelFirstFit {
         StatusForm(line.live, clock, period)
         if (period != null) StatusForm(line.live, clock, null)
@@ -991,10 +996,12 @@ private fun StatusForm(live: Boolean, clock: String?, period: String?) {
 
 /**
  * A period short for a panel row's status (TV QA BUG-C): "1st half" → "1H", "2nd quarter" → "Q2", "3rd period" →
- * "3rd", "overtime" → "OT"; anything else ("1st", "Q4", "OT2") as it is.
+ * "3rd", "overtime" → "OT"; a bare "1st" or "2nd" is a half where the game plays [halves] ("1H", coordinator decision:
+ * men's college basketball); anything else ("1st", "Q4", "OT2") as it is.
  */
-internal fun panelPeriodShort(period: String): String {
+internal fun panelPeriodShort(period: String, halves: Boolean = false): String {
     val text = period.trim()
+    if (halves) ORDINAL.matchEntire(text)?.let { return "${it.groupValues[1]}H" }
     PERIOD_WORDS.matchEntire(text)?.let { match ->
         val (number, suffix, unit) = match.destructured
         return when (unit.lowercase(Locale.ROOT)) {
@@ -1005,6 +1012,14 @@ internal fun panelPeriodShort(period: String): String {
     }
     return if (text.equals("overtime", ignoreCase = true)) "OT" else text
 }
+
+/**
+ * Whether a game in [league] plays two halves, so ESPN's "1st" is its first half: men's college basketball (the
+ * women's game plays quarters since 2015, as the pros do).
+ */
+internal fun panelPlaysHalves(league: EspnLeague?): Boolean = league == EspnLeagueMap.COLLEGE_BASKETBALL
+
+private val ORDINAL = Regex("""^([12])(st|nd)$""", RegexOption.IGNORE_CASE)
 
 private val PERIOD_WORDS = Regex("""^(\d+)(st|nd|rd|th)\s+(half|quarter|period)$""", RegexOption.IGNORE_CASE)
 
