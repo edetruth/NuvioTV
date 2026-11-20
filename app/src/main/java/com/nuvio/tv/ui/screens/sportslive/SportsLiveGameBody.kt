@@ -482,7 +482,7 @@ private fun GameStat.labelRes(): Int = when (this) {
     GameStat.FOULS -> R.string.sports_live_stat_fouls
 }
 
-/** A table line's cells: the name takes what the [column]-wide stat cells leave. */
+/** A table line's cells: the name takes what the stat cells, [widths] wide each, leave. */
 @Composable
 private fun RowScope.TableCells(name: String, values: List<String>, style: TextStyle, color: androidx.compose.ui.graphics.Color, widths: List<Dp>) {
     Text(name, style = style, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
