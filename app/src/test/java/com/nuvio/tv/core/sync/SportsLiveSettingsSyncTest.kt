@@ -123,6 +123,12 @@ class SportsLiveSettingsSyncTest {
     }
 
     @Test
+    fun `an empty store exports nothing, as a cloud copy without Sports and Live reads`() {
+        val exported = SportsLiveSettingsSync.export(androidx.datastore.preferences.core.emptyPreferences(), 1_000L)
+        assertEquals(SportsLiveSettingsSync.canonical(kotlinx.serialization.json.JsonObject(emptyMap())), SportsLiveSettingsSync.canonical(exported))
+    }
+
+    @Test
     fun `no addon data is synced`() = runTest(dispatcher) {
         val harness = harness()
         val prefs = harness.sports

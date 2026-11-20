@@ -159,8 +159,9 @@ object SportsLiveSettingsSync {
     fun export(prefs: Preferences, nowMs: Long): JsonObject {
         val stamps = stampsOf(prefs)
         val meta = itemMetaOf(prefs)
-        return buildJsonObject {
-            put("fields", buildJsonObject {
+        // Nothing to sync exports {} (no "fields"/"lists"), as a cloud copy without Sports & Live reads: equal
+        // signatures, so a pull is never echoed back as a push.
+        val fieldsOut = buildJsonObject {
                 scalars.keys.forEach { key ->
                     val value = valueOf(prefs, key)
                     val at = stamps[key]
@@ -170,8 +171,8 @@ object SportsLiveSettingsSync {
                         put("value", value ?: JsonNull)
                     })
                 }
-            })
-            put("lists", buildJsonObject {
+        }
+        val listsOut = buildJsonObject {
                 lists.forEach { field ->
                     val items = itemsOf(prefs, field)
                     val entries = meta[field.key].orEmpty()
@@ -193,7 +194,10 @@ object SportsLiveSettingsSync {
                     }
                     if (out.isNotEmpty()) put(field.key, out)
                 }
-            })
+        }
+        return buildJsonObject {
+            if (fieldsOut.isNotEmpty()) put("fields", fieldsOut)
+            if (listsOut.isNotEmpty()) put("lists", listsOut)
         }
     }
 
