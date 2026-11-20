@@ -147,6 +147,20 @@ class SportsLiveHomeMetaTest {
     }
 
     @Test
+    fun `the hero shows no addon date when a game has no score label`() {
+        val game = item("g", "Celtics vs Knicks").let { it.copy(meta = it.meta.copy(releaseInfo = "Nov 19, 20:30")) }
+        val words = SportsLiveHomeRow.Words(liveNow = "Live now", yourTeam = "★ Your team", streams = { "$it streams" })
+        val row = SportsLiveHomeRow.build(listOf(game), "Live now", emptyMap(), words)
+        assertNull(sportsLiveHeroPreview(row.items.single(), row)!!.secondaryHighlightText)
+    }
+
+    @Test
+    fun `sports rows are titled without the type suffix`() {
+        val row = SportsLiveHomeRow.build(listOf(item("g", "Celtics vs Knicks")), "Live now")
+        assertEquals("Live now", catalogRowTitle(row, showCatalogTypeSuffix = true))
+    }
+
+    @Test
     fun `other rows keep the usual hero`() {
         val card = item("m", "A Movie").meta
         val row = SportsLiveHomeRow.build(listOf(item("m", "A Movie")), "Popular").copy(addonBaseUrl = "https://addon.example")

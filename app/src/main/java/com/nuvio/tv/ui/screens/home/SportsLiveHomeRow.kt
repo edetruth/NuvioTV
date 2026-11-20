@@ -51,6 +51,8 @@ object SportsLiveHomeRow {
                 labelled
             } else {
                 labelled.copy(
+                    // The hero's status line is the score label only: never the addon's date ("Nov 19, 20:30").
+                    releaseInfo = scoreLabels[item.streamKey],
                     genres = listOf(SportsLiveHomeMeta.eyebrow(GameArt.of(item, null)?.league ?: item.sport, words.liveNow)),
                     description = SportsLiveHomeMeta.extraLine(item.followed, item.sourceCount, words.yourTeam, words.streams),
                     // A game is drawn (logos, clock, score): never the addon's art with LIVE baked in.

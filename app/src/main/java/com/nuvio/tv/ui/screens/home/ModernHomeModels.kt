@@ -634,7 +634,8 @@ internal fun catalogRowTitle(
     strTypeSeries: String = ""
 ): String {
     val catalogName = row.catalogName.replaceFirstChar { it.uppercase() }
-    if (!showCatalogTypeSuffix) return catalogName
+    // Sports & Live's own rows (V2 phase 10): "Live now", never "Live now - Sport".
+    if (!showCatalogTypeSuffix || row.addonId == SportsLiveHomeRow.ADDON_ID) return catalogName
     val typeLabel = when (row.apiType.lowercase()) {
         "movie" -> strTypeMovie.ifBlank { row.apiType.replaceFirstChar { it.uppercase() } }
         "series" -> strTypeSeries.ifBlank { row.apiType.replaceFirstChar { it.uppercase() } }
