@@ -1382,6 +1382,30 @@ class LiveScoresRepositoryTest {
     }
 
     @Test
+    fun `ESPN's tomorrow costs a matched live card nothing and an unmatched one a request every 15 min, not every poll`() = runTest {
+        val friday = LocalDate.of(2026, 11, 20)
+        val saturdayFeed = ScoreFeed(EspnLeague("soccer", "fra.1"), LocalDate.of(2026, 11, 21))
+        provider.respond = { feed -> ScoreboardResult(if (feed.date == friday) listOf(ligue1(ScoreState.IN, "2026-11-20T15:30:00Z")) else emptyList()) }
+        val repo = repository("2026-11-20T15:40:00Z", espnStarts = SportsLiveEspnStarts())
+        collect(repo)
+        val card = item("Nice vs PSG", "Ligue 1", "2026-11-20T15:30:00Z")
+        // Matched on its own day: its one feed, nothing more.
+        repo.track(SECTION, listOf(card))
+        runCurrent()
+        assertEquals(listOf(ScoreFeed(EspnLeague("soccer", "fra.1"), friday)), provider.calls)
+        // A live card ESPN does not list on its day: tomorrow is asked once its own feeds have answered.
+        repo.track(SECTION, listOf(card, item("Lens vs Lyon", "Ligue 1", "2026-11-20T15:30:00Z")))
+        runCurrent()
+        assertEquals(1, provider.calls.count { it == saturdayFeed })
+        // The live feed polls every 30 s; tomorrow is not asked again meanwhile.
+        advanceTimeBy(LiveScoresRepository.SCHEDULE_CHECK_MS - 60_000L); runCurrent()
+        assertTrue(provider.calls.count { it.date == friday } > 10)
+        assertEquals(1, provider.calls.count { it == saturdayFeed })
+        advanceTimeBy(60_001L); runCurrent()
+        assertEquals(2, provider.calls.count { it == saturdayFeed })
+    }
+
+    @Test
     fun `a matched game ESPN has later the same day moves its live card too, an upcoming card is left alone`() = runTest {
         provider.respond = { ScoreboardResult(listOf(ligue1(ScoreState.PRE, "2026-11-20T17:30:00Z"))) }
         val starts = SportsLiveEspnStarts()

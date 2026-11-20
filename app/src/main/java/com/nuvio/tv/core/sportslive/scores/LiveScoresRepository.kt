@@ -243,6 +243,8 @@ class LiveScoresRepository internal constructor(
      * [COLLEGE_MAX_MISSES] the card's college feed is dropped until the tracked cards change.
      */
     private val collegeMisses = HashMap<String, Pair<Long, Int>>()
+    /** Live card key to when ESPN's today and tomorrow last answered for it: asked again only after [SCHEDULE_CHECK_MS]. */
+    private val laterLookups = HashMap<String, Long>()
     @Volatile
     private var logosDirty = false
     private val scoreDelay = ScoreDelay()
@@ -616,10 +618,19 @@ class LiveScoresRepository internal constructor(
                 return
             }
             if (keys.isEmpty() || entry.tennis) return
-            val leagues = remembered[entry.card.key]?.let(::listOf) ?: entry.leagues
+            // Only once its own feeds have answered (fresh, not paused) without it, and at most once per SCHEDULE_CHECK_MS: a matched or
+            // still-loading card costs no extra request, and the extra days are not polled while it stays unmatched.
+            if (!cardFeeds.all { feed -> feeds[feed]?.let { it.fetched && !it.paused && it.isFresh(nowMs) } == true }) return
+            val key = entry.card.key
+            if (laterLookups[key]?.let { nowMs - it < SCHEDULE_CHECK_MS } == true) return
+            val leagues = remembered[key]?.let(::listOf) ?: entry.leagues
             val extra = feedsOf(leagues, laterDates(nowMs)).filter { it !in cardFeeds }
             if (extra.isEmpty() || !fits(extra)) return
             needed += extra
+            // Read once every extra day has answered (or paused) since this lookup was due.
+            if (!extra.all { feed -> feeds[feed]?.let { it.paused || it.fetched && it.isFresh(nowMs) } == true }) return
+            if (laterLookups.size >= MAX_REMEMBERED) laterLookups.clear()
+            laterLookups[key] = nowMs
             val events = (cardFeeds + extra).flatMap { feed -> feeds[feed]?.takeIf { it.isFresh(nowMs) && !it.paused }?.events.orEmpty() }
                 .distinctBy { it.eventId }
             matcher.laterMeeting(entry.card, events, nowMs)?.let { espnStarts.record(keys, it.startMs!!, nowMs) }
