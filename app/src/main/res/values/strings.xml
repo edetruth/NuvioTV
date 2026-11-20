@@ -4197,6 +4197,7 @@
     <string name="sports_live_link_slow">That link was slow to start</string>
     <string name="sports_live_link_not_working">This link isn\'t working</string>
     <string name="sports_live_dual_device_limit">This device can\'t play two streams at once</string>
+    <string name="sports_live_dual_no_info">No game info for this one</string>
     <string name="sports_live_dual_sound_on">Sound on</string>
     <string name="sports_live_dual_sound_off">Muted</string>
     <string name="sports_live_dual_keys_hint">←/→ sound · ↑/↓ change game · OK full screen · Menu swap · hold Menu layout · Info stats</string>

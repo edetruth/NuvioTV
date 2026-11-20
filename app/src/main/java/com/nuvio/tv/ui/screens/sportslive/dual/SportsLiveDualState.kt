@@ -150,8 +150,11 @@ data class DualState(
         is DualAction.EndChanged -> updatePaneOf(action.item) { pane ->
             if (pane.status != PaneStatus.Ended) null else pane.copy(end = action.card)
         }
+        // F13: the count never shrinks while the pane stays on its game ("2 of 5" then "3 of 4"), nor drops under
+        // the link it is on: a later count may see fewer links once the search cache changed.
         is DualAction.LinkCount -> updatePaneOf(action.item) { pane ->
-            if (pane.linkCount == action.count) null else pane.copy(linkCount = action.count)
+            val count = maxOf(pane.linkCount, action.count, pane.linkNumber)
+            if (pane.linkCount == count) null else pane.copy(linkCount = count)
         }
         is DualAction.Recovered -> updatePaneOf(action.item) { pane ->
             if (pane.reconnecting && pane.status == PaneStatus.Playing) pane.copy(reconnecting = false) else null

@@ -185,7 +185,13 @@ class SportsLiveDualViewModel internal constructor(
      * Card keys of the games of a list Live now shows over now (F2: ESPN finals, "Probably ended" estimates, dead
      * link checks), with every source of a merged card; [scoresOff]: the Scores setting is Off.
      */
-    private val overKeys: (items: List<SportsLiveItem>, scoresOff: Boolean) -> Set<String> = { _, _ -> emptySet() }
+    private val overKeys: (items: List<SportsLiveItem>, scoresOff: Boolean) -> Set<String> = { _, _ -> emptySet() },
+    /** True for a game saved with Watch later (#151): no next-game pick plays it live (#184). */
+    private val savedForLater: () -> (SportsLiveItem) -> Boolean = { { false } },
+    /** ✓ ready and ⚠ no working stream (#147), read by the next-game picks. */
+    private val readiness: SportsLiveGameReadiness = SportsLiveGameReadiness.shared,
+    /** Games tried and failed this session (#138 follow-up). */
+    private val triedGames: SportsLiveTriedGames = SportsLiveTriedGames.shared
 ) : ViewModel() {
 
     @Inject
@@ -217,7 +223,8 @@ class SportsLiveDualViewModel internal constructor(
                 list, liveScores.scores.value, System.currentTimeMillis(),
                 SportsLiveEndedGames.estimateGate(scoresOff, liveScores.unmatched.value)
             ) + SportsLiveLinkVerdicts.shared.deadKeys
-        }
+        },
+        savedForLater = { sportsLiveSavedForLater(liveScores.protection.value, liveScores.scores.value) }
     )
 
     private val items: List<SportsLiveItem> = session?.items.orEmpty()
@@ -391,11 +398,16 @@ class SportsLiveDualViewModel internal constructor(
         return true
     }
 
-    /** MENU held (#123): split ↔ big + small, remembered for the profile. Both players keep playing. */
+    /**
+     * MENU held (#123): split ↔ big + small, remembered for the profile. Both players keep playing. Into big + small
+     * the game with the sound goes large (F13): heard in the right pane, it trades places with the left one.
+     */
     fun toggleLayout() {
-        val layout = _state.value?.layout?.other ?: return
+        val state = _state.value ?: return
+        val layout = state.layout.other
         layoutChosen = true
         dispatch(DualAction.SetLayout(layout))
+        if (layout == DualLayout.BIG_SMALL && state.audibleSide == Side.RIGHT) swap()
         _layoutReady.value = true
         viewModelScope.launch { runCatching { saveLayout(layout) } }
     }
@@ -435,24 +447,29 @@ class SportsLiveDualViewModel internal constructor(
         val side = state.highlighted
         val current = state.pane(side).item
         val other = state.pane(side.other).item
-        SportsLiveTriedGames.shared.noteFailed(current)
+        triedGames.noteFailed(current)
+        val lineup = items.filterNot { it.sharesSourceWith(other) }
         val pick = SportsLiveSecondGame.nextAfterFailure(
             current = current,
-            lineup = items.filterNot { it.sharesSourceWith(other) },
+            lineup = lineup,
             scores = emptyMap(),
             finishedKeys = overNow(),
-            tried = SportsLiveTriedGames.shared.ids(),
+            tried = triedGames.ids(),
             // #147: ✓ ready first; ⚠ no working stream only when no other is left.
-            knownGood = { item ->
-                SportsLiveGameReadiness.shared.of(item) == SportsLiveReadyMark.READY || SportsLiveWorkingLinks.shared.goodStream(item.id) != null
-            },
-            noStream = SportsLiveGameReadiness.shared.marks.value.filterValues { it == SportsLiveReadyMark.NO_STREAM }.keys
+            knownGood = ::knownGood,
+            noStream = sportsLiveNoStreamIds(lineup, readiness, workingLinks),
+            // #184: never a game saved with Watch later.
+            savedForLater = savedForLater()
         ) ?: return false
         settle(current)
         forgetRecovery(pick)
         load(side, pick)
         return true
     }
+
+    /** ✓ ready (#147: a check, a race, a first frame) or a link known to play. */
+    private fun knownGood(item: SportsLiveItem): Boolean =
+        readiness.of(item) == SportsLiveReadyMark.READY || workingLinks.goodStream(item.id) != null
 
     /** Card keys of the games over now (F2): the probe's ended games, those known over when dual opened, and Live now's. */
     private fun overNow(): Set<String> = endedKeys() + finishedKeys + overKeys(items, scoresMode == ScoresMode.OFF)
@@ -520,17 +537,18 @@ class SportsLiveDualViewModel internal constructor(
         settle(item)
         val hasSound = state.audibleSide == side
         val other = state.pane(side.other).item
+        val lineup = items.filterNot { it.sharesSourceWith(other) }
         val next = SportsLiveNextGame.pick(
             ended = item,
-            lineup = items.filterNot { it.sharesSourceWith(other) },
+            lineup = lineup,
             scores = emptyMap(),
             finishedKeys = overNow(),
-            tried = SportsLiveTriedGames.shared.ids(),
-            // #183: a ✓ ready game first within each step; never one marked ⚠ no working stream.
-            knownGood = { game ->
-                SportsLiveGameReadiness.shared.of(game) == SportsLiveReadyMark.READY || SportsLiveWorkingLinks.shared.goodStream(game.id) != null
-            },
-            noStream = SportsLiveGameReadiness.shared.marks.value.filterValues { it == SportsLiveReadyMark.NO_STREAM }.keys
+            tried = triedGames.ids(),
+            // #183: a ✓ ready game first within each step; never one with no working stream (⚠, or every known link
+            // failed), nor one saved with Watch later (#184).
+            knownGood = ::knownGood,
+            noStream = sportsLiveNoStreamIds(lineup, readiness, workingLinks),
+            savedForLater = savedForLater()
         )
         val countdown = SportsLiveEndCountdown.runs(endAction, hasNext = next != null, hasSound = hasSound)
         val card = SportsLiveEndCard(

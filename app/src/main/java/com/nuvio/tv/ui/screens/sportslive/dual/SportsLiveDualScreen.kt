@@ -1,8 +1,9 @@
 package com.nuvio.tv.ui.screens.sportslive.dual
 
-import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.displayName
 import android.view.KeyEvent
+import com.nuvio.tv.core.sportslive.SportsLiveToastKind
+import com.nuvio.tv.core.sportslive.SportsLiveToasts
 import android.view.ViewGroup
 import androidx.activity.compose.BackHandler
 import androidx.annotation.OptIn
@@ -333,7 +334,13 @@ fun SportsLiveDualScreen(
                         if (native.repeatCount == 0) gameInfo.hide()
                         return@onKeyEvent true
                     }
-                    GameInfoKeyAction.PASS, GameInfoKeyAction.HIDE_AND_PASS -> Unit
+                    GameInfoKeyAction.PASS, GameInfoKeyAction.HIDE_AND_PASS -> if (native.keyCode == KeyEvent.KEYCODE_INFO) {
+                        // F13: a game with no ESPN match has no info to show; say so rather than do nothing.
+                        if (native.repeatCount == 0) {
+                            SportsLiveToasts.show(SportsLiveToastKind.INFO, context.getString(R.string.sports_live_dual_no_info))
+                        }
+                        return@onKeyEvent true
+                    }
                 }
                 // The highlighted ended pane's card: Up/Down move through its buttons, OK presses one.
                 if (endActions != null) {
@@ -564,7 +571,7 @@ private fun DualPaneView(
             val textColor = if (highlighted) SportsLiveTokens.Colors.TextPrimary else SportsLiveTokens.Colors.TextSecondary
             if (strip == null) {
                 Text(
-                    text = listOfNotNull(pane.item.displayName, SportsLiveTeams.sportLabelOf(pane.item)).joinToString(" · "),
+                    text = dualPaneCaption(pane.item),
                     style = MaterialTheme.typography.bodyMedium,
                     color = textColor,
                     maxLines = 1,

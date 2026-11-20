@@ -129,7 +129,7 @@ class SportsLiveDualLayoutTest {
     // Geometry (the 1080p TV: 960 x 540 dp)
 
     @Test
-    fun `split tiles are 912 px wide, 32 px apart, and a little above the middle`() {
+    fun `split tiles are 912 px wide, 32 px apart, and centred with their strips`() {
         val left = DualGeometry.tile(Side.LEFT, DualLayout.SPLIT, 960.dp, 540.dp)
         val right = DualGeometry.tile(Side.RIGHT, DualLayout.SPLIT, 960.dp, 540.dp)
         assertEquals(456f, left.width.value, 0.01f)
@@ -138,7 +138,8 @@ class SportsLiveDualLayoutTest {
         assertEquals(16f, left.start.value, 0.01f)
         assertEquals(960f, (right.end + 16.dp).value, 0.01f)
         assertEquals(left.top, right.top)
-        assertTrue(left.top.value < (540f - left.height.value) / 2f)
+        // F13: the tile and its strip sit in the middle, with no empty band below.
+        assertEquals(540f - (left.bottom + 32.dp).value, left.top.value, 0.01f)
         // The strip and the game info overlay fit under the tiles.
         assertTrue((left.bottom + 32.dp + 84.dp).value <= 540f)
     }
@@ -245,6 +246,28 @@ class SportsLiveDualLayoutTest {
         runCurrent()
         assertEquals(DualLayout.SPLIT, viewModel.state.value!!.layout)
         assertEquals(listOf(DualLayout.BIG_SMALL, DualLayout.SPLIT), saved)
+    }
+
+    @Test
+    fun `MENU held into big and small puts the game with the sound large`() = runTest(mainDispatcherRule.dispatcher) {
+        // F13: the sound was on the right pane; it must not stay on the small one.
+        val viewModel = newViewModel(loadLayout = { null })
+        runCurrent()
+        viewModel.highlight(Side.RIGHT)
+        viewModel.toggleLayout()
+        val big = viewModel.state.value!!
+        assertEquals(DualLayout.BIG_SMALL, big.layout)
+        assertEquals(b, big.left.item)
+        assertEquals(Side.LEFT, big.audibleSide)
+        // Back to split: nothing moves.
+        viewModel.toggleLayout()
+        assertEquals(b, viewModel.state.value!!.left.item)
+        assertEquals(DualLayout.SPLIT, viewModel.state.value!!.layout)
+        // The sound on the left already: the panes stay where they are.
+        val leftHeard = newViewModel(loadLayout = { null })
+        runCurrent()
+        leftHeard.toggleLayout()
+        assertEquals(a, leftHeard.state.value!!.left.item)
     }
 
     @Test

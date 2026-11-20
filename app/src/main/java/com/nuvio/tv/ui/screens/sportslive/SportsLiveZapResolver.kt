@@ -496,6 +496,7 @@ class SportsLiveZapResolver @Inject constructor(
                 currentCoroutineContext().ensureActive()
                 emptyList()
             }
+            workingLinks.noteLinks(item.id, streams)
             val fresh = workingLinks.withoutQuarantined(item.id, streams)
             preferredStream(fresh, settings, installedOrder.toSet())?.let { picked ->
                 // #147: the other sources that already answered race too, one link per addon.
@@ -645,14 +646,16 @@ class SportsLiveZapResolver @Inject constructor(
                 }
             }.first()
         }
-        // A timeout is inconclusive, so it is not reported; the probe would keep the old verdict anyway.
-        if (decision != null) last?.let { streamProbe.recordResult(item, it) }
-        (last as? NetworkResult.Success)?.data?.let(cooldown::noteNotices)
-        decision?.stream?.let { return SportsLiveLookup.Found(raced(item, it, fresh, settings)) }
         val came = StreamAutoPlaySelector.orderAddonStreams(
             (last as? NetworkResult.Success)?.data.orEmpty(),
             installedOrder
         ).flatMap { it.streams }.filterNot(::isNonStream)
+        // Every link found joins the game's known links: a next-game pick skips a game whose every link failed.
+        workingLinks.noteLinks(item.id, came)
+        // A timeout is inconclusive, so it is not reported; the probe would keep the old verdict anyway.
+        if (decision != null) last?.let { streamProbe.recordResult(item, it) }
+        (last as? NetworkResult.Success)?.data?.let(cooldown::noteNotices)
+        decision?.stream?.let { return SportsLiveLookup.Found(raced(item, it, fresh, settings)) }
         return if (came.isEmpty()) SportsLiveLookup.NothingFound else SportsLiveLookup.NonePlayable(came)
     }
 

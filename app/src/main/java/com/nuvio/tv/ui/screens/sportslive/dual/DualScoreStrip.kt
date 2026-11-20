@@ -1,5 +1,8 @@
 package com.nuvio.tv.ui.screens.sportslive.dual
 
+import com.nuvio.tv.core.sportslive.SportsLiveDisplayText
+import com.nuvio.tv.core.sportslive.SportsLiveTeams
+import com.nuvio.tv.core.sportslive.displayName
 import com.nuvio.tv.core.sportslive.scores.GameArt
 import com.nuvio.tv.core.sportslive.scores.GameArtTeam
 import com.nuvio.tv.core.sportslive.scores.ScoreChip
@@ -12,6 +15,20 @@ import com.nuvio.tv.domain.model.SportsLiveItem
 
 /** The dual screen's [com.nuvio.tv.core.sportslive.scores.LiveScoreTracking] screen id: its two panes' games (#124). */
 internal const val SCREEN_DUAL = "dual"
+
+/**
+ * A pane's caption when it has no score strip: "Clemson Tigers @ Duke Blue Devils · American Football". Words only
+ * (F13, the 10-ft rule): the addon's emoji and symbols ("⏱", "🏈") go from the name and the sport.
+ */
+internal fun dualPaneCaption(item: SportsLiveItem): String {
+    val name = DUAL_SYMBOLS.replace(item.displayName, " ").replace(DUAL_SPACES, " ").trim().ifEmpty { item.displayName }
+    val sport = SportsLiveDisplayText.label(SportsLiveTeams.sportLabelOf(item))
+    return listOfNotNull(name, sport).joinToString(" · ")
+}
+
+// Emoji and other pictographs, with their joiners and variation selectors.
+private val DUAL_SYMBOLS = Regex("""[\p{So}\p{Cs}\x{200D}\x{FE0E}\x{FE0F}\x{20E3}]+""")
+private val DUAL_SPACES = Regex("""\s+""")
 
 /**
  * The score strip under a dual pane (#124, the V2 dual board's ②): the two teams in the card's order with

@@ -13,7 +13,8 @@ data class DualTile(val start: Dp, val top: Dp, val width: Dp) {
 
 /**
  * Where the two tiles sit (#123), for the screen and for the alert cards placed over them, so both agree:
- * - split: two equal tiles, a little above the middle to leave [Size.DualInfoRoom] under the strips;
+ * - split: two equal tiles, centred with their strips (F13: no empty band below); the game info overlay still
+ *   fits in the room under a strip ([Size.DualInfoRoom]);
  * - big + small: [Side.LEFT] large (3/4 of the row) and [Side.RIGHT] small (1/4) in the top right corner,
  *   tops aligned, the pair centred with their strips. The tiles never overlap: each pane's video is its own
  *   SurfaceView, and the column under the small tile holds the game info overlay.
@@ -23,7 +24,7 @@ object DualGeometry {
     fun tile(side: Side, layout: DualLayout, width: Dp, height: Dp): DualTile = when (layout) {
         DualLayout.SPLIT -> {
             val tileWidth = (width - Size.DualSideMargin * 2 - Size.DualGap) / 2
-            val top = ((height - tileWidth * 9f / 16f - Size.DualCaption - Size.DualInfoRoom) / 2).coerceAtLeast(0.dp)
+            val top = ((height - tileWidth * 9f / 16f - Size.DualCaption) / 2).coerceAtLeast(0.dp)
             val start = if (side == Side.LEFT) Size.DualSideMargin else Size.DualSideMargin + tileWidth + Size.DualGap
             DualTile(start, top, tileWidth)
         }

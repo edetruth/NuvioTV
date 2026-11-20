@@ -8,7 +8,12 @@ import com.nuvio.tv.core.sportslive.scores.EspnLeagueMap
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.ScoreState
 import com.nuvio.tv.domain.model.SportsLiveItem
+import com.nuvio.tv.core.sportslive.SportsLiveGameReadiness
+import com.nuvio.tv.core.sportslive.SportsLiveWorkingLinks
+import com.nuvio.tv.core.sportslive.scores.ProtectedGame
+import com.nuvio.tv.core.sportslive.scores.SpoilerProtection
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -84,6 +89,65 @@ class SportsLiveNextGameTest {
         val lineup = listOf(nbaQuiet, ended, nbaBlowout)
         assertEquals(nbaQuiet, SportsLiveNextGame.pick(ended, lineup, scores, emptySet(), emptySet(), noStream = setOf(nbaBlowout.id)))
         assertNull(SportsLiveNextGame.pick(ended, lineup, scores, emptySet(), emptySet(), noStream = setOf(nbaBlowout.id, nbaQuiet.id)))
+    }
+
+    // #184: a game saved with Watch later is never a next-game pick, which would play it live.
+
+    private fun savedProtection(vararg events: ScoreSnapshot) =
+        SpoilerProtection(games = events.fold(emptyList<ProtectedGame>()) { games, event -> SpoilerProtection.saved(games, event, START) }, nowMs = START)
+
+    @Test
+    fun `a game saved for later is never Up next, even the big game in the same league`() {
+        val lineup = listOf(ended, nbaClose, nflOvertime)
+        assertEquals(nbaClose, SportsLiveNextGame.pick(ended, lineup, scores, emptySet(), emptySet()))
+        val saved = sportsLiveSavedForLater(savedProtection(nba[1]), scores)
+        assertEquals(nflOvertime, SportsLiveNextGame.pick(ended, lineup, scores, emptySet(), emptySet(), savedForLater = saved))
+        // Every live game saved: nothing is Up next.
+        val all = sportsLiveSavedForLater(savedProtection(nba[1], nfl), scores)
+        assertNull(SportsLiveNextGame.pick(ended, lineup, scores, emptySet(), emptySet(), savedForLater = all))
+    }
+
+    @Test
+    fun `a saved game with no score match is known by its two sides near its start`() {
+        val sameSides = nbaClose.copy(startMs = nba[1].startMs)
+        val saved = sportsLiveSavedForLater(savedProtection(nba[1]), emptyMap())
+        assertTrue(saved(sameSides))
+        assertFalse(saved(nbaQuiet))
+        assertEquals(nbaQuiet, SportsLiveNextGame.pick(ended, listOf(ended, sameSides, nbaQuiet), emptyMap(), emptySet(), emptySet(), savedForLater = saved))
+    }
+
+    @Test
+    fun `only Watch later keeps a game out, not my teams' protection nor a revealed game`() {
+        assertFalse(sportsLiveSavedForLater(SpoilerProtection(myTeams = true, nowMs = START), scores)(nbaClose))
+        val revealed = SpoilerProtection(
+            games = SpoilerProtection.ended(SpoilerProtection.saved(emptyList(), nba[1], START), nba[1], START),
+            nowMs = START
+        )
+        assertFalse(sportsLiveSavedForLater(revealed, scores)(nbaClose))
+    }
+
+    @Test
+    fun `next live game after a failure skips a game saved for later`() {
+        val lineup = listOf(ended, nbaClose, nbaQuiet)
+        assertEquals(nbaClose, SportsLiveSecondGame.nextAfterFailure(ended, lineup, scores, emptySet(), emptySet()))
+        val saved = sportsLiveSavedForLater(savedProtection(nba[1]), scores)
+        assertEquals(nbaQuiet, SportsLiveSecondGame.nextAfterFailure(ended, lineup, scores, emptySet(), emptySet(), savedForLater = saved))
+    }
+
+    @Test
+    fun `a game whose every known link failed counts as having no working stream`() {
+        val links = SportsLiveWorkingLinks(nowMs = { START })
+        val readiness = SportsLiveGameReadiness(nowMs = { START })
+        val only = dualStream("quiet-only")
+        links.noteLinks(nbaQuiet.id, listOf(only))
+        assertEquals(emptySet<String>(), sportsLiveNoStreamIds(listOf(nbaQuiet, nbaBlowout), readiness, links))
+        links.failed(nbaQuiet.id, only.url)
+        assertEquals(setOf(nbaQuiet.id), sportsLiveNoStreamIds(listOf(nbaQuiet, nbaBlowout), readiness, links))
+        // Up next goes past it: lineup order would pick it first.
+        val lineup = listOf(ended, nbaQuiet, nbaBlowout)
+        assertEquals(nbaQuiet, SportsLiveNextGame.pick(ended, lineup, scores, emptySet(), emptySet()))
+        val noStream = sportsLiveNoStreamIds(lineup, readiness, links)
+        assertEquals(nbaBlowout, SportsLiveNextGame.pick(ended, lineup, scores, emptySet(), emptySet(), noStream = noStream))
     }
 
     @Test

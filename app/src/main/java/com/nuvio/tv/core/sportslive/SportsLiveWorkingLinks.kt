@@ -17,7 +17,8 @@ import com.nuvio.tv.domain.model.Stream
  * - [order] puts good links first and quarantined ones last, so they play only when nothing else can.
  *
  * It also holds the stream the full player is playing for a game ([playing]), so dual screen can take
- * it over as is instead of looking it up again.
+ * it over as is instead of looking it up again, and the links lookups found for each game ([noteLinks]),
+ * so a next-game pick can skip a game whose every link failed ([allQuarantined]).
  */
 class SportsLiveWorkingLinks(
     internal val nowMs: () -> Long = { System.currentTimeMillis() },
@@ -31,6 +32,7 @@ class SportsLiveWorkingLinks(
         const val SLOW_START_QUARANTINE_MS = 2L * 60 * 1000
         const val STRIKE_WINDOW_MS = 10L * 60 * 1000
         private const val MAX_GAMES = 200
+        private const val MAX_KNOWN_LINKS = 200
 
         private val USER_INFO = Regex("^([A-Za-z][A-Za-z0-9+.-]*://)[^/?#@]*@")
 
@@ -70,6 +72,9 @@ class SportsLiveWorkingLinks(
         /** A quarantined link a lookup had to fall back to, and until when nothing better is expected. */
         var fallback: Stream? = null
         var fallbackUntilMs = 0L
+
+        /** Every link lookups found for the game, as link keys ([noteLinks]). */
+        val known = LinkedHashSet<String>()
     }
 
     // In access order: the game used least recently is dropped first.
@@ -252,6 +257,25 @@ class SportsLiveWorkingLinks(
     fun goodStream(gameKey: String): Stream? = synchronized(this) {
         val game = games[gameKey] ?: return null
         listOfNotNull(game.playing, game.launched).firstOrNull { isGood(gameKey, it.getStreamUrl()) }
+    }
+
+    /** Lookups found [streams] for [gameKey]: they join its known links (at most [MAX_KNOWN_LINKS]). */
+    fun noteLinks(gameKey: String, streams: List<Stream>) {
+        val keys = streams.mapNotNull { linkKey(it.getStreamUrl()) }
+        if (keys.isEmpty()) return
+        synchronized(this) {
+            val known = game(gameKey).known
+            keys.forEach { if (known.size < MAX_KNOWN_LINKS) known += it }
+        }
+    }
+
+    /**
+     * True when lookups found links for [gameKey] and every one of them is quarantined now: the game has no link
+     * left to try until a quarantine ends (live.19 re-check: Up next picked a game whose only link had failed).
+     */
+    fun allQuarantined(gameKey: String): Boolean = synchronized(this) {
+        val known = games[gameKey]?.known?.toList().orEmpty()
+        known.isNotEmpty() && known.all { isQuarantined(gameKey, it) }
     }
 
     /** [streams] without [gameKey]'s quarantined links. */

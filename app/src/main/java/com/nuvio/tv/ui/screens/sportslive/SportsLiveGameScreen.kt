@@ -313,7 +313,10 @@ fun SportsLiveGameScreen(
 }
 
 /** One side of the header: from the summary when loaded, else from the event as opened. */
-internal data class HeaderSide(val name: String, val logo: String?, val record: String?, val score: Int?, val rank: Int? = null)
+internal data class HeaderSide(val name: String, val logo: String?, val record: String?, val score: Int?, val rank: Int? = null) {
+    /** The record the header shows: none while the score is hidden (#184), as a record after the game tells how it ended. */
+    fun shownRecord(showsScore: Boolean): String? = record.takeIf { showsScore }
+}
 
 internal fun headerSides(summary: GameSummary?, event: ScoreSnapshot): Pair<HeaderSide, HeaderSide> {
     if (summary != null) {
@@ -418,9 +421,9 @@ private fun HeroTeam(side: HeaderSide, logo: Painter?, logoShown: Boolean, showR
             )
         }
         // The record after the game would tell how it ended: hidden with the score.
-        if (showRecord && side.record != null) {
+        side.shownRecord(showRecord)?.let { record ->
             Text(
-                side.record,
+                record,
                 style = SportsLiveTokens.style(SportsLiveTokens.Type.Meta).copy(fontFeatureSettings = "tnum"),
                 color = Colors.TextMuted,
                 maxLines = 1

@@ -89,6 +89,24 @@ class SportsLiveGameSpoilerTest {
     }
 
     @Test
+    fun `the header shows no team records while the score is hidden`() = runTest(mainDispatcherRule.dispatcher) {
+        // #184: a record after the game tells how it ended.
+        val withRecords = summary.copy(away = summary.away.copy(record = "2-1-7"), home = summary.home.copy(record = "5-3-2"))
+        protection.value = SpoilerProtection(SpoilerProtection.saved(emptyList(), game, now), nowMs = now)
+        val vm = viewModel(SportsLiveGameRequest(protection.value.stamp(game), revealed = true))
+        vm.setVisible(true)
+        runCurrent()
+        val (away, home) = headerSides(withRecords, game)
+        assertFalse(vm.uiState.value.showsScore)
+        assertEquals(listOf(null, null), listOf(away, home).map { it.shownRecord(vm.uiState.value.showsScore) })
+
+        vm.reveal()
+        runCurrent()
+        assertTrue(vm.uiState.value.showsScore)
+        assertEquals(listOf("2-1-7", "5-3-2"), listOf(away, home).map { it.shownRecord(vm.uiState.value.showsScore) })
+    }
+
+    @Test
     fun `saving a game while its page is open hides it at once`() = runTest(mainDispatcherRule.dispatcher) {
         val vm = viewModel(SportsLiveGameRequest(game, revealed = true))
         runCurrent()

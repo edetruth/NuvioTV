@@ -42,6 +42,8 @@ import com.nuvio.tv.core.sportslive.SportsLiveGameWatch
 import com.nuvio.tv.core.sportslive.alerts.GameReminders
 import com.nuvio.tv.core.sportslive.alerts.SportsLiveAlerts
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveNextGame
+import com.nuvio.tv.ui.screens.sportslive.dual.sportsLiveNoStreamIds
+import com.nuvio.tv.ui.screens.sportslive.dual.sportsLiveSavedForLater
 import com.nuvio.tv.core.sportslive.scores.ScoreChips
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.SportsLiveEndedGames
@@ -576,11 +578,12 @@ class SportsLiveZapViewModel internal constructor(
         val scores = liveScores.scores.value
         val nowMs = System.currentTimeMillis()
         val finished = overKeys(lineupItems, scores, nowMs)
-        // #183: a ✓ ready game first within each step; never one marked ⚠ no working stream.
+        // #183: a ✓ ready game first within each step; never one with no working stream, nor one saved for later (#184).
         val next = SportsLiveNextGame.pick(
             item, lineupItems, scores, finished, tried.ids(),
             knownGood = { game -> readiness.of(game) == SportsLiveReadyMark.READY || workingLinks.goodStream(game.id) != null },
-            noStream = noStreamIds()
+            noStream = noStreamIds(lineupItems),
+            savedForLater = sportsLiveSavedForLater(liveScores.protection.value, scores)
         ).takeUnless { gameWatch.debugNoNext }
         val upcoming = if (next != null) null else upcomingGame(nowMs)
         val snapshot = ScoreChips.matchedEvent(item, scores[item.streamKey]) ?: gameWatch.snapshot(item.id)
@@ -754,7 +757,9 @@ class SportsLiveZapViewModel internal constructor(
             tried = tried.ids(),
             // #147: ✓ ready (a check, a race, a first frame) or a link that played; ⚠ only when no other is left.
             knownGood = { item -> readiness.of(item) == SportsLiveReadyMark.READY || workingLinks.goodStream(item.id) != null },
-            noStream = noStreamIds()
+            noStream = noStreamIds(lineupItems),
+            // #184: never a game saved with Watch later, which would play live.
+            savedForLater = sportsLiveSavedForLater(liveScores.protection.value, scores)
         )
         if (next == null) {
             _nextExhausted.value = true
@@ -775,8 +780,8 @@ class SportsLiveZapViewModel internal constructor(
             SportsLiveEndedGames.shared.overSourceKeys(lineupItems, scores, nowMs, canEstimate)
     }
 
-    /** Game ids marked ⚠ no working stream (#147). */
-    private fun noStreamIds(): Set<String> = readiness.marks.value.filterValues { it == SportsLiveReadyMark.NO_STREAM }.keys
+    /** Game ids marked ⚠ no working stream (#147), and those of [lineupItems] whose every known link failed this session. */
+    private fun noStreamIds(lineupItems: List<SportsLiveItem>): Set<String> = sportsLiveNoStreamIds(lineupItems, readiness, workingLinks)
 
     /** Try again on "No other live game is playing right now": the tried games may be tried again. */
     internal fun retryNextLiveGame(): Boolean {

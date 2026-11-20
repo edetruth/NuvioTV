@@ -8,6 +8,7 @@ import com.nuvio.tv.core.sportslive.SportsLiveGameWatch
 import com.nuvio.tv.core.sportslive.SportsLiveRecoveryBudget
 import com.nuvio.tv.core.sportslive.SportsLiveStreamHealth
 import com.nuvio.tv.core.sportslive.SportsLiveTriedGames
+import com.nuvio.tv.core.sportslive.SportsLiveWorkingLinks
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveTab
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -109,6 +110,58 @@ class SportsLiveDualGameEndTest {
         assertEquals(PaneStatus.Ended, viewModel.state.value!!.left.status)
         assertEquals(c, viewModel.state.value!!.left.end!!.next)
     }
+
+    @Test
+    fun `Up next and Next live game in a pane never pick a game saved for later`() = runTest(mainDispatcherRule.dispatcher) {
+        // #184: b was saved with Watch later; playing it would show it live.
+        val viewModel = SportsLiveDualViewModel(
+            resolve = { item -> dualStream(item.id) },
+            endedKeys = { emptySet() },
+            session = SportsLiveDualSession(a, d, listOf(a, b, c, d), null, SportsLiveTab.LIVE_NOW),
+            recoveryBudget = SportsLiveRecoveryBudget(),
+            gameWatch = SportsLiveGameWatch(SportsLiveEndedGames(), nowMs = { now }),
+            endActions = flowOf(SportsLiveGameEndAction.MOVE),
+            savedForLater = { { it == b } }
+        )
+        runCurrent()
+        viewModel.playing()
+        viewModel.onUnhealthy(a, SportsLiveStreamHealth.Problem.UNEXPECTED_END)
+        assertEquals(c, viewModel.state.value!!.left.end!!.next)
+
+        // The pane's Next live game skips it too.
+        val other = newViewModelWith(savedForLater = { { it == b } })
+        runCurrent()
+        assertTrue(other.nextLiveGame())
+        runCurrent()
+        assertEquals(c, other.state.value!!.left.item)
+    }
+
+    @Test
+    fun `Up next in a pane skips a game whose every known link failed`() = runTest(mainDispatcherRule.dispatcher) {
+        val links = SportsLiveWorkingLinks(nowMs = { now })
+        val dead = dualStream("b-only")
+        links.noteLinks(b.id, listOf(dead))
+        links.failed(b.id, dead.url)
+        val viewModel = newViewModelWith(links = links)
+        runCurrent()
+        viewModel.playing()
+        viewModel.onUnhealthy(a, SportsLiveStreamHealth.Problem.UNEXPECTED_END)
+        assertEquals(c, viewModel.state.value!!.left.end!!.next)
+    }
+
+    private fun newViewModelWith(
+        savedForLater: () -> (SportsLiveItem) -> Boolean = { { false } },
+        links: SportsLiveWorkingLinks = SportsLiveWorkingLinks(nowMs = { now })
+    ) = SportsLiveDualViewModel(
+        resolve = { item -> dualStream(item.id) },
+        endedKeys = { emptySet() },
+        session = SportsLiveDualSession(a, d, listOf(a, b, c, d), null, SportsLiveTab.LIVE_NOW),
+        recoveryBudget = SportsLiveRecoveryBudget(),
+        gameWatch = SportsLiveGameWatch(SportsLiveEndedGames(), nowMs = { now }),
+        endActions = flowOf(SportsLiveGameEndAction.MOVE),
+        workingLinks = links,
+        savedForLater = savedForLater
+    )
 
     @Test
     fun `a swap during the countdown still moves the ended game's pane, not the other one`() =

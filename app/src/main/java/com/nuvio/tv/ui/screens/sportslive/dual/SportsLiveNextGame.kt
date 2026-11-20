@@ -1,8 +1,12 @@
 package com.nuvio.tv.ui.screens.sportslive.dual
 
+import com.nuvio.tv.core.sportslive.SportsLiveGameReadiness
+import com.nuvio.tv.core.sportslive.SportsLiveReadyMark
+import com.nuvio.tv.core.sportslive.SportsLiveWorkingLinks
 import com.nuvio.tv.core.sportslive.scores.LiveExcitement
 import com.nuvio.tv.core.sportslive.scores.ScoreChips
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
+import com.nuvio.tv.core.sportslive.scores.SpoilerProtection
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveKind
 
@@ -17,9 +21,10 @@ import com.nuvio.tv.domain.model.SportsLiveKind
  * "Big" is a live game the excitement scorer (#43, on the score-delayed snapshot) rates at least
  * [BIG_GAME_MIN]; the strongest wins, ties keep lineup order. Within each step a game ✓ ready ([knownGood],
  * #147) goes first (#183). Never a game over or with no working stream ([finishedKeys]: Live now's ended and
- * "Probably ended" games too; [noStream]: game ids marked ⚠ no working stream), one tried and failed this
- * session ([tried], as "Next live game" never offers one), a channel, or one sharing a source with the game
- * that ended. Null: nothing else is live.
+ * "Probably ended" games too; [noStream]: game ids marked ⚠ no working stream, or whose every known link failed,
+ * [sportsLiveNoStreamIds]), one tried and failed this session ([tried], as "Next live game" never offers one), a
+ * game saved with Watch later ([savedForLater], #184: playing it would show it live), a channel, or one sharing
+ * a source with the game that ended. Null: nothing else is live.
  */
 internal object SportsLiveNextGame {
     /** A live game rated at least this is a big game (a close game past half way rates about 2). */
@@ -32,10 +37,12 @@ internal object SportsLiveNextGame {
         finishedKeys: Set<String>,
         tried: Set<String>,
         knownGood: (SportsLiveItem) -> Boolean = { false },
-        noStream: Set<String> = emptySet()
+        noStream: Set<String> = emptySet(),
+        savedForLater: (SportsLiveItem) -> Boolean = { false }
     ): SportsLiveItem? {
         val left = SportsLiveSecondGame.candidates(ended, lineup, scores, finishedKeys)
             .filter { item -> item.id !in tried && item.alternates.none { it.id in tried } && item.id !in noStream }
+            .filterNot(savedForLater)
         if (left.isEmpty()) return null
         val forward = forwardFrom(ended, lineup, left)
         forward.filter { it.followed }.readyFirst(knownGood).firstOrNull()?.let { return it }
@@ -88,3 +95,32 @@ internal object SportsLiveNextGame {
         }
     }
 }
+
+/**
+ * The games saved with Watch later (#151), as every next-game pick reads them (#184): [item] is one when its ESPN
+ * match in [scores] (or a merged source's) is a game [protection] holds saved, else when it names the same two
+ * sides near a saved game's start ([SpoilerProtection.sameGame]). Only Watch later counts: "my teams" protection
+ * hides a score but never keeps a live game from playing.
+ */
+internal fun sportsLiveSavedForLater(protection: SpoilerProtection, scores: Map<String, ScoreSnapshot>): (SportsLiveItem) -> Boolean {
+    val saved = protection.saved
+    if (saved.isEmpty()) return { false }
+    val ids = saved.mapTo(HashSet()) { it.eventId }
+    return { item ->
+        (listOf(item) + item.alternates).any { source ->
+            ScoreChips.matchedEvent(source, scores[source.streamKey])?.eventId?.let { it in ids } == true
+        } || saved.any { SpoilerProtection.sameGame(it, item) }
+    }
+}
+
+/**
+ * Game ids with no working stream now: those marked ⚠ no working stream ([readiness], #147), and those of [items]
+ * whose every link a lookup found failed this session and is still quarantined ([SportsLiveWorkingLinks.allQuarantined]).
+ */
+internal fun sportsLiveNoStreamIds(
+    items: List<SportsLiveItem>,
+    readiness: SportsLiveGameReadiness,
+    workingLinks: SportsLiveWorkingLinks
+): Set<String> =
+    readiness.marks.value.filterValues { it == SportsLiveReadyMark.NO_STREAM }.keys +
+        items.filter { workingLinks.allQuarantined(it.id) }.map { it.id }

@@ -15,6 +15,9 @@ import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.ScoreState
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.core.sportslive.scores.SpoilerProtection
+import com.nuvio.tv.core.sportslive.scores.ProtectedGame
+import com.nuvio.tv.core.sportslive.SportsLiveTriedGames
+import com.nuvio.tv.core.sportslive.SportsLiveWorkingLinks
 import com.nuvio.tv.domain.model.ContentType
 import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.domain.model.PosterShape
@@ -88,7 +91,9 @@ class SportsLiveZapViewModelTest {
         playing: SportsLiveItem,
         others: List<SportsLiveItem>,
         started: Boolean = true,
-        watch: SportsLiveGameWatch = SportsLiveGameWatch()
+        watch: SportsLiveGameWatch = SportsLiveGameWatch(),
+        protection: SpoilerProtection = SpoilerProtection(),
+        links: SportsLiveWorkingLinks = SportsLiveWorkingLinks.shared
     ): SportsLiveZapViewModel {
         SportsLiveZapSessions.start(
             SportsLiveZapSession.of(listOf(playing) + others, playing.streamKey, SportsLiveTab.LIVE_NOW, null, returnToHomeOnBack = false)!!
@@ -104,11 +109,11 @@ class SportsLiveZapViewModelTest {
         val liveScores = mockk<LiveScoresRepository>(relaxed = true)
         every { liveScores.scores } returns scores
         every { liveScores.mode } returns flowOf(mode)
-        every { liveScores.protection } returns MutableStateFlow(SpoilerProtection())
+        every { liveScores.protection } returns MutableStateFlow(protection)
         every { liveScores.unmatched } returns MutableStateFlow(emptySet())
         return SportsLiveZapViewModel(
             SavedStateHandle(mapOf("contentId" to playing.id)), resolver, debrid, profiles, repo, liveScores,
-            mainDispatcherRule.dispatcher, gameWatch = watch
+            mainDispatcherRule.dispatcher, gameWatch = watch, workingLinks = links
         ).also { it.onPlayerStarted(started) }
     }
 
@@ -213,6 +218,54 @@ class SportsLiveZapViewModelTest {
         watch.reportEnd(pacers.id, GameEndReason.STREAM_ENDED)
         runCurrent()
         assertEquals(hawks, viewModel.endCard.value!!.next)
+    }
+
+    @Test
+    fun `Up next and Next live game never pick a game saved with Watch later`() = runTest(mainDispatcherRule.dispatcher) {
+        // #184: playing it would show it live. Hawks @ Spurs was saved for later (no ESPN match here: by its sides).
+        val pacers = game("Indiana Pacers at Philadelphia 76ers")
+        val hawks = game("Atlanta Hawks at San Antonio Spurs")
+        val celtics = game("Boston Celtics at New York Knicks")
+        val saved = ProtectedGame("401", home = "San Antonio Spurs", away = "Atlanta Hawks", startMs = null, savedAtMs = 0L)
+        val watch = SportsLiveGameWatch()
+        val viewModel = fullTimeViewModel(
+            MutableStateFlow(emptyMap()), ScoresMode.SHOW, pacers, listOf(hawks, celtics), watch = watch,
+            protection = SpoilerProtection(games = listOf(saved), nowMs = 0L)
+        )
+        val events = mutableListOf<SportsLiveZapEvent>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.events.collect { events += it } }
+        runCurrent()
+        watch.reportEnd(pacers.id, GameEndReason.STREAM_ENDED)
+        runCurrent()
+        assertEquals(celtics, viewModel.endCard.value!!.next)
+
+        // The error page's Next live game skips it too.
+        viewModel.dismissEndCard()
+        try {
+            assertTrue(viewModel.nextLiveGameAfterFailure())
+            advanceUntilIdle()
+            assertEquals(celtics, (events.single() as SportsLiveZapEvent.Navigate).target.item)
+        } finally {
+            SportsLiveTriedGames.shared.clear()
+        }
+    }
+
+    @Test
+    fun `Up next skips a game whose every known link failed this session`() = runTest(mainDispatcherRule.dispatcher) {
+        // live.19 re-check: Up next picked a game whose only link had already failed.
+        val pacers = game("Indiana Pacers at Philadelphia 76ers")
+        val hawks = game("Atlanta Hawks at San Antonio Spurs")
+        val celtics = game("Boston Celtics at New York Knicks")
+        val links = SportsLiveWorkingLinks()
+        val dead = STREAM.copy(url = "https://example.invalid/hawks.m3u8")
+        links.noteLinks(hawks.id, listOf(dead))
+        links.failed(hawks.id, dead.url)
+        val watch = SportsLiveGameWatch()
+        val viewModel = fullTimeViewModel(MutableStateFlow(emptyMap()), ScoresMode.SHOW, pacers, listOf(hawks, celtics), watch = watch, links = links)
+        runCurrent()
+        watch.reportEnd(pacers.id, GameEndReason.STREAM_ENDED)
+        runCurrent()
+        assertEquals(celtics, viewModel.endCard.value!!.next)
     }
 
     @Test
