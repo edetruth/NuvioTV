@@ -128,4 +128,27 @@ class TeamLogosTest {
         // A card naming the NBA never reads college logos.
         assertNull(book.forCard(item("Miami vs Duke", "NBA"), "Miami", "Duke"))
     }
+
+    @Test
+    fun `a team's real ESPN code is found by name in any league, only when all agree (BUG-C follow-up)`() {
+        val directory = TeamDirectory()
+        val book = TeamLogoBook(active = true, directory = directory)
+        val ger = EspnLeague("soccer", "ger.1")
+        book.learn(ger, team("132", "Bayern Munich", "BAY", "$logo#bay", short = "Bayern"))
+        assertEquals("BAY", book.abbreviationAnywhere("Bayern Munich"))
+        assertEquals("BAY", book.abbreviationAnywhere("Bayern"))
+        // Two teams of one name with one code: that code; with two codes: none.
+        book.learn(EspnLeagueMap.SOCCER_ALL, team("359", "Arsenal", "ARS", "$logo#eng"))
+        book.learn(EspnLeagueMap.SOCCER_ALL, team("2", "Arsenal de Sarandi", "ARS", "$logo#arg", short = "Arsenal"))
+        assertEquals("ARS", book.abbreviationAnywhere("Arsenal"))
+        book.learn(EspnLeagueMap.NBA, team("9", "Real Madrid", "RMB", "$logo#rmb"))
+        book.learn(EspnLeagueMap.SOCCER_ALL, team("86", "Real Madrid", "RMA", "$logo#rma"))
+        assertNull(book.abbreviationAnywhere("Real Madrid"))
+        // Not learned from a feed: the directory's lists.
+        directory.put(EspnLeague("soccer", "esp.2"), listOf(
+            DirectoryTeam("17534", "Leganés", "Leganés", "LEG", "Leganés", "Leganés", "https://a.espncdn.com/i/teamlogos/soccer/500/17534.png")
+        ), fetchedAt = 0L)
+        assertEquals("LEG", book.abbreviationAnywhere("Leganés"))
+        assertNull(book.abbreviationAnywhere("Nowhere United"))
+    }
 }

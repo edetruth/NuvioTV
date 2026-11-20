@@ -131,6 +131,21 @@ class TeamDirectory(
         leagues.firstNotNullOfOrNull { league -> resolve(league, side)?.abbreviation?.trim()?.takeIf(String::isNotEmpty) }
     }
 
+    /**
+     * [side]'s abbreviation in any loaded league (BUG-C follow-up: a card whose own league is not known): only when
+     * every league that resolves it agrees on one; null otherwise. Kept per side and directory generation.
+     */
+    fun abbreviationAnywhere(side: String): String? = abbreviationsAnywhere(side to generation)
+
+    private val abbreviationsAnywhere = Memo<Pair<String, Long>, String?>(HOLDING_MEMO) { (side, _) ->
+        val loaded = synchronized(this) { leagues.keys.toList() }.mapNotNull(::leagueOf)
+        loaded.mapNotNull { league -> resolve(league, side) }
+            .map { it.abbreviation?.trim().orEmpty() }
+            .distinct()
+            .singleOrNull()
+            ?.takeIf(String::isNotEmpty)
+    }
+
     /** True when [text] is a listed team's location ("Stetson", "Southern Utah") in a loaded league: a place, not a nickname. */
     fun isLocation(text: String): Boolean = text.trim().lowercase() in locations(generation)
 

@@ -53,6 +53,7 @@ import com.nuvio.tv.core.sportslive.SportsLiveTags
 import com.nuvio.tv.core.sportslive.SportsLiveDisplayText
 import com.nuvio.tv.core.sportslive.scores.GameArtTeam
 import com.nuvio.tv.core.sportslive.scores.TeamDirectory
+import com.nuvio.tv.core.sportslive.scores.TeamLogoBook
 import com.nuvio.tv.core.sportslive.scores.ScoreChip
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveFocus
@@ -227,11 +228,15 @@ private val LEADING_SYMBOLS = Regex("""^[^\p{L}\p{N}(]+""")
 /**
  * The names an unmatched side may take on a panel line, longest first (live.20 F5): the side as given, then, for a
  * one-on-one sport ([individual]: tennis, fights, darts…), each player's last name ("Neal Skupski / Joe Salisbury" →
- * "Skupski / Salisbury", "Novak Djokovic" → "Djokovic"). The line steps down only when the longer one does not fit.
+ * "Skupski / Salisbury", "Novak Djokovic" → "Djokovic"); a team's code: ESPN's real one when known ([code], BUG-C
+ * follow-up), else one derived from its name ([panelShortCode]). The line steps down only when the longer one does not fit.
  */
-internal fun panelSideChoices(name: String, individual: Boolean): List<String> {
+internal fun panelSideChoices(name: String, individual: Boolean, code: String? = null): List<String> {
     val full = name.trim()
-    if (!individual) return listOf(full, panelShortCode(full)).filter { it.isNotEmpty() }.distinct()
+    if (!individual) {
+        val short = code?.trim()?.takeIf { it.isNotEmpty() } ?: panelShortCode(full)
+        return listOf(full, short).filter { it.isNotEmpty() }.distinct()
+    }
     val players = full.split(PAIR_SEPARATOR).map { it.trim() }.filter { it.isNotEmpty() }
     val surnames = players.joinToString(" / ") { it.split(WHITESPACE).last() }
     return listOf(full, surnames).filter { it.isNotEmpty() }.distinct()
@@ -523,10 +528,13 @@ private fun RowScope.GameLine(row: ScoreboardRow, line: PanelLine, individual: B
     // score is never cut ([panelSidesFit]: it goes whole first).
     val matched = row.art?.let { !it.first.unmatched && !it.second.unmatched } == true
     if (logos != null) TeamLogoSlot(logos.first, logos.shown, Size.PanelLogo)
+    // ESPN's real codes for the names, when the app knows the teams anywhere (BUG-C follow-up): before derived ones.
+    val firstCode = remember(line.first) { line.first?.let(TeamLogoBook.shared::abbreviationAnywhere) }
+    val secondCode = remember(line.second) { line.second?.let(TeamLogoBook.shared::abbreviationAnywhere) }
     PanelSides(
-        first = { SideText(line.first.orEmpty(), individual && !matched, null) },
+        first = { SideText(line.first.orEmpty(), individual && !matched, null, firstCode) },
         middle = { LineMiddle(line.scores) },
-        second = { SideText(line.second.orEmpty(), individual && !matched, null) },
+        second = { SideText(line.second.orEmpty(), individual && !matched, null, secondCode) },
         modifier = Modifier.weight(1f, fill = false)
     )
     if (logos != null) TeamLogoSlot(logos.second, logos.shown, Size.PanelLogo)
@@ -563,8 +571,8 @@ private fun LineMiddle(scores: ScoreboardScores) {
  * shortest cut with an ellipsis; [onOverflow] is told once even the shortest does not fit. Taken afresh per name.
  */
 @Composable
-private fun SideText(name: String, individual: Boolean, onOverflow: (() -> Unit)?) {
-    val choices = remember(name, individual) { panelSideChoices(name, individual) }
+private fun SideText(name: String, individual: Boolean, onOverflow: (() -> Unit)?, code: String? = null) {
+    val choices = remember(name, individual, code) { panelSideChoices(name, individual, code) }
     var level by remember(choices) { mutableIntStateOf(0) }
     LineText(
         choices[level.coerceAtMost(choices.lastIndex)],

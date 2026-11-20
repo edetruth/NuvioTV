@@ -473,6 +473,8 @@ class SportsLiveSlimPanelTest {
         // A side that is already a code steps nowhere.
         assertEquals(listOf("ORL"), panelSideChoices("ORL", individual = false))
         assertEquals(listOf("Leganes", "LEG"), panelSideChoices("Leganes", individual = false))
+        // ESPN's real code, when the app knows the team, before a derived one.
+        assertEquals(listOf("Bayern Munich", "BAY"), panelSideChoices("Bayern Munich", individual = false, code = "BAY"))
     }
 
     @Test

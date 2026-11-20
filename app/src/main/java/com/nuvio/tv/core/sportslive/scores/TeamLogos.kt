@@ -89,6 +89,22 @@ class TeamLogoBook(
     }
 
     /**
+     * ESPN's real abbreviation for [cardSide] in any league ("Bayern Munich" -> "BAY"), for a tight panel line when the
+     * card's own league resolved nothing (BUG-C follow-up): from the teams learned from score feeds, else the
+     * [directory]'s team lists. Only when every team answering to that name agrees on one; null otherwise. Not a
+     * spoiler, so read under any Scores setting.
+     */
+    fun abbreviationAnywhere(cardSide: String): String? {
+        val keys = sideKeys(cardSide)
+        if (keys.isEmpty()) return null
+        val learned = synchronized(this) {
+            entries.values.filter { team -> team.names.any { it in keys } }.map { it.known.abbreviation }
+        }
+        if (learned.isNotEmpty()) return learned.distinct().singleOrNull()?.takeIf { !it.isNullOrBlank() }
+        return directory.abbreviationAnywhere(cardSide)
+    }
+
+    /**
      * Both sides' known teams for [item], whose sides are [first] and [second]: only when exactly one
      * of the leagues the card can be on ([EspnLeagueMap], with its college fallback) resolves both.
      * Otherwise the [directory] (#82), under its own exactly-one rule, so logos never wait for a match.
