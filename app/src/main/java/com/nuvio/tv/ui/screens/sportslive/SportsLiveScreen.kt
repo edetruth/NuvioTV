@@ -342,6 +342,18 @@ fun SportsLiveScreen(
         )
     }
 
+    // Upcoming's one-time tip (live.20): the remote's keys for time slots and days, once per profile.
+    val upcomingTip by viewModel.upcomingTip.collectAsStateWithLifecycle()
+    LaunchedEffect(upcomingTip) {
+        if (!upcomingTip) return@LaunchedEffect
+        SportsLiveToasts.show(
+            SportsLiveToastKind.INFO,
+            context.getString(R.string.sports_live_upcoming_tip_title),
+            context.getString(R.string.sports_live_upcoming_tip_line)
+        )
+        viewModel.onUpcomingTipShown()
+    }
+
     val showNoAddons = !uiState.hasClaimedCatalogs && !uiState.isLoading && uiState.lastRefreshedMs != null
     when {
         showNoAddons -> NoAddonsState(onOpenAddons)

@@ -545,6 +545,31 @@ class SportsLiveViewModelTest {
     }
 
     @Test
+    fun `the first time Upcoming opens its keys tip is due once`() = runTest {
+        var seen = false
+        val viewModel = SportsLiveViewModel(
+            repo,
+            claimUpcomingTip = { (!seen).also { seen = true } },
+            computeDispatcher = compute
+        )
+        viewModel.nowMs = { NOW }
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+        assertFalse(viewModel.upcomingTip.value)
+
+        viewModel.selectTab(SportsLiveTab.UPCOMING)
+        advanceUntilIdle()
+        assertTrue(viewModel.upcomingTip.value)
+        viewModel.onUpcomingTipShown()
+        assertFalse(viewModel.upcomingTip.value)
+
+        viewModel.selectTab(SportsLiveTab.LIVE_NOW)
+        viewModel.selectTab(SportsLiveTab.UPCOMING)
+        advanceUntilIdle()
+        assertFalse(viewModel.upcomingTip.value)
+    }
+
+    @Test
     fun `focus returning to the selected tab keeps the selection (F23)`() = runTest {
         nextLoad = load(listOf(channel("uk1", "UK"), channel("ca1", "CA"), channel("us1", "US")))
         val viewModel = newViewModel()

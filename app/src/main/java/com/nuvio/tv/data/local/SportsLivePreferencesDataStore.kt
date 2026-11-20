@@ -78,6 +78,8 @@ class SportsLivePreferencesDataStore @Inject constructor(
     private val dualHintShownKey = intPreferencesKey("sports_live_dual_hint_shown")
     private val dualLayoutKey = stringPreferencesKey("sports_live_dual_layout")
     private val newSportsHintSeenKey = booleanPreferencesKey("sports_live_new_sports_hint_seen")
+    // live.20: Upcoming's one-time tip on its remote keys (time slots, days).
+    private val upcomingKeysTipSeenKey = booleanPreferencesKey("sports_live_upcoming_keys_tip_seen")
     // First-run setup (#134 phase 7): set once the profile has had its chance at it (shown, or set up already).
     private val setupDoneKey = booleanPreferencesKey("sports_live_setup_done")
     private val scoresModeKey = stringPreferencesKey("sports_live_scores_mode")
@@ -414,6 +416,17 @@ class SportsLivePreferencesDataStore @Inject constructor(
 
     suspend fun setDualLayout(name: String) {
         store().edit { prefs -> prefs[dualLayoutKey] = name }
+    }
+
+    /** Called when Upcoming opens: true the first time only for the profile (live.20's keys tip); seen from then on. */
+    suspend fun claimUpcomingKeysTip(): Boolean {
+        var show = false
+        store().edit { prefs ->
+            if (prefs[upcomingKeysTipSeenKey] == true) return@edit
+            show = true
+            prefs[upcomingKeysTipSeenKey] = true
+        }
+        return show
     }
 
     /**

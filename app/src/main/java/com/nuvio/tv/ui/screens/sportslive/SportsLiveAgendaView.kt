@@ -422,7 +422,7 @@ internal fun SportsLiveUpcomingStage(
                 Text(
                     text = stringResource(R.string.sports_live_no_streams_now),
                     style = SportsLiveTokens.style(SportsLiveTokens.Type.Meta),
-                    color = Colors.TextSecondary,
+                    color = Colors.TextMuted,
                     maxLines = 1
                 )
             }

@@ -130,6 +130,8 @@ class SportsLiveViewModel internal constructor(
     standings: Flow<Map<EspnLeague, Map<String, TeamStanding>>> = flowOf(emptyMap()),
     /** Asks for [EspnLeague]s' standings (fetched at most every few hours; the precision rule is applied here). */
     private val ensureStandings: (Collection<EspnLeague>) -> Unit = {},
+    /** True the first time the profile opens Upcoming (live.20's keys tip), marking it seen. */
+    private val claimUpcomingTip: suspend () -> Boolean = { false },
     // Where the list is bucketed and pinned, and the boards built; tests pass their dispatcher, so it runs in virtual time.
     private val computeDispatcher: CoroutineDispatcher
 ) : ViewModel() {
@@ -167,6 +169,7 @@ class SportsLiveViewModel internal constructor(
         },
         // V2 (#132): one view per tab, in start order; the View menu and Sort are gone with their stored choices.
         dropRetiredPrefs = prefs::dropRetiredKeys,
+        claimUpcomingTip = prefs::claimUpcomingKeysTip,
         scoresMode = liveScores.mode,
         linkChecker = SportsLiveLinkChecker(fetch = manifestFetcher::fetch, verdicts = SportsLiveLinkVerdicts.shared),
         // Only a fresh resolve (the resolve cache's, at most five minutes old): never an older link that
@@ -373,6 +376,15 @@ class SportsLiveViewModel internal constructor(
     /** The details pane's hover preview. */
     val preview: StateFlow<SportsLivePreviewState> = previewController.state
 
+    private val _upcomingTip = MutableStateFlow(false)
+
+    /** Upcoming's one-time keys tip is due (live.20): the screen shows it, then calls [onUpcomingTipShown]. */
+    val upcomingTip: StateFlow<Boolean> = _upcomingTip
+
+    fun onUpcomingTipShown() {
+        _upcomingTip.value = false
+    }
+
     init {
         fullLoadJob = launchFullLoad(force = false)
         // An active mini player counts as the setting off; once it stops, a fresh settle starts.
@@ -424,6 +436,7 @@ class SportsLiveViewModel internal constructor(
         // stage jumped to the addon's first item).
         if (!changed) return
         selectionState.update { it.copy(tab = tab, filter = remembered, itemId = null, browsing = false) }
+        if (tab == SportsLiveTab.UPCOMING) viewModelScope.launch { if (claimUpcomingTip()) _upcomingTip.value = true }
         previewController.onTab(tab)
         // The new tab's catalogs on its own cadence (#71).
         if (changed) restartAutoRefresh()

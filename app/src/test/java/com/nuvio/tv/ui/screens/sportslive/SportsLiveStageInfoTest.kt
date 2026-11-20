@@ -3,6 +3,10 @@ package com.nuvio.tv.ui.screens.sportslive
 import com.nuvio.tv.core.sportslive.SportsLiveSportKind
 import com.nuvio.tv.core.sportslive.scores.GameArt
 import com.nuvio.tv.core.sportslive.scores.GameArtTeam
+import com.nuvio.tv.core.sportslive.scores.PeriodLabel
+import com.nuvio.tv.core.sportslive.scores.ScoreDetails
+import com.nuvio.tv.core.sportslive.scores.ScoreDetailsSide
+import com.nuvio.tv.core.sportslive.scores.ScoreDetailsStrings
 import com.nuvio.tv.domain.model.ContentType
 import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.domain.model.PosterShape
@@ -101,6 +105,27 @@ class SportsLiveStageInfoTest {
         assertEquals(espnStart, facts.startedAtMs)
     }
 
+    // ---- Compact linescore ----
+
+    @Test
+    fun `the stage's linescore is the last three periods on one line`() {
+        val shown = ScoreDetails.Shown(
+            first = ScoreDetailsSide("BOS", 91, listOf(22, 25, 31, 13), emptyList()),
+            second = ScoreDetailsSide("NYK", 88, listOf(20, 30, 25, null), emptyList()),
+            status = null, live = true,
+            periods = listOf(PeriodLabel.Number(1), PeriodLabel.Number(2), PeriodLabel.Number(3), PeriodLabel.Number(4)),
+            soccer = false
+        )
+        assertEquals("2nd 25–30 · 3rd 31–25 · 4th 13––", stageLinescoreText(shown, DETAIL_STRINGS))
+        val overtime = shown.copy(
+            first = shown.first.copy(linescores = listOf(22, 25, 7)),
+            second = shown.second.copy(linescores = listOf(20, 30, 5)),
+            periods = listOf(PeriodLabel.Number(1), PeriodLabel.Number(2), PeriodLabel.Overtime(1))
+        )
+        assertEquals("1st 22–20 · 2nd 25–30 · OT 7–5", stageLinescoreText(overtime, DETAIL_STRINGS))
+        assertNull(stageLinescoreText(shown.copy(periods = emptyList()), DETAIL_STRINGS))
+    }
+
     // ---- The row's one badge ----
 
     @Test
@@ -191,6 +216,19 @@ class SportsLiveStageInfoTest {
         const val NOW = 1_800_000_000_000L
         const val MINUTE = 60_000L
         const val HOUR = 60 * MINUTE
+        val DETAIL_STRINGS = ScoreDetailsStrings(
+            scoreline = "%1\$s %2\$d–%3\$d %4\$s",
+            sides = "%1\$s – %2\$s",
+            overtime = "OT",
+            overtimeN = "%1\$dOT",
+            extraTime = "ET%1\$d",
+            shootout = "SO",
+            emptyPeriod = "–",
+            scorer = "%1\$s %2\$s",
+            penalty = "%1\$s (pen)",
+            ownGoal = "%1\$s (OG)",
+            separator = ", "
+        )
         val ART = GameArt(
             first = GameArtTeam("Arsenal", "ARS", null),
             second = GameArtTeam("Chelsea", "CHE", null),

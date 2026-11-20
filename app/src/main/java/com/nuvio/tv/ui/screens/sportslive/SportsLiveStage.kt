@@ -30,7 +30,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.boundsInWindow
@@ -110,7 +109,7 @@ internal fun SportsLiveStage(
             ChannelBlock(row, noStream)
         } else {
             // live.20 (the user's TV photos): the block takes the height it needs, so the buttons sit right under it.
-            Box(modifier = Modifier.fillMaxWidth().heightIn(max = SportsLiveStageLayout.INFO_MAX_DP.dp).clipToBounds()) {
+            Box(modifier = Modifier.fillMaxWidth().heightIn(max = SportsLiveStageLayout.INFO_MAX_DP.dp)) {
                 GameBlock(row, details, situation, noStream, facts)
             }
         }
@@ -522,8 +521,9 @@ private fun GameBlock(row: ScoreboardRow, details: ScoreDetails?, situation: Str
             if (situation.isNotEmpty() && lines.live) {
                 withStyle(SpanStyle(color = Colors.TextSecondary)) { append(" · $situation") }
             }
+            // Muted (coordinator, live.20), as "No stream yet": a calm note, never the loudest word on the stage.
             if (noStream) {
-                withStyle(SpanStyle(color = Colors.TextPrimary)) { append(" · $noStreamText") }
+                withStyle(SpanStyle(color = Colors.TextMuted)) { append(" · $noStreamText") }
             }
         }
         Text(
@@ -543,15 +543,16 @@ private fun GameBlock(row: ScoreboardRow, details: ScoreDetails?, situation: Str
                 overflow = TextOverflow.Ellipsis
             )
         }
-        if (shown != null && shown.periods.isNotEmpty()) {
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(SportsLiveTokens.Radius.Button))
-                    .background(Colors.Surface)
-                    .padding(horizontal = 10.dp, vertical = 4.dp)
-            ) {
-                LinescoreTable(shown, detailStrings, style = SportsLiveTokens.style(SportsLiveTokens.Type.Meta))
-            }
+        // The compact linescore (live.20): the last periods on one line ("3rd 25–20 · 4th 9–11"), never clipped; the full
+        // table stays on the Game page.
+        shown?.let { stageLinescoreText(it, detailStrings) }?.let { line ->
+            Text(
+                text = line,
+                style = SportsLiveTokens.style(SportsLiveTokens.Type.Meta).copy(fontFeatureSettings = "tnum"),
+                color = Colors.TextSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }
@@ -610,7 +611,7 @@ private fun ChannelBlock(row: ScoreboardRow, noStream: Boolean) {
             Text(
                 text = stringResource(R.string.sports_live_no_streams_now),
                 style = SportsLiveTokens.style(SportsLiveTokens.Type.Meta),
-                color = Colors.TextPrimary,
+                color = Colors.TextMuted,
                 maxLines = 1
             )
         }

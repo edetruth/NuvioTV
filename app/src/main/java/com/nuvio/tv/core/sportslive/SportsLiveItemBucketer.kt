@@ -93,13 +93,20 @@ object SportsLiveItemBucketer {
         // An events catalog's item tagged as a TV network (#145) is a channel listing, never a game.
         val network = claimed.kind == SportsLiveKind.EVENTS &&
             (rawMeta.genres.any { SportsLiveKeywords.containsKeyword(it, SportsLiveKeywords.NETWORKS) } || isChannelName(rawMeta.name))
-        val kind = if (network) SportsLiveKind.CHANNELS else claimed.kind
         // A leading 🔴 / 🔜 / ✅ (CNCVerse) is a status, not part of the name.
         val trimmedName = rawMeta.name.trimStart()
         val status = listOf(LIVE_EMOJI, SOON_EMOJI, DONE_EMOJI).firstOrNull { trimmedName.startsWith(it) }
         val meta = if (status == null) rawMeta else rawMeta.copy(name = trimmedName.removePrefix(status).trimStart())
         val start = SportsLiveTimeParser.parseStart(meta.releaseInfo, meta.released)
         val startMs = start?.startMs
+        // live.20 F16: a channels catalog's entry titled as a game whose start is still to come is that game, not a
+        // channel: it is listed on Upcoming. A live one, or one with no start, stays as it was.
+        val scheduledGame = !network && isScheduledGameEntry(claimed.kind, meta, status, startMs, nowMs)
+        val kind = when {
+            network -> SportsLiveKind.CHANNELS
+            scheduledGame -> SportsLiveKind.EVENTS
+            else -> claimed.kind
+        }
         // "Live TV" in a channels catalog's name is a kind of content, not a sign its channels are on now.
         val liveCatalog = kind != SportsLiveKind.CHANNELS &&
             (SportsLiveKeywords.containsKeyword(catalog.name, SportsLiveKeywords.LIVE) ||
@@ -108,10 +115,13 @@ object SportsLiveItemBucketer {
             meta.name.contains("LIVE NOW") ||
             meta.description?.let(liveNowPhrase::containsMatchIn) == true
         val description = meta.description.orEmpty()
-        val isChannel = kind == SportsLiveKind.CHANNELS ||
-            description.contains("IPTV") ||
-            description.contains("Live on") ||
-            meta.genres.any { SportsLiveKeywords.containsKeyword(it, SportsLiveKeywords.LIVE_TV) }
+        // A scheduled game entry (live.20 F16) is a game whatever its channel catalog's wording.
+        val isChannel = !scheduledGame && (
+            kind == SportsLiveKind.CHANNELS ||
+                description.contains("IPTV") ||
+                description.contains("Live on") ||
+                meta.genres.any { SportsLiveKeywords.containsKeyword(it, SportsLiveKeywords.LIVE_TV) }
+            )
         // A channel is live only on a signal of its own (marker, 🔴, timed window): a "Live" catalog
         // name alone would mark every channel listed beside the events live.
         val isLive = when (status) {
@@ -144,6 +154,16 @@ object SportsLiveItemBucketer {
         val hasSignal = status == LIVE_EMOJI || status == SOON_EMOJI || start != null || liveMarker || isChannel
         return item to hasSignal
     }
+
+    /**
+     * A channels catalog's entry that is a game still to come (live.20 F16): its title names two sides, its start is
+     * later than [nowMs], and nothing says it is live (no 🔴, no live marker). A channel naming the game it airs in
+     * brackets ("US| PEACOCK PPV 004 [Celtics vs. 76ers]") stays a channel.
+     */
+    private fun isScheduledGameEntry(catalogKind: SportsLiveKind, meta: MetaPreview, status: String?, startMs: Long?, nowMs: Long): Boolean =
+        catalogKind == SportsLiveKind.CHANNELS && status != LIVE_EMOJI && startMs != null && startMs > nowMs &&
+            !isLiveMarker(meta.releaseInfo) && !meta.name.contains("LIVE NOW") &&
+            SportsLiveTeams.parseBracketed(meta.name) == null && SportsLiveTeams.parse(meta.name) != null
 
     /**
      * True when [title] is a channel's name, not a game (F4: "NFL Network", "Tennis Channel" in a live-events catalog):

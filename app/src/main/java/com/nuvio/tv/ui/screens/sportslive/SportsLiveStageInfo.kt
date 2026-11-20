@@ -37,6 +37,11 @@ import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
 import com.nuvio.tv.R
 import com.nuvio.tv.core.sportslive.SportsLiveSportKind
+import com.nuvio.tv.core.sportslive.scores.BigGameText
+import com.nuvio.tv.core.sportslive.scores.PeriodLabel
+import com.nuvio.tv.core.sportslive.scores.ScoreDetails
+import com.nuvio.tv.core.sportslive.scores.ScoreDetailsBuilder
+import com.nuvio.tv.core.sportslive.scores.ScoreDetailsStrings
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens.Colors
@@ -240,5 +245,32 @@ internal fun rowBadgeOf(ready: Boolean, excitement: Boolean, closeGame: Boolean)
     closeGame -> RowBadge.CLOSE_GAME
     else -> RowBadge.NONE
 }
+
+/**
+ * The stage's compact linescore (live.20): the last [maxPeriods] periods on one line, each "3rd 25–20" (first side
+ * first, as the scoreline), an overtime or extra time by its own name ("OT 7–5"); a period a side has not played reads
+ * [ScoreDetailsStrings.emptyPeriod]. Null with no periods. The full table is the Game page's.
+ */
+internal fun stageLinescoreText(
+    details: ScoreDetails.Shown,
+    strings: ScoreDetailsStrings,
+    ordinal: (Int) -> String = BigGameText::englishOrdinal,
+    maxPeriods: Int = STAGE_PERIODS
+): String? {
+    if (details.periods.isEmpty()) return null
+    val from = (details.periods.size - maxPeriods).coerceAtLeast(0)
+    return (from until details.periods.size).joinToString(" · ") { index ->
+        val label = when (val period = details.periods[index]) {
+            is PeriodLabel.Number -> ordinal(period.n)
+            else -> ScoreDetailsBuilder.periodText(period, strings)
+        }
+        val first = details.first.linescores.getOrNull(index)?.toString() ?: strings.emptyPeriod
+        val second = details.second.linescores.getOrNull(index)?.toString() ?: strings.emptyPeriod
+        "$label $first–$second"
+    }
+}
+
+/** The periods the stage's compact linescore shows. */
+private const val STAGE_PERIODS = 3
 
 private val EVENT_MARK_SIZE = 44.dp
