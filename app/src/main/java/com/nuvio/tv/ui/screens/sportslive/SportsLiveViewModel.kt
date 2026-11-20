@@ -147,7 +147,9 @@ class SportsLiveViewModel internal constructor(
     /** The one sorting per load shared with Home's row and the player's panel (live.20); null: [bucket] on its own (tests). */
     private val sharedBuckets: SportsLiveSharedBuckets? = null,
     // Where the list is bucketed and pinned, and the boards built; tests pass their dispatcher, so it runs in virtual time.
-    private val computeDispatcher: CoroutineDispatcher
+    private val computeDispatcher: CoroutineDispatcher,
+    /** live.20 B2: looks up a Live now row rested on, ahead of OK; null (tests): none. */
+    prefetchHooks: SportsLivePrefetchHooks? = null
 ) : ViewModel() {
 
     @Inject
@@ -210,7 +212,8 @@ class SportsLiveViewModel internal constructor(
         listCache = listStore,
         directoryStamp = { SportsLiveSharedBuckets.currentStamp() },
         sharedBuckets = SportsLiveSharedBuckets.shared,
-        computeDispatcher = Dispatchers.Default
+        computeDispatcher = Dispatchers.Default,
+        prefetchHooks = SportsLivePrefetchHooks.of(resolver)
     )
 
     private data class Selection(
@@ -557,7 +560,16 @@ class SportsLiveViewModel internal constructor(
      */
     fun setPreviewFocus(item: SportsLiveItem?) {
         previewController.onFocus(item)
+        // B2: a live row rested on is looked up, so OK on it starts on a found link; never under Data saver.
+        prefetcher?.onFocus(
+            item?.takeIf {
+                selectionState.value.tab == SportsLiveTab.LIVE_NOW && sportsLiveAutoPlayEligible(it) &&
+                    SportsLiveDataSaver.prefetchAllowed(dataSaverActive)
+            }
+        )
     }
+
+    private val prefetcher = prefetchHooks?.let { SportsLiveStreamPrefetcher(viewModelScope, it) }
 
     fun onPreviewFirstFrame(item: SportsLiveItem) = previewController.onFirstFrame(item)
 
@@ -682,6 +694,7 @@ class SportsLiveViewModel internal constructor(
     fun onScreenVisible(visible: Boolean) {
         // The preview stops while the screen is hidden; coming back, it waits for a fresh settle.
         previewController.onVisible(visible)
+        if (!visible) prefetcher?.stop()
         if (visible == screenVisible) return
         screenVisible = visible
         restartAutoRefresh(returning = visible)

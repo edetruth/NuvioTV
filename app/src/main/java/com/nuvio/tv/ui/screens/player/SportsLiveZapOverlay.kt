@@ -371,12 +371,12 @@ private fun BoxScope.BehindLiveIndicator(
 /**
  * The zap banner (#76) in the V2 language (`Player.dc.html` 5): a slim top-left card. The league tag, both logos
  * around the clean matchup (or the channel's name); a status line, the red dot with the clock and score under the
- * Scores setting; then "3 of 9 · Next: …" and, once arrived, "▼ All games". Never the source's name.
+ * Scores setting; then "▲ previous game" and "▼ next game" (BUG6/Q10) and, once arrived, "◀ All games". Never the
+ * source's name.
  */
 @Composable
 private fun ZapBanner(banner: SportsLiveZapBanner) {
     val shape = RoundedCornerShape(SportsLiveTokens.Alert.Radius)
-    val separator = stringResource(R.string.sports_live_game_info_separator)
     Column(
         verticalArrangement = Arrangement.spacedBy(SportsLiveTokens.Alert.Gap),
         modifier = Modifier
@@ -427,17 +427,21 @@ private fun ZapBanner(banner: SportsLiveZapBanner) {
                 )
             }
         }
-        val position = stringResource(R.string.sports_live_zap_position, banner.position, banner.total)
-        // A leading emoji or symbol on the next game's title ("📺 …") goes.
-        val next = banner.next?.replaceFirst(LEADING_SYMBOLS, "")?.let { stringResource(R.string.sports_live_zap_next, it) }
-        val downHint = stringResource(R.string.sports_live_zap_down_hint).takeIf { !banner.switching }
-        Text(
-            text = listOfNotNull(position, next, downHint).joinToString(separator),
-            style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag),
-            color = SportsLiveTokens.Colors.TextMuted,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
+        // BUG6/Q10: the games ▲ and ▼ zap to, named from the frozen zap order (no "N of M", which moved with the list).
+        // A leading emoji or symbol on a title ("📺 …") goes. One line each, so a long name never hides the other.
+        val previous = banner.previous?.replaceFirst(LEADING_SYMBOLS, "")?.let { stringResource(R.string.sports_live_zap_previous_name, it) }
+        val next = banner.next?.replaceFirst(LEADING_SYMBOLS, "")?.let { stringResource(R.string.sports_live_zap_next_name, it) }
+        // ◀ opens the panel (a short Left); ▼ always zaps on, as the line above says.
+        val panelHint = stringResource(R.string.sports_live_zap_left_hint).takeIf { !banner.switching }
+        listOfNotNull(previous, next, panelHint).forEach { line ->
+            Text(
+                text = line,
+                style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag),
+                color = SportsLiveTokens.Colors.TextMuted,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
         if (banner.looking) {
             // #158: a CH± zap's slow lookup; Skip is the card's one action (OK), drawn focused (never a white slab).
             Row(

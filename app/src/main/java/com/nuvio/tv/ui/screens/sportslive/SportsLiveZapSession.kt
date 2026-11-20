@@ -109,6 +109,29 @@ data class SportsLiveZapSession(
         )
     }
 
+    /**
+     * [withLineup], frozen (BUG6/Q10): with no [lineup] yet, the panel's [rows] are taken as they are. Once taken, the
+     * order is kept: a game new to [rows] is added at the end, a game gone from them is passed over (as finals are),
+     * games keep their places and the game playing stays current. So the banner's ▲/▼ names and the next CH± agree,
+     * however the list moves meanwhile. [PlayerZapController.thaw] and a chip pick take the order afresh.
+     */
+    internal fun withFrozenLineup(rows: List<ZapPanelRow>): SportsLiveZapSession {
+        val frozen = lineup
+        if (frozen == null || tab != SportsLiveTab.LIVE_NOW || rows.isEmpty()) return withLineup(rows)
+        val freshByKey = rows.associateBy { it.item.streamKey }
+        val listed = frozen.toHashSet()
+        val added = rows.filter { it.item.streamKey !in listed }
+        val itemKeys = items.mapTo(HashSet()) { it.streamKey }
+        return copy(
+            // Rows update in place (a game's newer copy); new games go after the rest.
+            items = items.map { freshByKey[it.streamKey]?.item ?: it } +
+                added.filter { it.item.streamKey !in itemKeys }.map { it.item },
+            lineup = frozen + added.map { it.item.streamKey },
+            skipped = rows.filterNot { it.zappable }.mapTo(HashSet()) { it.item.streamKey } +
+                frozen.filter { it !in freshByKey }
+        )
+    }
+
     /** The session moved to the item whose [SportsLiveItem.streamKey] is [itemKey], or null if absent. */
     fun moveTo(itemKey: String): SportsLiveZapSession? =
         items.indexOfFirst { it.streamKey == itemKey }

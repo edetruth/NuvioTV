@@ -21,6 +21,9 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -180,7 +183,8 @@ class SportsLiveZapResolverTest {
     }
 
     @Test
-    fun `a selection already found plays once the early pick delay passes`() = runTest {
+    fun `the first pick plays once the grace passes, not after every addon answered`() = runTest {
+        // B2: on the real box a full addon round took 17 s; the first stream the user's settings pick plays 1.5 s on.
         settings = PlayerSettings(streamAutoPlayMode = StreamAutoPlayMode.FIRST_STREAM)
         streams.response = {
             flow {
@@ -190,7 +194,59 @@ class SportsLiveZapResolverTest {
         }
 
         assertEquals(SD, newResolver().resolve(ITEM))
-        assertEquals(SportsLiveZapResolver.EARLY_PICK_MS, testScheduler.currentTime)
+        assertEquals(SportsLiveZapResolver.FIRST_ARRIVAL_GRACE_MS, testScheduler.currentTime)
+        assertEquals(1_500L, SportsLiveZapResolver.FIRST_ARRIVAL_GRACE_MS)
+    }
+
+    @Test
+    fun `the grace starts at the first pick, however late it comes`() = runTest {
+        settings = PlayerSettings(streamAutoPlayMode = StreamAutoPlayMode.FIRST_STREAM)
+        streams.response = {
+            flow {
+                emit(NetworkResult.Loading)
+                delay(3_000)
+                emit(success(SD))
+                awaitCancellation()
+            }
+        }
+
+        assertEquals(SD, newResolver().resolve(ITEM))
+        assertEquals(3_000L + SportsLiveZapResolver.FIRST_ARRIVAL_GRACE_MS, testScheduler.currentTime)
+    }
+
+    @Test
+    fun `a better-ranked addon answering within the grace wins over the first answer`() = runTest {
+        settings = PlayerSettings(streamAutoPlayMode = StreamAutoPlayMode.FIRST_STREAM)
+        val other = stream(url = "https://other.example.invalid/live.m3u8", name = "Other live", addonName = "Other")
+        streams.response = {
+            flow {
+                // An addon outside the installed order answers first; the installed one a second later.
+                emit(NetworkResult.Success(listOf(AddonStreams(addonName = "Other", addonLogo = null, streams = listOf(other)))))
+                delay(1_000)
+                emit(
+                    NetworkResult.Success(
+                        listOf(
+                            AddonStreams(addonName = "Other", addonLogo = null, streams = listOf(other)),
+                            AddonStreams(addonName = "Sports", addonLogo = null, streams = listOf(SD))
+                        )
+                    )
+                )
+                awaitCancellation()
+            }
+        }
+
+        assertEquals(SD, newResolver().resolve(ITEM))
+        // Played when the grace that started with the first answer ran out.
+        assertEquals(SportsLiveZapResolver.FIRST_ARRIVAL_GRACE_MS, testScheduler.currentTime)
+    }
+
+    @Test
+    fun `a search that finishes inside the grace plays at once`() = runTest {
+        settings = PlayerSettings(streamAutoPlayMode = StreamAutoPlayMode.FIRST_STREAM)
+        streams.response = { flow { emit(success(SD)); delay(400); emit(success(SD, HD)) } }
+
+        assertEquals(SD, newResolver().resolve(ITEM))
+        assertEquals(400L, testScheduler.currentTime)
     }
 
     @Test
@@ -857,6 +913,117 @@ class SportsLiveZapResolverTest {
         assertTrue(streams.calls.isEmpty())
         assertTrue(probed.isEmpty())
         assertNull(readiness.of(ITEM))
+    }
+
+    // ---- live.20 B2: first arrival across a merged game's sources, joined lookups and prefetch ----
+
+    @Test
+    fun `a merged game plays a lower-ranked source's pick once the grace passes while the best-ranked one is slow`() = runTest {
+        streams.responses["game"] = { flow { delay(10_000); emit(success(SD)) } }
+        streams.responses["alt1"] = { flowOf(success(HD, addon = "Other")) }
+        streams.responses["alt2"] = { flowOf(success(addon = "Third")) }
+
+        assertEquals(HD, newResolver().resolve(MERGED))
+        assertEquals(SportsLiveZapResolver.FIRST_ARRIVAL_GRACE_MS, testScheduler.currentTime)
+    }
+
+    @Test
+    fun `a merged game's best-ranked source answering within the grace still wins`() = runTest {
+        streams.responses["game"] = { flow { delay(1_000); emit(success(SD)) } }
+        streams.responses["alt1"] = { flowOf(success(HD, addon = "Other")) }
+        streams.responses["alt2"] = { flowOf(success(addon = "Third")) }
+
+        assertEquals(SD, newResolver().resolve(MERGED))
+        assertEquals(1_000L, testScheduler.currentTime)
+    }
+
+    @Test
+    fun `a merged game with no pick yet waits for its sources, with no grace`() = runTest {
+        // Only a better-ranked source with nothing to pick has answered: nothing starts the grace.
+        streams.responses["game"] = { flowOf(success(WEB)) }
+        streams.responses["alt1"] = { flow { delay(4_000); emit(success(HD, addon = "Other")) } }
+        streams.responses["alt2"] = { flow { delay(5_000); emit(success(addon = "Third")) } }
+
+        assertEquals(HD, newResolver().resolve(MERGED))
+        assertEquals(4_000L, testScheduler.currentTime)
+    }
+
+    @Test
+    fun `OK on a game being prefetched joins the prefetch and asks no addon again`() = runTest {
+        streams.response = { flow { delay(3_000); emit(success(SD)) } }
+        val resolver = newResolver()
+
+        val prefetch = async { resolver.prefetch(ITEM) }
+        runCurrent()
+        val ok = async { resolver.lookup(ITEM) }
+
+        assertEquals(SportsLiveLookup.Found(SD), ok.await())
+        assertEquals(SportsLiveLookup.Found(SD), prefetch.await())
+        assertEquals(1, streams.calls.size)
+        assertEquals(3_000L, testScheduler.currentTime)
+    }
+
+    @Test
+    fun `a zap that stops waiting on a prefetch leaves it to finish, and the next start finds it cached`() = runTest {
+        streams.response = { flow { delay(12_000); emit(success(SD)) } }
+        val resolver = newResolver()
+        backgroundScope.launch { resolver.prefetch(ITEM) }
+        runCurrent()
+
+        // The zap gives up after 8 s (#158) ...
+        assertNull(withTimeoutOrNull(8_000) { resolver.lookup(ITEM) })
+        assertFalse(resolver.isWarm(ITEM))
+        // ... the prefetch goes on and its pick is cached: the next start asks nothing.
+        advanceTimeBy(4_001)
+        assertTrue(resolver.isWarm(ITEM))
+        assertEquals(SportsLiveLookup.Found(SD), resolver.lookup(ITEM))
+        assertEquals(1, streams.calls.size)
+    }
+
+    @Test
+    fun `a prefetch caches the pick so OK starts with no addon request`() = runTest {
+        streams.response = { result(SD) }
+        val resolver = newResolver()
+
+        assertFalse(resolver.isWarm(ITEM))
+        assertEquals(SportsLiveLookup.Found(SD), resolver.prefetch(ITEM))
+        assertTrue(resolver.isWarm(ITEM))
+        assertEquals(SportsLiveLookup.Found(SD), resolver.lookup(ITEM))
+        assertEquals(1, streams.calls.size)
+    }
+
+    @Test
+    fun `a prefetch of another merged game never cancels the fetches of the game being started`() = runTest {
+        var cancelled = 0
+        streams.responses["game"] = { flowOf(success(SD)) }
+        streams.responses["game2"] = { flowOf(success(HD)) }
+        streams.responses["alt1"] = { flow { try { awaitCancellation() } finally { cancelled++ } } }
+        streams.responses["alt2"] = { flowOf(success(OTHER_HD, addon = "Third")) }
+        val resolver = newResolver()
+
+        assertEquals(SD, resolver.resolve(MERGED))
+        runCurrent()
+        assertEquals(SportsLiveLookup.Found(HD), resolver.prefetch(MERGED.copy(meta = MERGED.meta.copy(id = "game2"))))
+        runCurrent()
+        assertEquals(0, cancelled)
+    }
+
+    @Test
+    fun `a Ready game's held link is warm, and a game on a cooling addon is told apart`() = runTest {
+        streams.response = { twoAddons() }
+        val resolver = racingResolver(mapOf(raceOther to (100L to ProbeVerdict.OK)))
+        assertFalse(resolver.allSourcesCooling(ITEM))
+        resolver.checkAhead(ITEM)
+        resolveCache.clear()
+
+        // HARD RULE: the held link is what OK plays, so nothing needs prefetching.
+        assertTrue(resolver.isWarm(ITEM))
+        assertTrue(resolver.holds(ITEM, raceOther))
+
+        resolver.cooldown = SportsLiveSourceCooldown(nowMs = { 0L }).also { it.note(ITEM.addonBaseUrl, "Sports", 5) }
+        assertTrue(resolver.allSourcesCooling(ITEM))
+        // A merged game with a source on another addon can still be looked up.
+        assertFalse(resolver.allSourcesCooling(MERGED.copy(alternates = listOf(ALT1.copy(addonBaseUrl = "https://other.example.invalid")))))
     }
 
     private class FakeStreamRepository : StreamRepository {

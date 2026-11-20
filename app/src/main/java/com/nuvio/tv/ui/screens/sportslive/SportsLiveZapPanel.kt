@@ -102,7 +102,7 @@ internal fun SportsLiveZapSession.pickFromPanel(
  * What the zap banner shows (#76); [switching] while the game's stream is being looked up. A game
  * matched to its teams carries [art] (logos, names) and the score [chip] under the Scores setting (never
  * revealed by the banner: Hide until focused reads "Score hidden"; Off, none). [next] is the game ▼ / CH−
- * zaps to from here, null when there is none.
+ * zaps to from here and [previous] the one ▲ / CH+ zaps to (BUG6/Q10: from the frozen zap order), null when there is none.
  */
 data class SportsLiveZapBanner(
     /** The matchup or the channel, as the card names it. */
@@ -115,6 +115,7 @@ data class SportsLiveZapBanner(
     val art: GameArt? = null,
     val chip: ScoreChip? = null,
     val next: String? = null,
+    val previous: String? = null,
     /** A CH± zap's lookup is slow (#158): "Looking for streams…" with Skip (OK) shows. */
     val looking: Boolean = false
 )
@@ -141,7 +142,8 @@ internal fun SportsLiveZapSession.banner(
         art = art,
         // The banner never reveals a score: Hide until focused shows it hidden.
         chip = ScoreChips.of(item, event, mode, revealed = false),
-        next = step(forward = true, endedKeys = endedKeys)?.current?.takeIf { it.streamKey != item.streamKey }?.displayName
+        next = step(forward = true, endedKeys = endedKeys)?.current?.takeIf { it.streamKey != item.streamKey }?.displayName,
+        previous = step(forward = false, endedKeys = endedKeys)?.current?.takeIf { it.streamKey != item.streamKey }?.displayName
     )
 }
 

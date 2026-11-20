@@ -12,6 +12,7 @@ import com.nuvio.tv.core.sportslive.identify.SportsLiveTeamIdentity
 import com.nuvio.tv.core.sportslive.identify.TeamIdentityBook
 import com.nuvio.tv.core.sportslive.SportsLiveMySportsScope
 import com.nuvio.tv.core.sportslive.SportsLiveTriedGames
+import com.nuvio.tv.core.sportslive.SportsLiveDataSaver
 import com.nuvio.tv.core.sportslive.SportsLiveReadyMark
 import com.nuvio.tv.core.sportslive.SportsLiveGameReadiness
 import com.nuvio.tv.core.sportslive.scores.MySports
@@ -156,7 +157,11 @@ class SportsLiveZapViewModel internal constructor(
     // game itself (1b: only my games are checked ahead, by [SportsLiveReadyKeeper]).
     private val readiness: SportsLiveGameReadiness = SportsLiveGameReadiness.shared,
     // live.20: the panel's keys hint, claimed per opening (the profile's first few show it).
-    private val claimPanelKeysHint: suspend () -> Boolean = { false }
+    private val claimPanelKeysHint: suspend () -> Boolean = { false },
+    // live.20 B2: looks up a focused panel row and the zap neighbours ahead of OK and CH±; null (tests): none.
+    prefetchHooks: SportsLivePrefetchHooks? = null,
+    // Data saver: nothing is looked up ahead while it is on (B2).
+    dataSaver: Flow<Boolean> = flowOf(false)
 ) : ViewModel() {
 
     @Inject constructor(
@@ -175,7 +180,9 @@ class SportsLiveZapViewModel internal constructor(
         toggleReminder = { item ->
             prefs?.updateReminders { GameReminders.toggle(it, item, System.currentTimeMillis()) }?.isReminded(item) == true
         },
-        claimPanelKeysHint = { prefs?.claimPanelKeysHint() == true }
+        claimPanelKeysHint = { prefs?.claimPanelKeysHint() == true },
+        prefetchHooks = SportsLivePrefetchHooks.of(resolver),
+        dataSaver = prefs?.dataSaver ?: flowOf(false)
     )
 
     private val contentId: String? = savedStateHandle.get<String>("contentId").also { id ->
@@ -218,6 +225,21 @@ class SportsLiveZapViewModel internal constructor(
 
     /** True when this player was opened with a zap session for its content; only then is the overlay shown. */
     val hasSession: Boolean = SportsLiveZapSessions.activeFor(contentId) != null
+
+    // live.20 B2: streams resolved before OK or CH± asks (a panel row rested on, the games ▲ and ▼ go to).
+    private val prefetcher = prefetchHooks?.takeIf { hasSession }?.let { SportsLiveStreamPrefetcher(viewModelScope, it) }
+    private var neighbourJob: Job? = null
+
+    @Volatile
+    private var dataSaverOn = false
+
+    init {
+        if (prefetcher != null) viewModelScope.launch { dataSaver.collect { dataSaverOn = it } }
+    }
+
+    /** The prefetcher, unless Data saver is on (B2). */
+    private val activePrefetcher: SportsLiveStreamPrefetcher?
+        get() = prefetcher?.takeIf { SportsLiveDataSaver.prefetchAllowed(dataSaverOn) }
 
     init {
         // Watch from outside Sports & Live (#173 follow-up): the shared list may not be loaded; the panel fills once it is.
@@ -448,6 +470,12 @@ class SportsLiveZapViewModel internal constructor(
     fun onPanelRowFocus(key: String?) {
         focusedRowKey = key
         if (panelKeyPressed) reveal.onFocus(key)
+        // B2: a row rested on is looked up, so OK on it starts at once; never the game playing.
+        activePrefetcher?.onFocus(
+            key?.takeIf { it != nowPlaying?.streamKey }
+                ?.let { focused -> lineup.value?.rows?.firstOrNull { it.item.streamKey == focused }?.item }
+                ?.takeIf(::sportsLiveAutoPlayEligible)
+        )
     }
 
     /** Panel rows revealed under Hide until focused (for tests). */
@@ -540,6 +568,19 @@ class SportsLiveZapViewModel internal constructor(
     fun onPlayerStarted(started: Boolean) {
         if (started) nowTracker.onStart() else nowTracker.onStop()
         playerStarted.value = started
+        neighbourJob?.cancel()
+        neighbourJob = null
+        val prefetch = activePrefetcher ?: return
+        if (!started) return
+        // B2: the games ▲ and ▼ zap to are resolved (and their links probed once) after this one had time to start,
+        // so its own start never shares the box's bandwidth with them.
+        neighbourJob = viewModelScope.launch {
+            delay(NEIGHBOUR_PREFETCH_DELAY_MS)
+            prefetch.prefetchNow(
+                listOfNotNull(controller.nextTarget(contentId, forward = true), controller.nextTarget(contentId, forward = false))
+                    .filter(::sportsLiveAutoPlayEligible)
+            )
+        }
     }
 
     /**
@@ -779,14 +820,10 @@ class SportsLiveZapViewModel internal constructor(
     }
 
     /**
-     * True when the key was used: a zap, or ▼ while the arrival banner shows, which opens the live games
-     * panel (#76; CH− still zaps). No zaps while a watch party is active.
+     * True when the key was used: a zap. ▼ zaps on even while the arrival banner shows (BUG6/Q10: the banner names the
+     * game ▼ goes to; ◀ opens the live games panel). No zaps while a watch party is active.
      */
     fun onKey(keyCode: Int, partyActive: Boolean): Boolean {
-        if (zapBannerOpensPanel(keyCode, partyActive, banner.value)) {
-            openPanel()
-            return true
-        }
         val forward = zapDirection(keyCode, partyActive) ?: return false
         return controller.zap(contentId, forward)
     }
@@ -812,6 +849,8 @@ class SportsLiveZapViewModel internal constructor(
         focusedRowKey = null
         // #164: the order is taken afresh as the panel opens, then kept while it is open.
         frozenOrder = null
+        // BUG6/Q10: CH± follow the order the panel shows from now on.
+        controller.thaw(contentId)
         lastPanelKeyAtMs = System.currentTimeMillis()
         // The panel takes over from the arrival banner (#76).
         arrival.value = null
@@ -853,6 +892,7 @@ class SportsLiveZapViewModel internal constructor(
         panelKeyPressed = false
         focusedRowKey = null
         reveal.onFocus(null)
+        prefetcher?.stop()
         return true
     }
 
@@ -1080,6 +1120,13 @@ class SportsLiveZapViewModel internal constructor(
 
 private const val BANNER_MS = 3_000L
 
+/**
+ * The zap neighbours are looked up this long after the player started (B2): the live.19 TV start took 3.8 s from the
+ * stream found to playing, so 5 s leaves the start its bandwidth and still has them ready long before a viewer
+ * usually zaps on (tens of seconds).
+ */
+internal const val NEIGHBOUR_PREFETCH_DELAY_MS = 5_000L
+
 /** How long the end card stays over a stream still playing with no countdown (#60, #161); then the postgame plays on. */
 internal const val FULL_TIME_TOAST_MS = 10_000L
 
@@ -1123,13 +1170,6 @@ private data class PanelList(
  */
 private fun openingChip(session: SportsLiveZapSession): String? =
     session.panelChip?.filter ?: session.filter.takeIf { it == SportsLiveUiState.ALL_SPORTS_FILTER && session.tab == SportsLiveTab.LIVE_NOW }
-
-/**
- * Whether [keyCode] opens the live games panel from the zap banner (#76): ▼ (the D-pad, not CH−) while
- * the arrival banner shows. While a stream is still being looked up ("Switching to …") ▼ zaps on.
- */
-internal fun zapBannerOpensPanel(keyCode: Int, partyActive: Boolean, banner: SportsLiveZapBanner?): Boolean =
-    !partyActive && keyCode == KeyEvent.KEYCODE_DPAD_DOWN && banner != null && !banner.switching
 
 /** true = next game, false = previous game, null = not a zap key or a watch party is active. */
 internal fun zapDirection(keyCode: Int, partyActive: Boolean): Boolean? = if (partyActive) null else when (keyCode) {

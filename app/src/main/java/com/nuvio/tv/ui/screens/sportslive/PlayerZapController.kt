@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import com.nuvio.tv.core.sportslive.SportsLiveSpeedClock
 import com.nuvio.tv.core.sportslive.SportsLiveStreamThresholds
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.Stream
@@ -105,6 +106,7 @@ class PlayerZapController(
         val base = session(contentId)?.let(::ordered) ?: return false
         val target = base.step(forward, endedKeys()) ?: return false
         if (!inFlight) playing = base
+        SportsLiveSpeedClock.action("zap")
         return zapTo(target, direction = forward)
     }
 
@@ -121,6 +123,7 @@ class PlayerZapController(
             return false
         }
         if (inFlight && item.streamKey == base.current.streamKey) return true
+        SportsLiveSpeedClock.action("pick")
         return zapTo(base.pickFromPanel(item, panelItems) ?: return false)
     }
 
@@ -133,12 +136,23 @@ class PlayerZapController(
         val chip = ZapPanelChip(filter)
         if (job?.isActive == true) {
             val moved = target?.takeIf { SportsLiveZapSessions.current() === it } ?: return
-            playing = playing?.copy(panelChip = chip)
-            target = moved.copy(panelChip = chip).also(SportsLiveZapSessions::update)
+            // The zap order is taken afresh under the new chip (BUG6/Q10: frozen until then).
+            playing = playing?.copy(panelChip = chip, lineup = null)
+            target = moved.copy(panelChip = chip, lineup = null).also(SportsLiveZapSessions::update)
             return
         }
         val base = SportsLiveZapSessions.activeFor(contentId) ?: return
-        SportsLiveZapSessions.update(base.copy(panelChip = chip))
+        SportsLiveZapSessions.update(base.copy(panelChip = chip, lineup = null))
+    }
+
+    /**
+     * The live games panel opened over the player showing [contentId]: the zap order is taken afresh from the list
+     * it shows (BUG6/Q10: until then CH± keep the order frozen at the first zap). Nothing changes while a lookup runs.
+     */
+    fun thaw(contentId: String?) {
+        if (job?.isActive == true) return
+        val base = SportsLiveZapSessions.activeFor(contentId) ?: return
+        if (base.lineup != null) SportsLiveZapSessions.update(base.copy(lineup = null))
     }
 
     /**
@@ -157,9 +171,13 @@ class PlayerZapController(
     fun nextTarget(contentId: String?, forward: Boolean): SportsLiveItem? =
         session(contentId)?.let(::ordered)?.step(forward, endedKeys())?.current
 
-    /** [session] on the panel's ordered list, when it is known (#142). */
-    private fun ordered(session: SportsLiveZapSession): SportsLiveZapSession =
-        lineup()?.let(session::withLineup) ?: session
+    /**
+     * [session] on the panel's ordered list, when it is known (#142), frozen once taken (BUG6/Q10): later list changes
+     * add new games at the end and pass over games gone, but never move a game, so ▲/▼ and the banner's names stay
+     * true. The order is taken afresh when the panel opens ([thaw]) or a chip is picked ([pickChip]).
+     */
+    internal fun ordered(session: SportsLiveZapSession): SportsLiveZapSession =
+        lineup()?.let(session::withFrozenLineup) ?: session
 
     /** [direction]: an Up/Down zap's (true = next), which skips games with no stream; null for a panel pick. */
     private fun zapTo(target: SportsLiveZapSession, direction: Boolean? = null): Boolean {
@@ -173,15 +191,18 @@ class PlayerZapController(
             try {
                 // Settle first: a newer flip cancels this job here, so skipped channels never resolve.
                 if (settleMs > 0) delay(settleMs)
+                SportsLiveSpeedClock.stage("settled")
                 var landed = target
                 var skips = 0
                 val skipped = mutableSetOf<String>()
                 while (true) {
                     val item = landed.current
                     val stream = if (direction == null) resolve(item) else resolveOrSkip(item)
+                    SportsLiveSpeedClock.stage("resolved", "found=${stream != null} skips=$skips")
                     // A newer zap or pick made this lookup stale (#175): its result never plays.
                     if (lookups != lookup) break
                     if (stream != null) {
+                        SportsLiveSpeedClock.stage("navigate")
                         onNavigate(item, stream)
                         break
                     }

@@ -4136,6 +4136,9 @@
     <string name="sports_live_zap_switching">Switching to %1$s…</string>
     <!-- Zap banner (#76): the game the next ▼ / CH− zap goes to, and what ▼ does while the banner shows. -->
     <string name="sports_live_zap_next">Next: %1$s</string>
+    <string name="sports_live_zap_previous_name">▲ %1$s</string>
+    <string name="sports_live_zap_next_name">▼ %1$s</string>
+    <string name="sports_live_zap_left_hint">◀ All games</string>
     <string name="sports_live_zap_down_hint">▼ All games</string>
     <string name="sports_live_zap_panel_title">Live now</string>
     <string name="sports_live_zap_panel_empty">Nothing live right now</string>

@@ -3,6 +3,7 @@ package com.nuvio.tv.ui.screens.sportslive
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import com.nuvio.tv.core.sportslive.SportsLiveDebugTiming
+import com.nuvio.tv.core.sportslive.SportsLiveSpeedClock
 import kotlinx.coroutines.delay
 
 /**
@@ -23,6 +24,8 @@ internal suspend fun traceSportsLiveStart(
     val startedAt = System.currentTimeMillis()
     val startBytes = bytes()
     SportsLiveDebugTiming.log { "start who=$who link=$link" }
+    // live.20 B2: the key-to-first-frame clock.
+    if (who == "full") SportsLiveSpeedClock.stage("playerStart")
     while (true) {
         delay(1_000L)
         val elapsed = System.currentTimeMillis() - startedAt
@@ -33,6 +36,7 @@ internal suspend fun traceSportsLiveStart(
         val p = player()
         if (firstFrame()) {
             SportsLiveDebugTiming.log { "firstFrame who=$who link=$link t=$elapsed bytes=${bytes() - startBytes}" }
+            if (who == "full") SportsLiveSpeedClock.stage("firstFrame", "linkMs=$elapsed")
             return
         }
         SportsLiveDebugTiming.log {

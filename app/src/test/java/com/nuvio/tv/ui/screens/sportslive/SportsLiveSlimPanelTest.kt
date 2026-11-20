@@ -176,6 +176,66 @@ class SportsLiveSlimPanelTest {
         }
     }
 
+    // ---- BUG6/Q10: the zap order is frozen once taken ----
+
+    @Test
+    fun `once taken the zap order is kept - a moved game keeps its place, a new one comes last, a gone one is passed over`() {
+        val before = lineupOf(all)
+        val keys = before.map { it.item.streamKey }
+        val session = sessionOn(a, before)
+
+        // s2 goes live (it would move up), u leaves the list and a new live game n appears.
+        val n = game("n", now - 10 * minute)
+        val after = lineupOf(all.map { if (it == s2) it.copy(startMs = now - 5 * minute) else it }.filterNot { it == u } + n)
+        val frozen = session.withFrozenLineup(after)
+
+        assertEquals(keys + n.streamKey, frozen.zapOrder.map { frozen.items[it].streamKey })
+        assertEquals("a", frozen.current.id)
+        assertTrue(u.streamKey in frozen.skipped)
+        // Walking forward from a visits every game in the frozen order, never the gone one, and the new one last.
+        var at = frozen
+        val seen = mutableListOf<String>()
+        repeat(frozen.items.size) {
+            at = at.step(true, emptySet())!!
+            seen += at.current.id
+        }
+        assertFalse("u" in seen)
+        val zappable = (keys + n.streamKey).filter { key -> key != u.streamKey && key !in frozen.skipped }
+        assertEquals(zappable.last(), (frozen.items.first { it.id == "n" }).streamKey)
+        // The banner names exactly where the next ▲ and ▼ go.
+        val banner = frozen.banner(switching = false)
+        assertEquals(frozen.step(true, emptySet())!!.current.displayName, banner.next)
+        assertEquals(frozen.step(false, emptySet())!!.current.displayName, banner.previous)
+    }
+
+    @Test
+    fun `a session with no order yet takes the panel's as it is`() {
+        val rows = lineupOf(all)
+        val session = SportsLiveZapSession.of(all, a.streamKey, SportsLiveTab.LIVE_NOW, null, returnToHomeOnBack = false)!!
+        assertEquals(session.withLineup(rows), session.withFrozenLineup(rows))
+    }
+
+    @Test
+    fun `the zap order is taken afresh when the panel opens`() {
+        val before = lineupOf(all)
+        SportsLiveZapSessions.start(sessionOn(a, before))
+        var rows = before
+        val controller = PlayerZapController(
+            scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Unconfined),
+            resolve = { null },
+            onNavigate = { _, _ -> },
+            onNoStream = {},
+            lineup = { rows }
+        )
+        // The followed game is no longer followed: the fresh list orders differently.
+        rows = lineupOf(all.map { if (it == f) it.copy(followed = false) else it })
+        assertEquals(before.map { it.item.streamKey }, controller.ordered(SportsLiveZapSessions.current()!!).lineup)
+
+        controller.thaw(a.id)
+        assertEquals(rows.map { it.item.streamKey }, controller.ordered(SportsLiveZapSessions.current()!!).lineup)
+        SportsLiveZapSessions.clear()
+    }
+
     @Test
     fun `while the panel is open the order shown is kept and the zaps keep it too`() {
         val (shown, order) = freezePanelLineup(lineupOf(all), null)

@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.nuvio.tv.core.debrid.DirectDebridResolver
 import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.core.sportslive.SportsLiveOpenGame
+import com.nuvio.tv.core.sportslive.SportsLiveSpeedClock
 import com.nuvio.tv.core.sportslive.SportsLiveWorkingLinks
 import com.nuvio.tv.data.local.PlayerSettingsDataStore
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
@@ -297,6 +298,7 @@ class SportsLivePlayViewModel @Inject constructor(
         this.returnToHomeOnBack = returnToHomeOnBack
         _state.value = SportsLivePlayState.Idle
         val token = gate.begin(item.streamKey)
+        SportsLiveSpeedClock.action("ok")
         job = viewModelScope.launch { run(item, choose, token) }
     }
 
@@ -315,6 +317,7 @@ class SportsLivePlayViewModel @Inject constructor(
                 _state.value = SportsLivePlayState.Resolving(item)
                 // The zap's lookup: reliability order, the user's filters, junk dropped, cached.
                 val found = resolver.lookup(item)
+                SportsLiveSpeedClock.stage("resolved", "outcome=${found::class.simpleName}")
                 // Stopped or replaced meanwhile (#175): what it found is cached by the resolver, and nothing plays.
                 if (!gate.mayPlay(token)) return
                 _state.value = SportsLivePlayState.Idle
@@ -354,6 +357,7 @@ class SportsLivePlayViewModel @Inject constructor(
         returnToHomeOnBack = false
         _state.value = SportsLivePlayState.Idle
         val token = gate.begin(item.streamKey)
+        SportsLiveSpeedClock.action("okResolved")
         job = viewModelScope.launch {
             playStream(item, stream, autoPicked = item.alternates.isNotEmpty(), announce = sportsLiveAutoPlayEligible(item), token = token)
         }

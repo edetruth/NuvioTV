@@ -7,6 +7,7 @@ import com.nuvio.tv.core.player.StreamAutoPlaySelector
 import com.nuvio.tv.core.sportslive.SportsLiveAddonFetch
 import com.nuvio.tv.core.sportslive.ProbeVerdict
 import com.nuvio.tv.core.sportslive.SportsLiveDebugTiming
+import com.nuvio.tv.core.sportslive.SportsLiveFirstArrival
 import com.nuvio.tv.core.sportslive.SportsLiveLinkMarks
 import com.nuvio.tv.core.sportslive.SportsLiveGameReadiness
 import com.nuvio.tv.core.sportslive.SportsLiveLinkRace
@@ -37,6 +38,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -49,9 +51,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.mapNotNull
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.onCompletion
+import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -94,8 +97,11 @@ class SportsLiveZapResolver @Inject constructor(
         /** After this, a lookup plays the best of what came back without waiting for slower addons (#158). */
         const val SOFT_DEADLINE_MS = SportsLiveStreamThresholds.LOOKUP_SOFT_DEADLINE_MS
 
-        /** After this, a still-running search stops as soon as it holds the stream the user's settings prefer. */
-        const val EARLY_PICK_MS = 4_000L
+        /**
+         * live.20 B2: a start plays this long after the first stream the user's settings pick came back, unless every
+         * source answered sooner; a better-ranked addon answering meanwhile wins ([SportsLiveFirstArrival]).
+         */
+        const val FIRST_ARRIVAL_GRACE_MS = SportsLiveFirstArrival.GRACE_MS
 
         /** A hover preview resolves a game at most once in this window; a cached resolve is free (C1). */
         const val PREVIEW_RESOLVE_WINDOW_MS = 10 * 60_000L
@@ -136,6 +142,9 @@ class SportsLiveZapResolver @Inject constructor(
     @VisibleForTesting
     internal var softDeadlineMs = SOFT_DEADLINE_MS
 
+    @VisibleForTesting
+    internal var firstArrivalGraceMs = FIRST_ARRIVAL_GRACE_MS
+
     /** Which links worked or failed for each game (#65): good ones are tried first, quarantined ones last. */
     @VisibleForTesting
     internal var workingLinks: SportsLiveWorkingLinks = SportsLiveWorkingLinks.shared
@@ -173,9 +182,12 @@ class SportsLiveZapResolver @Inject constructor(
     /** The last merged game resolved ([SportsLiveItem.streamKey]) and its fetches, still running or done. */
     private var backgroundFetches: Pair<String, List<Deferred<Fetched>>>? = null
 
+    /** Prefetches running, by [SportsLiveItem.streamKey]: an OK or zap on that game joins its prefetch (B2). Guarded by itself. */
+    private val prefetches = HashMap<String, Deferred<SportsLiveLookup>>()
+
     private sealed interface Event {
         data class Result(val result: NetworkResult<List<AddonStreams>>) : Event
-        data object EarlyPick : Event
+        data object GraceOver : Event
         data object SoftDeadline : Event
         data object Finished : Event
     }
@@ -202,32 +214,78 @@ class SportsLiveZapResolver @Inject constructor(
     suspend fun lookup(item: SportsLiveItem): SportsLiveLookup = lookup(item, forceRefresh = false)
 
     suspend fun lookup(item: SportsLiveItem, forceRefresh: Boolean): SportsLiveLookup {
+        // An OK or zap on a game being prefetched joins that lookup: no second search, no second probe race (B2).
+        if (!forceRefresh) runningPrefetch(item)?.let { return it.await() }
+        return timedLookup(item, forceRefresh, prefetch = false)
+    }
+
+    /**
+     * Looks [item] up ahead of OK or CH± (live.20 B2: a focused row, a zap neighbour), so the start finds it cached.
+     * The same lookup as OK's, run in [fetchScope]: an OK or zap arriving meanwhile joins it, and one that stops
+     * waiting leaves it to finish. A merged game's prefetch never cancels the fetches of the game being started
+     * ([bestAcrossSources]).
+     */
+    suspend fun prefetch(item: SportsLiveItem): SportsLiveLookup = prefetchJob(item).await()
+
+    /**
+     * True when OK or CH± on [item] would start with no addon request: a held "▶ Ready" link, a link known to play it
+     * or a fresh resolve (what [lookup] serves first).
+     */
+    fun isWarm(item: SportsLiveItem): Boolean = cachedPick(item) != null
+
+    /** True when [link] is the verified link [item]'s "▶ Ready" mark holds (1b). */
+    fun holds(item: SportsLiveItem, link: Stream): Boolean = readiness.heldLink(item) == link
+
+    /** True when every source of [item] is on an addon cooling down after a rate limit (C1): a prefetch leaves it. */
+    fun allSourcesCooling(item: SportsLiveItem): Boolean {
+        val cooling = cooldown.coolingBaseUrls().mapTo(HashSet(), SportsLiveSourceCooldown::keyOf)
+        if (cooling.isEmpty()) return false
+        return (listOf(item) + item.alternates).all { SportsLiveSourceCooldown.keyOf(it.addonBaseUrl) in cooling }
+    }
+
+    private fun runningPrefetch(item: SportsLiveItem): Deferred<SportsLiveLookup>? =
+        synchronized(prefetches) { prefetches[item.streamKey]?.takeIf { it.isActive } }
+
+    /** [item]'s prefetch already running, or a new one in [fetchScope]. */
+    private fun prefetchJob(item: SportsLiveItem): Deferred<SportsLiveLookup> = synchronized(prefetches) {
+        prefetches[item.streamKey]?.takeIf { it.isActive }?.let { return@synchronized it }
+        val key = item.streamKey
+        val started = fetchScope.async { timedLookup(item, forceRefresh = false, prefetch = true) }
+        prefetches[key] = started
+        started.invokeOnCompletion { synchronized(prefetches) { if (prefetches[key] === started) prefetches.remove(key) } }
+        started
+    }
+
+    private suspend fun timedLookup(item: SportsLiveItem, forceRefresh: Boolean, prefetch: Boolean): SportsLiveLookup {
         val startedAt = System.currentTimeMillis()
-        return lookupNow(item, forceRefresh).also { found ->
+        return lookupNow(item, forceRefresh, prefetch).also { found ->
             SportsLiveDebugTiming.log {
                 "gameLookup ms=${System.currentTimeMillis() - startedAt} outcome=${found::class.simpleName} " +
-                    "sport=${item.sport} source=${SportsLiveDebugTiming.label(item.addonName)}"
+                    "prefetch=$prefetch sport=${item.sport} source=${SportsLiveDebugTiming.label(item.addonName)}"
             }
         }
     }
 
-    private suspend fun lookupNow(item: SportsLiveItem, forceRefresh: Boolean): SportsLiveLookup =
+    /**
+     * HARD RULE (1b): a game shown "▶ Ready" plays the verified link it holds, at once (no search, no race).
+     * Then a link known to play this game (#162, #173: Watch on a kickoff prompt). A cached
+     * link that has since failed is not served again, unless a search already found nothing better
+     * than a quarantined link: that one is served until its window ends, so a game with only failed
+     * links is searched at most once per quarantine window.
+     */
+    private fun cachedPick(item: SportsLiveItem): Stream? =
+        readiness.heldLink(item)?.takeUnless { workingLinks.isQuarantined(item.id, it) }
+            ?: workingLinks.goodStream(item.id)
+            ?: resolveCache.get(item.streamKey)?.takeUnless { workingLinks.isQuarantined(item.id, it) }
+            ?: workingLinks.fallback(item.id)
+
+    private suspend fun lookupNow(item: SportsLiveItem, forceRefresh: Boolean, prefetch: Boolean): SportsLiveLookup =
         try {
-            // HARD RULE (1b): a game shown "▶ Ready" plays the verified link it holds, at once (no search, no race).
-            // Then a link known to play this game (#162, #173: Watch on a kickoff prompt). A cached
-            // link that has since failed is not served again, unless a search already found nothing better
-            // than a quarantined link: that one is served until its window ends, so a game with only failed
-            // links is searched at most once per quarantine window.
-            val cached = if (forceRefresh) null else {
-                readiness.heldLink(item)?.takeUnless { workingLinks.isQuarantined(item.id, it) }
-                    ?: workingLinks.goodStream(item.id)
-                    ?: resolveCache.get(item.streamKey)?.takeUnless { workingLinks.isQuarantined(item.id, it) }
-                    ?: workingLinks.fallback(item.id)
-            }
+            val cached = if (forceRefresh) null else cachedPick(item)
             if (cached != null) {
                 SportsLiveLookup.Found(cached)
             } else {
-                val found = if (item.alternates.isEmpty()) search(item) else bestAcrossSources(item)
+                val found = if (item.alternates.isEmpty()) search(item) else bestAcrossSources(item, prefetch)
                 if (found is SportsLiveLookup.Found) {
                     resolveCache.put(item.streamKey, found.stream)
                     if (workingLinks.isQuarantined(item.id, found.stream)) workingLinks.noteFallback(item.id, found.stream)
@@ -459,22 +517,26 @@ class SportsLiveZapResolver @Inject constructor(
         addonRepository.getInstalledAddons().first().enabledAddons().map { it.displayName }
 
     /**
-     * All sources are fetched at once in [fetchScope]; the primary's best stream plays as soon as it
-     * is known, while the alternates finish in the background (their results are still recorded).
-     * Only when the primary has nothing are the alternates awaited, in order. Starting on another
-     * game cancels the previous game's fetches still running, so fast zaps do not pile them up.
+     * All sources are fetched at once in [fetchScope]; the best-ranked source's pick plays as soon as it
+     * is known, while the others finish in the background (their results are still recorded). A
+     * lower-ranked source's pick plays once every better-ranked source answered without one, or
+     * [firstArrivalGraceMs] after it came back while a better-ranked one is still answering (B2,
+     * [SportsLiveFirstArrival]). Starting on another game cancels the previous game's fetches still
+     * running, so fast zaps do not pile them up; a [prefetch] neither cancels nor is cancelled so.
      */
-    private suspend fun bestAcrossSources(item: SportsLiveItem): SportsLiveLookup {
+    private suspend fun bestAcrossSources(item: SportsLiveItem, prefetch: Boolean): SportsLiveLookup {
         val settings = playerSettingsDataStore.playerSettings.first()
         val installedOrder = installedOrder()
         // The most reliable source first; its best stream plays as soon as it is known.
         val sources = rankedSources(item, settings)
         val fetches = sources.map { source -> fetchScope.async { fetchSource(item, source, installedOrder) } }
-        val previous = synchronized(this) {
-            backgroundFetches.also { backgroundFetches = item.streamKey to fetches }
+        if (!prefetch) {
+            val previous = synchronized(this) {
+                backgroundFetches.also { backgroundFetches = item.streamKey to fetches }
+            }
+            // Finished fetches have recorded their results already; only running ones are cancelled.
+            if (previous != null && previous.first != item.streamKey) previous.second.forEach { it.cancel() }
         }
-        // Finished fetches have recorded their results already; only running ones are cancelled.
-        if (previous != null && previous.first != item.streamKey) previous.second.forEach { it.cancel() }
         // Once every alternate has answered, the Sources panel gets them without fetching them again.
         fetchScope.launch {
             val fetched = try {
@@ -488,27 +550,59 @@ class SportsLiveZapResolver @Inject constructor(
         // nothing the user's regex or chosen addons allow never plays a stream they rule out.
         // Within a source, links known to work for this game go first; quarantined ones are left
         // for the end, across every source (#65).
-        val fetched = mutableListOf<List<Stream>>()
-        for ((source, fetch) in sources.zip(fetches)) {
-            val streams = try {
-                workingLinks.order(item.id, linkSpeed.order(item.id, playablePerSource(item, source, fetch.await().streams)))
-            } catch (e: CancellationException) {
-                // A newer game cancelled this fetch: unless this lookup is cancelled too, it found nothing.
-                currentCoroutineContext().ensureActive()
-                emptyList()
-            }
-            workingLinks.noteLinks(item.id, streams)
-            val fresh = workingLinks.withoutQuarantined(item.id, streams)
-            preferredStream(fresh, settings, installedOrder.toSet())?.let { picked ->
-                // #147: the other sources that already answered race too, one link per addon.
-                val answered = sources.zip(fetches).filter { (other, done) -> other !== source && done.isCompleted && !done.isCancelled }
-                    .flatMap { (other, done) ->
-                        workingLinks.withoutQuarantined(item.id, linkSpeed.order(item.id, playablePerSource(item, other, done.await().streams)))
+        val installedNames = installedOrder.toSet()
+        // Per source, once it answered: its links in order, and the user's pick among those not quarantined.
+        val answered = arrayOfNulls<List<Stream>>(sources.size)
+        val picks = arrayOfNulls<Stream>(sources.size)
+        val chosen: Int? = coroutineScope {
+            var grace: Job? = null
+            var result: Int? = null
+            try {
+                while (true) {
+                    for (index in sources.indices) {
+                        if (answered[index] != null || !fetches[index].isCompleted) continue
+                        val streams = workingLinks.order(item.id, linkSpeed.order(item.id, playablePerSource(item, sources[index], answerOf(fetches[index]))))
+                        workingLinks.noteLinks(item.id, streams)
+                        answered[index] = streams
+                        picks[index] = preferredStream(workingLinks.withoutQuarantined(item.id, streams), settings, installedNames)
                     }
-                return SportsLiveLookup.Found(raced(item, picked, fresh + answered, settings))
+                    val answers = sources.indices.map { index ->
+                        when {
+                            answered[index] == null -> SportsLiveFirstArrival.Answer.PENDING
+                            picks[index] != null -> SportsLiveFirstArrival.Answer.PICK
+                            else -> SportsLiveFirstArrival.Answer.NO_PICK
+                        }
+                    }
+                    result = SportsLiveFirstArrival.choose(answers, graceOver = grace?.isCompleted == true)
+                    if (result != null) break
+                    val pending = fetches.filterIndexed { index, _ -> answered[index] == null }
+                    if (pending.isEmpty()) break
+                    // A pick waits behind a better-ranked source still answering: the grace starts (B2).
+                    if (grace == null && SportsLiveFirstArrival.Answer.PICK in answers) {
+                        SportsLiveDebugTiming.log { "firstArrival merged pending=${pending.size}" }
+                        grace = launch { delay(firstArrivalGraceMs) }
+                    }
+                    val timer = grace
+                    select<Unit> {
+                        pending.forEach { it.onJoin {} }
+                        if (timer != null) timer.onJoin {}
+                    }
+                }
+            } finally {
+                grace?.cancel()
             }
-            fetched += streams
+            result
         }
+        if (chosen != null) {
+            val picked = picks[chosen]!!
+            val fresh = workingLinks.withoutQuarantined(item.id, answered[chosen].orEmpty())
+            // #147: the other sources that already answered race too, one link per addon.
+            val others = sources.indices.filter { it != chosen }.flatMap { index ->
+                answered[index]?.let { workingLinks.withoutQuarantined(item.id, it) }.orEmpty()
+            }
+            return SportsLiveLookup.Found(raced(item, picked, fresh + others, settings))
+        }
+        val fetched = answered.map { it.orEmpty() }
         // Then, only when the user's settings do not narrow what may play, the first playable stream.
         val firstPlayable = { lists: List<List<Stream>> ->
             if (honoursAutoPlayFilters(settings)) null
@@ -540,6 +634,15 @@ class SportsLiveZapResolver @Inject constructor(
 
     private class Fetched(val streams: List<Stream>, val finished: Boolean)
 
+    /** A finished [fetch]'s streams; none when a newer game cancelled it (unless this lookup is cancelled too). */
+    private suspend fun answerOf(fetch: Deferred<Fetched>): List<Stream> =
+        try {
+            fetch.await().streams
+        } catch (e: CancellationException) {
+            currentCoroutineContext().ensureActive()
+            emptyList()
+        }
+
     /**
      * [source]'s streams in addon order, junk dropped (those that need preparation kept: see
      * [playablePerSource]). Past the soft deadline ([softDeadlineMs], #158) it stops as soon as any
@@ -570,7 +673,7 @@ class SportsLiveZapResolver @Inject constructor(
                         is Event.Result -> last = event.result
                         Event.Finished -> finished = true
                         Event.SoftDeadline -> softPassed = true
-                        Event.EarlyPick -> Unit
+                        Event.GraceOver -> Unit
                     }
                     finished || (softPassed && hasStreams())
                 }
@@ -599,53 +702,82 @@ class SportsLiveZapResolver @Inject constructor(
         val installedOrder = installedOrder()
 
         var last: NetworkResult<List<AddonStreams>>? = null
-        var earlyPickAllowed = false
+        var graceOver = false
         var softPassed = false
         var finished = false
         var fresh: List<Stream> = emptyList()
-        // Never forced: a forced fetch cancels other collectors of the same stream session.
-        val events = merge(
-            streamsOf(item)
-                .map<NetworkResult<List<AddonStreams>>, Event> { Event.Result(it) }
-                .onCompletion { cause -> if (cause == null) emit(Event.Finished) },
-            flow { delay(EARLY_PICK_MS); emit(Event.EarlyPick) },
-            flow { delay(softDeadlineMs); emit(Event.SoftDeadline) }
-        )
+        val startedAt = System.currentTimeMillis()
         val decision = withTimeoutOrNull(timeoutMs) {
-            events.mapNotNull { event ->
-                when (event) {
-                    is Event.Result -> last = event.result
-                    Event.EarlyPick -> earlyPickAllowed = true
-                    Event.SoftDeadline -> softPassed = true
-                    Event.Finished -> finished = true
-                }
-                // Links known to work for this game first; quarantined ones only when nothing else plays (#65).
-                // An informational entry or junk link is never picked (C1).
-                // #147: within that, the links that start fastest for this game (or addon) first.
-                val ordered = workingLinks.order(
-                    item.id,
-                    linkSpeed.order(
-                        item.id,
-                        StreamAutoPlaySelector.orderAddonStreams(
-                            (last as? NetworkResult.Success)?.data.orEmpty(),
-                            installedOrder
-                        ).flatMap { it.streams }.filterNot(::isNonStream)
-                    )
+            coroutineScope {
+                val events = Channel<Event>(Channel.UNLIMITED)
+                // Never forced: a forced fetch cancels other collectors of the same stream session.
+                val feeds = listOf(
+                    launch {
+                        streamsOf(item).collect { events.send(Event.Result(it)) }
+                        events.send(Event.Finished)
+                    },
+                    launch {
+                        delay(softDeadlineMs)
+                        events.send(Event.SoftDeadline)
+                    }
                 )
-                fresh = workingLinks.withoutQuarantined(item.id, ordered)
-                val preferred = preferredStream(fresh, settings, installedOrder.toSet())
-                when {
-                    finished -> Decision(
-                        preferred ?: fresh.firstOrNull(StreamAutoPlaySelector::isPlayable)
-                            ?: preferredStream(ordered, settings, installedOrder.toSet())
-                            ?: ordered.firstOrNull(StreamAutoPlaySelector::isPlayable)
-                    )
-                    earlyPickAllowed && preferred != null -> Decision(preferred)
-                    // Past the soft deadline, a slow addon is not waited for when something plays (#158).
-                    softPassed -> (preferred ?: fresh.firstOrNull(StreamAutoPlaySelector::isPlayable))?.let(::Decision)
-                    else -> null
+                var grace: Job? = null
+                var picked: Decision? = null
+                try {
+                    for (event in events) {
+                        when (event) {
+                            is Event.Result -> last = event.result
+                            Event.GraceOver -> graceOver = true
+                            Event.SoftDeadline -> softPassed = true
+                            Event.Finished -> finished = true
+                        }
+                        // Links known to work for this game first; quarantined ones only when nothing else plays (#65).
+                        // An informational entry or junk link is never picked (C1).
+                        // #147: within that, the links that start fastest for this game (or addon) first.
+                        val ordered = workingLinks.order(
+                            item.id,
+                            linkSpeed.order(
+                                item.id,
+                                StreamAutoPlaySelector.orderAddonStreams(
+                                    (last as? NetworkResult.Success)?.data.orEmpty(),
+                                    installedOrder
+                                ).flatMap { it.streams }.filterNot(::isNonStream)
+                            )
+                        )
+                        fresh = workingLinks.withoutQuarantined(item.id, ordered)
+                        val preferred = preferredStream(fresh, settings, installedOrder.toSet())
+                        picked = when {
+                            finished -> Decision(
+                                preferred ?: fresh.firstOrNull(StreamAutoPlaySelector::isPlayable)
+                                    ?: preferredStream(ordered, settings, installedOrder.toSet())
+                                    ?: ordered.firstOrNull(StreamAutoPlaySelector::isPlayable)
+                            )
+                            // B2: the first pick plays once slower addons had the grace to answer with a better one.
+                            graceOver && preferred != null -> Decision(preferred)
+                            // Past the soft deadline, a slow addon is not waited for when something plays (#158).
+                            softPassed -> (preferred ?: fresh.firstOrNull(StreamAutoPlaySelector::isPlayable))?.let(::Decision)
+                            else -> null
+                        }
+                        if (picked != null) break
+                        // The first stream the user's settings pick came back: the grace starts.
+                        if (grace == null && preferred != null) {
+                            SportsLiveDebugTiming.log { "firstArrival ms=${System.currentTimeMillis() - startedAt}" }
+                            grace = launch {
+                                delay(firstArrivalGraceMs)
+                                events.send(Event.GraceOver)
+                            }
+                        }
+                    }
+                } finally {
+                    feeds.forEach { it.cancel() }
+                    grace?.cancel()
                 }
-            }.first()
+                picked
+            }
+        }
+        SportsLiveDebugTiming.log {
+            "searchDecided ms=${System.currentTimeMillis() - startedAt} finished=$finished grace=$graceOver soft=$softPassed " +
+                "picked=${decision?.stream != null}"
         }
         val came = StreamAutoPlaySelector.orderAddonStreams(
             (last as? NetworkResult.Success)?.data.orEmpty(),

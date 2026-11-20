@@ -16,12 +16,10 @@ import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveKind
 import com.nuvio.tv.domain.model.SportsLiveTab
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** #76: the zap banner's content, its spoiler handling and ▼ opening the panel. */
+/** #76: the zap banner's content and its spoiler handling; BUG6/Q10: ▲/▼ names, ▼ always zaps. */
 class SportsLiveZapBannerTest {
 
     private val nba = EspnFixtures.events(EspnFixtures.NBA_20261115, EspnLeagueMap.NBA)
@@ -88,14 +86,21 @@ class SportsLiveZapBannerTest {
     }
 
     @Test
-    fun `down opens the panel while the arrival banner shows, never while switching or in a party`() {
-        val arrived = session.banner(switching = false)
-        val switching = session.banner(switching = true)
-        assertTrue(zapBannerOpensPanel(KeyEvent.KEYCODE_DPAD_DOWN, partyActive = false, banner = arrived))
-        assertFalse(zapBannerOpensPanel(KeyEvent.KEYCODE_DPAD_DOWN, partyActive = false, banner = switching))
-        assertFalse(zapBannerOpensPanel(KeyEvent.KEYCODE_DPAD_DOWN, partyActive = true, banner = arrived))
-        assertFalse(zapBannerOpensPanel(KeyEvent.KEYCODE_DPAD_DOWN, partyActive = false, banner = null))
-        // Channel down still zaps.
-        assertFalse(zapBannerOpensPanel(KeyEvent.KEYCODE_CHANNEL_DOWN, partyActive = false, banner = arrived))
+    fun `the banner names the games up and down zap to, from the frozen zap order`() {
+        val banner = session.banner(switching = false)
+        assertEquals("Sports Channel 1", banner.previous)
+        assertEquals("Knicks vs Celtics", banner.next)
+        // Two games: both keys go to the other one.
+        val two = SportsLiveZapSession.of(listOf(pacers, knicks), pacers.streamKey, SportsLiveTab.LIVE_NOW, null, false)!!
+        assertEquals("Knicks vs Celtics", two.banner(false).previous)
+        assertEquals("Knicks vs Celtics", two.banner(false).next)
+        assertNull(SportsLiveZapSession.of(listOf(pacers), pacers.streamKey, SportsLiveTab.LIVE_NOW, null, false)!!.banner(false).previous)
+    }
+
+    @Test
+    fun `down zaps on while the arrival banner shows, as its line says`() {
+        assertEquals(true, zapDirection(KeyEvent.KEYCODE_DPAD_DOWN, partyActive = false))
+        assertEquals(false, zapDirection(KeyEvent.KEYCODE_DPAD_UP, partyActive = false))
+        assertNull(zapDirection(KeyEvent.KEYCODE_DPAD_DOWN, partyActive = true))
     }
 }

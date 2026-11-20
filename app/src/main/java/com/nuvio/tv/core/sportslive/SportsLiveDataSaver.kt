@@ -12,4 +12,7 @@ object SportsLiveDataSaver {
 
     /** The on-focus ended-probe runs only when Data saver is off. */
     fun onFocusProbeAllowed(dataSaver: Boolean): Boolean = !dataSaver
+
+    /** live.20 B2: streams are looked up ahead (a rested row, the zap neighbours) only when Data saver is off. */
+    fun prefetchAllowed(dataSaver: Boolean): Boolean = !dataSaver
 }
