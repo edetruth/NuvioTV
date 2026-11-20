@@ -88,6 +88,11 @@ fun sportsLiveEndActions(card: SportsLiveEndCard, pane: Boolean = false): List<S
     add(SportsLiveEndAction.STAY)
 }
 
+/** A dual pane card's key line: "OK Watch next · Back close" with a game to watch next, else "Back close". */
+fun sportsLiveEndPaneKeys(card: SportsLiveEndCard): Int =
+    if (SportsLiveEndAction.WATCH_NEXT in sportsLiveEndActions(card, pane = true)) R.string.sports_live_end_pane_keys
+    else R.string.sports_live_end_pane_keys_close
+
 /**
  * The card itself, a calm V2 card over the last frame (#161), never an error. With [selected] null its buttons
  * are focusable and Watch next takes focus (the full player): any key stops the countdown ([onAnyKey]) and still
@@ -181,7 +186,6 @@ fun SportsLiveEndCardView(
             val waiting = when {
                 secondsLeft != null -> stringResource(R.string.sports_live_end_switching_in, secondsLeft)
                 card.stillWatching -> stringResource(R.string.sports_live_end_still_watching)
-                pane && !card.countdown -> stringResource(R.string.sports_live_end_ok_to_switch)
                 else -> null
             }
             waiting?.let {
@@ -204,6 +208,16 @@ fun SportsLiveEndCardView(
         }
         if (!showActions) return@Column
         val actions = sportsLiveEndActions(card, pane)
+        // A pane's card names its keys (every prompt does): "OK Watch next · Back close", or "Back close" alone.
+        if (pane) {
+            Text(
+                text = stringResource(sportsLiveEndPaneKeys(card)),
+                style = SportsLiveTokens.style(SportsLiveTokens.Type.Meta),
+                color = SportsLiveTokens.Colors.TextMuted,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
         if (actions.isEmpty()) return@Column
         val labels = mapOf(
             SportsLiveEndAction.WATCH_NEXT to stringResource(R.string.sports_live_end_watch_next),

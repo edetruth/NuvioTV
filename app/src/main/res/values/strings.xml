@@ -4337,8 +4337,9 @@
     <string name="sports_live_end_final_score">Final · %1$s %2$d–%3$d %4$s</string>
     <string name="sports_live_end_up_next">UP NEXT</string>
     <string name="sports_live_end_switching_in">Switching in %1$d s · any key to stop</string>
-    <string name="sports_live_end_ok_to_switch">OK to switch</string>
     <string name="sports_live_end_still_watching">Are you still watching? OK to switch</string>
+    <string name="sports_live_end_pane_keys">OK Watch next · Back close</string>
+    <string name="sports_live_end_pane_keys_close">Back close</string>
     <string name="sports_live_end_nothing_live">Nothing else live</string>
     <string name="sports_live_end_nothing_live_next">Nothing else live · Next: %1$s %2$s</string>
     <string name="sports_live_end_watch_next">Watch next</string>

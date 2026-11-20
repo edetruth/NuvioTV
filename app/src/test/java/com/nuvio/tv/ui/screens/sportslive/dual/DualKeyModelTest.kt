@@ -1,12 +1,14 @@
 package com.nuvio.tv.ui.screens.sportslive.dual
 
 import android.view.KeyEvent
+import com.nuvio.tv.R
 import com.nuvio.tv.core.sportslive.GameEndReason
 import com.nuvio.tv.domain.model.SportsLiveTab
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveEndAction
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveEndCard
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapSession
 import com.nuvio.tv.ui.screens.sportslive.sportsLiveEndActions
+import com.nuvio.tv.ui.screens.sportslive.sportsLiveEndPaneKeys
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -94,6 +96,9 @@ class DualKeyModelTest {
         // Coordinator decision 4: Back closes a pane's end card.
         assertEquals(listOf(SportsLiveEndAction.WATCH_NEXT), sportsLiveEndActions(ended(next = true).end!!, pane = true))
         assertEquals(emptyList<SportsLiveEndAction>(), sportsLiveEndActions(ended(next = false).end!!, pane = true))
+        // Its key line names the keys: OK Watch next and Back close, or Back close alone.
+        assertEquals(R.string.sports_live_end_pane_keys, sportsLiveEndPaneKeys(ended(next = true).end!!))
+        assertEquals(R.string.sports_live_end_pane_keys_close, sportsLiveEndPaneKeys(ended(next = false).end!!))
         val state = split.copy(left = ended(next = true))
         assertEquals(1, dualCardButtons(ended(next = true)))
         assertEquals(DualKeyRoute.Zap(forward = true), dualKeyRoute(state, KeyEvent.KEYCODE_DPAD_DOWN, cardSelected = 0))
