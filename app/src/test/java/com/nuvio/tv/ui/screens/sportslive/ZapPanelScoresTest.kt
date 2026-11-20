@@ -250,6 +250,37 @@ class ZapPanelScoresTest {
         assertNull(viewModel.panel.value)
     }
 
+    @Test
+    fun `the game playing is scored in the open panel even when its chip hides it`() = runTest(mainDispatcherRule.dispatcher) {
+        val provider = object : ScoreProvider {
+            override suspend fun scoreboard(league: EspnLeague, date: LocalDate): ScoreboardResult =
+                ScoreboardResult(if (league == EspnLeagueMap.NBA) listOf(live(pacersEvent, "Q3 4:12", 88, 80)) else emptyList())
+        }
+        val scores = LiveScoresRepository(
+            provider = provider, settings = MutableStateFlow(ScoreSettings()), scope = backgroundScope,
+            now = { now + testScheduler.currentTime }, zone = { ZoneOffset.UTC }, jitter = { 0L },
+            espnStarts = SportsLiveEspnStarts()
+        )
+        val hockey = item("Boston Bruins at Toronto Maple Leafs", pacersEvent.startMs).copy(sport = "Hockey")
+        val (viewModel, playing) = panelViewModel(scores, extra = listOf(hockey))
+        viewModel.openPanel()
+        runCurrent()
+        // The Hockey chip lists the hockey game only: the basketball game playing is pinned above it, still scored.
+        viewModel.onPanelChip(com.nuvio.tv.core.sportslive.SportsLiveSportKind.filterKeyOf(hockey))
+        val state = viewModel.panel.first { panel -> panel?.nowPlayingRow?.chip != null && panel.rows.none { it.item.streamKey == playing.streamKey } }!!
+        assertEquals(playing.streamKey, state.nowPlayingRow!!.item.streamKey)
+        assertEquals(ScoreChip.Live("Q3 4:12", com.nuvio.tv.core.sportslive.scores.ChipScore(80, 88)), state.nowPlayingRow!!.chip)
+    }
+
+    @Test
+    fun `the panel tracks the game playing once, beside the games it lists`() {
+        val playing = item("Indiana Pacers at Philadelphia 76ers", pacersEvent.startMs)
+        val other = item("Los Angeles Lakers at Phoenix Suns", lakersEvent.startMs)
+        assertEquals(listOf(other, playing), panelTrackedCards(listOf(other), playing))
+        assertEquals(listOf(playing, other), panelTrackedCards(listOf(playing, other), playing))
+        assertEquals(listOf(other), panelTrackedCards(listOf(other), null))
+    }
+
     // The game playing is polled for its full-time toast (#60)
 
     /** Requests [scores]' provider makes while the player of [panelViewModel]'s game runs for 30 minutes. */
@@ -329,7 +360,8 @@ class ZapPanelScoresTest {
 
     private fun panelViewModel(
         scores: LiveScoresRepository,
-        logos: TeamLogoBook = TeamLogoBook.shared
+        logos: TeamLogoBook = TeamLogoBook.shared,
+        extra: List<SportsLiveItem> = emptyList()
     ): Pair<SportsLiveZapViewModel, SportsLiveItem> {
         val playing = item("Indiana Pacers at Philadelphia 76ers", pacersEvent.startMs)
         val other = item("Los Angeles Lakers at Phoenix Suns", lakersEvent.startMs)
@@ -339,7 +371,7 @@ class ZapPanelScoresTest {
         val claimed = mockk<ClaimedCatalog>(relaxed = true)
         every { claimed.key } returns CATALOG
         val repo = mockk<SportsLiveRepository>(relaxed = true)
-        every { repo.latest } returns MutableStateFlow(SportsLiveLoad(listOf(playing, other), emptyList(), 0L, setOf(CATALOG)))
+        every { repo.latest } returns MutableStateFlow(SportsLiveLoad(listOf(playing, other) + extra, emptyList(), 0L, setOf(CATALOG)))
         every { repo.claimedCatalogs } returns flowOf(listOf(claimed))
         every { repo.endedKeys } returns MutableStateFlow(emptySet())
         every { repo.followedTeams } returns flowOf(emptyList())

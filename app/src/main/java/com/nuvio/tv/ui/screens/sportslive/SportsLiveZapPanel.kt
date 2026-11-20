@@ -77,6 +77,14 @@ internal fun panelChipCounts(items: List<SportsLiveItem>, scoped: List<SportsLiv
     return if (scoped.size < items.size) counts + (SportsLiveUiState.ALL_SPORTS_FILTER to items.size) else counts
 }
 
+/**
+ * The games the open panel tracks for scores (live.20): those it lists under its chip, and the game [playing] when
+ * the chip or My sports leaves it out, so its pinned Now playing row is scored like any other row (the Scores
+ * setting and spoiler protection apply to it as to them).
+ */
+internal fun panelTrackedCards(shown: List<SportsLiveItem>, playing: SportsLiveItem?): List<SportsLiveItem> =
+    if (playing == null || shown.any { it.streamKey == playing.streamKey }) shown else shown + playing
+
 /** The panel games under [chip] (null and All sports are All, otherwise a sport or "★ My teams"). */
 internal fun filterPanelItems(items: List<SportsLiveItem>, chip: String?): List<SportsLiveItem> =
     if (chip == null) items else items.filter { it.matchesZapFilter(chip, SportsLiveTab.LIVE_NOW) }

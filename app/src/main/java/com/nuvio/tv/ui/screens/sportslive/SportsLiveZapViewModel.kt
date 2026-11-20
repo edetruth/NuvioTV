@@ -484,7 +484,8 @@ class SportsLiveZapViewModel internal constructor(
         // the next open would start tracking this session's list.
         if (panelSession.value !== shown.session) return@map null
         // Under Off too: only the start of games listed live is read then, never a score (live.20, a wrong LIVE).
-        scoreTracker.update(shown.lineup.list.shown, enabled = true)
+        // The game playing too, when the chip or My sports leaves it out: its pinned row gets its score (live.20).
+        scoreTracker.update(panelTrackedCards(shown.lineup.list.shown, shown.state.nowPlayingRow?.item), enabled = true)
         shown.state
     }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
