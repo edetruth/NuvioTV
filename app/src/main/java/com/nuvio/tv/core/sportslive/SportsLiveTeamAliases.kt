@@ -137,7 +137,8 @@ object SportsLiveTeamAliases {
             // F4: the Basque club addons call by its city, ESPN by its own name.
             "athletic club" to listOf("athletic bilbao", "athletic club bilbao"),
             "borussia dortmund" to listOf("dortmund", "bvb"),
-            "bayer leverkusen" to listOf("leverkusen"),
+            // "Bayer 04 Leverkusen" as addons write it; never "Bayern" (Munich), which is its own club above (TV report #5).
+            "bayer leverkusen" to listOf("leverkusen", "bayer 04 leverkusen", "bayer 04"),
             "barcelona" to listOf("barca", "barça"),
             "inter miami" to emptyList(),
             "new york red bulls" to listOf("red bulls", "ny red bulls"),

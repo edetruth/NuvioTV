@@ -342,4 +342,24 @@ class SportsLiveTeamsTest {
     fun `My Teams matching does not take the merge prefix rule`() {
         assertFalse(SportsLiveTeams.matches("Adelaide 36ers", "Adelaide"))
     }
+
+    @Test
+    fun `Bayer is Leverkusen and Bayern is Munich, never one another`() {
+        // TV report #5: "Bayern München vs 1. FC Köln" must reach ESPN's "Bayern Munich" and "FC Cologne".
+        for (name in listOf("Bayern", "FC Bayern", "Bayern München", "Bayern Munchen", "Bayern Muenchen", "FC Bayern München")) {
+            assertTrue(name, SportsLiveTeams.matches(name, "Bayern Munich"))
+            assertFalse(name, SportsLiveTeams.matches(name, "Bayer Leverkusen"))
+            assertEquals(name, SportsLiveTeams.MergeMatch.NONE, SportsLiveTeams.mergeMatch(name, "Bayer Leverkusen"))
+        }
+        for (name in listOf("1. FC Köln", "Köln", "Koln", "Koeln", "FC Koln", "Cologne")) {
+            assertTrue(name, SportsLiveTeams.matches(name, "FC Cologne"))
+        }
+        for (name in listOf("Bayer Leverkusen", "Bayer 04 Leverkusen", "Leverkusen", "Bayer 04")) {
+            assertTrue(name, SportsLiveTeams.matches(name, "Bayer Leverkusen"))
+            assertFalse(name, SportsLiveTeams.matches(name, "Bayern Munich"))
+        }
+        // "Bayer" alone names neither club for sure: no match either way.
+        assertFalse(SportsLiveTeams.matches("Bayer", "Bayern Munich"))
+        assertFalse(SportsLiveTeams.matches("Bayer", "Bayer Leverkusen"))
+    }
 }
