@@ -295,7 +295,7 @@ class SportsLiveResultsViewModel internal constructor(
     }
 
     /**
-     * True while Results is the selected tab. Back on it after [RESULTS_DAY_KEPT_MS] away or on a new day
+     * True while Results is the selected tab. Back on it after [SportsLiveRefreshPlan.OPEN_STALE_MS] away or on a new day
      * ([resultsDayExpired]), it opens afresh: always Today (an empty Today offers Yesterday), ★ My sports, the
      * list at its top. A quick hop keeps the chosen day. The first open still uses [defaultResultsDay].
      */
@@ -424,19 +424,12 @@ internal fun defaultResultsDay(today: ResultsLoad): Int =
     if ((today as? ResultsLoad.Loaded)?.hasMyFinals == true) SportsResults.TODAY else SportsResults.YESTERDAY
 
 /**
- * How long a day chosen on Results stays chosen while the user is elsewhere (live.20 user report): a quick
- * hop to Live now and back keeps it; watching a game does not. 10 min, as Replays refreshes on opening
- * after 10 min ([SportsLiveRefreshPlan.REPLAYS_OPEN_STALE_MS]).
- */
-internal const val RESULTS_DAY_KEPT_MS = 10 * 60_000L
-
-/**
  * Back on Results [nowMs], left at [leftAtMs] and away for [awayMs] (Game page time from Results left out):
- * it opens afresh once [RESULTS_DAY_KEPT_MS] have counted or ESPN's day (US Eastern, what "Yesterday"
+ * it opens afresh once [SportsLiveRefreshPlan.OPEN_STALE_MS] have counted or ESPN's day (US Eastern, what "Yesterday"
  * counts from) has moved on.
  */
 internal fun resultsDayExpired(leftAtMs: Long, nowMs: Long, awayMs: Long = nowMs - leftAtMs): Boolean {
-    if (awayMs >= RESULTS_DAY_KEPT_MS) return true
+    if (awayMs >= SportsLiveRefreshPlan.OPEN_STALE_MS) return true
     fun espnDay(ms: Long) = java.time.Instant.ofEpochMilli(ms).atZone(SportsResults.EASTERN).toLocalDate()
     return espnDay(leftAtMs) != espnDay(nowMs)
 }

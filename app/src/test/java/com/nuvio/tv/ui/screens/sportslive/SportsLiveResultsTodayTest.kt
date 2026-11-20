@@ -135,8 +135,11 @@ class SportsLiveResultsTodayTest {
     fun `the chosen day is kept under 10 min away on the same ESPN day`() {
         val at = base // 17 00 US Eastern
         assertFalse(resultsDayExpired(at, at + 60_000L))
-        assertFalse(resultsDayExpired(at, at + RESULTS_DAY_KEPT_MS - 1))
-        assertTrue(resultsDayExpired(at, at + RESULTS_DAY_KEPT_MS))
+        assertFalse(resultsDayExpired(at, at + SportsLiveRefreshPlan.OPEN_STALE_MS - 1))
+        assertTrue(resultsDayExpired(at, at + SportsLiveRefreshPlan.OPEN_STALE_MS))
+        // One 10-minute rule: Replays refreshes on opening after it too.
+        assertEquals(10 * 60_000L, SportsLiveRefreshPlan.OPEN_STALE_MS)
+        assertEquals(SportsLiveRefreshPlan.OPEN_STALE_MS, SportsLiveRefreshPlan.of(com.nuvio.tv.domain.model.SportsLiveTab.REPLAYS)?.openStaleMs)
         // 23 58 US Eastern: a minute later is the same ESPN day, three minutes later a new one.
         val beforeMidnight = Instant.parse("2026-11-17T04:58:00Z").toEpochMilli()
         assertFalse(resultsDayExpired(beforeMidnight, beforeMidnight + 60_000L))
@@ -154,7 +157,7 @@ class SportsLiveResultsTodayTest {
         advanceTimeBy(1_000); runCurrent()
         // Live now for a few minutes, then back.
         vm.setActive(false)
-        advanceTimeBy(RESULTS_DAY_KEPT_MS - 60_000L); runCurrent()
+        advanceTimeBy(SportsLiveRefreshPlan.OPEN_STALE_MS - 60_000L); runCurrent()
         vm.setActive(true)
         runCurrent()
         assertEquals(3, vm.selectedDay.value)
@@ -177,7 +180,7 @@ class SportsLiveResultsTodayTest {
         advanceTimeBy(1_000); runCurrent()
         // Watching games on Live now, then back to Results.
         vm.setActive(false)
-        advanceTimeBy(RESULTS_DAY_KEPT_MS); runCurrent()
+        advanceTimeBy(SportsLiveRefreshPlan.OPEN_STALE_MS); runCurrent()
         vm.setActive(true)
         advanceTimeBy(1_000); runCurrent()
         // Today, ★ My sports, a new list (its key changes, so it starts at its top).
@@ -215,7 +218,7 @@ class SportsLiveResultsTodayTest {
         vm.onGamePageShown(true)
         advanceTimeBy(60_000L); runCurrent()
         vm.onGamePageShown(false)
-        advanceTimeBy(RESULTS_DAY_KEPT_MS + 60_000L); runCurrent()
+        advanceTimeBy(SportsLiveRefreshPlan.OPEN_STALE_MS + 60_000L); runCurrent()
         vm.onGamePageShown(true)
         advanceTimeBy(60_000L); runCurrent()
         vm.onGamePageShown(false)
@@ -269,7 +272,7 @@ class SportsLiveResultsTodayTest {
         assertEquals(setOf("final"), vm.uiState.value.revealed)
         // Back after 10 min: hidden again.
         vm.setActive(false)
-        advanceTimeBy(RESULTS_DAY_KEPT_MS); runCurrent()
+        advanceTimeBy(SportsLiveRefreshPlan.OPEN_STALE_MS); runCurrent()
         vm.setActive(true)
         advanceTimeBy(1_000); runCurrent()
         assertTrue(vm.uiState.value.revealed.isEmpty())

@@ -1071,12 +1071,17 @@ internal data class SportsLiveRefreshPlan(
     companion object {
         const val LIVE_NOW_MS = 3 * 60_000L
         const val UPCOMING_MS = 10 * 60_000L
-        const val REPLAYS_OPEN_STALE_MS = 10 * 60_000L
+
+        /**
+         * Back on a tab after this long away, it is stale: Replays refreshes on opening, and Results opens
+         * afresh on Today (live.20: a quick hop keeps the chosen day, watching a game does not).
+         */
+        const val OPEN_STALE_MS = 10 * 60_000L
 
         fun of(tab: SportsLiveTab): SportsLiveRefreshPlan? = when (tab) {
             SportsLiveTab.LIVE_NOW -> SportsLiveRefreshPlan(setOf(SportsLiveKind.EVENTS), LIVE_NOW_MS)
             SportsLiveTab.UPCOMING -> SportsLiveRefreshPlan(setOf(SportsLiveKind.EVENTS), UPCOMING_MS)
-            SportsLiveTab.REPLAYS -> SportsLiveRefreshPlan(setOf(SportsLiveKind.REPLAY), everyMs = null, openStaleMs = REPLAYS_OPEN_STALE_MS)
+            SportsLiveTab.REPLAYS -> SportsLiveRefreshPlan(setOf(SportsLiveKind.REPLAY), everyMs = null, openStaleMs = OPEN_STALE_MS)
             SportsLiveTab.CHANNELS, SportsLiveTab.RESULTS -> null
         }
     }
