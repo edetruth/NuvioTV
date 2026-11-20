@@ -156,6 +156,32 @@ class EspnScoreProvider internal constructor(
         }
 
     /**
+     * Scores Off (live.20): the scoreboard read for its schedule only. Always from ESPN, never written to the
+     * HTTP cache (no score is kept on disk while Scores is Off), and not recorded in [health] (Scores status
+     * shows nothing under Off). Individual sports list no team games: none are returned.
+     */
+    override suspend fun scheduleScoreboard(league: EspnLeague, date: LocalDate): ScoreboardResult =
+        withContext(Dispatchers.IO) {
+            try {
+                val request = Request.Builder().url(scoreboardUrl(league, date)).cacheControl(SCHEDULE_ONLY).build()
+                client.newCall(request).execute().use { response ->
+                    val body = response.body?.string()
+                    val dto = if (response.isSuccessful && body != null) adapter.fromJson(body) else null
+                    when {
+                        dto == null -> ScoreboardResult.FAILED
+                        EspnIndividualResults.covers(league) -> ScoreboardResult(emptyList())
+                        else -> ScoreboardResult(toSnapshots(dto, league))
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                debugLog("${league.path} $date (schedule): ${e.javaClass.simpleName}")
+                ScoreboardResult.FAILED
+            }
+        }
+
+    /**
      * The game summary of [eventId] on [league]'s feed path, as ESPN sent it; null on any failure. Never
      * stored in the HTTP cache (a summary is ~500 KB): finals have their own trimmed disk copy. A failure
      * is recorded in [health] here; a success once the body is read ([GameSummaryRepository]).
@@ -251,6 +277,9 @@ class EspnScoreProvider internal constructor(
         // ".../gameId/401930175/league/fifa.friendly_u21"
         private val LEAGUE_IN_LINK = Regex("""/league/([a-z0-9._-]+)""")
         private const val PAST_DAY_MAX_STALE_DAYS = 7
+
+        /** A Scores-Off schedule read: from ESPN, never stored in the HTTP cache. */
+        private val SCHEDULE_ONLY = CacheControl.Builder().noCache().noStore().build()
 
         private val JSON = "application/json".toMediaType()
 

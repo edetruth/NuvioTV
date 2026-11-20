@@ -92,11 +92,13 @@ class EuroLeagueScoresTest {
     // --- Fetching ---
 
     private val requests = mutableListOf<String>()
+    private val cacheHeaders = mutableListOf<String?>()
 
     private fun source(code: Int = 200, now: () -> Long, health: EspnFeedHealth? = null) = EuroLeagueScoreSource(
         OkHttpClient.Builder().addInterceptor(Interceptor { chain ->
             val url = chain.request().url.toString()
             requests += url
+            cacheHeaders += chain.request().header("Cache-Control")
             val body = when {
                 "limit=" in url -> SEASON
                 "roundNumber=13" in url -> ROUND_13
@@ -143,6 +145,24 @@ class EuroLeagueScoresTest {
         assertEquals(FeedFailureKind.HTTP, feed.lastFailure)
     }
 
+    @Test
+    fun `a Scores-Off schedule read stores nothing and records no health, the normal read is unchanged`() = runTest {
+        val now = ms("2026-11-19T18:00:00Z")
+        val health = EspnFeedHealth { now }
+        val day = LocalDate.of(2026, 11, 19)
+        val off = source(now = { now }, health = health).scheduleScoreboard(EspnLeagueMap.EUROLEAGUE, day)
+        assertEquals(setOf("euroleague:E2026_120", "euroleague:E2026_121"), off.events.map { it.eventId }.toSet())
+        assertEquals(listOf<String?>("no-store", "no-store"), cacheHeaders)
+        assertTrue(health.feeds.value.isEmpty())
+        assertTrue(source(code = 503, now = { now }, health = health).scheduleScoreboard(EspnLeagueMap.EUROLEAGUE, day).failed)
+        assertTrue(health.feeds.value.isEmpty())
+
+        cacheHeaders.clear()
+        assertFalse(source(now = { now }, health = health).scoreboard(EspnLeagueMap.EUROLEAGUE, day).failed)
+        assertEquals(listOf<String?>(null, null), cacheHeaders)
+        assertNull(health.feeds.value.getValue(EspnFeedKey.scoreboard(EspnLeagueMap.EUROLEAGUE, day)).lastFailure)
+    }
+
     // --- Routing ---
 
     private class FakeEspn : ScoreProvider {
@@ -152,6 +172,11 @@ class EuroLeagueScoresTest {
             return ScoreboardResult(emptyList())
         }
         override suspend fun teamList(league: EspnLeague): List<DirectoryTeam> = emptyList()
+        val scheduleCalls = mutableListOf<ScoreFeed>()
+        override suspend fun scheduleScoreboard(league: EspnLeague, date: LocalDate): ScoreboardResult {
+            scheduleCalls += ScoreFeed(league, date)
+            return ScoreboardResult(emptyList())
+        }
     }
 
     private class FakeSource(var events: List<ScoreSnapshot> = emptyList()) : LeagueScoreSource {
@@ -178,6 +203,19 @@ class EuroLeagueScoresTest {
         assertNull(routed.teamList(EspnLeagueMap.EUROLEAGUE))
         assertNotNull(routed.teamList(EspnLeagueMap.NBA))
         assertNull(routed.recentScoreboard(EspnLeagueMap.EUROLEAGUE, day))
+    }
+
+    @Test
+    fun `a Scores-Off schedule read is routed like a scoreboard`() = runTest {
+        val espn = FakeEspn()
+        val euro = FakeSource()
+        val routed = RoutedScoreProvider(espn, listOf(euro))
+        val day = LocalDate.of(2026, 11, 19)
+        routed.scheduleScoreboard(EspnLeagueMap.EUROLEAGUE, day)
+        routed.scheduleScoreboard(EspnLeagueMap.NBA, day)
+        assertEquals(listOf(EspnLeagueMap.EUROLEAGUE), euro.calls.map { it.league })
+        assertEquals(listOf(EspnLeagueMap.NBA), espn.scheduleCalls.map { it.league })
+        assertTrue(espn.calls.isEmpty())
     }
 
     private fun slugs(sport: String?, vararg hints: String) = EspnLeagueMap.leaguesFor(sport, hints.toList()).map { it.path }

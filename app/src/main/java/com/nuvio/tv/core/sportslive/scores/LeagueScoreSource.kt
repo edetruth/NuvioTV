@@ -13,6 +13,9 @@ interface LeagueScoreSource {
     fun handles(league: EspnLeague): Boolean
 
     suspend fun scoreboard(league: EspnLeague, date: LocalDate): ScoreboardResult
+
+    /** As [ScoreProvider.scheduleScoreboard]: nothing stored on disk, no health recorded. */
+    suspend fun scheduleScoreboard(league: EspnLeague, date: LocalDate): ScoreboardResult = scoreboard(league, date)
 }
 
 /**
@@ -28,6 +31,9 @@ class RoutedScoreProvider(
 
     override suspend fun scoreboard(league: EspnLeague, date: LocalDate): ScoreboardResult =
         sourceFor(league)?.scoreboard(league, date) ?: espn.scoreboard(league, date)
+
+    override suspend fun scheduleScoreboard(league: EspnLeague, date: LocalDate): ScoreboardResult =
+        sourceFor(league)?.scheduleScoreboard(league, date) ?: espn.scheduleScoreboard(league, date)
 
     override suspend fun recentScoreboard(league: EspnLeague, date: LocalDate): ScoreboardResult? =
         if (sourceFor(league) != null) null else espn.recentScoreboard(league, date)

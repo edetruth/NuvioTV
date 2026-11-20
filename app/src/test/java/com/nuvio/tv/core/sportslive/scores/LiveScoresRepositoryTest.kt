@@ -46,6 +46,12 @@ class LiveScoresRepositoryTest {
             return respond(feed)
         }
         override suspend fun recentScoreboard(league: EspnLeague, date: LocalDate): ScoreboardResult? = recent(ScoreFeed(league, date))
+        /** Scores-Off schedule reads (no disk copy, no health), also counted in [calls]. */
+        val scheduleCalls = mutableListOf<ScoreFeed>()
+        override suspend fun scheduleScoreboard(league: EspnLeague, date: LocalDate): ScoreboardResult {
+            scheduleCalls += ScoreFeed(league, date)
+            return scoreboard(league, date)
+        }
         /** Team list requests (#82). */
         val teamCalls = mutableListOf<EspnLeague>()
         var teams: suspend (EspnLeague) -> List<DirectoryTeam>? = { null }
@@ -1452,6 +1458,23 @@ class LiveScoresRepositoryTest {
         runCurrent()
         advanceTimeBy(60 * 60_000L); runCurrent()
         assertEquals(2 * first, provider.calls.size)
+    }
+
+    @Test
+    fun `Scores Off reads only through the no-store schedule read, Scores On never does`() = runTest {
+        settings.value = ScoreSettings(mode = ScoresMode.OFF)
+        val repo = repository("2026-11-20T15:40:00Z")
+        collect(repo)
+        repo.track(SECTION, listOf(item("Nice vs PSG", "Ligue 1", "2026-11-20T15:30:00Z")))
+        runCurrent()
+        assertTrue(provider.calls.isNotEmpty())
+        assertEquals(provider.calls, provider.scheduleCalls)
+
+        val offReads = provider.scheduleCalls.size
+        settings.value = ScoreSettings(mode = ScoresMode.SHOW)
+        runCurrent()
+        assertTrue(provider.calls.size > offReads)
+        assertEquals(offReads, provider.scheduleCalls.size)
     }
 
     @Test

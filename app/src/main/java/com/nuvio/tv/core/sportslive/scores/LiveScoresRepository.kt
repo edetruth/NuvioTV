@@ -442,7 +442,7 @@ class LiveScoresRepository internal constructor(
             cards += entry to cardFeeds
         }
         val results = coroutineScope {
-            needed.filter { it !in answered }.map { feed -> async { feed to provider.scoreboard(feed.league, feed.date) } }.awaitAll()
+            needed.filter { it !in answered }.map { feed -> async { feed to provider.scheduleScoreboard(feed.league, feed.date) } }.awaitAll()
         }
         for ((feed, result) in results) if (!result.failed) answered[feed] = nowMs to result.events.filter { it.individual == null }.map(::scheduleOnly)
         lock.withLock {

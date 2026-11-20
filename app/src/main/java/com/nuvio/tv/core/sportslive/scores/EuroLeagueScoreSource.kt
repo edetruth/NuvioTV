@@ -7,6 +7,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import okhttp3.CacheControl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.time.Instant
@@ -50,30 +51,36 @@ class EuroLeagueScoreSource internal constructor(
 
     override fun handles(league: EspnLeague): Boolean = league == EspnLeagueMap.EUROLEAGUE || league == EspnLeagueMap.EUROCUP
 
-    override suspend fun scoreboard(league: EspnLeague, date: LocalDate): ScoreboardResult {
+    override suspend fun scoreboard(league: EspnLeague, date: LocalDate): ScoreboardResult = read(league, date, scheduleOnly = false)
+
+    /** Scores Off (live.20): the same games, but no response is written to the HTTP cache and no health is recorded. */
+    override suspend fun scheduleScoreboard(league: EspnLeague, date: LocalDate): ScoreboardResult = read(league, date, scheduleOnly = true)
+
+    private suspend fun read(league: EspnLeague, date: LocalDate, scheduleOnly: Boolean): ScoreboardResult {
+        val recorder = health.takeUnless { scheduleOnly }
         val competition = competitionOf(league) ?: return ScoreboardResult.FAILED
         val season = seasonCode(competition, date)
         val key = EspnFeedKey.scoreboard(league, date)
         return try {
-            val schedule = schedule(competition, season)
-            val games = schedule.rounds[date].orEmpty().sorted().flatMap { number -> round(competition, season, number) }
-            health?.recordSuccess(key)
+            val schedule = schedule(competition, season, scheduleOnly)
+            val games = schedule.rounds[date].orEmpty().sorted().flatMap { number -> round(competition, season, number, scheduleOnly) }
+            recorder?.recordSuccess(key)
             ScoreboardResult(toSnapshots(games, league).filter { it.startMs?.let(::espnDay) == date })
         } catch (e: CancellationException) {
             throw e
         } catch (e: FeedException) {
-            health?.recordFailure(key, e.kind, e.httpCode)
+            recorder?.recordFailure(key, e.kind, e.httpCode)
             ScoreboardResult.FAILED
         } catch (e: Exception) {
-            health?.recordFailure(key, FeedFailureKind.of(e))
+            recorder?.recordFailure(key, FeedFailureKind.of(e))
             ScoreboardResult.FAILED
         }
     }
 
-    private suspend fun schedule(competition: String, season: String): Schedule = scheduleLock.withLock {
+    private suspend fun schedule(competition: String, season: String, noStore: Boolean): Schedule = scheduleLock.withLock {
         val id = "$competition/$season"
         schedules[id]?.takeIf { now() - it.fetchedAt in 0 until SCHEDULE_MS }?.let { return@withLock it }
-        val games = get("${gamesUrl(competition, season)}?limit=$SEASON_LIMIT")
+        val games = get("${gamesUrl(competition, season)}?limit=$SEASON_LIMIT", noStore)
         val byDay = HashMap<LocalDate, MutableSet<Int>>()
         for (game in games) {
             val round = game.round?.round ?: continue
@@ -83,10 +90,10 @@ class EuroLeagueScoreSource internal constructor(
         Schedule(now(), byDay).also { schedules[id] = it }
     }
 
-    private suspend fun round(competition: String, season: String, round: Int): List<EuroLeagueGameDto> = roundLock.withLock {
+    private suspend fun round(competition: String, season: String, round: Int, noStore: Boolean): List<EuroLeagueGameDto> = roundLock.withLock {
         val id = "$competition/$season/$round"
         rounds[id]?.takeIf { now() - it.fetchedAt in 0 until ROUND_REUSE_MS }?.let { return@withLock it.games }
-        val games = get("${gamesUrl(competition, season)}?roundNumber=$round")
+        val games = get("${gamesUrl(competition, season)}?roundNumber=$round", noStore)
         if (rounds.size >= MAX_ROUNDS_KEPT) rounds.clear()
         rounds[id] = RoundGames(now(), games)
         games
@@ -94,8 +101,9 @@ class EuroLeagueScoreSource internal constructor(
 
     private fun gamesUrl(competition: String, season: String) = "$baseUrl$competition/seasons/$season/games"
 
-    private suspend fun get(url: String): List<EuroLeagueGameDto> = withContext(Dispatchers.IO) {
-        client.newCall(Request.Builder().url(url).build()).execute().use { response ->
+    private suspend fun get(url: String, noStore: Boolean): List<EuroLeagueGameDto> = withContext(Dispatchers.IO) {
+        val request = Request.Builder().url(url).apply { if (noStore) cacheControl(CacheControl.Builder().noStore().build()) }.build()
+        client.newCall(request).execute().use { response ->
             val body = response.body?.string()
             if (!response.isSuccessful || body == null) throw FeedException(FeedFailureKind.HTTP, response.code)
             val dto = adapter.fromJson(body) ?: throw FeedException(FeedFailureKind.FORMAT)

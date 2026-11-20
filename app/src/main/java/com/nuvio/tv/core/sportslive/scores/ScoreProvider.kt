@@ -7,6 +7,12 @@ interface ScoreProvider {
     suspend fun scoreboard(league: EspnLeague, date: LocalDate): ScoreboardResult
 
     /**
+     * [league]'s scoreboard for [date] read for its schedule only (Scores Off, live.20): the answer is never
+     * written to disk (no HTTP cache entry) and never counts toward the feeds' health in Scores status.
+     */
+    suspend fun scheduleScoreboard(league: EspnLeague, date: LocalDate): ScoreboardResult = scoreboard(league, date)
+
+    /**
      * The last copy of [league]'s scoreboard for [date] fetched within [RECENT_MS], from local storage
      * only (no request), or null: a warm start after an app restart (#66).
      */

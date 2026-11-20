@@ -119,6 +119,49 @@ class EspnScoreProviderTest {
     }
 
     @Test
+    fun `a Scores-Off schedule read never writes the HTTP cache or feed health, a normal read still does`() = runTest {
+        val dir = Files.createTempDirectory("espn-schedule-cache").toFile()
+        try {
+            MockWebServer().use { server ->
+                repeat(2) {
+                    server.enqueue(MockResponse().setBody(EspnFixtures.json(EspnFixtures.NBA_20261115)).addHeader("Cache-Control", "max-age=60"))
+                }
+                val cache = Cache(dir, 1_000_000)
+                val health = EspnFeedHealth { 0L }
+                val p = EspnScoreProvider(
+                    OkHttpClient.Builder().cache(cache).build(), EspnFixtures.moshi, server.url("/").toString(),
+                    today = { day }, health = health
+                )
+                val off = p.scheduleScoreboard(EspnLeagueMap.NBA, day)
+                assertEquals(5, off.events.size)
+                assertEquals("no-cache, no-store", server.takeRequest().getHeader("Cache-Control"))
+                assertEquals(0, cache.writeSuccessCount())
+                assertTrue(health.feeds.value.isEmpty())
+                // Nothing stored: no warm start comes from a schedule read.
+                assertNull(p.recentScoreboard(EspnLeagueMap.NBA, day))
+
+                // Scores On: stored and recorded as before.
+                assertFalse(p.scoreboard(EspnLeagueMap.NBA, day).failed)
+                assertEquals(1, cache.writeSuccessCount())
+                assertTrue(EspnFeedKey.scoreboard(EspnLeagueMap.NBA, day) in health.feeds.value)
+            }
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `a failed Scores-Off schedule read records no health`() = runTest {
+        val health = EspnFeedHealth { 0L }
+        val p = EspnScoreProvider(
+            OkHttpClient.Builder().addInterceptor(respond(503, "")).build(), EspnFixtures.moshi,
+            "https://example.invalid/apis/site/v2/sports/", today = { day }, health = health
+        )
+        assertTrue(p.scheduleScoreboard(EspnLeagueMap.NBA, day).failed)
+        assertTrue(health.feeds.value.isEmpty())
+    }
+
+    @Test
     fun `Retry-After in seconds is kept on a failure`() {
         assertEquals(120_000L, EspnScoreProvider.retryAfterMs("120"))
         assertEquals(900_000L, EspnScoreProvider.retryAfterMs("99999"))
