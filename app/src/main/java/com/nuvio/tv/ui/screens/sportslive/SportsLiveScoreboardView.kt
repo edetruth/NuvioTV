@@ -678,7 +678,10 @@ internal fun scoreboardRowTag(league: String?, sport: String?, catalogName: Stri
     // A sport that is only the catalog's name (the addon gave none) says nothing about the game.
     val catalog = catalogName.trim()
     // ESPN's raw abbreviation ("FU17W") gives way to a readable short tag ("U17 WC") when one is known.
-    league?.takeIf { it.isNotBlank() && it.trim() != catalog }?.let { return SportsLiveLeagueTags.of(it) ?: scoreboardTag(it) }
+    // A catch-all ("Other Sports") is no league either: it would read "OS".
+    league?.takeIf { it.isNotBlank() && it.trim() != catalog }
+        ?.takeUnless { raw -> SportsLiveTeams.isGenericSport(SportsLiveDisplayText.label(raw) ?: raw) }
+        ?.let { return SportsLiveLeagueTags.of(it) ?: scoreboardTag(it) }
     return sport
         ?.takeIf { it.trim() != catalog }
         ?.takeUnless { raw -> SportsLiveTeams.isGenericSport(SportsLiveDisplayText.label(raw) ?: raw) }

@@ -44,6 +44,7 @@ import com.nuvio.tv.R
 import com.nuvio.tv.core.sportslive.GameStatusStrings
 import com.nuvio.tv.core.sportslive.SportsLiveDisplayText
 import com.nuvio.tv.core.sportslive.scores.GameArtTeam
+import com.nuvio.tv.core.sportslive.scores.ScoreChip
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveFocus
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens.Colors
@@ -96,7 +97,8 @@ internal fun panelLineOf(row: ScoreboardRow, strings: GameStatusStrings, kickoff
             first = panelTeamLabel(art.first),
             second = panelTeamLabel(art.second),
             scores = scoreboardScoresOf(row.chip),
-            clock = status.primary,
+            // Score hidden: the eye between the names says so; the words would push the names out (#167).
+            clock = status.primary.takeUnless { row.chip is ScoreChip.Hidden },
             period = period,
             live = status.live,
             tag = tag

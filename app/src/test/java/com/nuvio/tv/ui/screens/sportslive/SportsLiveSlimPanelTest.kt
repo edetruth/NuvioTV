@@ -288,6 +288,15 @@ class SportsLiveSlimPanelTest {
         // A catch-all addon sport ("Other Sports") is no tag ("OS"): the cricket the title tells is.
         val catchAll = hockey.copy(item = game("c", now - minute, sport = "Other Sports"), sportTag = SportsLiveSportKind.CRICKET)
         assertEquals("CRICKET", rowTagOf(catchAll, sportLabel = "Cricket"))
+        // The same as a league on an unmatched game's art.
+        val catchAllArt = catchAll.copy(art = art.copy(league = "Other Sports"))
+        assertEquals("CRICKET", rowTagOf(catchAllArt, sportLabel = "Cricket"))
+
+        // Score hidden: the eye shows between the names, and no "Score hidden" words push them out.
+        val hidden = hockey.copy(chip = ScoreChip.Hidden)
+        val hiddenLine = panelLineOf(hidden, strings, kickoff = null)
+        assertEquals(ScoreboardScores.Hidden, hiddenLine.scores)
+        assertEquals(null, hiddenLine.clock)
 
         // A single-line event carries it the same way; a channel never has one.
         val event = hockey.copy(art = null, twoSided = false)
