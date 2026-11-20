@@ -44,6 +44,7 @@ import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
 import com.nuvio.tv.R
+import com.nuvio.tv.core.sportslive.scores.BoxScoreRow
 import com.nuvio.tv.core.sportslive.scores.GameHighlight
 import com.nuvio.tv.core.sportslive.scores.GameSection
 import com.nuvio.tv.core.sportslive.scores.GameStat
@@ -72,6 +73,9 @@ internal const val GAME_ALL_HIGHLIGHTS_KEY = "hl|*"
 /** A top performer's key (by its place in the list), for focus on the way back from its Player card. */
 private fun performerKey(index: Int): String = "pf|$index"
 
+/** A Box score row's key (#180), for the same. */
+private fun boxRowKey(side: ScoreSide, table: Int, row: Int): String = "bx|$side|$table|$row"
+
 /**
  * The Game page's body: the hidden card, a load state, or the chosen [section] as one list whose every row
  * takes focus. [returnKey] names the element [returnFocus] goes on (Back from a clip or a Player card).
@@ -85,7 +89,7 @@ internal fun GameBody(
     returnKey: String?,
     returnFocus: FocusRequester,
     onPlayHighlights: (List<GameHighlight>) -> Unit,
-    /** A performer's Player card: its return key and target. */
+    /** A performer's or Box score player's Player card: its return key and target. */
     onOpenPlayer: (String, PlayerCardTarget) -> Unit
 ) {
     val summary = state.summary
@@ -124,7 +128,9 @@ internal fun GameBody(
                     GameSection.GAME -> gameTab(summary, first, state.homeFirst, gamePlayerTarget(state), { modifier, index -> modifier.returning(performerKey(index)) }) { index, target ->
                         onOpenPlayer(performerKey(index), target)
                     }
-                    GameSection.BOX_SCORE -> boxScoreTab(summary, first)
+                    GameSection.BOX_SCORE -> boxScoreTab(summary, first, gameBoxScoreTarget(state), { modifier, key -> modifier.returning(key) }) { key, target ->
+                        onOpenPlayer(key, target)
+                    }
                     GameSection.STANDINGS -> standingsTab(summary.standings, first)
                     GameSection.HIGHLIGHTS -> highlightsTab(summary.highlights, first, { modifier, key -> modifier.returning(key) }, onPlayHighlights)
                 }
@@ -197,6 +203,14 @@ internal fun gamePlayerTarget(state: SportsLiveGameUiState): (Performer) -> Play
     state.summary?.let { summary ->
         val team = if (performer.side == ScoreSide.HOME) summary.home else summary.away
         PlayerCards.targetFor(performer, summary.league, state.event?.leagueSlug, team.fullName)
+    }
+}
+
+/** The Player card a Box score row opens (#180), or null: as a top performer's. */
+internal fun gameBoxScoreTarget(state: SportsLiveGameUiState): (ScoreSide, BoxScoreRow) -> PlayerCardTarget? = { side, row ->
+    state.summary?.let { summary ->
+        val team = if (side == ScoreSide.HOME) summary.home else summary.away
+        PlayerCards.targetFor(row, summary.league, state.event?.leagueSlug, team.fullName)
     }
 }
 
@@ -454,8 +468,18 @@ private fun TableHeads(first: String, labels: List<String>, column: Dp) {
     }
 }
 
-/** Board ⑥ (F8): "New England · Passing", the "Player" heads, then a focusable 56 px row per player and the totals. */
-private fun LazyListScope.boxScoreTab(summary: GameSummary, first: Modifier) {
+/**
+ * Board ⑥ (F8): "New England · Passing", the "Player" heads, then a focusable 56 px row per player and the totals.
+ * OK on a player with a Player card opens it (#180); every row stays a focus stop either way, so ↓ is unchanged.
+ */
+private fun LazyListScope.boxScoreTab(
+    summary: GameSummary,
+    first: Modifier,
+    playerTarget: (ScoreSide, BoxScoreRow) -> PlayerCardTarget?,
+    /** [Modifier] plus what focuses the row with this key back on the way back from its Player card. */
+    returning: (Modifier, String) -> Modifier,
+    onOpenPlayer: (String, PlayerCardTarget) -> Unit
+) {
     var firstUsed = false
     summary.boxScore.forEach { team ->
         // "Milwaukee Bucks · Passing": the team's full name, not the feed's abbreviation.
@@ -475,9 +499,16 @@ private fun LazyListScope.boxScoreTab(summary: GameSummary, first: Modifier) {
                 }
             }
             table.rows.forEachIndexed { rowIndex, row ->
-                val modifier = if (firstUsed) Modifier else first.also { firstUsed = true }
+                val key = boxRowKey(team.side, tableIndex, rowIndex)
+                val modifier = returning(if (firstUsed) Modifier else first.also { firstUsed = true }, key)
+                val target = playerTarget(team.side, row)
                 item(key = "r|${team.side}|$tableIndex|$rowIndex") {
-                    SportsLivePageRow(height = PAGE_TABLE_ROW, modifier = modifier, lift = false) {
+                    SportsLivePageRow(
+                        height = PAGE_TABLE_ROW,
+                        modifier = modifier,
+                        onClick = target?.let { open -> { onOpenPlayer(key, open) } } ?: {},
+                        lift = false
+                    ) {
                         TableCells(listOfNotNull(row.player, row.position).joinToString(" "), row.values, tableStyle(), Colors.TextPrimary, BOX_COLUMN)
                     }
                 }

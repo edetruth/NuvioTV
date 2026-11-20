@@ -11,7 +11,10 @@ import com.nuvio.tv.core.sportslive.scores.PlayerCard
 import com.nuvio.tv.core.sportslive.scores.PlayerCardTarget
 import com.nuvio.tv.core.sportslive.scores.PlayerCards
 import com.nuvio.tv.core.sportslive.scores.ScoreSettings
+import com.nuvio.tv.core.sportslive.scores.ScoreSide
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
+import com.nuvio.tv.core.sportslive.scores.TeamLeader
+import com.nuvio.tv.core.sportslive.scores.TeamRef
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.advanceTimeBy
@@ -160,5 +163,51 @@ class SportsLivePlayerCardViewModelTest {
         assertTrue(nba.performers.map(gamePlayerTarget(college)).all { it == null })
         // Not loaded yet: nothing to open.
         assertTrue(nba.performers.map(gamePlayerTarget(SportsLiveGameUiState(event = event))).all { it == null })
+    }
+
+    @Test
+    fun `Game page - a Box score row opens its player's card, with the side's team and the league`() {
+        val nba = GameSummaryFixtures.summary(GameSummaryFixtures.NBA, EspnLeagueMap.NBA, "401909994")
+        val event = EspnFixtures.events(EspnFixtures.NBA_20261115, EspnLeagueMap.NBA).first()
+        val state = SportsLiveGameUiState(event = event, summary = nba)
+        val boston = nba.boxScore.first { it.team == "BOS" }
+        val tatumRow = boston.tables.single().rows.first { it.player == "J. Tatum" }
+        val celtics = if (boston.side == ScoreSide.HOME) nba.home else nba.away
+        assertEquals(
+            PlayerCardTarget(EspnLeagueMap.NBA, "4065648", "J. Tatum", celtics.fullName),
+            gameBoxScoreTarget(state)(boston.side, tatumRow)
+        )
+        // Every played row of this game opens a card.
+        assertTrue(nba.boxScore.all { team -> team.tables.all { table -> table.rows.all { gameBoxScoreTarget(state)(team.side, it) != null } } })
+
+        // No athlete id, a college league, or no summary yet: no card.
+        assertNull(gameBoxScoreTarget(state)(boston.side, tatumRow.copy(athleteId = null)))
+        assertNull(gameBoxScoreTarget(state)(boston.side, tatumRow.copy(athleteId = " ")))
+        val college = SportsLiveGameUiState(event = event, summary = nba.copy(league = EspnLeagueMap.COLLEGE_BASKETBALL))
+        assertNull(gameBoxScoreTarget(college)(boston.side, tatumRow))
+        assertNull(gameBoxScoreTarget(SportsLiveGameUiState(event = event))(boston.side, tatumRow))
+    }
+
+    @Test
+    fun `Player card request - a Box score row, a performer and a leader each carry the athlete and league`() {
+        val nba = GameSummaryFixtures.summary(GameSummaryFixtures.NBA, EspnLeagueMap.NBA, "401909994")
+        val event = EspnFixtures.events(EspnFixtures.NBA_20261115, EspnLeagueMap.NBA).first()
+        val state = SportsLiveGameUiState(event = event, summary = nba, spoilerSafe = true)
+        val row = nba.boxScore.first().tables.single().rows.first()
+        val fromRow = SportsLivePlayerCardRequest(gameBoxScoreTarget(state)(nba.boxScore.first().side, row)!!, spoilerSafe = state.spoilerSafe)
+        assertEquals(row.athleteId, fromRow.target.athleteId)
+        assertEquals(EspnLeagueMap.NBA, fromRow.target.league)
+        // A Game page opened spoiler-safe keeps the card's last games hidden.
+        assertTrue(fromRow.spoilerSafe)
+
+        val performer = nba.performers.first()
+        val fromPerformer = gamePlayerTarget(state)(performer)!!
+        assertEquals(performer.athleteId, fromPerformer.athleteId)
+        assertEquals(EspnLeagueMap.NBA, fromPerformer.league)
+
+        val leader = TeamLeader("Points", "T. Maxey", "G", "26.5", athleteId = "4431678")
+        val sixers = TeamRef(EspnLeagueMap.NBA, "20", event, ScoreSide.HOME)
+        assertEquals(PlayerCardTarget(EspnLeagueMap.NBA, "4431678", "T. Maxey", sixers.name), PlayerCards.targetFor(leader, sixers))
+        assertNull(PlayerCards.targetFor(leader.copy(athleteId = null), sixers))
     }
 }

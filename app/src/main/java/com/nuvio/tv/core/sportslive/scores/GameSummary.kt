@@ -81,7 +81,8 @@ data class Performer(
     val athleteId: String? = null
 )
 
-data class BoxScoreRow(val player: String, val position: String?, val values: List<String>)
+/** A player's box score line; [athleteId] opens the Player card (#63, #180). */
+data class BoxScoreRow(val player: String, val position: String?, val values: List<String>, val athleteId: String? = null)
 
 /** One player table of a team ([title]: "Passing", "Forwards"; null when the sport has one table). */
 data class BoxScoreTable(val title: String?, val labels: List<String>, val rows: List<BoxScoreRow>, val totals: List<String>?)
@@ -352,7 +353,12 @@ object GameSummaryParser {
             val stats = line.stats.orEmpty()
             if (stats.isEmpty()) return@mapNotNull null
             val name = (line.athlete?.shortName ?: line.athlete?.displayName)?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-            BoxScoreRow(name, line.athlete?.position?.abbreviation?.takeIf { it.isNotBlank() }, columns.map { stats.getOrNull(it).orEmpty() })
+            BoxScoreRow(
+                name,
+                line.athlete?.position?.abbreviation?.takeIf { it.isNotBlank() },
+                columns.map { stats.getOrNull(it).orEmpty() },
+                line.athlete?.id?.trim()?.takeIf { it.isNotEmpty() }
+            )
         }
         if (rows.isEmpty()) return null
         val totals = group.totals?.takeIf { it.size == labels.size }?.let { totals -> columns.map { totals[it] } }

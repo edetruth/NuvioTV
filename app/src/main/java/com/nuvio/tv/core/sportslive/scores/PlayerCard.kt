@@ -68,10 +68,17 @@ object PlayerCards {
     private const val COLLEGE = "ncaa"
 
     /** The card a top performer opens, or null: no ESPN athlete id, or not a pro league. */
-    fun targetFor(performer: Performer, league: EspnLeague, competitionSlug: String?, teamName: String?): PlayerCardTarget? {
-        val id = performer.athleteId?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+    fun targetFor(performer: Performer, league: EspnLeague, competitionSlug: String?, teamName: String?): PlayerCardTarget? =
+        gameTarget(performer.athleteId, performer.player, league, competitionSlug, teamName ?: performer.team)
+
+    /** The card a Box score row opens (#180), or null: no ESPN athlete id, or not a pro league. */
+    fun targetFor(row: BoxScoreRow, league: EspnLeague, competitionSlug: String?, teamName: String?): PlayerCardTarget? =
+        gameTarget(row.athleteId, row.player, league, competitionSlug, teamName)
+
+    private fun gameTarget(athleteId: String?, name: String, league: EspnLeague, competitionSlug: String?, team: String?): PlayerCardTarget? {
+        val id = athleteId?.trim()?.takeIf { it.isNotEmpty() } ?: return null
         if (!supports(league, competitionSlug)) return null
-        return PlayerCardTarget(league, id, performer.player, teamName ?: performer.team)
+        return PlayerCardTarget(league, id, name, team)
     }
 
     /** The card a Team page leader opens, or null: no ESPN athlete id, or not a pro league. */

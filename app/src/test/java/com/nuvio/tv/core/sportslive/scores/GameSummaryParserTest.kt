@@ -65,6 +65,8 @@ class GameSummaryParserTest {
         assertNull(orl.title)
         assertEquals(listOf("MIN", "PTS", "FG", "3PT", "FT", "REB", "AST", "STL", "BLK", "TO"), orl.labels)
         assertEquals("F. Wagner", orl.rows.first().player)
+        // Each row keeps its ESPN athlete id, which opens the Player card (#180).
+        assertEquals("4566434", orl.rows.first().athleteId)
         assertEquals("115", orl.totals!![1])
     }
 
