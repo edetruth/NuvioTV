@@ -17,7 +17,11 @@ import kotlinx.coroutines.flow.merge
  * ([SportsLiveItemBucketer.clockChangedBetween]) or [maxAgeMs] pass. The result is what
  * [SportsLiveItemBucketer.bucketTab] gives at the time it was built.
  */
-class SportsLiveSharedBuckets(private val maxAgeMs: Long = MAX_AGE_MS) {
+class SportsLiveSharedBuckets(
+    private val maxAgeMs: Long = MAX_AGE_MS,
+    // Where unplaced rows are recorded (live.20); null: nowhere (tests).
+    private val unidentified: SportsLiveUnidentified? = null
+) {
 
     private class Entry(
         val load: SportsLiveLoad,
@@ -45,7 +49,12 @@ class SportsLiveSharedBuckets(private val maxAgeMs: Long = MAX_AGE_MS) {
         stamp: Long = currentStamp()
     ): List<SportsLiveItem> {
         val entry = entryFor(load, claimedKeys, addonOrder, stamp, nowMs)
-        return entry.tabs.getOrPut(tab) { SportsLiveItemBucketer.bucketClocked(entry.clocked, tab, entry.builtAtMs, entry.addonOrder) }
+        return entry.tabs.getOrPut(tab) {
+            SportsLiveItemBucketer.bucketClocked(entry.clocked, tab, entry.builtAtMs, entry.addonOrder).also { games ->
+                // live.20: the rows no rule could place, kept for the continuous cleanup ([SportsLiveUnidentified]).
+                if (tab == SportsLiveTab.LIVE_NOW || tab == SportsLiveTab.UPCOMING) unidentified?.record(games, System.identityHashCode(load), nowMs)
+            }
+        }
     }
 
     /** Every tab of [load] ([SportsLiveItemBucketer.bucket]), each built once. */
@@ -77,7 +86,7 @@ class SportsLiveSharedBuckets(private val maxAgeMs: Long = MAX_AGE_MS) {
         const val MAX_AGE_MS = 5 * 60_000L
 
         /** The one the app shares. */
-        val shared = SportsLiveSharedBuckets()
+        val shared = SportsLiveSharedBuckets(unidentified = SportsLiveUnidentified.shared)
 
         /**
          * The team directory's, identities' and ESPN starts' ([SportsLiveEspnStarts]) revisions as one number: copies

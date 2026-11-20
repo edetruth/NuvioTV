@@ -38,6 +38,7 @@ import com.nuvio.tv.data.mediaserver.silo.SiloArtworkRefresher
 import com.nuvio.tv.data.simkl.SimklAnimeIdPreferenceHolder
 import com.nuvio.tv.ui.screens.settings.MemoryBudget
 import com.nuvio.tv.data.local.SportsLiveEndedGamesStore
+import com.nuvio.tv.data.local.SportsLiveUnidentifiedStore
 import com.nuvio.tv.data.local.SportsLiveSourceReliabilityStore
 import com.nuvio.tv.data.local.SportsLiveLinkSpeedStore
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveExtraSources
@@ -65,6 +66,7 @@ class NuvioApplication : Application(), SingletonImageLoader.Factory {
     @Inject lateinit var sportsLiveSourceReliabilityStore: SportsLiveSourceReliabilityStore
     @Inject lateinit var sportsLiveLinkSpeedStore: SportsLiveLinkSpeedStore
     @Inject lateinit var sportsLiveEndedGamesStore: SportsLiveEndedGamesStore
+    @Inject lateinit var sportsLiveUnidentifiedStore: SportsLiveUnidentifiedStore
     @Inject lateinit var plexArtworkSigner: PlexArtworkSigner
     @Inject lateinit var siloArtworkRefresher: SiloArtworkRefresher
 
@@ -114,6 +116,7 @@ class NuvioApplication : Application(), SingletonImageLoader.Factory {
         sportsLiveSourceReliabilityStore.start()
         sportsLiveLinkSpeedStore.start()
         sportsLiveEndedGamesStore.start()
+        sportsLiveUnidentifiedStore.start()
         // Load locale synchronously so it's available before Activity.attachBaseContext.
         // SharedPreferences reads are fast (cached in memory after first access).
         val tag = getSharedPreferences("app_locale", Context.MODE_PRIVATE)

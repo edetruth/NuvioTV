@@ -25,7 +25,8 @@ object SportsLiveTeamIdentity {
         if (book.isEmpty || item.isChannel || item.teams == null) return item
         val (first, second) = sides(item.meta.name) ?: return item
         val identity = book.identityOf(first, second) ?: return item
-        val genres = if (item.meta.genres.any { it.equals(identity.league, ignoreCase = true) }) item.meta.genres
+        // A sport-only identity (live.20: no league both sides share) adds no genre.
+        val genres = if (identity.league.isBlank() || item.meta.genres.any { it.equals(identity.league, ignoreCase = true) }) item.meta.genres
         else item.meta.genres + identity.league
         // A soccer game that names no competition (item 3: "FC Porto vs USC Paredes", tagged Soccer) takes its league.
         if (identity.sport == SOCCER && soccerLeagueUnknown(item)) return item.copy(meta = item.meta.copy(genres = genres))

@@ -10,6 +10,8 @@ import com.nuvio.tv.core.sportslive.SportsLiveSportInference
 import com.nuvio.tv.core.sportslive.SportsLiveDupes
 import com.nuvio.tv.BuildConfig
 import com.nuvio.tv.core.sportslive.identify.SportsLiveTeamIdentity
+import com.nuvio.tv.core.sportslive.identify.TeamIdentifier
+import com.nuvio.tv.core.sportslive.identify.TeamIdentityBook
 import com.nuvio.tv.core.sportslive.SportsLiveMySportsScope
 import com.nuvio.tv.core.sportslive.SportsLiveTriedGames
 import com.nuvio.tv.core.sportslive.SportsLiveDataSaver
@@ -173,7 +175,9 @@ class SportsLiveZapViewModel internal constructor(
     // "OK on live" (research Q19): Show controls (default) or Pause.
     okOnLive: Flow<SportsLiveOkOnLive> = flowOf(SportsLiveOkOnLive.DEFAULT),
     // Q18 (#85): "Scores ahead? +15 s" for a source (addon id); its new seconds.
-    private val nudgeScores: suspend (String) -> Int = { 0 }
+    private val nudgeScores: suspend (String) -> Int = { 0 },
+    // live.20 (#168): the panel's games whose sport is unknown are looked up too, also when the section was never opened.
+    private val identify: (List<SportsLiveItem>) -> Unit = {}
 ) : ViewModel() {
 
     @Inject constructor(
@@ -184,7 +188,9 @@ class SportsLiveZapViewModel internal constructor(
         repo: SportsLiveRepository,
         liveScores: LiveScoresRepository,
         // My sports (#146); null in tests that do not scope.
-        prefs: SportsLivePreferencesDataStore? = null
+        prefs: SportsLivePreferencesDataStore? = null,
+        // The team lookup (#168); null in tests.
+        identifier: TeamIdentifier? = null
     ) : this(
         savedStateHandle, resolver, directDebridResolver, profileManager, repo, liveScores, Dispatchers.Default,
         mySports = prefs?.mySports ?: flowOf(MySports.DEFAULT),
@@ -197,7 +203,8 @@ class SportsLiveZapViewModel internal constructor(
         dataSaver = prefs?.dataSaver ?: flowOf(false),
         reminders = prefs?.reminders ?: flowOf(RemindersState()),
         okOnLive = prefs?.okOnLive ?: flowOf(SportsLiveOkOnLive.DEFAULT),
-        nudgeScores = { source -> prefs?.nudgeScores(source) ?: 0 }
+        nudgeScores = { source -> prefs?.nudgeScores(source) ?: 0 },
+        identify = { items -> identifier?.offer(items) }
     )
 
     /** "OK on live" is Pause (research Q19): a bare OK pauses a live game at once, as Google's TV-PC says. */
@@ -371,7 +378,8 @@ class SportsLiveZapViewModel internal constructor(
                 // Unrouted two-team games take their teams' league here too (P4), as in the section's lists.
             ).map { SportsLiveTeamIdentity.identified(SportsLiveSportInference.infer(it, TeamDirectory.shared)) }
                 // Debug builds: rows that look like one game but did not merge (live.18).
-                .also { if (BuildConfig.IS_DEBUG_BUILD) SportsLiveDupes.log("PANEL", it, System.currentTimeMillis()) } to followed
+                .also { if (BuildConfig.IS_DEBUG_BUILD) SportsLiveDupes.log("PANEL", it, System.currentTimeMillis()) }
+                .also(identify) to followed
         }.flowOn(computeDispatcher)
         // The games under the chip are the ones listed and tracked: My sports' (#146), or every game under All sports.
         // Scoped again when the team directory changes (#159: a league's team list landing tells games apart).

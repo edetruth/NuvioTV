@@ -17,8 +17,9 @@ data class TeamCandidate(
 )
 
 /**
- * What both teams of a game agree on (#168): one sport and a league both play in. [badges] are the first
- * and second side's logos, in the order the game was asked about.
+ * What both teams of a game agree on (#168): one sport and a league both play in ([league] empty when they share
+ * none, live.20: a sport other than soccer alone). [badges] are the first and second side's logos, in the order
+ * the game was asked about.
  */
 data class GameIdentity(
     val sport: String,

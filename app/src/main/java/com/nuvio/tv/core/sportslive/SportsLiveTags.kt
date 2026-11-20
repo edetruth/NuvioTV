@@ -53,6 +53,8 @@ object SportsLiveTags {
         "SUPER LIG" to "SUPERLIG",
         "SAUDI PRO" to "SAUDI",
         "LIGA 1 ROU" to "LIGA 1",
-        "EUROLEAGUE" to "EUROLG"
+        "EUROLEAGUE" to "EUROLG",
+        // A sport the team lookup names that has no kind of its own (live.20: "Volleyball").
+        "VOLLEYBALL" to "VOLLEY"
     )
 }

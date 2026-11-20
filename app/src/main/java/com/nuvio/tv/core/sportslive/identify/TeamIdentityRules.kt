@@ -83,8 +83,10 @@ object TeamIdentityRules {
 
     /**
      * The game both sides' candidates agree on: exactly one sport both have, and within it a league both
-     * list (several: the first side's first-listed one). A side with no candidates, two shared sports or no
-     * shared league is no identity.
+     * list (several: the first side's first-listed one). A side with no candidates or two shared sports is no
+     * identity. With no shared league, a sport other than soccer is still the game's, with no league (live.20: a
+     * EuroLeague game of two domestic leagues' clubs, "Anadolu Efes vs ASVEL"): sources answer a multi-sport club
+     * with its football club, so a shared basketball or hockey answer is strong; soccer alone still needs a league.
      */
     fun agree(first: List<TeamCandidate>, second: List<TeamCandidate>): GameIdentity? {
         if (first.isEmpty() || second.isEmpty()) return null
@@ -94,12 +96,15 @@ object TeamIdentityRules {
         val secondTeams = second.filter { it.sport == sport }
         val secondLeagues = secondTeams.flatMapTo(HashSet()) { team -> team.leagues.map(::nameKey) }
         val league = firstTeams.asSequence().flatMap { it.leagues.asSequence() }
-            .firstOrNull { it.isNotBlank() && nameKey(it) in secondLeagues } ?: return null
+            .firstOrNull { it.isNotBlank() && nameKey(it) in secondLeagues }
+            ?: return if (sport == SOCCER) null else GameIdentity(sport, "", badgeOf(firstTeams, "") to badgeOf(secondTeams, ""))
         val leagueKey = nameKey(league)
-        fun badgeOf(teams: List<TeamCandidate>) =
-            (teams.filter { team -> team.leagues.any { nameKey(it) == leagueKey } } + teams).firstNotNullOfOrNull { it.badge }
-        return GameIdentity(sport, league, badgeOf(firstTeams) to badgeOf(secondTeams))
+        return GameIdentity(sport, league, badgeOf(firstTeams, leagueKey) to badgeOf(secondTeams, leagueKey))
     }
+
+    // A side's logo: its team in [leagueKey] first, else its first team with one.
+    private fun badgeOf(teams: List<TeamCandidate>, leagueKey: String): String? =
+        (teams.filter { team -> team.leagues.any { nameKey(it) == leagueKey } } + teams).firstNotNullOfOrNull { it.badge }
 
     // Words in a club's name that say its sport ("BC Dubai", "Dubai Basketball", "KK Partizan").
     private val MARKERS = mapOf(

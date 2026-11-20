@@ -26,12 +26,14 @@ enum class SportsLiveSportKind {
         // In order: American football before soccer's "football"; the first rule found anywhere decides.
         private val RULES: List<Pair<SportsLiveSportKind, Regex>> = listOf(
             FOOTBALL to """american[ _]football|\bnfl\b|\bncaaf\b|college football|\bcfl\b""",
-            BASKETBALL to """basketball|\bnba\b|\bncaab\b|\bncaam\b|\bncaaw\b|euroleague|eurocup|\bg league\b|\bwnba\b""",
-            HOCKEY to """hockey|\bnhl\b|\bkhl\b""",
+            BASKETBALL to """basketball|\bnba\b|\bncaab\b|\bncaam\b|\bncaaw\b|euroleague|eurocup|\bg league\b|\bwnba\b|""" +
+                """baloncesto|\bacb\b|liga endesa|\bvtb\b|aba league|aba liga|betclic elite|lega basket|\bfiba\b""",
+            HOCKEY to """hockey|\bnhl\b|\bkhl\b|\bshl\b|\bliiga\b|\bahl\b|\bechl\b|\bohl\b|\bwhl\b|\bqmjhl\b|\biihf\b""",
             BASEBALL to """baseball|\bmlb\b""",
             TENNIS to """tennis|\batp\b|\bwta\b|\bitf\b""",
-            CRICKET to """cricket|\bicc\b|\bt20\b|\bodi\b|\bipl\b|\bw?bbl\b|test match|big bash""",
-            RUGBY to """rugby|\bnrl\b|six nations""",
+            CRICKET to """cricket|\bicc\b|\bt20i?\b|\bodi\b|\bipl\b|\bw?bbl\b|test match|big bash|\bilt20\b|\bsa20\b|\bbpl\b|""" +
+                """ranji|sheffield shield|super smash|county championship""",
+            RUGBY to """rugby|\bnrlw?\b|six nations|\btop 14\b|\burc\b|state of origin""",
             GOLF to """golf|\bpga\b|\blpga\b|\bliv golf\b""",
             MMA to """\bmma\b|\bufc\b|\bpfl\b|bellator""",
             BOXING to """boxing""",
@@ -40,7 +42,10 @@ enum class SportsLiveSportKind {
             SNOOKER to """snooker""",
             WRESTLING to """wrestling|\bwwe\b|\baew\b|\bnxt\b|smackdown""",
             CYCLING to """cycling|tour de france""",
-            SOCCER to """soccer|football|futbol|futebol|premier league|la liga|bundesliga|serie a|ligue 1|\bmls\b|\bnwsl\b|\buefa\b|champions league"""
+            SOCCER to """soccer|football|futbol|futebol|premier league|la liga|bundesliga|serie a|ligue [12]\b|\bmls\b|\bnwsl\b|\buefa\b|""" +
+                """champions league|libertadores|sudamericana|\bcopa\b|ligapro|liga pro\b|liga mx|eredivisie|primeira liga|""" +
+                """liga portugal|super lig|ekstraklasa|allsvenskan|\bconmebol\b|\bconcacaf\b|\befl\b|fa cup|carabao|a-league|""" +
+                """j1 league|k league|serie b\b|coppa italia|dfb pokal"""
         ).map { (kind, pattern) -> kind to Regex(pattern) }
 
         /** The sport [text] names ("American Football" → FOOTBALL, "Football" → SOCCER); null when none. */

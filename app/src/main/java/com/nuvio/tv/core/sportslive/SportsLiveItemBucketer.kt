@@ -88,9 +88,11 @@ object SportsLiveItemBucketer {
     /** The item, and whether the item itself (not its catalog) says what it is. */
     private fun describeWithSignal(rawMeta: MetaPreview, claimed: ClaimedCatalog, nowMs: Long): Pair<SportsLiveItem, Boolean> {
         val catalog = claimed.catalog
-        // An events catalog's item tagged as a TV network (#145) is a channel listing, never a game.
+        // An events catalog's item tagged as a TV network (#145) is a channel listing, never a game; so is a broadcaster's
+        // channel without a suffix ("Fox Footy", live.20) and a title naming nothing but a stream ("Streams").
         val network = claimed.kind == SportsLiveKind.EVENTS &&
-            (rawMeta.genres.any { SportsLiveKeywords.containsKeyword(it, SportsLiveKeywords.NETWORKS) } || isChannelName(rawMeta.name))
+            (rawMeta.genres.any { SportsLiveKeywords.containsKeyword(it, SportsLiveKeywords.NETWORKS) } || isChannelName(rawMeta.name) ||
+                isPlaceholderChannel(rawMeta, catalog.name))
         // A leading 🔴 / 🔜 / ✅ (CNCVerse) is a status, not part of the name.
         val trimmedName = rawMeta.name.trimStart()
         val status = listOf(LIVE_EMOJI, SOON_EMOJI, DONE_EMOJI).firstOrNull { trimmedName.startsWith(it) }
@@ -168,17 +170,29 @@ object SportsLiveItemBucketer {
     /**
      * True when [title] is a channel's name, not a game (F4: "NFL Network", "Tennis Channel" in a live-events catalog):
      * its clean name ends in "Network", "Channel" or "TV", with or without a number ("Sports Channel 2"), and it
-     * names no two sides and no show on a channel ("Raw on USA Network").
+     * names no two sides and no show on a channel ("Raw on USA Network"). A broadcaster's channel needs no suffix
+     * ([SportsLiveBroadcasters], live.20: "Fox Footy", "TSN 4").
      */
     internal fun isChannelName(title: String): Boolean {
         val words = SportsLiveDisplayText.name(title).lowercase().split(' ').filter { it.isNotEmpty() }
         // "Raw on USA Network" is a show on a channel.
-        if (words.size < 2 || "on" in words || SportsLiveTeams.parse(title) != null) return false
+        if ("on" in words || SportsLiveTeams.parse(title) != null) return false
+        // A broadcaster's channel with no suffix (live.20): "Fox Footy", "Sky Sports Main Event", "TSN 4".
+        if (SportsLiveBroadcasters.isBroadcaster(title)) return true
+        if (words.size < 2) return false
         val last = if (words.last().all(Char::isDigit)) words[words.size - 2] else words.last()
         return last in CHANNEL_WORDS && words.size >= (if (last == words.last()) 2 else 3)
     }
 
     private val CHANNEL_WORDS = setOf("network", "channel", "tv")
+
+    /**
+     * True when [meta] is titled as nothing but a stream ("Streams", "Live Stream 2", live.20) and names no sport in its
+     * genres, description or catalog: a playable listing, but no game. A sport's feed ("Main Feed" under Tennis) stays.
+     */
+    internal fun isPlaceholderChannel(meta: MetaPreview, catalogName: String): Boolean =
+        SportsLiveBroadcasters.isPlaceholder(meta.name) &&
+            (meta.genres + meta.description + catalogName).none { SportsLiveSportKind.of(it) != null }
 
     /**
      * Every tab is present in the result (possibly empty), each sorted live first, then by start
