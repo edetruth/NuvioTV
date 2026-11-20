@@ -820,7 +820,8 @@ private fun ResultsStage(
         ) {
             val league = event.leagueName?.uppercase(Locale.getDefault()).orEmpty()
             if (event.individual == null) {
-                MatchupStageArt(GameArt.ofEvent(event), top = league, at = event.league.sport != "soccer")
+                // Records move with the result: none while the score is hidden (Watch later, spoiler rules), as the Game page.
+                MatchupStageArt(GameArt.ofEvent(event, records = showScore), top = league, at = event.league.sport != "soccer")
             } else {
                 Column(
                     modifier = Modifier.fillMaxSize().padding(16.dp),

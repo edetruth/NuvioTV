@@ -173,7 +173,7 @@ internal fun rememberCatchUpCardArt(items: List<CatchUpItem>): (String) -> (@Com
     val finalWord = stringResource(R.string.sports_live_chip_final_note)
     return remember(items, finalWord) {
         val cards = items.associate { item ->
-            val art = GameArt.ofEvent(item.event)
+            val art = GameArt.ofEvent(item.event, records = false) // spoiler-free: records move with the result
             val footer = DrawnCardFooter(lead = SportsLiveHomeMeta.catchUpLead(item.event.startMs, finalWord), trailing = DrawnCardTrailing.Replay)
             val card: @Composable () -> Unit = { SportsLiveDrawnGameCard(art, followed = false, footer = footer, modifier = Modifier.fillMaxSize()) }
             SportsLiveCatchUpHomeRow.cardId(item) to card

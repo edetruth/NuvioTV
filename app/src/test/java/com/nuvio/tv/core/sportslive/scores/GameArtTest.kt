@@ -78,6 +78,9 @@ class GameArtTest {
         val event = GameArt.ofEvent(saved)
         assertNull(event.first.record)
         assertNull(event.second.record)
+        // Results' events carry no protection mark: the stage passes whether its score shows.
+        assertNull(GameArt.ofEvent(withRecords, records = false).first.record)
+        assertEquals("1-15", GameArt.ofEvent(withRecords, records = true).first.record)
     }
 
     @Test

@@ -145,7 +145,7 @@ internal object YourTeams {
     fun replayStageRow(item: CatchUpItem): ScoreboardRow {
         val start = item.event.startMs
         val replay = item.replay.copy(startMs = start ?: item.replay.startMs, startHasTimeOfDay = start != null && item.event.timeValid)
-        val art = GameArt.ofEvent(item.event)
+        val art = GameArt.ofEvent(item.event, records = false) // spoiler-free: records move with the result
         return ScoreboardRow(
             item = replay,
             group = ScoreboardGroup.JUST_ENDED,
@@ -228,7 +228,7 @@ internal fun SportsLiveYourTeamsStrip(
                 val art = when (entry) {
                     is YourTeamsEntry.Live -> entry.row.art
                     is YourTeamsEntry.LaterToday -> entry.row.art
-                    is YourTeamsEntry.Replay -> remember(entry.item.event) { GameArt.ofEvent(entry.item.event) }
+                    is YourTeamsEntry.Replay -> remember(entry.item.event) { GameArt.ofEvent(entry.item.event, records = false) }
                 } ?: return@itemsIndexed
                 YourTeamsCard(
                     art = art,

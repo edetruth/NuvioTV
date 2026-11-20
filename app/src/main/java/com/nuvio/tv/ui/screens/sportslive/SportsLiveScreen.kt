@@ -1450,7 +1450,7 @@ private fun SportsLiveContent(
             // V2 Replays (P4, #90): by day under sticky headers, spoiler-free rows, and the fixed stage.
             // A strict ESPN game names the teams as ESPN does, with its logos and league (never its score).
             val replayRowOf: (ScoreboardRow) -> ScoreboardRow = { row ->
-                replayMatches[row.item.streamKey]?.let { event -> row.copy(art = GameArt.ofEvent(event), twoSided = true) } ?: row
+                replayMatches[row.item.streamKey]?.let { event -> row.copy(art = GameArt.ofEvent(event, records = false), twoSided = true) } ?: row
             }
             val replayTitleOf: (ScoreboardRow) -> String = { row -> agendaStageTitleText(replayRowOf(row), context) }
             fun replayJump(target: Int) {

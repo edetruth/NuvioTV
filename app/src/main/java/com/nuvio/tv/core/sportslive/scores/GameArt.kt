@@ -101,11 +101,12 @@ data class GameArt(
 
         /**
          * The drawn card for an ESPN [event] alone (the Catch up row, #58): away first, as Results lists
-         * them, ESPN's names, abbreviations and logos, its league; no time and no score.
+         * them, ESPN's names, abbreviations and logos, its league; no time and no score. [records] false leaves the
+         * teams' records out (they move with the result): a screen whose score is hidden passes it (#151).
          */
-        fun ofEvent(event: ScoreSnapshot): GameArt = GameArt(
-            first = espnTeam(event.away, event.league, records = !event.spoilerProtected),
-            second = espnTeam(event.home, event.league, records = !event.spoilerProtected),
+        fun ofEvent(event: ScoreSnapshot, records: Boolean = !event.spoilerProtected): GameArt = GameArt(
+            first = espnTeam(event.away, event.league, records = records && !event.spoilerProtected),
+            second = espnTeam(event.home, event.league, records = records && !event.spoilerProtected),
             league = event.leagueName?.takeIf { it.isNotBlank() },
             startMs = null,
             hasTimeOfDay = false,
