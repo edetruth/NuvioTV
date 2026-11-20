@@ -371,6 +371,14 @@ internal fun PlayerRuntimeController.trySportsCodecRetryWithMpv(errorCode: Int):
 }
 
 /**
+ * A VC-1 failure of a sports link (live.20): this TV has no VC-1 decoder, so the same link plays once on mpv
+ * (software decoding) before the sports recovery ([sportsRetriesWithMpv], as an unsupported format). False for
+ * movies and shows, a link already tried on mpv, or one that already played.
+ */
+internal fun PlayerRuntimeController.trySportsVc1RetryWithMpv(): Boolean =
+    trySportsCodecRetryWithMpv(PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED)
+
+/**
  * The Sources panel closed while nothing plays for a sports game (its source failed and no pick
  * replaced it): the recovery overlay (Choose stream / Retry / Back) comes back, not a black player (C1).
  * Engine-agnostic (ExoPlayer and mpv): it reads the failure the failover recorded for the link loaded.

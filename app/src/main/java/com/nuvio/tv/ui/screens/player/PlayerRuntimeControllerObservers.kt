@@ -977,6 +977,8 @@ internal fun PlayerRuntimeController.handleVc1PlaybackFailure(errorMessage: Stri
     cancelStableProgressReset()
     errorRetryJob?.cancel()
     errorRetryJob = null
+    // Sports & Live (live.20): a sports link gets one try on mpv, which decodes VC-1 in software, before the recovery.
+    if (trySportsVc1RetryWithMpv()) return
     releasePlayer(flushPlaybackState = false)
     // Sports & Live (live.19 QA VC-1): the sports recovery ladder first; the device's decoder, not the link, is at fault.
     if (trySportsRecoveryAfterError(displayMessage, decoderInit = true)) return
