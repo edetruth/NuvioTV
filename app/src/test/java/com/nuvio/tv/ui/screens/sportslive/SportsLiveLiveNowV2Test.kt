@@ -316,12 +316,29 @@ class SportsLiveLiveNowV2Test {
     @Test
     fun `Back from a player that zapped on returns to the game still playing (BUG9)`() {
         val keys = listOf("nfl", "atp", "ch1")
-        assertEquals("atp", sportsLiveReturnCardKey(focusedKey = "nfl", playingKey = "atp", keys = keys))
-        // Nothing playing on, or it is not listed: the card that had focus.
-        assertEquals("nfl", sportsLiveReturnCardKey(focusedKey = "nfl", playingKey = null, keys = keys))
-        assertEquals("nfl", sportsLiveReturnCardKey(focusedKey = "nfl", playingKey = "gone", keys = keys))
+        fun target(focused: String?, watched: String?) =
+            sportsLiveReturnTarget(keys, previousKeys = keys, focusedKey = focused, watchedKey = watched, liveNow = false, rowsOnScreen = 4)
+        assertEquals("atp", target(focused = "nfl", watched = "atp"))
+        // Nothing playing on, or it is in no list: the card that had focus.
+        assertEquals("nfl", target(focused = "nfl", watched = null))
+        assertEquals("nfl", target(focused = "nfl", watched = "elsewhere"))
         // First open: no return.
-        assertNull(sportsLiveReturnCardKey(focusedKey = null, playingKey = "atp", keys = keys))
+        assertNull(target(focused = null, watched = null))
+    }
+
+    @Test
+    fun `Back from the full player focuses the watched game's row, wherever it sits (BUG-E)`() {
+        val keys = listOf("andorra", "live2", "live3", "live4", "live5", "bayern")
+        // The stage showed another row (Andorra) when the player opened from the mini player: the watched game wins.
+        assertEquals("bayern", sportsLiveReturnTarget(keys, keys, focusedKey = "andorra", watchedKey = "bayern", liveNow = true, rowsOnScreen = 4))
+        // No card had focus yet: still the watched game.
+        assertEquals("bayern", sportsLiveReturnTarget(keys, keys, focusedKey = null, watchedKey = "bayern", liveNow = true, rowsOnScreen = 4))
+        // It left the list meanwhile: the nearest row to where it was.
+        val now = listOf("andorra", "live2", "live4", "live5")
+        assertEquals("live4", sportsLiveReturnTarget(now, listOf("andorra", "live2", "live3", "live4"), "andorra", "live3", liveNow = true, rowsOnScreen = 4))
+        // Not watching: Live now keeps F3 (a card far down hands focus to the first row).
+        assertEquals("andorra", sportsLiveReturnTarget(keys, keys, focusedKey = "bayern", watchedKey = null, liveNow = true, rowsOnScreen = 4))
+        assertNull(sportsLiveReturnTarget(emptyList(), keys, "bayern", "bayern", liveNow = true, rowsOnScreen = 4))
     }
 
     @Test

@@ -1337,6 +1337,9 @@ private fun SportsLiveContent(
     // may be built again on return). Live Now opens at its top so the LIVE group shows (F3): the card keeps
     // focus while it sits in the first screenful, else the first row takes it.
     var returnHandled by remember { mutableStateOf(false) }
+    // The list's rows as the user left this screen (BUG-E): a watched game gone from it hands focus to its nearest row.
+    var leftKeys by rememberSaveable { mutableStateOf<List<String>>(emptyList()) }
+    val keysBeforeReturn = remember { leftKeys }
     LaunchedEffect(boardPending) {
         if (boardPending || returnHandled) return@LaunchedEffect
         returnHandled = true
@@ -1344,15 +1347,20 @@ private fun SportsLiveContent(
         if (stripStageKey?.let { key -> yourTeams.any { it.key == key } } == true) return@LaunchedEffect
         // Not listed (any more): the list takes focus, and the strip does not take it later.
         stripReturnPending = false
-        // Back from a player that zapped on: the game still playing in the mini player, else the card left (BUG9).
-        val playingKey = (SportsLiveMiniPlayers.controller.state.value as? SportsLiveMiniState.Playing)?.item?.listKey
-        val key = sportsLiveReturnCardKey(focusedCardKey, playingKey, items.map { it.listKey }) ?: return@LaunchedEffect
+        // Back from the full player (BUG9, BUG-E): the game watched (playing on in the mini player, else the one
+        // Resume offers), wherever it sits; else the card left.
+        val mini = SportsLiveMiniPlayers.controller
+        val watchedKey = (mini.state.value as? SportsLiveMiniState.Playing)?.item?.listKey ?: mini.resume.value?.item?.listKey
+        val keys = items.map { it.listKey }
         val liveNow = uiState.selectedTab == SportsLiveTab.LIVE_NOW && scoreboard
-        val target = if (liveNow) sportsLiveReturnFocusKey(items.map { it.listKey }, key, RETURN_ROWS_ON_SCREEN) else key
-        val index = items.indexOfFirst { it.listKey == target }
-        if (target == null || index < 0) return@LaunchedEffect
-        if (liveNow) listState.scrollToItem(0) else scrollToCard(target, index, onlyIfHidden = false)
-        if (target != key) {
+        val target = sportsLiveReturnTarget(keys, keysBeforeReturn, focusedCardKey, watchedKey, liveNow, RETURN_ROWS_ON_SCREEN)
+            ?: return@LaunchedEffect
+        val index = keys.indexOf(target)
+        if (index < 0) return@LaunchedEffect
+        // Live now opens at its top (F3) unless the row returned to sits further down.
+        if (liveNow && index < RETURN_ROWS_ON_SCREEN) listState.scrollToItem(0) else scrollToCard(target, index, onlyIfHidden = false)
+        // The stage (and its Watch) shows the row returned to at once, never the card focused before (BUG-E).
+        if (target != focusedCardKey) {
             focusedCardKey = target
             onSelectItem(items[index].id)
         }
@@ -1364,6 +1372,10 @@ private fun SportsLiveContent(
             withFrameNanos { }
             if (listHasFocus) return@LaunchedEffect
         }
+    }
+
+    LaunchedEffect(boardPending, items) {
+        if (!boardPending) leftKeys = items.map { it.listKey }
     }
 
     // A refresh or an ended verdict can drop the focused card. The selection (and with it the pane

@@ -427,11 +427,29 @@ internal fun sportsLiveReturnFocusKey(keys: List<String>, focusedKey: String?, r
 }
 
 /**
- * The card Back from another screen returns to (BUG9): the game playing on in the mini player when it is listed (the
- * user zapped away from the card they started on), else [focusedKey], the card that had focus. Null: none (first open).
+ * The row Back from another screen puts focus on (BUG9, BUG-E TV QA). The game watched in the full player
+ * ([watchedKey]: playing on in the mini player, else the one Resume offers) when listed, wherever it sits (the user
+ * zapped away from the card they started on, or opened the player from the mini player); when it left the list, the
+ * nearest row to where it was in [previousKeys], the list as it was left ([sportsLiveKeyAfterRemoval]). Otherwise
+ * [focusedKey], the card that had focus, which on Live Now ([liveNow]) keeps it only among the first [rowsOnScreen]
+ * rows, else the first row takes it (F3). Null: nothing to return to (first open, an empty list).
  */
-internal fun sportsLiveReturnCardKey(focusedKey: String?, playingKey: String?, keys: List<String>): String? =
-    focusedKey?.let { playingKey?.takeIf { it in keys } ?: it }
+internal fun sportsLiveReturnTarget(
+    keys: List<String>,
+    previousKeys: List<String>,
+    focusedKey: String?,
+    watchedKey: String?,
+    liveNow: Boolean,
+    rowsOnScreen: Int
+): String? {
+    if (keys.isEmpty()) return null
+    if (watchedKey != null) {
+        if (watchedKey in keys) return watchedKey
+        if (watchedKey in previousKeys) return sportsLiveKeyAfterRemoval(previousKeys, keys, watchedKey)
+    }
+    val key = focusedKey ?: return null
+    return if (liveNow) sportsLiveReturnFocusKey(keys, key, rowsOnScreen) else key
+}
 
 /**
  * How far a list scrolls to bring a focused row ([offset], [size] in px) into a viewport [containerSize]
