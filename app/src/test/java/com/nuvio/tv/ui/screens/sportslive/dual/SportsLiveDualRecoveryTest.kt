@@ -265,25 +265,24 @@ class SportsLiveDualRecoveryTest {
     }
 
     @Test
-    fun `a zap from the failed pane never takes it back to a game that already failed`() = runTest(mainDispatcherRule.dispatcher) {
-        val viewModel = newViewModel()
-        runCurrent()
-        // c failed earlier in this session: the pane has nowhere left to go but never goes back.
-        SportsLiveTriedGames.shared.noteFailed(c)
-        viewModel.playing()
-        viewModel.onUnhealthy(a, Problem.FROZEN)
-        viewModel.onUnhealthy(a, Problem.FROZEN)
-        runCurrent()
-        assertEquals(PaneStatus.Error, viewModel.current().left.status)
-        val others = viewModel.current().let { listOf(it.left.item, it.right.item) }
-        val moved = viewModel.zap(forward = true)
-        if (moved) {
+    fun `a zap from the failed pane passes over failed games, and moves through them when only they are left`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            val viewModel = newViewModel()
+            runCurrent()
+            // c failed earlier in this session; a fails now. The other pane shows b: only failed games are left, and
+            // the user asked to keep flipping when every stream is exhausted, so the zap goes to c, looked up afresh.
+            SportsLiveTriedGames.shared.noteFailed(c)
+            viewModel.playing()
+            viewModel.onUnhealthy(a, Problem.FROZEN)
+            viewModel.onUnhealthy(a, Problem.FROZEN)
+            runCurrent()
+            assertEquals(PaneStatus.Error, viewModel.current().left.status)
+            val other = viewModel.current().right.item
+            assertTrue(viewModel.zap(forward = true))
+            runCurrent()
             val left = viewModel.current().left.item
-            assertFalse(left == c || left == a || left in others)
-        } else {
-            assertEquals(a, viewModel.current().left.item)
+            assertFalse(left == a || left == other)
         }
-    }
 
     // --- Start-up (#138) ---
 

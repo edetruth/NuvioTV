@@ -811,18 +811,24 @@ class SportsLiveDualViewModel internal constructor(
         val noStream = sportsLiveNoStreamIds(items, readiness, workingLinks)
         val start = items.indexOfFirst { it.streamKey == current.streamKey }
         val step = if (forward) 1 else -1
-        // Not in the list: the first step lands on the list's first (or last) game.
-        var index = if (start >= 0) start else if (forward) -1 else items.size
-        repeat(items.size) {
-            index = Math.floorMod(index + step, items.size)
-            val candidate = items[index]
-            val skip = candidate.sharesSourceWith(current) ||
-                candidate.sharesSourceWith(other) ||
-                candidate.hasEnded(ended) ||
-                candidate.id in failed || candidate.alternates.any { it.id in failed } || candidate.id in noStream
-            if (!skip) return candidate
+        fun next(skipDead: Boolean): SportsLiveItem? {
+            // Not in the list: the first step lands on the list's first (or last) game.
+            var index = if (start >= 0) start else if (forward) -1 else items.size
+            repeat(items.size) {
+                index = Math.floorMod(index + step, items.size)
+                val candidate = items[index]
+                val dead = candidate.id in failed || candidate.alternates.any { it.id in failed } || candidate.id in noStream
+                val skip = candidate.sharesSourceWith(current) ||
+                    candidate.sharesSourceWith(other) ||
+                    candidate.hasEnded(ended) ||
+                    (skipDead && dead)
+                if (!skip) return candidate
+            }
+            return null
         }
-        return null
+        // Games known dead this session are passed over while another remains; when only they are left the zap
+        // still moves through them, each looked up afresh (the user keeps flipping, never stuck on one error).
+        return next(skipDead = true) ?: next(skipDead = false)
     }
 
     /** [delayMs]: wait this long before the lookup (a retry). */

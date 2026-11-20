@@ -81,7 +81,7 @@ class SportsLiveDualErrorZapTest {
     }
 
     @Test
-    fun `games left on the error card this session are skipped, and with none other left the zap stops`() =
+    fun `games left on the error card this session are skipped, and with none other left the zap still moves`() =
         runTest(mainDispatcherRule.dispatcher) {
             val viewModel = newViewModel(dead = setOf(b, c, d))
             runCurrent()
@@ -90,9 +90,11 @@ class SportsLiveDualErrorZapTest {
                 runCurrent()
             }
             assertEquals(a, viewModel.left().item)
-            // Back from a: d, c and b failed here and e is the other pane's. Nothing is left: the pane stays.
-            assertFalse(viewModel.zap(forward = false))
-            assertEquals(a, viewModel.left().item)
+            // Back from a: d, c and b failed here and e is the other pane's. Only dead games are left: the zap
+            // still moves (the user asked to keep flipping when every stream is exhausted), to d, looked up afresh.
+            assertTrue(viewModel.zap(forward = false))
+            runCurrent()
+            assertEquals(d, viewModel.left().item)
         }
 
     @Test
