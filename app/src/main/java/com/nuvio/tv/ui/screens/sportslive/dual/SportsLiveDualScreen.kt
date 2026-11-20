@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
@@ -43,6 +44,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
@@ -51,7 +53,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -142,6 +143,7 @@ fun SportsLiveDualScreen(
     gameInfo: SportsLiveGameInfoViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val layoutReady by viewModel.layoutReady.collectAsStateWithLifecycle()
     val keysHint by viewModel.keysHint.collectAsStateWithLifecycle()
     val pairHint by viewModel.pairHint.collectAsStateWithLifecycle()
     val pairPicker by viewModel.pairPicker.collectAsStateWithLifecycle()
@@ -408,7 +410,8 @@ fun SportsLiveDualScreen(
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             val chipStrings = rememberScoreChipStrings()
             val detailsStrings = rememberScoreDetailsStrings()
-            Side.entries.forEach { side ->
+            // Not before the layout is known: a pane view is first laid out at its real tile (see layoutReady).
+            if (layoutReady) Side.entries.forEach { side ->
                 val tile = DualGeometry.tile(side, dual.layout, maxWidth, maxHeight)
                 val pane = dual.pane(side)
                 DualPaneView(
@@ -549,7 +552,7 @@ private fun DualPaneView(
                 },
                 modifier = Modifier.fillMaxSize()
             )
-            PaneStatusOverlay(pane, highlighted, startingSelection, endSelection)
+            PaneStatusOverlay(pane, highlighted, small, startingSelection, endSelection)
         }
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -660,6 +663,7 @@ private fun SoundBars(color: Color, modifier: Modifier = Modifier) {
 private fun BoxScope.PaneStatusOverlay(
     pane: DualPane,
     highlighted: Boolean,
+    small: Boolean,
     startingSelection: SportsLiveStartingAction,
     endSelection: SportsLiveEndAction
 ) {
@@ -695,9 +699,10 @@ private fun BoxScope.PaneStatusOverlay(
         PaneStatus.Playing -> Unit
         PaneStatus.Error -> PaneMessage(
             text = stringResource(R.string.sports_live_dual_stream_error),
-            hint = stringResource(R.string.sports_live_dual_recovery_choices)
+            hint = stringResource(R.string.sports_live_dual_recovery_choices),
+            small = small
         )
-        PaneStatus.DeviceLimit -> PaneMessage(text = stringResource(R.string.sports_live_dual_device_limit), hint = null)
+        PaneStatus.DeviceLimit -> PaneMessage(text = stringResource(R.string.sports_live_dual_device_limit), hint = null, small = small)
         // The game ended (#161): the end card in the pane; once closed (Stay), "Game over".
         PaneStatus.Ended -> pane.end?.let { card ->
             SportsLiveEndCardView(
@@ -709,30 +714,49 @@ private fun BoxScope.PaneStatusOverlay(
                 showActions = highlighted,
                 modifier = Modifier.align(Alignment.Center)
             )
-        } ?: PaneMessage(text = stringResource(R.string.sports_live_end_game_over), hint = null)
+        } ?: PaneMessage(text = stringResource(R.string.sports_live_end_game_over), hint = null, small = small)
     }
 }
 
+/**
+ * A pane's message (V2): a scrim over the pane's last frame and a card like the pane's end card, never bare text on
+ * video. The title takes up to two lines; each key hint ("OK  Choose stream") has its own line. The corner tile of
+ * big + small ([small]) has smaller type and padding, so all of it fits.
+ */
 @Composable
-private fun PaneMessage(text: String, hint: String?) {
+private fun BoxScope.PaneMessage(text: String, hint: String?, small: Boolean) {
+    Box(modifier = Modifier.matchParentSize().background(Color.Black.copy(alpha = PANE_SCRIM_ALPHA)))
+    val shape = RoundedCornerShape(SportsLiveTokens.Alert.Radius)
     Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.padding(16.dp)
+        verticalArrangement = Arrangement.spacedBy(if (small) 2.dp else 4.dp),
+        modifier = Modifier
+            .align(Alignment.Center)
+            .padding(if (small) 6.dp else 16.dp)
+            .widthIn(max = 320.dp)
+            .clip(shape)
+            .background(SportsLiveTokens.Colors.Surface.copy(alpha = 0.94f))
+            .border(1.dp, SportsLiveTokens.Colors.Outline, shape)
+            .padding(horizontal = if (small) 8.dp else 14.dp, vertical = if (small) 6.dp else 12.dp)
     ) {
         Text(
             text = text,
-            style = MaterialTheme.typography.titleMedium,
-            color = NuvioTheme.colors.TextPrimary,
-            textAlign = TextAlign.Center
+            style = SportsLiveTokens.style(if (small) SportsLiveTokens.Toast.Title else SportsLiveTokens.Type.PanelTitle),
+            color = SportsLiveTokens.Colors.TextPrimary,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
         )
-        if (hint != null) {
+        // One line per key: the hints are joined with a middle dot.
+        hint?.split('\u00B7')?.map { it.trim() }?.filter { it.isNotEmpty() }?.forEach { line ->
             Text(
-                text = hint,
-                style = MaterialTheme.typography.bodySmall,
-                color = NuvioTheme.colors.TextSecondary,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(top = 6.dp)
+                text = line,
+                style = SportsLiveTokens.style(if (small) SportsLiveTokens.Type.Tag else SportsLiveTokens.Type.PanelLine),
+                color = SportsLiveTokens.Colors.TextSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
 }
+
+/** How dark a pane's message makes its last frame. */
+private const val PANE_SCRIM_ALPHA = 0.6f
