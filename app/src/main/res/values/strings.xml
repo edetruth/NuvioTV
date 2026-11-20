@@ -4165,7 +4165,6 @@
     <string name="sports_live_stage_selected">Selected</string>
     <!-- live.20: the stage's facts line, a game in play's start ("Started 7:30 PM"). -->
     <string name="sports_live_stage_started">Started %1$s</string>
-    <!-- live.20: Upcoming's one-time tip on the remote's keys. -->
     <string name="sports_live_row_watching">▶ Watching</string>
     <!-- #148: Live now's header chip after Back from a paused game. -->
     <string name="sports_live_resume_live">Resume %1$s · Live</string>
