@@ -1,5 +1,7 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import android.os.SystemClock
+import kotlinx.coroutines.withTimeoutOrNull
 import com.nuvio.tv.core.sportslive.SportsLiveToastKind
 import com.nuvio.tv.core.sportslive.SportsLiveToasts
 import com.nuvio.tv.core.sportslive.scores.FollowTarget
@@ -691,17 +693,44 @@ private fun SportsLiveContent(
     val contentEntryFocusRequester = if (resumeShown) resumeFocusRequester else belowResumeFocusRequester
     // Results' "N games live now →" (#170): once Live now is the composed tab and its rows are drawn, focus goes
     // to its list (the column rule), else to its tab.
-    var focusLiveNowList by remember { mutableStateOf(false) }
-    LaunchedEffect(focusLiveNowList, uiState.selectedTab, boardPending, contentEntryFocusRequester) {
+    // Saved: the section's content can be composed again as Live now's board arrives, and the move must survive it.
+    var focusLiveNowList by rememberSaveable { mutableStateOf(false) }
+    // Read live: a filter change on arrival (Live now drops a sport filter) gives the list a new state.
+    val currentListState by rememberUpdatedState(listState)
+    LaunchedEffect(focusLiveNowList, uiState.selectedTab, boardPending) {
         if (!focusLiveNowList) return@LaunchedEffect
         if (uiState.selectedTab != SportsLiveTab.LIVE_NOW) {
             if (uiState.selectedTab != SportsLiveTab.RESULTS) focusLiveNowList = false
             return@LaunchedEffect
         }
         if (boardPending) return@LaunchedEffect
-        repeat(2) { withFrameNanos { } }
+        // The list's top: the Resume row or Catch up strip when shown, else its first row, scrolled in.
+        if (resumeShown || catchUpShown || items.isEmpty()) {
+            withFrameNanos { }
+            focusLiveNowList = false
+            runCatching { (if (resumeShown) resumeFocusRequester else if (catchUpShown) catchUpFocusRequester else contentEntryFocusRequester ?: activeTabFocusRequester).requestFocus() }
+            return@LaunchedEffect
+        }
+        // The board can still be rebuilt in the first frames (games re-sorted, rows added above): the list then
+        // keeps the focused row and scrolls with it. So the move follows the current first row for a moment, and
+        // stops as soon as the user moves elsewhere. The flag (a key) is cleared last, so it never cancels this.
+        var asked: String? = null
+        val until = SystemClock.uptimeMillis() + LIVE_NOW_FOCUS_MS
+        while (SystemClock.uptimeMillis() < until) {
+            val first = currentItemKeys.firstOrNull()
+            if (asked != null && focusedCardKey != asked && focusedCardKey != first) {
+                focusLiveNowList = false
+                return@LaunchedEffect
+            }
+            if (first != null && (focusedCardKey != first || !listHasFocus)) {
+                withTimeoutOrNull(LIVE_NOW_SCROLL_MS) { currentListState.scrollToItem(0) }
+                withFrameNanos { }
+                asked = first
+                runCatching { cardFocusRequesters[first]?.requestFocus() }
+            }
+            withFrameNanos { }
+        }
         focusLiveNowList = false
-        runCatching { (contentEntryFocusRequester ?: activeTabFocusRequester).requestFocus() }
     }
     // On the Results tab: the day in the title (P4), and where the header's Down lands in its content.
     val resultsDateFocusRequester = remember { FocusRequester() }
@@ -808,7 +837,7 @@ private fun SportsLiveContent(
         val filter = uiState.selectedFilter
         if (uiState.selectedTab == SportsLiveTab.LIVE_NOW && filter != null && filter != SportsLiveUiState.ALL_SPORTS_FILTER) onSelectFilter(null)
     }
-    // #170: a one-off miss says nothing; a source failing on shows a dot on Refresh, whose OK opens the sheet.
+    // #170: a one-off miss says nothing; a source failing on shows a dot on Refresh, whose Hold OK opens the sheet.
     val sourcesNowMs = uiState.nowMs.takeIf { it > 0L } ?: System.currentTimeMillis()
     val sourceBadge = uiState.sources.badge(sourcesNowMs)
     // A refresh the user asked for (Refresh, Retry): when a flagged source still fails, a toast says so (#170).
@@ -1213,6 +1242,8 @@ private fun SportsLiveContent(
                     // onEnter still sends focus to the Results tab, which selects Results again (the line then
                     // seemed to do nothing). The move waits for the new tab, below.
                     onSelectTab(SportsLiveTab.LIVE_NOW)
+                    // No card to return to: the list's first row takes focus, not the card it last had.
+                    focusedCardKey = null
                     focusLiveNowList = true
                 },
                 onExpandGroup = onExpandResultsGroup,
@@ -1639,6 +1670,10 @@ private fun SportsLiveContent(
 
 private const val FOLLOW_REFOCUS_WINDOW_MS = 1_500L
 private const val RETURN_FOCUS_FRAMES = 10
+
+/** How long Results' "N games live now" keeps focus on Live now's first row while its board settles. */
+private const val LIVE_NOW_FOCUS_MS = 3_000L
+private const val LIVE_NOW_SCROLL_MS = 300L
 
 /** On return to Live Now the card that had focus keeps it while among this many first rows (F3). */
 private const val RETURN_ROWS_ON_SCREEN = 4
