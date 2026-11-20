@@ -33,7 +33,9 @@ object SportsLiveSportInference {
         // Women's leagues (#163): their lists are kept too (team search, #149), and a card both of whose teams
         // only they know is theirs.
         EspnLeagueMap.WNBA to "WNBA",
-        EspnLeagueMap.NWSL to "NWSL"
+        EspnLeagueMap.NWSL to "NWSL",
+        // The G League (#169, live.18): a bare "Basketball" card of two G League teams gets its feed and score.
+        EspnLeagueMap.G_LEAGUE to "NBA G League"
     )
 
     /** The directory lists inference needs (asked for weekly with the rest, #82). */
@@ -86,8 +88,14 @@ object SportsLiveSportInference {
         val (first, second) = SportsLiveTeams.writtenOrder(item.meta.name) ?: return null
         // Every candidate list must be there: a league not loaded yet could be the one that makes a name ambiguous.
         if (candidates.any { directory.fetchedAt(it) == null }) return null
-        val firstLeagues = candidates.filter { directory.resolve(it, first) != null }
-        val secondLeagues = candidates.filter { directory.resolve(it, second) != null }
+        // A bare sport word may also be another of [LEAGUES] of that sport, when its list is loaded (the G League,
+        // the WNBA): "Coachella Valley Lakers vs Stockton Kings" is no NBA game.
+        val bare = !collegeOnly && (college != null || routed.all { it == EspnLeagueMap.SOCCER_ALL })
+        val extra = if (!bare) emptyList() else LEAGUES.map { it.first }.filter { league ->
+            league.sport != "soccer" && league !in candidates && routed.any { it.sport == league.sport } && directory.fetchedAt(league) != null
+        }
+        val firstLeagues = (candidates + extra).filter { directory.resolve(it, first) != null }
+        val secondLeagues = (candidates + extra).filter { directory.resolve(it, second) != null }
         // Colleges field teams in both sports ("Nevada"): a College card takes the one league that has both
         // sides. Otherwise each side must name exactly one league, so a pro name two leagues share stays.
         val league = if (collegeOnly) {

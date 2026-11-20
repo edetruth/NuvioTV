@@ -211,6 +211,20 @@ class SportsLiveSportInferenceTest {
     }
 
     @Test
+    fun `a bare Basketball card of two G League teams infers the G League`() {
+        val gLeague = listOf(
+            team("Coachella Valley Lakers", "Lakers", "Coachella Valley", "CVL"),
+            team("Stockton Kings", "Kings", "Stockton", "STO")
+        )
+        val dir = directory(EspnLeagueMap.NBA to nba, EspnLeagueMap.COLLEGE_BASKETBALL to ncaam, EspnLeagueMap.G_LEAGUE to gLeague)
+        val inferred = SportsLiveSportInference.infer(card("Coachella Valley Lakers vs Stockton Kings", sport = "Basketball"), dir)
+        assertEquals("NBA G League", inferred.sport)
+        assertEquals(listOf(EspnLeagueMap.G_LEAGUE), EspnLeagueMap.leaguesFor(inferred))
+        // NBA teams on a bare Basketball card are still the NBA's.
+        assertEquals("NBA", SportsLiveSportInference.infer(card("Celtics vs Heat", sport = "Basketball"), dir).sport)
+    }
+
+    @Test
     fun `UConn matches Connecticut`() {
         assertEquals(
             full.resolve(EspnLeagueMap.COLLEGE_BASKETBALL, "UConn")?.id,

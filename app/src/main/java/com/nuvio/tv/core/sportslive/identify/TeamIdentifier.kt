@@ -1,6 +1,8 @@
 package com.nuvio.tv.core.sportslive.identify
 
 import android.content.Context
+import android.util.Log
+import com.nuvio.tv.BuildConfig
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.squareup.moshi.Moshi
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -166,6 +168,10 @@ class TeamIdentifier internal constructor(
             }
         }
         book.put(game.first, game.second, identity)
+        // Debug builds: what the lookup made of the game (team names and the answer only).
+        if (BuildConfig.IS_DEBUG_BUILD) {
+            Log.d(LOG_TAG, "\"${game.first}\" vs \"${game.second}\": ${identity?.let { "${it.sport} / ${it.league}" } ?: "unknown"}")
+        }
         return Step(true, true)
     }
 
@@ -243,6 +249,7 @@ class TeamIdentifier internal constructor(
 
     companion object {
         private const val STORE_PATH = "sportslive/team_identity.json"
+        private const val LOG_TAG = "NuvioIdentify"
         /** Games queued at most; later offers come back on the next rebuild. */
         private const val MAX_PENDING = 128
         private const val MAX_ESPN_MISSES = 512
