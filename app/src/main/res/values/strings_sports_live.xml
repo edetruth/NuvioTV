@@ -516,9 +516,9 @@
     <string name="sports_live_setup_scores_subtitle">If you often watch later, hide them. You can change this any time.</string>
     <string name="sports_live_setup_scores_show_help">Live and final scores everywhere.</string>
     <string name="sports_live_setup_scores_my_teams">Only my teams</string>
-    <string name="sports_live_setup_scores_my_teams_help">Your teams\' scores stay hidden until you watch or pick Reveal result. Other games show theirs.</string>
+    <string name="sports_live_setup_scores_my_teams_help">Your teams\' scores hide until you watch or reveal. Other games show.</string>
     <string name="sports_live_setup_scores_hide_help">Hidden until you rest on a game for 1 s or pick Reveal.</string>
-    <string name="sports_live_setup_scores_off_help">No scores are shown or kept; only start times are checked. A game\'s page shows its result only if you pick Reveal.</string>
+    <string name="sports_live_setup_scores_off_help">No scores shown or kept, only start times. Reveal still shows a result.</string>
     <string name="sports_live_setup_sample_home" translatable="false">Celtics</string>
     <string name="sports_live_setup_sample_away" translatable="false">Knicks</string>
     <string name="sports_live_setup_delay_seconds">%1$d s</string>

@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Visibility
+import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -192,7 +193,8 @@ private fun Footer(step: SetupStep, next: FocusRequester, onSkip: () -> Unit, on
             modifier = Modifier.fillMaxWidth().height(SetupSize.Footer),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            GhostButton(text = stringResource(R.string.sports_live_setup_skip), onClick = onSkip)
+            // Nothing is left to skip on the last step (TV QA P3).
+            if (setupShowsSkip(step)) GhostButton(text = stringResource(R.string.sports_live_setup_skip), onClick = onSkip)
             Spacer(Modifier.weight(1f))
             StepDots(step)
             Spacer(Modifier.width(Size.ButtonGap * 2))
@@ -220,6 +222,9 @@ private fun Footer(step: SetupStep, next: FocusRequester, onSkip: () -> Unit, on
         }
     }
 }
+
+/** Skip setup shows on every step but the last ("You're set", TV QA P3): nothing is left to skip there. */
+internal fun setupShowsSkip(step: SetupStep): Boolean = step != SetupStep.DONE
 
 /** A ghost button (Skip setup): text only at rest; focus adds the ring and the lift. */
 @Composable
@@ -621,7 +626,9 @@ private fun ScoresCard(option: SetupScoresOption, selected: Boolean, onClick: ()
                 ),
                 style = SportsLiveTokens.style(Type.Tag),
                 color = Colors.TextSecondary,
-                maxLines = 3
+                // TV QA P2: the copy fits whole (short, up to four lines in the card's room); never cut mid-sentence.
+                maxLines = 4,
+                overflow = TextOverflow.Ellipsis
             )
             Spacer(Modifier.weight(1f))
             SampleRow(mode)
@@ -645,7 +652,7 @@ private object Sample {
     val AwayMark = Color(0xFFE07A2E)
 }
 
-/** One game row as [mode] draws it: scores and clock, "Score hidden", or no score at all. */
+/** One game row as [mode] draws it: scores and clock, the hidden-score eye (as the board's rows), or no score at all. */
 @Composable
 private fun SampleRow(mode: ScoresMode) {
     Row(
@@ -669,11 +676,12 @@ private fun SampleRow(mode: ScoresMode) {
                 SampleClock("4:12")
             }
             ScoresMode.HIDE_UNTIL_FOCUSED -> {
-                Text(
-                    text = stringResource(R.string.sports_live_results_score_hidden),
-                    style = SportsLiveTokens.style(Type.Tag),
-                    color = Colors.TextMuted,
-                    maxLines = 1
+                // TV QA P1: the eye the board's rows show, not the words, which cut the team names.
+                Icon(
+                    imageVector = Icons.Rounded.VisibilityOff,
+                    contentDescription = stringResource(R.string.sports_live_results_score_hidden),
+                    tint = Colors.TextMuted,
+                    modifier = Modifier.size(14.dp)
                 )
                 Spacer(Modifier.width(8.dp))
                 SampleClock("Q4")
@@ -688,7 +696,7 @@ private fun SampleTeam(name: String, mark: Color) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(7.dp).background(mark, CircleShape))
         Spacer(Modifier.width(5.dp))
-        Text(text = name, style = SportsLiveTokens.style(Type.Tag), color = Colors.TextPrimary, maxLines = 1)
+        Text(text = name, style = SportsLiveTokens.style(Type.Tag), color = Colors.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
