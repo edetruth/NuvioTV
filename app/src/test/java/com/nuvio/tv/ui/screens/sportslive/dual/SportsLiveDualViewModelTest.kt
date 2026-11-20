@@ -323,6 +323,8 @@ class SportsLiveDualViewModelTest {
         runCurrent()
         answer("a", dualStream("a"))
         runCurrent()
+        // Let the entry's keys hint run out, so only the pane's timeout could still be pending.
+        advanceTimeBy(SportsLiveDualViewModel.KEYS_HINT_MS + 1)
         viewModel.onFirstFrame(a)
         runCurrent()
         // With the timeout still pending, running idle would move virtual time 15 s on.
