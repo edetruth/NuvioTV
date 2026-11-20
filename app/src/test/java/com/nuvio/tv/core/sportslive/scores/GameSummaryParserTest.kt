@@ -216,7 +216,7 @@ class GameSummaryParserTest {
     }
 
     @Test
-    fun `pregame - no score and no season averages as game stats, only standings show`() {
+    fun `pregame - no score and no season averages as game stats, its preview and standings show`() {
         val game = summary(GameSummaryFixtures.NBA_PRE, EspnLeagueMap.NBA, "401910002")
         assertEquals(ScoreState.PRE, game.state)
         assertFalse(game.isFinal)
@@ -226,7 +226,8 @@ class GameSummaryParserTest {
         assertTrue(game.performers.isEmpty())
         assertTrue(game.boxScore.isEmpty())
         assertNull(game.scoreDetails())
-        assertEquals(listOf(GameSection.STANDINGS), game.sections)
+        // #171: the season leaders make a Preview, first.
+        assertEquals(listOf(GameSection.PREVIEW, GameSection.STANDINGS), game.sections)
     }
 
     @Test

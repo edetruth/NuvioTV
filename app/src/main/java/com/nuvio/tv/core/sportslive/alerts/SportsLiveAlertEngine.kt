@@ -1,5 +1,6 @@
 package com.nuvio.tv.core.sportslive.alerts
 
+import com.nuvio.tv.core.sportslive.scores.CrunchMoment
 import com.nuvio.tv.core.sportslive.Memo
 import com.nuvio.tv.core.sportslive.SportsLiveFullTimeAnnouncements
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
@@ -16,7 +17,9 @@ data class SportsLiveAlertSettings(
     /** "‹Team› score" toasts while watching something else (Scores = Show only). */
     val scoreAlerts: Boolean = true,
     /** The full-time toast (names only under Hide until focused; none under Off). */
-    val fullTimeAlerts: Boolean = true
+    val fullTimeAlerts: Boolean = true,
+    /** Crunch-time alerts (#137): a close game late, in My sports (no score under Hide until focused; none under Off). */
+    val closeGameAlerts: Boolean = true
 )
 
 /** What is on screen now, as far as alerts care. */
@@ -83,6 +86,17 @@ sealed interface SportsLiveAlert {
 
     /** A followed team's game ended (#42). [namesOnly]: Hide until focused, no score. */
     data class FullTime(override val item: SportsLiveItem, val snapshot: ScoreSnapshot, val namesOnly: Boolean) : SportsLiveAlert
+
+    /**
+     * Crunch time (#137): a close game late, in My sports, whoever plays ([CrunchTime]). [namesOnly]: Hide until
+     * focused, "Close finish: ND vs AUB, final minute" with no score.
+     */
+    data class Crunch(
+        override val item: SportsLiveItem,
+        val snapshot: ScoreSnapshot,
+        val moment: CrunchMoment,
+        val namesOnly: Boolean
+    ) : SportsLiveAlert
 }
 
 /**
@@ -291,6 +305,11 @@ class SportsLiveAlertEngine {
             is SportsLiveAlert.ScoreChange -> alert.takeIf { settings.scoreAlerts && mode == ScoresMode.SHOW }
             is SportsLiveAlert.FullTime -> when {
                 !settings.fullTimeAlerts || mode == ScoresMode.OFF -> null
+                mode == ScoresMode.HIDE_UNTIL_FOCUSED -> alert.copy(namesOnly = true)
+                else -> alert
+            }
+            is SportsLiveAlert.Crunch -> when {
+                !settings.closeGameAlerts || mode == ScoresMode.OFF -> null
                 mode == ScoresMode.HIDE_UNTIL_FOCUSED -> alert.copy(namesOnly = true)
                 else -> alert
             }

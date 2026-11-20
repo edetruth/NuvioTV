@@ -58,6 +58,7 @@ import com.nuvio.tv.core.sportslive.alerts.GameReminders
 import com.nuvio.tv.core.sportslive.scores.GameSection
 import com.nuvio.tv.core.sportslive.scores.GameSummary
 import com.nuvio.tv.core.sportslive.scores.GameTeam
+import com.nuvio.tv.core.sportslive.scores.RankDisplay
 import com.nuvio.tv.core.sportslive.scores.ScoreSide
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.ScoreState
@@ -309,20 +310,27 @@ fun SportsLiveGameScreen(
 }
 
 /** One side of the header: from the summary when loaded, else from the event as opened. */
-internal data class HeaderSide(val name: String, val logo: String?, val record: String?, val score: Int?)
+internal data class HeaderSide(val name: String, val logo: String?, val record: String?, val score: Int?, val rank: Int? = null)
 
 internal fun headerSides(summary: GameSummary?, event: ScoreSnapshot): Pair<HeaderSide, HeaderSide> {
     if (summary != null) {
         // The short name ("Celtics", as the design): the summary's, else the scoreboard's for the same side.
-        fun side(team: GameTeam, listed: ScoreTeam) =
-            HeaderSide((team.shortDisplayName ?: listed.shortDisplayName ?: team.fullName).trim(), team.logo, team.record, team.score)
+        fun side(team: GameTeam, listed: ScoreTeam) = HeaderSide(
+            (team.shortDisplayName ?: listed.shortDisplayName ?: team.fullName).trim(),
+            team.logo,
+            team.record,
+            team.score,
+            // A ranked college team's "#3" (#137), from the summary, else the scoreboard.
+            RankDisplay.rank(summary.league, team.rank ?: listed.rank)
+        )
         return side(summary.away, event.away) to side(summary.home, event.home)
     }
     fun side(team: ScoreTeam) = HeaderSide(
         name = (team.shortDisplayName ?: team.displayName ?: team.name ?: team.abbreviation.orEmpty()).trim(),
         logo = team.logo,
         record = null,
-        score = team.score
+        score = team.score,
+        rank = RankDisplay.rank(event.league, team.rank)
     )
     return side(event.away) to side(event.home)
 }
@@ -384,14 +392,26 @@ private fun HeroTeam(side: HeaderSide, logo: Painter?, logoShown: Boolean, showR
         }
         Spacer(Modifier.height(6.dp))
         // One line, never broken mid-word ("Mammo/th", #145): a long name shrinks to 32 px, then is cut.
-        AutoResizeText(
-            text = side.name,
-            color = Colors.TextPrimary,
-            style = SportsLiveTokens.style(HERO_NAME).sportsLiveBold(),
-            minFontSize = HERO_NAME_MIN,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth()
-        )
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {
+            // A ranked college team (#137): a small muted "#3" before the name.
+            side.rank?.let { rank ->
+                Text(
+                    text = RankDisplay.label(rank),
+                    style = SportsLiveTokens.style(SportsLiveTokens.Type.Meta).copy(fontFeatureSettings = "tnum"),
+                    color = Colors.TextMuted,
+                    maxLines = 1,
+                    modifier = Modifier.padding(end = 6.dp)
+                )
+            }
+            AutoResizeText(
+                text = side.name,
+                color = Colors.TextPrimary,
+                style = SportsLiveTokens.style(HERO_NAME).sportsLiveBold(),
+                minFontSize = HERO_NAME_MIN,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.weight(1f, fill = false)
+            )
+        }
         // The record after the game would tell how it ended: hidden with the score.
         if (showRecord && side.record != null) {
             Text(
@@ -567,6 +587,7 @@ private fun GameTabs(
 }
 
 private fun GameSection.labelRes(): Int = when (this) {
+    GameSection.PREVIEW -> R.string.sports_live_game_section_preview
     GameSection.GAME -> R.string.sports_live_game_section_game
     GameSection.BOX_SCORE -> R.string.sports_live_game_section_box_score
     GameSection.STANDINGS -> R.string.sports_live_game_section_standings

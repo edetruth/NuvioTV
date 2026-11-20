@@ -1,5 +1,9 @@
 package com.nuvio.tv.core.sportslive.alerts
 
+import com.nuvio.tv.core.sportslive.scores.MySports
+import com.nuvio.tv.core.sportslive.scores.MySport
+import com.nuvio.tv.core.sportslive.scores.MyLeague
+import com.nuvio.tv.core.sportslive.scores.CrunchMoment
 import com.nuvio.tv.core.sportslive.scores.EspnLeague
 import com.nuvio.tv.core.sportslive.scores.EspnLeagueMap
 import com.nuvio.tv.core.sportslive.scores.GameArt
@@ -29,6 +33,18 @@ sealed interface AlertContent {
 
     /** Full time under Hide until focused: "‹A› vs ‹B› · Full time", no score, no OT, no winner. */
     data class FullTimeNamesOnly(override val first: AlertSide, override val second: AlertSide) : AlertContent
+
+    /**
+     * Crunch time (#137): "Close finish" with both sides, the score under Show ([AlertSide.score]; none under Hide
+     * until focused), and where the game stands ([moment]: overtime, the minutes left, ESPN's clock).
+     */
+    data class Crunch(
+        override val first: AlertSide,
+        override val second: AlertSide,
+        val moment: CrunchMoment,
+        val withScore: Boolean,
+        val league: String?
+    ) : AlertContent
 }
 
 object SportsLiveAlertContent {
@@ -42,6 +58,9 @@ object SportsLiveAlertContent {
             val firstIsHome = firstIsHome(alert.item, alert.snapshot)
             val scorer = alert.scorer?.takeIf { firstIsHome != null }?.let { side -> if (firstIsHome == (side == ScoreSide.HOME)) first else second }
             AlertContent.Score(first, second, scorer, alert.snapshot.clockText)
+        }
+        is SportsLiveAlert.Crunch -> sides(alert.item, alert.snapshot, withScore = !alert.namesOnly)?.let { (first, second, art) ->
+            AlertContent.Crunch(first, second, alert.moment, withScore = !alert.namesOnly, league = art.league)
         }
         is SportsLiveAlert.FullTime -> if (alert.namesOnly) {
             sides(alert.item, alert.snapshot, withScore = false)?.let { (first, second, _) -> AlertContent.FullTimeNamesOnly(first, second) }
@@ -124,6 +143,35 @@ object SportsLiveAlertScope {
             .sortedBy { it.startMs ?: Long.MIN_VALUE }
             .take(MAX_CARDS)
             .toList()
+    }
+
+    /** Live games tracked for crunch time (#137), at most: the soonest started first. */
+    const val MAX_CRUNCH_CARDS = 12
+
+    /**
+     * The live games to track for crunch-time alerts (#137): live (by their load, started within [LIVE_SPAN_MS])
+     * games routed to an ESPN league in [mySports], not over ([ended]), at most [MAX_CRUNCH_CARDS].
+     */
+    fun crunchCardsToTrack(
+        cards: List<SportsLiveItem>,
+        mySports: MySports,
+        nowMs: Long,
+        ended: Set<String> = emptySet()
+    ): List<SportsLiveItem> = cards.asSequence()
+        .filter { !it.isChannel && it.isLive && isLiveOrKickingOff(it, nowMs) }
+        .filter { item -> (listOf(item) + item.alternates).flatMap(EspnLeagueMap::leaguesFor).any { inMySports(it, mySports) } }
+        .filter { SportsLiveAlertEngine.gameKey(it) !in ended }
+        .distinctBy { it.streamKey }
+        .sortedBy { it.startMs ?: Long.MIN_VALUE }
+        .take(MAX_CRUNCH_CARDS)
+        .toList()
+
+    /** True when [league]'s games can be in [mySports]: its sport is in, and (beyond soccer) the league too. */
+    internal fun inMySports(league: EspnLeague, mySports: MySports): Boolean {
+        val sport = MySport.ofEspn(league.sport) ?: return false
+        if (sport !in mySports.effectiveSports) return false
+        if (sport == MySport.SOCCER) return true
+        return MyLeague.ofFeed(league)?.let { it in mySports.leaguesOf(sport) } ?: false
     }
 
     /** A reminder's start this close ahead (or passed) asks for a load when this session has none. */

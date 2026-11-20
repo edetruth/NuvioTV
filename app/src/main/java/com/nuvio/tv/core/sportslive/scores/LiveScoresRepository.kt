@@ -164,7 +164,9 @@ class LiveScoresRepository internal constructor(
         val leagues: List<EspnLeague>,
         val followed: Boolean,
         /** The college feed to try when [leagues] answer without the game (#66); null for most cards. */
-        val fallback: EspnLeague?
+        val fallback: EspnLeague?,
+        /** A tennis card (#160): matched by surname on its tour's live copy ([TennisMatcher]). */
+        val tennis: Boolean = false
     )
 
     private class FeedState {
@@ -272,8 +274,14 @@ class LiveScoresRepository internal constructor(
     override fun track(screenId: String, cards: List<SportsLiveItem>) {
         val entries = cards.mapNotNull { item ->
             val card = ScoreCard.from(item) ?: return@mapNotNull null
-            val (source, leagues) = (listOf(item) + item.alternates).asSequence()
-                .map { it to EspnLeagueMap.leaguesFor(it) }.firstOrNull { it.second.isNotEmpty() } ?: return@mapNotNull null
+            val sources = listOf(item) + item.alternates
+            val routed = sources.asSequence().map { it to EspnLeagueMap.leaguesFor(it) }.firstOrNull { it.second.isNotEmpty() }
+            if (routed == null) {
+                // A tennis match (#160): its tour's feeds, matched by the players' surnames.
+                val tennis = sources.asSequence().map(EspnLeagueMap::tennisLeaguesFor).firstOrNull { it.isNotEmpty() } ?: return@mapNotNull null
+                return@mapNotNull TrackedCard(card, tennis, item.followed, fallback = null, tennis = true)
+            }
+            val (source, leagues) = routed
             TrackedCard(card, leagues, item.followed, EspnLeagueMap.collegeFallbackFor(source)?.takeIf { it !in leagues })
         }.distinctBy { it.card.key }
         tracked.update { current -> if (entries.isEmpty()) current - screenId else current + (screenId to entries) }
@@ -531,7 +539,7 @@ class LiveScoresRepository internal constructor(
             if (!fits(cardFeeds)) continue
             // A card matched on its college fallback stays held to both sides STRONG.
             val strict = entry.fallback != null && remembered[card.key] == entry.fallback
-            var match = matchOn(card, cardFeeds, if (strict) strictMatcher else matcher)
+            var match = if (entry.tennis) matchOn(card, cardFeeds, tennis = true) else matchOn(card, cardFeeds, if (strict) strictMatcher else matcher)
             // A soccer competition feed without the game: try soccer/all (shared, at its own cadence).
             if (match == null && leagues.all { it.sport == "soccer" && it != EspnLeagueMap.SOCCER_ALL } &&
                 cardFeeds.all { feed -> feeds[feed]?.let { it.fetched && !it.paused } == true }
@@ -676,7 +684,7 @@ class LiveScoresRepository internal constructor(
         return MyLeague.ofFeed(league)?.let { it in sports.leaguesOf(sport) } ?: false
     }
 
-    private fun matchOn(card: ScoreCard, cardFeeds: List<ScoreFeed>, using: ScoreMatcher = matcher): ScoreSnapshot? {
+    private fun matchOn(card: ScoreCard, cardFeeds: List<ScoreFeed>, using: ScoreMatcher = matcher, tennis: Boolean = false): ScoreSnapshot? {
         val nowMs = now()
         // A card with no start is matched across ESPN's days: a league counts only once all its days are
         // in, so yesterday's final never stands alone while today's feed is loading, failing or paused.
@@ -685,7 +693,11 @@ class LiveScoresRepository internal constructor(
             .flatten()
         val events = usable.flatMap { feed -> feeds[feed]?.takeIf { it.isFresh(nowMs) }?.events.orEmpty() }
             .distinctBy { it.eventId }
-        return if (events.isEmpty()) null else using.match(card, events, now())
+        return when {
+            events.isEmpty() -> null
+            tennis -> TennisMatcher.match(card, events)
+            else -> using.match(card, events, now())
+        }
     }
 
     /**

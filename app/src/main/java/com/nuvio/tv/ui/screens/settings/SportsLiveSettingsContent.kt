@@ -217,6 +217,7 @@ internal fun SportsLiveSettingsContent(
                 SportsLiveSetting.REMIND_MY_TEAMS -> alerts.remindMyTeams
                 SportsLiveSetting.SCORE_ALERTS -> alerts.scoreAlerts
                 SportsLiveSetting.FULL_TIME_ALERTS -> alerts.fullTimeAlerts
+                SportsLiveSetting.CLOSE_GAME_ALERTS -> alerts.closeGameAlerts
                 SportsLiveSetting.PICTURE_IN_PICTURE -> state.pipEnabled
                 SportsLiveSetting.HIDE_UNPLAYABLE -> state.hideUnplayable
                 SportsLiveSetting.SHOW_SECTION -> state.showSection

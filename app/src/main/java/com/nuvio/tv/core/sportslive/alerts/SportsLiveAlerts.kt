@@ -1,5 +1,10 @@
 package com.nuvio.tv.core.sportslive.alerts
 
+import com.nuvio.tv.core.sportslive.scores.MySports
+import com.nuvio.tv.core.sportslive.scores.CrunchTime
+import com.nuvio.tv.core.sportslive.scores.CrunchCandidate
+import com.nuvio.tv.core.sportslive.scores.CrunchAlerts
+import com.nuvio.tv.core.sportslive.scores.BigGame
 import androidx.annotation.VisibleForTesting
 import com.nuvio.tv.BuildConfig
 import com.nuvio.tv.core.sportslive.SportsLiveDisplayText
@@ -65,6 +70,8 @@ class SportsLiveAlerts @Inject constructor(
     private val liveScores: LiveScoresRepository
 ) {
     private val engine = SportsLiveAlertEngine()
+    /** Crunch-time alerts' limits (#137); guarded by [lock]. */
+    private val crunch = CrunchAlerts()
     private val lock = Any()
 
     /** Waiting overlays with when they were raised; guarded by [lock]. */
@@ -138,8 +145,9 @@ class SportsLiveAlerts @Inject constructor(
         val cards = combine(repo.latest, repo.claimedCatalogs, repo.followedTeams) { load, claimed, followed ->
             candidates(load, claimed, followed)
         }.flowOn(Dispatchers.Default)
-        val base = combine(cards, prefs.reminders, prefs.alertSettings, repo.followedTeams) { shown, reminded, settings, followed ->
-            Base(shown, reminded, settings, followed)
+        val sports = combine(prefs.mySports, repo.followedTeams) { picked, followed -> picked.withFollowed(followed) }
+        val base = combine(cards, prefs.reminders, prefs.alertSettings, repo.followedTeams, sports) { shown, reminded, settings, followed, mySports ->
+            Base(shown, reminded, settings, followed, mySports)
         }.stateIn(this, SharingStarted.Eagerly, null)
         // The 5 s clock runs only while there is something to time: a reminder, or a reminded or followed game.
         val clock = base.map { it?.hasWork == true }.distinctUntilChanged().flatMapLatest { busy -> if (busy) ticks() else flowOf(Unit) }
@@ -152,7 +160,7 @@ class SportsLiveAlerts @Inject constructor(
                 }
             }
             combine(base.filterNotNull(), liveScores.mode, watching, clock) { b, mode, now, _ ->
-                Inputs(b.cards, b.reminders, b.settings, b.followed, mode, now)
+                Inputs(b.cards, b.reminders, b.settings, b.followed, mode, now, b.mySports)
             }.collect { inputs ->
                 val nowMs = System.currentTimeMillis()
                 lastMode = inputs.mode
@@ -166,7 +174,13 @@ class SportsLiveAlerts @Inject constructor(
                     if (endedGames.size > MAX_ENDED) endedGames.clear()
                     endedGames.toSet()
                 }
-                val toTrack = SportsLiveAlertScope.cardsToTrack(inputs.cards, inputs.followed, nowMs, ended)
+                // Followed teams' games, then (#137) live games in My sports for crunch time, while those alerts are on.
+                val crunchCards = if (inputs.settings.closeGameAlerts && inputs.mode != ScoresMode.OFF) {
+                    SportsLiveAlertScope.crunchCardsToTrack(inputs.cards, inputs.mySports, nowMs, ended)
+                } else {
+                    emptyList()
+                }
+                val toTrack = (SportsLiveAlertScope.cardsToTrack(inputs.cards, inputs.followed, nowMs, ended) + crunchCards).distinctBy { it.streamKey }
                 if (toTrack != tracked.value) {
                     tracked.value = toTrack
                     liveScores.track(LiveScoresRepository.SCREEN_ALERTS, toTrack)
@@ -177,6 +191,7 @@ class SportsLiveAlerts @Inject constructor(
                     launch { loadQuietly() }
                 }
                 evaluate(inputs, scores, nowMs)
+                evaluateCrunch(inputs, crunchCards, scores, nowMs)
             }
         } finally {
             liveScores.untrack(LiveScoresRepository.SCREEN_ALERTS)
@@ -187,9 +202,13 @@ class SportsLiveAlerts @Inject constructor(
         val cards: List<SportsLiveItem>,
         val reminders: RemindersState,
         val settings: SportsLiveAlertSettings,
-        val followed: List<FollowedTeam>
+        val followed: List<FollowedTeam>,
+        val mySports: MySports
     ) {
-        val hasWork: Boolean get() = reminders.reminders.isNotEmpty() || cards.any { it.followed || reminders.isReminded(it) }
+        // A live game is work too while crunch-time alerts are on (#137).
+        val hasWork: Boolean
+            get() = reminders.reminders.isNotEmpty() || cards.any { it.followed || reminders.isReminded(it) } ||
+                (settings.closeGameAlerts && cards.any { it.isLive })
     }
 
     /** The repository's normal load (a minute-old one is reused; channels carried over); a failure is ignored. */
@@ -208,7 +227,8 @@ class SportsLiveAlerts @Inject constructor(
         val settings: SportsLiveAlertSettings,
         val followed: List<FollowedTeam>,
         val mode: ScoresMode,
-        val watching: SportsLiveWatching
+        val watching: SportsLiveWatching,
+        val mySports: MySports
     )
 
     private fun evaluate(inputs: Inputs, scores: Map<String, ScoreSnapshot>, nowMs: Long) {
@@ -221,6 +241,50 @@ class SportsLiveAlerts @Inject constructor(
         }
         val raised = synchronized(lock) { engine.update(nowMs, games, inputs.settings, inputs.mode, inputs.watching) }
         if (raised.isNotEmpty()) enqueue(raised, nowMs)
+    }
+
+    /**
+     * Crunch time (#137): of the live games in My sports ([tracked]), the one to alert now, at most one per game and
+     * one every three minutes, never the game playing, the biggest first ([CrunchAlerts]). Not over a movie or show,
+     * nor in a stream's first seconds; the score under Show only, none under Off.
+     */
+    private fun evaluateCrunch(inputs: Inputs, tracked: List<SportsLiveItem>, scores: Map<String, ScoreSnapshot>, nowMs: Long) {
+        if (!inputs.settings.closeGameAlerts || inputs.mode == ScoresMode.OFF || tracked.isEmpty()) return
+        val watching = inputs.watching
+        if (watching.inPlayer && !watching.sportsPlayback) return
+        if (watching.streamStartedAtMs?.let { nowMs - it < SportsLiveAlertEngine.STREAM_SETTLE_MS } == true) return
+        val byKey = HashMap<String, SportsLiveItem>()
+        val candidates = tracked.mapNotNull { item ->
+            val event = ScoreChips.matchedEvent(item, scores[item.streamKey])?.takeIf { it.individual == null && inputs.mySports.includes(it) }
+                ?: return@mapNotNull null
+            byKey[item.streamKey] = item
+            CrunchCandidate(item.streamKey, event, BigGame.rate(event, followed = item.followed).score, SportsLiveAlertEngine.isPlaying(item, watching))
+        }
+        val pick = synchronized(lock) { crunch.next(nowMs, candidates) } ?: return
+        val moment = CrunchTime.of(pick.event) ?: return
+        val item = byKey[pick.key] ?: return
+        enqueue(listOf(SportsLiveAlert.Crunch(item, pick.event, moment, namesOnly = inputs.mode == ScoresMode.HIDE_UNTIL_FOCUSED)), nowMs)
+    }
+
+    /**
+     * Debug builds only (the #137 emulator check): one crunch-time alert for a live game now listed and not playing,
+     * its strict ESPN match when known, else a made-up NCAAM 75–72 with 0:40 left. Nothing in a release build.
+     */
+    suspend fun debugCrunch() {
+        if (!BuildConfig.IS_DEBUG_BUILD) return
+        val card = candidates(repo.latest.value, repo.claimedCatalogs.first(), repo.followedTeams.first())
+            .firstOrNull { it.isLive && it.teams != null && !SportsLiveAlertEngine.isPlaying(it, watching.value) } ?: return
+        val teams = checkNotNull(card.teams)
+        fun side(name: String, score: Int) = ScoreTeam(null, null, name, name, name, null, null, score, emptyList())
+        val snapshot = ScoreChips.matchedEvent(card, liveScores.scores.value[card.streamKey])?.takeIf { CrunchTime.isCrunch(it) } ?: ScoreSnapshot(
+            eventId = "debug-crunch-${card.streamKey}", league = EspnLeague("basketball", "mens-college-basketball"), startMs = card.startMs,
+            state = ScoreState.IN, clockText = "0:40 - 2nd Half", isFinal = false, home = side(teams.home, 75), away = side(teams.away, 72)
+        )
+        val moment = CrunchTime.of(snapshot) ?: return
+        val mode = liveScores.mode.first()
+        synchronized(lock) { crunch.force(System.currentTimeMillis(), CrunchCandidate(card.streamKey, snapshot, 0.0, watching = false)) }
+        android.util.Log.d("SportsLiveAlerts", "debugCrunch: ${snapshot.eventId}")
+        enqueue(listOf(SportsLiveAlert.Crunch(card, snapshot, moment, namesOnly = mode == ScoresMode.HIDE_UNTIL_FOCUSED)), System.currentTimeMillis())
     }
 
     @VisibleForTesting

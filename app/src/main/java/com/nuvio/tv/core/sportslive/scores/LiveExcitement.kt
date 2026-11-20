@@ -90,7 +90,11 @@ object LiveExcitement {
         val minutesLeft: Int? = null,
         val late: Boolean = false,
         val overtime: Boolean = false,
-        val penalties: Boolean = false
+        val penalties: Boolean = false,
+        /** Seconds left in the final period or overtime, when the clock says (#137's crunch time). */
+        val secondsLeft: Int? = null,
+        /** The period the clock names (a soccer minute, a baseball inning are not periods). */
+        val period: Int? = null
     )
 
     internal fun clockOf(sport: String, clockText: String?): Clock {
@@ -109,7 +113,7 @@ object LiveExcitement {
         val left = CLOCK.find(text)?.let { it.groupValues[1].toInt() * 60 + it.groupValues[2].toInt() }
             ?: SECONDS.find(text)?.groupValues?.get(1)?.toInt()
         val minutesLeft = left?.let { (it + 59) / 60 }
-        if (OVERTIME.containsMatchIn(text)) return Clock(progress = 1.0, minutesLeft = minutesLeft, late = true, overtime = true)
+        if (OVERTIME.containsMatchIn(text)) return Clock(progress = 1.0, minutesLeft = minutesLeft, late = true, overtime = true, secondsLeft = left)
         if (HALFTIME.containsMatchIn(text)) return Clock(progress = 0.5)
         val halves = text.contains("half", ignoreCase = true)
         val count = if (halves) 2 else periods.count
@@ -125,7 +129,9 @@ object LiveExcitement {
         return Clock(
             progress = (period - 1 + inPeriod) / count,
             minutesLeft = minutesLeft.takeIf { final },
-            late = final && left <= LATE_SECONDS
+            late = final && left <= LATE_SECONDS,
+            secondsLeft = left.takeIf { final },
+            period = period
         )
     }
 

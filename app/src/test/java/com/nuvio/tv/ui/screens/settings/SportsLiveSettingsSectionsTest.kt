@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.settings
 
+import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.CLOSE_GAME_ALERTS
 import com.nuvio.tv.core.sportslive.scores.ScoreSettings
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.CATALOGS
@@ -54,7 +55,7 @@ class SportsLiveSettingsSectionsTest {
             listOf(
                 SCORES_AND_SPOILERS to listOf(SCORES, SCORE_DELAY),
                 WHAT_I_FOLLOW to listOf(MY_TEAMS, MY_SPORTS),
-                ALERTS to listOf(REMIND_MY_TEAMS, SCORE_ALERTS, FULL_TIME_ALERTS),
+                ALERTS to listOf(REMIND_MY_TEAMS, SCORE_ALERTS, FULL_TIME_ALERTS, CLOSE_GAME_ALERTS),
                 PLAYING to listOf(OPEN_GAME, HIDE_UNPLAYABLE, PICTURE_IN_PICTURE),
                 HOME_AND_ROWS to listOf(SHOW_SECTION, HOME_ROW, CATCH_UP_ROW, HOVER_PREVIEW),
                 SETUP to listOf(RUN_SETUP),
@@ -73,7 +74,7 @@ class SportsLiveSettingsSectionsTest {
             setOf(
                 SHOW_SECTION, HOME_ROW, HOVER_PREVIEW, DATA_SAVER, OPEN_GAME, RESET_STREAM_MEMORY,
                 PICTURE_IN_PICTURE, SCORES, SCORE_DELAY, SCORES_STATUS, REMIND_MY_TEAMS, SCORE_ALERTS,
-                FULL_TIME_ALERTS, MY_SPORTS, MY_TEAMS, CATCH_UP_ROW, RUN_SETUP, HIDDEN, CATALOGS, HIDE_UNPLAYABLE
+                FULL_TIME_ALERTS, CLOSE_GAME_ALERTS, MY_SPORTS, MY_TEAMS, CATCH_UP_ROW, RUN_SETUP, HIDDEN, CATALOGS, HIDE_UNPLAYABLE
             ),
             shown.toSet()
         )
@@ -101,7 +102,7 @@ class SportsLiveSettingsSectionsTest {
     @Test
     fun `scores off greys out the delay, both score-based alerts and the catch-up row`() {
         val off = enabledIn(SportsLiveSettingsUiState(scores = ScoreSettings(ScoresMode.OFF, 0)))
-        assertEquals(SportsLiveSetting.entries.toSet() - setOf(SCORE_DELAY, SCORE_ALERTS, FULL_TIME_ALERTS, CATCH_UP_ROW), off)
+        assertEquals(SportsLiveSetting.entries.toSet() - setOf(SCORE_DELAY, SCORE_ALERTS, FULL_TIME_ALERTS, CLOSE_GAME_ALERTS, CATCH_UP_ROW), off)
     }
 
     @Test

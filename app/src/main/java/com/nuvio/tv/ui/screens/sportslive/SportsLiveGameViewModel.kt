@@ -114,8 +114,12 @@ data class SportsLiveGameUiState(
     /** Score, records and stats show: Scores Show (unless [spoilerSafe]), or revealed. */
     val showsScore: Boolean get() = (mode == ScoresMode.SHOW && !spoilerSafe) || revealed
 
-    /** The sections with something to show; none while the score is hidden. */
-    val sections: List<GameSection> get() = if (showsScore) summary?.sections.orEmpty() else emptyList()
+    /**
+     * The sections with something to show. While the score is hidden only an upcoming game's Preview (#171), which is
+     * spoiler-neutral; the rest wait for Reveal.
+     */
+    val sections: List<GameSection>
+        get() = if (showsScore) summary?.sections.orEmpty() else summary?.sections.orEmpty().filter { it == GameSection.PREVIEW }
 
     val section: GameSection? get() = selected?.takeIf { it in sections } ?: sections.firstOrNull()
 }

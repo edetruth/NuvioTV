@@ -120,6 +120,8 @@ internal fun SportsLiveCardMenu(
     onChooseStream: (() -> Unit)? = null,
     /** "Game stats": the Game page (#18); null hides it (only a game with a strict ESPN match offers it). */
     onGameStats: (() -> Unit)? = null,
+    /** [onGameStats] opens an upcoming game: it reads "Game preview" (#171). */
+    gamePreview: Boolean = false,
     /** "Following ‹team›" in place of "Unfollow ‹team›" (the Results / Game page wording). */
     followingLabel: Boolean = false,
     /** "Remind me" / "Cancel reminder" (#44) by [reminded]; null hides it (only upcoming games offer it). */
@@ -160,7 +162,11 @@ internal fun SportsLiveCardMenu(
             SportsLiveMenuButton(text = stringResource(R.string.sports_live_choose_stream_menu), onClick = onChooseStream, modifier = first())
         }
         if (onGameStats != null) {
-            SportsLiveMenuButton(text = stringResource(R.string.sports_live_game_stats), onClick = onGameStats, modifier = first())
+            SportsLiveMenuButton(
+                text = stringResource(if (gamePreview) R.string.sports_live_game_preview else R.string.sports_live_game_stats),
+                onClick = onGameStats,
+                modifier = first()
+            )
         }
         sides.forEachIndexed { index, (side, followed) ->
             val label = when {

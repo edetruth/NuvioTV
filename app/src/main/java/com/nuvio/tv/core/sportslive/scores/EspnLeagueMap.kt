@@ -364,6 +364,36 @@ object EspnLeagueMap {
 
     private val SOCCER_WORD = Regex("""\bsoccer\b""")
 
+    // A tennis card (#160): its sport, title, genres or catalog name say tennis or name a tour or a major.
+    private val TENNIS = Regex(
+        """\b(tennis|atp|wta|itf|wimbledon|roland garros|french open|australian open|davis cup|billie jean king cup|united cup|laver cup)\b"""
+    )
+    private val TENNIS_WOMEN = Regex("""\bwta\b|\bwomen'?s?\b|\bladies\b|\bbillie jean king cup\b""")
+    private val TENNIS_MEN = Regex("""\batp\b|\bmen'?s\b|\bdavis cup\b""")
+
+    private val tennisRouted = Memo(CARD_CACHE_SIZE) { (sport, hints, routing): CardTexts ->
+        val texts = (listOfNotNull(sport) + hints + routing).map(::fold).filter { it.isNotEmpty() }
+        if (texts.none { TENNIS.containsMatchIn(it) }) {
+            emptyList()
+        } else {
+            val women = texts.any { TENNIS_WOMEN.containsMatchIn(it) }
+            val men = texts.any { TENNIS_MEN.containsMatchIn(it) }
+            when {
+                women && !men -> listOf(WTA)
+                men && !women -> listOf(ATP)
+                else -> listOf(ATP, WTA)
+            }
+        }
+    }
+
+    /**
+     * The tennis feeds of a tennis card (#160), for Live Now's live scores only: ATP for a men's card, WTA for a
+     * women's one, both when it does not say (a mixed doubles, a bare "Tennis"). Empty for any other card.
+     * Team routing ([leaguesFor]) still excludes tennis, so nothing else ever polls these feeds for it.
+     */
+    fun tennisLeaguesFor(item: SportsLiveItem): List<EspnLeague> =
+        tennisRouted(Triple(SportsLiveTeams.knownSport(item), listOf(item.meta.name) + item.meta.genres, listOf(item.catalogName)))
+
     /**
      * The ESPN sports a stored or addon [sport] word can mean: those of the feeds it routes to ("NBA" and
      * "Basketball" → basketball). A word routed only to `soccer/all` that says "Football" may also be

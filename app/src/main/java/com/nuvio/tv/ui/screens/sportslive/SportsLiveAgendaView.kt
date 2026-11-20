@@ -1,5 +1,8 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import com.nuvio.tv.core.sportslive.scores.BigGameText
+import com.nuvio.tv.core.sportslive.scores.BigGameStrings
+import com.nuvio.tv.core.sportslive.scores.BigGameRating
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -112,9 +115,23 @@ internal fun agendaSlotText(slot: AgendaSlot, nowMs: Long): Pair<String, String?
     return time to GameStatusText.countdown(agendaCountdown(start, nowMs), strings)
 }
 
-/** A time-slot header (V2 Upcoming): the time in bold, then the countdown or the number of games, muted. */
+/**
+ * A time-slot header (V2 Upcoming): the time in bold, then the countdown or the number of games, muted. A day's
+ * Games to watch (#137) says so instead; on Today from the evening on it reads Tonight's best ([day]).
+ */
 @Composable
-internal fun SportsLiveAgendaSlotHeader(slot: AgendaSlot, nowMs: Long, modifier: Modifier = Modifier) {
+internal fun SportsLiveAgendaSlotHeader(slot: AgendaSlot, nowMs: Long, modifier: Modifier = Modifier, day: AgendaDay? = null) {
+    if (slot.picks) {
+        Text(
+            text = stringResource(if (agendaTonight(day, nowMs)) R.string.sports_live_tonights_best else R.string.sports_live_games_to_watch)
+                .uppercase(Locale.getDefault()),
+            style = SportsLiveTokens.style(SportsLiveTokens.Type.SectionHeader),
+            color = Colors.TextMuted,
+            maxLines = 1,
+            modifier = modifier.padding(top = 6.dp, bottom = 3.dp)
+        )
+        return
+    }
     val (time, rest) = agendaSlotText(slot, nowMs) ?: return
     Row(modifier = modifier.padding(top = 6.dp, bottom = 3.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(text = time, style = SportsLiveTokens.style(SportsLiveTokens.Type.Meta).sportsLiveBold(), color = Colors.TextPrimary, maxLines = 1)
@@ -126,6 +143,40 @@ internal fun SportsLiveAgendaSlotHeader(slot: AgendaSlot, nowMs: Long, modifier:
                 maxLines = 1
             )
         }
+    }
+}
+
+/** Today from [TONIGHT_FROM_HOUR] on: its Games to watch are Tonight's best (#137). */
+internal fun agendaTonight(day: AgendaDay?, nowMs: Long, zone: ZoneId = ZoneId.systemDefault()): Boolean =
+    day?.kind == AgendaDayKind.TODAY && Instant.ofEpochMilli(nowMs).atZone(zone).hour >= TONIGHT_FROM_HOUR
+
+/** The local hour from which Today's picks read Tonight's best. */
+internal const val TONIGHT_FROM_HOUR = 16
+
+/** A Games to watch row's reason line (#137), under the row: small and muted. */
+@Composable
+internal fun SportsLiveAgendaReasonLine(rating: BigGameRating, modifier: Modifier = Modifier) {
+    Text(
+        text = BigGameText.line(rating.reasons, rememberBigGameStrings()),
+        style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag).copy(fontWeight = FontWeight.Normal),
+        color = Colors.TextSecondary,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = modifier.padding(start = 92.dp, top = 2.dp)
+    )
+}
+
+/** The reason line's words from string resources (#137). */
+@Composable
+internal fun rememberBigGameStrings(): BigGameStrings {
+    val versus = stringResource(R.string.sports_live_big_game_versus)
+    val topFour = stringResource(R.string.sports_live_big_game_top_four)
+    val relegation = stringResource(R.string.sports_live_big_game_relegation)
+    val derby = stringResource(R.string.sports_live_big_game_derby)
+    val playoffs = stringResource(R.string.sports_live_big_game_playoffs)
+    val separator = stringResource(R.string.sports_live_game_info_separator)
+    return remember(versus, topFour, relegation, derby, playoffs, separator) {
+        BigGameStrings(versus, topFour, relegation, derby, playoffs, separator, BigGameText::englishOrdinal)
     }
 }
 
@@ -332,6 +383,16 @@ internal fun SportsLiveUpcomingStage(
                     text = whenText,
                     style = SportsLiveTokens.style(WHEN_STYLE),
                     color = Colors.TextPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            // A big game's reason line (#137): "#1 vs #8 · ESPN · Players Era 8", "1st vs 3rd".
+            row.bigGame?.let { rating ->
+                Text(
+                    text = BigGameText.line(rating.reasons, rememberBigGameStrings()),
+                    style = SportsLiveTokens.style(SportsLiveTokens.Type.Meta),
+                    color = Colors.TextSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )

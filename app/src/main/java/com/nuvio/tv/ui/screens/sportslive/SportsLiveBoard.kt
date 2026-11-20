@@ -1,5 +1,11 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import com.nuvio.tv.core.sportslive.scores.TeamStanding
+import com.nuvio.tv.core.sportslive.scores.StandingsRepository
+import com.nuvio.tv.core.sportslive.scores.ScoreState
+import com.nuvio.tv.core.sportslive.scores.ScoreChips
+import com.nuvio.tv.core.sportslive.scores.EspnLeague
+import com.nuvio.tv.core.sportslive.scores.BigGame
 import androidx.compose.runtime.Immutable
 import com.nuvio.tv.core.sportslive.EndedGame
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
@@ -38,7 +44,9 @@ data class SportsLiveBoardInputs(
     /** The view model's clock, to the minute. */
     val clockMs: Long,
     /** Learned logos' revision (#66): the drawn cards are built again when it moves. */
-    val logoRevision: Int
+    val logoRevision: Int,
+    /** Standings by league (#137): Upcoming's big games read them; empty on the other tabs. */
+    val standings: Map<EspnLeague, Map<String, TeamStanding>> = emptyMap()
 )
 
 /**
@@ -68,6 +76,21 @@ data class SportsLiveBoard(
         /** The tabs drawn from Scoreboard rows (V2, #132): Live now, and Upcoming (as its Agenda). */
         fun isScoreboard(tab: SportsLiveTab): Boolean = tab == SportsLiveTab.LIVE_NOW || tab == SportsLiveTab.UPCOMING
 
+        /**
+         * Upcoming's big games (#137): each row with a strict ESPN match rated ([BigGame]) from its ranks, records,
+         * channel and note, and its league's standings; a big one carries its rating (the badge, Games to watch).
+         */
+        internal fun withBigGames(
+            rows: List<ScoreboardRow>,
+            scores: Map<String, ScoreSnapshot>,
+            standings: Map<EspnLeague, Map<String, TeamStanding>>
+        ): List<ScoreboardRow> = rows.map { row ->
+            val event = ScoreChips.matchedEvent(row.item, scores[row.item.streamKey])?.takeIf { it.state == ScoreState.PRE }
+                ?: return@map row
+            val rating = BigGame.rate(event, standings[StandingsRepository.leagueOf(event)].orEmpty(), followed = row.followed)
+            if (rating.isBig) row.copy(bigGame = rating) else row
+        }
+
         /** Builds the board for [inputs]: pure, and slow for a large list, so callers run it off the main thread. */
         fun build(inputs: SportsLiveBoardInputs, zone: ZoneId = ZoneId.systemDefault()): SportsLiveBoard {
             val tab = inputs.tab
@@ -84,6 +107,7 @@ data class SportsLiveBoard(
                     followsSide = { item, side -> inputs.followed.any { SportsLiveTeams.followsSideOfAnySource(it, side, item) } },
                     excitement = inputs.excitement
                 ).map { row -> if (row.item.streamKey in inputs.noStreams) row.copy(noStreams = true) else row }
+                    .let { built -> if (tab == SportsLiveTab.UPCOMING) withBigGames(built, scores.scores, inputs.standings) else built }
             } else {
                 when (tab) {
                     // V2 P4: Channels by region, Replays under their spoiler-free titles, by day.

@@ -3,6 +3,7 @@ package com.nuvio.tv.ui.screens.sportslive
 import androidx.compose.runtime.Immutable
 import com.nuvio.tv.core.sportslive.GameStatus
 import com.nuvio.tv.core.sportslive.alerts.GameReminders
+import com.nuvio.tv.core.sportslive.scores.GamesToWatch
 import com.nuvio.tv.domain.model.SportsLiveItem
 import java.time.Instant
 import java.time.LocalDate
@@ -19,13 +20,19 @@ enum class AgendaDayKind { TODAY, TOMORROW, YESTERDAY, DATE, ANY_TIME, UNDATED }
 @Immutable
 data class AgendaDay(val kind: AgendaDayKind, val date: LocalDate?)
 
-/** A time slot: the games starting at [startMs] ([count] of them) on day [day]; Any time is one slot with no time. */
+/**
+ * A time slot: the games starting at [startMs] ([count] of them) on day [day]; Any time is one slot with no time.
+ * [picks]: the day's "Games to watch" group (#137) at its top, no time.
+ */
 @Immutable
-data class AgendaSlot(val day: Int, val startMs: Long?, val count: Int)
+data class AgendaSlot(val day: Int, val startMs: Long?, val count: Int, val picks: Boolean = false)
 
-/** A game row of the Agenda: its Scoreboard [row], the index of its [day] and its [slot]. */
+/**
+ * A game row of the Agenda: its Scoreboard [row], the index of its [day] and its [slot]. [pick]: listed in its day's
+ * Games to watch (#137); the same game is also listed in its time slot.
+ */
 @Immutable
-data class AgendaGame(val row: ScoreboardRow, val day: Int, val slot: Int)
+data class AgendaGame(val row: ScoreboardRow, val day: Int, val slot: Int, val pick: Boolean = false)
 
 /** What the Agenda list draws at one position: a sticky day header, or a game (its slot header rides on its first game). */
 sealed interface AgendaEntry {
@@ -37,7 +44,8 @@ sealed interface AgendaEntry {
  * Upcoming as an Agenda (V2, #132): its games in start order under sticky **day** headers (Today, Tomorrow,
  * then the date) and **time-slot** headers ("3:30 PM · in 2 h 21 m", "6:00 PM · 4 games"), so the list is
  * the ruler. Games with a date but no time, and channels, close the list in **Any time**. Followed teams'
- * games lead their slot. ↑ ↓ move game by game (headers are never focused), ← → jump a slot ([slotJump]),
+ * games lead their slot. Each day opens with its **Games to watch** (#137: up to three big games, [GamesToWatch]),
+ * which stay in their time slots too. ↑ ↓ move game by game (headers are never focused), ← → jump a slot ([slotJump]),
  * CH+ / CH− a day ([dayJump]).
  */
 @Immutable
@@ -97,23 +105,25 @@ data class SportsLiveAgenda(val days: List<AgendaDay>, val slots: List<AgendaSlo
             val days = ArrayList<AgendaDay>()
             val slots = ArrayList<AgendaSlot>()
             val games = ArrayList<AgendaGame>()
-            var lastDate: LocalDate? = null
-            var lastMinute: Long? = null
-            ordered.forEach { (row, start) ->
-                // A start already passed (a late game still waiting) stays under Today.
-                val date = maxOf(Instant.ofEpochMilli(start).atZone(zone).toLocalDate(), today)
-                if (date != lastDate) {
-                    days += AgendaDay(dayKindOf(date, today), date)
-                    lastDate = date
-                    lastMinute = null
+            // A start already passed (a late game still waiting) stays under Today; dates follow the start order.
+            val byDay = ordered.groupBy { (_, start) -> maxOf(Instant.ofEpochMilli(start).atZone(zone).toLocalDate(), today) }
+            byDay.forEach { (date, dayGames) ->
+                days += AgendaDay(dayKindOf(date, today), date)
+                val picks = GamesToWatch.pick(dayGames.map { it.first }) { it.bigGame }
+                if (picks.isNotEmpty()) {
+                    slots += AgendaSlot(days.lastIndex, null, picks.size, picks = true)
+                    picks.forEach { (row, _) -> games += AgendaGame(row, days.lastIndex, slots.lastIndex, pick = true) }
                 }
-                val minute = start / MINUTE_MS
-                if (minute != lastMinute) {
-                    slots += AgendaSlot(days.lastIndex, start, 0)
-                    lastMinute = minute
+                var lastMinute: Long? = null
+                dayGames.forEach { (row, start) ->
+                    val minute = start / MINUTE_MS
+                    if (minute != lastMinute) {
+                        slots += AgendaSlot(days.lastIndex, start, 0)
+                        lastMinute = minute
+                    }
+                    slots[slots.lastIndex] = slots.last().let { it.copy(count = it.count + 1) }
+                    games += AgendaGame(row, days.lastIndex, slots.lastIndex)
                 }
-                slots[slots.lastIndex] = slots.last().let { it.copy(count = it.count + 1) }
-                games += AgendaGame(row, days.lastIndex, slots.lastIndex)
             }
             if (anyTime.isNotEmpty()) {
                 days += AgendaDay(AgendaDayKind.ANY_TIME, null)

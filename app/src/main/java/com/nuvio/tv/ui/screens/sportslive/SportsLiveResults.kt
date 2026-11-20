@@ -75,6 +75,7 @@ import com.nuvio.tv.core.sportslive.scores.GolfResult
 import com.nuvio.tv.core.sportslive.scores.ResultDay
 import com.nuvio.tv.core.sportslive.scores.ResultRow
 import com.nuvio.tv.core.sportslive.scores.ScoreSide
+import com.nuvio.tv.core.sportslive.scores.RankDisplay
 import com.nuvio.tv.core.sportslive.scores.ScoreTeam
 import com.nuvio.tv.core.sportslive.scores.SportsResults
 import com.nuvio.tv.core.sportslive.scores.TeamPages
@@ -684,8 +685,8 @@ private fun ResultBoardRow(
                     // Away first, as ESPN and US scoreboards list them.
                     // Logos only when both teams have one and both loaded (#130); never an empty circle.
                     val logos = rememberTeamLogoPair(event.away.logo, event.home.logo)
-                    TeamLine(event.away, logos?.first, logos?.shown == true, bold = awayWon)
-                    TeamLine(event.home, logos?.second, logos?.shown == true, bold = homeWon)
+                    TeamLine(event.away, logos?.first, logos?.shown == true, bold = awayWon, rank = RankDisplay.rank(event.league, event.away.rank)?.takeIf { RankDisplay.onRows(event.league) })
+                    TeamLine(event.home, logos?.second, logos?.shown == true, bold = homeWon, rank = RankDisplay.rank(event.league, event.home.rank)?.takeIf { RankDisplay.onRows(event.league) })
                 }
                 if (showScore) {
                     Column(modifier = Modifier.width(ResultRowColumns.SCORES_DP.dp), horizontalAlignment = Alignment.End) {
@@ -911,7 +912,7 @@ internal fun ReplayPill() {
 }
 
 @Composable
-private fun TeamLine(team: ScoreTeam, logo: Painter?, logoShown: Boolean, bold: Boolean) {
+private fun TeamLine(team: ScoreTeam, logo: Painter?, logoShown: Boolean, bold: Boolean, rank: Int? = null) {
     Row(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -919,6 +920,15 @@ private fun TeamLine(team: ScoreTeam, logo: Painter?, logoShown: Boolean, bold: 
         // The logo slot keeps its room without logos, so names line up row to row (#130).
         Box(modifier = Modifier.size(ResultRowMetrics.LOGO_DP.dp), contentAlignment = Alignment.Center) {
             if (logo != null) TeamLogoSlot(logo, logoShown, ResultRowMetrics.LOGO_DP.dp)
+        }
+        // A ranked college team (#137): a small muted "#3" before the name (the poll's, never the result's).
+        rank?.let {
+            Text(
+                text = RankDisplay.label(it),
+                style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag).copy(fontWeight = FontWeight.Medium, fontFeatureSettings = "tnum"),
+                color = Colors.TextMuted,
+                maxLines = 1
+            )
         }
         Text(
             text = team.listName,

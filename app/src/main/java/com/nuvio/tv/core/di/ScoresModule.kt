@@ -8,6 +8,7 @@ import com.nuvio.tv.core.sportslive.scores.GameSummarySource
 import com.nuvio.tv.core.sportslive.scores.PlayerCardSource
 import com.nuvio.tv.core.sportslive.scores.RoutedScoreProvider
 import com.nuvio.tv.core.sportslive.scores.ScoreProvider
+import com.nuvio.tv.core.sportslive.scores.StandingsSource
 import com.nuvio.tv.core.sportslive.scores.TeamPageSource
 import com.squareup.moshi.Moshi
 import dagger.Module
@@ -64,4 +65,7 @@ object ScoresModule {
 
     @Provides
     fun providePlayerCardSource(espn: EspnScoreProvider): PlayerCardSource = espn
+
+    @Provides
+    fun provideStandingsSource(espn: EspnScoreProvider): StandingsSource = espn
 }

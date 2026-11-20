@@ -47,6 +47,7 @@ import androidx.media3.ui.PlayerView
 import com.nuvio.tv.core.debrid.DirectDebridResolver
 import com.nuvio.tv.core.sportslive.alerts.AlertCard
 import com.nuvio.tv.core.sportslive.alerts.AlertKeyAction
+import com.nuvio.tv.core.sportslive.scores.CrunchMoment
 import com.nuvio.tv.core.sportslive.alerts.AlertKeyContext
 import com.nuvio.tv.core.sportslive.alerts.AlertSpot
 import com.nuvio.tv.core.sportslive.alerts.PeekCommand
@@ -824,6 +825,31 @@ private fun AlertBody(content: AlertContent, followed: Boolean) {
             }
             ScoreLine(content.first, content.second)
         }
+        // Crunch time (#137): "Close finish" and where the game stands; the score under Show only.
+        is AlertContent.Crunch -> {
+            val moment = crunchMomentText(content.moment)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = stringResource(R.string.sports_live_alert_close_finish),
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                    color = ArtColors.LiveText
+                )
+                val details = listOfNotNull(content.league, moment.takeIf { content.withScore })
+                if (details.isNotEmpty()) SmallLine(details.joinToString(HINT_SEPARATOR), ArtColors.Muted)
+            }
+            if (content.withScore) {
+                ScoreLine(content.first, content.second)
+            } else {
+                Text(
+                    text = listOfNotNull(stringResource(R.string.sports_live_alert_matchup, content.first.name, content.second.name), moment)
+                        .joinToString(", "),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = ArtColors.Text,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
         is AlertContent.FullTimeNamesOnly -> Text(
             text = stringResource(R.string.sports_live_alert_full_time_names, content.first.name, content.second.name),
             style = MaterialTheme.typography.titleSmall,
@@ -912,6 +938,15 @@ private fun ScoreLine(first: AlertSide, second: AlertSide) {
         )
         logos?.let { TeamLogoSlot(it.second, it.shown, SportsLiveTokens.Alert.Logo) }
     }
+}
+
+/** Where a crunch-time game stands (#137): "Overtime", "Final minute", "Final 3 min", else ESPN's clock ("Bot 9th", "88'"). */
+@Composable
+private fun crunchMomentText(moment: CrunchMoment): String? = when {
+    moment.overtime -> stringResource(R.string.sports_live_alert_crunch_overtime)
+    moment.minutesLeft == 1 -> stringResource(R.string.sports_live_alert_crunch_final_minute)
+    moment.minutesLeft != null -> stringResource(R.string.sports_live_alert_crunch_final_minutes, moment.minutesLeft)
+    else -> moment.clock?.takeIf { it.isNotBlank() }
 }
 
 @Composable

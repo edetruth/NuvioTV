@@ -12,7 +12,13 @@ import com.nuvio.tv.core.sportslive.SportsLiveProgress
 import com.nuvio.tv.core.sportslive.displayName
 import com.nuvio.tv.core.sportslive.SportsLiveSportKind
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
+import com.nuvio.tv.core.sportslive.scores.BigGameRating
 import com.nuvio.tv.core.sportslive.scores.ChipScore
+import com.nuvio.tv.core.sportslive.scores.CrunchTime
+import com.nuvio.tv.core.sportslive.scores.ScoreMatcher
+import com.nuvio.tv.core.sportslive.scores.TennisColumns
+import com.nuvio.tv.core.sportslive.scores.TennisMatch
+import com.nuvio.tv.core.sportslive.scores.TennisSets
 import com.nuvio.tv.core.sportslive.scores.GameArt
 import com.nuvio.tv.core.sportslive.scores.GameArtTeam
 import com.nuvio.tv.core.sportslive.scores.ScoreChip
@@ -63,7 +69,15 @@ data class ScoreboardRow(
     /** The list section it sits under (P4): a channel's region ([SportsLiveChannelRegions]); null for none. */
     val section: String? = null,
     /** Its last stream lookup found nothing (#145): kept, and dimmed until focused, as Just ended is. */
-    val noStreams: Boolean = false
+    val noStreams: Boolean = false,
+    /** A big game (#137) on Upcoming: the "Big game" badge, and a candidate for its day's Games to watch. */
+    val bigGame: BigGameRating? = null,
+    /** A tennis match's set columns (#160), in the card's order, with its score shown; null otherwise. */
+    val tennis: TennisColumns? = null,
+    /** A tennis match's round ("Semifinal", "Group Stage"), for the stage (#160). */
+    val tennisRound: String? = null,
+    /** Crunch time (#137): a close game late, the "Close game" badge (Scores not Off). */
+    val closeGame: Boolean = false
 ) {
     /** A followed team plays in it: the gold left bar. */
     val followed: Boolean get() = firstFollowed || secondFollowed || item.followed
@@ -116,7 +130,11 @@ internal fun scoreboardRowOf(
     val group = scoreboardGroupOf(status, item, tab)
     val estimate = endedGame?.signal == EndedSignal.ESTIMATE
     val sides = ScoreChips.orderedSides(item)
-    val matched = ScoreChips.matchedEvent(item, snapshot) != null
+    val event = ScoreChips.matchedEvent(item, snapshot)
+    val matched = event != null
+    val tennisMatch = (event?.individual as? TennisMatch)?.takeIf { it.live }
+    // The set columns show only when the chip shows the score (never under Hide before the reveal).
+    val tennisShown = tennisMatch != null && sides != null && !estimate && (row.chip is ScoreChip.Live || row.chip is ScoreChip.Final)
     return ScoreboardRow(
         item = item,
         group = group,
@@ -133,7 +151,14 @@ internal fun scoreboardRowOf(
             null
         },
         twoSided = scoreboardTwoSided(art, matched),
-        sportTag = SportsLiveSportKind.tagOf(item)
+        sportTag = SportsLiveSportKind.tagOf(item),
+        tennis = if (tennisShown) {
+            ScoreMatcher.firstIsHome(sides!!.first, sides.second, event!!)?.let { first -> TennisSets.columns(tennisMatch!!, first) }
+        } else {
+            null
+        },
+        tennisRound = tennisMatch?.title?.takeIf { it.isNotBlank() },
+        closeGame = group == ScoreboardGroup.LIVE && !estimate && event != null && CrunchTime.isCrunch(event)
     )
 }
 

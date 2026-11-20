@@ -1,0 +1,597 @@
+{
+ "_fixture": "Trimmed real ESPN basketball/nba/summary, GS at MEM (pre), 2026-11-19: preview blocks",
+ "header": {
+  "id": "401910019",
+  "competitions": [
+   {
+    "date": "2026-11-20T01:00Z",
+    "status": {
+     "type": {
+      "name": "STATUS_SCHEDULED",
+      "state": "pre",
+      "completed": false,
+      "shortDetail": "11/19 - 8:00 PM EST"
+     }
+    },
+    "competitors": [
+     {
+      "homeAway": "home",
+      "team": {
+       "id": "29",
+       "abbreviation": "MEM",
+       "displayName": "Memphis Grizzlies"
+      },
+      "record": [
+       {
+        "type": "total",
+        "summary": "11-4",
+        "displayValue": "11-4"
+       }
+      ]
+     },
+     {
+      "homeAway": "away",
+      "team": {
+       "id": "9",
+       "abbreviation": "GS",
+       "displayName": "Golden State Warriors"
+      },
+      "record": [
+       {
+        "type": "total",
+        "summary": "8-7",
+        "displayValue": "8-7"
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ "lastFiveGames": [
+  {
+   "team": {
+    "id": "29",
+    "abbreviation": "MEM",
+    "displayName": "Memphis Grizzlies"
+   },
+   "events": [
+    {
+     "gameDate": "2026-11-12T01:00Z",
+     "gameResult": "L",
+     "score": "123-118",
+     "atVs": "vs",
+     "homeTeamId": "29",
+     "awayTeamId": "7",
+     "homeTeamScore": "118",
+     "awayTeamScore": "123",
+     "opponent": {
+      "id": "7",
+      "abbreviation": "DEN",
+      "displayName": "Denver Nuggets"
+     }
+    },
+    {
+     "gameDate": "2026-11-14T01:00Z",
+     "gameResult": "W",
+     "score": "142-111",
+     "atVs": "@",
+     "homeTeamId": "3",
+     "awayTeamId": "29",
+     "homeTeamScore": "111",
+     "awayTeamScore": "142",
+     "opponent": {
+      "id": "3",
+      "abbreviation": "NO",
+      "displayName": "New Orleans Pelicans"
+     }
+    },
+    {
+     "gameDate": "2026-11-15T01:00Z",
+     "gameResult": "W",
+     "score": "129-110",
+     "atVs": "vs",
+     "homeTeamId": "29",
+     "awayTeamId": "17",
+     "homeTeamScore": "129",
+     "awayTeamScore": "110",
+     "opponent": {
+      "id": "17",
+      "abbreviation": "BKN",
+      "displayName": "Brooklyn Nets"
+     }
+    },
+    {
+     "gameDate": "2026-11-17T00:00Z",
+     "gameResult": "W",
+     "score": "136-120",
+     "atVs": "@",
+     "homeTeamId": "27",
+     "awayTeamId": "29",
+     "homeTeamScore": "120",
+     "awayTeamScore": "136",
+     "opponent": {
+      "id": "27",
+      "abbreviation": "WSH",
+      "displayName": "Washington Wizards"
+     }
+    },
+    {
+     "gameDate": "2026-11-19T00:00Z",
+     "gameResult": "W",
+     "score": "124-121",
+     "atVs": "@",
+     "homeTeamId": "5",
+     "awayTeamId": "29",
+     "homeTeamScore": "121",
+     "awayTeamScore": "124",
+     "opponent": {
+      "id": "5",
+      "abbreviation": "CLE",
+      "displayName": "Cleveland Cavaliers"
+     }
+    }
+   ]
+  },
+  {
+   "team": {
+    "id": "9",
+    "abbreviation": "GS",
+    "displayName": "Golden State Warriors"
+   },
+   "events": [
+    {
+     "gameDate": "2026-11-10T03:00Z",
+     "gameResult": "W",
+     "score": "138-87",
+     "atVs": "vs",
+     "homeTeamId": "9",
+     "awayTeamId": "3",
+     "homeTeamScore": "138",
+     "awayTeamScore": "87",
+     "opponent": {
+      "id": "3",
+      "abbreviation": "NO",
+      "displayName": "New Orleans Pelicans"
+     }
+    },
+    {
+     "gameDate": "2026-11-12T02:30Z",
+     "gameResult": "L",
+     "score": "115-108",
+     "atVs": "@",
+     "homeTeamId": "10",
+     "awayTeamId": "9",
+     "homeTeamScore": "115",
+     "awayTeamScore": "108",
+     "opponent": {
+      "id": "10",
+      "abbreviation": "HOU",
+      "displayName": "Houston Rockets"
+     }
+    },
+    {
+     "gameDate": "2026-11-14T02:30Z",
+     "gameResult": "L",
+     "score": "123-85",
+     "atVs": "@",
+     "homeTeamId": "24",
+     "awayTeamId": "9",
+     "homeTeamScore": "123",
+     "awayTeamScore": "85",
+     "opponent": {
+      "id": "24",
+      "abbreviation": "SA",
+      "displayName": "San Antonio Spurs"
+     }
+    },
+    {
+     "gameDate": "2026-11-17T01:00Z",
+     "gameResult": "L",
+     "score": "115-94",
+     "atVs": "@",
+     "homeTeamId": "3",
+     "awayTeamId": "9",
+     "homeTeamScore": "115",
+     "awayTeamScore": "94",
+     "opponent": {
+      "id": "3",
+      "abbreviation": "NO",
+      "displayName": "New Orleans Pelicans"
+     }
+    },
+    {
+     "gameDate": "2026-11-19T01:00Z",
+     "gameResult": "L",
+     "score": "116-94",
+     "atVs": "@",
+     "homeTeamId": "6",
+     "awayTeamId": "9",
+     "homeTeamScore": "116",
+     "awayTeamScore": "94",
+     "opponent": {
+      "id": "6",
+      "abbreviation": "DAL",
+      "displayName": "Dallas Mavericks"
+     }
+    }
+   ]
+  }
+ ],
+ "seasonseries": [
+  {
+   "type": "season",
+   "title": "Regular Season Series",
+   "summary": "MEM leads series 1-0",
+   "seriesScore": "1-0",
+   "totalCompetitions": 4,
+   "events": [
+    {
+     "date": "2026-10-24T02:00:00Z",
+     "competitors": [
+      {
+       "homeAway": "home",
+       "winner": false,
+       "score": "108",
+       "team": {
+        "id": "9",
+        "abbreviation": "GS"
+       }
+      },
+      {
+       "homeAway": "away",
+       "winner": true,
+       "score": "111",
+       "team": {
+        "id": "29",
+        "abbreviation": "MEM"
+       }
+      }
+     ]
+    },
+    {
+     "date": "2026-11-20T01:00:00Z",
+     "competitors": [
+      {
+       "homeAway": "home",
+       "winner": null,
+       "score": "0",
+       "team": {
+        "id": "29",
+        "abbreviation": "MEM"
+       }
+      },
+      {
+       "homeAway": "away",
+       "winner": null,
+       "score": "0",
+       "team": {
+        "id": "9",
+        "abbreviation": "GS"
+       }
+      }
+     ]
+    },
+    {
+     "date": "2026-12-15T01:00:00Z",
+     "competitors": [
+      {
+       "homeAway": "home",
+       "winner": null,
+       "score": "0",
+       "team": {
+        "id": "29",
+        "abbreviation": "MEM"
+       }
+      },
+      {
+       "homeAway": "away",
+       "winner": null,
+       "score": "0",
+       "team": {
+        "id": "9",
+        "abbreviation": "GS"
+       }
+      }
+     ]
+    },
+    {
+     "date": "2027-03-18T02:00:00Z",
+     "competitors": [
+      {
+       "homeAway": "home",
+       "winner": null,
+       "score": "0",
+       "team": {
+        "id": "9",
+        "abbreviation": "GS"
+       }
+      },
+      {
+       "homeAway": "away",
+       "winner": null,
+       "score": "0",
+       "team": {
+        "id": "29",
+        "abbreviation": "MEM"
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "predictor": {
+  "header": "Matchup Predictor",
+  "homeTeam": {
+   "id": "29",
+   "gameProjection": "62.2",
+   "teamChanceLoss": "37.8"
+  },
+  "awayTeam": {
+   "id": "9",
+   "gameProjection": "37.8",
+   "teamChanceLoss": "62.2"
+  }
+ },
+ "injuries": [
+  {
+   "team": {
+    "id": "29",
+    "abbreviation": "MEM",
+    "displayName": "Memphis Grizzlies"
+   },
+   "injuries": [
+    {
+     "status": "Out",
+     "athlete": {
+      "displayName": "Zach Edey",
+      "shortName": "Z. Edey",
+      "position": {
+       "abbreviation": "C"
+      }
+     },
+     "details": {
+      "type": "Ankle"
+     }
+    },
+    {
+     "status": "Out",
+     "athlete": {
+      "displayName": "Ty Jerome",
+      "shortName": "T. Jerome",
+      "position": {
+       "abbreviation": "G"
+      }
+     },
+     "details": {
+      "type": "Hip"
+     }
+    },
+    {
+     "status": "Out",
+     "athlete": {
+      "displayName": "GG Jackson",
+      "shortName": "G. Jackson",
+      "position": {
+       "abbreviation": "F"
+      }
+     },
+     "details": {
+      "type": "Foot"
+     }
+    },
+    {
+     "status": "Out",
+     "athlete": {
+      "displayName": "Scotty Pippen Jr.",
+      "shortName": "S. Pippen Jr.",
+      "position": {
+       "abbreviation": "G"
+      }
+     },
+     "details": {
+      "type": "Back"
+     }
+    },
+    {
+     "status": "Out",
+     "athlete": {
+      "displayName": "Richie Saunders",
+      "shortName": "R. Saunders",
+      "position": {
+       "abbreviation": "G"
+      }
+     },
+     "details": {
+      "type": "Knee"
+     }
+    }
+   ]
+  },
+  {
+   "team": {
+    "id": "9",
+    "abbreviation": "GS",
+    "displayName": "Golden State Warriors"
+   },
+   "injuries": [
+    {
+     "status": "Out",
+     "athlete": {
+      "displayName": "Draymond Green",
+      "shortName": "D. Green",
+      "position": {
+       "abbreviation": "F"
+      }
+     },
+     "details": {
+      "type": "Rest"
+     }
+    },
+    {
+     "status": "Out",
+     "athlete": {
+      "displayName": "Brandon Williams",
+      "shortName": "B. Williams",
+      "position": {
+       "abbreviation": "G"
+      }
+     },
+     "details": {
+      "type": "Hamstring"
+     }
+    },
+    {
+     "status": "Out",
+     "athlete": {
+      "displayName": "Stephen Curry",
+      "shortName": "S. Curry",
+      "position": {
+       "abbreviation": "G"
+      }
+     },
+     "details": {
+      "type": "Abdomen"
+     }
+    },
+    {
+     "status": "Out",
+     "athlete": {
+      "displayName": "Kristaps Porzingis",
+      "shortName": "K. Porzingis",
+      "position": {
+       "abbreviation": "C"
+      }
+     },
+     "details": {
+      "type": "Illness"
+     }
+    },
+    {
+     "status": "Out",
+     "athlete": {
+      "displayName": "Moses Moody",
+      "shortName": "M. Moody",
+      "position": {
+       "abbreviation": "G"
+      }
+     },
+     "details": {
+      "type": "Knee"
+     }
+    }
+   ]
+  }
+ ],
+ "leaders": [
+  {
+   "team": {
+    "id": "29",
+    "abbreviation": "MEM",
+    "displayName": "Memphis Grizzlies"
+   },
+   "leaders": [
+    {
+     "name": "pointsPerGame",
+     "displayName": "Points",
+     "abbreviation": null,
+     "leaders": [
+      {
+       "displayValue": "25.4",
+       "athlete": {
+        "id": "4065733",
+        "displayName": "Ty Jerome",
+        "shortName": "T. Jerome"
+       }
+      }
+     ]
+    },
+    {
+     "name": "assistsPerGame",
+     "displayName": "Assists",
+     "abbreviation": null,
+     "leaders": [
+      {
+       "displayValue": "5.5",
+       "athlete": {
+        "id": "4433083",
+        "displayName": "Cam Spencer",
+        "shortName": "C. Spencer"
+       }
+      }
+     ]
+    },
+    {
+     "name": "reboundsPerGame",
+     "displayName": "Rebounds",
+     "abbreviation": null,
+     "leaders": [
+      {
+       "displayValue": "9.4",
+       "athlete": {
+        "id": "5041935",
+        "displayName": "Cameron Boozer",
+        "shortName": "C. Boozer"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "team": {
+    "id": "9",
+    "abbreviation": "GS",
+    "displayName": "Golden State Warriors"
+   },
+   "leaders": [
+    {
+     "name": "pointsPerGame",
+     "displayName": "Points",
+     "abbreviation": null,
+     "leaders": [
+      {
+       "displayValue": "27.8",
+       "athlete": {
+        "id": "3975",
+        "displayName": "Stephen Curry",
+        "shortName": "S. Curry"
+       }
+      }
+     ]
+    },
+    {
+     "name": "assistsPerGame",
+     "displayName": "Assists",
+     "abbreviation": null,
+     "leaders": [
+      {
+       "displayValue": "6.5",
+       "athlete": {
+        "id": "6589",
+        "displayName": "Draymond Green",
+        "shortName": "D. Green"
+       }
+      }
+     ]
+    },
+    {
+     "name": "reboundsPerGame",
+     "displayName": "Rebounds",
+     "abbreviation": null,
+     "leaders": [
+      {
+       "displayValue": "7.3",
+       "athlete": {
+        "id": "5175737",
+        "displayName": "Yaxel Lendeborg",
+        "shortName": "Y. Lendeborg"
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

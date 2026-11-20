@@ -3803,6 +3803,27 @@
     <string name="sports_live_game_section_box_score">Box score</string>
     <string name="sports_live_game_section_standings">Standings</string>
     <string name="sports_live_game_section_highlights">Highlights</string>
+    <string name="sports_live_game_section_preview">Preview</string>
+    <string name="sports_live_game_preview">Game preview</string>
+    <string name="sports_live_preview_header">At a glance</string>
+    <string name="sports_live_preview_place_in">%1$s in %2$s</string>
+    <string name="sports_live_preview_form">Form</string>
+    <string name="sports_live_preview_head_to_head">Head-to-head</string>
+    <string name="sports_live_preview_meeting">%1$s %2$s–%3$s %4$s</string>
+    <string name="sports_live_preview_leaders">Season leaders</string>
+    <string name="sports_live_preview_injuries">Injuries</string>
+    <string name="sports_live_preview_out">Out: %1$s</string>
+    <string name="sports_live_preview_win_chance">Win chance</string>
+    <string name="sports_live_preview_percent">%1$s %2$.0f%%</string>
+    <string name="sports_live_close_game">Close game</string>
+    <string name="sports_live_big_game">Big game</string>
+    <string name="sports_live_games_to_watch">Games to watch</string>
+    <string name="sports_live_tonights_best">Tonight\'s best</string>
+    <string name="sports_live_big_game_versus">%1$s vs %2$s</string>
+    <string name="sports_live_big_game_top_four">Top-4 clash</string>
+    <string name="sports_live_big_game_relegation">Relegation battle</string>
+    <string name="sports_live_big_game_derby">Derby</string>
+    <string name="sports_live_big_game_playoffs">Playoffs</string>
     <string name="sports_live_game_top_performers">Top performers</string>
     <string name="sports_live_game_team_stats">Team stats</string>
     <string name="sports_live_game_info_separator">" · "</string>
@@ -3910,6 +3931,8 @@
     <string name="sports_live_setting_score_alerts_subtitle">A short note when a followed team\'s game changes score while you watch something else. Only when Scores is Show</string>
     <string name="sports_live_setting_full_time_alerts">Full-time alerts</string>
     <string name="sports_live_setting_full_time_alerts_subtitle">A short note when a followed team\'s game ends. Names only under Hide until focused</string>
+    <string name="sports_live_setting_close_game_alerts">Close-game alerts</string>
+    <string name="sports_live_setting_close_game_alerts_subtitle">A close game late in My sports, whoever plays: at most one every 3 minutes, never the game you\'re watching. No score under Hide until focused</string>
     <!-- Sports & Live settings screen, grouped (#72) -->
     <string name="sports_live_settings_subtitle">Scores, what you follow, alerts and playing</string>
     <string name="sports_live_section_what_i_follow">What I follow</string>
@@ -4034,6 +4057,10 @@
     <string name="sports_live_alert_score_update">Score update</string>
     <string name="sports_live_alert_score_line">%1$s %2$d–%3$d %4$s</string>
     <string name="sports_live_alert_full_time">FULL TIME</string>
+    <string name="sports_live_alert_close_finish">CLOSE FINISH</string>
+    <string name="sports_live_alert_crunch_overtime">overtime</string>
+    <string name="sports_live_alert_crunch_final_minute">final minute</string>
+    <string name="sports_live_alert_crunch_final_minutes">final %1$d min</string>
     <string name="sports_live_alert_starting_toast">%1$s is starting · open Sports &amp; Live to watch</string>
     <string name="sports_live_alert_full_time_names">%1$s vs %2$s · Full time</string>
     <string name="sports_live_alert_hint_watch">OK Watch</string>

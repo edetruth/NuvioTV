@@ -37,8 +37,10 @@ class EspnScoreProvider internal constructor(
     /** Where each request's outcome is recorded (#70). */
     private val health: EspnFeedHealth = EspnFeedHealth(),
     /** ESPN's athlete API, a different host from the scoreboards (#63). */
-    private val athleteBaseUrl: String = ATHLETE_BASE_URL
-) : ScoreProvider, GameSummarySource, TeamPageSource, PlayerCardSource {
+    private val athleteBaseUrl: String = ATHLETE_BASE_URL,
+    /** ESPN's standings API (#137), another path on the scoreboards' host. */
+    private val standingsBaseUrl: String = STANDINGS_BASE_URL
+) : ScoreProvider, GameSummarySource, TeamPageSource, PlayerCardSource, StandingsSource {
 
     @Inject
     constructor(okHttpClient: OkHttpClient, moshi: Moshi, health: EspnFeedHealth) :
@@ -139,7 +141,7 @@ class EspnScoreProvider internal constructor(
                             ScoreboardResult.FAILED
                         } else {
                             if (fromNetwork) health.recordSuccess(key)
-                            if (individual) ScoreboardResult(EspnIndividualResults.toSnapshots(dto, league, date))
+                            if (individual) ScoreboardResult(EspnIndividualResults.toSnapshots(dto, league, date) + EspnIndividualResults.tennisLive(dto, league, date))
                             else ScoreboardResult(toSnapshots(dto, league))
                         }
                     }
@@ -192,6 +194,10 @@ class EspnScoreProvider internal constructor(
     override suspend fun gameLog(league: EspnLeague, athleteId: String): String? =
         teamText("$athleteBaseUrl${league.path}/athletes/$athleteId/gamelog", "gamelog $athleteId")
 
+    /** [league]'s standings (#137), ESPN's v2 API; like a team body, never stored in the HTTP cache (kept by [StandingsRepository]). */
+    override suspend fun standings(league: EspnLeague): String? =
+        teamText("$standingsBaseUrl${league.path}/standings", "${league.path} standings")
+
     override suspend fun team(league: EspnLeague, teamId: String): String? =
         teamText("$baseUrl${league.path}/teams/$teamId", "team $teamId")
 
@@ -237,6 +243,7 @@ class EspnScoreProvider internal constructor(
         private const val TAG = "EspnScoreProvider"
         internal const val BASE_URL = "https://site.api.espn.com/apis/site/v2/sports/"
         internal const val ATHLETE_BASE_URL = "https://site.web.api.espn.com/apis/common/v3/sports/"
+        internal const val STANDINGS_BASE_URL = "https://site.api.espn.com/apis/v2/sports/"
         // ".../gameId/401930175/league/fifa.friendly_u21"
         private val LEAGUE_IN_LINK = Regex("""/league/([a-z0-9._-]+)""")
         private const val PAST_DAY_MAX_STALE_DAYS = 7
@@ -350,7 +357,10 @@ class EspnScoreProvider internal constructor(
                     type?.name?.let { RESUMABLE.containsMatchIn(it.uppercase()) } == true,
                 // Only while in play: a final's leftover last play is not a situation.
                 situation = if (state == ScoreState.IN) situation(competition.situation, homeTeam.id, awayTeam.id) else null,
-                seasonType = event.season?.type
+                seasonType = event.season?.type,
+                broadcasts = broadcastsOf(competition),
+                headline = competition.notes.orEmpty().firstNotNullOfOrNull { it.headline?.trim()?.takeIf(String::isNotEmpty) },
+                spread = competition.odds.orEmpty().firstNotNullOfOrNull { it.spread }
             )
         }
 
@@ -422,9 +432,21 @@ class EspnScoreProvider internal constructor(
                 score = competitor.score?.trim()?.toIntOrNull(),
                 linescores = competitor.linescores.orEmpty().mapNotNull { it.value?.toInt() },
                 record = competitor.records.orEmpty().let { records -> records.firstOrNull { it.type == "total" } ?: records.firstOrNull() }
-                    ?.summary?.trim()?.takeIf { it.isNotEmpty() }
+                    ?.summary?.trim()?.takeIf { it.isNotEmpty() },
+                rank = rankOf(competitor.curatedRank),
+                form = competitor.form?.trim()?.takeIf { it.isNotEmpty() }
             )
         }
+
+        /** ESPN's `curatedRank.current`, or null when absent, not positive, or college's 99 ("unranked"). */
+        internal fun rankOf(rank: EspnCuratedRankDto?): Int? = rank?.current?.takeIf { it in 1 until UNRANKED }
+
+        /** ESPN's poll and ranking value meaning "not ranked". */
+        internal const val UNRANKED = 99
+
+        /** Every channel name of the competition's broadcasts, once each, in ESPN's order. */
+        internal fun broadcastsOf(competition: EspnCompetitionDto): List<String> =
+            competition.broadcasts.orEmpty().flatMap { it.names.orEmpty() }.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
 
         private fun scorers(details: List<EspnDetailDto>, homeId: String?, awayId: String?): List<ScoreScorer> =
             details.filter { it.scoringPlay == true && it.shootout != true }.mapNotNull { detail ->

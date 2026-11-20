@@ -81,6 +81,100 @@ internal object EspnIndividualResults {
             }
     }
 
+    // Each tour's draws (#160): its own singles and doubles, and a Grand Slam's mixed doubles in both feeds.
+    private val TOUR_DRAWS = mapOf(
+        "atp" to setOf("mens-singles", "mens-doubles", "mixed-doubles"),
+        "wta" to setOf("womens-singles", "womens-doubles", "mixed-doubles")
+    )
+
+    /**
+     * Live Now's copy of a tennis scoreboard (#160): every match of the tour's draws (singles and doubles) that
+     * started on ESPN day [day] or is being played, with its two sides filled (home: ESPN's first listed, away:
+     * the second), each side's sets won as its score and its games per set as its linescore, its ranking, its
+     * serve and its members' names for the matcher ([TennisNames]). Ids are "tennis-live:‹id›", so they never
+     * meet Results' copy ([toSnapshots]), which this never changes.
+     */
+    fun tennisLive(dto: EspnScoreboardDto, league: EspnLeague, day: LocalDate): List<ScoreSnapshot> {
+        val draws = TOUR_DRAWS[league.league] ?: return emptyList()
+        return dto.events.orEmpty().flatMap { event ->
+            val tournament = event.name?.takeIf { it.isNotBlank() }
+            event.groupings.orEmpty().filter { it.grouping?.slug in draws }.flatMap { grouping ->
+                val doubles = grouping.grouping?.slug?.endsWith("doubles") == true
+                val section = listOfNotNull(tournament, grouping.grouping?.displayName?.takeIf { it.isNotBlank() })
+                    .joinToString(" · ").ifEmpty { null }
+                grouping.competitions.orEmpty().mapNotNull { match -> liveMatch(match, league, section, doubles, day) }
+            }
+        }
+    }
+
+    private fun liveMatch(match: EspnCompetitionDto, league: EspnLeague, section: String?, doubles: Boolean, day: LocalDate): ScoreSnapshot? {
+        val type = match.status?.type
+        val state = EspnScoreProvider.stateOf(type)
+        if (!onDay(match.date, day) && state != ScoreState.IN) return null
+        val id = match.id?.takeIf { it.isNotBlank() } ?: return null
+        val players = sides(match).map { competitor -> livePlayer(competitor, doubles) ?: return null }
+        if (players.size != 2) return null
+        val played = state == ScoreState.IN || state == ScoreState.POST
+        val (round, qualifying) = tennisRound(match)
+        val result = TennisMatch(round, players, TennisEnding.COMPLETED, qualifying, doubles = doubles, live = true)
+        fun side(player: TennisPlayer) = ScoreTeam(
+            id = null,
+            abbreviation = null,
+            displayName = player.name,
+            shortDisplayName = TennisNames.shortName(player.members),
+            name = TennisNames.shortName(player.members),
+            location = null,
+            logo = null,
+            score = if (played) player.setsWon else null,
+            linescores = if (played) player.sets.map { it.games } else emptyList(),
+            rank = player.rank
+        )
+        return ScoreSnapshot(
+            eventId = "tennis-live:$id",
+            league = league,
+            leagueName = section,
+            startMs = match.date?.let(EspnScoreProvider::parseDate),
+            timeValid = match.timeValid != false,
+            state = state,
+            clockText = type?.shortDetail?.takeIf { it.isNotBlank() },
+            isFinal = state != ScoreState.OFF && type?.completed == true,
+            home = side(players[0]),
+            away = side(players[1]),
+            individual = result
+        )
+    }
+
+    /** One side of a live copy's match; null when it names nobody (the match is then skipped). */
+    private fun livePlayer(competitor: EspnCompetitorDto, doubles: Boolean): TennisPlayer? {
+        val members = if (doubles) {
+            competitor.roster?.athletes.orEmpty().mapNotNull { it.displayName?.trim()?.takeIf(String::isNotEmpty) }
+        } else {
+            listOfNotNull(competitor.athlete?.displayName?.trim()?.takeIf(String::isNotEmpty))
+        }
+        if (members.isEmpty() || (doubles && members.size != 2)) return null
+        val name = (if (doubles) competitor.roster?.displayName?.trim()?.takeIf(String::isNotEmpty) else null) ?: members.joinToString(" / ")
+        val sets = competitor.linescores.orEmpty().map { set ->
+            TennisSet(set.value?.toInt() ?: return null, set.tiebreak, won = set.winner == true)
+        }
+        return TennisPlayer(
+            name = name,
+            winner = competitor.winner == true,
+            sets = sets,
+            rank = competitor.curatedRank?.current?.takeIf { it > 0 },
+            serving = serving(competitor.possession),
+            members = members,
+            setsWon = sets.count { it.won }
+        )
+    }
+
+    // A flag on ESPN's live tennis scoreboard; an object (or a non-empty id) also means this side serves.
+    private fun serving(possession: Any?): Boolean = when (possession) {
+        null -> false
+        is Boolean -> possession
+        is String -> possession.isNotBlank() && possession != "false"
+        else -> true
+    }
+
     private val QUALIFYING = Regex("""qualif""", RegexOption.IGNORE_CASE)
     private val ROUND_NUMBER = Regex("""\d+""")
 

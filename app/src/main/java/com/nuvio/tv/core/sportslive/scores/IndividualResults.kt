@@ -13,9 +13,23 @@ sealed interface IndividualResult {
 }
 
 /** A tennis set as one player won games in it; [tiebreak] is that player's tiebreak points, if any. */
-data class TennisSet(val games: Int, val tiebreak: Int? = null)
+data class TennisSet(val games: Int, val tiebreak: Int? = null, val won: Boolean = false)
 
-data class TennisPlayer(val name: String, val winner: Boolean, val sets: List<TennisSet>)
+/**
+ * A tennis side: [name] (a doubles pair "A / B"), the winner of the match, its sets. The live copy (#160) adds the
+ * ESPN [rank], whether it is [serving], each set it [won][TennisSet] and the [members]' full names (one, or two
+ * for doubles) the matcher reads.
+ */
+data class TennisPlayer(
+    val name: String,
+    val winner: Boolean,
+    val sets: List<TennisSet>,
+    val rank: Int? = null,
+    val serving: Boolean = false,
+    val members: List<String> = listOf(name),
+    /** The sets this side has won ([TennisSet.won]); a set still being played counts for neither. */
+    val setsWon: Int = 0
+)
 
 enum class TennisEnding { COMPLETED, RETIRED, WALKOVER }
 
@@ -27,7 +41,14 @@ data class TennisMatch(
     override val title: String?,
     val players: List<TennisPlayer>,
     val ending: TennisEnding,
-    val qualifying: Boolean = false
+    val qualifying: Boolean = false,
+    /** A doubles match: each side is a pair. */
+    val doubles: Boolean = false,
+    /**
+     * The Live Now copy (#160): every draw's matches, live ones included, with sides; Results lists only the
+     * other copy (singles finals, no sides).
+     */
+    val live: Boolean = false
 ) : IndividualResult {
     val winner: TennisPlayer? get() = players.singleOrNull { it.winner }
     override val listOrder: Int get() = if (qualifying) 1 else 0

@@ -199,7 +199,8 @@ fun SportsLiveScreen(
     }
     // The ESPN game behind a card, only for a strict match (as the chip needs): "Game stats" opens it.
     val gameOf: (SportsLiveItem) -> ScoreSnapshot? = remember(scores, scoredTab) {
-        { item -> if (scoredTab) ScoreChips.matchedEvent(item, scores[item.streamKey]) else null }
+        // An individual sport's match (a tennis score, #160) has no Game page.
+        { item -> if (scoredTab) ScoreChips.matchedEvent(item, scores[item.streamKey])?.takeIf { it.individual == null } else null }
     }
     // The list's model (#71): the Scoreboard's rows and the drawn cards, built by the view model off the main thread
     // from the scores shown here; the list draws the board once it is ready.
@@ -556,6 +557,8 @@ private fun SportsLiveContent(
     // requester shared by two cards sends focus to whichever of them attached last.
     val cardFocusRequesters = remember { mutableMapOf<String, FocusRequester>() }
     fun cardFocusRequester(item: SportsLiveItem) = cardFocusRequesters.getOrPut(item.listKey) { FocusRequester() }
+    // A game listed twice on Upcoming (#137: in its day's Games to watch and in its time slot): its pick row has its own.
+    fun pickFocusRequester(item: SportsLiveItem) = cardFocusRequesters.getOrPut("pick|${item.listKey}") { FocusRequester() }
     var listHasFocus by remember { mutableStateOf(false) }
     var paneHasFocus by remember { mutableStateOf(false) }
     // Saved with the back stack entry, so returning from the stream or detail page refocuses this card.
@@ -980,6 +983,7 @@ private fun SportsLiveContent(
             } else {
                 null
             },
+            gamePreview = game?.state == ScoreState.PRE,
             onGameStats = game?.takeIf { SportsLiveMoreEntry.GAME_STATS in entries }?.let { event ->
                 {
                     menuCardKey = null
@@ -1429,12 +1433,13 @@ private fun SportsLiveContent(
             }
             // ← → a time slot, CH+ / CH− a day: focus moves to that slot's or day's first game, scrolled in first.
             fun agendaJump(target: Int) {
-                val item = agenda.games.getOrNull(target)?.row?.item ?: return
+                val game = agenda.games.getOrNull(target) ?: return
+                val item = game.row.item
                 liveNowScope.launch {
                     val listIndex = agenda.listIndexOf(target)
                     if (listState.layoutInfo.visibleItemsInfo.none { it.index == listIndex }) listState.scrollToItem(listIndex)
                     withFrameNanos { }
-                    runCatching { cardFocusRequester(item).requestFocus() }
+                    runCatching { (if (game.pick) pickFocusRequester(item) else cardFocusRequester(item)).requestFocus() }
                 }
             }
             Row(modifier = Modifier.fillMaxSize()) {
@@ -1470,9 +1475,11 @@ private fun SportsLiveContent(
                                             val gameIndex = entry.game
                                             val game = agenda.games[gameIndex]
                                             val item = game.row.item
-                                            item(key = item.listKey) {
+                                            item(key = if (game.pick) "pick|${item.listKey}" else item.listKey) {
                                                 Column {
-                                                    if (agenda.opensSlot(gameIndex)) SportsLiveAgendaSlotHeader(agenda.slots[game.slot], uiState.nowMs)
+                                                    if (agenda.opensSlot(gameIndex)) {
+                                                        SportsLiveAgendaSlotHeader(agenda.slots[game.slot], uiState.nowMs, day = agenda.days.getOrNull(game.day))
+                                                    }
                                                     SportsLiveScoreboardRow(
                                                         row = game.row,
                                                         selected = paneHasFocus && item.listKey == selected.listKey,
@@ -1480,10 +1487,13 @@ private fun SportsLiveContent(
                                                         onLongClick = { cardLongClick(item) },
                                                         onFocus = { cardFocused(item) },
                                                         menuOpen = item.listKey == menuCardKey,
-                                                        agenda = AgendaRowSide(bell = agendaBellOf(remindable(item), reminders.isReminded(item))),
+                                                        agenda = AgendaRowSide(
+                                                            bell = agendaBellOf(remindable(item), reminders.isReminded(item)),
+                                                            bigGame = !game.pick && game.row.bigGame != null
+                                                        ),
                                                         watching = item.listKey == nowPlaying?.listKey,
                                                         modifier = Modifier
-                                                            .focusRequester(cardFocusRequester(item))
+                                                            .focusRequester(if (game.pick) pickFocusRequester(item) else cardFocusRequester(item))
                                                             .focusProperties {
                                                                 // → enters the stage from any row (#134), as on Live Now; Hold OK opens More….
                                                                 right = watchFocusRequester
@@ -1498,6 +1508,8 @@ private fun SportsLiveContent(
                                                                 true
                                                             }
                                                     )
+                                                    // A Games to watch row (#137): why, under it.
+                                                    if (game.pick) game.row.bigGame?.let { SportsLiveAgendaReasonLine(it) }
                                                 }
                                             }
                                         }

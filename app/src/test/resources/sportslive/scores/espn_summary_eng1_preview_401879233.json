@@ -1,0 +1,519 @@
+{
+ "_fixture": "Trimmed real ESPN soccer/eng.1/summary, Fulham at Man City (pre), 2026-11-19: preview blocks",
+ "header": {
+  "id": "401879233",
+  "competitions": [
+   {
+    "date": "2026-11-21T12:30Z",
+    "status": {
+     "type": {
+      "name": "STATUS_SCHEDULED",
+      "state": "pre",
+      "completed": false,
+      "shortDetail": "11/21 - 7:30 AM EST"
+     }
+    },
+    "competitors": [
+     {
+      "homeAway": "home",
+      "team": {
+       "id": "382",
+       "abbreviation": "MNC",
+       "displayName": "Manchester City",
+       "shortDisplayName": "Man City"
+      },
+      "record": [
+       {
+        "type": "total",
+        "summary": "7-0-3",
+        "displayValue": "7-0-3"
+       }
+      ]
+     },
+     {
+      "homeAway": "away",
+      "team": {
+       "id": "370",
+       "abbreviation": "FUL",
+       "displayName": "Fulham",
+       "shortDisplayName": "Fulham"
+      },
+      "record": [
+       {
+        "type": "total",
+        "summary": "2-4-4",
+        "displayValue": "2-4-4"
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ "lastFiveGames": [
+  {
+   "team": {
+    "id": "382",
+    "abbreviation": "MNC",
+    "displayName": "Manchester City"
+   },
+   "events": [
+    {
+     "gameDate": "2026-10-24T11:30Z",
+     "gameResult": "L",
+     "score": "2-1",
+     "atVs": "@",
+     "homeTeamId": "362",
+     "awayTeamId": "382",
+     "homeTeamScore": "2",
+     "awayTeamScore": "1",
+     "opponent": {
+      "id": "362",
+      "abbreviation": "AVL",
+      "displayName": "Aston Villa"
+     }
+    },
+    {
+     "gameDate": "2026-10-28T19:30Z",
+     "gameResult": "W",
+     "score": "2-2",
+     "atVs": "vs",
+     "homeTeamId": "382",
+     "awayTeamId": "331",
+     "homeTeamScore": "2",
+     "awayTeamScore": "2",
+     "opponent": {
+      "id": "331",
+      "abbreviation": "BHA",
+      "displayName": "Brighton & Hove Albion"
+     }
+    },
+    {
+     "gameDate": "2026-10-31T15:00Z",
+     "gameResult": "L",
+     "score": "1-0",
+     "atVs": "vs",
+     "homeTeamId": "382",
+     "awayTeamId": "331",
+     "homeTeamScore": "0",
+     "awayTeamScore": "1",
+     "opponent": {
+      "id": "331",
+      "abbreviation": "BHA",
+      "displayName": "Brighton & Hove Albion"
+     }
+    },
+    {
+     "gameDate": "2026-11-04T20:00Z",
+     "gameResult": "W",
+     "score": "3-2",
+     "atVs": "@",
+     "homeTeamId": "11420",
+     "awayTeamId": "382",
+     "homeTeamScore": "2",
+     "awayTeamScore": "3",
+     "opponent": {
+      "id": "11420",
+      "abbreviation": "RBL",
+      "displayName": "RB Leipzig"
+     }
+    },
+    {
+     "gameDate": "2026-11-07T17:30Z",
+     "gameResult": "L",
+     "score": "3-1",
+     "atVs": "@",
+     "homeTeamId": "393",
+     "awayTeamId": "382",
+     "homeTeamScore": "3",
+     "awayTeamScore": "1",
+     "opponent": {
+      "id": "393",
+      "abbreviation": "NFO",
+      "displayName": "Nottingham Forest"
+     }
+    }
+   ]
+  },
+  {
+   "team": {
+    "id": "370",
+    "abbreviation": "FUL",
+    "displayName": "Fulham"
+   },
+   "events": [
+    {
+     "gameDate": "2026-10-17T14:00Z",
+     "gameResult": "W",
+     "score": "1-0",
+     "atVs": "vs",
+     "homeTeamId": "370",
+     "awayTeamId": "306",
+     "homeTeamScore": "1",
+     "awayTeamScore": "0",
+     "opponent": {
+      "id": "306",
+      "abbreviation": "HUL",
+      "displayName": "Hull City"
+     }
+    },
+    {
+     "gameDate": "2026-10-24T14:00Z",
+     "gameResult": "W",
+     "score": "1-0",
+     "atVs": "@",
+     "homeTeamId": "388",
+     "awayTeamId": "370",
+     "homeTeamScore": "0",
+     "awayTeamScore": "1",
+     "opponent": {
+      "id": "388",
+      "abbreviation": "COV",
+      "displayName": "Coventry City"
+     }
+    },
+    {
+     "gameDate": "2026-10-28T19:45Z",
+     "gameResult": "L",
+     "score": "1-0",
+     "atVs": "vs",
+     "homeTeamId": "370",
+     "awayTeamId": "384",
+     "homeTeamScore": "0",
+     "awayTeamScore": "1",
+     "opponent": {
+      "id": "384",
+      "abbreviation": "CRY",
+      "displayName": "Crystal Palace"
+     }
+    },
+    {
+     "gameDate": "2026-10-31T20:00Z",
+     "gameResult": "D",
+     "score": "1-1",
+     "atVs": "@",
+     "homeTeamId": "362",
+     "awayTeamId": "370",
+     "homeTeamScore": "1",
+     "awayTeamScore": "1",
+     "opponent": {
+      "id": "362",
+      "abbreviation": "AVL",
+      "displayName": "Aston Villa"
+     }
+    },
+    {
+     "gameDate": "2026-11-07T15:00Z",
+     "gameResult": "D",
+     "score": "1-1",
+     "atVs": "vs",
+     "homeTeamId": "370",
+     "awayTeamId": "361",
+     "homeTeamScore": "1",
+     "awayTeamScore": "1",
+     "opponent": {
+      "id": "361",
+      "abbreviation": "NEW",
+      "displayName": "Newcastle United"
+     }
+    }
+   ]
+  }
+ ],
+ "seasonseries": [
+  {
+   "type": "head-to-head",
+   "title": "Manchester City vs. Fulham",
+   "summary": "MNC leads series 5-0",
+   "seriesScore": "5-0",
+   "totalCompetitions": 5,
+   "events": [
+    {
+     "date": "2026-02-11T19:30:00Z",
+     "competitors": [
+      {
+       "homeAway": "home",
+       "winner": true,
+       "score": "3",
+       "team": {
+        "id": "382",
+        "abbreviation": "MNC"
+       }
+      },
+      {
+       "homeAway": "away",
+       "winner": false,
+       "score": "0",
+       "team": {
+        "id": "370",
+        "abbreviation": "FUL"
+       }
+      }
+     ]
+    },
+    {
+     "date": "2025-12-02T19:30:00Z",
+     "competitors": [
+      {
+       "homeAway": "home",
+       "winner": false,
+       "score": "4",
+       "team": {
+        "id": "370",
+        "abbreviation": "FUL"
+       }
+      },
+      {
+       "homeAway": "away",
+       "winner": true,
+       "score": "5",
+       "team": {
+        "id": "382",
+        "abbreviation": "MNC"
+       }
+      }
+     ]
+    },
+    {
+     "date": "2025-05-25T15:00:00Z",
+     "competitors": [
+      {
+       "homeAway": "home",
+       "winner": false,
+       "score": "0",
+       "team": {
+        "id": "370",
+        "abbreviation": "FUL"
+       }
+      },
+      {
+       "homeAway": "away",
+       "winner": true,
+       "score": "2",
+       "team": {
+        "id": "382",
+        "abbreviation": "MNC"
+       }
+      }
+     ]
+    },
+    {
+     "date": "2024-10-05T14:00:00Z",
+     "competitors": [
+      {
+       "homeAway": "home",
+       "winner": true,
+       "score": "3",
+       "team": {
+        "id": "382",
+        "abbreviation": "MNC"
+       }
+      },
+      {
+       "homeAway": "away",
+       "winner": false,
+       "score": "2",
+       "team": {
+        "id": "370",
+        "abbreviation": "FUL"
+       }
+      }
+     ]
+    },
+    {
+     "date": "2024-05-11T11:30:00Z",
+     "competitors": [
+      {
+       "homeAway": "home",
+       "winner": false,
+       "score": "0",
+       "team": {
+        "id": "370",
+        "abbreviation": "FUL"
+       }
+      },
+      {
+       "homeAway": "away",
+       "winner": true,
+       "score": "4",
+       "team": {
+        "id": "382",
+        "abbreviation": "MNC"
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "leaders": [
+  {
+   "team": {
+    "id": "382",
+    "abbreviation": "MNC",
+    "displayName": "Manchester City"
+   },
+   "leaders": [
+    {
+     "name": "goalsLeaders",
+     "displayName": "Goals",
+     "abbreviation": null,
+     "leaders": [
+      {
+       "displayValue": "Matches: 10, Goals: 9",
+       "athlete": {
+        "id": "253989",
+        "displayName": "Erling Haaland",
+        "shortName": "E. Haaland"
+       }
+      }
+     ]
+    },
+    {
+     "name": "assistsLeaders",
+     "displayName": "Assists",
+     "abbreviation": null,
+     "leaders": [
+      {
+       "displayValue": "Matches: 10, Assists: 3",
+       "athlete": {
+        "id": "299910",
+        "displayName": "Josko Gvardiol",
+        "shortName": "J. Gvardiol"
+       }
+      }
+     ]
+    },
+    {
+     "name": "totalShots",
+     "displayName": "Total Shots",
+     "abbreviation": null,
+     "leaders": [
+      {
+       "displayValue": "38",
+       "athlete": {
+        "id": "253989",
+        "displayName": "Erling Haaland",
+        "shortName": "E. Haaland"
+       }
+      }
+     ]
+    },
+    {
+     "name": "accuratePasses",
+     "displayName": "Accurate Passes",
+     "abbreviation": null,
+     "leaders": [
+      {
+       "displayValue": "846",
+       "athlete": {
+        "id": "234878",
+        "displayName": "Rúben Dias",
+        "shortName": "R. Dias"
+       }
+      }
+     ]
+    },
+    {
+     "name": "saves",
+     "displayName": "Saves",
+     "abbreviation": null,
+     "leaders": [
+      {
+       "displayValue": "25",
+       "athlete": {
+        "id": "217092",
+        "displayName": "Gianluigi Donnarumma",
+        "shortName": "G. Donnarumma"
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "team": {
+    "id": "370",
+    "abbreviation": "FUL",
+    "displayName": "Fulham"
+   },
+   "leaders": [
+    {
+     "name": "goalsLeaders",
+     "displayName": "Goals",
+     "abbreviation": null,
+     "leaders": [
+      {
+       "displayValue": "Matches: 10, Goals: 2",
+       "athlete": {
+        "id": "409541",
+        "displayName": "Josh King",
+        "shortName": "J. King"
+       }
+      }
+     ]
+    },
+    {
+     "name": "assistsLeaders",
+     "displayName": "Assists",
+     "abbreviation": null,
+     "leaders": [
+      {
+       "displayValue": "Matches: 10, Assists: 1",
+       "athlete": {
+        "id": "409541",
+        "displayName": "Josh King",
+        "shortName": "J. King"
+       }
+      }
+     ]
+    },
+    {
+     "name": "totalShots",
+     "displayName": "Total Shots",
+     "abbreviation": null,
+     "leaders": [
+      {
+       "displayValue": "24",
+       "athlete": {
+        "id": "87297",
+        "displayName": "Gonzalo García",
+        "shortName": "G. García"
+       }
+      }
+     ]
+    },
+    {
+     "name": "accuratePasses",
+     "displayName": "Accurate Passes",
+     "abbreviation": null,
+     "leaders": [
+      {
+       "displayValue": "652",
+       "athlete": {
+        "id": "263110",
+        "displayName": "Calvin Bassey",
+        "shortName": "C. Bassey"
+       }
+      }
+     ]
+    },
+    {
+     "name": "saves",
+     "displayName": "Saves",
+     "abbreviation": null,
+     "leaders": [
+      {
+       "displayValue": "27",
+       "athlete": {
+        "id": "153765",
+        "displayName": "Bernd Leno",
+        "shortName": "B. Leno"
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

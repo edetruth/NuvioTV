@@ -8,6 +8,8 @@ import com.nuvio.tv.core.sportslive.SportsLiveItemBucketer
 import com.nuvio.tv.core.sportslive.SportsLiveSportKind
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.scores.FollowTarget
+import com.nuvio.tv.core.sportslive.scores.BigGame
+import com.nuvio.tv.core.sportslive.scores.CrunchTime
 import com.nuvio.tv.core.sportslive.scores.GameArt
 import com.nuvio.tv.core.sportslive.scores.GameSituation
 import com.nuvio.tv.core.sportslive.scores.GameSituations
@@ -218,7 +220,8 @@ internal fun groupPanelRows(
         val teams = PanelArt.of(item, event, known)
         val art = teams.takeIf { group == ZapPanelGroup.STARTING_SOON }
         // A live score shows only for a game in play that strictly matches its event (any score provider).
-        val rank = lineupRankOf(item, liveScored = group == ZapPanelGroup.LIVE_NOW && event != null)
+        val liveScored = group == ZapPanelGroup.LIVE_NOW && event != null
+        val rank = lineupRankOf(item, liveScored, bigGame = liveScored && isLiveBigGame(event!!))
         Entry(ZapPanelRow(item, group, chip, art, teams, status, scoreboardGroupOf(status, item)), start, index, rank)
     }
     val order = compareBy<Entry> { it.row.group.ordinal }
@@ -231,14 +234,18 @@ internal fun groupPanelRows(
 /**
  * Where a game sits inside its group (the panel, CH± and Live now share it): followed teams' games first
  * ([LINEUP_RANK_FOLLOWED]), then games with a live score ([liveScored], [LINEUP_RANK_SCORED]), then the rest; the
- * group's own order breaks ties. [LINEUP_RANK_BIG_GAME] is kept free between the first two for #137's big games.
+ * group's own order breaks ties. Big games in play ([LINEUP_RANK_BIG_GAME], #137: crunch time or big stakes) sit between the first two.
  */
-internal fun lineupRankOf(item: SportsLiveItem, liveScored: Boolean): Int = when {
+internal fun lineupRankOf(item: SportsLiveItem, liveScored: Boolean, bigGame: Boolean = false): Int = when {
     item.followed -> LINEUP_RANK_FOLLOWED
-    // #137: a big game (its score's stakes) will rank LINEUP_RANK_BIG_GAME here.
+    // #137: a big game in play, by its stakes or its crunch time, comes next.
+    bigGame -> LINEUP_RANK_BIG_GAME
     liveScored -> LINEUP_RANK_SCORED
     else -> LINEUP_RANK_REST
 }
+
+/** A live game for Live Now's big-game slot (#137): in crunch time, or big by its stakes ([BigGame]). */
+internal fun isLiveBigGame(event: ScoreSnapshot): Boolean = CrunchTime.isCrunch(event) || BigGame.rate(event).isBig
 
 internal const val LINEUP_RANK_FOLLOWED = 0
 internal const val LINEUP_RANK_BIG_GAME = 1

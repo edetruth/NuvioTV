@@ -89,7 +89,7 @@ class GameSummaryRepository internal constructor(
     suspend fun load(league: EspnLeague, eventId: String): GameSummaryLoad {
         val key = "${league.sport}_${league.league}_$eventId"
         lock.withLock {
-            memory[key]?.takeIf { it.final || now() - it.fetchedAt < LIVE_TTL_MS }?.let { return loaded(it, league, eventId) }
+            memory[key]?.takeIf { it.final || now() - it.fetchedAt < ttlOf(it) }?.let { return loaded(it, league, eventId) }
         }
         val diskKey = "v${DISK_FORMAT}_$key"
         disk?.let { cache ->
@@ -124,6 +124,14 @@ class GameSummaryRepository internal constructor(
 
     private fun parse(json: String): EspnSummaryDto? = runCatching { adapter.fromJson(json) }.getOrNull()
 
+    // Before tip-off a summary changes slowly (#171): the preview is reused for half an hour, never past the start.
+    private fun ttlOf(cached: Cached): Long {
+        val competition = cached.dto.header?.competitions?.firstOrNull()
+        if (EspnScoreProvider.stateOf(competition?.status?.type) != ScoreState.PRE) return LIVE_TTL_MS
+        val start = competition?.date?.let(EspnScoreProvider::parseDate) ?: return PRE_TTL_MS
+        return if (now() < start) PRE_TTL_MS.coerceAtMost(start - cached.fetchedAt) else LIVE_TTL_MS
+    }
+
     private fun loaded(cached: Cached, league: EspnLeague, eventId: String): GameSummaryLoad =
         GameSummaryParser.parse(cached.dto, league, eventId)?.let { GameSummaryLoad.Loaded(it, cached.final) }
             ?: GameSummaryLoad.Failed
@@ -131,6 +139,9 @@ class GameSummaryRepository internal constructor(
     companion object {
         /** A game not final yet is fetched again after this long. */
         const val LIVE_TTL_MS = 30_000L
+
+        /** An upcoming game's summary (its preview, #171) is fetched again after this long. */
+        const val PRE_TTL_MS = 30 * 60_000L
 
         /**
          * The disk copy's format, part of its file name. A copy written in an older format is never read

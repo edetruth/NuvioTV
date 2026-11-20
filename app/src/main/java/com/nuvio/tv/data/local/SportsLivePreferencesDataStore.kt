@@ -86,6 +86,7 @@ class SportsLivePreferencesDataStore @Inject constructor(
     private val remindMyTeamsKey = booleanPreferencesKey("sports_live_remind_my_teams")
     private val scoreAlertsKey = booleanPreferencesKey("sports_live_score_alerts")
     private val fullTimeAlertsKey = booleanPreferencesKey("sports_live_full_time_alerts")
+    private val closeGameAlertsKey = booleanPreferencesKey("sports_live_close_game_alerts")
 
     // [{"keys": source keys joined by REMINDER_KEY_SEPARATOR, "title": ..., "home": ..., "away": ..., "start": "epoch ms"}]; plain maps, like the follows.
     private val remindersType = object : TypeToken<List<Map<String, String?>>>() {}.type
@@ -199,7 +200,8 @@ class SportsLivePreferencesDataStore @Inject constructor(
             SportsLiveAlertSettings(
                 remindMyTeams = prefs[remindMyTeamsKey] ?: true,
                 scoreAlerts = prefs[scoreAlertsKey] ?: true,
-                fullTimeAlerts = prefs[fullTimeAlertsKey] ?: true
+                fullTimeAlerts = prefs[fullTimeAlertsKey] ?: true,
+                closeGameAlerts = prefs[closeGameAlertsKey] ?: true
             )
         }
     }
@@ -214,6 +216,11 @@ class SportsLivePreferencesDataStore @Inject constructor(
 
     suspend fun setFullTimeAlerts(v: Boolean) {
         store().edit { it[fullTimeAlertsKey] = v }
+    }
+
+    /** "Close-game alerts" (#137): crunch-time alerts for games in My sports. */
+    suspend fun setCloseGameAlerts(v: Boolean) {
+        store().edit { it[closeGameAlertsKey] = v }
     }
 
     /** The active profile's reminders (#44), opt-outs from automatic ones, and "Remind me for my teams". */

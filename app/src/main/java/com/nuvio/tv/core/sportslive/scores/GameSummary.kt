@@ -11,7 +11,9 @@ data class GameTeam(
     val score: Int?,
     val linescores: List<Int>,
     /** The season record ("11-3", soccer "2-1-7"); null when ESPN gives none. */
-    val record: String?
+    val record: String?,
+    /** ESPN's poll rank (#137; 99 "unranked" is null); [RankDisplay] decides where it shows. */
+    val rank: Int? = null
 ) {
     /** "BOS", else the short name, else the full name. */
     val short: String get() = abbreviation ?: shortDisplayName ?: displayName.orEmpty()
@@ -103,7 +105,7 @@ data class GameHighlight(
     val links: List<String>
 )
 
-enum class GameSection { GAME, BOX_SCORE, STANDINGS, HIGHLIGHTS }
+enum class GameSection { PREVIEW, GAME, BOX_SCORE, STANDINGS, HIGHLIGHTS }
 
 /** One game as the Game page shows it, from ESPN's summary. Every list may be empty. */
 data class GameSummary(
@@ -122,7 +124,9 @@ data class GameSummary(
     val performers: List<Performer>,
     val boxScore: List<BoxScoreTeam>,
     val standings: List<StandingsTable>,
-    val highlights: List<GameHighlight>
+    val highlights: List<GameHighlight>,
+    /** An upcoming game's preview (#171); null once the game is under way or over. */
+    val preview: GamePreview? = null
 ) {
     val isLive: Boolean get() = state == ScoreState.IN
 
@@ -132,6 +136,8 @@ data class GameSummary(
     /** The sections with something to show, in pill order; an empty one is hidden. */
     val sections: List<GameSection>
         get() = buildList {
+            // An upcoming game opens on its Preview (#171), when it has anything beyond the header.
+            if (state == ScoreState.PRE && preview?.hasContent == true) add(GameSection.PREVIEW)
             if (hasLinescore || performers.isNotEmpty() || teamStats.isNotEmpty()) add(GameSection.GAME)
             if (boxScore.isNotEmpty()) add(GameSection.BOX_SCORE)
             if (standings.isNotEmpty()) add(GameSection.STANDINGS)
@@ -175,7 +181,8 @@ object GameSummaryParser {
             boxScore = if (played) boxScore(dto.boxscore?.players.orEmpty(), sport, home, away) else emptyList(),
             standings = standings(dto.standings, sport, setOfNotNull(home.id, away.id)),
             // One card per clip: ESPN can list a clip twice, and the list is keyed by id.
-            highlights = dto.videos.orEmpty().mapNotNull(::highlight).distinctBy { it.id }
+            highlights = dto.videos.orEmpty().mapNotNull(::highlight).distinctBy { it.id },
+            preview = if (state == ScoreState.PRE) GamePreviewParser.parse(dto, home, away) else null
         )
     }
 
@@ -223,7 +230,8 @@ object GameSummaryParser {
             } else {
                 emptyList()
             },
-            record = (records.firstOrNull { it.type == "total" } ?: records.firstOrNull())?.summary?.takeIf { it.isNotBlank() }
+            record = (records.firstOrNull { it.type == "total" } ?: records.firstOrNull())?.summary?.takeIf { it.isNotBlank() },
+            rank = EspnScoreProvider.rankOf(dto.curatedRank)
         )
     }
 

@@ -79,8 +79,28 @@ data class EspnCompetitionDto(
     val timeValid: Boolean? = null,
     val details: List<EspnDetailDto>? = null,
     /** What is happening now in a live game (Scoreboard SB1); absent before and mostly after play. */
-    val situation: EspnSituationDto? = null
+    val situation: EspnSituationDto? = null,
+    /** The TV channels (#137): `names` per broadcast ("ESPN", "TNT", "ESPN+"). */
+    val broadcasts: List<EspnBroadcastDto>? = null,
+    /** The event's name (#137): "Players Era 8 - Championship", a rivalry, a tournament round. */
+    val notes: List<EspnNoteDto>? = null,
+    /** The betting line where ESPN lists one (#137): a close [EspnOddsDto.spread] means an expected-close game. */
+    val odds: List<EspnOddsDto>? = null
 )
+
+@JsonClass(generateAdapter = true)
+data class EspnBroadcastDto(val names: List<String>? = null)
+
+/** An event note: [headline] on team scoreboards, [text] on tennis ("(1) Zverev bt (8) Jodar 6-4 6-4"). */
+@JsonClass(generateAdapter = true)
+data class EspnNoteDto(val headline: String? = null, val text: String? = null, val type: String? = null)
+
+@JsonClass(generateAdapter = true)
+data class EspnOddsDto(val spread: Double? = null)
+
+/** A college poll rank or a tennis ranking: [current] (college: 99 = unranked). */
+@JsonClass(generateAdapter = true)
+data class EspnCuratedRankDto(val current: Int? = null)
 
 @JsonClass(generateAdapter = true)
 data class EspnCompetitorDto(
@@ -96,11 +116,22 @@ data class EspnCompetitorDto(
     /** Tennis/UFC: the listing order (not the result); F1 and golf: the finishing position. */
     val order: Int? = null,
     /** Team records: "total" ("18-9"), "home", "road". */
-    val records: List<EspnRecordDto>? = null
+    val records: List<EspnRecordDto>? = null,
+    /** College: the AP / coaches poll rank (99 = unranked); tennis: the player's ranking (#137, #160). */
+    val curatedRank: EspnCuratedRankDto? = null,
+    /** Soccer: the last five results, oldest first ("DWWLW"). */
+    val form: String? = null,
+    /** Tennis, live: this side is serving (read loosely: a flag or an object). */
+    val possession: Any? = null
 )
 
 @JsonClass(generateAdapter = true)
-data class EspnRosterDto(val displayName: String? = null, val shortDisplayName: String? = null)
+data class EspnRosterDto(
+    val displayName: String? = null,
+    val shortDisplayName: String? = null,
+    /** Tennis doubles: the two players. */
+    val athletes: List<EspnAthleteDto>? = null
+)
 
 @JsonClass(generateAdapter = true)
 data class EspnCompetitionTypeDto(
@@ -128,7 +159,9 @@ data class EspnTeamDto(
 data class EspnLinescoreDto(
     val value: Double? = null,
     /** Tennis: this side's tiebreak points in the set. */
-    val tiebreak: Int? = null
+    val tiebreak: Int? = null,
+    /** Tennis: this side won the set (false for both while it is played). */
+    val winner: Boolean? = null
 )
 
 @JsonClass(generateAdapter = true)

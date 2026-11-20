@@ -31,7 +31,14 @@ data class ScoreTeam(
      * Other names a non-ESPN feed knows the team by (#169: EuroLeague's "Maccabi", "Maccabi Tel Aviv" for
      * "Maccabi Rapyd Tel Aviv"); matched as its own names are. Empty for ESPN teams.
      */
-    val alternateNames: List<String> = emptyList()
+    val alternateNames: List<String> = emptyList(),
+    /**
+     * ESPN's `curatedRank` (#137): a college team's poll rank (1..25; ESPN's 99 "unranked" is null) or a tennis
+     * player's ranking; null when none. [RankDisplay] decides where it shows.
+     */
+    val rank: Int? = null,
+    /** Soccer: the last five results, oldest first ("DWWLW"); null when ESPN gives none. */
+    val form: String? = null
 )
 
 /** A soccer goal from the scoreboard's `details`. */
@@ -81,7 +88,13 @@ data class ScoreSnapshot(
      */
     val individual: IndividualResult? = null,
     /** ESPN's season type: 1 preseason, 2 regular season, 3 postseason; null when not given. */
-    val seasonType: Int? = null
+    val seasonType: Int? = null,
+    /** The TV channels ESPN lists (#137): "ESPN", "TNT", "ESPN+"; national ones count toward a big game. */
+    val broadcasts: List<String> = emptyList(),
+    /** ESPN's note naming the event (#137): "Players Era 8 - Championship"; null when none. */
+    val headline: String? = null,
+    /** The betting spread where ESPN lists one (#137); null when none. */
+    val spread: Double? = null
 ) {
     val homeAbbr: String? get() = home.abbreviation
     val awayAbbr: String? get() = away.abbreviation

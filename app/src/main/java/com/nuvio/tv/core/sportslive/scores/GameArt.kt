@@ -18,7 +18,9 @@ data class GameArtTeam(
     val logo: String?,
     val shortName: String = name,
     /** ESPN's season record ("18-9") when the game is matched; null otherwise. */
-    val record: String? = null
+    val record: String? = null,
+    /** The rank to show before the name ([RankDisplay]: a ranked college team, a tennis player); null for none. */
+    val rank: Int? = null
 )
 
 /**
@@ -36,7 +38,9 @@ data class GameArt(
     val startMs: Long?,
     val hasTimeOfDay: Boolean,
     /** ESPN's season type of the matched game (1 preseason, 2 regular season, 3 postseason); null otherwise. */
-    val seasonType: Int? = null
+    val seasonType: Int? = null,
+    /** Rows show the teams' ranks too (#137: college only); the stage and Game page always do. */
+    val ranksOnRows: Boolean = false
 ) {
     /** Logos are drawn only when both teams have one (#130); otherwise the names are set in large type. */
     val hasLogos: Boolean get() = TeamMarks.pair(first.logo, second.logo) != null
@@ -59,12 +63,13 @@ data class GameArt(
             // ESPN's own time beats an addon's, unless ESPN has none yet (TBD).
             val eventStart = event?.takeIf { it.timeValid }?.startMs
             return GameArt(
-                first = team(first, firstTeam, remembered?.first),
-                second = team(second, secondTeam, remembered?.second),
+                first = team(first, firstTeam, remembered?.first, event?.league),
+                second = team(second, secondTeam, remembered?.second, event?.league),
                 league = event?.leagueName?.takeIf { it.isNotBlank() } ?: sportLabelOf(item),
                 startMs = eventStart ?: item.startMs,
                 hasTimeOfDay = if (eventStart != null) true else item.startHasTimeOfDay,
-                seasonType = event?.seasonType
+                seasonType = event?.seasonType,
+                ranksOnRows = event != null && RankDisplay.onRows(event.league)
             )
         }
 
@@ -97,14 +102,15 @@ data class GameArt(
          * them, ESPN's names, abbreviations and logos, its league; no time and no score.
          */
         fun ofEvent(event: ScoreSnapshot): GameArt = GameArt(
-            first = espnTeam(event.away),
-            second = espnTeam(event.home),
+            first = espnTeam(event.away, event.league),
+            second = espnTeam(event.home, event.league),
             league = event.leagueName?.takeIf { it.isNotBlank() },
             startMs = null,
-            hasTimeOfDay = false
+            hasTimeOfDay = false,
+            ranksOnRows = RankDisplay.onRows(event.league)
         )
 
-        private fun espnTeam(team: ScoreTeam): GameArtTeam {
+        private fun espnTeam(team: ScoreTeam, league: EspnLeague): GameArtTeam {
             val name = listOf(team.displayName, team.shortDisplayName, team.name, team.abbreviation)
                 .firstOrNull { !it.isNullOrBlank() }.orEmpty()
             return GameArtTeam(
@@ -112,7 +118,8 @@ data class GameArt(
                 short = team.abbreviation?.takeIf { it.isNotBlank() } ?: team.shortDisplayName?.takeIf { it.isNotBlank() } ?: name,
                 logo = team.logo?.takeIf { it.isNotBlank() },
                 shortName = team.shortDisplayName?.takeIf { it.isNotBlank() } ?: name,
-                record = team.record
+                record = team.record,
+                rank = RankDisplay.rank(league, team.rank)
             )
         }
 
@@ -120,7 +127,7 @@ data class GameArt(
         fun kickoff(art: GameArt, nowMs: Long, zone: ZoneId, locale: Locale): SportsLivePillTime? =
             art.startMs?.let { SportsLivePillTime.of(it, art.hasTimeOfDay, nowMs, zone, locale) }
 
-        private fun team(cardName: String, espn: ScoreTeam?, known: KnownTeam?): GameArtTeam {
+        private fun team(cardName: String, espn: ScoreTeam?, known: KnownTeam?, league: EspnLeague?): GameArtTeam {
             val own = displayName(cardName)
             val name = espn?.displayName?.takeIf { it.isNotBlank() } ?: own
             val short = espn?.abbreviation?.takeIf { it.isNotBlank() } ?: espn?.shortDisplayName?.takeIf { it.isNotBlank() }
@@ -130,7 +137,8 @@ data class GameArt(
                 short = short,
                 logo = espn?.logo?.takeIf { it.isNotBlank() } ?: known?.logo,
                 shortName = espn?.shortDisplayName?.takeIf { it.isNotBlank() } ?: name,
-                record = espn?.record
+                record = espn?.record,
+                rank = league?.let { RankDisplay.rank(it, espn?.rank) }
             )
         }
 

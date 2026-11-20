@@ -160,6 +160,7 @@ class SportsLiveSettingsViewModel @Inject constructor(
             SportsLiveSetting.REMIND_MY_TEAMS -> setRemindMyTeams(on)
             SportsLiveSetting.SCORE_ALERTS -> setScoreAlerts(on)
             SportsLiveSetting.FULL_TIME_ALERTS -> setFullTimeAlerts(on)
+            SportsLiveSetting.CLOSE_GAME_ALERTS -> viewModelScope.launch { prefs.setCloseGameAlerts(on) }
             // Not switches: pickers, lists and actions with their own calls.
             SportsLiveSetting.MY_SPORTS, SportsLiveSetting.MY_TEAMS, SportsLiveSetting.SCORES,
             SportsLiveSetting.SCORE_DELAY, SportsLiveSetting.OPEN_GAME, SportsLiveSetting.SCORES_STATUS,

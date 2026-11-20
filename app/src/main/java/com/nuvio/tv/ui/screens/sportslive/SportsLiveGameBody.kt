@@ -90,7 +90,8 @@ internal fun GameBody(
 ) {
     val summary = state.summary
     when {
-        !state.showsScore -> HiddenGameBody(hasReplay = state.replay != null)
+        // An upcoming game's Preview is spoiler-neutral (#171): it shows with the score hidden too.
+        !state.showsScore && section != GameSection.PREVIEW -> HiddenGameBody(hasReplay = state.replay != null)
         state.status == GameLoadStatus.FAILED && summary == null -> SportsLivePageMessage(stringResource(R.string.sports_live_game_unavailable))
         summary == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { LoadingIndicator() }
         section == null -> SportsLivePageMessage(stringResource(R.string.sports_live_game_no_stats))
@@ -119,6 +120,7 @@ internal fun GameBody(
                     .focusProperties { up = upFocus }
                 fun Modifier.returning(key: String): Modifier = if (key == returnKey) focusRequester(returnFocus) else this
                 when (section) {
+                    GameSection.PREVIEW -> previewTab(summary, first, state.homeFirst)
                     GameSection.GAME -> gameTab(summary, first, state.homeFirst, gamePlayerTarget(state), { modifier, index -> modifier.returning(performerKey(index)) }) { index, target ->
                         onOpenPlayer(performerKey(index), target)
                     }

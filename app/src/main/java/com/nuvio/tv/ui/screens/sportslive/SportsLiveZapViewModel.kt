@@ -797,7 +797,8 @@ class SportsLiveZapViewModel internal constructor(
     private fun strictGame(current: PanelLineup, item: SportsLiveItem): ScoreSnapshot? {
         if (current.mode == ScoresMode.OFF) return null
         val snapshot = current.boardScores[item.streamKey] ?: liveScores.scores.value[item.streamKey]
-        return ScoreChips.matchedEvent(item, snapshot)
+        // A tennis match (#160) has a score but no Game page.
+        return ScoreChips.matchedEvent(item, snapshot)?.takeIf { it.individual == null }
     }
 
     /** Choose stream on [item] in the panel (#140): the panel closes and [item]'s Stream screen opens, to pick from. */

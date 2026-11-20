@@ -37,6 +37,7 @@ object SportsLiveAlertCards {
     fun isBigMoment(alert: SportsLiveAlert): Boolean = when (alert) {
         is SportsLiveAlert.ScoreChange -> alert.leadChange
         is SportsLiveAlert.FullTime -> true
+        is SportsLiveAlert.Crunch -> true
         is SportsLiveAlert.Kickoff -> false
     }
 

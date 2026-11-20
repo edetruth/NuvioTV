@@ -446,7 +446,8 @@ class SportsLiveSettingsViewModelTest {
             SportsLiveSetting.HIDE_UNPLAYABLE to "sports_live_hide_unplayable_links",
             SportsLiveSetting.REMIND_MY_TEAMS to "sports_live_remind_my_teams",
             SportsLiveSetting.SCORE_ALERTS to "sports_live_score_alerts",
-            SportsLiveSetting.FULL_TIME_ALERTS to "sports_live_full_time_alerts"
+            SportsLiveSetting.FULL_TIME_ALERTS to "sports_live_full_time_alerts",
+            SportsLiveSetting.CLOSE_GAME_ALERTS to "sports_live_close_game_alerts"
         )
         keys.forEach { (setting, key) ->
             for (on in listOf(false, true)) {

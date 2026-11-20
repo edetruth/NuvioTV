@@ -366,6 +366,10 @@ class ScoreMatcher(
          * wrong team.
          */
         fun firstIsHome(first: String, second: String, event: ScoreSnapshot): Boolean? {
+            // A live tennis copy (#160): its home side is ESPN's first listed player, matched by surname.
+            (event.individual as? TennisMatch)?.let { match ->
+                return if (match.live) TennisNames.firstIsFirstListed(first, second, match) else null
+            }
             val qualifier = eventQualifier(event)
             val women = isWomenFeed(event)
             val home = competitor(event.home, qualifier)

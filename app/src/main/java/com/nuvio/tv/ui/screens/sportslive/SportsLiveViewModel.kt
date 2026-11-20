@@ -1,5 +1,8 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import com.nuvio.tv.core.sportslive.scores.TeamStanding
+import com.nuvio.tv.core.sportslive.scores.StandingsRepository
+import com.nuvio.tv.core.sportslive.scores.EspnLeague
 import androidx.annotation.VisibleForTesting
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -124,6 +127,10 @@ class SportsLiveViewModel internal constructor(
     private val hideTitle: suspend (String) -> Unit = {},
     /** The catalog refresh cadence's clock (#71), monotonic; tests pass virtual time. */
     private val refreshClock: () -> Long = { System.nanoTime() / 1_000_000L },
+    /** Standings by league (#137), for the big-game score: what is known, cached on the device. */
+    standings: Flow<Map<EspnLeague, Map<String, TeamStanding>>> = flowOf(emptyMap()),
+    /** Asks for [EspnLeague]s' standings (fetched at most every few hours; the precision rule is applied here). */
+    private val ensureStandings: (Collection<EspnLeague>) -> Unit = {},
     // Where the list is bucketed and pinned, and the boards built; tests pass their dispatcher, so it runs in virtual time.
     private val computeDispatcher: CoroutineDispatcher
 ) : ViewModel() {
@@ -136,7 +143,8 @@ class SportsLiveViewModel internal constructor(
         liveScores: LiveScoresRepository,
         resolveCache: SportsLiveResolveCache,
         manifestFetcher: SportsLiveManifestFetcher,
-        identifier: TeamIdentifier
+        identifier: TeamIdentifier,
+        standingsRepository: StandingsRepository
     ) : this(
         repo = repo,
         // The zap's pick, which joins the stream search the ended-games probe started on settle; a
@@ -177,6 +185,8 @@ class SportsLiveViewModel internal constructor(
         mySports = prefs.mySports,
         hiddenTitles = prefs.hiddenTitles,
         hideTitle = prefs::hideTitle,
+        standings = standingsRepository.books,
+        ensureStandings = standingsRepository::ensure,
         computeDispatcher = Dispatchers.Default
     )
 
@@ -297,7 +307,22 @@ class SportsLiveViewModel internal constructor(
     /** The scores, Scores setting and reveals the screen shows: the Scoreboard and drawn cards read them. */
     fun setBoardScores(scores: SportsLiveBoardScores) {
         boardScores.value = scores
+        // The big-game score's standings (#137): only leagues in My sports with games on screen (the precision rule).
+        if (scores.mode != null && scores.mode != ScoresMode.OFF) {
+            val sports = lastMySports
+            val leagues = scores.scores.values.asSequence()
+                .filter { it.individual == null && (it.state == ScoreState.PRE || it.state == ScoreState.IN) && sports.includes(it) }
+                .map(StandingsRepository::leagueOf)
+                .filter(StandingsRepository::covers)
+                .distinct()
+                .toList()
+            if (leagues.isNotEmpty()) ensureStandings(leagues)
+        }
     }
+
+    /** My sports as the last state build read it (#146), for the standings' precision rule. */
+    @Volatile
+    private var lastMySports: MySports = MySports.DEFAULT
 
     /** Builds a board; tests swap it to see where it runs. */
     @VisibleForTesting
@@ -310,7 +335,7 @@ class SportsLiveViewModel internal constructor(
      */
     @OptIn(ExperimentalCoroutinesApi::class)
     val board: StateFlow<SportsLiveBoard?> =
-        combine(uiState, boardScores, repo.followedTeams, logoRevision) { state, scores, followed, revision ->
+        combine(uiState, boardScores, repo.followedTeams, logoRevision, standings) { state, scores, followed, revision, books ->
             val tab = state.selectedTab
             val live = tab == SportsLiveTab.LIVE_NOW
             SportsLiveBoardInputs(
@@ -323,7 +348,9 @@ class SportsLiveViewModel internal constructor(
                 excitement = if (live) state.whyTags else emptyMap(),
                 followed = followed,
                 clockMs = state.nowMs / MINUTE_MS * MINUTE_MS,
-                logoRevision = revision
+                logoRevision = revision,
+                // Upcoming's big games (#137) read them.
+                standings = if (tab == SportsLiveTab.UPCOMING) books else emptyMap()
             )
         }
             .distinctUntilChanged()
@@ -565,6 +592,7 @@ class SportsLiveViewModel internal constructor(
         /** My sports (#146): scopes Live now, Upcoming and Replays. */
         mySports: MySports = MySports.DEFAULT
     ): SportsLiveUiState {
+        lastMySports = mySports
         val hasClaimed = bucketed.hasClaimed
         // A live game whose lookup found no streams is not over (#145): it stays where it is, dimmed as
         // "no streams yet", and is looked up again later. Games found over (#60: ESPN, or their addon) move

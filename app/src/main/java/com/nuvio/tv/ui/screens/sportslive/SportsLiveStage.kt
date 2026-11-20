@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import com.nuvio.tv.core.sportslive.scores.RankDisplay
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -536,6 +537,16 @@ private fun GameBlock(row: ScoreboardRow, details: ScoreDetails?, situation: Str
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
+        // Ranks and the round (#137, #160): "#1 Sinner vs #8 Alcaraz · Semifinal", "#3 UConn vs #12 Arizona".
+        stageRanksLine(row)?.let { line ->
+            Text(
+                text = line,
+                style = SportsLiveTokens.style(SportsLiveTokens.Type.Meta),
+                color = Colors.TextSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
         if (shown != null && shown.periods.isNotEmpty()) {
             Box(
                 modifier = Modifier
@@ -547,6 +558,24 @@ private fun GameBlock(row: ScoreboardRow, details: ScoreDetails?, situation: Str
             }
         }
     }
+}
+
+/**
+ * The stage's ranks line (#137, #160): each ranked side as "#1 Sinner" (unranked: the name alone), joined by "vs",
+ * then a tennis round; null when no side is ranked and there is no round.
+ */
+@Composable
+internal fun stageRanksLine(row: ScoreboardRow): String? {
+    val art = row.art?.takeIf { row.twoSided }
+    val ranked = art != null && (art.first.rank != null || art.second.rank != null)
+    val ranks = if (ranked) {
+        fun side(team: com.nuvio.tv.core.sportslive.scores.GameArtTeam) =
+            listOfNotNull(team.rank?.let(RankDisplay::label), team.shortName).joinToString(" ")
+        stringResource(R.string.sports_live_matchup, side(art!!.first), side(art.second))
+    } else {
+        null
+    }
+    return listOfNotNull(ranks, row.tennisRound).joinToString(" · ").ifEmpty { null }
 }
 
 /**

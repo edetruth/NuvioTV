@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.settings
 
+import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.CLOSE_GAME_ALERTS
 import com.nuvio.tv.R
 import com.nuvio.tv.core.sportslive.scores.MyLeague
 import com.nuvio.tv.core.sportslive.scores.MySport
@@ -65,7 +66,7 @@ class SportsLiveSettingsHelpTest {
             listOf(
                 header(SCORES_AND_SPOILERS), row(SCORES), row(SCORE_DELAY),
                 header(WHAT_I_FOLLOW), row(MY_TEAMS), row(MY_SPORTS),
-                header(ALERTS), row(REMIND_MY_TEAMS), row(SCORE_ALERTS), row(FULL_TIME_ALERTS),
+                header(ALERTS), row(REMIND_MY_TEAMS), row(SCORE_ALERTS), row(FULL_TIME_ALERTS), row(CLOSE_GAME_ALERTS),
                 header(PLAYING), row(OPEN_GAME), row(HIDE_UNPLAYABLE), row(PICTURE_IN_PICTURE),
                 header(HOME_AND_ROWS), row(SHOW_SECTION), row(HOME_ROW), row(CATCH_UP_ROW), row(HOVER_PREVIEW),
                 header(STATUS), row(SCORES_STATUS),
@@ -215,7 +216,7 @@ class SportsLiveSettingsHelpTest {
 
     @Test
     fun `a cause lists the rows it switches off right now in screen order`() {
-        assertEquals(listOf(SCORE_DELAY, SCORE_ALERTS, FULL_TIME_ALERTS, CATCH_UP_ROW), sportsLiveSwitchedOffBy(SCORES, scoresOff))
+        assertEquals(listOf(SCORE_DELAY, SCORE_ALERTS, FULL_TIME_ALERTS, CLOSE_GAME_ALERTS, CATCH_UP_ROW), sportsLiveSwitchedOffBy(SCORES, scoresOff))
         assertEquals(listOf(SCORE_ALERTS), sportsLiveSwitchedOffBy(SCORES, hideUntilFocused))
         assertEquals(emptyList<SportsLiveSetting>(), sportsLiveSwitchedOffBy(SCORES, SportsLiveSettingsUiState()))
         assertEquals(listOf(CATCH_UP_ROW), sportsLiveSwitchedOffBy(HOME_ROW, SportsLiveSettingsUiState(showHomeRow = false)))
@@ -248,7 +249,7 @@ class SportsLiveSettingsHelpTest {
     @Test
     fun `a setting that switches others off names them`() {
         assertEquals(
-            SportsLiveHelp(SCORES.help, switchesOff = listOf(SCORE_DELAY, SCORE_ALERTS, FULL_TIME_ALERTS, CATCH_UP_ROW)),
+            SportsLiveHelp(SCORES.help, switchesOff = listOf(SCORE_DELAY, SCORE_ALERTS, FULL_TIME_ALERTS, CLOSE_GAME_ALERTS, CATCH_UP_ROW)),
             sportsLiveHelpFor(row(SCORES), scoresOff)
         )
         assertEquals(

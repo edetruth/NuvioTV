@@ -56,6 +56,8 @@ object SportsResults {
     fun rows(events: List<ScoreSnapshot>, followed: List<FollowedTeam>): List<ResultRow> =
         events.asSequence()
             .filter { it.state == ScoreState.POST && it.isFinal }
+            // Live Now's copy of a tennis match (#160) is never a Results row: Results lists its own.
+            .filter { (it.individual as? TennisMatch)?.live != true }
             .sortedBy { if (it.league == EspnLeagueMap.SOCCER_ALL) 1 else 0 }
             .distinctBy { it.eventId }
             .map { ResultRow(it, followed = it.individual == null && followed.any { team -> follows(team, it) }, note = finalNote(it)) }

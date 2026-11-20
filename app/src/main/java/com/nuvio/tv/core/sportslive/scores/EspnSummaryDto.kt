@@ -14,8 +14,76 @@ data class EspnSummaryDto(
     val boxscore: EspnBoxscoreDto? = null,
     val leaders: List<EspnTeamLeadersDto>? = null,
     val standings: EspnStandingsDto? = null,
-    val videos: List<EspnVideoDto>? = null
+    val videos: List<EspnVideoDto>? = null,
+    /** Pre-game (#171): each team's last five games. */
+    val lastFiveGames: List<EspnLastFiveDto>? = null,
+    /** Pre-game (#171): this season's series, or soccer's last meetings ("MEM leads series 1-0"). */
+    val seasonseries: List<EspnSeasonSeriesDto>? = null,
+    /** Pre-game (#171): ESPN's win chance. */
+    val predictor: EspnPredictorDto? = null,
+    /** Pre-game (#171): each team's injuries. */
+    val injuries: List<EspnTeamInjuriesDto>? = null
 )
+
+@JsonClass(generateAdapter = true)
+data class EspnLastFiveDto(val team: EspnSummaryTeamDto? = null, val events: List<EspnLastFiveEventDto>? = null)
+
+@JsonClass(generateAdapter = true)
+data class EspnLastFiveEventDto(
+    val gameDate: String? = null,
+    /** "W", "L", "D" (soccer), "T". */
+    val gameResult: String? = null,
+    /** "123-118": the higher score first, whoever won. */
+    val score: String? = null,
+    /** "vs" (home) or "@" (away). */
+    val atVs: String? = null,
+    val homeTeamId: String? = null,
+    val awayTeamId: String? = null,
+    val homeTeamScore: String? = null,
+    val awayTeamScore: String? = null,
+    val opponent: EspnSummaryTeamDto? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class EspnSeasonSeriesDto(
+    val type: String? = null,
+    val title: String? = null,
+    val summary: String? = null,
+    val seriesScore: String? = null,
+    val events: List<EspnSeriesEventDto>? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class EspnSeriesEventDto(val date: String? = null, val competitors: List<EspnSeriesCompetitorDto>? = null)
+
+@JsonClass(generateAdapter = true)
+data class EspnSeriesCompetitorDto(
+    val homeAway: String? = null,
+    val winner: Boolean? = null,
+    val score: String? = null,
+    val team: EspnSummaryTeamDto? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class EspnPredictorDto(val homeTeam: EspnPredictorTeamDto? = null, val awayTeam: EspnPredictorTeamDto? = null)
+
+/** [gameProjection]: the team's win chance in percent ("62.2"). */
+@JsonClass(generateAdapter = true)
+data class EspnPredictorTeamDto(val id: String? = null, val gameProjection: String? = null)
+
+@JsonClass(generateAdapter = true)
+data class EspnTeamInjuriesDto(val team: EspnSummaryTeamDto? = null, val injuries: List<EspnInjuryDto>? = null)
+
+@JsonClass(generateAdapter = true)
+data class EspnInjuryDto(
+    /** "Out", "Questionable", "Day-To-Day", "Doubtful". */
+    val status: String? = null,
+    val athlete: EspnSummaryAthleteDto? = null,
+    val details: EspnInjuryDetailsDto? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class EspnInjuryDetailsDto(val type: String? = null)
 
 @JsonClass(generateAdapter = true)
 data class EspnSummaryHeaderDto(val id: String? = null, val competitions: List<EspnSummaryCompetitionDto>? = null)
@@ -37,7 +105,9 @@ data class EspnSummaryCompetitorDto(
     val team: EspnSummaryTeamDto? = null,
     val linescores: List<EspnSummaryLinescoreDto>? = null,
     /** "total" ("11-3"), "home", "road"...; soccer also "points". */
-    val record: List<EspnRecordDto>? = null
+    val record: List<EspnRecordDto>? = null,
+    /** College: the poll rank (99 = unranked, #137). */
+    val curatedRank: EspnCuratedRankDto? = null
 )
 
 @JsonClass(generateAdapter = true)

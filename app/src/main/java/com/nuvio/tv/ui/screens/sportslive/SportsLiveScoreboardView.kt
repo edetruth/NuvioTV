@@ -1,5 +1,7 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import com.nuvio.tv.core.sportslive.scores.TennisColumns
+import com.nuvio.tv.core.sportslive.scores.RankDisplay
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -132,7 +134,12 @@ internal fun scoreboardRowHeight(group: ScoreboardGroup, twoSided: Boolean = tru
  * time), then the reminder bell. No "Stream listed" dot (P4): every listed game comes from an addon.
  */
 @Immutable
-internal data class AgendaRowSide(val bell: AgendaBell, val trailing: String? = null)
+internal data class AgendaRowSide(
+    val bell: AgendaBell,
+    val trailing: String? = null,
+    /** The subtle "Big game" badge (#137): a big game in its time slot (not in Games to watch, which says it already). */
+    val bigGame: Boolean = false
+)
 
 /**
  * A Scoreboard row (V2 Live Now, #132), the same in the list and in the player's panel (F12): fixed
@@ -266,15 +273,17 @@ private fun GameCells(row: ScoreboardRow, reminded: Boolean, hasReplay: Boolean,
                 val maxLevel = maxOf(firstChoices.lastIndex, secondChoices.lastIndex)
                 val tooLong: () -> Unit = { if (level < maxLevel) level++ }
                 val logos = rememberTeamLogoPair(art)?.takeIf { !it.failed }
-                val leader = (scores as? ScoreboardScores.Shown)?.leader
-                TeamLine(firstChoices, level, logos?.first, logos?.shown == true, row.firstFollowed, leader == 0, compact, tooLong)
-                TeamLine(secondChoices, level, logos?.second, logos?.shown == true, row.secondFollowed, leader == 1, compact, tooLong)
+                val leader = row.tennis?.leader ?: (scores as? ScoreboardScores.Shown)?.leader
+                val ranks = art.takeIf { it.ranksOnRows }
+                TeamLine(firstChoices, level, logos?.first, logos?.shown == true, row.firstFollowed, leader == 0, compact, tooLong, ranks?.first?.rank)
+                TeamLine(secondChoices, level, logos?.second, logos?.shown == true, row.secondFollowed, leader == 1, compact, tooLong, ranks?.second?.rank)
             } else {
                 // An unmatched title with no two sides: its clean name, in the same column.
                 NameText(item.displayName, bold = false, compact = compact, maxLines = 2)
             }
         }
-        ScoresCell(scores, reminded, compact)
+        // A tennis match (#160): its set columns in place of the stacked scores.
+        row.tennis?.let { TennisSetsCell(it, live, compact) } ?: ScoresCell(scores, reminded, compact)
         StatusCell(row, hasReplay)
     }
 }
@@ -349,8 +358,9 @@ private fun AgendaCells(row: ScoreboardRow, side: AgendaRowSide, shortNames: Boo
                 val maxLevel = maxOf(firstChoices.lastIndex, secondChoices.lastIndex)
                 val tooLong: () -> Unit = { if (level < maxLevel) level++ }
                 val logos = rememberTeamLogoPair(art)?.takeIf { !it.failed }
-                TeamLine(firstChoices, level, logos?.first, logos?.shown == true, row.firstFollowed, false, false, tooLong)
-                TeamLine(secondChoices, level, logos?.second, logos?.shown == true, row.secondFollowed, false, false, tooLong)
+                val ranks = art.takeIf { it.ranksOnRows }
+                TeamLine(firstChoices, level, logos?.first, logos?.shown == true, row.firstFollowed, false, false, tooLong, ranks?.first?.rank)
+                TeamLine(secondChoices, level, logos?.second, logos?.shown == true, row.secondFollowed, false, false, tooLong, ranks?.second?.rank)
             } else {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Spacer(modifier = Modifier.width(ROW_LOGO_SIZE + 6.dp))
@@ -358,6 +368,7 @@ private fun AgendaCells(row: ScoreboardRow, side: AgendaRowSide, shortNames: Boo
                 }
             }
         }
+        if (side.bigGame) BigGameBadge()
         side.trailing?.let { trailing ->
             Text(
                 text = trailing,
@@ -501,7 +512,9 @@ private fun TeamLine(
     followed: Boolean,
     leading: Boolean,
     compact: Boolean,
-    onTooLong: () -> Unit
+    onTooLong: () -> Unit,
+    /** A ranked college team (#137): a small muted "#3" before the name. */
+    rank: Int? = null
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
         val logoSize = if (compact) 14.dp else ROW_LOGO_SIZE
@@ -510,6 +523,14 @@ private fun TeamLine(
         }
         val index = level.coerceAtMost(choices.lastIndex)
         Row(modifier = Modifier.weight(1f, fill = false), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+            rank?.let {
+                Text(
+                    text = RankDisplay.label(it),
+                    style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag).copy(fontWeight = FontWeight.Medium, fontFeatureSettings = "tnum"),
+                    color = Colors.TextMuted,
+                    maxLines = 1
+                )
+            }
             Text(
                 text = choices[index],
                 style = nameStyle(leading, compact),
@@ -617,9 +638,56 @@ private fun StatusCell(row: ScoreboardRow, hasReplay: Boolean, singleLine: Boole
                 Text(text = secondary, style = style, color = Colors.TextPrimary.copy(alpha = 0.7f), maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
-        row.excitement?.let { tag -> ExcitementBadge(whyTagText(tag)) }
+        // The excitement badge (Scores shown), else "Close game" in crunch time (#137, under Hide too: it tells no score).
+        val excitement = row.excitement
+        when {
+            excitement != null -> ExcitementBadge(whyTagText(excitement))
+            row.closeGame -> ExcitementBadge(stringResource(R.string.sports_live_close_game))
+        }
         if (hasReplay && row.group == ScoreboardGroup.JUST_ENDED) ReplayPill()
     }
+}
+
+/**
+ * A tennis match's set columns (#160): "6 3 2" over "4 6 1", tabular, the set being played in white and bold
+ * ([live]), the ones before muted; a small dot before the side serving.
+ */
+@Composable
+private fun TennisSetsCell(columns: TennisColumns, live: Boolean, compact: Boolean) {
+    val size = if (compact) 14.sp else 16.sp
+    val style = SportsLiveTokens.style(SportsLiveTokens.Type.RowScore).copy(fontSize = size, lineHeight = if (compact) 17.sp else 20.sp)
+    Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.Center) {
+        listOf(columns.first to (columns.servingFirst == true), columns.second to (columns.servingFirst == false)).forEach { (games, serving) ->
+            Row(horizontalArrangement = Arrangement.spacedBy(TENNIS_SET_GAP), verticalAlignment = Alignment.CenterVertically) {
+                Box(modifier = Modifier.size(5.dp).clip(CircleShape).background(if (serving && live) Colors.FollowedGold else Color.Transparent))
+                games.forEachIndexed { index, value ->
+                    val current = live && index == games.lastIndex
+                    Text(
+                        text = value.toString(),
+                        style = if (current) style.sportsLiveBold() else style.copy(fontWeight = FontWeight.Medium),
+                        color = if (current) Colors.TextPrimary else Colors.TextSecondary,
+                        textAlign = TextAlign.End,
+                        maxLines = 1,
+                        modifier = Modifier.width(TENNIS_SET_WIDTH)
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** The "Big game" badge (#137): small, outlined and muted, so it never competes with the names. */
+@Composable
+private fun BigGameBadge() {
+    Text(
+        text = stringResource(R.string.sports_live_big_game),
+        style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag).copy(fontSize = 10.sp, lineHeight = 12.sp, fontWeight = FontWeight.Medium),
+        color = Colors.TextSecondary,
+        maxLines = 1,
+        modifier = Modifier
+            .border(1.dp, Colors.OutlineStrong, RoundedCornerShape(SportsLiveTokens.Radius.Badge))
+            .padding(horizontal = 4.dp)
+    )
 }
 
 /** The excitement badge (#43, F2): small and blue, so it never reads as live (red) or followed (gold). */
@@ -694,6 +762,10 @@ private const val TAG_MAX_CHARS = 10
 private const val TAG_MAX_WORDS = 4
 
 private val ROW_LOGO_SIZE = 18.dp
+
+/** A tennis set column (#160): one or two digits, tabular. */
+private val TENNIS_SET_WIDTH = 11.dp
+private val TENNIS_SET_GAP = 3.dp
 
 private val SINGLE_LINE_ROW_HEIGHT = 40.dp
 private val CHANNEL_LOGO_HEIGHT = 27.dp

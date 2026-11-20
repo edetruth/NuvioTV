@@ -1471,6 +1471,8 @@ open class MainActivity : ComponentActivity() {
             if (count > 0) lifecycleScope.launch { sportsLiveAlerts.debugRaise(count) }
             // `--ez debugSportsKickoff true`: a kickoff prompt for a live game, for checking #173.
             if (intent.getBooleanExtra("debugSportsKickoff", false)) lifecycleScope.launch { sportsLiveAlerts.debugKickoff() }
+            // `--ez debugSportsCrunch true`: one crunch-time alert (#137).
+            if (intent.getBooleanExtra("debugSportsCrunch", false)) lifecycleScope.launch { sportsLiveAlerts.debugCrunch() }
             // `--es debugSportsProbe <sport>`: measures sports lookups and link starts (#158).
             intent.getStringExtra("debugSportsProbe")?.let { filter ->
                 sportsLiveDebugProbe.run(
