@@ -349,13 +349,17 @@ object SportsLiveItemBucketer {
         directory: TeamDirectory = TeamDirectory.shared
     ): List<SportsLiveItem> {
         val rank = addonOrder.withIndex().associate { (index, id) -> id to index }
-        // Copies of one game share a team-pair key, so only plausible matches are compared.
+        // Each copy's id view ([idView]: league inference and #168 identity) once per merge, not four times per pair
+        // compared. It is a pure function of the item, so one per item object (an adopted start makes a new primary).
+        val views = IdentityHashMap<SportsLiveItem, SportsLiveItem>()
+        fun view(item: SportsLiveItem): SportsLiveItem = views.getOrPut(item) { idView(item, directory) }
+        // Copies of one game share a team-pair key (by name, or by ESPN team ids), so only plausible matches are compared.
         val candidates = candidateGroups(
             items.filter {
                 it.kind == SportsLiveKind.EVENTS && !it.isChannel && it.teams != null &&
                     !SportsLiveTeams.isPlaceholderGame(it.teams)
             }
-        )
+        ) { item -> idKeys(view(item), directory) }
         if (candidates.isEmpty()) return items
         // Keyed by the primary's stream key; a source joins at most one primary.
         val alternatesOf = HashMap<String, MutableList<SportsLiveItem>>()
@@ -364,10 +368,6 @@ object SportsLiveItemBucketer {
         val folded = HashSet<String>()
         // Primaries that took a copy by ESPN team ids, and the copy whose league is named, by the primary's stream key.
         val presentedBy = HashMap<String, SportsLiveItem>()
-        // Each copy's id view ([idView]: league inference and #168 identity) once per merge, not four times per pair
-        // compared. It is a pure function of the item, so one per item object (an adopted start makes a new primary).
-        val views = IdentityHashMap<SportsLiveItem, SportsLiveItem>()
-        fun view(item: SportsLiveItem): SportsLiveItem = views.getOrPut(item) { idView(item, directory) }
         for (group in candidates) {
             // Each primary as later copies are compared with it: with the start it adopted, if any.
             val primaries = mutableListOf<SportsLiveItem>()
@@ -699,8 +699,13 @@ object SportsLiveItemBucketer {
      * joined, transitively. A side's keys are the first and last words of its canonical name (abbreviations
      * folded in: "SL" -> "sri lanka"), so "Lakers" meets "Los Angeles Lakers" by the last word and
      * "Adelaide" meets "Adelaide 36ers" by the first (#153). The keys keep the groups coarse; [sameGame] is precise.
+     * [idKeysOf] adds keys by ESPN team ids, so copies whose names share no word ("PHI vs IND" and "Philadelphia 76ers
+     * vs Indiana Pacers") are compared too, and [idVerdict] decides.
      */
-    private fun candidateGroups(items: List<SportsLiveItem>): Collection<List<SportsLiveItem>> {
+    private fun candidateGroups(
+        items: List<SportsLiveItem>,
+        idKeysOf: (SportsLiveItem) -> List<Pair<String, String>> = { emptyList() }
+    ): Collection<List<SportsLiveItem>> {
         val parent = IntArray(items.size) { it }
         fun root(i: Int): Int {
             var r = i
@@ -711,12 +716,25 @@ object SportsLiveItemBucketer {
         }
         val firstWithKey = HashMap<Pair<String, String>, Int>()
         items.forEachIndexed { index, item ->
-            for (key in pairKeys(item.teams!!)) {
+            for (key in pairKeys(item.teams!!) + idKeysOf(item)) {
                 val other = firstWithKey.putIfAbsent(key, index) ?: continue
                 parent[root(index)] = root(other)
             }
         }
         return items.indices.groupBy(::root, items::get).values.filter { it.size > 1 }
+    }
+
+    /**
+     * [view]'s two ESPN teams ([TeamDirectory.teamId]) in each league it can be on, as candidate keys (either order);
+     * none where the directory does not resolve both sides to two teams.
+     */
+    private fun idKeys(view: SportsLiveItem, directory: TeamDirectory): List<Pair<String, String>> {
+        val teams = view.teams ?: return emptyList()
+        return TeamDirectory.leaguesFor(view).mapNotNull { league ->
+            val a = directory.teamId(league, teams.home) ?: return@mapNotNull null
+            val b = directory.teamId(league, teams.away) ?: return@mapNotNull null
+            if (a == b) null else "id ${league.path}" to (if (a <= b) "$a $b" else "$b $a")
+        }
     }
 
     private fun pairKeys(teams: TeamPair): List<Pair<String, String>> {

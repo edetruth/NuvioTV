@@ -69,7 +69,10 @@ class SportsLiveDuplicateCorpusTest {
         Case("Illawarra and Adelaide 36ers", 1,
             copy("Illawarra Hawks vs Adelaide", "Basketball"), copy("Illawarra Hawks vs Adelaide 36ers", "Basketball")),
         Case("Brisbane W", 1,
-            copy("Brisbane W vs Hobart W", "Cricket"), copy("Brisbane Heat Women vs Hobart Hurricanes Women", "Cricket"))
+            copy("Brisbane W vs Hobart W", "Cricket"), copy("Brisbane Heat Women vs Hobart Hurricanes Women", "Cricket")),
+        // live.20: names that share no word, the same two ESPN teams (ids first, names the fallback).
+        Case("abbreviations and full names", 1,
+            copy("PHI vs IND", "NBA"), copy("Philadelphia 76ers vs Indiana Pacers", "Basketball"))
     )
 
     private val apart = listOf(
@@ -107,6 +110,32 @@ class SportsLiveDuplicateCorpusTest {
             val suspects = SportsLiveDupes.scan(rows(case), now, nba)
             assertTrue("${case.name}: ${suspects.map { it.reason }}", suspects.none { it.why == "same team ids" })
         }
+    }
+
+    @Test
+    fun `copies sharing no name word merge by ESPN team ids, either way round`() {
+        val items = listOf(
+            event("a", "1", "PHI vs IND", listOf("NBA")),
+            event("b", "2", "Indiana Pacers at Philadelphia 76ers", listOf("Basketball"))
+        )
+        val rows = SportsLiveItemBucketer.merge(items, listOf("a", "b"), now, nba)
+        assertEquals(1, rows.size)
+        assertEquals(2, rows.single().sourceCount)
+        // Other ESPN teams stay apart, however alike the abbreviations look.
+        val other = listOf(event("a", "1", "PHI vs IND", listOf("NBA")), event("b", "2", "Philadelphia 76ers vs Boston Celtics", listOf("Basketball")))
+        assertEquals(2, SportsLiveItemBucketer.merge(other, listOf("a", "b"), now, nba).size)
+    }
+
+    @Test
+    fun `near misses are rows of one date with one side alike`() {
+        val minnesota = event("a", "1", "Minnesota vs Oklahoma St", listOf("NCAAF"))
+        val gophers = event("b", "2", "Minnesota Golden Gophers vs Kansas Jayhawks", listOf("College Football"))
+        val elsewhere = event("c", "3", "Arsenal vs Chelsea", listOf("Soccer"))
+        val misses = SportsLiveDupes.nearMisses(listOf(minnesota, gophers, elsewhere))
+        assertEquals(listOf(minnesota to gophers), misses)
+        // Alike on both sides: the duplicate detector's, not a near miss.
+        val copy = event("d", "4", "Minnesota vs Oklahoma St", listOf("NCAAF"))
+        assertTrue(SportsLiveDupes.nearMisses(listOf(minnesota, copy)).isEmpty())
     }
 
     @Test
