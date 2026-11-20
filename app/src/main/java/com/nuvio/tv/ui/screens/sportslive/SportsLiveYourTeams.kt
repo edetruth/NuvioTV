@@ -35,6 +35,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -286,6 +287,11 @@ internal fun SportsLiveYourTeamsStrip(
     val todayWord = stringResource(R.string.sports_live_agenda_today)
     val startedWord = stringResource(R.string.sports_live_your_teams_started)
     val listState = rememberLazyListState()
+    // Focus gone from the strip: back to its first card, so the tabs' Down (which lands on it) always finds it composed,
+    // also after ▶ along the strip (user TV report, live.20).
+    LaunchedEffect(focusedKey == null) {
+        if (focusedKey == null && listState.firstVisibleItemIndex > 0) listState.scrollToItem(0)
+    }
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(TITLE_GAP)) {
         Text(
             text = yourTeamsHeading(YourTeams.summary(entries)),
@@ -362,6 +368,10 @@ internal fun SportsLiveYourTeamsStrip(
                                     onFocus(entry)
                                 }
                             }
+                            // User TV report (live.20): Up from a strip card stayed on the strip, though Back (a direct
+                            // request) reached the tab. The column's moves ([sportsLiveColumnTarget], STRIP) are asked for
+                            // directly too, before the focus search; the properties stay as the fallback.
+                            .onPreviewKeyEvent { event -> sportsLiveStripKey(event.nativeKeyEvent, upFocusRequester, downFocusRequester) }
                             .focusProperties {
                                 upFocusRequester?.let { up = it }
                                 downFocusRequester?.let { down = it }
@@ -587,4 +597,30 @@ internal fun catchUpReplayWhen(item: CatchUpItem, nowMs: Long): String {
         else -> agendaDateText(date)
     }
     return stringResource(R.string.sports_live_your_teams_replay_when, day)
+}
+
+/**
+ * A key on a strip card (user TV report, live.20): ▲ goes to [up] (the tab row, or the Resume row while it shows) and ▼
+ * to [down] (the list's first row), by a direct request, as [sportsLiveColumnTarget] has them for [SportsLiveFocusSpot.STRIP].
+ * True when the key was used; anything else (◀ ▶, OK, a key up, a requester not on screen) is left to the card.
+ */
+internal fun sportsLiveStripKey(event: android.view.KeyEvent, up: FocusRequester?, down: FocusRequester?): Boolean {
+    if (event.action != android.view.KeyEvent.ACTION_DOWN) return false
+    val target = when (stripMoveOf(event.keyCode) ?: return false) {
+        SportsLiveFocusMove.UP -> up
+        else -> down
+    } ?: return false
+    // Not on screen (throws) or not focusable (false): left to the focus search.
+    return runCatching<Any?> { target.requestFocus() }.getOrNull().let { it != null && it != false }
+}
+
+/** The column move a key code makes from a strip card: ▲ and ▼ only. */
+internal fun stripMoveOf(keyCode: Int): SportsLiveFocusMove? = when (keyCode) {
+    android.view.KeyEvent.KEYCODE_DPAD_UP -> SportsLiveFocusMove.UP.takeIf {
+        sportsLiveColumnTarget(SportsLiveFocusSpot.STRIP, it, stageShown = false) != SportsLiveFocusTarget.DEFAULT
+    }
+    android.view.KeyEvent.KEYCODE_DPAD_DOWN -> SportsLiveFocusMove.DOWN.takeIf {
+        sportsLiveColumnTarget(SportsLiveFocusSpot.STRIP, it, stageShown = false) != SportsLiveFocusTarget.DEFAULT
+    }
+    else -> null
 }

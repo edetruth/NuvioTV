@@ -76,4 +76,23 @@ class SportsLiveColumnFocusTest {
         val noDate = generateSequence(SportsLiveHeaderStop.TAB) { sportsLiveHeaderNeighbour(it, right = true, hasDate = false, hasFilter = false) }.toList()
         assertEquals(listOf(SportsLiveHeaderStop.TAB, REFRESH), noDate)
     }
+
+    @Test
+    fun `up from any Your teams card goes to the tab row, down to the list (user TV report)`() {
+        assertEquals(SELECTED_TAB, sportsLiveColumnTarget(SportsLiveFocusSpot.STRIP, UP, stageShown = true))
+        assertEquals(SELECTED_TAB, sportsLiveColumnTarget(SportsLiveFocusSpot.STRIP, UP, stageShown = false))
+        assertEquals(LIST, sportsLiveColumnTarget(SportsLiveFocusSpot.STRIP, DOWN, stageShown = true))
+        assertEquals(DEFAULT, sportsLiveColumnTarget(SportsLiveFocusSpot.STRIP, RIGHT, stageShown = true))
+        // The tabs' Down still enters the content (the strip's first card while it shows: YourTeams.entry).
+        assertEquals(LIST, sportsLiveColumnTarget(TAB, DOWN, stageShown = true))
+    }
+
+    @Test
+    fun `a strip card asks for the column's moves itself, only for up and down`() {
+        assertEquals(UP, stripMoveOf(android.view.KeyEvent.KEYCODE_DPAD_UP))
+        assertEquals(DOWN, stripMoveOf(android.view.KeyEvent.KEYCODE_DPAD_DOWN))
+        assertEquals(null, stripMoveOf(android.view.KeyEvent.KEYCODE_DPAD_LEFT))
+        assertEquals(null, stripMoveOf(android.view.KeyEvent.KEYCODE_DPAD_RIGHT))
+        assertEquals(null, stripMoveOf(android.view.KeyEvent.KEYCODE_DPAD_CENTER))
+    }
 }
