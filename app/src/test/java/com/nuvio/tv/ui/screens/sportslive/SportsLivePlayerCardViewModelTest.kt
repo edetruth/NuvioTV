@@ -161,7 +161,7 @@ class SportsLivePlayerCardViewModelTest {
     }
 
     @Test
-    fun `Game page - a top performer opens a card on a pro league, never on a college one`() {
+    fun `Game page - a top performer opens a card on a pro or college league, never on EuroLeague`() {
         val nba = GameSummaryFixtures.summary(GameSummaryFixtures.NBA, EspnLeagueMap.NBA, "401909994")
         val event = EspnFixtures.events(EspnFixtures.NBA_20261115, EspnLeagueMap.NBA).first()
         val state = SportsLiveGameUiState(event = event, summary = nba)
@@ -173,7 +173,9 @@ class SportsLivePlayerCardViewModelTest {
         assertEquals(celtics.fullName, tatum.team)
 
         val college = SportsLiveGameUiState(event = event, summary = nba.copy(league = EspnLeagueMap.COLLEGE_BASKETBALL))
-        assertTrue(nba.performers.map(gamePlayerTarget(college)).all { it == null })
+        assertTrue(nba.performers.map(gamePlayerTarget(college)).all { it?.league == EspnLeagueMap.COLLEGE_BASKETBALL })
+        val euro = SportsLiveGameUiState(event = event, summary = nba.copy(league = EspnLeagueMap.EUROLEAGUE))
+        assertTrue(nba.performers.map(gamePlayerTarget(euro)).all { it == null })
         // Not loaded yet: nothing to open.
         assertTrue(nba.performers.map(gamePlayerTarget(SportsLiveGameUiState(event = event))).all { it == null })
     }
@@ -193,11 +195,14 @@ class SportsLivePlayerCardViewModelTest {
         // Every played row of this game opens a card.
         assertTrue(nba.boxScore.all { team -> team.tables.all { table -> table.rows.all { gameBoxScoreTarget(state)(team.side, it) != null } } })
 
-        // No athlete id, a college league, or no summary yet: no card.
+        // No athlete id, a league ESPN has no athletes for, or no summary yet: no card.
         assertNull(gameBoxScoreTarget(state)(boston.side, tatumRow.copy(athleteId = null)))
         assertNull(gameBoxScoreTarget(state)(boston.side, tatumRow.copy(athleteId = " ")))
+        val euro = SportsLiveGameUiState(event = event, summary = nba.copy(league = EspnLeagueMap.EUROLEAGUE))
+        assertNull(gameBoxScoreTarget(euro)(boston.side, tatumRow))
+        // A college box score row opens one (BUG11: NCAAM rows did nothing).
         val college = SportsLiveGameUiState(event = event, summary = nba.copy(league = EspnLeagueMap.COLLEGE_BASKETBALL))
-        assertNull(gameBoxScoreTarget(college)(boston.side, tatumRow))
+        assertEquals(EspnLeagueMap.COLLEGE_BASKETBALL, gameBoxScoreTarget(college)(boston.side, tatumRow)?.league)
         assertNull(gameBoxScoreTarget(SportsLiveGameUiState(event = event))(boston.side, tatumRow))
     }
 

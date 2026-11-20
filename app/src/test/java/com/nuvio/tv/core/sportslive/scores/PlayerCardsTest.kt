@@ -162,15 +162,20 @@ class PlayerCardsTest {
     }
 
     @Test
-    fun `entry - pro leagues only, and only with an ESPN athlete id`() {
+    fun `entry - ESPN athlete leagues only, and only with an ESPN athlete id`() {
         assertTrue(PlayerCards.supports(EspnLeagueMap.NBA))
         assertTrue(PlayerCards.supports(EspnLeagueMap.NFL))
         assertTrue(PlayerCards.supports(EspnLeagueMap.NHL))
         assertTrue(PlayerCards.supports(EspnLeagueMap.MLB))
         assertTrue(PlayerCards.supports(EspnFixtures.ENG1))
         assertTrue(PlayerCards.supports(EspnLeagueMap.SOCCER_ALL, "eng.1"))
-        assertFalse(PlayerCards.supports(EspnLeagueMap.COLLEGE_BASKETBALL))
-        assertFalse(PlayerCards.supports(EspnLeagueMap.COLLEGE_FOOTBALL))
+        // College basketball and football box scores open cards too (BUG11).
+        assertTrue(PlayerCards.supports(EspnLeagueMap.COLLEGE_BASKETBALL))
+        assertTrue(PlayerCards.supports(EspnLeagueMap.COLLEGE_BASKETBALL_WOMEN))
+        assertTrue(PlayerCards.supports(EspnLeagueMap.WNBA))
+        assertTrue(PlayerCards.supports(EspnLeagueMap.COLLEGE_FOOTBALL))
+        assertFalse(PlayerCards.supports(EspnLeagueMap.EUROLEAGUE))
+        assertFalse(PlayerCards.supports(EspnLeagueMap.G_LEAGUE))
         assertFalse(PlayerCards.supports(EspnLeagueMap.SOCCER_ALL, "usa.ncaa.m.1"))
         assertFalse(PlayerCards.supports(EspnLeagueMap.ATP))
         assertFalse(PlayerCards.supports(EspnLeagueMap.UFC))
@@ -185,7 +190,11 @@ class PlayerCardsTest {
         )
         assertNull(PlayerCards.targetFor(tatum.copy(athleteId = null), EspnLeagueMap.NBA, "nba", null))
         assertNull(PlayerCards.targetFor(tatum.copy(athleteId = " "), EspnLeagueMap.NBA, "nba", null))
-        assertNull(PlayerCards.targetFor(tatum, EspnLeagueMap.COLLEGE_BASKETBALL, null, null))
+        assertNull(PlayerCards.targetFor(tatum, EspnLeagueMap.EUROLEAGUE, null, null))
+        assertEquals(
+            PlayerCardTarget(EspnLeagueMap.COLLEGE_BASKETBALL, "4065648", "J. Tatum", "Houston Cougars"),
+            PlayerCards.targetFor(tatum, EspnLeagueMap.COLLEGE_BASKETBALL, "mens-college-basketball", "Houston Cougars")
+        )
     }
 
     @Test
@@ -199,6 +208,6 @@ class PlayerCardsTest {
             PlayerCards.targetFor(embiid, sixers)
         )
         assertNull(PlayerCards.targetFor(embiid.copy(athleteId = null), sixers))
-        assertNull(PlayerCards.targetFor(embiid, sixers.copy(league = EspnLeagueMap.COLLEGE_BASKETBALL)))
+        assertNull(PlayerCards.targetFor(embiid, sixers.copy(league = EspnLeagueMap.EUROLEAGUE)))
     }
 }

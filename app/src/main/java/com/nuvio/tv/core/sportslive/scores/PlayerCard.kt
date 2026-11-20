@@ -48,7 +48,8 @@ data class PlayerCardTarget(val league: EspnLeague, val athleteId: String, val n
 
 /**
  * Reads ESPN's athlete and game log responses into a [PlayerCard], and decides where a card can open.
- * Pro leagues only: NBA, NFL, NHL, MLB and soccer (not college soccer).
+ * NBA, WNBA, NFL, NHL, MLB, soccer (not college soccer), and college basketball and football (live.20 BUG11: ESPN
+ * serves their athletes and game logs in the same shape).
  */
 object PlayerCards {
     const val LAST_GAMES = 5
@@ -57,8 +58,8 @@ object PlayerCards {
 
     /** Whether a Player card opens for players of [league]; [competitionSlug] tells a college soccer game apart. */
     fun supports(league: EspnLeague, competitionSlug: String? = null): Boolean = when (league.sport) {
-        "basketball" -> league == EspnLeagueMap.NBA
-        "football" -> league == EspnLeagueMap.NFL
+        "basketball" -> league in CARD_BASKETBALL
+        "football" -> league == EspnLeagueMap.NFL || league == EspnLeagueMap.COLLEGE_FOOTBALL
         "hockey" -> league == EspnLeagueMap.NHL
         "baseball" -> league == EspnLeagueMap.MLB
         "soccer" -> !league.league.contains(COLLEGE) && competitionSlug?.contains(COLLEGE) != true
@@ -66,6 +67,10 @@ object PlayerCards {
     }
 
     private const val COLLEGE = "ncaa"
+
+    private val CARD_BASKETBALL = setOf(
+        EspnLeagueMap.NBA, EspnLeagueMap.WNBA, EspnLeagueMap.COLLEGE_BASKETBALL, EspnLeagueMap.COLLEGE_BASKETBALL_WOMEN
+    )
 
     /** The card a top performer opens, or null: no ESPN athlete id, or not a pro league. */
     fun targetFor(performer: Performer, league: EspnLeague, competitionSlug: String?, teamName: String?): PlayerCardTarget? =

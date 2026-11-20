@@ -214,10 +214,19 @@ class TeamPagesTest {
     }
 
     @Test
-    fun `college, women's, cups and individual sports have no team page`() {
+    fun `college basketball and football and the WNBA have team pages (BUG12)`() {
         val college = EspnFixtures.events(EspnFixtures.CBB_20261115, EspnLeagueMap.COLLEGE_BASKETBALL).first()
-        assertTrue(TeamPages.refsOf(college, homeFirst = false).isEmpty())
-        assertTrue(TeamPages.refsOf(nbaGame.copy(league = EspnLeagueMap.COLLEGE_FOOTBALL, leagueSlug = "college-football"), false).isEmpty())
+        assertEquals(listOf(EspnLeagueMap.COLLEGE_BASKETBALL), TeamPages.refsOf(college, homeFirst = false).map { it.league }.distinct())
+        assertEquals(2, TeamPages.refsOf(college, homeFirst = false).size)
+        for (league in listOf(EspnLeagueMap.COLLEGE_FOOTBALL, EspnLeagueMap.COLLEGE_BASKETBALL_WOMEN, EspnLeagueMap.WNBA)) {
+            assertEquals(league, TeamPages.leagueOf(nbaGame.copy(league = league, leagueSlug = league.league)))
+        }
+    }
+
+    @Test
+    fun `women's soccer, cups, other leagues and individual sports have no team page`() {
+        assertNull(TeamPages.leagueOf(nbaGame.copy(league = EspnLeagueMap.EUROLEAGUE, leagueSlug = "euroleague")))
+        assertNull(TeamPages.leagueOf(nbaGame.copy(league = EspnLeagueMap.NWSL, leagueSlug = "usa.nwsl")))
         val soccerAll = nbaGame.copy(league = EspnLeagueMap.SOCCER_ALL)
         for (slug in listOf("uefa.champions", "eng.w.1", "fifa.friendly", "eng.2")) {
             assertNull(slug, TeamPages.leagueOf(soccerAll.copy(leagueSlug = slug)))

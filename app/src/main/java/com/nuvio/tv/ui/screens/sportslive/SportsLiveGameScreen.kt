@@ -158,6 +158,8 @@ fun SportsLiveGameScreen(
 
     val actionFocus = remember { GameAction.entries.associateWith { FocusRequester() } }
     val moreFocus = remember { FocusRequester() }
+    // The header team the action row's Up lands on (BUG12): the first one with a Team page.
+    val heroTeamFocus = remember { FocusRequester() }
     val tabFocus = remember { GameSection.entries.associateWith { FocusRequester() } }
     val bodyFocus = remember { FocusRequester() }
     // The first action, else More…: the header's first focus.
@@ -225,7 +227,25 @@ fun SportsLiveGameScreen(
             .onPreviewKeyEvent { if (it.type == KeyEventType.KeyDown) keyPressed = true; false }
             .padding(start = PAGE_SIDE, end = PAGE_SIDE, top = PAGE_TOP)
     ) {
-        GameHero(state = state, event = event, first = sideOf(firstSide), second = sideOf(secondSide))
+        // A team with a page (#62): its header name and logo take focus, OK opens it (BUG12, Q9).
+        fun teamOpener(side: ScoreSide): (() -> Unit)? = TeamPages.refOf(event, side)?.let { ref ->
+            {
+                SportsLiveTeamRequests.open(SportsLiveTeamRequest(ref))
+                onOpenTeam()
+            }
+        }
+        val firstTeam = teamOpener(firstSide)
+        val secondTeam = teamOpener(secondSide)
+        GameHero(
+            state = state,
+            event = event,
+            first = sideOf(firstSide),
+            second = sideOf(secondSide),
+            onFirstTeam = firstTeam,
+            onSecondTeam = secondTeam,
+            teamFocus = heroTeamFocus,
+            downFocus = headerFirst
+        )
         Spacer(Modifier.height(10.dp))
         GameActionRow(
             actions = actions,
@@ -250,7 +270,8 @@ fun SportsLiveGameScreen(
                     }
                 }
             },
-            onMore = { menuOpen = true }
+            onMore = { menuOpen = true },
+            upFocus = if (TeamPages.refsOf(event, homeFirst = false).isNotEmpty()) heroTeamFocus else null
         )
         if (sections.isNotEmpty() && section != null) {
             Spacer(Modifier.height(18.dp))
@@ -391,7 +412,19 @@ internal fun <T> inCardOrder(away: T, home: T, homeFirst: Boolean): Pair<T, T> =
  * status (28 px) and the venue (24 px).
  */
 @Composable
-private fun GameHero(state: SportsLiveGameUiState, event: ScoreSnapshot, first: HeaderSide, second: HeaderSide) {
+private fun GameHero(
+    state: SportsLiveGameUiState,
+    event: ScoreSnapshot,
+    first: HeaderSide,
+    second: HeaderSide,
+    /** Opens [first]'s Team page; null: no page, the team is plain text. */
+    onFirstTeam: (() -> Unit)? = null,
+    onSecondTeam: (() -> Unit)? = null,
+    /** On the first team with a page (the action row's Up). */
+    teamFocus: FocusRequester? = null,
+    /** Where Down from a header team goes: the first action. */
+    downFocus: FocusRequester? = null
+) {
     val summary = state.summary
     val showsScore = state.showsScore
     val logos = rememberTeamLogoPair(first.logo, second.logo, px = HERO_LOGO_PX)
@@ -402,7 +435,10 @@ private fun GameHero(state: SportsLiveGameUiState, event: ScoreSnapshot, first: 
         verticalAlignment = Alignment.Top
     ) {
         val upcoming = gameState == ScoreState.PRE
-        HeroTeam(first, logos?.first, logos?.shown == true, showsScore, upcoming)
+        HeroTeam(
+            first, logos?.first, logos?.shown == true, showsScore, upcoming,
+            onClick = onFirstTeam, focus = teamFocus.takeIf { onFirstTeam != null }, downFocus = downFocus
+        )
         Column(
             modifier = Modifier.width(HERO_MIDDLE_WIDTH),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -433,13 +469,47 @@ private fun GameHero(state: SportsLiveGameUiState, event: ScoreSnapshot, first: 
             }
             GameStatusLine(summary = summary, event = event, showsScore = showsScore, live = gameState == ScoreState.IN)
         }
-        HeroTeam(second, logos?.second, logos?.shown == true, showsScore, upcoming)
+        HeroTeam(
+            second, logos?.second, logos?.shown == true, showsScore, upcoming,
+            onClick = onSecondTeam, focus = teamFocus.takeIf { onFirstTeam == null && onSecondTeam != null }, downFocus = downFocus
+        )
     }
 }
 
 @Composable
-private fun HeroTeam(side: HeaderSide, logo: Painter?, logoShown: Boolean, showRecord: Boolean, upcoming: Boolean) {
-    Column(modifier = Modifier.width(HERO_TEAM_WIDTH), horizontalAlignment = Alignment.CenterHorizontally) {
+private fun HeroTeam(
+    side: HeaderSide,
+    logo: Painter?,
+    logoShown: Boolean,
+    showRecord: Boolean,
+    upcoming: Boolean,
+    /** Opens the team's page (BUG12): the name and logo become one focusable block with the V2 ring. */
+    onClick: (() -> Unit)? = null,
+    focus: FocusRequester? = null,
+    downFocus: FocusRequester? = null
+) {
+    if (onClick == null) {
+        HeroTeamContent(side, logo, logoShown, showRecord, upcoming, Modifier.width(HERO_TEAM_WIDTH))
+        return
+    }
+    SportsLivePageSurface(
+        modifier = Modifier
+            .width(HERO_TEAM_WIDTH)
+            .then(if (focus != null) Modifier.focusRequester(focus) else Modifier)
+            .focusProperties {
+                up = FocusRequester.Cancel
+                downFocus?.let { down = it }
+            },
+        onClick = onClick,
+        container = Colors.Background
+    ) {
+        HeroTeamContent(side, logo, logoShown, showRecord, upcoming, Modifier.fillMaxWidth().padding(vertical = 4.dp))
+    }
+}
+
+@Composable
+private fun HeroTeamContent(side: HeaderSide, logo: Painter?, logoShown: Boolean, showRecord: Boolean, upcoming: Boolean, modifier: Modifier) {
+    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         // The logo's room stays, so both names sit on one line whether or not logos load (#130).
         Box(modifier = Modifier.height(HERO_LOGO), contentAlignment = Alignment.Center) {
             if (logo != null) TeamLogoSlot(painter = logo, shown = logoShown, size = HERO_LOGO)
@@ -543,14 +613,16 @@ private fun GameActionRow(
     reminded: Boolean,
     onAction: (GameAction) -> Unit,
     onMore: () -> Unit,
-    revealResult: Boolean = false
+    revealResult: Boolean = false,
+    /** Up from the row: a header team with a Team page (BUG12); null stays put. */
+    upFocus: FocusRequester? = null
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(SportsLiveTokens.Size.ButtonGap, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        fun Modifier.leaves(): Modifier = focusProperties { down = downFocus ?: FocusRequester.Cancel; up = FocusRequester.Cancel }
+        fun Modifier.leaves(): Modifier = focusProperties { down = downFocus ?: FocusRequester.Cancel; up = upFocus ?: FocusRequester.Cancel }
         actions.forEachIndexed { index, action ->
             val primary = index == 0
             SportsLiveButton(

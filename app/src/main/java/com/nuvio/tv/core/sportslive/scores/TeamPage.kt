@@ -63,12 +63,20 @@ object TeamPages {
     /** A game that has not started this long after its start is stale (ESPN never updated it): left out. */
     private const val STALE_PRE_MS = 6 * 60 * 60_000L
 
-    /** The pro leagues with team pages, and their short names; soccer by its own competition below. */
+    /**
+     * The leagues with team pages, and their short names; soccer by its own competition below. College basketball
+     * and football and the WNBA since live.20 (BUG12: an NCAAM game offered no Team page anywhere; ESPN serves
+     * their team and schedule feeds in the same shape).
+     */
     private val PRO = mapOf(
         EspnLeagueMap.NBA to "NBA",
         EspnLeagueMap.NFL to "NFL",
         EspnLeagueMap.NHL to "NHL",
-        EspnLeagueMap.MLB to "MLB"
+        EspnLeagueMap.MLB to "MLB",
+        EspnLeagueMap.WNBA to "WNBA",
+        EspnLeagueMap.COLLEGE_BASKETBALL to "NCAAM",
+        EspnLeagueMap.COLLEGE_BASKETBALL_WOMEN to "NCAAW",
+        EspnLeagueMap.COLLEGE_FOOTBALL to "NCAAF"
     )
 
     /** The major soccer leagues ESPN has team pages for (a club's domestic league; cups have none of their own). */
