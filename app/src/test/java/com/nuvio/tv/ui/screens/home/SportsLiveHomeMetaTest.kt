@@ -155,6 +155,14 @@ class SportsLiveHomeMetaTest {
     }
 
     @Test
+    fun `a catch-all sport tag never reads as the league in the hero`() {
+        val game = item("g", "Cartagena vs Tigres").copy(sport = "Other")
+        val words = SportsLiveHomeRow.Words(liveNow = "Live now", yourTeam = "★ Your team", streams = { "$it streams" })
+        val row = SportsLiveHomeRow.build(listOf(game), "Live now", emptyMap(), words)
+        assertEquals("Live now", sportsLiveHeroPreview(row.items.single(), row)!!.contentTypeText)
+    }
+
+    @Test
     fun `sports rows are titled without the type suffix`() {
         val row = SportsLiveHomeRow.build(listOf(item("g", "Celtics vs Knicks")), "Live now")
         assertEquals("Live now", catalogRowTitle(row, showCatalogTypeSuffix = true))
