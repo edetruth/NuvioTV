@@ -50,7 +50,7 @@ import javax.inject.Singleton
 /**
  * Report a problem (#172): saves a privacy-safe snapshot of what the app is doing to a file the coordinator pulls over
  * adb ([SportsLiveReportFiles]), shows its summary as a QR code where adb is not at hand, and takes a short voice note.
- * Triggered by holding Play/Pause or Info ([SportsLiveReportKey], from MainActivity) or from Settings → Sports & Live →
+ * Triggered by holding ★, TV, Play/Pause or Info ([SportsLiveReportKey], from MainActivity) or from Settings → Sports & Live →
  * More → Report a problem. Nothing leaves the TV by itself.
  */
 @Singleton
@@ -117,7 +117,12 @@ class SportsLiveReporter @Inject constructor(
     fun onKey(event: KeyEvent): Boolean {
         val action = key.onKey(event.keyCode, event.action, event.repeatCount, event.downTime, event.eventTime)
         if (action == SportsLiveReportKeyAction.REPORT) {
-            val trigger = if (event.keyCode == KeyEvent.KEYCODE_INFO) "Hold Info" else "Hold Play/Pause"
+            val trigger = when (event.keyCode) {
+                KeyEvent.KEYCODE_MACRO_1 -> "Hold ★"
+                KeyEvent.KEYCODE_GUIDE -> "Hold TV"
+                KeyEvent.KEYCODE_INFO -> "Hold Info"
+                else -> "Hold Play/Pause"
+            }
             scope.launch {
                 val saved = runCatching { save(trigger) }.getOrNull()
                 val adb = adbOn()

@@ -7,7 +7,7 @@ import com.nuvio.tv.core.sportslive.report.SportsLiveReportKeyAction.REPORT
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-/** Report a problem (#172): hold Play/Pause or Info for 2 s; nothing else about the remote changes. */
+/** Report a problem (#172): hold ★, TV, Play/Pause or Info for 2 s; nothing else about the remote changes. */
 class SportsLiveReportKeyTest {
 
     private val down = KeyEvent.ACTION_DOWN
@@ -64,6 +64,18 @@ class SportsLiveReportKeyTest {
     fun `info works the same`() {
         val key = SportsLiveReportKey()
         assertEquals(1, hold(key, KeyEvent.KEYCODE_INFO, 0, 2_600).count { it == REPORT })
+    }
+
+    @Test
+    fun `the star key and the TV key held 2 s report once, a short press passes through (onn remote)`() {
+        for (code in listOf(KeyEvent.KEYCODE_MACRO_1, KeyEvent.KEYCODE_GUIDE)) {
+            val key = SportsLiveReportKey()
+            val held = hold(key, code, 0, 2_600)
+            assertEquals("$code", 1, held.count { it == REPORT })
+            assertEquals("$code", PASS, held.first())
+            assertEquals("$code", CONSUME, held.last())
+            assertEquals("$code", listOf(PASS, PASS), hold(key, code, 10_000, 10_150))
+        }
     }
 
     @Test
