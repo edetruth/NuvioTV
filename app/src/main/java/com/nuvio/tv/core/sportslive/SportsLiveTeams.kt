@@ -265,6 +265,9 @@ object SportsLiveTeams {
         if (qualifier != null) words.removeAt(words.lastIndex)
         // A club suffix before the marker ("Arsenal FC W", #174) goes as it does before "(W)".
         while (words.size > 1 && words.last() in CLUB_SUFFIXES) words.removeAt(words.lastIndex)
+        // A last "St" is State, as ESPN shortens schools ("Oklahoma St" is "Oklahoma State Cowboys", user TV report);
+        // a first or inner one is Saint ("St Johns", "Mount St Marys") and stays.
+        if (words.size > 1 && words.last() == "st") words[words.lastIndex] = "state"
         return MergeForm(words, qualifier, canonicalOrNull(normalised))
     }
 

@@ -121,6 +121,24 @@ class SportsLiveDuplicateMergeTest {
         assertTrue(SportsLiveMySportsScope.shows(ncaaw, MySports.decode(setOf("basketball/womens-college-basketball"))))
     }
 
+    @Test
+    fun `a school's St is State, so two addons' copies of one college game merge (user TV report)`() {
+        assertEquals(SportsLiveTeams.MergeMatch.FULL, SportsLiveTeams.mergeMatch("Oklahoma St", "Oklahoma State"))
+        assertEquals(SportsLiveTeams.MergeMatch.PREFIX, SportsLiveTeams.mergeMatch("Oklahoma St.", "Oklahoma State Cowboys"))
+        // A first St is Saint, as before.
+        assertEquals(SportsLiveTeams.MergeMatch.FULL, SportsLiveTeams.mergeMatch("St Johns", "St. John's"))
+        val rows = SportsLiveItemBucketer.bucketTab(
+            listOf(
+                event("a", "1", "Minnesota Golden Gophers vs Oklahoma State Cowboys", genres = listOf("Basketball")),
+                event("b", "2", "Minnesota vs Oklahoma St", genres = listOf("Basketball")),
+                event("c", "3", "Oklahoma St. at Minnesota", genres = listOf("Basketball"))
+            ),
+            SportsLiveTab.LIVE_NOW, now, addonOrder = listOf("a", "b", "c")
+        )
+        assertEquals(1, rows.size)
+        assertEquals(3, rows.single().sourceCount)
+    }
+
     private fun event(addonId: String, id: String, name: String, genres: List<String> = emptyList()): SportsLiveItem =
         SportsLiveItemBucketer.describe(
             MetaPreview(
