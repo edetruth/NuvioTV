@@ -170,7 +170,7 @@ internal fun SportsLiveScoreboardRow(
     shortNames: Boolean = false,
     /** An Agenda row (Upcoming): its right side shows the listing and the bell, never scores or a status. */
     agenda: AgendaRowSide? = null,
-    /** The mini player's game (#157): a small "▶ Watching" marker at its top-right. */
+    /** The mini player's game (#157): "▶ Watching" in the row's badge place (BUG-D: never over its status). */
     watching: Boolean = false,
     /** "▶ Ready" (live.20 1b): my game holds a verified link; the pill beside its status, never "No stream yet". */
     ready: Boolean = false
@@ -209,10 +209,10 @@ internal fun SportsLiveScoreboardRow(
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             when {
-                row.group == ScoreboardGroup.CHANNELS -> ChannelCells(row)
-                agenda != null -> AgendaCells(row, agenda, shortNames, ready)
-                !row.twoSided -> SingleLineCells(row, hasReplay, ready)
-                else -> GameCells(row, reminded, hasReplay, shortNames, ready)
+                row.group == ScoreboardGroup.CHANNELS -> ChannelCells(row, watching)
+                agenda != null -> AgendaCells(row, agenda, shortNames, ready, watching)
+                !row.twoSided -> SingleLineCells(row, hasReplay, ready, watching)
+                else -> GameCells(row, reminded, hasReplay, shortNames, ready, watching)
             }
             // The left bar: white while selected (focus in the stage) or playing, else gold for a followed team.
             val bar = when {
@@ -223,20 +223,6 @@ internal fun SportsLiveScoreboardRow(
             }
             if (bar != null) {
                 Box(modifier = Modifier.align(Alignment.CenterStart).width(BAR_WIDTH).fillMaxHeight().background(bar))
-            }
-            if (watching) {
-                Text(
-                    text = stringResource(R.string.sports_live_row_watching),
-                    style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag).copy(fontSize = 10.sp, lineHeight = 12.sp),
-                    color = Colors.OnPrimary,
-                    maxLines = 1,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(top = 3.dp, end = 4.dp)
-                        .clip(RoundedCornerShape(SportsLiveTokens.Radius.Badge))
-                        .background(Colors.PrimaryFill)
-                        .padding(horizontal = 4.dp)
-                )
             }
             row.progress?.let { share ->
                 Box(
@@ -253,7 +239,7 @@ internal fun SportsLiveScoreboardRow(
 
 /** A game's cells: league tag, the two teams, stacked scores and the status column. */
 @Composable
-private fun GameCells(row: ScoreboardRow, reminded: Boolean, hasReplay: Boolean, shortNames: Boolean, ready: Boolean) {
+private fun GameCells(row: ScoreboardRow, reminded: Boolean, hasReplay: Boolean, shortNames: Boolean, ready: Boolean, watching: Boolean) {
     val item = row.item
     val live = row.group == ScoreboardGroup.LIVE
     val scores = scoreboardScoresOf(row.chip)
@@ -286,7 +272,7 @@ private fun GameCells(row: ScoreboardRow, reminded: Boolean, hasReplay: Boolean,
         }
         // A tennis match (#160): its set columns in place of the stacked scores.
         row.tennis?.let { TennisSetsCell(it, live, compact) } ?: ScoresCell(scores, reminded, compact)
-        StatusCell(row, hasReplay, ready = ready)
+        StatusCell(row, hasReplay, ready = ready, watching = watching)
     }
 }
 
@@ -325,7 +311,7 @@ internal fun rowTagOf(row: ScoreboardRow, sportLabel: String?, plainLabel: Strin
  * clean title on one line, and the status (the red dot and LIVE, or the kickoff).
  */
 @Composable
-private fun SingleLineCells(row: ScoreboardRow, hasReplay: Boolean, ready: Boolean) {
+private fun SingleLineCells(row: ScoreboardRow, hasReplay: Boolean, ready: Boolean, watching: Boolean) {
     Row(
         modifier = Modifier.fillMaxSize().padding(start = 4.dp, end = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(COLUMN_GAP),
@@ -344,7 +330,7 @@ private fun SingleLineCells(row: ScoreboardRow, hasReplay: Boolean, ready: Boole
             modifier = Modifier.weight(1f)
         )
         // One line (#134): a live event with no clock says "● LIVE" at the tag's size, not the clock's.
-        StatusCell(row, hasReplay, singleLine = true, ready = ready)
+        StatusCell(row, hasReplay, singleLine = true, ready = ready, watching = watching)
     }
 }
 
@@ -353,7 +339,7 @@ private fun SingleLineCells(row: ScoreboardRow, hasReplay: Boolean, ready: Boole
  * trailing word and the bell: outline when off, filled blue when set. Never a score or a live mark.
  */
 @Composable
-private fun AgendaCells(row: ScoreboardRow, side: AgendaRowSide, shortNames: Boolean, ready: Boolean) {
+private fun AgendaCells(row: ScoreboardRow, side: AgendaRowSide, shortNames: Boolean, ready: Boolean, watching: Boolean) {
     val item = row.item
     Row(
         modifier = Modifier.fillMaxSize().padding(start = 4.dp, end = 10.dp),
@@ -382,8 +368,12 @@ private fun AgendaCells(row: ScoreboardRow, side: AgendaRowSide, shortNames: Boo
                 }
             }
         }
-        // A link check running (live.20): the faint mark where "▶ Ready" would be.
-        if (ready) SportsLiveReadyPill() else if (rememberSportsLiveChecking(item)) SportsLiveCheckingMark()
+        // A link check running (live.20): the faint mark where "▶ Ready" would be; "▶ Watching" in its place (BUG-D).
+        when {
+            watching -> SportsLiveWatchingPill()
+            ready -> SportsLiveReadyPill()
+            rememberSportsLiveChecking(item) -> SportsLiveCheckingMark()
+        }
         if (side.bigGame) BigGameBadge()
         side.trailing?.let { trailing ->
             Text(
@@ -447,7 +437,7 @@ internal fun sportFilterLabel(value: String): String =
 
 /** A channel's cells: its small logo in the league column, then its clean name, quality and "Now: …". */
 @Composable
-private fun ChannelCells(row: ScoreboardRow) {
+private fun ChannelCells(row: ScoreboardRow, watching: Boolean) {
     val item = row.item
     val title = SportsLiveDisplayText.of(item.meta.name)
     Row(
@@ -484,6 +474,7 @@ private fun ChannelCells(row: ScoreboardRow) {
                 )
                 title.quality?.let { SportsLiveBadge(it) }
                 if (item.followed) StarMark()
+                if (watching) SportsLiveWatchingPill()
             }
             channelNowText(item)?.let { now ->
                 Text(
@@ -619,7 +610,7 @@ private fun ScoresCell(scores: ScoreboardScores, reminded: Boolean, compact: Boo
 
 /** The status column (75 dp): the red dot and clock over the period, or the kickoff over its countdown; then the badge. */
 @Composable
-private fun StatusCell(row: ScoreboardRow, hasReplay: Boolean, singleLine: Boolean = false, ready: Boolean = false) {
+private fun StatusCell(row: ScoreboardRow, hasReplay: Boolean, singleLine: Boolean = false, ready: Boolean = false, watching: Boolean = false) {
     val strings = rememberGameStatusStrings()
     val kickoff = row.art?.let { kickoffText(it) }
     val lines = scoreboardStatusLines(row, strings, kickoff)
@@ -659,7 +650,9 @@ private fun StatusCell(row: ScoreboardRow, hasReplay: Boolean, singleLine: Boole
         val excitement = row.excitement
         // A live row whose last lookup found nothing playable (#145, BUG2) says so in words, beside its dimming.
         val noStream = row.noStreams && row.group == ScoreboardGroup.LIVE
-        when (rowBadgeOf(ready, excitement != null, row.closeGame, noStream)) {
+        when (rowBadgeOf(ready, excitement != null, row.closeGame, noStream, watching)) {
+            // BUG-D: the mini player's game says so in the badge's place, under its status, never stacked on "LIVE".
+            RowBadge.WATCHING -> SportsLiveWatchingPill()
             RowBadge.READY -> SportsLiveReadyPill()
             RowBadge.NO_STREAM -> SportsLiveNoStreamYet()
             RowBadge.EXCITEMENT -> excitement?.let { ExcitementBadge(whyTagText(it)) }
@@ -697,6 +690,22 @@ private fun TennisSetsCell(columns: TennisColumns, live: Boolean, compact: Boole
             }
         }
     }
+}
+
+/** "▶ Watching" (#157): the mini player's game. Small, filled in the primary colour, one line. */
+@Composable
+private fun SportsLiveWatchingPill() {
+    Text(
+        text = stringResource(R.string.sports_live_row_watching),
+        style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag).copy(fontSize = 10.sp, lineHeight = 12.sp),
+        color = Colors.OnPrimary,
+        maxLines = 1,
+        softWrap = false,
+        modifier = Modifier
+            .clip(RoundedCornerShape(SportsLiveTokens.Radius.Badge))
+            .background(Colors.PrimaryFill)
+            .padding(horizontal = 4.dp)
+    )
 }
 
 /** The "Big game" badge (#137): small, outlined and muted, so it never competes with the names. */
