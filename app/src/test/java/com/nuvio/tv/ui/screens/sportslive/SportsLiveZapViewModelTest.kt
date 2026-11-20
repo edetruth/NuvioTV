@@ -448,6 +448,26 @@ class SportsLiveZapViewModelTest {
     }
 
     @Test
+    fun `the game playing is tracked in its inferred league, so an untagged game gets its score with the panel closed`() {
+        val untagged = game("Boston Celtics at Miami Heat")
+        assertNull(untagged.sport)
+        val nbaTeams = com.nuvio.tv.core.sportslive.scores.TeamDirectory.parse(
+            EspnFixtures.json("espn_teams_nba_20261118.json"), EspnFixtures.moshi
+        )!!
+        val directory = com.nuvio.tv.core.sportslive.scores.TeamDirectory()
+        // No list yet: not placed in a league.
+        assertFalse(playerTrackedCard(untagged, directory).sport == "NBA")
+
+        directory.put(EspnLeagueMap.NBA, nbaTeams, 0L)
+        val tracked = playerTrackedCard(untagged, directory)
+        assertEquals("NBA", tracked.sport)
+        // The same game for the scores map.
+        assertEquals(untagged.streamKey, tracked.streamKey)
+        // A tagged game keeps its tag.
+        assertEquals("NHL", playerTrackedCard(untagged.copy(sport = "NHL"), directory).sport)
+    }
+
+    @Test
     fun `nothing is scored or raised while the player is stopped`() = runTest(mainDispatcherRule.dispatcher) {
         val pacers = game("Indiana Pacers at Philadelphia 76ers")
         val scores = MutableStateFlow(mapOf(pacers.streamKey to inPlay))
