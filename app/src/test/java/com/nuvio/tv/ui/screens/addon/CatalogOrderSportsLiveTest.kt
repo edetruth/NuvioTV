@@ -82,7 +82,9 @@ class CatalogOrderSportsLiveTest {
         val store = layoutStore(savedOrder = listOf(POPULAR_KEY, SPORTS_KEY, TOP_KEY), disabled = emptyList())
         val viewModel = newViewModel(store)
 
-        viewModel.moveDown(POPULAR_KEY)
+        viewModel.enterMoveMode(POPULAR_KEY)
+        assertEquals(1, viewModel.moveDuringDrag(POPULAR_KEY, 1))
+        viewModel.confirmMove()
 
         coVerify(timeout = 2_000) {
             store.setHomeCatalogOrderKeys(listOf(TOP_KEY, SPORTS_KEY, POPULAR_KEY))

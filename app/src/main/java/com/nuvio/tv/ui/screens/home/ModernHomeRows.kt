@@ -682,7 +682,7 @@ internal fun ModernRowSection(
                 ).roundToPx()
             }
             val cwHeightPx = with(density) { continueWatchingCardHeight.roundToPx() }
-            fun imageUrlAndKey(item: ModernCarouselItem): Pair<String, String>? {
+            fun imageUrlAndKey(item: ModernCarouselItem): Pair<String, MemoryCache.Key>? {
                 return when (val payload = item.payload) {
                     is ModernPayload.Catalog -> {
                         val url = item.imageUrl ?: return null
@@ -695,7 +695,9 @@ internal fun ModernRowSection(
                         )
                         val widthPx = with(density) { metrics.width.roundToPx() }
                         val heightPx = with(density) { metrics.height.roundToPx() }
-                        url to "${url}_${widthPx}x${heightPx}"
+                        val landscapeCustomPoster = useLandscapePosters && !alwaysShowLandscapeClearlogo &&
+                            !item.metaPreview?.landscapePoster.isNullOrBlank()
+                        url to cardImageMemoryCacheKey(url, widthPx, heightPx, item.cardImageFallbackUrl(landscapeCustomPoster))
                     }
                     is ModernPayload.CollectionFolder -> {
                         val url = item.imageUrl ?: return null
@@ -708,7 +710,9 @@ internal fun ModernRowSection(
                         )
                         val widthPx = with(density) { metrics.width.roundToPx() }
                         val heightPx = with(density) { metrics.height.roundToPx() }
-                        url to "${url}_${widthPx}x${heightPx}"
+                        val landscapeCustomPoster = useLandscapePosters && !alwaysShowLandscapeClearlogo &&
+                            !item.metaPreview?.landscapePoster.isNullOrBlank()
+                        url to cardImageMemoryCacheKey(url, widthPx, heightPx, item.cardImageFallbackUrl(landscapeCustomPoster))
                     }
                     is ModernPayload.ContinueWatching -> {
                         // Use the same model and cache key the card computes so the prefetch warms the entry the card actually reads.
@@ -720,14 +724,14 @@ internal fun ModernRowSection(
                             payload.item, blurUnwatchedEpisodes, continueWatchingUsesEpisodeThumbnails(continueWatchingCardStyle, useEpisodeThumbnails),
                             continueWatchingCardStyle != ContinueWatchingCardStyle.CARD
                         )
-                        model to continueWatchingImageCacheKey(model, cwWidthPx, cwHeightPx, blur)
+                        model to MemoryCache.Key(continueWatchingImageCacheKey(model, cwWidthPx, cwHeightPx, blur))
                     }
                 }
             }
             fun enqueueIfNeeded(item: ModernCarouselItem, widthPx: Int, heightPx: Int) {
                 if (widthPx <= 0 || heightPx <= 0) return
                 val (url, cacheKey) = imageUrlAndKey(item) ?: return
-                if (imageLoader.memoryCache?.get(MemoryCache.Key(cacheKey)) != null) return
+                if (imageLoader.memoryCache?.get(cacheKey) != null) return
                 val payload = item.payload
                 val blur = payload is ModernPayload.ContinueWatching &&
                     continueWatchingShouldBlur(
@@ -1297,15 +1301,18 @@ private fun ModernCarouselCard(
         is ModernPayload.CollectionFolder -> ContentScale.FillBounds
         else -> ContentScale.Crop
     }
-    // Keep decode target stable across expand/collapse to avoid recreating image requests/painters
-    // purely due to animated width changes.
     val maxRequestCardWidth = if (focusedPosterBackdropExpandEnabled) {
         maxOf(cardWidth, expandedCardWidth)
     } else {
         cardWidth
     }
-    val requestWidthPx = remember(maxRequestCardWidth, density) {
-        with(density) { maxRequestCardWidth.roundToPx() }.coerceAtLeast(1)
+    val imageRequestCardWidth = if (focusedPosterBackdropExpandEnabled && isBackdropExpanded) {
+        maxRequestCardWidth
+    } else {
+        cardWidth
+    }
+    val requestWidthPx = remember(imageRequestCardWidth, density) {
+        with(density) { imageRequestCardWidth.roundToPx() }.coerceAtLeast(1)
     }
     val requestHeightPx = remember(cardHeight, density) {
         with(density) { cardHeight.roundToPx() }.coerceAtLeast(1)
@@ -1315,24 +1322,16 @@ private fun ModernCarouselCard(
     var customPosterLoadFailed by remember(imageUrl) { mutableStateOf(false) }
     val imageModel = remember(context, imageUrl, requestWidthPx, requestHeightPx, revalidationKey) {
         imageUrl?.let {
+            val isLandscapeCustomPoster = useLandscapeOverlayTreatment && !effectiveIgnoreLandscapePoster && !item.metaPreview?.landscapePoster.isNullOrBlank()
+            val fallbackUrl = item.cardImageFallbackUrl(isLandscapeCustomPoster)
             val builder = ImageRequest.Builder(context)
                 .data(it)
                 .crossfade(true)
-                .memoryCacheKey("${it}_${requestWidthPx}x${requestHeightPx}_v$revalidationKey")
+                .memoryCacheKey(cardImageMemoryCacheKey(it, requestWidthPx, requestHeightPx, fallbackUrl, revalidationKey))
                 .size(width = requestWidthPx, height = requestHeightPx)
             if (revalidationKey > 0) {
-                builder.placeholderMemoryCacheKey("${it}_${requestWidthPx}x${requestHeightPx}_v${revalidationKey - 1}")
-            }
-            val isLandscapeCustomPoster = useLandscapeOverlayTreatment && !effectiveIgnoreLandscapePoster && !item.metaPreview?.landscapePoster.isNullOrBlank()
-            val fallbackUrl = if (isLandscapeCustomPoster) {
-                // Landscape custom poster -> fall back to original backdrop
-                item.metaPreview?.background ?: item.heroPreview.backdrop ?: item.metaPreview?.rawPosterUrl
-            } else {
-                item.metaPreview?.rawPosterUrl
-            }
-            if (!fallbackUrl.isNullOrBlank() && fallbackUrl != it) {
-                builder.memoryCacheKeyExtras(
-                    mapOf(com.nuvio.tv.core.image.CustomPosterFallbackInterceptor.FALLBACK_URL_KEY to fallbackUrl)
+                builder.placeholderMemoryCacheKey(
+                    cardImageMemoryCacheKey(it, requestWidthPx, requestHeightPx, fallbackUrl, revalidationKey - 1)
                 )
             }
             builder.build()
