@@ -606,6 +606,8 @@ private fun LiveGamesPanel(
     var focusedKey by remember { mutableStateOf<String?>(null) }
     var focusedIndex by remember { mutableIntStateOf(-1) }
     var panelHasFocus by remember { mutableStateOf(false) }
+    // A key was pressed in the panel since it opened: from then on focus is where the user put it.
+    var userKeyed by remember { mutableStateOf(false) }
     // live.20: the footer names the focused row in full; nothing while the filter has focus.
     val focusedBoard = remember(state, focusedKey, nowRow) {
         (state.rows.firstOrNull { it.item.streamKey == focusedKey } ?: nowRow?.takeIf { it.item.streamKey == focusedKey })
@@ -631,12 +633,25 @@ private fun LiveGamesPanel(
     }
 
     // #140: focus opens on Now playing; on the first game when the game playing is unknown, else the empty line.
+    // TV QA (54-panel): the panel opened with no focus at all (no ring, blank footer). Focus is now asked for until it
+    // lands (a request in the panel's first frames can come to nothing), and once the game playing is known focus
+    // moves to it from wherever the panel put it meanwhile (the filter); only a line the user moved to is kept.
     LaunchedEffect(nowRow == null, firstKey == null) {
-        if (filterFocused) return@LaunchedEffect
-        when {
-            nowRow != null -> runCatching { nowFocusRequester.requestFocus() }
-            firstKey != null -> focusLine(firstKey)
-            else -> runCatching { emptyFocusRequester.requestFocus() }
+        repeat(PANEL_OPEN_FOCUS_FRAMES) {
+            val target = panelOpenFocus(nowRow != null, firstKey != null, userKeyed, panelHasFocus || filterFocused || filterMenuOpen)
+            val landed = when (target) {
+                PanelOpenFocus.KEEP -> true
+                PanelOpenFocus.NOW_PLAYING -> focusedKey == nowKey && panelHasFocus
+                PanelOpenFocus.FIRST_LINE, PanelOpenFocus.EMPTY_LINE -> panelHasFocus && !filterFocused
+            }
+            if (landed) return@LaunchedEffect
+            when (target) {
+                PanelOpenFocus.NOW_PLAYING -> runCatching { nowFocusRequester.requestFocus() }
+                PanelOpenFocus.FIRST_LINE -> firstKey?.let { focusLine(it) }
+                PanelOpenFocus.EMPTY_LINE -> runCatching { emptyFocusRequester.requestFocus() }
+                PanelOpenFocus.KEEP -> Unit
+            }
+            withFrameNanos { }
         }
     }
     // #164/#167: an update keeps focus on the same line, by key, and keeps it in view (scrolled only when it left
@@ -670,7 +685,7 @@ private fun LiveGamesPanel(
             key != null && key != nowKey && guide.indexOf(key) >= 0 -> focusLine(key)
             key != null && key != nowKey -> guide.nearestFocusable(focusedIndex)?.let { focusLine(it) }
                 ?: runCatching { nowFocusRequester.requestFocus() }
-            filterFocused || (key == null && filterShown && nowRow == null) -> runCatching { filterFocusRequester.requestFocus() }
+            filterFocused || (key == null && filterShown && nowRow == null && firstKey == null) -> runCatching { filterFocusRequester.requestFocus() }
             nowRow != null -> runCatching { nowFocusRequester.requestFocus() }
             firstKey != null -> focusLine(firstKey)
         }
@@ -693,7 +708,10 @@ private fun LiveGamesPanel(
             .focusProperties { onExit = { cancelFocusChange() } }
             .onPreviewKeyEvent {
                 val native = it.nativeKeyEvent
-                if (native.action == KeyEvent.ACTION_DOWN) onKey(native.keyCode)
+                if (native.action == KeyEvent.ACTION_DOWN) {
+                    userKeyed = true
+                    onKey(native.keyCode)
+                }
                 false
             }
             .focusGroup()
@@ -949,6 +967,26 @@ private val PANEL_FOOTER_START = PANEL_ROW_ROOM + 8.dp
 
 /** Above and below the rule under the pinned Now playing row (#145). */
 private val NOW_PLAYING_GAP = 6.dp
+
+/** Where focus goes as the panel opens (#140, TV QA 54-panel): [panelOpenFocus]. */
+internal enum class PanelOpenFocus { NOW_PLAYING, FIRST_LINE, EMPTY_LINE, KEEP }
+
+/**
+ * Where focus goes as the panel opens (#140): the game playing's row once it is known ([nowPlaying]), else the list's
+ * first line ([firstLine]), else the empty line. Focus stays where it is only once the user moved it ([userKeyed]) and
+ * the panel holds it ([hasFocus]): focus the panel itself put on the filter while the game playing was unknown moves on
+ * to Now playing (TV QA: blank footer, no ring).
+ */
+internal fun panelOpenFocus(nowPlaying: Boolean, firstLine: Boolean, userKeyed: Boolean, hasFocus: Boolean): PanelOpenFocus =
+    when {
+        userKeyed && hasFocus -> PanelOpenFocus.KEEP
+        nowPlaying -> PanelOpenFocus.NOW_PLAYING
+        firstLine -> PanelOpenFocus.FIRST_LINE
+        else -> PanelOpenFocus.EMPTY_LINE
+    }
+
+/** How many frames the panel keeps asking for its opening focus before it leaves it to the loss watch below. */
+private const val PANEL_OPEN_FOCUS_FRAMES = 30
 
 /** How far past the panel its fade runs out (#140, #145). */
 private val PANEL_FADE = 80.dp
