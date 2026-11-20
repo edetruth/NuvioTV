@@ -322,7 +322,9 @@ class SportsLiveZapViewModel internal constructor(
                 endedKeys = ended,
                 followed = followed,
                 nowMs = System.currentTimeMillis(),
-                addonOrder = claimed.map { it.addon.id }.distinct()
+                addonOrder = claimed.map { it.addon.id }.distinct(),
+                // The section's and Home's sorting of this load (live.20): no second merge of the same games.
+                load = load
                 // Unrouted two-team games take their teams' league here too (P4), as in the section's lists.
             ).map { SportsLiveTeamIdentity.identified(SportsLiveSportInference.infer(it, TeamDirectory.shared)) }
                 // Debug builds: rows that look like one game but did not merge (live.18).

@@ -36,6 +36,7 @@ import com.nuvio.tv.core.sportslive.SportsLiveDebugTiming
 import com.nuvio.tv.core.sportslive.SportsLiveListCache
 import com.nuvio.tv.core.sportslive.SportsLiveListSnapshot
 import com.nuvio.tv.core.sportslive.SportsLiveListSnapshots
+import com.nuvio.tv.core.sportslive.SportsLiveSharedBuckets
 import com.nuvio.tv.data.local.SportsLiveListSnapshotStore
 import com.nuvio.tv.domain.model.ClaimedCatalog
 import com.nuvio.tv.BuildConfig
@@ -143,6 +144,8 @@ class SportsLiveViewModel internal constructor(
     private val listCache: SportsLiveListCache = SportsLiveListCache.NONE,
     /** The team directory's and identities' revisions as one number: a list bucketed under another is not reused. */
     private val directoryStamp: () -> Long = { 0L },
+    /** The one sorting per load shared with Home's row and the player's panel (live.20); null: [bucket] on its own (tests). */
+    private val sharedBuckets: SportsLiveSharedBuckets? = null,
     // Where the list is bucketed and pinned, and the boards built; tests pass their dispatcher, so it runs in virtual time.
     private val computeDispatcher: CoroutineDispatcher
 ) : ViewModel() {
@@ -205,7 +208,8 @@ class SportsLiveViewModel internal constructor(
         standings = standingsRepository.books,
         ensureStandings = standingsRepository::ensure,
         listCache = listStore,
-        directoryStamp = { TeamDirectory.shared.revision.value * 31 + TeamIdentityBook.shared.revision.value },
+        directoryStamp = { SportsLiveSharedBuckets.currentStamp() },
+        sharedBuckets = SportsLiveSharedBuckets.shared,
         computeDispatcher = Dispatchers.Default
     )
 
@@ -322,7 +326,7 @@ class SportsLiveViewModel internal constructor(
             reused.tabs
         } else {
             val startedAt = System.nanoTime()
-            bucket(items, now, addonOrder).also { tabs ->
+            (sharedBuckets?.all(latest, claimedKeys, addonOrder, now, stamp) ?: bucket(items, now, addonOrder)).also { tabs ->
                 SportsLiveDebugTiming.log {
                     "sportsOpen stage=bucket ms=${(System.nanoTime() - startedAt) / 1_000_000} t=${sinceOpenMs()} items=${items.size} " +
                         tabs.entries.joinToString(" ") { (tab, list) -> "${tab.name}=${list.size}" }
@@ -406,17 +410,47 @@ class SportsLiveViewModel internal constructor(
         }
     }.flowOn(computeDispatcher)
 
+    /** What one full state build read, and what it built (live.20): a focus move alone reuses it ([stateForFocus]). */
+    private class StateBuild(
+        val pinned: Bucketed,
+        val endedKeys: Set<String>,
+        val selection: Selection,
+        val inputs: EndedInputs,
+        val mode: ScoresMode?,
+        val linkDead: Map<String, SportsLiveLinkVerdicts.Dead>,
+        val mySports: MySports,
+        val tick: Long,
+        /** Live now as built, before the keep step (null: no Live now tab). */
+        val builtLiveNow: List<SportsLiveItem>?,
+        val state: SportsLiveUiState
+    )
+
+    // Each clock tick counts, so a tick (with nothing else new) still builds again.
+    private var clockTicks = 0L
+    private var lastBuild: StateBuild? = null
+    // Live now as the last full build made it, before the keep step.
+    private var lastBuiltLiveNow: List<SportsLiveItem>? = null
+
+    /** Full state builds; tests read it. */
+    @VisibleForTesting
+    internal var stateBuilds = 0
+
     val uiState: StateFlow<SportsLiveUiState> =
         combine(
             pinned,
             repo.endedKeys,
             combine(selectionState, scoresMode, mySports) { selection, mode, sports -> Triple(selection, mode, sports) },
             combine(endedInputs, linkChecker?.dead ?: flowOf(emptyMap())) { inputs, linkDead -> inputs to linkDead },
-            clock
-        ) { pinned, endedKeys, (selection, mode, sports), (inputs, linkDead), _ ->
-            buildState(pinned, endedKeys, selection, inputs, mode, linkDead, sports)
+            clock.map { ++clockTicks }
+        ) { pinned, endedKeys, (selection, mode, sports), (inputs, linkDead), tick ->
+            // A focus move alone (live.20): the last build with the new selection, unless it changes which rows Live now keeps.
+            stateForFocus(pinned, endedKeys, selection, inputs, mode, linkDead, sports, tick)
+                ?: buildState(pinned, endedKeys, selection, inputs, mode, linkDead, sports).also { state ->
+                    stateBuilds++
+                    lastBuild = StateBuild(pinned, endedKeys, selection, inputs, mode, linkDead, sports, tick, lastBuiltLiveNow, state)
+                }
         }
-            // A focus move rebuilds the state: never on the main thread (#143).
+            // A rebuild never runs on the main thread (#143).
             .flowOn(computeDispatcher)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SportsLiveUiState())
 
@@ -650,7 +684,7 @@ class SportsLiveViewModel internal constructor(
         previewController.onVisible(visible)
         if (visible == screenVisible) return
         screenVisible = visible
-        restartAutoRefresh()
+        restartAutoRefresh(returning = visible)
     }
 
     /** Ambient mode, the screensaver or a dream shows over the section (#71): no preview, no refresh. */
@@ -661,14 +695,23 @@ class SportsLiveViewModel internal constructor(
         restartAutoRefresh()
     }
 
-    private fun restartAutoRefresh() {
+    /** [returning]: the section came back on screen (from the player, another screen, or the app in the background). */
+    private fun restartAutoRefresh(returning: Boolean = false) {
         autoRefreshJob?.cancel()
         autoRefreshJob = null
         if (!screenVisible || ambientShowing) return
-        val plan = SportsLiveRefreshPlan.of(selectionState.value.tab) ?: return
+        val plan = SportsLiveRefreshPlan.of(selectionState.value.tab)
+        if (plan == null && !returning) return
         autoRefreshJob = viewModelScope.launch {
             // The section's opening load (or a manual refresh) first: it fetched this tab's catalogs too.
             fullLoadJob?.join()
+            // live.20 C1: back on the section with a list over RETURN_STALE_MS old, the live catalogs (and the tab's own)
+            // refresh at once, whatever the tab's cadence: the list must not wait minutes for its next round.
+            if (returning) {
+                val kinds = setOf(SportsLiveKind.EVENTS) + plan?.kinds.orEmpty()
+                if (ageOf(kinds) >= RETURN_STALE_MS) refreshKinds(kinds)
+            }
+            if (plan == null) return@launch
             val every = plan.everyMs
             if (every == null) {
                 // Opened, not on a timer: only when its last fetch is older than its openStaleMs.
@@ -727,6 +770,46 @@ class SportsLiveViewModel internal constructor(
         }
     }
 
+    /**
+     * The last build's state for a selection that differs from its own only in the focused card (live.20: a D-pad move
+     * rebuilt every tab's scoping, chips and counts): the same lists, with [selection]'s card selected. Null when anything
+     * else changed, or when the new focus changes the rows Live now keeps ([sportsLiveKeepFocused]: a card a load dropped
+     * leaves once focus moves off it), which takes a full build.
+     */
+    private fun stateForFocus(
+        pinned: Bucketed,
+        endedKeys: Set<String>,
+        selection: Selection,
+        inputs: EndedInputs,
+        mode: ScoresMode?,
+        linkDead: Map<String, SportsLiveLinkVerdicts.Dead>,
+        mySports: MySports,
+        tick: Long
+    ): SportsLiveUiState? {
+        val last = lastBuild ?: return null
+        if (last.pinned !== pinned || last.endedKeys !== endedKeys || last.inputs !== inputs || last.linkDead !== linkDead ||
+            last.tick != tick || last.mode != mode || last.mySports != mySports
+        ) {
+            return null
+        }
+        if (last.selection.copy(itemId = null) != selection.copy(itemId = null)) return null
+        val built = last.builtLiveNow
+        if (built != null) {
+            val focusedId = selection.itemId.takeIf { selection.tab == SportsLiveTab.LIVE_NOW }
+            val kept = if (selection.browsing && selection.tab == SportsLiveTab.LIVE_NOW) {
+                sportsLiveKeepShown(shownLiveNow, built)
+            } else {
+                sportsLiveKeepFocused(shownLiveNow, built, focusedId)
+            }
+            val shown = SportsLiveHiddenTitles.filter(kept, hiddenNow)
+            val shownBefore = shownLiveNow
+            if (shown.size != shownBefore.size || shown.indices.any { shown[it] !== shownBefore[it] }) return null
+        }
+        val visible = last.state.visibleItems
+        val selectedId = selection.itemId?.takeIf { id -> visible.any { it.id == id } } ?: visible.firstOrNull()?.id
+        return last.state.copy(selectedItemId = selectedId)
+    }
+
     private fun buildState(
         bucketed: Bucketed,
         endedKeys: Set<String>,
@@ -740,6 +823,7 @@ class SportsLiveViewModel internal constructor(
         mySports: MySports = MySports.DEFAULT
     ): SportsLiveUiState {
         lastMySports = mySports
+        lastBuiltLiveNow = null
         val hasClaimed = bucketed.hasClaimed
         // A live game whose lookup found no streams is not over (#145): it stays where it is, dimmed as
         // "no streams yet", and is looked up again later. Games found over (#60: ESPN, or their addon) move
@@ -803,6 +887,7 @@ class SportsLiveViewModel internal constructor(
                     }
                 }
                 val built = live + split.justEnded + overdueEnded.map { it.first } + linkEnded
+                lastBuiltLiveNow = built
                 // The focused card is never taken from under the user: kept in place until focus moves on. While the list
                 // holds focus no row leaves at all (F6): they go once it lets focus go.
                 val focusedId = selection.itemId.takeIf { selection.tab == SportsLiveTab.LIVE_NOW }
@@ -906,6 +991,9 @@ class SportsLiveViewModel internal constructor(
 
         /** After a tip-off, how long before the list is bucketed again (live.20 C1): clear of the start itself. */
         const val KICKOFF_SLACK_MS = 1_000L
+
+        /** Coming back to the section, a list this old refreshes at once (live.20). */
+        const val RETURN_STALE_MS = 3 * 60_000L
 
         /** A burst of learned logos counts once, this long after its last one (live.20 B1). */
         const val LOGO_DEBOUNCE_MS = 750L

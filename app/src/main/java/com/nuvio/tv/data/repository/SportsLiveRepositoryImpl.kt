@@ -5,6 +5,7 @@ import com.nuvio.tv.core.network.NetworkResult
 import com.nuvio.tv.core.sportslive.SportsLiveCatalogOptions
 import com.nuvio.tv.core.sportslive.SportsLiveCatalogPolicy
 import com.nuvio.tv.core.sportslive.SportsLiveDebugTiming
+import com.nuvio.tv.core.sportslive.SportsLiveSharedBuckets
 import com.nuvio.tv.core.sportslive.SportsLiveItemBucketer
 import com.nuvio.tv.core.sportslive.SportsLiveMySportsScope
 import com.nuvio.tv.core.sportslive.identify.TeamIdentityBook
@@ -67,6 +68,10 @@ class SportsLiveRepositoryImpl @Inject constructor(
 
     @VisibleForTesting
     internal var nowMs: () -> Long = { System.currentTimeMillis() }
+
+    /** The one sorting per load the section, Home and the player share (live.20). */
+    @VisibleForTesting
+    internal var sharedBuckets: SportsLiveSharedBuckets = SportsLiveSharedBuckets.shared
 
     @VisibleForTesting
     internal var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
@@ -275,10 +280,10 @@ class SportsLiveRepositoryImpl @Inject constructor(
                 emptyList()
             } else {
                 val keys = claimed.mapTo(HashSet()) { it.key }
-                val items = load.items.filter { it.catalogKey in keys }
                 // The user's addon order picks a merged game's primary.
                 val addonOrder = claimed.map { it.addon.id }.distinct()
-                val live = SportsLiveItemBucketer.bucketTab(items, SportsLiveTab.LIVE_NOW, nowMs(), addonOrder)
+                // The section's own sorting of this load, when it has one (live.20): never a second merge of the same games.
+                val live = sharedBuckets.tab(load, keys, addonOrder, SportsLiveTab.LIVE_NOW, nowMs())
                 // My sports scopes the row as it does the section (#146, #167): followed teams' games and channels stay;
                 // games of no identifiable sport go.
                 SportsLiveMySportsScope.scope(SportsLiveItemBucketer.pinFollowed(live, followed), mySports)

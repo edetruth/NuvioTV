@@ -4,6 +4,7 @@ import com.nuvio.tv.MainDispatcherRule
 import com.nuvio.tv.core.sportslive.SportsLiveItemBucketer
 import com.nuvio.tv.core.sportslive.SportsLiveListCache
 import com.nuvio.tv.core.sportslive.SportsLiveListSnapshot
+import com.nuvio.tv.core.sportslive.SportsLiveSharedBuckets
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.domain.model.Addon
 import com.nuvio.tv.domain.model.CatalogDescriptor
@@ -33,6 +34,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -80,8 +82,18 @@ class SportsLiveOpenSpeedTest {
         }
     }
 
-    private fun TestScope.newViewModel(cache: SportsLiveListCache, buckets: IntArray = IntArray(1)): SportsLiveViewModel {
-        val viewModel = SportsLiveViewModel(repo, listCache = cache, computeDispatcher = compute)
+    private fun TestScope.newViewModel(
+        cache: SportsLiveListCache,
+        buckets: IntArray = IntArray(1),
+        shared: SportsLiveSharedBuckets? = null
+    ): SportsLiveViewModel {
+        val viewModel = SportsLiveViewModel(
+            repo,
+            refreshClock = { testScheduler.currentTime },
+            listCache = cache,
+            sharedBuckets = shared,
+            computeDispatcher = compute
+        )
         viewModel.nowMs = { NOW + testScheduler.currentTime }
         viewModel.bucket = { items, now, order ->
             buckets[0]++
@@ -150,6 +162,81 @@ class SportsLiveOpenSpeedTest {
         assertEquals(loadsBefore, loads)
     }
 
+    @Test
+    fun `the section uses the sorting Home's row and the player's panel already made of the load`() = runTest {
+        val load = load(listOf(item("a", isLive = true), item("b", isLive = false, startMs = NOW + HOUR)))
+        latestFlow.value = load
+        val shared = SportsLiveSharedBuckets()
+        val keys = setOf(CLAIMED.key)
+        val order = listOf(CLAIMED.addon.id)
+        // Home's row asked first.
+        val homeLive = shared.tab(load, keys, order, SportsLiveTab.LIVE_NOW, NOW, stamp = 0L)
+        val buckets = IntArray(1)
+        val viewModel = newViewModel(SportsLiveListCache.NONE, buckets, shared)
+        runCurrent()
+        assertEquals(0, buckets[0])
+        assertEquals(listOf("a"), viewModel.uiState.value.tabs.getValue(SportsLiveTab.LIVE_NOW).map { it.id })
+        assertEquals(listOf("b"), viewModel.uiState.value.tabs.getValue(SportsLiveTab.UPCOMING).map { it.id })
+        // The player's panel gets the same one, not a new merge.
+        assertSame(homeLive, shared.tab(load, keys, order, SportsLiveTab.LIVE_NOW, NOW, stamp = 0L))
+    }
+
+    @Test
+    fun `a focus move builds no new state unless it changes the rows Live now keeps`() = runTest {
+        latestFlow.value = load(listOf(item("a", isLive = true), item("b", isLive = true), item("c", isLive = true)))
+        val viewModel = newViewModel(SportsLiveListCache.NONE)
+        runCurrent()
+        val builds = viewModel.stateBuilds
+        viewModel.selectItem("b")
+        runCurrent()
+        assertEquals("b", viewModel.uiState.value.selectedItemId)
+        viewModel.selectItem("c")
+        runCurrent()
+        assertEquals("c", viewModel.uiState.value.selectedItemId)
+        viewModel.selectItem("gone")
+        runCurrent()
+        assertEquals("a", viewModel.uiState.value.selectedItemId)
+        assertEquals(builds, viewModel.stateBuilds)
+
+        // A load that drops the focused card keeps it while focused; moving off it builds again and it leaves.
+        viewModel.selectItem("b")
+        runCurrent()
+        latestFlow.value = load(listOf(item("a", isLive = true), item("c", isLive = true)))
+        runCurrent()
+        assertEquals(listOf("a", "b", "c"), viewModel.uiState.value.visibleItems.map { it.id })
+        val afterLoad = viewModel.stateBuilds
+        viewModel.selectItem("c")
+        runCurrent()
+        assertEquals(listOf("a", "c"), viewModel.uiState.value.visibleItems.map { it.id })
+        assertEquals(afterLoad + 1, viewModel.stateBuilds)
+    }
+
+    @Test
+    fun `back on the section with a list over 3 minutes old, it refreshes at once`() = runTest {
+        latestFlow.value = load(listOf(item("a", isLive = true)))
+        val viewModel = newViewModel(SportsLiveListCache.NONE)
+        runCurrent()
+        // Upcoming refreshes every 10 minutes on its own.
+        viewModel.selectTab(SportsLiveTab.UPCOMING)
+        viewModel.onScreenVisible(true)
+        runCurrent()
+        val opened = loads
+
+        // Away (the player, another screen) for 2 minutes: nothing.
+        viewModel.onScreenVisible(false)
+        advanceTimeBy(2 * MINUTE)
+        viewModel.onScreenVisible(true)
+        runCurrent()
+        assertEquals(opened, loads)
+
+        // Away for 2 more: the list is 4 minutes old, so it refreshes on return, not at 10.
+        viewModel.onScreenVisible(false)
+        advanceTimeBy(2 * MINUTE)
+        viewModel.onScreenVisible(true)
+        runCurrent()
+        assertEquals(opened + 1, loads)
+    }
+
     private fun load(items: List<SportsLiveItem>) =
         SportsLiveLoad(items = items, failures = emptyList(), loadedAtMs = NOW, claimedKeys = setOf(CLAIMED.key))
 
@@ -186,6 +273,7 @@ class SportsLiveOpenSpeedTest {
     private companion object {
         const val NOW = 1_700_000_000_000L
         const val MINUTE = 60_000L
+        const val HOUR = 60 * MINUTE
 
         val CLAIMED: ClaimedCatalog = run {
             val catalog = CatalogDescriptor(type = ContentType.fromString("tv"), rawType = "tv", id = "events", name = "Events")

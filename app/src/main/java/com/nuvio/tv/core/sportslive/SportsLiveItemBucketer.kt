@@ -211,7 +211,7 @@ object SportsLiveItemBucketer {
         addonOrder: List<String> = firstSeenAddons(items)
     ): List<SportsLiveItem> = bucketClocked(reclock(items, nowMs), tab, nowMs, addonOrder)
 
-    private fun bucketClocked(
+    internal fun bucketClocked(
         items: List<SportsLiveItem>,
         tab: SportsLiveTab,
         nowMs: Long,

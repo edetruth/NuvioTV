@@ -5,6 +5,7 @@ import com.nuvio.tv.core.sportslive.EndedGame
 import com.nuvio.tv.core.sportslive.GameStatus
 import com.nuvio.tv.core.sportslive.SportsLiveEndedGames
 import com.nuvio.tv.core.sportslive.SportsLiveItemBucketer
+import com.nuvio.tv.core.sportslive.SportsLiveSharedBuckets
 import com.nuvio.tv.core.sportslive.SportsLiveSportKind
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.scores.FollowTarget
@@ -21,6 +22,7 @@ import com.nuvio.tv.core.sportslive.scores.TeamLogoBook
 import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveTab
+import com.nuvio.tv.domain.repository.SportsLiveLoad
 import kotlin.math.abs
 
 /**
@@ -34,9 +36,18 @@ internal fun liveGamesPanelItems(
     endedKeys: Set<String>,
     followed: List<FollowedTeam>,
     nowMs: Long,
-    addonOrder: List<String> = emptyList()
+    addonOrder: List<String> = emptyList(),
+    /** The load [items] come from: its Live now is the one the section and Home share ([SportsLiveSharedBuckets], live.20). */
+    load: SportsLiveLoad? = null,
+    shared: SportsLiveSharedBuckets = SportsLiveSharedBuckets.shared
 ): List<SportsLiveItem> =
-    SportsLiveItemBucketer.bucketTab(items.filter { it.catalogKey in claimedKeys }, SportsLiveTab.LIVE_NOW, nowMs, addonOrder)
+    (
+        if (load != null) {
+            shared.tab(load, claimedKeys, addonOrder, SportsLiveTab.LIVE_NOW, nowMs)
+        } else {
+            SportsLiveItemBucketer.bucketTab(items.filter { it.catalogKey in claimedKeys }, SportsLiveTab.LIVE_NOW, nowMs, addonOrder)
+        }
+        )
         .let { SportsLiveItemBucketer.pinFollowed(it, followed) }
         .filterNot { it.hasEnded(endedKeys) }
 

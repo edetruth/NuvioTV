@@ -428,13 +428,15 @@ class SportsLivePlayViewModel @Inject constructor(
         if (item.kind != SportsLiveKind.EVENTS || SportsLiveZapSessions.activeFor(item.id) != null) return
         val lineup = try {
             val claimed = repo.claimedCatalogs.first()
+            val load = repo.latest.value
             liveGamesPanelItems(
-                items = repo.latest.value?.items.orEmpty(),
+                items = load?.items.orEmpty(),
                 claimedKeys = claimed.mapTo(HashSet()) { it.key },
                 endedKeys = repo.endedKeys.value,
                 followed = repo.followedTeams.first(),
                 nowMs = System.currentTimeMillis(),
-                addonOrder = claimed.map { it.addon.id }.distinct()
+                addonOrder = claimed.map { it.addon.id }.distinct(),
+                load = load
             )
         } catch (e: CancellationException) {
             throw e
