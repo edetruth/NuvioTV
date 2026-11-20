@@ -4,6 +4,7 @@ import com.nuvio.tv.core.sportslive.EndedGame
 import com.nuvio.tv.core.sportslive.EndedSignal
 import com.nuvio.tv.core.sportslive.GameStatus
 import com.nuvio.tv.core.sportslive.GameStatusStrings
+import com.nuvio.tv.core.sportslive.SportsLiveReadyMark
 import com.nuvio.tv.core.sportslive.SportsLiveSportKind
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.scores.ChipScore
@@ -255,7 +256,8 @@ class SportsLiveSlimPanelTest {
         val event = live.copy(item = game("t", now).copy(meta = game("t", now).meta.copy(name = "ATP 250 - Stockholm Open")), chip = null, art = null, twoSided = false)
         val eventLine = panelLineOf(event, strings, kickoff = null)
         assertEquals(PanelLineKind.EVENT, eventLine.kind)
-        assertEquals("LIVE", eventLine.clock)
+        // live.20 F5: no "LIVE" word on every row (the LIVE header says it), only the red dot.
+        assertEquals(null, eventLine.clock)
         assertTrue(eventLine.live)
 
         val channel = live.copy(item = ch, group = ScoreboardGroup.CHANNELS, chip = null, art = null, twoSided = false, status = GameStatus.Channel)
@@ -327,6 +329,111 @@ class SportsLiveSlimPanelTest {
         val line = panelLineOf(row, strings, kickoff = null) { panelSideName(it, null) { place -> place in places } }
         assertEquals("Southern Utah", line.first)
         assertEquals("TEX", line.second)
+    }
+
+    // ---- live.20 F5 / #179: the panel's tag column, names and readiness ----
+
+    @Test
+    fun `a panel tag is one short word that always fits the fixed column`() {
+        // Short league and sport tags stay as they are.
+        listOf("NBA", "NCAAM", "TENNIS", "CRICKET", "HOCKEY", "SOCCER", "BASEBALL", "FOOTBALL", "ATP", "U17 WC", "SERIE A")
+            .forEach { assertEquals(it, panelTag(it, null)) }
+        // Long sport words take their panel word, the row's sport unknown or not.
+        assertEquals("MOTOR", panelTag("MOTORSPORT", null))
+        assertEquals("MOTOR", panelTag("Motorsport", SportsLiveSportKind.MOTORSPORT))
+        assertEquals("BBALL", panelTag("BASKETBALL", null))
+        assertEquals("WRESTLE", panelTag("WRESTLING", null))
+        assertEquals("HOCKEY", panelTag("ICE HOCKEY", null))
+        // Long league tags take their short form.
+        assertEquals("BUNDES", panelTag("BUNDESLIGA", SportsLiveSportKind.SOCCER))
+        assertEquals("NATIONS", panelTag("NATIONS LG", null))
+        assertEquals("EUROLG", panelTag("EUROLEAGUE", SportsLiveSportKind.BASKETBALL))
+        // Any other long tag: the row's sport word, else its first word, else its start.
+        assertEquals("SOCCER", panelTag("EKSTRAKLASA", SportsLiveSportKind.SOCCER))
+        assertEquals("GRAND", panelTag("GRAND SLAM CUP", null))
+        assertEquals("EKSTRAKL", panelTag("EKSTRAKLASA", null))
+        assertEquals("", panelTag("  ", SportsLiveSportKind.SOCCER))
+
+        // Every word of the vocabulary fits the column.
+        SportsLiveSportKind.values().forEach { assertTrue(it.name, panelSportWord(it).length <= PANEL_TAG_MAX_CHARS) }
+        val longLeagueTags = listOf(
+            "WORLD CUP", "WOMEN'S WC", "U21 FRNDLY", "NATIONS LG", "EURO QUAL", "AFCON QUAL", "ASIAN CUP", "CHAMPNSHP",
+            "LEAGUE CUP", "BUNDESLIGA", "DFB POKAL", "EREDIVISIE", "SUPER LIG", "SAUDI PRO", "LIGA 1 ROU", "EUROLEAGUE",
+            "SOME LONG UNKNOWN LEAGUE"
+        )
+        longLeagueTags.forEach { assertTrue(it, panelTag(it, null).length in 1..PANEL_TAG_MAX_CHARS) }
+    }
+
+    @Test
+    fun `a live row with no clock shows the dot alone, and a real clock stays`() {
+        val art = GameArt(GameArtTeam("Slovenia", "Slovenia", null), GameArtTeam("Indonesia", "Indonesia", null), null, null, false)
+        val row = ScoreboardRow(
+            item = game("s", now - minute, sport = "Tennis"), group = ScoreboardGroup.LIVE, chip = null, art = art,
+            firstFollowed = false, secondFollowed = false, probablyEnded = false, status = GameStatus.Live(null), twoSided = true
+        )
+        val line = panelLineOf(row, strings, kickoff = null)
+        assertEquals(null, line.clock)
+        assertTrue(line.live)
+        val clocked = row.copy(chip = ScoreChip.Live("Q4 11:22", ChipScore(1, 0)))
+        assertEquals("11:22", panelLineOf(clocked, strings, kickoff = null).clock)
+    }
+
+    @Test
+    fun `the two names share the line by need - a short one keeps its width, the long one takes the rest`() {
+        // Both fit: each its own.
+        assertEquals(40 to 60, panelSideWidths(40, 60, 120))
+        // The first fits in half: the second takes the rest.
+        assertEquals(30 to 70, panelSideWidths(30, 200, 100))
+        // The second fits in half: the first takes the rest.
+        assertEquals(70 to 30, panelSideWidths(200, 30, 100))
+        // Both long: half each.
+        assertEquals(50 to 50, panelSideWidths(200, 300, 100))
+        assertEquals(0 to 0, panelSideWidths(10, 10, -5))
+    }
+
+    @Test
+    fun `a player's side steps down to last names, a team's never`() {
+        assertEquals(listOf("Neal Skupski / Joe Salisbury", "Skupski / Salisbury"), panelSideChoices("Neal Skupski / Joe Salisbury", individual = true))
+        assertEquals(listOf("Novak Djokovic", "Djokovic"), panelSideChoices("Novak Djokovic", individual = true))
+        assertEquals(listOf("Arevalo & Pavic", "Arevalo / Pavic"), panelSideChoices("Arevalo & Pavic", individual = true))
+        assertEquals(listOf("Slovenia"), panelSideChoices("Slovenia", individual = true))
+        assertEquals(listOf("Real Madrid"), panelSideChoices("Real Madrid", individual = false))
+        assertTrue(SportsLiveSportKind.TENNIS in PANEL_INDIVIDUAL_SPORTS)
+        assertFalse(SportsLiveSportKind.SOCCER in PANEL_INDIVIDUAL_SPORTS)
+
+        // A player's full name is never cut as a team's nickname.
+        assertEquals("Neal Skupski / Joe Salisbury", panelSideName("Neal Skupski / Joe Salisbury", null, individual = true) { true })
+    }
+
+    @Test
+    fun `panel names and titles lose the addon's leading emoji, marks and bracketed prefix`() {
+        assertEquals("Portugal Free Practice", panelCleanText("\uD83D\uDCFA Portugal Free Practice"))
+        assertEquals("Moto2 | Round 22", panelCleanText("\u200B\uFE0FMoto2 | Round 22"))
+        assertEquals("Lakers", panelCleanText("[NBA 11/19] Lakers"))
+        assertEquals("Lakers", panelCleanText("\uD83C\uDFC0 [NBA 11/19] Lakers"))
+        assertEquals("76ers", panelCleanText("76ers"))
+        assertEquals("(W) Final", panelCleanText("(W) Final"))
+        // Nothing left: as it was.
+        assertEquals("[TBD]", panelCleanText("[TBD]"))
+
+        val event = ScoreboardRow(
+            item = game("p", now - minute, sport = "Motorsport").let { it.copy(meta = it.meta.copy(name = "\uD83D\uDCFA Portugal Free Practice")) },
+            group = ScoreboardGroup.LIVE, chip = null, art = null,
+            firstFollowed = false, secondFollowed = false, probablyEnded = false, status = GameStatus.Live(null), twoSided = false
+        )
+        assertEquals("Portugal Free Practice", panelLineOf(event, strings, kickoff = null).title)
+    }
+
+    @Test
+    fun `Ready always shows on a panel row, No stream yet only under focus, the row dimmed meanwhile`() {
+        assertEquals(SportsLiveReadyMark.READY, panelReadyMarkShown(SportsLiveReadyMark.READY, focused = false))
+        assertEquals(SportsLiveReadyMark.READY, panelReadyMarkShown(SportsLiveReadyMark.READY, focused = true))
+        assertEquals(null, panelReadyMarkShown(SportsLiveReadyMark.NO_STREAM, focused = false))
+        assertEquals(SportsLiveReadyMark.NO_STREAM, panelReadyMarkShown(SportsLiveReadyMark.NO_STREAM, focused = true))
+        assertEquals(null, panelReadyMarkShown(null, focused = true))
+        assertTrue(panelNoStreamDimmed(SportsLiveReadyMark.NO_STREAM, focused = false))
+        assertFalse(panelNoStreamDimmed(SportsLiveReadyMark.NO_STREAM, focused = true))
+        assertFalse(panelNoStreamDimmed(SportsLiveReadyMark.READY, focused = false))
     }
 
     private val strings = GameStatusStrings(

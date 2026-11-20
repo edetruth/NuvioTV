@@ -4175,7 +4175,7 @@
     <string name="sports_live_full_time_score">Full time · %1$s</string>
     <string name="sports_live_full_time_actions">Stay for postgame · Next live game →</string>
     <string name="sports_live_watch_both">Watch both</string>
-    <string name="sports_live_panel_footer_hint">Hold OK: more options · Back: close</string>
+    <string name="sports_live_panel_footer_hint">OK switch · Hold OK more · Back close</string>
     <string name="sports_live_panel_box_score_hint">Box score ›</string>
     <string name="sports_live_watch_postgame">Watch postgame</string>
     <string name="sports_live_panel_now_playing">NOW PLAYING</string>

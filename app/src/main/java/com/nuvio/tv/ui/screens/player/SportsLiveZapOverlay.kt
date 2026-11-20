@@ -572,7 +572,7 @@ private fun LiveGamesPanel(
     onKey: () -> Unit,
     /** The panel is open (false while it fades out): only then is lost focus given back. */
     open: Boolean,
-    /** ✓ ready / ⚠ no working stream by stream key (#147); a game with none has no mark. */
+    /** Ready / no working stream by stream key (#147, live.20 1b); a game with none has no mark. */
     readiness: Map<String, SportsLiveReadyMark> = emptyMap()
 ) {
     // #140: the list starts at its top, never scrolled to centre one.
@@ -708,61 +708,33 @@ private fun LiveGamesPanel(
         Column(modifier = Modifier.padding(horizontal = PANEL_PADDING, vertical = NuvioTheme.spacing.lg)) {
             Row(
                 // #167: while previews may play, the corner's room is kept, so the list never jumps under focus.
+                // live.20: the title and the filter stack beside the corner, so its room is never an empty band.
                 modifier = Modifier
                     .padding(horizontal = PANEL_ROW_ROOM)
                     .then(if (previewsAllowed) Modifier.height(PANEL_PREVIEW_HEIGHT) else Modifier),
-                horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)
+                horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // One line (#140): no info card under it.
-                Text(
-                    text = stringResource(R.string.sports_live_zap_panel_title),
-                    style = SportsLiveTokens.style(SportsLiveTokens.Type.PanelTitle),
-                    color = SportsLiveTokens.Colors.TextPrimary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f).align(Alignment.CenterVertically)
-                )
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(PANEL_HEADER_GAP)) {
+                    // One line (#140): no info card under it.
+                    Text(
+                        text = stringResource(R.string.sports_live_zap_panel_title),
+                        style = SportsLiveTokens.style(SportsLiveTokens.Type.PanelTitle),
+                        color = SportsLiveTokens.Colors.TextPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (filterShown) PanelFilter(state, onChip, onRowFocus, filterFocusRequester, { filterMenuOpen = it }) {
+                        filterFocused = it
+                        // No game row is focused while the filter is: none is revealed meanwhile.
+                        if (it) focusedKey = null
+                    }
+                }
                 // #83: the corner holds only the focused game's preview video, inside the panel; nothing while none plays.
                 val cornerPreview = preview?.takeIf { it.item.streamKey == focusedKey }
                 if (panelPreviewCornerShown(cornerPreview != null)) {
                     PanelPreviewCorner(preview = cornerPreview, player = previewPlayer)
                 }
-            }
-            if (filterShown) {
-                Spacer(modifier = Modifier.height(NuvioTheme.spacing.sm))
-                // #146: All is My sports' games while it scopes the panel; All sports lifts it.
-                val scoped = SportsLiveUiState.ALL_SPORTS_FILTER in state.chips
-                val allLabel = stringResource(if (scoped) R.string.sports_live_filter_my_sports else R.string.sports_live_filter_all)
-                val allSportsLabel = stringResource(R.string.sports_live_filter_all_sports)
-                val myTeamsLabel = stringResource(R.string.sports_live_filter_my_teams)
-                val options = state.chips.map { chip ->
-                    val name = when (chip) {
-                        null -> allLabel
-                        SportsLiveUiState.MY_TEAMS_FILTER -> myTeamsLabel
-                        SportsLiveUiState.ALL_SPORTS_FILTER -> allSportsLabel
-                        else -> sportFilterLabel(chip)
-                    }
-                    SportsLiveFilterOption(chip, name, gold = chip == SportsLiveUiState.MY_TEAMS_FILTER)
-                }
-                // V2 (`Player.dc.html` 1): one dropdown, "My sports ▾", no counts; OK opens its options.
-                SportsLiveFilterDropdown(
-                    options = options,
-                    selected = state.chip,
-                    onSelect = onChip,
-                    title = stringResource(R.string.sports_live_zap_panel_title),
-                    onOpenChange = { filterMenuOpen = it },
-                    modifier = Modifier
-                        .padding(horizontal = PANEL_ROW_ROOM)
-                        .onFocusChanged {
-                            filterFocused = it.isFocused
-                            // No game row is focused while the filter is: none is revealed meanwhile.
-                            if (it.isFocused) {
-                                focusedKey = null
-                                onRowFocus(null)
-                            }
-                        }
-                        .focusRequester(filterFocusRequester)
-                )
             }
             Spacer(modifier = Modifier.height(NuvioTheme.spacing.xs))
             // #140: the game playing, pinned under the filter. Up goes to the filter, Down to the list's first line.
@@ -892,8 +864,50 @@ private fun LiveGamesPanel(
 }
 
 /**
+ * The panel's filter (V2 `Player.dc.html` 1): one dropdown, "My sports ▾", no counts; OK opens its options (#146: All
+ * is My sports' games while it scopes the panel; All sports lifts it). [onFocused] follows its focus.
+ */
+@Composable
+private fun PanelFilter(
+    state: SportsLiveZapPanelState,
+    onChip: (String?) -> Unit,
+    onRowFocus: (String?) -> Unit,
+    focusRequester: FocusRequester,
+    onOpenChange: (Boolean) -> Unit,
+    onFocused: (Boolean) -> Unit
+) {
+    val scoped = SportsLiveUiState.ALL_SPORTS_FILTER in state.chips
+    val allLabel = stringResource(if (scoped) R.string.sports_live_filter_my_sports else R.string.sports_live_filter_all)
+    val allSportsLabel = stringResource(R.string.sports_live_filter_all_sports)
+    val myTeamsLabel = stringResource(R.string.sports_live_filter_my_teams)
+    val options = state.chips.map { chip ->
+        val name = when (chip) {
+            null -> allLabel
+            SportsLiveUiState.MY_TEAMS_FILTER -> myTeamsLabel
+            SportsLiveUiState.ALL_SPORTS_FILTER -> allSportsLabel
+            else -> sportFilterLabel(chip)
+        }
+        SportsLiveFilterOption(chip, name, gold = chip == SportsLiveUiState.MY_TEAMS_FILTER)
+    }
+    SportsLiveFilterDropdown(
+        options = options,
+        selected = state.chip,
+        onSelect = onChip,
+        title = stringResource(R.string.sports_live_zap_panel_title),
+        onOpenChange = onOpenChange,
+        modifier = Modifier
+            .onFocusChanged {
+                onFocused(it.isFocused)
+                if (it.isFocused) onRowFocus(null)
+            }
+            .focusRequester(focusRequester)
+    )
+}
+
+/**
  * The panel's top-right corner (#83, V2 P3): the focused game's muted 16:9 preview, shown only while one
- * loads or plays ([panelPreviewCornerShown]); no logos or time card in its place. Never focusable.
+ * loads or plays ([panelPreviewCornerShown]); no logos or time card in its place. Never focusable. Until its first
+ * frame its shutter is the panel fade's own black (live.20: never an empty black box), so nothing shows until it plays.
  */
 @Composable
 private fun PanelPreviewCorner(preview: SportsLivePreviewState.Playing?, player: SportsLivePreviewPlayer) {
@@ -905,7 +919,7 @@ private fun PanelPreviewCorner(preview: SportsLivePreviewState.Playing?, player:
             .background(if (preview?.rendering == true) NuvioTheme.colors.PosterFallback else Color.Transparent)
     ) {
         // The video is laid out while the stream loads, so its first frame can arrive.
-        if (preview != null) SportsLivePreviewVideo(player, overVideo = true)
+        if (preview != null) SportsLivePreviewVideo(player, overVideo = true, shutterColor = PANEL_PREVIEW_SHUTTER)
         if (preview?.rendering == true) {
             SportsLivePreviewLabel(modifier = Modifier.align(Alignment.TopStart).padding(NuvioTheme.spacing.xs))
         }
@@ -932,8 +946,20 @@ private val PANEL_WIDTH = SportsLiveTokens.Size.PanelWidth
 private val PANEL_PADDING = 4.dp
 private val PANEL_ROW_ROOM = 6.dp
 
-/** The corner preview: 16:9 at this width (#83), beside the title, inside the panel's width (F12). */
-private val PANEL_PREVIEW_WIDTH = 150.dp
+/**
+ * The corner preview: 16:9 at this width (#83), beside the title and the filter, inside the panel's width (F12); the
+ * stack beside it keeps 120 dp, room for "My sports ▾" or a sport's name.
+ */
+private val PANEL_PREVIEW_WIDTH = 132.dp
+
+/** Between the panel's title and its filter. */
+private val PANEL_HEADER_GAP = 6.dp
+
+/**
+ * The corner's video shutter before its first frame (live.20): about the panel fade's black where the corner sits,
+ * so a preview still loading (or one that never starts) leaves no black box over the game.
+ */
+private const val PANEL_PREVIEW_SHUTTER = 0xC7000000.toInt()
 
 /** The corner preview's height (16:9), kept for the title row while previews may play (#167). */
 private val PANEL_PREVIEW_HEIGHT = PANEL_PREVIEW_WIDTH * 9f / 16f

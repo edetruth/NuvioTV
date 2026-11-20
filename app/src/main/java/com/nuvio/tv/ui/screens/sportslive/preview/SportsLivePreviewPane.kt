@@ -25,11 +25,16 @@ import com.nuvio.tv.ui.theme.NuvioTheme
  * The preview's video in the details pane: a [PlayerView] with its default SurfaceView (composited
  * by the display hardware, as in the dual screen) showing [player]'s video. It never takes focus.
  * [overVideo]: drawn over the full player's own video (the in-player panel, #83), so its surface is
- * put above that one.
+ * put above that one. [shutterColor]: what shows before the first frame (black by default).
  */
 @OptIn(UnstableApi::class)
 @Composable
-internal fun SportsLivePreviewVideo(player: SportsLivePreviewPlayer, modifier: Modifier = Modifier, overVideo: Boolean = false) {
+internal fun SportsLivePreviewVideo(
+    player: SportsLivePreviewPlayer,
+    modifier: Modifier = Modifier,
+    overVideo: Boolean = false,
+    shutterColor: Int = android.graphics.Color.BLACK
+) {
     AndroidView(
         factory = { ctx ->
             PlayerView(ctx).apply {
@@ -39,7 +44,7 @@ internal fun SportsLivePreviewVideo(player: SportsLivePreviewPlayer, modifier: M
                 )
                 useController = false
                 resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-                setShutterBackgroundColor(android.graphics.Color.BLACK)
+                setShutterBackgroundColor(shutterColor)
                 isFocusable = false
                 descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
                 if (overVideo) (videoSurfaceView as? SurfaceView)?.setZOrderMediaOverlay(true)
