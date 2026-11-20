@@ -130,8 +130,8 @@ object EspnLeagueMap {
         // Brazil's top flight before Italy's: "Brazil Serie A" names it, as ESPN does (#132 P4).
         Rule("""\bbrazil(ian)? serie a\b|\bbrasileir(a|ao)\b""", soccer("bra.1")),
         Rule("""\bserie a\b""", soccer("ita.1")),
-        // Austria's Bundesliga is its own (#169: ESPN's league index routes it).
-        Rule("""(?<!2\. )(?<!2 )(?<!austrian )(?<!admiral )\bbundesliga\b""", soccer("ger.1")),
+        // Austria's Bundesliga is its own (#169: ESPN's league index routes it). "BUNDES" is an addon's short tag (#206).
+        Rule("""(?<!2\. )(?<!2 )(?<!austrian )(?<!admiral )\bbundes(liga)?\b""", soccer("ger.1")),
         Rule("""\bligue 1\b""", soccer("fra.1")),
         Rule("""\bmls\b|major league soccer""", soccer("usa.1")),
         Rule("""\bfriendl(y|ies)\b""", soccer("fifa.friendly"))

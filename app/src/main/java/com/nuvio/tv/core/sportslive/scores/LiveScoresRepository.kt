@@ -4,6 +4,7 @@ import android.content.Context
 import com.nuvio.tv.R
 import com.nuvio.tv.core.sportslive.SportsLiveEspnStarts
 import com.nuvio.tv.core.sportslive.SportsLiveSportInference
+import com.nuvio.tv.core.sportslive.SportsLiveSportKind
 import com.nuvio.tv.core.sportslive.SportsLiveToastKind
 import com.nuvio.tv.core.sportslive.SportsLiveToasts
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
@@ -191,7 +192,12 @@ class LiveScoresRepository internal constructor(
          * The source keys of a game its addon lists live (not a channel), else empty: when ESPN schedules its game
          * later, they go to [espnStarts] (live.20).
          */
-        val liveKeys: List<String> = emptyList()
+        val liveKeys: List<String> = emptyList(),
+        /**
+         * A two-team card that names no sport and no feed covers (#206: "Troyes vs Le Havre", untagged): matched, both
+         * sides STRONG, only on the feeds other cards already poll, so it never asks for a feed of its own.
+         */
+        val piggyback: Boolean = false
     )
 
     private class FeedState {
@@ -331,8 +337,12 @@ class LiveScoresRepository internal constructor(
             val routed = sources.asSequence().map { it to EspnLeagueMap.leaguesFor(it) }.firstOrNull { it.second.isNotEmpty() }
             if (routed == null) {
                 // A tennis match (#160): its tour's feeds, matched by the players' surnames.
-                val tennis = sources.asSequence().map(EspnLeagueMap::tennisLeaguesFor).firstOrNull { it.isNotEmpty() } ?: return@mapNotNull null
-                return@mapNotNull TrackedCard(card, tennis, item.followed, fallback = null, tennis = true)
+                val tennis = sources.asSequence().map(EspnLeagueMap::tennisLeaguesFor).firstOrNull { it.isNotEmpty() }
+                if (tennis != null) return@mapNotNull TrackedCard(card, tennis, item.followed, fallback = null, tennis = true)
+                // No sport anywhere on the card (#206): only the feeds already polled for others.
+                if (item.isChannel || item.teams == null || sources.any { SportsLiveSportKind.tagOf(it) != null }) return@mapNotNull null
+                val liveKeys = if (item.isLive) sources.filter { !it.isChannel }.map { it.streamKey } else emptyList()
+                return@mapNotNull TrackedCard(card, emptyList(), item.followed, fallback = null, liveKeys = liveKeys, piggyback = true)
             }
             val (source, leagues) = routed
             val liveKeys = if (item.isLive && !item.isChannel) sources.filter { !it.isChannel }.map { it.streamKey } else emptyList()
@@ -666,7 +676,12 @@ class LiveScoresRepository internal constructor(
             }
         }
 
+        val piggybacks = ArrayList<TrackedCard>()
         for (entry in trackedUnion()) {
+            if (entry.piggyback) {
+                piggybacks += entry
+                continue
+            }
             val card = entry.card
             val dates = datesFor(card)
             val leagues = remembered[card.key]?.let(::listOf) ?: entry.leagues
@@ -731,6 +746,15 @@ class LiveScoresRepository internal constructor(
                 }
             }
             settle(wait.entry, wait.dates, wait.cardFeeds + college, match)
+        }
+        // Cards that name no sport (#206): the polled feeds' games, both sides STRONG; no feed is asked for them.
+        val polled = needed.toList()
+        for (entry in piggybacks) {
+            val match = matchOn(entry.card, polled, strictMatcher) ?: continue
+            noteStart(entry, emptyList(), match)
+            unmatchedKeys -= entry.card.key
+            learnLogos(match)
+            matched[entry.card.key] = match
         }
         raw = matched
         matchedStates.value = matched.values.associate { it.eventId to it.state }

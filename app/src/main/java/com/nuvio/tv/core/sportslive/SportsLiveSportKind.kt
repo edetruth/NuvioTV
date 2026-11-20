@@ -1,6 +1,8 @@
 package com.nuvio.tv.core.sportslive
 
 import androidx.annotation.VisibleForTesting
+import com.nuvio.tv.core.sportslive.scores.EspnLeagueMap
+import com.nuvio.tv.core.sportslive.scores.TeamDirectory
 import com.nuvio.tv.domain.model.SportsLiveItem
 import java.text.Normalizer
 
@@ -42,7 +44,7 @@ enum class SportsLiveSportKind {
             SNOOKER to """snooker""",
             WRESTLING to """wrestling|\bwwe\b|\baew\b|\bnxt\b|smackdown""",
             CYCLING to """cycling|tour de france""",
-            SOCCER to """soccer|football|futbol|futebol|premier league|la liga|bundesliga|serie a|ligue [12]\b|\bmls\b|\bnwsl\b|\buefa\b|""" +
+            SOCCER to """soccer|football|futbol|futebol|premier league|la liga|bundesliga|\bbundes\b|serie a|ligue [12]\b|\bmls\b|\bnwsl\b|\buefa\b|""" +
                 """champions league|libertadores|sudamericana|\bcopa\b|ligapro|liga pro\b|liga mx|eredivisie|primeira liga|""" +
                 """liga portugal|super lig|ekstraklasa|allsvenskan|\bconmebol\b|\bconcacaf\b|\befl\b|fa cup|carabao|a-league|""" +
                 """j1 league|k league|serie b\b|coppa italia|dfb pokal"""
@@ -91,19 +93,32 @@ enum class SportsLiveSportKind {
         /**
          * The sport whose one name a row's tag uses when [item]'s sport is a plain sport word ("Soccer", "Futbol",
          * "Ice Hockey", "Motorsport"), so one addon's "FOOTBALL" and another's "SOCCER" read the same (F4); null for a
-         * league or competition ("NBA", "Premier League"), which stays as written. A bare "Football" may be American
-         * football: it is soccer only when the card says so elsewhere (a copy tagged "Soccer", or its title, genres,
-         * description or catalog naming a soccer competition), else null and it stays as written.
+         * league or competition ("NBA", "Premier League"), which stays as written. A bare "Football" is soccer, as most
+         * of the world means it (#206), unless the card says American football (a copy tagged so, or its title, genres,
+         * description or catalog naming an American football competition) or both its teams are on the loaded NFL or
+         * college football list of [directory]; null when the card says both.
          */
-        fun plainTagOf(item: SportsLiveItem): SportsLiveSportKind? {
+        fun plainTagOf(item: SportsLiveItem, directory: TeamDirectory = TeamDirectory.shared): SportsLiveSportKind? {
             val sport = item.sport ?: return null
             if (fold(SportsLiveDisplayText.label(sport) ?: return null) !in PLAIN_SPORT_WORDS) return null
             val kind = of(sport) ?: return null
             if (!isBareFootball(sport)) return kind
             val others = item.alternates.map { it.sport } + item.meta.name + item.meta.genres + item.meta.description + item.catalogName
             val kinds = others.filterNot { it == null || isBareFootball(it) }.mapNotNull(::of)
-            return SOCCER.takeIf { SOCCER in kinds && FOOTBALL !in kinds }
+            return when {
+                SOCCER in kinds && FOOTBALL in kinds -> null
+                FOOTBALL in kinds || americanTeams(item, directory) -> FOOTBALL
+                else -> SOCCER
+            }
         }
+
+        // Both sides on one loaded American football list (#206): "Bears vs Packers" tagged "Football".
+        private fun americanTeams(item: SportsLiveItem, directory: TeamDirectory): Boolean {
+            val (first, second) = SportsLiveTeams.writtenOrder(item.meta.name) ?: return false
+            return AMERICAN_FOOTBALL.any { league -> directory.resolve(league, first) != null && directory.resolve(league, second) != null }
+        }
+
+        private val AMERICAN_FOOTBALL = listOf(EspnLeagueMap.NFL, EspnLeagueMap.COLLEGE_FOOTBALL)
 
         /** True when [text] is a plain sport word alone ("Tennis", "Ice Hockey", "Soccer"): no event of its own. */
         fun isPlainSportWord(text: String?): Boolean =

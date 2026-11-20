@@ -187,11 +187,11 @@ class SportsLiveLive20DataTest {
     // ---- Tags ----
 
     @Test
-    fun `a plain sport word is the sport's one name, a bare Football only when the card says soccer`() {
+    fun `a plain sport word is the sport's one name, a bare Football is soccer unless it says American football`() {
         assertEquals(SportsLiveSportKind.SOCCER, SportsLiveSportKind.plainTagOf(event("a", "1", "East Bengal FC vs Sporting Delhi", listOf("Soccer"))))
         assertEquals(SportsLiveSportKind.HOCKEY, SportsLiveSportKind.plainTagOf(event("a", "2", "Devils vs Rangers", listOf("Ice Hockey"))))
-        // A lone "Football" may be American football: as written.
-        assertNull(SportsLiveSportKind.plainTagOf(event("a", "3", "East Bengal FC vs Sporting Delhi", listOf("Football"))))
+        // A lone "Football" is soccer unless the card says American football (#206).
+        assertEquals(SportsLiveSportKind.SOCCER, SportsLiveSportKind.plainTagOf(event("a", "3", "East Bengal FC vs Sporting Delhi", listOf("Football"))))
         // A league stays as written.
         assertNull(SportsLiveSportKind.plainTagOf(event("a", "4", "Arsenal vs Chelsea", listOf("Premier League"))))
         // A bare "Football" with an NFL genre is American football.
