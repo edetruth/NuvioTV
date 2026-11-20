@@ -139,6 +139,33 @@ class SportsLiveDuplicateMergeTest {
         assertEquals(3, rows.single().sourceCount)
     }
 
+    @Test
+    fun `Wisconsin never merges with Wisconsin-Green Bay by its first word (live.20)`() {
+        // "Wisconsin-Green Bay" is a known alias of ESPN's "Green Bay"; plain "Wisconsin" is another school.
+        assertEquals(SportsLiveTeams.MergeMatch.NONE, SportsLiveTeams.mergeMatch("Wisconsin", "Wisconsin-Green Bay"))
+        assertEquals(SportsLiveTeams.MergeMatch.NONE, SportsLiveTeams.mergeMatch("Wisconsin-Green Bay", "Wisconsin"))
+        // A short name that fits the known team's own name still merges, as do names no alias knows.
+        assertEquals(SportsLiveTeams.MergeMatch.PREFIX, SportsLiveTeams.mergeMatch("Green Bay", "Green Bay Phoenix"))
+        assertEquals(SportsLiveTeams.MergeMatch.PREFIX, SportsLiveTeams.mergeMatch("Adelaide", "Adelaide 36ers"))
+        val apart = SportsLiveItemBucketer.bucketTab(
+            listOf(
+                event("a", "1", "Florida State Seminoles vs Wisconsin-Green Bay", genres = listOf("Basketball")),
+                event("b", "2", "Florida State vs Wisconsin", genres = listOf("Basketball"))
+            ),
+            SportsLiveTab.LIVE_NOW, now, addonOrder = listOf("a", "b")
+        )
+        assertEquals(2, apart.size)
+        val one = SportsLiveItemBucketer.bucketTab(
+            listOf(
+                event("a", "1", "Florida State Seminoles vs Green Bay Phoenix", genres = listOf("Basketball")),
+                event("b", "2", "Florida State vs Green Bay", genres = listOf("Basketball"))
+            ),
+            SportsLiveTab.LIVE_NOW, now, addonOrder = listOf("a", "b")
+        )
+        assertEquals(1, one.size)
+        assertEquals(2, one.single().sourceCount)
+    }
+
     private fun event(addonId: String, id: String, name: String, genres: List<String> = emptyList()): SportsLiveItem =
         SportsLiveItemBucketer.describe(
             MetaPreview(

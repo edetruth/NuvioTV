@@ -232,16 +232,26 @@ object SportsLiveTeams {
         if (x.words.isEmpty() || y.words.isEmpty() || x.qualifier != y.qualifier) return MergeMatch.NONE
         if (x.words == y.words || matches(a, b)) return MergeMatch.FULL
         if (x.canonical != null && y.canonical != null) return MergeMatch.NONE
-        val (shorter, longer) = if (x.words.size <= y.words.size) x to y else y to x
-        val prefix = shorter.words == longer.words.subList(0, shorter.words.size) &&
-            shorter.words.any(::isSignificantWord)
+        if (!partOf(x.words, y.words)) return MergeMatch.NONE
+        // One name a known alias of a team (live.20): the other must also fit that team's own name, so "Wisconsin"
+        // (the Badgers) never takes "Wisconsin-Green Bay" (ESPN's "Green Bay") by its first word.
+        val aliased = x.canonicalWords ?: y.canonicalWords
+        if (aliased != null && !partOf(if (x.canonicalWords == null) x.words else y.words, aliased)) return MergeMatch.NONE
+        return MergeMatch.PREFIX
+    }
+
+    // [mergeMatch]'s near match of two names' words: one begins the other, sits inside it, or lacks only club words.
+    private fun partOf(a: List<String>, b: List<String>): Boolean {
+        val (shorter, longer) = if (a.size <= b.size) a to b else b to a
+        if (shorter.isEmpty()) return false
+        val prefix = shorter == longer.subList(0, shorter.size) && shorter.any(::isSignificantWord)
         // One word set inside the other (#174). Two significant words, so filler alone ("Racing Club") never stands
         // for a club; two clubs of one city differ by a word ("City" / "United"), so neither is inside the other.
-        val subset = shorter.words.count(::isSignificantWord) >= 2 && longer.words.containsAll(shorter.words)
+        val subset = shorter.count(::isSignificantWord) >= 2 && longer.containsAll(shorter)
         // "Sporting Delhi" / "Sporting Club Delhi" (F4): the longer adds only a club word, and the shorter has a word of its own.
-        val clubWord = shorter.words.any(::isSignificantWord) && longer.words.containsAll(shorter.words) &&
-            (longer.words - shorter.words.toSet()).let { extra -> extra.isNotEmpty() && extra.all { it in CLUB_WORDS } }
-        return if (prefix || subset || clubWord) MergeMatch.PREFIX else MergeMatch.NONE
+        val clubWord = shorter.any(::isSignificantWord) && longer.containsAll(shorter) &&
+            (longer - shorter.toSet()).let { extra -> extra.isNotEmpty() && extra.all { it in CLUB_WORDS } }
+        return prefix || subset || clubWord
     }
 
     // Words a club's full name adds to its short one ("Sporting Club Delhi"): never a word that tells two clubs apart.
@@ -256,7 +266,11 @@ object SportsLiveTeams {
     private fun asWomenSide(side: String): String = if (mergeForms(side).qualifier == null) "$side W" else side
 
     /** A side's words for [mergeMatch], its (W)/U21 qualifier ("w", "u21") apart and its known canonical team. */
-    private class MergeForm(val words: List<String>, val qualifier: String?, val canonical: String?)
+    private class MergeForm(val words: List<String>, val qualifier: String?, val canonical: String?) {
+        /** The known team's own name in words ("green bay" for "Wisconsin-Green Bay"), its qualifier apart; null when none. */
+        val canonicalWords: List<String>? = canonical?.split(' ')?.filter { it.isNotEmpty() }
+            ?.let { words -> if (qualifier != null && words.size > 1) words.dropLast(1) else words }
+    }
 
     private val mergeForms = Memo(8_192) { team: String -> mergeFormUncached(team) }
 
