@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import com.nuvio.tv.MainDispatcherRule
 import com.nuvio.tv.core.debrid.DirectDebridResolver
 import com.nuvio.tv.core.profile.ProfileManager
+import com.nuvio.tv.core.sportslive.SportsLiveEspnStarts
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.scores.EspnFixtures
 import com.nuvio.tv.core.sportslive.scores.EspnLeague
@@ -223,7 +224,8 @@ class ZapPanelScoresTest {
         }
         val scores = LiveScoresRepository(
             provider = provider, settings = MutableStateFlow(ScoreSettings()), scope = backgroundScope,
-            now = { now + testScheduler.currentTime }, zone = { ZoneOffset.UTC }, jitter = { 0L }
+            now = { now + testScheduler.currentTime }, zone = { ZoneOffset.UTC }, jitter = { 0L },
+            espnStarts = SportsLiveEspnStarts()
         )
         val (viewModel, playing) = panelViewModel(scores)
 
@@ -261,7 +263,8 @@ class ZapPanelScoresTest {
         }
         val scores = LiveScoresRepository(
             provider = provider, settings = MutableStateFlow(ScoreSettings(mode = mode)), scope = backgroundScope,
-            now = { now + testScheduler.currentTime }, zone = { ZoneOffset.UTC }, jitter = { 0L }
+            now = { now + testScheduler.currentTime }, zone = { ZoneOffset.UTC }, jitter = { 0L },
+            espnStarts = SportsLiveEspnStarts()
         )
         val (viewModel, playing) = panelViewModel(scores)
         // The section (or Home) tracks the same game: the feed is one poller, whoever asks.
@@ -302,7 +305,8 @@ class ZapPanelScoresTest {
         }
         val scores = LiveScoresRepository(
             provider = provider, settings = MutableStateFlow(ScoreSettings()), scope = backgroundScope,
-            now = { now + testScheduler.currentTime }, zone = { ZoneOffset.UTC }, jitter = { 0L }
+            now = { now + testScheduler.currentTime }, zone = { ZoneOffset.UTC }, jitter = { 0L },
+            espnStarts = SportsLiveEspnStarts()
         )
         val (viewModel, _) = panelViewModel(scores)
         // Not started (or stopped): nothing.
@@ -355,7 +359,8 @@ class ZapPanelScoresTest {
         }
         val scores = LiveScoresRepository(
             provider = provider, settings = MutableStateFlow(ScoreSettings()), scope = backgroundScope,
-            now = { now + testScheduler.currentTime }, zone = { ZoneOffset.UTC }, jitter = { 0L }
+            now = { now + testScheduler.currentTime }, zone = { ZoneOffset.UTC }, jitter = { 0L },
+            espnStarts = SportsLiveEspnStarts()
         )
         val book = TeamLogoBook(active = true)
         val (viewModel, playing) = panelViewModel(scores, book)
@@ -381,7 +386,8 @@ class ZapPanelScoresTest {
         }
         val scores = LiveScoresRepository(
             provider = provider, settings = MutableStateFlow(ScoreSettings(mode = ScoresMode.HIDE_UNTIL_FOCUSED)), scope = backgroundScope,
-            now = { now + testScheduler.currentTime }, zone = { ZoneOffset.UTC }, jitter = { 0L }
+            now = { now + testScheduler.currentTime }, zone = { ZoneOffset.UTC }, jitter = { 0L },
+            espnStarts = SportsLiveEspnStarts()
         )
         val (viewModel, playing) = panelViewModel(scores)
         viewModel.openPanel()

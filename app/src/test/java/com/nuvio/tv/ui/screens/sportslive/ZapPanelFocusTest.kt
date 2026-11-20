@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import com.nuvio.tv.MainDispatcherRule
 import com.nuvio.tv.core.debrid.DirectDebridResolver
 import com.nuvio.tv.core.profile.ProfileManager
+import com.nuvio.tv.core.sportslive.SportsLiveEspnStarts
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.scores.EspnFixtures
 import com.nuvio.tv.core.sportslive.scores.EspnLeague
@@ -214,7 +215,8 @@ class ZapPanelFocusTest {
                 },
                 settings = MutableStateFlow(ScoreSettings()), scope = backgroundScope,
                 now = { now }, zone = { ZoneOffset.UTC }, jitter = { 0L },
-                logos = book, logoFile = TeamLogoFile(file), io = mainDispatcherRule.dispatcher
+                logos = book, logoFile = TeamLogoFile(file), io = mainDispatcherRule.dispatcher,
+                espnStarts = SportsLiveEspnStarts()
             )
             assertFalse(scores.logosLoaded.value)
             runCurrent()
@@ -238,7 +240,8 @@ class ZapPanelFocusTest {
                 override suspend fun scoreboard(league: EspnLeague, date: LocalDate) = ScoreboardResult(emptyList())
             },
             settings = MutableStateFlow(ScoreSettings(mode = ScoresMode.OFF)), scope = backgroundScope,
-            now = { now + testScheduler.currentTime }, zone = { ZoneOffset.UTC }, jitter = { 0L }
+            now = { now + testScheduler.currentTime }, zone = { ZoneOffset.UTC }, jitter = { 0L },
+            espnStarts = SportsLiveEspnStarts()
         )
         val claimed = mockk<ClaimedCatalog>(relaxed = true)
         every { claimed.key } returns CATALOG

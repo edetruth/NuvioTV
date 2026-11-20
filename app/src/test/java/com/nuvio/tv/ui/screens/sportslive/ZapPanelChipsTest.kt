@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import com.nuvio.tv.MainDispatcherRule
 import com.nuvio.tv.core.debrid.DirectDebridResolver
 import com.nuvio.tv.core.profile.ProfileManager
+import com.nuvio.tv.core.sportslive.SportsLiveEspnStarts
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.scores.EspnLeague
 import com.nuvio.tv.core.sportslive.scores.LiveScoresRepository
@@ -141,7 +142,8 @@ class ZapPanelChipsTest {
                 override suspend fun scoreboard(league: EspnLeague, date: LocalDate) = ScoreboardResult(emptyList())
             },
             settings = MutableStateFlow(ScoreSettings(mode = ScoresMode.OFF)), scope = backgroundScope,
-            now = { NOW + testScheduler.currentTime }, zone = { ZoneOffset.UTC }, jitter = { 0L }
+            now = { NOW + testScheduler.currentTime }, zone = { ZoneOffset.UTC }, jitter = { 0L },
+            espnStarts = SportsLiveEspnStarts()
         )
         val claimed = mockk<ClaimedCatalog>(relaxed = true)
         every { claimed.key } returns CATALOG

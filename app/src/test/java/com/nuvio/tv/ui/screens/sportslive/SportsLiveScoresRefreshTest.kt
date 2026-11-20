@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import com.nuvio.tv.MainDispatcherRule
 import com.nuvio.tv.core.debrid.DirectDebridResolver
 import com.nuvio.tv.core.profile.ProfileManager
+import com.nuvio.tv.core.sportslive.SportsLiveEspnStarts
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.scores.ChipScore
 import com.nuvio.tv.core.sportslive.scores.EspnFixtures
@@ -115,7 +116,8 @@ class SportsLiveScoresRefreshTest {
 
     private fun TestScope.repository(feeds: Feeds) = LiveScoresRepository(
         provider = feeds, settings = MutableStateFlow(ScoreSettings()), scope = backgroundScope,
-        now = { now + testScheduler.currentTime }, zone = { ZoneOffset.UTC }, jitter = { 0L }
+        now = { now + testScheduler.currentTime }, zone = { ZoneOffset.UTC }, jitter = { 0L },
+        espnStarts = SportsLiveEspnStarts()
     )
 
     private fun TestScope.nowMs() = now + testScheduler.currentTime

@@ -1,5 +1,6 @@
 package com.nuvio.tv.core.sportslive.scores
 
+import com.nuvio.tv.core.sportslive.SportsLiveEspnStarts
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.domain.model.ContentType
 import com.nuvio.tv.domain.model.MetaPreview
@@ -247,7 +248,8 @@ class EuroLeagueScoresTest {
             now = { base + testScheduler.currentTime },
             zone = { ZoneOffset.UTC },
             jitter = { 0L },
-            io = EmptyCoroutineContext
+            io = EmptyCoroutineContext,
+            espnStarts = SportsLiveEspnStarts()
         )
         backgroundScope.launch { repo.scores.collect {} }
         val game = card("Maccabi Tel Aviv vs Dubai Basketball", "2026-11-19T17:15:00Z")

@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import com.nuvio.tv.core.sportslive.SportsLiveEspnStarts
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.scores.EspnLeague
 import com.nuvio.tv.core.sportslive.scores.LiveScoreTracking
@@ -131,7 +132,8 @@ class LiveScoresTrackerTest {
         val base = Instant.parse("2026-11-15T17:00:00Z").toEpochMilli()
         val repo = LiveScoresRepository(
             provider = provider, settings = settings, scope = backgroundScope,
-            now = { base + testScheduler.currentTime }, zone = { ZoneOffset.UTC }, jitter = { 0L }
+            now = { base + testScheduler.currentTime }, zone = { ZoneOffset.UTC }, jitter = { 0L },
+            espnStarts = SportsLiveEspnStarts()
         )
         backgroundScope.launch { repo.scores.collect {} }
         val tracker = LiveScoresTracker(LiveScoresRepository.SCREEN_SECTION, repo)
