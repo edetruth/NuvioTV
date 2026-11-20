@@ -219,6 +219,33 @@ class SportsLiveResultsTodayTest {
     }
 
     @Test
+    fun `a fresh open hides again the scores Hide until focused revealed`() = runTest {
+        settings.value = ScoreSettings(mode = ScoresMode.HIDE_UNTIL_FOCUSED)
+        todayHasFinal(true)
+        val vm = viewModel()
+        backgroundScope.launch { vm.uiState.collect {} }
+        vm.setActive(true)
+        advanceTimeBy(1_000); runCurrent()
+        vm.onRowFocus("final")
+        advanceTimeBy(ResultSpoilerReveal.REVEAL_AFTER_MS); runCurrent()
+        assertEquals(setOf("final"), vm.uiState.value.revealed)
+        // A quick hop keeps it revealed.
+        vm.setActive(false)
+        advanceTimeBy(60_000L); runCurrent()
+        vm.setActive(true)
+        advanceTimeBy(1_000); runCurrent()
+        assertEquals(setOf("final"), vm.uiState.value.revealed)
+        // Back after 10 min: hidden again.
+        vm.setActive(false)
+        advanceTimeBy(RESULTS_DAY_KEPT_MS); runCurrent()
+        vm.setActive(true)
+        advanceTimeBy(1_000); runCurrent()
+        assertTrue(vm.uiState.value.revealed.isEmpty())
+        vm.setActive(false)
+        vm.close()
+    }
+
+    @Test
     fun `the first open still uses the opening rule`() = runTest {
         todayHasFinal(false)
         val repo = repository()

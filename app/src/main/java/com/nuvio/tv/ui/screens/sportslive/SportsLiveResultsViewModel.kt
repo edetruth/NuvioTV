@@ -317,6 +317,8 @@ class SportsLiveResultsViewModel internal constructor(
         daysAgo.value = SportsResults.TODAY
         earlierOpen.value = false
         selection.value = Selection()
+        // A fresh open hides again what Hide until focused revealed.
+        reveal.clear()
         freshOpens.update { it + 1 }
     }
 
@@ -569,6 +571,14 @@ internal class ResultSpoilerReveal(private val scope: CoroutineScope, private va
             delay(revealAfterMs)
             _revealed.update { it + id }
         }
+    }
+
+    /** Hides every revealed score again (Results opened afresh). */
+    fun clear() {
+        focused = null
+        job?.cancel()
+        job = null
+        _revealed.value = emptySet()
     }
 
     companion object {
