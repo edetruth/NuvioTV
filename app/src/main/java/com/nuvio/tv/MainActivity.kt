@@ -1,15 +1,11 @@
 package com.nuvio.tv
 
-import android.app.PictureInPictureParams
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.drawable.ColorDrawable
-import android.os.Build
 import android.os.Bundle
 import android.util.Log
-import android.util.Rational
 import android.view.KeyEvent
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -75,7 +71,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.foundation.focusGroup
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
@@ -127,7 +122,6 @@ import androidx.compose.ui.unit.sp
 import androidx.core.os.ConfigurationCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.metrics.performance.JankStats
 import androidx.metrics.performance.PerformanceMetricsState
@@ -184,7 +178,6 @@ import com.nuvio.tv.domain.model.resolveAppTheme
 import com.nuvio.tv.domain.model.resolveCustomThemeColors
 import com.nuvio.tv.domain.deeplink.AppDeepLink
 import com.nuvio.tv.domain.repository.AddonRepository
-import com.nuvio.tv.domain.repository.SportsLiveRepository
 import com.nuvio.tv.ui.components.NuvioScrollDefaults
 import com.nuvio.tv.ui.components.BrandWordmark
 import com.nuvio.tv.ui.components.LocalCardDepthStyle
@@ -193,15 +186,13 @@ import com.nuvio.tv.ui.components.LocalAlwaysBackdropWithLogo
 import com.nuvio.tv.ui.components.ProfileAvatarCircle
 import com.nuvio.tv.ui.navigation.LocalNavViewModelStoreOwner
 import com.nuvio.tv.ui.navigation.NuvioNavHost
-import com.nuvio.tv.ui.navigation.sportsLiveTargetRoute
-import com.nuvio.tv.ui.screens.sportslive.SportsLiveAlertsHost
-import com.nuvio.tv.ui.screens.sportslive.SportsLiveAwakeHolds
-import com.nuvio.tv.ui.screens.sportslive.SportsLiveKeepScreenOn
-import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniPlayerHost
-import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniPlayers
-import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniStop
-import com.nuvio.tv.ui.screens.sportslive.mini.SportsLivePip
-import com.nuvio.tv.ui.screens.sportslive.mini.sportsLivePipEligible
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveActivityHooks
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveActivityOverlays
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveActivityServices
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveContentFocusGroup
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveRouteEffects
+import com.nuvio.tv.ui.screens.sportslive.sportsLiveDrawerItem
+import com.nuvio.tv.ui.screens.sportslive.sportsLiveKeepAwake
 import com.nuvio.tv.ui.navigation.Screen
 import com.nuvio.tv.ui.navigation.rememberNavSessionViewModelStoreOwner
 import com.nuvio.tv.ui.screens.party.PartyEffects
@@ -306,13 +297,7 @@ open class MainActivity : ComponentActivity() {
     lateinit var addonRepository: AddonRepository
 
     @Inject
-    lateinit var sportsLiveRepository: SportsLiveRepository
-
-    @Inject
-    lateinit var sportsLiveAlerts: com.nuvio.tv.core.sportslive.alerts.SportsLiveAlerts
-
-    @Inject
-    lateinit var sportsLiveDebugProbe: com.nuvio.tv.ui.screens.sportslive.SportsLiveDebugProbe
+    lateinit var sportsLive: SportsLiveActivityServices
 
     @Inject
     lateinit var trackingProgressRefreshCoordinator: TrackingProgressRefreshCoordinator
@@ -643,13 +628,7 @@ open class MainActivity : ComponentActivity() {
                     addonRepository.getInstalledAddons()
                 }.collectAsState(initial = null)
             }
-            // Null until the first emission, so a restore onto Sports & Live is not redirected
-            // before the stores have loaded; the sidebar treats null as not available.
-            val sportsLiveAvailability by key(activeProfileId, startupSession) {
-                remember(sportsLiveRepository) {
-                    sportsLiveRepository.sectionAvailable
-                }.collectAsState(initial = null as Boolean?)
-            }
+            val sportsLiveAvailability = sportsLive.availability(activeProfileId, startupSession)
             val sportsLiveAvailable = sportsLiveAvailability == true
             val discoverLocation = mainUiPrefs.discoverLocation
 
@@ -1137,25 +1116,12 @@ open class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    // The mini player stays inside Sports & Live (BUG13).
-                    LaunchedEffect(currentRoute) { SportsLiveMiniPlayers.controller.onRoute(currentRoute) }
-                    LaunchedEffect(sportsLiveAvailability, currentRoute) {
-                        val onSportsLiveRoute = currentRoute == Screen.SportsLive.route ||
-                            currentRoute?.startsWith("${Screen.SportsLive.route}/") == true
-                        if (sportsLiveAvailability == false && onSportsLiveRoute) {
-                            navController.navigate(Screen.Home.route) {
-                                popUpTo(navController.graph.startDestinationId) { saveState = false }
-                                launchSingleTop = true
-                            }
-                        }
-                    }
+                    SportsLiveRouteEffects(navController, currentRoute, sportsLiveAvailability)
 
                     val rootRoutes = remember(discoverLocation, sportsLiveAvailable) {
                         buildSet {
                             add(Screen.Home.route)
-                            if (sportsLiveAvailable) {
-                                add(Screen.SportsLive.route)
-                            }
+                            if (sportsLiveAvailable) add(Screen.SportsLive.route)
                             add(Screen.Search.route)
                             add(Screen.Library.route)
                             add(Screen.Settings.route)
@@ -1198,15 +1164,7 @@ open class MainActivity : ComponentActivity() {
                                     )
                                 )
                             }
-                            if (sportsLiveAvailable) {
-                                add(
-                                    DrawerItem(
-                                        route = Screen.SportsLive.route,
-                                        label = strNavSportsLive,
-                                        iconRes = R.raw.sidebar_sports
-                                    )
-                                )
-                            }
+                            if (sportsLiveAvailable) add(sportsLiveDrawerItem(strNavSportsLive))
                             add(
                                 DrawerItem(
                                     route = Screen.Search.route,
@@ -1273,7 +1231,7 @@ open class MainActivity : ComponentActivity() {
                         onFeedbackShown = updateViewModel::consumeFeedbackMessage
                     ) {
                         val handleSwitchProfile = {
-                            SportsLiveMiniPlayers.controller.stop(SportsLiveMiniStop.PROFILE_SWITCH)
+                            SportsLiveActivityHooks.onProfileSwitch()
                             startupSession++
                             splashTriggered = false
                             profileSwitchedManually = true
@@ -1283,19 +1241,9 @@ open class MainActivity : ComponentActivity() {
                             focusedSplashTheme = null
                             hasSelectedProfileThisSession = false
                         }
-                        // Sports & Live: arrows on the mini player give focus back to the content, where it last was.
                         val sportsLiveContentFocus = remember { FocusRequester() }
                         Box(modifier = Modifier.fillMaxSize()) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .focusRequester(sportsLiveContentFocus)
-                                    // Saved only for the mini player's arrows to restore; nothing
-                                    // else enters through this group, so screens keep their own focus.
-                                    .focusProperties { onExit = { sportsLiveContentFocus.saveFocusedChild() } }
-                                    .onFocusChanged { com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniFocus.onContentFocus(it.hasFocus) }
-                                    .focusGroup()
-                            ) {
+                            SportsLiveContentFocusGroup(sportsLiveContentFocus) {
                             CompositionLocalProvider(LocalNavViewModelStoreOwner provides navViewModelStoreOwner) {
                                 if (modernSidebarEnabled) {
                                     ModernSidebarScaffold(
@@ -1341,20 +1289,7 @@ open class MainActivity : ComponentActivity() {
                             }
 
                             }
-
-                            // The Sports & Live mini player, above the NavHost; focus reaches it only by a D-pad move.
-                            SportsLiveMiniPlayerHost(
-                                onExpand = { target -> navController.navigate(sportsLiveTargetRoute(target)) },
-                                contentFocusRequester = sportsLiveContentFocus,
-                                chip = com.nuvio.tv.ui.screens.sportslive.mini.sportsLiveMiniChipOn(currentRoute)
-                            )
-                            // Sports & Live reminders' "Watch now?" and followed teams' toasts (#42, #44).
-                            SportsLiveAlertsHost(
-                                navController = navController,
-                                contentFocusRequester = sportsLiveContentFocus
-                            )
-                            // Sports & Live's one toast card (#134): top right, never focused, newest wins.
-                            com.nuvio.tv.ui.screens.sportslive.SportsLiveToastLayer()
+                            SportsLiveActivityOverlays(navController, currentRoute, sportsLiveContentFocus)
 
                             val autoNextOverlay by externalPlaybackTracker.autoNextOverlay.collectAsState()
                             autoNextOverlay?.let { ov ->
@@ -1373,13 +1308,7 @@ open class MainActivity : ComponentActivity() {
                             LaunchedEffect(isTrailerPlaying) {
                                 if (!isTrailerPlaying) ambientIdleController.onInteraction()
                             }
-                            // Sports video playing outside the full player (dual screen, the mini player)
-                            // keeps the screen awake and ambient mode away; the idle time restarts when it stops (#38).
-                            val sportsVideoPlaying by SportsLiveAwakeHolds.shared.anyPlaying.collectAsState()
-                            SportsLiveKeepScreenOn(sportsVideoPlaying)
-                            LaunchedEffect(sportsVideoPlaying) {
-                                if (!sportsVideoPlaying) ambientIdleController.onInteraction()
-                            }
+                            val sportsVideoPlaying = sportsLiveKeepAwake { ambientIdleController.onInteraction() }
                             AmbientModeHost(
                                 controller = ambientIdleController,
                                 allowed = currentRoute?.startsWith("player/") != true &&
@@ -1447,7 +1376,7 @@ open class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        SportsLivePip.ownLaunchInFlight = false
+        SportsLiveActivityHooks.onResume()
         ambientIdleController.dismiss()
         if (::jankStats.isInitialized) jankStats.isTrackingEnabled = true
         memberAccessRepository.refreshIfStale()
@@ -1469,41 +1398,7 @@ open class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        // Debug builds only: `--ei debugSportsAlerts N` raises N score alerts, for checking #136 on a device.
-        if (BuildConfig.IS_DEBUG_BUILD) {
-            val count = intent.getIntExtra("debugSportsAlerts", 0)
-            if (count > 0) lifecycleScope.launch { sportsLiveAlerts.debugRaise(count) }
-            // `--ez debugSportsKickoff true`: a kickoff prompt for a live game, for checking #173.
-            if (intent.getBooleanExtra("debugSportsKickoff", false)) lifecycleScope.launch { sportsLiveAlerts.debugKickoff() }
-            // `--ez debugSportsCrunch true`: one crunch-time alert (#137).
-            if (intent.getBooleanExtra("debugSportsCrunch", false)) lifecycleScope.launch { sportsLiveAlerts.debugCrunch() }
-            // #161/#162 emulator checks: the game playing ends (optionally with nothing else live), every stream
-            // stopping is a game end (dual, mini), the next link start waits, a kickoff is held or given up.
-            // A score toast for the game on screen (through another addon's copy where listed): must not show.
-            if (intent.getBooleanExtra("debugSportsAlertPlaying", false)) lifecycleScope.launch { sportsLiveAlerts.debugRaiseForPlaying() }
-            val watch = com.nuvio.tv.core.sportslive.SportsLiveGameWatch.shared
-            if (intent.hasExtra("debugSportsNoNext")) watch.debugNoNext = intent.getBooleanExtra("debugSportsNoNext", false)
-            if (intent.hasExtra("debugSportsEndAll")) watch.debugEndAll = intent.getBooleanExtra("debugSportsEndAll", false)
-            if (intent.getBooleanExtra("debugSportsEnd", false)) watch.debugEndNow()
-            if (intent.getBooleanExtra("debugSportsWait", false)) watch.debugWaitNext(intent.getIntExtra("debugSportsWaitSeconds", 120) * 1_000L)
-            val holdSeconds = intent.getIntExtra("debugSportsKickoffHold", 0)
-            if (holdSeconds > 0) {
-                lifecycleScope.launch {
-                    sportsLiveAlerts.debugKickoffHold(holdSeconds * 1_000L, giveUp = intent.getBooleanExtra("debugSportsKickoffGiveUp", false))
-                }
-            }
-            // `--es debugSportsProbe <sport>`: measures sports lookups and link starts (#158).
-            intent.getStringExtra("debugSportsProbe")?.let { filter ->
-                sportsLiveDebugProbe.run(
-                    filter = filter,
-                    games = intent.getIntExtra("debugProbeGames", 3),
-                    links = intent.getIntExtra("debugProbeLinks", 3),
-                    maxMs = intent.getIntExtra("debugProbeMaxMs", 45_000).toLong(),
-                    skipGames = intent.getIntExtra("debugProbeSkip", 0),
-                    watch = intent.getBooleanExtra("debugProbeWatch", false)
-                )
-            }
-        }
+        sportsLive.onNewIntent(intent, lifecycleScope)
         captureDeepLinkIntent(intent)
         captureLaunchIntent(intent)
     }
@@ -1539,30 +1434,12 @@ open class MainActivity : ComponentActivity() {
     override fun onUserInteraction() {
         super.onUserInteraction()
         ambientIdleController.onInteraction()
-        SportsLiveMiniPlayers.controller.onInteraction()
-        com.nuvio.tv.core.sportslive.SportsLiveStillWatching.shared.onInteraction()
+        SportsLiveActivityHooks.onUserInteraction()
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (ambientIdleController.consumeKeyEvent(event)) return true
-        // A Sports & Live alert card takes OK / ▼ / Back only while it is up and actionable; a peek takes
-        // every key but the volume (#136). Before the screens, so the player never sees those presses.
-        if (com.nuvio.tv.ui.screens.sportslive.SportsLiveAlertSurfaces.dispatch(event)) return true
-        // Play/Pause while the Sports & Live mini player plays expands it; otherwise upstream behavior.
-        if ((event.keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE || event.keyCode == KeyEvent.KEYCODE_MEDIA_PLAY) &&
-            SportsLiveMiniPlayers.controller.isActive
-        ) {
-            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
-                SportsLiveMiniPlayers.controller.requestExpand()
-            }
-            return true
-        }
-        // MEDIA_STOP or a held Back stops the Sports & Live mini player from any screen (BUG13); the rest of a held
-        // Back is eaten below, so it opens no menu.
-        if (SportsLiveMiniPlayers.controller.onStopKey(event.keyCode, event.action == KeyEvent.ACTION_DOWN, event.isLongPress)) {
-            if (event.keyCode == KeyEvent.KEYCODE_BACK) longPressBackHeld.value = true
-            return true
-        }
+        if (SportsLiveActivityHooks.dispatchKeyEvent(event) { longPressBackHeld.value = true }) return true
         if (event.keyCode == KeyEvent.KEYCODE_BACK) {
             if (longPressBackHeld.value) {
                 if (event.action == KeyEvent.ACTION_UP) longPressBackHeld.value = false
@@ -1592,52 +1469,25 @@ open class MainActivity : ComponentActivity() {
         androidTvChannelSyncService.onForegroundChanged(true)
     }
 
-    // Every in-app launch (startActivity included) passes here; its leave hint is not Home.
     @Deprecated("Deprecated in ComponentActivity")
     override fun startActivityForResult(intent: Intent, requestCode: Int, options: Bundle?) {
-        SportsLivePip.ownLaunchInFlight = true
+        SportsLiveActivityHooks.onStartActivity()
         super.startActivityForResult(intent, requestCode, options)
     }
 
-    // Home while Sports & Live plays: picture-in-picture (16:9) when the device has it.
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
-        val eligible = sportsLivePipEligible(
-            sdkInt = Build.VERSION.SDK_INT,
-            hasPipFeature = packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE),
-            sportsFullPlayerShowing = SportsLivePip.sportsFullPlayerShowing(),
-            miniPlayerActive = SportsLiveMiniPlayers.controller.isActive,
-            ownLaunchInFlight = SportsLivePip.ownLaunchInFlight,
-            pipEnabled = SportsLivePip.userEnabled
-        )
-        if (eligible && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            runCatching {
-                enterPictureInPictureMode(
-                    PictureInPictureParams.Builder().setAspectRatio(Rational(16, 9)).build()
-                )
-            }
-        }
+        SportsLiveActivityHooks.onUserLeaveHint(this)
     }
 
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
-        // Leaving PiP while stopped means its window was closed; otherwise the full UI is back.
-        if (!isInPictureInPictureMode && !lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
-            SportsLivePip.onClosed()
-        } else {
-            SportsLivePip.onModeChanged(isInPictureInPictureMode)
-        }
+        SportsLiveActivityHooks.onPictureInPictureModeChanged(isInPictureInPictureMode, lifecycle)
     }
 
     override fun onStop() {
         externalPlaybackTracker.onExternalPlayerCoveredApp()
-        when {
-            // The PiP window was closed: its playback stops and the players are released.
-            isInPictureInPictureMode -> SportsLivePip.onClosed()
-            // No sound in the background: the mini player stops when the app leaves (an external
-            // player included) without picture-in-picture.
-            !isChangingConfigurations -> SportsLiveMiniPlayers.controller.stop(SportsLiveMiniStop.APP_BACKGROUND)
-        }
+        SportsLiveActivityHooks.onStop(isInPictureInPictureMode, isChangingConfigurations)
         super.onStop()
         startupSyncService.stopPeriodicSurfacePulls()
         // App going to background (e.g. user returning to the launcher): reconcile the
@@ -1646,7 +1496,7 @@ open class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        if (isFinishing) SportsLiveMiniPlayers.controller.stop(SportsLiveMiniStop.APP_FINISH)
+        SportsLiveActivityHooks.onDestroy(isFinishing)
         super.onDestroy()
         PluginRuntimeHooks.onActivityDestroy()
     }
@@ -1724,7 +1574,7 @@ private fun LegacySidebarScaffold(
 
 
     BackHandler(enabled = currentRoute in rootRoutes && drawerState.currentValue == DrawerValue.Closed) {
-        if (SportsLiveMiniPlayers.controller.stopOnBack()) return@BackHandler
+        if (SportsLiveActivityHooks.stopOnBack()) return@BackHandler
         pendingSidebarFocusRequest = true
         drawerState.setValue(DrawerValue.Open)
     }
@@ -2177,7 +2027,7 @@ private fun ModernSidebarScaffold(
     }
 
     BackHandler(enabled = currentRoute in rootRoutes && !isSidebarExpanded && !sidebarCollapsePending) {
-        if (SportsLiveMiniPlayers.controller.stopOnBack()) return@BackHandler
+        if (SportsLiveActivityHooks.stopOnBack()) return@BackHandler
         isSidebarExpanded = true
         sidebarCollapsePending = false
         pendingSidebarFocusRequest = true
