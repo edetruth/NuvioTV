@@ -73,8 +73,8 @@ enum class SportsLiveEndAction { WATCH_NEXT, REMIND, BACK_TO_LIVE_NOW, BOX_SCORE
 
 /**
  * The card's buttons (#161): Watch next (focused), Box score, Stay; with nothing else live, Remind me (when an
- * upcoming game is named) and Back to Live Now instead of Watch next. A dual pane ([pane]) has Watch next and
- * Stay only.
+ * upcoming game is named) and Back to Live Now instead of Watch next. A dual pane ([pane]) has Watch next only,
+ * when there is a next game: Back closes the card there (coordinator decision 4).
  */
 fun sportsLiveEndActions(card: SportsLiveEndCard, pane: Boolean = false): List<SportsLiveEndAction> = buildList {
     if (card.next != null) {
@@ -83,7 +83,8 @@ fun sportsLiveEndActions(card: SportsLiveEndCard, pane: Boolean = false): List<S
         if (card.upcoming != null) add(SportsLiveEndAction.REMIND)
         add(SportsLiveEndAction.BACK_TO_LIVE_NOW)
     }
-    if (!pane && card.boxScore) add(SportsLiveEndAction.BOX_SCORE)
+    if (pane) return@buildList
+    if (card.boxScore) add(SportsLiveEndAction.BOX_SCORE)
     add(SportsLiveEndAction.STAY)
 }
 
@@ -203,6 +204,7 @@ fun SportsLiveEndCardView(
         }
         if (!showActions) return@Column
         val actions = sportsLiveEndActions(card, pane)
+        if (actions.isEmpty()) return@Column
         val labels = mapOf(
             SportsLiveEndAction.WATCH_NEXT to stringResource(R.string.sports_live_end_watch_next),
             SportsLiveEndAction.REMIND to stringResource(if (card.upcomingReminded) R.string.sports_live_cancel_reminder else R.string.sports_live_remind_me),

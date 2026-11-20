@@ -10,18 +10,21 @@ import com.nuvio.tv.ui.screens.sportslive.sportsLiveEndActions
  * YouTube TV multiview and Apple TV multiview (the D-pad moves the active view and the sound follows it; Select on
  * the active view goes full screen; Apple's one larger view).
  *
- *   ◀ ▶       move the white ring to the other pane; the sound follows it. ◀ on the left pane already: pick the
- *             other game (#57).
+ *   ◀ ▶       move the white ring to the other pane; the sound follows it. Past the edge (◀ on the left pane,
+ *             ▶ on the right one): pick the game of the other pane (#57).
  *   ▲ ▼       change the ringed pane's game (previous / next live game). On a pane card with buttons (a link
  *             starting, the game over) they move through its buttons first; past the top or bottom button they
  *             change the game, so a card never traps the pane.
- *   OK        split, or the big pane: full screen. The small pane of big + small: it becomes the big one (the sound
- *             stays with it). On a pane card: presses the selected button ("Couldn't play": choose a stream).
- *   Hold OK   side by side ↔ big + small.
- *   Back      as before (a countdown stops first, then back to the full player or out).
+ *   OK        split, or the big pane: full screen (Back there returns to dual with both games). The small pane of
+ *             big + small: it becomes the big one (the sound stays with it). On a pane card: presses the selected
+ *             button ("Couldn't play": choose a stream; an end card with nothing next: closes it).
+ *   Hold OK   the app-wide "more" menu (#88: a key keeps its meaning): Layout · Swap panes · Change the other game ·
+ *             Full screen ([dualMenuEntries]).
+ *   Back      closes a pane's end card first; then as before (back to the full player or out).
  *
  * Optional shortcuts: MENU swaps the panes, held it changes the layout (#123); CH+/CH- and next/previous change the
- * game, on a card too; INFO shows the game info (#139). The keys hint names the D-pad ones on entry.
+ * game, on a card too; INFO shows the game info (#139). The keys hint names the D-pad ones on every entry, for
+ * a few seconds or until ◀ ▶ or OK is pressed.
  */
 
 /** What a key does in dual screen, from [dualKeyRoute]. */
@@ -29,7 +32,7 @@ internal sealed interface DualKeyRoute {
     /** The ring (and the sound) moves to [side]. */
     data class Highlight(val side: Side) : DualKeyRoute
 
-    /** ◀ on the left pane already: the picker for the other game (#57). */
+    /** ◀ on the left pane, or ▶ on the right one: the picker for the other pane's game (#57). */
     data object PickOtherGame : DualKeyRoute
 
     /** The ringed pane's card selects its button [index]. */
@@ -40,8 +43,8 @@ internal sealed interface DualKeyRoute {
 }
 
 /**
- * How many buttons [pane]'s card has that ▲ ▼ move through and OK presses: a link starting (#138) or the game over
- * (#161, until Stay closes it). 0: no such card ("Couldn't play" takes OK and ▲ ▼ change the game).
+ * How many buttons [pane]'s card has that ▲ ▼ move through and OK presses: a link starting (#138), or the game over
+ * with a game to watch next (#161; Back closes that card). 0: none ("Couldn't play" takes OK and ▲ ▼ change the game).
  */
 internal fun dualCardButtons(pane: DualPane): Int = when {
     pane.isStarting -> SportsLiveStartingAction.entries.size
@@ -57,7 +60,8 @@ internal fun dualKeyRoute(state: DualState, keyCode: Int, cardSelected: Int = 0)
     when (keyCode) {
         KeyEvent.KEYCODE_DPAD_LEFT ->
             return if (state.highlighted == Side.LEFT) DualKeyRoute.PickOtherGame else DualKeyRoute.Highlight(Side.LEFT)
-        KeyEvent.KEYCODE_DPAD_RIGHT -> return DualKeyRoute.Highlight(Side.RIGHT)
+        KeyEvent.KEYCODE_DPAD_RIGHT ->
+            return if (state.highlighted == Side.RIGHT) DualKeyRoute.PickOtherGame else DualKeyRoute.Highlight(Side.RIGHT)
     }
     val pane = state.pane(state.highlighted)
     val buttons = dualCardButtons(pane)
@@ -72,7 +76,7 @@ internal fun dualKeyRoute(state: DualState, keyCode: Int, cardSelected: Int = 0)
 
 /** What a short OK does in dual screen, from [dualOkRoute]. */
 internal enum class DualOk {
-    /** The ringed pane's card presses its selected button. */
+    /** The ringed pane's card presses its selected button (an end card with none: it closes). */
     CARD_BUTTON,
 
     /** "Couldn't play this stream": the game's streams to choose from (#138). */
@@ -89,7 +93,7 @@ internal enum class DualOk {
 internal fun dualOkRoute(state: DualState): DualOk {
     val pane = state.pane(state.highlighted)
     return when {
-        dualCardButtons(pane) > 0 -> DualOk.CARD_BUTTON
+        dualCardButtons(pane) > 0 || (pane.status == PaneStatus.Ended && pane.end != null) -> DualOk.CARD_BUTTON
         pane.status == PaneStatus.Error -> DualOk.CHOOSE_STREAM
         state.layout == DualLayout.BIG_SMALL && state.highlighted == Side.RIGHT -> DualOk.MAKE_BIG
         else -> DualOk.FULL_SCREEN
@@ -97,17 +101,41 @@ internal fun dualOkRoute(state: DualState): DualOk {
 }
 
 /** One line of the keys hint: a key and what it does. */
-internal enum class DualHint { MOVE, ZAP, OK_FULL_SCREEN, OK_MAKE_BIG, HOLD_OK_BIG_SMALL, HOLD_OK_SIDE_BY_SIDE }
+internal enum class DualHint { MOVE, ZAP, OK_FULL_SCREEN, OK_MAKE_BIG, HOLD_OK_MORE }
 
 /**
  * The keys hint for [state] (research 8): the D-pad model only, for the panes playing (a pane card names its own
- * keys). OK says what it does on the ringed pane; Hold OK names the other layout.
+ * keys). ◀ ▶ names the edge too; OK says what it does on the ringed pane; Hold OK opens the menu.
  */
 internal fun dualKeyHints(state: DualState): List<DualHint> = listOf(
     DualHint.MOVE,
     DualHint.ZAP,
     if (state.layout == DualLayout.BIG_SMALL && state.highlighted == Side.RIGHT) DualHint.OK_MAKE_BIG else DualHint.OK_FULL_SCREEN,
-    if (state.layout == DualLayout.SPLIT) DualHint.HOLD_OK_BIG_SMALL else DualHint.HOLD_OK_SIDE_BY_SIDE
+    DualHint.HOLD_OK_MORE
+)
+
+/** An entry of the Hold OK menu in dual screen. */
+internal enum class DualMenuEntry {
+    /** Split now: big + small. */
+    LAYOUT_BIG_SMALL,
+
+    /** Big + small now: side by side. */
+    LAYOUT_SIDE_BY_SIDE,
+    SWAP,
+
+    /** The picker for the game of the pane without the ring (#57). */
+    CHANGE_OTHER_GAME,
+
+    /** The ringed pane's game in the full player, as OK does. */
+    FULL_SCREEN
+}
+
+/** The Hold OK menu for [state], in its order: Layout (the other one) · Swap panes · Change the other game · Full screen. */
+internal fun dualMenuEntries(state: DualState): List<DualMenuEntry> = listOf(
+    if (state.layout == DualLayout.SPLIT) DualMenuEntry.LAYOUT_BIG_SMALL else DualMenuEntry.LAYOUT_SIDE_BY_SIDE,
+    DualMenuEntry.SWAP,
+    DualMenuEntry.CHANGE_OTHER_GAME,
+    DualMenuEntry.FULL_SCREEN
 )
 
 /** A key pressed briefly or held, from [DualHoldKey]. */
@@ -116,9 +144,10 @@ internal enum class DualPress { SHORT, HELD }
 /**
  * A key that does one thing pressed briefly (on its release) and another held: held until the key repeats (the
  * system's long-press time), or released after [holdMs], it is [DualPress.HELD] once and its release does nothing
- * more. A release or repeat without its press (the press went to the screen before) does nothing.
+ * more. [heldOnRelease]: a hold is reported on the release instead (a menu that opens then never takes the release
+ * as a click). A release or repeat without its press (the press went to the screen before) does nothing.
  */
-internal class DualHoldKey(private val holdMs: Long = DEFAULT_HOLD_MS) {
+internal class DualHoldKey(private val holdMs: Long = DEFAULT_HOLD_MS, private val heldOnRelease: Boolean = false) {
     private var down = false
     private var held = false
 
@@ -131,13 +160,14 @@ internal class DualHoldKey(private val holdMs: Long = DEFAULT_HOLD_MS) {
         }
         if (!down || held) return null
         held = true
-        return DualPress.HELD
+        return if (heldOnRelease) null else DualPress.HELD
     }
 
     /** The release, [heldMs] after the press; the press to act on now, if any. */
     fun onUp(heldMs: Long = 0L): DualPress? {
         val press = when {
-            !down || held -> null
+            !down -> null
+            held -> if (heldOnRelease) DualPress.HELD else null
             heldMs >= holdMs -> DualPress.HELD
             else -> DualPress.SHORT
         }

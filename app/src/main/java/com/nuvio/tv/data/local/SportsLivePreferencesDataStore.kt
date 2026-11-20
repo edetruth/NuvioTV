@@ -75,8 +75,6 @@ class SportsLivePreferencesDataStore @Inject constructor(
     private val catalogOptionsKey = stringPreferencesKey("sports_live_catalog_options")
     private val followedTeamsKey = stringPreferencesKey("sports_live_followed_teams")
     private val hiddenTitlesKey = stringSetPreferencesKey("sports_live_hidden_titles")
-    // v2: the D-pad key model (research 8) shows its hint afresh to a profile that saw the MENU one.
-    private val dualHintShownKey = intPreferencesKey("sports_live_dual_hint_shown_v2")
     private val panelHintShownKey = intPreferencesKey("sports_live_panel_hint_shown")
     private val dualLayoutKey = stringPreferencesKey("sports_live_dual_layout")
     private val newSportsHintSeenKey = booleanPreferencesKey("sports_live_new_sports_hint_seen")
@@ -403,20 +401,6 @@ class SportsLivePreferencesDataStore @Inject constructor(
     }
 
     /**
-     * Called once per dual screen entry: true when its keys hint shows this time (the profile's first
-     * [DUAL_KEYS_HINT_ENTRIES] entries), which is then counted.
-     */
-    suspend fun claimDualKeysHint(): Boolean {
-        var show = false
-        store().edit { prefs ->
-            val shown = prefs[dualHintShownKey] ?: 0
-            show = shouldShowDualKeysHint(shown)
-            if (show) prefs[dualHintShownKey] = shown + 1
-        }
-        return show
-    }
-
-    /**
      * Called once per in-player panel opening (live.20): true when its keys hint shows this time (the profile's first
      * [PANEL_KEYS_HINT_OPENS] openings), which is then counted.
      */
@@ -687,12 +671,6 @@ private class SyncStampedStore(
 
 /** Between a stored reminder's source keys (a unit separator: never in an addon or item id). */
 private const val REMINDER_KEY_SEPARATOR = "\u001F"
-
-/** Dual screen entries that show the keys hint. */
-const val DUAL_KEYS_HINT_ENTRIES = 3
-
-/** Whether the dual screen's keys hint shows, after it has shown [shownCount] times. */
-fun shouldShowDualKeysHint(shownCount: Int): Boolean = shownCount < DUAL_KEYS_HINT_ENTRIES
 
 /** In-player panel openings that show the keys hint (live.20). */
 const val PANEL_KEYS_HINT_OPENS = 3

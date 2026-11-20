@@ -2,7 +2,11 @@ package com.nuvio.tv.ui.screens.sportslive.dual
 
 import android.view.KeyEvent
 import com.nuvio.tv.core.sportslive.GameEndReason
+import com.nuvio.tv.domain.model.SportsLiveTab
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveEndAction
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveEndCard
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapSession
+import com.nuvio.tv.ui.screens.sportslive.sportsLiveEndActions
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -44,8 +48,9 @@ class DualKeyModelTest {
     }
 
     @Test
-    fun `Left on the left pane picks the other game`() {
+    fun `past the edge, Left on the left pane and Right on the right one, picks the other game`() {
         assertEquals(DualKeyRoute.PickOtherGame, dualKeyRoute(split, KeyEvent.KEYCODE_DPAD_LEFT))
+        assertEquals(DualKeyRoute.PickOtherGame, dualKeyRoute(split.copy(highlighted = Side.RIGHT), KeyEvent.KEYCODE_DPAD_RIGHT))
     }
 
     @Test
@@ -85,15 +90,17 @@ class DualKeyModelTest {
     }
 
     @Test
-    fun `an end card's buttons take Up and Down first, then the game changes past them`() {
+    fun `a pane's end card has Watch next only, no Stay, and Up and Down change the game`() {
+        // Coordinator decision 4: Back closes a pane's end card.
+        assertEquals(listOf(SportsLiveEndAction.WATCH_NEXT), sportsLiveEndActions(ended(next = true).end!!, pane = true))
+        assertEquals(emptyList<SportsLiveEndAction>(), sportsLiveEndActions(ended(next = false).end!!, pane = true))
         val state = split.copy(left = ended(next = true))
-        assertEquals(2, dualCardButtons(ended(next = true)))
-        assertEquals(DualKeyRoute.CardButton(1), dualKeyRoute(state, KeyEvent.KEYCODE_DPAD_DOWN, cardSelected = 0))
-        assertEquals(DualKeyRoute.Zap(forward = true), dualKeyRoute(state, KeyEvent.KEYCODE_DPAD_DOWN, cardSelected = 1))
+        assertEquals(1, dualCardButtons(ended(next = true)))
+        assertEquals(DualKeyRoute.Zap(forward = true), dualKeyRoute(state, KeyEvent.KEYCODE_DPAD_DOWN, cardSelected = 0))
         assertEquals(DualKeyRoute.Zap(forward = false), dualKeyRoute(state, KeyEvent.KEYCODE_DPAD_UP, cardSelected = 0))
-        // Nothing next: Stay alone, and both Up and Down change the game.
+        // Nothing next: no button, and both Up and Down change the game.
         val alone = split.copy(left = ended(next = false))
-        assertEquals(1, dualCardButtons(ended(next = false)))
+        assertEquals(0, dualCardButtons(ended(next = false)))
         assertEquals(DualKeyRoute.Zap(forward = true), dualKeyRoute(alone, KeyEvent.KEYCODE_DPAD_DOWN))
         assertEquals(DualKeyRoute.Zap(forward = false), dualKeyRoute(alone, KeyEvent.KEYCODE_DPAD_UP))
     }
@@ -148,12 +155,37 @@ class DualKeyModelTest {
     fun `OK on a pane card presses its button, on the error card it offers the streams`() {
         assertEquals(DualOk.CARD_BUTTON, dualOkRoute(split.copy(left = starting)))
         assertEquals(DualOk.CARD_BUTTON, dualOkRoute(split.copy(left = ended(next = true))))
+        // An end card with nothing next: OK closes it.
+        assertEquals(DualOk.CARD_BUTTON, dualOkRoute(split.copy(left = ended(next = false))))
         assertEquals(DualOk.CHOOSE_STREAM, dualOkRoute(split.copy(left = DualPane(a, dualStream("a"), PaneStatus.Error))))
         // A card on the small pane keeps OK for its buttons.
         assertEquals(DualOk.CARD_BUTTON, dualOkRoute(bigSmall.copy(right = starting, highlighted = Side.RIGHT)))
     }
 
     // Hold OK and MENU
+
+    @Test
+    fun `Hold OK opens the menu on its release, so the menu never takes the release as a click`() {
+        val key = DualHoldKey(holdMs = 500L, heldOnRelease = true)
+        assertNull(key.onDown(0))
+        assertNull(key.onDown(1))
+        assertNull(key.onDown(2))
+        assertEquals(DualPress.HELD, key.onUp(heldMs = 900L))
+        // A short one is still a short one.
+        assertNull(key.onDown(0))
+        assertEquals(DualPress.SHORT, key.onUp(heldMs = 100L))
+        // A release whose press went elsewhere: nothing.
+        assertNull(key.onUp(heldMs = 900L))
+    }
+
+    @Test
+    fun `the Hold OK menu offers the other layout, Swap panes, Change the other game and Full screen`() {
+        assertEquals(
+            listOf(DualMenuEntry.LAYOUT_BIG_SMALL, DualMenuEntry.SWAP, DualMenuEntry.CHANGE_OTHER_GAME, DualMenuEntry.FULL_SCREEN),
+            dualMenuEntries(split)
+        )
+        assertEquals(DualMenuEntry.LAYOUT_SIDE_BY_SIDE, dualMenuEntries(bigSmall).first())
+    }
 
     @Test
     fun `a short OK acts on its release, a held one once, and never both`() {
@@ -192,17 +224,42 @@ class DualKeyModelTest {
 
     @Test
     fun `the keys hint names the D-pad model and what OK and Hold OK do here`() {
+        assertEquals(listOf(DualHint.MOVE, DualHint.ZAP, DualHint.OK_FULL_SCREEN, DualHint.HOLD_OK_MORE), dualKeyHints(split))
+        assertEquals(listOf(DualHint.MOVE, DualHint.ZAP, DualHint.OK_FULL_SCREEN, DualHint.HOLD_OK_MORE), dualKeyHints(bigSmall))
         assertEquals(
-            listOf(DualHint.MOVE, DualHint.ZAP, DualHint.OK_FULL_SCREEN, DualHint.HOLD_OK_BIG_SMALL),
-            dualKeyHints(split)
-        )
-        assertEquals(
-            listOf(DualHint.MOVE, DualHint.ZAP, DualHint.OK_FULL_SCREEN, DualHint.HOLD_OK_SIDE_BY_SIDE),
-            dualKeyHints(bigSmall)
-        )
-        assertEquals(
-            listOf(DualHint.MOVE, DualHint.ZAP, DualHint.OK_MAKE_BIG, DualHint.HOLD_OK_SIDE_BY_SIDE),
+            listOf(DualHint.MOVE, DualHint.ZAP, DualHint.OK_MAKE_BIG, DualHint.HOLD_OK_MORE),
             dualKeyHints(bigSmall.copy(highlighted = Side.RIGHT))
         )
+    }
+
+    // Back from a full screen opened out of dual (coordinator decision 1)
+
+    private fun zapOn(game: com.nuvio.tv.domain.model.SportsLiveItem, back: SportsLiveDualReturn?) =
+        SportsLiveZapSession.of(listOf(a, b, c), game.streamKey, SportsLiveTab.LIVE_NOW, null, returnToHomeOnBack = false)!!
+            .copy(dualReturn = back)
+
+    @Test
+    fun `Back from a full screen opened out of dual returns to dual with both games`() {
+        val back = SportsLiveDualReturn(other = b, items = listOf(a, b, c), zapItems = listOf(a, b, c), filter = null, tab = SportsLiveTab.LIVE_NOW)
+        val session = zapOn(a, back).dualSessionOnBack(dualStream("a"))!!
+        assertEquals(a, session.left)
+        assertEquals(b, session.right)
+        assertEquals(dualStream("a"), session.leftStream)
+        // Back from that dual leaves: it does not go to the full player again.
+        assertNull(session.backTo)
+        // Zapped to c in full screen: c comes back beside b.
+        assertEquals(c, zapOn(c, back).dualSessionOnBack(null)!!.left)
+        // Zapped to the other pane's game: nothing to pair, Back leaves as before.
+        assertNull(zapOn(b, back).dualSessionOnBack(null))
+        // A session not started from dual: Back as before.
+        assertNull(zapOn(a, null).dualSessionOnBack(null))
+    }
+
+    @Test
+    fun `the way back to dual survives zaps and the panel's lineup`() {
+        val back = SportsLiveDualReturn(other = b, items = listOf(a, b, c), zapItems = listOf(a, b, c), filter = null, tab = SportsLiveTab.LIVE_NOW)
+        val session = zapOn(a, back)
+        assertEquals(back, session.next().dualReturn)
+        assertEquals(back, session.moveTo(c.streamKey)!!.dualReturn)
     }
 }

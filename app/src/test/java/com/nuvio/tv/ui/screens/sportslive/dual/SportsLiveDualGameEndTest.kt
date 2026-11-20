@@ -324,4 +324,24 @@ class SportsLiveDualGameEndTest {
         guard.onAutoMove()
         assertFalse(guard.mayAutoMove())
     }
+
+    @Test
+    fun `Back closes a pane's end card, its countdown with it, and the pane stays on Game over`() = runTest(mainDispatcherRule.dispatcher) {
+        // Coordinator decision 4: a pane's card has no Stay; Back closes it.
+        val viewModel = newViewModel(a, d)
+        runCurrent()
+        viewModel.playing()
+        viewModel.onUnhealthy(a, SportsLiveStreamHealth.Problem.UNEXPECTED_END)
+        assertNotNull(viewModel.state.value!!.left.end!!.countdownEndsAtMs)
+        // The ring is on the other pane: its card still closes.
+        viewModel.highlight(Side.RIGHT)
+        assertTrue(viewModel.closeEndCard())
+        assertNull(viewModel.state.value!!.left.end)
+        assertEquals(PaneStatus.Ended, viewModel.state.value!!.left.status)
+        advanceTimeBy(SportsLiveEndCountdown.DURATION_MS * 2)
+        runCurrent()
+        assertEquals(a, viewModel.state.value!!.left.item)
+        // Nothing left to close: Back goes on as before.
+        assertFalse(viewModel.closeEndCard())
+    }
 }

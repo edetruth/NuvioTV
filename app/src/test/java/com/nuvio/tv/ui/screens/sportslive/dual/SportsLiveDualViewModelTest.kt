@@ -333,9 +333,9 @@ class SportsLiveDualViewModelTest {
     }
 
     @Test
-    fun `the keys hint shows for its time when claimed, and not otherwise`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `the keys hint shows on every entry for its time, and goes at once on a key`() = runTest(mainDispatcherRule.dispatcher) {
         val session = SportsLiveDualSession(a, b, items, null, SportsLiveTab.LIVE_NOW)
-        val shown = SportsLiveDualViewModel(resolve = { null }, endedKeys = { emptySet() }, session = session, claimKeysHint = { true })
+        val shown = SportsLiveDualViewModel(resolve = { null }, endedKeys = { emptySet() }, session = session)
         runCurrent()
         assertTrue(shown.keysHint.value)
         advanceTimeBy(SportsLiveDualViewModel.KEYS_HINT_MS - 1)
@@ -343,8 +343,11 @@ class SportsLiveDualViewModelTest {
         advanceTimeBy(2)
         assertFalse(shown.keysHint.value)
 
-        val notShown = SportsLiveDualViewModel(resolve = { null }, endedKeys = { emptySet() }, session = session, claimKeysHint = { false })
+        // The next entry shows it again; Left, Right or OK hide it before its time.
+        val again = SportsLiveDualViewModel(resolve = { null }, endedKeys = { emptySet() }, session = session)
         runCurrent()
-        assertFalse(notShown.keysHint.value)
+        assertTrue(again.keysHint.value)
+        again.hideKeysHint()
+        assertFalse(again.keysHint.value)
     }
 }

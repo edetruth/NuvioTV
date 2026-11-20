@@ -1,5 +1,12 @@
 package com.nuvio.tv.ui.screens.sportslive.dual
 
+import com.nuvio.tv.core.sportslive.SportsLiveWorkingLinks
+import com.nuvio.tv.domain.model.SportsLiveItem
+import com.nuvio.tv.domain.model.SportsLiveTab
+import com.nuvio.tv.domain.model.Stream
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapSession
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapSessions
+
 /** What opening dual screen from a full player pops off the back stack. */
 enum class SportsLiveDualPopTarget {
     /**
@@ -45,4 +52,54 @@ fun sportsLiveDualEntryPopTarget(
 fun sportsLiveStackAfterDualHandOff(stack: List<String>, dualRoute: String, targetRoute: String): List<String> {
     val dual = stack.lastIndexOf(dualRoute)
     return (if (dual < 0) stack else stack.subList(0, dual)) + targetRoute
+}
+
+/**
+ * Coordinator decision 1 (as YouTube TV and Apple multiview): a game OK took full screen from dual remembers the
+ * game in the other pane and dual's lists, in its zap session ([SportsLiveZapSession.dualReturn]), so Back from
+ * that player returns to dual with both games. A session started anywhere else carries none.
+ */
+data class SportsLiveDualReturn(
+    /** The other pane's game. */
+    val other: SportsLiveItem,
+    val items: List<SportsLiveItem>,
+    val zapItems: List<SportsLiveItem>,
+    val filter: String?,
+    val tab: SportsLiveTab,
+    val finishedKeys: Set<String> = emptySet()
+)
+
+/**
+ * Dual screen for Back from this full player: the game playing now (a zap in full screen replaced the pane's
+ * game) on the left, on [playingStream] with no lookup and with the sound, beside the other pane's game. Null with
+ * no [SportsLiveZapSession.dualReturn], or when the game playing is the other pane's (or shares a source with it):
+ * Back leaves as before.
+ */
+internal fun SportsLiveZapSession.dualSessionOnBack(playingStream: Stream?): SportsLiveDualSession? {
+    val back = dualReturn ?: return null
+    val game = current
+    if (game.sharesSourceWith(back.other)) return null
+    return SportsLiveDualSession(
+        left = game,
+        right = back.other,
+        items = back.items,
+        filter = back.filter,
+        tab = back.tab,
+        leftStream = playingStream,
+        zapItems = back.zapItems,
+        finishedKeys = back.finishedKeys
+    )
+}
+
+/**
+ * Back from the full player showing [contentId] (the nav host's one-line seam): when it was opened full screen from
+ * dual, dual screen opens again on both games ([openDual] leaves the player as "Watch both" does) and this returns
+ * true; false otherwise, and Back goes on as before.
+ */
+internal fun sportsLiveBackToDual(contentId: String?, openDual: () -> Unit): Boolean {
+    val zap = SportsLiveZapSessions.activeFor(contentId) ?: return false
+    val session = zap.dualSessionOnBack(SportsLiveWorkingLinks.shared.playing(zap.current.id)) ?: return false
+    SportsLiveDualSessions.start(session)
+    openDual()
+    return true
 }

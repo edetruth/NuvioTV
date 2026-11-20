@@ -138,7 +138,6 @@ class SportsLiveSettingsSyncTest {
         prefs.setCatalogOption("secret-addon-id|live_catalog", CatalogOption("genre", "Hidden Value"))
         prefs.updateReminders { it.copy(reminders = listOf(GameReminder(setOf("secret-addon-id|item-42"), "Game", "A Team", "B Team", now + 60 * AlertFixtures.MINUTE))) }
         prefs.follow(celtics)
-        prefs.claimDualKeysHint()
 
         harness.service.pushCurrentProfileToRemote().getOrThrow()
 

@@ -93,6 +93,8 @@ import com.nuvio.tv.ui.screens.sportslive.sportsLiveBold
 import com.nuvio.tv.R
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.ui.components.LoadingIndicator
+import com.nuvio.tv.ui.components.NuvioDialog
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveMenuButton
 import com.nuvio.tv.core.sportslive.alerts.DualPanes
 import com.nuvio.tv.ui.screens.sportslive.RegisterSportsLiveAlertSurface
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveAlertSurface
@@ -126,9 +128,10 @@ val LocalOpenSportsLiveDual = staticCompositionLocalOf<(() -> Unit)?> { null }
  * DualKeyModel.kt (research 8: no Menu or channel keys needed): Left/Right highlight a pane (the sound follows),
  * Up/Down change its game (through a pane card's buttons first), OK plays the highlighted game in the full player
  * (its playing stream as is; a pane not playing takes the section's path: Stream screen, or a merged game's best
- * stream) or, on the small pane of big + small, makes it the big one, and Hold OK switches split / big + small.
- * MENU (swap; held: layout, #123), CH+/CH- and INFO (the game info for the game with sound, #139) are shortcuts.
- * Back leaves, or returns to the full player dual screen was opened in.
+ * stream; Back there comes back here) or, on the small pane of big + small, makes it the big one; Hold OK opens the
+ * menu (Layout, Swap panes, Change the other game, Full screen). MENU (swap; held: layout, #123), CH+/CH- and INFO
+ * (the game info for the game with sound, #139) are shortcuts. Back closes a pane's end card, else leaves, or
+ * returns to the full player dual screen was opened in.
  * Each pane has a score strip under it (#124). Both layouts use the same two players: no third decoder.
  *
  * Each pane is a [PlayerView] with its default SurfaceView: two SurfaceViews are composited by the
@@ -219,7 +222,9 @@ fun SportsLiveDualScreen(
     val infoItem = dual.pane(dual.infoSide).item
     LaunchedEffect(infoItem) { gameInfo.follow(infoItem) }
     val menuKey = remember { DualMenuKey() }
-    val okKey = remember { DualHoldKey(ViewConfiguration.getLongPressTimeout().toLong()) }
+    // Hold OK opens the menu on its release, so the menu never takes that release as a click.
+    val okKey = remember { DualHoldKey(ViewConfiguration.getLongPressTimeout().toLong(), heldOnRelease = true) }
+    var menuOpen by remember { mutableStateOf(false) }
 
     LaunchedEffect(players, dual) {
         val current = players ?: return@LaunchedEffect
@@ -227,29 +232,32 @@ fun SportsLiveDualScreen(
         Side.entries.forEach { side -> views[side]?.player = current.player(side) }
     }
 
+    // Set once Back from dual is what plays a game full screen (M11, Close this side).
+    var backPlayed by remember { mutableStateOf(false) }
     // OK plays the pane's stream (or takes the section's path); the players stop before the full
     // player (or Stream screen) opens, and the zap session runs over the dual list.
     SportsLivePlayHost(
         playViewModel = playViewModel,
         onOpenStreamScreen = { item, manual ->
             releasePlayers()
-            viewModel.startZapSession(item)
+            // Back from that full screen returns here, unless Back itself is what plays it (no ping-pong).
+            viewModel.startZapSession(item, returnToDual = !backPlayed)
             onOpenStreamScreen(item, manual)
         },
         onPlayTarget = { target ->
             releasePlayers()
-            viewModel.startZapSession(target.item)
+            viewModel.startZapSession(target.item, returnToDual = !backPlayed)
             onPlayTarget(target)
         }
     )
 
     // Back from dual screen opened in a full player plays that game full screen again (M11), in place
     // of dual screen as OK does (#27); a second Back while it starts, or dual opened elsewhere, leaves.
-    var backPlayed by remember { mutableStateOf(false) }
     val handleBack: () -> Unit = handleBack@{
         // The game info overlay closes first.
         if (gameInfo.hide()) return@handleBack
-        // An ended pane's countdown (#161): Back stops it first.
+        // A pane's end card (its countdown with it, #161) (coordinator decision 4: no Stay in a pane): Back closes it.
+        if (viewModel.closeEndCard()) return@handleBack
         if (viewModel.cancelEndCountdowns()) return@handleBack
         // "Close this side" (#138): the highlighted pane gave up; the other game plays full screen.
         viewModel.closeFailedSide()?.takeUnless { backPlayed }?.let { (item, stream) ->
@@ -276,7 +284,7 @@ fun SportsLiveDualScreen(
     var endSelection by remember { mutableStateOf(SportsLiveEndAction.WATCH_NEXT) }
     val endActions = highlightedPane.end?.takeIf { highlightedPane.status == PaneStatus.Ended }?.let { sportsLiveEndActions(it, pane = true) }
     LaunchedEffect(dual.highlighted, highlightedPane.end?.item?.streamKey, endActions) {
-        endSelection = endActions?.first() ?: SportsLiveEndAction.WATCH_NEXT
+        endSelection = endActions?.firstOrNull() ?: SportsLiveEndAction.WATCH_NEXT
     }
 
     // Opened from the full player (live.20): its last frame stays in the game's pane until the pane's first frame.
@@ -287,6 +295,13 @@ fun SportsLiveDualScreen(
         if (handoffPane == null || handoffPane.status != PaneStatus.Loading || handoffPane.reconnecting) SportsLiveDualHandoffFrame.clear()
     }
     DisposableEffect(Unit) { onDispose { SportsLiveDualHandoffFrame.clear() } }
+
+    // OK on the ringed pane, or Full screen in the menu: a playing pane's stream goes straight to the full player.
+    fun playFullScreen() {
+        val pane = dual.pane(dual.highlighted)
+        val stream = pane.okStream
+        if (stream != null) playViewModel.playResolved(pane.item, stream) else playViewModel.play(pane.item)
+    }
 
     // Focus starts on the screen and comes back to it when OK's lookup or stream picker closes.
     val focusRequester = remember { FocusRequester() }
@@ -301,7 +316,7 @@ fun SportsLiveDualScreen(
     }
     DisposableEffect(Unit) { onDispose { SportsLiveAlertSurfaces.setDualPanes(null) } }
     val alertBusy by rememberUpdatedState(
-        pairPicker != null || playState != SportsLivePlayState.Idle || dual.pane(dual.highlighted).isStarting
+        menuOpen || pairPicker != null || playState != SportsLivePlayState.Idle || dual.pane(dual.highlighted).isStarting
     )
     val alertSurface = remember(viewModel) {
         object : SportsLiveAlertSurface {
@@ -311,8 +326,8 @@ fun SportsLiveDualScreen(
         }
     }
     RegisterSportsLiveAlertSurface(alertSurface)
-    LaunchedEffect(playState == SportsLivePlayState.Idle, pairPicker == null) {
-        if (playState == SportsLivePlayState.Idle && pairPicker == null) runCatching { focusRequester.requestFocus() }
+    LaunchedEffect(playState == SportsLivePlayState.Idle, pairPicker == null, menuOpen) {
+        if (playState == SportsLivePlayState.Idle && pairPicker == null && !menuOpen) runCatching { focusRequester.requestFocus() }
     }
 
     Box(
@@ -337,7 +352,7 @@ fun SportsLiveDualScreen(
                     }
                     return@onKeyEvent true
                 }
-                // OK (research 8): a short press acts on its release; held, split / big + small (no MENU needed).
+                // OK (research 8): a short press acts on its release; held, the menu (the app-wide Hold OK, #88).
                 if (native.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || native.keyCode == KeyEvent.KEYCODE_ENTER ||
                     native.keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
                 ) {
@@ -350,8 +365,9 @@ fun SportsLiveDualScreen(
                         KeyEvent.ACTION_UP -> okKey.onUp(native.eventTime - native.downTime)
                         else -> null
                     }
+                    if (press != null) viewModel.hideKeysHint()
                     when (press) {
-                        DualPress.HELD -> viewModel.toggleLayout()
+                        DualPress.HELD -> menuOpen = true
                         DualPress.SHORT -> {
                             val pane = dual.pane(dual.highlighted)
                             when (dualOkRoute(dual)) {
@@ -361,19 +377,14 @@ fun SportsLiveDualScreen(
                                         SportsLiveStartingAction.SOURCES -> playViewModel.chooseStream(pane.item)
                                     }
                                 } else {
-                                    when (endSelection) {
-                                        SportsLiveEndAction.WATCH_NEXT -> viewModel.endWatchNext()
-                                        else -> viewModel.endStay()
-                                    }
+                                    // Watch next, its one button; with nothing next, OK closes the card as Back does.
+                                    if (!viewModel.endWatchNext()) viewModel.endStay()
                                 }
                                 // A pane whose recovery gave up offers its streams to choose from (#138).
                                 DualOk.CHOOSE_STREAM -> playViewModel.chooseStream(pane.item)
                                 DualOk.MAKE_BIG -> viewModel.swap()
                                 // A playing pane's stream goes straight to the full player.
-                                DualOk.FULL_SCREEN -> {
-                                    val stream = pane.okStream
-                                    if (stream != null) playViewModel.playResolved(pane.item, stream) else playViewModel.play(pane.item)
-                                }
+                                DualOk.FULL_SCREEN -> playFullScreen()
                             }
                         }
                         null -> Unit
@@ -405,9 +416,15 @@ fun SportsLiveDualScreen(
                 // buttons, then the pane's game. Every pane zaps, its error card included: flipping on never sticks.
                 val cardSelected = if (highlightedPane.isStarting) startingSelection.ordinal else endActions?.indexOf(endSelection) ?: 0
                 when (val route = dualKeyRoute(dual, native.keyCode, cardSelected) ?: return@onKeyEvent false) {
-                    is DualKeyRoute.Highlight -> viewModel.highlight(route.side)
-                    // On the left pane already, Left opens the other pane's picker (#57).
-                    DualKeyRoute.PickOtherGame -> if (native.repeatCount == 0) viewModel.onLeft()
+                    is DualKeyRoute.Highlight -> {
+                        viewModel.hideKeysHint()
+                        viewModel.highlight(route.side)
+                    }
+                    // Past the edge (Left on the left pane, Right on the right one): the other pane's picker (#57).
+                    DualKeyRoute.PickOtherGame -> if (native.repeatCount == 0) {
+                        viewModel.hideKeysHint()
+                        viewModel.openPairPicker(dual.highlighted.other)
+                    }
                     is DualKeyRoute.CardButton -> if (highlightedPane.isStarting) {
                         startingSelection = SportsLiveStartingAction.entries[route.index]
                     } else {
@@ -498,6 +515,22 @@ fun SportsLiveDualScreen(
                     .padding(horizontal = 20.dp, vertical = 10.dp)
             )
         }
+    }
+
+    if (menuOpen) {
+        DualMenu(
+            entries = dualMenuEntries(dual),
+            onPick = { entry ->
+                menuOpen = false
+                when (entry) {
+                    DualMenuEntry.LAYOUT_BIG_SMALL, DualMenuEntry.LAYOUT_SIDE_BY_SIDE -> viewModel.toggleLayout()
+                    DualMenuEntry.SWAP -> viewModel.swap()
+                    DualMenuEntry.CHANGE_OTHER_GAME -> viewModel.openPairPicker(dual.highlighted.other)
+                    DualMenuEntry.FULL_SCREEN -> playFullScreen()
+                }
+            },
+            onDismiss = { menuOpen = false }
+        )
     }
 
     pairPicker?.let { candidates ->
@@ -798,8 +831,7 @@ private fun DualKeysHint(hints: List<DualHint>) {
                 DualHint.ZAP -> R.string.sports_live_dual_hint_key_zap to R.string.sports_live_dual_hint_zap
                 DualHint.OK_FULL_SCREEN -> R.string.sports_live_dual_hint_key_ok to R.string.sports_live_dual_hint_full_screen
                 DualHint.OK_MAKE_BIG -> R.string.sports_live_dual_hint_key_ok to R.string.sports_live_dual_hint_make_big
-                DualHint.HOLD_OK_BIG_SMALL -> R.string.sports_live_dual_hint_key_hold_ok to R.string.sports_live_dual_hint_big_small
-                DualHint.HOLD_OK_SIDE_BY_SIDE -> R.string.sports_live_dual_hint_key_hold_ok to R.string.sports_live_dual_hint_side_by_side
+                DualHint.HOLD_OK_MORE -> R.string.sports_live_dual_hint_key_hold_ok to R.string.sports_live_dual_hint_more
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 val cap = SportsLiveTokens.Radius.ButtonShape
@@ -820,6 +852,33 @@ private fun DualKeysHint(hints: List<DualHint>) {
                     overflow = TextOverflow.Ellipsis
                 )
             }
+        }
+    }
+}
+
+/**
+ * Hold OK in dual screen (the app-wide "more" meaning, #88): a small V2 menu, the first entry focused. Layout
+ * names the other layout; Change the other game opens the picker for the pane without the ring.
+ */
+@Composable
+private fun DualMenu(entries: List<DualMenuEntry>, onPick: (DualMenuEntry) -> Unit, onDismiss: () -> Unit) {
+    val firstFocusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { firstFocusRequester.requestFocus() } }
+    NuvioDialog(onDismiss = onDismiss, title = stringResource(R.string.sports_live_dual_menu_title)) {
+        entries.forEachIndexed { index, entry ->
+            SportsLiveMenuButton(
+                text = stringResource(
+                    when (entry) {
+                        DualMenuEntry.LAYOUT_BIG_SMALL -> R.string.sports_live_dual_menu_layout_big_small
+                        DualMenuEntry.LAYOUT_SIDE_BY_SIDE -> R.string.sports_live_dual_menu_layout_side_by_side
+                        DualMenuEntry.SWAP -> R.string.sports_live_dual_menu_swap
+                        DualMenuEntry.CHANGE_OTHER_GAME -> R.string.sports_live_dual_menu_change_other
+                        DualMenuEntry.FULL_SCREEN -> R.string.sports_live_dual_menu_full_screen
+                    }
+                ),
+                onClick = { onPick(entry) },
+                modifier = if (index == 0) Modifier.focusRequester(firstFocusRequester) else Modifier
+            )
         }
     }
 }

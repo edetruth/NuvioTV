@@ -96,7 +96,7 @@ internal fun SportsLiveZapSession.pickFromPanel(
         tab = SportsLiveTab.LIVE_NOW,
         filter = filter.takeIf { tab == SportsLiveTab.LIVE_NOW },
         returnToHomeOnBack = returnToHomeOnBack
-    )?.copy(panelChip = panelChip)
+    )?.copy(panelChip = panelChip, dualReturn = dualReturn)
 
 /**
  * What the zap banner shows (#76); [switching] while the game's stream is being looked up. A game

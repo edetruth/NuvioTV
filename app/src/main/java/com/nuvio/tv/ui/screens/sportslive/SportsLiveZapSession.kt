@@ -26,7 +26,9 @@ data class SportsLiveZapSession(
     /** The panel's rows (stream keys) in the order it lists them (#142); null until [withLineup]. */
     val lineup: List<String>? = null,
     /** Rows of [lineup] CH+/CH− pass over (F11): finals and just ended games, which the panel still lists. */
-    val skipped: Set<String> = emptySet()
+    val skipped: Set<String> = emptySet(),
+    /** Opened full screen from dual screen: Back returns to dual with both games (coordinator decision 1). */
+    val dualReturn: com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualReturn? = null
 ) {
     init {
         require(index in items.indices) { "index $index outside ${items.size} items" }

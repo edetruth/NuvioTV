@@ -161,8 +161,6 @@ class SportsLiveDualViewModel internal constructor(
     private val resolve: suspend (SportsLiveItem) -> Stream?,
     private val endedKeys: () -> Set<String>,
     session: SportsLiveDualSession?,
-    /** Counts this entry for the keys hint; true when the hint shows (see [keysHint]). */
-    claimKeysHint: suspend () -> Boolean = { false },
     /** Whether a pane can play the full player's stream as is (a plain url); else the pane looks one up. */
     private val handOffPlayable: suspend (Stream) -> Boolean = { true },
     /** Which links work for each game (#65): the panes' outcomes are remembered here. */
@@ -216,7 +214,6 @@ class SportsLiveDualViewModel internal constructor(
         },
         endedKeys = { repo.endedKeys.value },
         session = SportsLiveDualSessions.take(),
-        claimKeysHint = preferences::claimDualKeysHint,
         handOffPlayable = { stream -> sportsLiveLightPlayable(stream, directDebridResolver) },
         recoveryLookup = resolver::recoveryStream,
         recoveryBudget = SportsLiveRecoveryBudget.shared,
@@ -250,7 +247,7 @@ class SportsLiveDualViewModel internal constructor(
 
     private val _keysHint = MutableStateFlow(false)
 
-    /** The keys hint shows for [KEYS_HINT_MS] after the screen opens, on the profile's first entries. */
+    /** The keys hint shows for [KEYS_HINT_MS] after the screen opens, every time, until ◀ ▶ or OK ([hideKeysHint]). */
     val keysHint: StateFlow<Boolean> = _keysHint.asStateFlow()
 
     private val _pairHint = MutableStateFlow<String?>(null)
@@ -343,14 +340,18 @@ class SportsLiveDualViewModel internal constructor(
                     _pairHint.value = null
                 }
             }
+            // Every entry (coordinator decision 3): the model is shown where it is used, briefly.
+            _keysHint.value = true
             viewModelScope.launch {
-                if (runCatching { claimKeysHint() }.getOrDefault(false)) {
-                    _keysHint.value = true
-                    delay(KEYS_HINT_MS)
-                    _keysHint.value = false
-                }
+                delay(KEYS_HINT_MS)
+                _keysHint.value = false
             }
         }
+    }
+
+    /** ◀ ▶ or OK was pressed: the keys hint has done its job. */
+    fun hideKeysHint() {
+        _keysHint.value = false
     }
 
     fun highlight(side: Side) = dispatch(DualAction.Highlight(side))
@@ -364,12 +365,16 @@ class SportsLiveDualViewModel internal constructor(
         if (state.highlighted == Side.LEFT) openPairPicker() else highlight(Side.LEFT)
     }
 
+    // The pane the open picker changes (#57): the right one from ◀ on the left pane, the left one from ▶ on the right.
+    private var pickerSide = Side.RIGHT
+
     /**
-     * Opens the right pane's picker: the list's games not known to be over, not already on screen and
+     * Opens [side]'s picker: the list's games not known to be over, not already on screen and
      * sharing no source with either pane. Nothing is looked up until one is picked.
      */
-    fun openPairPicker() {
+    fun openPairPicker(side: Side = Side.RIGHT) {
         val state = _state.value ?: return
+        pickerSide = side
         val ended = endedKeys()
         val onScreen = state.left.item.sourceKeys() + state.right.item.sourceKeys()
         _pairHint.value = null
@@ -382,14 +387,14 @@ class SportsLiveDualViewModel internal constructor(
         _pairPicker.value = null
     }
 
-    /** [item] picked in the right pane's picker: that pane plays it (one lookup, the cache's when fresh). */
+    /** [item] picked in a pane's picker: that pane plays it (one lookup, the cache's when fresh). */
     fun pickPair(item: SportsLiveItem) {
         _pairPicker.value = null
         val state = _state.value ?: return
         if (item.sharesSourceWith(state.left.item) || item.sharesSourceWith(state.right.item)) return
-        settle(state.right.item)
+        settle(state.pane(pickerSide).item)
         forgetRecovery(item)
-        load(Side.RIGHT, item)
+        load(pickerSide, item)
     }
 
     /**
@@ -587,6 +592,20 @@ class SportsLiveDualViewModel internal constructor(
         return true
     }
 
+    /**
+     * Back with an end card up (coordinator decision 4: a pane's card has no Stay): the highlighted pane's card closes,
+     * else the other pane's; "Game over" stays. False when neither pane shows one.
+     */
+    fun closeEndCard(): Boolean {
+        val state = _state.value ?: return false
+        val side = listOf(state.highlighted, state.highlighted.other).firstOrNull { side ->
+            state.pane(side).let { it.status == PaneStatus.Ended && it.end != null }
+        } ?: return false
+        jobs.remove(side)?.cancel()
+        dispatch(DualAction.EndChanged(state.pane(side).item, null))
+        return true
+    }
+
     /** Stay on the highlighted ended pane's card: the card goes, "Game over" stays. False when none shows. */
     fun endStay(): Boolean {
         val state = _state.value ?: return false
@@ -701,7 +720,10 @@ class SportsLiveDualViewModel internal constructor(
      * Before OK plays [item] full screen: the player zaps through the dual screen's list, and Back
      * from it returns here. With no session to start, any earlier one ends.
      */
-    fun startZapSession(item: SportsLiveItem) {
+    fun startZapSession(item: SportsLiveItem, returnToDual: Boolean = true) {
+        // Back from that full screen returns here with both games (coordinator decision 1): the other pane's game.
+        // Not when Back from dual is what plays it ([backToPlayer], Close this side): Back then leaves.
+        val other = if (!returnToDual) null else _state.value?.let { state -> state.sideOf(item)?.let { state.pane(it.other).item } }
         // Every game of the tab, so the player's panel and zaps are not held to the filter (#68).
         val session = SportsLiveZapSession.of(
             items = zapItems,
@@ -709,7 +731,7 @@ class SportsLiveDualViewModel internal constructor(
             tab = tab,
             filter = filter,
             returnToHomeOnBack = false
-        )
+        )?.copy(dualReturn = other?.let { SportsLiveDualReturn(it, items, zapItems, filter, tab, finishedKeys) })
         if (session != null) SportsLiveZapSessions.start(session) else SportsLiveZapSessions.clear()
     }
 
@@ -928,7 +950,7 @@ class SportsLiveDualViewModel internal constructor(
         const val DEVICE_LIMIT_RETRY_MS = 1_000L
 
         /** How long the keys hint shows after the screen opens. */
-        const val KEYS_HINT_MS = 6_000L
+        const val KEYS_HINT_MS = 4_000L
 
         /** How long "Paired with ‹game› · ← to change" shows after "Watch with another game" (#57). */
         const val PAIR_HINT_MS = 3_000L

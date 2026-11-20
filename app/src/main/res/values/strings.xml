@@ -4227,15 +4227,20 @@
     <string name="sports_live_dual_sound_on">Sound on</string>
     <string name="sports_live_dual_sound_off">Muted</string>
     <string name="sports_live_dual_hint_key_move">◀ ▶</string>
-    <string name="sports_live_dual_hint_move">Pick a game, sound follows</string>
+    <string name="sports_live_dual_hint_move">Pick a game, sound follows · past the edge: other game</string>
     <string name="sports_live_dual_hint_key_zap">▲ ▼</string>
     <string name="sports_live_dual_hint_zap">Change game</string>
     <string name="sports_live_dual_hint_key_ok">OK</string>
     <string name="sports_live_dual_hint_full_screen">Full screen</string>
     <string name="sports_live_dual_hint_make_big">Make big</string>
     <string name="sports_live_dual_hint_key_hold_ok">Hold OK</string>
-    <string name="sports_live_dual_hint_big_small">Big + small</string>
-    <string name="sports_live_dual_hint_side_by_side">Side by side</string>
+    <string name="sports_live_dual_hint_more">More</string>
+    <string name="sports_live_dual_menu_title">Two games</string>
+    <string name="sports_live_dual_menu_layout_big_small">Layout: big + small</string>
+    <string name="sports_live_dual_menu_layout_side_by_side">Layout: side by side</string>
+    <string name="sports_live_dual_menu_swap">Swap panes</string>
+    <string name="sports_live_dual_menu_change_other">Change the other game</string>
+    <string name="sports_live_dual_menu_full_screen">Full screen</string>
     <string name="sports_live_source_loading">%1$s · loading…</string>
     <string name="sports_live_source_notice">Message from the source · not a stream</string>
     <!-- #156: marks on links that already failed or played for this game, in every stream list. -->

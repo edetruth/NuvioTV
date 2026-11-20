@@ -1176,6 +1176,8 @@ private fun PlaybackNavHost(
             PlayerScreen(
                 viewModel = playerViewModel,
                 onBackPress = { currentVideoId, currentSeason, currentEpisode, autoPlayEnabled, playbackCompleted ->
+                    // A game OK took full screen from dual screen: Back returns to dual with both games (live.20).
+                    if (com.nuvio.tv.ui.screens.sportslive.dual.sportsLiveBackToDual(backStackEntry.arguments?.getString("contentId"), openSportsLiveDual)) return@PlayerScreen
                     // Back stops a highlights playlist and returns to the Game page.
                     if (isHighlightClip) SportsLiveHighlights.stop()
                     if (!playbackCompleted) {
