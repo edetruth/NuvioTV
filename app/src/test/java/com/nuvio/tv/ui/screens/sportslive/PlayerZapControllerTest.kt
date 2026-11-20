@@ -45,7 +45,8 @@ class PlayerZapControllerTest {
 
     private fun TestScope.controller(
         scope: CoroutineScope = backgroundScope,
-        settleMs: Long = 0L
+        settleMs: Long = 0L,
+        prefetching: (SportsLiveItem) -> Boolean = { false }
     ) = PlayerZapController(
         scope = scope,
         resolve = { item ->
@@ -63,7 +64,8 @@ class PlayerZapControllerTest {
         onSkipped = { item -> skipped += item.id },
         endedKeys = { ended },
         triedIds = { tried },
-        settleMs = settleMs
+        settleMs = settleMs,
+        prefetching = prefetching
     )
 
     private fun startOn(id: String) {
@@ -339,6 +341,64 @@ class PlayerZapControllerTest {
         pending.getValue("c").complete(STREAM)
         runCurrent()
         assertEquals(listOf("c" to STREAM), navigated)
+    }
+
+    @Test
+    fun `a CH zap on a game being prefetched waits for the prefetch instead of skipping`() = runTest {
+        startOn("a")
+        val prefetchingIds = mutableSetOf("b")
+        val controller = controller(prefetching = { it.id in prefetchingIds })
+
+        controller.zap("a", forward = true)
+        runCurrent()
+        // Past the 8 s skip wait: b's prefetch is still running, so the zap stays on b with the card up.
+        advanceTimeBy(SportsLiveStreamThresholds.ZAP_SKIP_WAIT_MS + 3_000)
+        runCurrent()
+        assertTrue(skipped.isEmpty())
+        assertEquals("b", controller.resolving.value?.current?.id)
+        assertEquals("b", controller.looking.value?.id)
+        // The prefetch answers: b plays.
+        pending.getValue("b").complete(STREAM)
+        runCurrent()
+        assertEquals(listOf("b" to STREAM), navigated)
+        assertTrue(skipped.isEmpty())
+    }
+
+    @Test
+    fun `the wait on a prefetch is bounded by the lookup's cap and Skip still works`() = runTest {
+        startOn("a")
+        val controller = controller(prefetching = { it.id == "b" || it.id == "c" })
+
+        controller.zap("a", forward = true)
+        runCurrent()
+        advanceTimeBy(SportsLiveStreamThresholds.LOOKUP_HARD_CAP_MS - 1)
+        runCurrent()
+        assertTrue(skipped.isEmpty())
+        advanceTimeBy(2)
+        runCurrent()
+        // At the lookup's own 20 s cap the zap skips on, as it would have at 8 s.
+        assertEquals(listOf("b"), skipped)
+        assertEquals("c", controller.resolving.value?.current?.id)
+
+        // c is being prefetched too: Skip on the card moves on at once, past 8 s or not.
+        advanceTimeBy(SportsLiveStreamThresholds.ZAP_LOOKING_CARD_AFTER_MS + 1)
+        runCurrent()
+        assertTrue(controller.skip())
+        runCurrent()
+        assertEquals(listOf("b", "c"), skipped)
+    }
+
+    @Test
+    fun `a lookup that found nothing within 8 s is not waited on even while prefetching`() = runTest {
+        startOn("a")
+        val controller = controller(prefetching = { true })
+
+        controller.zap("a", forward = true)
+        runCurrent()
+        pending.getValue("b").complete(null)
+        runCurrent()
+        // b answered with nothing: skipped at once, no extra wait.
+        assertEquals(listOf("b"), skipped)
     }
 
     @Test

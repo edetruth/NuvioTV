@@ -220,7 +220,9 @@ class SportsLiveZapViewModel internal constructor(
         endedKeys = { repo.endedKeys.value },
         triedIds = { tried.ids() },
         // #142: CH+/CH- walk the panel's own list.
-        lineup = { lineup.value?.rows }
+        lineup = { lineup.value?.rows },
+        // B2: a zap on a game being prefetched waits for that prefetch instead of skipping it.
+        prefetching = { item -> prefetchHooks?.isPrefetching?.invoke(item) == true }
     )
 
     /** True when this player was opened with a zap session for its content; only then is the overlay shown. */

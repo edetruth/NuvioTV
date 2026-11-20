@@ -19,7 +19,9 @@ class SportsLivePrefetchHooks(
     val prefetch: suspend (SportsLiveItem) -> SportsLiveLookup,
     val isWarm: (SportsLiveItem) -> Boolean,
     val isCooling: (SportsLiveItem) -> Boolean,
-    val verify: suspend (SportsLiveItem, Stream) -> Unit = { _, _ -> }
+    val verify: suspend (SportsLiveItem, Stream) -> Unit = { _, _ -> },
+    /** True while a game's prefetch is running ([SportsLiveZapResolver.isPrefetching]). */
+    val isPrefetching: (SportsLiveItem) -> Boolean = { false }
 ) {
     companion object {
         fun of(resolver: SportsLiveZapResolver) = SportsLivePrefetchHooks(
@@ -27,7 +29,8 @@ class SportsLivePrefetchHooks(
             isWarm = resolver::isWarm,
             isCooling = resolver::allSourcesCooling,
             // A link the lookup's own race just held is not probed again.
-            verify = { item, stream -> if (!resolver.holds(item, stream)) resolver.verifyAndHold(item, stream) }
+            verify = { item, stream -> if (!resolver.holds(item, stream)) resolver.verifyAndHold(item, stream) },
+            isPrefetching = resolver::isPrefetching
         )
     }
 }

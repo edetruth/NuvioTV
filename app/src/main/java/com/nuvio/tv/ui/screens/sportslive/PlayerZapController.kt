@@ -54,7 +54,14 @@ class PlayerZapController(
     /** A CH± zap gives up on a slow lookup after this long and skips on (#158); a pick waits for the lookup. */
     private val skipWaitMs: Long = SportsLiveStreamThresholds.ZAP_SKIP_WAIT_MS,
     /** A CH± zap's lookup running this long shows the Looking for streams card. */
-    private val lookingAfterMs: Long = SportsLiveStreamThresholds.ZAP_LOOKING_CARD_AFTER_MS
+    private val lookingAfterMs: Long = SportsLiveStreamThresholds.ZAP_LOOKING_CARD_AFTER_MS,
+    /** True while [SportsLiveItem]'s prefetch is running (live.20 B2): a CH± zap on it waits past [skipWaitMs]. */
+    private val prefetching: (SportsLiveItem) -> Boolean = { false },
+    /**
+     * How long in all a CH± zap waits on a game whose prefetch is running: the lookup's own hard cap, which the
+     * prefetch (started earlier) reaches first, so the wait never outlasts the lookup it joined.
+     */
+    private val prefetchWaitMs: Long = SportsLiveStreamThresholds.LOOKUP_HARD_CAP_MS
 ) {
     companion object {
         const val SETTLE_MS = 600L
@@ -237,8 +244,9 @@ class PlayerZapController(
     }
 
     /**
-     * [item]'s stream for a CH± zap: null when its lookup finds none, takes over [skipWaitMs], or Skip is pressed.
-     * The card shows from [lookingAfterMs] on; the addons keep answering in the background for the next lookup.
+     * [item]'s stream for a CH± zap: null when its lookup finds none, takes over [skipWaitMs] (over [prefetchWaitMs]
+     * when its prefetch is running), or Skip is pressed. The card shows from [lookingAfterMs] on; the addons keep
+     * answering in the background for the next lookup.
      */
     private suspend fun resolveOrSkip(item: SportsLiveItem): Stream? = coroutineScope {
         val skipped = CompletableDeferred<Unit>()
@@ -248,12 +256,21 @@ class PlayerZapController(
             delay(lookingAfterMs)
             _looking.value = item
         }
+        suspend fun waitFor(ms: Long): Stream? = withTimeoutOrNull(ms) {
+            select<Stream?> {
+                found.onAwait { it }
+                skipped.onAwait { null }
+            }
+        }
         try {
-            withTimeoutOrNull(skipWaitMs) {
-                select<Stream?> {
-                    found.onAwait { it }
-                    skipped.onAwait { null }
-                }
+            val stream = waitFor(skipWaitMs)
+            // B2: a game being prefetched is about to answer (its addons were asked earlier): skipping it now would
+            // throw that answer away. Keep waiting, Skip still works, up to the prefetch's own cap.
+            if (stream == null && !found.isCompleted && !skipped.isCompleted && prefetching(item)) {
+                SportsLiveSpeedClock.stage("waitPrefetch")
+                waitFor((prefetchWaitMs - skipWaitMs).coerceAtLeast(0L))
+            } else {
+                stream
             }
         } finally {
             card.cancel()

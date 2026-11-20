@@ -243,6 +243,9 @@ class SportsLiveZapResolver @Inject constructor(
         return (listOf(item) + item.alternates).all { SportsLiveSourceCooldown.keyOf(it.addonBaseUrl) in cooling }
     }
 
+    /** True while [item]'s prefetch is running: a zap that joined it waits for it rather than skip (B2). */
+    fun isPrefetching(item: SportsLiveItem): Boolean = runningPrefetch(item) != null
+
     private fun runningPrefetch(item: SportsLiveItem): Deferred<SportsLiveLookup>? =
         synchronized(prefetches) { prefetches[item.streamKey]?.takeIf { it.isActive } }
 
