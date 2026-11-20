@@ -157,6 +157,10 @@ import com.nuvio.tv.ui.screens.sportslive.SportsLiveShortPress
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveReconnectingChip
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapTarget
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapViewModel
+import com.nuvio.tv.ui.screens.sportslive.GameInfoKeyAction
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveGameInfoKeys
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveGameInfoOverlay
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveGameInfoViewModel
 import com.nuvio.tv.ui.screens.sportslive.liveWindow
 import com.nuvio.tv.ui.screens.sportslive.rememberSportsLiveZapKeyHandler
 import com.nuvio.tv.ui.screens.sportslive.RegisterSportsLiveAlertSurface
@@ -227,6 +231,8 @@ fun PlayerScreen(
     val uiState by viewModel.uiState.collectAsState()
     val sportsLiveZapKey = rememberSportsLiveZapKeyHandler(onZap)
     val sportsLiveZap: SportsLiveZapViewModel = hiltViewModel()
+    // Sports & Live game info (#139): on demand over the game this player plays.
+    val sportsLiveGameInfo: SportsLiveGameInfoViewModel = hiltViewModel()
     val playerBadges = rememberPlayerBadges(viewModel, uiState)
     val partyState by viewModel.party.state.collectAsState()
     // Sports & Live zapping, its panel and live rewind are off during a watch party.
@@ -369,6 +375,8 @@ fun PlayerScreen(
     val handleBackPress = handleBackPress@{
         if (externalHandoffInProgress) return@handleBackPress
         if (sportsLiveZap.closePanelOnBack()) return@handleBackPress
+        // The game info overlay (#139) sits above the end-of-game card: Back closes it first.
+        if (sportsLiveGameInfo.hide()) return@handleBackPress
         // The end-of-game card (#161): Back stops its countdown, then closes it (Stay).
         if (sportsLiveZap.endCardOnBack()) return@handleBackPress
         if (postPlayRecommendationState.canReturnToPlayer && !uiState.playbackEnded) {
@@ -894,6 +902,28 @@ fun PlayerScreen(
                 // Sports & Live: a short Left press opens the live games panel, which then keeps the keys;
                 // a short Right press shows the controls (seeking is a no-op on live).
                 if (sportsLiveZap.panelOpen.value) return@onKeyEvent false
+                // Sports & Live game info (#139): INFO or MENU opens it; with it up, a key closes it first.
+                if (keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN && !partyActive) {
+                    val playing = sportsLiveZap.nowPlaying
+                    val infoKey = SportsLiveGameInfoKeys.fullScreen(
+                        keyCode = keyEvent.nativeKeyEvent.keyCode,
+                        shown = sportsLiveGameInfo.shown,
+                        available = sportsLiveGameInfo.available(playing),
+                        controlsShown = uiState.showControls || uiState.showPauseOverlay
+                    )
+                    when (infoKey) {
+                        GameInfoKeyAction.SHOW -> {
+                            if (keyEvent.nativeKeyEvent.repeatCount == 0 && playing != null) sportsLiveGameInfo.show(playing)
+                            return@onKeyEvent true
+                        }
+                        GameInfoKeyAction.HIDE -> {
+                            sportsLiveGameInfo.hide()
+                            return@onKeyEvent true
+                        }
+                        GameInfoKeyAction.HIDE_AND_PASS -> sportsLiveGameInfo.hide()
+                        GameInfoKeyAction.PASS -> Unit
+                    }
+                }
                 if (!uiState.showControls && !uiState.showPauseOverlay) {
                     when (sportsLiveZap.onShortPressKey(keyEvent.nativeKeyEvent, partyActive)) {
                         SportsLiveShortPress.NONE -> Unit
@@ -2403,6 +2433,17 @@ fun PlayerScreen(
             isPlaying = { viewModel.uiState.value.isPlaying },
             onBackToLiveNow = { exitPlayerFromError() }
         )
+
+        // Sports & Live game info (#139): a slim card at the bottom, on demand only.
+        val sportsLiveInfo by sportsLiveGameInfo.info.collectAsState()
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 48.dp, vertical = 32.dp),
+            contentAlignment = Alignment.BottomCenter
+        ) {
+            SportsLiveGameInfoOverlay(info = sportsLiveInfo, compact = false)
+        }
     }
 }
 

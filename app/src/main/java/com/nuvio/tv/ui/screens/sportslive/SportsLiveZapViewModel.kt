@@ -440,7 +440,7 @@ class SportsLiveZapViewModel internal constructor(
     private val shortPressKeys = SportsLiveShortPressKeys()
 
     // The game this player plays, for "Ended while you're watching" (#60).
-    private val nowPlaying: SportsLiveItem? = SportsLiveZapSessions.activeFor(contentId)?.current
+    internal val nowPlaying: SportsLiveItem? = SportsLiveZapSessions.activeFor(contentId)?.current
 
     // Only the game playing is scored for the toast, while the player is started and Scores is not Off.
     private val nowTracker = LiveScoresTracker(LiveScoresRepository.SCREEN_PLAYER_NOW, liveScores)

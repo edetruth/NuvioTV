@@ -71,6 +71,7 @@ class SportsLivePreferencesDataStore @Inject constructor(
     private val followedTeamsKey = stringPreferencesKey("sports_live_followed_teams")
     private val hiddenTitlesKey = stringSetPreferencesKey("sports_live_hidden_titles")
     private val dualHintShownKey = intPreferencesKey("sports_live_dual_hint_shown")
+    private val dualLayoutKey = stringPreferencesKey("sports_live_dual_layout")
     private val newSportsHintSeenKey = booleanPreferencesKey("sports_live_new_sports_hint_seen")
     // First-run setup (#134 phase 7): set once the profile has had its chance at it (shown, or set up already).
     private val setupDoneKey = booleanPreferencesKey("sports_live_setup_done")
@@ -366,6 +367,13 @@ class SportsLivePreferencesDataStore @Inject constructor(
             if (show) prefs[dualHintShownKey] = shown + 1
         }
         return show
+    }
+
+    /** The dual screen layout the profile chose last (#123): a [com.nuvio.tv.ui.screens.sportslive.dual.DualLayout] name; null: never chosen. */
+    suspend fun dualLayout(): String? = store().data.first()[dualLayoutKey]
+
+    suspend fun setDualLayout(name: String) {
+        store().edit { prefs -> prefs[dualLayoutKey] = name }
     }
 
     /**

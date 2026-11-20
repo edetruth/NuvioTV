@@ -45,11 +45,23 @@ data class DualPane(
 val DualPane.isStarting: Boolean
     get() = status == PaneStatus.Loading && stream != null
 
+/** How the two panes share the screen (#123); remembered per profile. */
+enum class DualLayout {
+    /** Two equal tiles side by side. */
+    SPLIT,
+
+    /** The [Side.LEFT] pane large, the [Side.RIGHT] pane small in the top right corner; MENU swaps them. */
+    BIG_SMALL;
+
+    val other: DualLayout get() = if (this == SPLIT) BIG_SMALL else SPLIT
+}
+
 /** Two games side by side; only the [audibleSide] pane has sound. */
 data class DualState(
     val left: DualPane,
     val right: DualPane,
-    val highlighted: Side = Side.LEFT
+    val highlighted: Side = Side.LEFT,
+    val layout: DualLayout = DualLayout.SPLIT
 ) {
     fun pane(side: Side): DualPane = if (side == Side.LEFT) left else right
 
@@ -81,8 +93,14 @@ data class DualState(
 
     fun reduce(action: DualAction): DualState = when (action) {
         is DualAction.Highlight -> copy(highlighted = action.side)
-        // The highlight stays on the same game.
-        DualAction.Swap -> copy(left = right, right = left, highlighted = highlighted.other)
+        // Split: the highlight stays on the same game. Big + small (#123): the sound follows the large
+        // pane, so the game swapped in large has it; Left/Right still move it after.
+        DualAction.Swap -> copy(
+            left = right,
+            right = left,
+            highlighted = if (layout == DualLayout.BIG_SMALL) Side.LEFT else highlighted.other
+        )
+        is DualAction.SetLayout -> copy(layout = action.layout)
         is DualAction.ZapRequested -> with(action.side, DualPane(action.item))
         is DualAction.Resolved -> updatePaneOf(action.item) { pane ->
             if (pane.status != PaneStatus.Loading || pane.stream != null) null
@@ -156,6 +174,12 @@ private val DualPane.isRecoverable: Boolean
 val DualPane.okStream: Stream?
     get() = stream.takeIf { status == PaneStatus.Playing }
 
+/**
+ * The pane the game info overlay is about in dual (#139): the one with sound, never both games. It
+ * follows [DualState.audibleSide], so a failed highlighted pane leaves it on the game still heard.
+ */
+val DualState.infoSide: Side get() = audibleSide
+
 /** What a pane's label shows about its sound. */
 enum class PaneSound {
     /** Muted pane: a faint muted speaker. */
@@ -187,6 +211,9 @@ sealed interface DualAction {
 
     /** MENU: the panes trade places. */
     data object Swap : DualAction
+
+    /** MENU held, or the profile's saved layout (#123): the panes take [layout]. */
+    data class SetLayout(val layout: DualLayout) : DualAction
 
     /** The [side] pane now looks up [item]'s stream. */
     data class ZapRequested(val side: Side, val item: SportsLiveItem) : DualAction

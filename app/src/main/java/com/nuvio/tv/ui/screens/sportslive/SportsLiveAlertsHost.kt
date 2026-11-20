@@ -1,5 +1,8 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import com.nuvio.tv.ui.screens.sportslive.dual.DualGeometry
+import com.nuvio.tv.ui.screens.sportslive.dual.DualLayout
+import com.nuvio.tv.ui.screens.sportslive.dual.Side
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
@@ -512,7 +515,7 @@ fun SportsLiveAlertsHost(
             ).joinToString(HINT_SEPARATOR)
         }
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-            val (end, top) = alertCardOffset(SportsLiveAlertPlacement.spot(alert, panes), maxWidth, maxHeight)
+            val (end, top) = alertCardOffset(SportsLiveAlertPlacement.spot(alert, panes), maxWidth, maxHeight, bigSmall = panes?.bigSmall == true)
             AlertCardView(
                 cardId = current.id,
                 content = content,
@@ -553,17 +556,19 @@ private fun TakeBack(active: Boolean, onBack: () -> Unit) {
 
 /**
  * Where a card's top right corner sits, as (end, top) insets of the screen (#136): the screen's alert spot,
- * or [SportsLiveTokens.Alert.PaneInset] inside a dual screen pane's top right corner (the panes as dual
- * screen lays them out: side margins, the gap, 16:9 video, a caption row under each, centred).
+ * or [SportsLiveTokens.Alert.PaneInset] inside a dual screen pane's top right corner, the tiles placed as
+ * dual screen places them ([DualGeometry]). In big + small (#123) the small tile is narrower than a card,
+ * so a card goes to the column under it (its strip), clear of both videos' top right corners.
  */
-internal fun alertCardOffset(spot: AlertSpot, width: Dp, height: Dp): Pair<Dp, Dp> {
+internal fun alertCardOffset(spot: AlertSpot, width: Dp, height: Dp, bigSmall: Boolean = false): Pair<Dp, Dp> {
     if (spot == AlertSpot.SCREEN) return SportsLiveTokens.Alert.End to SportsLiveTokens.Alert.Top
-    val margin = SportsLiveTokens.Size.DualSideMargin
-    val paneWidth = (width - margin * 2 - SportsLiveTokens.Size.DualGap) / 2
-    val videoHeight = paneWidth * 9f / 16f
-    val top = ((height - videoHeight - SportsLiveTokens.Size.DualCaption) / 2).coerceAtLeast(0.dp) + SportsLiveTokens.Alert.PaneInset
-    val end = if (spot == AlertSpot.RIGHT_PANE) margin else margin + paneWidth + SportsLiveTokens.Size.DualGap
-    return (end + SportsLiveTokens.Alert.PaneInset) to top
+    val inset = SportsLiveTokens.Alert.PaneInset
+    if (bigSmall) {
+        val small = DualGeometry.tile(Side.RIGHT, DualLayout.BIG_SMALL, width, height)
+        return (width - small.end) to (small.bottom + SportsLiveTokens.Size.DualCaption + inset)
+    }
+    val tile = DualGeometry.tile(if (spot == AlertSpot.RIGHT_PANE) Side.RIGHT else Side.LEFT, DualLayout.SPLIT, width, height)
+    return (width - tile.end + inset) to (tile.top + inset)
 }
 
 /**

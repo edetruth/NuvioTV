@@ -66,6 +66,24 @@ import androidx.media3.ui.PlayerView
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import com.nuvio.tv.core.sportslive.scores.ScoreChipStrings
+import com.nuvio.tv.core.sportslive.scores.ScoreDetailsStrings
+import com.nuvio.tv.core.sportslive.scores.ScoresMode
+import com.nuvio.tv.ui.screens.sportslive.GameInfoKeyAction
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveGameInfoKeys
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveGameInfoOverlay
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveGameInfoViewModel
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveScoresViewModel
+import com.nuvio.tv.ui.screens.sportslive.TeamLogoSlot
+import com.nuvio.tv.ui.screens.sportslive.TrackLiveScores
+import com.nuvio.tv.ui.screens.sportslive.rememberScoreChipStrings
+import com.nuvio.tv.ui.screens.sportslive.rememberScoreDetailsStrings
+import com.nuvio.tv.ui.screens.sportslive.rememberTeamLogoPair
+import com.nuvio.tv.ui.screens.sportslive.sportsLiveBold
 import com.nuvio.tv.R
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.ui.components.LoadingIndicator
@@ -99,9 +117,11 @@ val LocalOpenSportsLiveDual = staticCompositionLocalOf<(() -> Unit)?> { null }
 
 /**
  * Two Sports & Live games side by side; only the highlighted pane has sound. Left/Right highlight a
- * pane, Up/Down zap it, MENU swaps the panes, OK plays the highlighted game in the full player (its
+ * pane, Up/Down zap it, MENU swaps the panes (held: split or big + small, #123), INFO shows the game info
+ * for the game with sound (#139), OK plays the highlighted game in the full player (its
  * playing stream as is; a pane not playing takes the section's path: Stream screen, or a merged
  * game's best stream) and Back leaves, or returns to the full player dual screen was opened in.
+ * Each pane has a score strip under it (#124). Both layouts use the same two players: no third decoder.
  *
  * Each pane is a [PlayerView] with its default SurfaceView: two SurfaceViews are composited by the
  * display hardware directly, cheaper than TextureViews (no GPU copy per frame) and the right surface
@@ -117,7 +137,9 @@ fun SportsLiveDualScreen(
     onOpenStreamScreen: (item: SportsLiveItem, manualSelection: Boolean) -> Unit,
     onPlayTarget: (SportsLiveZapTarget) -> Unit,
     viewModel: SportsLiveDualViewModel = hiltViewModel(),
-    playViewModel: SportsLivePlayViewModel = hiltViewModel()
+    playViewModel: SportsLivePlayViewModel = hiltViewModel(),
+    scoresViewModel: SportsLiveScoresViewModel = hiltViewModel(),
+    gameInfo: SportsLiveGameInfoViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val keysHint by viewModel.keysHint.collectAsStateWithLifecycle()
@@ -173,6 +195,22 @@ fun SportsLiveDualScreen(
     }
     val dual = state ?: return
 
+    // The panes' games are scored while the screen is started and Scores is not Off (#124); the highlighted
+    // pane counts as focused for Hide until focused.
+    val scores by scoresViewModel.scores.collectAsStateWithLifecycle()
+    val scoresMode by scoresViewModel.mode.collectAsStateWithLifecycle()
+    val revealed by scoresViewModel.revealed.collectAsStateWithLifecycle()
+    val paneItems = remember(dual.left.item, dual.right.item) { listOf(dual.left.item, dual.right.item) }
+    TrackLiveScores(SCREEN_DUAL, paneItems, enabled = scoresMode != null && scoresMode != ScoresMode.OFF, tracking = scoresViewModel.tracking)
+    val highlightedKey = dual.pane(dual.highlighted).item.streamKey
+    LaunchedEffect(highlightedKey) { scoresViewModel.onCardFocus(highlightedKey) }
+
+    // The game info overlay (#139) is about the game with sound, and follows it while open.
+    val info by gameInfo.info.collectAsStateWithLifecycle()
+    val infoItem = dual.pane(dual.infoSide).item
+    LaunchedEffect(infoItem) { gameInfo.follow(infoItem) }
+    val menuKey = remember { DualMenuKey() }
+
     LaunchedEffect(players, dual) {
         val current = players ?: return@LaunchedEffect
         current.sync(dual)
@@ -199,6 +237,8 @@ fun SportsLiveDualScreen(
     // of dual screen as OK does (#27); a second Back while it starts, or dual opened elsewhere, leaves.
     var backPlayed by remember { mutableStateOf(false) }
     val handleBack: () -> Unit = handleBack@{
+        // The game info overlay closes first.
+        if (gameInfo.hide()) return@handleBack
         // An ended pane's countdown (#161): Back stops it first.
         if (viewModel.cancelEndCountdowns()) return@handleBack
         // "Close this side" (#138): the highlighted pane gave up; the other game plays full screen.
@@ -235,8 +275,10 @@ fun SportsLiveDualScreen(
 
     // Alerts (#136): a card sits over the pane it is not about, and OK on it plays its game in the
     // highlighted pane, unless the picker, OK's lookup or a starting card is up.
-    LaunchedEffect(dual.left.item, dual.right.item, dual.highlighted) {
-        SportsLiveAlertSurfaces.setDualPanes(DualPanes(dual.left.item, dual.right.item, dual.highlighted == Side.LEFT))
+    LaunchedEffect(dual.left.item, dual.right.item, dual.highlighted, dual.layout) {
+        SportsLiveAlertSurfaces.setDualPanes(
+            DualPanes(dual.left.item, dual.right.item, dual.highlighted == Side.LEFT, bigSmall = dual.layout == DualLayout.BIG_SMALL)
+        )
     }
     DisposableEffect(Unit) { onDispose { SportsLiveAlertSurfaces.setDualPanes(null) } }
     val alertBusy by rememberUpdatedState(
@@ -262,9 +304,35 @@ fun SportsLiveDualScreen(
             .focusable()
             .onKeyEvent { event ->
                 val native = event.nativeKeyEvent
+                // MENU (#123): a short press swaps the panes on release; held, it changes the layout.
+                if (native.keyCode == KeyEvent.KEYCODE_MENU) {
+                    val action = when (native.action) {
+                        KeyEvent.ACTION_DOWN -> menuKey.onDown(native.repeatCount)
+                        KeyEvent.ACTION_UP -> menuKey.onUp()
+                        else -> null
+                    }
+                    when (action) {
+                        DualMenuAction.SWAP -> viewModel.swap()
+                        DualMenuAction.TOGGLE_LAYOUT -> viewModel.toggleLayout()
+                        null -> Unit
+                    }
+                    return@onKeyEvent true
+                }
                 if (native.action != KeyEvent.ACTION_DOWN) return@onKeyEvent false
                 // Any key stops an ended pane's countdown (#161), and still does what it does.
                 if (native.keyCode != KeyEvent.KEYCODE_BACK) viewModel.cancelEndCountdowns()
+                // INFO (#139): the game info overlay for the game with sound.
+                when (SportsLiveGameInfoKeys.dual(native.keyCode, gameInfo.shown, gameInfo.available(infoItem))) {
+                    GameInfoKeyAction.SHOW -> {
+                        if (native.repeatCount == 0) gameInfo.show(infoItem)
+                        return@onKeyEvent true
+                    }
+                    GameInfoKeyAction.HIDE -> {
+                        if (native.repeatCount == 0) gameInfo.hide()
+                        return@onKeyEvent true
+                    }
+                    GameInfoKeyAction.PASS, GameInfoKeyAction.HIDE_AND_PASS -> Unit
+                }
                 // The highlighted ended pane's card: Up/Down move through its buttons, OK presses one.
                 if (endActions != null) {
                     when (native.keyCode) {
@@ -312,7 +380,6 @@ fun SportsLiveDualScreen(
                     // On the left pane already, Left opens the right pane's picker (#57).
                     KeyEvent.KEYCODE_DPAD_LEFT -> if (native.repeatCount == 0) viewModel.onLeft()
                     KeyEvent.KEYCODE_DPAD_RIGHT -> viewModel.highlight(Side.RIGHT)
-                    KeyEvent.KEYCODE_MENU -> if (native.repeatCount == 0) viewModel.swap()
                     KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER ->
                         if (native.repeatCount == 0) {
                             val pane = dual.pane(dual.highlighted)
@@ -336,27 +403,44 @@ fun SportsLiveDualScreen(
             },
         contentAlignment = Alignment.Center
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = SportsLiveTokens.Size.DualSideMargin),
-            horizontalArrangement = Arrangement.spacedBy(SportsLiveTokens.Size.DualGap),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        // Both layouts place the same two pane views (#123): only their size and spot change, so the
+        // players keep playing through a layout change.
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            val chipStrings = rememberScoreChipStrings()
+            val detailsStrings = rememberScoreDetailsStrings()
             Side.entries.forEach { side ->
+                val tile = DualGeometry.tile(side, dual.layout, maxWidth, maxHeight)
+                val pane = dual.pane(side)
                 DualPaneView(
-                    pane = dual.pane(side),
+                    pane = pane,
                     highlighted = side == dual.highlighted,
+                    small = dual.layout == DualLayout.BIG_SMALL && side == Side.RIGHT,
                     startingSelection = startingSelection,
                     endSelection = endSelection,
                     sound = dual.paneSound(side, players?.isPlaying(side) == true),
+                    strip = DualScoreStrip.of(pane.item, scores[pane.item.streamKey], scoresMode, pane.item.streamKey in revealed),
+                    chipStrings = chipStrings,
+                    detailsStrings = detailsStrings,
                     onViewCreated = { view ->
                         views[side] = view
                         view.player = players?.player(side)
                     },
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier
+                        .offset(x = tile.start, y = tile.top)
+                        .width(tile.width)
                 )
             }
+            // Split: under the sound pane's strip; big + small: the column under the small tile.
+            val infoTile = DualGeometry.tile(
+                if (dual.layout == DualLayout.BIG_SMALL) Side.RIGHT else dual.infoSide, dual.layout, maxWidth, maxHeight
+            )
+            SportsLiveGameInfoOverlay(
+                info = info,
+                compact = true,
+                modifier = Modifier
+                    .offset(x = infoTile.start, y = infoTile.bottom + SportsLiveTokens.Size.DualCaption + 4.dp)
+                    .width(infoTile.width)
+            )
         }
         // Not focusable: keys stay with the screen.
         AnimatedVisibility(
@@ -416,24 +500,32 @@ fun SportsLiveDualScreen(
 private fun DualPaneView(
     pane: DualPane,
     highlighted: Boolean,
+    /** The corner tile of big + small (#123): a smaller strip. */
+    small: Boolean,
     startingSelection: SportsLiveStartingAction,
     endSelection: SportsLiveEndAction,
     sound: PaneSound,
+    /** The score strip (#124); null: the pane's clean name. */
+    strip: DualScoreStrip?,
+    chipStrings: ScoreChipStrings,
+    detailsStrings: ScoreDetailsStrings,
     onViewCreated: (PlayerView) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val shape = RoundedCornerShape(NuvioTheme.radii.md)
+    val ring = SportsLiveTokens.Focus.RingWidth
     Column(modifier = modifier) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(16f / 9f)
+                // The V2 ring (white, 4 px) marks the pane the keys act on, which has the sound.
                 .border(
-                    width = 3.dp,
-                    color = if (highlighted) NuvioTheme.colors.Primary else Color.Transparent,
+                    width = ring,
+                    color = if (highlighted) SportsLiveTokens.Colors.FocusWhite else Color.Transparent,
                     shape = shape
                 )
-                .padding(3.dp),
+                .padding(ring),
             contentAlignment = Alignment.Center
         ) {
             AndroidView(
@@ -466,15 +558,56 @@ private fun DualPaneView(
                 .padding(top = 8.dp, start = 4.dp, end = 4.dp)
         ) {
             PaneSoundIndicator(sound)
+            val textColor = if (highlighted) SportsLiveTokens.Colors.TextPrimary else SportsLiveTokens.Colors.TextSecondary
+            if (strip == null) {
+                Text(
+                    text = listOfNotNull(pane.item.displayName, SportsLiveTeams.sportLabelOf(pane.item)).joinToString(" · "),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = textColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(start = 8.dp)
+                )
+            } else {
+                PaneScoreStrip(strip, small, textColor, chipStrings, detailsStrings, Modifier.weight(1f).padding(start = 8.dp))
+            }
+        }
+    }
+}
+
+/** "[logo] BOS 91–88 NYK [logo]  ● 4:12 Q4": the logos only once both have loaded, the dot only while live. */
+@Composable
+private fun PaneScoreStrip(
+    strip: DualScoreStrip,
+    small: Boolean,
+    textColor: Color,
+    chipStrings: ScoreChipStrings,
+    detailsStrings: ScoreDetailsStrings,
+    modifier: Modifier = Modifier
+) {
+    val logos = rememberTeamLogoPair(strip.first.logo, strip.second.logo)?.takeUnless { it.failed }
+    val logoSize = if (small) 12.dp else 16.dp
+    val style = SportsLiveTokens.style(if (small) SportsLiveTokens.Type.PanelScore else SportsLiveTokens.Type.DualStrip)
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = modifier) {
+        logos?.let { TeamLogoSlot(it.first, it.shown, logoSize) }
+        Text(
+            text = strip.scoreline(detailsStrings),
+            style = style.sportsLiveBold(),
+            color = textColor,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false)
+        )
+        logos?.let { TeamLogoSlot(it.second, it.shown, logoSize) }
+        strip.status(chipStrings)?.let { status ->
+            if (strip.live) Box(Modifier.size(6.dp).background(SportsLiveTokens.Colors.LiveRed, CircleShape))
             Text(
-                text = listOfNotNull(pane.item.displayName, SportsLiveTeams.sportLabelOf(pane.item)).joinToString(" · "),
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (highlighted) NuvioTheme.colors.TextPrimary else NuvioTheme.colors.TextSecondary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(start = 8.dp)
+                text = status,
+                style = style,
+                color = if (strip.live) SportsLiveTokens.Colors.LiveText else SportsLiveTokens.Colors.TextMuted,
+                maxLines = 1
             )
         }
     }

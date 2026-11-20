@@ -108,6 +108,8 @@ object SportsLiveTokens {
         val ControlSelected = Control.copy(fontWeight = FontWeight.SemiBold)
         /** Buttons (Watch, More…): 28 px semibold. */
         val Button = TextStyle(fontSize = 14.sp, lineHeight = 17.sp, fontWeight = FontWeight.SemiBold)
+        /** Dual screen's score strip under a tile (#124): 34 px semibold, tabular. */
+        val DualStrip = TextStyle(fontSize = 17.sp, lineHeight = 20.sp, fontWeight = FontWeight.SemiBold, fontFeatureSettings = "tnum")
         /** The in-player panel's one-line rows (#140), the row scale in compact form: 26 px names and status. */
         val PanelLine = TextStyle(fontSize = 13.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium)
         /** Their scores: 26 px tabular; the leader's set in real bold. */
@@ -182,10 +184,17 @@ object SportsLiveTokens {
         /** A Settings row (#134): 72 px, one line, the label centred. */
         val SettingsRow = 36.dp
 
-        /** Dual screen: the panes' side margins, the gap between them and the caption row under each. */
-        val DualSideMargin = 32.dp
-        val DualGap = 24.dp
-        val DualCaption = 28.dp
+        /**
+         * Dual screen (V2 board ①): split tiles 912 px wide, 32 px apart, so 32 px side margins; the score strip
+         * under each tile (its row, with the gap above it).
+         */
+        val DualSideMargin = 16.dp
+        val DualGap = 16.dp
+        val DualCaption = 32.dp
+        /** Split: the room kept under the strips for the game info overlay (#139), so the tiles sit a little high. */
+        val DualInfoRoom = 84.dp
+        /** Big + small (#123): side margins; the large tile takes 3/4 of the row, the small one 1/4. */
+        val DualBigMargin = 24.dp
     }
 
     /**

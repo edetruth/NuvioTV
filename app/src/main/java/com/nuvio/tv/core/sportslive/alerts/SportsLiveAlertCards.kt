@@ -77,8 +77,11 @@ object SportsLiveAlertCards {
 /** Where a card sits (#136): top right of the screen, or of one dual screen pane. */
 enum class AlertSpot { SCREEN, LEFT_PANE, RIGHT_PANE }
 
-/** Dual screen's two games, and which pane is highlighted (has the sound; OK acts on it). */
-data class DualPanes(val left: SportsLiveItem, val right: SportsLiveItem, val leftHighlighted: Boolean)
+/**
+ * Dual screen's two games, and which pane is highlighted (has the sound; OK acts on it). [bigSmall]: the
+ * left game large and the right one small in the corner (#123), which moves where a card sits.
+ */
+data class DualPanes(val left: SportsLiveItem, val right: SportsLiveItem, val leftHighlighted: Boolean, val bigSmall: Boolean = false)
 
 object SportsLiveAlertPlacement {
 

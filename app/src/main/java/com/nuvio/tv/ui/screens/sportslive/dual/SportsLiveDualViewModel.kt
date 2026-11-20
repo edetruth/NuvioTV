@@ -172,7 +172,10 @@ class SportsLiveDualViewModel internal constructor(
     /** "When a game ends" (#161). */
     endActions: Flow<SportsLiveGameEndAction> = flowOf(SportsLiveGameEndAction.DEFAULT),
     /** The Scores setting: an ended pane's card says the final score under Show only. */
-    scoresModes: Flow<ScoresMode?> = flowOf(null)
+    scoresModes: Flow<ScoresMode?> = flowOf(null),
+    /** The profile's saved layout (#123); null: never chosen (split). */
+    private val loadLayout: suspend () -> DualLayout? = { null },
+    private val saveLayout: suspend (DualLayout) -> Unit = {}
 ) : ViewModel() {
 
     @Inject
@@ -195,7 +198,9 @@ class SportsLiveDualViewModel internal constructor(
         linkCount = resolver::cachedLinkCount,
         gameWatch = SportsLiveGameWatch.shared,
         endActions = preferences.gameEndAction,
-        scoresModes = preferences.scoreSettings.map { it.mode }
+        scoresModes = preferences.scoreSettings.map { it.mode },
+        loadLayout = { preferences.dualLayout()?.let { name -> DualLayout.entries.firstOrNull { it.name == name } } },
+        saveLayout = { layout -> preferences.setDualLayout(layout.name) }
     )
 
     private val items: List<SportsLiveItem> = session?.items.orEmpty()
@@ -224,6 +229,9 @@ class SportsLiveDualViewModel internal constructor(
 
     /** The games the right pane may change to (#57), while its picker is open; null when closed. */
     val pairPicker: StateFlow<List<SportsLiveItem>?> = _pairPicker.asStateFlow()
+
+    // MENU was held this session: the saved layout read late does not undo it.
+    private var layoutChosen = false
 
     private val jobs = mutableMapOf<Side, Job>()
 
@@ -273,6 +281,11 @@ class SportsLiveDualViewModel internal constructor(
         viewModelScope.launch { scoresModes.collect { scoresMode = it } }
         session?.let { s -> s.leftStream?.let { handOffs[s.left.streamKey] = it } }
         session?.let {
+            viewModelScope.launch {
+                // A layout already changed with MENU held before this read wins.
+                val saved = runCatching { loadLayout() }.getOrNull()
+                if (saved != null && !layoutChosen) dispatch(DualAction.SetLayout(saved))
+            }
             load(Side.LEFT, it.left)
             load(Side.RIGHT, it.right)
             if (it.pairedHint) {
@@ -348,6 +361,14 @@ class SportsLiveDualViewModel internal constructor(
         forgetRecovery(item)
         load(side, item)
         return true
+    }
+
+    /** MENU held (#123): split ↔ big + small, remembered for the profile. Both players keep playing. */
+    fun toggleLayout() {
+        val layout = _state.value?.layout?.other ?: return
+        layoutChosen = true
+        dispatch(DualAction.SetLayout(layout))
+        viewModelScope.launch { runCatching { saveLayout(layout) } }
     }
 
     /** MENU: the panes trade places, each keeping its lookup. */
