@@ -87,7 +87,7 @@ object SportsLiveDupes {
 
     /** Logs [rows]' new suspects under [TAG] for [surface] ("Live now", "Panel"); debug builds only. */
     fun log(surface: String, rows: List<SportsLiveItem>, nowMs: Long) {
-        if (!BuildConfig.DEBUG) return
+        if (!BuildConfig.IS_DEBUG_BUILD) return
         for (suspect in scan(rows, nowMs)) {
             val key = listOf(surface, suspect.a.streamKey, suspect.b.streamKey).joinToString("\u0000")
             val fresh = synchronized(logged) {

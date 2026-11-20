@@ -294,7 +294,7 @@ class SportsLiveZapViewModel internal constructor(
                 // Unrouted two-team games take their teams' league here too (P4), as in the section's lists.
             ).map { SportsLiveTeamIdentity.identified(SportsLiveSportInference.infer(it, TeamDirectory.shared)) }
                 // Debug builds: rows that look like one game but did not merge (live.18).
-                .also { if (BuildConfig.DEBUG) SportsLiveDupes.log("PANEL", it, System.currentTimeMillis()) } to followed
+                .also { if (BuildConfig.IS_DEBUG_BUILD) SportsLiveDupes.log("PANEL", it, System.currentTimeMillis()) } to followed
         }.flowOn(computeDispatcher)
         // The games under the chip are the ones listed and tracked: My sports' (#146), or every game under All sports.
         // Scoped again when the team directory changes (#159: a league's team list landing tells games apart).

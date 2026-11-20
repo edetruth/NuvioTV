@@ -271,7 +271,7 @@ class SportsLiveViewModel internal constructor(
                 } else {
                     SportsLiveItemBucketer.pinFollowed(items, followed).also { rows ->
                         // Debug builds: rows that look like one game but did not merge (live.18).
-                        if (BuildConfig.DEBUG) SportsLiveDupes.log(tab.name, rows, nowMs())
+                        if (BuildConfig.IS_DEBUG_BUILD) SportsLiveDupes.log(tab.name, rows, nowMs())
                     }
                 }
             }

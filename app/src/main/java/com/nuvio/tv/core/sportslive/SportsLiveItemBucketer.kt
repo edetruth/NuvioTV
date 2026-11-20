@@ -235,7 +235,12 @@ object SportsLiveItemBucketer {
                     if (pooled.any { it.streamKey == item.streamKey }) return@indexOfFirst false
                     // ESPN team ids decide first; names only for teams the directory does not know.
                     when (idVerdict(primary, item, directory)) {
-                        IdVerdict.SAME -> (idGuardFailure(primary, item, nowMs, directory) == null).also { byIds = it }
+                        IdVerdict.SAME -> when (idGuardFailure(primary, item, nowMs, directory)) {
+                            null -> true.also { byIds = true }
+                            // A copy of unknown sport: its teams were read in the other copy's league; names decide.
+                            SPORT_UNKNOWN -> sameGame(primary, item, nowMs)
+                            else -> false
+                        }
                         IdVerdict.DIFFERENT -> false
                         IdVerdict.UNKNOWN -> sameGame(primary, item, nowMs)
                     }
@@ -297,6 +302,8 @@ object SportsLiveItemBucketer {
         return teamsMatch && sportsAgree(a, b) && !EspnLeagueMap.otherGender(a, b) && sameTime(a, b, nowMs)
     }
 
+    private const val SPORT_UNKNOWN = "sport unknown"
+
     /** What ESPN team ids say about two copies (live.18). */
     internal enum class IdVerdict { SAME, DIFFERENT, UNKNOWN }
 
@@ -322,7 +329,9 @@ object SportsLiveItemBucketer {
             if ((a1 == b1 && a2 == b2) || (a1 == b2 && a2 == b1)) return IdVerdict.SAME
             resolved = true
         }
-        return if (resolved) IdVerdict.DIFFERENT else IdVerdict.UNKNOWN
+        // A copy of unknown sport was read in the other copy's leagues only: no veto from it.
+        val bothKnown = SportsLiveTeams.knownSport(viewA) != null && SportsLiveTeams.knownSport(viewB) != null
+        return if (resolved && bothKnown) IdVerdict.DIFFERENT else IdVerdict.UNKNOWN
     }
 
     // A copy as the lists show it: its league inferred from its teams, its sport from #168's team lookup.
@@ -341,7 +350,7 @@ object SportsLiveItemBucketer {
     ): String? {
         val viewA = idView(a, directory)
         val viewB = idView(b, directory)
-        if (SportsLiveTeams.knownSport(viewA) == null || SportsLiveTeams.knownSport(viewB) == null) return "sport unknown"
+        if (SportsLiveTeams.knownSport(viewA) == null || SportsLiveTeams.knownSport(viewB) == null) return SPORT_UNKNOWN
         if (!sportsAgree(viewA, viewB)) return "sport mismatch"
         val genders = EspnLeagueMap.saysWomen(viewA) != EspnLeagueMap.saysWomen(viewB) ||
             saysWomenCompetition(viewA) != saysWomenCompetition(viewB) || saysMen(viewA) != saysMen(viewB)
@@ -361,7 +370,11 @@ object SportsLiveItemBucketer {
         val teamsB = b.teams ?: return "no teams"
         if (SportsLiveTeams.isPlaceholderGame(teamsA) || SportsLiveTeams.isPlaceholderGame(teamsB)) return "placeholder"
         return when (idVerdict(a, b, directory)) {
-            IdVerdict.SAME -> idGuardFailure(a, b, nowMs, directory)?.let { "same team ids, $it" }
+            IdVerdict.SAME -> when (val failure = idGuardFailure(a, b, nowMs, directory)) {
+                null -> null
+                SPORT_UNKNOWN -> if (sameGame(a, b, nowMs)) null else "same team ids, sport unknown, names differ"
+                else -> "same team ids, $failure"
+            }
             IdVerdict.DIFFERENT -> "different team ids"
             IdVerdict.UNKNOWN -> when {
                 sameGame(a, b, nowMs) -> null

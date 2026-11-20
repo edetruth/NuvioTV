@@ -37,6 +37,9 @@ class SportsLiveDuplicateCorpusTest {
     private val oneGame = listOf(
         Case("Spurs and Clippers, sides swapped, LA and Los Angeles", 1,
             copy("San Antonio Spurs vs Los Angeles Clippers", "Basketball"), copy("LA Clippers vs San Antonio Spurs", "NBA")),
+        // Seen on the emulator (Seattle vs Salt Lake, MLS and untagged): ids from one copy's league, names decide.
+        Case("one copy tagged, the other untagged", 1,
+            copy("LA Clippers vs San Antonio Spurs", "NBA"), copy("LA Clippers vs San Antonio Spurs")),
         Case("Qatar and Panama Sub-17 and U17", 1,
             copy("Qatar Sub-17 vs Panamá Sub-17", "Football"), copy("LIVE: Qatar U17 x Panamá U17"), copy("Qatar U17 vs Panama U17", "Soccer")),
         Case("Argentina U17", 1,
