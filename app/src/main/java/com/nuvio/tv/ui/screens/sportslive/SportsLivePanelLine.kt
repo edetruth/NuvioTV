@@ -324,8 +324,6 @@ internal fun SportsLivePanelLine(
     menuOpen: Boolean = false,
     /** What OK does, hinted at the row's end while it has focus ("Box score ›" on a matched Just ended game); null: none. */
     okHint: String? = null,
-    /** The game playing's own place in the list (#140): "▶ Watching" at its end, never focused. */
-    watching: Boolean = false,
     /** Listed since the panel opened (#164): a "New" tag at its end. */
     isNew: Boolean = false,
     /** Gone from the list since the panel opened (#164): kept in place, dimmed. */
@@ -406,16 +404,12 @@ internal fun SportsLivePanelLine(
                     }
                     StatusText(line)
                     panelReadyMarkShown(readyMark, focused)?.let { ReadyMark(it) }
-                    val tag = when {
-                        watching -> stringResource(R.string.sports_live_panel_watching)
-                        isNew -> stringResource(R.string.sports_live_panel_new)
-                        else -> null
-                    }
+                    val tag = if (isNew) stringResource(R.string.sports_live_panel_new) else null
                     if (tag != null) {
                         Text(
                             text = tag,
                             style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag),
-                            color = if (watching) Colors.TextPrimary else Colors.TextSecondary,
+                            color = Colors.TextSecondary,
                             maxLines = 1,
                             softWrap = false
                         )
@@ -430,7 +424,7 @@ internal fun SportsLivePanelLine(
                         )
                     }
                 }
-                if (nowPlaying || watching) {
+                if (nowPlaying) {
                     Box(
                         modifier = Modifier
                             .align(Alignment.CenterStart)

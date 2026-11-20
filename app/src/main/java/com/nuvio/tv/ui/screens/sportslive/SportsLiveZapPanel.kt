@@ -352,8 +352,8 @@ internal const val PANEL_IDLE_REORDER_MS = 2 * 60_000L
 
 /**
  * A line of the panel's list under its pinned **Now playing** row (#140): a group's [Header] (its [count] of
- * games in that run), a [Game] row (the game playing too, in its own place, marked [Game.watching]), or the last
- * line, [HiddenByMySports] (#167).
+ * games in that run), a [Game] row (never the game playing: it is drawn under Now playing only), or the last line,
+ * [HiddenByMySports] (#167).
  */
 internal sealed interface PanelGuideEntry {
     val key: String
@@ -362,7 +362,7 @@ internal sealed interface PanelGuideEntry {
         override val key: String get() = "group_${run}_$section"
     }
 
-    data class Game(val row: ZapPanelRow, val watching: Boolean = false) : PanelGuideEntry {
+    data class Game(val row: ZapPanelRow) : PanelGuideEntry {
         override val key: String get() = row.item.streamKey
     }
 
@@ -374,9 +374,9 @@ internal sealed interface PanelGuideEntry {
 
 internal const val HIDDEN_BY_MY_SPORTS_KEY = "hidden_by_my_sports"
 
-/** The key focus may land on for [entry]: a game row (never the game playing's own place) or the last line. */
+/** The key focus may land on for [entry]: a game row or the last line. */
 private fun focusKeyOf(entry: PanelGuideEntry): String? = when (entry) {
-    is PanelGuideEntry.Game -> entry.key.takeUnless { entry.watching }
+    is PanelGuideEntry.Game -> entry.key
     is PanelGuideEntry.HiddenByMySports -> entry.key
     is PanelGuideEntry.Header -> null
 }

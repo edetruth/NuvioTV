@@ -56,7 +56,6 @@ class SportsLivePanelGuideTest {
         // User TV report: no second "Watching" row under Now playing.
         val games = guide.entries.filterIsInstance<PanelGuideEntry.Game>()
         assertEquals(listOf("l1", "l2", "l4", "l5"), games.map { it.row.item.id })
-        assertTrue(games.none { it.watching })
         // One header over the one run, counting the rows drawn; no divider of any kind.
         assertEquals(listOf(PanelGuideEntry.Header(ScoreboardGroup.LIVE, 4, run = 0)), guide.entries.filterIsInstance<PanelGuideEntry.Header>())
         assertEquals(5, guide.entries.size)
@@ -129,12 +128,12 @@ class SportsLivePanelGuideTest {
     }
 
     @Test
-    fun `with the current game outside the list, nothing is pinned or marked watching`() {
+    fun `with the current game outside the list, nothing is pinned and every game is drawn`() {
         val rows = lineupOf(live)
         val guide = panelGuide(rows, "elsewhere|x")
         assertNull(guide.nowPlaying)
         assertEquals(ids(rows), ids(guide.rows))
-        assertTrue(guide.entries.filterIsInstance<PanelGuideEntry.Game>().none { it.watching })
+        assertEquals(ids(rows), guide.entries.filterIsInstance<PanelGuideEntry.Game>().map { it.row.item.id })
     }
 
     @Test

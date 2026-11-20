@@ -556,8 +556,8 @@ private val BANNER_MAX_WIDTH = 360.dp
  * The games live now, from the left edge (#140): a slim column of one-line rows over a soft fade, so the game
  * stays visible beside it. Under one filter dropdown (V2: "My sports ▾", OK opens its options), the
  * game playing is pinned as **Now playing**, where focus opens; below it the lineup in its own order, the game
- * playing listed in its place too, marked ▶ Watching ([SportsLiveZapPanelState.guide]), so CH− (the game after
- * it) and CH+ (the one before it) read off the list. Under My sports the list may end with "N more hidden by My
+ * playing drawn under Now playing only, keeping its place in the CH± walk ([SportsLiveZapPanelState.guide]): CH−
+ * plays the game after that place, CH+ the one before it. Under My sports the list may end with "N more hidden by My
  * sports · Show all" (#167). Left or Right closes the panel (Back is handled by the player), and Up/Down stay
  * inside it. OK on a game zaps to it; Hold OK opens its menu ([onLongPick]). Focus is kept by row key: a row that
  * leaves the list hands focus to the nearest one, and focus lost while the panel is [open] is given back (#167).
@@ -823,18 +823,14 @@ private fun LiveGamesPanel(
                                             ?: panelBoards(listOf(row), emptyMap(), null, emptySet(), 0L).single().board,
                                         nowPlaying = false,
                                         titleSuffix = suffixes[item.streamKey],
-                                        watching = entry.watching,
                                         isNew = row.isNew,
                                         gone = row.gone,
                                         onClick = { onPick(item) },
                                         onLongClick = { onLongPick(item) },
                                         onFocus = { lineFocus(item.streamKey, item.streamKey) },
                                         okHint = boxScoreHint.takeIf { item.streamKey in state.boxScores },
-                                        // The game playing's own place shows ▶ Watching, never a mark.
-                                        readyMark = readiness[item.streamKey]?.takeUnless { entry.watching },
+                                        readyMark = readiness[item.streamKey],
                                         modifier = when {
-                                            // The game playing's own place: shown, never focused (Now playing is its row).
-                                            entry.watching -> Modifier.focusProperties { canFocus = false }
                                             entry.key == firstKey && upFromFirst != null ->
                                                 Modifier.focusRequester(requesterOf(entry.key)).focusProperties { up = upFromFirst }
                                             else -> Modifier.focusRequester(requesterOf(entry.key))
