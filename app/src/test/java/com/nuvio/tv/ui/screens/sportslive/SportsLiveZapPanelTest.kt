@@ -93,16 +93,17 @@ class SportsLiveZapPanelTest {
     }
 
     @Test
-    fun `banner names the game, its league and addon, and its position`() {
+    fun `banner names the game, its sport tag but never the addon, and its position`() {
         val banner = session(SportsLiveTab.LIVE_NOW, null, on = football2).banner(switching = false)
 
         assertEquals("f2", banner.name)
-        assertEquals("Football · Sports", banner.detail)
+        assertEquals("FOOTBALL", banner.tag)
         assertEquals(2, banner.position)
         assertEquals(3, banner.total)
         assertFalse(banner.switching)
         val noSport = SportsLiveZapSession.of(listOf(item("n1", sport = null)), "addon|n1", SportsLiveTab.LIVE_NOW, null, false)!!
-        assertEquals("Live · Sports", noSport.banner(switching = true).detail)
+        // A catch-all catalog name ("Live") names no sport: no tag.
+        assertNull(noSport.banner(switching = true).tag)
         assertTrue(noSport.banner(switching = true).switching)
     }
 
