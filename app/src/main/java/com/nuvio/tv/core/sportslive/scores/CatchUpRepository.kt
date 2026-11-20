@@ -100,6 +100,14 @@ class CatchUpRepository internal constructor(
         sectionEnabled
     ) { row, scores, homeRow, section -> row && scores && homeRow && section }
 
+    private val _loading = MutableStateFlow(false)
+
+    /**
+     * P14: the row is on and has teams to look for, but its days are not loaded yet (or Home has not asked yet):
+     * Home keeps the row's place and title meanwhile, so the row under Continue Watching never changes under the user.
+     */
+    val loading: StateFlow<Boolean> = _loading
+
     // Reloaded on a visit and when the teams or the settings change (never on a timer, never on a
     // resubscription); marks and replays only re-select.
     private val loaded: StateFlow<Loaded?> = combine(rowOn, prefs.followedTeams, visit, prefs.activeProfileId) { on, followed, visit, profileId ->
@@ -107,9 +115,9 @@ class CatchUpRepository internal constructor(
     }
         .distinctUntilChanged()
         .mapLatest { (on, followed, visit) ->
-            if (!on || followed.isEmpty() || visit == null) return@mapLatest null
-            val feeds = CatchUp.feeds(followed)
-            if (feeds.isEmpty()) return@mapLatest null
+            val feeds = if (on) CatchUp.feeds(followed) else emptyList()
+            _loading.value = feeds.isNotEmpty()
+            if (feeds.isEmpty() || visit == null) return@mapLatest null
             val saved = prefs.spoilerProtection.first().games.filter { it.endedAtMs == null }.mapNotNull { it.startMs }
             val range = CatchUp.daysAgo(visit.sinceMs, prefs.catchUpMarks.first(), now(), CatchUp::easternDate, saved)
             // Days in parallel, two at a time; each feed and day is asked once at most.
@@ -117,7 +125,7 @@ class CatchUpRepository internal constructor(
             val days = coroutineScope {
                 range.map { day -> async { gate.withPermit { results.catchUpDay(day, feeds) } } }.awaitAll()
             }
-            Loaded(days.filterNotNull(), visit.sinceMs)
+            Loaded(days.filterNotNull(), visit.sinceMs).also { _loading.value = false }
         }
         .stateIn(scope, SharingStarted.Eagerly, null)
 

@@ -24,6 +24,7 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.Instant
@@ -126,6 +127,22 @@ class CatchUpRepositoryTest {
         assertEquals(expected.toSet(), provider.calls.toSet())
         assertEquals(expected.size, provider.calls.size)
         assertEquals(setOf(pacersId), prefs.catchUpMarks.first().surfaced.keys)
+    }
+
+    @Test
+    fun `the row reads as loading while its days load, never with no team (P14)`() = runTest {
+        val repo = repository()
+        open(repo)
+        assertFalse(repo.loading.value)
+
+        followPacers()
+        provider.delayMs = 1_000L
+        runCurrent()
+        assertTrue("held from the start", repo.loading.value)
+        advanceTimeBy(10_000L)
+        runCurrent()
+        assertFalse(repo.loading.value)
+        assertEquals(listOf(pacersId), keys(repo))
     }
 
     @Test

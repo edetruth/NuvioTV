@@ -82,6 +82,13 @@ internal fun HomeViewModel.setCatchUpItems(items: List<CatchUpItem>) {
     if (addonsCache.isNotEmpty()) scheduleUpdateCatalogRows()
 }
 
+/** P14: whether the Catch up row's place is held while it loads (from Home's screen). */
+internal fun HomeViewModel.setCatchUpPending(pending: Boolean) {
+    if (pending == _uiState.value.catchUpPending) return
+    _uiState.update { it.copy(catchUpPending = pending) }
+    if (addonsCache.isNotEmpty()) scheduleUpdateCatalogRows()
+}
+
 /**
  * Feeds the Live now row (its first [LIVE_NOW_ROW_LIMIT] games; [HomeViewModel.liveNowAllItems] keeps
  * them all). Before the catalogs load, the next catalog update picks the items up.

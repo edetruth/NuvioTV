@@ -127,6 +127,13 @@ fun HomeScreen(
     val replayResume by catchUpViewModel.resume.collectAsStateWithLifecycle()
     val catchUpContext = androidx.compose.ui.platform.LocalContext.current
     LaunchedEffect(catchUpItems) { viewModel.setCatchUpItems(catchUpItems) }
+    // P14: the row under Continue Watching never changes title as it loads: its place is held while it loads. The
+    // hold ends a moment after loading does, so the cards arrive in the held place instead of the row leaving first.
+    val catchUpLoading by catchUpViewModel.loading.collectAsStateWithLifecycle()
+    LaunchedEffect(catchUpLoading, catchUpItems.isEmpty()) {
+        if (!catchUpLoading && catchUpItems.isEmpty()) kotlinx.coroutines.delay(CATCH_UP_HOLD_GRACE_MS)
+        viewModel.setCatchUpPending(catchUpLoading)
+    }
     val catchUpCardArt = rememberCatchUpCardArt(uiState.catchUpItems, replayResume)
     var catchUpMenuKey by remember { mutableStateOf<String?>(null) }
     uiState.catchUpItems.firstOrNull { it.key == catchUpMenuKey }?.let { item ->
@@ -944,3 +951,5 @@ private fun HomePosterOptionsDialog(
     }
 }
 
+/** P14: how long Home keeps the Catch up row's place after it finished loading with nothing, so its cards land there. */
+private const val CATCH_UP_HOLD_GRACE_MS = 400L

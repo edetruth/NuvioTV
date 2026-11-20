@@ -589,12 +589,14 @@ internal suspend fun HomeViewModel.updateCatalogRowsPipeline() {
     val liveNowTitle = if (liveNowItems.isNotEmpty()) appContext.getString(R.string.sports_live_home_row_title) else ""
     // The Catch up row (#58) heads the sports rows: ESPN's names and "Replay", never a score.
     val catchUpItems = _uiState.value.catchUpItems
+    val catchUpPending = _uiState.value.catchUpPending
+    val catchUpTitle = appContext.getString(R.string.sports_live_catch_up_title)
     val catchUpRow = if (catchUpItems.isEmpty()) {
         null
     } else {
         SportsLiveCatchUpHomeRow.build(
             items = catchUpItems,
-            title = appContext.getString(R.string.sports_live_catch_up_title),
+            title = catchUpTitle,
             names = { appContext.getString(R.string.sports_live_results_menu_title, it.event.away.catchUpName, it.event.home.catchUpName) },
             replayLabel = appContext.getString(R.string.sports_live_results_replay)
         )
@@ -744,7 +746,27 @@ internal suspend fun HomeViewModel.updateCatalogRowsPipeline() {
                 placeholderDescriptors.associateBy { it.catalogKey }
             }
             val addedCollectionIds = mutableSetOf<String>()
-            if (catchUpRow != null) add(HomeRow.Catalog(catchUpRow))
+            if (catchUpRow != null) {
+                add(HomeRow.Catalog(catchUpRow))
+            } else if (catchUpPending && currentLayout == HomeLayout.MODERN) {
+                // P14: the row is still loading: its place and final title are held, so nothing below moves up first.
+                add(HomeRow.PlaceholderCatalog(
+                    catalogKey = SportsLiveCatchUpHomeRow.PLACEHOLDER_KEY,
+                    stableCatalogKey = catalogRowStableKey(
+                        SportsLiveHomeRow.ADDON_ID,
+                        SportsLiveCatchUpHomeRow.BASE_URL,
+                        SportsLiveCatchUpHomeRow.RAW_TYPE,
+                        SportsLiveCatchUpHomeRow.CATALOG_ID
+                    ),
+                    addonId = SportsLiveHomeRow.ADDON_ID,
+                    addonName = SportsLiveCatchUpHomeRow.ADDON_NAME,
+                    addonBaseUrl = SportsLiveCatchUpHomeRow.BASE_URL,
+                    catalogId = SportsLiveCatchUpHomeRow.CATALOG_ID,
+                    catalogName = catchUpTitle,
+                    apiType = SportsLiveCatchUpHomeRow.RAW_TYPE,
+                    displayTitle = catchUpTitle
+                ))
+            }
             if (liveNowItems.isNotEmpty()) {
                 add(HomeRow.Catalog(SportsLiveHomeRow.build(liveNowItems, liveNowTitle, liveNowScoreLabels, sportsLiveHomeWords())))
             }

@@ -49,6 +49,9 @@ class SportsLiveCatchUpViewModel @Inject constructor(
     /** The row (Home) and strip (Live Now); empty while Sports & Live, its Home row or the row is off. */
     val items: StateFlow<List<CatchUpItem>> = repository.items
 
+    /** The row's days are still loading (P14): Home holds its place and title meanwhile. */
+    val loading: StateFlow<Boolean> = repository.loading
+
     /** The screen is on screen again (each resume). */
     fun onOpened() = repository.onOpened()
 
@@ -157,6 +160,11 @@ internal fun SportsLiveCatchUpMenu(
 object SportsLiveCatchUpHomeRow {
     const val BASE_URL = "nuvio://sports-live/catch-up"
     const val CATALOG_ID = "catch_up"
+    const val RAW_TYPE = "sport"
+    const val ADDON_NAME = "Sports & Live"
+
+    /** The held place's key while the row loads (P14). */
+    const val PLACEHOLDER_KEY = "sportslive_catch_up_pending"
     private const val ID_PREFIX = "catchup:"
 
     fun isCatchUpRow(addonBaseUrl: String): Boolean = addonBaseUrl == BASE_URL
@@ -164,7 +172,7 @@ object SportsLiveCatchUpHomeRow {
     /** The row: Sports & Live's addon id (See all opens the section), its own base URL and [cards]. */
     fun build(items: List<CatchUpItem>, title: String, names: (CatchUpItem) -> String, replayLabel: String): CatalogRow = CatalogRow(
         addonId = SportsLiveHomeRow.ADDON_ID,
-        addonName = "Sports & Live",
+        addonName = ADDON_NAME,
         addonBaseUrl = BASE_URL,
         catalogId = CATALOG_ID,
         catalogName = title,

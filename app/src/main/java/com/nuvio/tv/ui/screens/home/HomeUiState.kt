@@ -84,7 +84,9 @@ data class HomeUiState(
     /** Card keys of [liveNowItems] whose game is over (#60): Home drops them (no Just ended strip there). */
     val liveNowEnded: Set<String> = emptySet(),
     /** The Catch up row (#58): followed teams' replays since the last visit, above Live now. */
-    val catchUpItems: List<com.nuvio.tv.core.sportslive.scores.CatchUpItem> = emptyList()
+    val catchUpItems: List<com.nuvio.tv.core.sportslive.scores.CatchUpItem> = emptyList(),
+    /** P14: the Catch up row is expected but still loading: its place and title are held (Modern layout). */
+    val catchUpPending: Boolean = false
 ) {
     /** The Live now row's cards: [liveNowItems] without the ended games. */
     val liveNowShown: List<SportsLiveItem>
