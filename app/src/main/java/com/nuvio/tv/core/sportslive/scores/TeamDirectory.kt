@@ -4,6 +4,9 @@ import com.nuvio.tv.core.sportslive.Memo
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.squareup.moshi.JsonClass
 import com.squareup.moshi.Moshi
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.io.File
@@ -45,6 +48,11 @@ class TeamDirectory(private val maxLeagues: Int = MAX_LEAGUES) {
     @Volatile
     private var generation = 0L
 
+    private val revisionFlow = MutableStateFlow(0L)
+
+    /** Moves whenever a league is added or replaced: lists merged by team ids are built again (live.18). */
+    val revision: StateFlow<Long> = revisionFlow.asStateFlow()
+
     /** Called after a league is added or replaced (the [TeamLogoBook] bumps its revision: cards redraw). */
     @Volatile
     internal var onChange: (() -> Unit)? = null
@@ -63,6 +71,7 @@ class TeamDirectory(private val maxLeagues: Int = MAX_LEAGUES) {
                 leagueOf(path)?.let(dropped::add)
             }
         }
+        revisionFlow.value = generation
         onChange?.invoke()
         return dropped
     }

@@ -28,6 +28,8 @@ import com.nuvio.tv.core.sportslive.scores.TeamFollows
 import com.nuvio.tv.core.sportslive.scores.TeamLogoBook
 import com.nuvio.tv.core.sportslive.scores.TeamDirectory
 import com.nuvio.tv.core.sportslive.SportsLiveSportInference
+import com.nuvio.tv.core.sportslive.SportsLiveDupes
+import com.nuvio.tv.BuildConfig
 import com.nuvio.tv.core.sportslive.identify.SportsLiveTeamIdentity
 import com.nuvio.tv.core.sportslive.identify.TeamIdentifier
 import com.nuvio.tv.core.sportslive.identify.TeamIdentityBook
@@ -53,11 +55,17 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.merge
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
@@ -103,6 +111,11 @@ class SportsLiveViewModel internal constructor(
     private val inferSport: (SportsLiveItem) -> SportsLiveItem = { it },
     /** Offers the tab's games of unknown sport for a background team lookup (#168); called only while on screen. */
     private val identify: (List<SportsLiveItem>) -> Unit = {},
+    /**
+     * Emits when the team directory or a #168 identity changes (live.18): the current load is bucketed and merged
+     * again, [REBUCKET_DEBOUNCE_MS] after the last change, on the compute dispatcher.
+     */
+    directoryChanges: Flow<Unit> = emptyFlow(),
     /** My sports (#146): Live now, Upcoming and Replays list only its games, unless All sports is picked. */
     mySports: Flow<MySports> = flowOf(MySports.DEFAULT),
     /** Titles hidden from Live Now (#134): left off Live Now's list. */
@@ -160,6 +173,7 @@ class SportsLiveViewModel internal constructor(
         logoRevision = combine(TeamLogoBook.shared.revision, TeamIdentityBook.shared.revision) { logos, identities -> logos * 31 + identities },
         inferSport = { item -> SportsLiveTeamIdentity.identified(SportsLiveSportInference.infer(item, TeamDirectory.shared)) },
         identify = identifier::offer,
+        directoryChanges = merge(TeamDirectory.shared.revision.drop(1), TeamIdentityBook.shared.revision.drop(1)).map { },
         mySports = prefs.mySports,
         hiddenTitles = prefs.hiddenTitles,
         hideTitle = prefs::hideTitle,
@@ -226,7 +240,13 @@ class SportsLiveViewModel internal constructor(
 
     // Bucketing a large channel list is the expensive step, so selection changes do not repeat it,
     // and it runs off the main thread.
-    private val bucketed = combine(repo.claimedCatalogs, repo.latest) { claimed, latest ->
+    // A team list landing or a team identified (live.18) buckets the same load again, so copies that resolve to
+    // the same teams fold without waiting for the next catalog refresh; Live now's focused card stays put
+    // ([sportsLiveKeepFocused]).
+    @OptIn(FlowPreview::class)
+    private val rebucket: Flow<Unit> = directoryChanges.debounce(REBUCKET_DEBOUNCE_MS).onStart { emit(Unit) }
+
+    private val bucketed = combine(repo.claimedCatalogs, repo.latest, rebucket) { claimed, latest, _ ->
         // Only items of catalogs claimed right now: the cache may still hold another profile's load.
         val claimedKeys = claimed.mapTo(HashSet()) { it.key }
         val items = latest?.items.orEmpty().filter { it.catalogKey in claimedKeys }
@@ -249,7 +269,10 @@ class SportsLiveViewModel internal constructor(
                 if (tab == SportsLiveTab.CHANNELS) {
                     SportsLiveItemBucketer.markFollowed(items, followed)
                 } else {
-                    SportsLiveItemBucketer.pinFollowed(items, followed)
+                    SportsLiveItemBucketer.pinFollowed(items, followed).also { rows ->
+                        // Debug builds: rows that look like one game but did not merge (live.18).
+                        if (BuildConfig.DEBUG) SportsLiveDupes.log(tab.name, rows, nowMs())
+                    }
                 }
             }
         )
@@ -683,6 +706,8 @@ class SportsLiveViewModel internal constructor(
     }
 
     private companion object {
+        /** How long the team directory must be still before the load is merged again (live.18). */
+        const val REBUCKET_DEBOUNCE_MS = 2_000L
         const val MINUTE_MS = 60_000L
         const val FOCUS_PROBE_DELAY_MS = 700L
         const val ENDED_TICK_MS = 30_000L

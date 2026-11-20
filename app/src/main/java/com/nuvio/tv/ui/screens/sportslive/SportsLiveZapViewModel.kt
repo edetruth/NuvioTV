@@ -6,6 +6,8 @@ import com.nuvio.tv.core.sportslive.scores.FollowTarget
 import com.nuvio.tv.core.sportslive.scores.FollowTargets
 import com.nuvio.tv.core.sportslive.scores.GameSection
 import com.nuvio.tv.core.sportslive.SportsLiveSportInference
+import com.nuvio.tv.core.sportslive.SportsLiveDupes
+import com.nuvio.tv.BuildConfig
 import com.nuvio.tv.core.sportslive.identify.SportsLiveTeamIdentity
 import com.nuvio.tv.core.sportslive.identify.TeamIdentityBook
 import com.nuvio.tv.core.sportslive.SportsLiveMySportsScope
@@ -57,6 +59,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
@@ -67,6 +70,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.merge
+import kotlinx.coroutines.flow.transform
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
@@ -105,7 +113,7 @@ sealed interface SportsLiveZapEvent {
 }
 
 /** Zap state of one Player back stack entry, whose route arguments it reads. */
-@OptIn(ExperimentalCoroutinesApi::class)
+@OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 @HiltViewModel
 class SportsLiveZapViewModel internal constructor(
     savedStateHandle: SavedStateHandle,
@@ -263,9 +271,18 @@ class SportsLiveZapViewModel internal constructor(
     private val lineup: StateFlow<PanelLineup?> = if (!hasSession) {
         MutableStateFlow(null)
     } else {
-        // A game's teams identified in the background (#168, by the section) list it under its sport here too.
+        // A game's teams identified in the background (#168, by the section) list it under its sport here too, and a
+        // team list landing merges copies of one game by their teams (live.18): both build the list again, 2 s after
+        // the last change and only once the panel is closed (an open panel keeps its snapshot).
+        val rebucket = merge(TeamDirectory.shared.revision.drop(1), TeamIdentityBook.shared.revision.drop(1))
+            .debounce(REBUCKET_DEBOUNCE_MS)
+            .transform<Any, Unit> {
+                _panelOpen.first { open -> !open }
+                emit(Unit)
+            }
+            .onStart { emit(Unit) }
         val all = combine(
-            repo.latest, repo.claimedCatalogs, repo.endedKeys, repo.followedTeams, TeamIdentityBook.shared.revision
+            repo.latest, repo.claimedCatalogs, repo.endedKeys, repo.followedTeams, rebucket
         ) { load, claimed, ended, followed, _ ->
             liveGamesPanelItems(
                 items = load?.items.orEmpty(),
@@ -275,7 +292,9 @@ class SportsLiveZapViewModel internal constructor(
                 nowMs = System.currentTimeMillis(),
                 addonOrder = claimed.map { it.addon.id }.distinct()
                 // Unrouted two-team games take their teams' league here too (P4), as in the section's lists.
-            ).map { SportsLiveTeamIdentity.identified(SportsLiveSportInference.infer(it, TeamDirectory.shared)) } to followed
+            ).map { SportsLiveTeamIdentity.identified(SportsLiveSportInference.infer(it, TeamDirectory.shared)) }
+                // Debug builds: rows that look like one game but did not merge (live.18).
+                .also { if (BuildConfig.DEBUG) SportsLiveDupes.log("PANEL", it, System.currentTimeMillis()) } to followed
         }.flowOn(computeDispatcher)
         // The games under the chip are the ones listed and tracked: My sports' (#146), or every game under All sports.
         // Scoped again when the team directory changes (#159: a league's team list landing tells games apart).
@@ -946,3 +965,6 @@ private fun panelTicks(): Flow<Unit> = flow {
 }
 
 private const val PANEL_TICK_MS = 30_000L
+
+/** How long the team directory must be still before the panel list is merged again (live.18). */
+private const val REBUCKET_DEBOUNCE_MS = 2_000L

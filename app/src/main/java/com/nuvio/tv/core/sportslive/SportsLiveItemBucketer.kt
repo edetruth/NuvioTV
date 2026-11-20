@@ -1,5 +1,6 @@
 package com.nuvio.tv.core.sportslive
 
+import com.nuvio.tv.core.sportslive.identify.SportsLiveTeamIdentity
 import com.nuvio.tv.core.sportslive.scores.EspnLeagueMap
 import com.nuvio.tv.core.sportslive.scores.TeamDirectory
 import com.nuvio.tv.domain.model.CatalogStats
@@ -195,7 +196,7 @@ object SportsLiveItemBucketer {
      *
      * Copies whose names differ beyond that ("San Antonio Spurs / Los Angeles Clippers" and "LA Clippers / San
      * Antonio Spurs", live.18) also merge when both sides resolve to the same two ESPN teams of a league either
-     * card can be on ([sameTeams], through the [directory]); the merged row then shows the copy that names its
+     * card can be on ([idVerdict], through the [directory]: ids decide first, names only where ids are unknown); the merged row then shows the copy that names its
      * league ("NBA") when the primary names only its sport, keeping every source.
      */
     fun merge(
@@ -231,8 +232,13 @@ object SportsLiveItemBucketer {
                 var byIds = false
                 val index = primaries.indexOfFirst { primary ->
                     val pooled = alternatesOf[primary.streamKey].orEmpty() + primary
-                    pooled.none { it.streamKey == item.streamKey } &&
-                        (sameGame(primary, item, nowMs) || sameTeams(primary, item, nowMs, directory).also { byIds = it })
+                    if (pooled.any { it.streamKey == item.streamKey }) return@indexOfFirst false
+                    // ESPN team ids decide first; names only for teams the directory does not know.
+                    when (idVerdict(primary, item, directory)) {
+                        IdVerdict.SAME -> (idGuardFailure(primary, item, nowMs, directory) == null).also { byIds = it }
+                        IdVerdict.DIFFERENT -> false
+                        IdVerdict.UNKNOWN -> sameGame(primary, item, nowMs)
+                    }
                 }
                 if (index < 0) {
                     primaries += item
@@ -291,26 +297,79 @@ object SportsLiveItemBucketer {
         return teamsMatch && sportsAgree(a, b) && !EspnLeagueMap.otherGender(a, b) && sameTime(a, b, nowMs)
     }
 
+    /** What ESPN team ids say about two copies (live.18). */
+    internal enum class IdVerdict { SAME, DIFFERENT, UNKNOWN }
+
     /**
-     * Two copies of one game by ESPN team ids (live.18): their sports are both known and agree ("Basketball" and
-     * "NBA"), neither says women's unless both do, they are at one time, and in some league either card can be on
-     * ([TeamDirectory.leaguesFor]) both of each copy's sides resolve to one team ([TeamDirectory.teamId], cities
-     * short or in full), the same two teams in either order.
+     * Two copies by ESPN team ids, the primary rule for every sport the team directory knows (live.18): in the
+     * leagues either card can be on ([TeamDirectory.leaguesFor], after its league inference and #168 identity),
+     * [IdVerdict.SAME] when both copies' sides resolve to the same two teams in either order
+     * ([TeamDirectory.teamId], cities short or in full), [IdVerdict.DIFFERENT] when they resolve to other teams,
+     * [IdVerdict.UNKNOWN] when no league resolves all four sides (the name rules decide).
      */
-    private fun sameTeams(a: SportsLiveItem, b: SportsLiveItem, nowMs: Long, directory: TeamDirectory): Boolean {
-        val teamsA = a.teams ?: return false
-        val teamsB = b.teams ?: return false
-        if (SportsLiveTeams.knownSport(a) == null || SportsLiveTeams.knownSport(b) == null || !sportsAgree(a, b)) return false
-        if (EspnLeagueMap.saysWomen(a) != EspnLeagueMap.saysWomen(b)) return false
-        if (saysWomenCompetition(a) != saysWomenCompetition(b) || saysMen(a) != saysMen(b)) return false
-        if (!sameTime(a, b, nowMs)) return false
-        val leagues = (TeamDirectory.leaguesFor(a) + TeamDirectory.leaguesFor(b)).distinct()
-        return leagues.any { league ->
-            val a1 = directory.teamId(league, teamsA.home) ?: return@any false
-            val a2 = directory.teamId(league, teamsA.away) ?: return@any false
-            val b1 = directory.teamId(league, teamsB.home) ?: return@any false
-            val b2 = directory.teamId(league, teamsB.away) ?: return@any false
-            a1 != a2 && ((a1 == b1 && a2 == b2) || (a1 == b2 && a2 == b1))
+    internal fun idVerdict(a: SportsLiveItem, b: SportsLiveItem, directory: TeamDirectory = TeamDirectory.shared): IdVerdict {
+        val viewA = idView(a, directory)
+        val viewB = idView(b, directory)
+        val teamsA = viewA.teams ?: return IdVerdict.UNKNOWN
+        val teamsB = viewB.teams ?: return IdVerdict.UNKNOWN
+        var resolved = false
+        for (league in (TeamDirectory.leaguesFor(viewA) + TeamDirectory.leaguesFor(viewB)).distinct()) {
+            val a1 = directory.teamId(league, teamsA.home) ?: continue
+            val a2 = directory.teamId(league, teamsA.away) ?: continue
+            val b1 = directory.teamId(league, teamsB.home) ?: continue
+            val b2 = directory.teamId(league, teamsB.away) ?: continue
+            if (a1 == a2 || b1 == b2) continue
+            if ((a1 == b1 && a2 == b2) || (a1 == b2 && a2 == b1)) return IdVerdict.SAME
+            resolved = true
+        }
+        return if (resolved) IdVerdict.DIFFERENT else IdVerdict.UNKNOWN
+    }
+
+    // A copy as the lists show it: its league inferred from its teams, its sport from #168's team lookup.
+    private fun idView(item: SportsLiveItem, directory: TeamDirectory): SportsLiveItem =
+        SportsLiveTeamIdentity.identified(SportsLiveSportInference.infer(item, directory))
+
+    /**
+     * Why two copies whose team ids agree are still not one game, or null when they are: their sports must both be
+     * known and agree ("Basketball" and "NBA"), neither may say women's unless both do, and they are at one time.
+     */
+    internal fun idGuardFailure(
+        a: SportsLiveItem,
+        b: SportsLiveItem,
+        nowMs: Long,
+        directory: TeamDirectory = TeamDirectory.shared
+    ): String? {
+        val viewA = idView(a, directory)
+        val viewB = idView(b, directory)
+        if (SportsLiveTeams.knownSport(viewA) == null || SportsLiveTeams.knownSport(viewB) == null) return "sport unknown"
+        if (!sportsAgree(viewA, viewB)) return "sport mismatch"
+        val genders = EspnLeagueMap.saysWomen(viewA) != EspnLeagueMap.saysWomen(viewB) ||
+            saysWomenCompetition(viewA) != saysWomenCompetition(viewB) || saysMen(viewA) != saysMen(viewB)
+        if (genders) return "gender rule"
+        if (!sameTime(viewA, viewB, nowMs)) return "start window"
+        return null
+    }
+
+    /**
+     * Why [a] and [b] are not one row (the debug duplicate log, live.18), or null when [merge] would join them:
+     * not both events, a placeholder, different team ids, an id guard, or (ids unknown) the name rules with the
+     * guard that failed.
+     */
+    internal fun splitReason(a: SportsLiveItem, b: SportsLiveItem, nowMs: Long, directory: TeamDirectory = TeamDirectory.shared): String? {
+        if (a.kind != SportsLiveKind.EVENTS || b.kind != SportsLiveKind.EVENTS || a.isChannel || b.isChannel) return "not both events"
+        val teamsA = a.teams ?: return "no teams"
+        val teamsB = b.teams ?: return "no teams"
+        if (SportsLiveTeams.isPlaceholderGame(teamsA) || SportsLiveTeams.isPlaceholderGame(teamsB)) return "placeholder"
+        return when (idVerdict(a, b, directory)) {
+            IdVerdict.SAME -> idGuardFailure(a, b, nowMs, directory)?.let { "same team ids, $it" }
+            IdVerdict.DIFFERENT -> "different team ids"
+            IdVerdict.UNKNOWN -> when {
+                sameGame(a, b, nowMs) -> null
+                !sportsAgree(a, b) -> "no team id, sport mismatch"
+                EspnLeagueMap.otherGender(a, b) || saysMen(a) != saysMen(b) -> "no team id, gender rule"
+                !sameTime(a, b, nowMs) -> "no team id, start window"
+                else -> "no team id, names differ"
+            }
         }
     }
 

@@ -6,6 +6,8 @@ import com.nuvio.tv.core.sportslive.SportsLiveCatalogOptions
 import com.nuvio.tv.core.sportslive.SportsLiveCatalogPolicy
 import com.nuvio.tv.core.sportslive.SportsLiveItemBucketer
 import com.nuvio.tv.core.sportslive.SportsLiveMySportsScope
+import com.nuvio.tv.core.sportslive.identify.TeamIdentityBook
+import com.nuvio.tv.core.sportslive.scores.TeamDirectory
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import com.nuvio.tv.domain.model.CatalogOption
 import com.nuvio.tv.domain.model.CatalogRow
@@ -24,6 +26,7 @@ import com.nuvio.tv.domain.repository.SportsLiveRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -32,6 +35,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.merge
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
@@ -53,6 +60,7 @@ class SportsLiveRepositoryImpl @Inject constructor(
 ) : SportsLiveRepository {
     private companion object {
         const val CACHE_MS = 60_000L
+        const val REBUCKET_DEBOUNCE_MS = 2_000L
         const val CATALOG_TIMEOUT_MS = 15_000L
     }
 
@@ -227,6 +235,14 @@ class SportsLiveRepositoryImpl @Inject constructor(
         item.alternates.forEach(streamProbe::reprobeIfStale)
     }
 
+    /** The team directory or a #168 identity changed, 2 s after the last change; once at the start (live.18). */
+    @OptIn(FlowPreview::class)
+    private val directoryChanges: Flow<Unit> =
+        merge(TeamDirectory.shared.revision.drop(1), TeamIdentityBook.shared.revision.drop(1))
+            .debounce(REBUCKET_DEBOUNCE_MS)
+            .map { }
+            .onStart { emit(Unit) }
+
     /** Only items of catalogs claimed right now, so a profile switch or an exclusion hides stale items at once. */
     override fun liveNow(limit: Int): Flow<List<SportsLiveItem>> =
         combine(
@@ -234,7 +250,8 @@ class SportsLiveRepositoryImpl @Inject constructor(
             combine(prefs.showHomeRow, enabled) { showHomeRow, enabled -> showHomeRow && enabled },
             claimedCatalogs,
             endedKeys,
-            combine(followedTeams, prefs.mySports) { followed, mySports -> followed to mySports }
+            // A team list landing merges copies of one game by their teams (live.18): the row is built again.
+            combine(followedTeams, prefs.mySports, directoryChanges) { followed, mySports, _ -> followed to mySports }
         ) { load, shown, claimed, ended, (followed, mySports) ->
             if (load == null || !shown) {
                 emptyList()

@@ -522,6 +522,55 @@ class SportsLiveViewModelTest {
     }
 
     @Test
+    fun `a team directory change merges the current load again after 2 s without moving the focused row`() = runTest {
+        val items = listOf("a", "b", "c").map { item(it, isLive = true, sport = "Soccer", name = it.uppercase()) }
+        nextLoad = load(items)
+        val directoryChanges = MutableSharedFlow<Unit>()
+        val viewModel = SportsLiveViewModel(repo, directoryChanges = directoryChanges, computeDispatcher = compute)
+        viewModel.nowMs = { NOW }
+        var bucketCalls = 0
+        // After the change, "b" turns out to be a copy of "a" (live.18: its teams resolved to the same ESPN ids).
+        var foldB = false
+        viewModel.bucket = { listed, now, order ->
+            bucketCalls++
+            val tabs = SportsLiveItemBucketer.bucket(listed, now, order)
+            if (!foldB) {
+                tabs
+            } else {
+                tabs.mapValues { (tab, rows) ->
+                    if (tab != SportsLiveTab.LIVE_NOW) rows
+                    else rows.filter { it.id != "b" }.map { if (it.id == "a") it.copy(alternates = listOf(items[1])) else it }
+                }
+            }
+        }
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+        viewModel.selectItem("b")
+        runCurrent()
+        val before = bucketCalls
+
+        foldB = true
+        directoryChanges.emit(Unit)
+        advanceTimeBy(1_900); runCurrent()
+        // Debounced: nothing yet.
+        assertEquals(before, bucketCalls)
+        directoryChanges.emit(Unit)
+        advanceTimeBy(1_900); runCurrent()
+        assertEquals(before, bucketCalls)
+        advanceTimeBy(200); runCurrent()
+        // Merged again, once, from the same load (no catalog request): the focused "b" stays where it was.
+        assertEquals(before + 1, bucketCalls)
+        assertEquals(listOf("a", "b", "c"), viewModel.uiState.value.visibleItems.map { it.id })
+        assertEquals("b", viewModel.uiState.value.selectedItemId)
+        assertEquals(1, viewModel.uiState.value.visibleItems.first { it.id == "a" }.alternates.size)
+
+        // Focus moves on: the copy leaves.
+        viewModel.selectItem("c")
+        runCurrent()
+        assertEquals(listOf("a", "c"), viewModel.uiState.value.visibleItems.map { it.id })
+    }
+
+    @Test
     fun `only the Live now item the user settles on for 700 ms is re-probed`() = runTest {
         val items = (1..5).map { item("g$it", isLive = true, sport = "Soccer", name = "G$it") }
         nextLoad = load(items)
