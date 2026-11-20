@@ -373,4 +373,12 @@ class SportsLiveTeamsTest {
         // "AC" alone is no team.
         assertFalse(SportsLiveTeams.matches("AC", "Le Havre AC"))
     }
+
+    @Test
+    fun `letters accent folding keeps whole read plain, so a slashed o Bodo is Bodo`() {
+        assertEquals("bodo glimt", SportsLiveTeams.normalise("Bodø/Glimt"))
+        assertTrue(SportsLiveTeams.matches("Bodø/Glimt", "Bodo/Glimt"))
+        assertTrue(SportsLiveTeams.matches("Brøndby IF", "Brondby IF"))
+        assertEquals("lodz", SportsLiveTeams.normalise("Łódź").let(SportsLiveTeams::foldAccents))
+    }
 }

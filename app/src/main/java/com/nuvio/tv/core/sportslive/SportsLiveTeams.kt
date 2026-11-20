@@ -162,7 +162,7 @@ object SportsLiveTeams {
 
     @VisibleForTesting
     internal fun normaliseUncached(team: String): String {
-        val cleaned = SportsLiveSmallLetters.plain(clean(team)).lowercase()
+        val cleaned = plainLetters(SportsLiveSmallLetters.plain(clean(team)).lowercase())
         // A qualifier is set aside so "Arsenal FC (W)" still loses its club suffix: "arsenal (w)".
         val qualifier = QUALIFIER.find(cleaned)
         val base = if (qualifier == null) cleaned else cleaned.substring(0, qualifier.range.first)
@@ -182,6 +182,15 @@ object SportsLiveTeams {
         "praha" to "prague",
         "københavn" to "copenhagen", "kobenhavn" to "copenhagen", "koebenhavn" to "copenhagen"
     )
+
+    // Letters no accent folding takes apart (TV report #5: addons' "Bodø/Glimt" is ESPN's "Bodo/Glimt"), as plain ones.
+    private val PLAIN_LETTERS = mapOf('ø' to "o", 'æ' to "ae", 'œ' to "oe", 'ß' to "ss", 'ł' to "l", 'đ' to "d", 'ð' to "d", 'þ' to "th", 'ı' to "i")
+
+    /** [text] (lowercase) with [PLAIN_LETTERS] written plain; unchanged, and not copied, when it has none. */
+    private fun plainLetters(text: String): String {
+        if (text.none { it in PLAIN_LETTERS }) return text
+        return buildString(text.length + 2) { for (c in text) append(PLAIN_LETTERS[c] ?: c) }
+    }
 
     private val POSSESSIVE = Regex("""['\u2019]s(?![\p{L}\p{N}])""")
     private val PUNCTUATION = Regex("""[^\p{L}\p{N}\s]+""")
