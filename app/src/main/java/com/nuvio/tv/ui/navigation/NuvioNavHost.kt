@@ -121,7 +121,7 @@ fun NuvioNavHost(
         val navViewModelStoreOwner = LocalNavViewModelStoreOwner.current
             ?: checkNotNull(LocalViewModelStoreOwner.current)
         // The player's live games panel opens dual screen through this.
-        val openSportsLiveDual: () -> Unit = remember(navController) { { openSportsLiveDualFromPlayer(navController) } }
+        val openSportsLiveDual: () -> Unit = androidx.compose.ui.platform.LocalView.current.let { root -> remember(navController, root) { { openSportsLiveDualFromPlayer(navController, root) } } }
         // ...and the Game page (Game stats in its Hold OK menu, #140), above the player: Back returns to it.
         val openSportsLiveGame: () -> Unit = remember(navController) { { navController.navigate(Screen.SportsLiveGame.route) } }
         CompositionLocalProvider(
@@ -234,9 +234,11 @@ internal fun navigateToSportsLiveZapTarget(navController: NavHostController, tar
  * to the section (see sportsLiveDualEntryPopTarget). Like Back from the player, its zap session and
  * the other addons' streams registered for it end.
  */
-private fun openSportsLiveDualFromPlayer(navController: NavHostController) {
+private fun openSportsLiveDualFromPlayer(navController: NavHostController, root: android.view.View) {
     val playerEntry = navController.currentBackStackEntry
         ?.takeIf { it.destination.route == Screen.Player.route } ?: return
+    // live.20: the player's last frame stays in the game's pane until it plays there (no black pane).
+    com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualHandoffFrame.capture(root)
     SportsLiveZapSessions.clear()
     SportsLiveExtraSources.clear(playerEntry.arguments?.getString("contentId"))
     val stackRoutes = navController.currentBackStack.value.map { it.destination.route }

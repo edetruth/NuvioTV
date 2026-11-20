@@ -25,7 +25,10 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
@@ -272,6 +275,15 @@ fun SportsLiveDualScreen(
         endSelection = endActions?.first() ?: SportsLiveEndAction.WATCH_NEXT
     }
 
+    // Opened from the full player (live.20): its last frame stays in the game's pane until the pane's first frame.
+    val handoffFrame by SportsLiveDualHandoffFrame.frame.collectAsStateWithLifecycle()
+    val handoffKey = remember { dual.left.item.streamKey }
+    val handoffPane = listOf(dual.left, dual.right).firstOrNull { it.item.streamKey == handoffKey }
+    LaunchedEffect(handoffPane?.status, handoffPane?.reconnecting) {
+        if (handoffPane == null || handoffPane.status != PaneStatus.Loading || handoffPane.reconnecting) SportsLiveDualHandoffFrame.clear()
+    }
+    DisposableEffect(Unit) { onDispose { SportsLiveDualHandoffFrame.clear() } }
+
     // Focus starts on the screen and comes back to it when OK's lookup or stream picker closes.
     val focusRequester = remember { FocusRequester() }
     val playState by playViewModel.state.collectAsStateWithLifecycle()
@@ -424,6 +436,7 @@ fun SportsLiveDualScreen(
                 val pane = dual.pane(side)
                 DualPaneView(
                     pane = pane,
+                    handoff = handoffFrame?.takeIf { dualShowsHandoffFrame(it.atMs, handoffKey, pane, System.currentTimeMillis()) }?.image,
                     highlighted = side == dual.highlighted,
                     small = dual.layout == DualLayout.BIG_SMALL && side == Side.RIGHT,
                     startingSelection = startingSelection,
@@ -510,6 +523,8 @@ fun SportsLiveDualScreen(
 @Composable
 private fun DualPaneView(
     pane: DualPane,
+    /** The full player's last frame (live.20), shown over the pane's still black video until its first frame. */
+    handoff: ImageBitmap?,
     highlighted: Boolean,
     /** The corner tile of big + small (#123): a smaller strip. */
     small: Boolean,
@@ -560,6 +575,7 @@ private fun DualPaneView(
                 },
                 modifier = Modifier.fillMaxSize()
             )
+            handoff?.let { Image(bitmap = it, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize()) }
             PaneStatusOverlay(pane, highlighted, small, startingSelection, endSelection)
         }
         Row(
