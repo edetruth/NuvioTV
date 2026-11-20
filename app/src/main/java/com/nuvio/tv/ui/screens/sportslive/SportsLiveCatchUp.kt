@@ -57,7 +57,7 @@ class SportsLiveCatchUpViewModel @Inject constructor(
      * its score hidden meanwhile, and it shows under Replays' Saved for later.
      */
     val kept: StateFlow<Set<String>> = spoilers.protection
-        .map { protection -> protection.saved.mapTo(HashSet()) { it.eventId } }
+        .map { protection -> protection.saved.map { it.eventId }.toSet() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
 
     /** Keep [item] until it is watched, or let it go again ([kept]: it is kept now). */
