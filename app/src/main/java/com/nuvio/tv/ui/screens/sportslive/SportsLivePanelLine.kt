@@ -20,10 +20,12 @@ import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -357,7 +359,9 @@ internal fun SportsLivePanelLine(
     /** What the check-ahead found (#147, live.20 1b): "▶ Ready" or no working stream ("No stream yet"); null: not known, no mark. */
     readyMark: SportsLiveReadyMark? = null,
     /** What tells this row from another of the same title ([panelTitleSuffixes]); null for none. */
-    titleSuffix: String? = null
+    titleSuffix: String? = null,
+    /** Told whether the row's "▶ Ready" was left out for want of room (BUG-C), so the footer can say it instead. */
+    onReadyHidden: ((Boolean) -> Unit)? = null
 ) {
     val strings = rememberGameStatusStrings()
     val kickoff = row.art?.let { kickoffText(it) }
@@ -378,6 +382,11 @@ internal fun SportsLivePanelLine(
     val shape = RoundedCornerShape(PANEL_LINE_RADIUS)
     var focused by remember { mutableStateOf(false) }
     val checking = rememberSportsLiveChecking(row.item)
+    // Set by the row's layout: its chips were left out so the names keep their room (BUG-C).
+    var chipsDropped by remember { mutableStateOf(false) }
+    val readyHidden = chipsDropped && panelReadyMarkShown(readyMark, focused) == SportsLiveReadyMark.READY
+    val currentOnReadyHidden by rememberUpdatedState(onReadyHidden)
+    LaunchedEffect(readyHidden) { currentOnReadyHidden?.invoke(readyHidden) }
     val (longPress, click) = if (onLongClick != null) rememberSportsLiveLongPress(menuOpen, onLongClick, onClick) else Modifier to onClick
     Column(modifier = Modifier.fillMaxWidth()) {
         if (nowPlaying) {
@@ -456,7 +465,8 @@ internal fun SportsLivePanelLine(
                             }
                         }
                     },
-                    modifier = Modifier.fillMaxSize().padding(start = 8.dp, end = 6.dp)
+                    modifier = Modifier.fillMaxSize().padding(start = 8.dp, end = 6.dp),
+                    onChipsShown = { shown -> chipsDropped = !shown }
                 )
                 if (nowPlaying) {
                     Box(
@@ -573,7 +583,9 @@ private fun PanelLineParts(
     main: @Composable () -> Unit,
     status: @Composable () -> Unit,
     chips: @Composable () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** Told at each layout whether the chips show. */
+    onChipsShown: (Boolean) -> Unit = {}
 ) {
     // Each part in a Box: a part that draws nothing (no clock) still takes its place, at no width.
     Layout(content = { Box { main() }; Box { status() }; Box { chips() } }, modifier = modifier) { measurables, constraints ->
@@ -587,6 +599,7 @@ private fun PanelLineParts(
         val bounded = loose.hasBoundedWidth
         val end = if (bounded) loose.maxWidth else wantMain + statusWidth + chipsWidth
         val showChips = !bounded || panelChipsShown(end, statusWidth, chipsWidth, wantMain, PANEL_NAMES_FLOOR.roundToPx())
+        onChipsShown(showChips || chipsPlaced.width == 0)
         val mainMax = (end - statusWidth - if (showChips) chipsWidth else 0).coerceAtLeast(0)
         val mainPlaced = measurables[0].measure(loose.copy(maxWidth = mainMax))
         val height = if (loose.hasBoundedHeight) loose.maxHeight else maxOf(mainPlaced.height, statusPlaced.height, chipsPlaced.height)
@@ -602,6 +615,13 @@ private fun PanelLineParts(
         }
     }
 }
+
+/**
+ * The panel footer's line (live.20): the focused row's [fullName], then "▶ Ready" ([ready], after [separator]) when
+ * its row had no room for the chip (BUG-C), so the mark is never lost on a tight row.
+ */
+internal fun panelFooterText(fullName: String, readyHidden: Boolean, ready: String, separator: String): String =
+    if (readyHidden) fullName + separator + ready else fullName
 
 /**
  * Whether a panel row's chips show (BUG-C): only while the main part ([wantMain] px at its longest) still gets all it

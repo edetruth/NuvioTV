@@ -489,6 +489,12 @@ class SportsLiveSlimPanelTest {
     }
 
     @Test
+    fun `the footer says Ready when the focused row had no room for the chip`() {
+        assertEquals("FC Andorra vs Leganés · ▶ Ready", panelFooterText("FC Andorra vs Leganés", true, "▶ Ready", " · "))
+        assertEquals("FC Andorra vs Leganés", panelFooterText("FC Andorra vs Leganés", false, "▶ Ready", " · "))
+    }
+
+    @Test
     fun `panel names and titles lose the addon's leading emoji, marks and bracketed prefix`() {
         assertEquals("Portugal Free Practice", panelCleanText("\uD83D\uDCFA Portugal Free Practice"))
         assertEquals("Moto2 | Round 22", panelCleanText("\u200B\uFE0FMoto2 | Round 22"))
