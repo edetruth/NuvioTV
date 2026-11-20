@@ -2,12 +2,14 @@ package com.nuvio.tv.ui.screens.sportslive
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.nuvio.tv.core.sportslive.scores.CollegeRankingsRepository
 import com.nuvio.tv.core.sportslive.scores.DelayedValues
 import com.nuvio.tv.core.sportslive.scores.EspnLeague
 import com.nuvio.tv.core.sportslive.scores.GameSection
 import com.nuvio.tv.core.sportslive.scores.GameSummary
 import com.nuvio.tv.core.sportslive.scores.GameSummaryLoad
 import com.nuvio.tv.core.sportslive.scores.GameSummaryRepository
+import com.nuvio.tv.core.sportslive.scores.RankDisplay
 import com.nuvio.tv.core.sportslive.scores.ScoreChips
 import com.nuvio.tv.core.sportslive.scores.ScoreMatcher
 import com.nuvio.tv.core.sportslive.scores.ScoreSettings
@@ -29,6 +31,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -166,11 +169,18 @@ class SportsLiveGameViewModel internal constructor(
     /** Watch later (no spoilers) from the page's More… (F22): the game is protected from now on. */
     private val saveForLater: suspend (ScoreSnapshot) -> Unit = {},
     /** Watch replay pressed: played to its end, it ends the game's protection. */
-    private val replayStarted: suspend (SportsLiveItem, ScoreSnapshot) -> Unit = { _, _ -> }
+    private val replayStarted: suspend (SportsLiveItem, ScoreSnapshot) -> Unit = { _, _ -> },
+    /** A college league's AP ranks by team id (BUG18), for every standings row. */
+    private val loadRanks: suspend (EspnLeague) -> Map<String, Int> = { emptyMap() }
 ) : ViewModel() {
 
     @Inject
-    constructor(summaries: GameSummaryRepository, prefs: SportsLivePreferencesDataStore, protection: SpoilerProtectionStore) : this(
+    constructor(
+        summaries: GameSummaryRepository,
+        prefs: SportsLivePreferencesDataStore,
+        protection: SpoilerProtectionStore,
+        rankings: CollegeRankingsRepository
+    ) : this(
         request = SportsLiveGameRequests.take(),
         // Parsing a summary (hundreds of KB of JSON) stays off the main thread (#107).
         loadSummary = { league, eventId -> withContext(Dispatchers.Default) { summaries.load(league, eventId) } },
@@ -182,8 +192,23 @@ class SportsLiveGameViewModel internal constructor(
         protection = protection.protection,
         endProtection = protection::reveal,
         saveForLater = protection::saveForLater,
-        replayStarted = { replay, event -> protection.onReplayStarted(listOf(replay) + replay.alternates, event) }
+        replayStarted = { replay, event -> protection.onReplayStarted(listOf(replay) + replay.alternates, event) },
+        loadRanks = rankings::ranks
     )
+
+    private val ranks = MutableStateFlow<Map<String, Int>>(emptyMap())
+    private var ranksAsked = false
+
+    /** Every ranked college team's AP rank by ESPN team id (BUG18): asked for once the Standings tab shows. */
+    val standingRanks: StateFlow<Map<String, Int>> = ranks.asStateFlow()
+
+    /** The Standings tab is showing: a college league's poll is asked for once (one cached request a day). */
+    fun onStandingsShown() {
+        val league = page.value.summary?.league ?: return
+        if (ranksAsked || !RankDisplay.isCollege(league)) return
+        ranksAsked = true
+        viewModelScope.launch { ranks.value = loadRanks(league) }
+    }
 
     private data class Page(
         val summary: GameSummary? = null,

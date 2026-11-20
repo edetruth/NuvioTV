@@ -96,7 +96,9 @@ internal fun GameBody(
     /** A performer's or Box score player's Player card: its return key and target. */
     onOpenPlayer: (String, PlayerCardTarget) -> Unit,
     /** A Standings row's Team page (BUG11). */
-    onOpenTeam: (TeamRef) -> Unit = {}
+    onOpenTeam: (TeamRef) -> Unit = {},
+    /** A college league's AP ranks by team id, for every Standings row (BUG18). */
+    standingRanks: Map<String, Int> = emptyMap()
 ) {
     val summary = state.summary
     when {
@@ -145,7 +147,7 @@ internal fun GameBody(
                     GameSection.STANDINGS -> standingsTab(
                         summary.standings,
                         first,
-                        ranks = listOf(summary.home, summary.away).mapNotNull { team ->
+                        ranks = standingRanks + listOf(summary.home, summary.away).mapNotNull { team ->
                             val id = team.id ?: return@mapNotNull null
                             RankDisplay.rank(summary.league, team.rank)?.let { id to it }
                         }.toMap(),

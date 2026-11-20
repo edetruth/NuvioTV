@@ -138,6 +138,9 @@ fun SportsLiveGameScreen(
 
     val sections = state.sections
     val section = state.section
+    // College standings: every ranked team's "#N" (BUG18), asked for once the tab shows.
+    val standingRanks by viewModel.standingRanks.collectAsStateWithLifecycle()
+    LaunchedEffect(section) { if (section == GameSection.STANDINGS) viewModel.onStandingsShown() }
     val showsScore = state.showsScore
     // Remind me (#44): an upcoming game, by the card it was opened from, else by ESPN's game itself (live.19 F18:
     // opened from Upcoming or Results with no card, an upcoming game had no PRIMARY), as the Team page does.
@@ -315,7 +318,8 @@ fun SportsLiveGameScreen(
                 onOpenTeam = { ref ->
                     SportsLiveTeamRequests.open(SportsLiveTeamRequest(ref))
                     onOpenTeam()
-                }
+                },
+                standingRanks = standingRanks
             )
         }
     }

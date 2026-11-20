@@ -40,7 +40,7 @@ class EspnScoreProvider internal constructor(
     private val athleteBaseUrl: String = ATHLETE_BASE_URL,
     /** ESPN's standings API (#137), another path on the scoreboards' host. */
     private val standingsBaseUrl: String = STANDINGS_BASE_URL
-) : ScoreProvider, GameSummarySource, TeamPageSource, PlayerCardSource, StandingsSource {
+) : ScoreProvider, GameSummarySource, TeamPageSource, PlayerCardSource, StandingsSource, RankingsSource {
 
     @Inject
     constructor(okHttpClient: OkHttpClient, moshi: Moshi, health: EspnFeedHealth) :
@@ -197,6 +197,10 @@ class EspnScoreProvider internal constructor(
     /** [league]'s standings (#137), ESPN's v2 API; like a team body, never stored in the HTTP cache (kept by [StandingsRepository]). */
     override suspend fun standings(league: EspnLeague): String? =
         teamText("$standingsBaseUrl${league.path}/standings", "${league.path} standings")
+
+    /** [league]'s college polls (live.20 BUG18); kept a day by [CollegeRankingsRepository], not in the HTTP cache. */
+    override suspend fun rankings(league: EspnLeague): String? =
+        teamText("$baseUrl${league.path}/rankings", "${league.path} rankings")
 
     override suspend fun team(league: EspnLeague, teamId: String): String? =
         teamText("$baseUrl${league.path}/teams/$teamId", "team $teamId")

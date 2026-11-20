@@ -6,6 +6,7 @@ import com.nuvio.tv.core.sportslive.scores.EspnScoreProvider
 import com.nuvio.tv.core.sportslive.scores.EuroLeagueScoreSource
 import com.nuvio.tv.core.sportslive.scores.GameSummarySource
 import com.nuvio.tv.core.sportslive.scores.PlayerCardSource
+import com.nuvio.tv.core.sportslive.scores.RankingsSource
 import com.nuvio.tv.core.sportslive.scores.RoutedScoreProvider
 import com.nuvio.tv.core.sportslive.scores.ScoreProvider
 import com.nuvio.tv.core.sportslive.scores.StandingsSource
@@ -68,4 +69,7 @@ object ScoresModule {
 
     @Provides
     fun provideStandingsSource(espn: EspnScoreProvider): StandingsSource = espn
+
+    @Provides
+    fun provideRankingsSource(espn: EspnScoreProvider): RankingsSource = espn
 }
