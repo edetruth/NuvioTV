@@ -196,7 +196,8 @@ class SportsLiveScoresRefreshTest {
         val labels = threePolls(LiveScoresRepository.SCREEN_HOME, listOf(undated)) { scores ->
             SportsLiveHomeRow.scoreLabels(listOf(undated), scores, ScoresMode.SHOW, strings, "● %1\$s")[undated.streamKey]
         }
-        assertEquals(listOf(88, 91, 94).map { "● $CLOCK · $AWAY–$it" }, labels)
+        // "Q3 4:12" reads clock first, then the period, then the score between the abbreviations (V2 phase 10).
+        assertEquals(listOf(88, 91, 94).map { "● 4:12 · Q3 · IND $AWAY–$it PHI" }, labels)
     }
 
     @Test

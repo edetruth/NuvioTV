@@ -1,39 +1,19 @@
 package com.nuvio.tv.ui.screens.sportslive
 
 import android.content.Context
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.withFrameNanos
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
-import androidx.tv.material3.Border
-import androidx.tv.material3.MaterialTheme
-import androidx.tv.material3.Text
 import com.nuvio.tv.R
 import com.nuvio.tv.core.sportslive.scores.CatchUpItem
 import com.nuvio.tv.core.sportslive.scores.CatchUpRepository
@@ -43,11 +23,10 @@ import com.nuvio.tv.domain.model.CatalogRow
 import com.nuvio.tv.domain.model.ContentType
 import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.domain.model.PosterShape
-import com.nuvio.tv.ui.components.LightweightCard
 import com.nuvio.tv.ui.components.LoadingIndicator
 import com.nuvio.tv.ui.components.NuvioDialog
+import com.nuvio.tv.ui.screens.home.SportsLiveHomeMeta
 import com.nuvio.tv.ui.screens.home.SportsLiveHomeRow
-import com.nuvio.tv.ui.theme.NuvioTheme
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.StateFlow
 import javax.inject.Inject
@@ -82,119 +61,6 @@ internal val ScoreTeam.catchUpName: String get() = displayName ?: shortDisplayNa
 @Composable
 internal fun catchUpMatchup(item: CatchUpItem): String =
     stringResource(R.string.sports_live_results_menu_title, item.event.away.catchUpName, item.event.home.catchUpName)
-
-/**
- * The Catch up strip at the top of Live Now: "Catch up · your teams", then a card per game with the
- * league, both teams and the Replay pill. Never a score, a winner or a final note, whatever the Scores
- * setting. OK plays; hold OK opens [SportsLiveCatchUpMenu].
- */
-@Composable
-internal fun SportsLiveCatchUpStrip(
-    items: List<CatchUpItem>,
-    firstFocusRequester: FocusRequester,
-    upFocusRequester: FocusRequester?,
-    downFocusRequester: FocusRequester?,
-    onPlay: (CatchUpItem) -> Unit,
-    onOpenGame: (CatchUpItem) -> Unit,
-    onMarkWatched: (CatchUpItem) -> Unit,
-    /** Whether a card of the strip holds focus (its menu open counts), for when the strip empties. */
-    onHoldsFocus: (Boolean) -> Unit = {},
-    modifier: Modifier = Modifier
-) {
-    var menuKey by remember { mutableStateOf<String?>(null) }
-    // The card focus was last on, while focus stays in the strip or its menu.
-    var focusedKey by remember { mutableStateOf<String?>(null) }
-    val currentOnHoldsFocus by rememberUpdatedState(onHoldsFocus)
-    LaunchedEffect(focusedKey != null) { currentOnHoldsFocus(focusedKey != null) }
-    // The focused card left (watched, or marked so): focus goes to the first card left.
-    val keys = items.map { it.key }
-    LaunchedEffect(keys) {
-        val key = focusedKey ?: return@LaunchedEffect
-        if (key in keys || keys.isEmpty() || menuKey != null) return@LaunchedEffect
-        withFrameNanos { }
-        runCatching { firstFocusRequester.requestFocus() }
-    }
-    items.firstOrNull { it.key == menuKey }?.let { item ->
-        SportsLiveCatchUpMenu(
-            item = item,
-            onOpenGame = {
-                menuKey = null
-                onOpenGame(item)
-            },
-            onMarkWatched = {
-                menuKey = null
-                onMarkWatched(item)
-            },
-            onDismiss = { menuKey = null }
-        )
-    }
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs)) {
-        Text(
-            text = stringResource(R.string.sports_live_catch_up_title),
-            style = MaterialTheme.typography.titleSmall,
-            color = NuvioTheme.colors.TextSecondary
-        )
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm),
-            // Focus leaving for the menu keeps the card; leaving for anything else forgets it.
-            modifier = Modifier.onFocusChanged { if (!it.hasFocus && menuKey == null && focusedKey?.let { key -> key in keys } == true) focusedKey = null }
-        ) {
-            itemsIndexed(items, key = { _, item -> item.key }) { index, item ->
-                CatchUpCard(
-                    item = item,
-                    onClick = { onPlay(item) },
-                    onLongClick = { menuKey = item.key },
-                    menuOpen = menuKey == item.key,
-                    modifier = Modifier
-                        .then(if (index == 0) Modifier.focusRequester(firstFocusRequester) else Modifier)
-                        .onFocusChanged { if (it.isFocused) focusedKey = item.key }
-                        .focusProperties {
-                            upFocusRequester?.let { up = it }
-                            downFocusRequester?.let { down = it }
-                        }
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun CatchUpCard(
-    item: CatchUpItem,
-    onClick: () -> Unit,
-    onLongClick: () -> Unit,
-    menuOpen: Boolean,
-    modifier: Modifier = Modifier
-) {
-    val shape = RoundedCornerShape(NuvioTheme.radii.md)
-    val (longPress, click) = rememberSportsLiveLongPress(menuOpen = menuOpen, onLongClick = onLongClick, onClick = onClick)
-    LightweightCard(
-        onClick = click,
-        modifier = modifier.width(CATCH_UP_CARD_WIDTH).then(longPress),
-        shape = shape,
-        containerColor = NuvioTheme.colors.BackgroundCard,
-        focusedBorder = Border(border = NuvioTheme.focusRing.border(NuvioTheme.spacing.xxs), shape = shape)
-    ) {
-        // The drawn art (logos when both teams have one, else the names; the league), never the replay's poster.
-        val art = remember(item.event) { GameArt.ofEvent(item.event) }
-        SportsLiveGameArt(art, compact = true, modifier = Modifier.fillMaxWidth().height(CATCH_UP_ART_HEIGHT))
-        Row(
-            modifier = Modifier.padding(horizontal = NuvioTheme.spacing.md, vertical = NuvioTheme.spacing.sm),
-            horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = catchUpMatchup(item),
-                style = MaterialTheme.typography.bodySmall,
-                color = NuvioTheme.colors.TextPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
-            )
-            ReplayPill()
-        }
-    }
-}
 
 /** Hold OK on a catch-up card (Home or Live Now): Game stats (score behind Reveal) and Mark as watched. */
 @Composable
@@ -298,16 +164,21 @@ internal fun SportsLiveReplaySourceDialog(title: String, sources: List<String>, 
     }
 }
 
-/** Home's drawn art for its Catch up cards, by card id ([LocalDrawnCardArt]): logos and names, never a score. */
+/**
+ * Home's drawn art for its Catch up cards, by card id ([LocalDrawnCardArt]): the section's game card (V2 phase 10)
+ * with the logos and names, "Final · Sun 15 Nov" and the Replay pill; never a score.
+ */
 @Composable
-internal fun rememberCatchUpCardArt(items: List<CatchUpItem>): (String) -> (@Composable () -> Unit)? =
-    remember(items) {
-        val arts = items.associate { SportsLiveCatchUpHomeRow.cardId(it) to GameArt.ofEvent(it.event) }
-        val lookup: (String) -> (@Composable () -> Unit)? = { id ->
-            arts[id]?.let { art -> { SportsLiveGameArt(art, compact = false, modifier = Modifier.fillMaxSize()) } }
+internal fun rememberCatchUpCardArt(items: List<CatchUpItem>): (String) -> (@Composable () -> Unit)? {
+    val finalWord = stringResource(R.string.sports_live_chip_final_note)
+    return remember(items, finalWord) {
+        val cards = items.associate { item ->
+            val art = GameArt.ofEvent(item.event)
+            val footer = DrawnCardFooter(lead = SportsLiveHomeMeta.catchUpLead(item.event.startMs, finalWord), trailing = DrawnCardTrailing.Replay)
+            val card: @Composable () -> Unit = { SportsLiveDrawnGameCard(art, followed = false, footer = footer, modifier = Modifier.fillMaxSize()) }
+            SportsLiveCatchUpHomeRow.cardId(item) to card
         }
+        val lookup: (String) -> (@Composable () -> Unit)? = { id -> cards[id] }
         lookup
     }
-
-private val CATCH_UP_CARD_WIDTH = 240.dp
-private val CATCH_UP_ART_HEIGHT = 64.dp
+}

@@ -253,7 +253,9 @@ internal fun SportsLiveReplayStage(
     modifier: Modifier = Modifier,
     watchModifier: Modifier = Modifier,
     /** A mini player plays (#157): it docks in the media box and the replay's details read as Selected. */
-    miniPlaying: Boolean = false
+    miniPlaying: Boolean = false,
+    /** The "When" line in place of the replay's date and time (a catch-up's "Replay · Yesterday", #155). */
+    whenText: String? = null
 ) {
     Column(
         modifier = modifier.width(SportsLiveStageLayout.WIDTH_DP.dp).fillMaxHeight(),
@@ -309,8 +311,8 @@ internal fun SportsLiveReplayStage(
                 overflow = TextOverflow.Ellipsis,
                 autoSize = TextAutoSize.StepBased(minFontSize = 15.sp, maxFontSize = TITLE_STYLE.fontSize, stepSize = 1.sp)
             )
-            replayWhenText(row.item, nowMs)?.let { whenText ->
-                Text(text = whenText, style = SportsLiveTokens.style(WHEN_STYLE), color = Colors.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            (whenText ?: replayWhenText(row.item, nowMs))?.let { whenLine ->
+                Text(text = whenLine, style = SportsLiveTokens.style(WHEN_STYLE), color = Colors.TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
         Row(

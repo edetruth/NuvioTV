@@ -123,6 +123,7 @@ import com.nuvio.tv.ui.components.continueWatchingShouldBlur
 import com.nuvio.tv.ui.components.continueWatchingUsesEpisodeThumbnails
 import com.nuvio.tv.ui.components.LocalCardDepthStyle
 import com.nuvio.tv.ui.components.DrawnCardArtOr
+import com.nuvio.tv.ui.components.LocalDrawnCardArt
 import com.nuvio.tv.ui.components.MonochromePosterPlaceholder
 import com.nuvio.tv.ui.components.TrailerPlayer
 import com.nuvio.tv.ui.components.WatchedMarker
@@ -1084,6 +1085,10 @@ internal fun ModernRowSection(
                             width = metrics.width,
                             height = metrics.height,
                             cornerRadius = posterCardCornerRadius,
+                            // Live now's See all (V2 phase 10): "32 live in Sports & Live".
+                            subtitle = LocalSportsLiveSeeAll.current?.takeIf {
+                                row.addonId == SportsLiveHomeRow.ADDON_ID && row.catalogId == SportsLiveHomeRow.CATALOG_ID
+                            },
                             focusRequester = itemFocusRequesters.getOrPut(seeAllIndex) { FocusRequester() },
                             onClick = {
                                 onNavigateToCatalogSeeAll(
@@ -1108,6 +1113,7 @@ private fun ModernSeeAllCard(
     height: Dp,
     cornerRadius: Dp,
     focusRequester: FocusRequester,
+    subtitle: String? = null,
     onClick: () -> Unit
 ) {
     val shape = RoundedCornerShape(cornerRadius)
@@ -1144,6 +1150,16 @@ private fun ModernSeeAllCard(
                 style = MaterialTheme.typography.titleSmall,
                 color = NuvioTheme.colors.TextSecondary
             )
+            subtitle?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = NuvioTheme.colors.TextTertiary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = NuvioTheme.spacing.sm)
+                )
+            }
         }
     }
 }
@@ -1578,7 +1594,10 @@ private fun ModernCarouselCard(
                         contentScale = ContentScale.Fit,
                         alignment = Alignment.CenterStart
                     )
-                } else if ((useLandscapeOverlayTreatment || isBackdropExpanded) && !isCollectionFolder && !(useLandscapeAsExpanded && !trailerFirstFrameRendered) && (effectiveIgnoreLandscapePoster || item.metaPreview?.landscapePoster.isNullOrBlank() || customPosterLoadFailed)) {
+                } else if ((useLandscapeOverlayTreatment || isBackdropExpanded) && !isCollectionFolder && !(useLandscapeAsExpanded && !trailerFirstFrameRendered) && (effectiveIgnoreLandscapePoster || item.metaPreview?.landscapePoster.isNullOrBlank() || customPosterLoadFailed) &&
+                    // A drawn sports card names its teams itself.
+                    item.metaPreview?.id?.let { LocalDrawnCardArt.current(it) } == null
+                ) {
                     Text(
                         text = item.title,
                         style = titleStyle.copy(

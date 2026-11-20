@@ -4230,4 +4230,15 @@
     <string name="sports_live_sport_snooker">Snooker</string>
     <string name="sports_live_sport_wrestling">Wrestling</string>
     <string name="sports_live_sport_cycling">Cycling</string>
+    <!-- Your teams strip on Live Now (#155) and Home's drawn sports cards (V2 phase 10). -->
+    <string name="sports_live_your_teams_title">Your teams</string>
+    <string name="sports_live_your_teams_today">Today %1$s</string>
+    <string name="sports_live_your_teams_replay_when">Replay · %1$s</string>
+    <string name="sports_live_your_team">Your team</string>
+    <string name="sports_live_home_your_team">★ Your team</string>
+    <plurals name="sports_live_home_streams">
+        <item quantity="one">%1$d stream</item>
+        <item quantity="other">%1$d streams</item>
+    </plurals>
+    <string name="sports_live_home_see_all_live">%1$d live in Sports &amp; Live</string>
 </resources>

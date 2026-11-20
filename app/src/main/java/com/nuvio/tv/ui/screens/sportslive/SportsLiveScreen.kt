@@ -255,6 +255,11 @@ fun SportsLiveScreen(
         resultsViewModel.setReplaysActive(uiState.selectedTab == SportsLiveTab.REPLAYS && screenStarted)
     }
     val replayMatches by resultsViewModel.replayMatches.collectAsStateWithLifecycle()
+    // Your teams (#155): followed teams' games on Upcoming, for the strip's "later today" (a few rows at most).
+    val upcomingFollowed = remember(uiState.tabs) { uiState.tabs[SportsLiveTab.UPCOMING].orEmpty().filter { it.followed } }
+    val upcomingFollowedRows = remember(upcomingFollowed, scores, scoresMode, revealed, uiState.nowMs) {
+        if (upcomingFollowed.isEmpty()) emptyList() else scoreboardRows(upcomingFollowed, SportsLiveTab.UPCOMING, scores, scoresMode, revealed, uiState.nowMs)
+    }
 
     // The hover preview's one player: it plays while the preview does, and is freed the moment the
     // screen pauses or leaves, or OK hands its stream to the full player.
@@ -437,6 +442,8 @@ fun SportsLiveScreen(
             reminders = reminders,
             onToggleReminder = remindersViewModel::toggle,
             catchUpItems = catchUpItems,
+            upcomingFollowedRows = upcomingFollowedRows,
+            scoresMode = scoresMode,
             onPlayCatchUp = { item ->
                 // OK plays the replay at once: never the addon's page or Stream screen (spoilers).
                 previewPlayer.release()
@@ -538,8 +545,11 @@ private fun SportsLiveContent(
     /** Reminders (#44): the bell on upcoming games, and Remind me / Cancel reminder. */
     reminders: RemindersState = RemindersState(),
     onToggleReminder: (SportsLiveItem) -> Unit = {},
-    /** The Catch up strip's items (#58): shown at the top of Live Now. */
+    /** The catch-up replays (#58): the last part of Live Now's Your teams strip (#155). */
     catchUpItems: List<CatchUpItem>,
+    /** Followed teams' games on Upcoming: Your teams' "later today" (#155). */
+    upcomingFollowedRows: List<ScoreboardRow> = emptyList(),
+    scoresMode: ScoresMode? = null,
     onPlayCatchUp: (CatchUpItem) -> Unit,
     onOpenCatchUpGame: (CatchUpItem) -> Unit,
     onMarkCatchUpWatched: (CatchUpItem) -> Unit,
@@ -651,10 +661,37 @@ private fun SportsLiveContent(
     }
     val entryCardFocusRequester = agendaEntryRequester
         ?: items.firstOrNull { it.listKey == entryKey }?.let(::cardFocusRequester) ?: selectedCardFocusRequester
-    // The Catch up strip (#58) sits between the header and Live Now's games: Down from the header lands
-    // on it, Up from the first game goes back to it.
-    val catchUpShown = uiState.selectedTab == SportsLiveTab.LIVE_NOW && catchUpItems.isNotEmpty()
+    // The Your teams strip (#155) sits between the header (and the Resume row) and Live Now's games: live now,
+    // later today, then catch-up replays (#58). Up from the first game goes back to it.
+    val liveNowShown = uiState.selectedTab == SportsLiveTab.LIVE_NOW
+    val liveBoardRows = if (liveNowShown) shownBoard?.rows.orEmpty() else emptyList()
+    val yourTeams = remember(liveNowShown, liveBoardRows, upcomingFollowedRows, catchUpItems, uiState.nowMs) {
+        if (liveNowShown) YourTeams.strip(liveBoardRows, upcomingFollowedRows, catchUpItems, uiState.nowMs.takeIf { it > 0L } ?: System.currentTimeMillis()) else emptyList()
+    }
+    val catchUpShown = yourTeams.isNotEmpty()
     val catchUpFocusRequester = remember { FocusRequester() }
+    val stripRequesters = remember { mutableMapOf<String, FocusRequester>() }
+    val stripRequesterOf: (String) -> FocusRequester = { key -> stripRequesters.getOrPut(key) { FocusRequester() } }
+    // The strip card focus was last on (#155), cleared when a list row takes focus: a later-today or replay card
+    // takes the stage over, a live card selects its list row; Left from the stage goes back to it.
+    var stripStageKey by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(uiState.selectedTab) { stripStageKey = null }
+    val stripStage = YourTeams.stageFor(yourTeams, stripStageKey)?.takeIf { it !is YourTeamsStage.ListRow }
+    var catchUpMenuKey by remember { mutableStateOf<String?>(null) }
+    catchUpItems.firstOrNull { it.key == catchUpMenuKey }?.let { item ->
+        SportsLiveCatchUpMenu(
+            item = item,
+            onOpenGame = {
+                catchUpMenuKey = null
+                onOpenCatchUpGame(item)
+            },
+            onMarkWatched = {
+                catchUpMenuKey = null
+                onMarkCatchUpWatched(item)
+            },
+            onDismiss = { catchUpMenuKey = null }
+        )
+    }
     // The strip held focus and has emptied (its last game watched): focus goes to the games, else the tab.
     var catchUpHoldsFocus by remember { mutableStateOf(false) }
     LaunchedEffect(catchUpShown) {
@@ -706,7 +743,14 @@ private fun SportsLiveContent(
     } else {
         entryCardFocusRequester ?: emptyStateFocusRequester.takeIf { selected == null && uiState.selectedTab != SportsLiveTab.RESULTS }
     }
-    val contentEntryFocusRequester = if (resumeShown) resumeFocusRequester else belowResumeFocusRequester
+    // Down from the header (#155): Resume, else a followed team's live game, else the first live game; never a replay.
+    val liveNowEntry = YourTeams.entry(resumeShown, yourTeams, listHasRows = entryCardFocusRequester != null)
+    val contentEntryFocusRequester = when (liveNowEntry) {
+        LiveNowEntry.RESUME -> resumeFocusRequester
+        LiveNowEntry.STRIP -> catchUpFocusRequester
+        LiveNowEntry.LIST -> entryCardFocusRequester
+        LiveNowEntry.EMPTY -> emptyStateFocusRequester.takeIf { selected == null && uiState.selectedTab != SportsLiveTab.RESULTS }
+    }
     // Results' "N games live now →" (#170): once Live now is the composed tab and its rows are drawn, focus goes
     // to its list (the column rule), else to its tab.
     // Saved: the section's content can be composed again as Live now's board arrives, and the move must survive it.
@@ -720,11 +764,12 @@ private fun SportsLiveContent(
             return@LaunchedEffect
         }
         if (boardPending) return@LaunchedEffect
-        // The list's top: the Resume row or Catch up strip when shown, else its first row, scrolled in.
-        if (resumeShown || catchUpShown || items.isEmpty()) {
+        // The Resume row when shown, else a followed team's live game in Your teams (#155), else the list's first row,
+        // scrolled in; never a catch-up replay.
+        if (liveNowEntry == LiveNowEntry.RESUME || liveNowEntry == LiveNowEntry.STRIP || items.isEmpty()) {
             withFrameNanos { }
             focusLiveNowList = false
-            runCatching { (if (resumeShown) resumeFocusRequester else if (catchUpShown) catchUpFocusRequester else contentEntryFocusRequester ?: activeTabFocusRequester).requestFocus() }
+            runCatching { (contentEntryFocusRequester ?: activeTabFocusRequester).requestFocus() }
             return@LaunchedEffect
         }
         // The board can still be rebuilt in the first frames (games re-sorted, rows added above): the list then
@@ -943,12 +988,17 @@ private fun SportsLiveContent(
         menuCardKey = item.listKey
     }
     fun cardFocused(item: SportsLiveItem) {
+        stripStageKey = null
         onCardFocus(item.streamKey)
         if (item.listKey != followedCardKey) followedCardKey = null
         focusedCardKey = item.listKey
         onSelectItem(item.id)
     }
-    items.firstOrNull { it.listKey == menuCardKey }?.let { item ->
+    // A later-today strip card (#155) opens the same menu as its Upcoming row.
+    val stripRowOf: (String) -> ScoreboardRow? = { key ->
+        yourTeams.firstNotNullOfOrNull { entry -> (entry as? YourTeamsEntry.LaterToday)?.row?.takeIf { it.item.listKey == key } }
+    }
+    (items.firstOrNull { it.listKey == menuCardKey } ?: menuCardKey?.let(stripRowOf)?.item)?.let { item ->
         // Replays (P4): Game stats and the Team pages from the replay's strict ESPN game; no Follow there or on
         // Channels, whose More… is Watch with another game, Choose stream and Details.
         val replayGame = if (uiState.selectedTab == SportsLiveTab.REPLAYS) replayMatches[item.streamKey] else null
@@ -969,7 +1019,7 @@ private fun SportsLiveContent(
         )
         val watchWith = SportsLiveMoreEntry.WATCH_WITH in entries
         val canRemind = SportsLiveMoreEntry.REMIND in entries
-        val heading = rememberMoreHeading(item, boardRowOf[item.listKey])
+        val heading = rememberMoreHeading(item, boardRowOf[item.listKey] ?: stripRowOf(item.listKey))
         // Gone from the list (hidden), or followed under ★ My teams: focus goes to the card in its place.
         fun refocusAfter() {
             followedCardKey = item.listKey
@@ -1052,13 +1102,50 @@ private fun SportsLiveContent(
         )
     }
 
+    @Composable
+    fun YourTeamsStrip(stageShown: Boolean, modifier: Modifier) {
+        SportsLiveYourTeamsStrip(
+            entries = yourTeams,
+            requesterOf = stripRequesterOf,
+            firstFocusRequester = catchUpFocusRequester,
+            upFocusRequester = aboveCatchUpFocusRequester,
+            downFocusRequester = entryCardFocusRequester,
+            stageFocusRequester = watchFocusRequester.takeIf { stageShown },
+            selectedKey = stripStageKey?.takeIf { paneHasFocus },
+            scoresMode = scoresMode,
+            reminded = { item -> reminders.isReminded(item) },
+            onFocus = { entry ->
+                if (entry is YourTeamsEntry.Live) cardFocused(entry.row.item) else onCardFocus(null)
+                stripStageKey = entry.key
+            },
+            onClick = { entry ->
+                when (entry) {
+                    is YourTeamsEntry.Live -> cardClick(entry.row.item)
+                    // OK on a later-today card is Remind me (#155); the bell shows the state.
+                    is YourTeamsEntry.LaterToday -> onToggleReminder(entry.row.item)
+                    is YourTeamsEntry.Replay -> onPlayCatchUp(entry.item)
+                }
+            },
+            onLongClick = { entry ->
+                when (entry) {
+                    is YourTeamsEntry.Live -> cardLongClick(entry.row.item)
+                    is YourTeamsEntry.LaterToday -> cardLongClick(entry.row.item)
+                    is YourTeamsEntry.Replay -> catchUpMenuKey = entry.item.key
+                }
+            },
+            menuOpen = catchUpMenuKey != null || menuCardKey != null,
+            onHoldsFocus = { catchUpHoldsFocus = it },
+            modifier = modifier.onFocusChanged { if (it.hasFocus) followedCardKey = null }
+        )
+    }
     BackHandler(enabled = listHasFocus) {
         runCatching { activeTabFocusRequester.requestFocus() }
     }
     // The preview follows the focused card (in the list, or its pane's buttons) while no menu or
     // dialog is open; anything else stops it.
+    // A live Your teams card previews its game too; a later-today or replay stage has no preview (#155).
     val previewItem = selected?.takeIf {
-        (listHasFocus || paneHasFocus) && menuCardKey == null && !dialogOpen
+        (listHasFocus || paneHasFocus || catchUpHoldsFocus) && stripStage == null && menuCardKey == null && !dialogOpen
     }
     val currentOnPreviewFocus by rememberUpdatedState(onPreviewFocus)
     LaunchedEffect(previewItem?.listKey) { currentOnPreviewFocus(previewItem) }
@@ -1284,19 +1371,7 @@ private fun SportsLiveContent(
         // With the stage shown the row and the strip sit at the top of the list's column (the stage keeps its place).
         if (!stageShown) ResumeRow(Modifier.padding(top = NuvioTheme.spacing.sm))
         if (catchUpShown && !stageShown) {
-            SportsLiveCatchUpStrip(
-                items = catchUpItems,
-                firstFocusRequester = catchUpFocusRequester,
-                upFocusRequester = aboveCatchUpFocusRequester,
-                downFocusRequester = entryCardFocusRequester,
-                onPlay = onPlayCatchUp,
-                onOpenGame = onOpenCatchUpGame,
-                onMarkWatched = onMarkCatchUpWatched,
-                onHoldsFocus = { catchUpHoldsFocus = it },
-                modifier = Modifier
-                    .padding(top = NuvioTheme.spacing.sm)
-                    .onFocusChanged { if (it.hasFocus) followedCardKey = null }
-            )
+            YourTeamsStrip(stageShown = false, modifier = Modifier.padding(top = NuvioTheme.spacing.sm))
         }
         Spacer(modifier = Modifier.height(SportsLiveTokens.Size.HeaderBottomGap))
 
@@ -1576,19 +1651,7 @@ private fun SportsLiveContent(
                 ) {
                     ResumeRow(Modifier.padding(start = LIST_FOCUS_ROOM, end = LIST_FOCUS_ROOM, bottom = NuvioTheme.spacing.sm))
                     if (catchUpShown) {
-                        SportsLiveCatchUpStrip(
-                            items = catchUpItems,
-                            firstFocusRequester = catchUpFocusRequester,
-                            upFocusRequester = aboveCatchUpFocusRequester,
-                            downFocusRequester = entryCardFocusRequester,
-                            onPlay = onPlayCatchUp,
-                            onOpenGame = onOpenCatchUpGame,
-                            onMarkWatched = onMarkCatchUpWatched,
-                            onHoldsFocus = { catchUpHoldsFocus = it },
-                            modifier = Modifier
-                                .padding(start = LIST_FOCUS_ROOM, bottom = NuvioTheme.spacing.xs)
-                                .onFocusChanged { if (it.hasFocus) followedCardKey = null }
-                        )
+                        YourTeamsStrip(stageShown = true, modifier = Modifier.padding(start = LIST_FOCUS_ROOM, bottom = NuvioTheme.spacing.xs))
                     }
                     val groupCounts = remember(shownBoard) { shownBoard?.rows.orEmpty().groupingBy { it.group }.eachCount() }
                     // Channels (P4): one list, under a header per region while more than one region shows.
@@ -1626,8 +1689,8 @@ private fun SportsLiveContent(
                                         }
                                         SportsLiveScoreboardRow(
                                             row = boardRow,
-                                            // Focus in the stage: the selected row keeps a white left bar.
-                                            selected = paneHasFocus && item.listKey == selected.listKey,
+                                            // Focus in the stage: the selected row keeps a white left bar (not while it shows a strip card).
+                                            selected = paneHasFocus && stripStageKey == null && item.listKey == selected.listKey,
                                             onClick = { cardClick(item) },
                                             onLongClick = { cardLongClick(item) },
                                             onFocus = { cardFocused(item) },
@@ -1660,33 +1723,75 @@ private fun SportsLiveContent(
                     }
                 }
                 Spacer(modifier = Modifier.width(SportsLiveTokens.Size.StageGap - LIST_FOCUS_ROOM * 2))
-                SportsLiveStage(
-                    row = selectedRow,
-                    details = detailsOf(selected),
-                    situation = situationOf(selected),
-                    preview = if (selectedPreview != null) {
-                        { SportsLivePreviewVideo(previewPlayer) }
-                    } else {
-                        null
-                    },
-                    previewShowing = selectedPreview?.rendering == true,
-                    miniInStage = nowPlaying != null,
-                    noStream = noStreamKey == selected.listKey,
-                    onWatch = stageWatch,
-                    onMore = { menuCardKey = selected.listKey },
-                    modifier = Modifier
-                        .padding(top = LIST_FOCUS_ROOM)
-                        .onFocusChanged { paneHasFocus = it.hasFocus }
-                        .sportsLiveStageColumn(controlsFocusRequester, SportsLiveMiniFocus.requester.takeIf { miniDocked }),
-                    watchModifier = Modifier
-                        .focusRequester(watchFocusRequester)
-                        .focusProperties {
-                            left = entryCardFocusRequester ?: selectedCardFocusRequester
-                            // Up reaches the docked mini player (#157), whose Back stops it.
-                            if (miniDocked) up = SportsLiveMiniFocus.requester
+                // The stage follows the strip (#155): a later-today card shows Upcoming's stage, a replay Watch replay.
+                val stripCardFocusRequester = stripStageKey?.takeIf { key -> yourTeams.any { it.key == key } }?.let(stripRequesterOf)
+                val stripStageModifier = Modifier
+                    .focusRequester(watchFocusRequester)
+                    .focusProperties {
+                        stripCardFocusRequester?.let { left = it }
+                        if (miniDocked) up = SportsLiveMiniFocus.requester
+                    }
+                when (val stage = stripStage) {
+                    is YourTeamsStage.Upcoming -> SportsLiveUpcomingStage(
+                        row = stage.row,
+                        nowMs = uiState.nowMs,
+                        reminded = remindedCard(stage.row.item),
+                        preview = null,
+                        previewShowing = false,
+                        miniInStage = nowPlaying != null,
+                        noStream = false,
+                        onRemind = { onToggleReminder(stage.row.item) },
+                        onWatch = { open(stage.row.item) },
+                        onMore = { menuCardKey = stage.row.item.listKey },
+                        modifier = Modifier
+                            .padding(top = LIST_FOCUS_ROOM)
+                            .onFocusChanged { paneHasFocus = it.hasFocus }
+                            .sportsLiveStageColumn(controlsFocusRequester, SportsLiveMiniFocus.requester.takeIf { miniDocked }),
+                        primaryModifier = stripStageModifier,
+                        header = sportsLiveStageHeader(nowPlaying?.listKey, stage.row.item.listKey)
+                    )
+                    is YourTeamsStage.Replay -> SportsLiveReplayStage(
+                        row = YourTeams.replayStageRow(stage.item),
+                        title = catchUpMatchup(stage.item),
+                        nowMs = uiState.nowMs,
+                        onWatch = { onPlayCatchUp(stage.item) },
+                        onMore = { catchUpMenuKey = stage.item.key },
+                        modifier = Modifier
+                            .padding(top = LIST_FOCUS_ROOM)
+                            .onFocusChanged { paneHasFocus = it.hasFocus }
+                            .sportsLiveStageColumn(controlsFocusRequester, SportsLiveMiniFocus.requester.takeIf { miniDocked }),
+                        watchModifier = stripStageModifier,
+                        miniPlaying = nowPlaying != null,
+                        whenText = catchUpReplayWhen(stage.item, uiState.nowMs)
+                    )
+                    else -> SportsLiveStage(
+                        row = selectedRow,
+                        details = detailsOf(selected),
+                        situation = situationOf(selected),
+                        preview = if (selectedPreview != null) {
+                            { SportsLivePreviewVideo(previewPlayer) }
+                        } else {
+                            null
                         },
-                    header = stageHeader
-                )
+                        previewShowing = selectedPreview?.rendering == true,
+                        miniInStage = nowPlaying != null,
+                        noStream = noStreamKey == selected.listKey,
+                        onWatch = stageWatch,
+                        onMore = { menuCardKey = selected.listKey },
+                        modifier = Modifier
+                            .padding(top = LIST_FOCUS_ROOM)
+                            .onFocusChanged { paneHasFocus = it.hasFocus }
+                            .sportsLiveStageColumn(controlsFocusRequester, SportsLiveMiniFocus.requester.takeIf { miniDocked }),
+                        watchModifier = Modifier
+                            .focusRequester(watchFocusRequester)
+                            .focusProperties {
+                                left = stripCardFocusRequester ?: entryCardFocusRequester ?: selectedCardFocusRequester
+                                // Up reaches the docked mini player (#157), whose Back stops it.
+                                if (miniDocked) up = SportsLiveMiniFocus.requester
+                            },
+                        header = stageHeader
+                    )
+                }
             }
             return@Column
         }

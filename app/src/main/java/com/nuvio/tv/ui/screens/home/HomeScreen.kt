@@ -164,6 +164,13 @@ fun HomeScreen(
         SportsLiveEndedGames.shared.confirmedEndedKeys(uiState.liveNowItems, liveScores, liveClockMs)
     }
     LaunchedEffect(liveNowEnded) { viewModel.setLiveNowEnded(liveNowEnded) }
+    // V2 phase 10: Live now games are drawn as the section's game card; See all counts every live game.
+    val liveNowCardArt = rememberLiveNowCardArt(uiState.liveNowItems, liveScores, liveScoresMode)
+    val sportsCardArt = remember(catchUpCardArt, liveNowCardArt) { drawnArtOf(catchUpCardArt, liveNowCardArt) }
+    val liveGameCount = remember(uiState.liveNowItems, liveNowEnded) {
+        viewModel.liveNowAllItems.count { !it.isChannel && it.streamKey !in liveNowEnded }
+    }
+    val liveNowSeeAll = if (liveGameCount > 0) stringResource(R.string.sports_live_home_see_all_live, liveGameCount) else null
 
     // Home was the only major screen without a lifecycle observer, so nothing ever told it to
     // look at its catalogs again.
@@ -367,8 +374,8 @@ fun HomeScreen(
         }
     }
 
-    // Catch up cards (#58) carry no image: their drawn art (logos and names, never a score) stands in.
-    CompositionLocalProvider(LocalDrawnCardArt provides catchUpCardArt) {
+    // Catch up cards (#58) and Live now games (V2 phase 10) carry no image: the section's drawn game card stands in.
+    CompositionLocalProvider(LocalDrawnCardArt provides sportsCardArt, LocalSportsLiveSeeAll provides liveNowSeeAll) {
     Box(
         modifier = Modifier.fillMaxSize()
     ) {

@@ -2,7 +2,7 @@ package com.nuvio.tv.ui.screens.home
 
 import com.nuvio.tv.core.sportslive.SportsLiveDisplayText
 import com.nuvio.tv.core.sportslive.displayName
-import com.nuvio.tv.core.sportslive.scores.ScoreChip
+import com.nuvio.tv.core.sportslive.scores.GameArt
 import com.nuvio.tv.core.sportslive.scores.ScoreChipStrings
 import com.nuvio.tv.core.sportslive.scores.ScoreChips
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
@@ -17,11 +17,23 @@ object SportsLiveHomeRow {
     const val BASE_URL = "nuvio://sports-live"
     const val CATALOG_ID = "live_now"
 
+    /** Home's words for the hero (V2 phase 10): "Live now", "★ Your team", "2 streams". */
+    data class Words(val liveNow: String, val yourTeam: String, val streams: (Int) -> String)
+
     /**
-     * [scoreLabels] (item streamKey → score chip text) replace a card's label line (its release info), so a
-     * live game shows its clock and score under its title.
+     * [scoreLabels] (item streamKey → [SportsLiveHomeMeta.statusLine]) replace a card's label line (its release
+     * info), so a live game shows its clock and score under its title and in the hero.
+     *
+     * With [words] (V2 phase 10) a game's card carries no addon image at all (Home draws the section's game card in
+     * its place, [rememberLiveNowCardArt]), and the hero reads "NBA · Live now" (the genres line) and
+     * "★ Your team · 2 streams" (the description) instead of the addon's type, date and blurb.
      */
-    fun build(items: List<SportsLiveItem>, title: String, scoreLabels: Map<String, String> = emptyMap()): CatalogRow = CatalogRow(
+    fun build(
+        items: List<SportsLiveItem>,
+        title: String,
+        scoreLabels: Map<String, String> = emptyMap(),
+        words: Words? = null
+    ): CatalogRow = CatalogRow(
         addonId = ADDON_ID,
         addonName = "Sports & Live",
         addonBaseUrl = BASE_URL,
@@ -33,7 +45,21 @@ object SportsLiveHomeRow {
             // Clean addon text (#100): the card and hero show the display name and no taglines; Details
             // loads the addon's own meta.
             val clean = item.meta.copy(name = item.displayName, description = SportsLiveDisplayText.description(item.meta.description))
-            val meta = scoreLabels[item.streamKey]?.let { clean.copy(releaseInfo = it) } ?: clean
+            val labelled = scoreLabels[item.streamKey]?.let { clean.copy(releaseInfo = it) } ?: clean
+            val drawn = words != null && GameArt.of(item, null) != null
+            val meta = if (words == null) {
+                labelled
+            } else {
+                labelled.copy(
+                    genres = listOf(SportsLiveHomeMeta.eyebrow(GameArt.of(item, null)?.league ?: item.sport, words.liveNow)),
+                    description = SportsLiveHomeMeta.extraLine(item.followed, item.sourceCount, words.yourTeam, words.streams),
+                    // A game is drawn (logos, clock, score): never the addon's art with LIVE baked in.
+                    poster = if (drawn) null else labelled.poster,
+                    background = if (drawn) null else labelled.background,
+                    landscapePoster = if (drawn) null else labelled.landscapePoster,
+                    logo = if (drawn) null else labelled.logo
+                )
+            }
             // The card's own art as its landscape poster: a channel's art carries its logo, so the focused
             // card draws no title over it.
             val art = meta.backdropUrl
@@ -45,8 +71,8 @@ object SportsLiveHomeRow {
     )
 
     /**
-     * The Live now cards' score labels, by item streamKey (two addons may share an item id): the chip
-     * text ("● Q3 4:12 · 88–80"), with [liveFormat] ("● %1$s") marking a live one. Only under Show: Home
+     * The Live now cards' score labels, by item streamKey (two addons may share an item id): the status line
+     * ("● 4:12 · Q3 · IND 80–88 PHI"), with [liveFormat] ("● %1$s") marking a live one. Only under Show: Home
      * has no focus reveal, so Hide until focused (and Off, or no strict match) shows nothing there.
      */
     fun scoreLabels(
@@ -56,10 +82,10 @@ object SportsLiveHomeRow {
         strings: ScoreChipStrings,
         liveFormat: String
     ): Map<String, String> = if (mode != ScoresMode.SHOW) emptyMap() else items.mapNotNull { item ->
-        val chip = ScoreChips.of(item, scores[item.streamKey], mode, revealed = false) ?: return@mapNotNull null
-        val text = ScoreChips.text(chip, strings)
-        val live = chip is ScoreChip.Live
-        item.streamKey to if (live) String.format(liveFormat, text) else text
+        val snapshot = scores[item.streamKey]
+        val chip = ScoreChips.of(item, snapshot, mode, revealed = false) ?: return@mapNotNull null
+        // "● 4:12 · Q3 · IND 80–88 PHI" (V2 phase 10): the hero's status line, the abbreviations from the matched game.
+        item.streamKey to SportsLiveHomeMeta.statusLine(chip, GameArt.of(item, snapshot), strings, liveFormat)
     }.toMap()
 
     fun isLiveNowRow(addonBaseUrl: String): Boolean = addonBaseUrl == BASE_URL

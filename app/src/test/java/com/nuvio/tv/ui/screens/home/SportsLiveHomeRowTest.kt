@@ -90,7 +90,7 @@ class SportsLiveHomeRowTest {
     }
 
     @Test
-    fun `live now cards carry their score chip as the label line, spoiler setting applied`() {
+    fun `live now cards carry their status line as the label line, spoiler setting applied`() {
         val event = EspnFixtures.events(EspnFixtures.NBA_20261115, EspnLeagueMap.NBA).first { it.eventId == "401909985" }
             .let { it.copy(state = ScoreState.IN, isFinal = false, clockText = "Q3 4:12", home = it.home.copy(score = 88), away = it.away.copy(score = 80)) }
         val game = item("g").let { it.copy(meta = it.meta.copy(name = "Pacers at 76ers", releaseInfo = "2026"), teams = SportsLiveTeams.parse("Pacers at 76ers")) }
@@ -99,13 +99,13 @@ class SportsLiveHomeRowTest {
         val scores = mapOf(game.streamKey to event)
         fun labels(mode: ScoresMode) = SportsLiveHomeRow.scoreLabels(listOf(game, unmatched), scores, mode, strings, "● %1\$s")
 
-        assertEquals(mapOf(game.streamKey to "● Q3 4:12 · 80–88"), labels(ScoresMode.SHOW))
+        assertEquals(mapOf(game.streamKey to "● 4:12 · Q3 · IND 80–88 PHI"), labels(ScoresMode.SHOW))
         // No focus reveal on Home: Hide until focused shows nothing there (and nothing is polled for it).
         assertEquals(emptyMap<String, String>(), labels(ScoresMode.HIDE_UNTIL_FOCUSED))
         assertEquals(emptyMap<String, String>(), labels(ScoresMode.OFF))
 
         val row = SportsLiveHomeRow.build(listOf(game, unmatched), "Live now", labels(ScoresMode.SHOW))
-        assertEquals(listOf("● Q3 4:12 · 80–88", null), row.items.map { it.releaseInfo })
+        assertEquals(listOf("● 4:12 · Q3 · IND 80–88 PHI", null), row.items.map { it.releaseInfo })
     }
 
     @Test

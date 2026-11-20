@@ -481,7 +481,7 @@ internal fun buildCatalogItem(
     val frozenLogo = carriedLogo?.takeIf { it.isNotBlank() }
         ?: currentLogo
 
-    val heroPreview = HeroPreview(
+    val heroPreview = sportsLiveHeroPreview(item, row) ?: HeroPreview(
         title = item.name,
         logo = item.logo,
         description = item.description,
@@ -533,6 +533,36 @@ internal fun buildCatalogItem(
             trailerApiType = item.apiType
         ),
         metaPreview = item
+    )
+}
+
+/**
+ * The hero for a Sports & Live card (V2 phase 10): "NBA · Live now" (the card's genres line), the clean title, the
+ * status line ("● 4:12 · Q4 · BOS 91–88 NYK", its label) and "★ Your team · 2 streams" (its description). A Catch up
+ * card reads "NFL · Replay" and nothing more: never a score. Never "Movie · 2026-11-18" or the addon's blurb.
+ * Null for any other row.
+ */
+internal fun sportsLiveHeroPreview(item: MetaPreview, row: CatalogRow): HeroPreview? {
+    val liveNow = SportsLiveHomeRow.isLiveNowRow(row.addonBaseUrl)
+    val catchUp = com.nuvio.tv.ui.screens.sportslive.SportsLiveCatchUpHomeRow.isCatchUpRow(row.addonBaseUrl)
+    if (!liveNow && !catchUp) return null
+    val eyebrow = if (liveNow) {
+        item.genres.firstOrNull()
+    } else {
+        SportsLiveHomeMeta.eyebrow(item.genres.firstOrNull(), item.releaseInfo.orEmpty()).takeIf { it.isNotBlank() }
+    }
+    return HeroPreview(
+        title = item.name,
+        logo = null,
+        description = if (liveNow) item.description else null,
+        contentTypeText = eyebrow,
+        yearText = null,
+        secondaryHighlightText = if (liveNow) item.releaseInfo?.takeIf { it.isNotBlank() } else null,
+        imdbText = null,
+        genres = emptyList<String>().asStable(),
+        poster = item.poster,
+        backdrop = item.backdropUrl,
+        imageUrl = item.landscapePoster ?: item.backdropUrl ?: item.poster
     )
 }
 

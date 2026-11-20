@@ -1,6 +1,7 @@
 package com.nuvio.tv.ui.screens.home
 
 import android.util.Log
+import com.nuvio.tv.R
 import com.nuvio.tv.core.sportslive.scores.CatchUpItem
 import androidx.lifecycle.viewModelScope
 import com.nuvio.tv.domain.model.SportsLiveItem
@@ -58,7 +59,7 @@ internal fun HomeViewModel.setLiveNowScoreLabels(labels: Map<String, String>) {
         if (index < 0 || state.liveNowShown.isEmpty()) return@update state
         val old = (state.homeRows[index] as HomeRow.Catalog).row
         val rows = state.homeRows.toMutableList()
-        rows[index] = HomeRow.Catalog(SportsLiveHomeRow.build(state.liveNowShown, old.catalogName, labels))
+        rows[index] = HomeRow.Catalog(SportsLiveHomeRow.build(state.liveNowShown, old.catalogName, labels, sportsLiveHomeWords()))
         state.copy(homeRows = rows)
     }
 }
@@ -95,6 +96,13 @@ internal fun HomeViewModel.observeLiveNowPipeline() {
         }
     }
 }
+
+/** The hero's words for the Live now cards (V2 phase 10). */
+internal fun HomeViewModel.sportsLiveHomeWords(): SportsLiveHomeRow.Words = SportsLiveHomeRow.Words(
+    liveNow = appContext.getString(R.string.sports_live_home_row_title),
+    yourTeam = appContext.getString(R.string.sports_live_home_your_team),
+    streams = { count -> appContext.resources.getQuantityString(R.plurals.sports_live_home_streams, count, count) }
+)
 
 /** How many games the Home Live now row shows. */
 private const val LIVE_NOW_ROW_LIMIT = 20
