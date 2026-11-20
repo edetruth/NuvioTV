@@ -66,7 +66,8 @@ class SportsLiveEspnStartsTest {
         starts.record(listOf(red.streamKey, marked.streamKey), espnKickoff, friday)
         val tabs = SportsLiveItemBucketer.bucket(listOf(red, marked), friday)
         assertTrue(tabs.getValue(SportsLiveTab.LIVE_NOW).isEmpty())
-        assertEquals(setOf("red", "marked"), tabs.getValue(SportsLiveTab.UPCOMING).map { it.id }.toSet())
+        // Both copies wait on Upcoming, as one row of the game (the other its alternate).
+        assertEquals(setOf("red", "marked"), tabs.getValue(SportsLiveTab.UPCOMING).flatMap { row -> listOf(row.id) + row.alternates.map { it.id } }.toSet())
 
         val channel = SportsLiveItemBucketer.describe(meta("ch", "Sports 1 [Nice vs PSG]"), claimed("ch", "Channels", SportsLiveKind.CHANNELS), friday)
         starts.record(listOf(channel.streamKey), espnKickoff, friday)

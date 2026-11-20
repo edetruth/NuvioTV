@@ -31,7 +31,9 @@ class SportsLiveTagsTest {
         assertEquals("EUROLG", SportsLiveTags.short("EUROLEAGUE", SportsLiveSportKind.BASKETBALL))
         assertEquals("SOCCER", SportsLiveTags.short("EKSTRAKLASA", SportsLiveSportKind.SOCCER))
         assertEquals("GRAND", SportsLiveTags.short("GRAND SLAM CUP", null))
-        assertEquals("EKSTRAKL", SportsLiveTags.short("EKSTRAKLASA", null))
+        // A league that names its sport reads as the sport (live.20 told Ekstraklasa as soccer); an unknown one is cut.
+        assertEquals("SOCCER", SportsLiveTags.short("EKSTRAKLASA", null))
+        assertEquals("SUPERETT", SportsLiveTags.short("SUPERETTAN", null))
     }
 
     @Test
