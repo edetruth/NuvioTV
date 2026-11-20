@@ -135,11 +135,11 @@ class SportsLiveLifecycleAlertsTest {
     fun `Up opens both games from a card in the full player, and is not offered in dual screen`() {
         val fullPlayer = AlertKeyContext(cardActionable = true, canPeek = true, peeking = false, canBoth = true)
         assertEquals(AlertKeyAction.BOTH, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_UP, fullPlayer))
-        assertEquals(AlertKeyAction.WATCH, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_CENTER, fullPlayer))
+        assertEquals(AlertKeyAction.WATCH, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, fullPlayer))
         assertEquals(AlertKeyAction.PEEK, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_DOWN, fullPlayer))
         val dual = AlertKeyContext(cardActionable = true, canPeek = false, peeking = false, canBoth = false)
         assertEquals(AlertKeyAction.PASS, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_UP, dual))
-        assertEquals(AlertKeyAction.WATCH, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_CENTER, dual))
+        assertEquals(AlertKeyAction.WATCH, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_CENTER, dual, held = true))
         // No card to act on: Up is the screen's.
         assertEquals(AlertKeyAction.PASS, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_UP, fullPlayer.copy(cardActionable = false)))
     }

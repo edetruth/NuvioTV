@@ -151,6 +151,8 @@ class SportsLiveZapViewModelTest {
         assertFalse(viewModel.panelKeysHint.value)
         viewModel.onPanelKey(android.view.KeyEvent.KEYCODE_INFO)
         assertTrue(viewModel.panelKeysHint.value)
+        // The open panel ticks forever; close it so the test can end.
+        viewModel.closePanel()
     }
 
     private val END_STRINGS = GameEndStrings("Game over", "Final · %1\$s %2\$d–%3\$d %4\$s")

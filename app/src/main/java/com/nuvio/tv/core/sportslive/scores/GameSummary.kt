@@ -391,6 +391,8 @@ object GameSummaryParser {
             val columns = (if (sport == SOCCER) SOCCER_STANDINGS else STANDINGS)
                 .filter { name -> first.any { it.name == name } }
                 .filterNot { name -> isEmptyColumn(valuesOf(name)) }
+                // The overall record only stands in for W and L (college tables); beside them it repeats them.
+                .let { shown -> if ("wins" in shown && "losses" in shown) shown - "overall" else shown }
             if (columns.isEmpty()) return@mapNotNull null
             StandingsTable(
                 title = (group.header ?: dto?.header)?.takeIf { it.isNotBlank() },

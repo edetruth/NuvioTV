@@ -235,6 +235,8 @@ class SportsLiveOpenSpeedTest {
         viewModel.onScreenVisible(true)
         runCurrent()
         assertEquals(opened + 1, loads)
+        // A visible section refreshes forever; leave it so the test can end.
+        viewModel.onScreenVisible(false)
     }
 
     private fun load(items: List<SportsLiveItem>) =

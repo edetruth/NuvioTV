@@ -92,7 +92,7 @@ class SportsLiveSettingsHelpTest {
         assertEquals(listOf(header(SETUP), row(RUN_SETUP), header(STATUS)), items.subList(items.indexOf(header(SETUP)), items.indexOf(header(STATUS)) + 1))
         assertEquals(
             listOf(header(MORE), Item.MoreToggle, row(DATA_SAVER), row(REAL_TIME_SCORES), row(RESET_STREAM_MEMORY), row(HIDDEN), row(CATALOGS)),
-            items.takeLast(6)
+            items.takeLast(7)
         )
     }
 
