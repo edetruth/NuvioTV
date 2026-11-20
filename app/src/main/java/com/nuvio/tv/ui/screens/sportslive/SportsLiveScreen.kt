@@ -342,18 +342,6 @@ fun SportsLiveScreen(
         )
     }
 
-    // Upcoming's one-time tip (live.20): the remote's keys for time slots and days, once per profile.
-    val upcomingTip by viewModel.upcomingTip.collectAsStateWithLifecycle()
-    LaunchedEffect(upcomingTip) {
-        if (!upcomingTip) return@LaunchedEffect
-        SportsLiveToasts.show(
-            SportsLiveToastKind.INFO,
-            context.getString(R.string.sports_live_upcoming_tip_title),
-            context.getString(R.string.sports_live_upcoming_tip_line)
-        )
-        viewModel.onUpcomingTipShown()
-    }
-
     val showNoAddons = !uiState.hasClaimedCatalogs && !uiState.isLoading && uiState.lastRefreshedMs != null
     when {
         showNoAddons -> NoAddonsState(onOpenAddons)
@@ -800,10 +788,23 @@ private fun SportsLiveContent(
     // Down from the header (#155, live.20 1c): Resume, else the strip's first card (a followed team's live game comes
     // first; a replay may take it), else the list.
     val liveNowEntry = YourTeams.entry(resumeShown, yourTeams, listHasRows = entryCardFocusRequester != null)
+    // Upcoming's day tabs (research 3): the row between the header and the Agenda, where Down from the header lands
+    // (on the tab of the day the stage shows) and Up from the first game goes back to.
+    val dayBarAgenda = agenda?.takeIf { uiState.selectedTab == SportsLiveTab.UPCOMING && selected != null && boardRowOf[selected.listKey] != null }
+    val dayRequesters = remember { mutableMapOf<Int, FocusRequester>() }
+    fun dayRequester(day: Int) = dayRequesters.getOrPut(day) { FocusRequester() }
+    val shownKey = selected?.listKey
+    val currentAgendaGame = dayBarAgenda?.slotGameOf { it.listKey == shownKey }
+    val currentAgendaDay = currentAgendaGame?.let { game -> dayBarAgenda?.games?.getOrNull(game)?.day } ?: 0
+    val dayBarFocusRequester = dayBarAgenda?.let { dayRequester(currentAgendaDay) }
+    var dayBarHasFocus by remember { mutableStateOf(false) }
+    BackHandler(enabled = dayBarHasFocus) {
+        runCatching { activeTabFocusRequester.requestFocus() }
+    }
     val contentEntryFocusRequester = when (liveNowEntry) {
         LiveNowEntry.RESUME -> resumeFocusRequester
         LiveNowEntry.STRIP -> catchUpFocusRequester
-        LiveNowEntry.LIST -> entryCardFocusRequester
+        LiveNowEntry.LIST -> dayBarFocusRequester ?: entryCardFocusRequester
         LiveNowEntry.EMPTY -> emptyStateFocusRequester.takeIf { selected == null && uiState.selectedTab != SportsLiveTab.RESULTS }
     }
     // Results' "N games live now →" (#170): once Live now is the composed tab and its rows are drawn, focus goes
@@ -1632,6 +1633,21 @@ private fun SportsLiveContent(
                     runCatching { (if (game.pick) pickFocusRequester(item) else cardFocusRequester(item)).requestFocus() }
                 }
             }
+            // The stage shows game [target] (a day tab or Earlier / Later, research 3): its row scrolled in, focus kept.
+            fun agendaShow(target: Int) {
+                val item = agenda.games.getOrNull(target)?.row?.item ?: return
+                focusedCardKey = item.listKey
+                onSelectItem(item.id)
+                liveNowScope.launch {
+                    val listIndex = agenda.listIndexOf(target)
+                    // A day opens under its own header; a slot only scrolls when its game is off screen.
+                    if (agenda.firstGameOf(agenda.games[target].day) == target) {
+                        listState.scrollToItem(listIndex - 1)
+                    } else if (listState.layoutInfo.visibleItemsInfo.none { it.index == listIndex }) {
+                        listState.scrollToItem(listIndex)
+                    }
+                }
+            }
             Row(modifier = Modifier.fillMaxSize()) {
                 Column(
                     modifier = Modifier
@@ -1639,6 +1655,23 @@ private fun SportsLiveContent(
                         .offset(x = -LIST_FOCUS_ROOM)
                         .fillMaxHeight()
                 ) {
+                    SportsLiveAgendaDayBar(
+                        days = agenda.days,
+                        currentDay = currentAgendaDay,
+                        canEarlier = currentAgendaGame?.let { agenda.timeSlotJump(it, forward = false) } != null,
+                        canLater = currentAgendaGame?.let { agenda.timeSlotJump(it, forward = true) } != null,
+                        dayFocusRequester = ::dayRequester,
+                        upFocusRequester = aboveContentFocusRequester,
+                        downFocusRequester = entryCardFocusRequester,
+                        // Selection follows focus (TV tab rows); the day already shown keeps its game in view.
+                        onDayFocused = { day -> if (day != currentAgendaDay) agenda.firstGameOf(day)?.let(::agendaShow) },
+                        onDayOk = { day ->
+                            val target = if (day == currentAgendaDay) currentAgendaGame else agenda.firstGameOf(day)
+                            target?.let(::agendaJump)
+                        },
+                        onStep = { later -> currentAgendaGame?.let { agenda.timeSlotJump(it, forward = later) }?.let(::agendaShow) },
+                        modifier = Modifier.onFocusChanged { dayBarHasFocus = it.hasFocus }
+                    )
                     key(filterKey) {
                         SportsLiveKeepFromEdge(margin = LIST_EDGE_KEEP) {
                             LazyColumn(
@@ -1672,7 +1705,8 @@ private fun SportsLiveContent(
                                                     }
                                                     SportsLiveScoreboardRow(
                                                         row = game.row,
-                                                        selected = paneHasFocus && item.listKey == selected.listKey,
+                                                        // The row the stage shows keeps its bar while focus is on the stage or the day tabs.
+                                                        selected = (paneHasFocus || dayBarHasFocus) && item.listKey == selected.listKey,
                                                         onClick = { agendaOk(item, game.row) },
                                                         onLongClick = { cardLongClick(item) },
                                                         onFocus = { cardFocused(item) },
@@ -1688,7 +1722,8 @@ private fun SportsLiveContent(
                                                             .focusProperties {
                                                                 // → enters the stage from any row (#134), as on Live Now; Hold OK opens More….
                                                                 right = watchFocusRequester
-                                                                if (gameIndex == 0) up = aboveListFocusRequester
+                                                                // ↑ from the first game: the day tabs (research 3).
+                                                                if (gameIndex == 0) up = dayBarFocusRequester ?: aboveListFocusRequester
                                                             }
                                                             .onPreviewKeyEvent { event ->
                                                                 if (event.nativeKeyEvent.action != AndroidKeyEvent.ACTION_DOWN) return@onPreviewKeyEvent false

@@ -4166,8 +4166,6 @@
     <!-- live.20: the stage's facts line, a game in play's start ("Started 7:30 PM"). -->
     <string name="sports_live_stage_started">Started %1$s</string>
     <!-- live.20: Upcoming's one-time tip on the remote's keys. -->
-    <string name="sports_live_upcoming_tip_title">Jump through Upcoming</string>
-    <string name="sports_live_upcoming_tip_line">◂◂ ▸▸ a time slot · CH +/− a day</string>
     <string name="sports_live_row_watching">▶ Watching</string>
     <!-- #148: Live now's header chip after Back from a paused game. -->
     <string name="sports_live_resume_live">Resume %1$s · Live</string>
@@ -4195,6 +4193,8 @@
     <!-- live.20 1b: readiness in words (✓ means Watched / Selected in Nuvio). -->
     <string name="sports_live_ready_pill">▶ Ready</string>
     <string name="sports_live_stage_stream_ready">▶ Stream ready</string>
+    <string name="sports_live_agenda_earlier">‹ Earlier</string>
+    <string name="sports_live_agenda_later">Later ›</string>
     <string name="sports_live_no_stream_yet_mark">No stream yet</string>
     <string name="sports_live_kickoff_stream_ready">Stream ready · Watch now?</string>
     <string name="sports_live_kickoff_waiting_stream">Waiting for a working stream…</string>

@@ -50,8 +50,9 @@ sealed interface AgendaEntry {
  * then the date) and **time-slot** headers ("3:30 PM · in 2 h 21 m", "6:00 PM · 4 games"), so the list is
  * the ruler. Games with a date but no time, and channels, close the list in **Any time**. Followed teams'
  * games lead their slot. Each day opens with its **Games to watch** (#137: up to three big games, [GamesToWatch]),
- * which stay in their time slots too. ↑ ↓ move game by game (headers are never focused), ← → jump a slot ([slotJump]),
- * CH+ / CH− a day ([dayJump]).
+ * which stay in their time slots too. ↑ ↓ move game by game (headers are never focused). Days and time slots are
+ * visible targets above the list (research 3: the day tabs and Earlier / Later, [firstGameOf], [timeSlotJump]); ⏪ ⏩ a
+ * slot and CH+ / CH− a day stay as shortcuts ([dayJump]).
  */
 @Immutable
 data class SportsLiveAgenda(val days: List<AgendaDay>, val slots: List<AgendaSlot>, val games: List<AgendaGame>) {
@@ -83,6 +84,29 @@ data class SportsLiveAgenda(val days: List<AgendaDay>, val slots: List<AgendaSlo
         val slot = games.getOrNull(game)?.slot ?: return null
         val target = if (forward) slot + 1 else slot - 1
         return games.indexOfFirst { it.slot == target }.takeIf { it >= 0 }
+    }
+
+    /** The first game listed under day [day] (its Games to watch first, #137); null for no such day. */
+    fun firstGameOf(day: Int): Int? = games.indexOfFirst { it.day == day }.takeIf { it >= 0 }
+
+    /**
+     * The game whose item [matches], by its time-slot copy: a big game is listed twice (#137), and Earlier / Later
+     * step from its own time, not from the day's Games to watch. Null when none matches.
+     */
+    fun slotGameOf(matches: (SportsLiveItem) -> Boolean): Int? {
+        val copies = games.indices.filter { matches(games[it].row.item) }
+        return copies.firstOrNull { !games[it].pick } ?: copies.firstOrNull()
+    }
+
+    /**
+     * Earlier / Later (research 3): the first game of the time slot before (or, [forward], after) game [game]'s,
+     * stepping over a day's Games to watch (no time of its own, #137); null at either end.
+     */
+    fun timeSlotJump(game: Int, forward: Boolean): Int? {
+        val slot = games.getOrNull(game)?.slot ?: return null
+        val range = if (forward) slot + 1..slots.lastIndex else slot - 1 downTo 0
+        val target = range.firstOrNull { !slots[it].picks } ?: return null
+        return games.indexOfFirst { it.slot == target && !it.pick }.takeIf { it >= 0 }
     }
 
     /** The first game of the day before (or, [forward], after) game [game]'s; null at either end. */

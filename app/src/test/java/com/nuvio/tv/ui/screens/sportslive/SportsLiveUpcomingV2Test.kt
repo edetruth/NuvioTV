@@ -139,6 +139,40 @@ class SportsLiveUpcomingV2Test {
     }
 
     @Test
+    fun `a day tab opens on its day's first game, and Earlier and Later step a time slot from the game shown`() {
+        val agenda = agendaOf(week)
+        // Every day listed is a tab, Any time too.
+        assertEquals(listOf(0, 1, 2, 3).map { agenda.games[agenda.firstGameOf(it)!!].day }, listOf(0, 1, 2, 3))
+        assertEquals("Bills vs Dolphins", agenda.games[agenda.firstGameOf(1)!!].row.item.meta.name)
+        assertNull(agenda.firstGameOf(9))
+        // Later from the 3:30 PM game: the 6:00 PM slot's first game (the followed team's); Earlier back.
+        val magic = agenda.slotGameOf { it.meta.name == "Magic at Rockets" }!!
+        val later = agenda.timeSlotJump(magic, forward = true)!!
+        assertEquals("Lakers vs Suns", agenda.games[later].row.item.meta.name)
+        assertEquals(magic, agenda.timeSlotJump(later, forward = false))
+        // Later crosses into the next day; nothing before the first slot.
+        assertEquals(1, agenda.games[agenda.timeSlotJump(agenda.slotGameOf { it.meta.name == "Arsenal vs Chelsea" }!!, forward = true)!!].day)
+        assertNull(agenda.timeSlotJump(0, forward = false))
+        assertNull(agenda.slotGameOf { it.meta.name == "Nobody" })
+    }
+
+    @Test
+    fun `Earlier and Later step from a big game's own time slot, not its Games to watch copy`() {
+        val rows = agendaOf(week).games.map { it.row }
+        val agenda = SportsLiveAgenda(
+            days = listOf(AgendaDay(AgendaDayKind.TODAY, null)),
+            slots = listOf(AgendaSlot(0, null, 1, picks = true), AgendaSlot(0, at(18, 15, 30), 1), AgendaSlot(0, at(18, 18, 0), 1)),
+            games = listOf(AgendaGame(rows[1], 0, 0, pick = true), AgendaGame(rows[0], 0, 1), AgendaGame(rows[1], 0, 2))
+        )
+        assertEquals(2, agenda.slotGameOf { it == rows[1].item })
+        assertEquals(1, agenda.timeSlotJump(2, forward = false))
+        // Games to watch has no time: Earlier from the first time slot stops there, Later from the picks skips none.
+        assertNull(agenda.timeSlotJump(1, forward = false))
+        assertEquals(1, agenda.timeSlotJump(0, forward = true))
+        assertEquals(0, agenda.firstGameOf(0))
+    }
+
+    @Test
     fun `channel keys jump a day, CH minus on and CH plus back`() {
         val agenda = agendaOf(week)
         assertEquals(4, agenda.target(2, AgendaKey.DAY_FORWARD))
