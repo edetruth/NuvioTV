@@ -25,7 +25,8 @@ import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens.Colors
 /*
  * Readiness in words (live.20 1b), for every Sports & Live surface. ✓ means Watched / Selected in Nuvio, so a game
  * whose verified link is held reads "▶ Ready" (a green outlined pill, never the filled Replay pill) and one with no
- * working stream "No stream yet" (muted text, the panel and the kickoff prompt only: never on browse rows).
+ * working stream "No stream yet" (muted text: the panel, the kickoff prompt, and a dimmed Live Now row whose own
+ * lookup found nothing playable (BUG2); never as a guess on rows nobody looked up).
  *
  * Reading an item's mark: [rememberSportsLiveReadyMark] in a composable, or SportsLiveGameReadiness.shared.of(item)
  * (marks by game id: SportsLiveGameReadiness.shared.marks). READY stands only while the verified link is held; OK on

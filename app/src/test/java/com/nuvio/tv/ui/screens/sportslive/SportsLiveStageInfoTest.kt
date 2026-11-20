@@ -135,6 +135,12 @@ class SportsLiveStageInfoTest {
         assertEquals(RowBadge.NONE, rowBadgeOf(ready = false, excitement = false, closeGame = false))
     }
 
+    @Test
+    fun `a live row with nothing playable says No stream yet, unless a verified link is held`() {
+        assertEquals(RowBadge.NO_STREAM, rowBadgeOf(ready = false, excitement = true, closeGame = true, noStream = true))
+        assertEquals(RowBadge.READY, rowBadgeOf(ready = true, excitement = false, closeGame = false, noStream = true))
+    }
+
     // ---- Board builds (F21) ----
 
     @Test

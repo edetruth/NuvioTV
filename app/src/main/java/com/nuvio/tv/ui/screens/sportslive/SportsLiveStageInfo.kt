@@ -234,11 +234,16 @@ internal fun SportsLiveStageFactsLine(facts: StageFacts, modifier: Modifier = Mo
     }
 }
 
-/** The one badge a row's status column has room for (live.20): "▶ Ready" first (my game, one press to play). */
-internal enum class RowBadge { READY, EXCITEMENT, CLOSE_GAME, NONE }
+/**
+ * The one badge a row's status column has room for (live.20): "▶ Ready" first (my game, one press to play), then
+ * "No stream yet" (BUG2: its last lookup found nothing playable, only notices or nothing, so the LIVE row must not
+ * read as playable), then excitement, then close game.
+ */
+internal enum class RowBadge { READY, NO_STREAM, EXCITEMENT, CLOSE_GAME, NONE }
 
-internal fun rowBadgeOf(ready: Boolean, excitement: Boolean, closeGame: Boolean): RowBadge = when {
+internal fun rowBadgeOf(ready: Boolean, excitement: Boolean, closeGame: Boolean, noStream: Boolean = false): RowBadge = when {
     ready -> RowBadge.READY
+    noStream -> RowBadge.NO_STREAM
     excitement -> RowBadge.EXCITEMENT
     closeGame -> RowBadge.CLOSE_GAME
     else -> RowBadge.NONE

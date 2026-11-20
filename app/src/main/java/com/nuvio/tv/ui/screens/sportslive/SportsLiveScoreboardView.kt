@@ -656,8 +656,11 @@ private fun StatusCell(row: ScoreboardRow, hasReplay: Boolean, singleLine: Boole
         // One badge fits (live.20): "▶ Ready" on my game, else the excitement badge (Scores shown), else "Close game" in
         // crunch time (#137, under Hide too: it tells no score).
         val excitement = row.excitement
-        when (rowBadgeOf(ready, excitement != null, row.closeGame)) {
+        // A live row whose last lookup found nothing playable (#145, BUG2) says so in words, beside its dimming.
+        val noStream = row.noStreams && row.group == ScoreboardGroup.LIVE
+        when (rowBadgeOf(ready, excitement != null, row.closeGame, noStream)) {
             RowBadge.READY -> SportsLiveReadyPill()
+            RowBadge.NO_STREAM -> SportsLiveNoStreamYet()
             RowBadge.EXCITEMENT -> excitement?.let { ExcitementBadge(whyTagText(it)) }
             RowBadge.CLOSE_GAME -> ExcitementBadge(stringResource(R.string.sports_live_close_game))
             RowBadge.NONE -> Unit

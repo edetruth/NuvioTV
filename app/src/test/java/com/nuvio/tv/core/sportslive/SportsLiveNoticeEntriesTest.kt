@@ -170,6 +170,11 @@ class SportsLiveNoticeEntriesTest {
             stream(title = "Donate to keep the links up", url = "https://addon.example.invalid/page"),
             stream(title = "Buy me a coffee", url = null, externalUrl = "https://pay.example.invalid/x")
         ).forEach { assertTrue(SportsLiveNoticeEntries.text(it), SportsLiveNoticeEntries.isNotice(it)) }
+        // BUG2 (TV QA): an addon's donation pseudo-stream, the only entry a LIVE row's picker showed.
+        listOf(
+            stream(name = "✨ | support the project!", url = "https://addon.example.invalid/support"),
+            stream(name = "Addon", title = "✨ | Support the project!", url = null, externalUrl = "https://pay.example.invalid/x")
+        ).forEach { assertTrue(SportsLiveNoticeEntries.text(it), SportsLiveNoticeEntries.isNotice(it)) }
         // A real stream is never one, whatever its wording.
         assertFalse(SportsLiveNoticeEntries.isNotice(stream(name = "Support Us", url = "https://cdn.example.invalid/live/index.m3u8")))
         assertFalse(SportsLiveNoticeEntries.isNotice(stream(title = "Supporters Cup Final", url = "https://cdn.example.invalid/ch/3")))
