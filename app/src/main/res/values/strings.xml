@@ -4019,7 +4019,7 @@
     <string name="sports_live_setting_pip_system_subtitle">Your TV\'s own picture-in-picture switch for this app</string>
     <string name="sports_live_setting_catalogs_subtitle">Which addon catalogs feed Sports &amp; Live. OK cycles Auto, Included, Excluded</string>
     <!-- Settings → Sports & Live V2 (#134 phase 6): one help line, On/Off switches, why a row is off (#89). -->
-    <string name="sports_live_setting_scores_help">Show: scores everywhere · Hide until I reveal: a score shows when you rest on its game for 1 s or pick Reveal · Never show: no scores on lists or alerts, and no score checks; a game's page still shows its result if you pick Reveal.</string>
+    <string name="sports_live_setting_scores_help">Show: scores everywhere · Hide until I reveal: a score shows when you rest on its game for 1 s or pick Reveal · Never show: no scores on lists or alerts, and no score checks; a game\'s page still shows its result if you pick Reveal.</string>
     <string name="sports_live_section_setup">Setup</string>
     <string name="sports_live_setting_run_setup">Run setup again</string>
     <string name="sports_live_setting_run_setup_subtitle">Pick your sports, teams and how scores show, one step at a time</string>
@@ -4045,7 +4045,7 @@
     <string name="sports_live_setup_scores_my_teams">Only my teams</string>
     <string name="sports_live_setup_scores_my_teams_help">Your teams\' scores stay hidden until you watch or pick Reveal result. Other games show theirs.</string>
     <string name="sports_live_setup_scores_hide_help">Hidden until you rest on a game for 1 s or pick Reveal.</string>
-    <string name="sports_live_setup_scores_off_help">No scores on lists or alerts, and no score checks. A game's page shows its result only if you pick Reveal.</string>
+    <string name="sports_live_setup_scores_off_help">No scores on lists or alerts, and no score checks. A game\'s page shows its result only if you pick Reveal.</string>
     <string name="sports_live_setup_sample_home" translatable="false">Celtics</string>
     <string name="sports_live_setup_sample_away" translatable="false">Knicks</string>
     <string name="sports_live_setup_delay_seconds">%1$d s</string>
