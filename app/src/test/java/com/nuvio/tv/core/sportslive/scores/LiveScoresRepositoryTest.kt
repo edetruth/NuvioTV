@@ -97,6 +97,8 @@ class LiveScoresRepositoryTest {
     private val HOME = LiveScoresRepository.SCREEN_HOME
 
     private val pacersCard = item("Indiana Pacers at Philadelphia 76ers", "Basketball", "2026-11-15T18:00:00Z")
+    /** Not listed live: Scores Off reads nothing for it (a live card's start is read, live.20). */
+    private val pacersUpcoming = pacersCard.copy(isLive = false)
 
     private val mySports = MutableStateFlow(MySports.DEFAULT)
 
@@ -143,7 +145,7 @@ class LiveScoresRepositoryTest {
         provider.teams = { nbaTeams }
         val repo = repository("2026-11-15T19:00:00Z")
         collect(repo)
-        repo.track(SECTION, listOf(pacersCard))
+        repo.track(SECTION, listOf(pacersUpcoming))
         advanceTimeBy(30 * 60_000L); runCurrent()
         assertTrue(provider.teamCalls.isEmpty())
         assertTrue(provider.calls.isEmpty())
@@ -284,7 +286,7 @@ class LiveScoresRepositoryTest {
         failure(health, nba15)
         val repo = repository("2026-11-16T12:00:00Z", health = health)
         collect(repo)
-        repo.track(SECTION, listOf(pacersCard))
+        repo.track(SECTION, listOf(pacersUpcoming))
         repo.retryNow()
         advanceTimeBy(30 * 60_000L); runCurrent()
         assertTrue(provider.calls.isEmpty())
@@ -510,7 +512,7 @@ class LiveScoresRepositoryTest {
         provider.respond = { ScoreboardResult(listOf(game(ScoreState.IN, 50, 48))) }
         val repo = repository("2026-11-15T19:00:00Z")
         collect(repo)
-        repo.track(SECTION, listOf(pacersCard))
+        repo.track(SECTION, listOf(pacersUpcoming))
         runCurrent()
         advanceTimeBy(10 * 60_000L); runCurrent()
         assertTrue(provider.calls.isEmpty())
@@ -1385,5 +1387,89 @@ class LiveScoresRepositoryTest {
         runCurrent()
         assertEquals(ms("2026-11-20T17:30:00Z"), starts.startOf(live.streamKey, ms("2026-11-20T15:40:00Z")))
         assertNull(starts.startOf(upcoming.streamKey, ms("2026-11-20T15:40:00Z")))
+    }
+
+    // --- live.20: Scores Off still reads a live card's ESPN start, never a score ---
+
+    @Test
+    fun `with Scores Off a card listed live the day before gets ESPN's start and nothing is served`() = runTest {
+        settings.value = ScoreSettings(mode = ScoresMode.OFF)
+        val saturday = LocalDate.of(2026, 11, 21)
+        provider.respond = { feed -> ScoreboardResult(if (feed.date == saturday) listOf(ligue1(ScoreState.PRE, "2026-11-21T16:15:00Z")) else emptyList()) }
+        val starts = SportsLiveEspnStarts()
+        val logos = TeamLogoBook()
+        val repo = repository("2026-11-20T15:40:00Z", espnStarts = starts, logos = logos)
+        collect(repo)
+        val card = item("Nice vs PSG", "Ligue 1", "2026-11-20T15:30:00Z")
+        repo.track(SECTION, listOf(card))
+        runCurrent()
+        assertTrue(provider.calls.any { it.date == saturday })
+        assertEquals(ms("2026-11-21T16:15:00Z"), starts.startOf(card.streamKey, ms("2026-11-20T15:40:00Z")))
+        assertTrue(repo.scores.value.isEmpty())
+        assertTrue(repo.unmatched.value.isEmpty())
+        assertEquals(0, logos.size)
+    }
+
+    @Test
+    fun `with Scores Off a game in play leaves its card live and serves no score`() = runTest {
+        settings.value = ScoreSettings(mode = ScoresMode.OFF)
+        provider.respond = { ScoreboardResult(listOf(ligue1(ScoreState.IN, "2026-11-20T15:30:00Z"))) }
+        val starts = SportsLiveEspnStarts()
+        val repo = repository("2026-11-20T15:40:00Z", espnStarts = starts)
+        collect(repo)
+        val card = item("Nice vs PSG", "Ligue 1", "2026-11-20T15:30:00Z")
+        repo.track(SECTION, listOf(card))
+        runCurrent()
+        assertTrue(provider.calls.isNotEmpty())
+        assertNull(starts.startOf(card.streamKey, ms("2026-11-20T15:40:00Z")))
+        assertTrue(repo.scores.value.isEmpty())
+    }
+
+    @Test
+    fun `with Scores Off only live cards are read, each feed once per check interval`() = runTest {
+        settings.value = ScoreSettings(mode = ScoresMode.OFF)
+        val repo = repository("2026-11-20T15:40:00Z")
+        collect(repo)
+        val upcoming = item("Nice vs PSG", "Ligue 1", "2026-11-20T18:00:00Z").copy(isLive = false)
+        repo.track(SECTION, listOf(upcoming))
+        runCurrent()
+        advanceTimeBy(60 * 60_000L); runCurrent()
+        assertTrue(provider.calls.isEmpty())
+
+        val live = item("Lens vs Lyon", "Ligue 1", "2026-11-20T15:30:00Z")
+        repo.track(SECTION, listOf(upcoming, live))
+        runCurrent()
+        val first = provider.calls.size
+        assertTrue(first > 0)
+        // The cards change again within the interval: no feed is asked twice.
+        repo.track(HOME, listOf(live))
+        runCurrent()
+        assertEquals(first, provider.calls.size)
+        advanceTimeBy(LiveScoresRepository.SCHEDULE_CHECK_MS); runCurrent()
+        assertEquals(2 * first, provider.calls.size)
+        // Untracked: nothing more.
+        repo.untrack(SECTION); repo.untrack(HOME)
+        runCurrent()
+        advanceTimeBy(60 * 60_000L); runCurrent()
+        assertEquals(2 * first, provider.calls.size)
+    }
+
+    @Test
+    fun `a schedule-only copy keeps the start and teams and drops every score`() {
+        val played = ligue1(ScoreState.IN, "2026-11-20T15:30:00Z").copy(
+            clockText = "67'", scorers = listOf(ScoreScorer(ScoreSide.HOME, "A Player", "12'", penalty = false, ownGoal = false)),
+            home = ligue1(ScoreState.IN, "2026-11-20T15:30:00Z").home.copy(linescores = listOf(1, 0), record = "5-2-1", form = "WWDLW")
+        )
+        val stripped = LiveScoresRepository.scheduleOnly(played)
+        assertEquals(played.startMs, stripped.startMs)
+        assertEquals("Nice", stripped.home.displayName)
+        assertEquals("Paris Saint-Germain", stripped.away.displayName)
+        assertNull(stripped.homeScore)
+        assertNull(stripped.awayScore)
+        assertNull(stripped.clockText)
+        assertTrue(stripped.scorers.isEmpty())
+        assertTrue(stripped.home.linescores.isEmpty())
+        assertNull(stripped.home.record)
+        assertNull(stripped.home.form)
     }
 }

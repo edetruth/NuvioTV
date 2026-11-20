@@ -171,8 +171,9 @@ fun HomeScreen(
     TrackLiveScores(
         screenId = LiveScoresRepository.SCREEN_HOME,
         cards = uiState.liveNowItems,
-        // Under Hide too: the matched game gives the cards their logos (#182); the score stays hidden.
-        enabled = liveScoresMode != null && liveScoresMode != ScoresMode.OFF,
+        // Under Hide too: the matched game gives the cards their logos (#182); the score stays hidden. Under Off, only
+        // the start of games listed live is read, never a score (live.20, a wrong LIVE).
+        enabled = liveScoresMode != null,
         tracking = liveScoresViewModel.tracking
     )
     val scoreChipStrings = rememberScoreChipStrings()

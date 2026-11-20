@@ -180,7 +180,8 @@ fun SportsLiveScreen(
             SportsLiveTab.UPCOMING -> uiState.visibleItems
             else -> emptyList()
         },
-        enabled = scoresMode != null && scoresMode != ScoresMode.OFF,
+        // Under Off too: only the start of games listed live is read then, never a score (live.20, a wrong LIVE).
+        enabled = scoresMode != null,
         tracking = scoresViewModel.tracking
     )
     // Worked out once per card for each scores update (or setting / reveal change), not per recomposition.

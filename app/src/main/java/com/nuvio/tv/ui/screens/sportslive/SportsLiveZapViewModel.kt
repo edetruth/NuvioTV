@@ -483,7 +483,8 @@ class SportsLiveZapViewModel internal constructor(
         // A list built before closePanel can arrive after it: it must not become the tracker's cards, or
         // the next open would start tracking this session's list.
         if (panelSession.value !== shown.session) return@map null
-        scoreTracker.update(shown.lineup.list.shown, enabled = shown.lineup.mode != ScoresMode.OFF)
+        // Under Off too: only the start of games listed live is read then, never a score (live.20, a wrong LIVE).
+        scoreTracker.update(shown.lineup.list.shown, enabled = true)
         shown.state
     }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 

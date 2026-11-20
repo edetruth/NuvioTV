@@ -53,7 +53,7 @@ import kotlin.random.Random
  *   The repository polls the union of every surface's cards, so Home and the section never replace
  *   each other's set. Nothing is fetched while
  *   no one collects [scores] (collect it with the lifecycle, e.g. `collectAsStateWithLifecycle`), or
- *   while the Scores setting is Off.
+ *   while the Scores setting is Off, but the start of games an addon lists live ([checkSchedules], never a score).
  * - Cards are routed to ESPN feeds by [EspnLeagueMap] and grouped by (league, date): one poller per
  *   feed, shared by all its cards, at the [ScoreCadence] rules, with in-flight requests coalesced.
  * - The [ScoreDelay] is applied here, once, so every surface gets the delayed view.
@@ -372,6 +372,7 @@ class LiveScoresRepository internal constructor(
             lock.withLock { scoresMode = current.mode }
             if (current.mode == ScoresMode.OFF) {
                 lock.withLock { publishLocked(off = true) }
+                checkSchedules()
                 return@collectLatest
             }
             coroutineScope {
@@ -406,6 +407,55 @@ class LiveScoresRepository internal constructor(
                     }
                 } finally {
                     if (activePollerScope === pollerScope) activePollerScope = null
+                }
+            }
+        }
+    }
+
+    /**
+     * Scores Off (live.20, a wrong LIVE): ESPN's start for the games an addon lists live, so one listed live too early
+     * still waits on Upcoming. Only the start is kept ([espnStarts]); no score, state or logo is kept or served, and
+     * nothing is published. Each live card's own days and ESPN's today and tomorrow, within [MAX_FEEDS], asked when the
+     * tracked cards change and every [SCHEDULE_CHECK_MS]; a feed is asked at most once in that time.
+     */
+    private suspend fun checkSchedules() {
+        // Feed to (when it answered, its games stripped to their schedule).
+        val answered = HashMap<ScoreFeed, Pair<Long, List<ScoreSnapshot>>>()
+        tracked.collectLatest {
+            while (true) {
+                checkSchedulesOnce(answered)
+                delay(SCHEDULE_CHECK_MS)
+            }
+        }
+    }
+
+    private suspend fun checkSchedulesOnce(answered: HashMap<ScoreFeed, Pair<Long, List<ScoreSnapshot>>>) {
+        val nowMs = now()
+        answered.values.removeAll { (at, _) -> nowMs - at >= SCHEDULE_CHECK_MS }
+        val needed = LinkedHashSet<ScoreFeed>()
+        val cards = ArrayList<Pair<TrackedCard, List<ScoreFeed>>>()
+        for (entry in trackedUnion()) {
+            if (entry.liveKeys.isEmpty() || entry.tennis) continue
+            val cardFeeds = feedsOf(entry.leagues, (datesFor(entry.card) + laterDates(nowMs)).distinct())
+            if (needed.size + cardFeeds.count { it !in needed } > MAX_FEEDS) continue
+            needed += cardFeeds
+            cards += entry to cardFeeds
+        }
+        val results = coroutineScope {
+            needed.filter { it !in answered }.map { feed -> async { feed to provider.scoreboard(feed.league, feed.date) } }.awaitAll()
+        }
+        for ((feed, result) in results) if (!result.failed) answered[feed] = nowMs to result.events.filter { it.individual == null }.map(::scheduleOnly)
+        lock.withLock {
+            for ((entry, cardFeeds) in cards) {
+                val events = cardFeeds.flatMap { answered[it]?.second.orEmpty() }.distinctBy { it.eventId }
+                if (events.isEmpty()) continue
+                val match = matcher.match(entry.card, events, nowMs)
+                val later = if (match != null) SportsLiveEspnStarts.laterStart(match, nowMs) else matcher.laterMeeting(entry.card, events, nowMs)?.startMs
+                when {
+                    later != null -> espnStarts.record(entry.liveKeys, later, nowMs)
+                    // A game moved before: kept on ESPN's start as it changes (as with Scores on).
+                    match != null && match.timeValid && match.startMs != null && espnStarts.has(entry.card.key) ->
+                        espnStarts.record(listOf(entry.card.key), match.startMs, nowMs)
                 }
             }
         }
@@ -865,7 +915,16 @@ class LiveScoresRepository internal constructor(
         internal const val DIRECTORY_START_DELAY_MS = 2_000L
         /** "Retry now" at most this often, and never on a feed asked for within this long. */
         internal const val RETRY_MIN_INTERVAL_MS = 30_000L
+        /** Scores Off: how often a live card's ESPN start is read again ([checkSchedules]). */
+        internal const val SCHEDULE_CHECK_MS = 15 * 60_000L
         private val SLUG = Regex("""[a-z0-9._-]+""")
+
+        /** [event] with no score: no points, clock, scorers, situation or record (Scores Off reads starts only). */
+        internal fun scheduleOnly(event: ScoreSnapshot): ScoreSnapshot = event.copy(
+            clockText = null, isFinal = false, scorers = emptyList(), situation = null,
+            home = event.home.copy(score = null, linescores = emptyList(), record = null, form = null),
+            away = event.away.copy(score = null, linescores = emptyList(), record = null, form = null)
+        )
         private val EASTERN: ZoneId = ZoneId.of("America/New_York")
 
         /** A followed team's stored "sport/league", as a league; null when it has none. */
