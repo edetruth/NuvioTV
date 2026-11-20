@@ -153,7 +153,7 @@ internal object YourTeams {
     /**
      * The strip's replays (research 7), newest first, at most [MAX_REPLAYS]: one per followed team (Google's one item
      * per series in Continue Watching; a newer game of the team supersedes the older one), except those the user kept
-     * ([kept] event ids, "Keep until I watch it"), which always stay (chosen before the others) and leave their team's
+     * ([kept] event ids, "Watch later (no spoilers)"), which always stay (chosen before the others) and leave their team's
      * newest replay its place too, so a kept replay never vanishes for a rule the viewer cannot see. A replay whose
      * followed team is not known ([followed] empty) counts on its own.
      */

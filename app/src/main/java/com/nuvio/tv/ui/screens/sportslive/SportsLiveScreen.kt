@@ -584,7 +584,7 @@ private fun SportsLiveContent(
     onMarkCatchUpWatched: (CatchUpItem) -> Unit,
     /** Replays the user kept (research 7), by ESPN event id: they stay in the strip until watched. */
     keptReplays: Set<String> = emptySet(),
-    /** Keep / Don't keep a replay (its kept state now). */
+    /** Watch later / Reveal result on a replay (its saved state now). */
     onToggleKeep: (CatchUpItem, Boolean) -> Unit = { _, _ -> },
     /** The empty card's "Sources" (#134): the addons screen. */
     onOpenAddons: () -> Unit = {},

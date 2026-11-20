@@ -52,7 +52,7 @@ class SportsLiveCatchUpViewModel @Inject constructor(
     fun markWatched(item: CatchUpItem) = repository.markWatched(item)
 
     /**
-     * The replays the user kept (research 7: "Keep until I watch it"), by ESPN event id. Keep is Watch later (#151): it
+     * The replays the user kept (research 7, worded as everywhere: "Watch later (no spoilers)"), by ESPN event id. Keep is Watch later (#151): it
      * stays until its replay is watched or for 7 days ([com.nuvio.tv.core.sportslive.scores.ReplayLifetime] rule 4), with
      * its score hidden meanwhile, and it shows under Replays' Saved for later.
      */
@@ -87,8 +87,8 @@ internal fun catchUpMatchup(item: CatchUpItem): String =
 
 /**
  * Hold OK on a catch-up card (Home or Live Now), in the one More… sheet every Sports & Live card uses (Q8: never a
- * second, centered menu): "‹away› at ‹home›" over "Replay · Sun 15 Nov", then Game stats (score behind Reveal), Keep
- * until I watch it / Don't keep ([kept], research 7) and Mark as watched, which reads "Remove from Your teams" on
+ * second, centered menu): "‹away› at ‹home›" over "Replay · Sun 15 Nov", then Game stats (score behind Reveal), Watch
+ * later (no spoilers) / Reveal result ([kept], research 7: it keeps the replay until watched) and Mark as watched, which reads "Remove from Your teams" on
  * Live Now's strip ([fromYourTeams], live.20 1c).
  */
 @Composable
@@ -99,7 +99,7 @@ internal fun SportsLiveCatchUpMenu(
     onDismiss: () -> Unit,
     fromYourTeams: Boolean = false,
     kept: Boolean = false,
-    /** Keep / Don't keep; null hides it. */
+    /** Watch later / Reveal result; null hides it. */
     onToggleKeep: (() -> Unit)? = null
 ) {
     SportsLiveSheet(
@@ -112,7 +112,7 @@ internal fun SportsLiveCatchUpMenu(
         SportsLiveMenuButton(text = stringResource(R.string.sports_live_game_stats), onClick = onOpenGame, modifier = first())
         if (onToggleKeep != null) {
             SportsLiveMenuButton(
-                text = stringResource(if (kept) R.string.sports_live_your_teams_unkeep else R.string.sports_live_your_teams_keep),
+                text = stringResource(if (kept) R.string.sports_live_reveal_result_menu else R.string.sports_live_watch_later),
                 onClick = onToggleKeep,
                 modifier = first()
             )
