@@ -6,7 +6,6 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.Preferences
-import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.profile.ProfileManager
 import com.google.gson.Gson
 import com.google.gson.JsonElement
@@ -817,7 +816,7 @@ class WatchProgressPreferences @Inject constructor(
             }
             parsed
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to parse progress data", LogRedact.error(e))
+            Log.e(TAG, "Failed to parse progress data", e)
             // Backward compatibility with previously stored direct WatchProgress payloads.
             runCatching {
                 val fallbackType = object : TypeToken<Map<String, WatchProgress>>() {}.type

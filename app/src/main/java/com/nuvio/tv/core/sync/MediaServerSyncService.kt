@@ -2,7 +2,6 @@ package com.nuvio.tv.core.sync
 
 import android.os.SystemClock
 import android.util.Log
-import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.auth.AuthManager
 import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.data.mediaserver.RefusedServerTypes
@@ -102,7 +101,7 @@ class MediaServerSyncService @Inject constructor(
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
-            Log.e(TAG, "Media server sync failed for profile $profileId", LogRedact.error(error))
+            Log.e(TAG, "Media server sync failed for profile $profileId", error)
             Result.failure(error)
         }
 

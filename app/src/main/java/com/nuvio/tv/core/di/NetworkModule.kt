@@ -3,7 +3,6 @@ package com.nuvio.tv.core.di
 import android.content.Context
 import android.util.Log
 import com.nuvio.tv.BuildConfig
-import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.network.NoDelaySocketFactory
 import com.nuvio.tv.data.remote.api.AddonApi
 import com.nuvio.tv.data.remote.api.AniSkipApi
@@ -294,7 +293,7 @@ object NetworkModule {
                 val durationMs = (System.nanoTime() - startNs) / 1_000_000L
                 Log.w(
                     "TraktHttp",
-                    "ERR #$requestId ${newRequest.method} $target ${durationMs}ms ${error.javaClass.simpleName}: ${LogRedact.text(error.message)}"
+                    "ERR #$requestId ${newRequest.method} $target ${durationMs}ms ${error.javaClass.simpleName}: ${error.message}"
                 )
                 throw error
             }

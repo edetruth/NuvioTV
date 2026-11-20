@@ -5,7 +5,6 @@ import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.os.Build
 import android.util.Log
-import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.data.local.AudioOutputChannels
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -106,7 +105,7 @@ internal fun PlayerRuntimeController.registerAudioDelayRouteCallback() {
         audioOutputRouteCallback = callback
         Log.d(PlayerRuntimeController.TAG, "Registered audio output route callback")
     }.onFailure {
-        Log.w(PlayerRuntimeController.TAG, "Failed to register audio route callback", LogRedact.error(it))
+        Log.w(PlayerRuntimeController.TAG, "Failed to register audio route callback", it)
     }
 }
 
@@ -117,7 +116,7 @@ internal fun PlayerRuntimeController.unregisterAudioDelayRouteCallback() {
     runCatching {
         audioManager.unregisterAudioDeviceCallback(callback)
     }.onFailure {
-        Log.w(PlayerRuntimeController.TAG, "Failed to unregister audio route callback", LogRedact.error(it))
+        Log.w(PlayerRuntimeController.TAG, "Failed to unregister audio route callback", it)
     }
     audioOutputRouteCallback = null
 }

@@ -1,7 +1,6 @@
 package com.nuvio.tv.data.repository
 
 import android.util.Log
-import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.data.remote.api.ImdbApiParentsGuideCategory
 import com.nuvio.tv.data.remote.api.ParentalGuideApi
 import java.util.concurrent.ConcurrentHashMap
@@ -42,7 +41,7 @@ class ParentalGuideRepository @Inject constructor(
                 null
             }
         } catch (e: Exception) {
-            Log.e("ParentalGuide", "Failed to fetch parental guide for $imdbId", LogRedact.error(e))
+            Log.e("ParentalGuide", "Failed to fetch parental guide for $imdbId", e)
             null
         }
     }

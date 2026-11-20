@@ -8,7 +8,6 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.TransferListener
-import com.nuvio.tv.core.LogRedact
 import java.io.ByteArrayOutputStream
 import java.io.InterruptedIOException
 import java.util.concurrent.Callable
@@ -94,7 +93,7 @@ internal class HlsParameterSetInitDataSource(
             }
             head.toByteArray()
         } catch (e: java.io.IOException) {
-            Log.w(TAG, "Could not read the start of ${LogRedact.url(uri)}", LogRedact.error(e))
+            Log.w(TAG, "Could not read the start of $uri", e)
             null
         } finally {
             runCatching { source.close() }
@@ -147,7 +146,7 @@ internal fun <T : Any> resultWithin(timeoutMs: Long, block: () -> T?): T? {
         Log.w(TAG, "Checking segments took over $timeoutMs ms, playlist left as is")
         null
     } catch (e: ExecutionException) {
-        Log.w(TAG, "Checking segments failed, playlist left as is", LogRedact.error(e.cause))
+        Log.w(TAG, "Checking segments failed, playlist left as is", e.cause)
         null
     } catch (e: InterruptedException) {
         task.cancel(true)

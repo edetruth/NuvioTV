@@ -2,7 +2,6 @@ package com.nuvio.tv.data.repository
 
 import android.content.Context
 import android.util.Log
-import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.network.NetworkResult
 import com.nuvio.tv.data.mapper.toDomain
 import com.nuvio.tv.data.mediaserver.ServerCatalog
@@ -185,7 +184,7 @@ class MetaRepositoryImpl @Inject constructor(
                 Log.w(
                     TAG,
                     "Addon unresolved (not installed, disabled, or URL not matched), " +
-                        "requesting as-is url=${LogRedact.url(addonBaseUrl)} type=$requestedType id=$id"
+                        "requesting as-is url=$addonBaseUrl type=$requestedType id=$id"
                 )
             } else {
                 Log.w(
@@ -220,7 +219,7 @@ class MetaRepositoryImpl @Inject constructor(
                 } catch (e: kotlinx.coroutines.CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    Log.w(TAG, "getMeta failed for ${LogRedact.url(url)}: ${LogRedact.text(e.message)}")
+                    Log.w(TAG, "getMeta failed for $url: ${e.message}")
                     null
                 } finally {
                     inFlightMeta.remove(cacheKey)
@@ -556,7 +555,7 @@ class MetaRepositoryImpl @Inject constructor(
                 } catch (e: kotlinx.coroutines.CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    Log.w(TAG, "Primary meta fetch failed for ${LogRedact.url(url)}: ${LogRedact.text(e.message)}")
+                    Log.w(TAG, "Primary meta fetch failed for $url: ${e.message}")
                     null
                 } finally {
                     inFlightPrimaryMeta.remove(cacheKey)

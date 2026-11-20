@@ -20,7 +20,6 @@ import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.SynchronousQueue
 import java.util.concurrent.ThreadFactory
 import java.util.concurrent.TimeUnit
-import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.data.local.PlayerSettings
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -108,7 +107,7 @@ internal class ParallelRangeDataSource(
                     cleanMethod.invoke(cleaner)
                 }
             } catch (e: Throwable) {
-                Log.w(TAG, "Failed to explicitly free direct buffer: ${LogRedact.text(e.message)}")
+                Log.w(TAG, "Failed to explicitly free direct buffer: ${e.message}")
             }
         }
 
@@ -970,7 +969,7 @@ internal class ParallelRangeDataSource(
             )
         } catch (e: Exception) {
             try { source.close() } catch (_: Exception) {}
-            Log.w(TAG, "Continuation open failed at $position; using chunk path: ${LogRedact.text(e.message)}")
+            Log.w(TAG, "Continuation open failed at $position; using chunk path: ${e.message}")
             return
         }
         continuationSource = source
@@ -1029,7 +1028,7 @@ internal class ParallelRangeDataSource(
                 }
             } catch (e: Exception) {
 
-                Log.w(TAG, "RS_ESCALATE failed chunk=$chunkIndex: ${LogRedact.text(e.message)}")
+                Log.w(TAG, "RS_ESCALATE failed chunk=$chunkIndex: ${e.message}")
             } catch (e: OutOfMemoryError) {
                 drainIdleBuffers(activeSession.chunkSize)
                 Log.w(TAG, "RS_ESCALATE failed chunk=$chunkIndex: chunk buffer OOM (contained)")
@@ -1198,7 +1197,7 @@ internal class ParallelRangeDataSource(
                         } catch (_: InterruptedException) {
                         }
                     } else {
-                        Log.w(TAG, "Chunk $chunkIndex download failed (attempt 1), retrying: ${LogRedact.text(e.message)}")
+                        Log.w(TAG, "Chunk $chunkIndex download failed (attempt 1), retrying: ${e.message}")
                     }
                 }
             }

@@ -7,7 +7,6 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nuvio.tv.R
-import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.auth.AuthManager
 import com.nuvio.tv.core.auth.diagnostics.AuthDiagnosticsSession
 import com.nuvio.tv.core.logging.bodySnippetForLog
@@ -164,7 +163,7 @@ class AccountViewModel @Inject constructor(
             authManager.signInWithEmail(email, password).fold(
                 onSuccess = {
                     pullRemoteData().onFailure { e ->
-                        Log.e("AccountViewModel", "signIn: pullRemoteData failed, continuing signed-in flow", LogRedact.error(e))
+                        Log.e("AccountViewModel", "signIn: pullRemoteData failed, continuing signed-in flow", e)
                     }
                     loadConnectedStats()
                     _uiState.update { it.copy(isLoading = false) }
@@ -221,7 +220,7 @@ class AccountViewModel @Inject constructor(
                     if (result.success) {
                         authManager.clearEffectiveUserIdCache()
                         pullRemoteData().onFailure { e ->
-                            Log.e("AccountViewModel", "claimSyncCode: pullRemoteData failed, continuing", LogRedact.error(e))
+                            Log.e("AccountViewModel", "claimSyncCode: pullRemoteData failed, continuing", e)
                         }
                         updateEffectiveOwnerId(_uiState.value.authState)
                         _uiState.update { it.copy(isLoading = false, syncClaimSuccess = true) }
@@ -342,7 +341,7 @@ class AccountViewModel @Inject constructor(
                         runCatching { QrCodeGenerator.generate(result.verificationUriComplete, 420, margin = 1) }
                     }
                         .onFailure { e ->
-                            Log.e(TAG, "QR_LOGIN[$traceId] QR bitmap generation failed url=${LogRedact.url(result.verificationUriComplete)} urlLength=${result.verificationUriComplete.length} error=${LogRedact.text(e.diagnosticSummary())}", LogRedact.error(e))
+                            Log.e(TAG, "QR_LOGIN[$traceId] QR bitmap generation failed url=${result.verificationUriComplete.urlForLog()} urlLength=${result.verificationUriComplete.length} error=${e.diagnosticSummary()}", e)
                         }
                         .getOrNull()
                     // The session can be cleared or replaced while the bitmap is built off the main thread.
@@ -367,7 +366,7 @@ class AccountViewModel @Inject constructor(
                     startQrLoginPolling()
                 },
                 onFailure = { e ->
-                    Log.e(TAG, "QR_LOGIN[$traceId] start_device_login_session failed totalElapsedMs=${SystemClock.elapsedRealtime() - startedAtMs} error=${LogRedact.text(e.diagnosticSummary())}", LogRedact.error(e))
+                    Log.e(TAG, "QR_LOGIN[$traceId] start_device_login_session failed totalElapsedMs=${SystemClock.elapsedRealtime() - startedAtMs} error=${e.diagnosticSummary()}", e)
                     diagnostics.finishFailure("start_device_login_session_failed", QR_ENDPOINT_START, error = e)
                     activeQrLoginDiagnostics = null
                     _uiState.update {
@@ -415,13 +414,13 @@ class AccountViewModel @Inject constructor(
                         diagnostics?.finishSuccess("qr_login_completed")
                         if (activeQrLoginDiagnostics === diagnostics) activeQrLoginDiagnostics = null
                         pullRemoteData().onFailure { e ->
-                            Log.e(TAG, "QR_LOGIN[${traceId ?: "-"}] exchange pullRemoteData failed, continuing error=${LogRedact.text(e.diagnosticSummary())}", LogRedact.error(e))
+                            Log.e(TAG, "QR_LOGIN[${traceId ?: "-"}] exchange pullRemoteData failed, continuing error=${e.diagnosticSummary()}", e)
                         }
                         loadConnectedStats()
                         _uiState.update { it.copy(isLoading = false, qrLoginStatus = context.getString(R.string.qr_login_success)) }
                     },
                     onFailure = { e ->
-                        Log.e(TAG, "QR_LOGIN[${traceId ?: "-"}] exchange failed elapsedMs=${SystemClock.elapsedRealtime() - startedAtMs} error=${LogRedact.text(e.diagnosticSummary())}", LogRedact.error(e))
+                        Log.e(TAG, "QR_LOGIN[${traceId ?: "-"}] exchange failed elapsedMs=${SystemClock.elapsedRealtime() - startedAtMs} error=${e.diagnosticSummary()}", e)
                         diagnostics?.finishFailure("exchange_tv_login_session_failed", QR_ENDPOINT_EXCHANGE, error = e)
                         if (activeQrLoginDiagnostics === diagnostics) activeQrLoginDiagnostics = null
                         _uiState.update {
@@ -584,7 +583,7 @@ class AccountViewModel @Inject constructor(
         val raw = e.message ?: ""
         val message = raw.lowercase()
         val compactRaw = raw.bodySnippetForLog()
-        Log.w(TAG, "Raw error: ${LogRedact.text(compactRaw)}")
+        Log.w(TAG, "Raw error: $compactRaw")
 
         val resId = when {
             // PIN errors (from PG RAISE EXCEPTION or any wrapper)
@@ -710,7 +709,7 @@ class AccountViewModel @Inject constructor(
                 }
             },
             onFailure = { e ->
-                Log.e(TAG, "QR_LOGIN[${traceId ?: "-"}] poll attempt=$attempt failed elapsedMs=${SystemClock.elapsedRealtime() - startedAtMs} error=${LogRedact.text(e.diagnosticSummary())}", LogRedact.error(e))
+                Log.e(TAG, "QR_LOGIN[${traceId ?: "-"}] poll attempt=$attempt failed elapsedMs=${SystemClock.elapsedRealtime() - startedAtMs} error=${e.diagnosticSummary()}", e)
                 cancelQrLoginPolling()
                 diagnostics?.finishFailure("poll_tv_login_session_failed", QR_ENDPOINT_POLL, error = e)
                 if (activeQrLoginDiagnostics === diagnostics) activeQrLoginDiagnostics = null
@@ -777,7 +776,7 @@ class AccountViewModel @Inject constructor(
                         )
                     },
                     onFailure = { e ->
-                        Log.e("AccountViewModel", "pullRemoteData: failed to pull library items", LogRedact.error(e))
+                        Log.e("AccountViewModel", "pullRemoteData: failed to pull library items", e)
                     }
                 )
                 libraryRepository.hasCompletedInitialPull = true

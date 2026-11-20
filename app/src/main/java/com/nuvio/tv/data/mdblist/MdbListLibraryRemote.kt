@@ -1,7 +1,6 @@
 package com.nuvio.tv.data.mdblist
 
 import android.util.Log
-import com.nuvio.tv.core.LogRedact
 import kotlinx.coroutines.CancellationException
 
 internal class MdbListLibraryRemote(private val api: MdbListApiClient, private val scope: MdbListAuthScope) {
@@ -84,7 +83,7 @@ internal class MdbListLibraryRemote(private val api: MdbListApiClient, private v
             throw error
         } catch (error: Exception) {
             if ((error as? MdbListApiException)?.retryAtEpochMs != null) throw error
-            Log.w(TAG, "$label lists sync failed", LogRedact.error(error))
+            Log.w(TAG, "$label lists sync failed", error)
             val cachedItems = previous?.itemsByList.orEmpty()
             // Hidden lists have no cached items but must stay listed so they remain hidden.
             previousLists.filter { it.key in cachedItems || it.key in hidden }

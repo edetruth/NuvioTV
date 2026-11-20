@@ -1,7 +1,6 @@
 package com.nuvio.tv.core.sync
 
 import android.util.Log
-import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.sync.library.LIBRARY_DELTA_PAGE_SIZE
 import com.nuvio.tv.core.sync.library.LIBRARY_SNAPSHOT_PAGE_SIZE
 import com.nuvio.tv.core.sync.library.LibrarySyncLocalStore
@@ -46,7 +45,7 @@ class LibrarySyncService @Inject constructor(
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
-                Log.e(TAG, "Failed to push library mutations for profile $profileId", LogRedact.error(error))
+                Log.e(TAG, "Failed to push library mutations for profile $profileId", error)
                 Result.failure(error)
             }
         }
@@ -120,7 +119,7 @@ class LibrarySyncService @Inject constructor(
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
-                Log.e(TAG, "Failed to sync library for profile $profileId", LogRedact.error(error))
+                Log.e(TAG, "Failed to sync library for profile $profileId", error)
                 Result.failure(error)
             }
         }

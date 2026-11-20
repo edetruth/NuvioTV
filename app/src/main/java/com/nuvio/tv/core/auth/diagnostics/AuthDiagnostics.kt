@@ -5,7 +5,6 @@ import android.os.Build
 import android.os.SystemClock
 import android.util.Log
 import com.nuvio.tv.BuildConfig
-import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.data.remote.dto.AuthDiagnosticAppDto
 import com.nuvio.tv.data.remote.dto.AuthDiagnosticDeviceDto
 import com.nuvio.tv.data.remote.dto.AuthDiagnosticEnvironmentDto
@@ -234,7 +233,7 @@ class AuthDiagnosticsSession(
         val result = repository.submit(payload)
         result.fold(
             onSuccess = { reportId -> Log.d(TAG, "attempt=$attemptId flow=$flowType upload=success reportId=$reportId") },
-            onFailure = { uploadError -> Log.w(TAG, "attempt=$attemptId flow=$flowType upload=queued error=${uploadError.javaClass.simpleName}: ${LogRedact.text(uploadError.message)}") }
+            onFailure = { uploadError -> Log.w(TAG, "attempt=$attemptId flow=$flowType upload=queued error=${uploadError.javaClass.simpleName}: ${uploadError.message}") }
         )
         return result
     }
@@ -252,7 +251,7 @@ class AuthDiagnosticsSession(
         val line = event.toLogLine()
         events += event
         rawLogs += "${event.timeMs} $line"
-        if (event.exception != null) Log.e(TAG, LogRedact.text(line)) else Log.d(TAG, line)
+        if (event.exception != null) Log.e(TAG, line) else Log.d(TAG, line)
     }
 
     private fun elapsedMs(): Long = SystemClock.elapsedRealtime() - startedElapsedMs

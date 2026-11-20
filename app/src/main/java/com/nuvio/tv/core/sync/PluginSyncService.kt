@@ -1,7 +1,6 @@
 package com.nuvio.tv.core.sync
 
 import android.util.Log
-import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.auth.AuthManager
 import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.data.local.PluginDataStore
@@ -93,7 +92,7 @@ class PluginSyncService @Inject constructor(
             Log.d(TAG, "Pushed ${localRepos.size} plugin repos to remote for profile $profileId")
             Result.success(Unit)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to push plugins to remote", LogRedact.error(e))
+            Log.e(TAG, "Failed to push plugins to remote", e)
             Result.failure(e)
         }
     }
@@ -122,7 +121,7 @@ class PluginSyncService @Inject constructor(
                 .map { RemotePluginInfo(url = it.url, repoType = it.repoType) }
             )
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to get remote repo URLs", LogRedact.error(e))
+            Log.e(TAG, "Failed to get remote repo URLs", e)
             Result.failure(e)
         }
     }

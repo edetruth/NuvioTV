@@ -1,7 +1,6 @@
 package com.nuvio.tv.core.tracking
 
 import android.util.Log
-import com.nuvio.tv.core.LogRedact
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
@@ -74,7 +73,7 @@ class TrackingScrobbleCoordinator @Inject constructor(
             Log.w(
                 "TrackingScrobble",
                 "${failure.providerId.storageId} ${if (seek) "seek " else ""}scrobble ${action.wireValue} failed",
-                LogRedact.error(failure.cause)
+                failure.cause
             )
         }
     }

@@ -9,7 +9,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nuvio.tv.BuildConfig
 import com.nuvio.tv.R
-import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.updater.model.AppUpdate
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -329,14 +328,14 @@ class UpdateViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             if (useSystemInstaller) {
                 runCatching { ApkInstaller.launchSystemInstaller(context, apkFile) }
-                    .onFailure { error -> Log.w(TAG, "System installer failed", LogRedact.error(error)) }
+                    .onFailure { error -> Log.w(TAG, "System installer failed", error) }
                 return@launch
             }
             runCatching { ApkInstaller.install(context, apkFile, background = false) }
                 .onFailure {
-                    Log.w(TAG, "Session install failed, falling back to the system installer", LogRedact.error(it))
+                    Log.w(TAG, "Session install failed, falling back to the system installer", it)
                     runCatching { ApkInstaller.launchSystemInstaller(context, apkFile) }
-                        .onFailure { error -> Log.w(TAG, "System installer failed", LogRedact.error(error)) }
+                        .onFailure { error -> Log.w(TAG, "System installer failed", error) }
                 }
         }
     }

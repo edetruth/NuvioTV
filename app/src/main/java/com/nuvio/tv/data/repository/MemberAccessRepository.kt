@@ -3,7 +3,6 @@ package com.nuvio.tv.data.repository
 import android.os.SystemClock
 import android.util.Log
 import com.nuvio.tv.BuildConfig
-import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.auth.AuthManager
 import com.nuvio.tv.data.local.DebugSettingsDataStore
 import com.nuvio.tv.data.local.MemberAccessDataStore
@@ -67,7 +66,7 @@ class MemberAccessRepository @Inject constructor(
                 val cachedAccess = runCatching {
                     memberAccessDataStore.get(authState.userId)
                 }.onFailure { error ->
-                    Log.w(MemberAccessTag, "Failed to load cached supporter access", LogRedact.error(error))
+                    Log.w(MemberAccessTag, "Failed to load cached supporter access", error)
                 }.getOrNull()
                 optimisticCachedAccess = cachedAccess ?: MemberAccess.None
                 emit(optimisticCachedAccess)
@@ -77,7 +76,7 @@ class MemberAccessRepository @Inject constructor(
                     val persistedAccess = runCatching {
                         memberAccessDataStore.save(authState.userId, remoteAccess)
                     }.onFailure { error ->
-                        Log.w(MemberAccessTag, "Failed to cache supporter access", LogRedact.error(error))
+                        Log.w(MemberAccessTag, "Failed to cache supporter access", error)
                     }.getOrDefault(remoteAccess)
                     optimisticCachedAccess = persistedAccess
                     lastVerifiedUserId = authState.userId
@@ -86,7 +85,7 @@ class MemberAccessRepository @Inject constructor(
                 } catch (error: CancellationException) {
                     throw error
                 } catch (error: Exception) {
-                    Log.w(MemberAccessTag, "Supporter access verification failed", LogRedact.error(error))
+                    Log.w(MemberAccessTag, "Supporter access verification failed", error)
                 }
             } else if (authState is AuthState.Loading) {
                 emit(optimisticCachedAccess)

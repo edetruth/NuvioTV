@@ -6,7 +6,6 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nuvio.tv.R
-import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.debrid.DebridStreamPresentation
 import com.nuvio.tv.core.debrid.DirectDebridResolveResult
 import com.nuvio.tv.core.debrid.DirectDebridResolver
@@ -1894,7 +1893,7 @@ class StreamScreenViewModel @Inject constructor(
                 }
                 keepStreamForPlayer = true
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to start torrent stream for external player", LogRedact.error(e))
+                Log.e(TAG, "Failed to start torrent stream for external player", e)
                 updateUiStateIfChanged {
                     it.copy(
                         showDirectAutoPlayOverlay = false,
@@ -2091,7 +2090,7 @@ class StreamScreenViewModel @Inject constructor(
         } catch (cancellation: CancellationException) {
             throw cancellation
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to fetch subtitles for external player", LogRedact.error(e))
+            Log.w(TAG, "Failed to fetch subtitles for external player", e)
             null
         }
     }

@@ -7,7 +7,6 @@ import com.dokar.quickjs.quickJs
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import com.nuvio.tv.BuildConfig
-import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.domain.model.LocalScraperResult
 import com.nuvio.tv.domain.model.Subtitle
 import com.nuvio.tv.domain.model.toStreamAudioDelayLanguage
@@ -94,7 +93,7 @@ class PluginRuntime @Inject constructor() {
                 compiledCryptoJsBytecode = bytecode
                 return bytecode
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to compile crypto-js to bytecode: ${LogRedact.text(e.message)}", LogRedact.error(e))
+                Log.e(TAG, "Failed to compile crypto-js to bytecode: ${e.message}", e)
                 return null
             }
         }
@@ -109,7 +108,7 @@ class PluginRuntime @Inject constructor() {
                 compiledPolyfillBytecode = bytecode
                 return bytecode
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to compile polyfill to bytecode: ${LogRedact.text(e.message)}", LogRedact.error(e))
+                Log.e(TAG, "Failed to compile polyfill to bytecode: ${e.message}", e)
                 throw e
             }
         }
@@ -124,7 +123,7 @@ class PluginRuntime @Inject constructor() {
                 compiledCallBytecode = bytecode
                 return bytecode
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to compile call code to bytecode: ${LogRedact.text(e.message)}", LogRedact.error(e))
+                Log.e(TAG, "Failed to compile call code to bytecode: ${e.message}", e)
                 throw e
             }
         }
@@ -270,11 +269,11 @@ class PluginRuntime @Inject constructor() {
                             null
                         }
                         function("error") { args ->
-                            Log.e("Plugin:$scraperId", LogRedact.text(args.joinToString(" ") { it?.toString() ?: "null" }))
+                            Log.e("Plugin:$scraperId", args.joinToString(" ") { it?.toString() ?: "null" })
                             null
                         }
                         function("warn") { args ->
-                            Log.w("Plugin:$scraperId", LogRedact.text(args.joinToString(" ") { it?.toString() ?: "null" }))
+                            Log.w("Plugin:$scraperId", args.joinToString(" ") { it?.toString() ?: "null" })
                             null
                         }
                         function("info") { args ->
@@ -299,7 +298,7 @@ class PluginRuntime @Inject constructor() {
                         try {
                             performNativeFetch(url, method, headersJson, bodyKind, body, followRedirects, inFlightCalls)
                         } catch (t: Throwable) {
-                            Log.e(TAG, "Async fetch bridge error for $method ${LogRedact.url(url)}: ${LogRedact.text(t.message)}")
+                            Log.e(TAG, "Async fetch bridge error for $method $url: ${t.message}")
                             gson.toJson(
                                 mapOf(
                                     "ok" to false,
@@ -498,7 +497,7 @@ class PluginRuntime @Inject constructor() {
             return parseJsonResults(resultJson)
 
         } catch (e: Exception) {
-            Log.e(TAG, "Plugin execution failed: ${LogRedact.text(e.message)}", LogRedact.error(e))
+            Log.e(TAG, "Plugin execution failed: ${e.message}", e)
             throw e
         } finally {
             cancellationRegistration?.dispose()
@@ -609,7 +608,7 @@ class PluginRuntime @Inject constructor() {
                             }
                         }
                     } catch (e: Exception) {
-                        Log.w(TAG, "Failed to read/decode response body for ${LogRedact.url(url)}: ${LogRedact.text(e.message)}")
+                        Log.w(TAG, "Failed to read/decode response body for $url: ${e.message}")
                         BoundedReadResult(ByteArray(0), false)
                     }
 
@@ -635,7 +634,7 @@ class PluginRuntime @Inject constructor() {
                 inFlightCalls.remove(call)
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Fetch error: ${LogRedact.text(e.message)}")
+            Log.e(TAG, "Fetch error: ${e.message}")
             gson.toJson(mapOf(
                 "ok" to false,
                 "status" to 0,
@@ -1454,7 +1453,7 @@ class PluginRuntime @Inject constructor() {
                 )
             }?.filter { it.url.isNotBlank() } ?: emptyList()
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to parse results: ${LogRedact.text(e.message)}")
+            Log.e(TAG, "Failed to parse results: ${e.message}")
             emptyList()
         }
     }

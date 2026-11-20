@@ -1,7 +1,6 @@
 package com.nuvio.tv.data.trailer
 
 import android.util.Log
-import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.player.TrailerVideoPolicy
 import com.nuvio.tv.core.tmdb.TmdbService
 import com.nuvio.tv.data.local.TmdbSettingsDataStore
@@ -144,7 +143,7 @@ class TrailerService(
             // miss for the rest of the process, so the trailer button stayed gone.
             throw e
         } catch (e: Exception) {
-            Log.e(TAG, "Error fetching trailer for $title: ${LogRedact.text(e.message)}", LogRedact.error(e))
+            Log.e(TAG, "Error fetching trailer for $title: ${e.message}", e)
             null
         }
     }
@@ -283,7 +282,7 @@ class TrailerService(
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
-            Log.e(TAG, "Error getting trailer from YouTube: ${LogRedact.text(e.message)}", LogRedact.error(e))
+            Log.e(TAG, "Error getting trailer from YouTube: ${e.message}", e)
             null
         }
     }
@@ -346,10 +345,10 @@ class TrailerService(
         }
 
         // Fallback to remote trailer resolver if in-app extraction fails.
-        Log.w(TAG, "In-app extraction failed, falling back to backend resolver for ${LogRedact.url(youtubeUrl)}")
+        Log.w(TAG, "In-app extraction failed, falling back to backend resolver for ${summarizeUrl(youtubeUrl)}")
         val response = trailerApi.getTrailer(youtubeUrl = youtubeUrl, title = title, year = year)
         if (!response.isSuccessful) {
-            Log.w(TAG, "Backend trailer fallback failed (${response.code()}) for ${LogRedact.url(youtubeUrl)}")
+            Log.w(TAG, "Backend trailer fallback failed (${response.code()}) for ${summarizeUrl(youtubeUrl)}")
             return null
         }
 
@@ -417,7 +416,7 @@ class TrailerService(
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
-            Log.w(TAG, "TMDB movie videos error ($tmdbId/$language): ${LogRedact.text(e.message)}")
+            Log.w(TAG, "TMDB movie videos error ($tmdbId/$language): ${e.message}")
             emptyList()
         }
     }
@@ -438,7 +437,7 @@ class TrailerService(
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
-            Log.w(TAG, "TMDB tv videos error ($tmdbId/$language): ${LogRedact.text(e.message)}")
+            Log.w(TAG, "TMDB tv videos error ($tmdbId/$language): ${e.message}")
             emptyList()
         }
     }

@@ -6,7 +6,6 @@ import androidx.annotation.OptIn
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSpec
-import com.nuvio.tv.core.LogRedact
 import java.util.concurrent.ConcurrentLinkedDeque
 
 @OptIn(UnstableApi::class)
@@ -36,7 +35,7 @@ class LoggingDataSource(
         } catch (e: Exception) {
             val elapsed = (SystemClock.elapsedRealtime() - t0).coerceAtLeast(0L)
             val line = "[$site] file=$uriName pos=${dataSpec.position} FAILED ${e.javaClass.simpleName}: ${e.message} ms=$elapsed"
-            Log.w("DS_OPEN", LogRedact.text(line))
+            Log.w("DS_OPEN", line)
             recordEvent(line)
             throw e
         }

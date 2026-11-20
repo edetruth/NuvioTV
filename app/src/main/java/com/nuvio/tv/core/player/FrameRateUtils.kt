@@ -8,7 +8,6 @@ import android.os.Build
 import android.util.Log
 import android.view.Display
 import androidx.media3.common.MimeTypes
-import com.nuvio.tv.core.LogRedact
 import io.github.anilbeesetti.nextlib.mediainfo.MediaInfo
 import io.github.anilbeesetti.nextlib.mediainfo.MediaInfoBuilder
 import kotlinx.coroutines.Dispatchers
@@ -466,7 +465,7 @@ object FrameRateUtils {
                 true
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to restore display mode", LogRedact.error(e))
+            Log.e(TAG, "Failed to restore display mode", e)
             false
         }
     }
@@ -817,7 +816,7 @@ object FrameRateUtils {
         val tempFile = try {
             java.io.File.createTempFile("afr_probe_", ".tmp", context.cacheDir)
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to create temp file for AFR probe: ${LogRedact.text(e.message)}")
+            Log.w(TAG, "Failed to create temp file for AFR probe: ${e.message}")
             return null
         }
 
@@ -948,7 +947,7 @@ object FrameRateUtils {
                 }
             }
         } catch (e: Throwable) {
-            Log.w(TAG, "OkHttp AFR probe failed: ${LogRedact.text(e.message)}")
+            Log.w(TAG, "OkHttp AFR probe failed: ${e.message}")
         } finally {
             runCatching { tempFile.delete() }
         }
@@ -1318,7 +1317,7 @@ object FrameRateUtils {
             }
         } catch (e: Exception) {
             call.cancel()
-            Log.w(TAG, "fetchHttpRangeToFile failed for url=${LogRedact.url(url)} range=$rangeHeader: ${LogRedact.text(e.message)}")
+            Log.w(TAG, "fetchHttpRangeToFile failed for url=$url range=$rangeHeader: ${e.message}")
             HttpRangeFetchResult(success = false)
         }
     }
@@ -1448,7 +1447,7 @@ object FrameRateUtils {
                     videoHeight = video.frameHeight.takeIf { it > 0 }
                 )
             } catch (e: Throwable) {
-                Log.w(TAG, "NextLib frame rate probe failed: ${LogRedact.text(e.message)}")
+                Log.w(TAG, "NextLib frame rate probe failed: ${e.message}")
             } finally {
                 runCatching { mediaInfo?.release() }
             }
@@ -1537,7 +1536,7 @@ object FrameRateUtils {
                 videoHeight = detectedVideoHeight
             )
         } catch (e: Exception) {
-            Log.w(TAG, "Frame rate probe failed: ${LogRedact.text(e.message)}")
+            Log.w(TAG, "Frame rate probe failed: ${e.message}")
             null
         } finally {
             try {

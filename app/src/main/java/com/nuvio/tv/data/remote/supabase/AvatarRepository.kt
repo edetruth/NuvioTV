@@ -3,7 +3,6 @@ package com.nuvio.tv.data.remote.supabase
 import android.content.Context
 import android.os.SystemClock
 import android.util.Log
-import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.data.local.MemberCatalogStorage
 import com.nuvio.tv.domain.model.ServerConfiguration
 import com.nuvio.tv.domain.model.UserProfile
@@ -129,7 +128,7 @@ class AvatarRepository @Inject constructor(
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
-            Log.w(MemberAvatarTag, "Unable to load supporter avatar catalog", LogRedact.error(error))
+            Log.w(MemberAvatarTag, "Unable to load supporter avatar catalog", error)
             return emptyList()
         }
         memberMetadata = remote
@@ -146,7 +145,7 @@ class AvatarRepository @Inject constructor(
                         } catch (error: CancellationException) {
                             throw error
                         } catch (error: Exception) {
-                            Log.w(MemberAvatarTag, "Unable to load supporter avatar ${item.id}", LogRedact.error(error))
+                            Log.w(MemberAvatarTag, "Unable to load supporter avatar ${item.id}", error)
                             toMemberCatalogFallbackItem(item)
                         }
                     }
@@ -174,7 +173,7 @@ class AvatarRepository @Inject constructor(
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
-            Log.w(MemberAvatarTag, "Unable to share supporter avatar ${avatar.id}", LogRedact.error(error))
+            Log.w(MemberAvatarTag, "Unable to share supporter avatar ${avatar.id}", error)
             null
         }
     }
@@ -209,7 +208,7 @@ class AvatarRepository @Inject constructor(
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
-                Log.w(MemberAvatarTag, "Unable to refresh avatar catalog", LogRedact.error(error))
+                Log.w(MemberAvatarTag, "Unable to refresh avatar catalog", error)
             }
         }
     }
@@ -223,7 +222,7 @@ class AvatarRepository @Inject constructor(
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
-                Log.w(MemberAvatarTag, "Unable to refresh supporter avatar catalog", LogRedact.error(error))
+                Log.w(MemberAvatarTag, "Unable to refresh supporter avatar catalog", error)
             }
         }
     }

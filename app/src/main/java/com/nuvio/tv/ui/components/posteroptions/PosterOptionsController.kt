@@ -1,7 +1,6 @@
 package com.nuvio.tv.ui.components.posteroptions
 
 import android.util.Log
-import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.network.NetworkResult
 import com.nuvio.tv.core.tmdb.TmdbService
 import com.nuvio.tv.core.tracking.TrackingMembershipRemovalConfirmation
@@ -211,7 +210,7 @@ class PosterOptionsController @Inject constructor(
                     canonical.toLibraryEntryInput(state.addonBaseUrl.takeIf { it.isNotBlank() })
                 )
             }.onFailure { error ->
-                Log.w(TAG, "Failed to toggle library for ${canonical.id}: ${LogRedact.text(error.message)}")
+                Log.w(TAG, "Failed to toggle library for ${canonical.id}: ${error.message}")
             }
             _state.update { it.copy(isLibraryPending = false) }
         }
@@ -261,7 +260,7 @@ class PosterOptionsController @Inject constructor(
                     )
                 }
             }.onFailure { error ->
-                Log.w(TAG, "Failed to load list picker for ${canonical.id}: ${LogRedact.text(error.message)}")
+                Log.w(TAG, "Failed to load list picker for ${canonical.id}: ${error.message}")
                 _state.update { current ->
                     current.copy(
                         listPickerPending = false,
@@ -318,7 +317,7 @@ class PosterOptionsController @Inject constructor(
                     closeListPickerAfterSave()
                 }
             }.onFailure { error ->
-                Log.w(TAG, "Failed to save list picker: ${LogRedact.text(error.message)}")
+                Log.w(TAG, "Failed to save list picker: ${error.message}")
                 _state.update {
                     it.copy(
                         listPickerPending = false,
@@ -429,7 +428,7 @@ class PosterOptionsController @Inject constructor(
                     watchProgressRepository.markAsCompleted(buildCompletedMovieProgress(canonical))
                 }
             }.onFailure { error ->
-                Log.w(TAG, "Failed to toggle watched for ${canonical.id}: ${LogRedact.text(error.message)}")
+                Log.w(TAG, "Failed to toggle watched for ${canonical.id}: ${error.message}")
                 // Revert optimistic update on failure
                 watchProgressRepository.revertOptimisticWatchedMovie(optimisticIds, add = !currentlyWatched)
             }
@@ -464,7 +463,7 @@ class PosterOptionsController @Inject constructor(
                     markSeriesWatched(canonical)
                 }
             }.onFailure { error ->
-                Log.w(TAG, "Failed to toggle series watched for ${canonical.id}: ${LogRedact.text(error.message)}")
+                Log.w(TAG, "Failed to toggle series watched for ${canonical.id}: ${error.message}")
                 // Revert optimistic update on failure
                 watchedSeriesStateHolder.update(currentIds)
             }

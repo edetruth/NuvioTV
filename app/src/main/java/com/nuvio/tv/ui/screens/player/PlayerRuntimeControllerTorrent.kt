@@ -2,7 +2,6 @@ package com.nuvio.tv.ui.screens.player
 
 import android.util.Log
 import com.nuvio.tv.R
-import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.torrent.TorrentState
 import com.nuvio.tv.core.torrent.torrentInitialLoadingProgress
 import com.nuvio.tv.domain.model.Stream
@@ -65,7 +64,7 @@ internal fun PlayerRuntimeController.observeTorrentState() {
                 is TorrentState.Connecting -> onTorrentConnecting(torrentState)
                 is TorrentState.Streaming -> onTorrentStreaming(torrentState)
                 is TorrentState.Error -> {
-                    Log.e(TAG, "Torrent error: ${LogRedact.text(torrentState.message)}")
+                    Log.e(TAG, "Torrent error: ${torrentState.message}")
                     _uiState.update {
                         it.copy(
                             error = context.getString(R.string.player_error_torrent, torrentState.message),
@@ -211,7 +210,7 @@ internal fun PlayerRuntimeController.launchTorrentSourceStream(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to start torrent stream", LogRedact.error(e))
+            Log.e(TAG, "Failed to start torrent stream", e)
             _uiState.update {
                 it.copy(
                     error = context.getString(

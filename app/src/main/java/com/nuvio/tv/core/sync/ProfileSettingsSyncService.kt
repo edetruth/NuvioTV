@@ -12,7 +12,6 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
-import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.auth.AuthManager
 import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.data.local.AmbientModeDataStore
@@ -246,7 +245,7 @@ class ProfileSettingsSyncService @Inject constructor(
                 Log.d(TAG, "Pushed profile settings blob for profile $profileId")
                 Result.success(Unit)
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to push profile settings blob", LogRedact.error(e))
+                Log.e(TAG, "Failed to push profile settings blob", e)
                 Result.failure(e)
             }
         }
@@ -277,7 +276,7 @@ class ProfileSettingsSyncService @Inject constructor(
                 Log.d(TAG, "Applied remote profile settings blob for profile $profileId")
                 Result.success(true)
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to pull profile settings blob", LogRedact.error(e))
+                Log.e(TAG, "Failed to pull profile settings blob", e)
                 Result.failure(e)
             }
         }
@@ -371,7 +370,7 @@ class ProfileSettingsSyncService @Inject constructor(
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    Log.e(TAG, "Failed to copy profile setup from $sourceProfileId to $targetProfileId", LogRedact.error(e))
+                    Log.e(TAG, "Failed to copy profile setup from $sourceProfileId to $targetProfileId", e)
                     Result.failure(e)
                 }
             }

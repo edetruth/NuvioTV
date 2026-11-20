@@ -6,7 +6,6 @@ import android.os.SystemClock
 import android.provider.Settings
 import android.util.Log
 import com.nuvio.tv.BuildConfig
-import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.sync.SyncClientIdentity
 import com.nuvio.tv.domain.model.AuthState
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -91,7 +90,7 @@ class DeviceSessionRegistration @Inject constructor(
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Throwable) {
-                Log.w(TAG, "Device session registration failed", LogRedact.error(error))
+                Log.w(TAG, "Device session registration failed", error)
                 false
             }
         }

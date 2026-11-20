@@ -7,7 +7,6 @@ import android.util.Log
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.mediacodec.MediaCodecInfo
-import com.nuvio.tv.core.LogRedact
 
 /**
  * Finds Dolby Vision hardware decoders that exist on the device but don't
@@ -118,7 +117,7 @@ object DolbyVisionCodecFallback {
             }
             results
         }.getOrElse { e ->
-            Log.e(TAG, "Error probing DV decoders", LogRedact.error(e))
+            Log.e(TAG, "Error probing DV decoders", e)
             emptyList()
         }
     }
@@ -137,7 +136,7 @@ object DolbyVisionCodecFallback {
             codec.release()
             true
         }.getOrElse { e ->
-            Log.w(TAG, "Codec probe failed for $componentName: ${LogRedact.text(e.message)}")
+            Log.w(TAG, "Codec probe failed for $componentName: ${e.message}")
             false
         }
     }

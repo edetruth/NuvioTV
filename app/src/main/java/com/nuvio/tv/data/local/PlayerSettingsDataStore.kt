@@ -9,7 +9,6 @@ import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
-import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.core.player.LastPlaybackDiagnostics
 import com.nuvio.tv.core.player.SubtitleFonts
@@ -1273,7 +1272,7 @@ class PlayerSettingsDataStore @Inject constructor(
                 )
             )
         } catch (e: ClassCastException) {
-            Log.w("PlayerSettingsDataStore", "Corrupt preference value, using defaults", LogRedact.error(e))
+            Log.w("PlayerSettingsDataStore", "Corrupt preference value, using defaults", e)
             PlayerSettings()
         }
         }

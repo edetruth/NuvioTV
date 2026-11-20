@@ -2,7 +2,6 @@ package com.nuvio.tv.ui.screens.home
 
 import android.util.Log
 import androidx.lifecycle.viewModelScope
-import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.tracking.TrackingMembershipRemovalConfirmation
 import com.nuvio.tv.core.tracking.mergeTrackingMembershipWithTabs
 import com.nuvio.tv.core.tracking.toggleTrackingMembershipSelection
@@ -105,7 +104,7 @@ fun HomeViewModel.togglePosterLibrary(item: MetaPreview, addonBaseUrl: String?) 
         runCatching {
             libraryRepository.toggleDefault(item.toLibraryEntryInput(addonBaseUrl))
         }.onFailure { error ->
-            Log.w(HomeViewModel.TAG, "Failed to toggle poster library for ${item.id}: ${LogRedact.text(error.message)}")
+            Log.w(HomeViewModel.TAG, "Failed to toggle poster library for ${item.id}: ${error.message}")
         }
         runCatching {
             val isNowInLibrary = libraryRepository.isInLibrary(item.id, item.apiType).first()
@@ -160,7 +159,7 @@ fun HomeViewModel.openPosterListPicker(item: MetaPreview, addonBaseUrl: String?)
                 )
             }
         }.onFailure { error ->
-            Log.w(HomeViewModel.TAG, "Failed to load poster list picker for ${item.id}: ${LogRedact.text(error.message)}")
+            Log.w(HomeViewModel.TAG, "Failed to load poster list picker for ${item.id}: ${error.message}")
             _uiState.update { state ->
                 state.copy(
                     showPosterListPicker = true,
@@ -221,7 +220,7 @@ fun HomeViewModel.savePosterListPickerMembership() {
                 closePosterListPickerAfterSave(changes)
             }
         }.onFailure { error ->
-            Log.w(HomeViewModel.TAG, "Failed to save poster list picker: ${LogRedact.text(error.message)}")
+            Log.w(HomeViewModel.TAG, "Failed to save poster list picker: ${error.message}")
             _uiState.update { state ->
                 state.copy(
                     posterListPickerPending = false,
@@ -262,7 +261,7 @@ fun HomeViewModel.confirmPosterListPickerRemoval() {
                 closePosterListPickerAfterSave(changes)
             }
         }.onFailure { error ->
-            Log.w(HomeViewModel.TAG, "Failed to confirm poster list removal: ${LogRedact.text(error.message)}")
+            Log.w(HomeViewModel.TAG, "Failed to confirm poster list removal: ${error.message}")
             _uiState.update {
                 it.copy(
                     posterListPickerPending = false,
@@ -336,7 +335,7 @@ fun HomeViewModel.togglePosterMovieWatched(item: MetaPreview) {
                 watchProgressRepository.markAsCompleted(buildCompletedMovieProgress(item))
             }
         }.onFailure { error ->
-            Log.w(HomeViewModel.TAG, "Failed to toggle poster watched status for ${item.id}: ${LogRedact.text(error.message)}")
+            Log.w(HomeViewModel.TAG, "Failed to toggle poster watched status for ${item.id}: ${error.message}")
         }
         _uiState.update { state ->
             state.copy(movieWatchedPending = state.movieWatchedPending - statusKey)
@@ -388,7 +387,7 @@ fun HomeViewModel.togglePosterSeriesWatched(item: MetaPreview) {
                 markSeriesWatched(item)
             }
         }.onFailure { error ->
-            Log.w(HomeViewModel.TAG, "Failed to toggle series watched for ${item.id}: ${LogRedact.text(error.message)}")
+            Log.w(HomeViewModel.TAG, "Failed to toggle series watched for ${item.id}: ${error.message}")
             // Revert optimistic update on failure
             _uiState.update { state ->
                 state.copy(

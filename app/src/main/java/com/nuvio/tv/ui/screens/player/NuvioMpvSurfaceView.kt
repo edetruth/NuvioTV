@@ -5,7 +5,6 @@ import android.util.AttributeSet
 import android.util.Log
 import android.util.TypedValue
 import android.view.SurfaceHolder
-import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.data.local.MpvHardwareDecodeMode
 import com.nuvio.tv.data.local.SubtitleStyleSettings
 import `is`.xyz.mpv.MPV
@@ -165,7 +164,7 @@ class NuvioMpvSurfaceView @JvmOverloads constructor(
             // In that path, SurfaceHolder callback may not fire again, so force attach.
             surfaceCreated(currentHolder)
         }.onFailure {
-            Log.w(TAG, "Failed to force MPV surface attach: ${LogRedact.text(it.message)}")
+            Log.w(TAG, "Failed to force MPV surface attach: ${it.message}")
         }
     }
 
@@ -176,7 +175,7 @@ class NuvioMpvSurfaceView @JvmOverloads constructor(
             mpv.setPropertyString("sid", "auto")
             mpv.setPropertyBoolean("sub-visibility", !styledSubtitlesEnabled)
         }.onFailure {
-            Log.w(TAG, "Failed to reset default A/V track selection: ${LogRedact.text(it.message)}")
+            Log.w(TAG, "Failed to reset default A/V track selection: ${it.message}")
         }
     }
 
@@ -240,7 +239,7 @@ class NuvioMpvSurfaceView @JvmOverloads constructor(
         if (!initialized) return
         val seconds = String.format(Locale.US, "%.3f", positionMs.coerceAtLeast(0L) / 1000.0)
         runCatching { mpv.command("seek", seconds, "absolute+exact") }
-            .onFailure { Log.w(TAG, "Exact seek failed: ${LogRedact.text(it.message)}") }
+            .onFailure { Log.w(TAG, "Exact seek failed: ${it.message}") }
     }
 
     fun currentSubtitleText(): String? {
@@ -307,7 +306,7 @@ class NuvioMpvSurfaceView @JvmOverloads constructor(
         runCatching {
             mpv.setPropertyDouble("volume", targetVolumePercent)
         }.onFailure {
-            Log.w(TAG, "Failed to apply audio amplification on mpv (db=$clampedDb): ${LogRedact.text(it.message)}")
+            Log.w(TAG, "Failed to apply audio amplification on mpv (db=$clampedDb): ${it.message}")
         }
     }
 
@@ -324,7 +323,7 @@ class NuvioMpvSurfaceView @JvmOverloads constructor(
             // Re-run automatic audio selection with the latest preferences.
             mpv.setPropertyString("aid", "auto")
         }.onFailure {
-            Log.w(TAG, "Failed to set audio language preference: ${LogRedact.text(it.message)}")
+            Log.w(TAG, "Failed to set audio language preference: ${it.message}")
         }
     }
 
@@ -334,7 +333,7 @@ class NuvioMpvSurfaceView @JvmOverloads constructor(
         runCatching {
             mpv.setPropertyString("hwdec", mode.toMpvHwdecValue())
         }.onFailure {
-            Log.w(TAG, "Failed to apply mpv hardware decode mode ($mode): ${LogRedact.text(it.message)}")
+            Log.w(TAG, "Failed to apply mpv hardware decode mode ($mode): ${it.message}")
         }
     }
 
@@ -349,7 +348,7 @@ class NuvioMpvSurfaceView @JvmOverloads constructor(
             mpv.setPropertyString("hwdec", hardwareDecoder)
             appliedHi10pGnextSoftwareFallback = active
         }.onFailure {
-            Log.w(TAG, "Failed to apply mpv Hi10P G-NEXT SW fallback (active=$active): ${LogRedact.text(it.message)}")
+            Log.w(TAG, "Failed to apply mpv Hi10P G-NEXT SW fallback (active=$active): ${it.message}")
         }
     }
 
@@ -358,7 +357,7 @@ class NuvioMpvSurfaceView @JvmOverloads constructor(
         runCatching {
             mpv.setPropertyDouble("sub-delay", delayMs / 1000.0)
         }.onFailure {
-            Log.w(TAG, "Failed to set subtitle delay on mpv: ${LogRedact.text(it.message)}")
+            Log.w(TAG, "Failed to set subtitle delay on mpv: ${it.message}")
         }
     }
 
@@ -367,7 +366,7 @@ class NuvioMpvSurfaceView @JvmOverloads constructor(
         runCatching {
             mpv.setPropertyDouble("audio-delay", audioDelayMsToSeconds(delayMs))
         }.onFailure {
-            Log.w(TAG, "Failed to set audio delay on mpv (delayMs=$delayMs): ${LogRedact.text(it.message)}")
+            Log.w(TAG, "Failed to set audio delay on mpv (delayMs=$delayMs): ${it.message}")
         }
     }
 
@@ -391,7 +390,7 @@ class NuvioMpvSurfaceView @JvmOverloads constructor(
                 }
             }
         }.onFailure {
-            Log.w(TAG, "Failed to apply bluetooth audio route on mpv (bt=$isBluetooth): ${LogRedact.text(it.message)}")
+            Log.w(TAG, "Failed to apply bluetooth audio route on mpv (bt=$isBluetooth): ${it.message}")
         }
     }
 
@@ -500,7 +499,7 @@ class NuvioMpvSurfaceView @JvmOverloads constructor(
             mpv.setPropertyBoolean("sub-filter-sdh", style.stripSdh)
             mpv.setPropertyBoolean("sub-filter-sdh-harder", style.stripSdh)
         }.onFailure {
-            Log.w(TAG, "Failed to apply subtitle style on mpv: ${LogRedact.text(it.message)}")
+            Log.w(TAG, "Failed to apply subtitle style on mpv: ${it.message}")
         }
     }
 
@@ -582,7 +581,7 @@ class NuvioMpvSurfaceView @JvmOverloads constructor(
             mpv.setPropertyInt("aid", trackId)
             true
         }.getOrElse {
-            Log.w(TAG, "Failed to select audio track id=$trackId: ${LogRedact.text(it.message)}")
+            Log.w(TAG, "Failed to select audio track id=$trackId: ${it.message}")
             false
         }
     }
@@ -594,7 +593,7 @@ class NuvioMpvSurfaceView @JvmOverloads constructor(
             mpv.setPropertyInt("sid", trackId)
             true
         }.getOrElse {
-            Log.w(TAG, "Failed to select subtitle track id=$trackId: ${LogRedact.text(it.message)}")
+            Log.w(TAG, "Failed to select subtitle track id=$trackId: ${it.message}")
             false
         }
     }
@@ -606,7 +605,7 @@ class NuvioMpvSurfaceView @JvmOverloads constructor(
             mpv.setPropertyBoolean("sub-visibility", false)
             true
         }.getOrElse {
-            Log.w(TAG, "Failed to disable subtitles: ${LogRedact.text(it.message)}")
+            Log.w(TAG, "Failed to disable subtitles: ${it.message}")
             false
         }
     }
@@ -633,7 +632,7 @@ class NuvioMpvSurfaceView @JvmOverloads constructor(
             mpv.setPropertyBoolean("sub-visibility", !styledSubtitlesEnabled)
             true
         }.getOrElse {
-            Log.w(TAG, "Failed to add external subtitle: ${LogRedact.text(it.message)}")
+            Log.w(TAG, "Failed to add external subtitle: ${it.message}")
             false
         }
     }
@@ -664,7 +663,7 @@ class NuvioMpvSurfaceView @JvmOverloads constructor(
             if (replaceTrackId != null && replaceTrackId != added) removeSubtitleTrack(replaceTrackId)
             added
         }.getOrElse {
-            Log.w(TAG, "Failed to replace external subtitle: ${LogRedact.text(it.message)}")
+            Log.w(TAG, "Failed to replace external subtitle: ${it.message}")
             null
         }
     }
@@ -676,7 +675,7 @@ class NuvioMpvSurfaceView @JvmOverloads constructor(
             mpv.command("sub-remove", trackId.toString())
             true
         }.getOrElse {
-            Log.w(TAG, "Failed to remove subtitle track id=$trackId: ${LogRedact.text(it.message)}")
+            Log.w(TAG, "Failed to remove subtitle track id=$trackId: ${it.message}")
             false
         }
     }
@@ -700,7 +699,7 @@ class NuvioMpvSurfaceView @JvmOverloads constructor(
         runCatching {
             mpv.setPropertyString("slang", languages.joinToString(","))
         }.onFailure {
-            Log.w(TAG, "Failed to set subtitle language preference: ${LogRedact.text(it.message)}")
+            Log.w(TAG, "Failed to set subtitle language preference: ${it.message}")
         }
     }
 
@@ -815,7 +814,7 @@ class NuvioMpvSurfaceView @JvmOverloads constructor(
         if (!initialized) return
         removeCallbacks(aspectReapplyRunnable)
         runCatching { destroy() }
-            .onFailure { Log.w(TAG, "Failed to destroy libmpv view cleanly: ${LogRedact.text(it.message)}") }
+            .onFailure { Log.w(TAG, "Failed to destroy libmpv view cleanly: ${it.message}") }
         initialized = false
         hasQueuedInitialMedia = false
         lastMediaRequestKey = null

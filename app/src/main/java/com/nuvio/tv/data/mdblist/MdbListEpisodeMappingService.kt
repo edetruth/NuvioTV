@@ -2,7 +2,6 @@ package com.nuvio.tv.data.mdblist
 
 import android.util.Log
 import com.nuvio.tv.BuildConfig
-import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.tmdb.TmdbService
 import com.nuvio.tv.core.tracking.TrackingMediaKind
 import com.nuvio.tv.core.tracking.TrackingMediaReference
@@ -70,7 +69,7 @@ class MdbListEpisodeMappingService @Inject constructor(
             deferred.complete(null)
             throw error
         } catch (error: Exception) {
-            Log.w(TAG, "episode mapping failed for $key", LogRedact.error(error))
+            Log.w(TAG, "episode mapping failed for $key", error)
             deferred.complete(null)
             null
         } finally {

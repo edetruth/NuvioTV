@@ -12,7 +12,6 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.nuvio.tv.BuildConfig
 import com.nuvio.tv.R
-import com.nuvio.tv.core.LogRedact
 
 /**
  * Foreground service that prevents the system from killing Nuvio while an
@@ -41,7 +40,7 @@ class ExternalPlaybackKeepAliveService : Service() {
                 }
                 Log.d(TAG, "Service start requested")
             } catch (e: Exception) {
-                Log.w(TAG, "Failed to start keep-alive service", LogRedact.error(e))
+                Log.w(TAG, "Failed to start keep-alive service", e)
             }
         }
 
@@ -52,7 +51,7 @@ class ExternalPlaybackKeepAliveService : Service() {
                 context.stopService(intent)
                 Log.d(TAG, "Service stop requested")
             } catch (e: Exception) {
-                Log.w(TAG, "Failed to stop keep-alive service", LogRedact.error(e))
+                Log.w(TAG, "Failed to stop keep-alive service", e)
             }
         }
     }
@@ -74,7 +73,7 @@ class ExternalPlaybackKeepAliveService : Service() {
         } catch (e: Exception) {
             // ForegroundServiceStartNotAllowedException on Android 12+ when the app
             // is no longer in a state that allows foreground service starts.
-            Log.w(TAG, "startForeground() not allowed, stopping: ${LogRedact.text(e.message)}")
+            Log.w(TAG, "startForeground() not allowed, stopping: ${e.message}")
             stopSelf()
             return START_NOT_STICKY
         }

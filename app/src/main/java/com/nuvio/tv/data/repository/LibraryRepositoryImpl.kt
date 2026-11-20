@@ -2,7 +2,6 @@ package com.nuvio.tv.data.repository
 
 import android.util.Log
 import com.nuvio.tv.R
-import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.auth.AuthManager
 import com.nuvio.tv.core.network.NetworkResult
 import com.nuvio.tv.core.profile.ProfileManager
@@ -417,7 +416,7 @@ class LibraryRepositoryImpl @Inject constructor(
                 if (logo != null) {
                     libraryPreferences.updateLogo(entry.id, entry.type, logo)
                 }
-            }.onFailure { Log.w("LibraryRepo", "Logo hydration failed for ${entry.id}", LogRedact.error(it)) }
+            }.onFailure { Log.w("LibraryRepo", "Logo hydration failed for ${entry.id}", it) }
         }
     }
 }

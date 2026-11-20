@@ -5,7 +5,6 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
-import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.domain.model.Subtitle
 import com.nuvio.tv.ui.screens.player.autosync.AutoSyncSyncedSubtitle
 import kotlinx.coroutines.delay
@@ -468,7 +467,7 @@ internal fun PlayerRuntimeController.selectAddonSubtitle(subtitle: Subtitle) {
                 file.writeText(sanitized, Charsets.UTF_8)
                 file.absolutePath
             } catch (e: Exception) {
-                Log.w(PlayerRuntimeController.TAG, "Failed to cache normalized subtitle for MPV, falling back to URL", LogRedact.error(e))
+                Log.w(PlayerRuntimeController.TAG, "Failed to cache normalized subtitle for MPV, falling back to URL", e)
                 subtitle.url
             }
 

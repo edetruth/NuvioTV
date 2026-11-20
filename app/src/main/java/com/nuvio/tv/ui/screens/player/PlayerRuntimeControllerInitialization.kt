@@ -1,6 +1,5 @@
 package com.nuvio.tv.ui.screens.player
 
-import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.ui.screens.sportslive.isDecoderInitFailure
 import com.nuvio.tv.ui.screens.player.audiosync.AudioSyncTaps
 import android.content.Context
@@ -1102,7 +1101,7 @@ internal fun PlayerRuntimeController.initializePlayer(
                 setHandleAudioBecomingNoisy(true)
 
                 runCatching { installExoMediaSession(this) }
-                    .onFailure { LogRedact.error(it)?.printStackTrace() }
+                    .onFailure { it.printStackTrace() }
 
                 applyAudioAmplification(_uiState.value.audioAmplificationDb)
                 applyCenterMixLevel(_uiState.value.centerMixLevelDb)

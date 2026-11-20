@@ -1,18 +1,14 @@
 package com.nuvio.tv.core
 
-import android.util.Log
-import androidx.annotation.OptIn
-import androidx.media3.common.util.UnstableApi
-import co.touchlab.kermit.Severity
 import com.nuvio.tv.BuildConfig
 
 /**
- * Fork: keeps addon links out of logcat in a release build. A private addon's link carries the
- * user's token in its path or query, and a private host is itself a secret, so warn and error
- * lines show a link as `https://host-3fa2/…` (a short stable label for the host, never the host)
- * and scrub links, hosts, IP addresses and bearer tokens out of exception text. The class name of
- * an exception and plain words are kept. A release build also drops verbose, debug and info lines
- * (proguard-fork-logging.pro). Debug builds (emulator and TV test installs) log everything as-is.
+ * Fork: keeps addon links out of text the app hands on. A private addon's link carries the user's
+ * token in its path or query, and a private host is itself a secret, so a link shows as
+ * `https://host-3fa2/…` (a short stable label for the host, never the host) and links, hosts, IP
+ * addresses and bearer tokens are scrubbed out of exception text. The class name of an exception and
+ * plain words are kept. Used by fork code and by the Report-a-problem export (#172). A release build
+ * logs nothing at all (proguard-fork-logging.pro); debug builds pass every value through as-is.
  */
 object LogRedact {
     // IS_DEBUG_BUILD, not DEBUG: debug installs are built non-debuggable by default (BuildConfig.DEBUG false).
@@ -26,36 +22,6 @@ object LogRedact {
 
     /** An exception to pass to Log.w / Log.e: same class name and stack, scrubbed messages. */
     fun error(t: Throwable?): Throwable? = if (enabled && t != null) redactThrowable(t) else t
-
-    /**
-     * Library warn and error lines go through [redactText] in a release build: the player's (a failed
-     * link start carries the link's exception chain) and the account backend client's (its errors can
-     * carry request links and session tokens). Their debug and info lines are dropped.
-     */
-    @OptIn(UnstableApi::class)
-    fun installLibraryLoggers() {
-        if (!enabled) return
-        androidx.media3.common.util.Log.setLogger(object : androidx.media3.common.util.Log.Logger {
-            override fun d(tag: String, message: String, throwable: Throwable?) = Unit
-            override fun i(tag: String, message: String, throwable: Throwable?) = Unit
-            override fun w(tag: String, message: String, throwable: Throwable?) {
-                Log.w(tag, redactText(androidx.media3.common.util.Log.appendThrowableString(message, throwable)))
-            }
-            override fun e(tag: String, message: String, throwable: Throwable?) {
-                Log.e(tag, redactText(androidx.media3.common.util.Log.appendThrowableString(message, throwable)))
-            }
-        })
-        co.touchlab.kermit.Logger.setLogWriters(object : co.touchlab.kermit.LogWriter() {
-            override fun log(severity: Severity, message: String, tag: String, throwable: Throwable?) {
-                val redacted = throwable?.let { redactThrowable(it) }
-                when (severity) {
-                    Severity.Warn -> Log.w(tag, redactText(message), redacted)
-                    Severity.Error, Severity.Assert -> Log.e(tag, redactText(message), redacted)
-                    else -> Unit
-                }
-            }
-        })
-    }
 
     internal fun redactUrl(value: String?): String {
         if (value == null) return "null"

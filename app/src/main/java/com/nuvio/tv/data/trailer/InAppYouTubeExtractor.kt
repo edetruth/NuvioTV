@@ -14,7 +14,6 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.withTimeout
-import com.nuvio.tv.core.LogRedact
 import okhttp3.Headers
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -355,7 +354,7 @@ class InAppYouTubeExtractor internal constructor(
             Log.w(
                 TAG,
                 "YouTube is rate limiting, skipping extraction for another " +
-                    "${rateLimitGate.remainingMs() / 1000}s: ${LogRedact.url(youtubeUrl)}"
+                    "${rateLimitGate.remainingMs() / 1000}s: ${summarizeUrl(youtubeUrl)}"
             )
             return@withContext null
         }
@@ -373,20 +372,20 @@ class InAppYouTubeExtractor internal constructor(
             }
         } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
             // A timeout is a failed attempt, not a cancellation of the caller.
-            Log.w(TAG, "Kotlin extractor timed out for ${LogRedact.url(youtubeUrl)}")
+            Log.w(TAG, "Kotlin extractor timed out for $youtubeUrl")
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: RateLimitedException) {
             val cooldownMs = rateLimitGate.onRateLimited()
-            Log.w(TAG, "YouTube is rate limiting (${LogRedact.text(e.message)}), pausing extraction for ${cooldownMs / 1000}s")
+            Log.w(TAG, "YouTube is rate limiting (${e.message}), pausing extraction for ${cooldownMs / 1000}s")
         } catch (e: StaleConfigException) {
-            Log.w(TAG, "Every client still asks to sign in with a fresh watch config for ${LogRedact.url(youtubeUrl)}")
+            Log.w(TAG, "Every client still asks to sign in with a fresh watch config for $youtubeUrl")
         } catch (error: Exception) {
-            Log.w(TAG, "Kotlin extractor failed for ${LogRedact.url(youtubeUrl)}: ${LogRedact.text(error.message)}")
+            Log.w(TAG, "Kotlin extractor failed for $youtubeUrl: ${error.message}")
         }
 
         if (source == null) {
-            Log.w(TAG, "Kotlin extraction returned no playable source for ${LogRedact.url(youtubeUrl)}")
+            Log.w(TAG, "Kotlin extraction returned no playable source for ${summarizeUrl(youtubeUrl)}")
         } else {
             rateLimitGate.onSuccess()
             Log.d(
@@ -469,7 +468,7 @@ class InAppYouTubeExtractor internal constructor(
                 throw e
             } catch (error: Exception) {
                 if (BuildConfig.DEBUG) {
-                    Log.w(TAG, "Client ${client.key} failed: ${LogRedact.text(error.message)}")
+                    Log.w(TAG, "Client ${client.key} failed: ${error.message}")
                 }
             }
         }
@@ -670,7 +669,7 @@ class InAppYouTubeExtractor internal constructor(
                 }
             } catch (error: Exception) {
                 if (BuildConfig.DEBUG) {
-                    Log.w(TAG, "Manifest parse failed: ${LogRedact.text(error.message)}")
+                    Log.w(TAG, "Manifest parse failed: ${error.message}")
                 }
             }
         }

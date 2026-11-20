@@ -13,7 +13,6 @@ import androidx.tvprovider.media.tv.PreviewProgram
 import androidx.tvprovider.media.tv.TvContractCompat
 import com.nuvio.tv.MainActivity
 import com.nuvio.tv.R
-import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.data.mediaserver.plex.PlexArtworkLink
 import com.nuvio.tv.domain.model.WatchProgress
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -120,7 +119,7 @@ class AndroidTvChannelManager @Inject constructor(
             TvContractCompat.requestChannelBrowsable(context, id)
             Log.d(TAG, "Created channel id=$id")
             id
-        }.onFailure { Log.w(TAG, "ensureChannel failed", LogRedact.error(it)) }.getOrNull()
+        }.onFailure { Log.w(TAG, "ensureChannel failed", it) }.getOrNull()
     }
 
     /**
@@ -212,7 +211,7 @@ class AndroidTvChannelManager @Inject constructor(
                 syncedProgramFingerprints[key] = newFingerprint
                 Log.d(TAG, "${if (!rowIds.isNullOrEmpty()) "Updated" else "Inserted"} program key=$key pos=${values.getAsInteger("last_playback_position_millis")} dur=${values.getAsInteger("duration_millis")} pct=${progress.progressPercent}")
             }
-        }.onFailure { Log.w(TAG, "reconcile failed", LogRedact.error(it)) }
+        }.onFailure { Log.w(TAG, "reconcile failed", it) }
     }
 
     /** Removes all preview programs from our channel (used on sign-out / history clear). */
@@ -230,7 +229,7 @@ class AndroidTvChannelManager @Inject constructor(
             }
             syncedProgramFingerprints.clear()
             Log.d(TAG, "Cleared $deletedCount programs for channel $channelId")
-        }.onFailure { Log.w(TAG, "clearAll failed", LogRedact.error(it)) }
+        }.onFailure { Log.w(TAG, "clearAll failed", it) }
     }
 
     // ---
@@ -361,7 +360,7 @@ class AndroidTvChannelManager @Inject constructor(
             context.contentResolver.openOutputStream(
                 TvContractCompat.buildChannelLogoUri(channelId)
             )?.use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
-        }.onFailure { Log.w(TAG, "writeChannelLogo failed", LogRedact.error(it)) }
+        }.onFailure { Log.w(TAG, "writeChannelLogo failed", it) }
     }
 
     /**

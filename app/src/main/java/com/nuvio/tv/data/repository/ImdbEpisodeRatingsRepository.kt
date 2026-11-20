@@ -1,7 +1,6 @@
 package com.nuvio.tv.data.repository
 
 import android.util.Log
-import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.data.remote.api.ImdbTapframeApi
 import com.nuvio.tv.data.remote.api.SeriesGraphApi
 import kotlinx.coroutines.CoroutineScope
@@ -112,7 +111,7 @@ class ImdbEpisodeRatingsRepository @Inject constructor(
             }
             toEpisodeRatings(response.body().orEmpty())
         } catch (e: Exception) {
-            Log.w(tag, "Error fetching primary season ratings for imdbId=$imdbId", LogRedact.error(e))
+            Log.w(tag, "Error fetching primary season ratings for imdbId=$imdbId", e)
             emptyList()
         }
     }
@@ -126,7 +125,7 @@ class ImdbEpisodeRatingsRepository @Inject constructor(
             }
             toEpisodeRatings(response.body().orEmpty())
         } catch (e: Exception) {
-            Log.w(tag, "Error fetching fallback season ratings for tmdbId=$tmdbId", LogRedact.error(e))
+            Log.w(tag, "Error fetching fallback season ratings for tmdbId=$tmdbId", e)
             emptyList()
         }
     }

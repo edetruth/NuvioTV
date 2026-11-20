@@ -12,7 +12,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import com.nuvio.tv.core.LogRedact
 import okhttp3.Dispatcher
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -127,7 +126,7 @@ class StaleWhileRevalidateCacheStrategy(
                         }
                         StaleRevalidationResult.Unchanged -> {
                             if (response.code != 304 && response.code !in 200..299) {
-                                Log.w(TAG, "Revalidation ${response.code}: ${LogRedact.url(url)}")
+                                Log.w(TAG, "Revalidation ${response.code}: ${url.take(80)}")
                             }
                         }
                     }
@@ -136,7 +135,7 @@ class StaleWhileRevalidateCacheStrategy(
                 }
             } catch (e: Exception) {
                 if (e !is kotlinx.coroutines.CancellationException) {
-                    Log.w(TAG, "Revalidation error: ${LogRedact.url(url)} - ${LogRedact.text(e.message)}")
+                    Log.w(TAG, "Revalidation error: ${url.take(80)} - ${e.message}")
                 }
             } finally {
                 revalidatingUrls.remove(url)

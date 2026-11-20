@@ -6,7 +6,6 @@ import androidx.annotation.AnyThread
 import com.lagradost.cloudstream3.USER_AGENT
 import com.lagradost.cloudstream3.app
 import kotlinx.coroutines.runBlocking
-import com.nuvio.tv.core.LogRedact
 import okhttp3.Headers
 import okhttp3.Headers.Companion.toHeaders
 import okhttp3.Interceptor
@@ -85,7 +84,7 @@ class CloudflareKiller : Interceptor {
             }
         }
 
-        Log.w(TAG, "Failed cloudflare at: ${LogRedact.url(request.url)}")
+        Log.w(TAG, "Failed cloudflare at: ${request.url}")
         return@runBlocking chain.proceed(request)
     }
 
@@ -138,14 +137,14 @@ class CloudflareKiller : Interceptor {
                     trySolveWithSavedCookies(request)
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "WebView bypass failed: ${LogRedact.text(e.message)}")
+                Log.e(TAG, "WebView bypass failed: ${e.message}")
                 return null
             }
         }
 
         val cookies = savedCookies[request.url.host]
         if (cookies == null) {
-            Log.w(TAG, "No cf_clearance obtained for ${LogRedact.text(request.url.host)}")
+            Log.w(TAG, "No cf_clearance obtained for ${request.url.host}")
             return null
         }
         return proceed(request, cookies)

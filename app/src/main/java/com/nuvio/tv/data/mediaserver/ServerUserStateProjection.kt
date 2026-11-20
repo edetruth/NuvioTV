@@ -1,7 +1,6 @@
 package com.nuvio.tv.data.mediaserver
 
 import android.util.Log
-import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.data.local.WatchProgressPreferences
 import com.nuvio.tv.data.local.WatchedItemsPreferences
@@ -38,7 +37,7 @@ class ServerUserStateProjection @Inject constructor(
                 } catch (error: CancellationException) {
                     throw error
                 } catch (error: Exception) {
-                    Log.w(TAG, "Unable to apply server user state", LogRedact.error(error))
+                    Log.w(TAG, "Unable to apply server user state", error)
                 }
             }
         }

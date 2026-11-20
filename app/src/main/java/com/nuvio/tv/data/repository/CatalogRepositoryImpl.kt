@@ -2,7 +2,6 @@ package com.nuvio.tv.data.repository
 
 import android.content.Context
 import android.util.Log
-import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.network.NetworkResult
 import com.nuvio.tv.core.network.safeApiCall
 import com.nuvio.tv.core.poster.withCustomPosterUrls
@@ -109,7 +108,7 @@ class CatalogRepositoryImpl @Inject constructor(
             is NetworkResult.Error -> {
                 Log.w(
                     TAG,
-                    "Catalog fetch failed addonId=$addonId type=$type catalogId=$catalogId code=${result.code} message=${LogRedact.text(result.message)} url=${LogRedact.url(url)}"
+                    "Catalog fetch failed addonId=$addonId type=$type catalogId=$catalogId code=${result.code} message=${result.message} url=$url"
                 )
                 emit(result)
             }

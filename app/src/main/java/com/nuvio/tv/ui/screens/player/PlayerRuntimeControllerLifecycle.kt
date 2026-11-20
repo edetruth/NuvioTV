@@ -2,7 +2,6 @@ package com.nuvio.tv.ui.screens.player
 
 import android.content.Intent
 import android.media.audiofx.AudioEffect
-import com.nuvio.tv.core.LogRedact
 import kotlinx.coroutines.flow.update
 
 internal fun PlayerRuntimeController.releasePlayer() {
@@ -142,7 +141,7 @@ internal fun PlayerRuntimeController.notifyAudioSessionUpdate(active: Boolean) {
             }
             context.sendBroadcast(intent)
         } catch (e: SecurityException) {
-            LogRedact.error(e)?.printStackTrace()
+            e.printStackTrace()
         }
     }
 }

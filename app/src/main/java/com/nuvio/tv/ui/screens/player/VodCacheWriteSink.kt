@@ -5,7 +5,6 @@ import android.util.Log
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSink
 import androidx.media3.datasource.DataSpec
-import com.nuvio.tv.core.LogRedact
 import java.io.IOException
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicLong
@@ -176,7 +175,7 @@ internal class VodCacheWriteSink(
             delegate.close()
         } catch (e: IOException) {
             counters.errors.incrementAndGet()
-            Log.w(TAG, "VOD_CACHE: sink close failed", LogRedact.error(e))
+            Log.w(TAG, "VOD_CACHE: sink close failed", e)
             throw e
         } finally {
             if (interrupted) Thread.currentThread().interrupt()
@@ -192,7 +191,7 @@ internal class VodCacheWriteSink(
                 counters.bytesWritten.addAndGet(length.toLong())
             } catch (e: IOException) {
                 counters.errors.incrementAndGet()
-                Log.w(TAG, "VOD_CACHE: sink write failed", LogRedact.error(e))
+                Log.w(TAG, "VOD_CACHE: sink write failed", e)
                 failed = true
             }
         }

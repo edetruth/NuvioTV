@@ -6,7 +6,6 @@ import com.lagradost.cloudstream3.utils.ExtractorApi
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.extractorApis
 import com.lagradost.cloudstream3.utils.loadExtractor
-import com.nuvio.tv.core.LogRedact
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -58,15 +57,15 @@ class ExternalExtractorRegistry @Inject constructor() {
                     url
                 }
                 if (missingExtractorDomains.add(domain)) {
-                    Log.w(TAG, "No extractor registered for domain: ${LogRedact.text(domain)} (url: ${LogRedact.url(url)})")
+                    Log.w(TAG, "No extractor registered for domain: $domain (url: $url)")
                 }
             }
             result
         } catch (e: Exception) {
-            Log.e(TAG, "loadExtractor error for ${LogRedact.url(url)}: ${LogRedact.text(e.message)}", LogRedact.error(e))
+            Log.e(TAG, "loadExtractor error for ${url.take(80)}: ${e.message}", e)
             false
         } catch (e: Error) {
-            Log.e(TAG, "loadExtractor linkage error for ${LogRedact.url(url)}: ${LogRedact.text(e.message)}", LogRedact.error(e))
+            Log.e(TAG, "loadExtractor linkage error for ${url.take(80)}: ${e.message}", e)
             false
         }
     }

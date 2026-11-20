@@ -11,7 +11,6 @@ import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.preferencesDataStore
 import com.nuvio.tv.R
-import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.domain.model.UserProfile
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
@@ -24,7 +23,7 @@ import javax.inject.Singleton
 private val Context.profileDataStore: DataStore<Preferences> by preferencesDataStore(
     name = "profile_settings",
     corruptionHandler = ReplaceFileCorruptionHandler { ex ->
-        android.util.Log.e("ProfileDataStore", "DataStore corrupted: ${LogRedact.text(ex.message)} — resetting to empty")
+        android.util.Log.e("ProfileDataStore", "DataStore corrupted: ${ex.message} — resetting to empty")
         emptyPreferences()
     }
 )

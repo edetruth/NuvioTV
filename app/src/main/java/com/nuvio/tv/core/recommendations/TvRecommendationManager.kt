@@ -3,7 +3,6 @@ package com.nuvio.tv.core.recommendations
 import android.content.Context
 import android.content.pm.PackageManager
 import android.util.Log
-import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.poster.CustomPosterScreen
 import com.nuvio.tv.core.poster.patternForScreen
 import com.nuvio.tv.core.poster.withCustomPosterArt
@@ -135,7 +134,7 @@ class TvRecommendationManager @Inject constructor(
                         syncedFingerprints[id] = newFingerprint
                     }
                 } catch (e: Exception) {
-                    Log.w(TAG, "updateWatchNext failed", LogRedact.error(e))
+                    Log.w(TAG, "updateWatchNext failed", e)
                 }
             }
         }
@@ -196,7 +195,7 @@ class TvRecommendationManager @Inject constructor(
                 programBuilder.upsertWatchNextProgram(program, id)
                 syncedFingerprints[id] = newFingerprint
             } catch (e: Exception) {
-                Log.w(TAG, "updateSingleWatchNextProgram failed", LogRedact.error(e))
+                Log.w(TAG, "updateSingleWatchNextProgram failed", e)
             }
         }
     }

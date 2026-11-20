@@ -11,7 +11,6 @@ import com.lagradost.cloudstream3.plugins.Plugin
 import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
 import com.lagradost.cloudstream3.utils.ExtractorApi
 import com.lagradost.cloudstream3.utils.extractorApis
-import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.plugin.TestDiagnostics
 import dalvik.system.DexClassLoader
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -101,10 +100,10 @@ private class ReflectivePluginWrapper(private val foreignInstance: Any) : Plugin
                     m.invoke(foreignInstance, null)
                     loaded = true
                 } catch (e2: Exception) {
-                    Log.w(TAG, "ReflectivePluginWrapper: load(Activity) also failed: ${LogRedact.text(e2.message)}")
+                    Log.w(TAG, "ReflectivePluginWrapper: load(Activity) also failed: ${e2.message}")
                 }
             } else {
-                Log.w(TAG, "ReflectivePluginWrapper: load(Context) threw: ${LogRedact.text(cause?.message ?: e.message)}")
+                Log.w(TAG, "ReflectivePluginWrapper: load(Context) threw: ${cause?.message ?: e.message}")
             }
         } catch (_: NoSuchMethodException) {
             // Try load(Activity?) next
@@ -120,13 +119,13 @@ private class ReflectivePluginWrapper(private val foreignInstance: Any) : Plugin
                     loaded = true
                     Log.d(TAG, "ReflectivePluginWrapper: loaded via no-arg load()")
                 } catch (e: Exception) {
-                    Log.w(TAG, "ReflectivePluginWrapper: load() (no-arg) failed: ${LogRedact.text(e.message)}")
+                    Log.w(TAG, "ReflectivePluginWrapper: load() (no-arg) failed: ${e.message}")
                 }
             } catch (e: Exception) {
-                Log.w(TAG, "ReflectivePluginWrapper: load(Activity) failed: ${LogRedact.text(e.message)}")
+                Log.w(TAG, "ReflectivePluginWrapper: load(Activity) failed: ${e.message}")
             }
         } catch (e: Exception) {
-            Log.w(TAG, "ReflectivePluginWrapper: load() failed: ${LogRedact.text(e.message)}")
+            Log.w(TAG, "ReflectivePluginWrapper: load() failed: ${e.message}")
         }
 
         // First try reading local registration lists (our Plugin pattern)
@@ -251,7 +250,7 @@ class ExternalExtensionLoader @Inject constructor(
                 targetFile
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error downloading extension $scraperId: ${LogRedact.text(e.message)}", LogRedact.error(e))
+            Log.e(TAG, "Error downloading extension $scraperId: ${e.message}", e)
             null
         }
     }
@@ -319,13 +318,13 @@ class ExternalExtensionLoader @Inject constructor(
             try {
                 plugin.load((activity as Context?) ?: context)
             } catch (e: Exception) {
-                Log.w(TAG, "plugin.load() threw (partial load, ${plugin.registeredMainAPIs.size} APIs so far): ${LogRedact.text(e.message)}", LogRedact.error(e))
+                Log.w(TAG, "plugin.load() threw (partial load, ${plugin.registeredMainAPIs.size} APIs so far): ${e.message}", e)
             } catch (e: Error) {
                 val missingClass = extractMissingClassName(e)
                 if (missingClass != null) {
-                    Log.w(TAG, "plugin.load() MISSING CLASS: $missingClass (${plugin.registeredMainAPIs.size} APIs so far)", LogRedact.error(e))
+                    Log.w(TAG, "plugin.load() MISSING CLASS: $missingClass (${plugin.registeredMainAPIs.size} APIs so far)", e)
                 } else {
-                    Log.w(TAG, "plugin.load() linkage error (partial load, ${plugin.registeredMainAPIs.size} APIs so far): ${LogRedact.text(e.message)}", LogRedact.error(e))
+                    Log.w(TAG, "plugin.load() linkage error (partial load, ${plugin.registeredMainAPIs.size} APIs so far): ${e.message}", e)
                 }
             }
 
@@ -379,7 +378,7 @@ class ExternalExtensionLoader @Inject constructor(
                         }
                     }
                 } catch (e: Exception) {
-                    Log.w(TAG, "Fallback DEX scan failed: ${LogRedact.text(e.message)}")
+                    Log.w(TAG, "Fallback DEX scan failed: ${e.message}")
                 }
 
                 if (fallbackApis.isNotEmpty()) {
@@ -404,14 +403,14 @@ class ExternalExtensionLoader @Inject constructor(
             Log.d(TAG, "Loaded extension $scraperId: ${apis.size} providers (${apis.joinToString { it.name }})")
             apis
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to load extension $scraperId: ${LogRedact.text(e.message)}", LogRedact.error(e))
+            Log.e(TAG, "Failed to load extension $scraperId: ${e.message}", e)
             emptyList()
         } catch (e: Error) {
             val missingClass = extractMissingClassName(e)
             if (missingClass != null) {
-                Log.e(TAG, "Failed to load extension $scraperId: MISSING CLASS: $missingClass (${e.javaClass.simpleName})", LogRedact.error(e))
+                Log.e(TAG, "Failed to load extension $scraperId: MISSING CLASS: $missingClass (${e.javaClass.simpleName})", e)
             } else {
-                Log.e(TAG, "Failed to load extension $scraperId (linkage error): ${LogRedact.text(e.message)}", LogRedact.error(e))
+                Log.e(TAG, "Failed to load extension $scraperId (linkage error): ${e.message}", e)
             }
             emptyList()
         }
@@ -643,9 +642,9 @@ class ExternalExtensionLoader @Inject constructor(
                     }
                 }
             } catch (e: Exception) {
-                Log.w(TAG, "ensureExtractorsLoaded: failed for $scraperId: ${LogRedact.text(e.message)}")
+                Log.w(TAG, "ensureExtractorsLoaded: failed for $scraperId: ${e.message}")
             } catch (e: Error) {
-                Log.w(TAG, "ensureExtractorsLoaded: linkage error for $scraperId: ${LogRedact.text(e.message)}")
+                Log.w(TAG, "ensureExtractorsLoaded: linkage error for $scraperId: ${e.message}")
             }
         }
 
@@ -700,9 +699,9 @@ class ExternalExtensionLoader @Inject constructor(
                 }
                 Log.w(TAG, "Class $pluginClassName is not a Plugin and has no plugin methods")
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to load manifest class $pluginClassName: ${LogRedact.text(e.message)}", LogRedact.error(e))
+                Log.e(TAG, "Failed to load manifest class $pluginClassName: ${e.message}", e)
             } catch (e: Error) {
-                Log.e(TAG, "Linkage error loading manifest class $pluginClassName: ${LogRedact.text(e.message)}", LogRedact.error(e))
+                Log.e(TAG, "Linkage error loading manifest class $pluginClassName: ${e.message}", e)
             }
         }
 
@@ -750,7 +749,7 @@ class ExternalExtensionLoader @Inject constructor(
                 } catch (_: ClassNotFoundException) {
                 } catch (_: NoClassDefFoundError) {
                 } catch (e: Exception) {
-                    Log.w(TAG, "Error inspecting class $className: ${LogRedact.text(e.message)}")
+                    Log.w(TAG, "Error inspecting class $className: ${e.message}")
                 }
             }
 

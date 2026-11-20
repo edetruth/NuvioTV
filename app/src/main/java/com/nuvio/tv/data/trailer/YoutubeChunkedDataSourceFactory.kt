@@ -8,7 +8,6 @@ import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.TransferListener
-import com.nuvio.tv.core.LogRedact
 
 /**
  * A DataSource.Factory that wraps DefaultHttpDataSource and appends YouTube's
@@ -124,7 +123,7 @@ class YoutubeChunkedDataSourceFactory(
                     openNextChunk()
                     upstream.read(buffer, offset, length)
                 } catch (e: Exception) {
-                    Log.w(TAG, "Failed to open next chunk at $currentChunkStart: ${LogRedact.text(e.message)}")
+                    Log.w(TAG, "Failed to open next chunk at $currentChunkStart: ${e.message}")
                     C.RESULT_END_OF_INPUT
                 }
             }

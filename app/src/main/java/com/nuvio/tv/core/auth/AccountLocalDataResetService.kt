@@ -2,7 +2,6 @@ package com.nuvio.tv.core.auth
 
 import android.content.Context
 import android.util.Log
-import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.sync.androidtv.AndroidTvChannelManager
 import com.nuvio.tv.core.profile.ProfileScopedCredentialStore
 import com.nuvio.tv.data.local.ProfileDataStore
@@ -28,17 +27,17 @@ class AccountLocalDataResetService @Inject constructor(
 ) {
     suspend fun clearAfterSignOut() = withContext(Dispatchers.IO) {
         runCatching { androidTvChannelManager.clearAll() }
-            .onFailure { Log.w(ACCOUNT_RESET_TAG, "Failed to clear Android TV channel data", LogRedact.error(it)) }
+            .onFailure { Log.w(ACCOUNT_RESET_TAG, "Failed to clear Android TV channel data", it) }
         runCatching { profileDataStoreFactory.clearProfileScopedData() }
-            .onFailure { Log.w(ACCOUNT_RESET_TAG, "Failed to clear profile-scoped data", LogRedact.error(it)) }
+            .onFailure { Log.w(ACCOUNT_RESET_TAG, "Failed to clear profile-scoped data", it) }
         runCatching { profileDataStore.clearAll() }
-            .onFailure { Log.w(ACCOUNT_RESET_TAG, "Failed to clear profile metadata", LogRedact.error(it)) }
+            .onFailure { Log.w(ACCOUNT_RESET_TAG, "Failed to clear profile metadata", it) }
         runCatching { profileLockStateDataStore.clearAll() }
-            .onFailure { Log.w(ACCOUNT_RESET_TAG, "Failed to clear profile lock states", LogRedact.error(it)) }
+            .onFailure { Log.w(ACCOUNT_RESET_TAG, "Failed to clear profile lock states", it) }
         runCatching { credentialStores.forEach(ProfileScopedCredentialStore::clearAllProfiles) }
-            .onFailure { Log.w(ACCOUNT_RESET_TAG, "Failed to clear profile credentials", LogRedact.error(it)) }
+            .onFailure { Log.w(ACCOUNT_RESET_TAG, "Failed to clear profile credentials", it) }
         runCatching { clearAccountFiles() }
-            .onFailure { Log.w(ACCOUNT_RESET_TAG, "Failed to clear account files", LogRedact.error(it)) }
+            .onFailure { Log.w(ACCOUNT_RESET_TAG, "Failed to clear account files", it) }
     }
 
     private fun clearAccountFiles() {

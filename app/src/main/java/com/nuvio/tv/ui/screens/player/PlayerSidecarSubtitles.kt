@@ -15,7 +15,6 @@ import androidx.media3.extractor.text.DefaultSubtitleParserFactory
 import androidx.media3.extractor.text.SubtitleParser
 import androidx.media3.ui.SubtitleView
 import com.nuvio.tv.R
-import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.domain.model.Subtitle
 import com.nuvio.tv.ui.screens.player.autosync.AutoSyncLibassSubtitles
 import com.nuvio.tv.ui.screens.player.autosync.AutoSyncSyncedSubtitle
@@ -155,7 +154,7 @@ internal fun PlayerRuntimeController.startSidecarAddonSubtitle(
                 Log.w(
                     PlayerRuntimeController.TAG,
                     "Sidecar subtitle parse empty for id=${subtitle.id} " +
-                        "urlMime=${LogRedact.text(urlMimeHint)} sniffed=$resolvedMime " +
+                        "urlMime=$urlMimeHint sniffed=$resolvedMime " +
                         "(buffer preserved; no media reload)"
                 )
                 // Stay on sidecar path — do not wipe progressive buffer via setMediaSource.
@@ -187,7 +186,7 @@ internal fun PlayerRuntimeController.startSidecarAddonSubtitle(
             if (!isCurrent()) return@launch
             Log.w(
                 PlayerRuntimeController.TAG,
-                "Sidecar subtitle failed id=${subtitle.id}: ${LogRedact.text(e.message)} " +
+                "Sidecar subtitle failed id=${subtitle.id}: ${e.message} " +
                     "(buffer preserved; no media reload)"
             )
             activeSidecarSubtitleKey = null

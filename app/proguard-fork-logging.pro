@@ -1,10 +1,24 @@
-# Fork: release builds drop verbose, debug and info log lines (android.util.Log v/d/i), in the app and
-# in every library R8 processes. Upstream debug lines print full addon links, and a private addon's link
-# carries the user's token. Warn and error lines stay for crash diagnostics; the app routes their links
-# and exception text through com.nuvio.tv.core.LogRedact (guarded by LogRedactGuardTest). Debug builds
-# are not minified, so they keep every line.
+# Fork: a release build writes no log lines at all. Upstream log lines print full addon links, and a
+# private addon's link carries the user's token, so every android.util.Log call (all levels) and every
+# printStackTrace() (to System.err) is removed by R8, in the app and in every library R8 processes (the player, OkHttp and
+# the backend client log through android.util.Log). Crash traces from the runtime (AndroidRuntime FATAL)
+# and Sentry reports are unaffected. Debug builds are not minified, so they keep every line.
+# Only the no-argument printStackTrace: the PrintWriter/PrintStream forms build stack-trace text
+# (Kotlin stackTraceToString, auth diagnostics) and must keep working.
+# Checked by ReleaseLogStripRulesTest.
 -assumenosideeffects class android.util.Log {
+    public static boolean isLoggable(java.lang.String, int) return false;
     public static int v(...);
     public static int d(...);
     public static int i(...);
+    public static int w(...);
+    public static int e(...);
+    public static int wtf(...);
+    public static int println(...);
+}
+-assumenosideeffects class java.lang.Throwable {
+    public void printStackTrace();
+}
+-assumenosideeffects class * extends java.lang.Throwable {
+    public void printStackTrace();
 }

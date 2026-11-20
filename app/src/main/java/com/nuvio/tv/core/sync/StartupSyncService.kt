@@ -2,7 +2,6 @@ package com.nuvio.tv.core.sync
 
 import android.os.SystemClock
 import android.util.Log
-import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.auth.AuthManager
 import com.nuvio.tv.core.plugin.PluginManager
 import com.nuvio.tv.core.profile.ProfileManager
@@ -210,7 +209,7 @@ class StartupSyncService @Inject constructor(
 
                 Log.d(TAG, "Manual addon sync pulled ${remoteAddonUrls.size} addons for profile $profileId")
             } catch (e: Exception) {
-                Log.e(TAG, "Manual addon sync failed for profile $profileId", LogRedact.error(e))
+                Log.e(TAG, "Manual addon sync failed for profile $profileId", e)
             } finally {
                 addonRepository.isSyncingFromRemote = false
                 // The user asked for a refresh, so let screens holding catalogs re-request them
@@ -253,7 +252,7 @@ class StartupSyncService @Inject constructor(
                             Log.d(TAG, "Realtime profile settings pull completed profile=$profileId applied=$applied")
                         }
                         .onFailure { error ->
-                            Log.e(TAG, "Realtime profile settings pull failed profile=$profileId", LogRedact.error(error))
+                            Log.e(TAG, "Realtime profile settings pull failed profile=$profileId", error)
                         }
                 }
                 "provider_credentials" -> {
@@ -262,7 +261,7 @@ class StartupSyncService @Inject constructor(
                             Log.d(TAG, "Realtime provider credential pull completed profile=$profileId applied=$applied")
                         }
                         .onFailure { error ->
-                            Log.e(TAG, "Realtime provider credential pull failed profile=$profileId", LogRedact.error(error))
+                            Log.e(TAG, "Realtime provider credential pull failed profile=$profileId", error)
                         }
                 }
                 "collections" -> {
@@ -271,7 +270,7 @@ class StartupSyncService @Inject constructor(
                             Log.d(TAG, "Realtime collections pull completed profile=$profileId applied=$applied")
                         }
                         .onFailure { error ->
-                            Log.e(TAG, "Realtime collections pull failed profile=$profileId", LogRedact.error(error))
+                            Log.e(TAG, "Realtime collections pull failed profile=$profileId", error)
                         }
                 }
                 "home_catalog_settings" -> {
@@ -280,7 +279,7 @@ class StartupSyncService @Inject constructor(
                             Log.d(TAG, "Realtime home catalog settings pull completed profile=$profileId applied=$applied")
                         }
                         .onFailure { error ->
-                            Log.e(TAG, "Realtime home catalog settings pull failed profile=$profileId", LogRedact.error(error))
+                            Log.e(TAG, "Realtime home catalog settings pull failed profile=$profileId", error)
                         }
                 }
                 "profiles" -> {
@@ -289,7 +288,7 @@ class StartupSyncService @Inject constructor(
                             Log.d(TAG, "Realtime profiles pull completed count=${profiles.size}")
                         }
                         .onFailure { error ->
-                            Log.e(TAG, "Realtime profiles pull failed", LogRedact.error(error))
+                            Log.e(TAG, "Realtime profiles pull failed", error)
                         }
                 }
                 else -> Log.w(TAG, "Unknown realtime sync surface=$surface profile=$profileId")
@@ -424,7 +423,7 @@ class StartupSyncService @Inject constructor(
                     break
                 }
 
-                Log.w(TAG, "Startup sync attempt $attempt failed for key=$key", LogRedact.error(result.exceptionOrNull()))
+                Log.w(TAG, "Startup sync attempt $attempt failed for key=$key", result.exceptionOrNull())
                 if (attempt < maxAttempts) {
                     delay(3000)
                 }
@@ -509,7 +508,7 @@ class StartupSyncService @Inject constructor(
             addonRepository.isSyncingFromRemote = false
             watchProgressRepository.isSyncingFromRemote = false
             libraryRepository.isSyncingFromRemote = false
-            Log.e(TAG, "Startup sync failed", LogRedact.error(e))
+            Log.e(TAG, "Startup sync failed", e)
             return Result.failure(e)
         }
     }
@@ -551,7 +550,7 @@ class StartupSyncService @Inject constructor(
         } catch (e: Exception) {
             watchProgressRepository.isSyncingFromRemote = false
             libraryRepository.isSyncingFromRemote = false
-            Log.e(TAG, "Warm startup sync failed", LogRedact.error(e))
+            Log.e(TAG, "Warm startup sync failed", e)
             return Result.failure(e)
         }
     }
@@ -570,7 +569,7 @@ class StartupSyncService @Inject constructor(
                     Log.d(TAG, "Profile settings blob pull completed for profile $profileId (applied=$applied)")
                 }
                 .onFailure { e ->
-                    Log.e(TAG, "Failed to pull profile settings blob, keeping local settings", LogRedact.error(e))
+                    Log.e(TAG, "Failed to pull profile settings blob, keeping local settings", e)
                 }
         }
 
@@ -579,7 +578,7 @@ class StartupSyncService @Inject constructor(
                 Log.d(TAG, "Provider credential sync completed for profile $profileId applied=$applied")
             }
             .onFailure { error ->
-                Log.e(TAG, "Failed to sync provider credentials, keeping local credentials", LogRedact.error(error))
+                Log.e(TAG, "Failed to sync provider credentials, keeping local credentials", error)
             }
 
         coroutineScope {
@@ -596,7 +595,7 @@ class StartupSyncService @Inject constructor(
                                 "upserts=${result.appliedUpserts} deletes=${result.appliedDeletes}"
                         )
                     } catch (e: Exception) {
-                        Log.e(TAG, "Failed to pull library, continuing with other syncs", LogRedact.error(e))
+                        Log.e(TAG, "Failed to pull library, continuing with other syncs", e)
                         libraryRepository.hasCompletedInitialPull = true
                     } finally {
                         libraryRepository.isSyncingFromRemote = false
@@ -616,7 +615,7 @@ class StartupSyncService @Inject constructor(
                     )
                     Log.d(TAG, "Pulled ${remoteAddonUrls.size} addons from remote for profile $profileId")
                 } catch (e: Exception) {
-                    Log.e(TAG, "Failed to pull addons from remote, keeping local cache", LogRedact.error(e))
+                    Log.e(TAG, "Failed to pull addons from remote, keeping local cache", e)
                 } finally {
                     addonRepository.isSyncingFromRemote = false
                 }
@@ -637,10 +636,10 @@ class StartupSyncService @Inject constructor(
                             Log.d(TAG, "Collections pull completed for profile $profileId (applied=$applied)")
                         }
                         .onFailure { e ->
-                            Log.e(TAG, "Failed to pull collections from remote, keeping local", LogRedact.error(e))
+                            Log.e(TAG, "Failed to pull collections from remote, keeping local", e)
                         }
                 } catch (e: Exception) {
-                    Log.e(TAG, "Failed to pull collections from remote", LogRedact.error(e))
+                    Log.e(TAG, "Failed to pull collections from remote", e)
                 }
             }
 
@@ -651,10 +650,10 @@ class StartupSyncService @Inject constructor(
                             Log.d(TAG, "Home catalog settings pull completed for profile $profileId (applied=$applied)")
                         }
                         .onFailure { e ->
-                            Log.e(TAG, "Failed to pull home catalog settings from remote, keeping local", LogRedact.error(e))
+                            Log.e(TAG, "Failed to pull home catalog settings from remote, keeping local", e)
                         }
                 } catch (e: Exception) {
-                    Log.e(TAG, "Failed to pull home catalog settings from remote", LogRedact.error(e))
+                    Log.e(TAG, "Failed to pull home catalog settings from remote", e)
                 }
             }
 
@@ -697,7 +696,7 @@ class StartupSyncService @Inject constructor(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to pull plugins from remote, keeping local cache", LogRedact.error(e))
+            Log.e(TAG, "Failed to pull plugins from remote, keeping local cache", e)
         } finally {
             val ownsPull = synchronized(pluginSyncGenerationLock) { pluginSyncGeneration == generation }
             if (ownsPull) {
@@ -731,7 +730,7 @@ class StartupSyncService @Inject constructor(
             true
         } catch (e: Exception) {
             libraryRepository.hasCompletedInitialPull = true
-            Log.e(TAG, "Periodic Nuvio library pull failed profile=$profileId", LogRedact.error(e))
+            Log.e(TAG, "Periodic Nuvio library pull failed profile=$profileId", e)
             false
         } finally {
             libraryRepository.isSyncingFromRemote = false
@@ -748,7 +747,7 @@ class StartupSyncService @Inject constructor(
             )
             Log.d(TAG, "Realtime addons pull reconciled ${remoteAddonUrls.size} addons for profile $profileId")
         } catch (e: Exception) {
-            Log.e(TAG, "Realtime addons pull failed profile=$profileId", LogRedact.error(e))
+            Log.e(TAG, "Realtime addons pull failed profile=$profileId", e)
         } finally {
             addonRepository.isSyncingFromRemote = false
         }
@@ -772,7 +771,7 @@ class StartupSyncService @Inject constructor(
             }
             true
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to pull watched items, continuing with other syncs", LogRedact.error(e))
+            Log.e(TAG, "Failed to pull watched items, continuing with other syncs", e)
             false
         }
     }
@@ -791,7 +790,7 @@ class StartupSyncService @Inject constructor(
                 watchedItemsSyncService.pushToRemote(profileId)
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to pull watched items snapshot, continuing with other syncs", LogRedact.error(e))
+            Log.e(TAG, "Failed to pull watched items snapshot, continuing with other syncs", e)
         }
     }
 
@@ -861,7 +860,7 @@ class StartupSyncService @Inject constructor(
             }
             return Result.success(Unit)
         } catch (e: Exception) {
-            Log.e(TAG, LogRedact.text(failureMessage), LogRedact.error(e))
+            Log.e(TAG, failureMessage, e)
             return Result.failure(e)
         } finally {
             watchProgressRepository.isSyncingFromRemote = false

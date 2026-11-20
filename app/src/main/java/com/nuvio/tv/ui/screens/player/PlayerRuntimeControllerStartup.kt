@@ -4,7 +4,6 @@ import android.app.Activity
 import android.os.SystemClock
 import android.util.Log
 import com.nuvio.tv.R
-import com.nuvio.tv.core.LogRedact
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.lang.ref.WeakReference
@@ -69,7 +68,7 @@ internal fun PlayerRuntimeController.startInitialPlaybackIfNeeded() {
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
-                Log.e("PlayerStartup", "Failed to start torrent", LogRedact.error(e))
+                Log.e("PlayerStartup", "Failed to start torrent", e)
                 _uiState.update {
                     it.copy(
                         error = context.getString(

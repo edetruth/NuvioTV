@@ -1,7 +1,6 @@
 package com.nuvio.tv.core.tmdb
 
 import android.util.Log
-import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.data.repository.MDBListRepository
 import com.nuvio.tv.domain.model.MDBListSettings
 import com.nuvio.tv.domain.model.Meta
@@ -46,7 +45,7 @@ class MetaPreviewEnricher @Inject constructor(
                         } catch (e: CancellationException) {
                             throw e
                         } catch (e: Exception) {
-                            Log.w(TAG, "Enrichment failed for ${item.id}: ${LogRedact.text(e.message)}")
+                            Log.w(TAG, "Enrichment failed for ${item.id}: ${e.message}")
                             item
                         }
                     }

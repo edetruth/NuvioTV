@@ -2,7 +2,6 @@ package com.nuvio.tv.ui.screens.player
 
 import android.util.Log
 import androidx.media3.exoplayer.SeekParameters
-import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.data.local.InternalPlayerEngine
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -187,7 +186,7 @@ internal fun PlayerRuntimeController.initializeMpvPlayer(
         scheduleHideControls()
         emitScrobbleStart()
     }.onFailure { error ->
-        Log.e(PlayerRuntimeController.TAG, "libmpv initialize failed: ${LogRedact.text(error.message)}", LogRedact.error(error))
+        Log.e(PlayerRuntimeController.TAG, "libmpv initialize failed: ${error.message}", error)
         val technical = error.message?.trim()?.takeIf { it.isNotEmpty() }
         val explanation = context.getString(com.nuvio.tv.R.string.player_error_mpv_playback_failed)
         val detailedError = if (technical == null || technical.equals(explanation, ignoreCase = true)) {
@@ -318,7 +317,7 @@ internal fun PlayerRuntimeController.resumeForLifecycle() {
 
         // Re-create the MediaSession so media controls work in the foreground.
         if (currentMediaSession == null) runCatching { installExoMediaSession(player) }
-            .onFailure { LogRedact.error(it)?.printStackTrace() }
+            .onFailure { it.printStackTrace() }
     }
 }
 
@@ -384,7 +383,7 @@ internal fun PlayerRuntimeController.updateMpvAvailableTracks() {
         } catch (error: CancellationException) {
             throw error
         } catch (error: Throwable) {
-            Log.w(PlayerRuntimeController.TAG, "Failed to refresh MPV track snapshot: ${LogRedact.text(error.message)}")
+            Log.w(PlayerRuntimeController.TAG, "Failed to refresh MPV track snapshot: ${error.message}")
         } finally {
             mpvTrackRefreshInProgress = false
         }
@@ -508,7 +507,7 @@ private fun PlayerRuntimeController.performPendingMpvHardRestartIfNeeded(view: N
         Log.d(PlayerRuntimeController.TAG, "Applying MPV hard restart for startup engine failover")
         view.releasePlayer()
     }.onFailure {
-        Log.w(PlayerRuntimeController.TAG, "MPV hard restart release failed: ${LogRedact.text(it.message)}")
+        Log.w(PlayerRuntimeController.TAG, "MPV hard restart release failed: ${it.message}")
     }
     return true
 }

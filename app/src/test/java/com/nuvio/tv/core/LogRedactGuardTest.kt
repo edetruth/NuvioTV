@@ -6,29 +6,38 @@ import org.junit.Test
 import java.io.File
 
 /**
- * Fork guard: a release build keeps warn and error lines, so every one of them that carries a link,
- * a host or exception text must pass it through [LogRedact]. Scans the app sources.
+ * Fork guard: a release build logs nothing (proguard-fork-logging.pro, see ReleaseLogStripRulesTest),
+ * but debug installs and the Report-a-problem export (#172) still carry our own warn and error lines,
+ * so in FORK code every one of them that carries a link, a host or exception text passes it through
+ * [LogRedact]. Upstream files are not scanned: they are left as upstream wrote them.
  */
 class LogRedactGuardTest {
 
     @Test
-    fun `warn and error lines in the app never log a raw link or exception text`() {
+    fun `fork warn and error lines never log a raw link or exception text`() {
         val src = File("src")
         assertTrue("run from the app module", File(src, "main/java").isDirectory)
         val roots = src.listFiles().orEmpty()
             .filter { !it.name.startsWith("test") && !it.name.startsWith("androidTest") }
             .map { File(it, "java") }
             .filter { it.isDirectory }
-        val problems = roots.flatMap { root ->
-            root.walkTopDown()
-                .filter { it.isFile && it.extension == "kt" && it.name != "LogRedact.kt" }
-                .flatMap { file -> LogLeakScanner.scan(file.readText()).map { "${file.relativeTo(src)}:$it" } }
-                .toList()
+        val forkFiles = roots.flatMap { root ->
+            root.walkTopDown().filter { it.isFile && it.extension == "kt" && isForkOwned(it) }.toList()
+        }
+        assertTrue("fork files found", forkFiles.size > 20)
+        val problems = forkFiles.flatMap { file ->
+            LogLeakScanner.scan(file.readText()).map { "${file.relativeTo(src)}:$it" }
         }
         assertTrue(
             "Route these through LogRedact.url, LogRedact.text or LogRedact.error\n" + problems.joinToString("\n"),
             problems.isEmpty()
         )
+    }
+
+    /** Sports & Live code: the sportslive packages and the SportsLive / Sports* files beside upstream ones. */
+    private fun isForkOwned(file: File): Boolean {
+        val path = file.invariantSeparatorsPath
+        return "/sportslive/" in path || Regex("""^(.*SportsLive.*|.*Sports[A-Z]\w*)\.kt$""").matches(file.name)
     }
 
     @Test

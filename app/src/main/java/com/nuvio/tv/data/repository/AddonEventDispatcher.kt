@@ -1,7 +1,6 @@
 package com.nuvio.tv.data.repository
 
 import android.util.Log
-import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.streams.supportsResource
 import com.nuvio.tv.data.mediaserver.ServerItemRef
 import com.nuvio.tv.data.remote.api.AddonApi
@@ -149,7 +148,7 @@ class AddonEventDispatcher @Inject constructor(
             withTimeout(EVENT_TIMEOUT_MS) { api.sendEvent(delivery.url).body()?.close() }
         }.onFailure { error ->
             if (error is CancellationException && error !is TimeoutCancellationException) throw error
-            Log.w(TAG, "${delivery.addonId} ${delivery.resource} event failed", LogRedact.error(error))
+            Log.w(TAG, "${delivery.addonId} ${delivery.resource} event failed", error)
         }
     }
 
