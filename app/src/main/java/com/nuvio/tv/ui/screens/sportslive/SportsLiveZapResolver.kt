@@ -737,7 +737,8 @@ class SportsLiveZapResolver @Inject constructor(
         if (checkable.isEmpty()) return
         val settings = playerSettingsDataStore.playerSettings.first()
         val installedOrder = installedOrder()
-        val cached = resolveCache.get(item.streamKey)?.takeUnless { workingLinks.isQuarantined(item.id, it) }
+        // A cached link since found protected (#166) is never probed: it could mark the game ready.
+        val cached = resolveCache.get(item.streamKey)?.takeUnless { workingLinks.isQuarantined(item.id, it) || isNonStream(it) }
         // Only a search of every source can prove no working stream; a cached link alone cannot.
         var complete = cached == null && checkable.size == sources.size
         val streams = if (cached != null) {

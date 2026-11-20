@@ -1,7 +1,11 @@
 package com.nuvio.tv.data.repository
 
 import com.nuvio.tv.core.sportslive.ProbeVerdict
+import com.nuvio.tv.core.sportslive.SportsLiveLinkCause
+import com.nuvio.tv.core.sportslive.SportsLiveLinkMarks
+import com.nuvio.tv.core.sportslive.SportsLiveManifestDrm
 import com.nuvio.tv.core.sportslive.SportsLiveMediaPlaylist
+import com.nuvio.tv.core.sportslive.SportsLiveStreamLicences
 import com.nuvio.tv.core.sportslive.SportsLiveStreamThresholds
 import kotlinx.coroutines.suspendCancellableCoroutine
 import okhttp3.Call
@@ -21,17 +25,26 @@ import kotlin.coroutines.resume
 
 /**
  * Probes a link before a start (#147): an HLS link's playlist, and for a master its first variant, must be a
- * live media playlist ([SportsLiveMediaPlaylist.verdict], #110); any other link must answer. Its own bare
+ * live media playlist ([SportsLiveMediaPlaylist.verdict], #110); any other link must answer. A playlist that needs a
+ * DRM licence its addon does not give (#166) is dead here: it is noted as protected, never raced or marked ready. Its own bare
  * client, like [SportsLiveManifestFetcher]'s: no cache, no logging interceptor, so a url is never logged.
  * Redirects follow the same rules ([SportsLiveManifestFetcher.nextHop]). Calls are cancelled with their
  * coroutine, so a race's losers stop at once.
  */
 @Singleton
 class SportsLiveLinkProber @Inject constructor() {
-    private companion object {
-        const val MAX_BYTES = 64L * 1024
-        const val MAX_REDIRECTS = 3
+    companion object {
+        private const val MAX_BYTES = 64L * 1024
+        private const val MAX_REDIRECTS = 3
+
+        /** True when [text], [url]'s playlist, needs a DRM licence that [url]'s addon does not provide (#166). */
+        internal fun isUnlicensedDrm(url: String, text: String?): Boolean =
+            text != null && SportsLiveManifestDrm.isProtected(text) && !SportsLiveStreamLicences.has(url)
     }
+
+    /** [isUnlicensedDrm]: the link is remembered as protected for every game, as the player's sniffer does. */
+    private fun protectedHere(url: String, text: String?): Boolean =
+        isUnlicensedDrm(url, text).also { if (it) SportsLiveLinkMarks.shared.noteCause(url, SportsLiveLinkCause.DRM) }
 
     private val client: OkHttpClient by lazy {
         val timeout = SportsLiveStreamThresholds.RACE_PROBE_TIMEOUT_MS
@@ -54,12 +67,14 @@ class SportsLiveLinkProber @Inject constructor() {
         if (first.code !in 200..299) return codeVerdict(first.code)
         if (!hls) return ProbeVerdict.OK
         val body = first.body ?: return ProbeVerdict.DEAD
+        if (protectedHere(url, body)) return ProbeVerdict.DEAD
         if (!SportsLiveMediaPlaylist.isMaster(body)) return SportsLiveMediaPlaylist.verdict(body, System.currentTimeMillis())
         val variant = SportsLiveMediaPlaylist.firstVariant(body)?.let(first.url::resolve) ?: return ProbeVerdict.UNKNOWN
         val media = get(variant, headers.takeIf { variant.host.equals(first.url.host, ignoreCase = true) }.orEmpty(), readBody = true)
             ?: return ProbeVerdict.UNKNOWN
         media.failed?.let { return it }
         if (media.code !in 200..299) return codeVerdict(media.code)
+        if (protectedHere(url, media.body)) return ProbeVerdict.DEAD
         return SportsLiveMediaPlaylist.verdict(media.body, System.currentTimeMillis())
     }
 
