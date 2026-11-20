@@ -4088,11 +4088,8 @@
     <string name="sports_live_more_show">Show</string>
     <string name="sports_live_more_hide">Hide</string>
     <string name="sports_live_catalog_filter_help">Pins one filter value of this catalog, so Sports &amp; Live loads only that</string>
-    <string name="sports_live_alert_kicking_off">KICKING OFF NOW</string>
     <string name="sports_live_alert_watch_now">Watch now?</string>
     <string name="sports_live_alert_watching">you\'re watching %1$s</string>
-    <string name="sports_live_alert_later">Later</string>
-    <string name="sports_live_alert_closes">Closes in %1$d s</string>
     <string name="sports_live_alert_matchup">%1$s vs %2$s</string>
     <string name="sports_live_alert_scored">%1$s score</string>
     <string name="sports_live_alert_score_update">Score update</string>
@@ -4104,9 +4101,12 @@
     <string name="sports_live_alert_crunch_final_minutes">final %1$d min</string>
     <string name="sports_live_alert_starting_toast">%1$s is starting · open Sports &amp; Live to watch</string>
     <string name="sports_live_alert_full_time_names">%1$s vs %2$s · Full time</string>
-    <string name="sports_live_alert_hint_watch">OK Watch</string>
-    <string name="sports_live_alert_prompt_hint">OK Watch · Back Later</string>
-    <string name="sports_live_alert_no_stream_hint">OK Remind me in 10 min · Back Dismiss</string>
+    <string name="sports_live_alert_hint_watch">▶ or hold OK Watch</string>
+    <string name="sports_live_alert_prompt_hint">▶ or hold OK to watch</string>
+    <string name="sports_live_alert_no_stream_hint">▶ or hold OK: remind me in 10 min</string>
+    <string name="sports_live_alert_switching_hint">Switching in %1$d s · Back cancel · ▶ now</string>
+    <string name="sports_live_alert_just_started">Just started</string>
+    <string name="sports_live_your_teams_started">Started</string>
     <string name="sports_live_alert_hint_dismiss">Back Dismiss</string>
     <string name="sports_live_info_hint_game">OK Game page · Back close</string>
     <string name="sports_live_info_hint_close">Back close</string>
@@ -4215,7 +4215,7 @@
     </plurals>
     <string name="sports_live_agenda_later">Later ›</string>
     <string name="sports_live_no_stream_yet_mark">No stream yet</string>
-    <string name="sports_live_kickoff_stream_ready">Stream ready · Watch now?</string>
+    <string name="sports_live_kickoff_stream_ready_short">Stream ready</string>
     <string name="sports_live_kickoff_waiting_stream">Waiting for a working stream…</string>
     <string name="sports_live_heads_up_title">No working stream yet for %1$s</string>
     <string name="sports_live_heads_up_line">I\'ll tell you when one is up</string>
@@ -4374,10 +4374,7 @@
     <string name="sports_live_waiting_checking">Checking every %1$d s</string>
     <string name="sports_live_alert_no_stream_yet">NO STREAM YET</string>
     <string name="sports_live_alert_no_stream_line">Started, but no stream is live yet</string>
-    <string name="sports_live_alert_remind_in_10">Remind me in 10 min</string>
-    <string name="sports_live_alert_dismiss">Dismiss</string>
     <string name="sports_live_alert_hint_both">▲ Both</string>
-    <string name="sports_live_alert_both_button">▲ Both</string>
     <string name="sports_live_remind_every_team">Remind me for every %1$s game</string>
     <string name="sports_live_stop_reminding_team">Stop reminding for %1$s games</string>
     <string name="sports_live_setting_reminded_teams">Teams I\'m reminded about</string>

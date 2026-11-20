@@ -65,10 +65,10 @@ data class AlertGame(
 
 /** How a kickoff prompt shows, by what is on screen ([SportsLiveAlertEngine.kickoffStyle]). */
 enum class KickoffStyle {
-    /** Outside the player: the full prompt, focused, Watch / Later. */
+    /** Outside the player: the kickoff toast (research Q17: never focused; ▶ or a held OK watch). */
     FULL,
 
-    /** Over a Sports & Live stream: the small prompt, focused, Watch / Later. */
+    /** Over a Sports & Live stream: the small kickoff toast, the same keys. */
     COMPACT,
 
     /** Over a movie or show: a toast only. It never takes focus or Back, so OK can never replace that player. */

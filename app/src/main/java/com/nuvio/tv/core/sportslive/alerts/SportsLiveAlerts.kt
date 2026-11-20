@@ -180,6 +180,9 @@ class SportsLiveAlerts @Inject constructor(
         reminderNoticeFlow.compareAndSet(notice, null)
     }
 
+    /** "At tip-off" as last read (research Q17): Remind me, or Switch automatically. */
+    val tipOff: com.nuvio.tv.core.sportslive.SportsLiveTipOff get() = lastSettings.tipOff
+
     fun setWatching(now: SportsLiveWatching) {
         watching.value = now
     }
@@ -416,8 +419,10 @@ class SportsLiveAlerts @Inject constructor(
             if (answer == AlertAnswer.LATER) holdsScope.launch { holdsLock.withLock { holds.remindLater(alert) } }
         } else if (alert is SportsLiveAlert.Kickoff) {
             when (answer) {
-                AlertAnswer.WATCH, AlertAnswer.DISMISS -> engine.answered(alert.item)
-                AlertAnswer.LATER, AlertAnswer.TIMEOUT -> engine.later(alert.item, nowMs)
+                // The kickoff toast timing out is answered too (research Q17: one alert per game; the game stays
+                // in Your teams as "Started").
+                AlertAnswer.WATCH, AlertAnswer.DISMISS, AlertAnswer.TIMEOUT -> engine.answered(alert.item)
+                AlertAnswer.LATER -> engine.later(alert.item, nowMs)
             }
         }
         // By id: alerts may have joined the card since the host read it.

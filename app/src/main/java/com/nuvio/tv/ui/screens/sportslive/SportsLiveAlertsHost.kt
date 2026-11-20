@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Star
 import android.view.SurfaceView
 import android.view.ViewGroup
@@ -56,9 +55,9 @@ import com.nuvio.tv.core.sportslive.alerts.PeekCommand
 import com.nuvio.tv.core.sportslive.alerts.PeekEvent
 import com.nuvio.tv.core.sportslive.alerts.PeekPhase
 import com.nuvio.tv.core.sportslive.alerts.PeekState
-import com.nuvio.tv.core.sportslive.alerts.PromptChoice
 import com.nuvio.tv.core.sportslive.alerts.SportsLiveAlertCards
 import com.nuvio.tv.core.sportslive.alerts.SportsLiveAlertKeys
+import com.nuvio.tv.core.sportslive.alerts.SportsLiveTipOffSwitch
 import com.nuvio.tv.core.sportslive.alerts.SportsLiveAlertPlacement
 import com.nuvio.tv.core.sportslive.alerts.SportsLivePeek
 import com.nuvio.tv.core.sportslive.displayName
@@ -74,14 +73,10 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -153,13 +148,13 @@ class SportsLiveAlertsViewModel @Inject constructor(
 private class PeekSession(val surface: SportsLiveAlertSurface, val host: SportsLivePeekHost, val entryId: String?)
 
 /**
- * Reminders' "Watch now?" prompt (#44) and followed teams' toasts (#42), over every screen while the
- * app is in the foreground. Over the player the prompt is the small one. The prompt takes focus (Watch
- * first) and gives it back to [contentFocusRequester] when it closes.
+ * Reminders' kickoff toast (#44, research Q17) and followed teams' toasts (#42), over every screen while the
+ * app is in the foreground. Over the player the kickoff toast is the small one. Nothing here takes focus or a
+ * plain OK ([contentFocusRequester] keeps it): the kickoff toast acts on ▶ or a held OK only.
  *
  * Toasts never take focus (#136): toasts raised close together share one slim card at the top right that
  * cycles through them. Over the full player of a game or dual screen, while that screen's own overlays are
- * closed, the card takes OK (its game plays here: a zap, or the highlighted pane), ▼ (a peek: its game
+ * closed, the card takes ▶ or a held OK (its game plays here: a zap, or the highlighted pane), ▼ (a peek: its game
  * full screen with sound for a few seconds, the game from before kept playing quietly underneath) and
  * Back (it goes); every other key, and every key while not actionable, goes to the screen as usual
  * ([SportsLiveAlertSurfaces.dispatch], [SportsLiveAlertKeys]).
@@ -280,9 +275,6 @@ fun SportsLiveAlertsHost(
     val surface by SportsLiveAlertSurfaces.surface.collectAsState()
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    fun giveFocusBack() {
-        runCatching { contentFocusRequester.restoreFocusedChild() || contentFocusRequester.requestFocus(FocusDirection.Enter) }
-    }
 
     /** [item] plays here: [on]'s own way (a zap, the highlighted pane), else as Watch on a prompt. */
     fun playHere(item: SportsLiveItem, on: SportsLiveAlertSurface?) {
@@ -357,24 +349,29 @@ fun SportsLiveAlertsHost(
     val currentSurface by rememberUpdatedState(surface)
     val canActHere by rememberUpdatedState((inPlayer && watching.sportsPlayback) || dualRoute)
     val currentInPlayer by rememberUpdatedState(inPlayer)
-    // The kickoff prompt's chosen button while it takes the keys (#173), by card: Watch first on each new prompt.
-    var promptPick by remember { mutableStateOf<Pair<Long, PromptChoice>?>(null) }
-    fun choose(choice: PromptChoice) {
-        promptPick = currentCard?.let { it.id to choice }
+    // "At tip-off: Switch automatically" (research Q17): the card whose countdown Back cancelled.
+    var switchCancelled by remember { mutableStateOf<Long?>(null) }
+    val currentWatching by rememberUpdatedState(watching)
+    /** [shown] counts down to switching: opted in, a game with a stream, and never over a game being watched. */
+    fun countsDown(shown: AlertCard?): Boolean {
+        val kickoff = shown?.first as? SportsLiveAlert.Kickoff ?: return false
+        return SportsLiveTipOffSwitch.runs(alerts.tipOff, kickoff.noStreamYet, currentWatching.inPlayer) && switchCancelled != shown.id
     }
     fun keyContext(): AlertKeyContext {
         val on = currentSurface
-        // ▲ Both: the full player only; dual screen already shows two games (OK replaces the highlighted one).
-        // A kickoff with no live stream yet (#162) has nothing to put beside the game.
-        val kickoff = currentCard?.first as? SportsLiveAlert.Kickoff
+        val shown = currentCard
+        val kickoff = shown?.first as? SportsLiveAlert.Kickoff
         return SportsLiveAlertKeys.context(
-            card = currentCard,
+            card = shown,
             canActHere = canActHere,
             surfaceBusy = on?.busy(),
             canPeek = currentInPlayer && on?.peek?.canPeek() == true,
             peeking = peek != null,
-            promptChoice = promptPick?.takeIf { it.first == currentCard?.id }?.second ?: PromptChoice.WATCH,
-            canBoth = currentInPlayer && kickoff?.noStreamYet != true && on?.offersBoth() == true
+            // ▲ Both: the full player only; dual screen already shows two games.
+            canBoth = currentInPlayer && on?.offersBoth() == true,
+            // Over a movie or show the kickoff only informs (KickoffStyle.TOAST): ▶ stays that player's.
+            kickoffKeys = kickoff != null && SportsLiveAlertEngine.kickoffStyle(currentWatching) != KickoffStyle.TOAST,
+            countdown = countsDown(shown)
         )
     }
     /** Watch on the kickoff prompt over the player or dual screen (#173): the game's fresh card, played here. */
@@ -393,15 +390,11 @@ fun SportsLiveAlertsHost(
                     AlertKeyAction.PASS, AlertKeyAction.CONSUME -> Unit
                     AlertKeyAction.PEEK_STAY -> onPeek(PeekEvent.Ok(nowMs))
                     AlertKeyAction.PEEK_RETURN -> onPeek(PeekEvent.Back)
-                    AlertKeyAction.PROMPT_CHOOSE_WATCH -> choose(PromptChoice.WATCH)
-                    AlertKeyAction.PROMPT_CHOOSE_LATER -> choose(PromptChoice.LATER)
-                    // No live stream yet (#162): the buttons are Remind me in 10 min (Later's answer) and Dismiss.
+                    // ▶ or a held OK (research Q17); on the no-stream note (#162) it is Remind me in 10 min.
                     AlertKeyAction.PROMPT_WATCH -> currentCard?.let {
                         if (it.noStreamYet()) alerts.close(it, AlertAnswer.LATER) else watchFromPrompt(it)
                     }
-                    AlertKeyAction.PROMPT_LATER -> currentCard?.let {
-                        alerts.close(it, if (it.noStreamYet()) AlertAnswer.DISMISS else AlertAnswer.LATER)
-                    }
+                    AlertKeyAction.PROMPT_CANCEL -> switchCancelled = currentCard?.id
                     AlertKeyAction.WATCH, AlertKeyAction.PEEK, AlertKeyAction.BOTH, AlertKeyAction.DISMISS -> {
                         val shown = currentCard ?: return
                         // OK acts on the alert the card shows now (of those it shows: the ones with words).
@@ -463,52 +456,28 @@ fun SportsLiveAlertsHost(
                 LaunchedEffect(current.id) { alerts.close(current, AlertAnswer.DISMISS) }
                 return@Box
             }
-            // Over the player or dual screen the prompt takes its keys by the dispatcher (#173), not by focus;
-            // Back is Later, by the back callback as by the key.
-            val keyChoice = keyContext().prompt
-            TakeBack(keyChoice != null && peek == null) {
-                currentCard?.let { alerts.close(it, if (it.noStreamYet()) AlertAnswer.DISMISS else AlertAnswer.LATER) }
-            }
-            // While it is up, the player's own cards wait under it (live.19 QA F11: one focused button at a time).
+            // Research Q17: a toast that never takes focus; ▶ or a held OK watch (the dispatcher's keys), every
+            // other key is the screen's. While it is up, the player's own cards wait under it (live.19 QA F11).
             DisposableEffect(current.id) {
                 SportsLiveAlertSurfaces.setPromptUp(true)
                 onDispose { SportsLiveAlertSurfaces.setPromptUp(false) }
             }
+            // Back cancels a switch countdown (and only that), by the back callback as by the key.
+            TakeBack(countsDown(current) && peek == null) { switchCancelled = current.id }
             val kickoffLabelOf = rememberSportsLiveStateLabeler(SportsLiveTab.UPCOMING)
-            KickoffPrompt(
+            KickoffToast(
                 content = content,
                 compact = style == KickoffStyle.COMPACT,
                 noStreamYet = first.noStreamYet,
                 streamReady = remember(readyMarks, first) { SportsLiveGameReadiness.shared.of(first.item) == SportsLiveReadyMark.READY },
-                // ▲ Both (the full player only, never dual screen): this game and the kickoff's side by side.
-                onBoth = surface?.takeIf { inPlayer && !dualRoute && style == KickoffStyle.COMPACT && !first.noStreamYet && it.offersBoth() }?.let { on ->
-                    {
-                        alerts.close(current, AlertAnswer.WATCH)
-                        scope.launch { sportsLiveKickoffBoth(first.item, alerts::cardToWatch, on::watchBoth) { playViewModel.play(it) } }
-                    }
-                },
                 watchingTitle = playerTitle?.let(::sportsLivePlainTitle),
-                // "Kicking off now" already says when: a time only when it is the real kickoff (F11: never "12:00 AM").
+                // A time only when it is the real kickoff (F11: never "12:00 AM").
                 kickoffLabel = kickoffLabelOf(first.item.copy(isLive = false))
                     .takeIf { sportsLiveKickoffShowsTime(first.item.startMs, first.item.startHasTimeOfDay, System.currentTimeMillis()) },
-                keyChoice = keyChoice,
-                onWatch = {
-                    alerts.close(current, AlertAnswer.WATCH)
-                    scope.launch { playViewModel.play(alerts.cardToWatch(first.item)) }
-                },
-                onLater = {
-                    alerts.close(current, AlertAnswer.LATER)
-                    giveFocusBack()
-                },
-                onBack = {
-                    alerts.close(current, AlertAnswer.DISMISS)
-                    giveFocusBack()
-                },
-                onTimeout = {
-                    alerts.close(current, AlertAnswer.TIMEOUT)
-                    // A key-driven prompt never took focus: there is none to give back.
-                    if (keyChoice == null) giveFocusBack()
-                },
+                countdown = countsDown(current),
+                onSwitch = { watchFromPrompt(current) },
+                // Timed out: answered (one alert per game, research Q17); the game stays in Your teams, "Started".
+                onTimeout = { alerts.close(current, AlertAnswer.TIMEOUT) },
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .then(promptPlace)
@@ -730,68 +699,61 @@ private fun SportsLivePeekLayer(state: PeekState, stream: Stream?, onFirstFrame:
 }
 
 /**
- * The "Watch now?" prompt (#44). Outside the player and dual screen ([keyChoice] null) it takes focus, Watch
- * first. Over them (#173) it takes no focus: the dispatcher gives it OK, ← → and Back ([SportsLiveAlertKeys]),
- * it draws [keyChoice] focused and says so in a hint.
+ * The kickoff toast (research Q17, replacing the "Watch now?" prompt #44 / #173): it never takes focus and never acts
+ * on a plain OK. "LIVE · Just started", the matchup, "Stream ready" or "Waiting for a working stream…", and its keys:
+ * "▶ or hold OK to watch" (the dispatcher's, [SportsLiveAlertKeys]). Up [KICKOFF_TOAST_MS], then [onTimeout]. With
+ * "At tip-off: Switch automatically" ([countdown]) it counts [SWITCH_COUNTDOWN_MS] down instead and then switches
+ * ([onSwitch]); Back cancels the countdown, and the toast stays as a plain reminder. The no-stream note ([noStreamYet],
+ * #162) offers "▶ or hold OK: remind me in 10 min".
  */
 @Composable
-private fun KickoffPrompt(
+private fun KickoffToast(
     content: AlertContent.Kickoff,
     compact: Boolean,
-    /** The quiet note (#162): no link came up within 20 minutes; Remind me in 10 min / Dismiss, no Watch. */
     noStreamYet: Boolean,
-    /** 1b: a verified link is held, so Watch plays it at once: "▶ Ready · Stream ready · Watch now?"; else "Waiting for a working stream…". */
     streamReady: Boolean,
-    /** ▲ Both over the full player; null where dual screen cannot open. */
-    onBoth: (() -> Unit)?,
     watchingTitle: String?,
     kickoffLabel: String?,
-    keyChoice: PromptChoice?,
-    onWatch: () -> Unit,
-    onLater: () -> Unit,
-    onBack: () -> Unit,
+    countdown: Boolean,
+    onSwitch: () -> Unit,
     onTimeout: () -> Unit,
     modifier: Modifier
 ) {
-    val watchFocus = remember { FocusRequester() }
-    var secondsLeft by remember { mutableIntStateOf((PROMPT_MS / 1_000).toInt()) }
-    val keyDriven = keyChoice != null
-    LaunchedEffect(keyDriven) {
-        if (keyDriven) return@LaunchedEffect
-        withFrameNanos { }
-        runCatching { watchFocus.requestFocus() }
-    }
-    // The countdown runs only while the app is in the foreground; it resumes where it was.
+    var secondsLeft by remember { mutableIntStateOf((SWITCH_COUNTDOWN_MS / 1_000).toInt()) }
+    val currentCountdown by rememberUpdatedState(countdown)
+    // The time runs only while the app is in the foreground; it resumes where it was.
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            while (secondsLeft > 0) {
+            var shownMs = 0L
+            while (true) {
+                if (currentCountdown) {
+                    if (secondsLeft <= 0) {
+                        onSwitch()
+                        return@repeatOnLifecycle
+                    }
+                } else if (shownMs >= KICKOFF_TOAST_MS) {
+                    onTimeout()
+                    return@repeatOnLifecycle
+                }
                 delay(1_000)
-                secondsLeft--
+                shownMs += 1_000
+                if (currentCountdown) secondsLeft--
             }
-            onTimeout()
         }
     }
-    BackHandler(enabled = !keyDriven, onBack = onBack)
     val shape = RoundedCornerShape(16.dp)
-    val logoSize = if (compact) 36.dp else 52.dp
+    val logoSize = if (compact) 36.dp else 44.dp
     Column(
         modifier = modifier
             .claimsBottomLeft()
-            // ▲ Both (the full player): the key works wherever focus is on the prompt.
-            .onPreviewKeyEvent { event ->
-                val both = onBoth ?: return@onPreviewKeyEvent false
-                if (event.nativeKeyEvent.keyCode != android.view.KeyEvent.KEYCODE_DPAD_UP) return@onPreviewKeyEvent false
-                if (event.nativeKeyEvent.action == android.view.KeyEvent.ACTION_DOWN && event.nativeKeyEvent.repeatCount == 0) both()
-                true
-            }
-            .widthIn(max = if (compact) 440.dp else 560.dp)
+            .widthIn(max = if (compact) 440.dp else 520.dp)
             .clip(shape)
             // V2 (#134): the toast card's raised surface, in the toasts' corner (live.19 QA F11).
             .background(SportsLiveTokens.Colors.SurfaceRaised.copy(alpha = 0.96f))
             .border(1.dp, SportsLiveTokens.Colors.Outline, shape)
-            .padding(if (compact) 16.dp else 24.dp),
-        verticalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 12.dp)
+            .padding(if (compact) 14.dp else 18.dp),
+        verticalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 8.dp)
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             if (!noStreamYet) {
@@ -806,7 +768,7 @@ private fun KickoffPrompt(
                 )
             }
             Text(
-                text = stringResource(if (noStreamYet) R.string.sports_live_alert_no_stream_yet else R.string.sports_live_alert_kicking_off),
+                text = stringResource(if (noStreamYet) R.string.sports_live_alert_no_stream_yet else R.string.sports_live_alert_just_started),
                 style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                 color = if (noStreamYet) ArtColors.Secondary else ArtColors.LiveText
             )
@@ -817,7 +779,7 @@ private fun KickoffPrompt(
             logos?.let { TeamLogoSlot(it.first, it.shown, logoSize) }
             Text(
                 text = stringResource(R.string.sports_live_alert_matchup, content.first.name, content.second.name),
-                style = (if (compact) MaterialTheme.typography.titleMedium else MaterialTheme.typography.headlineSmall).sportsLiveBold(),
+                style = (if (compact) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleLarge).sportsLiveBold(),
                 color = ArtColors.Text,
                 // One line (F11): it never wraps over the screen behind.
                 maxLines = 1,
@@ -837,7 +799,7 @@ private fun KickoffPrompt(
         }
         if (details.isNotEmpty()) {
             Text(
-                text = details.joinToString(" · "),
+                text = details.joinToString(HINT_SEPARATOR),
                 style = MaterialTheme.typography.bodyMedium,
                 color = ArtColors.Secondary,
                 maxLines = 1,
@@ -845,74 +807,27 @@ private fun KickoffPrompt(
             )
         }
         if (!noStreamYet) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                // The words say "Stream ready" already: no "▶ Ready" pill beside them (coordinator, live.20).
-                Text(
-                    text = stringResource(if (streamReady) R.string.sports_live_kickoff_stream_ready else R.string.sports_live_kickoff_waiting_stream),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = if (streamReady) ArtColors.Text else ArtColors.Muted,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (keyChoice != null) {
-                SportsLiveDrawnButton(
-                    text = stringResource(if (noStreamYet) R.string.sports_live_alert_remind_in_10 else R.string.sports_live_watch),
-                    primary = true,
-                    focused = keyChoice == PromptChoice.WATCH,
-                    icon = Icons.Rounded.PlayArrow.takeIf { !noStreamYet }
-                )
-                SportsLiveDrawnButton(
-                    text = stringResource(if (noStreamYet) R.string.sports_live_alert_dismiss else R.string.sports_live_alert_later),
-                    primary = false,
-                    focused = keyChoice == PromptChoice.LATER
-                )
-            } else if (noStreamYet) {
-                SportsLivePaneButton(onClick = onLater, modifier = Modifier.focusRequester(watchFocus), primary = true) {
-                    Text(stringResource(R.string.sports_live_alert_remind_in_10), maxLines = 1)
-                }
-                SportsLivePaneButton(onClick = onBack) {
-                    Text(stringResource(R.string.sports_live_alert_dismiss), maxLines = 1)
-                }
-            } else {
-                SportsLivePaneButton(onClick = onWatch, modifier = Modifier.focusRequester(watchFocus), primary = true) {
-                    Icon(imageVector = Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
-                    Text(stringResource(R.string.sports_live_watch), maxLines = 1)
-                }
-                if (onBoth != null) {
-                    SportsLivePaneButton(onClick = onBoth) {
-                        Text(stringResource(R.string.sports_live_alert_both_button), maxLines = 1)
-                    }
-                }
-                SportsLivePaneButton(onClick = onLater) {
-                    Text(stringResource(R.string.sports_live_alert_later), maxLines = 1)
-                }
-            }
+            // live.20 1b wording, kept: a verified link held, or not yet.
             Text(
-                text = stringResource(R.string.sports_live_alert_closes, secondsLeft),
-                style = MaterialTheme.typography.bodySmall,
-                color = ArtColors.Muted,
-                maxLines = 1
+                text = stringResource(if (streamReady) R.string.sports_live_kickoff_stream_ready_short else R.string.sports_live_kickoff_waiting_stream),
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (streamReady) ArtColors.Text else ArtColors.Muted,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
-        // Every prompt names its keys (research 4): the no-stream note's too.
-        if (keyDriven) {
-            Text(
-                text = if (noStreamYet) {
-                    stringResource(R.string.sports_live_alert_no_stream_hint)
-                } else {
-                    listOfNotNull(
-                        stringResource(R.string.sports_live_alert_prompt_hint),
-                        stringResource(R.string.sports_live_alert_hint_both).takeIf { onBoth != null }
-                    ).joinToString(HINT_SEPARATOR)
-                },
-                style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag),
-                color = SportsLiveTokens.Alert.Hint,
-                maxLines = 1
-            )
-        }
+        // Its keys, named (research 4): never OK alone.
+        Text(
+            text = when {
+                noStreamYet -> stringResource(R.string.sports_live_alert_no_stream_hint)
+                countdown -> stringResource(R.string.sports_live_alert_switching_hint, secondsLeft.coerceAtLeast(0))
+                else -> stringResource(R.string.sports_live_alert_prompt_hint)
+            },
+            style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag),
+            color = if (countdown && !noStreamYet) ArtColors.Text else SportsLiveTokens.Alert.Hint,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
@@ -1095,7 +1010,11 @@ private const val PEEK_TICK_MS = 500L
 private const val HINT_SEPARATOR = " · "
 
 /** The prompt closes by itself after this long, as Later (the design's 15 s). */
-private const val PROMPT_MS = 15_000L
+/** The kickoff toast stays up this long (research Q17: about 8 s). */
+private const val KICKOFF_TOAST_MS = 8_000L
+
+/** "At tip-off: Switch automatically": the countdown before the switch (research Q17: 10 s, Back cancels). */
+private const val SWITCH_COUNTDOWN_MS = 10_000L
 
 /** A kickoff prompt with no live stream yet (#162): Remind me in 10 min and Dismiss, no Watch. */
 private fun AlertCard.noStreamYet(): Boolean = (first as? SportsLiveAlert.Kickoff)?.noStreamYet == true

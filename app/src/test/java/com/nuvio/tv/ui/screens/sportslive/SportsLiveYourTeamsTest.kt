@@ -37,6 +37,7 @@ class SportsLiveYourTeamsTest {
     private val evening = row("evening", followed = true, group = ScoreboardGroup.LATER, startMs = ms("2026-11-19T19:00:00Z"))
     private val tomorrow = row("tomorrow", followed = true, group = ScoreboardGroup.LATER, startMs = ms("2026-11-20T01:00:00Z"))
     private val started = row("started", followed = true, group = ScoreboardGroup.LATER, startMs = now - hour)
+    private val longStarted = row("long-started", followed = true, group = ScoreboardGroup.LATER, startMs = now - 4 * hour)
     private val notFollowed = row("other", followed = false, group = ScoreboardGroup.LATER, startMs = ms("2026-11-19T20:00:00Z"))
 
     private val nba = EspnFixtures.events(EspnFixtures.NBA_20261115, EspnLeagueMap.NBA)
@@ -62,7 +63,7 @@ class SportsLiveYourTeamsTest {
             zone = zone
         )
         assertEquals(
-            listOf("live|a|live-f", "today|a|soon", "replay|newer", "replay|older", "today|a|evening", "today|a|tonight"),
+            listOf("live|a|live-f", "today|a|started", "today|a|soon", "replay|newer", "replay|older", "today|a|evening", "today|a|tonight"),
             strip.map { it.key }
         )
     }
@@ -98,7 +99,19 @@ class SportsLiveYourTeamsTest {
 
     @Test
     fun `an empty strip when nothing qualifies`() {
-        assertTrue(YourTeams.strip(listOf(liveOther), listOf(tomorrow, notFollowed, started), emptyList(), now, zone).isEmpty())
+        assertTrue(YourTeams.strip(listOf(liveOther), listOf(tomorrow, notFollowed, longStarted), emptyList(), now, zone).isEmpty())
+    }
+
+    @Test
+    fun `after tip-off a game no addon lists live yet stays in the strip as Started, and OK plays it (Q17)`() {
+        val strip = YourTeams.strip(emptyList(), listOf(evening, started), emptyList(), now, zone)
+        val entry = strip.first() as YourTeamsEntry.LaterToday
+        assertEquals("today|a|started", entry.key)
+        assertTrue(entry.started)
+        assertTrue(YourTeams.okPlays(entry, null))
+        assertFalse((strip[1] as YourTeamsEntry.LaterToday).started)
+        // Three hours on it leaves: by then it is live (in the list) or not happening.
+        assertTrue(YourTeams.strip(emptyList(), listOf(longStarted), emptyList(), now, zone).isEmpty())
     }
 
     @Test

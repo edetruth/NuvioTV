@@ -75,8 +75,12 @@ internal sealed interface YourTeamsEntry {
         override val key: String get() = "live|" + row.item.streamKey
     }
 
-    /** A followed team's game later today ([startMs] ahead): OK is Remind me, the stage is Upcoming's. */
-    data class LaterToday(val row: ScoreboardRow, val startMs: Long) : YourTeamsEntry {
+    /**
+     * A followed team's game later today ([startMs] ahead): OK is Remind me, the stage is Upcoming's. [started]: its
+     * start has passed but no addon lists it live yet (research Q17: after the tip-off toast the game stays here,
+     * tagged "Started", and OK plays it).
+     */
+    data class LaterToday(val row: ScoreboardRow, val startMs: Long, val started: Boolean = false) : YourTeamsEntry {
         override val key: String get() = "today|" + row.item.streamKey
     }
 
@@ -106,6 +110,9 @@ internal object YourTeams {
     /** A game starting within this is "starting soon": it comes before the replays. */
     const val SOON_MS = 60 * 60_000L
 
+    /** A game whose start passed stays "Started" this long while no addon lists it live yet (research Q17). */
+    const val STARTED_KEEP_MS = 3 * 60 * 60_000L
+
     /** At most this many replays, the newest. */
     const val MAX_REPLAYS = 3
 
@@ -130,8 +137,8 @@ internal object YourTeams {
         val today = Instant.ofEpochMilli(nowMs).atZone(zone).toLocalDate()
         val later = upcomingRows.asSequence()
             .filter { it.followed && it.group != ScoreboardGroup.LIVE && it.art != null && it.item.streamKey !in liveKeys && !it.item.isLive }
-            .mapNotNull { row -> agendaStartOf(row)?.let { start -> YourTeamsEntry.LaterToday(row, start) } }
-            .filter { it.startMs > nowMs && Instant.ofEpochMilli(it.startMs).atZone(zone).toLocalDate() == today }
+            .mapNotNull { row -> agendaStartOf(row)?.let { start -> YourTeamsEntry.LaterToday(row, start, started = start <= nowMs) } }
+            .filter { it.startMs > nowMs - STARTED_KEEP_MS && Instant.ofEpochMilli(it.startMs).atZone(zone).toLocalDate() == today }
             .distinctBy { it.row.item.streamKey }
             .sortedBy { it.startMs }
             .toList()
@@ -182,7 +189,7 @@ internal object YourTeams {
      * ([mark] READY: "Watch now", the held link at once, 1b HARD RULE), else it sets the reminder.
      */
     fun okPlays(entry: YourTeamsEntry, mark: SportsLiveReadyMark?): Boolean =
-        entry !is YourTeamsEntry.LaterToday || mark == SportsLiveReadyMark.READY
+        entry !is YourTeamsEntry.LaterToday || entry.started || mark == SportsLiveReadyMark.READY
 
     /** From 5 pm local the day's games read "tonight", before it "today" (the heading and Home's line). */
     fun isEvening(nowMs: Long, zone: ZoneId = ZoneId.systemDefault()): Boolean =
@@ -250,6 +257,7 @@ internal fun SportsLiveYourTeamsStrip(
     val strings = rememberScoreChipStrings()
     val liveWord = stringResource(R.string.sports_live_team_live)
     val todayWord = stringResource(R.string.sports_live_agenda_today)
+    val startedWord = stringResource(R.string.sports_live_your_teams_started)
     val listState = rememberLazyListState()
     // Cards past the last one fully in view: the "+N ›" cue.
     val offScreen by remember(listState) {
@@ -300,9 +308,14 @@ internal fun SportsLiveYourTeamsStrip(
                             )
                         }
                         // Ready: OK is Watch now (the held link), the pill says so; else OK is Remind me, the bell.
+                        // Started (research Q17): no bell (nothing left to remind), OK plays.
                         is YourTeamsEntry.LaterToday -> SlimFace(
-                            status = SlimStatus.Time(agendaTimeText(entry.startMs)),
-                            corner = if (ready) SlimCorner.Ready else SlimCorner.Bell(reminded(entry.row.item))
+                            status = SlimStatus.Time(if (entry.started) startedWord else agendaTimeText(entry.startMs)),
+                            corner = when {
+                                ready -> SlimCorner.Ready
+                                entry.started -> null
+                                else -> SlimCorner.Bell(reminded(entry.row.item))
+                            }
                         )
                         // Never a score, a winner or a final note: the Replay pill and the day.
                         is YourTeamsEntry.Replay -> SlimFace(

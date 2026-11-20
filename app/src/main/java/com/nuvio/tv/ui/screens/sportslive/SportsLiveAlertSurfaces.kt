@@ -106,6 +106,15 @@ internal object SportsLiveAlertSurfaces {
     fun dispatch(event: KeyEvent): Boolean {
         if (event.keyCode == KeyEvent.KEYCODE_BACK && event.downTime <= backTakenAtMs) return true
         if (event.action != KeyEvent.ACTION_DOWN || event.repeatCount > 0) {
+            // A held OK (research Q17): its first repeat may watch an alert's game; the rest of the press is taken.
+            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 1 && event.keyCode !in taken) {
+                val handler = keys ?: return false
+                val action = SportsLiveAlertKeys.route(event.keyCode, handler.context(), held = true)
+                if (action == AlertKeyAction.PASS) return false
+                taken += event.keyCode
+                handler.onAction(action)
+                return true
+            }
             if (event.keyCode !in taken) return false
             if (event.action == KeyEvent.ACTION_UP) taken -= event.keyCode
             return true

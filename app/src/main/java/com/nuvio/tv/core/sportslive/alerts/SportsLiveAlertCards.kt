@@ -112,7 +112,7 @@ enum class AlertKeyAction {
     /** Swallowed: nothing happens (a peek covers the player, so its keys must not reach it). */
     CONSUME,
 
-    /** OK on a card: its game plays here. */
+    /** ▶ (or a held OK) on a card: its game plays here. Never a plain OK (research Q17). */
     WATCH,
 
     /** ▼ on a card: its game plays full screen with sound for a few seconds. */
@@ -130,48 +130,53 @@ enum class AlertKeyAction {
     /** Back during a peek: the game from before, at its live edge. */
     PEEK_RETURN,
 
-    /** OK on the kickoff prompt with Watch chosen (#173): its game plays here. */
+    /** ▶ or a held OK on the kickoff toast (research Q17): its game plays (the no-stream note: remind me in 10 min). */
     PROMPT_WATCH,
 
-    /** OK with Later chosen, or Back, on the kickoff prompt (#173): ask again later. */
-    PROMPT_LATER,
-
-    /** ← on the kickoff prompt: Watch is chosen. */
-    PROMPT_CHOOSE_WATCH,
-
-    /** → on the kickoff prompt: Later is chosen. */
-    PROMPT_CHOOSE_LATER
+    /** Back while the kickoff toast counts down to switching ("At tip-off: Switch automatically"): no switch. */
+    PROMPT_CANCEL
 }
-
-/** The kickoff prompt's two buttons (#173), left to right; OK presses the one chosen. */
-enum class PromptChoice { WATCH, LATER }
 
 /**
  * Who gets a fresh key press (#136). [cardActionable]: a score or full-time card shows over a screen
  * that can play its game here (the full player of a game, dual screen) and that screen's own overlays
- * (controls, the live games panel, a dialog) are closed, so OK is not needed by anything else.
- * [canPeek]: that screen can peek (the full player). [peeking]: a peek plays.
+ * (controls, the live games panel, a dialog) are closed. [canPeek]: that screen can peek (the full player).
+ * [peeking]: a peek plays.
  */
 data class AlertKeyContext(
     val cardActionable: Boolean,
     val canPeek: Boolean,
     val peeking: Boolean,
     /**
-     * A kickoff prompt shows over a screen that can play its game here (#173), with this button chosen: it
-     * takes OK, ← →, Back and every zap key until it closes, whatever else is up. Null: no such prompt.
+     * A kickoff toast shows (research Q17), on any screen: it never takes focus, and only ▶ or a held OK act on it;
+     * every other key, OK and Back included, does what it does underneath.
      */
-    val prompt: PromptChoice? = null,
+    val kickoff: Boolean = false,
+    /** The kickoff toast counts down to switching: Back cancels the switch (and only that). */
+    val countdown: Boolean = false,
     /** ▲ opens dual screen with both games: the full player only (never in dual screen, already two games). */
     val canBoth: Boolean = false
 )
+
+/**
+ * "At tip-off: Switch automatically" (research Q17): the kickoff toast counts down and switches only when opted in
+ * ([tipOff]), for a game with a stream (never the no-stream note), and never over anything playing ([inPlayer]: a
+ * live game being watched is the most valuable thing on screen; over a movie the toast only informs).
+ */
+object SportsLiveTipOffSwitch {
+    fun runs(tipOff: com.nuvio.tv.core.sportslive.SportsLiveTipOff, noStreamYet: Boolean, inPlayer: Boolean): Boolean =
+        tipOff == com.nuvio.tv.core.sportslive.SportsLiveTipOff.SWITCH && !noStreamYet && !inPlayer
+}
+
 object SportsLiveAlertKeys {
 
     /**
      * Who takes keys now: [card] (null once it closed, a timeout too) over a screen that can play its game
      * here ([canActHere]: the full player of a game, dual screen) and registered as a surface ([surfaceBusy]
      * null when none is). A score card is actionable only while the screen's own overlays are closed
-     * ([surfaceBusy] false); a kickoff prompt always is, with [promptChoice] chosen (#173). [canPeek]: the
-     * screen could peek (the full player). [canBoth]: ▲ could open dual screen with both games (the full player).
+     * ([surfaceBusy] false). A kickoff takes its keys wherever it shows as the toast ([kickoffKeys]: not over a
+     * movie, where it only informs). [countdown]: its auto-switch countdown runs. [canPeek]: the screen could peek
+     * (the full player). [canBoth]: ▲ could open dual screen with both games (the full player).
      */
     fun context(
         card: AlertCard?,
@@ -179,24 +184,31 @@ object SportsLiveAlertKeys {
         surfaceBusy: Boolean?,
         canPeek: Boolean,
         peeking: Boolean,
-        promptChoice: PromptChoice = PromptChoice.WATCH,
-        canBoth: Boolean = false
+        canBoth: Boolean = false,
+        kickoffKeys: Boolean = true,
+        countdown: Boolean = false
     ): AlertKeyContext {
+        val kickoff = card?.first is SportsLiveAlert.Kickoff
         val onSurface = card != null && canActHere && surfaceBusy != null
-        val prompt = onSurface && card?.first is SportsLiveAlert.Kickoff
-        val actionable = onSurface && !prompt && surfaceBusy == false
+        val actionable = onSurface && !kickoff && surfaceBusy == false
         return AlertKeyContext(
             cardActionable = actionable,
             canPeek = actionable && canPeek,
             peeking = peeking,
-            prompt = promptChoice.takeIf { prompt },
-            canBoth = (actionable || prompt) && canBoth
+            kickoff = kickoff && kickoffKeys,
+            countdown = kickoff && kickoffKeys && countdown,
+            canBoth = actionable && canBoth
         )
     }
 
-    /** The action of a key's first press (repeats and the release follow it: see the host's dispatcher). */
-    fun route(keyCode: Int, context: AlertKeyContext): AlertKeyAction {
+    /**
+     * The action of a key's first press, or of a held OK's first repeat ([held]: about half a second in); the rest
+     * of that press follows it (see the host's dispatcher). A plain OK never acts on an alert (research Q17: OK is
+     * the most-pressed key, and a prompt that took it took presses meant for the screen).
+     */
+    fun route(keyCode: Int, context: AlertKeyContext, held: Boolean = false): AlertKeyAction {
         if (context.peeking) {
+            if (held) return AlertKeyAction.PASS
             return when {
                 isOk(keyCode) -> AlertKeyAction.PEEK_STAY
                 keyCode == KeyEvent.KEYCODE_BACK || keyCode == KeyEvent.KEYCODE_ESCAPE -> AlertKeyAction.PEEK_RETURN
@@ -205,10 +217,24 @@ object SportsLiveAlertKeys {
                 else -> AlertKeyAction.CONSUME
             }
         }
-        context.prompt?.let { return routePrompt(keyCode, it, context.canBoth) }
+        if (held) {
+            return when {
+                !isOk(keyCode) -> AlertKeyAction.PASS
+                context.kickoff -> AlertKeyAction.PROMPT_WATCH
+                context.cardActionable -> AlertKeyAction.WATCH
+                else -> AlertKeyAction.PASS
+            }
+        }
+        if (context.kickoff) {
+            return when {
+                isWatchKey(keyCode) -> AlertKeyAction.PROMPT_WATCH
+                context.countdown && (keyCode == KeyEvent.KEYCODE_BACK || keyCode == KeyEvent.KEYCODE_ESCAPE) -> AlertKeyAction.PROMPT_CANCEL
+                else -> AlertKeyAction.PASS
+            }
+        }
         if (!context.cardActionable) return AlertKeyAction.PASS
         return when {
-            isOk(keyCode) -> AlertKeyAction.WATCH
+            isWatchKey(keyCode) -> AlertKeyAction.WATCH
             keyCode == KeyEvent.KEYCODE_DPAD_DOWN && context.canPeek -> AlertKeyAction.PEEK
             keyCode == KeyEvent.KEYCODE_DPAD_UP && context.canBoth -> AlertKeyAction.BOTH
             keyCode == KeyEvent.KEYCODE_BACK || keyCode == KeyEvent.KEYCODE_ESCAPE -> AlertKeyAction.DISMISS
@@ -216,32 +242,14 @@ object SportsLiveAlertKeys {
         }
     }
 
-    /**
-     * A key while the kickoff prompt is up (#173): ▲ ▼ and CH± never zap under it; ▲ opens both games where
-     * [canBoth] (#161); the volume and the rest pass.
-     */
-    private fun routePrompt(keyCode: Int, choice: PromptChoice, canBoth: Boolean): AlertKeyAction = when {
-        isOk(keyCode) -> if (choice == PromptChoice.WATCH) AlertKeyAction.PROMPT_WATCH else AlertKeyAction.PROMPT_LATER
-        keyCode == KeyEvent.KEYCODE_BACK || keyCode == KeyEvent.KEYCODE_ESCAPE -> AlertKeyAction.PROMPT_LATER
-        keyCode == KeyEvent.KEYCODE_DPAD_LEFT -> AlertKeyAction.PROMPT_CHOOSE_WATCH
-        keyCode == KeyEvent.KEYCODE_DPAD_RIGHT -> AlertKeyAction.PROMPT_CHOOSE_LATER
-        keyCode == KeyEvent.KEYCODE_DPAD_UP && canBoth -> AlertKeyAction.BOTH
-        keyCode in ZAP_KEYS -> AlertKeyAction.CONSUME
-        else -> AlertKeyAction.PASS
-    }
-
     fun isOk(keyCode: Int): Boolean =
         keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
 
-    private val SYSTEM_KEYS = setOf(KeyEvent.KEYCODE_VOLUME_UP, KeyEvent.KEYCODE_VOLUME_DOWN, KeyEvent.KEYCODE_VOLUME_MUTE)
+    /** ▶: Play/Pause or Play, the deliberate key an alert's Watch is bound to (research Q17). */
+    fun isWatchKey(keyCode: Int): Boolean =
+        keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE || keyCode == KeyEvent.KEYCODE_MEDIA_PLAY
 
-    /** Every key that zaps in the player or dual screen (the D-pad's ▲ ▼, CH±, next and previous). */
-    private val ZAP_KEYS = setOf(
-        KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN,
-        KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_CHANNEL_DOWN,
-        KeyEvent.KEYCODE_PAGE_UP, KeyEvent.KEYCODE_PAGE_DOWN,
-        KeyEvent.KEYCODE_MEDIA_NEXT, KeyEvent.KEYCODE_MEDIA_PREVIOUS
-    )
+    private val SYSTEM_KEYS = setOf(KeyEvent.KEYCODE_VOLUME_UP, KeyEvent.KEYCODE_VOLUME_DOWN, KeyEvent.KEYCODE_VOLUME_MUTE)
 }
 
 /** A peek's phase (#136): its stream is looked up and starting, it plays, or OK was pressed and the zap runs. */
