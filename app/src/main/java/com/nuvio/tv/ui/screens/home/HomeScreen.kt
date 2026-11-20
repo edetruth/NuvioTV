@@ -123,6 +123,7 @@ fun HomeScreen(
 
     // The Catch up row (#58): worked out when Home resumes, never on a timer.
     val catchUpItems by catchUpViewModel.items.collectAsStateWithLifecycle()
+    val keptReplays by catchUpViewModel.kept.collectAsStateWithLifecycle()
     val catchUpContext = androidx.compose.ui.platform.LocalContext.current
     LaunchedEffect(catchUpItems) { viewModel.setCatchUpItems(catchUpItems) }
     val catchUpCardArt = rememberCatchUpCardArt(uiState.catchUpItems)
@@ -139,7 +140,12 @@ fun HomeScreen(
                 catchUpMenuKey = null
                 catchUpViewModel.markWatched(item)
             },
-            onDismiss = { catchUpMenuKey = null }
+            onDismiss = { catchUpMenuKey = null },
+            kept = item.key in keptReplays,
+            onToggleKeep = {
+                catchUpMenuKey = null
+                catchUpViewModel.toggleKeep(item, item.key in keptReplays)
+            }
         )
     }
 

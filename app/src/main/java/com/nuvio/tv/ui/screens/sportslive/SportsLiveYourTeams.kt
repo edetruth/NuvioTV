@@ -22,7 +22,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -53,7 +52,9 @@ import com.nuvio.tv.core.sportslive.SportsLiveReadyMark
 import com.nuvio.tv.core.sportslive.scores.CatchUpItem
 import com.nuvio.tv.core.sportslive.scores.GameArt
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
+import com.nuvio.tv.core.sportslive.scores.SportsResults
 import com.nuvio.tv.core.sportslive.scores.TeamLogoUrls
+import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.ui.screens.home.SportsLiveHomeMeta
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveFocus
@@ -118,17 +119,19 @@ internal object YourTeams {
 
     /**
      * The strip (live.20 1c), in order: followed teams' games live now (as the list orders them), then those starting
-     * within [SOON_MS], then the catch-up replays newest first (at most [MAX_REPLAYS]: [catchUp] holds only the unwatched
-     * ones still useful, [com.nuvio.tv.core.sportslive.scores.ReplayLifetime]), then the rest of today by start (still
-     * ahead and on [nowMs]'s local day in [zone]). [liveRows] are Live now's rows, [upcomingRows] Upcoming's followed
-     * games. A game with no drawn art (no two sides) is left out.
+     * within [SOON_MS], then the catch-up replays newest first ([replays]: [catchUp] holds only the unwatched ones still
+     * useful, [com.nuvio.tv.core.sportslive.scores.ReplayLifetime]), then the rest of today by start (still ahead and on
+     * [nowMs]'s local day in [zone]). [liveRows] are Live now's rows, [upcomingRows] Upcoming's followed games. A game
+     * with no drawn art (no two sides) is left out.
      */
     fun strip(
         liveRows: List<ScoreboardRow>,
         upcomingRows: List<ScoreboardRow>,
         catchUp: List<CatchUpItem>,
         nowMs: Long,
-        zone: ZoneId = ZoneId.systemDefault()
+        zone: ZoneId = ZoneId.systemDefault(),
+        followed: List<FollowedTeam> = emptyList(),
+        kept: Set<String> = emptySet()
     ): List<YourTeamsEntry> {
         val live = liveRows.filter { it.followed && it.group == ScoreboardGroup.LIVE && it.art != null }
             .distinctBy { it.item.streamKey }
@@ -143,11 +146,32 @@ internal object YourTeams {
             .sortedBy { it.startMs }
             .toList()
         val (soon, rest) = later.partition { it.startMs - nowMs <= SOON_MS }
-        val replays = catchUp.sortedByDescending { it.event.startMs ?: Long.MIN_VALUE }
-            .distinctBy { it.key }
-            .take(MAX_REPLAYS)
-            .map { YourTeamsEntry.Replay(it) }
+        val replays = replays(catchUp, followed, kept).map { YourTeamsEntry.Replay(it) }
         return live + soon + replays + rest
+    }
+
+    /**
+     * The strip's replays (research 7), newest first, at most [MAX_REPLAYS]: one per followed team (Google's one item
+     * per series in Continue Watching; a newer game of the team supersedes the older one), except those the user kept
+     * ([kept] event ids, "Keep until I watch it"), which always stay (chosen before the others) and leave their team's
+     * newest replay its place too, so a kept replay never vanishes for a rule the viewer cannot see. A replay whose
+     * followed team is not known ([followed] empty) counts on its own.
+     */
+    fun replays(catchUp: List<CatchUpItem>, followed: List<FollowedTeam>, kept: Set<String> = emptySet()): List<CatchUpItem> {
+        val newest = catchUp.sortedByDescending { it.event.startMs ?: Long.MIN_VALUE }.distinctBy { it.key }
+        val teamsOf = { item: CatchUpItem -> followed.filter { SportsResults.follows(it, item.event) }.toSet() }
+        val used = HashSet<FollowedTeam>()
+        val chosen = ArrayList<CatchUpItem>()
+        chosen += newest.filter { it.key in kept }.take(MAX_REPLAYS)
+        for (item in newest) {
+            if (chosen.size >= MAX_REPLAYS) break
+            if (item.key in kept) continue
+            val teams = teamsOf(item)
+            if (teams.isNotEmpty() && teams.any { it in used }) continue
+            chosen += item
+            used += teams
+        }
+        return chosen.sortedByDescending { it.event.startMs ?: Long.MIN_VALUE }
     }
 
     /** The heading's counts: live games, replays and games later today. */
@@ -218,7 +242,8 @@ internal object YourTeams {
 /**
  * Live Now's "Your teams" strip (#155, live.20 1c): live games, games starting soon, catch-up replays, then later
  * today, under "Your teams · 1 live · 2 replays · 3 tonight". Slim cards (logos, short names, the time) so four fit
- * across the list column; "▶ Ready" on a game holding a verified link (1b); "+N ›" while more cards are off-screen.
+ * across the list column; "▶ Ready" on a game holding a verified link (1b); with more cards than fit, the next one
+ * shows in part at the right edge (research 7: Android TV's own "more this way" cue, [yourTeamsCardsAcross]).
  * OK plays (live, replay) or sets the reminder (later today); hold OK opens the card's menu. → from the last card
  * enters the stage, which always describes the focused card ([YourTeams.stageOf]).
  */
@@ -259,14 +284,6 @@ internal fun SportsLiveYourTeamsStrip(
     val todayWord = stringResource(R.string.sports_live_agenda_today)
     val startedWord = stringResource(R.string.sports_live_your_teams_started)
     val listState = rememberLazyListState()
-    // Cards past the last one fully in view: the "+N ›" cue.
-    val offScreen by remember(listState) {
-        derivedStateOf {
-            val info = listState.layoutInfo
-            val lastFull = info.visibleItemsInfo.lastOrNull { it.offset + it.size <= info.viewportEndOffset }?.index ?: return@derivedStateOf 0
-            (info.totalItemsCount - 1 - lastFull).coerceAtLeast(0)
-        }
-    }
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(TITLE_GAP)) {
         Text(
             text = yourTeamsHeading(YourTeams.summary(entries)),
@@ -277,8 +294,10 @@ internal fun SportsLiveYourTeamsStrip(
             modifier = Modifier.padding(start = FOCUS_ROOM)
         )
         BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-            // Four across the list column (live.20 1c), never narrower than the logos need nor wider than Home's look.
-            val cardWidth = ((maxWidth - FOCUS_ROOM * 2 - CARD_GAP * (CARDS_ACROSS - 1)) / CARDS_ACROSS).coerceIn(CARD_MIN_WIDTH, CARD_MAX_WIDTH)
+            // Four across the list column (live.20 1c), never narrower than the logos need nor wider than Home's look; with
+            // more cards than fit, three and a part of the next (research 7). Room for the focus ring at both ends (BUG10).
+            val cardWidth = ((maxWidth - FOCUS_ROOM * 2 - CARD_GAP * (CARDS_ACROSS - 1)) / yourTeamsCardsAcross(entries.size))
+                .coerceIn(CARD_MIN_WIDTH, CARD_MAX_WIDTH)
             LazyRow(
                 state = listState,
                 horizontalArrangement = Arrangement.spacedBy(CARD_GAP),
@@ -348,9 +367,6 @@ internal fun SportsLiveYourTeamsStrip(
                             }
                     )
                 }
-            }
-            if (offScreen > 0) {
-                MoreCue(offScreen, Modifier.align(Alignment.CenterEnd))
             }
         }
     }
@@ -528,29 +544,18 @@ private fun SlimText(text: String, style: TextStyle, color: Color, modifier: Mod
     Text(text = text, style = style, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = modifier)
 }
 
-/** "+2 ›": more cards off-screen to the right, over the last card in view (a fade, then the count). */
-@Composable
-private fun MoreCue(count: Int, modifier: Modifier) {
-    Box(
-        modifier = modifier
-            .padding(vertical = FOCUS_ROOM)
-            .height(CARD_HEIGHT)
-            .background(Brush.horizontalGradient(listOf(Color.Transparent, Colors.Background.copy(alpha = 0.92f))))
-            .padding(start = 20.dp, end = 4.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = stringResource(R.string.sports_live_your_teams_more, count),
-            style = SportsLiveTokens.style(SportsLiveTokens.Type.Meta).copy(fontWeight = FontWeight.Bold),
-            color = Colors.TextPrimary,
-            maxLines = 1,
-            softWrap = false
-        )
-    }
-}
+/**
+ * How many cards the strip's width holds for [count] cards: four when all fit, else three and [PEEK] of the next, so
+ * the cut card says "more this way" (research 7, Android TV layouts: partial display of offscreen elements).
+ */
+internal fun yourTeamsCardsAcross(count: Int): Float =
+    if (count > CARDS_ACROSS) CARDS_ACROSS - 1 + PEEK else CARDS_ACROSS.toFloat()
 
 /** Four slim cards across the 400 dp list column (live.20 1c); wider where the strip has the room. */
 private const val CARDS_ACROSS = 4
+
+/** The share of the next card in view when more cards than [CARDS_ACROSS] wait to the right. */
+private const val PEEK = 0.4f
 private val CARD_MIN_WIDTH = 88.dp
 private val CARD_MAX_WIDTH = 132.dp
 private val CARD_HEIGHT = 92.dp

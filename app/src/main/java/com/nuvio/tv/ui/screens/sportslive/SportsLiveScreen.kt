@@ -159,6 +159,7 @@ fun SportsLiveScreen(
     val reminders by remindersViewModel.state.collectAsStateWithLifecycle()
     // The Catch up strip (#58) at the top of Live Now: worked out when the screen resumes, never on a timer.
     val catchUpItems by catchUpViewModel.items.collectAsStateWithLifecycle()
+    val keptReplays by catchUpViewModel.kept.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     // Live scores for the Live now and Upcoming cards on screen, polled only while the screen is
@@ -473,6 +474,8 @@ fun SportsLiveScreen(
                 onOpenGame()
             },
             onMarkCatchUpWatched = catchUpViewModel::markWatched,
+            keptReplays = keptReplays,
+            onToggleKeep = catchUpViewModel::toggleKeep,
             onOpenAddons = onOpenAddons,
             onHide = viewModel::hideFromLiveNow,
             protection = protection,
@@ -579,6 +582,10 @@ private fun SportsLiveContent(
     onPlayCatchUp: (CatchUpItem) -> Unit,
     onOpenCatchUpGame: (CatchUpItem) -> Unit,
     onMarkCatchUpWatched: (CatchUpItem) -> Unit,
+    /** Replays the user kept (research 7), by ESPN event id: they stay in the strip until watched. */
+    keptReplays: Set<String> = emptySet(),
+    /** Keep / Don't keep a replay (its kept state now). */
+    onToggleKeep: (CatchUpItem, Boolean) -> Unit = { _, _ -> },
     /** The empty card's "Sources" (#134): the addons screen. */
     onOpenAddons: () -> Unit = {},
     /** More… → Hide from Live Now (#134). */
@@ -715,8 +722,16 @@ private fun SportsLiveContent(
     // later today, then catch-up replays (#58). Up from the first game goes back to it.
     val liveNowShown = uiState.selectedTab == SportsLiveTab.LIVE_NOW
     val liveBoardRows = if (liveNowShown) shownBoard?.rows.orEmpty() else emptyList()
-    val yourTeams = remember(liveNowShown, liveBoardRows, upcomingFollowedRows, catchUpItems, uiState.nowMs) {
-        if (liveNowShown) YourTeams.strip(liveBoardRows, upcomingFollowedRows, catchUpItems, uiState.nowMs.takeIf { it > 0L } ?: System.currentTimeMillis()) else emptyList()
+    val yourTeams = remember(liveNowShown, liveBoardRows, upcomingFollowedRows, catchUpItems, uiState.nowMs, followedTeams, keptReplays) {
+        if (liveNowShown) {
+            YourTeams.strip(
+                liveBoardRows, upcomingFollowedRows, catchUpItems, uiState.nowMs.takeIf { it > 0L } ?: System.currentTimeMillis(),
+                followed = followedTeams,
+                kept = keptReplays
+            )
+        } else {
+            emptyList()
+        }
     }
     val catchUpShown = yourTeams.isNotEmpty()
     val catchUpFocusRequester = remember { FocusRequester() }
@@ -740,7 +755,12 @@ private fun SportsLiveContent(
                 onMarkCatchUpWatched(item)
             },
             onDismiss = { catchUpMenuKey = null },
-            fromYourTeams = true
+            fromYourTeams = true,
+            kept = item.key in keptReplays,
+            onToggleKeep = {
+                catchUpMenuKey = null
+                onToggleKeep(item, item.key in keptReplays)
+            }
         )
     }
     // The strip held focus and has emptied (its last game watched): focus goes to the games, else the tab.

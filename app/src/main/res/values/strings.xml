@@ -4349,8 +4349,9 @@
     </plurals>
     <string name="sports_live_your_teams_tonight">%1$d tonight</string>
     <string name="sports_live_your_teams_today_count">%1$d today</string>
-    <string name="sports_live_your_teams_more">+%1$d ›</string>
     <string name="sports_live_your_teams_remove">Remove from Your teams</string>
+    <string name="sports_live_your_teams_keep">Keep until I watch it</string>
+    <string name="sports_live_your_teams_unkeep">Don\'t keep</string>
     <string name="sports_live_your_team">Your team</string>
     <string name="sports_live_home_your_team">★ Your team</string>
     <plurals name="sports_live_home_streams">

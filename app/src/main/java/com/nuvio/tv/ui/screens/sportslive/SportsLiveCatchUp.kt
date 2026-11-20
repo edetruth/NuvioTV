@@ -14,11 +14,13 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.nuvio.tv.R
 import com.nuvio.tv.core.sportslive.scores.CatchUpItem
 import com.nuvio.tv.core.sportslive.scores.CatchUpRepository
 import com.nuvio.tv.core.sportslive.scores.GameArt
 import com.nuvio.tv.core.sportslive.scores.ScoreTeam
+import com.nuvio.tv.core.sportslive.scores.SpoilerProtectionStore
 import com.nuvio.tv.domain.model.CatalogRow
 import com.nuvio.tv.domain.model.ContentType
 import com.nuvio.tv.domain.model.MetaPreview
@@ -28,12 +30,19 @@ import com.nuvio.tv.ui.components.NuvioDialog
 import com.nuvio.tv.ui.screens.home.SportsLiveHomeMeta
 import com.nuvio.tv.ui.screens.home.SportsLiveHomeRow
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /** The Catch up row (#58) for Home and Live Now. */
 @HiltViewModel
-class SportsLiveCatchUpViewModel @Inject constructor(private val repository: CatchUpRepository) : ViewModel() {
+class SportsLiveCatchUpViewModel @Inject constructor(
+    private val repository: CatchUpRepository,
+    private val spoilers: SpoilerProtectionStore
+) : ViewModel() {
     /** The row (Home) and strip (Live Now); empty while Sports & Live, its Home row or the row is off. */
     val items: StateFlow<List<CatchUpItem>> = repository.items
 
@@ -41,6 +50,20 @@ class SportsLiveCatchUpViewModel @Inject constructor(private val repository: Cat
     fun onOpened() = repository.onOpened()
 
     fun markWatched(item: CatchUpItem) = repository.markWatched(item)
+
+    /**
+     * The replays the user kept (research 7: "Keep until I watch it"), by ESPN event id. Keep is Watch later (#151): it
+     * stays until its replay is watched or for 7 days ([com.nuvio.tv.core.sportslive.scores.ReplayLifetime] rule 4), with
+     * its score hidden meanwhile, and it shows under Replays' Saved for later.
+     */
+    val kept: StateFlow<Set<String>> = spoilers.protection
+        .map { protection -> protection.saved.mapTo(HashSet()) { it.eventId } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
+
+    /** Keep [item] until it is watched, or let it go again ([kept]: it is kept now). */
+    fun toggleKeep(item: CatchUpItem, kept: Boolean) {
+        viewModelScope.launch { if (kept) spoilers.reveal(item.event) else spoilers.saveForLater(item.event) }
+    }
 }
 
 /** The catch-up card's title outside composition (the player's, the source picker's): ESPN's "‹away› at ‹home›". */
@@ -63,8 +86,10 @@ internal fun catchUpMatchup(item: CatchUpItem): String =
     stringResource(R.string.sports_live_results_menu_title, item.event.away.catchUpName, item.event.home.catchUpName)
 
 /**
- * Hold OK on a catch-up card (Home or Live Now): Game stats (score behind Reveal) and Mark as watched, which reads
- * "Remove from Your teams" on Live Now's strip ([fromYourTeams], live.20 1c).
+ * Hold OK on a catch-up card (Home or Live Now), in the one More… sheet every Sports & Live card uses (Q8: never a
+ * second, centered menu): "‹away› at ‹home›" over "Replay · Sun 15 Nov", then Game stats (score behind Reveal), Keep
+ * until I watch it / Don't keep ([kept], research 7) and Mark as watched, which reads "Remove from Your teams" on
+ * Live Now's strip ([fromYourTeams], live.20 1c).
  */
 @Composable
 internal fun SportsLiveCatchUpMenu(
@@ -72,19 +97,30 @@ internal fun SportsLiveCatchUpMenu(
     onOpenGame: () -> Unit,
     onMarkWatched: () -> Unit,
     onDismiss: () -> Unit,
-    fromYourTeams: Boolean = false
+    fromYourTeams: Boolean = false,
+    kept: Boolean = false,
+    /** Keep / Don't keep; null hides it. */
+    onToggleKeep: (() -> Unit)? = null
 ) {
-    val firstFocusRequester = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { firstFocusRequester.requestFocus() } }
-    NuvioDialog(onDismiss = onDismiss, title = catchUpMatchup(item)) {
-        SportsLiveMenuButton(
-            text = stringResource(R.string.sports_live_game_stats),
-            onClick = onOpenGame,
-            modifier = Modifier.focusRequester(firstFocusRequester)
-        )
+    SportsLiveSheet(
+        title = catchUpMatchup(item),
+        status = catchUpReplayWhen(item, System.currentTimeMillis()),
+        statusLive = false,
+        onDismiss = onDismiss,
+        onBack = null
+    ) { first ->
+        SportsLiveMenuButton(text = stringResource(R.string.sports_live_game_stats), onClick = onOpenGame, modifier = first())
+        if (onToggleKeep != null) {
+            SportsLiveMenuButton(
+                text = stringResource(if (kept) R.string.sports_live_your_teams_unkeep else R.string.sports_live_your_teams_keep),
+                onClick = onToggleKeep,
+                modifier = first()
+            )
+        }
         SportsLiveMenuButton(
             text = stringResource(if (fromYourTeams) R.string.sports_live_your_teams_remove else R.string.sports_live_catch_up_mark_watched),
-            onClick = onMarkWatched
+            onClick = onMarkWatched,
+            modifier = first()
         )
     }
 }

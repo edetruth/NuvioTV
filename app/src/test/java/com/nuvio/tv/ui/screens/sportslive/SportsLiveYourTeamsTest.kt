@@ -8,6 +8,7 @@ import com.nuvio.tv.core.sportslive.scores.EspnLeagueMap
 import com.nuvio.tv.core.sportslive.scores.GameArt
 import com.nuvio.tv.core.sportslive.scores.GameArtTeam
 import com.nuvio.tv.domain.model.ContentType
+import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.domain.model.PosterShape
 import com.nuvio.tv.domain.model.SportsLiveItem
@@ -81,6 +82,38 @@ class SportsLiveYourTeamsTest {
         val replays = listOf(1.0, 9.0, 3.0, 20.0, 6.0).mapIndexed { index, hours -> replay("r$index", hoursAgo = hours) }
         val strip = YourTeams.strip(emptyList(), emptyList(), replays, now, zone)
         assertEquals(listOf("replay|r0", "replay|r2", "replay|r4"), strip.map { it.key })
+    }
+
+    /** A replay of [replay] [id] whose home side is the team [teamId]. */
+    private fun teamReplay(id: String, hoursAgo: Double, teamId: String): CatchUpItem {
+        val base = replay(id, hoursAgo)
+        return base.copy(event = base.event.copy(home = base.event.home.copy(id = teamId), away = base.event.away.copy(id = "opp-$id")))
+    }
+
+    private fun follows(teamId: String) = FollowedTeam(name = "Team $teamId", sport = "Basketball", espnId = teamId, league = game.league.path)
+
+    @Test
+    fun `one replay per followed team, the newest`() {
+        val replays = listOf(teamReplay("a-old", 20.0, "A"), teamReplay("a-new", 2.0, "A"), teamReplay("b", 9.0, "B"))
+        val strip = YourTeams.strip(emptyList(), emptyList(), replays, now, zone, followed = listOf(follows("A"), follows("B")))
+        assertEquals(listOf("replay|a-new", "replay|b"), strip.map { it.key })
+    }
+
+    @Test
+    fun `a kept replay stays beside its team's newest one and comes before the others for the cap`() {
+        val replays = listOf(
+            teamReplay("a-old", 30.0, "A"), teamReplay("a-new", 2.0, "A"),
+            teamReplay("b", 3.0, "B"), teamReplay("c", 4.0, "C")
+        )
+        val followed = listOf(follows("A"), follows("B"), follows("C"))
+        val strip = YourTeams.strip(emptyList(), emptyList(), replays, now, zone, followed = followed, kept = setOf("a-old"))
+        assertEquals(listOf("replay|a-new", "replay|b", "replay|a-old"), strip.map { it.key })
+    }
+
+    @Test
+    fun `with more cards than fit, the next one shows in part`() {
+        assertEquals(4f, yourTeamsCardsAcross(4), 0f)
+        assertTrue(yourTeamsCardsAcross(5) in 3.01f..3.99f)
     }
 
     @Test
