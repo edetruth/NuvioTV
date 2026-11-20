@@ -272,10 +272,12 @@ internal fun SportsLivePanelLine(
 private fun RowScope.GameLine(row: ScoreboardRow, line: PanelLine) {
     LineTag(line.tag)
     val logos = rememberTeamLogoPair(row.art)?.takeIf { !it.failed }
-    // With both logos shown, abbreviations that no longer fit (a revealed score and clock) go whole, never as
-    // "B…": the logos name the teams. Taken afresh for each new line.
+    // A matched game with both logos shown: abbreviations that no longer fit (a revealed score and clock) go whole,
+    // never as "B…": the logos name the teams. An unmatched game's names are cut per side instead. Taken afresh
+    // for each new line.
     var namesFit by remember(line) { mutableStateOf(true) }
-    val logosShown = logos?.shown == true
+    val matched = row.art?.let { !it.first.unmatched && !it.second.unmatched } == true
+    val logosShown = logos?.shown == true && matched
     val onOverflow: (() -> Unit)? = if (logosShown) ({ namesFit = false }) else null
     if (logos != null) TeamLogoSlot(logos.first, logos.shown, Size.PanelLogo)
     if (namesFit || !logosShown) LineText(line.first.orEmpty(), Modifier.weight(1f, fill = false), onOverflow = onOverflow)
