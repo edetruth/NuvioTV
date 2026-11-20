@@ -1,8 +1,9 @@
 name: Upstream preview
 
 # Fork-only: every night, merges upstream NuvioMedia/NuvioTV `dev` into the work branch inside the
-# runner and runs the full release-variant unit suite the way the release job does, so an upstream
-# change that conflicts, breaks compilation or fails a test shows up hours before the daily release
+# runner, runs the full release-variant unit suite the way the release job does, then builds the
+# release APKs debug-signed (R8/minify), so an upstream change that conflicts, breaks compilation,
+# fails a test or breaks the release build shows up hours before the daily release
 # (live-sync-release.yml) meets it. It never pushes, publishes or reads a secret.
 # Reports to ONE issue, "Upstream preview: needs attention" (assigned to the repo owner), and closes
 # it with a comment when a later run is clean. The release job refuses to start when that issue
@@ -113,11 +114,27 @@ jobs:
             > "${RUNNER_TEMP}/tests.md"
           cat "${RUNNER_TEMP}/tests.md" >> "${GITHUB_STEP_SUMMARY}"
 
+      # R8/minify and resource shrinking only run when packaging. The build reads CI_USE_DEBUG_SIGNING
+      # (app/build.gradle.kts) and signs the release variant with the debug key: no secrets needed.
+      - name: Build the release APKs (debug-signed)
+        id: assemble
+        if: steps.gradle.outcome == 'success'
+        continue-on-error: true
+        env:
+          CI_USE_DEBUG_SIGNING: "true"
+        run: |
+          set -o pipefail
+          ./gradlew :app:assembleFullRelease \
+            --init-script .github/exclude-known-failing-tests.gradle \
+            --init-script .github/ci-test-retry.gradle \
+            --stacktrace 2>&1 | tee "${RUNNER_TEMP}/assemble.log"
+
       - name: Verdict
         id: verdict
         env:
           CONFLICT: ${{ steps.merge.outputs.conflict }}
           GRADLE_OUTCOME: ${{ steps.gradle.outcome }}
+          ASSEMBLE_OUTCOME: ${{ steps.assemble.outcome }}
           FAILED_TESTS: ${{ steps.tests.outputs.failed }}
           BASE_SHA: ${{ steps.merge.outputs.base_sha }}
           UPSTREAM_SHA: ${{ steps.merge.outputs.upstream_sha }}
@@ -125,14 +142,29 @@ jobs:
         run: |
           if [[ "${CONFLICT}" == "true" ]]; then
             result=conflicts
-          elif [[ "${GRADLE_OUTCOME}" == "success" ]]; then
+          elif [[ "${GRADLE_OUTCOME}" == "success" && "${ASSEMBLE_OUTCOME}" == "success" ]]; then
             result=clean
+          elif [[ "${GRADLE_OUTCOME}" == "success" ]]; then
+            result=release
           elif (( ${FAILED_TESTS:-0} > 0 )); then
             result=tests
           else
             result=build
           fi
           echo "result=${result}" >> "${GITHUB_OUTPUT}"
+
+          # Error lines from a Gradle log (Kotlin, javac, R8), runner paths stripped.
+          print_errors() {
+            local errors
+            errors="$(grep -E '^e: |: error: |^ERROR' "$1" | head -n 40 || true)"
+            if [[ -z "${errors}" ]]; then
+              errors="$(sed -n '/^\* What went wrong:/,/^\* Try:/p' "$1" | head -n 30 || true)"
+            fi
+            echo '```'
+            printf '%s\n' "${errors:-No error lines found; see the run log.}" \
+              | sed -e "s#file://${GITHUB_WORKSPACE}/##g" -e "s#${GITHUB_WORKSPACE}/##g"
+            echo '```'
+          }
 
           report="${RUNNER_TEMP}/report.md"
           {
@@ -142,7 +174,7 @@ jobs:
             echo
             case "${result}" in
               clean)
-                echo "Result: **clean** (merges, compiles, unit suite passes)." ;;
+                echo "Result: **clean** (merges, compiles, unit suite passes, release APKs build)." ;;
               conflicts)
                 echo "Result: **merge conflicts**. Conflicting files:"
                 echo
@@ -154,14 +186,11 @@ jobs:
               build)
                 echo "Result: **the build failed** (no git conflict; usually an upstream change that breaks fork code)."
                 echo
-                echo '```'
-                errors="$(grep -E '^e: |: error: ' "${RUNNER_TEMP}/gradle.log" | head -n 40 || true)"
-                if [[ -z "${errors}" ]]; then
-                  errors="$(sed -n '/^\* What went wrong:/,/^\* Try:/p' "${RUNNER_TEMP}/gradle.log" | head -n 30 || true)"
-                fi
-                printf '%s\n' "${errors:-No error lines found; see the run log.}" \
-                  | sed -e "s#file://${GITHUB_WORKSPACE}/##g" -e "s#${GITHUB_WORKSPACE}/##g"
-                echo '```' ;;
+                print_errors "${RUNNER_TEMP}/gradle.log" ;;
+              release)
+                echo "Result: **release build failed** (unit suite passes; packaging the release APKs failed, often R8/minify or resource shrinking)."
+                echo
+                print_errors "${RUNNER_TEMP}/assemble.log" ;;
             esac
             echo
             echo "Run: ${RUN_URL}"
