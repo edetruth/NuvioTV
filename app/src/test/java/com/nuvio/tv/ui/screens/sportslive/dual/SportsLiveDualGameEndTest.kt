@@ -91,6 +91,24 @@ class SportsLiveDualGameEndTest {
         }
 
     @Test
+    fun `a swap during the countdown still moves the ended game's pane, not the other one`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            val viewModel = newViewModel(a, d)
+            runCurrent()
+            viewModel.playing()
+            viewModel.onUnhealthy(a, SportsLiveStreamHealth.Problem.UNEXPECTED_END)
+            viewModel.swap()
+            runCurrent()
+            assertEquals(a, viewModel.state.value!!.right.item)
+
+            advanceTimeBy(SportsLiveEndCountdown.DURATION_MS + 1)
+            runCurrent()
+            assertEquals(b, viewModel.state.value!!.right.item)
+            assertEquals(d, viewModel.state.value!!.left.item)
+            assertEquals(PaneStatus.Playing, viewModel.state.value!!.left.status)
+        }
+
+    @Test
     fun `the muted pane's card waits for OK`() = runTest(mainDispatcherRule.dispatcher) {
         val viewModel = newViewModel(d, a)
         runCurrent()

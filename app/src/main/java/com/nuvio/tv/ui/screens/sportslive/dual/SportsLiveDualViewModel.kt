@@ -509,7 +509,8 @@ class SportsLiveDualViewModel internal constructor(
         if (countdown) {
             jobs[side] = viewModelScope.launch {
                 delay(SportsLiveEndCountdown.DURATION_MS)
-                endWatchNext(side)
+                // The pane the ended game is in now: a swap (#123) may have moved it.
+                _state.value?.sideOf(item)?.let { endWatchNext(it) }
             }
         }
     }
