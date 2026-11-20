@@ -52,27 +52,30 @@ fun SportsLiveTab.offersPreview(): Boolean = this == SportsLiveTab.LIVE_NOW || t
  * The hover preview: once the focused card has rested for [settleMs] on a tab that
  * [offersPreview], with the setting on and the screen visible, its stream is looked up with
  * [resolve]; a stream plays (muted) until its first frame, which must come within
- * [firstFrameTimeoutMs], and for at most [maxPlayMs] in all (#71: a preview left on a card must not
- * stream for hours). Ambient mode, the screensaver or a dream ([onAmbient]) and the screen leaving
+ * [firstFrameTimeoutMs], and keeps playing while its card stays focused, until [idleStopMs] pass with
+ * no key pressed ([onKey] restarts that wait; #71: a preview left on a card must not stream for hours). Ambient mode, the screensaver or a dream ([onAmbient]) and the screen leaving
  * ([onVisible]) stop it like any other input. Any change of input (focus, tab, setting, visibility) drops the preview
  * at once and starts a fresh settle when the new inputs allow one, so scrolling past cards never
  * looks anything up. A stream only the full player can play, an error or a missed first frame
  * leave the art in place, silently, until the focus moves; no stream at all shows as [NoStream]
- * until then. A preview that ran its [maxPlayMs] also leaves the art until the focus moves.
+ * until then. A preview stopped for idleness also leaves the art until the focus moves.
  */
 class SportsLivePreviewController(
     private val scope: CoroutineScope,
     private val resolve: suspend (SportsLiveItem) -> SportsLivePreviewLookup,
     private val settleMs: Long = SETTLE_MS,
     private val firstFrameTimeoutMs: Long = FIRST_FRAME_TIMEOUT_MS,
-    private val maxPlayMs: Long = MAX_PLAY_MS
+    private val idleStopMs: Long = IDLE_STOP_MS
 ) {
     companion object {
         const val SETTLE_MS = 2_000L
         const val FIRST_FRAME_TIMEOUT_MS = 10_000L
 
-        /** A preview plays this long on one card at most (from its stream loading), then the art comes back. */
-        const val MAX_PLAY_MS = 20_000L
+        /**
+         * live.20: a preview plays while its card is focused, but stops after this long with no key pressed (from its
+         * stream loading, or the last key), so a TV left on a card does not stream for hours.
+         */
+        const val IDLE_STOP_MS = 180_000L
     }
 
     private val _state = MutableStateFlow<SportsLivePreviewState>(SportsLivePreviewState.Idle)
@@ -84,6 +87,10 @@ class SportsLivePreviewController(
     private var visible = false
     private var ambient = false
     private var job: Job? = null
+    private var idleJob: Job? = null
+
+    /** The playing preview's request check while it plays (null: nothing playing), for the idle stop. */
+    private var playingCurrent: (() -> Boolean)? = null
 
     /**
      * Each settle's request token (#175): a focus, tab or setting change makes the running lookup's stale, so a
@@ -147,10 +154,36 @@ class SportsLivePreviewController(
         return playing
     }
 
+    /** A key was pressed on the screen: a playing preview waits [idleStopMs] again before it stops. */
+    fun onKey() {
+        playingCurrent?.let(::armIdleStop)
+    }
+
+    private fun armIdleStop(current: () -> Boolean) {
+        playingCurrent = current
+        idleJob?.cancel()
+        idleJob = scope.launch {
+            delay(idleStopMs)
+            // No key for that long: back to the art, with no new settle until an input changes.
+            if (current() && _state.value is SportsLivePreviewState.Playing) {
+                playingCurrent = null
+                idleJob = null
+                _state.value = SportsLivePreviewState.Idle
+            }
+        }
+    }
+
+    private fun stopIdleTimer() {
+        playingCurrent = null
+        idleJob?.cancel()
+        idleJob = null
+    }
+
     private fun stop() {
         gate.invalidate()
         job?.cancel()
         job = null
+        stopIdleTimer()
         _state.value = SportsLivePreviewState.Idle
     }
 
@@ -177,15 +210,13 @@ class SportsLivePreviewController(
                 }
             }
             _state.value = SportsLivePreviewState.Playing(item, stream)
-            delay(minOf(firstFrameTimeoutMs, maxPlayMs))
+            armIdleStop(current)
+            delay(firstFrameTimeoutMs)
             if (!current()) return@launch
             if ((_state.value as? SportsLivePreviewState.Playing)?.rendering != true) {
+                stopIdleTimer()
                 _state.value = SportsLivePreviewState.Idle
-                return@launch
             }
-            // Its time is up: back to the art, with no new settle until an input changes.
-            delay((maxPlayMs - firstFrameTimeoutMs).coerceAtLeast(0L))
-            if (current()) _state.value = SportsLivePreviewState.Idle
         }
     }
 }

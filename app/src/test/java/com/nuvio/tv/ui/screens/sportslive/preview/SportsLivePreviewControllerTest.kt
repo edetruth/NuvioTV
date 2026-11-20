@@ -62,13 +62,16 @@ class SportsLivePreviewControllerTest {
     }
 
     @Test
-    fun `a preview stops after 20 s on the same card and does not start again until the focus moves`() = runTest {
+    fun `a preview plays on past 20 s and stops after 3 min with no key, not again until the focus moves`() = runTest {
         val preview = controller()
         preview.onFocus(a)
         advanceTimeBy(2_001)
         runCurrent()
         preview.onFirstFrame(a)
-        advanceTimeBy(SportsLivePreviewController.MAX_PLAY_MS - 2)
+        advanceTimeBy(60_000)
+        runCurrent()
+        assertEquals("well past the old 20 s cap", SportsLivePreviewState.Playing(a, streamA, rendering = true), preview.state.value)
+        advanceTimeBy(SportsLivePreviewController.IDLE_STOP_MS - 60_000 - 2)
         runCurrent()
         assertEquals(SportsLivePreviewState.Playing(a, streamA, rendering = true), preview.state.value)
         advanceTimeBy(2)
@@ -84,6 +87,45 @@ class SportsLivePreviewControllerTest {
         advanceTimeBy(2_001)
         runCurrent()
         assertEquals(SportsLivePreviewState.Playing(b, streamB), preview.state.value)
+    }
+
+    @Test
+    fun `each key press restarts the idle wait of a playing preview`() = runTest {
+        val preview = controller()
+        preview.onFocus(a)
+        advanceTimeBy(2_001)
+        runCurrent()
+        preview.onFirstFrame(a)
+        repeat(3) {
+            advanceTimeBy(SportsLivePreviewController.IDLE_STOP_MS - 1_000)
+            runCurrent()
+            preview.onKey()
+        }
+        assertEquals(SportsLivePreviewState.Playing(a, streamA, rendering = true), preview.state.value)
+        advanceTimeBy(SportsLivePreviewController.IDLE_STOP_MS - 1)
+        runCurrent()
+        assertEquals(SportsLivePreviewState.Playing(a, streamA, rendering = true), preview.state.value)
+        advanceTimeBy(2)
+        runCurrent()
+        assertEquals(SportsLivePreviewState.Idle, preview.state.value)
+        // A key after the idle stop does not bring it back by itself.
+        preview.onKey()
+        advanceUntilIdle()
+        assertEquals(SportsLivePreviewState.Idle, preview.state.value)
+        assertEquals(listOf("a"), lookups)
+    }
+
+    @Test
+    fun `a key before anything plays changes nothing`() = runTest {
+        val preview = controller()
+        preview.onKey()
+        preview.onFocus(a)
+        advanceTimeBy(1_000)
+        preview.onKey()
+        advanceTimeBy(1_001)
+        runCurrent()
+        assertEquals(SportsLivePreviewState.Playing(a, streamA), preview.state.value)
+        preview.onFocus(null)
     }
 
     @Test

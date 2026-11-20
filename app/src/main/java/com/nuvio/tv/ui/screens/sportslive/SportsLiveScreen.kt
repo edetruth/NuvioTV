@@ -419,6 +419,7 @@ fun SportsLiveScreen(
             previewPlayer = previewPlayer,
             dialogOpen = playState != SportsLivePlayState.Idle || dualPick != null,
             onPreviewFocus = viewModel::setPreviewFocus,
+            onPreviewKey = viewModel::onPreviewKey,
             onOpenDetail = onOpenDetail,
             onToggleFollow = { _, target -> viewModel.toggleFollow(target) },
             canWatchWith = canWatchWith,
@@ -557,6 +558,8 @@ private fun SportsLiveContent(
     /** OK's stream lookup or picker is open. */
     dialogOpen: Boolean,
     onPreviewFocus: (SportsLiveItem?) -> Unit,
+    /** Any key pressed on the section: a playing preview stops only after a while with no key. */
+    onPreviewKey: () -> Unit = {},
     onOpenDetail: (SportsLiveItem) -> Unit,
     /** More… → Follow ‹team› (#134): a side matched to a real team. */
     onToggleFollow: (SportsLiveItem, FollowTarget) -> Unit,
@@ -1422,6 +1425,7 @@ private fun SportsLiveContent(
     }
 
     val currentSelectedFilterEmpty by rememberUpdatedState(uiState.selectedFilterEmpty)
+    val currentOnPreviewKey by rememberUpdatedState(onPreviewKey)
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -1429,7 +1433,10 @@ private fun SportsLiveContent(
             // #79: a selected filter whose games have gone stays shown until the user moves; the first key
             // falls back to All (the filter control keeps focus).
             .onPreviewKeyEvent { event ->
-                if (event.nativeKeyEvent.action == AndroidKeyEvent.ACTION_DOWN && currentSelectedFilterEmpty) onUserMoved()
+                if (event.nativeKeyEvent.action == AndroidKeyEvent.ACTION_DOWN) {
+                    currentOnPreviewKey()
+                    if (currentSelectedFilterEmpty) onUserMoved()
+                }
                 false
             }
             .padding(

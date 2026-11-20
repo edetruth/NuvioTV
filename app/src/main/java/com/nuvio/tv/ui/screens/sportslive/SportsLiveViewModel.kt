@@ -574,6 +574,9 @@ class SportsLiveViewModel internal constructor(
 
     fun onPreviewFirstFrame(item: SportsLiveItem) = previewController.onFirstFrame(item)
 
+    /** A key pressed on the section: a playing preview's idle stop waits again (live.20). */
+    fun onPreviewKey() = previewController.onKey()
+
     fun onPreviewError(item: SportsLiveItem) {
         // The previewed stream failed to play: drop its cached resolve so it is re-resolved next time.
         onResolveFailed(item)
