@@ -495,7 +495,8 @@ private fun ZapBanner(banner: SportsLiveZapBanner) {
             }
         }
         val position = stringResource(R.string.sports_live_zap_position, banner.position, banner.total)
-        val next = banner.next?.let { stringResource(R.string.sports_live_zap_next, it) }
+        // A leading emoji or symbol on the next game's title ("📺 …") goes.
+        val next = banner.next?.replaceFirst(LEADING_SYMBOLS, "")?.let { stringResource(R.string.sports_live_zap_next, it) }
         val downHint = stringResource(R.string.sports_live_zap_down_hint).takeIf { !banner.switching }
         Text(
             text = listOfNotNull(position, next, downHint).joinToString(separator),
@@ -527,6 +528,8 @@ private fun ZapBanner(banner: SportsLiveZapBanner) {
         }
     }
 }
+
+private val LEADING_SYMBOLS = Regex("""^[^\p{L}\p{N}\[(]+""")
 
 /** The banner's widest: 720 px, clear of the game's own scorebug. */
 private val BANNER_MAX_WIDTH = 360.dp

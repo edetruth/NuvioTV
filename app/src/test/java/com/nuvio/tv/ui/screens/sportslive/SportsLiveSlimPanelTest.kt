@@ -285,6 +285,9 @@ class SportsLiveSlimPanelTest {
         val other = hockey.copy(item = game("o", now - minute, sport = "OTHER"), sportTag = SportsLiveSportKind.HOCKEY)
         assertEquals("HOCKEY", rowTagOf(other, sportLabel = "Hockey"))
         assertEquals("", rowTagOf(other.copy(sportTag = null), sportLabel = null))
+        // A catch-all addon sport ("Other Sports") is no tag ("OS"): the cricket the title tells is.
+        val catchAll = hockey.copy(item = game("c", now - minute, sport = "Other Sports"), sportTag = SportsLiveSportKind.CRICKET)
+        assertEquals("CRICKET", rowTagOf(catchAll, sportLabel = "Cricket"))
 
         // A single-line event carries it the same way; a channel never has one.
         val event = hockey.copy(art = null, twoSided = false)

@@ -44,6 +44,7 @@ import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.nuvio.tv.R
+import com.nuvio.tv.core.sportslive.SportsLiveDisplayText
 import com.nuvio.tv.core.sportslive.SportsLiveStreamThresholds
 import com.nuvio.tv.ui.screens.player.PlayerOverlayButton
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveButton
@@ -100,7 +101,9 @@ fun SportsLiveStartingCard(
     } else {
         stringResource(R.string.sports_live_starting_link_short, linkNumber)
     }
-    val line = listOfNotNull(link, sourceName?.takeIf(String::isNotBlank), sportsLiveStartingElapsed(now - startedAtMs))
+    // The source by its clean name: no emoji or symbols (V2).
+    val source = sourceName?.let { SportsLiveDisplayText.label(it) }
+    val line = listOfNotNull(link, source, sportsLiveStartingElapsed(now - startedAtMs))
         .joinToString(stringResource(R.string.sports_live_game_info_separator))
     val shape = RoundedCornerShape(SportsLiveTokens.Alert.Radius)
     Column(

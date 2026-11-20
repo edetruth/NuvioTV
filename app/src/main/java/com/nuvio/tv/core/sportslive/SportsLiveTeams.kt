@@ -332,7 +332,7 @@ object SportsLiveTeams {
     private val NON_SPORT_TAGS = setOf("other", "others", "misc", "general", "entertainment", "network", "networks")
 
     private val GENERIC_SPORTS = setOf(
-        "sports", "live tv", "live", "tv", "events", "live now", "live events", "live sport", "live sports", "now"
+        "sports", "live tv", "live", "tv", "events", "live now", "live events", "live sport", "live sports", "now", "other sports"
     ) + NON_SPORT_TAGS
 
     /** True for a genre that names no sport ("Sports", "Live", "LIVE NOW", "Live Events", #134), or a non-sport tag. */

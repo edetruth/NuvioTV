@@ -393,5 +393,5 @@ internal fun SportsLivePanelHeader(group: ScoreboardGroup, count: Int) {
 
 private val PANEL_LINE_RADIUS = 6.dp
 private val PANEL_LINE_ACCENT = 2.dp
-private val PANEL_TAG_COLUMN = 48.dp
+private val PANEL_TAG_COLUMN = 72.dp
 private const val JUST_ENDED_LINE_ALPHA = 0.6f
