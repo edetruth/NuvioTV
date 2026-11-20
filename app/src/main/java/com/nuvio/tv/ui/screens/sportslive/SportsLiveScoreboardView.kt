@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -39,8 +40,10 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -662,8 +665,8 @@ private fun StatusCell(row: ScoreboardRow, hasReplay: Boolean, singleLine: Boole
         when (rowBadgeOf(ready, excitement != null, row.closeGame, noStream)) {
             RowBadge.READY -> SportsLiveReadyPill()
             RowBadge.NO_STREAM -> SportsLiveNoStreamYet()
-            RowBadge.EXCITEMENT -> excitement?.let { ExcitementBadge(whyTagText(it)) }
-            RowBadge.CLOSE_GAME -> ExcitementBadge(stringResource(R.string.sports_live_close_game))
+            RowBadge.EXCITEMENT -> excitement?.let { ExcitementBadge(whyTagTexts(it)) }
+            RowBadge.CLOSE_GAME -> ExcitementBadge(listOf(stringResource(R.string.sports_live_close_game)))
             // A link check running (live.20), with no other badge to show: the faint mark in the badge's place.
             RowBadge.NONE -> if (rememberSportsLiveChecking(row.item)) SportsLiveCheckingMark()
         }
@@ -715,10 +718,27 @@ private fun BigGameBadge() {
 
 /** The excitement badge (#43, F2): small and blue, so it never reads as live (red) or followed (gold). */
 @Composable
-private fun ExcitementBadge(text: String) {
+private fun ExcitementBadge(texts: List<String>) {
+    val style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag).copy(fontSize = 10.sp, lineHeight = 12.sp)
+    val measurer = rememberTextMeasurer()
+    // The first of [texts] (longest first) whose one line fits the column beside the badge's padding (live.20: never
+    // "Close · 8 m…"); the last, the shortest, otherwise.
+    BoxWithConstraints {
+        val room = constraints.maxWidth - 2 * with(LocalDensity.current) { EXCITEMENT_BADGE_PADDING.roundToPx() }
+        val text = remember(texts, room, style) {
+            texts.firstOrNull { measurer.measure(it, style, maxLines = 1, softWrap = false).size.width <= room } ?: texts.last()
+        }
+        ExcitementBadgeText(text, style)
+    }
+}
+
+private val EXCITEMENT_BADGE_PADDING = 4.dp
+
+@Composable
+private fun ExcitementBadgeText(text: String, style: TextStyle) {
     Text(
         text = text,
-        style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag).copy(fontSize = 10.sp, lineHeight = 12.sp),
+        style = style,
         color = Colors.WhyTagText,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
@@ -726,7 +746,7 @@ private fun ExcitementBadge(text: String) {
             .clip(RoundedCornerShape(SportsLiveTokens.Radius.Badge))
             .background(Colors.WhyTagBackground)
             .border(1.dp, Colors.WhyTagBorder, RoundedCornerShape(SportsLiveTokens.Radius.Badge))
-            .padding(horizontal = 4.dp)
+            .padding(horizontal = EXCITEMENT_BADGE_PADDING)
     )
 }
 

@@ -432,6 +432,8 @@
     <string name="sports_live_why_extra_time">Extra time</string>
     <string name="sports_live_why_extra_innings">Extra innings</string>
     <string name="sports_live_why_close_minutes">Close · %1$d min left</string>
+    <!-- The excitement badge's shorter words, when the longer ones do not fit its column (live.20: never an ellipsis). -->
+    <string name="sports_live_why_close_minutes_short">Close · %1$d min</string>
     <string name="sports_live_why_close_late">Close · late</string>
     <string name="sports_live_why_lead_change">Lead change</string>
     <!-- Reminders (#44) and followed-team alerts (#42) -->
@@ -608,6 +610,7 @@
     <string name="sports_live_why_red_zone">Red zone</string>
     <string name="sports_live_why_bases_loaded">Bases loaded</string>
     <string name="sports_live_why_scoring_position">Runners in scoring position</string>
+    <string name="sports_live_why_scoring_position_short">Runners on</string>
     <string name="sports_live_situation_separator">" · "</string>
     <string name="sports_live_situation_possession">%1$s ball</string>
     <string name="sports_live_situation_red_zone">Red zone</string>

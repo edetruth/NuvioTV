@@ -494,22 +494,39 @@ internal fun ReminderPill() {
     }
 }
 
-/** [tag]'s words (the excitement badge, #43): "Close · 2 min left", "OT", "Lead change"... */
+/**
+ * [tag]'s words (the excitement badge, #43), longest first: "Close · 2 min left", "Close · 2 min", "Close · late". The
+ * badge shows the first that fits its column, never an ellipsis (live.20 TV report: "Close · 8 m…").
+ */
 @Composable
-internal fun whyTagText(tag: WhyTag): String = when (tag.kind) {
-    WhyKind.PENALTIES -> stringResource(R.string.sports_live_why_penalties)
-    WhyKind.SHOOTOUT -> stringResource(R.string.sports_live_why_shootout)
-    WhyKind.OVERTIME -> stringResource(R.string.sports_live_why_overtime)
-    WhyKind.EXTRA_TIME -> stringResource(R.string.sports_live_why_extra_time)
-    WhyKind.EXTRA_INNINGS -> stringResource(R.string.sports_live_why_extra_innings)
-    WhyKind.CLOSE_LATE -> tag.minutesLeft?.let { stringResource(R.string.sports_live_why_close_minutes, it) }
-        ?: stringResource(R.string.sports_live_why_close_late)
-    WhyKind.LEAD_CHANGE -> stringResource(R.string.sports_live_why_lead_change)
-    WhyKind.JUST_SCORED -> stringResource(R.string.sports_live_why_just_scored)
-    WhyKind.RED_ZONE -> stringResource(R.string.sports_live_why_red_zone)
-    WhyKind.BASES_LOADED -> stringResource(R.string.sports_live_why_bases_loaded)
-    WhyKind.SCORING_POSITION -> stringResource(R.string.sports_live_why_scoring_position)
+internal fun whyTagTexts(tag: WhyTag): List<String> = when (tag.kind) {
+    WhyKind.PENALTIES -> listOf(stringResource(R.string.sports_live_why_penalties))
+    WhyKind.SHOOTOUT -> listOf(stringResource(R.string.sports_live_why_shootout))
+    WhyKind.OVERTIME -> listOf(stringResource(R.string.sports_live_why_overtime))
+    WhyKind.EXTRA_TIME -> listOf(stringResource(R.string.sports_live_why_extra_time))
+    WhyKind.EXTRA_INNINGS -> listOf(stringResource(R.string.sports_live_why_extra_innings))
+    WhyKind.CLOSE_LATE -> closeLateTexts(
+        tag.minutesLeft,
+        long = { stringResource(R.string.sports_live_why_close_minutes, it) },
+        short = { stringResource(R.string.sports_live_why_close_minutes_short, it) },
+        late = stringResource(R.string.sports_live_why_close_late)
+    )
+    WhyKind.LEAD_CHANGE -> listOf(stringResource(R.string.sports_live_why_lead_change))
+    WhyKind.JUST_SCORED -> listOf(stringResource(R.string.sports_live_why_just_scored))
+    WhyKind.RED_ZONE -> listOf(stringResource(R.string.sports_live_why_red_zone))
+    WhyKind.BASES_LOADED -> listOf(stringResource(R.string.sports_live_why_bases_loaded))
+    WhyKind.SCORING_POSITION -> listOf(
+        stringResource(R.string.sports_live_why_scoring_position),
+        stringResource(R.string.sports_live_why_scoring_position_short)
+    )
 }
+
+/**
+ * A close game's badge words, longest first: with [minutesLeft], "Close · 8 min left" then "Close · 8 min"; always
+ * ending on [late] ("Close · late"), which is true of every such game and fits the narrowest column.
+ */
+internal inline fun closeLateTexts(minutesLeft: Int?, long: (Int) -> String, short: (Int) -> String, late: String): List<String> =
+    if (minutesLeft == null) listOf(late) else listOf(long(minutesLeft), short(minutesLeft), late)
 
 private val WHY_TAG_TEXT = SportsLiveTokens.Colors.WhyTagText
 private val WHY_TAG_BACKGROUND = SportsLiveTokens.Colors.WhyTagBackground
