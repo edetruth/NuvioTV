@@ -58,7 +58,7 @@ internal object SportsLiveSecondGame {
     }
 
     /**
-     * "Next live game" after [current] failed (#138 follow-up; the player's error screen, a dual pane): the next of
+     * "Next live game" after [current] failed (#138 follow-up; the player's error screen): the next of
      * [lineup]'s live games forward from [current] (wrapping), never one over ([finishedKeys]: ended games and those
      * marked with no working stream) nor one [tried] and failed this session ([current] included), so two dead games
      * never send the viewer back and forth. A game with a known-good link ([knownGood]: ✓ ready) goes first; one

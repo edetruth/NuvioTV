@@ -112,7 +112,7 @@ class SportsLiveDualGameEndTest {
     }
 
     @Test
-    fun `Up next and Next live game in a pane never pick a game saved for later`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `Up next in a pane never picks a game saved for later`() = runTest(mainDispatcherRule.dispatcher) {
         // #184: b was saved with Watch later; playing it would show it live.
         val viewModel = SportsLiveDualViewModel(
             resolve = { item -> dualStream(item.id) },
@@ -127,13 +127,6 @@ class SportsLiveDualGameEndTest {
         viewModel.playing()
         viewModel.onUnhealthy(a, SportsLiveStreamHealth.Problem.UNEXPECTED_END)
         assertEquals(c, viewModel.state.value!!.left.end!!.next)
-
-        // The pane's Next live game skips it too.
-        val other = newViewModelWith(savedForLater = { { it == b } })
-        runCurrent()
-        assertTrue(other.nextLiveGame())
-        runCurrent()
-        assertEquals(c, other.state.value!!.left.item)
     }
 
     @Test

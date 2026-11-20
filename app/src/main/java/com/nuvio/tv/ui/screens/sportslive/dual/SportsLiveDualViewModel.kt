@@ -423,47 +423,20 @@ class SportsLiveDualViewModel internal constructor(
     }
 
     /**
-     * Up/Down: the highlighted pane moves to the next (or previous) game of the list that is not known
-     * to have ended and not shown in the other pane. False when there is none.
+     * Up/Down, CH+/CH-, next/previous: the highlighted pane moves to the next (or previous) game of the list, wrapping,
+     * that is not known to have ended, not shown in the other pane and not known dead this session (tried and failed,
+     * ⚠ no working stream, or every known link failed). A pane whose recovery gave up (its error card) zaps the same
+     * way, its game counted as tried and failed, so flipping on through dead games never sticks (live.19 TV report)
+     * and never comes back to one. False when no such game is left.
      */
     fun zap(forward: Boolean): Boolean {
         val state = _state.value ?: return false
         val side = state.highlighted
+        if (state.pane(side).status == PaneStatus.Error) triedGames.noteFailed(state.pane(side).item)
         val target = zapTarget(state.pane(side).item, state.pane(side.other).item, forward) ?: return false
         settle(state.pane(side).item)
         forgetRecovery(target)
         load(side, target)
-        return true
-    }
-
-    /**
-     * "Next live game" on a pane whose recovery gave up (#138): the same rule as the player's error screen
-     * ([SportsLiveSecondGame.nextAfterFailure]): the pane's game counts as tried and failed, and the pane moves
-     * forward to the next live game never tried this session, a known-good one first, never the other pane's or
-     * one known to be over. False when nothing is left (never back to a game that failed).
-     */
-    fun nextLiveGame(): Boolean {
-        val state = _state.value ?: return false
-        val side = state.highlighted
-        val current = state.pane(side).item
-        val other = state.pane(side.other).item
-        triedGames.noteFailed(current)
-        val lineup = items.filterNot { it.sharesSourceWith(other) }
-        val pick = SportsLiveSecondGame.nextAfterFailure(
-            current = current,
-            lineup = lineup,
-            scores = emptyMap(),
-            finishedKeys = overNow(),
-            tried = triedGames.ids(),
-            // #147: ✓ ready first; ⚠ no working stream only when no other is left.
-            knownGood = ::knownGood,
-            noStream = sportsLiveNoStreamIds(lineup, readiness, workingLinks),
-            // #184: never a game saved with Watch later.
-            savedForLater = savedForLater()
-        ) ?: return false
-        settle(current)
-        forgetRecovery(pick)
-        load(side, pick)
         return true
     }
 
@@ -740,6 +713,8 @@ class SportsLiveDualViewModel internal constructor(
         // The link plays: its "didn't work" mark clears in the stream lists (#156).
         SportsLiveLinkMarks.shared.played(item.id, (stream ?: _state.value?.pane(side)?.stream)?.getStreamUrl())
         dispatch(DualAction.FirstFrame(item))
+        // A game tried and failed plays after all: zaps may land on it again, as in the full player.
+        triedGames.onPlaying(item.id)
         // Playing now: the pane's first-frame timeout is no longer needed, and a later decoder
         // failure gets its retry again.
         if (_state.value?.pane(side)?.status == PaneStatus.Playing) {
@@ -832,6 +807,8 @@ class SportsLiveDualViewModel internal constructor(
     private fun zapTarget(current: SportsLiveItem, other: SportsLiveItem, forward: Boolean): SportsLiveItem? {
         if (items.isEmpty()) return null
         val ended = endedKeys()
+        val failed = triedGames.ids()
+        val noStream = sportsLiveNoStreamIds(items, readiness, workingLinks)
         val start = items.indexOfFirst { it.streamKey == current.streamKey }
         val step = if (forward) 1 else -1
         // Not in the list: the first step lands on the list's first (or last) game.
@@ -841,7 +818,8 @@ class SportsLiveDualViewModel internal constructor(
             val candidate = items[index]
             val skip = candidate.sharesSourceWith(current) ||
                 candidate.sharesSourceWith(other) ||
-                candidate.hasEnded(ended)
+                candidate.hasEnded(ended) ||
+                candidate.id in failed || candidate.alternates.any { it.id in failed } || candidate.id in noStream
             if (!skip) return candidate
         }
         return null

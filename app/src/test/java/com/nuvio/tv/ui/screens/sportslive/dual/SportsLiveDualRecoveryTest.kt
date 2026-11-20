@@ -249,7 +249,7 @@ class SportsLiveDualRecoveryTest {
     }
 
     @Test
-    fun `next live game moves the failed pane to another game, never the other pane's`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `a zap from the failed pane moves it to another game, never the other pane's`() = runTest(mainDispatcherRule.dispatcher) {
         val viewModel = newViewModel()
         runCurrent()
         viewModel.playing()
@@ -258,14 +258,14 @@ class SportsLiveDualRecoveryTest {
         runCurrent()
         assertEquals(PaneStatus.Error, viewModel.current().left.status)
 
-        assertTrue(viewModel.nextLiveGame())
+        assertTrue(viewModel.zap(forward = true))
         val left: SportsLiveItem = viewModel.current().left.item
         assertEquals(c, left)
         assertEquals(b, viewModel.current().right.item)
     }
 
     @Test
-    fun `next live game never takes a pane back to a game that already failed`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `a zap from the failed pane never takes it back to a game that already failed`() = runTest(mainDispatcherRule.dispatcher) {
         val viewModel = newViewModel()
         runCurrent()
         // c failed earlier in this session: the pane has nowhere left to go but never goes back.
@@ -276,7 +276,7 @@ class SportsLiveDualRecoveryTest {
         runCurrent()
         assertEquals(PaneStatus.Error, viewModel.current().left.status)
         val others = viewModel.current().let { listOf(it.left.item, it.right.item) }
-        val moved = viewModel.nextLiveGame()
+        val moved = viewModel.zap(forward = true)
         if (moved) {
             val left = viewModel.current().left.item
             assertFalse(left == c || left == a || left in others)

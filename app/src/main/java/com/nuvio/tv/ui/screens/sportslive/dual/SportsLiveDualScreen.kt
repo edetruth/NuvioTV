@@ -104,7 +104,6 @@ import com.nuvio.tv.ui.screens.sportslive.sportsLiveEndActions
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveStartingAction
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveStartingCard
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapTarget
-import com.nuvio.tv.ui.screens.sportslive.zapDirection
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens
 import com.nuvio.tv.ui.theme.NuvioTheme
 import kotlin.math.PI
@@ -400,11 +399,10 @@ fun SportsLiveDualScreen(
                             else playViewModel.play(pane.item)
                         }
                     else -> {
-                        val forward = zapDirection(native.keyCode, partyActive = false) ?: return@onKeyEvent false
-                        // On a pane whose recovery gave up, Down is "Next live game" (#138).
-                        if (native.repeatCount == 0) {
-                            if (forward && dual.pane(dual.highlighted).status == PaneStatus.Error) viewModel.nextLiveGame()
-                            else viewModel.zap(forward)
+                        // Every pane zaps, its error card included: flipping on through dead games never sticks.
+                        val forward = dualZapKey(dual.pane(dual.highlighted), native.keyCode) ?: return@onKeyEvent false
+                        if (native.repeatCount == 0 && !viewModel.zap(forward)) {
+                            SportsLiveToasts.show(SportsLiveToastKind.INFO, context.getString(R.string.sports_live_no_other_live_game))
                         }
                     }
                 }
