@@ -84,7 +84,9 @@ class LiveExcitementTest {
         // Stoppage time has no whole minutes left to count.
         assertEquals(WhyTag(WhyKind.CLOSE_LATE, null), tag(stoppage))
         assertNull(tag(rout))
-        assertEquals(WhyTag(WhyKind.CLOSE), tag(game("soccer", 0, 0, "HT")))
+        // A level game at halftime is not news: "close" is only ever flagged late (CLOSE_LATE).
+        assertNull(tag(game("soccer", 0, 0, "HT")))
+        assertNull(tag(game("soccer", 1, 1, "59'")))
         assertNull(tag(game("soccer", 0, 2, "88'")))
     }
 

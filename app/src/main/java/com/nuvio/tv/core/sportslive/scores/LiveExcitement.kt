@@ -4,7 +4,7 @@ import kotlin.math.abs
 import kotlin.math.sign
 
 /** Why a game ranks high in Live now's Most exciting sort (#43): one short tag per card. */
-enum class WhyKind { PENALTIES, SHOOTOUT, OVERTIME, EXTRA_TIME, EXTRA_INNINGS, CLOSE_LATE, LEAD_CHANGE, JUST_SCORED, RED_ZONE, BASES_LOADED, SCORING_POSITION, CLOSE }
+enum class WhyKind { PENALTIES, SHOOTOUT, OVERTIME, EXTRA_TIME, EXTRA_INNINGS, CLOSE_LATE, LEAD_CHANGE, JUST_SCORED, RED_ZONE, BASES_LOADED, SCORING_POSITION }
 
 /** A card's why tag: [minutesLeft] goes with [WhyKind.CLOSE_LATE] ("Close · 2 min left"); null there reads "Close · late". */
 data class WhyTag(val kind: WhyKind, val minutesLeft: Int? = null)
@@ -73,8 +73,6 @@ object LiveExcitement {
             recent.leadChange -> WhyTag(WhyKind.LEAD_CHANGE)
             recent.scored -> WhyTag(WhyKind.JUST_SCORED)
             redZone -> WhyTag(WhyKind.RED_ZONE)
-            // Only with a clock that says the game is past halfway.
-            close && (clock.progress ?: 0.0) >= 0.5 -> WhyTag(WhyKind.CLOSE)
             else -> null
         }
         return ExcitementRating(score, tag)

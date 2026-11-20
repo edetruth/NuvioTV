@@ -608,7 +608,6 @@
     <string name="sports_live_why_red_zone">Red zone</string>
     <string name="sports_live_why_bases_loaded">Bases loaded</string>
     <string name="sports_live_why_scoring_position">Runners in scoring position</string>
-    <string name="sports_live_why_close">Close game</string>
     <string name="sports_live_situation_separator">" · "</string>
     <string name="sports_live_situation_possession">%1$s ball</string>
     <string name="sports_live_situation_red_zone">Red zone</string>

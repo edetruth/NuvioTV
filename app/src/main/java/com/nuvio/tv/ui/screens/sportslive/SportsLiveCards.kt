@@ -509,7 +509,6 @@ internal fun whyTagText(tag: WhyTag): String = when (tag.kind) {
     WhyKind.RED_ZONE -> stringResource(R.string.sports_live_why_red_zone)
     WhyKind.BASES_LOADED -> stringResource(R.string.sports_live_why_bases_loaded)
     WhyKind.SCORING_POSITION -> stringResource(R.string.sports_live_why_scoring_position)
-    WhyKind.CLOSE -> stringResource(R.string.sports_live_why_close)
 }
 
 private val WHY_TAG_TEXT = SportsLiveTokens.Colors.WhyTagText
