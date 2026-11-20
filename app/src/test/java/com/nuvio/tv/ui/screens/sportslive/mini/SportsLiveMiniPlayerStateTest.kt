@@ -218,4 +218,71 @@ class SportsLiveMiniPlayerStateTest {
         assertEquals("application/vnd.apple.mpegurl", mini?.behaviorHints?.proxyHeaders?.response?.get("Content-Type"))
         assertEquals("live.m3u8", mini?.behaviorHints?.filename)
     }
+
+    @Test
+    fun `the mini player plays on only inside Sports and Live and the player`() {
+        assertTrue(sportsLiveMiniPlaysOn(null))
+        assertTrue(sportsLiveMiniPlaysOn("sports_live"))
+        assertTrue(sportsLiveMiniPlaysOn("sports_live_game"))
+        assertTrue(sportsLiveMiniPlaysOn("sports_live_player_card"))
+        assertTrue(sportsLiveMiniPlaysOn("player/{streamUrl}/{title}"))
+        assertFalse(sportsLiveMiniPlaysOn("home"))
+        assertFalse(sportsLiveMiniPlaysOn("search"))
+        assertFalse(sportsLiveMiniPlaysOn("stream/{videoId}"))
+        assertFalse(sportsLiveMiniPlaysOn("settings"))
+    }
+
+    @Test
+    fun `leaving Sports and Live stops the mini player, moving inside it does not`() = runTest {
+        val mini = controller()
+        mini.onBackFromPlayer("a", session, stream)
+
+        mini.onRoute("sports_live_game")
+        assertTrue(mini.isActive)
+
+        mini.onRoute("home")
+        assertFalse(mini.isActive)
+        assertEquals(SportsLiveMiniStop.LEFT_SECTION, mini.lastStop)
+    }
+
+    @Test
+    fun `Back from a player opened on Home starts no mini player`() = runTest {
+        val mini = controller()
+        val fromHome = SportsLiveZapSession(listOf(a, b), 0, SportsLiveTab.LIVE_NOW, null, true)
+
+        mini.onBackFromPlayer("a", fromHome, stream)
+
+        assertEquals(SportsLiveMiniState.Idle, mini.state.value)
+    }
+
+    @Test
+    fun `Back on a top-level screen stops a playing mini player once, then does the usual`() = runTest {
+        val mini = controller()
+        mini.onBackFromPlayer("a", session, stream)
+
+        assertTrue(mini.stopOnBack())
+        assertEquals(SportsLiveMiniStop.USER_STOP, mini.lastStop)
+        assertFalse(mini.stopOnBack())
+    }
+
+    @Test
+    fun `MEDIA_STOP and a held Back stop it, a short Back and other keys do not`() = runTest {
+        val stop = android.view.KeyEvent.KEYCODE_MEDIA_STOP
+        val back = android.view.KeyEvent.KEYCODE_BACK
+        val mini = controller()
+        assertFalse(mini.onStopKey(stop, down = true, longPress = false))
+
+        mini.onBackFromPlayer("a", session, stream)
+        assertFalse(mini.onStopKey(back, down = true, longPress = false))
+        assertFalse(mini.onStopKey(android.view.KeyEvent.KEYCODE_DPAD_UP, down = true, longPress = true))
+        assertFalse(mini.onStopKey(stop, down = false, longPress = false))
+        assertTrue(mini.isActive)
+
+        assertTrue(mini.onStopKey(back, down = true, longPress = true))
+        assertFalse(mini.isActive)
+
+        mini.onBackFromPlayer("a", session, stream)
+        assertTrue(mini.onStopKey(stop, down = true, longPress = false))
+        assertFalse(mini.isActive)
+    }
 }

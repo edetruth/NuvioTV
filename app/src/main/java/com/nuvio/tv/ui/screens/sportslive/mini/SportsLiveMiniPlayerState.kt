@@ -61,7 +61,32 @@ fun sportsLiveBackAction(paused: Boolean, started: Boolean): SportsLiveBackActio
 enum class SportsLiveMiniStop {
     OTHER_PLAYER, PROFILE_SWITCH, USER_STOP, IDLE_TIMEOUT, DUAL_SCREEN, EXPANDED, STREAM_ERROR, APP_FINISH, APP_BACKGROUND, PIP_CLOSED,
     /** The game ended (#161): it closed with a "Final" toast. */
-    GAME_ENDED
+    GAME_ENDED,
+
+    /** The user went to a screen outside Sports & Live (Home, Search, Library, Settings...): it stays in the section. */
+    LEFT_SECTION
+}
+
+/**
+ * Whether the mini player plays on at [route]: only inside Sports & Live (its tabs, Game, Team and Player card
+ * pages, setup) and the player itself (an expand or another player stops it on its own). Elsewhere it would
+ * cover another screen's content with video the user can no longer act on, and on a slow box it holds a decoder
+ * while the user is busy elsewhere. A null route (the app still starting) changes nothing.
+ */
+fun sportsLiveMiniPlaysOn(route: String?): Boolean =
+    route == null || route.startsWith(SPORTS_LIVE_ROUTE_PREFIX) || route.startsWith(PLAYER_ROUTE_PREFIX)
+
+private const val SPORTS_LIVE_ROUTE_PREFIX = "sports_live"
+private const val PLAYER_ROUTE_PREFIX = "player/"
+
+/**
+ * Keys that stop the mini player from any screen, whatever has focus: MEDIA_STOP, and Back held (a long press). A
+ * short Back is the screens' own; on Sports & Live's top level it stops the mini player first ([SportsLiveMiniPlayerController.stopOnBack]).
+ */
+fun sportsLiveMiniStopKey(keyCode: Int, down: Boolean, longPress: Boolean): Boolean = when (keyCode) {
+    android.view.KeyEvent.KEYCODE_MEDIA_STOP -> down
+    android.view.KeyEvent.KEYCODE_BACK -> down && longPress
+    else -> false
 }
 
 /**
@@ -127,6 +152,8 @@ class SportsLiveMiniPlayerController(
         started: Boolean = true
     ) {
         if (session == null || stream == null || contentId == null || session.current.id != contentId) return
+        // Back from a player opened on Home lands on Home, where no mini player plays (BUG13): Back there is a stop.
+        if (session.returnToHomeOnBack && !paused) return
         when (sportsLiveBackAction(paused, started)) {
             SportsLiveBackAction.NOTHING -> return
             SportsLiveBackAction.RESUME_OFFER -> {
@@ -164,6 +191,28 @@ class SportsLiveMiniPlayerController(
         _state.value = SportsLiveMiniState.Idle
         lastStop = reason
         onStopped?.invoke()
+    }
+
+    /** The app is on [route] now: outside Sports & Live the mini player stops (BUG13, [sportsLiveMiniPlaysOn]). */
+    fun onRoute(route: String?) {
+        if (!sportsLiveMiniPlaysOn(route)) stop(SportsLiveMiniStop.LEFT_SECTION)
+    }
+
+    /**
+     * Back that no screen took, on a top-level screen (where it would open the menu or leave the app): it stops a
+     * playing mini player instead, and returns true; the next Back does the usual. False when none plays.
+     */
+    fun stopOnBack(): Boolean {
+        if (!isActive) return false
+        stop(SportsLiveMiniStop.USER_STOP)
+        return true
+    }
+
+    /** MEDIA_STOP or a held Back ([sportsLiveMiniStopKey]) while one plays: it stops; true when the key was used. */
+    fun onStopKey(keyCode: Int, down: Boolean, longPress: Boolean): Boolean {
+        if (!isActive || !sportsLiveMiniStopKey(keyCode, down, longPress)) return false
+        stop(SportsLiveMiniStop.USER_STOP)
+        return true
     }
 
     /** Whether [sessionId] is the mini player playing now. */

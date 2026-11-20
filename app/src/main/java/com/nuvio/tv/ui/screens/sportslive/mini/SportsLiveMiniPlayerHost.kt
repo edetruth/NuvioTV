@@ -426,7 +426,8 @@ class SportsLiveMiniPlayerViewModel @Inject constructor(
  *
  * It is focusable but never asks for focus: it comes after the whole app in the hierarchy, so a
  * screen's initial focus never lands on it, and only a D-pad move (Down/Right) with nothing else
- * that way reaches it (a list scrolls its items in before focus leaves it). Focused, it shows a
+ * that way reaches it (a list scrolls its items in before focus leaves it); focus that lands on it from nowhere
+ * goes back to the screen (BUG13, [sportsLiveMiniFocusInvited]). Focused, it shows a
  * ring and "OK full screen · Back stop": OK expands, Back stops it and focus goes back up to the
  * content, and any arrow hands focus back to [contentFocusRequester] (the content, which restores
  * its last focused element) while the mini player plays on.
@@ -475,6 +476,15 @@ fun SportsLiveMiniPlayerHost(
     val currentOnExpand by rememberUpdatedState(onExpand)
     val focusManager = LocalFocusManager.current
     var focused by remember { mutableStateOf(false) }
+    // Focus that reached the mini player from nowhere (BUG13: a screen opened with nothing focused yet) goes back.
+    var giveFocusBack by remember { mutableStateOf(false) }
+    LaunchedEffect(giveFocusBack) {
+        if (!giveFocusBack) return@LaunchedEffect
+        giveFocusBack = false
+        val handed = contentFocusRequester != null &&
+            runCatching { contentFocusRequester.requestFocus(FocusDirection.Enter) }.getOrDefault(false)
+        if (!handed && focused) focusManager.clearFocus()
+    }
 
     DisposableEffect(playback) {
         val release: () -> Unit = playback::release
@@ -571,7 +581,10 @@ fun SportsLiveMiniPlayerHost(
                 placement
             } else {
                 placement
-                    .onFocusChanged { focused = it.isFocused }
+                    .onFocusChanged {
+                        if (it.isFocused && !focused && !SportsLiveMiniFocus.arrivalInvited()) giveFocusBack = true
+                        focused = it.isFocused
+                    }
                     .onKeyEvent { event ->
                         val native = event.nativeKeyEvent
                         val key = sportsLiveMiniKey(

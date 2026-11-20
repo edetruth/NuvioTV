@@ -1137,6 +1137,8 @@ open class MainActivity : ComponentActivity() {
                         }
                     }
 
+                    // The mini player stays inside Sports & Live (BUG13).
+                    LaunchedEffect(currentRoute) { SportsLiveMiniPlayers.controller.onRoute(currentRoute) }
                     LaunchedEffect(sportsLiveAvailability, currentRoute) {
                         val onSportsLiveRoute = currentRoute == Screen.SportsLive.route ||
                             currentRoute?.startsWith("${Screen.SportsLive.route}/") == true
@@ -1291,6 +1293,7 @@ open class MainActivity : ComponentActivity() {
                                     // Saved only for the mini player's arrows to restore; nothing
                                     // else enters through this group, so screens keep their own focus.
                                     .focusProperties { onExit = { sportsLiveContentFocus.saveFocusedChild() } }
+                                    .onFocusChanged { com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniFocus.onContentFocus(it.hasFocus) }
                                     .focusGroup()
                             ) {
                             CompositionLocalProvider(LocalNavViewModelStoreOwner provides navViewModelStoreOwner) {
@@ -1553,6 +1556,12 @@ open class MainActivity : ComponentActivity() {
             }
             return true
         }
+        // MEDIA_STOP or a held Back stops the Sports & Live mini player from any screen (BUG13); the rest of a held
+        // Back is eaten below, so it opens no menu.
+        if (SportsLiveMiniPlayers.controller.onStopKey(event.keyCode, event.action == KeyEvent.ACTION_DOWN, event.isLongPress)) {
+            if (event.keyCode == KeyEvent.KEYCODE_BACK) longPressBackHeld.value = true
+            return true
+        }
         if (event.keyCode == KeyEvent.KEYCODE_BACK) {
             if (longPressBackHeld.value) {
                 if (event.action == KeyEvent.ACTION_UP) longPressBackHeld.value = false
@@ -1714,6 +1723,7 @@ private fun LegacySidebarScaffold(
 
 
     BackHandler(enabled = currentRoute in rootRoutes && drawerState.currentValue == DrawerValue.Closed) {
+        if (SportsLiveMiniPlayers.controller.stopOnBack()) return@BackHandler
         pendingSidebarFocusRequest = true
         drawerState.setValue(DrawerValue.Open)
     }
@@ -2166,6 +2176,7 @@ private fun ModernSidebarScaffold(
     }
 
     BackHandler(enabled = currentRoute in rootRoutes && !isSidebarExpanded && !sidebarCollapsePending) {
+        if (SportsLiveMiniPlayers.controller.stopOnBack()) return@BackHandler
         isSidebarExpanded = true
         sidebarCollapsePending = false
         pendingSidebarFocusRequest = true

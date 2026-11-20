@@ -15,7 +15,32 @@ object SportsLiveMiniFocus {
 
     /** Where focus goes when Back stops the docked mini player (F23: the stage's Watch); null: back to the content. */
     var back: FocusRequester? = null
+
+    private var contentFocused = false
+    private var contentLeftAtMs = Long.MIN_VALUE / 2
+
+    /** The app content (everything under the mini player) gained or lost focus. */
+    fun onContentFocus(hasFocus: Boolean, nowMs: Long = android.os.SystemClock.uptimeMillis()) {
+        if (contentFocused && !hasFocus) contentLeftAtMs = nowMs
+        contentFocused = hasFocus
+    }
+
+    /** Whether focus reaching the mini player now came from the content (a D-pad move or the stage's Up). */
+    fun arrivalInvited(nowMs: Long = android.os.SystemClock.uptimeMillis()): Boolean =
+        sportsLiveMiniFocusInvited(contentFocused, contentLeftAtMs, nowMs)
 }
+
+/** How long after the content lost focus the mini player may still take it as the same move. */
+internal const val MINI_FOCUS_INVITE_MS = 400L
+
+/**
+ * BUG13: the mini player takes focus only from a move out of the content: the content still has focus (its change
+ * arrives after the mini player's) or lost it within [MINI_FOCUS_INVITE_MS]. Focus that lands on it from nowhere (a
+ * screen that opened with nothing focused yet, its first key press searching the whole window) is not the user's
+ * choice, and goes back to the screen.
+ */
+fun sportsLiveMiniFocusInvited(contentFocused: Boolean, contentLeftAtMs: Long, nowMs: Long): Boolean =
+    contentFocused || nowMs - contentLeftAtMs in 0..MINI_FOCUS_INVITE_MS
 
 /** What a key does while the mini player has focus. */
 enum class SportsLiveMiniKey {
