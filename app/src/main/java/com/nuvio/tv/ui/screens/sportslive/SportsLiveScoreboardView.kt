@@ -651,7 +651,7 @@ private fun StatusCell(row: ScoreboardRow, hasReplay: Boolean, singleLine: Boole
         // A live row whose last lookup found nothing playable (#145, BUG2) says so in words, beside its dimming.
         val noStream = row.noStreams && row.group == ScoreboardGroup.LIVE
         when (rowBadgeOf(ready, excitement != null, row.closeGame, noStream, watching)) {
-            // BUG-D: the mini player's game says so in the badge's place, under its status, never stacked on "LIVE".
+            // BUG-D: the mini player's game says so in the badge's place (after its excitement or close badge), never on "LIVE".
             RowBadge.WATCHING -> SportsLiveWatchingPill()
             RowBadge.READY -> SportsLiveReadyPill()
             RowBadge.NO_STREAM -> SportsLiveNoStreamYet()

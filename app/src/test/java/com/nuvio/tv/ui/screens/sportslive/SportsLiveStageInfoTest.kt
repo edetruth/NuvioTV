@@ -143,7 +143,10 @@ class SportsLiveStageInfoTest {
 
     @Test
     fun `the mini player's game says Watching in the badge place, never over its status (BUG-D)`() {
-        assertEquals(RowBadge.WATCHING, rowBadgeOf(ready = true, excitement = true, closeGame = true, noStream = true, watching = true))
+        assertEquals(RowBadge.WATCHING, rowBadgeOf(ready = true, excitement = false, closeGame = false, noStream = true, watching = true))
+        // The close-game and excitement badges outrank Watching: the mini player already says what is watching.
+        assertEquals(RowBadge.EXCITEMENT, rowBadgeOf(ready = true, excitement = true, closeGame = true, watching = true))
+        assertEquals(RowBadge.CLOSE_GAME, rowBadgeOf(ready = true, excitement = false, closeGame = true, watching = true))
         assertEquals(RowBadge.READY, rowBadgeOf(ready = true, excitement = false, closeGame = false, watching = false))
     }
 
