@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.sportslive.SportsLiveSourceReliability
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
@@ -51,14 +52,14 @@ class SportsLiveSourceReliabilityStore @Inject constructor(
             val stored = runCatching {
                 SportsLiveSourceReliability.decode(context.sportsLiveReliabilityDataStore.data.first()[key])
             }.getOrElse {
-                Log.w(TAG, "Could not read stream memory", it)
+                Log.w(TAG, "Could not read stream memory", LogRedact.error(it))
                 emptyMap()
             }
             SportsLiveSourceReliability.install(stored) { records -> pending.trySend(records) }
             pending.receiveAsFlow().collect { records ->
                 runCatching {
                     context.sportsLiveReliabilityDataStore.edit { it[key] = SportsLiveSourceReliability.encode(records) }
-                }.onFailure { Log.w(TAG, "Could not save stream memory", it) }
+                }.onFailure { Log.w(TAG, "Could not save stream memory", LogRedact.error(it)) }
             }
         }
     }

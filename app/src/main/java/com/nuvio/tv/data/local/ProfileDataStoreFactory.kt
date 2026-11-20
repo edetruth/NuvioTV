@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.preferencesDataStoreFile
+import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.domain.model.DiscoverLocation
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
@@ -155,7 +156,7 @@ class ProfileDataStoreFactory @Inject constructor(
         }
         val store = PreferenceDataStoreFactory.create(
             corruptionHandler = androidx.datastore.core.handlers.ReplaceFileCorruptionHandler { ex ->
-                Log.e("ProfileDataStoreFactory", "DataStore corrupted ($fileName): ${ex.message} — attempting shadow copy recovery")
+                Log.e("ProfileDataStoreFactory", "DataStore corrupted ($fileName): ${LogRedact.text(ex.message)} — attempting shadow copy recovery")
                 val recovered = recoverFromShadowCopy(fileName)
                 if (recovered != null) {
                     Log.i("ProfileDataStoreFactory", "DataStore recovered from shadow copy ($fileName)")
@@ -189,7 +190,7 @@ class ProfileDataStoreFactory @Inject constructor(
                 sourceFile.copyTo(backupFile, overwrite = true)
             }
         } catch (e: Exception) {
-            Log.w("ProfileDataStoreFactory", "Failed to write shadow copy for $fileName: ${e.message}")
+            Log.w("ProfileDataStoreFactory", "Failed to write shadow copy for $fileName: ${LogRedact.text(e.message)}")
         }
     }
 
@@ -206,7 +207,7 @@ class ProfileDataStoreFactory @Inject constructor(
             Log.i("ProfileDataStoreFactory", "Parsed shadow copy for $fileName (${preferences.asMap().size} keys)")
             preferences
         } catch (e: Exception) {
-            Log.w("ProfileDataStoreFactory", "Shadow copy recovery failed for $fileName: ${e.message}")
+            Log.w("ProfileDataStoreFactory", "Shadow copy recovery failed for $fileName: ${LogRedact.text(e.message)}")
             null
         }
     }

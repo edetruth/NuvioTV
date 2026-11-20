@@ -8,6 +8,7 @@ import com.lagradost.cloudstream3.AcraApplication
 import com.lagradost.cloudstream3.app
 import com.lagradost.nicehttp.ignoreAllSSLErrors
 import com.nuvio.tv.NuvioApplication
+import com.nuvio.tv.core.LogRedact
 import okhttp3.Cache
 import okhttp3.OkHttpClient
 import org.conscrypt.Conscrypt
@@ -45,7 +46,7 @@ object PluginRuntimeHooks {
             try {
                 Security.insertProviderAt(Conscrypt.newProvider(), 1)
             } catch (e: Exception) {
-                Log.w("NuvioApplication", "Failed to install Conscrypt: ${e.message}")
+                Log.w("NuvioApplication", "Failed to install Conscrypt: ${LogRedact.text(e.message)}")
             }
 
             try {
@@ -61,7 +62,7 @@ object PluginRuntimeHooks {
                     ))
                     .build()
             } catch (e: Throwable) {
-                Log.w("NuvioApplication", "Failed to initialize NiceHttp client (API ${Build.VERSION.SDK_INT}): ${e.message}")
+                Log.w("NuvioApplication", "Failed to initialize NiceHttp client (API ${Build.VERSION.SDK_INT}): ${LogRedact.text(e.message)}")
             }
             
             isCloudstreamInitialized = true

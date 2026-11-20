@@ -5,6 +5,7 @@ import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.TransferListener
 import androidx.media3.datasource.okhttp.OkHttpDataSource
+import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.ui.screens.player.ParallelRangeDataSource
 import com.nuvio.tv.ui.screens.player.PlayerPlaybackNetworking
 import kotlinx.coroutines.launch
@@ -63,7 +64,7 @@ object StreamSpeedTester {
                 return@withContext (totalBytes * 8.0) / (elapsed * 1000.0)
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            LogRedact.error(e)?.printStackTrace()
             return@withContext 0.0
         }
         @Suppress("UNREACHABLE_CODE")
@@ -170,7 +171,7 @@ object StreamSpeedTester {
             android.util.Log.e(
                 "StreamSpeedTester",
                 "Parallel measure failed (${parallelConnections}c/${chunkSizeBytes / (1024L * 1024L)}MB)",
-                t
+                LogRedact.error(t)
             )
             ParallelRangeDataSource.releaseRetainedSession()
             ParallelRangeDataSource.drainIdleBuffers(chunkSizeBytes)
@@ -215,7 +216,7 @@ object StreamSpeedTester {
                 }
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            LogRedact.error(e)?.printStackTrace()
         }
         0L
     }

@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.profile.ProfileManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -110,7 +111,7 @@ class ContinueWatchingEnrichmentCache @Inject constructor(
                 gson.fromJson(file.readText(), object : TypeToken<List<CachedNextUpItem>>() {}.type)
                     ?: emptyList()
             } catch (e: Exception) {
-                Log.w(TAG, "Failed to read next-up cache: ${e.message}")
+                Log.w(TAG, "Failed to read next-up cache: ${LogRedact.text(e.message)}")
                 emptyList()
             }
         }
@@ -134,7 +135,7 @@ class ContinueWatchingEnrichmentCache @Inject constructor(
                 lastNextUpHash = contentHash
                 _snapshotVersion.value++
             } catch (e: Exception) {
-                Log.w(TAG, "Failed to write next-up cache: ${e.message}")
+                Log.w(TAG, "Failed to write next-up cache: ${LogRedact.text(e.message)}")
             }
         }
     }
@@ -156,7 +157,7 @@ class ContinueWatchingEnrichmentCache @Inject constructor(
                 gson.fromJson(file.readText(), object : TypeToken<List<CachedInProgressItem>>() {}.type)
                     ?: emptyList()
             } catch (e: Exception) {
-                Log.w(TAG, "Failed to read in-progress cache: ${e.message}")
+                Log.w(TAG, "Failed to read in-progress cache: ${LogRedact.text(e.message)}")
                 emptyList()
             }
         }
@@ -180,7 +181,7 @@ class ContinueWatchingEnrichmentCache @Inject constructor(
                 lastInProgressHash = contentHash
                 _snapshotVersion.value++
             } catch (e: Exception) {
-                Log.w(TAG, "Failed to write in-progress cache: ${e.message}")
+                Log.w(TAG, "Failed to write in-progress cache: ${LogRedact.text(e.message)}")
             }
         }
     }
@@ -205,7 +206,7 @@ class ContinueWatchingEnrichmentCache @Inject constructor(
                     object : TypeToken<Map<String, Long>>() {}.type
                 ) ?: emptyMap()
             } catch (e: Exception) {
-                Log.w(TAG, "Failed to read no next-up cache: ${e.message}")
+                Log.w(TAG, "Failed to read no next-up cache: ${LogRedact.text(e.message)}")
                 emptyMap()
             }
         }
@@ -216,7 +217,7 @@ class ContinueWatchingEnrichmentCache @Inject constructor(
             try {
                 atomicWrite(noNextUpFile(), gson.toJson(seeds))
             } catch (e: Exception) {
-                Log.w(TAG, "Failed to write no next-up cache: ${e.message}")
+                Log.w(TAG, "Failed to write no next-up cache: ${LogRedact.text(e.message)}")
             }
         }
     }
@@ -234,7 +235,7 @@ class ContinueWatchingEnrichmentCache @Inject constructor(
                 lastInProgressHash = 0
                 Log.d(TAG, "Cleared CW enrichment cache for profile ${profileManager.activeProfileId.value}")
             } catch (e: Exception) {
-                Log.w(TAG, "Failed to clear CW enrichment cache: ${e.message}")
+                Log.w(TAG, "Failed to clear CW enrichment cache: ${LogRedact.text(e.message)}")
             }
         }
         _cacheCleared.value++

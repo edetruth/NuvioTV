@@ -1,5 +1,6 @@
 package com.nuvio.tv.core.player
 
+import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.data.repository.AddonEventDispatcher
 import com.nuvio.tv.data.repository.AddonPlayerAction
 import com.nuvio.tv.data.repository.AddonPlayerEventTarget
@@ -558,7 +559,7 @@ class ExternalPlaybackTracker @Inject constructor(
                 true
             } catch (e: Exception) {
                 awaitingExternalPlayerResult = false
-                Log.w(TAG, "ActivityResultLauncher failed, falling back to fire-and-forget", e)
+                Log.w(TAG, "ActivityResultLauncher failed, falling back to fire-and-forget", LogRedact.error(e))
                 ExternalPlayerLauncher.launch(
                     context = context,
                     url = url,
@@ -1465,7 +1466,7 @@ class ExternalPlaybackTracker @Inject constructor(
             try {
                 watchProgressRepository.saveProgress(progress, metadata.profileId)
             } catch (error: IOException) {
-                Log.w(TAG, "Watch progress could not be saved", error)
+                Log.w(TAG, "Watch progress could not be saved", LogRedact.error(error))
             }
 
             val progressPercent = if (effectiveDuration > 0L) {

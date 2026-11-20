@@ -2,6 +2,7 @@ package com.nuvio.tv.data.mediaserver
 
 import android.os.SystemClock
 import android.util.Log
+import com.nuvio.tv.core.LogRedact
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.abs
@@ -118,7 +119,7 @@ class ServerPlayback internal constructor(
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
-            Log.w(TAG, "Playback restart for ${current.label} failed: ${error.serverFailure()} (${error.message})")
+            Log.w(TAG, "Playback restart for ${current.label} failed: ${error.serverFailure()} (${LogRedact.text(error.message)})")
             return null
         }
         stop(url)
@@ -159,7 +160,7 @@ class ServerPlayback internal constructor(
                     } catch (error: CancellationException) {
                         throw error
                     } catch (error: Exception) {
-                        Log.w(TAG, "Playback report ${event.type} for $label failed: ${error.serverFailure()} (${error.message})")
+                        Log.w(TAG, "Playback report ${event.type} for $label failed: ${error.serverFailure()} (${LogRedact.text(error.message)})")
                     }
                 }
             }

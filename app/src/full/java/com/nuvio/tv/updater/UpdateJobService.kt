@@ -9,6 +9,7 @@ import android.content.Context
 import android.os.Build
 import android.util.Log
 import com.nuvio.tv.BuildConfig
+import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.util.hasPendingJob
 import com.nuvio.tv.core.util.scheduleSafely
 import dagger.hilt.EntryPoint
@@ -65,7 +66,7 @@ class UpdateJobService : JobService() {
             } catch (e: NoEligibleUpdateException) {
                 Log.d(TAG, e.message.orEmpty())
             } catch (e: Exception) {
-                Log.w(TAG, "Update job ${params.jobId} failed", e)
+                Log.w(TAG, "Update job ${params.jobId} failed", LogRedact.error(e))
                 retry = true
             } finally {
                 jobFinished(params, retry)

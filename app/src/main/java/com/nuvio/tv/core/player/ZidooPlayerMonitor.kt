@@ -7,6 +7,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import com.nuvio.tv.core.LogRedact
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -225,7 +226,7 @@ object ZidooPlayerMonitor {
             }
         } catch (e: Exception) {
             if (e is CancellationException) throw e
-            Log.w(TAG, "seekTo failed", e)
+            Log.w(TAG, "seekTo failed", LogRedact.error(e))
             false
         }
     }

@@ -5,6 +5,7 @@ import androidx.media3.common.C
 import androidx.media3.common.MimeTypes
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.extractor.ExtractorsFactory
+import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.ui.screens.player.audiosync.AudioSyncFallback
 import com.nuvio.tv.ui.screens.player.audiosync.AudioSyncSettings
 import com.nuvio.tv.ui.screens.player.audiosync.AudioSyncTaps
@@ -161,7 +162,7 @@ internal fun PlayerRuntimeController.maybeRunAutomaticSubtitleSync(
             } catch (cancel: CancellationException) {
                 throw cancel
             } catch (error: Exception) {
-                Log.w(PlayerRuntimeController.TAG, "AUTO_SYNC_V2 subtitle download failed", error)
+                Log.w(PlayerRuntimeController.TAG, "AUTO_SYNC_V2 subtitle download failed", LogRedact.error(error))
                 null
             }
             selectedBodyDeferred.complete(body)
@@ -309,7 +310,7 @@ internal fun PlayerRuntimeController.maybeRunAutomaticSubtitleSync(
             throw cancel
         } catch (error: Throwable) {
             audioFallback?.disarm()
-            Log.w(PlayerRuntimeController.TAG, "AUTO_SYNC_V2 failed", error)
+            Log.w(PlayerRuntimeController.TAG, "AUTO_SYNC_V2 failed", LogRedact.error(error))
             if (!stillRelevant()) return@launch
             if (activeSidecarSubtitleKey == null) {
                 startSidecarAddonSubtitle(selectedSubtitle)
@@ -472,7 +473,7 @@ private fun PlayerRuntimeController.runMpvAutomaticSubtitleSync(
         } catch (cancel: CancellationException) {
             throw cancel
         } catch (error: Throwable) {
-            Log.w(PlayerRuntimeController.TAG, "AUTO_SYNC_V2 mpv failed", error)
+            Log.w(PlayerRuntimeController.TAG, "AUTO_SYNC_V2 mpv failed", LogRedact.error(error))
             if (streamUnchanged() && _uiState.value.selectedAddonSubtitle?.url == selectedUrl) {
                 AutoSyncSyncedSubtitle.mark(selectedUrl, AutoSyncState.FAILED)
             }
@@ -638,7 +639,7 @@ private fun PlayerRuntimeController.runLibassAutomaticSubtitleSync(
         } catch (cancel: CancellationException) {
             throw cancel
         } catch (error: Throwable) {
-            Log.w(PlayerRuntimeController.TAG, "AUTO_SYNC_V2 libass failed", error)
+            Log.w(PlayerRuntimeController.TAG, "AUTO_SYNC_V2 libass failed", LogRedact.error(error))
             if (stillRelevant()) AutoSyncSyncedSubtitle.mark(selectedUrl, AutoSyncState.FAILED)
         }
     }.also { job ->

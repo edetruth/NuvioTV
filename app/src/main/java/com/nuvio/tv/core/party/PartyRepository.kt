@@ -1,6 +1,7 @@
 package com.nuvio.tv.core.party
 
 import android.util.Log
+import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.auth.AuthManager
 import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.core.sync.SyncClientIdentity
@@ -146,7 +147,7 @@ class PartyRepository @Inject constructor(
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Throwable) {
-                Log.w(TAG, "Watch party preview failed", error)
+                Log.w(TAG, "Watch party preview failed", LogRedact.error(error))
                 PartyPreview(error = "network")
             }
         }
@@ -268,7 +269,7 @@ class PartyRepository @Inject constructor(
                 } catch (error: CancellationException) {
                     throw error
                 } catch (error: Throwable) {
-                    Log.w(TAG, "Watch party request failed", error)
+                    Log.w(TAG, "Watch party request failed", LogRedact.error(error))
                     PartyError.Network
                 } finally {
                     _state.update { it.copy(busy = false) }
@@ -298,7 +299,7 @@ class PartyRepository @Inject constructor(
                     onPresence = { joins, leaves -> session.launch { onPresence(joins, leaves) } },
                     onConnected = { connected -> session.launch { onConnection(connected) } },
                 )
-            }.onFailure { Log.w(TAG, "Watch party channel failed", it) }
+            }.onFailure { Log.w(TAG, "Watch party channel failed", LogRedact.error(it)) }
         }
         session.launch { heartbeatLoop() }
         session.launch { refineClock() }
@@ -645,7 +646,7 @@ class PartyRepository @Inject constructor(
         } catch (error: CancellationException) {
             throw error
         } catch (error: Throwable) {
-            Log.w(TAG, "Watch party call failed", error)
+            Log.w(TAG, "Watch party call failed", LogRedact.error(error))
             null
         }
 

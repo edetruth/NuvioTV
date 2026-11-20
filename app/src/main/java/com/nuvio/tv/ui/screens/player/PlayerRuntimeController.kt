@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.player
 
+import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.data.repository.AddonEventDispatcher
 import com.nuvio.tv.data.repository.AddonPlayerAction
 import com.nuvio.tv.data.repository.AddonPlayerEventTarget
@@ -974,6 +975,6 @@ internal fun PlayerRuntimeController.logSwitchTrace(
     val streamToken = currentStreamUrl.hashCode().toUInt().toString(16)
     Log.w(
         PlayerRuntimeController.SWITCH_TRACE_TAG,
-        "sid=$switchTraceSessionId seq=$sequence stage=$stage engine=$currentInternalPlayerEngine streamToken=$streamToken $message"
+        "sid=$switchTraceSessionId seq=$sequence stage=$stage engine=$currentInternalPlayerEngine streamToken=$streamToken ${LogRedact.text(message)}"
     )
 }

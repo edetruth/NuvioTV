@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.search
 
+import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.ui.theme.NuvioTheme
 import com.nuvio.tv.ui.screens.home.HeroBackdropState
 
@@ -261,7 +262,7 @@ fun SearchScreen(
             override fun onError(error: Int) {
                 isVoiceListening = false
                 voiceRmsLevel = 0f
-                Log.w("SearchScreen", "Voice recognition error: $error")
+                Log.w("SearchScreen", "Voice recognition error: ${LogRedact.text(error)}")
                 when (error) {
                     SpeechRecognizer.ERROR_NO_MATCH,
                     SpeechRecognizer.ERROR_SPEECH_TIMEOUT ->

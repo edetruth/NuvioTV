@@ -280,6 +280,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            proguardFiles("proguard-fork-logging.pro") // Fork: strip v/d/i log lines from release
             signingConfig = if (useDebugReleaseSigning) {
                 signingConfigs.getByName("debug")
             } else {

@@ -1,6 +1,7 @@
 package com.nuvio.tv.data.mediaserver
 
 import android.util.Log
+import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.network.NetworkResult
 import com.nuvio.tv.core.tmdb.TmdbMetadataService
 import com.nuvio.tv.core.tmdb.TmdbService
@@ -238,7 +239,7 @@ class ServerMatcher internal constructor(
                 build.failed = true
                 build.result.completeExceptionally(error)
                 if (error is CancellationException) throw error
-                Log.w(TAG, "Indexing ${connection.providerId} library ${library.name} failed", error)
+                Log.w(TAG, "Indexing ${connection.providerId} library ${library.name} failed", LogRedact.error(error))
             }
         }
         return build

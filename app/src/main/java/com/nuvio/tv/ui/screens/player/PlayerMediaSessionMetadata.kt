@@ -6,6 +6,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
+import com.nuvio.tv.core.LogRedact
 
 /**
  * Builds a [MediaMetadata] from the current playback information so that
@@ -94,7 +95,7 @@ internal fun PlayerRuntimeController.updateMediaSessionMetadata() {
                 "artist=${metadata.artist}, mediaId=$mediaId, artworkUri=${metadata.artworkUri}"
         )
     } catch (e: Exception) {
-        Log.w(PlayerRuntimeController.TAG, "Failed to update MediaSession metadata", e)
+        Log.w(PlayerRuntimeController.TAG, "Failed to update MediaSession metadata", LogRedact.error(e))
     }
 }
 
@@ -146,7 +147,7 @@ internal fun PlayerRuntimeController.installMpvMediaSession() {
         updateMediaSessionMetadata()
     }.onFailure { error ->
         releaseMediaSession()
-        Log.w(PlayerRuntimeController.TAG, "Failed to install MPV MediaSession", error)
+        Log.w(PlayerRuntimeController.TAG, "Failed to install MPV MediaSession", LogRedact.error(error))
     }
 }
 

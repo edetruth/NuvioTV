@@ -4,6 +4,7 @@ import android.util.Log
 import kotlinx.coroutines.CancellationException
 import androidx.lifecycle.viewModelScope
 import com.nuvio.tv.LocaleCache
+import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.build.AppFeaturePolicy
 import com.nuvio.tv.core.network.NetworkResult
 import com.nuvio.tv.core.poster.CustomPosterScreen
@@ -557,7 +558,7 @@ private suspend fun HomeViewModel.fetchExternalMetaOutcome(item: MetaPreview): E
         // the launched enrichment coroutine to fail with it, which loses the focus pipeline for
         // that item. Treating it as Failed keeps the outcome exhaustive and lets the next focus
         // retry, which is what any other failure does.
-        Log.w(HomeViewModel.TAG, "External meta fetch threw for ${item.id}: ${e.message}")
+        Log.w(HomeViewModel.TAG, "External meta fetch threw for ${item.id}: ${LogRedact.text(e.message)}")
         ExternalMetaOutcome.Failed
     }
 

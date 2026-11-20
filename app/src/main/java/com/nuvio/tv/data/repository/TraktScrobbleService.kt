@@ -2,6 +2,7 @@ package com.nuvio.tv.data.repository
 
 import android.util.Log
 import com.nuvio.tv.BuildConfig
+import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.data.remote.api.TraktApi
 import com.nuvio.tv.data.remote.dto.trakt.TraktEpisodeDto
 import com.nuvio.tv.data.remote.dto.trakt.TraktIdsDto
@@ -106,7 +107,7 @@ class TraktScrobbleService @Inject constructor(
             } catch (e: IOException) {
                 lastException = e
                 if (attempt < attempts) {
-                    Log.w(TAG, "Scrobble $action attempt $attempt failed (IO), retrying", e)
+                    Log.w(TAG, "Scrobble $action attempt $attempt failed (IO), retrying", LogRedact.error(e))
                     delay(retryDelayMs * attempt)
                     continue
                 }
@@ -119,7 +120,7 @@ class TraktScrobbleService @Inject constructor(
                     delay(retryDelayMs * attempt)
                     continue
                 }
-                Log.w(TAG, "Scrobble $action failed after $attempts attempts", lastException)
+                Log.w(TAG, "Scrobble $action failed after $attempts attempts", LogRedact.error(lastException))
                 return
             }
 

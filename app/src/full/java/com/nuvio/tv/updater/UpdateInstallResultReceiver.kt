@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.pm.PackageInstaller
 import android.os.Build
 import android.util.Log
+import com.nuvio.tv.core.LogRedact
 import java.io.File
 
 private const val TAG = "UpdateInstall"
@@ -37,7 +38,7 @@ class UpdateInstallResultReceiver : BroadcastReceiver() {
                     confirmationIntent(intent)?.let { confirm ->
                         runCatching { context.startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
                             .onFailure {
-                                Log.w(TAG, "Install confirmation screen unavailable", it)
+                                Log.w(TAG, "Install confirmation screen unavailable", LogRedact.error(it))
                                 runCatching { context.packageManager.packageInstaller.abandonSession(sessionId) }
                                 retryAfterFailure(context, apkFile, background = false, withDexMetadata = false)
                             }
@@ -59,7 +60,7 @@ class UpdateInstallResultReceiver : BroadcastReceiver() {
                 withDexMetadata -> ApkInstaller.install(context, apkFile, background, withDexMetadata = false)
                 !background -> ApkInstaller.launchSystemInstaller(context, apkFile)
             }
-        }.onFailure { Log.w(TAG, "Update install retry failed", it) }
+        }.onFailure { Log.w(TAG, "Update install retry failed", LogRedact.error(it)) }
     }
 
     private fun confirmationIntent(intent: Intent): Intent? =

@@ -1,6 +1,7 @@
 package com.nuvio.tv.core.plugin
 
 import android.util.Log
+import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.plugin.cloudstream.toNuvioType
 import com.nuvio.tv.core.plugin.cloudstream.tvTypeFromString
 import com.nuvio.tv.core.plugin.cloudstream.ExternalExtensionLoader
@@ -160,7 +161,7 @@ class PluginManager @Inject constructor(
                 null
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to resolve short code '$code': ${e.message}")
+            Log.e(TAG, "Failed to resolve short code '$code': ${LogRedact.text(e.message)}")
             null
         } ?: try {
             // Fallback: follow redirects and see where we end up
@@ -179,7 +180,7 @@ class PluginManager @Inject constructor(
                 }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Fallback resolve for short code '$code' failed: ${e.message}")
+            Log.e(TAG, "Fallback resolve for short code '$code' failed: ${LogRedact.text(e.message)}")
             null
         }
     }
@@ -358,7 +359,7 @@ class PluginManager @Inject constructor(
 
             Result.failure(Exception("Failed to parse repository: unrecognized format"))
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to add repository: ${e.message}", e)
+            Log.e(TAG, "Failed to add repository: ${LogRedact.text(e.message)}", LogRedact.error(e))
             Result.failure(e)
         }
     }
@@ -400,7 +401,7 @@ class PluginManager @Inject constructor(
             // Fall back to full auto-detection
             addRepository(sanitizedUrl)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to add repository with hint: ${e.message}", e)
+            Log.e(TAG, "Failed to add repository with hint: ${LogRedact.text(e.message)}", LogRedact.error(e))
             Result.failure(e)
         }
     }
@@ -535,7 +536,7 @@ class PluginManager @Inject constructor(
                 }
                 val result = addRepositoryWithTypeHint(remotePlugin.url, typeHint)
                 if (result.isFailure) {
-                    Log.e(TAG, "reconcile: failed to add repo ${remotePlugin.url}: ${result.exceptionOrNull()?.message}")
+                    Log.e(TAG, "reconcile: failed to add repo ${LogRedact.url(remotePlugin.url)}: ${LogRedact.text(result.exceptionOrNull()?.message)}")
                 }
             }
         }
@@ -593,7 +594,7 @@ class PluginManager @Inject constructor(
 
             Result.success(Unit)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to refresh repository: ${e.message}", e)
+            Log.e(TAG, "Failed to refresh repository: ${LogRedact.text(e.message)}", LogRedact.error(e))
             Result.failure(e)
         }
     }
@@ -664,7 +665,7 @@ class PluginManager @Inject constructor(
         val scraperId = scraperIdFromPluginBingeGroup(bingeGroup) ?: return
         syncScope.launch {
             runCatching { dataStore.recordPluginProviderPlay(scraperId) }
-                .onFailure { error -> Log.w(TAG, "Failed to record plugin provider play", error) }
+                .onFailure { error -> Log.w(TAG, "Failed to record plugin provider play", LogRedact.error(error)) }
         }
     }
 
@@ -769,7 +770,7 @@ class PluginManager @Inject constructor(
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
-                Log.e(TAG, "Preferred plugin ${preferred.name} failed: ${error.message}")
+                Log.e(TAG, "Preferred plugin ${preferred.name} failed: ${LogRedact.text(error.message)}")
                 emptyList()
             }
             if (results.isNotEmpty()) {
@@ -824,7 +825,7 @@ class PluginManager @Inject constructor(
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    Log.e(TAG, "Scraper ${scraper.name} failed in streaming: ${e.message}")
+                    Log.e(TAG, "Scraper ${scraper.name} failed in streaming: ${LogRedact.text(e.message)}")
                 }
             }
         }
@@ -865,7 +866,7 @@ class PluginManager @Inject constructor(
             try {
                 deferred.await()
             } catch (e: Exception) {
-                Log.e(TAG, "Scraper ${scraper.name} failed: ${e.message}")
+                Log.e(TAG, "Scraper ${scraper.name} failed: ${LogRedact.text(e.message)}")
                 emptyList()
             } finally {
                 inFlightScrapers.remove(cacheKey)
@@ -945,7 +946,7 @@ class PluginManager @Inject constructor(
             results.map { it.copy(provider = scraper.name) }
 
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to execute scraper ${scraper.name}: ${e.message}", e)
+            Log.e(TAG, "Failed to execute scraper ${scraper.name}: ${LogRedact.text(e.message)}", LogRedact.error(e))
             emptyList()
         }
     }
@@ -974,7 +975,7 @@ class PluginManager @Inject constructor(
             Log.d(TAG, "DEX scraper ${scraper.name} returned ${results.size} results")
             results.map { it.copy(provider = scraper.name) }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to execute DEX scraper ${scraper.name}: ${e.message}", e)
+            Log.e(TAG, "Failed to execute DEX scraper ${scraper.name}: ${LogRedact.text(e.message)}", LogRedact.error(e))
             emptyList()
         }
     }
@@ -1048,7 +1049,7 @@ class PluginManager @Inject constructor(
             }
             
         } catch (e: Exception) {
-            Log.e(TAG, "Error fetching manifest: ${e.message}", e)
+            Log.e(TAG, "Error fetching manifest: ${LogRedact.text(e.message)}", LogRedact.error(e))
             null
         }
     }
@@ -1145,7 +1146,7 @@ class PluginManager @Inject constructor(
                 Log.d(TAG, "Downloaded scraper: ${info.name}")
                 
             } catch (e: Exception) {
-                Log.e(TAG, "Error downloading scraper ${info.name}: ${e.message}", e)
+                Log.e(TAG, "Error downloading scraper ${info.name}: ${LogRedact.text(e.message)}", LogRedact.error(e))
             }
         }
         
@@ -1204,7 +1205,7 @@ class PluginManager @Inject constructor(
                         newScrapers.add(scraper)
                         Log.d(TAG, "Downloaded DEX extension: ${plugin.name} (${file.length()} bytes)")
                     } catch (e: Exception) {
-                        Log.e(TAG, "Error downloading extension ${plugin.name}: ${e.message}", e)
+                        Log.e(TAG, "Error downloading extension ${plugin.name}: ${LogRedact.text(e.message)}", LogRedact.error(e))
                     }
                 }
             }

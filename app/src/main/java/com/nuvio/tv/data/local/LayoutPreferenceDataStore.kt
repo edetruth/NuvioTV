@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.core.sync.LocalHomeCatalogSettingsState
 import com.nuvio.tv.core.sync.SyncHomeCatalogPayload
@@ -151,7 +152,7 @@ class LayoutPreferenceDataStore @Inject constructor(
                 Log.w(TAG, "Key '${key.name}' stored as Set instead of String (${legacySet.size} items), converting")
                 gson.toJson(legacySet.toList())
             } else {
-                Log.e(TAG, "ClassCastException for key '${key.name}' but no Set value found", e)
+                Log.e(TAG, "ClassCastException for key '${key.name}' but no Set value found", LogRedact.error(e))
                 null
             }
         }

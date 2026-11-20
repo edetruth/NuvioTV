@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.player
 
+import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.data.repository.AddonPlayerAction
 import com.nuvio.tv.data.repository.AddonPlayerEventTarget
 import android.net.Uri
@@ -1021,7 +1022,7 @@ internal fun PlayerRuntimeController.saveWatchProgressInternal(position: Long, d
                 runCatching { tvRecommendationManager.updateSingleWatchNextProgram(normalizedProgress) }
             }
         } catch (error: IOException) {
-            Log.w(PlayerRuntimeController.TAG, "Watch progress could not be saved", error)
+            Log.w(PlayerRuntimeController.TAG, "Watch progress could not be saved", LogRedact.error(error))
         }
     }
 }

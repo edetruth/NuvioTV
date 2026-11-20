@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.network.NetworkResult
 import com.nuvio.tv.core.network.safeApiCall
 import com.nuvio.tv.data.local.AddonPreferences
@@ -207,7 +208,7 @@ class AddonRepositoryImpl(
             bumpManifestCacheRevision()
             Log.d(TAG, "Loaded ${cached.size} cached manifests from disk")
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to load manifest cache from disk", e)
+            Log.w(TAG, "Failed to load manifest cache from disk", LogRedact.error(e))
         }
     }
 
@@ -218,7 +219,7 @@ class AddonRepositoryImpl(
                 val prefs = context.getSharedPreferences(MANIFEST_CACHE_PREFS, Context.MODE_PRIVATE)
                 prefs.edit().putString(MANIFEST_CACHE_KEY, gson.toJson(snapshot)).apply()
             } catch (e: Exception) {
-                Log.w(TAG, "Failed to persist manifest cache to disk", e)
+                Log.w(TAG, "Failed to persist manifest cache to disk", LogRedact.error(e))
             }
         }
     }
@@ -311,7 +312,7 @@ class AddonRepositoryImpl(
                 NetworkResult.Success(addon)
             }
             is NetworkResult.Error -> {
-                Log.w(TAG, "Failed to fetch addon manifest for url=$manifestUrl code=${result.code} message=${result.message}")
+                Log.w(TAG, "Failed to fetch addon manifest for url=${LogRedact.url(manifestUrl)} code=${result.code} message=${LogRedact.text(result.message)}")
                 result
             }
             NetworkResult.Loading -> NetworkResult.Loading

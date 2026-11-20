@@ -3,6 +3,7 @@ package com.nuvio.tv.ui.screens.player.autosync
 import android.util.Log
 import androidx.media3.common.C
 import androidx.media3.extractor.text.CuesWithTiming
+import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.ui.screens.player.PlayerRuntimeController
 import com.nuvio.tv.ui.screens.player.canAttachAddonSubtitleViaSidecar
 import com.nuvio.tv.ui.screens.player.commitPreparedSidecarSubtitle
@@ -84,7 +85,7 @@ internal suspend fun replaceAutoSyncSidecarSubtitle(
             parseSidecarTimedCuesRobust(body, url).cues
         }
         if (parsed.isEmpty()) {
-            Log.w(TAG, "replacement parse empty url=$url; keeping $expectedCurrentUrl")
+            Log.w(TAG, "replacement parse empty url=${LogRedact.url(url)}; keeping ${LogRedact.url(expectedCurrentUrl)}")
             return false
         }
 
@@ -97,8 +98,8 @@ internal suspend fun replaceAutoSyncSidecarSubtitle(
     } catch (error: Exception) {
         Log.w(
             TAG,
-            "replacement preparation failed url=$url: ${error.message}; " +
-                "keeping $expectedCurrentUrl",
+            "replacement preparation failed url=${LogRedact.url(url)}: ${LogRedact.text(error.message)}; " +
+                "keeping ${LogRedact.url(expectedCurrentUrl)}",
         )
         return false
     }

@@ -2,6 +2,7 @@ package com.nuvio.tv.data.repository
 
 import android.content.Context
 import android.util.Log
+import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.network.NetworkResult
 import com.nuvio.tv.core.network.safeApiCall
 import com.nuvio.tv.data.local.AddonPreferences
@@ -53,7 +54,7 @@ class SubtitleRepositoryImpl @Inject constructor(
         val addons = try {
             addonRepository.getInstalledAddons().first().enabledAddons()
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to get installed addons", e)
+            Log.e(TAG, "Failed to get installed addons", LogRedact.error(e))
             return@withContext emptyList()
         }
 
@@ -88,7 +89,7 @@ class SubtitleRepositoryImpl @Inject constructor(
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {
-                        Log.e(TAG, "Exception fetching subtitles from ${addon.name}", e)
+                        Log.e(TAG, "Exception fetching subtitles from ${addon.name}", LogRedact.error(e))
                         emptyList()
                     }
                     onProgress?.invoke(completedCount.incrementAndGet(), total, addon.displayName)
@@ -210,13 +211,13 @@ class SubtitleRepositoryImpl @Inject constructor(
                     subtitles
                 }
                 is NetworkResult.Error -> {
-                    Log.e(TAG, "Failed to fetch subtitles from ${addon.name}: code=${result.code} message=${result.message}")
+                    Log.e(TAG, "Failed to fetch subtitles from ${addon.name}: code=${result.code} message=${LogRedact.text(result.message)}")
                     emptyList()
                 }
                 NetworkResult.Loading -> emptyList()
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Exception fetching subtitles from ${addon.name}", e)
+            Log.e(TAG, "Exception fetching subtitles from ${addon.name}", LogRedact.error(e))
             emptyList()
         }
     }

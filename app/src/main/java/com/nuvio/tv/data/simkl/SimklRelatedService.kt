@@ -1,6 +1,7 @@
 package com.nuvio.tv.data.simkl
 
 import android.util.Log
+import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.domain.model.ContentType
 import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.domain.model.PosterShape
@@ -121,7 +122,7 @@ class SimklRelatedService @Inject constructor(
         if (response.status in 200..299) json.decodeFromString(response.body) else null
     } catch (e: Exception) {
         if (e is kotlinx.coroutines.CancellationException) throw e
-        Log.w(TAG, "Failed to fetch Simkl detail $type/$simklId: ${e.message}")
+        Log.w(TAG, "Failed to fetch Simkl detail $type/$simklId: ${LogRedact.text(e.message)}")
         null
     }
 

@@ -1,6 +1,7 @@
 package com.nuvio.tv.data.repository
 
 import android.util.Log
+import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.auth.AuthManager
 import com.nuvio.tv.data.remote.supabase.MembershipOverviewRemoteDataSource
 import com.nuvio.tv.domain.model.AuthState
@@ -76,7 +77,7 @@ class MembershipOverviewRepository @Inject constructor(
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
-            Log.w(MembershipOverviewTag, "Unable to load membership overview", error)
+            Log.w(MembershipOverviewTag, "Unable to load membership overview", LogRedact.error(error))
             _state.value = MembershipOverviewState(
                 overview = previous,
                 isLoading = false,

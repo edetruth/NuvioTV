@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nuvio.tv.LocaleCache
+import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.player.StreamAutoPlayPolicy
 import com.nuvio.tv.core.recommendations.TvRecommendationManager
 import com.nuvio.tv.core.tmdb.MetaPreviewEnricher
@@ -881,7 +882,7 @@ class HomeViewModel @Inject constructor(
         if (!item.canMarkWatched()) return
         viewModelScope.launch {
             runCatching { watchProgressRepository.markAsCompleted(item.toCompletedProgress()) }
-                .onFailure { error -> Log.w(TAG, "Failed to mark continue watching item as watched", error) }
+                .onFailure { error -> Log.w(TAG, "Failed to mark continue watching item as watched", LogRedact.error(error)) }
         }
     }
 

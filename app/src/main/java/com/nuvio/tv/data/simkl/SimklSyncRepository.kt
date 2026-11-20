@@ -1,6 +1,7 @@
 package com.nuvio.tv.data.simkl
 
 import android.util.Log
+import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.core.tracking.TrackingMediaReference
 import com.nuvio.tv.core.tracking.TrackingRefreshIntent
@@ -227,7 +228,7 @@ class SimklSyncRepository @Inject constructor(
             ?.takeIf(String::isNotEmpty)
             ?.let { payload ->
                 runCatching { decodeSnapshot(payload) }
-                    .onFailure { error -> Log.w(TAG, "Unable to decode Simkl snapshot", error) }
+                    .onFailure { error -> Log.w(TAG, "Unable to decode Simkl snapshot", LogRedact.error(error)) }
                     .getOrNull()
             }
         var snapshot = persistedSnapshot ?: SimklSyncSnapshot()
@@ -236,7 +237,7 @@ class SimklSyncRepository @Inject constructor(
             ?.takeIf(String::isNotEmpty)
             ?.let { payload ->
                 runCatching { decodePlaybackOverride(payload, persistedSnapshot) }
-                    .onFailure { error -> Log.w(TAG, "Unable to decode Simkl playback override", error) }
+                    .onFailure { error -> Log.w(TAG, "Unable to decode Simkl playback override", LogRedact.error(error)) }
                     .getOrNull()
             }
         if (playbackOverride != null) {
@@ -258,7 +259,7 @@ class SimklSyncRepository @Inject constructor(
         } catch (error: CancellationException) {
             throw error
         } catch (error: Throwable) {
-            Log.w(TAG, "Simkl sync failed", error)
+            Log.w(TAG, "Simkl sync failed", LogRedact.error(error))
             if (isCurrent(profileId, generation)) {
                 _state.value = previous.copy(
                     isLoading = false,

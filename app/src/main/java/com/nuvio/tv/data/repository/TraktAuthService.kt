@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.nuvio.tv.BuildConfig
 import com.nuvio.tv.R
+import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.data.local.AuthSessionNoticeDataStore
 import com.nuvio.tv.data.local.TraktAuthDataStore
 import com.nuvio.tv.data.local.TraktAuthState
@@ -281,7 +282,7 @@ class TraktAuthService @Inject constructor(
                     )
                 )
             } catch (e: IOException) {
-                Log.w("TraktAuthService", "Network error while refreshing token", e)
+                Log.w("TraktAuthService", "Network error while refreshing token", LogRedact.error(e))
                 return@withLock false
             }
 
@@ -363,7 +364,7 @@ class TraktAuthService @Inject constructor(
                     retriedNetwork = true
                     continue
                 }
-                Log.w("TraktAuthService", "Network error during authorized request", e)
+                Log.w("TraktAuthService", "Network error during authorized request", LogRedact.error(e))
                 return null
             }
 
@@ -443,7 +444,7 @@ class TraktAuthService @Inject constructor(
                     retriedNetwork = true
                     continue
                 }
-                Log.w("TraktAuthService", "Network error during public request", e)
+                Log.w("TraktAuthService", "Network error during public request", LogRedact.error(e))
                 return null
             }
 

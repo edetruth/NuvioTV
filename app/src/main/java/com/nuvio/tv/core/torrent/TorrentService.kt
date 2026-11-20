@@ -7,6 +7,7 @@ import com.nuvio.engine.NuvioEngine
 import com.nuvio.engine.NuvioEventType
 import com.nuvio.engine.NuvioStream
 import com.nuvio.tv.R
+import com.nuvio.tv.core.LogRedact
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import java.util.concurrent.atomic.AtomicReference
@@ -209,8 +210,8 @@ class TorrentService @Inject constructor(
             Log.e(
                 TorrentDiagnosticTag,
                 "start phase=${phase.get()} failed elapsedMs=${elapsedSince(startedAtMs)} " +
-                    "error=${diagnosticMessage(error.message)}",
-                error
+                    "error=${LogRedact.text(diagnosticMessage(error.message))}",
+                LogRedact.error(error)
             )
             val terminalState = TorrentState.Error(error.message ?: unknownErrorMessage())
             withContext(NonCancellable) {
@@ -300,7 +301,7 @@ class TorrentService @Inject constructor(
         } catch (cancellation: CancellationException) {
             throw cancellation
         } catch (error: Exception) {
-            Log.w(TAG, "Error stopping Nuvio Engine stream route", error)
+            Log.w(TAG, "Error stopping Nuvio Engine stream route", LogRedact.error(error))
         }
     }
 
@@ -353,7 +354,7 @@ class TorrentService @Inject constructor(
             try {
                 target.shutdown()
             } catch (error: Exception) {
-                Log.w(TAG, "Error shutting down Nuvio Engine", error)
+                Log.w(TAG, "Error shutting down Nuvio Engine", LogRedact.error(error))
             }
         }
     }
@@ -428,7 +429,7 @@ class TorrentService @Inject constructor(
                     } catch (cancellation: CancellationException) {
                         throw cancellation
                     } catch (error: Exception) {
-                        Log.w(TAG, "Error sampling Nuvio Engine stream progress", error)
+                        Log.w(TAG, "Error sampling Nuvio Engine stream progress", LogRedact.error(error))
                         null
                     }
                     val aggregate = activeEngine.stats.value

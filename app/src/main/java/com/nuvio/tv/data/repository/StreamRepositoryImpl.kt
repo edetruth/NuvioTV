@@ -3,6 +3,7 @@ package com.nuvio.tv.data.repository
 import android.content.Context
 import android.util.Log
 import com.nuvio.tv.R
+import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.network.NetworkResult
 import com.nuvio.tv.core.sportslive.SportsLiveAddonFetch
 import com.nuvio.tv.core.network.safeApiCall
@@ -357,7 +358,7 @@ class StreamRepositoryImpl @Inject constructor(
                             }
                         } catch (e: Exception) {
                             if (e is CancellationException) throw e
-                            Log.e(TAG, "Addon ${addon.name} failed: ${e.message}")
+                            Log.e(TAG, "Addon ${addon.name} failed: ${LogRedact.text(e.message)}")
                             attemptedFailures += StreamAttemptFailure(
                                 addonName = addon.displayName,
                                 kind = StreamFailureKind.REQUEST_FAILED,
@@ -440,7 +441,7 @@ class StreamRepositoryImpl @Inject constructor(
                         }
                     } catch (e: Exception) {
                         if (e is CancellationException) throw e
-                        Log.e(TAG, "Plugin execution failed: ${e.message}")
+                        Log.e(TAG, "Plugin execution failed: ${LogRedact.text(e.message)}")
                     } finally {
                         if (completedJobs.incrementAndGet() >= totalJobs) {
                             resultChannel.close()
@@ -483,7 +484,7 @@ class StreamRepositoryImpl @Inject constructor(
             }
         } catch (e: Exception) {
             if (e is CancellationException) throw e
-            Log.e(TAG, "Failed to fetch streams: ${e.message}", e)
+            Log.e(TAG, "Failed to fetch streams: ${LogRedact.text(e.message)}", LogRedact.error(e))
             emit(NetworkResult.Error(e.message ?: context.getString(com.nuvio.tv.R.string.stream_error_fetch_failed)))
         }
     }
@@ -659,7 +660,7 @@ class StreamRepositoryImpl @Inject constructor(
             }
         } catch (e: Exception) {
             if (e is CancellationException) throw e
-            Log.e(TAG, "Failed to stream plugins: ${e.message}", e)
+            Log.e(TAG, "Failed to stream plugins: ${LogRedact.text(e.message)}", LogRedact.error(e))
         }
     }
 
@@ -782,7 +783,7 @@ class StreamRepositoryImpl @Inject constructor(
             is NetworkResult.Error -> {
                 Log.w(
                     TAG,
-                    "Streams failed addon=$addonName code=${result.code} message=${result.message} url=$streamUrl"
+                    "Streams failed addon=$addonName code=${result.code} message=${LogRedact.text(result.message)} url=${LogRedact.url(streamUrl)}"
                 )
                 result
             }
@@ -848,7 +849,7 @@ class StreamRepositoryImpl @Inject constructor(
             }
         } catch (e: Exception) {
             if (e is CancellationException) throw e
-            Log.w(TAG, "Failed to fetch inline streams from meta for ${addon.displayName}: ${e.message}")
+            Log.w(TAG, "Failed to fetch inline streams from meta for ${addon.displayName}: ${LogRedact.text(e.message)}")
             emptyList()
         }
     }

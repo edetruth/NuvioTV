@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import android.widget.Toast
 import com.nuvio.tv.R
+import com.nuvio.tv.core.LogRedact
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -86,7 +87,7 @@ class ServerWatched internal constructor(
                         throw error
                     } catch (error: Exception) {
                         lookupFailures++
-                        Log.w(TAG, "Looking up ${mark.label()} on ${connection.providerId} failed", error)
+                        Log.w(TAG, "Looking up ${mark.label()} on ${connection.providerId} failed", LogRedact.error(error))
                         emptyList()
                     }
                 }
@@ -137,7 +138,7 @@ class ServerWatched internal constructor(
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
-            Log.w(TAG, "Setting played=$played on ${ref.label()} failed", error)
+            Log.w(TAG, "Setting played=$played on ${ref.label()} failed", LogRedact.error(error))
             false
         }
 
@@ -147,7 +148,7 @@ class ServerWatched internal constructor(
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
-            Log.w(TAG, "Refreshing ${ref.label()} after a failed write failed", error)
+            Log.w(TAG, "Refreshing ${ref.label()} after a failed write failed", LogRedact.error(error))
         }
     }
 

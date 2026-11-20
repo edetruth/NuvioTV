@@ -1,6 +1,7 @@
 package com.nuvio.tv.data.mdblist
 
 import android.util.Log
+import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.tracking.TrackingListManager
 import com.nuvio.tv.core.tracking.TrackingLibrarySorter
 import com.nuvio.tv.core.tracking.TrackingRefreshGate
@@ -118,7 +119,7 @@ class MdbListLibraryService(
                 val cached = sync.currentSnapshot()?.library
                 Log.w(TAG, "Library refresh failed (cached lists ${cached?.lists?.size ?: 0}, dynamic " +
                     "${cached?.dynamicLists?.size ?: 0}, liked ${cached?.likedLists?.size ?: 0}, external " +
-                    "${cached?.externalLists?.size ?: 0}, hidden ${cached?.hiddenListKeys?.size ?: 0})", error)
+                    "${cached?.externalLists?.size ?: 0}, hidden ${cached?.hiddenListKeys?.size ?: 0})", LogRedact.error(error))
                 loadState.value = LibraryLoadState(scope, error = error, attemptedAt = now())
             }
         }

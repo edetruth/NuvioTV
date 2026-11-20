@@ -4,6 +4,7 @@ import android.os.SystemClock
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.sync.HomeCatalogSettingsSyncService
 import com.nuvio.tv.core.sync.homeCatalogKey
 import com.nuvio.tv.core.sync.homeLegacyDisabledCatalogKey
@@ -125,7 +126,7 @@ class CatalogOrderViewModel @Inject constructor(
             } catch (ce: CancellationException) {
                 throw ce
             } catch (t: Throwable) {
-                Log.e(TAG, "confirmMove write failed gen=$generation", t)
+                Log.e(TAG, "confirmMove write failed gen=$generation", LogRedact.error(t))
             }
             if (!wrote && generation == persistGeneration) {
                 pendingSavedOrderKeys = null

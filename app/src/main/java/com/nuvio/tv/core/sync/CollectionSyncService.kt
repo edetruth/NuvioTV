@@ -1,6 +1,7 @@
 package com.nuvio.tv.core.sync
 
 import android.util.Log
+import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.auth.AuthManager
 import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.data.local.CollectionsDataStore
@@ -74,7 +75,7 @@ class CollectionSyncService @Inject constructor(
             Log.d(TAG, "Pushed collections to remote for profile $profileId")
             Result.success(Unit)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to push collections to remote", e)
+            Log.e(TAG, "Failed to push collections to remote", LogRedact.error(e))
             Result.failure(e)
         }
     }
@@ -128,7 +129,7 @@ class CollectionSyncService @Inject constructor(
             Log.d(TAG, "Applied ${remoteCollections.size} remote collections for profile $profileId")
             Result.success(true)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to pull collections from remote", e)
+            Log.e(TAG, "Failed to pull collections from remote", LogRedact.error(e))
             Result.failure(e)
         }
     }

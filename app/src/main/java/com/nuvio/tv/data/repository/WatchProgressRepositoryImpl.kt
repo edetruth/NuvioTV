@@ -1,5 +1,6 @@
 package com.nuvio.tv.data.repository
 
+import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.auth.AuthManager
 import com.nuvio.tv.core.network.NetworkResult
 import com.nuvio.tv.core.sync.WatchProgressSyncService
@@ -421,7 +422,7 @@ class WatchProgressRepositoryImpl @Inject constructor(
             .flatMapLatest { provider -> provider?.let(::pendingMarksReportedBy) ?: emptyFlow() }
             .collect { (profileId, reported) ->
                 runCatching { watchedItemsPreferences.acknowledgePendingProviderMarks(reported, profileId) }
-                    .onFailure { error -> Log.w(TAG, "Failed to acknowledge provider-reported marks", error) }
+                    .onFailure { error -> Log.w(TAG, "Failed to acknowledge provider-reported marks", LogRedact.error(error)) }
             }
     }
 
@@ -857,7 +858,7 @@ class WatchProgressRepositoryImpl @Inject constructor(
             syncScope.launch(NonCancellable) {
                 watchProgressSyncService.pushSingleToRemote(progressKey, progress, profileId)
                     .onFailure { error ->
-                        Log.w(TAG, "Failed single progress push; pending mutation retained", error)
+                        Log.w(TAG, "Failed single progress push; pending mutation retained", LogRedact.error(error))
                         triggerRemoteSync(profileId)
                     }
             }
@@ -926,7 +927,7 @@ class WatchProgressRepositoryImpl @Inject constructor(
                     provider.applyOptimisticRemoval(contentId, season, episode)
                     runCatching { provider.removeProgress(contentId, season, episode) }
                         .onFailure { error ->
-                            Log.w(TAG, "Failed ${provider.providerId.storageId} progress removal", error)
+                            Log.w(TAG, "Failed ${provider.providerId.storageId} progress removal", LogRedact.error(error))
                         }
                 }
             }.forEach { operation -> operation.await() }
@@ -935,7 +936,7 @@ class WatchProgressRepositoryImpl @Inject constructor(
         if (authManager.isAuthenticated && remoteDeleteKeys.isNotEmpty()) {
             watchProgressSyncService.deleteFromRemote(remoteDeleteKeys, profileId)
                 .onFailure { error ->
-                    Log.w(TAG, "removeProgress remote delete failed; pending mutation retained", error)
+                    Log.w(TAG, "removeProgress remote delete failed; pending mutation retained", LogRedact.error(error))
                 }
         }
         triggerRemoteSync(profileId = profileId)
@@ -1003,13 +1004,13 @@ class WatchProgressRepositoryImpl @Inject constructor(
         if (authManager.isAuthenticated && remoteDeleteKeys.isNotEmpty()) {
             watchProgressSyncService.deleteFromRemote(remoteDeleteKeys, profileId)
                 .onFailure { error ->
-                    Log.w(TAG, "removeFromHistory remote delete failed; pending mutation retained", error)
+                    Log.w(TAG, "removeFromHistory remote delete failed; pending mutation retained", LogRedact.error(error))
                 }
         }
         if (authManager.isAuthenticated) {
             watchedItemsSyncService.deleteFromRemote(contentId, season, episode, profileId = profileId)
                 .onFailure { error ->
-                    Log.w(TAG, "removeFromHistory watched item remote delete failed; pending mutation retained", error)
+                    Log.w(TAG, "removeFromHistory watched item remote delete failed; pending mutation retained", LogRedact.error(error))
                     triggerWatchedItemsSync(profileId)
                 }
         }
@@ -1083,10 +1084,10 @@ class WatchProgressRepositoryImpl @Inject constructor(
         )
         if (authManager.isAuthenticated) {
             watchProgressSyncService.deleteFromRemote(remoteDeleteKeys.distinct(), profileId)
-                .onFailure { error -> Log.w(TAG, "removeFromHistoryBatch remote delete failed", error) }
+                .onFailure { error -> Log.w(TAG, "removeFromHistoryBatch remote delete failed", LogRedact.error(error)) }
             watchedItemsSyncService.deleteFromRemoteBatch(contentId, episodePairs, profileId = profileId)
                 .onFailure { error ->
-                    Log.w(TAG, "removeFromHistoryBatch watched item remote delete failed; pending mutation retained", error)
+                    Log.w(TAG, "removeFromHistoryBatch watched item remote delete failed; pending mutation retained", LogRedact.error(error))
                     triggerWatchedItemsSync(profileId)
                 }
         }
@@ -1298,7 +1299,7 @@ class WatchProgressRepositoryImpl @Inject constructor(
                     async {
                         runCatching { writer.addToHistory(profileId, items) }
                             .onFailure { error ->
-                                Log.w(TAG, "Failed ${writer.providerId.storageId} history add", error)
+                                Log.w(TAG, "Failed ${writer.providerId.storageId} history add", LogRedact.error(error))
                             }
                     }
                 }
@@ -1320,7 +1321,7 @@ class WatchProgressRepositoryImpl @Inject constructor(
                     async {
                         runCatching { writer.removeFromHistory(profileId, items) }
                             .onFailure { error ->
-                                Log.w(TAG, "Failed ${writer.providerId.storageId} history removal", error)
+                                Log.w(TAG, "Failed ${writer.providerId.storageId} history removal", LogRedact.error(error))
                             }
                     }
                 }
@@ -1442,7 +1443,7 @@ class WatchProgressRepositoryImpl @Inject constructor(
                     metadataAttempts.remove(key)
                 }
             } catch (e: Throwable) {
-                Log.w(TAG, "Progress artwork hydration failed for ${progress.contentId}", e)
+                Log.w(TAG, "Progress artwork hydration failed for ${progress.contentId}", LogRedact.error(e))
             } finally {
                 metadataMutex.withLock {
                     inFlightMetadataKeys.remove(key)

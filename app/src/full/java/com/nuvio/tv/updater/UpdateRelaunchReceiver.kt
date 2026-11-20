@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.util.Log
+import com.nuvio.tv.core.LogRedact
 
 private const val TAG = "UpdateInstall"
 private const val PREFS_NAME = "update_relaunch"
@@ -27,7 +28,7 @@ class UpdateRelaunchReceiver : BroadcastReceiver() {
             ?: return
         runCatching { context.startActivity(launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
             .onSuccess { Log.i(TAG, "Reopened the app after the update") }
-            .onFailure { Log.w(TAG, "Could not reopen the app after the update", it) }
+            .onFailure { Log.w(TAG, "Could not reopen the app after the update", LogRedact.error(it)) }
     }
 
     companion object {

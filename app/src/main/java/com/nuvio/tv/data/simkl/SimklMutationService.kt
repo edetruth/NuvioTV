@@ -1,6 +1,7 @@
 package com.nuvio.tv.data.simkl
 
 import android.util.Log
+import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.tracking.TRACKING_SCROBBLE_DIAGNOSTIC_TAG
 import com.nuvio.tv.core.tracking.TrackingHistoryItem
 import com.nuvio.tv.core.tracking.TrackingListStatus
@@ -117,8 +118,8 @@ class SimklMutationService internal constructor(
             Log.e(
                 TRACKING_SCROBBLE_DIAGNOSTIC_TAG,
                 "simkl mutation failed action=${action.wireValue} " +
-                    "error=${error.javaClass.simpleName}:${error.message} ${event.scrobbleDiagnosticSummary()}",
-                error
+                    "error=${error.javaClass.simpleName}:${LogRedact.text(error.message)} ${event.scrobbleDiagnosticSummary()}",
+                LogRedact.error(error)
             )
             throw error
         }

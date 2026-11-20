@@ -3,6 +3,7 @@ package com.nuvio.tv.ui.screens.home
 import android.util.Log
 import androidx.lifecycle.viewModelScope
 import com.nuvio.tv.R
+import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveCatchUpHomeRow
 import com.nuvio.tv.ui.screens.sportslive.catchUpName
 import com.nuvio.tv.core.network.NetworkResult
@@ -499,7 +500,7 @@ internal fun HomeViewModel.loadCatalogPipeline(
                         }
                         Log.w(
                             HomeViewModel.TAG,
-                            "Home catalog failed addonId=${addon.id} type=${catalog.apiType} catalogId=${catalog.id} code=${result.code} message=${result.message}"
+                            "Home catalog failed addonId=${addon.id} type=${catalog.apiType} catalogId=${catalog.id} code=${result.code} message=${LogRedact.text(result.message)}"
                         )
                         if (pendingCatalogLoads == 0) {
                             catalogsLoadInProgress = false

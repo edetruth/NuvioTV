@@ -2,6 +2,7 @@ package com.nuvio.tv.core.tmdb
 
 import android.util.Log
 import com.nuvio.tv.BuildConfig
+import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.data.remote.api.TmdbApi
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -75,7 +76,7 @@ class TmdbService @Inject constructor(
             )
             
             if (!response.isSuccessful) {
-                Log.e(TAG, "TMDB API error: ${response.code()} - ${response.message()}")
+                Log.e(TAG, "TMDB API error: ${response.code()} - ${LogRedact.text(response.message())}")
                 requestDeferred.complete(null)
                 return@withContext null
             }
@@ -115,7 +116,7 @@ class TmdbService @Inject constructor(
             requestDeferred.cancel(e)
             throw e
         } catch (e: Exception) {
-            Log.e(TAG, "Error looking up TMDB ID for $imdbId: ${e.message}", e)
+            Log.e(TAG, "Error looking up TMDB ID for $imdbId: ${LogRedact.text(e.message)}", LogRedact.error(e))
             requestDeferred.complete(null)
             null
         } finally {
@@ -156,7 +157,7 @@ class TmdbService @Inject constructor(
             }
             
             if (!response.isSuccessful) {
-                Log.e(TAG, "TMDB API error: ${response.code()} - ${response.message()}")
+                Log.e(TAG, "TMDB API error: ${response.code()} - ${LogRedact.text(response.message())}")
                 requestDeferred.complete(null)
                 return@withContext null
             }
@@ -189,7 +190,7 @@ class TmdbService @Inject constructor(
             requestDeferred.cancel(e)
             throw e
         } catch (e: Exception) {
-            Log.e(TAG, "Error looking up IMDB ID for $tmdbId: ${e.message}", e)
+            Log.e(TAG, "Error looking up IMDB ID for $tmdbId: ${LogRedact.text(e.message)}", LogRedact.error(e))
             requestDeferred.complete(null)
             null
         } finally {

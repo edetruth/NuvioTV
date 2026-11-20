@@ -2,6 +2,7 @@ package com.nuvio.tv.core.auth
 
 import android.content.Context
 import android.util.Log
+import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.sync.androidtv.AndroidTvChannelManager
 import com.nuvio.tv.core.profile.ProfileScopedCredentialStore
 import com.nuvio.tv.data.local.ProfileDataStore
@@ -27,17 +28,17 @@ class AccountLocalDataResetService @Inject constructor(
 ) {
     suspend fun clearAfterSignOut() = withContext(Dispatchers.IO) {
         runCatching { androidTvChannelManager.clearAll() }
-            .onFailure { Log.w(ACCOUNT_RESET_TAG, "Failed to clear Android TV channel data", it) }
+            .onFailure { Log.w(ACCOUNT_RESET_TAG, "Failed to clear Android TV channel data", LogRedact.error(it)) }
         runCatching { profileDataStoreFactory.clearProfileScopedData() }
-            .onFailure { Log.w(ACCOUNT_RESET_TAG, "Failed to clear profile-scoped data", it) }
+            .onFailure { Log.w(ACCOUNT_RESET_TAG, "Failed to clear profile-scoped data", LogRedact.error(it)) }
         runCatching { profileDataStore.clearAll() }
-            .onFailure { Log.w(ACCOUNT_RESET_TAG, "Failed to clear profile metadata", it) }
+            .onFailure { Log.w(ACCOUNT_RESET_TAG, "Failed to clear profile metadata", LogRedact.error(it)) }
         runCatching { profileLockStateDataStore.clearAll() }
-            .onFailure { Log.w(ACCOUNT_RESET_TAG, "Failed to clear profile lock states", it) }
+            .onFailure { Log.w(ACCOUNT_RESET_TAG, "Failed to clear profile lock states", LogRedact.error(it)) }
         runCatching { credentialStores.forEach(ProfileScopedCredentialStore::clearAllProfiles) }
-            .onFailure { Log.w(ACCOUNT_RESET_TAG, "Failed to clear profile credentials", it) }
+            .onFailure { Log.w(ACCOUNT_RESET_TAG, "Failed to clear profile credentials", LogRedact.error(it)) }
         runCatching { clearAccountFiles() }
-            .onFailure { Log.w(ACCOUNT_RESET_TAG, "Failed to clear account files", it) }
+            .onFailure { Log.w(ACCOUNT_RESET_TAG, "Failed to clear account files", LogRedact.error(it)) }
     }
 
     private fun clearAccountFiles() {

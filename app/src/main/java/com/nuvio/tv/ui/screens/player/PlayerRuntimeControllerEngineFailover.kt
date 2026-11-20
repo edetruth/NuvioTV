@@ -3,6 +3,7 @@ package com.nuvio.tv.ui.screens.player
 import android.util.Log
 import androidx.media3.common.C
 import com.nuvio.tv.R
+import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.data.local.InternalPlayerEngine
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.update
@@ -28,7 +29,7 @@ internal fun PlayerRuntimeController.maybeAutoSwitchInternalPlayerOnStartupError
         message = "allowEngineFailover=$allowEngineFailover detailedError=${detailedError.take(220)}"
     )
     rememberCurrentTrackPreferenceForEngineSwitch()
-    Log.w(PlayerRuntimeController.TAG, "Startup playback error; auto-switching engine: $detailedError")
+    Log.w(PlayerRuntimeController.TAG, "Startup playback error; auto-switching engine: ${LogRedact.text(detailedError)}")
     startupEngineFailoverTriggered = true
 
     val targetEngineLabel = targetEngineLabel(targetEngine)

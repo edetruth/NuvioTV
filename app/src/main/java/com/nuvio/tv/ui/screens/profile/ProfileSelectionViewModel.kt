@@ -3,6 +3,7 @@ package com.nuvio.tv.ui.screens.profile
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.core.sync.ProfileSettingsSyncService
 import com.nuvio.tv.core.sync.ProfileSyncService
@@ -144,7 +145,7 @@ class ProfileSelectionViewModel @Inject constructor(
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
-            Log.e("ProfileSelectionVM", "Failed to load avatar catalog", error)
+            Log.e("ProfileSelectionVM", "Failed to load avatar catalog", LogRedact.error(error))
         }
     }
 
@@ -174,7 +175,7 @@ class ProfileSelectionViewModel @Inject constructor(
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
-                Log.e("ProfileSelectionVM", "Failed to select profile", error)
+                Log.e("ProfileSelectionVM", "Failed to select profile", LogRedact.error(error))
                 onFailure()
             } finally {
                 isSelectingProfile = false
@@ -216,7 +217,7 @@ class ProfileSelectionViewModel @Inject constructor(
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
-                Log.e("ProfileSelectionVM", "Failed to create profile", error)
+                Log.e("ProfileSelectionVM", "Failed to create profile", LogRedact.error(error))
                 CreateProfileResult.Failed
             } finally {
                 _isCreating.value = false
@@ -279,7 +280,7 @@ class ProfileSelectionViewModel @Inject constructor(
                 Log.e(
                     "ProfileSelectionVM",
                     "Failed to refresh profile PIN states (attempt=$attempt)",
-                    result.exceptionOrNull()
+                    LogRedact.error(result.exceptionOrNull())
                 )
                 attempt++
                 delay(2000L * attempt)

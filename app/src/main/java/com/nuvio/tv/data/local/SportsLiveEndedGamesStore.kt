@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.sportslive.SportsLiveEndedGames
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
@@ -48,14 +49,14 @@ class SportsLiveEndedGamesStore @Inject constructor(
             val stored = runCatching {
                 SportsLiveEndedGames.decodeTimes(context.sportsLiveEndedGamesDataStore.data.first()[key])
             }.getOrElse {
-                Log.w(TAG, "Could not read ended games", it)
+                Log.w(TAG, "Could not read ended games", LogRedact.error(it))
                 emptyMap()
             }
             SportsLiveEndedGames.shared.install(stored, System.currentTimeMillis()) { times -> pending.trySend(times) }
             pending.receiveAsFlow().collect { times ->
                 runCatching {
                     context.sportsLiveEndedGamesDataStore.edit { it[key] = SportsLiveEndedGames.encodeTimes(times) }
-                }.onFailure { Log.w(TAG, "Could not save ended games", it) }
+                }.onFailure { Log.w(TAG, "Could not save ended games", LogRedact.error(it)) }
             }
         }
     }

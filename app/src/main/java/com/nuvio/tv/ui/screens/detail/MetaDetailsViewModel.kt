@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.player.StreamAutoPlayPolicy
 import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.core.network.NetworkResult
@@ -1179,7 +1180,7 @@ class MetaDetailsViewModel @Inject constructor(
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
-                Log.w(TAG, "Failed to load Trakt comments for ${meta.id}: ${error.message}")
+                Log.w(TAG, "Failed to load Trakt comments for ${meta.id}: ${LogRedact.text(error.message)}")
                 _uiState.update { state ->
                     if (state.meta == null || state.meta.id != meta.id) {
                         state
@@ -1261,7 +1262,7 @@ class MetaDetailsViewModel @Inject constructor(
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
-                Log.w(TAG, "Failed to load more Trakt comments for ${meta.id}: ${error.message}")
+                Log.w(TAG, "Failed to load more Trakt comments for ${meta.id}: ${LogRedact.text(error.message)}")
                 _uiState.update { current ->
                     if (current.meta?.id != meta.id) current else current.copy(isCommentsLoadingMore = false)
                 }
@@ -1335,7 +1336,7 @@ class MetaDetailsViewModel @Inject constructor(
                             fallbackItemType = itemType
                         )
                     }.getOrElse {
-                        Log.w(TAG, "Failed to load Trakt related titles for ${meta.id}: ${it.message}")
+                        Log.w(TAG, "Failed to load Trakt related titles for ${meta.id}: ${LogRedact.text(it.message)}")
                         emptyList()
                     }
                 }
@@ -1348,7 +1349,7 @@ class MetaDetailsViewModel @Inject constructor(
                             fallbackItemType = itemType
                         )
                     }.getOrElse {
-                        Log.w(TAG, "Failed to load Simkl related titles for ${meta.id}: ${it.message}")
+                        Log.w(TAG, "Failed to load Simkl related titles for ${meta.id}: ${LogRedact.text(it.message)}")
                         emptyList()
                     }
                 }
@@ -1371,7 +1372,7 @@ class MetaDetailsViewModel @Inject constructor(
                             language = settings.language
                         )
                     }.getOrElse {
-                        Log.w(TAG, "Failed to load More like this for ${meta.id}: ${it.message}")
+                        Log.w(TAG, "Failed to load More like this for ${meta.id}: ${LogRedact.text(it.message)}")
                         emptyList()
                     }
                 }
@@ -1434,7 +1435,7 @@ class MetaDetailsViewModel @Inject constructor(
                     language = settings.language
                 )
             }.getOrElse {
-                Log.w(TAG, "Failed to load collection $collectionId: ${it.message}")
+                Log.w(TAG, "Failed to load collection $collectionId: ${LogRedact.text(it.message)}")
                 TmdbMovieCollection(name = null, items = emptyList())
             }
 
@@ -1569,7 +1570,7 @@ class MetaDetailsViewModel @Inject constructor(
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
-                Log.w(TAG, "Failed to load episode ratings for ${meta.id}: ${error.message}")
+                Log.w(TAG, "Failed to load episode ratings for ${meta.id}: ${LogRedact.text(error.message)}")
                 _uiState.update { state ->
                     if (state.meta == null || state.meta.id != meta.id) {
                         state
@@ -2597,7 +2598,7 @@ class MetaDetailsViewModel @Inject constructor(
                 val progressList = unwatched.map { buildCompletedEpisodeProgress(meta, it) }
                 watchProgressRepository.markAsCompletedBatch(progressList)
             }.onFailure { error ->
-                Log.w(TAG, "Failed to batch mark season $season as watched: ${error.message}")
+                Log.w(TAG, "Failed to batch mark season $season as watched: ${LogRedact.text(error.message)}")
             }
 
             _uiState.update {
@@ -2645,7 +2646,7 @@ class MetaDetailsViewModel @Inject constructor(
                     episodes = episodeTriples
                 )
             }.onFailure { error ->
-                Log.w(TAG, "Failed to batch unmark season $season: ${error.message}")
+                Log.w(TAG, "Failed to batch unmark season $season: ${LogRedact.text(error.message)}")
             }
 
             _uiState.update {
@@ -2696,7 +2697,7 @@ class MetaDetailsViewModel @Inject constructor(
                 val progressList = unwatched.map { buildCompletedEpisodeProgress(meta, it) }
                 watchProgressRepository.markAsCompletedBatch(progressList)
             }.onFailure { error ->
-                Log.w(TAG, "Failed to batch mark previous episodes as watched: ${error.message}")
+                Log.w(TAG, "Failed to batch mark previous episodes as watched: ${LogRedact.text(error.message)}")
             }
 
             _uiState.update {
@@ -2741,7 +2742,7 @@ class MetaDetailsViewModel @Inject constructor(
                 val progressList = unwatched.map { buildCompletedEpisodeProgress(meta, it) }
                 watchProgressRepository.markAsCompletedBatch(progressList)
             }.onFailure { error ->
-                Log.w(TAG, "Failed to batch mark previous seasons as watched: ${error.message}")
+                Log.w(TAG, "Failed to batch mark previous seasons as watched: ${LogRedact.text(error.message)}")
             }
 
             _uiState.update {

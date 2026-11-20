@@ -1,6 +1,7 @@
 package com.nuvio.tv.data.mediaserver
 
 import android.util.Log
+import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.profile.ProfileScopedCredentialStore
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CancellationException
@@ -344,7 +345,7 @@ class ServerRepository(
 
     override fun removeProfile(profileId: Int) {
         runCatching { persistence.write(profileId, null) }
-            .onFailure { Log.w(TAG, "Unable to remove server connections", it) }
+            .onFailure { Log.w(TAG, "Unable to remove server connections", LogRedact.error(it)) }
         if (loadedProfileId == profileId) load(profileId)
     }
 
@@ -354,7 +355,7 @@ class ServerRepository(
         loadedProfileId = null
         pendingPush = false
         syncedKeys = null
-        runCatching { persistence.clear() }.onFailure { Log.w(TAG, "Unable to clear server storage", it) }
+        runCatching { persistence.clear() }.onFailure { Log.w(TAG, "Unable to clear server storage", LogRedact.error(it)) }
         mutableState.value = ServersUiState(revision = mutableState.value.revision + 1)
     }
 
@@ -396,7 +397,7 @@ class ServerRepository(
         val stored = StoredServers(connections, currentTokens, pendingPush, syncedKeys?.toList())
         runCatching {
             persistence.write(profileId, json.encodeToString(StoredServers.serializer(), stored))
-        }.onFailure { Log.w(TAG, "Unable to save server connections", it) }
+        }.onFailure { Log.w(TAG, "Unable to save server connections", LogRedact.error(it)) }
     }
 
     private fun setFailure(connectionId: String, failure: ServerFailure?) {

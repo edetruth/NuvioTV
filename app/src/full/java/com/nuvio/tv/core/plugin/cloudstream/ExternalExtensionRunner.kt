@@ -21,6 +21,7 @@ import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ExtractorLinkType
 import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.app
+import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.plugin.TestDiagnostics
 import com.nuvio.tv.core.plugin.matchPluginEpisodeIndex
 import com.nuvio.tv.core.tmdb.TmdbMetadataService
@@ -76,14 +77,14 @@ class ExternalExtensionRunner @Inject constructor(
         try {
             executeInternal(api, tmdbId, mediaType, season, episode)
         } catch (e: Exception) {
-            Log.e(TAG, "Extension ${api.name} failed: ${e.javaClass.simpleName}: ${e.message}", e)
+            Log.e(TAG, "Extension ${api.name} failed: ${e.javaClass.simpleName}: ${LogRedact.text(e.message)}", LogRedact.error(e))
             emptyList()
         } catch (e: Error) {
             val missing = extractMissingClass(e)
             if (missing != null) {
-                Log.e(TAG, "Extension ${api.name} MISSING CLASS: $missing", e)
+                Log.e(TAG, "Extension ${api.name} MISSING CLASS: $missing", LogRedact.error(e))
             } else {
-                Log.e(TAG, "Extension ${api.name} linkage error: ${e.javaClass.simpleName}: ${e.message}", e)
+                Log.e(TAG, "Extension ${api.name} linkage error: ${e.javaClass.simpleName}: ${LogRedact.text(e.message)}", LogRedact.error(e))
             }
             emptyList()
         }
@@ -120,12 +121,12 @@ class ExternalExtensionRunner @Inject constructor(
                     executeSearchBasedWithDiagnostics(api, tmdbId, mediaType, season, episode, diagnostics)
                 }
             } catch (e: Error) {
-                Log.e(TAG, "Diagnostic ${api.name} error: ${e.javaClass.simpleName}: ${e.message}", e)
+                Log.e(TAG, "Diagnostic ${api.name} error: ${e.javaClass.simpleName}: ${LogRedact.text(e.message)}", LogRedact.error(e))
                 diagnostics.addStep("Runtime error: ${e.javaClass.simpleName}")
                 diagnostics.addStep("Detail: ${e.message?.take(300)}")
                 emptyList()
             } catch (e: Exception) {
-                Log.e(TAG, "Diagnostic ${api.name} exception: ${e.javaClass.simpleName}: ${e.message}", e)
+                Log.e(TAG, "Diagnostic ${api.name} exception: ${e.javaClass.simpleName}: ${LogRedact.text(e.message)}", LogRedact.error(e))
                 diagnostics.addStep("Runtime exception: ${e.javaClass.simpleName}: ${e.message?.take(300)}")
                 emptyList()
             }
@@ -386,11 +387,11 @@ class ExternalExtensionRunner @Inject constructor(
         val loadResponse = try {
             api.load(loadJson)
         } catch (e: Exception) {
-            Log.w(TAG, "TmdbProvider ${api.name} load(json) threw: ${e.javaClass.simpleName}: ${e.message?.take(100)}")
+            Log.w(TAG, "TmdbProvider ${api.name} load(json) threw: ${e.javaClass.simpleName}: ${LogRedact.text(e.message?.take(100))}")
             null
         } catch (e: Error) {
             val missing = extractMissingClass(e)
-            Log.w(TAG, "TmdbProvider ${api.name} load(json) error: ${missing ?: e.message?.take(100)}")
+            Log.w(TAG, "TmdbProvider ${api.name} load(json) error: ${LogRedact.text(missing ?: e.message?.take(100))}")
             null
         }
 
@@ -414,7 +415,7 @@ class ExternalExtensionRunner @Inject constructor(
         val fallbackResponse = try {
             api.load(tmdbUrl)
         } catch (e: Exception) {
-            Log.w(TAG, "TmdbProvider ${api.name} fallback load(url) threw: ${e.javaClass.simpleName}: ${e.message?.take(100)}")
+            Log.w(TAG, "TmdbProvider ${api.name} fallback load(url) threw: ${e.javaClass.simpleName}: ${LogRedact.text(e.message?.take(100))}")
             null
         } catch (e: Error) { null }
 
@@ -456,7 +457,7 @@ class ExternalExtensionRunner @Inject constructor(
                 false
             } catch (e: Error) {
                 val missing = extractMissingClass(e)
-                Log.w(TAG, "TmdbProvider ${api.name} loadLinks error: ${missing ?: e.message} (${links.size} links collected)")
+                Log.w(TAG, "TmdbProvider ${api.name} loadLinks error: ${LogRedact.text(missing ?: e.message)} (${links.size} links collected)")
                 false
             }
         }
@@ -575,15 +576,15 @@ class ExternalExtensionRunner @Inject constructor(
         val loadResponse = try {
             api.load(bestMatch.url)
         } catch (e: Exception) {
-            Log.e(TAG, "SearchBased ${api.name} load() threw: ${e.javaClass.simpleName}: ${e.message}", e)
+            Log.e(TAG, "SearchBased ${api.name} load() threw: ${e.javaClass.simpleName}: ${LogRedact.text(e.message)}", LogRedact.error(e))
             null
         } catch (e: Error) {
             val missing = extractMissingClass(e)
-            Log.e(TAG, "SearchBased ${api.name} load() error: ${missing ?: e.message}", e)
+            Log.e(TAG, "SearchBased ${api.name} load() error: ${LogRedact.text(missing ?: e.message)}", LogRedact.error(e))
             null
         }
         if (loadResponse == null) {
-            Log.w(TAG, "SearchBased ${api.name}: load(${bestMatch.url}) returned null")
+            Log.w(TAG, "SearchBased ${api.name}: load(${LogRedact.url(bestMatch.url)}) returned null")
             return emptyList()
         }
         Log.d(TAG, "SearchBased ${api.name}: loaded ${loadResponse.javaClass.simpleName}")
@@ -606,11 +607,11 @@ class ExternalExtensionRunner @Inject constructor(
                     callback = { links.add(it) }
                 )
             } catch (e: Exception) {
-                Log.e(TAG, "SearchBased ${api.name} loadLinks threw: ${e.javaClass.simpleName}: ${e.message}", e)
+                Log.e(TAG, "SearchBased ${api.name} loadLinks threw: ${e.javaClass.simpleName}: ${LogRedact.text(e.message)}", LogRedact.error(e))
                 false
             } catch (e: Error) {
                 val missing = extractMissingClass(e)
-                Log.e(TAG, "SearchBased ${api.name} loadLinks error: ${missing ?: e.message}", e)
+                Log.e(TAG, "SearchBased ${api.name} loadLinks error: ${LogRedact.text(missing ?: e.message)}", LogRedact.error(e))
                 false
             }
         }
@@ -700,7 +701,7 @@ class ExternalExtensionRunner @Inject constructor(
     private suspend fun trySearch(api: MainAPI, query: String): SearchOutcome = try {
         SearchOutcome(api.search(query, 1)?.items)
     } catch (e: java.net.UnknownHostException) {
-        Log.e(TAG, "SearchBased ${api.name} search(\"$query\") DNS fail: ${e.message}")
+        Log.e(TAG, "SearchBased ${api.name} search(\"$query\") DNS fail: ${LogRedact.text(e.message)}")
         SearchOutcome(null, hostUnreachable = true)
     } catch (e: NotImplementedError) {
         // Provider (e.g. live-sports scrapers) doesn't override search(); retries
@@ -708,11 +709,11 @@ class ExternalExtensionRunner @Inject constructor(
         Log.e(TAG, "SearchBased ${api.name}: search() not implemented; skipping provider")
         SearchOutcome(null, unsupported = true)
     } catch (e: Exception) {
-        Log.e(TAG, "SearchBased ${api.name} search(\"$query\") threw: ${e.javaClass.simpleName}: ${e.message}", e)
+        Log.e(TAG, "SearchBased ${api.name} search(\"$query\") threw: ${e.javaClass.simpleName}: ${LogRedact.text(e.message)}", LogRedact.error(e))
         SearchOutcome(null)
     } catch (e: Error) {
         val missing = extractMissingClass(e)
-        Log.e(TAG, "SearchBased ${api.name} search(\"$query\") error: ${missing ?: e.message}", e)
+        Log.e(TAG, "SearchBased ${api.name} search(\"$query\") error: ${LogRedact.text(missing ?: e.message)}", LogRedact.error(e))
         SearchOutcome(null)
     }
 
@@ -845,7 +846,7 @@ class ExternalExtensionRunner @Inject constructor(
                 !url.startsWith("http://") && !url.startsWith("https://") -> false
                 else -> true
             }.also { valid ->
-                if (!valid) Log.w(TAG, "Filtered invalid link: source=${link.source}, url=${url.take(60)}")
+                if (!valid) Log.w(TAG, "Filtered invalid link: source=${LogRedact.text(link.source)}, url=${LogRedact.url(url)}")
             }
         }
     }

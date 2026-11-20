@@ -2,6 +2,7 @@ package com.nuvio.tv.core.tmdb
 
 import android.util.Log
 import com.nuvio.tv.BuildConfig
+import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.data.remote.api.TmdbAggregateCreditsResponse
 import com.nuvio.tv.data.remote.api.TmdbApi
 import com.nuvio.tv.data.remote.api.TmdbCastMember
@@ -213,7 +214,7 @@ class TmdbMetadataService(
                             }
                         }
                     }.getOrElse {
-                        Log.w(TAG, "Failed to fetch English credits fallback for $numericId: ${it.message}")
+                        Log.w(TAG, "Failed to fetch English credits fallback for $numericId: ${LogRedact.text(it.message)}")
                         emptyMap()
                     }
                 } else {
@@ -502,7 +503,7 @@ class TmdbMetadataService(
                 requestDeferred.cancel(e)
                 throw e
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to fetch TMDB enrichment: ${e.message}", e)
+                Log.e(TAG, "Failed to fetch TMDB enrichment: ${LogRedact.text(e.message)}", LogRedact.error(e))
                 requestDeferred.complete(null)
                 null
             } finally {
@@ -522,14 +523,14 @@ class TmdbMetadataService(
             "tv" -> runCatching {
                 tmdbApi.getTvVideos(tmdbId, TMDB_API_KEY, preferredLanguage).body()?.results.orEmpty()
             }.getOrElse {
-                Log.w(TAG, "Failed to fetch localized TV trailers for $tmdbId: ${it.message}")
+                Log.w(TAG, "Failed to fetch localized TV trailers for $tmdbId: ${LogRedact.text(it.message)}")
                 emptyList()
             }
 
             else -> runCatching {
                 tmdbApi.getMovieVideos(tmdbId, TMDB_API_KEY, preferredLanguage).body()?.results.orEmpty()
             }.getOrElse {
-                Log.w(TAG, "Failed to fetch localized movie trailers for $tmdbId: ${it.message}")
+                Log.w(TAG, "Failed to fetch localized movie trailers for $tmdbId: ${LogRedact.text(it.message)}")
                 emptyList()
             }
         }
@@ -545,7 +546,7 @@ class TmdbMetadataService(
                     tmdbApi.getTvVideos(tmdbId, TMDB_API_KEY, TMDB_TRAILER_FALLBACK_LANGUAGE)
                         .body()?.results.orEmpty()
                 }.getOrElse {
-                    Log.w(TAG, "Failed to fetch fallback TV trailers for $tmdbId: ${it.message}")
+                    Log.w(TAG, "Failed to fetch fallback TV trailers for $tmdbId: ${LogRedact.text(it.message)}")
                     emptyList()
                 }
 
@@ -553,7 +554,7 @@ class TmdbMetadataService(
                     tmdbApi.getMovieVideos(tmdbId, TMDB_API_KEY, TMDB_TRAILER_FALLBACK_LANGUAGE)
                         .body()?.results.orEmpty()
                 }.getOrElse {
-                    Log.w(TAG, "Failed to fetch fallback movie trailers for $tmdbId: ${it.message}")
+                    Log.w(TAG, "Failed to fetch fallback movie trailers for $tmdbId: ${LogRedact.text(it.message)}")
                     emptyList()
                 }
             }
@@ -634,7 +635,7 @@ class TmdbMetadataService(
                             } catch (e: CancellationException) {
                                 throw e
                             } catch (e: Exception) {
-                                Log.w(TAG, "Failed to fetch TMDB season $season: ${e.message}")
+                                Log.w(TAG, "Failed to fetch TMDB season $season: ${LogRedact.text(e.message)}")
                                 emptyMap()
                             }
                         }
@@ -781,7 +782,7 @@ class TmdbMetadataService(
             moreLikeThisCache[cacheKey] = items
             items
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to fetch recommendations for $tmdbId: ${e.message}")
+            Log.w(TAG, "Failed to fetch recommendations for $tmdbId: ${LogRedact.text(e.message)}")
             emptyList()
         }
     }
@@ -882,7 +883,7 @@ class TmdbMetadataService(
             collectionCache[cacheKey] = collection
             collection
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to fetch collection for $collectionId: ${e.message}")
+            Log.w(TAG, "Failed to fetch collection for $collectionId: ${LogRedact.text(e.message)}")
             TmdbMovieCollection(name = null, items = emptyList())
         }
     }
@@ -1001,7 +1002,7 @@ class TmdbMetadataService(
                 }
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to fetch ${entityKind.routeValue} header for $entityId: ${e.message}")
+            Log.w(TAG, "Failed to fetch ${entityKind.routeValue} header for $entityId: ${LogRedact.text(e.message)}")
             null
         } ?: fallbackName?.takeIf { it.isNotBlank() }?.let {
             TmdbEntityHeader(
@@ -1108,7 +1109,7 @@ class TmdbMetadataService(
         } catch (e: Exception) {
             Log.w(
                 TAG,
-                "Failed to fetch ${entityKind.routeValue} rail ${railType.value}/${mediaType.value} for $entityId: ${e.message}"
+                "Failed to fetch ${entityKind.routeValue} rail ${railType.value}/${mediaType.value} for $entityId: ${LogRedact.text(e.message)}"
             )
             TmdbEntityRailPageResult(items = emptyList(), hasMore = false)
         }
@@ -1412,7 +1413,7 @@ class TmdbMetadataService(
                 personCache[cacheKey] = detail
                 detail
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to fetch person detail: ${e.message}", e)
+                Log.e(TAG, "Failed to fetch person detail: ${LogRedact.text(e.message)}", LogRedact.error(e))
                 null
             }
         }

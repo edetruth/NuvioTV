@@ -2,6 +2,7 @@ package com.nuvio.tv.ui.screens.home
 
 import android.util.Log
 import com.nuvio.tv.R
+import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.sportslive.scores.CatchUpItem
 import androidx.lifecycle.viewModelScope
 import com.nuvio.tv.domain.model.SportsLiveItem
@@ -116,7 +117,7 @@ internal fun HomeViewModel.refreshSportsLiveInBackground() {
     viewModelScope.launch {
         runCatching { sportsLiveRepository.load(includeChannels = false) }.onFailure { error ->
             if (error is CancellationException) throw error
-            Log.w(HomeViewModel.TAG, "Sports & Live load failed", error)
+            Log.w(HomeViewModel.TAG, "Sports & Live load failed", LogRedact.error(error))
         }
     }
 }

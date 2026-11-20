@@ -110,6 +110,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
+import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.ui.screens.ambient.AmbientIdleController
 import com.nuvio.tv.ui.screens.ambient.AmbientModeHost
 import com.nuvio.tv.ui.screens.ambient.LocalAmbientIdleController
@@ -2658,7 +2659,7 @@ private fun navigateToDrawerRoute(
             restoreState = true
         }
     } catch (e: IllegalArgumentException) {
-        Log.w("NuvioNavigation", "Route not found in nav graph: $targetRoute", e)
+        Log.w("NuvioNavigation", "Route not found in nav graph: $targetRoute", LogRedact.error(e))
     }
 }
 

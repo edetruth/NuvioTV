@@ -4,6 +4,7 @@ import android.os.SystemClock
 import android.util.Log
 import androidx.annotation.VisibleForTesting
 import com.nuvio.tv.BuildConfig
+import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.core.network.NetworkResult
 import com.nuvio.tv.data.local.TraktSettingsDataStore
@@ -161,7 +162,7 @@ class TraktProgressService @Inject constructor(
     )
 
     private val exceptionHandler = CoroutineExceptionHandler { _, throwable ->
-        Log.e(TAG, "Uncaught exception in TraktProgressService scope", throwable)
+        Log.e(TAG, "Uncaught exception in TraktProgressService scope", LogRedact.error(throwable))
     }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO + exceptionHandler)
     private val refreshSignals = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
@@ -297,7 +298,7 @@ class TraktProgressService @Inject constructor(
                     refreshRemoteSnapshot()
                     true
                 } catch (e: Exception) {
-                    Log.w(TAG, "Failed to refresh remote snapshot", e)
+                    Log.w(TAG, "Failed to refresh remote snapshot", LogRedact.error(e))
                     false
                 }
                 updateRefreshBackoff(success)
@@ -1111,7 +1112,7 @@ class TraktProgressService @Inject constructor(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                Log.w(TAG, "fetchAllProgressSnapshot failed, keeping existing snapshot", e)
+                Log.w(TAG, "fetchAllProgressSnapshot failed, keeping existing snapshot", LogRedact.error(e))
                 null
             }
             watchedMoviesDeferred?.let {
@@ -1269,7 +1270,7 @@ class TraktProgressService @Inject constructor(
             )
             result.progress
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to fetch episode progress for show=$cacheKey", e)
+            Log.w(TAG, "Failed to fetch episode progress for show=$cacheKey", LogRedact.error(e))
             episodeProgressState.value[cacheKey]?.progress ?: cachedEntry?.progress.orEmpty()
         } finally {
             episodeProgressMutex.withLock {
@@ -2384,7 +2385,7 @@ class TraktProgressService @Inject constructor(
             Log.w(
                 TAG,
                 "resolveAddonEpisodeProgress failed for $contentId s=$season e=$episode",
-                error
+                LogRedact.error(error)
             )
             null
         }
@@ -2729,7 +2730,7 @@ class TraktProgressService @Inject constructor(
             remappedEpisode = remapped
         )
     }.getOrElse { error ->
-        Log.w(TAG, "markAsWatched: episode remap fallback failed", error)
+        Log.w(TAG, "markAsWatched: episode remap fallback failed", LogRedact.error(error))
         null
     }
 

@@ -1,6 +1,7 @@
 package com.nuvio.tv.data.mdblist
 
 import android.util.Log
+import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.core.tracking.TRACKING_SCROBBLE_DIAGNOSTIC_TAG
 import com.nuvio.tv.core.tracking.TrackingCapability
@@ -66,7 +67,7 @@ class MdbListTrackingScrobbler @Inject constructor(
             val media = episodeMappings.toMdbListNumbering(event.media, sync.currentProjection().mediaIndex)
             service.scrobble(sync.currentScope(), action, event.copy(media = media))
         } catch (error: Throwable) {
-            Log.w(TRACKING_SCROBBLE_DIAGNOSTIC_TAG, "mdblist adapter failed action=${action.wireValue} error=${error.javaClass.simpleName}:${error.message} ${event.scrobbleDiagnosticSummary()}", error)
+            Log.w(TRACKING_SCROBBLE_DIAGNOSTIC_TAG, "mdblist adapter failed action=${action.wireValue} error=${error.javaClass.simpleName}:${LogRedact.text(error.message)} ${event.scrobbleDiagnosticSummary()}", LogRedact.error(error))
             throw error
         }
         Log.d(TRACKING_SCROBBLE_DIAGNOSTIC_TAG, "mdblist adapter complete action=${action.wireValue} ${event.scrobbleDiagnosticSummary()}")

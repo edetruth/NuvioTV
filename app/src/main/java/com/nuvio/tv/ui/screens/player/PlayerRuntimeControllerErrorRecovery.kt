@@ -7,6 +7,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.mediacodec.MediaCodecRenderer
 import com.nuvio.tv.R
+import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.util.findCause
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.update
@@ -48,7 +49,7 @@ internal fun PlayerRuntimeController.attemptStartupRecovery(
 
     Log.w(
         PlayerRuntimeController.TAG,
-        "Startup recovery ${attempt + 1}/$MAX_STARTUP_AUTO_RETRIES after ${RETRY_DELAY_MS}ms for: $detailedError"
+        "Startup recovery ${attempt + 1}/$MAX_STARTUP_AUTO_RETRIES after ${RETRY_DELAY_MS}ms for: ${LogRedact.text(detailedError)}"
     )
 
     errorRetryJob?.cancel()
@@ -260,7 +261,7 @@ internal fun PlayerRuntimeController.attemptAutoRetry(
 
     Log.w(
         PlayerRuntimeController.TAG,
-        "Auto-retry ${attempt + 1}/$MAX_AUTO_RETRIES after ${RETRY_DELAY_MS}ms for: $detailedError"
+        "Auto-retry ${attempt + 1}/$MAX_AUTO_RETRIES after ${RETRY_DELAY_MS}ms for: ${LogRedact.text(detailedError)}"
     )
 
     // Capture the current position so we can resume after re-init.

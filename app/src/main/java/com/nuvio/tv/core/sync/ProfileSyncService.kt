@@ -2,6 +2,7 @@ package com.nuvio.tv.core.sync
 
 import android.os.SystemClock
 import android.util.Log
+import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.auth.AuthManager
 import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.data.remote.supabase.SupabaseProfileLockState
@@ -92,7 +93,7 @@ class ProfileSyncService @Inject constructor(
             Log.d(TAG, "Pushed ${profiles.size} profiles to remote")
             Result.success(Unit)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to push profiles to remote", e)
+            Log.e(TAG, "Failed to push profiles to remote", LogRedact.error(e))
             Result.failure(e)
         }
     }
@@ -141,7 +142,7 @@ class ProfileSyncService @Inject constructor(
                 }
                 Result.success(profiles)
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to pull profiles from remote", e)
+                Log.e(TAG, "Failed to pull profiles from remote", LogRedact.error(e))
                 Result.failure(e)
             }
         }
@@ -160,7 +161,7 @@ class ProfileSyncService @Inject constructor(
             Log.d(TAG, "Deleted remote data for profile $profileId")
             Result.success(Unit)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to delete remote profile data for profile $profileId", e)
+            Log.e(TAG, "Failed to delete remote profile data for profile $profileId", LogRedact.error(e))
             Result.failure(e)
         }
     }
@@ -174,7 +175,7 @@ class ProfileSyncService @Inject constructor(
             val result = remote.associate { it.profileIndex to it.pinEnabled }
             Result.success(result)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to pull profile lock states", e)
+            Log.e(TAG, "Failed to pull profile lock states", LogRedact.error(e))
             Result.failure(e)
         }
     }
@@ -193,7 +194,7 @@ class ProfileSyncService @Inject constructor(
             }
             SetProfilePinResult.Success
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to set profile PIN", e)
+            Log.e(TAG, "Failed to set profile PIN", LogRedact.error(e))
             if (isCurrentPinRequiredError(e)) {
                 SetProfilePinResult.CurrentPinRequired
             } else {
@@ -218,7 +219,7 @@ class ProfileSyncService @Inject constructor(
             }
             Result.success(Unit)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to clear profile PIN", e)
+            Log.e(TAG, "Failed to clear profile PIN", LogRedact.error(e))
             Result.failure(e)
         }
     }
@@ -236,7 +237,7 @@ class ProfileSyncService @Inject constructor(
                 ?: SupabaseProfilePinVerifyResult(unlocked = false, retryAfterSeconds = 0)
             Result.success(decoded)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to verify profile PIN", e)
+            Log.e(TAG, "Failed to verify profile PIN", LogRedact.error(e))
             Result.failure(e)
         }
     }

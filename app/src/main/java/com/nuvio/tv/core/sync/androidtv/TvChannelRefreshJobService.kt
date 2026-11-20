@@ -7,6 +7,7 @@ import android.app.job.JobService
 import android.content.ComponentName
 import android.content.Context
 import android.util.Log
+import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.util.hasPendingJob
 import com.nuvio.tv.core.util.scheduleSafely
 import dagger.hilt.EntryPoint
@@ -67,7 +68,7 @@ class TvChannelRefreshJobService : JobService() {
                 syncService.reconcileFromCache()
                 Log.d(TAG, "Background job: reconciled from CW cache")
             } catch (e: Exception) {
-                Log.w(TAG, "Background job reconcile failed", e)
+                Log.w(TAG, "Background job reconcile failed", LogRedact.error(e))
             } finally {
                 jobFinished(params, false)
             }

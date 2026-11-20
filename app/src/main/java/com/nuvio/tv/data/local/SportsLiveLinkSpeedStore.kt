@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.nuvio.tv.core.LogRedact
 import com.nuvio.tv.core.sportslive.SportsLiveLinkSpeed
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
@@ -47,14 +48,14 @@ class SportsLiveLinkSpeedStore @Inject constructor(
             val stored = runCatching {
                 SportsLiveLinkSpeed.decode(context.sportsLiveLinkSpeedDataStore.data.first()[key])
             }.getOrElse {
-                Log.w(TAG, "Could not read link speeds", it)
+                Log.w(TAG, "Could not read link speeds", LogRedact.error(it))
                 emptyMap()
             }
             SportsLiveLinkSpeed.shared.install(stored) { records -> pending.trySend(records) }
             pending.receiveAsFlow().collect { records ->
                 runCatching {
                     context.sportsLiveLinkSpeedDataStore.edit { it[key] = SportsLiveLinkSpeed.encode(records) }
-                }.onFailure { Log.w(TAG, "Could not save link speeds", it) }
+                }.onFailure { Log.w(TAG, "Could not save link speeds", LogRedact.error(it)) }
             }
         }
     }

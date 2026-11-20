@@ -2,6 +2,7 @@ package com.nuvio.tv.core.player
 
 import android.util.Log
 import com.nuvio.tv.BuildConfig
+import com.nuvio.tv.core.LogRedact
 import java.util.concurrent.atomic.AtomicLong
 
 object DoviBridge {
@@ -42,7 +43,7 @@ object DoviBridge {
     fun getBridgeVersionOrNull(): String? {
         if (!isAvailable()) return null
         return runCatching { nativeGetBridgeVersion() }
-            .onFailure { Log.w(TAG, "Failed to read bridge version: ${it.message}") }
+            .onFailure { Log.w(TAG, "Failed to read bridge version: ${LogRedact.text(it.message)}") }
             .getOrNull()
     }
 
@@ -86,11 +87,11 @@ object DoviBridge {
         }
 
         val bridgeVersion = runCatching { nativeGetBridgeVersion() }
-            .onFailure { Log.w(TAG, "probe version failed host=${streamUrl.safeHost()}: ${it.message}") }
+            .onFailure { Log.w(TAG, "probe version failed link=${LogRedact.url(streamUrl)}: ${LogRedact.text(it.message)}") }
             .getOrNull()
 
         val ready = runCatching { nativeIsConversionPathReady() }
-            .onFailure { Log.w(TAG, "probe readiness failed host=${streamUrl.safeHost()}: ${it.message}") }
+            .onFailure { Log.w(TAG, "probe readiness failed link=${LogRedact.url(streamUrl)}: ${LogRedact.text(it.message)}") }
             .getOrDefault(false)
 
         val selfTest = runStartupSelfTest(streamUrl)
@@ -139,7 +140,7 @@ object DoviBridge {
             0x21, 0x33, 0x55, 0x77, 0x11, 0x02, 0x06, 0x10
         )
         val output = runCatching { nativeConvertDv7RpuToDv81(payload, 2) }
-            .onFailure { Log.w(TAG, "Self-test conversion failed: ${it.message}") }
+            .onFailure { Log.w(TAG, "Self-test conversion failed: ${LogRedact.text(it.message)}") }
             .getOrNull()
         val result = if (output != null && output.isNotEmpty()) {
             SelfTestResult(
@@ -192,7 +193,7 @@ object DoviBridge {
         if (!isAvailable() || payload.isEmpty()) return null
         conversionCallCount.incrementAndGet()
         val converted = runCatching { nativeConvertDv7RpuToDv81(payload, mode) }
-            .onFailure { Log.w(TAG, "Conversion failed: ${it.message}") }
+            .onFailure { Log.w(TAG, "Conversion failed: ${LogRedact.text(it.message)}") }
             .getOrNull()
         if (converted != null && converted.isNotEmpty()) {
             conversionSuccessCount.incrementAndGet()
@@ -225,7 +226,7 @@ object DoviBridge {
         conversionCallCount.incrementAndGet()
         var written = runCatching {
             nativeConvertDv7RpuToDv81NonAllocating(sample, offset, len, rpuOutBuffer, mode)
-        }.onFailure { Log.w(TAG, "Non-allocating conversion failed: ${it.message}") }
+        }.onFailure { Log.w(TAG, "Non-allocating conversion failed: ${LogRedact.text(it.message)}") }
             .getOrDefault(0)
         if (written < 0) {
             // Output didn't fit: grow the reusable buffer to the required size and retry once.
@@ -233,7 +234,7 @@ object DoviBridge {
             rpuOutBuffer = ByteArray(maxOf(required, rpuOutBuffer.size * 2))
             written = runCatching {
                 nativeConvertDv7RpuToDv81NonAllocating(sample, offset, len, rpuOutBuffer, mode)
-            }.onFailure { Log.w(TAG, "Non-allocating retry failed: ${it.message}") }
+            }.onFailure { Log.w(TAG, "Non-allocating retry failed: ${LogRedact.text(it.message)}") }
                 .getOrDefault(0)
         }
         if (written > 0) {
@@ -274,7 +275,7 @@ object DoviBridge {
                 stripDoviRpu = stripDoviRpu,
                 stripHdr10Plus = stripHdr10Plus
             )
-        }.onFailure { Log.w(TAG, "nativeProcessVideoSample failed: ${it.message}") }
+        }.onFailure { Log.w(TAG, "nativeProcessVideoSample failed: ${LogRedact.text(it.message)}") }
             .getOrDefault(0L)
 
         var written = packed.toInt()
@@ -294,7 +295,7 @@ object DoviBridge {
                     stripDoviRpu = stripDoviRpu,
                     stripHdr10Plus = stripHdr10Plus
                 )
-            }.onFailure { Log.w(TAG, "nativeProcessVideoSample retry failed: ${it.message}") }
+            }.onFailure { Log.w(TAG, "nativeProcessVideoSample retry failed: ${LogRedact.text(it.message)}") }
                 .getOrDefault(0L)
             written = packed.toInt()
         }
@@ -321,7 +322,7 @@ object DoviBridge {
             Log.i(TAG, "Loaded native library: $LIB_NAME")
             true
         } catch (t: Throwable) {
-            Log.w(TAG, "Failed to load native library $LIB_NAME: ${t.message}")
+            Log.w(TAG, "Failed to load native library $LIB_NAME: ${LogRedact.text(t.message)}")
             false
         }
     }
