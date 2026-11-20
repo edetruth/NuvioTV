@@ -15,10 +15,13 @@ object SportsLiveNonSport {
         RegexOption.IGNORE_CASE
     )
 
+    // Every list build asks again for the same titles (#152: a regex call on Android allocates native memory).
+    private val episodeTitle = Memo(4_096) { name: String -> EPISODE.containsMatchIn(name) }
+
     /** True when [item] is no sport: an episode, or a non-sport tag with no pairing, and no sport named anywhere. */
     fun isNonSport(item: SportsLiveItem): Boolean {
         if (item.isChannel) return false
-        val episode = EPISODE.containsMatchIn(item.meta.name)
+        val episode = episodeTitle(item.meta.name)
         val untaggedShow = item.teams == null && item.sport?.let(SportsLiveTeams::isNonSportTag) == true
         if (!episode && !untaggedShow) return false
         return SportsLiveSportKind.tagOf(item) == null

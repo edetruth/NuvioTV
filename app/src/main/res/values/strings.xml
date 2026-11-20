@@ -3934,6 +3934,8 @@
     <string name="sports_live_stat_corners">Corners</string>
     <string name="sports_live_stat_fouls">Fouls</string>
     <string name="sports_live_refresh">Refresh</string>
+    <!-- live.20 B1: the saved list shown while the refresh runs; %1$s is a time ("7:42 PM"). -->
+    <string name="sports_live_updated_at">Updated %1$s</string>
     <string name="sports_live_live_pill">LIVE</string>
     <!-- Live now games found over (#60): the strip at the end of the list, and its cards' pill. -->
     <string name="sports_live_probably_ended">Probably ended</string>

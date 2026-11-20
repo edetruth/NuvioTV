@@ -85,13 +85,19 @@ data class SportsLiveItem(
     /** True when a followed team plays in it; set where the followed teams are known, not by describe. */
     val followed: Boolean = false,
     /** Other addons' copies of the same game (see SportsLiveItemBucketer.merge); this item is the primary. */
-    val alternates: List<SportsLiveItem> = emptyList()
+    val alternates: List<SportsLiveItem> = emptyList(),
+    /**
+     * True when only the clock decides [isLive] (an events item with a timed start and no status or live marker of
+     * its own): live from its start for the live window. The lists re-read it at each build (SportsLiveItemBucketer.reclock),
+     * so a game moves from Upcoming to Live now at tip-off without waiting for a catalog refresh.
+     */
+    val liveByClock: Boolean = false
 ) {
     val id: String get() = meta.id
     val apiType: String get() = meta.apiType
 
-    /** Identifies the item across loads, for its stream probe; see SportsLiveRepository.endedKeys. */
-    val streamKey: String get() = "$addonId|$id"
+    /** Identifies the item across loads, for its stream probe; see SportsLiveRepository.endedKeys. Built once (it is read very often). */
+    val streamKey: String = "${addonId}|${meta.id}"
 
     /** Addons this card plays from: 1 plus the [alternates]. */
     val sourceCount: Int get() = 1 + alternates.size

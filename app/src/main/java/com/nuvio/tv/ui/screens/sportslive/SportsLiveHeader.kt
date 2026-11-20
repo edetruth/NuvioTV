@@ -126,7 +126,9 @@ internal fun SportsLiveHeader(
     dateFocusRequester: FocusRequester = remember { FocusRequester() },
     onShowFailures: () -> Unit,
     onRefresh: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** Stale-while-revalidate (live.20 B1): when the list shown was loaded, while a refresh runs; null shows nothing. */
+    updatedAtMs: Long? = null
 ) {
     val activeTabFocusRequester = tabFocusRequesters.getValue(selectedTab)
     val downModifier = Modifier.focusProperties { downFocusRequester?.let { down = it } }
@@ -227,6 +229,20 @@ internal fun SportsLiveHeader(
                     )
                 }
             }
+        }
+        // live.20 B1: a quiet "Updated 7:42 PM" beside Refresh while a refresh runs over an older list (the TV pattern of
+        // a timestamp on cached guide data); it goes when the fresh list lands.
+        if (updatedAtMs != null) {
+            val context = LocalContext.current
+            val timeFormat = remember(context) { DateFormat.getTimeFormat(context) }
+            Text(
+                text = stringResource(R.string.sports_live_updated_at, timeFormat.format(Date(updatedAtMs))),
+                style = SportsLiveTokens.style(SportsLiveTokens.Type.Meta),
+                color = Colors.TextMuted,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(end = Size.ControlGap)
+            )
         }
         // #170: while a source keeps failing, a dot on Refresh (grey, or amber when it matters). OK always refreshes;
         // Hold OK opens the sources sheet, as Hold OK means more options elsewhere.

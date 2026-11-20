@@ -10,6 +10,7 @@ import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveKind
 import com.nuvio.tv.domain.model.SportsLiveTab
+import java.util.IdentityHashMap
 import kotlin.math.abs
 
 /** Annotates items from claimed catalogs and sorts them into the Sports & Live tabs. */
@@ -30,9 +31,6 @@ object SportsLiveItemBucketer {
     /** Two dated copies (one with no time of day) are one game only this close together. */
     private const val MERGE_DATE_WINDOW_MS = 24 * 60 * 60 * 1000L
 
-    private val nonLetters = Regex("""[^\p{L}]+""")
-    // "LIVE NOW", "Live now": a whole phrase, so "Alive nowhere" does not count.
-    private val liveNowPhrase = Regex("""(?<![\p{L}\p{N}])live now(?![\p{L}\p{N}])""", RegexOption.IGNORE_CASE)
     private const val LIVE_EMOJI = "🔴" // 🔴
     private const val SOON_EMOJI = "🔜" // 🔜
     private const val DONE_EMOJI = "✅" // ✅
@@ -113,7 +111,7 @@ object SportsLiveItemBucketer {
                 SportsLiveKeywords.containsKeyword(catalog.id, SportsLiveKeywords.LIVE))
         val liveMarker = isLiveMarker(meta.releaseInfo) ||
             meta.name.contains("LIVE NOW") ||
-            meta.description?.let(liveNowPhrase::containsMatchIn) == true
+            meta.description?.let(::saysLiveNow) == true
         val description = meta.description.orEmpty()
         // A scheduled game entry (live.20 F16) is a game whatever its channel catalog's wording.
         val isChannel = !scheduledGame && (
@@ -149,7 +147,9 @@ object SportsLiveItemBucketer {
             group = if (isChannel) SportsLiveChannelGrouper.groupOf(meta, catalog.name, claimed.addon.name) else null,
             isFinished = status == DONE_EMOJI,
             // A channel is a game only when its [...] group names one; "Sky Sports - HD" is not.
-            teams = if (isChannel) SportsLiveTeams.parseBracketed(meta.name) else SportsLiveTeams.parse(meta.name)
+            teams = if (isChannel) SportsLiveTeams.parseBracketed(meta.name) else SportsLiveTeams.parse(meta.name),
+            // Nothing but its timed start says whether it is on: each list build reads the clock again ([reclock]).
+            liveByClock = status == null && !liveMarker && kind == SportsLiveKind.EVENTS && start != null && start.hasTimeOfDay
         )
         val hasSignal = status == LIVE_EMOJI || status == SOON_EMOJI || start != null || liveMarker || isChannel
         return item to hasSignal
@@ -191,8 +191,11 @@ object SportsLiveItemBucketer {
         items: List<SportsLiveItem>,
         nowMs: Long,
         addonOrder: List<String> = firstSeenAddons(items)
-    ): Map<SportsLiveTab, List<SportsLiveItem>> =
-        SportsLiveTab.entries.associateWith { tab -> bucketTab(items, tab, nowMs, addonOrder) }
+    ): Map<SportsLiveTab, List<SportsLiveItem>> {
+        // The clock is read once for every tab (tip-offs since the load, live.20 C1).
+        val clocked = reclock(items, nowMs)
+        return SportsLiveTab.entries.associateWith { tab -> bucketClocked(clocked, tab, nowMs, addonOrder) }
+    }
 
     /**
      * One tab of [bucket], without sorting the other tabs' items (the Home row needs only Live Now).
@@ -206,11 +209,87 @@ object SportsLiveItemBucketer {
         tab: SportsLiveTab,
         nowMs: Long,
         addonOrder: List<String> = firstSeenAddons(items)
+    ): List<SportsLiveItem> = bucketClocked(reclock(items, nowMs), tab, nowMs, addonOrder)
+
+    private fun bucketClocked(
+        items: List<SportsLiveItem>,
+        tab: SportsLiveTab,
+        nowMs: Long,
+        addonOrder: List<String>
     ): List<SportsLiveItem> =
         items.filter { !it.isFinished && belongsTo(it, tab, nowMs) }
-            .distinctBy { it.addonId to it.id }
+            // The stream key (`addonId|id`) is built once per item: no pair per item and tab.
+            .distinctBy { it.streamKey }
             .let { if (tab == SportsLiveTab.REPLAYS) it else mergeSameTitle(merge(it, addonOrder, nowMs), addonOrder) }
             .sortedWith(if (tab == SportsLiveTab.REPLAYS) replayOrder else tabOrder)
+
+    /**
+     * [item] as it is at [nowMs] (live.20 C1): an item whose start alone says whether it is on ([SportsLiveItem.liveByClock])
+     * is live from its start for the live window, whenever its catalog was loaded, so a game moves from Upcoming to
+     * Live now at tip-off without a refresh, and leaves Live now when its window is over. Any other item is unchanged.
+     */
+    fun reclock(item: SportsLiveItem, nowMs: Long): SportsLiveItem {
+        if (!item.liveByClock) return item
+        val live = liveByClockAt(item, nowMs)
+        return if (live == item.isLive) item else item.copy(isLive = live)
+    }
+
+    /** [items] reclocked ([reclock]); the same list when none changes. */
+    fun reclock(items: List<SportsLiveItem>, nowMs: Long): List<SportsLiveItem> {
+        if (items.none { it.liveByClock && liveByClockAt(it, nowMs) != it.isLive }) return items
+        return items.map { reclock(it, nowMs) }
+    }
+
+    private fun liveByClockAt(item: SportsLiveItem, nowMs: Long): Boolean {
+        val start = item.startMs ?: return item.isLive
+        return start > nowMs - LIVE_WINDOW_MS && start <= nowMs
+    }
+
+    /**
+     * The next moment after [nowMs] when one of [items] (or a merged copy) changes tab by the clock alone
+     * ([SportsLiveItem.liveByClock]): its start, or the end of its live window. Null when none is coming.
+     */
+    fun nextClockChange(items: Collection<SportsLiveItem>, nowMs: Long): Long? {
+        var next = Long.MAX_VALUE
+        fun consider(item: SportsLiveItem) {
+            if (!item.liveByClock) return
+            val start = item.startMs ?: return
+            if (start > nowMs && start < next) next = start
+            val end = start + LIVE_WINDOW_MS
+            if (end > nowMs && end < next) next = end
+        }
+        for (item in items) {
+            consider(item)
+            item.alternates.forEach { consider(it) }
+        }
+        return next.takeIf { it != Long.MAX_VALUE }
+    }
+
+    /** True when one of [items] changes tab by the clock in ([fromMs], [toMs]]: a list built at [fromMs] is out of date. */
+    fun clockChangedBetween(items: Collection<SportsLiveItem>, fromMs: Long, toMs: Long): Boolean {
+        val next = nextClockChange(items, fromMs) ?: return false
+        return next <= toMs
+    }
+
+    /**
+     * Tabs built earlier ([tabs]) as the clock has them at [nowMs], without bucketing again (a list restored from the
+     * device, live.20): an Upcoming game that has started moves to Live now (sorted in), a Live now game whose window
+     * is over leaves, and an Upcoming game whose start has passed without it going live goes. Copies are not merged
+     * again: the next real build does that.
+     */
+    fun moveKickedOff(tabs: Map<SportsLiveTab, List<SportsLiveItem>>, nowMs: Long): Map<SportsLiveTab, List<SportsLiveItem>> {
+        val live = tabs[SportsLiveTab.LIVE_NOW].orEmpty()
+        val upcoming = tabs[SportsLiveTab.UPCOMING].orEmpty()
+        val clockedLive = reclock(live, nowMs)
+        val clockedUpcoming = reclock(upcoming, nowMs)
+        if (clockedLive === live && clockedUpcoming === upcoming) return tabs
+        val started = clockedUpcoming.filter { it.isLive }
+        val stillLive = clockedLive.filter { it.isLive || !it.liveByClock }
+        val stillUpcoming = clockedUpcoming.filter { !it.isLive && (!it.liveByClock || (it.startMs ?: Long.MAX_VALUE) > nowMs) }
+        val liveKeys = stillLive.mapTo(HashSet()) { it.streamKey }
+        val newLive = if (started.isEmpty()) stillLive else (stillLive + started.filter { it.streamKey !in liveKeys }).sortedWith(tabOrder)
+        return tabs + mapOf(SportsLiveTab.LIVE_NOW to newLive, SportsLiveTab.UPCOMING to stillUpcoming)
+    }
 
     /**
      * Folds copies of one game into one item, pooling every source: the primary (first in [addonOrder],
@@ -256,6 +335,10 @@ object SportsLiveItemBucketer {
         val folded = HashSet<String>()
         // Primaries that took a copy by ESPN team ids, and the copy whose league is named, by the primary's stream key.
         val presentedBy = HashMap<String, SportsLiveItem>()
+        // Each copy's id view ([idView]: league inference and #168 identity) once per merge, not four times per pair
+        // compared. It is a pure function of the item, so one per item object (an adopted start makes a new primary).
+        val views = IdentityHashMap<SportsLiveItem, SportsLiveItem>()
+        fun view(item: SportsLiveItem): SportsLiveItem = views.getOrPut(item) { idView(item, directory) }
         for (group in candidates) {
             // Each primary as later copies are compared with it: with the start it adopted, if any.
             val primaries = mutableListOf<SportsLiveItem>()
@@ -266,11 +349,17 @@ object SportsLiveItemBucketer {
             for (item in ordered) {
                 var byIds = false
                 val index = primaries.indexOfFirst { primary ->
-                    val pooled = alternatesOf[primary.streamKey].orEmpty() + primary
-                    if (pooled.any { it.streamKey == item.streamKey }) return@indexOfFirst false
+                    // A source already pooled under this primary is not pooled twice (no list built per pair).
+                    if (primary.streamKey == item.streamKey ||
+                        alternatesOf[primary.streamKey]?.any { it.streamKey == item.streamKey } == true
+                    ) {
+                        return@indexOfFirst false
+                    }
                     // ESPN team ids decide first; names only for teams the directory does not know.
-                    when (idVerdict(primary, item, directory)) {
-                        IdVerdict.SAME -> when (idGuardFailure(primary, item, nowMs, directory)) {
+                    val viewA = view(primary)
+                    val viewB = view(item)
+                    when (idVerdictOfViews(viewA, viewB, directory)) {
+                        IdVerdict.SAME -> when (idGuardFailureOfViews(viewA, viewB, nowMs)) {
                             null -> true.also { byIds = true }
                             // A copy of unknown sport: its teams were read in the other copy's league; names decide.
                             SPORT_UNKNOWN -> sameGame(primary, item, nowMs)
@@ -409,9 +498,11 @@ object SportsLiveItemBucketer {
      * ([TeamDirectory.teamId], cities short or in full), [IdVerdict.DIFFERENT] when they resolve to other teams,
      * [IdVerdict.UNKNOWN] when no league resolves all four sides (the name rules decide).
      */
-    internal fun idVerdict(a: SportsLiveItem, b: SportsLiveItem, directory: TeamDirectory = TeamDirectory.shared): IdVerdict {
-        val viewA = idView(a, directory)
-        val viewB = idView(b, directory)
+    internal fun idVerdict(a: SportsLiveItem, b: SportsLiveItem, directory: TeamDirectory = TeamDirectory.shared): IdVerdict =
+        idVerdictOfViews(idView(a, directory), idView(b, directory), directory)
+
+    // [idVerdict] on two copies' views ([idView]) already built.
+    private fun idVerdictOfViews(viewA: SportsLiveItem, viewB: SportsLiveItem, directory: TeamDirectory): IdVerdict {
         val teamsA = viewA.teams ?: return IdVerdict.UNKNOWN
         val teamsB = viewB.teams ?: return IdVerdict.UNKNOWN
         var resolved = false
@@ -442,9 +533,10 @@ object SportsLiveItemBucketer {
         b: SportsLiveItem,
         nowMs: Long,
         directory: TeamDirectory = TeamDirectory.shared
-    ): String? {
-        val viewA = idView(a, directory)
-        val viewB = idView(b, directory)
+    ): String? = idGuardFailureOfViews(idView(a, directory), idView(b, directory), nowMs)
+
+    // [idGuardFailure] on two copies' views ([idView]) already built.
+    private fun idGuardFailureOfViews(viewA: SportsLiveItem, viewB: SportsLiveItem, nowMs: Long): String? {
         if (SportsLiveTeams.knownSport(viewA) == null || SportsLiveTeams.knownSport(viewB) == null) return SPORT_UNKNOWN
         if (!sportsAgree(viewA, viewB)) return "sport mismatch"
         // A women's copy is never one game with a copy that does not say women's; "NCAAM" and an unmarked "College"
@@ -636,9 +728,38 @@ object SportsLiveItemBucketer {
             }
         }
 
-    // "LIVE", "🔴 LIVE": the word LIVE once emoji, punctuation and digits are stripped.
-    private fun isLiveMarker(releaseInfo: String?): Boolean =
-        releaseInfo?.split(nonLetters)?.any { it.equals("LIVE", ignoreCase = true) } == true
+    // "LIVE", "🔴 LIVE": the word LIVE once emoji, punctuation and digits are stripped. A plain scan, no regex (#152):
+    // it runs for every item of every load.
+    internal fun isLiveMarker(releaseInfo: String?): Boolean {
+        if (releaseInfo == null) return false
+        var start = -1
+        for (i in 0..releaseInfo.length) {
+            if (i < releaseInfo.length && releaseInfo[i].isLetter()) {
+                if (start < 0) start = i
+            } else if (start >= 0) {
+                if (i - start == LIVE_WORD.length && releaseInfo.regionMatches(start, LIVE_WORD, 0, LIVE_WORD.length, ignoreCase = true)) return true
+                start = -1
+            }
+        }
+        return false
+    }
+
+    /** True when [text] says "live now" as a whole phrase ("LIVE NOW", "Live now"; never "Alive nowhere"); no regex (#152). */
+    internal fun saysLiveNow(text: String): Boolean {
+        var from = 0
+        while (true) {
+            val at = text.indexOf(LIVE_NOW_PHRASE, from, ignoreCase = true)
+            if (at < 0) return false
+            val end = at + LIVE_NOW_PHRASE.length
+            val before = at == 0 || !text[at - 1].isLetterOrDigit()
+            val after = end == text.length || !text[end].isLetterOrDigit()
+            if (before && after) return true
+            from = at + 1
+        }
+    }
+
+    private const val LIVE_WORD = "LIVE"
+    private const val LIVE_NOW_PHRASE = "live now"
 
     // MetaPreview does not carry the addon's "category" field, so the fallback goes straight to the catalog name.
     // Pro wrestling an addon files under MMA ("AEW Dynamite", #145) is wrestling.

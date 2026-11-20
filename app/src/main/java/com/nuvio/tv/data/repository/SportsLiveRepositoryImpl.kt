@@ -4,6 +4,7 @@ import androidx.annotation.VisibleForTesting
 import com.nuvio.tv.core.network.NetworkResult
 import com.nuvio.tv.core.sportslive.SportsLiveCatalogOptions
 import com.nuvio.tv.core.sportslive.SportsLiveCatalogPolicy
+import com.nuvio.tv.core.sportslive.SportsLiveDebugTiming
 import com.nuvio.tv.core.sportslive.SportsLiveItemBucketer
 import com.nuvio.tv.core.sportslive.SportsLiveMySportsScope
 import com.nuvio.tv.core.sportslive.identify.TeamIdentityBook
@@ -122,6 +123,9 @@ class SportsLiveRepositoryImpl @Inject constructor(
      * fetching, so a load started for one profile never overwrites the cache after a switch to another.
      */
     override suspend fun load(force: Boolean, includeChannels: Boolean, onlyKinds: Set<SportsLiveKind>?): SportsLiveLoad = loadMutex.withLock {
+        // Debug builds (live.20 B1): each stage's time, to measure the open on a slow box.
+        val startedAt = System.nanoTime()
+        fun elapsedMs() = (System.nanoTime() - startedAt) / 1_000_000
         val claimed = claimedCatalogs.first()
         val claimedKeys = claimed.map { it.key }.toSet()
         val options = optionsOf(claimed)
@@ -151,11 +155,24 @@ class SportsLiveRepositoryImpl @Inject constructor(
                     }.toMap()
             }
 
+        SportsLiveDebugTiming.log { "sportsOpen stage=loadStart t=${elapsedMs()} catalogs=${claimed.size} carried=${carriedItems.size} force=$force" }
         val fetched = coroutineScope {
             claimed.filterNot { it.key in carriedItems }
-                .map { catalog -> async(ioDispatcher) { catalog.key to fetchFirstPage(catalog) } }
+                .map { catalog ->
+                    async(ioDispatcher) {
+                        val fetchedAt = System.nanoTime()
+                        val result = fetchFirstPage(catalog)
+                        SportsLiveDebugTiming.log {
+                            val size = if (result is NetworkResult.Success) result.data.items.size else null
+                            "sportsOpen stage=catalog ms=${(System.nanoTime() - fetchedAt) / 1_000_000} source=${SportsLiveDebugTiming.label(catalog.addon.displayName)} " +
+                                "kind=${catalog.kind.name} items=${size ?: "error"}"
+                        }
+                        catalog.key to result
+                    }
+                }
                 .awaitAll()
         }.toMap()
+        SportsLiveDebugTiming.log { "sportsOpen stage=fetched t=${elapsedMs()}" }
         val now = nowMs()
         val items = mutableListOf<SportsLiveItem>()
         val failures = mutableListOf<SportsLiveFailure>()
@@ -176,6 +193,7 @@ class SportsLiveRepositoryImpl @Inject constructor(
                 stats[catalog.key] = SportsLiveItemBucketer.stats(catalogItems, now)
             }
         }
+        SportsLiveDebugTiming.log { "sportsOpen stage=described t=${elapsedMs()} items=${items.size} failures=${failures.size}" }
         val load = SportsLiveLoad(
             items, failures, loadedAtMs = now, claimedKeys = claimedKeys, catalogOptions = options,
             fetchedSources = claimed.filter { it.key in fetched }.associate { it.addon.id to it.addon.displayName },

@@ -55,7 +55,12 @@ data class SportsLiveUiState(
     /** The view model's clock when this state was built (it ticks while the list is watched). */
     val nowMs: Long = 0L,
     /** Live now's excitement badges (#43, V2) by card key, with scores shown only; empty otherwise. */
-    val whyTags: Map<String, WhyTag> = emptyMap()
+    val whyTags: Map<String, WhyTag> = emptyMap(),
+    /**
+     * Stale-while-revalidate (live.20 B1): when the list shown was loaded, while a refresh runs over a list over 5 minutes
+     * old (the one saved on the device, or the last load); the header reads "Updated ‹time›". Null otherwise.
+     */
+    val staleListAtMs: Long? = null
 ) {
     /** The selected chip has no games left (#79): it stays shown with 0 until the user moves, then All. */
     val selectedFilterEmpty: Boolean get() = selectedFilter != null && (filterCounts[selectedFilter] ?: 0) == 0

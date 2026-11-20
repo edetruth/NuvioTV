@@ -1427,7 +1427,8 @@ private fun SportsLiveContent(
             },
             onShowFailures = { failuresOpen = true },
             onRefresh = userRefresh,
-            modifier = Modifier.onFocusChanged { if (it.hasFocus) followedCardKey = null }
+            modifier = Modifier.onFocusChanged { if (it.hasFocus) followedCardKey = null },
+            updatedAtMs = uiState.staleListAtMs.takeIf { !showingResults }
         )
         if (showingResults) {
             SportsLiveResultsView(

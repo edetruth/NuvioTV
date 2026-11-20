@@ -28,7 +28,15 @@ object SportsLiveKeywords {
     val GENERIC_CHANNEL_CATALOGS: Set<String> =
         setOf("channels", "channel list", "live tv", "tv", "live channels", "all channels")
 
-    private val regexCache = ConcurrentHashMap<Set<String>, Regex>()
+    private val regexCache = ConcurrentHashMap<Set<String>, Finder>()
+
+    // A keyword set's regex, and its answers for the texts it was asked about: every load asks again for the same
+    // catalog names, genres and ids, item by item (#152: each regex call on Android allocates native memory).
+    private class Finder(val regex: Regex) {
+        val answers = Memo<String, String?>(FINDER_CACHE_SIZE) { text -> regex.find(text)?.value?.lowercase() }
+    }
+
+    private const val FINDER_CACHE_SIZE = 2_048
 
     fun containsKeyword(text: String?, keywords: Set<String>): Boolean =
         findKeyword(text, keywords) != null
@@ -36,13 +44,13 @@ object SportsLiveKeywords {
     /** The first keyword found in [text] (lowercased), or null. */
     fun findKeyword(text: String?, keywords: Set<String>): String? {
         if (text.isNullOrBlank() || keywords.isEmpty()) return null
-        return regexFor(keywords).find(text)?.value?.lowercase()
+        return finderFor(keywords).answers(text)
     }
 
     // Boundaries are "not a letter or digit" rather than \b, so ids like "sports_recap"
     // still split on the underscore while "Transportation" does not match "sport".
-    private fun regexFor(keywords: Set<String>): Regex = regexCache.getOrPut(keywords) {
+    private fun finderFor(keywords: Set<String>): Finder = regexCache.getOrPut(keywords) {
         val alternatives = keywords.sortedByDescending { it.length }.joinToString("|") { Regex.escape(it) }
-        Regex("(?<![\\p{L}\\p{N}])(?:$alternatives)(?![\\p{L}\\p{N}])", RegexOption.IGNORE_CASE)
+        Finder(Regex("(?<![\\p{L}\\p{N}])(?:$alternatives)(?![\\p{L}\\p{N}])", RegexOption.IGNORE_CASE))
     }
 }

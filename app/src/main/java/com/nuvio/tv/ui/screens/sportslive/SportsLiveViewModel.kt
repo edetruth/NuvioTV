@@ -32,6 +32,12 @@ import com.nuvio.tv.core.sportslive.scores.TeamLogoBook
 import com.nuvio.tv.core.sportslive.scores.TeamDirectory
 import com.nuvio.tv.core.sportslive.SportsLiveSportInference
 import com.nuvio.tv.core.sportslive.SportsLiveDupes
+import com.nuvio.tv.core.sportslive.SportsLiveDebugTiming
+import com.nuvio.tv.core.sportslive.SportsLiveListCache
+import com.nuvio.tv.core.sportslive.SportsLiveListSnapshot
+import com.nuvio.tv.core.sportslive.SportsLiveListSnapshots
+import com.nuvio.tv.data.local.SportsLiveListSnapshotStore
+import com.nuvio.tv.domain.model.ClaimedCatalog
 import com.nuvio.tv.BuildConfig
 import com.nuvio.tv.core.sportslive.identify.SportsLiveTeamIdentity
 import com.nuvio.tv.core.sportslive.identify.TeamIdentifier
@@ -76,6 +82,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -132,6 +139,10 @@ class SportsLiveViewModel internal constructor(
     private val ensureStandings: (Collection<EspnLeague>) -> Unit = {},
     /** True the first time the profile opens Upcoming (live.20's keys tip), marking it seen. */
     private val claimUpcomingTip: suspend () -> Boolean = { false },
+    /** The last list built for the profile (live.20 B1): shown at once on open, reused on re-entry while its load is the latest. */
+    private val listCache: SportsLiveListCache = SportsLiveListCache.NONE,
+    /** The team directory's and identities' revisions as one number: a list bucketed under another is not reused. */
+    private val directoryStamp: () -> Long = { 0L },
     // Where the list is bucketed and pinned, and the boards built; tests pass their dispatcher, so it runs in virtual time.
     private val computeDispatcher: CoroutineDispatcher
 ) : ViewModel() {
@@ -145,7 +156,8 @@ class SportsLiveViewModel internal constructor(
         resolveCache: SportsLiveResolveCache,
         manifestFetcher: SportsLiveManifestFetcher,
         identifier: TeamIdentifier,
-        standingsRepository: StandingsRepository
+        standingsRepository: StandingsRepository,
+        listStore: SportsLiveListSnapshotStore
     ) : this(
         repo = repo,
         // The zap's pick, which joins the stream search the ended-games probe started on settle; a
@@ -179,8 +191,11 @@ class SportsLiveViewModel internal constructor(
                 SportsLiveManifestVerdict.requestFor(item, stream, resolvedAtMs)
             }
         },
-        // A game's teams identified in the background (#168) rebuild the lists as a learned logo does.
-        logoRevision = combine(TeamLogoBook.shared.revision, TeamIdentityBook.shared.revision) { logos, identities -> logos * 31 + identities },
+        // A game's teams identified in the background (#168) rebuild the lists as a learned logo does. A score feed or a
+        // team list landing learns many logos one by one: each bump re-inferred every card and rebuilt the board
+        // (live.20 B1, GC churn on the TV), so a burst counts once, LOGO_DEBOUNCE_MS after its last bump.
+        logoRevision = combine(TeamLogoBook.shared.revision, TeamIdentityBook.shared.revision) { logos, identities -> logos * 31 + identities }
+            .firstThenDebounce(LOGO_DEBOUNCE_MS),
         inferSport = { item -> SportsLiveTeamIdentity.identified(SportsLiveSportInference.infer(item, TeamDirectory.shared)) },
         identify = identifier::offer,
         directoryChanges = merge(TeamDirectory.shared.revision.drop(1), TeamIdentityBook.shared.revision.drop(1)).map { },
@@ -189,6 +204,8 @@ class SportsLiveViewModel internal constructor(
         hideTitle = prefs::hideTitle,
         standings = standingsRepository.books,
         ensureStandings = standingsRepository::ensure,
+        listCache = listStore,
+        directoryStamp = { TeamDirectory.shared.revision.value * 31 + TeamIdentityBook.shared.revision.value },
         computeDispatcher = Dispatchers.Default
     )
 
@@ -211,7 +228,9 @@ class SportsLiveViewModel internal constructor(
     private data class Bucketed(
         val hasClaimed: Boolean,
         val hasLoad: Boolean,
-        val tabs: Map<SportsLiveTab, List<SportsLiveItem>>
+        val tabs: Map<SportsLiveTab, List<SportsLiveItem>>,
+        /** When the catalogs shown were loaded (a list restored from the device: when it was saved); null: none. */
+        val listAtMs: Long? = null
     )
 
     @VisibleForTesting
@@ -260,14 +279,106 @@ class SportsLiveViewModel internal constructor(
     @OptIn(FlowPreview::class)
     private val rebucket: Flow<Unit> = directoryChanges.debounce(REBUCKET_DEBOUNCE_MS).onStart { emit(Unit) }
 
-    private val bucketed = combine(repo.claimedCatalogs, repo.latest, rebucket) { claimed, latest, _ ->
+    // live.20 C1: the next tip-off (or live window's end) of the shown list; when it passes, the list is bucketed again,
+    // so a game moves from Upcoming to Live now on time without a catalog refresh.
+    private val kickoffs = MutableStateFlow(0L)
+    private var kickoffJob: Job? = null
+    private var kickoffTarget = Long.MIN_VALUE
+    private var kickoffFired = Long.MIN_VALUE
+
+    // The saved list (live.20 B1), read once: shown while there is no load yet.
+    private var savedRead = false
+    private var saved: SportsLiveListSnapshot? = null
+
+    // When the section was opened (debug timing lines).
+    private val openedAtNs = System.nanoTime()
+    private val firstStateLogged = java.util.concurrent.atomic.AtomicBoolean(false)
+    private fun sinceOpenMs(): Long = (System.nanoTime() - openedAtNs) / 1_000_000
+
+    private val bucketed = combine(repo.claimedCatalogs, repo.latest, rebucket, kickoffs) { claimed, latest, _, _ ->
         // Only items of catalogs claimed right now: the cache may still hold another profile's load.
         val claimedKeys = claimed.mapTo(HashSet()) { it.key }
-        val items = latest?.items.orEmpty().filter { it.catalogKey in claimedKeys }
         // Claimed catalogs come in the user's addon order, which picks a merged game's primary.
         val addonOrder = claimed.map { it.addon.id }.distinct()
-        Bucketed(hasClaimed = claimed.isNotEmpty(), hasLoad = latest != null, tabs = bucket(items, nowMs(), addonOrder))
+        val now = nowMs()
+        if (latest == null) {
+            // Stale-while-revalidate (live.20 B1): the profile's last list, moved by the clock, while the first load runs.
+            savedTabs(claimed, now)?.let { (tabs, savedAtMs) ->
+                scheduleKickoff(SportsLiveItemBucketer.nextClockChange(tabs.values.flatten(), now))
+                return@combine Bucketed(hasClaimed = true, hasLoad = true, tabs = tabs, listAtMs = savedAtMs)
+            }
+            return@combine Bucketed(hasClaimed = claimed.isNotEmpty(), hasLoad = false, tabs = bucket(emptyList(), now, addonOrder))
+        }
+        val items = latest.items.filter { it.catalogKey in claimedKeys }
+        val stamp = directoryStamp()
+        // Back on the section while the load it was built from is still the latest (live.20 B1): no bucketing again,
+        // unless the team directory moved or a game started since.
+        val reused = listCache.peek()?.takeIf {
+            it.load === latest && it.claimedKeys == claimedKeys && it.addonOrder == addonOrder && it.directoryStamp == stamp &&
+                !SportsLiveItemBucketer.clockChangedBetween(items, it.builtAtMs, now)
+        }
+        val tabs = if (reused != null) {
+            SportsLiveDebugTiming.log { "sportsOpen stage=bucketReused t=${sinceOpenMs()}" }
+            reused.tabs
+        } else {
+            val startedAt = System.nanoTime()
+            bucket(items, now, addonOrder).also { tabs ->
+                SportsLiveDebugTiming.log {
+                    "sportsOpen stage=bucket ms=${(System.nanoTime() - startedAt) / 1_000_000} t=${sinceOpenMs()} items=${items.size} " +
+                        tabs.entries.joinToString(" ") { (tab, list) -> "${tab.name}=${list.size}" }
+                }
+                listCache.save(
+                    SportsLiveListSnapshot(
+                        savedAtMs = latest.loadedAtMs, tabs = tabs, load = latest, claimedKeys = claimedKeys,
+                        addonOrder = addonOrder, directoryStamp = stamp, builtAtMs = now
+                    )
+                )
+            }
+        }
+        scheduleKickoff(SportsLiveItemBucketer.nextClockChange(items, now))
+        Bucketed(hasClaimed = claimed.isNotEmpty(), hasLoad = true, tabs = tabs, listAtMs = latest.loadedAtMs)
     }.flowOn(computeDispatcher)
+
+    /** The saved list's tabs for [claimed] at [now], with when it was loaded; null when there is none to show. */
+    private suspend fun savedTabs(claimed: List<ClaimedCatalog>, now: Long): Pair<Map<SportsLiveTab, List<SportsLiveItem>>, Long>? {
+        if (claimed.isEmpty()) return null
+        if (!savedRead) {
+            savedRead = true
+            saved = try {
+                listCache.read()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                null
+            }
+        }
+        val snapshot = saved ?: return null
+        val startedAt = System.nanoTime()
+        val tabs = SportsLiveListSnapshots.restore(snapshot, claimed, now) ?: return null
+        SportsLiveDebugTiming.log {
+            "sportsOpen stage=restored ms=${(System.nanoTime() - startedAt) / 1_000_000} t=${sinceOpenMs()} " +
+                "ageMin=${(now - snapshot.savedAtMs) / MINUTE_MS} live=${tabs[SportsLiveTab.LIVE_NOW].orEmpty().size}"
+        }
+        return tabs to snapshot.savedAtMs
+    }
+
+    /**
+     * Buckets the list again just after [next] (live.20 C1): a start or a live window's end. Each moment once: a
+     * clock that has not moved past it (tests) never schedules it again.
+     */
+    @Synchronized
+    private fun scheduleKickoff(next: Long?) {
+        if (next == null || next <= kickoffFired) return
+        if (next == kickoffTarget && kickoffJob?.isActive == true) return
+        kickoffJob?.cancel()
+        kickoffTarget = next
+        kickoffJob = viewModelScope.launch {
+            delay((next - nowMs()).coerceAtLeast(0L) + KICKOFF_SLACK_MS)
+            synchronized(this@SportsLiveViewModel) { kickoffFired = next }
+            SportsLiveDebugTiming.log { "sportsOpen stage=kickoff t=${sinceOpenMs()}" }
+            kickoffs.value = next
+        }
+    }
 
     // Followed teams' games first in every tab but Channels, where they are only marked (for the
     // card star); a follow change does not re-bucket.
@@ -276,6 +387,7 @@ class SportsLiveViewModel internal constructor(
     // Titles hidden from Live Now (#134) are left off its list only.
     private val pinned = combine(bucketed, repo.followedTeams, logoRevision, hiddenTitles) { bucketed, followed, _, hidden ->
         hiddenNow = hidden
+        val startedAt = System.nanoTime()
         bucketed.copy(
             tabs = bucketed.tabs.mapValues { (tab, all) ->
                 val listed = if (tab == SportsLiveTab.LIVE_NOW) SportsLiveHiddenTitles.filter(all, hidden) else all
@@ -289,7 +401,9 @@ class SportsLiveViewModel internal constructor(
                     }
                 }
             }
-        )
+        ).also {
+            SportsLiveDebugTiming.log { "sportsOpen stage=pinned ms=${(System.nanoTime() - startedAt) / 1_000_000} t=${sinceOpenMs()}" }
+        }
     }.flowOn(computeDispatcher)
 
     val uiState: StateFlow<SportsLiveUiState> =
@@ -361,7 +475,14 @@ class SportsLiveViewModel internal constructor(
             // F21: an update of the same tab and filter lets the board being built finish (the newest follows); another
             // tab or filter cancels it.
             .mapFinishing({ running, next -> running.tab != next.tab || running.filter != next.filter }) { inputs ->
-                withContext(computeDispatcher) { buildBoard(inputs) }
+                withContext(computeDispatcher) {
+                    val startedAt = System.nanoTime()
+                    buildBoard(inputs).also {
+                        SportsLiveDebugTiming.log {
+                            "sportsOpen stage=board ms=${(System.nanoTime() - startedAt) / 1_000_000} t=${sinceOpenMs()} tab=${inputs.tab.name} items=${inputs.items.size}"
+                        }
+                    }
+                }
             }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
@@ -763,8 +884,17 @@ class SportsLiveViewModel internal constructor(
             justEnded = justEnded,
             noStreams = noStreams,
             nowMs = now,
-            whyTags = whyTags
-        )
+            whyTags = whyTags,
+            // Stale-while-revalidate (live.20 B1): a list over 5 minutes old shown while the refresh runs says when it is from.
+            staleListAtMs = bucketed.listAtMs?.takeIf { selection.isRefreshing && now - it >= STALE_MARK_MS }
+        ).also { state ->
+            if (!state.isLoading && hasClaimed && firstStateLogged.compareAndSet(false, true)) {
+                SportsLiveDebugTiming.log {
+                    "sportsOpen stage=firstList t=${sinceOpenMs()} restored=${bucketed.listAtMs != null && selection.lastRefreshedMs == null} " +
+                        "visible=${state.visibleItems.size}"
+                }
+            }
+        }
     }
 
     private companion object {
@@ -773,6 +903,15 @@ class SportsLiveViewModel internal constructor(
         const val MINUTE_MS = 60_000L
         const val FOCUS_PROBE_DELAY_MS = 700L
         const val ENDED_TICK_MS = 30_000L
+
+        /** After a tip-off, how long before the list is bucketed again (live.20 C1): clear of the start itself. */
+        const val KICKOFF_SLACK_MS = 1_000L
+
+        /** A burst of learned logos counts once, this long after its last one (live.20 B1). */
+        const val LOGO_DEBOUNCE_MS = 750L
+
+        /** A shown list this old is marked "Updated ‹time›" while a refresh runs (live.20 B1); the 3-minute Live now refresh never is. */
+        const val STALE_MARK_MS = 5 * 60_000L
 
         /** The tabs My sports scopes (#146); never Channels or Results (which has its own My sports). */
         val SCOPED_TABS = setOf(SportsLiveTab.LIVE_NOW, SportsLiveTab.UPCOMING, SportsLiveTab.REPLAYS)
@@ -822,3 +961,10 @@ internal suspend fun SportsLiveRepository.toggleFollowTarget(target: FollowTarge
         matching.forEach { unfollow(it) }
     }
 }
+
+/**
+ * This flow's first value at once, then each later one only once [ms] pass without another (live.20 B1): a burst
+ * counts once, and the first build never waits.
+ */
+@OptIn(FlowPreview::class)
+internal fun <T> Flow<T>.firstThenDebounce(ms: Long): Flow<T> = merge(take(1), drop(1).debounce(ms))

@@ -289,7 +289,8 @@ object SportsLiveDisplayText {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, SportsLiveDisplayTitle>?): Boolean = size > CACHE_SIZE
     }
 
-    private const val CACHE_SIZE = 1024
+    // A load holds more titles than 1,024 (channels): a smaller LRU missed on every pass over them (live.20 B1).
+    private const val CACHE_SIZE = 4096
 }
 
 /**
