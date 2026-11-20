@@ -218,6 +218,19 @@ fun SportsLiveGameScreen(
     }
 
     var menuOpen by remember { mutableStateOf(false) }
+    // BUG9: the sheet closed on this page (Back, or an entry that stays here): focus goes back to More…, which opened
+    // it, never to whatever the window's focus search finds first (the Box score tab). Reveal moves it on itself.
+    var menuWasOpen by remember { mutableStateOf(false) }
+    LaunchedEffect(menuOpen) {
+        if (menuOpen) {
+            menuWasOpen = true
+            return@LaunchedEffect
+        }
+        if (!menuWasOpen) return@LaunchedEffect
+        menuWasOpen = false
+        withFrameNanos { }
+        if (!revealPressed) runCatching { moreFocus.requestFocus() }
+    }
     val (awaySide, homeSide) = headerSides(state.summary, event)
     val (firstSide, secondSide) = inCardOrder(ScoreSide.AWAY, ScoreSide.HOME, state.homeFirst)
     fun sideOf(side: ScoreSide) = if (side == ScoreSide.HOME) homeSide else awaySide

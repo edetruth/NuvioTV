@@ -291,6 +291,17 @@ class SportsLiveLiveNowV2Test {
     }
 
     @Test
+    fun `Back from a player that zapped on returns to the game still playing (BUG9)`() {
+        val keys = listOf("nfl", "atp", "ch1")
+        assertEquals("atp", sportsLiveReturnCardKey(focusedKey = "nfl", playingKey = "atp", keys = keys))
+        // Nothing playing on, or it is not listed: the card that had focus.
+        assertEquals("nfl", sportsLiveReturnCardKey(focusedKey = "nfl", playingKey = null, keys = keys))
+        assertEquals("nfl", sportsLiveReturnCardKey(focusedKey = "nfl", playingKey = "gone", keys = keys))
+        // First open: no return.
+        assertNull(sportsLiveReturnCardKey(focusedKey = null, playingKey = "atp", keys = keys))
+    }
+
+    @Test
     fun `focus keeps about two rows from the list edges`() {
         // A 400 px list keeping 100 px: a row at 350 px (50 tall) scrolls by 100, one at 20 px back by 80.
         assertEquals(100f, sportsLiveKeepFromEdge(offset = 350f, size = 50f, containerSize = 400f, margin = 100f), 0f)

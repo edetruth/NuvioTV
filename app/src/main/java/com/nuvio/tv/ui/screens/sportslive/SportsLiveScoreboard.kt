@@ -412,6 +412,13 @@ internal fun sportsLiveReturnFocusKey(keys: List<String>, focusedKey: String?, r
 }
 
 /**
+ * The card Back from another screen returns to (BUG9): the game playing on in the mini player when it is listed (the
+ * user zapped away from the card they started on), else [focusedKey], the card that had focus. Null: none (first open).
+ */
+internal fun sportsLiveReturnCardKey(focusedKey: String?, playingKey: String?, keys: List<String>): String? =
+    focusedKey?.let { playingKey?.takeIf { it in keys } ?: it }
+
+/**
  * How far a list scrolls to bring a focused row ([offset], [size] in px) into a viewport [containerSize]
  * tall, keeping it [margin] px from either edge (about two rows, V2): 0 while it already is; a row taller
  * than the room left aligns to the top margin.

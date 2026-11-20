@@ -739,8 +739,22 @@ private fun SportsLiveContent(
     val stripRequesterOf: (String) -> FocusRequester = { key -> stripRequesters.getOrPut(key) { FocusRequester() } }
     // The strip card focus was last on (#155), cleared when a list row takes focus: a later-today or replay card
     // takes the stage over, a live card selects its list row; Left from the stage goes back to it.
-    var stripStageKey by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(uiState.selectedTab) { stripStageKey = null }
+    // Saved, so Back from a page opened from a strip card returns to that card (BUG9).
+    var stripStageKey by rememberSaveable { mutableStateOf<String?>(null) }
+    var stripTab by rememberSaveable { mutableStateOf(uiState.selectedTab) }
+    LaunchedEffect(uiState.selectedTab) {
+        if (stripTab == uiState.selectedTab) return@LaunchedEffect
+        stripTab = uiState.selectedTab
+        stripStageKey = null
+    }
+    // Back from another screen with focus last on a strip card: it takes focus again once the strip lists it (BUG9),
+    // unless the user moved first or it does not come back within a few seconds.
+    var stripReturnPending by remember { mutableStateOf(stripStageKey != null) }
+    LaunchedEffect(stripReturnPending) {
+        if (!stripReturnPending) return@LaunchedEffect
+        delay(STRIP_RETURN_WAIT_MS)
+        stripReturnPending = false
+    }
     val stripStage = YourTeams.stageFor(yourTeams, stripStageKey)?.takeIf { it !is YourTeamsStage.ListRow }
     var catchUpMenuKey by remember { mutableStateOf<String?>(null) }
     catchUpItems.firstOrNull { it.key == catchUpMenuKey }?.let { item ->
@@ -770,6 +784,20 @@ private fun SportsLiveContent(
         catchUpHoldsFocus = false
         withFrameNanos { }
         runCatching { (entryCardFocusRequester ?: activeTabFocusRequester).requestFocus() }
+    }
+    // BUG9: the strip card focus was on when another page opened takes it back as soon as the strip lists it again.
+    val stripKeys = remember(yourTeams) { yourTeams.map { it.key } }
+    LaunchedEffect(stripReturnPending, stripKeys) {
+        if (!stripReturnPending) return@LaunchedEffect
+        val key = stripStageKey ?: run { stripReturnPending = false; return@LaunchedEffect }
+        if (key !in stripKeys) return@LaunchedEffect
+        stripReturnPending = false
+        repeat(2) { withFrameNanos { } }
+        repeat(RETURN_FOCUS_FRAMES) {
+            runCatching { stripRequesterOf(key).requestFocus() }
+            withFrameNanos { }
+            if (catchUpHoldsFocus) return@LaunchedEffect
+        }
     }
     // Back from a paused game (#148): Live now's and Channels' first row offers Resume while it is live, its final
     // once it ended (live.19 F15).
@@ -1275,7 +1303,13 @@ private fun SportsLiveContent(
     LaunchedEffect(boardPending) {
         if (boardPending || returnHandled) return@LaunchedEffect
         returnHandled = true
-        val key = focusedCardKey ?: return@LaunchedEffect
+        // Back to a Your teams card the user left from (BUG9): the strip's own return below takes it.
+        if (stripStageKey?.let { key -> yourTeams.any { it.key == key } } == true) return@LaunchedEffect
+        // Not listed (any more): the list takes focus, and the strip does not take it later.
+        stripReturnPending = false
+        // Back from a player that zapped on: the game still playing in the mini player, else the card left (BUG9).
+        val playingKey = (SportsLiveMiniPlayers.controller.state.value as? SportsLiveMiniState.Playing)?.item?.listKey
+        val key = sportsLiveReturnCardKey(focusedCardKey, playingKey, items.map { it.listKey }) ?: return@LaunchedEffect
         val liveNow = uiState.selectedTab == SportsLiveTab.LIVE_NOW && scoreboard
         val target = if (liveNow) sportsLiveReturnFocusKey(items.map { it.listKey }, key, RETURN_ROWS_ON_SCREEN) else key
         val index = items.indexOfFirst { it.listKey == target }
@@ -1985,6 +2019,9 @@ private fun SportsLiveContent(
 
 private const val FOLLOW_REFOCUS_WINDOW_MS = 1_500L
 private const val RETURN_FOCUS_FRAMES = 10
+
+/** How long Back's return waits for the strip card it left from to be listed again (BUG9). */
+private const val STRIP_RETURN_WAIT_MS = 3_000L
 
 /** How long Results' "N games live now" keeps focus on Live now's first row while its board settles. */
 private const val LIVE_NOW_FOCUS_MS = 3_000L
