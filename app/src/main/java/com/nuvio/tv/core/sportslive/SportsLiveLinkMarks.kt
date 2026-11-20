@@ -39,7 +39,7 @@ sealed interface SportsLiveLinkMark {
         fun minutesAgo(nowMs: Long): Int = ((nowMs - atMs).coerceAtLeast(0L) / 60_000L).toInt()
     }
 
-    /** It played for this game this session: a subtle "✓ Played". */
+    /** It played for this game this session: a subtle "Played before". */
     data object Played : SportsLiveLinkMark
 }
 
@@ -138,7 +138,7 @@ class SportsLiveLinkMarks(internal val nowMs: () -> Long = { System.currentTimeM
         bump()
     }
 
-    /** [url] shows its first frame for [gameKey]: its failure mark clears, and it reads "✓ Played". */
+    /** [url] shows its first frame for [gameKey]: its failure mark clears, and it reads "Played before". */
     fun played(gameKey: String, url: String?) {
         val key = SportsLiveWorkingLinks.linkKey(url) ?: return
         synchronized(this) {

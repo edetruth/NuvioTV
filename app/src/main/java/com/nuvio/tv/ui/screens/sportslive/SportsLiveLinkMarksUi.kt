@@ -76,7 +76,7 @@ internal fun rememberSportsLiveLinkMarks(
     }
 }
 
-/** The text of [mark] at [nowMs]: "Didn't start · 3 min ago", "Link dead", "✓ Played"… */
+/** The text of [mark] at [nowMs]: "Didn't start · 3 min ago", "Link dead", "Played before"… */
 @Composable
 internal fun sportsLiveLinkMarkText(mark: SportsLiveLinkMark, nowMs: Long): String = when (mark) {
     SportsLiveLinkMark.Played -> stringResource(R.string.sports_live_link_played)
@@ -106,7 +106,7 @@ internal fun sportsLiveLinkMarkText(mark: SportsLiveLinkMark, nowMs: Long): Stri
     }
 }
 
-/** A link's mark under its name: an amber ⚠ and reason for a failure, a subtle "✓ Played" otherwise. */
+/** A link's mark under its name: an amber ⚠ and reason for a failure, a subtle "Played before" otherwise. */
 @Composable
 internal fun SportsLiveLinkMarkLine(mark: SportsLiveLinkMark, nowMs: Long, modifier: Modifier = Modifier) {
     Text(
