@@ -125,6 +125,23 @@ class SportsLiveGameInfoViewModel internal constructor(
         if (item == null || !available(item)) hide() else showOn(item)
     }
 
+    /**
+     * The Game page of the game the overlay shows (OK on it, TV QA C5): its strict ESPN match, the score revealed as
+     * the Scores setting says; null while closed, without a Game page (an individual sport) or under Scores Off.
+     */
+    fun gameRequest(): SportsLiveGameRequest? {
+        val shownItem = item.value ?: return null
+        val shownMode = mode.value ?: return null
+        if (shownMode == ScoresMode.OFF) return null
+        val event = ScoreChips.matchedEvent(shownItem, scores.value[shownItem.streamKey])?.takeIf { it.individual == null } ?: return null
+        return SportsLiveGameRequest(
+            event,
+            revealed = shownMode == ScoresMode.SHOW,
+            homeFirst = sportsLiveGameHomeFirst(shownItem, event),
+            card = shownItem
+        )
+    }
+
     /** Closes the overlay; false when it was not open. */
     fun hide(): Boolean {
         if (item.value == null) return false

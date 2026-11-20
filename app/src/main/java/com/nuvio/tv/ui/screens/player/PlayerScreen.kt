@@ -233,6 +233,8 @@ fun PlayerScreen(
     val sportsLiveZap: SportsLiveZapViewModel = hiltViewModel()
     // Sports & Live game info (#139): on demand over the game this player plays.
     val sportsLiveGameInfo: SportsLiveGameInfoViewModel = hiltViewModel()
+    // Sports & Live (TV QA C5): a bare OK never pauses a live game.
+    val sportsLiveOk = com.nuvio.tv.ui.screens.sportslive.rememberSportsLiveOkHandler(sportsLiveZap, sportsLiveGameInfo, showControls = { viewModel.onEvent(PlayerEvent.OnToggleControls) }, isPlaying = { viewModel.uiState.value.isPlaying })
     val playerBadges = rememberPlayerBadges(viewModel, uiState)
     val partyState by viewModel.party.state.collectAsState()
     // Sports & Live zapping, its panel and live rewind are off during a watch party.
@@ -904,6 +906,8 @@ fun PlayerScreen(
                 // Sports & Live: a short Left press opens the live games panel, which then keeps the keys;
                 // a short Right press shows the controls (seeking is a no-op on live).
                 if (sportsLiveZap.panelOpen.value) return@onKeyEvent false
+                // Sports & Live (TV QA C5): OK on the game info opens its Game page, never closes it into a pause.
+                if (sportsLiveGameInfo.shown && sportsLiveOk(keyEvent.nativeKeyEvent, partyActive, uiState.showControls || uiState.showPauseOverlay)) return@onKeyEvent true
                 // Sports & Live game info (#139): INFO or MENU opens it; with it up, a key closes it first.
                 if (keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN && !partyActive) {
                     val playing = sportsLiveZap.nowPlaying
@@ -991,7 +995,8 @@ fun PlayerScreen(
                     when (keyEvent.nativeKeyEvent.keyCode) {
                         KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
                             if (!uiState.showControls) {
-                                viewModel.onEvent(PlayerEvent.OnPlayPause)
+                                // Sports & Live (TV QA C5): on a live game the game info or the controls, never a pause.
+                                if (!sportsLiveOk(keyEvent.nativeKeyEvent, partyActive, false)) viewModel.onEvent(PlayerEvent.OnPlayPause)
                                 true
                             } else {
                                 // Let the focused button handle it

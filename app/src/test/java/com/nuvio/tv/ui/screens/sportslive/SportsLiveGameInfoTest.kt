@@ -84,6 +84,22 @@ class SportsLiveGameInfoTest {
     // Keys: dual
 
     @Test
+    fun `a bare OK never pauses a live game, it opens the game info and then its Game page (TV QA C5)`() {
+        fun ok(live: Boolean = true, controls: Boolean = false, shown: Boolean = false, available: Boolean = true, game: Boolean = true) =
+            SportsLiveGameInfoKeys.fullScreenOk(live, controls, shown, available, game)
+        assertEquals(SportsLiveOkAction.SHOW_INFO, ok())
+        assertEquals(SportsLiveOkAction.OPEN_GAME, ok(shown = true))
+        // No Game page to open (an individual sport): OK only closes the card, still no pause.
+        assertEquals(SportsLiveOkAction.HIDE_INFO, ok(shown = true, game = false))
+        // Nothing to show (no ESPN match, Scores Off): the controls, Play focused, so pausing takes a second OK.
+        assertEquals(SportsLiveOkAction.SHOW_CONTROLS, ok(available = false))
+        // The controls' own buttons and a replay keep the player's OK (a replay pauses as any video does).
+        assertEquals(SportsLiveOkAction.PASS, ok(controls = true))
+        assertEquals(SportsLiveOkAction.PASS, ok(live = false))
+        assertEquals(SportsLiveOkAction.PASS, ok(live = false, shown = true))
+    }
+
+    @Test
     fun `dual INFO opens and closes the overlay, MENU stays the swap`() {
         assertEquals(GameInfoKeyAction.SHOW, SportsLiveGameInfoKeys.dual(KeyEvent.KEYCODE_INFO, shown = false, available = true))
         assertEquals(GameInfoKeyAction.HIDE, SportsLiveGameInfoKeys.dual(KeyEvent.KEYCODE_INFO, shown = true, available = true))
@@ -196,6 +212,24 @@ class SportsLiveGameInfoTest {
         assertFalse(viewModel.show(card))
         assertFalse(viewModel.shown)
         assertTrue(loads.isEmpty())
+    }
+
+    @Test
+    fun `the open card's Game page is its matched game, never under Scores Off nor while closed`() = runTest(mainDispatcherRule.dispatcher) {
+        val viewModel = newViewModel()
+        runCurrent()
+        assertNull(viewModel.gameRequest())
+        viewModel.show(card)
+        val request = viewModel.gameRequest()
+        assertEquals(live.eventId, request?.event?.eventId)
+        assertEquals(card, request?.card)
+        assertTrue(request!!.revealed)
+        mode.value = ScoresMode.HIDE_UNTIL_FOCUSED
+        runCurrent()
+        assertFalse(viewModel.gameRequest()!!.revealed)
+        mode.value = ScoresMode.OFF
+        runCurrent()
+        assertNull(viewModel.gameRequest())
     }
 
     @Test
