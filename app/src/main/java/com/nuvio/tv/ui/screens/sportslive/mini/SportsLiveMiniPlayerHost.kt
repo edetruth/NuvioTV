@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -439,6 +440,12 @@ fun SportsLiveMiniPlayerHost(
     modifier: Modifier = Modifier,
     /** The app content under the mini player; requesting it gives focus back where it last was. */
     contentFocusRequester: FocusRequester? = null,
+    /**
+     * A Sports & Live page with content of its own (Game, Team, Player card, [sportsLiveMiniChipOn]): the mini player
+     * shrinks to a small "▶ Playing ‹game›" chip at the top right of the page header, its video hidden while the sound
+     * plays on, so it never covers the page (coordinator 2026-11-20, BUG13).
+     */
+    chip: Boolean = false,
     viewModel: SportsLiveMiniPlayerViewModel = hiltViewModel()
 ) {
     val controller = SportsLiveMiniPlayers.controller
@@ -521,7 +528,8 @@ fun SportsLiveMiniPlayerHost(
     // switch; else the usual corner. The one PlayerView is only moved and resized, never recreated, so the
     // decoder keeps its surface and the video flows on through a switch.
     val dock = rememberSportsLiveMiniDock()
-    val stageSlot = (dock as? SportsLiveMiniDock.Docked)?.slot?.takeIf { !inPip }
+    // On a page that shows the chip, no stage slot counts (a slot left behind by the section never places the video).
+    val stageSlot = (dock as? SportsLiveMiniDock.Docked)?.slot?.takeIf { !inPip && !chip }
     var lastDocked by remember { mutableStateOf<SportsLiveMiniSlot?>(null) }
     if (stageSlot != null) lastDocked = stageSlot
     // The host's own place in the window, so a slot (window pixels) is placed relative to it.
@@ -563,8 +571,13 @@ fun SportsLiveMiniPlayerHost(
         // With predictive back (target SDK 36) Back also reaches the back callbacks, where a screen's would leave
         // Sports Live: while the mini player has focus its own callback, added last, takes Back first (#157).
         if (focused && !inPip) BackHandler { close() }
+        val asChip = chip && !inPip
         val placement = when {
             inPip -> Modifier.fillMaxSize()
+            asChip -> Modifier
+                .align(Alignment.TopEnd)
+                .padding(top = SportsLiveTokens.Size.SafeTop, end = SportsLiveTokens.Size.SafeEnd)
+                .widthIn(max = SportsLiveMiniGeometry.CHIP_MAX_WIDTH_DP.dp)
             stageSlot != null && docked != null -> with(density) {
                 val (dockOffset, dockSize) = docked
                 Modifier
@@ -620,6 +633,9 @@ fun SportsLiveMiniPlayerHost(
             Box(
                 modifier = if (inPip) {
                     Modifier.fillMaxSize()
+                } else if (asChip) {
+                    // The video is hidden, its sound plays on; the same PlayerView, so it shows again on return.
+                    Modifier.size(0.dp)
                 } else if (stageSlot != null) {
                     // The stage's media box: the same size, no shadow over the page; the ring when focused.
                     Modifier
@@ -674,7 +690,13 @@ fun SportsLiveMiniPlayerHost(
                     )
                 }
             }
-            if (!inPip && stageSlot == null) {
+            if (asChip) {
+                PlayingChip(
+                    name = playing.item.displayName,
+                    hint = stringResource(R.string.sports_live_mini_watching_ok_hint).takeIf { focused },
+                    focused = focused
+                )
+            } else if (!inPip && stageSlot == null) {
                 MiniCaption(
                     text = stringResource(
                         if (focused) R.string.sports_live_mini_ok_hint else R.string.sports_live_mini_hint,
@@ -737,6 +759,39 @@ private fun WatchingStrip(name: String, hint: String, modifier: Modifier = Modif
             maxLines = 1,
             softWrap = false
         )
+    }
+}
+
+/**
+ * The mini player as a chip (coordinator 2026-11-20): "▶ Playing ‹game›" on a solid pill, cut with an ellipsis; focused,
+ * the ring and "OK full screen · Back stop" under it.
+ */
+@Composable
+private fun PlayingChip(name: String, hint: String?, focused: Boolean) {
+    val shape = RoundedCornerShape(NuvioTheme.radii.sm)
+    Column(
+        modifier = Modifier
+            .clip(shape)
+            .background(SportsLiveTokens.Colors.SurfaceRaised)
+            .border(2.dp, if (focused) NuvioTheme.colors.FocusRing else SportsLiveTokens.Colors.Outline, shape)
+            .padding(horizontal = 8.dp, vertical = 4.dp)
+    ) {
+        Text(
+            text = stringResource(R.string.sports_live_mini_chip, name),
+            style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag).sportsLiveBold(),
+            color = SportsLiveTokens.Colors.TextPrimary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        if (hint != null) {
+            Text(
+                text = hint,
+                style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag),
+                color = SportsLiveTokens.Colors.TextSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
     }
 }
 

@@ -4186,6 +4186,7 @@
     <string name="sports_live_mini_watching">PLAYING</string>
     <string name="sports_live_mini_watching_hint">Play/Pause full screen</string>
     <string name="sports_live_mini_watching_ok_hint">OK full screen · Back stop</string>
+    <string name="sports_live_mini_chip">▶ Playing %1$s</string>
     <string name="sports_live_stage_selected">Selected</string>
     <!-- live.20: the stage's facts line, a game in play's start ("Started 7:30 PM"). -->
     <string name="sports_live_stage_started">Started %1$s</string>

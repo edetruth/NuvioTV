@@ -233,6 +233,16 @@ class SportsLiveMiniPlayerStateTest {
     }
 
     @Test
+    fun `on Sports and Live's own pages the mini player is a chip, in the section it docks`() {
+        assertTrue(sportsLiveMiniChipOn("sports_live_game"))
+        assertTrue(sportsLiveMiniChipOn("sports_live_team"))
+        assertTrue(sportsLiveMiniChipOn("sports_live_player_card"))
+        assertFalse(sportsLiveMiniChipOn("sports_live"))
+        assertFalse(sportsLiveMiniChipOn("player/{streamUrl}/{title}"))
+        assertFalse(sportsLiveMiniChipOn(null))
+    }
+
+    @Test
     fun `leaving Sports and Live stops the mini player, moving inside it does not`() = runTest {
         val mini = controller()
         mini.onBackFromPlayer("a", session, stream)

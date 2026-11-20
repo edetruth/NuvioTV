@@ -178,6 +178,12 @@ object SportsLiveMiniGeometry {
     /** Its distance from the window's right and bottom edges. */
     const val EDGE_DP = 24f
 
+    /**
+     * The chip's widest on a page (coordinator 2026-11-20): the room right of a Game or Team page header's second logo
+     * at the top right of the safe area, so it never covers the header.
+     */
+    const val CHIP_MAX_WIDTH_DP = 130f
+
     /** Its caption line under the video (hint text and padding). */
     const val CAPTION_DP = 28f
 

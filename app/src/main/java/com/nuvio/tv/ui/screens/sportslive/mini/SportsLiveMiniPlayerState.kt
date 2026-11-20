@@ -77,6 +77,15 @@ fun sportsLiveMiniPlaysOn(route: String?): Boolean =
     route == null || route.startsWith(SPORTS_LIVE_ROUTE_PREFIX) || route.startsWith(PLAYER_ROUTE_PREFIX)
 
 private const val SPORTS_LIVE_ROUTE_PREFIX = "sports_live"
+private const val SPORTS_LIVE_ROOT_ROUTE = "sports_live"
+
+/**
+ * Whether the mini player shows as a small "▶ Playing ‹game›" chip at [route]: on Sports & Live's own pages (Game,
+ * Team, Player card, ...), whose content the corner video would cover; never on the section itself (it docks in the
+ * stage there) nor in the player.
+ */
+fun sportsLiveMiniChipOn(route: String?): Boolean =
+    route != null && route.startsWith(SPORTS_LIVE_ROUTE_PREFIX) && route != SPORTS_LIVE_ROOT_ROUTE
 private const val PLAYER_ROUTE_PREFIX = "player/"
 
 /**

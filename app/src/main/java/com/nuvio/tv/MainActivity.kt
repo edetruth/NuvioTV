@@ -1345,7 +1345,8 @@ open class MainActivity : ComponentActivity() {
                             // The Sports & Live mini player, above the NavHost; focus reaches it only by a D-pad move.
                             SportsLiveMiniPlayerHost(
                                 onExpand = { target -> navController.navigate(sportsLiveTargetRoute(target)) },
-                                contentFocusRequester = sportsLiveContentFocus
+                                contentFocusRequester = sportsLiveContentFocus,
+                                chip = com.nuvio.tv.ui.screens.sportslive.mini.sportsLiveMiniChipOn(currentRoute)
                             )
                             // Sports & Live reminders' "Watch now?" and followed teams' toasts (#42, #44).
                             SportsLiveAlertsHost(
