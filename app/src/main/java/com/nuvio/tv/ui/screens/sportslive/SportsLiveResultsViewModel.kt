@@ -11,6 +11,7 @@ import com.nuvio.tv.core.sportslive.scores.ResultsRepository
 import com.nuvio.tv.core.sportslive.scores.ScoreSide
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
+import com.nuvio.tv.core.sportslive.scores.SpoilerProtection
 import com.nuvio.tv.core.sportslive.scores.TeamFollows
 import com.nuvio.tv.core.sportslive.scores.SportsResults
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
@@ -92,9 +93,12 @@ data class SportsLiveResultsUiState(
     /** Rows (event ids) focused long enough to reveal their score under Hide until focused. */
     val revealed: Set<String> = emptySet(),
     /** The replay each result opens, by event id (strict matches only). */
-    val replays: Map<String, SportsLiveItem> = emptyMap()
+    val replays: Map<String, SportsLiveItem> = emptyMap(),
+    /** Spoiler protection (#151): a protected game's row hides its score whatever the setting. */
+    val protection: SpoilerProtection = SpoilerProtection()
 ) {
-    fun showsScore(row: ResultRow): Boolean = ResultSpoilerReveal.showsScore(mode, revealed, row.event.eventId)
+    fun showsScore(row: ResultRow): Boolean =
+        ResultSpoilerReveal.showsScore(mode, revealed, row.event.eventId, spoilerProtected = protection.protects(row.event))
 
     /**
      * The "N games live now" line: on Today, once loaded, while [liveGames] (Live now's own live games,
@@ -177,8 +181,9 @@ class SportsLiveResultsViewModel internal constructor(
         combine(daysAgo, load, earlierOpen, ::Triple),
         mode,
         reveal.revealed,
-        listing
-    ) { (days, load, earlier), mode, revealed, listing ->
+        listing,
+        prefs.spoilerProtection
+    ) { (days, load, earlier), mode, revealed, listing, protection ->
         SportsLiveResultsUiState(
             daysAgo = days,
             // Every day (P4): the title's ‹ › steps through them, so no Earlier toggle hides any.
@@ -196,7 +201,8 @@ class SportsLiveResultsViewModel internal constructor(
             mode = mode,
             modeKnown = true,
             revealed = revealed,
-            replays = listing.replays
+            replays = listing.replays,
+            protection = protection
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SportsLiveResultsUiState())
 
@@ -520,8 +526,13 @@ internal class ResultSpoilerReveal(private val scope: CoroutineScope, private va
     companion object {
         const val REVEAL_AFTER_MS = 1_000L
 
-        /** Show: always; Hide until focused: once revealed; Off: never. */
-        fun showsScore(mode: ScoresMode, revealed: Set<String>, eventId: String): Boolean = when (mode) {
+        /** Show: always; Hide until focused: once revealed; Off: never. A [spoilerProtected] game (#151): never. */
+        fun showsScore(mode: ScoresMode, revealed: Set<String>, eventId: String, spoilerProtected: Boolean = false): Boolean = when {
+            spoilerProtected -> false
+            else -> byMode(mode, revealed, eventId)
+        }
+
+        private fun byMode(mode: ScoresMode, revealed: Set<String>, eventId: String): Boolean = when (mode) {
             ScoresMode.SHOW -> true
             ScoresMode.HIDE_UNTIL_FOCUSED -> eventId in revealed
             ScoresMode.OFF -> false

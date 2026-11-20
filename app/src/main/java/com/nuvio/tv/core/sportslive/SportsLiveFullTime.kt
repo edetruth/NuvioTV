@@ -60,6 +60,8 @@ object SportsLiveFullTimeToasts {
      */
     fun of(item: SportsLiveItem, snapshot: ScoreSnapshot?, mode: ScoresMode?, seenLive: Boolean): FullTimeToast? {
         if (mode == null || mode == ScoresMode.OFF || !seenLive) return null
+        // A spoiler-protected game (#151) is never announced.
+        if (snapshot?.spoilerProtected == true) return null
         val event = ScoreChips.matchedEvent(item, snapshot) ?: return null
         if (!SportsLiveEndedGames.isFinalWithScore(event)) return null
         val score = if (mode == ScoresMode.SHOW) (ScoreChips.of(item, event, mode, revealed = true) as? ScoreChip.Final)?.score else null

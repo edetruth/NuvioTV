@@ -14,6 +14,7 @@ import com.nuvio.tv.core.sportslive.scores.LiveScoresRepository
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.ScoreState
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
+import com.nuvio.tv.core.sportslive.scores.SpoilerProtection
 import com.nuvio.tv.domain.model.ContentType
 import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.domain.model.PosterShape
@@ -103,6 +104,7 @@ class SportsLiveZapViewModelTest {
         val liveScores = mockk<LiveScoresRepository>(relaxed = true)
         every { liveScores.scores } returns scores
         every { liveScores.mode } returns flowOf(mode)
+        every { liveScores.protection } returns MutableStateFlow(SpoilerProtection())
         return SportsLiveZapViewModel(
             SavedStateHandle(mapOf("contentId" to playing.id)), resolver, debrid, profiles, repo, liveScores,
             mainDispatcherRule.dispatcher, gameWatch = watch

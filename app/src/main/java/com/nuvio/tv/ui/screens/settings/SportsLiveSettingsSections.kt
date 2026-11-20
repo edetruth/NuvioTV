@@ -34,6 +34,8 @@ internal enum class SportsLiveSetting(
 ) {
     SCORES(SportsLiveSettingsSection.SCORES_AND_SPOILERS, R.string.sports_live_setting_scores, R.string.sports_live_setting_scores_help),
     SCORE_DELAY(SportsLiveSettingsSection.SCORES_AND_SPOILERS, R.string.sports_live_setting_score_delay, R.string.sports_live_setting_score_delay_subtitle),
+    /** "Hide scores of my teams' games until I've watched" (#151): off by default. */
+    MY_TEAMS_SPOILERS(SportsLiveSettingsSection.SCORES_AND_SPOILERS, R.string.sports_live_setting_my_teams_spoilers, R.string.sports_live_setting_my_teams_spoilers_subtitle),
     MY_TEAMS(SportsLiveSettingsSection.WHAT_I_FOLLOW, R.string.sports_live_my_teams_title, R.string.sports_live_my_teams_subtitle),
     MY_SPORTS(SportsLiveSettingsSection.WHAT_I_FOLLOW, R.string.sports_live_my_sports_title, R.string.sports_live_my_sports_subtitle),
     REMIND_MY_TEAMS(SportsLiveSettingsSection.ALERTS, R.string.sports_live_setting_remind_my_teams, R.string.sports_live_setting_remind_my_teams_subtitle),
@@ -71,7 +73,7 @@ internal enum class SportsLiveSetting(
         val scores = state.scores.mode
         return when (this) {
             SHOW_SECTION, RESET_STREAM_MEMORY, MY_TEAMS, RUN_SETUP, HIDDEN -> true
-            SCORE_DELAY, FULL_TIME_ALERTS, CLOSE_GAME_ALERTS -> section && scores != ScoresMode.OFF
+            SCORE_DELAY, FULL_TIME_ALERTS, CLOSE_GAME_ALERTS, MY_TEAMS_SPOILERS -> section && scores != ScoresMode.OFF
             SCORE_ALERTS -> section && scores == ScoresMode.SHOW
             // Scores Off means no score data at all, and the row needs the section's Home row: off with either.
             CATCH_UP_ROW -> section && state.showHomeRow && scores != ScoresMode.OFF
@@ -89,7 +91,7 @@ internal enum class SportsLiveSetting(
     private companion object {
         val SWITCHES = setOf(
             REMIND_MY_TEAMS, SCORE_ALERTS, FULL_TIME_ALERTS, CLOSE_GAME_ALERTS, HIDE_UNPLAYABLE, PICTURE_IN_PICTURE, SHOW_SECTION, HOME_ROW,
-            CATCH_UP_ROW, HOVER_PREVIEW, DATA_SAVER
+            CATCH_UP_ROW, HOVER_PREVIEW, DATA_SAVER, MY_TEAMS_SPOILERS
         )
     }
 }
@@ -117,7 +119,7 @@ internal fun SportsLiveSetting.offReason(state: SportsLiveSettingsUiState, pipSu
     if (isEnabled(state)) return null
     if (!state.showSection) return SportsLiveOffReason.SECTION_HIDDEN
     return when (this) {
-        SportsLiveSetting.SCORE_DELAY, SportsLiveSetting.FULL_TIME_ALERTS, SportsLiveSetting.CLOSE_GAME_ALERTS -> SportsLiveOffReason.SCORES_OFF
+        SportsLiveSetting.SCORE_DELAY, SportsLiveSetting.FULL_TIME_ALERTS, SportsLiveSetting.CLOSE_GAME_ALERTS, SportsLiveSetting.MY_TEAMS_SPOILERS -> SportsLiveOffReason.SCORES_OFF
         SportsLiveSetting.SCORE_ALERTS -> SportsLiveOffReason.SCORES_NOT_SHOW
         SportsLiveSetting.CATCH_UP_ROW ->
             if (!state.showHomeRow) SportsLiveOffReason.HOME_ROW_OFF else SportsLiveOffReason.SCORES_OFF

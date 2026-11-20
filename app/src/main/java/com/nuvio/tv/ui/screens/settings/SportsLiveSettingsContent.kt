@@ -230,6 +230,7 @@ internal fun SportsLiveSettingsContent(
                 SportsLiveSetting.SHOW_SECTION -> state.showSection
                 SportsLiveSetting.HOME_ROW -> state.showHomeRow
                 SportsLiveSetting.CATCH_UP_ROW -> state.catchUpRow
+                SportsLiveSetting.MY_TEAMS_SPOILERS -> state.hideMyTeamsScores
                 SportsLiveSetting.HOVER_PREVIEW -> state.hoverPreview
                 else -> state.dataSaver
             }

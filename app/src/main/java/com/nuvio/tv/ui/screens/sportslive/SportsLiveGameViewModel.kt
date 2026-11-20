@@ -15,6 +15,8 @@ import com.nuvio.tv.core.sportslive.scores.ScoreSide
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.ScoreState
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
+import com.nuvio.tv.core.sportslive.scores.SpoilerProtection
+import com.nuvio.tv.core.sportslive.scores.SpoilerProtectionStore
 import com.nuvio.tv.core.sportslive.scores.TeamFollows
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import com.nuvio.tv.domain.model.FollowedTeam
@@ -31,6 +33,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -57,6 +60,13 @@ data class SportsLiveGameRequest(
     /** The section the page opens on when it has one (a Just ended panel row's "Box score ›", #145); null: the first. */
     val section: GameSection? = null
 )
+
+/**
+ * The Game page of a replay's game (#151: Replays' Game stats, a replay in the player): spoiler-free, its
+ * result behind Reveal result whatever the Scores setting.
+ */
+internal fun sportsLiveReplayGameRequest(event: ScoreSnapshot, replay: SportsLiveItem?): SportsLiveGameRequest =
+    SportsLiveGameRequest(event = event, replay = replay, revealed = false, spoilerSafe = true)
 
 /** Whether [item]'s card names [event]'s home team first (N10); away first when that is not known. */
 internal fun sportsLiveGameHomeFirst(item: SportsLiveItem, event: ScoreSnapshot): Boolean =
@@ -109,10 +119,12 @@ data class SportsLiveGameUiState(
     /** "Watch with another game" shows (#57): opened on a live Live now game, while it is live. */
     val offersWatchWith: Boolean = false,
     /** Opened on a chosen section (a panel row's "Box score ›", #145): its tab takes the first focus. */
-    val openedOnSection: Boolean = false
+    val openedOnSection: Boolean = false,
+    /** Spoiler-protected (#151): nothing shows until Reveal result, which ends the protection. */
+    val spoilerProtected: Boolean = false
 ) {
-    /** Score, records and stats show: Scores Show (unless [spoilerSafe]), or revealed. */
-    val showsScore: Boolean get() = (mode == ScoresMode.SHOW && !spoilerSafe) || revealed
+    /** Score, records and stats show: Scores Show (unless [spoilerSafe]), or revealed; never while [spoilerProtected]. */
+    val showsScore: Boolean get() = !spoilerProtected && ((mode == ScoresMode.SHOW && !spoilerSafe) || revealed)
 
     /**
      * The sections with something to show. While the score is hidden only an upcoming game's Preview (#171), which is
@@ -140,11 +152,17 @@ class SportsLiveGameViewModel internal constructor(
     private val unfollow: suspend (FollowedTeam) -> Unit,
     private val now: () -> Long,
     /** Highlight clips that failed to play this session (#61): hidden. */
-    failedHighlights: Flow<Set<String>> = SportsLiveHighlights.failedClipIds
+    failedHighlights: Flow<Set<String>> = SportsLiveHighlights.failedClipIds,
+    /** Spoiler protection (#151) of the active profile. */
+    protection: Flow<SpoilerProtection> = flowOf(SpoilerProtection()),
+    /** Reveal result on a protected game: its protection ends. */
+    private val endProtection: suspend (ScoreSnapshot) -> Unit = {},
+    /** Watch replay pressed: played to its end, it ends the game's protection. */
+    private val replayStarted: suspend (SportsLiveItem, ScoreSnapshot) -> Unit = { _, _ -> }
 ) : ViewModel() {
 
     @Inject
-    constructor(summaries: GameSummaryRepository, prefs: SportsLivePreferencesDataStore) : this(
+    constructor(summaries: GameSummaryRepository, prefs: SportsLivePreferencesDataStore, protection: SpoilerProtectionStore) : this(
         request = SportsLiveGameRequests.take(),
         // Parsing a summary (hundreds of KB of JSON) stays off the main thread (#107).
         loadSummary = { league, eventId -> withContext(Dispatchers.Default) { summaries.load(league, eventId) } },
@@ -152,7 +170,10 @@ class SportsLiveGameViewModel internal constructor(
         followedTeams = prefs.followedTeams,
         follow = prefs::follow,
         unfollow = prefs::unfollow,
-        now = System::currentTimeMillis
+        now = System::currentTimeMillis,
+        protection = protection.protection,
+        endProtection = protection::reveal,
+        replayStarted = { replay, event -> protection.onReplayStarted(listOf(replay) + replay.alternates, event) }
     )
 
     private data class Page(
@@ -167,7 +188,7 @@ class SportsLiveGameViewModel internal constructor(
     private val visible = MutableStateFlow(false)
     private val revealRequested = MutableStateFlow(request?.revealed == true)
 
-    val uiState: StateFlow<SportsLiveGameUiState> = combine(page, followedTeams, failedHighlights) { page, followed, failed ->
+    val uiState: StateFlow<SportsLiveGameUiState> = combine(page, followedTeams, failedHighlights, protection) { page, followed, failed, protection ->
         val event = request?.event
         SportsLiveGameUiState(
             event = event,
@@ -188,7 +209,8 @@ class SportsLiveGameViewModel internal constructor(
             spoilerSafe = request?.spoilerSafe == true,
             // Live games only: gone once the page's summary says the game is over.
             offersWatchWith = request?.watchWith != null && (page.summary?.state ?: event?.state) == ScoreState.IN,
-            openedOnSection = request?.section != null
+            openedOnSection = request?.section != null,
+            spoilerProtected = event != null && protection.protects(event)
         )
     }.stateIn(
         viewModelScope,
@@ -202,7 +224,9 @@ class SportsLiveGameViewModel internal constructor(
             spoilerSafe = request?.spoilerSafe == true,
             offersWatchWith = request?.watchWith != null && request.event.state == ScoreState.IN,
             selected = request?.section,
-            openedOnSection = request?.section != null
+            openedOnSection = request?.section != null,
+            // As stamped where the page was opened, until the protection is read.
+            spoilerProtected = request?.event?.spoilerProtected == true
         )
     )
 
@@ -280,6 +304,14 @@ class SportsLiveGameViewModel internal constructor(
     /** Reveal: score and stats show; under Scores Off this is when the first request is made. */
     fun reveal() {
         revealRequested.value = true
+        val event = request?.event ?: return
+        if (uiState.value.spoilerProtected) viewModelScope.launch { endProtection(event) }
+    }
+
+    /** Watch replay pressed on this page (#151). */
+    fun onReplayStarted(replay: SportsLiveItem) {
+        val event = request?.event ?: return
+        viewModelScope.launch { replayStarted(replay, event) }
     }
 
     fun selectSection(section: GameSection) {

@@ -19,6 +19,7 @@ import com.nuvio.tv.data.local.ContinueWatchingEnrichmentCache
 import com.nuvio.tv.data.local.ExperienceModeDataStore
 import com.nuvio.tv.data.local.PluginDataStore
 import com.nuvio.tv.data.local.ProfileDataStoreFactory
+import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import com.nuvio.tv.data.local.StreamBadgeSettingsDataStore
 import com.nuvio.tv.data.local.TmdbSettingsDataStore
 import com.nuvio.tv.data.remote.supabase.SupabaseProfileSetupCopyResult
@@ -67,6 +68,8 @@ private const val FOREGROUND_PULL_DELAY_MS = 2500L
 private const val FOREGROUND_PULL_MIN_INTERVAL_MS = 60_000L
 private const val SETTINGS_SYNC_PLATFORM = "tv"
 private const val PLAYER_SETTINGS_FEATURE = "player_settings"
+// Sports & Live (#141): an allow-list, merged per setting and per entry rather than replaced ([SportsLiveSettingsSync]).
+private const val SPORTS_LIVE_FEATURE = SportsLivePreferencesDataStore.FEATURE
 
 private val catalogKeysExcludedFromProfileSettingsBlob = setOf(
     "home_catalog_order_keys",
@@ -215,7 +218,8 @@ class ProfileSettingsSyncService @Inject constructor(
         "debrid_settings",
         "animeskip_settings",
         "track_preference",
-        AmbientModeDataStore.FEATURE
+        AmbientModeDataStore.FEATURE,
+        SPORTS_LIVE_FEATURE
     )
 
     init {
@@ -474,6 +478,10 @@ class ProfileSettingsSyncService @Inject constructor(
         val features = buildJsonObject {
             syncedFeatures.forEach { feature ->
                 val prefs = profileDataStoreFactory.get(profileId, feature).data.first()
+                if (feature == SPORTS_LIVE_FEATURE) {
+                    put(feature, SportsLiveSettingsSync.export(prefs, System.currentTimeMillis()))
+                    return@forEach
+                }
                 val serialized = buildJsonObject {
                     prefs.asMap().forEach { (key, rawValue) ->
                         if (shouldExcludePreferenceFromProfileSettingsSync(feature, key.name)) return@forEach
@@ -498,6 +506,12 @@ class ProfileSettingsSyncService @Inject constructor(
                 val featureJson = featuresJson[feature]?.jsonObject ?: return@forEach
                 if (feature == PluginDataStore.FEATURE) {
                     importPluginSettings(profileId, featureJson)
+                    return@forEach
+                }
+                if (feature == SPORTS_LIVE_FEATURE) {
+                    profileDataStoreFactory.get(profileId, feature).edit { mutablePrefs ->
+                        SportsLiveSettingsSync.merge(mutablePrefs, featureJson, System.currentTimeMillis())
+                    }
                     return@forEach
                 }
                 profileDataStoreFactory.get(profileId, feature).edit { mutablePrefs ->
@@ -671,6 +685,9 @@ class ProfileSettingsSyncService @Inject constructor(
     }
 
     private fun buildFeatureSignature(prefs: Preferences, feature: String = ""): String {
+        if (feature == SPORTS_LIVE_FEATURE) {
+            return SportsLiveSettingsSync.canonical(SportsLiveSettingsSync.export(prefs, System.currentTimeMillis()))
+        }
         return prefs.asMap()
             .entries
             .mapNotNull { (key, rawValue) ->
@@ -684,6 +701,7 @@ class ProfileSettingsSyncService @Inject constructor(
     }
 
     private fun buildFeatureSignature(featureJson: JsonObject, feature: String = ""): String {
+        if (feature == SPORTS_LIVE_FEATURE) return SportsLiveSettingsSync.canonical(featureJson)
         return featureJson.entries
             .filterNot { (key, _) -> shouldExcludePreferenceFromProfileSettingsSync(feature, key) }
             .sortedBy { it.key }

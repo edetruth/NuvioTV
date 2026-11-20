@@ -226,7 +226,7 @@ class SportsLiveAlertEngine {
         mode: ScoresMode,
         watching: SportsLiveWatching
     ): SportsLiveAlert.ScoreChange? {
-        if (!settings.scoreAlerts || mode != ScoresMode.SHOW) return null
+        if (!settings.scoreAlerts || mode != ScoresMode.SHOW || event.spoilerProtected) return null
         // Only while a game plays: the full player, dual screen or the mini player.
         if (!watching.inPlayer && !watching.dual && !watching.miniPlaying) return null
         if (event.state != ScoreState.IN || before.state != ScoreState.IN) return null
@@ -260,7 +260,8 @@ class SportsLiveAlertEngine {
     ): SportsLiveAlert.FullTime? {
         if (before.state != ScoreState.IN || event.state != ScoreState.POST || !event.isFinal) return null
         if (!finals.add(event.eventId)) return null
-        if (!settings.fullTimeAlerts || mode == ScoresMode.OFF) return null
+        // Muted for a spoiler-protected game (#151), as for Scores Off.
+        if (!settings.fullTimeAlerts || mode == ScoresMode.OFF || event.spoilerProtected) return null
         return SportsLiveAlert.FullTime(game.item, event, namesOnly = mode == ScoresMode.HIDE_UNTIL_FOCUSED)
     }
 

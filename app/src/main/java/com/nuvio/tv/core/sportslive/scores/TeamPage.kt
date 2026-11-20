@@ -305,7 +305,10 @@ object TeamPageSpoilers {
 
     fun showsResults(mode: ScoresMode, revealed: Boolean): Boolean = mode == ScoresMode.SHOW || revealed
 
-    /** One of the last results (#134): as [showsResults], and under Hide until focused while its row has focus. */
-    fun showsResult(mode: ScoresMode, revealed: Boolean, focused: Boolean): Boolean =
-        showsResults(mode, revealed) || (mode == ScoresMode.HIDE_UNTIL_FOCUSED && focused)
+    /**
+     * One of the last results (#134): as [showsResults], and under Hide until focused while its row has focus.
+     * Never a [spoilerProtected] game's (#151), whatever the page's Reveal.
+     */
+    fun showsResult(mode: ScoresMode, revealed: Boolean, focused: Boolean, spoilerProtected: Boolean = false): Boolean =
+        !spoilerProtected && (showsResults(mode, revealed) || (mode == ScoresMode.HIDE_UNTIL_FOCUSED && focused))
 }

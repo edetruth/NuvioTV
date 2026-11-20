@@ -218,11 +218,14 @@ fun SportsLiveGameScreen(
             // No tabs (scores hidden, or nothing to show): Down stays put.
             downFocus = selectedTab,
             reminded = remindCard != null && reminders.isReminded(remindCard),
+            // A replay's or a saved game's page (#151): "Reveal result".
+            revealResult = state.spoilerProtected || state.spoilerSafe,
             onAction = { action ->
                 when (action) {
                     GameAction.WATCH -> liveCard?.let { playViewModel.play(it) }
                     GameAction.REMIND -> remindCard?.let(remindersViewModel::toggle)
                     GameAction.REPLAY -> state.replay?.let { replay ->
+                        viewModel.onReplayStarted(replay)
                         if (replay.apiType == "series") onOpenDetail(replay) else playViewModel.play(replay)
                     }
                     GameAction.REVEAL -> {
@@ -266,7 +269,7 @@ fun SportsLiveGameScreen(
                 onOpenPlayer = { key, target ->
                     returnKey = key
                     returnPending = true
-                    SportsLivePlayerCardRequests.open(SportsLivePlayerCardRequest(target, spoilerSafe = state.spoilerSafe))
+                    SportsLivePlayerCardRequests.open(SportsLivePlayerCardRequest(target, spoilerSafe = state.spoilerSafe || state.spoilerProtected))
                     onOpenPlayerCard()
                 }
             )
@@ -489,7 +492,8 @@ private fun GameActionRow(
     downFocus: FocusRequester?,
     reminded: Boolean,
     onAction: (GameAction) -> Unit,
-    onMore: () -> Unit
+    onMore: () -> Unit,
+    revealResult: Boolean = false
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -522,7 +526,7 @@ private fun GameActionRow(
                             GameAction.WATCH -> R.string.sports_live_watch
                             GameAction.REMIND -> if (reminded) R.string.sports_live_cancel_reminder else R.string.sports_live_remind_me
                             GameAction.REPLAY -> R.string.sports_live_game_watch_replay
-                            GameAction.REVEAL -> R.string.sports_live_game_reveal
+                            GameAction.REVEAL -> if (revealResult) R.string.sports_live_game_reveal_result else R.string.sports_live_game_reveal
                         }
                     ),
                     style = SportsLiveTokens.style(SportsLiveTokens.Type.Button),

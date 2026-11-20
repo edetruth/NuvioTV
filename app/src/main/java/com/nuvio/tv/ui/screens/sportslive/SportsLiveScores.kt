@@ -15,12 +15,15 @@ import com.nuvio.tv.core.sportslive.scores.LiveScoreTracking
 import com.nuvio.tv.core.sportslive.scores.LiveScoresRepository
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
+import com.nuvio.tv.core.sportslive.scores.SpoilerProtection
+import com.nuvio.tv.core.sportslive.scores.SpoilerProtectionStore
 import com.nuvio.tv.domain.model.SportsLiveItem
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
@@ -29,7 +32,10 @@ import javax.inject.Inject
  * does. Hide until focused reveals a card's score after [ResultSpoilerReveal.REVEAL_AFTER_MS] of focus.
  */
 @HiltViewModel
-class SportsLiveScoresViewModel @Inject constructor(private val repo: LiveScoresRepository) : ViewModel() {
+class SportsLiveScoresViewModel @Inject constructor(
+    private val repo: LiveScoresRepository,
+    private val spoilers: SpoilerProtectionStore
+) : ViewModel() {
 
     /** Delayed scores by card key (a merged card's primary streamKey); empty while Scores is Off. */
     val scores: StateFlow<Map<String, ScoreSnapshot>> = repo.scores
@@ -46,6 +52,24 @@ class SportsLiveScoresViewModel @Inject constructor(private val repo: LiveScores
 
     /** The focused card's key, or null when no card is focused. */
     fun onCardFocus(key: String?) = reveal.onFocus(key)
+
+    /** Spoiler protection (#151), as the scores are stamped with it. */
+    val protection: StateFlow<SpoilerProtection> = repo.protection
+
+    /** More… → Watch later (no spoilers) on [event]'s game. */
+    fun saveForLater(event: ScoreSnapshot) {
+        viewModelScope.launch { spoilers.saveForLater(event) }
+    }
+
+    /** More… → Reveal result: [event]'s protection ends. */
+    fun revealResult(event: ScoreSnapshot) {
+        viewModelScope.launch { spoilers.reveal(event) }
+    }
+
+    /** [replays] of [event] (when known) start: one played to its end ends a saved game's protection. */
+    fun onReplayStarted(replays: List<SportsLiveItem>, event: ScoreSnapshot? = null) {
+        viewModelScope.launch { spoilers.onReplayStarted(replays, event) }
+    }
 }
 
 /**

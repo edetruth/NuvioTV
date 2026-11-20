@@ -99,7 +99,9 @@ class LiveScoresRepository internal constructor(
     /** Where the logo directory's lists are kept (#82); null: memory only. */
     directoryStore: TeamDirectoryStore? = null,
     /** Followed teams' ESPN leagues ("soccer/eng.1"): their lists are kept too (#82). */
-    private val followedLeagues: Flow<List<EspnLeague>> = flowOf(emptyList())
+    private val followedLeagues: Flow<List<EspnLeague>> = flowOf(emptyList()),
+    /** Spoiler protection (#151): every score served is stamped with it ([SpoilerProtection.stamp]). */
+    protectionSource: Flow<SpoilerProtection> = flowOf(SpoilerProtection())
 ) : LiveScoreTracking {
     @Inject
     constructor(
@@ -127,7 +129,8 @@ class LiveScoresRepository internal constructor(
             )
         },
         directoryStore = TeamDirectoryStore(File(context.filesDir, "sportslive/team_directory")),
-        followedLeagues = prefs.followedTeams.map { teams -> teams.mapNotNull { leagueOfPath(it.league) } }
+        followedLeagues = prefs.followedTeams.map { teams -> teams.mapNotNull { leagueOfPath(it.league) } },
+        protectionSource = prefs.spoilerProtection
     )
 
     /** What the settings screen and surfaces read: Show / Hide until focused / Off. */
@@ -135,8 +138,16 @@ class LiveScoresRepository internal constructor(
 
     private val output = MutableStateFlow<Map<String, ScoreSnapshot>>(emptyMap())
 
-    /** Delayed scores of the tracked cards that matched a game, by card key. Empty when Scores is Off. */
+    /**
+     * Delayed scores of the tracked cards that matched a game, by card key. Empty when Scores is Off. Each is
+     * stamped [ScoreSnapshot.spoilerProtected] (#151), so every surface hides a protected game's score.
+     */
     val scores: StateFlow<Map<String, ScoreSnapshot>> = output.asStateFlow()
+
+    private val protectionState = MutableStateFlow(SpoilerProtection())
+
+    /** The active profile's spoiler protection (#151), as the scores were last stamped with it. */
+    val protection: StateFlow<SpoilerProtection> = protectionState.asStateFlow()
 
     private val unmatchedOutput = MutableStateFlow<Set<String>>(emptySet())
 
@@ -248,6 +259,15 @@ class LiveScoresRepository internal constructor(
         scope.launch(io) { directorySync.load() }
         // No learned logo is drawn before the Scores setting is known, nor while it is Off.
         scope.launch { mode.collect { logos.active = it != ScoresMode.OFF } }
+        // A game saved for later (or revealed) is stamped again at once, not at the next fetch.
+        scope.launch {
+            protectionSource.collect { latest ->
+                lock.withLock {
+                    protectionState.value = latest
+                    if (output.value.isNotEmpty()) output.value = latest.stampAll(output.value)
+                }
+            }
+        }
         scope.launch {
             output.subscriptionCount.map { it > 0 }.distinctUntilChanged().collectLatest { active ->
                 if (active) {
@@ -720,7 +740,8 @@ class LiveScoresRepository internal constructor(
             output.value = emptyMap()
             return
         }
-        output.value = scoreDelay.apply(raw, delayMs, now())
+        // Read against the clock now, so a protection's 7 days run out without a settings change.
+        output.value = protectionState.value.copy(nowMs = now()).stampAll(scoreDelay.apply(raw, delayMs, now()))
         nextRelease.value = scoreDelay.nextChangeAt
     }
 

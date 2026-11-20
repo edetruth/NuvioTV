@@ -94,7 +94,9 @@ data class ScoreSnapshot(
     /** ESPN's note naming the event (#137): "Players Era 8 - Championship"; null when none. */
     val headline: String? = null,
     /** The betting spread where ESPN lists one (#137); null when none. */
-    val spread: Double? = null
+    val spread: Double? = null,
+    /** Spoiler-protected (#151, [SpoilerProtection]): every surface hides the score, stats and alerts. */
+    val spoilerProtected: Boolean = false
 ) {
     val homeAbbr: String? get() = home.abbreviation
     val awayAbbr: String? get() = away.abbreviation

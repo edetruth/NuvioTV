@@ -14,6 +14,7 @@ import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.scores.GameArt
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
+import com.nuvio.tv.core.sportslive.scores.SpoilerProtection
 import com.nuvio.tv.core.sportslive.scores.WhyTag
 import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveItem
@@ -24,7 +25,11 @@ import java.time.ZoneId
 data class SportsLiveBoardScores(
     val scores: Map<String, ScoreSnapshot> = emptyMap(),
     val mode: ScoresMode? = null,
-    val revealed: Set<String> = emptySet()
+    val revealed: Set<String> = emptySet(),
+    /** Spoiler protection (#151): a Just ended game's kept final is stamped with it too. */
+    val protection: SpoilerProtection = SpoilerProtection(),
+    /** Replays of games saved for later, by card key: listed first under Saved for later (#151). */
+    val savedReplays: Set<String> = emptySet()
 )
 
 /**
@@ -113,7 +118,7 @@ data class SportsLiveBoard(
                     mode = scores.mode,
                     revealed = scores.revealed,
                     nowMs = inputs.clockMs,
-                    ended = inputs.ended,
+                    ended = inputs.ended.mapValues { (_, ended) -> ended.event?.let { ended.copy(event = scores.protection.stamp(it)) } ?: ended },
                     followsSide = { item, side -> inputs.followed.any { SportsLiveTeams.followsSideOfAnySource(it, side, item) } },
                     excitement = inputs.excitement
                 ).map { row -> if (row.item.streamKey in inputs.noStreams) row.copy(noStreams = true) else row }
@@ -129,7 +134,7 @@ data class SportsLiveBoard(
             val agenda = when {
                 rows == null -> null
                 tab == SportsLiveTab.UPCOMING -> SportsLiveAgenda.of(rows, inputs.clockMs, zone)
-                tab == SportsLiveTab.REPLAYS -> SportsLiveAgenda.ofReplays(rows, inputs.clockMs, zone)
+                tab == SportsLiveTab.REPLAYS -> SportsLiveAgenda.ofReplays(rows, inputs.clockMs, zone, scores.savedReplays)
                 else -> null
             }
             val items = agenda?.items ?: rows?.map { it.item } ?: inputs.items

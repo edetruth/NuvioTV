@@ -14,7 +14,12 @@ import java.time.temporal.ChronoUnit
  * A day of the Agenda (V2 Upcoming, #132): Today, Tomorrow, a later date, or the closing "Any time" group;
  * on Replays (P4) Today, Yesterday, an earlier date, or the closing "Other replays" ([UNDATED]).
  */
-enum class AgendaDayKind { TODAY, TOMORROW, YESTERDAY, DATE, ANY_TIME, UNDATED }
+enum class AgendaDayKind {
+    TODAY, TOMORROW, YESTERDAY, DATE, ANY_TIME, UNDATED,
+
+    /** Replays' "Saved for later" (#151): the replays of games saved for later, first. */
+    SAVED
+}
 
 /** A day header: its [kind] and [date] (null for Any time). */
 @Immutable
@@ -138,17 +143,26 @@ data class SportsLiveAgenda(val days: List<AgendaDay>, val slots: List<AgendaSlo
         /**
          * Replays by day (V2 P4, #90): Today, Yesterday, then each earlier date, newest first, and within a day
          * newest first (by time, then as listed); replays with no date close the list under Other replays.
-         * One slot per day: replays have no time-slot headers.
+         * One slot per day: replays have no time-slot headers. The replays of games saved for later ([saved], by
+         * card key, #151) come first, under Saved for later, newest first.
          */
-        fun ofReplays(rows: List<ScoreboardRow>, nowMs: Long, zone: ZoneId): SportsLiveAgenda {
+        fun ofReplays(rows: List<ScoreboardRow>, nowMs: Long, zone: ZoneId, saved: Set<String> = emptySet()): SportsLiveAgenda {
             val today = Instant.ofEpochMilli(nowMs).atZone(zone).toLocalDate()
-            val dated = rows.withIndex().filter { it.value.item.startMs != null }
-                .sortedWith(compareByDescending<IndexedValue<ScoreboardRow>> { it.value.item.startMs }.thenBy { it.index })
-                .map { it.value }
-            val undated = rows.filter { it.item.startMs == null }
             val days = ArrayList<AgendaDay>()
             val slots = ArrayList<AgendaSlot>()
             val games = ArrayList<AgendaGame>()
+            val savedRows = rows.filter { it.item.streamKey in saved }
+                .sortedByDescending { it.item.startMs ?: Long.MIN_VALUE }
+            if (savedRows.isNotEmpty()) {
+                days += AgendaDay(AgendaDayKind.SAVED, null)
+                slots += AgendaSlot(days.lastIndex, null, savedRows.size)
+                savedRows.forEach { games += AgendaGame(it, days.lastIndex, slots.lastIndex) }
+            }
+            val rest = if (savedRows.isEmpty()) rows else rows.filterNot { it.item.streamKey in saved }
+            val dated = rest.withIndex().filter { it.value.item.startMs != null }
+                .sortedWith(compareByDescending<IndexedValue<ScoreboardRow>> { it.value.item.startMs }.thenBy { it.index })
+                .map { it.value }
+            val undated = rest.filter { it.item.startMs == null }
             var lastDate: LocalDate? = null
             dated.forEach { row ->
                 // A replay dated ahead (a clock or zone slip) still reads as Today.

@@ -3796,6 +3796,15 @@
     <string name="sports_live_game_watch_replay">Watch replay</string>
     <string name="sports_live_game_following">Following %1$s</string>
     <string name="sports_live_game_reveal">Reveal score</string>
+    <!-- Spoiler protection (#151). -->
+    <string name="sports_live_game_reveal_result">Reveal result</string>
+    <string name="sports_live_watch_later">Watch later (no spoilers)</string>
+    <string name="sports_live_watch_later_toast">Saved for later: %1$s</string>
+    <string name="sports_live_watch_later_toast_line">Its score stays hidden for 7 days, until you watch or reveal it</string>
+    <string name="sports_live_reveal_result_menu">Reveal result</string>
+    <string name="sports_live_replays_saved">Saved for later</string>
+    <string name="sports_live_setting_my_teams_spoilers">Hide scores of my teams\' games until I\'ve watched</string>
+    <string name="sports_live_setting_my_teams_spoilers_subtitle">Followed teams\' games you didn\'t watch live stay spoiler-free for 7 days</string>
     <string name="sports_live_game_hidden">Score and stats are hidden</string>
     <string name="sports_live_game_hidden_reveal_note">Reveal shows the score, records, box score and highlights for this game.</string>
     <string name="sports_live_game_hidden_replay_note">Watch replay starts the game without showing the score.</string>

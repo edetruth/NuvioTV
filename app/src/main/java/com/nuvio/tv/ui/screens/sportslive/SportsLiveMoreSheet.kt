@@ -141,7 +141,10 @@ internal fun SportsLiveCardMenu(
      * list ("Stop reminding for ‹team› games"); [onToggleTeamReminder] gets its index.
      */
     teamReminders: List<Pair<String, Boolean>> = emptyList(),
-    onToggleTeamReminder: (Int) -> Unit = {}
+    onToggleTeamReminder: (Int) -> Unit = {},
+    /** "Watch later (no spoilers)" (#151), or "Reveal result" when [savedForLater]; null hides it. */
+    onWatchLater: (() -> Unit)? = null,
+    savedForLater: Boolean = false
 ) {
     var teamsOpen by remember { mutableStateOf(false) }
     SportsLiveSheet(
@@ -200,6 +203,13 @@ internal fun SportsLiveCardMenu(
             SportsLiveMenuButton(
                 text = stringResource(if (on) R.string.sports_live_stop_reminding_team else R.string.sports_live_remind_every_team, team),
                 onClick = { onToggleTeamReminder(index) },
+                modifier = first()
+            )
+        }
+        if (onWatchLater != null) {
+            SportsLiveMenuButton(
+                text = stringResource(if (savedForLater) R.string.sports_live_reveal_result_menu else R.string.sports_live_watch_later),
+                onClick = onWatchLater,
                 modifier = first()
             )
         }

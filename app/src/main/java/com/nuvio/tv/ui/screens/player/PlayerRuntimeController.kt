@@ -407,6 +407,17 @@ class PlayerRuntimeController(
                     }
                 }
         }
+        // A Sports & Live replay played to its end ends its game's spoiler protection (#151).
+        scope.launch {
+            _uiState
+                .map { it.playbackEnded }
+                .distinctUntilChanged()
+                .collect { ended ->
+                    if (ended && com.nuvio.tv.ui.screens.sportslive.SportsLiveExtraSources.isSportsPlayback(contentId)) {
+                        com.nuvio.tv.core.sportslive.SportsLivePlayedTime.shared.onFinished(contentId)
+                    }
+                }
+        }
     }
 
     internal fun consumePendingExitReason() {

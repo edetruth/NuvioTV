@@ -244,8 +244,12 @@ internal fun lineupRankOf(item: SportsLiveItem, liveScored: Boolean, bigGame: Bo
     else -> LINEUP_RANK_REST
 }
 
-/** A live game for Live Now's big-game slot (#137): in crunch time, or big by its stakes ([BigGame]). */
-internal fun isLiveBigGame(event: ScoreSnapshot): Boolean = CrunchTime.isCrunch(event) || BigGame.rate(event).isBig
+/**
+ * A live game for Live Now's big-game slot (#137): in crunch time, or big by its stakes ([BigGame]). A
+ * spoiler-protected game (#151) is placed by its stakes only: moving up for its crunch time would tell the score.
+ */
+internal fun isLiveBigGame(event: ScoreSnapshot): Boolean =
+    (!event.spoilerProtected && CrunchTime.isCrunch(event)) || BigGame.rate(event).isBig
 
 internal const val LINEUP_RANK_FOLLOWED = 0
 internal const val LINEUP_RANK_BIG_GAME = 1

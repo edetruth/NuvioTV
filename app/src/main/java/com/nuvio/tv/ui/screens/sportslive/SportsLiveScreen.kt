@@ -91,6 +91,7 @@ import com.nuvio.tv.core.sportslive.scores.TeamFollows
 import com.nuvio.tv.core.sportslive.scores.TeamPages
 import com.nuvio.tv.core.sportslive.scores.TeamRef
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
+import com.nuvio.tv.core.sportslive.scores.SpoilerProtection
 import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveKind
@@ -162,6 +163,8 @@ fun SportsLiveScreen(
     val scores by scoresViewModel.scores.collectAsStateWithLifecycle()
     val scoresMode by scoresViewModel.mode.collectAsStateWithLifecycle()
     val revealed by scoresViewModel.revealed.collectAsStateWithLifecycle()
+    // Spoiler protection (#151): the scores come stamped with it; a kept Just ended final is stamped here.
+    val protection by scoresViewModel.protection.collectAsStateWithLifecycle()
     val scoredTab = uiState.selectedTab == SportsLiveTab.LIVE_NOW || uiState.selectedTab == SportsLiveTab.UPCOMING
     TrackLiveScores(
         screenId = LiveScoresRepository.SCREEN_SECTION,
@@ -176,7 +179,7 @@ fun SportsLiveScreen(
         tracking = scoresViewModel.tracking
     )
     // Worked out once per card for each scores update (or setting / reveal change), not per recomposition.
-    val chipOf: (SportsLiveItem) -> ScoreChip? = remember(scores, scoresMode, revealed, scoredTab, uiState.justEnded) {
+    val chipOf: (SportsLiveItem) -> ScoreChip? = remember(scores, scoresMode, revealed, scoredTab, uiState.justEnded, protection) {
         val cache = HashMap<SportsLiveItem, ScoreChip?>()
         val chip: (SportsLiveItem) -> ScoreChip? = { item ->
             if (!scoredTab) {
@@ -184,7 +187,7 @@ fun SportsLiveScreen(
             } else {
                 cache.getOrPut(item) {
                     // A Just ended card keeps the final it was moved on, whatever is tracked now.
-                    val snapshot = scores[item.streamKey] ?: uiState.endedOf(item)?.event
+                    val snapshot = scores[item.streamKey] ?: uiState.endedOf(item)?.event?.let(protection::stamp)
                     ScoreChips.of(item, snapshot, scoresMode, item.streamKey in revealed)
                 }
             }
@@ -204,9 +207,6 @@ fun SportsLiveScreen(
     }
     // The list's model (#71): the Scoreboard's rows and the drawn cards, built by the view model off the main thread
     // from the scores shown here; the list draws the board once it is ready.
-    LaunchedEffect(scores, scoresMode, revealed) {
-        viewModel.setBoardScores(SportsLiveBoardScores(scores, scoresMode, revealed))
-    }
     val board by viewModel.board.collectAsStateWithLifecycle()
     // The situation line follows the score: only while the card would show its live score.
     val situationStrings = rememberGameSituationStrings()
@@ -259,6 +259,12 @@ fun SportsLiveScreen(
     val upcomingFollowed = remember(uiState.tabs) { uiState.tabs[SportsLiveTab.UPCOMING].orEmpty().filter { it.followed } }
     val upcomingFollowedRows = remember(upcomingFollowed, scores, scoresMode, revealed, uiState.nowMs) {
         if (upcomingFollowed.isEmpty()) emptyList() else scoreboardRows(upcomingFollowed, SportsLiveTab.UPCOMING, scores, scoresMode, revealed, uiState.nowMs)
+    }
+    // The board's inputs from here (#71), with the Replays of games saved for later (#151) listed first.
+    val replaysTabItems = uiState.tabs[SportsLiveTab.REPLAYS].orEmpty()
+    LaunchedEffect(scores, scoresMode, revealed, protection, replayMatches, replaysTabItems) {
+        val saved = protection.savedReplayKeys(replaysTabItems, replayMatches)
+        viewModel.setBoardScores(SportsLiveBoardScores(scores, scoresMode, revealed, protection, saved))
     }
 
     // The hover preview's one player: it plays while the preview does, and is freed the moment the
@@ -383,6 +389,8 @@ fun SportsLiveScreen(
             onSelectItem = viewModel::selectItem,
             onRefresh = { viewModel.refresh() },
             onPlay = { item ->
+                // A saved game's replay played to its end ends its protection (#151).
+                if (item.kind == SportsLiveKind.REPLAY) scoresViewModel.onReplayStarted(listOf(item) + item.alternates, replayMatches[item.streamKey])
                 // OK on a playing preview: its stream plays full screen at once (unless the stored
                 // setting lets the user choose); otherwise the best stream is looked up.
                 playViewModel.playCard(item) {
@@ -427,12 +435,13 @@ fun SportsLiveScreen(
             // Results' and Replays' Watch replay (P4): the replay plays at once under a clean title, never through
             // the addon's page or Stream screen (spoilers).
             onWatchReplay = { replay, title ->
+                scoresViewModel.onReplayStarted(listOf(replay) + replay.alternates, replayMatches[replay.streamKey])
                 previewPlayer.release()
                 playViewModel.playReplay(listOf(replay) + replay.alternates, title)
             },
             replayMatches = replayMatches,
             onOpenReplayGame = { replay, event ->
-                SportsLiveGameRequests.open(SportsLiveGameRequest(event = event, replay = replay, revealed = false, spoilerSafe = true))
+                SportsLiveGameRequests.open(sportsLiveReplayGameRequest(event, replay))
                 onOpenGame()
             },
             onOpenTeam = { ref ->
@@ -448,6 +457,7 @@ fun SportsLiveScreen(
             onPlayCatchUp = { item ->
                 // OK plays the replay at once: never the addon's page or Stream screen (spoilers).
                 previewPlayer.release()
+                scoresViewModel.onReplayStarted(item.replays, item.event)
                 playViewModel.playReplay(item.replays, catchUpTitle(context, item))
             },
             onOpenCatchUpGame = { item ->
@@ -456,7 +466,10 @@ fun SportsLiveScreen(
             },
             onMarkCatchUpWatched = catchUpViewModel::markWatched,
             onOpenAddons = onOpenAddons,
-            onHide = viewModel::hideFromLiveNow
+            onHide = viewModel::hideFromLiveNow,
+            protection = protection,
+            onSaveForLater = scoresViewModel::saveForLater,
+            onRevealResult = scoresViewModel::revealResult
         )
     }
 }
@@ -559,7 +572,11 @@ private fun SportsLiveContent(
     /** The empty card's "Sources" (#134): the addons screen. */
     onOpenAddons: () -> Unit = {},
     /** More… → Hide from Live Now (#134). */
-    onHide: (SportsLiveItem) -> Unit = {}
+    onHide: (SportsLiveItem) -> Unit = {},
+    /** Spoiler protection (#151): More… offers Watch later (no spoilers), or Reveal result on a saved game. */
+    protection: SpoilerProtection = SpoilerProtection(),
+    onSaveForLater: (ScoreSnapshot) -> Unit = {},
+    onRevealResult: (ScoreSnapshot) -> Unit = {}
 ) {
     val context = LocalContext.current
     val tabFocusRequesters = remember { SportsLiveTab.entries.associateWith { FocusRequester() } }
@@ -1082,6 +1099,23 @@ private fun SportsLiveContent(
                 menuCardKey = null
                 teamReminderTargets.getOrNull(index)?.let(onToggleTeamReminder)
             },
+            // Watch later (no spoilers) (#151): a game with its strict ESPN match, on any tab but Channels.
+            onWatchLater = game?.takeIf { !item.isChannel }?.let { event ->
+                {
+                    menuCardKey = null
+                    if (protection.isSaved(event.eventId)) {
+                        onRevealResult(event)
+                    } else {
+                        onSaveForLater(event)
+                        SportsLiveToasts.show(
+                            SportsLiveToastKind.INFO,
+                            context.getString(R.string.sports_live_watch_later_toast, heading.title),
+                            context.getString(R.string.sports_live_watch_later_toast_line)
+                        )
+                    }
+                }
+            },
+            savedForLater = game != null && protection.isSaved(game.eventId),
             // Team page ‹team› (Decision 6): from the strict ESPN game, else (no game listed yet) from the team
             // directory, for pro leagues with ESPN's team id.
             teamPages = (
@@ -1374,6 +1408,8 @@ private fun SportsLiveContent(
                 onOpenTeam = onOpenTeam,
                 liveGames = uiState.liveGameCount,
                 onEditMySports = onEditMySports,
+                onSaveForLater = onSaveForLater,
+                onRevealResult = onRevealResult,
                 modifier = Modifier.padding(top = SportsLiveTokens.Size.HeaderBottomGap)
             )
             return@Column

@@ -233,10 +233,11 @@ fun SportsLiveTeamScreen(
                                     teamId = team.teamId,
                                     mode = state.mode,
                                     revealed = state.revealed,
+                                    spoilerProtected = state.protection.protects(event),
                                     hasReplay = event.eventId in state.replays,
                                     modifier = modifier,
                                     // Under Hide until focused the row's result is showing as OK is pressed.
-                                    onClick = { openGame(event, revealed = TeamPageSpoilers.showsResult(state.mode, state.revealed, focused = true)) }
+                                    onClick = { openGame(event, revealed = TeamPageSpoilers.showsResult(state.mode, state.revealed, focused = true, spoilerProtected = state.protection.protects(event))) }
                                 )
                             }
                         }
@@ -461,7 +462,8 @@ private fun RecentRow(
     revealed: Boolean,
     hasReplay: Boolean,
     modifier: Modifier,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    spoilerProtected: Boolean = false
 ) {
     var focused by remember { mutableStateOf(false) }
     SportsLivePageRow(
@@ -478,7 +480,7 @@ private fun RecentRow(
         )
         OpponentName(event, teamId, Modifier.weight(1f))
         val result = TeamPages.resultOf(event, teamId)
-        val shown = TeamPageSpoilers.showsResult(mode, revealed, focused) && result != null
+        val shown = TeamPageSpoilers.showsResult(mode, revealed, focused, spoilerProtected) && result != null
         val win = shown && result?.outcome == TeamOutcome.WIN
         Text(
             text = if (shown && result != null) {

@@ -359,8 +359,11 @@ class SportsLiveZapViewModel internal constructor(
             val allSplit = if (list === panelList.all) split else SportsLiveEndedGames.shared.split(panelList.all, scores, nowMs, canEstimate)
             val splitFinished = allSplit.ended.keys + allSplit.finals.keys
             // A final in its grace is grouped (and chipped) as the final it is, never as live (C3).
-            val boardScores = split.scoresWithFinals(scores)
-            val grouped = groupPanelRows(split.live + split.justEnded, boardScores, scoresMode, revealed, nowMs, split.ended, logos)
+            // Spoiler protection (#151): a kept Just ended final is stamped too, as on Live Now's board.
+            val protection = liveScores.protection.value
+            val boardScores = protection.stampAll(split.scoresWithFinals(scores))
+            val ended = split.ended.mapValues { (_, game) -> game.event?.let { game.copy(event = protection.stamp(it)) } ?: game }
+            val grouped = groupPanelRows(split.live + split.justEnded, boardScores, scoresMode, revealed, nowMs, ended, logos)
             // #164: while the panel is open its order stays as it opened (rows update in place, new ones go to the end of
             // their group, gone ones stay dimmed); a new chip or two idle minutes take the fresh order. Closed: fresh.
             val open = _panelOpen.value
@@ -378,7 +381,7 @@ class SportsLiveZapViewModel internal constructor(
             }
             // The rows CH± passes over count as finished too, so the chip's count is the banner's "of N".
             val finished = splitFinished + rows.filterNot { it.zappable }.map { it.item.streamKey }
-            PanelLineup(panelList, rows, scoresMode, boardScores, split.ended, revealed, nowMs, loaded, finished)
+            PanelLineup(panelList, rows, scoresMode, boardScores, ended, revealed, nowMs, loaded, finished)
         }.flowOn(computeDispatcher)
             // A player whose sources cannot be read keeps the session's own order.
             .catch { }
@@ -1019,9 +1022,12 @@ class SportsLiveZapViewModel internal constructor(
         val item = menu.item
         val current = lineup.value
         closePanel()
+        // A replay's page is spoiler-free (#151): its result shows only on Reveal.
+        val replay = item.kind == com.nuvio.tv.domain.model.SportsLiveKind.REPLAY
         return SportsLiveGameRequest(
             event,
-            revealed = current?.mode == ScoresMode.SHOW || item.streamKey in current?.revealed.orEmpty(),
+            revealed = !replay && (current?.mode == ScoresMode.SHOW || item.streamKey in current?.revealed.orEmpty()),
+            spoilerSafe = replay,
             homeFirst = sportsLiveGameHomeFirst(item, event),
             card = item,
             section = section

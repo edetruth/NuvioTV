@@ -649,7 +649,9 @@ class SportsLiveViewModel internal constructor(
                 if (mode == ScoresMode.SHOW) {
                     whyTags = buildMap {
                         live.forEach { item ->
-                            excitementOf(item, scores[item.streamKey], excitementHistory, now)?.tag?.let { put(item.streamKey, it) }
+                            // A spoiler-protected game (#151) gets no "close game" badge either.
+                            val snapshot = scores[item.streamKey]?.takeUnless { it.spoilerProtected }
+                            excitementOf(item, snapshot, excitementHistory, now)?.tag?.let { put(item.streamKey, it) }
                         }
                     }
                 }

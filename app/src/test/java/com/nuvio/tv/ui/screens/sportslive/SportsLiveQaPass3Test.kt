@@ -138,7 +138,7 @@ class SportsLiveQaPass3Test {
 
     @Test
     fun `a bell press shows the app's toast card, and a newer press replaces it`() {
-        val alerts = SportsLiveAlerts(mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true))
+        val alerts = SportsLiveAlerts(mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true))
         val card = item("Lakers @ Celtics", NOW + HOUR)
         alerts.noticeReminder(card, on = true)
         val first = alerts.reminderNotice.value!!

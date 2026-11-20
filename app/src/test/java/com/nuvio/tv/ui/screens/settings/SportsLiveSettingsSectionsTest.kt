@@ -14,6 +14,7 @@ import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.HOME_ROW
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.HOVER_PREVIEW
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.MY_SPORTS
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.MY_TEAMS
+import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.MY_TEAMS_SPOILERS
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.OPEN_GAME
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.HIDE_UNPLAYABLE
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.PICTURE_IN_PICTURE
@@ -55,7 +56,7 @@ class SportsLiveSettingsSectionsTest {
     fun `each section holds its settings in order`() {
         assertEquals(
             listOf(
-                SCORES_AND_SPOILERS to listOf(SCORES, SCORE_DELAY),
+                SCORES_AND_SPOILERS to listOf(SCORES, SCORE_DELAY, MY_TEAMS_SPOILERS),
                 WHAT_I_FOLLOW to listOf(MY_TEAMS, MY_SPORTS),
                 ALERTS to listOf(REMIND_MY_TEAMS, SCORE_ALERTS, FULL_TIME_ALERTS, CLOSE_GAME_ALERTS, REMINDED_TEAMS),
                 PLAYING to listOf(OPEN_GAME, GAME_END, HIDE_UNPLAYABLE, PICTURE_IN_PICTURE),
@@ -78,7 +79,9 @@ class SportsLiveSettingsSectionsTest {
                 PICTURE_IN_PICTURE, SCORES, SCORE_DELAY, SCORES_STATUS, REMIND_MY_TEAMS, SCORE_ALERTS,
                 FULL_TIME_ALERTS, CLOSE_GAME_ALERTS, MY_SPORTS, MY_TEAMS, CATCH_UP_ROW, RUN_SETUP, HIDDEN, CATALOGS, HIDE_UNPLAYABLE,
                 // #161 and #154.
-                GAME_END, REMINDED_TEAMS
+                GAME_END, REMINDED_TEAMS,
+                // #151.
+                MY_TEAMS_SPOILERS
             ),
             shown.toSet()
         )
@@ -106,7 +109,7 @@ class SportsLiveSettingsSectionsTest {
     @Test
     fun `scores off greys out the delay, both score-based alerts and the catch-up row`() {
         val off = enabledIn(SportsLiveSettingsUiState(scores = ScoreSettings(ScoresMode.OFF, 0)))
-        assertEquals(SportsLiveSetting.entries.toSet() - setOf(SCORE_DELAY, SCORE_ALERTS, FULL_TIME_ALERTS, CLOSE_GAME_ALERTS, CATCH_UP_ROW), off)
+        assertEquals(SportsLiveSetting.entries.toSet() - setOf(SCORE_DELAY, MY_TEAMS_SPOILERS, SCORE_ALERTS, FULL_TIME_ALERTS, CLOSE_GAME_ALERTS, CATCH_UP_ROW), off)
     }
 
     @Test

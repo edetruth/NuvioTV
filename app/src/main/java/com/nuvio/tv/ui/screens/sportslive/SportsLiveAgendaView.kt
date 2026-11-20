@@ -71,6 +71,7 @@ internal fun agendaDayName(day: AgendaDay): String = when (day.kind) {
     AgendaDayKind.DATE -> day.date?.let { agendaDateText(it) }.orEmpty()
     AgendaDayKind.ANY_TIME -> stringResource(R.string.sports_live_agenda_any_time)
     AgendaDayKind.UNDATED -> stringResource(R.string.sports_live_replays_undated)
+    AgendaDayKind.SAVED -> stringResource(R.string.sports_live_replays_saved)
 }
 
 /** The sticky day header (V2 Upcoming): "Today  Wed 18 Nov" over a hairline; opaque, so rows scroll under it. */

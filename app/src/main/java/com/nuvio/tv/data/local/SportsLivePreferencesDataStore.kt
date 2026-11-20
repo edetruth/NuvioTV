@@ -1,5 +1,6 @@
 package com.nuvio.tv.data.local
 
+import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
@@ -20,10 +21,13 @@ import com.nuvio.tv.core.sportslive.alerts.SportsLiveAlertSettings
 import com.nuvio.tv.core.sportslive.scores.CatchUp
 import com.nuvio.tv.core.sportslive.scores.CatchUpMarks
 import com.nuvio.tv.core.sportslive.scores.MySports
+import com.nuvio.tv.core.sportslive.scores.ProtectedGame
 import com.nuvio.tv.core.sportslive.scores.ScoreDelayChoices
 import com.nuvio.tv.core.sportslive.scores.ScoreSettings
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
+import com.nuvio.tv.core.sportslive.scores.SpoilerProtection
 import com.nuvio.tv.core.sportslive.scores.SportKind
+import com.nuvio.tv.core.sync.SportsLiveSettingsSync
 import com.nuvio.tv.domain.model.CatalogOption
 import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveOverride
@@ -55,7 +59,8 @@ class SportsLivePreferencesDataStore @Inject constructor(
     // [{"name": name, "sport": sport or null}]; plain maps, like the options.
     private val followedType = object : TypeToken<List<Map<String, String?>>>() {}.type
 
-    private fun store() = factory.get(profileManager.activeProfileId.value, FEATURE)
+    /** Every change is stamped for the account sync (#141, [SportsLiveSettingsSync.stamp]). */
+    private fun store(): DataStore<Preferences> = SyncStampedStore(factory.get(profileManager.activeProfileId.value, FEATURE)) { nowMs() }
 
     /** The clock reminders are read against (games started over 6 h ago are dropped); tests set it. */
     internal var nowMs: () -> Long = System::currentTimeMillis
@@ -93,6 +98,9 @@ class SportsLivePreferencesDataStore @Inject constructor(
     private val remindedTeamsKey = stringPreferencesKey("sports_live_reminded_teams")
     // "When a game ends" (#161): a [SportsLiveGameEndAction] name.
     private val gameEndActionKey = stringPreferencesKey("sports_live_game_end_action")
+    // Spoiler protection (#151): games saved for later, and "Hide scores of my teams' games until I've watched".
+    private val watchLaterKey = stringPreferencesKey(SportsLiveSettingsSync.WATCH_LATER)
+    private val myTeamsSpoilersKey = booleanPreferencesKey("sports_live_my_teams_spoilers")
 
     // [{"keys": source keys joined by REMINDER_KEY_SEPARATOR, "title": ..., "home": ..., "away": ..., "start": "epoch ms"}]; plain maps, like the follows.
     private val remindersType = object : TypeToken<List<Map<String, String?>>>() {}.type
@@ -198,6 +206,38 @@ class SportsLivePreferencesDataStore @Inject constructor(
         val store = store()
         if (retiredKeys.none { it in store.data.first() }) return
         store.edit { prefs -> retiredKeys.forEach { prefs.remove(it) } }
+    }
+
+    /**
+     * Spoiler protection (#151) of the active profile: the games saved for later (and recently ended ones),
+     * "Hide scores of my teams' games until I've watched" (off by default) and the followed teams it reads.
+     */
+    val spoilerProtection: Flow<SpoilerProtection> = profileManager.activeProfileId.flatMapLatest { pid ->
+        factory.get(pid, FEATURE).data.map { prefs ->
+            SpoilerProtection(
+                games = decodeProtected(prefs[watchLaterKey]),
+                myTeams = prefs[myTeamsSpoilersKey] ?: false,
+                followed = decodeFollowed(prefs[followedTeamsKey]),
+                nowMs = nowMs()
+            )
+        }
+    }
+
+    /** "Hide scores of my teams' games until I've watched" (#151); off by default. */
+    val hideMyTeamsScores: Flow<Boolean> = profileManager.activeProfileId.flatMapLatest { pid ->
+        factory.get(pid, FEATURE).data.map { it[myTeamsSpoilersKey] ?: false }
+    }
+
+    suspend fun setHideMyTeamsScores(v: Boolean) {
+        store().edit { it[myTeamsSpoilersKey] = v }
+    }
+
+    /** Saves [change] of the protected games in one edit. */
+    suspend fun updateProtectedGames(change: (List<ProtectedGame>) -> List<ProtectedGame>) {
+        store().edit { prefs ->
+            val next = change(decodeProtected(prefs[watchLaterKey]))
+            if (next.isEmpty()) prefs.remove(watchLaterKey) else prefs[watchLaterKey] = encodeProtected(next)
+        }
     }
 
     /** Settings → Sports & Live → Alerts (#42, #44): each on by default. */
@@ -516,6 +556,38 @@ class SportsLivePreferencesDataStore @Inject constructor(
         }.getOrDefault(emptyList())
     }
 
+    // [{"eventId", "home", "away", "start", "saved", "ended"}]: numbers as text, plain maps like the follows.
+    private fun encodeProtected(games: List<ProtectedGame>): String =
+        gson.toJson(
+            games.map {
+                mapOf(
+                    "eventId" to it.eventId,
+                    "home" to it.home,
+                    "away" to it.away,
+                    "start" to it.startMs?.toString(),
+                    "saved" to it.savedAtMs.toString(),
+                    "ended" to it.endedAtMs?.toString()
+                )
+            }
+        )
+
+    private fun decodeProtected(json: String?): List<ProtectedGame> {
+        if (json.isNullOrBlank()) return emptyList()
+        return runCatching {
+            gson.fromJson<List<Map<String, String?>?>?>(json, followedType).orEmpty().mapNotNull { stored ->
+                val id = stored?.get("eventId")?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                ProtectedGame(
+                    eventId = id,
+                    home = stored["home"]?.takeIf { it.isNotBlank() },
+                    away = stored["away"]?.takeIf { it.isNotBlank() },
+                    startMs = stored["start"]?.toLongOrNull(),
+                    savedAtMs = stored["saved"]?.toLongOrNull() ?: return@mapNotNull null,
+                    endedAtMs = stored["ended"]?.toLongOrNull()
+                )
+            }
+        }.getOrDefault(emptyList())
+    }
+
     private fun decodeOptions(json: String?): Map<String, CatalogOption> {
         if (json.isNullOrBlank()) return emptyMap()
         return runCatching {
@@ -568,6 +640,17 @@ fun firstRunSetup(done: Boolean, changedMySports: Boolean, followsTeam: Boolean)
     done -> FirstRunSetup.NONE
     changedMySports || followsTeam -> FirstRunSetup.MARK_DONE
     else -> FirstRunSetup.SHOW
+}
+
+/** [delegate] with each change stamped for the account sync (#141): the times its merge compares. */
+private class SyncStampedStore(
+    private val delegate: DataStore<Preferences>,
+    private val now: () -> Long
+) : DataStore<Preferences> {
+    override val data: Flow<Preferences> get() = delegate.data
+
+    override suspend fun updateData(transform: suspend (t: Preferences) -> Preferences): Preferences =
+        delegate.updateData { before -> SportsLiveSettingsSync.stamp(before, transform(before), now()) }
 }
 
 /** Between a stored reminder's source keys (a unit separator: never in an addon or item id). */

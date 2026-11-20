@@ -19,6 +19,7 @@ import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.ScoreTeam
 import com.nuvio.tv.core.sportslive.scores.ScoreState
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
+import com.nuvio.tv.core.sportslive.scores.SpoilerProtectionStore
 import com.nuvio.tv.core.sportslive.scores.TeamFollows
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import com.nuvio.tv.domain.model.ClaimedCatalog
@@ -74,6 +75,8 @@ class SportsLiveAlerts @Inject constructor(
     private val repo: SportsLiveRepository,
     private val prefs: SportsLivePreferencesDataStore,
     private val liveScores: LiveScoresRepository,
+    /** Followed teams' games watched live are not spoiler-protected afterwards (#151). */
+    private val spoilers: SpoilerProtectionStore,
     /** Probes a game's links at kickoff (#162); null (tests): every kickoff fires unchecked. */
     private val kickoffProbe: SportsLiveKickoffProbe? = null
 ) {
@@ -245,7 +248,8 @@ class SportsLiveAlerts @Inject constructor(
                     reminderLoadAsked = true
                     launch { loadQuietly() }
                 }
-                evaluate(inputs, scores, nowMs)
+                val watchedLive = evaluate(inputs, scores, nowMs)
+                if (watchedLive.isNotEmpty()) launch { spoilers.onWatchedLive(watchedLive) }
                 evaluateCrunch(inputs, crunchCards, scores, nowMs)
             }
         } finally {
@@ -286,7 +290,8 @@ class SportsLiveAlerts @Inject constructor(
         val mySports: MySports
     )
 
-    private fun evaluate(inputs: Inputs, scores: Map<String, ScoreSnapshot>, nowMs: Long) {
+    /** Queues the alerts due; returns the followed teams' live games playing now (watched live, #151). */
+    private fun evaluate(inputs: Inputs, scores: Map<String, ScoreSnapshot>, nowMs: Long): List<ScoreSnapshot> {
         val reminders = inputs.reminders.copy(remindMyTeams = inputs.settings.remindMyTeams)
         val games = inputs.cards.mapNotNull { item ->
             val event = if (inputs.mode == ScoresMode.OFF) null else ScoreChips.matchedEvent(item, scores[item.streamKey])
@@ -296,11 +301,17 @@ class SportsLiveAlerts @Inject constructor(
             AlertGame(item, event, reminded, event?.let { followedSides(inputs.followed, it) }.orEmpty())
         }
         val raised = synchronized(lock) { engine.update(nowMs, games, inputs.settings, inputs.mode, inputs.watching) }
-        if (raised.isEmpty()) return
-        // A first kickoff prompt waits for a live link (#162); a re-ask after Later shows as it comes.
-        val (held, shown) = raised.partition { it is SportsLiveAlert.Kickoff && SportsLiveAlerts.holdsFirst(it) }
-        if (held.isNotEmpty()) holdsScope.launch { holdsLock.withLock { held.forEach { holds.hold(it as SportsLiveAlert.Kickoff) } } }
-        if (shown.isNotEmpty()) enqueue(shown, nowMs)
+        if (raised.isNotEmpty()) {
+            // A first kickoff prompt waits for a live link (#162); a re-ask after Later shows as it comes.
+            val (held, shown) = raised.partition { it is SportsLiveAlert.Kickoff && SportsLiveAlerts.holdsFirst(it) }
+            if (held.isNotEmpty()) holdsScope.launch { holdsLock.withLock { held.forEach { holds.hold(it as SportsLiveAlert.Kickoff) } } }
+            if (shown.isNotEmpty()) enqueue(shown, nowMs)
+        }
+        return games.mapNotNull { game ->
+            game.snapshot?.takeIf {
+                it.state == ScoreState.IN && game.followedSides.isNotEmpty() && SportsLiveAlertEngine.isPlaying(game.item, inputs.watching)
+            }
+        }
     }
 
     /**
@@ -315,7 +326,7 @@ class SportsLiveAlerts @Inject constructor(
         if (watching.streamStartedAtMs?.let { nowMs - it < SportsLiveAlertEngine.STREAM_SETTLE_MS } == true) return
         val byKey = HashMap<String, SportsLiveItem>()
         val candidates = tracked.mapNotNull { item ->
-            val event = ScoreChips.matchedEvent(item, scores[item.streamKey])?.takeIf { it.individual == null && inputs.mySports.includes(it) }
+            val event = ScoreChips.matchedEvent(item, scores[item.streamKey])?.takeIf { it.individual == null && !it.spoilerProtected && inputs.mySports.includes(it) }
                 ?: return@mapNotNull null
             byKey[item.streamKey] = item
             CrunchCandidate(item.streamKey, event, BigGame.rate(event, followed = item.followed).score, SportsLiveAlertEngine.isPlaying(item, watching))

@@ -60,6 +60,7 @@ class SportsLiveResultsTodayTest {
         every { scoreSettings } returns settings
         every { followedTeams } returns followed
         every { mySports } returns this@SportsLiveResultsTodayTest.mySports
+        every { spoilerProtection } returns kotlinx.coroutines.flow.flowOf(com.nuvio.tv.core.sportslive.scores.SpoilerProtection())
     }
     private val base = Instant.parse("2026-11-16T22:00:00Z").toEpochMilli()
     private val today = LocalDate.of(2026, 11, 16)

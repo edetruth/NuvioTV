@@ -55,6 +55,8 @@ object ScoreChips {
         val (first, second) = orderedSides(item) ?: return null
         val firstIsHome = ScoreMatcher.firstIsHome(first, second, snapshot) ?: return null
         val score = scoreOf(snapshot, firstIsHome)
+        // Spoiler-protected (#151): hidden whatever the setting, and a focus never reveals it.
+        if (snapshot.spoilerProtected && snapshot.state in HIDDEN_STATES) return ScoreChip.Hidden
         // Hidden: one chip for scheduled, live and finished games alike, whatever the feed has yet.
         if (mode == ScoresMode.HIDE_UNTIL_FOCUSED && !revealed && snapshot.state in HIDDEN_STATES) return ScoreChip.Hidden
         return when (snapshot.state) {

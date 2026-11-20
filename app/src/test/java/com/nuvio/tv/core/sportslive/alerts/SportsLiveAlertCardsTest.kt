@@ -361,7 +361,7 @@ class SportsLiveAlertCardsTest {
 
     @Test
     fun `toasts raised together share one card, a later one joins it, and closing it shows the next`() {
-        val alerts = SportsLiveAlerts(mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true))
+        val alerts = SportsLiveAlerts(mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true))
         val now = System.currentTimeMillis()
         alerts.enqueue(listOf(score(pacers), score(lakers)), now)
         val card = alerts.current.value!!

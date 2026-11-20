@@ -161,7 +161,8 @@ internal fun scoreboardRowOf(
         },
         tennisRound = tennisMatch?.title?.takeIf { it.isNotBlank() },
         leagueTag = tennisMatch?.let { event!!.league.league.uppercase() },
-        closeGame = group == ScoreboardGroup.LIVE && !estimate && event != null && CrunchTime.isCrunch(event)
+        // Never for a spoiler-protected game (#151): "close game" tells how it is going.
+        closeGame = group == ScoreboardGroup.LIVE && !estimate && event != null && !event.spoilerProtected && CrunchTime.isCrunch(event)
     )
 }
 

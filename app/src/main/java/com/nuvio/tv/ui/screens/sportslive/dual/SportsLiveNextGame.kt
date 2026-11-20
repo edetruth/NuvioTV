@@ -36,7 +36,8 @@ internal object SportsLiveNextGame {
         val forward = forwardFrom(ended, lineup, left)
         forward.firstOrNull { it.followed }?.let { return it }
         val rated = forward.mapNotNull { item ->
-            val event = ScoreChips.matchedEvent(item, scores[item.streamKey]) ?: return@mapNotNull null
+            // A spoiler-protected game (#151) is never picked for how close it is.
+            val event = ScoreChips.matchedEvent(item, scores[item.streamKey])?.takeUnless { it.spoilerProtected } ?: return@mapNotNull null
             val score = LiveExcitement.rate(event)?.score ?: return@mapNotNull null
             if (score < BIG_GAME_MIN) null else Triple(item, event, score)
         }

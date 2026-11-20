@@ -8,6 +8,7 @@ import com.nuvio.tv.core.sportslive.scores.ScoreCard
 import com.nuvio.tv.core.sportslive.scores.ScoreChips
 import com.nuvio.tv.core.sportslive.scores.ScoreMatcher
 import com.nuvio.tv.core.sportslive.scores.ScoreSettings
+import com.nuvio.tv.core.sportslive.scores.SpoilerProtection
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.core.sportslive.scores.TeamFollows
@@ -33,6 +34,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -69,7 +71,9 @@ data class SportsLiveTeamUiState(
     /** The strict replay match of each of the last results, by event id (the Replay pill). */
     val replays: Map<String, SportsLiveItem> = emptyMap(),
     /** The card of each upcoming game (strict match), by event id: Watch and Remind me. */
-    val cards: Map<String, SportsLiveItem> = emptyMap()
+    val cards: Map<String, SportsLiveItem> = emptyMap(),
+    /** Spoiler protection (#151): a protected game's result row stays hidden. */
+    val protection: SpoilerProtection = SpoilerProtection()
 ) {
     /** Record, standing, upcoming games and leaders (decision 5: shown under Hide until focused). */
     val showsRecord: Boolean get() = TeamPageSpoilers.showsRecord(mode, revealed)
@@ -96,7 +100,8 @@ class SportsLiveTeamViewModel internal constructor(
     items: Flow<List<SportsLiveItem>>,
     private val now: () -> Long,
     /** Where the replay and card matching runs: off the main thread in the app (#107). */
-    matchContext: CoroutineContext = EmptyCoroutineContext
+    matchContext: CoroutineContext = EmptyCoroutineContext,
+    protection: Flow<SpoilerProtection> = flowOf(SpoilerProtection())
 ) : ViewModel() {
 
     @Inject
@@ -117,7 +122,8 @@ class SportsLiveTeamViewModel internal constructor(
             load?.items.orEmpty().filter { it.catalogKey in keys }
         },
         now = System::currentTimeMillis,
-        matchContext = Dispatchers.Default
+        matchContext = Dispatchers.Default,
+        protection = prefs.spoilerProtection
     )
 
     private data class Page(
@@ -132,7 +138,7 @@ class SportsLiveTeamViewModel internal constructor(
     private val visible = MutableStateFlow(false)
     private val revealRequested = MutableStateFlow(false)
 
-    val uiState: StateFlow<SportsLiveTeamUiState> = combine(page, followedTeams, items) { page, followed, items ->
+    val uiState: StateFlow<SportsLiveTeamUiState> = combine(page, followedTeams, items, protection) { page, followed, items, protection ->
         val team = request?.team
         val isFollowed = team != null && TeamFollows.followersOf(followed, team.event, team.team).isNotEmpty()
         val data = page.data
@@ -146,7 +152,8 @@ class SportsLiveTeamViewModel internal constructor(
             revealed = page.revealed,
             followed = isFollowed,
             replays = data?.let { TeamPages.replaysFor(it.recent, SportsLiveItemBucketer.bucketTab(items, SportsLiveTab.REPLAYS, nowMs), nowMs) }.orEmpty(),
-            cards = data?.let { teamPageCards(it.upcoming, items, isFollowed, nowMs) }.orEmpty()
+            cards = data?.let { teamPageCards(it.upcoming, items, isFollowed, nowMs) }.orEmpty(),
+            protection = protection
         )
     }.flowOn(matchContext).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SportsLiveTeamUiState(team = request?.team))
 

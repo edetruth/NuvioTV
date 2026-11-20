@@ -1,5 +1,9 @@
 package com.nuvio.tv.core.sportslive
 
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
+
 /**
  * How long each Sports & Live content id has actually been playing in the full player this process
  * (#58: a catch-up replay played 2+ min counts as watched, wherever it was started). The player reports
@@ -16,6 +20,16 @@ class SportsLivePlayedTime(private val now: () -> Long) {
         if (started != null) playedMs[contentId] = (playedMs[contentId] ?: 0L) + (now() - started).coerceAtLeast(0L)
         if (playing) playingSince[contentId] = now()
         if (playedMs.size > MAX_ENTRIES) playedMs.keys.firstOrNull()?.let(playedMs::remove)
+    }
+
+    private val finishedFlow = MutableSharedFlow<String>(extraBufferCapacity = 16)
+
+    /** Content ids the full player played to their natural end (#151: a saved game's replay ends its protection). */
+    val finished: SharedFlow<String> = finishedFlow.asSharedFlow()
+
+    /** The player reached [contentId]'s natural end. */
+    fun onFinished(contentId: String?) {
+        if (!contentId.isNullOrEmpty()) finishedFlow.tryEmit(contentId)
     }
 
     /** [contentId]'s playing time so far, the running stretch included. */

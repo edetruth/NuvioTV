@@ -1,6 +1,8 @@
 package com.nuvio.tv.ui.screens.sportslive
 
 import com.nuvio.tv.core.sportslive.GameStatusText
+import com.nuvio.tv.core.sportslive.SportsLiveToastKind
+import com.nuvio.tv.core.sportslive.SportsLiveToasts
 import android.view.KeyEvent as AndroidKeyEvent
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -57,6 +59,7 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -76,6 +79,7 @@ import com.nuvio.tv.core.sportslive.scores.ResultDay
 import com.nuvio.tv.core.sportslive.scores.ResultRow
 import com.nuvio.tv.core.sportslive.scores.ScoreSide
 import com.nuvio.tv.core.sportslive.scores.RankDisplay
+import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.ScoreTeam
 import com.nuvio.tv.core.sportslive.scores.SportsResults
 import com.nuvio.tv.core.sportslive.scores.TeamPages
@@ -153,8 +157,12 @@ internal fun SportsLiveResultsView(
     /** The stage's first button: Right from a row, and the header controls' Down while [onStageShown] says it is drawn. */
     stageFocusRequester: FocusRequester = remember { FocusRequester() },
     onStageShown: (Boolean) -> Unit = {},
+    /** More… → Watch later (no spoilers) (#151); Reveal result on a game already saved. */
+    onSaveForLater: (ScoreSnapshot) -> Unit = {},
+    onRevealResult: (ScoreSnapshot) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val liveNowFocusRequester = remember { FocusRequester() }
     val ready = state.status == ResultsStatus.READY
     // Today: games being played are not listed, only counted on a line that jumps to Live Now.
@@ -267,6 +275,21 @@ internal fun SportsLiveResultsView(
                 onOpen(row)
             },
             followingLabel = true,
+            // Watch later (no spoilers) (#151): the row's score hides at once, here and everywhere.
+            onWatchLater = {
+                menuRowKey = null
+                if (state.protection.isSaved(row.event.eventId)) {
+                    onRevealResult(row.event)
+                } else {
+                    onSaveForLater(row.event)
+                    SportsLiveToasts.show(
+                        SportsLiveToastKind.INFO,
+                        context.getString(R.string.sports_live_watch_later_toast, context.getString(R.string.sports_live_results_menu_title, row.event.away.listName, row.event.home.listName)),
+                        context.getString(R.string.sports_live_watch_later_toast_line)
+                    )
+                }
+            },
+            savedForLater = state.protection.isSaved(row.event.eventId),
             // Away first, as the row lists them.
             teamPages = TeamPages.refsOf(row.event, homeFirst = false).map { ref ->
                 ref.team.listName to {
