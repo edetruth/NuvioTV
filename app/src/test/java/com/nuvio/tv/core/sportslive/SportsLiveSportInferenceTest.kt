@@ -103,9 +103,17 @@ class SportsLiveSportInferenceTest {
 
     @Test
     fun `a name two leagues know infers nothing`() {
-        // Rangers play in the NHL and in MLB: never a guess.
+        // Rangers play in the NHL and in MLB: never a guess by one side.
+        assertNull(SportsLiveSportInference.leagueOf(card("Rangers vs Kings"), full))
+        // Only the NHL holds both sides: My sports places the game there, and its tag says so (TV report #5).
+        assertEquals("NHL", SportsLiveSportInference.infer(card("Rangers vs Kings"), full).sport)
+        // A pair two leagues both hold stays untagged.
+        val twice = directory(
+            EspnLeagueMap.NHL to nhl,
+            EspnLeagueMap.MLB to mlb + team("Kansas City Kings", "Kings", "Kansas City", "KCK")
+        )
         val item = card("Rangers vs Kings")
-        assertSame(item, SportsLiveSportInference.infer(item, full))
+        assertSame(item, SportsLiveSportInference.infer(item, twice))
     }
 
     @Test
@@ -354,5 +362,52 @@ class SportsLiveSportInferenceTest {
         val dir = directory(EspnLeagueMap.NBA to nba, EspnLeagueMap.COLLEGE_BASKETBALL to listOf(pitt, cmu))
         val item = card("Pittsburgh vs Central Michigan", sport = "Basketball")
         assertEquals(listOf(EspnLeagueMap.COLLEGE_BASKETBALL), SportsLiveMySportsScope.directoryLeaguesOf(item, dir))
+    }
+
+    // ---- One classification for My sports and the row tag (TV report #5) ----
+
+    private val bundesliga = listOf(
+        team("Bayern Munich", "Bayern", "Bayern Munich", "MUN"),
+        team("FC Cologne", "Cologne", "FC Cologne", "KOE"),
+        team("Bayer Leverkusen", "Leverkusen", "Bayer Leverkusen", "B04")
+    )
+
+    @Test
+    fun `an untagged Bayern vs Koln gets the Bundesliga tag even with a list not loaded`() {
+        // Only the Bundesliga list loaded: the strict rule (every list loaded) infers nothing, My sports still places it.
+        val dir = TeamDirectory().apply { put(EspnLeague("soccer", "ger.1"), bundesliga, 0L) }
+        for (name in listOf("Bayern München vs 1. FC Köln", "FC Bayern vs Koln", "Bayern Munich vs FC Cologne", "Bayern vs Köln")) {
+            val item = card(name)
+            assertEquals(name, listOf(EspnLeague("soccer", "ger.1")), SportsLiveMySportsScope.directoryLeaguesOf(item, dir))
+            val inferred = SportsLiveSportInference.infer(item, dir)
+            assertEquals(name, "Bundesliga", inferred.sport)
+            assertEquals(name, listOf(EspnLeague("soccer", "ger.1")), EspnLeagueMap.leaguesFor(inferred))
+            assertEquals(name, "BUNDES", SportsLiveTags.short("BUNDESLIGA", SportsLiveSportKind.tagOf(inferred)))
+        }
+    }
+
+    @Test
+    fun `every game My sports places in one league shows that league's tag`() {
+        val dir = directory(
+            EspnLeagueMap.NHL to nhl, EspnLeagueMap.MLB to mlb, EspnLeague("soccer", "bra.1") to bra,
+            EspnLeague("soccer", "ger.1") to bundesliga, EspnLeagueMap.NBA to nba
+        )
+        val names = listOf(
+            "Devils v Canadiens", "Rangers vs Kings", "Flamengo v Athletico", "Bayern vs Köln", "Celtics vs Heat",
+            "Rangers vs Royals", "Bayer Leverkusen vs Bayern Munich"
+        )
+        for (name in names) {
+            val item = card(name)
+            val placed = SportsLiveMySportsScope.directoryLeaguesOf(item, dir).singleOrNull() ?: continue
+            val tag = SportsLiveSportInference.LEAGUES.first { it.first == placed }.second
+            assertEquals(name, tag, SportsLiveSportInference.infer(item, dir).sport)
+        }
+    }
+
+    @Test
+    fun `a women's card is never tagged a men's league by its teams`() {
+        val dir = TeamDirectory().apply { put(EspnLeague("soccer", "ger.1"), bundesliga, 0L) }
+        val item = card("Bayern vs Köln", genres = listOf("Women's"))
+        assertSame(item, SportsLiveSportInference.infer(item, dir))
     }
 }

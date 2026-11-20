@@ -1,5 +1,6 @@
 package com.nuvio.tv.core.sportslive
 
+import com.nuvio.tv.core.sportslive.identify.SportsLiveTeamIdentity
 import com.nuvio.tv.core.sportslive.scores.EspnLeague
 import com.nuvio.tv.core.sportslive.scores.EspnLeagueMap
 import com.nuvio.tv.core.sportslive.scores.TeamDirectory
@@ -152,9 +153,25 @@ object SportsLiveSportInference {
     fun infer(item: SportsLiveItem, directory: TeamDirectory): SportsLiveItem {
         // Two schools on a bare "Basketball" card whose gender is not known: the neutral college tag, both college feeds.
         collegeLeaguesOf(item, directory)?.takeIf { it.size > 1 }?.let { return item.copy(sport = EspnLeagueMap.COLLEGE_BASKETBALL_EITHER) }
-        val league = leagueOf(item, directory) ?: return item
+        val league = leagueOf(item, directory) ?: heldLeague(item, directory) ?: return item
         // The league's tag ("NHL", "NCAAM"), never the generic sport word.
         val sport = (LEAGUES + COLLEGE).first { it.first == league }.second
         return item.copy(sport = sport)
+    }
+
+    /**
+     * The one loaded league whose list holds both teams of a game no source gives a sport (TV report #5: "Bayern vs
+     * Köln", untagged): the league My sports already places it in ([SportsLiveMySportsScope.directoryLeaguesOf]), so
+     * its row shows that league's tag and routes to its feed, one classification for both. Only a league with a tag
+     * here ([LEAGUES], [COLLEGE]); a card that says women's only into a women's league. The score still needs both
+     * teams on that feed at the card's time ([com.nuvio.tv.core.sportslive.scores.ScoreMatcher]).
+     */
+    internal fun heldLeague(item: SportsLiveItem, directory: TeamDirectory): EspnLeague? {
+        if (item.isChannel || item.kind == SportsLiveKind.CHANNELS || item.teams == null) return null
+        if (!SportsLiveTeamIdentity.sportUnknown(item)) return null
+        val (first, second) = SportsLiveTeams.writtenOrder(item.meta.name) ?: return null
+        val league = directory.leaguesHolding(first, second).singleOrNull() ?: return null
+        if (EspnLeagueMap.saysWomen(item) && league !in EspnLeagueMap.WOMEN_FEEDS) return null
+        return league.takeIf { held -> (LEAGUES + COLLEGE).any { it.first == held } }
     }
 }
