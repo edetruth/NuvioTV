@@ -4241,4 +4241,38 @@
         <item quantity="other">%1$d streams</item>
     </plurals>
     <string name="sports_live_home_see_all_live">%1$d live in Sports &amp; Live</string>
+    <!-- #161 game ends, #162 kickoff waits for a live stream, #154 reminder-only teams -->
+    <string name="sports_live_end_game_over">Game over</string>
+    <string name="sports_live_end_final_score">Final · %1$s %2$d–%3$d %4$s</string>
+    <string name="sports_live_end_up_next">UP NEXT</string>
+    <string name="sports_live_end_switching_in">Switching in %1$d s · any key to stop</string>
+    <string name="sports_live_end_ok_to_switch">OK to switch</string>
+    <string name="sports_live_end_nothing_live">Nothing else live</string>
+    <string name="sports_live_end_nothing_live_next">Nothing else live · Next: %1$s %2$s</string>
+    <string name="sports_live_end_watch_next">Watch next</string>
+    <string name="sports_live_end_box_score">Box score</string>
+    <string name="sports_live_end_stay">Stay</string>
+    <string name="sports_live_end_staying">Staying for the postgame</string>
+    <string name="sports_live_setting_game_end">When a game ends</string>
+    <string name="sports_live_setting_game_end_help">What the player does when the game you watch ends: move to the next live game after 10 s, ask, or stay</string>
+    <string name="sports_live_game_end_move">Move to the next game</string>
+    <string name="sports_live_game_end_ask">Ask</string>
+    <string name="sports_live_game_end_stay">Stay</string>
+    <string name="sports_live_waiting_title">Waiting for the stream to start…</string>
+    <string name="sports_live_waiting_starts">Starts %1$s</string>
+    <string name="sports_live_waiting_checking">Checking every %1$d s</string>
+    <string name="sports_live_alert_no_stream_yet">NO STREAM YET</string>
+    <string name="sports_live_alert_no_stream_line">Started, but no stream is live yet</string>
+    <string name="sports_live_alert_remind_in_10">Remind me in 10 min</string>
+    <string name="sports_live_alert_dismiss">Dismiss</string>
+    <string name="sports_live_alert_hint_both">▲ Both</string>
+    <string name="sports_live_alert_both_button">▲ Both</string>
+    <string name="sports_live_remind_every_team">Remind me for every %1$s game</string>
+    <string name="sports_live_stop_reminding_team">Stop reminding for %1$s games</string>
+    <string name="sports_live_setting_reminded_teams">Teams I\'m reminded about</string>
+    <string name="sports_live_setting_reminded_teams_help">A Watch now? prompt at the start of each of their games, with no follow or score alerts. Add a team from a game\'s More… menu</string>
+    <string name="sports_live_setting_reminded_teams_empty">Add a team from a game\'s More… menu: Remind me for every game</string>
+    <string name="sports_live_setting_reminded_teams_none">No teams yet</string>
+    <string name="sports_live_setting_reminded_team_help">OK stops the reminders for this team\'s games</string>
+    <string name="sports_live_setting_reminded_team_remove">Remove</string>
 </resources>

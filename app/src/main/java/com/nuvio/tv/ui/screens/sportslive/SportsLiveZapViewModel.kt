@@ -32,7 +32,13 @@ import com.nuvio.tv.R
 import com.nuvio.tv.core.debrid.DirectDebridResolver
 import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.core.sportslive.EndedGame
-import com.nuvio.tv.core.sportslive.FullTimeToast
+import com.nuvio.tv.core.sportslive.GameEndReason
+import com.nuvio.tv.core.sportslive.SportsLiveEndCountdown
+import com.nuvio.tv.core.sportslive.SportsLiveGameEndAction
+import com.nuvio.tv.core.sportslive.SportsLiveGameWatch
+import com.nuvio.tv.core.sportslive.alerts.GameReminders
+import com.nuvio.tv.core.sportslive.alerts.SportsLiveAlerts
+import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveNextGame
 import com.nuvio.tv.core.sportslive.scores.ScoreChips
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.SportsLiveEndedGames
@@ -79,7 +85,9 @@ import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -133,7 +141,13 @@ class SportsLiveZapViewModel internal constructor(
     // My sports (#146): the panel and CH+/CH- list only its games, unless the panel's All sports is picked.
     private val mySports: Flow<MySports> = flowOf(MySports.DEFAULT),
     // Games tried and failed this session (#138 follow-up): Next live game and the CH± auto-skip never go back to one.
-    private val tried: SportsLiveTriedGames = SportsLiveTriedGames.shared
+    private val tried: SportsLiveTriedGames = SportsLiveTriedGames.shared,
+    // "When a game ends" (#161): Move to the next game, Ask, or Stay.
+    private val gameEndAction: Flow<SportsLiveGameEndAction> = flowOf(SportsLiveGameEndAction.DEFAULT),
+    // The nothing-live state's Remind me on the upcoming game (#161): reminded now?
+    private val toggleReminder: suspend (SportsLiveItem) -> Boolean = { false },
+    // What every sports player knows about its game (#161): its snapshot, and a stream stopping at the game's end.
+    private val gameWatch: SportsLiveGameWatch = SportsLiveGameWatch.shared
 ) : ViewModel() {
 
     @Inject constructor(
@@ -147,7 +161,11 @@ class SportsLiveZapViewModel internal constructor(
         prefs: SportsLivePreferencesDataStore? = null
     ) : this(
         savedStateHandle, resolver, directDebridResolver, profileManager, repo, liveScores, Dispatchers.Default,
-        mySports = prefs?.mySports ?: flowOf(MySports.DEFAULT)
+        mySports = prefs?.mySports ?: flowOf(MySports.DEFAULT),
+        gameEndAction = prefs?.gameEndAction ?: flowOf(SportsLiveGameEndAction.DEFAULT),
+        toggleReminder = { item ->
+            prefs?.updateReminders { GameReminders.toggle(it, item, System.currentTimeMillis()) }?.isReminded(item) == true
+        }
     )
 
     private val contentId: String? = savedStateHandle.get<String>("contentId").also { id ->
@@ -430,27 +448,37 @@ class SportsLiveZapViewModel internal constructor(
     // ESPN's delayed view showed the game playing in play: only then may it say it ended here.
     private var nowSeenLive = false
 
-    private val _fullTime = MutableStateFlow<FullTimeToast?>(null)
+    // The Scores setting as the game playing was last scored: the end card's title follows it.
+    @Volatile
+    private var nowMode: ScoresMode? = null
+
+    // "When a game ends" as last read (#161).
+    @Volatile
+    private var endAction: SportsLiveGameEndAction = SportsLiveGameEndAction.DEFAULT
+
+    private val _endCard = MutableStateFlow<SportsLiveEndCard?>(null)
 
     /**
-     * "Full time · ‹score› · Stay for postgame / Next live game →" (#60) when ESPN's delayed view says the
-     * game playing is over; the score under Show only, nothing under Off. The overlay shows it when
-     * nothing else is up and says so ([onFullTimeVisible]): only then is the game's full time claimed
-     * ([SportsLiveFullTimeAnnouncements], shared with the followed-team alerts, #42) and the toast stays
-     * [FULL_TIME_TOAST_MS]. One never shown within [FULL_TIME_PENDING_MS] is dropped unclaimed.
+     * The end-of-game card (#161), one end-of-game experience in place of the full-time toast (#60): raised
+     * when ESPN's delayed view says the game playing is over, or when its stream stopped as the game ended
+     * ([SportsLiveGameWatch.ends]: the recovery ladder never runs then). The overlay shows it when nothing
+     * else is up and says so ([onEndCardVisible]): only then is an ESPN final claimed
+     * ([SportsLiveFullTimeAnnouncements], shared with the followed-team alerts, #42), and only then does its
+     * 10 s Up next countdown start. Under Stay, while the stream still plays, it is a toast only.
      */
-    val fullTime: StateFlow<FullTimeToast?> = _fullTime.asStateFlow()
-    private var fullTimeJob: Job? = null
+    val endCard: StateFlow<SportsLiveEndCard?> = _endCard.asStateFlow()
+    private var endJob: Job? = null
+    private val countdown = SportsLiveEndCountdown()
 
-    // The player is started: only then is the game playing scored and its toast looked for.
+    // The player is started: only then is the game playing scored and its end looked for.
     private val playerStarted = MutableStateFlow(false)
 
-    // The toast's game's full time was claimed (it showed), and the toast is on screen now.
-    private var fullTimeClaimed = false
-    private var fullTimeVisible = false
+    // The card's ESPN final was claimed (it showed), and the card is on screen now.
+    private var endClaimed = false
+    private var endVisible = false
 
-    // The event a toast was raised for: one toast per game per player.
-    private var fullTimeEventId: String? = null
+    // The ESPN event a card was raised for: one card per game per player.
+    private var endEventId: String? = null
 
     init {
         if (arrival.value != null) {
@@ -459,16 +487,26 @@ class SportsLiveZapViewModel internal constructor(
                 arrival.value = null
             }
         }
+        viewModelScope.launch { gameEndAction.collect { endAction = it } }
         nowPlaying?.let { item ->
+            gameWatch.watch(item)
             viewModelScope.launch {
                 // Paused while the player is stopped: nothing is scored or raised behind Home.
                 playerStarted.flatMapLatest { started ->
                     if (started) combine(liveScores.scores, liveScores.mode) { scores, mode -> scores[item.streamKey] to mode } else emptyFlow()
                 }.collect { (snapshot, mode) ->
+                    nowMode = mode
                     nowTracker.update(listOf(item), enabled = mode != ScoresMode.OFF)
+                    gameWatch.note(item.id, ScoreChips.matchedEvent(item, snapshot))
                     if (SportsLiveFullTimeToasts.isLive(item, snapshot)) nowSeenLive = true
                     val toast = SportsLiveFullTimeToasts.of(item, snapshot, mode, nowSeenLive) ?: return@collect
-                    raiseFullTime(toast)
+                    raiseEnd(GameEndReason.FINAL, streamStopped = false, eventId = toast.eventId)
+                }
+            }
+            // The player stopped the stream because the game ended (#161): the card, never an error.
+            viewModelScope.launch {
+                gameWatch.ends.collect { (gameId, reason) ->
+                    if (gameId == item.id) raiseEnd(reason, streamStopped = true, eventId = null)
                 }
             }
         }
@@ -480,58 +518,169 @@ class SportsLiveZapViewModel internal constructor(
         playerStarted.value = started
     }
 
-    /** [toast] is due: it waits for the overlay to show it, unclaimed; once per game, never one already announced. */
-    private fun raiseFullTime(toast: FullTimeToast) {
-        if (fullTimeEventId == toast.eventId || SportsLiveFullTimeAnnouncements.isAnnounced(toast.eventId)) return
-        fullTimeEventId = toast.eventId
-        fullTimeClaimed = false
-        _fullTime.value = toast
-        fullTimeJob?.cancel()
-        fullTimeJob = viewModelScope.launch {
-            delay(FULL_TIME_PENDING_MS)
-            if (!fullTimeClaimed) _fullTime.value = null
-        }
-        if (fullTimeVisible) onFullTimeVisible(true)
-    }
-
     /**
-     * The overlay shows the toast ([visible]) or not (controls, the panel or the zap banner are up, or the
-     * player left). The first time it shows, its game's full time is claimed; already announced by the
-     * alerts, it goes at once. Shown, it stays [FULL_TIME_TOAST_MS].
+     * The game playing ended ([reason]); [streamStopped]: its stream is gone too. Once per ESPN game per player
+     * (a stream stopping afterwards still turns the card into its stopped form); never for one the alerts
+     * already announced while the stream plays.
      */
-    fun onFullTimeVisible(visible: Boolean) {
-        fullTimeVisible = visible
-        val toast = _fullTime.value ?: return
-        if (!visible || fullTimeClaimed) return
-        if (!SportsLiveFullTimeAnnouncements.claim(toast.eventId)) {
-            dismissFullTime()
+    private suspend fun raiseEnd(reason: GameEndReason, streamStopped: Boolean, eventId: String?) {
+        val item = nowPlaying ?: return
+        val shown = _endCard.value
+        if (!streamStopped) {
+            if (eventId != null && (endEventId == eventId || SportsLiveFullTimeAnnouncements.isAnnounced(eventId))) return
+            endEventId = eventId
+        } else if (shown?.streamStopped == true) {
             return
         }
-        fullTimeClaimed = true
-        fullTimeJob?.cancel()
-        fullTimeJob = viewModelScope.launch {
-            delay(FULL_TIME_TOAST_MS)
-            _fullTime.value = null
+        val session = controller.session(contentId)
+        val lineupItems = lineup.value?.rows?.map { it.item } ?: session?.items.orEmpty()
+        val scores = liveScores.scores.value
+        val nowMs = System.currentTimeMillis()
+        val finished = repo.endedKeys.value + panelEndedKeys() + linkVerdicts.deadKeys +
+            SportsLiveEndedGames.shared.confirmedEndedSourceKeys(lineupItems, scores, nowMs)
+        val next = SportsLiveNextGame.pick(item, lineupItems, scores, finished, tried.ids()).takeUnless { gameWatch.debugNoNext }
+        val upcoming = if (next != null) null else upcomingGame(nowMs)
+        val snapshot = ScoreChips.matchedEvent(item, scores[item.streamKey]) ?: gameWatch.snapshot(item.id)
+        val action = endAction
+        val card = SportsLiveEndCard(
+            item = item,
+            reason = reason,
+            eventId = eventId ?: shown?.eventId,
+            snapshot = snapshot,
+            mode = nowMode,
+            next = next,
+            upcoming = upcoming,
+            boxScore = nowMode != ScoresMode.OFF && snapshot != null,
+            streamStopped = streamStopped,
+            toastOnly = action == SportsLiveGameEndAction.STAY && !streamStopped,
+            countdown = SportsLiveEndCountdown.runs(action, hasNext = next != null, hasSound = true) &&
+                !(action == SportsLiveGameEndAction.STAY && !streamStopped)
+        )
+        // A new card (or its stopped form) is claimed and timed afresh once on screen.
+        endClaimed = false
+        _endCard.value = card
+        endJob?.cancel()
+        countdown.cancel()
+        // Not on screen within a minute (the controls or the panel stayed up): dropped, unless nothing plays.
+        if (!streamStopped) {
+            endJob = viewModelScope.launch {
+                delay(FULL_TIME_PENDING_MS)
+                if (!endClaimed) _endCard.value = null
+            }
         }
+        if (endVisible) onEndCardVisible(true)
     }
 
-    /** Stay for postgame: the toast goes. */
-    fun dismissFullTime() {
-        fullTimeJob?.cancel()
-        _fullTime.value = null
+    /** The game the nothing-live state names: the soonest still to start among the loaded games. */
+    private suspend fun upcomingGame(nowMs: Long): SportsLiveItem? = try {
+        val candidates = SportsLiveAlerts.candidates(repo.latest.value, repo.claimedCatalogs.first(), repo.followedTeams.first())
+        SportsLiveNextGame.upcoming(candidates, nowMs)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (_: Exception) {
+        null
     }
 
     /**
-     * Next live game → on the full-time toast: zaps to the game "Watch with another game" would pair
-     * with the one that ended (#57's pick, never a finished game). False when there is none.
+     * The overlay shows the card ([visible]) or not (controls, the panel or the zap banner are up, or the player
+     * left). The first time it shows, its ESPN final is claimed; one the alerts announced meanwhile goes at once
+     * while the stream plays. Shown: the countdown starts when it runs; a card over a stream still playing with
+     * no countdown leaves after [FULL_TIME_TOAST_MS].
+     */
+    fun onEndCardVisible(visible: Boolean) {
+        endVisible = visible
+        val card = _endCard.value ?: return
+        if (!visible || endClaimed) return
+        val eventId = card.eventId
+        if (eventId != null && !SportsLiveFullTimeAnnouncements.claim(eventId) && !card.streamStopped) {
+            dismissEndCard()
+            return
+        }
+        endClaimed = true
+        endJob?.cancel()
+        endJob = null
+        when {
+            card.countdown -> {
+                countdown.start(System.currentTimeMillis())
+                _endCard.value = card.copy(countdownEndsAtMs = countdown.endsAtMs)
+                endJob = viewModelScope.launch {
+                    delay(SportsLiveEndCountdown.DURATION_MS)
+                    // The delay is the clock (a cancel clears the countdown and this job), not the wall time.
+                    if (countdown.running) endWatchNext()
+                }
+            }
+            !card.streamStopped -> endJob = viewModelScope.launch {
+                delay(FULL_TIME_TOAST_MS)
+                _endCard.value = null
+            }
+        }
+    }
+
+    /** Back or any key on the card (#161): the countdown stops and the card waits for OK. True when one ran. */
+    fun cancelEndCountdown(): Boolean {
+        if (!countdown.cancel()) return false
+        endJob?.cancel()
+        endJob = null
+        _endCard.update { it?.copy(countdown = false, countdownEndsAtMs = null) }
+        return true
+    }
+
+    /** Back with the card on screen (#161): its countdown stops, else it closes. False when no card shows. */
+    fun endCardOnBack(): Boolean {
+        val card = _endCard.value ?: return false
+        if (!endVisible || card.toastOnly) return false
+        if (!cancelEndCountdown()) dismissEndCard()
+        return true
+    }
+
+    /** Stay (or Back with no countdown): the card goes; the postgame stream plays on if it still does. */
+    fun dismissEndCard() {
+        endJob?.cancel()
+        endJob = null
+        countdown.cancel()
+        _endCard.value = null
+    }
+
+    /** Watch next on the card, or its countdown running out: the zap to Up next. False when there is none. */
+    internal fun endWatchNext(): Boolean {
+        val card = _endCard.value ?: return false
+        val next = card.next ?: return false
+        val session = controller.session(contentId) ?: return false
+        dismissEndCard()
+        val lineupItems = lineup.value?.rows?.map { it.item } ?: session.items
+        return controller.pick(contentId, next, if (lineupItems.any { it.streamKey == next.streamKey }) lineupItems else session.items + next)
+    }
+
+    /** Box score on the card: the Game page on its Box Score tab (#145). Null without a strict ESPN match. */
+    internal fun endBoxScore(): SportsLiveGameRequest? {
+        val card = _endCard.value ?: return null
+        val event = card.snapshot?.takeIf { card.boxScore } ?: return null
+        dismissEndCard()
+        return SportsLiveGameRequest(
+            event,
+            revealed = card.mode == ScoresMode.SHOW,
+            homeFirst = sportsLiveGameHomeFirst(card.item, event),
+            card = card.item,
+            section = GameSection.BOX_SCORE
+        )
+    }
+
+    /** Remind me on the nothing-live state's upcoming game. */
+    fun endRemindUpcoming() {
+        val upcoming = _endCard.value?.upcoming ?: return
+        viewModelScope.launch {
+            val on = toggleReminder(upcoming)
+            _endCard.update { card -> if (card?.upcoming?.streamKey == upcoming.streamKey) card.copy(upcomingReminded = on) else card }
+        }
+    }
+
+    /**
+     * A short Right with the card on screen (#60's "Next live game →"): Watch next. False when the card is not
+     * on screen or has no next game.
      */
     internal fun nextLiveGame(): Boolean {
-        // Only while the toast is on screen: Right does nothing for a toast that is not showing.
-        if (_fullTime.value == null || !fullTimeClaimed || !fullTimeVisible) return false
-        val session = controller.session(contentId) ?: return false
-        val next = nextLiveGameFor(session) ?: return false
-        dismissFullTime()
-        return controller.pick(contentId, next, session.items)
+        if (_endCard.value == null || !endClaimed || !endVisible) return false
+        return endWatchNext()
     }
 
     private val _nextExhausted = MutableStateFlow(false)
@@ -581,15 +730,6 @@ class SportsLiveZapViewModel internal constructor(
     /** The exhausted card was left (Back to Live Now). */
     internal fun dismissNextExhausted() {
         _nextExhausted.value = false
-    }
-
-    /** #57's pick after the game playing in [session], never a finished game. */
-    private fun nextLiveGameFor(session: SportsLiveZapSession): SportsLiveItem? {
-        val scores = liveScores.scores.value
-        // Never a finished game: the probe's, the panel's Just ended, ESPN finals, and dead link checks.
-        val finished = repo.endedKeys.value + panelEndedKeys() + linkVerdicts.deadKeys +
-            SportsLiveEndedGames.shared.confirmedEndedSourceKeys(session.items, scores, System.currentTimeMillis())
-        return SportsLiveSecondGame.pick(session.current, session.items, scores, finished)
     }
 
     /**
@@ -740,6 +880,20 @@ class SportsLiveZapViewModel internal constructor(
     }
 
     /**
+     * ▲ Both on an alert or kickoff card for [item]: dual screen with the game playing on the left (its working link
+     * and the sound, as "Watch both" in the panel) and [item] on the right, muted, over the panel's list ([item]
+     * added when the list leaves it out). Null when dual screen cannot pair them (the same game, a shared source,
+     * a game over, or no zap session).
+     */
+    fun bothFromAlert(item: SportsLiveItem): SportsLiveDualSession? {
+        fun withItem(list: List<SportsLiveItem>) = if (list.any { it.streamKey == item.streamKey }) list else list + item
+        return dualPick(
+            { session -> withItem(lineup.value?.list?.all ?: session.items) },
+            { session -> withItem(panel.value?.allItems ?: lineup.value?.list?.all ?: session.items) }
+        )?.pairWith(item)
+    }
+
+    /**
      * OK on an alert card (or during its peek) for [item] (#136): the player zaps to it as a panel pick does,
      * over the panel's list (with [item] added when the list leaves it out). False with no zap session.
      */
@@ -867,10 +1021,10 @@ class SportsLiveZapViewModel internal constructor(
 
 private const val BANNER_MS = 3_000L
 
-/** How long the full-time toast stays (#60); doing nothing meanwhile stays for the postgame. */
+/** How long the end card stays over a stream still playing with no countdown (#60, #161); then the postgame plays on. */
 internal const val FULL_TIME_TOAST_MS = 10_000L
 
-/** A full-time toast the overlay could not show this long (controls or the panel up) is dropped. */
+/** An end card the overlay could not show this long (controls or the panel up) is dropped, unless nothing plays. */
 internal const val FULL_TIME_PENDING_MS = 60_000L
 
 /**

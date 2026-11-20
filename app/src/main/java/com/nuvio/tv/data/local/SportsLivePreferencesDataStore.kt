@@ -15,6 +15,7 @@ import com.nuvio.tv.core.sportslive.SportsLiveOpenGame
 import com.nuvio.tv.core.sportslive.alerts.GameReminder
 import com.nuvio.tv.core.sportslive.alerts.GameReminders
 import com.nuvio.tv.core.sportslive.alerts.RemindersState
+import com.nuvio.tv.core.sportslive.SportsLiveGameEndAction
 import com.nuvio.tv.core.sportslive.alerts.SportsLiveAlertSettings
 import com.nuvio.tv.core.sportslive.scores.CatchUp
 import com.nuvio.tv.core.sportslive.scores.CatchUpMarks
@@ -87,6 +88,10 @@ class SportsLivePreferencesDataStore @Inject constructor(
     private val scoreAlertsKey = booleanPreferencesKey("sports_live_score_alerts")
     private val fullTimeAlertsKey = booleanPreferencesKey("sports_live_full_time_alerts")
     private val closeGameAlertsKey = booleanPreferencesKey("sports_live_close_game_alerts")
+    // Reminder-only teams (#154), stored as the follows are.
+    private val remindedTeamsKey = stringPreferencesKey("sports_live_reminded_teams")
+    // "When a game ends" (#161): a [SportsLiveGameEndAction] name.
+    private val gameEndActionKey = stringPreferencesKey("sports_live_game_end_action")
 
     // [{"keys": source keys joined by REMINDER_KEY_SEPARATOR, "title": ..., "home": ..., "away": ..., "start": "epoch ms"}]; plain maps, like the follows.
     private val remindersType = object : TypeToken<List<Map<String, String?>>>() {}.type
@@ -223,13 +228,23 @@ class SportsLivePreferencesDataStore @Inject constructor(
         store().edit { it[closeGameAlertsKey] = v }
     }
 
+    /** "When a game ends" (#161): Move to the next game by default. */
+    val gameEndAction: Flow<SportsLiveGameEndAction> = profileManager.activeProfileId.flatMapLatest { pid ->
+        factory.get(pid, FEATURE).data.map { SportsLiveGameEndAction.fromStored(it[gameEndActionKey]) }
+    }
+
+    suspend fun setGameEndAction(action: SportsLiveGameEndAction) {
+        store().edit { it[gameEndActionKey] = action.name }
+    }
+
     /** The active profile's reminders (#44), opt-outs from automatic ones, and "Remind me for my teams". */
     val reminders: Flow<RemindersState> = profileManager.activeProfileId.flatMapLatest { pid ->
         factory.get(pid, FEATURE).data.map { prefs ->
             RemindersState(
                 reminders = GameReminders.current(decodeReminders(prefs[remindersKey]), nowMs()),
                 optOuts = GameReminders.current(decodeReminders(prefs[reminderOptOutsKey]), nowMs()),
-                remindMyTeams = prefs[remindMyTeamsKey] ?: true
+                remindMyTeams = prefs[remindMyTeamsKey] ?: true,
+                remindedTeams = decodeFollowed(prefs[remindedTeamsKey])
             )
         }
     }
@@ -241,11 +256,13 @@ class SportsLivePreferencesDataStore @Inject constructor(
             val current = RemindersState(
                 reminders = decodeReminders(prefs[remindersKey]),
                 optOuts = decodeReminders(prefs[reminderOptOutsKey]),
-                remindMyTeams = prefs[remindMyTeamsKey] ?: true
+                remindMyTeams = prefs[remindMyTeamsKey] ?: true,
+                remindedTeams = decodeFollowed(prefs[remindedTeamsKey])
             )
             saved = change(current)
             prefs[remindersKey] = encodeReminders(saved.reminders)
             prefs[reminderOptOutsKey] = encodeReminders(saved.optOuts)
+            prefs[remindedTeamsKey] = encodeFollowed(saved.remindedTeams)
         }
         return saved
     }

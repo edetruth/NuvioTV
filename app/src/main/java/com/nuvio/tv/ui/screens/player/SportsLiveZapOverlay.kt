@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -106,9 +107,8 @@ import com.nuvio.tv.ui.screens.sportslive.preview.previewKey
 import coil3.compose.AsyncImage
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapViewModel
 import com.nuvio.tv.ui.screens.sportslive.PanelGuideEntry
-import com.nuvio.tv.core.sportslive.FullTimeToast
-import com.nuvio.tv.core.sportslive.FullTimeToastStrings
-import com.nuvio.tv.core.sportslive.SportsLiveFullTimeToasts
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveEndAction
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveEndCardView
 import com.nuvio.tv.ui.screens.sportslive.TeamLogoSlot
 import com.nuvio.tv.ui.screens.sportslive.rememberTeamLogoPair
 import com.nuvio.tv.ui.screens.sportslive.dual.LocalOpenSportsLiveDual
@@ -133,7 +133,9 @@ internal fun BoxScope.SportsLiveZapOverlay(
     engine: () -> InternalPlayerEngine,
     playerOverlayVisible: Boolean,
     /** Whether the game is playing now: a Game page opened over it resumes it on return (#145). */
-    isPlaying: () -> Boolean = { false }
+    isPlaying: () -> Boolean = { false },
+    /** Back to Live Now on the end card's nothing-live state (#161): the player leaves. */
+    onBackToLiveNow: () -> Unit = {}
 ) {
     if (!viewModel.hasSession) return
     // In picture-in-picture only the video shows: no banner, indicator or panel.
@@ -182,26 +184,52 @@ internal fun BoxScope.SportsLiveZapOverlay(
         (banner ?: lastBanner)?.let { ZapBanner(it) }
     }
 
-    // "Ended while you're watching" (#60): over the video while nothing else is up; Right moves on.
-    val fullTime by viewModel.fullTime.collectAsState()
-    var lastFullTime by remember { mutableStateOf<FullTimeToast?>(null) }
-    LaunchedEffect(fullTime) { fullTime?.let { lastFullTime = it } }
-    val fullTimeShown = fullTime != null && banner == null && !panelOpen && !playerOverlayVisible
-    // Claimed and timed only once on screen; Right moves on only while it is.
-    DisposableEffect(fullTimeShown, viewModel) {
-        viewModel.onFullTimeVisible(fullTimeShown)
-        onDispose { viewModel.onFullTimeVisible(false) }
+    // The end-of-game card (#161, in place of #60's full-time toast): over the last frame while nothing else is up.
+    val endCard by viewModel.endCard.collectAsState()
+    val openGameFromEnd = LocalOpenSportsLiveGame.current
+    val endShown = endCard != null && banner == null && !panelOpen && !playerOverlayVisible
+    // Claimed, and its countdown started, only once on screen.
+    DisposableEffect(endShown, viewModel) {
+        viewModel.onEndCardVisible(endShown)
+        onDispose { viewModel.onEndCardVisible(false) }
     }
-    AnimatedVisibility(
-        visible = fullTimeShown,
-        enter = fadeIn(tween(150)),
-        exit = fadeOut(tween(250)),
-        modifier = Modifier
-            .align(Alignment.TopCenter)
-            .padding(top = 32.dp)
-            .zIndex(3f)
-    ) {
-        (fullTime ?: lastFullTime)?.let { FullTimeToastCard(it) }
+    // A card closed: the keys go back to the player.
+    var endWasShown by remember { mutableStateOf(false) }
+    LaunchedEffect(endShown) {
+        if (endWasShown && !endShown && endCard?.toastOnly != true) runCatching { playerFocusRequester.requestFocus() }
+        endWasShown = endShown && endCard?.toastOnly != true
+    }
+    if (endShown) {
+        endCard?.let { card ->
+            // The dimmed backdrop: the last frame stays, the card reads over it.
+            if (!card.toastOnly && card.streamStopped) {
+                Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.55f)).zIndex(2.9f))
+            }
+            SportsLiveEndCardView(
+                card = card,
+                onAction = { action ->
+                    when (action) {
+                        SportsLiveEndAction.WATCH_NEXT -> viewModel.endWatchNext()
+                        SportsLiveEndAction.REMIND -> viewModel.endRemindUpcoming()
+                        SportsLiveEndAction.BACK_TO_LIVE_NOW -> {
+                            viewModel.dismissEndCard()
+                            onBackToLiveNow()
+                        }
+                        SportsLiveEndAction.BOX_SCORE -> viewModel.endBoxScore()?.let { request ->
+                            SportsLiveGameRequests.open(request)
+                            viewModel.onGameOpened(wasPlaying = isPlaying())
+                            openGameFromEnd?.invoke()
+                        }
+                        SportsLiveEndAction.STAY -> viewModel.dismissEndCard()
+                    }
+                },
+                onAnyKey = { viewModel.cancelEndCountdown() },
+                modifier = Modifier
+                    .align(if (card.toastOnly) Alignment.TopCenter else Alignment.Center)
+                    .padding(top = if (card.toastOnly) 32.dp else 0.dp)
+                    .zIndex(3f)
+            )
+        }
     }
 
     var wasOpen by remember { mutableStateOf(false) }
@@ -369,38 +397,6 @@ internal fun BoxScope.SportsLiveZapOverlay(
             } else {
                 null
             }
-        )
-    }
-}
-
-/** "Full time · 2–1" (no score under Hide until focused), then "Stay for postgame · Next live game →". */
-@Composable
-private fun FullTimeToastCard(toast: FullTimeToast) {
-    val strings = FullTimeToastStrings(
-        title = stringResource(R.string.sports_live_full_time),
-        withScore = stringResource(R.string.sports_live_full_time_score),
-        score = stringResource(R.string.sports_live_chip_score)
-    )
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier
-            .widthIn(max = 720.dp)
-            .clip(RoundedCornerShape(NuvioTheme.radii.xl))
-            .background(NuvioTheme.colors.BackgroundElevated.copy(alpha = 0.92f))
-            .padding(horizontal = 28.dp, vertical = 14.dp)
-    ) {
-        Text(
-            text = SportsLiveFullTimeToasts.text(toast, strings),
-            style = MaterialTheme.typography.titleLarge,
-            color = NuvioTheme.colors.TextPrimary,
-            maxLines = 1
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = stringResource(R.string.sports_live_full_time_actions),
-            style = MaterialTheme.typography.labelLarge,
-            color = NuvioTheme.extendedColors.textSecondary,
-            maxLines = 1
         )
     }
 }

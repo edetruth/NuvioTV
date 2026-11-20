@@ -1,6 +1,11 @@
 package com.nuvio.tv.ui.screens.sportslive.mini
 
 import com.nuvio.tv.ui.screens.sportslive.noteSportsLiveLinkError
+import com.nuvio.tv.core.sportslive.GameEndStrings
+import com.nuvio.tv.core.sportslive.SportsLiveToastKind
+import com.nuvio.tv.core.sportslive.SportsLiveToasts
+import com.nuvio.tv.core.sportslive.SportsLiveGameEnd
+import com.nuvio.tv.core.sportslive.SportsLiveGameWatch
 import com.nuvio.tv.core.sportslive.displayName
 import android.content.Context
 import android.view.ViewGroup
@@ -135,7 +140,9 @@ internal class SportsLiveMiniPlayback(
     private val lookup: suspend (item: SportsLiveItem, tried: Set<String>) -> Stream? = { _, _ -> null },
     private val onStreamReplaced: (sessionId: Long, stream: Stream) -> Unit = { _, _ -> },
     /** Whether the link draws frames now (first frame in, not reconnecting): an expand reuses it (#157). */
-    private val onLinkPlaying: (sessionId: Long, playing: Boolean) -> Unit = { _, _ -> }
+    private val onLinkPlaying: (sessionId: Long, playing: Boolean) -> Unit = { _, _ -> },
+    /** The stream stopped as its game ended (#161): the mini player closes with a small "Final" toast. */
+    private val onGameEnded: (sessionId: Long, item: SportsLiveItem) -> Unit = { id, _ -> onError(id) }
 ) {
     private val appContext = context.applicationContext
     private var player: ExoPlayer? = null
@@ -301,6 +308,11 @@ internal class SportsLiveMiniPlayback(
         val failed = stream ?: return
         val url = failed.getStreamUrl()
         reportLink(sessionId, false)
+        // The game is over (#161): no recovery, the mini player closes.
+        if (SportsLiveGameWatch.shared.failureIsEnd(game.id, game) != null) {
+            onGameEnded(sessionId, game)
+            return
+        }
         SportsLiveSourceReliability.record(
             SportsLiveExtraSources.sourceKeyFor(game, failed),
             if (problem.isStall) SportsLiveSourceReliability.Outcome.STALL else SportsLiveSourceReliability.Outcome.FAILURE
@@ -438,7 +450,17 @@ fun SportsLiveMiniPlayerHost(
             scope = recoveryScope,
             lookup = viewModel::recoveryStream,
             onStreamReplaced = controller::onStreamReplaced,
-            onLinkPlaying = controller::onLinkPlaying
+            onLinkPlaying = controller::onLinkPlaying,
+            onGameEnded = { sessionId, item ->
+                if (controller.isSession(sessionId)) {
+                    controller.stop(SportsLiveMiniStop.GAME_ENDED)
+                    val title = SportsLiveGameEnd.title(
+                        item, SportsLiveGameWatch.shared.snapshot(item.id), null,
+                        GameEndStrings(context.getString(R.string.sports_live_end_game_over), context.getString(R.string.sports_live_end_final_score))
+                    )
+                    SportsLiveToasts.show(SportsLiveToastKind.FINAL, title, item.displayName)
+                }
+            }
         )
     }
     val currentOnExpand by rememberUpdatedState(onExpand)

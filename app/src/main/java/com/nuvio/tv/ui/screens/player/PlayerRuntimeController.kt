@@ -300,6 +300,9 @@ class PlayerRuntimeController(
     internal val sportsHealth = com.nuvio.tv.core.sportslive.SportsLiveStreamHealth()
     internal val sportsRecoveryLadder = com.nuvio.tv.core.sportslive.SportsLiveRecoveryLadder()
 
+    /** "Waiting for the stream to start…" (#162): the re-check of a game whose links are not live yet. */
+    internal var sportsWaitingJob: Job? = null
+
     /** The sports link loading now: its first-frame timeout (#138), and whether one of its requests failed. */
     internal var sportsStartupJob: Job? = null
     @Volatile internal var sportsStartRequestFailed = false

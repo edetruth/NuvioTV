@@ -115,6 +115,9 @@ enum class AlertKeyAction {
     /** ▼ on a card: its game plays full screen with sound for a few seconds. */
     PEEK,
 
+    /** ▲ on a card in the full player: dual screen with the game playing and the card's game beside it, muted. */
+    BOTH,
+
     /** Back on a card: it goes. */
     DISMISS,
 
@@ -154,7 +157,9 @@ data class AlertKeyContext(
      * A kickoff prompt shows over a screen that can play its game here (#173), with this button chosen: it
      * takes OK, ← →, Back and every zap key until it closes, whatever else is up. Null: no such prompt.
      */
-    val prompt: PromptChoice? = null
+    val prompt: PromptChoice? = null,
+    /** ▲ opens dual screen with both games: the full player only (never in dual screen, already two games). */
+    val canBoth: Boolean = false
 )
 object SportsLiveAlertKeys {
 
@@ -163,7 +168,7 @@ object SportsLiveAlertKeys {
      * here ([canActHere]: the full player of a game, dual screen) and registered as a surface ([surfaceBusy]
      * null when none is). A score card is actionable only while the screen's own overlays are closed
      * ([surfaceBusy] false); a kickoff prompt always is, with [promptChoice] chosen (#173). [canPeek]: the
-     * screen could peek (the full player).
+     * screen could peek (the full player). [canBoth]: ▲ could open dual screen with both games (the full player).
      */
     fun context(
         card: AlertCard?,
@@ -171,7 +176,8 @@ object SportsLiveAlertKeys {
         surfaceBusy: Boolean?,
         canPeek: Boolean,
         peeking: Boolean,
-        promptChoice: PromptChoice = PromptChoice.WATCH
+        promptChoice: PromptChoice = PromptChoice.WATCH,
+        canBoth: Boolean = false
     ): AlertKeyContext {
         val onSurface = card != null && canActHere && surfaceBusy != null
         val prompt = onSurface && card?.first is SportsLiveAlert.Kickoff
@@ -180,7 +186,8 @@ object SportsLiveAlertKeys {
             cardActionable = actionable,
             canPeek = actionable && canPeek,
             peeking = peeking,
-            prompt = promptChoice.takeIf { prompt }
+            prompt = promptChoice.takeIf { prompt },
+            canBoth = (actionable || prompt) && canBoth
         )
     }
 
@@ -195,22 +202,27 @@ object SportsLiveAlertKeys {
                 else -> AlertKeyAction.CONSUME
             }
         }
-        context.prompt?.let { return routePrompt(keyCode, it) }
+        context.prompt?.let { return routePrompt(keyCode, it, context.canBoth) }
         if (!context.cardActionable) return AlertKeyAction.PASS
         return when {
             isOk(keyCode) -> AlertKeyAction.WATCH
             keyCode == KeyEvent.KEYCODE_DPAD_DOWN && context.canPeek -> AlertKeyAction.PEEK
+            keyCode == KeyEvent.KEYCODE_DPAD_UP && context.canBoth -> AlertKeyAction.BOTH
             keyCode == KeyEvent.KEYCODE_BACK || keyCode == KeyEvent.KEYCODE_ESCAPE -> AlertKeyAction.DISMISS
             else -> AlertKeyAction.PASS
         }
     }
 
-    /** A key while the kickoff prompt is up (#173): ▲ ▼ and CH± never zap under it; the volume and the rest pass. */
-    private fun routePrompt(keyCode: Int, choice: PromptChoice): AlertKeyAction = when {
+    /**
+     * A key while the kickoff prompt is up (#173): ▲ ▼ and CH± never zap under it; ▲ opens both games where
+     * [canBoth] (#161); the volume and the rest pass.
+     */
+    private fun routePrompt(keyCode: Int, choice: PromptChoice, canBoth: Boolean): AlertKeyAction = when {
         isOk(keyCode) -> if (choice == PromptChoice.WATCH) AlertKeyAction.PROMPT_WATCH else AlertKeyAction.PROMPT_LATER
         keyCode == KeyEvent.KEYCODE_BACK || keyCode == KeyEvent.KEYCODE_ESCAPE -> AlertKeyAction.PROMPT_LATER
         keyCode == KeyEvent.KEYCODE_DPAD_LEFT -> AlertKeyAction.PROMPT_CHOOSE_WATCH
         keyCode == KeyEvent.KEYCODE_DPAD_RIGHT -> AlertKeyAction.PROMPT_CHOOSE_LATER
+        keyCode == KeyEvent.KEYCODE_DPAD_UP && canBoth -> AlertKeyAction.BOTH
         keyCode in ZAP_KEYS -> AlertKeyAction.CONSUME
         else -> AlertKeyAction.PASS
     }

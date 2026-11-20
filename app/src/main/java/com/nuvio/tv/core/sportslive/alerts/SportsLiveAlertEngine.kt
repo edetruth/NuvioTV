@@ -24,8 +24,15 @@ data class SportsLiveAlertSettings(
 
 /** What is on screen now, as far as alerts care. */
 data class SportsLiveWatching(
-    /** Content ids playing (the full player's, the mini player's): their games never alert. */
+    /** Content ids playing (the full player's, both dual panes', the mini player's): their games never alert. */
     val playingIds: Set<String> = emptySet(),
+    /**
+     * The games on screen by [SportsLiveAlertEngine.gameKey] (their two sides and day), so another addon's copy of
+     * a game playing, or a merged card led by another source, never alerts either.
+     */
+    val playingGameKeys: Set<String> = emptySet(),
+    /** The ESPN event ids of the games on screen, where known: a card matched to one of them never alerts. */
+    val playingEventIds: Set<String> = emptySet(),
     /** The full player is on screen: the kickoff prompt is the small one, and score toasts may show. */
     val inPlayer: Boolean = false,
     /** What the full player plays is Sports & Live content (a game or channel), not a movie or show. */
@@ -33,8 +40,8 @@ data class SportsLiveWatching(
     /** When the stream on screen started (null: none): nothing shows in its first 10 s. */
     val streamStartedAtMs: Long? = null,
     /**
-     * Dual screen is on: prompts wait. Toasts show (#136), over the pane they are not about; [playingIds]
-     * then holds the highlighted pane's game only, so the other pane's game can still alert.
+     * Dual screen is on: prompts wait. Toasts show (#136), over the pane they are not about; neither pane's game
+     * alerts ([playingIds] holds both).
      */
     val dual: Boolean = false,
     /** The mini player plays a game: score toasts show over it as over the full player (#136). */
@@ -70,8 +77,16 @@ enum class KickoffStyle {
 sealed interface SportsLiveAlert {
     val item: SportsLiveItem
 
-    /** "Watch now?" at kickoff (#44, and #42 for followed teams). [again]: the one re-ask after Later. */
-    data class Kickoff(override val item: SportsLiveItem, val snapshot: ScoreSnapshot?, val again: Boolean = false) : SportsLiveAlert
+    /**
+     * "Watch now?" at kickoff (#44, and #42 for followed teams). [again]: the one re-ask after Later.
+     * [noStreamYet] (#162): the quiet note after no link came up within 20 minutes, with Remind me in 10 min.
+     */
+    data class Kickoff(
+        override val item: SportsLiveItem,
+        val snapshot: ScoreSnapshot?,
+        val again: Boolean = false,
+        val noStreamYet: Boolean = false
+    ) : SportsLiveAlert
 
     /**
      * A followed team's game changed score (#42). [scorer]: the side that scored; null when both changed.
@@ -140,7 +155,7 @@ class SportsLiveAlertEngine {
         val settling = watching.streamStartedAtMs?.let { nowMs - it < STREAM_SETTLE_MS } == true
         val alerts = ArrayList<SportsLiveAlert>()
         for (game in games.distinctBy { gameKey(it.item) }) {
-            val playing = isPlaying(game.item, watching)
+            val playing = isPlaying(game.item, watching, game.snapshot)
             if (game.reminded) kickoff(game, nowMs, playing, holding = settling || watching.dual)?.let(alerts::add)
             val event = game.snapshot ?: continue
             val before = seen[event.eventId]
@@ -323,8 +338,37 @@ class SportsLiveAlertEngine {
         fun claimToShow(alert: SportsLiveAlert): Boolean =
             alert !is SportsLiveAlert.FullTime || SportsLiveFullTimeAnnouncements.claim(alert.snapshot.eventId)
 
-        /** True when [item] (or one of its sources) is what plays now. */
-        fun isPlaying(item: SportsLiveItem, watching: SportsLiveWatching): Boolean =
-            watching.playingIds.isNotEmpty() && (listOf(item) + item.alternates).any { it.id in watching.playingIds }
+        /**
+         * True when [item]'s game is on screen now (the full player, either dual pane, the mini player): by card
+         * (it or one of its sources), by game identity ([gameKey]: its two sides and day, whichever addon lists it),
+         * or by its ESPN event ([snapshot]). Never by title.
+         */
+        fun isPlaying(item: SportsLiveItem, watching: SportsLiveWatching, snapshot: ScoreSnapshot? = null): Boolean {
+            if (watching.playingIds.isNotEmpty() && (listOf(item) + item.alternates).any { it.id in watching.playingIds }) return true
+            if (item.teams != null && watching.playingGameKeys.isNotEmpty() &&
+                (listOf(item) + item.alternates).any { gameKey(it) in watching.playingGameKeys }
+            ) {
+                return true
+            }
+            return snapshot != null && snapshot.eventId in watching.playingEventIds
+        }
+
+        /** What [games] on screen are, for [SportsLiveWatching] ([eventIdOf]: a game's ESPN event, where known). */
+        fun watchingKeys(games: List<SportsLiveItem>, eventIdOf: (SportsLiveItem) -> String?): Triple<Set<String>, Set<String>, Set<String>> {
+            val sources = games.flatMap { listOf(it) + it.alternates }
+            return Triple(
+                sources.mapTo(HashSet()) { it.id },
+                sources.filter { it.teams != null }.mapTo(HashSet()) { gameKey(it) },
+                games.mapNotNullTo(HashSet(), eventIdOf)
+            )
+        }
+
+        /** The ESPN game an alert is about, where it has one. */
+        fun snapshotOf(alert: SportsLiveAlert): ScoreSnapshot? = when (alert) {
+            is SportsLiveAlert.Kickoff -> alert.snapshot
+            is SportsLiveAlert.ScoreChange -> alert.snapshot
+            is SportsLiveAlert.FullTime -> alert.snapshot
+            is SportsLiveAlert.Crunch -> alert.snapshot
+        }
     }
 }

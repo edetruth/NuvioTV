@@ -59,7 +59,9 @@ fun sportsLiveBackAction(paused: Boolean, started: Boolean): SportsLiveBackActio
 
 /** Why the mini player stopped. */
 enum class SportsLiveMiniStop {
-    OTHER_PLAYER, PROFILE_SWITCH, USER_STOP, IDLE_TIMEOUT, DUAL_SCREEN, EXPANDED, STREAM_ERROR, APP_FINISH, APP_BACKGROUND, PIP_CLOSED
+    OTHER_PLAYER, PROFILE_SWITCH, USER_STOP, IDLE_TIMEOUT, DUAL_SCREEN, EXPANDED, STREAM_ERROR, APP_FINISH, APP_BACKGROUND, PIP_CLOSED,
+    /** The game ended (#161): it closed with a "Final" toast. */
+    GAME_ENDED
 }
 
 /**
@@ -163,6 +165,9 @@ class SportsLiveMiniPlayerController(
         lastStop = reason
         onStopped?.invoke()
     }
+
+    /** Whether [sessionId] is the mini player playing now. */
+    fun isSession(sessionId: Long): Boolean = (_state.value as? SportsLiveMiniState.Playing)?.sessionId == sessionId
 
     /** The stream of mini player [sessionId] failed: it stops quietly. */
     fun onStreamError(sessionId: Long) {

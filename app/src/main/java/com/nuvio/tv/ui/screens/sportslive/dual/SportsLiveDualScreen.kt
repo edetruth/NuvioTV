@@ -77,7 +77,10 @@ import com.nuvio.tv.ui.screens.sportslive.SportsLivePeekHost
 import com.nuvio.tv.ui.screens.sportslive.SportsLivePlayHost
 import com.nuvio.tv.ui.screens.sportslive.SportsLivePlayState
 import com.nuvio.tv.ui.screens.sportslive.SportsLivePlayViewModel
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveEndAction
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveEndCardView
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveReconnectingChip
+import com.nuvio.tv.ui.screens.sportslive.sportsLiveEndActions
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveStartingAction
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveStartingCard
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapTarget
@@ -196,6 +199,8 @@ fun SportsLiveDualScreen(
     // of dual screen as OK does (#27); a second Back while it starts, or dual opened elsewhere, leaves.
     var backPlayed by remember { mutableStateOf(false) }
     val handleBack: () -> Unit = handleBack@{
+        // An ended pane's countdown (#161): Back stops it first.
+        if (viewModel.cancelEndCountdowns()) return@handleBack
         // "Close this side" (#138): the highlighted pane gave up; the other game plays full screen.
         viewModel.closeFailedSide()?.takeUnless { backPlayed }?.let { (item, stream) ->
             backPlayed = true
@@ -217,6 +222,12 @@ fun SportsLiveDualScreen(
     val highlightedPane = dual.pane(dual.highlighted)
     var startingSelection by remember { mutableStateOf(SportsLiveStartingAction.TRY_NEXT_LINK) }
     LaunchedEffect(dual.highlighted, highlightedPane.stream) { startingSelection = SportsLiveStartingAction.TRY_NEXT_LINK }
+    // The highlighted ended pane's card (#161): Up/Down move through its buttons, OK presses one.
+    var endSelection by remember { mutableStateOf(SportsLiveEndAction.WATCH_NEXT) }
+    val endActions = highlightedPane.end?.takeIf { highlightedPane.status == PaneStatus.Ended }?.let { sportsLiveEndActions(it, pane = true) }
+    LaunchedEffect(dual.highlighted, highlightedPane.end?.item?.streamKey, endActions) {
+        endSelection = endActions?.first() ?: SportsLiveEndAction.WATCH_NEXT
+    }
 
     // Focus starts on the screen and comes back to it when OK's lookup or stream picker closes.
     val focusRequester = remember { FocusRequester() }
@@ -252,6 +263,28 @@ fun SportsLiveDualScreen(
             .onKeyEvent { event ->
                 val native = event.nativeKeyEvent
                 if (native.action != KeyEvent.ACTION_DOWN) return@onKeyEvent false
+                // Any key stops an ended pane's countdown (#161), and still does what it does.
+                if (native.keyCode != KeyEvent.KEYCODE_BACK) viewModel.cancelEndCountdowns()
+                // The highlighted ended pane's card: Up/Down move through its buttons, OK presses one.
+                if (endActions != null) {
+                    when (native.keyCode) {
+                        KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN -> {
+                            val at = endActions.indexOf(endSelection).coerceAtLeast(0)
+                            val step = if (native.keyCode == KeyEvent.KEYCODE_DPAD_UP) -1 else 1
+                            endSelection = endActions[(at + step).coerceIn(0, endActions.lastIndex)]
+                            return@onKeyEvent true
+                        }
+                        KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                            if (native.repeatCount == 0) {
+                                when (endSelection) {
+                                    SportsLiveEndAction.WATCH_NEXT -> viewModel.endWatchNext()
+                                    else -> viewModel.endStay()
+                                }
+                            }
+                            return@onKeyEvent true
+                        }
+                    }
+                }
                 // A starting pane's card (#138): CH+/CH- still zap, as everywhere.
                 if (dual.pane(dual.highlighted).isStarting) {
                     val actions = SportsLiveStartingAction.entries
@@ -315,6 +348,7 @@ fun SportsLiveDualScreen(
                     pane = dual.pane(side),
                     highlighted = side == dual.highlighted,
                     startingSelection = startingSelection,
+                    endSelection = endSelection,
                     sound = dual.paneSound(side, players?.isPlaying(side) == true),
                     onViewCreated = { view ->
                         views[side] = view
@@ -383,6 +417,7 @@ private fun DualPaneView(
     pane: DualPane,
     highlighted: Boolean,
     startingSelection: SportsLiveStartingAction,
+    endSelection: SportsLiveEndAction,
     sound: PaneSound,
     onViewCreated: (PlayerView) -> Unit,
     modifier: Modifier = Modifier
@@ -422,7 +457,7 @@ private fun DualPaneView(
                 },
                 modifier = Modifier.fillMaxSize()
             )
-            PaneStatusOverlay(pane, highlighted, startingSelection)
+            PaneStatusOverlay(pane, highlighted, startingSelection, endSelection)
         }
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -489,7 +524,12 @@ private fun SoundBars(color: Color, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun BoxScope.PaneStatusOverlay(pane: DualPane, highlighted: Boolean, startingSelection: SportsLiveStartingAction) {
+private fun BoxScope.PaneStatusOverlay(
+    pane: DualPane,
+    highlighted: Boolean,
+    startingSelection: SportsLiveStartingAction,
+    endSelection: SportsLiveEndAction
+) {
     // A link starting (#138): its card; the highlighted pane's has the buttons the keys move through.
     if (pane.isStarting) {
         val startedAtMs = remember(pane.stream, pane.attempt) { System.currentTimeMillis() }
@@ -525,6 +565,18 @@ private fun BoxScope.PaneStatusOverlay(pane: DualPane, highlighted: Boolean, sta
             hint = stringResource(R.string.sports_live_dual_recovery_choices)
         )
         PaneStatus.DeviceLimit -> PaneMessage(text = stringResource(R.string.sports_live_dual_device_limit), hint = null)
+        // The game ended (#161): the end card in the pane; once closed (Stay), "Game over".
+        PaneStatus.Ended -> pane.end?.let { card ->
+            SportsLiveEndCardView(
+                card = card,
+                onAction = {},
+                onAnyKey = {},
+                pane = true,
+                selected = endSelection,
+                showActions = highlighted,
+                modifier = Modifier.align(Alignment.Center)
+            )
+        } ?: PaneMessage(text = stringResource(R.string.sports_live_end_game_over), hint = null)
     }
 }
 

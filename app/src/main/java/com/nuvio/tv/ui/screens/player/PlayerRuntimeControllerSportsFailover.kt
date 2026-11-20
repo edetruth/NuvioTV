@@ -11,6 +11,9 @@ import com.nuvio.tv.core.sportslive.SportsLiveLinkMarks
 import com.nuvio.tv.data.local.InternalPlayerEngine
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveManifestSniffer
 import com.nuvio.tv.ui.screens.sportslive.noteSportsLiveLinkError
+import com.nuvio.tv.core.sportslive.SportsLiveGameWatch
+import com.nuvio.tv.core.sportslive.SportsLiveKickoffWait
+import com.nuvio.tv.data.repository.SportsLiveKickoffProbe
 import com.nuvio.tv.core.sportslive.SportsLiveLinkErrors
 import com.nuvio.tv.core.sportslive.SportsLiveRecoveryCandidates
 import com.nuvio.tv.core.sportslive.SportsLiveRecoveryLadder
@@ -134,6 +137,8 @@ internal fun PlayerRuntimeController.trySportsLiveFailoverAfterError(
     problem: SportsLiveStreamHealth.Problem? = null
 ): Boolean {
     if (!SportsLiveExtraSources.isSportsPlayback(contentId)) return false
+    // The game is over (#161) or not live yet (#162): no failover, no error; the end card or the waiting card.
+    if (recordFailure && (trySportsGameEnded() || trySportsWaitForKickoff())) return true
     // Nothing that works plays now (also a Sources panel pick failing before its first frame): dual
     // screen must not take over a stream this player no longer plays (#65).
     SportsLiveWorkingLinks.shared.stoppedPlaying(contentId.orEmpty(), failedUrl = currentStreamUrl)
@@ -424,6 +429,8 @@ internal fun PlayerRuntimeController.trySportsHealthRecoveryAfterError(errorMess
  * sports failover), else, with the game's recovery budget used up, the recovery overlay's choices.
  */
 private fun PlayerRuntimeController.recoverSportsHealth(problem: SportsLiveStreamHealth.Problem, message: String) {
+    // A stream stopping as its game ends is no failure (#161): the end card, never the ladder.
+    if (trySportsGameEnded()) return
     val gameKey = contentId.orEmpty()
     val url = currentSportsStream()?.getStreamUrl() ?: currentStreamUrl
     val step = sportsRecoveryLadder.decide(gameKey, url, problem, started = hasRenderedFirstFrame)
@@ -458,6 +465,12 @@ internal fun PlayerRuntimeController.scheduleSportsStartupTimeout() {
     // The player's own retries (a rebuild, a timeout retry) load the same link again: its start-up
     // time keeps running, or retrying would hold a dead link on "Starting stream…" forever.
     if (sports && url == sportsStartupUrl && sportsStartupJob?.isActive == true && !hasRenderedFirstFrame) return
+    // A new link loads (a source picked, the waiting card's live link): the waiting card is over (#162).
+    if (_uiState.value.sportsWaiting != null || sportsWaitingJob != null) {
+        sportsWaitingJob?.cancel()
+        sportsWaitingJob = null
+        _uiState.update { it.copy(sportsWaiting = null) }
+    }
     sportsStartupJob?.cancel()
     sportsStartRequestFailed = false
     sportsStartupUrl = url
@@ -475,6 +488,11 @@ internal fun PlayerRuntimeController.scheduleSportsStartupTimeout() {
         return
     }
     if (url.isNotBlank()) sportsStartedLinks += url
+    // Debug builds only (the #162 emulator check): this start goes straight to the waiting card.
+    if (BuildConfig.IS_DEBUG_BUILD && SportsLiveGameWatch.shared.consumeDebugWait()) {
+        scope.launch { trySportsWaitForKickoff() }
+        return
+    }
     val number = sportsStartedLinks.indexOf(url) + 1
     _uiState.update {
         it.copy(
@@ -589,6 +607,111 @@ internal fun PlayerRuntimeController.trySportsDeadLinkFailover(error: PlaybackEx
     stopPendingSportsStart()
     recoverSportsHealth(SportsLiveStreamHealth.Problem.DEAD_LINK, context.getString(R.string.sports_live_link_not_working))
     return true
+}
+
+/**
+ * The sports stream stopped or failed as its game ended (#161, [SportsLiveGameWatch.failureIsEnd]: ESPN final,
+ * the Just ended window, or around the expected end with ESPN not showing it in play): nothing is retried and no
+ * error shows; the player stops trying, keeps the last frame, and the zap overlay's end card takes over. False
+ * when it is a real failure (the ladder runs) or not sports.
+ */
+internal fun PlayerRuntimeController.trySportsGameEnded(): Boolean {
+    if (!SportsLiveExtraSources.isSportsPlayback(contentId)) return false
+    val gameId = contentId ?: return false
+    val reason = SportsLiveGameWatch.shared.failureIsEnd(gameId) ?: return false
+    Log.i(PlayerRuntimeController.TAG, "Sports stream stopped at the game's end ($reason): no recovery")
+    stopPendingSportsStart()
+    cancelSportsStallWatchdog()
+    cancelSportsWaiting()
+    sourceFallbackJob?.cancel()
+    finishSportsStartup()
+    SportsLiveWorkingLinks.shared.stoppedPlaying(gameId)
+    _exoPlayer?.playWhenReady = false
+    _uiState.update {
+        it.copy(
+            error = null,
+            sportsReconnecting = false,
+            isBuffering = false,
+            showLoadingOverlay = false,
+            showPauseOverlay = false
+        )
+    }
+    SportsLiveGameWatch.shared.reportEnd(gameId, reason)
+    return true
+}
+
+/**
+ * The game's links are not live yet around its kickoff (#162, [SportsLiveKickoffWait]): instead of the failure
+ * ladder and an error, "Waiting for the stream to start…" shows and the links are checked every 30 s, one
+ * probe per addon ([SportsLiveLiveCheck]: a media playlist with recent segments, never a master alone). The
+ * first live link plays at once. Once the kickoff window passes with none live, the usual recovery choices
+ * show. False when it does not apply (a link played already, or the game is not near its kickoff).
+ */
+internal fun PlayerRuntimeController.trySportsWaitForKickoff(): Boolean {
+    if (hasRenderedFirstFrame) return false
+    val gameId = contentId ?: return false
+    if (!SportsLiveGameWatch.shared.waits(gameId)) return false
+    if (sportsWaitingJob?.isActive == true) return true
+    Log.i(PlayerRuntimeController.TAG, "Sports links not live yet near kickoff: waiting for the stream to start")
+    stopPendingSportsStart()
+    finishSportsStartup()
+    cancelSportsStallWatchdog()
+    val start = SportsLiveGameWatch.shared.item(gameId)?.let { item -> item.startMs?.takeIf { item.startHasTimeOfDay } }
+    _uiState.update {
+        it.copy(
+            error = null,
+            sportsWaiting = SportsLiveWaitingInfo(start),
+            sportsReconnecting = false,
+            isBuffering = false,
+            // The loading backdrop stays behind the card.
+            showLoadingOverlay = true,
+            showPauseOverlay = false
+        )
+    }
+    val season = currentSeason
+    val episode = currentEpisode
+    sportsWaitingJob = scope.launch {
+        while (true) {
+            delay(SportsLiveKickoffWait.RECHECK_MS)
+            if (isInBackground) continue
+            // A fresh search (one request per addon), then one probe per addon.
+            loadSourceStreams(forceRefresh = true)
+            var polls = 0
+            while (_uiState.value.isLoadingSourceStreams && polls < SPORTS_FAILOVER_POLL_COUNT) {
+                delay(SPORTS_FAILOVER_POLL_INTERVAL_MS)
+                polls++
+            }
+            val streams = (_uiState.value.sourceAllStreams + SportsLiveExtraSources.availableStreamsFor(contentId))
+                .filterNot(SportsLiveZapResolver::isNonStream)
+            val live = SportsLiveKickoffProbe.liveCheck.firstLive(streams).live
+            if (live != null) {
+                val playable = (directDebridResolver.resolveToPlayableStream(live, season, episode)
+                    as? DirectDebridPlayableResult.Success)?.stream
+                if (playable != null && !playable.getStreamUrl().isNullOrBlank()) {
+                    Log.i(PlayerRuntimeController.TAG, "A link went live: playing it")
+                    _uiState.update { it.copy(sportsWaiting = null) }
+                    sportsFailoverRunStartedAtMs = null
+                    SportsLiveWorkingLinks.shared.noteLaunch(gameId, playable)
+                    switchToSourceStream(playable)
+                    return@launch
+                }
+            }
+            if (!SportsLiveGameWatch.shared.waits(gameId)) {
+                // The kickoff window passed with nothing live: the usual choices.
+                _uiState.update { it.copy(sportsWaiting = null) }
+                surfaceSportsFailoverError(context.getString(R.string.sports_live_link_not_working))
+                return@launch
+            }
+        }
+    }
+    return true
+}
+
+/** Leaves the waiting card (#162): a link plays, the viewer picked a source, or the player moved on. */
+internal fun PlayerRuntimeController.cancelSportsWaiting() {
+    sportsWaitingJob?.cancel()
+    sportsWaitingJob = null
+    if (_uiState.value.sportsWaiting != null) _uiState.update { it.copy(sportsWaiting = null) }
 }
 
 internal fun PlayerRuntimeController.cancelSportsStallWatchdog() {

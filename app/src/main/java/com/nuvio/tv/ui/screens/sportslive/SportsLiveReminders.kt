@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nuvio.tv.core.sportslive.alerts.RemindersState
 import com.nuvio.tv.core.sportslive.alerts.SportsLiveAlerts
+import com.nuvio.tv.core.sportslive.scores.FollowTarget
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.domain.model.SportsLiveItem
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -27,6 +28,11 @@ class SportsLiveRemindersViewModel @Inject constructor(private val alerts: Sport
         viewModelScope.launch {
             alerts.noticeReminder(item, alerts.toggleReminder(item))
         }
+    }
+
+    /** "Remind me for every ‹team› game" / "Stop reminding…" in More… (#154). */
+    fun toggleTeam(target: FollowTarget) {
+        viewModelScope.launch { alerts.toggleTeamReminder(target.event, target.side) }
     }
 
     /** The bell on an ESPN game no card plays yet (a Team page's next game). */

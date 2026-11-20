@@ -12,6 +12,7 @@ import com.nuvio.tv.core.sportslive.alerts.AlertKeyContext
 import com.nuvio.tv.core.sportslive.alerts.DualPanes
 import com.nuvio.tv.core.sportslive.alerts.SportsLiveAlertKeys
 import com.nuvio.tv.domain.model.SportsLiveItem
+import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualSessions
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -29,6 +30,12 @@ internal interface SportsLiveAlertSurface {
 
     /** The full player, which can peek (#136); null elsewhere. */
     val peek: SportsLivePeekHost?
+
+    /** ▲ Both: dual screen can open here with this screen's game and another (the full player only). */
+    fun offersBoth(): Boolean = false
+
+    /** ▲ Both on a card for [item]: dual screen with the game playing (its link and sound) and [item], muted. */
+    fun watchBoth(item: SportsLiveItem): Boolean = false
 }
 
 /** The full player during a peek (#136): its game goes quiet and comes back. */
@@ -126,9 +133,22 @@ internal fun sportsLivePlayerAlertSurface(
     zap: SportsLiveZapViewModel,
     isBusy: () -> Boolean,
     exoPlayer: () -> ExoPlayer?,
-    partyActive: () -> Boolean
+    partyActive: () -> Boolean,
+    /** Opens dual screen over this player; null where it cannot open. */
+    openDual: (() -> Unit)? = null
 ): SportsLiveAlertSurface = object : SportsLiveAlertSurface {
     override fun watch(item: SportsLiveItem): Boolean = !partyActive() && zap.watchFromAlert(item)
+
+    override fun offersBoth(): Boolean = openDual != null && !partyActive() && zap.hasSession
+
+    override fun watchBoth(item: SportsLiveItem): Boolean {
+        val open = openDual ?: return false
+        if (partyActive()) return false
+        val session = zap.bothFromAlert(item) ?: return false
+        SportsLiveDualSessions.start(session)
+        open()
+        return true
+    }
 
     override fun busy(): Boolean = isBusy()
 

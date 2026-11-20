@@ -1,7 +1,16 @@
 package com.nuvio.tv.ui.screens.sportslive.dual
 
 import com.nuvio.tv.core.sportslive.SportsLiveLinkMarks
+import com.nuvio.tv.core.sportslive.GameEndReason
+import com.nuvio.tv.core.sportslive.SportsLiveEndCountdown
+import com.nuvio.tv.core.sportslive.SportsLiveGameEndAction
+import com.nuvio.tv.core.sportslive.SportsLiveGameWatch
 import com.nuvio.tv.core.sportslive.SportsLiveTriedGames
+import com.nuvio.tv.core.sportslive.scores.ScoresMode
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveEndCard
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import com.nuvio.tv.core.sportslive.displayName
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -157,7 +166,13 @@ class SportsLiveDualViewModel internal constructor(
     /** Automatic recoveries each game may have (#138). */
     private val recoveryBudget: SportsLiveRecoveryBudget = SportsLiveRecoveryBudget(),
     /** How many links a game has, as far as known without a request (#138); 0 when unknown. */
-    private val linkCount: suspend (SportsLiveItem) -> Int = { 0 }
+    private val linkCount: suspend (SportsLiveItem) -> Int = { 0 },
+    /** Tells a pane's stream stopping at its game's end from a failure (#161); null: never an end (tests). */
+    private val gameWatch: SportsLiveGameWatch? = null,
+    /** "When a game ends" (#161). */
+    endActions: Flow<SportsLiveGameEndAction> = flowOf(SportsLiveGameEndAction.DEFAULT),
+    /** The Scores setting: an ended pane's card says the final score under Show only. */
+    scoresModes: Flow<ScoresMode?> = flowOf(null)
 ) : ViewModel() {
 
     @Inject
@@ -177,7 +192,10 @@ class SportsLiveDualViewModel internal constructor(
         handOffPlayable = { stream -> sportsLiveLightPlayable(stream, directDebridResolver) },
         recoveryLookup = resolver::recoveryStream,
         recoveryBudget = SportsLiveRecoveryBudget.shared,
-        linkCount = resolver::cachedLinkCount
+        linkCount = resolver::cachedLinkCount,
+        gameWatch = SportsLiveGameWatch.shared,
+        endActions = preferences.gameEndAction,
+        scoresModes = preferences.scoreSettings.map { it.mode }
     )
 
     private val items: List<SportsLiveItem> = session?.items.orEmpty()
@@ -244,7 +262,15 @@ class SportsLiveDualViewModel internal constructor(
     /** What each pane game's link has loaded so far (#158), by stream key, for its start-up timeout. */
     private val loadProgress = mutableMapOf<String, SportsLiveStartupTimeout.Progress>()
 
+    @Volatile
+    private var endAction = SportsLiveGameEndAction.DEFAULT
+
+    @Volatile
+    private var scoresMode: ScoresMode? = null
+
     init {
+        viewModelScope.launch { endActions.collect { endAction = it } }
+        viewModelScope.launch { scoresModes.collect { scoresMode = it } }
         session?.let { s -> s.leftStream?.let { handOffs[s.left.streamKey] = it } }
         session?.let {
             load(Side.LEFT, it.left)
@@ -397,6 +423,13 @@ class SportsLiveDualViewModel internal constructor(
         val side = state.sideOf(item) ?: return
         val pane = state.pane(side)
         val stream = pane.stream ?: return
+        // The pane's game is over (#161): its end card, never the recovery ladder; the other pane plays on.
+        if (pane.status != PaneStatus.Ended) {
+            gameWatch?.failureIsEnd(item.id, item)?.let { reason ->
+                endPane(side, item, reason)
+                return
+            }
+        }
         // A link that never started (or whose host is unknown) recovers from Loading too.
         val startFailure = pane.status == PaneStatus.Loading &&
             (problem == SportsLiveStreamHealth.Problem.NO_START || problem == SportsLiveStreamHealth.Problem.DEAD_LINK)
@@ -416,6 +449,90 @@ class SportsLiveDualViewModel internal constructor(
                 dispatch(DualAction.Exhausted(item))
             }
         }
+    }
+
+    /**
+     * [item]'s pane game ended ([reason], #161): its player stops and its pane shows the end card, Up next picked as
+     * the full player picks it ([SportsLiveNextGame], never the other pane's game). The 10 s countdown runs only
+     * when "When a game ends" is Move and this pane had the sound; otherwise the card waits for OK. The other pane
+     * is never touched.
+     */
+    private fun endPane(side: Side, item: SportsLiveItem, reason: GameEndReason) {
+        val state = _state.value ?: return
+        jobs.remove(side)?.cancel()
+        settle(item)
+        val hasSound = state.audibleSide == side
+        val other = state.pane(side.other).item
+        val next = SportsLiveNextGame.pick(
+            ended = item,
+            lineup = items.filterNot { it.sharesSourceWith(other) },
+            scores = emptyMap(),
+            finishedKeys = endedKeys() + finishedKeys,
+            tried = SportsLiveTriedGames.shared.ids()
+        )
+        val countdown = SportsLiveEndCountdown.runs(endAction, hasNext = next != null, hasSound = hasSound)
+        val card = SportsLiveEndCard(
+            item = item,
+            reason = reason,
+            eventId = null,
+            snapshot = gameWatch?.snapshot(item.id),
+            mode = scoresMode,
+            next = next,
+            upcoming = null,
+            boxScore = false,
+            streamStopped = true,
+            countdown = countdown,
+            countdownEndsAtMs = if (countdown) workingLinks.nowMs() + SportsLiveEndCountdown.DURATION_MS else null
+        )
+        dispatch(DualAction.Ended(item, card))
+        if (countdown) {
+            jobs[side] = viewModelScope.launch {
+                delay(SportsLiveEndCountdown.DURATION_MS)
+                endWatchNext(side)
+            }
+        }
+    }
+
+    /**
+     * Watch next on an ended pane's card (#161), or its countdown running out: that pane ([side], else the highlighted
+     * one) moves to Up next. False when the pane has no card or no next game.
+     */
+    fun endWatchNext(side: Side? = null): Boolean {
+        val state = _state.value ?: return false
+        val at = side ?: state.highlighted
+        val pane = state.pane(at)
+        if (pane.status != PaneStatus.Ended) return false
+        val next = pane.end?.next ?: return false
+        if (next.sharesSourceWith(state.pane(at.other).item)) return false
+        jobs.remove(at)?.cancel()
+        forgetRecovery(next)
+        load(at, next)
+        return true
+    }
+
+    /** Stay on the highlighted ended pane's card: the card goes, "Game over" stays. False when none shows. */
+    fun endStay(): Boolean {
+        val state = _state.value ?: return false
+        val pane = state.pane(state.highlighted)
+        if (pane.status != PaneStatus.Ended || pane.end == null) return false
+        jobs.remove(state.highlighted)?.cancel()
+        dispatch(DualAction.EndChanged(pane.item, null))
+        return true
+    }
+
+    /** Any key (#161): every running end countdown stops; the cards wait for OK. True when one ran. */
+    fun cancelEndCountdowns(): Boolean {
+        val state = _state.value ?: return false
+        var any = false
+        for (side in Side.entries) {
+            val pane = state.pane(side)
+            val card = pane.end ?: continue
+            if (pane.status != PaneStatus.Ended || card.countdownEndsAtMs == null) continue
+            jobs.remove(side)?.cancel()
+            dispatch(DualAction.EndChanged(pane.item, card.copy(countdown = false, countdownEndsAtMs = null)))
+            any = true
+        }
+        return any
     }
 
     /** [item]'s pane stream moves again: a recovery is over (#138). */
@@ -652,6 +769,7 @@ class SportsLiveDualViewModel internal constructor(
     /** [delayMs]: wait this long before the lookup (a retry). */
     private fun load(side: Side, item: SportsLiveItem, delayMs: Long = 0L) {
         jobs.remove(side)?.cancel()
+        gameWatch?.watch(item)
         dispatch(DualAction.ZapRequested(side, item))
         jobs[side] = viewModelScope.launch {
             if (delayMs > 0) delay(delayMs)

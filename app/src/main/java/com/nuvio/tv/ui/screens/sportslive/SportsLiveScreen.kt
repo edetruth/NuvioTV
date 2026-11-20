@@ -441,6 +441,7 @@ fun SportsLiveScreen(
             },
             reminders = reminders,
             onToggleReminder = remindersViewModel::toggle,
+            onToggleTeamReminder = remindersViewModel::toggleTeam,
             catchUpItems = catchUpItems,
             upcomingFollowedRows = upcomingFollowedRows,
             scoresMode = scoresMode,
@@ -545,6 +546,8 @@ private fun SportsLiveContent(
     /** Reminders (#44): the bell on upcoming games, and Remind me / Cancel reminder. */
     reminders: RemindersState = RemindersState(),
     onToggleReminder: (SportsLiveItem) -> Unit = {},
+    /** "Remind me for every ‹team› game" in More… (#154). */
+    onToggleTeamReminder: (FollowTarget) -> Unit = {},
     /** The catch-up replays (#58): the last part of Live Now's Your teams strip (#155). */
     catchUpItems: List<CatchUpItem>,
     /** Followed teams' games on Upcoming: Your teams' "later today" (#155). */
@@ -1020,6 +1023,8 @@ private fun SportsLiveContent(
         val watchWith = SportsLiveMoreEntry.WATCH_WITH in entries
         val canRemind = SportsLiveMoreEntry.REMIND in entries
         val heading = rememberMoreHeading(item, boardRowOf[item.listKey] ?: stripRowOf(item.listKey))
+        // #154: per matched side, hidden for a followed team while "Remind me for my teams" is On.
+        val teamReminderTargets = targets.filter { GameReminders.offersTeamReminder(reminders, followedTeams, it.event, it.side) }
         // Gone from the list (hidden), or followed under ★ My teams: focus goes to the card in its place.
         fun refocusAfter() {
             followedCardKey = item.listKey
@@ -1072,6 +1077,11 @@ private fun SportsLiveContent(
                 null
             },
             reminded = canRemind && reminders.isReminded(item),
+            teamReminders = teamReminderTargets.map { it.label to GameReminders.isTeamReminded(reminders, it.event, it.side) },
+            onToggleTeamReminder = { index ->
+                menuCardKey = null
+                teamReminderTargets.getOrNull(index)?.let(onToggleTeamReminder)
+            },
             // Team page ‹team› (Decision 6): from the strict ESPN game, else (no game listed yet) from the team
             // directory, for pro leagues with ESPN's team id.
             teamPages = (

@@ -249,6 +249,28 @@ class SportsLiveAlertCardsTest {
     }
 
     @Test
+    fun `up on the kickoff prompt opens both games where the player offers it, else it stays swallowed`() {
+        val kickoff = AlertCard(1, listOf(SportsLiveAlert.Kickoff(lakers, null)), shownAtMs = START)
+        val both = SportsLiveAlertKeys.context(kickoff, canActHere = true, surfaceBusy = true, canPeek = true, peeking = false, canBoth = true)
+        assertEquals(AlertKeyAction.BOTH, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_UP, both))
+        // ▼ and CH± still never zap under it.
+        assertEquals(AlertKeyAction.CONSUME, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_DOWN, both))
+        assertEquals(AlertKeyAction.CONSUME, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_CHANNEL_UP, both))
+        val noBoth = SportsLiveAlertKeys.context(kickoff, canActHere = true, surfaceBusy = false, canPeek = true, peeking = false, canBoth = false)
+        assertEquals(AlertKeyAction.CONSUME, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_UP, noBoth))
+    }
+
+    @Test
+    fun `up on a score card opens both games only while the card takes keys`() {
+        val card = AlertCard(1, listOf(score()), shownAtMs = START)
+        val open = SportsLiveAlertKeys.context(card, canActHere = true, surfaceBusy = false, canPeek = true, peeking = false, canBoth = true)
+        assertEquals(AlertKeyAction.BOTH, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_UP, open))
+        val busy = SportsLiveAlertKeys.context(card, canActHere = true, surfaceBusy = true, canPeek = true, peeking = false, canBoth = true)
+        assertFalse(busy.canBoth)
+        assertEquals(AlertKeyAction.PASS, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_UP, busy))
+    }
+
+    @Test
     fun `a score card's context is unchanged - actionable only with the screen's overlays closed`() {
         val card = AlertCard(1, listOf(score()), shownAtMs = START)
         val open = SportsLiveAlertKeys.context(card, canActHere = true, surfaceBusy = false, canPeek = true, peeking = false)

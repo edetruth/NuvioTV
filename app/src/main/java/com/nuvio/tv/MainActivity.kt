@@ -1473,6 +1473,19 @@ open class MainActivity : ComponentActivity() {
             if (intent.getBooleanExtra("debugSportsKickoff", false)) lifecycleScope.launch { sportsLiveAlerts.debugKickoff() }
             // `--ez debugSportsCrunch true`: one crunch-time alert (#137).
             if (intent.getBooleanExtra("debugSportsCrunch", false)) lifecycleScope.launch { sportsLiveAlerts.debugCrunch() }
+            // #161/#162 emulator checks: the game playing ends (optionally with nothing else live), every stream
+            // stopping is a game end (dual, mini), the next link start waits, a kickoff is held or given up.
+            val watch = com.nuvio.tv.core.sportslive.SportsLiveGameWatch.shared
+            if (intent.hasExtra("debugSportsNoNext")) watch.debugNoNext = intent.getBooleanExtra("debugSportsNoNext", false)
+            if (intent.hasExtra("debugSportsEndAll")) watch.debugEndAll = intent.getBooleanExtra("debugSportsEndAll", false)
+            if (intent.getBooleanExtra("debugSportsEnd", false)) watch.debugEndNow()
+            if (intent.getBooleanExtra("debugSportsWait", false)) watch.debugWaitNext(intent.getIntExtra("debugSportsWaitSeconds", 120) * 1_000L)
+            val holdSeconds = intent.getIntExtra("debugSportsKickoffHold", 0)
+            if (holdSeconds > 0) {
+                lifecycleScope.launch {
+                    sportsLiveAlerts.debugKickoffHold(holdSeconds * 1_000L, giveUp = intent.getBooleanExtra("debugSportsKickoffGiveUp", false))
+                }
+            }
             // `--es debugSportsProbe <sport>`: measures sports lookups and link starts (#158).
             intent.getStringExtra("debugSportsProbe")?.let { filter ->
                 sportsLiveDebugProbe.run(

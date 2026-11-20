@@ -277,7 +277,7 @@ class ZapPanelScoresTest {
         // Off: no request at all, and no toast.
         val (offRequests, offViewModel) = playerNowRequests(ScoresMode.OFF, alsoTrackedElsewhere = false)
         assertEquals(0, offRequests)
-        assertNull(offViewModel.fullTime.value)
+        assertNull(offViewModel.endCard.value)
         offViewModel.onPlayerStarted(false)
 
         // Show: its league is polled while the player runs.

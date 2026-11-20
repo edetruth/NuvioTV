@@ -369,6 +369,8 @@ fun PlayerScreen(
     val handleBackPress = handleBackPress@{
         if (externalHandoffInProgress) return@handleBackPress
         if (sportsLiveZap.closePanelOnBack()) return@handleBackPress
+        // The end-of-game card (#161): Back stops its countdown, then closes it (Stay).
+        if (sportsLiveZap.endCardOnBack()) return@handleBackPress
         if (postPlayRecommendationState.canReturnToPlayer && !uiState.playbackEnded) {
             returnToPlayerFromPostPlay()
             viewModel.hideControls()
@@ -587,7 +589,8 @@ fun PlayerScreen(
     }
 
     // Sports & Live (#138): the starting card while a link starts; it holds the focus meanwhile.
-    val sportsStartingVisible = uiState.sportsStarting != null && uiState.error == null &&
+    // The waiting card (#162) holds the focus the same way.
+    val sportsStartingVisible = (uiState.sportsStarting != null || uiState.sportsWaiting != null) && uiState.error == null &&
         !uiState.showSourcesPanel && !uiState.showControls && !postPlayRecommendationState.isVisible
 
     // Request focus for key events when controls visibility or panel state changes
@@ -1472,6 +1475,24 @@ fun PlayerScreen(
             )
         }
 
+        // Sports & Live (#162): the game's links are not live yet near kickoff; it plays as soon as one is.
+        uiState.sportsWaiting?.takeIf { sportsStartingVisible }?.let { waiting ->
+            com.nuvio.tv.ui.screens.sportslive.SportsLiveWaitingCard(
+                game = uiState.title,
+                startMs = waiting.startMs,
+                onAction = { action ->
+                    when (action) {
+                        com.nuvio.tv.ui.screens.sportslive.SportsLiveWaitingAction.BACK -> handleBackPress()
+                        com.nuvio.tv.ui.screens.sportslive.SportsLiveWaitingAction.SOURCES ->
+                            viewModel.onEvent(PlayerEvent.OnShowSourcesPanel)
+                    }
+                },
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .zIndex(2.5f)
+            )
+        }
+
         if (uiState.playbackIssueReportsEnabled &&
             uiState.showLoadingOverlay &&
             uiState.error == null &&
@@ -2349,16 +2370,22 @@ fun PlayerScreen(
             postPlayRecommendationState.isVisible || shouldConfirmNextEpisodeOnEnd || sportsStartingVisible
         )
         val currentPartyActive by rememberUpdatedState(partyActive)
-        val alertSurface = remember(sportsLiveZap, viewModel) {
+        val openDualFromAlert = com.nuvio.tv.ui.screens.sportslive.dual.LocalOpenSportsLiveDual.current
+        val alertSurface = remember(sportsLiveZap, viewModel, openDualFromAlert) {
             sportsLivePlayerAlertSurface(
                 zap = sportsLiveZap,
-                isBusy = { alertOverlayUp || sportsLiveZap.panelOpen.value || sportsLivePlayerOverlayUp(viewModel.uiState.value) },
+                isBusy = {
+                    alertOverlayUp || sportsLiveZap.panelOpen.value || sportsLivePlayerOverlayUp(viewModel.uiState.value) ||
+                        // The end card (#161) and the waiting card (#162) hold OK.
+                        sportsLiveZap.endCard.value?.toastOnly == false || viewModel.uiState.value.sportsWaiting != null
+                },
                 exoPlayer = {
                     viewModel.exoPlayer?.takeIf {
                         viewModel.controller.currentInternalPlayerEngine == com.nuvio.tv.data.local.InternalPlayerEngine.EXOPLAYER
                     }
                 },
-                partyActive = { currentPartyActive }
+                partyActive = { currentPartyActive },
+                openDual = openDualFromAlert
             )
         }
         RegisterSportsLiveAlertSurface(alertSurface)
@@ -2373,7 +2400,8 @@ fun PlayerScreen(
                 uiState.showAudioOverlay || uiState.showSubtitleOverlay || uiState.showSubtitleStylePanel ||
                 uiState.showSpeedDialog || uiState.showSubtitleDelayOverlay ||
                 uiState.showSubtitleTimingDialog || uiState.showMoreDialog,
-            isPlaying = { viewModel.uiState.value.isPlaying }
+            isPlaying = { viewModel.uiState.value.isPlaying },
+            onBackToLiveNow = { exitPlayerFromError() }
         )
     }
 }

@@ -164,7 +164,8 @@ class SportsLiveSettingsViewModel @Inject constructor(
             // Not switches: pickers, lists and actions with their own calls.
             SportsLiveSetting.MY_SPORTS, SportsLiveSetting.MY_TEAMS, SportsLiveSetting.SCORES,
             SportsLiveSetting.SCORE_DELAY, SportsLiveSetting.OPEN_GAME, SportsLiveSetting.SCORES_STATUS,
-            SportsLiveSetting.RESET_STREAM_MEMORY, SportsLiveSetting.RUN_SETUP, SportsLiveSetting.HIDDEN, SportsLiveSetting.CATALOGS -> Unit
+            SportsLiveSetting.RESET_STREAM_MEMORY, SportsLiveSetting.RUN_SETUP, SportsLiveSetting.HIDDEN, SportsLiveSetting.CATALOGS,
+            SportsLiveSetting.GAME_END, SportsLiveSetting.REMINDED_TEAMS -> Unit
         }
     }
 
@@ -211,6 +212,26 @@ class SportsLiveSettingsViewModel @Inject constructor(
 
     fun unhide(title: String) {
         viewModelScope.launch { prefs.unhideTitle(title) }
+    }
+
+    /** Reminder-only teams (#154), in the order added. */
+    val remindedTeams: StateFlow<List<com.nuvio.tv.domain.model.FollowedTeam>> = prefs.reminders
+        .map { it.remindedTeams }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** OK on a reminder-only team: it goes from the list. */
+    fun removeRemindedTeam(team: com.nuvio.tv.domain.model.FollowedTeam) {
+        viewModelScope.launch {
+            prefs.updateReminders { com.nuvio.tv.core.sportslive.alerts.GameReminders.removeTeam(it, team) }
+        }
+    }
+
+    /** "When a game ends" (#161). */
+    val gameEndAction: StateFlow<com.nuvio.tv.core.sportslive.SportsLiveGameEndAction> = prefs.gameEndAction
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), com.nuvio.tv.core.sportslive.SportsLiveGameEndAction.DEFAULT)
+
+    fun setGameEndAction(action: com.nuvio.tv.core.sportslive.SportsLiveGameEndAction) {
+        viewModelScope.launch { prefs.setGameEndAction(action) }
     }
 
     fun setRemindMyTeams(enabled: Boolean) {

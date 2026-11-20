@@ -4,6 +4,8 @@ import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.ScoreState
 import com.nuvio.tv.core.sportslive.scores.ScoreTeam
+import com.nuvio.tv.core.sportslive.scores.TeamFollows
+import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveKind
 import kotlin.math.abs
@@ -26,15 +28,26 @@ data class RemindersState(
     val reminders: List<GameReminder> = emptyList(),
     val optOuts: List<GameReminder> = emptyList(),
     /** Settings → Sports & Live → Alerts → "Remind me for my teams". */
-    val remindMyTeams: Boolean = true
+    val remindMyTeams: Boolean = true,
+    /**
+     * Reminder-only teams (#154): "Remind me for every ‹team› game". Each of their games gets the kickoff
+     * prompt, with no follow and no score alerts. Stored as a follow is ([TeamFollows.teamToFollow]).
+     */
+    val remindedTeams: List<FollowedTeam> = emptyList()
 ) {
-    /** Whether [item] gets a "Watch now?" prompt at kickoff: reminded by hand, or a followed team's game not opted out. */
-    fun isReminded(item: SportsLiveItem): Boolean =
-        reminders.any { GameReminders.matches(it, item) } ||
-            (remindMyTeams && item.followed && optOuts.none { GameReminders.matches(it, item) })
+    /**
+     * Whether [item] gets a "Watch now?" prompt at kickoff: reminded by hand, or (unless opted out) a followed
+     * team's game, or a reminder-only team's ([event]: its strict ESPN game, matched by ESPN id; null: by name).
+     */
+    fun isReminded(item: SportsLiveItem, event: ScoreSnapshot? = null): Boolean {
+        if (reminders.any { GameReminders.matches(it, item) }) return true
+        if (optOuts.any { GameReminders.matches(it, item) }) return false
+        return (remindMyTeams && item.followed) || GameReminders.remindsTeamOf(remindedTeams, item, event)
+    }
 
-    /** Whether an ESPN game with no card (a Team page's next game) is reminded by hand. */
-    fun isReminded(event: ScoreSnapshot): Boolean = reminders.any { GameReminders.matches(it, event) }
+    /** Whether an ESPN game with no card (a Team page's next game) is reminded: by hand, or a reminder-only team's. */
+    fun isReminded(event: ScoreSnapshot): Boolean =
+        reminders.any { GameReminders.matches(it, event) } || GameReminders.remindsTeamOf(remindedTeams, event)
 }
 
 object GameReminders {
@@ -139,6 +152,48 @@ object GameReminders {
         val reminders = state.reminders.filterNot { matches(it, event) }
         return state.copy(reminders = prune(if (on) reminders else reminders + reminder, nowMs))
     }
+
+    /**
+     * Whether [teams] (reminder-only) play in [item]: on its strict ESPN [event] by ESPN id
+     * ([TeamFollows.followsSide]); with no event, by name, as followed teams are matched to cards.
+     */
+    fun remindsTeamOf(teams: List<FollowedTeam>, item: SportsLiveItem, event: ScoreSnapshot?): Boolean {
+        if (teams.isEmpty() || item.isChannel) return false
+        if (event != null) return remindsTeamOf(teams, event)
+        return SportsLiveTeams.isFollowed(item, teams) || item.alternates.any { SportsLiveTeams.isFollowed(it, teams) }
+    }
+
+    /** Whether [teams] (reminder-only) play in ESPN [event]. */
+    fun remindsTeamOf(teams: List<FollowedTeam>, event: ScoreSnapshot): Boolean =
+        teams.isNotEmpty() && event.individual == null &&
+            (TeamFollows.followersOf(teams, event, event.home).isNotEmpty() || TeamFollows.followersOf(teams, event, event.away).isNotEmpty())
+
+    /** Whether [side] of [event] is on the reminder-only list of [state]. */
+    fun isTeamReminded(state: RemindersState, event: ScoreSnapshot, side: ScoreTeam): Boolean =
+        TeamFollows.followersOf(state.remindedTeams, event, side).isNotEmpty()
+
+    /**
+     * Whether More… offers "Remind me for every ‹team› game" for [side] of [event] (#154): not for a team
+     * already followed while "Remind me for my teams" is On (those games are reminded already), unless it is
+     * on the list anyway (so it can be taken off).
+     */
+    fun offersTeamReminder(state: RemindersState, followed: List<FollowedTeam>, event: ScoreSnapshot, side: ScoreTeam): Boolean {
+        if (isTeamReminded(state, event, side)) return true
+        if (TeamFollows.teamToFollow(event, side) == null) return false
+        return !(state.remindMyTeams && TeamFollows.followersOf(followed, event, side).isNotEmpty())
+    }
+
+    /** [state] after "Remind me for every ‹team› game" (or "Stop reminding…") on [side] of [event]. */
+    fun toggleTeam(state: RemindersState, event: ScoreSnapshot, side: ScoreTeam): RemindersState {
+        val on = TeamFollows.followersOf(state.remindedTeams, event, side)
+        if (on.isNotEmpty()) return state.copy(remindedTeams = state.remindedTeams - on.toSet())
+        val team = TeamFollows.teamToFollow(event, side) ?: return state
+        return state.copy(remindedTeams = state.remindedTeams + team)
+    }
+
+    /** [state] without [team] (Settings → Alerts → "Teams I'm reminded about", OK removes). */
+    fun removeTeam(state: RemindersState, team: FollowedTeam): RemindersState =
+        state.copy(remindedTeams = state.remindedTeams.filterNot { it == team })
 
     private fun sideName(team: ScoreTeam): String? =
         listOf(team.displayName, team.shortDisplayName, team.name).firstOrNull { !it.isNullOrBlank() }?.trim()

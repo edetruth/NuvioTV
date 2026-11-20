@@ -1,0 +1,120 @@
+package com.nuvio.tv.core.sportslive.alerts
+
+import android.view.KeyEvent
+import com.nuvio.tv.core.sportslive.alerts.AlertFixtures.MINUTE
+import com.nuvio.tv.core.sportslive.alerts.AlertFixtures.START
+import com.nuvio.tv.core.sportslive.alerts.AlertFixtures.item
+import com.nuvio.tv.core.sportslive.alerts.AlertFixtures.live
+import com.nuvio.tv.core.sportslive.alerts.AlertFixtures.pacersFinal
+import com.nuvio.tv.core.sportslive.scores.ScoresMode
+import com.nuvio.tv.core.sportslive.scores.TeamFollows
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+/** #154 reminder-only teams, the games-on-screen rule, and ▲ Both's key. */
+class SportsLiveLifecycleAlertsTest {
+
+    private val game = item()
+    private val event = live(10, 12)
+    private val pacers = TeamFollows.teamToFollow(pacersFinal, pacersFinal.away)!!
+    private val watchingNothing = SportsLiveWatching(streamStartedAtMs = START - 60 * MINUTE)
+
+    // #154
+
+    @Test
+    fun `a reminder-only team's game is reminded, by ESPN id or by name`() {
+        val state = RemindersState(remindedTeams = listOf(pacers))
+        assertTrue(state.isReminded(game, event))
+        assertTrue(state.isReminded(game))
+        assertFalse(state.isReminded(item(name = "Knicks @ Celtics")))
+        assertFalse(RemindersState().isReminded(game, event))
+    }
+
+    @Test
+    fun `a per-game opt-out still applies to a reminder-only team's game`() {
+        val state = RemindersState(remindedTeams = listOf(pacers), optOuts = listOf(GameReminders.of(game)!!))
+        assertFalse(state.isReminded(game, event))
+    }
+
+    @Test
+    fun `a followed and reminder-only team's game prompts once`() {
+        val engine = SportsLiveAlertEngine()
+        val state = RemindersState(remindedTeams = listOf(pacers))
+        val followedCopy = item(followed = true)
+        val otherCopy = item(id = "copy", addonId = "b")
+        val games = listOf(followedCopy, otherCopy).map { AlertGame(it, null, state.isReminded(it), emptySet()) }
+        val alerts = engine.update(START + MINUTE, games, SportsLiveAlertSettings(), ScoresMode.SHOW, watchingNothing)
+        assertEquals(1, alerts.count { it is SportsLiveAlert.Kickoff })
+    }
+
+    @Test
+    fun `More offers it per side, hidden for followed teams while Remind me for my teams is On`() {
+        val followed = listOf(pacers)
+        assertFalse(GameReminders.offersTeamReminder(RemindersState(), followed, pacersFinal, pacersFinal.away))
+        assertTrue(GameReminders.offersTeamReminder(RemindersState(remindMyTeams = false), followed, pacersFinal, pacersFinal.away))
+        assertTrue(GameReminders.offersTeamReminder(RemindersState(), followed, pacersFinal, pacersFinal.home))
+        // On the list anyway: offered, so it can be taken off.
+        assertTrue(GameReminders.offersTeamReminder(RemindersState(remindedTeams = listOf(pacers)), followed, pacersFinal, pacersFinal.away))
+    }
+
+    @Test
+    fun `the list round-trips through More and Settings`() {
+        val on = GameReminders.toggleTeam(RemindersState(), pacersFinal, pacersFinal.away)
+        assertEquals(listOf(pacers), on.remindedTeams)
+        assertTrue(GameReminders.isTeamReminded(on, pacersFinal, pacersFinal.away))
+        assertFalse(GameReminders.isTeamReminded(on, pacersFinal, pacersFinal.home))
+        val off = GameReminders.toggleTeam(on, pacersFinal, pacersFinal.away)
+        assertEquals(emptyList<Any>(), off.remindedTeams)
+        assertEquals(emptyList<Any>(), GameReminders.removeTeam(on, pacers).remindedTeams)
+    }
+
+    // Games on screen never alert
+
+    @Test
+    fun `a reminded game playing under another addon's id gives no prompt, now or later`() {
+        val engine = SportsLiveAlertEngine()
+        val listed = item(followed = true)
+        val playingCopy = item(id = "other-addon-copy", addonId = "z")
+        val (ids, keys, events) = SportsLiveAlertEngine.watchingKeys(listOf(playingCopy)) { null }
+        val watching = SportsLiveWatching(playingIds = ids, playingGameKeys = keys, playingEventIds = events, inPlayer = true, sportsPlayback = true)
+        assertEquals(emptyList<SportsLiveAlert>(), engine.update(START + MINUTE, listOf(AlertGame(listed, null, true)), SportsLiveAlertSettings(), ScoresMode.SHOW, watching))
+        // The player left: the reminder was satisfied, it never fires.
+        assertEquals(emptyList<SportsLiveAlert>(), engine.update(START + 2 * MINUTE, listOf(AlertGame(listed, null, true)), SportsLiveAlertSettings(), ScoresMode.SHOW, watchingNothing))
+    }
+
+    @Test
+    fun `the same game in either dual pane or the mini player gives no prompt`() {
+        val other = item(name = "Knicks @ Celtics", id = "knicks")
+        for (onScreen in listOf(listOf(other, game), listOf(game, other), listOf(game))) {
+            val engine = SportsLiveAlertEngine()
+            val (ids, keys, events) = SportsLiveAlertEngine.watchingKeys(onScreen) { null }
+            val watching = SportsLiveWatching(playingIds = ids, playingGameKeys = keys, playingEventIds = events, dual = onScreen.size == 2, miniPlaying = onScreen.size == 1)
+            val alerts = engine.update(START + MINUTE, listOf(AlertGame(item(id = "listed"), null, true)), SportsLiveAlertSettings(), ScoresMode.SHOW, watching)
+            assertEquals(emptyList<SportsLiveAlert>(), alerts)
+        }
+    }
+
+    @Test
+    fun `a card matched to the ESPN game on screen is that game`() {
+        val watching = SportsLiveWatching(playingEventIds = setOf(event.eventId))
+        assertTrue(SportsLiveAlertEngine.isPlaying(item(name = "Indiana at Philadelphia", id = "x"), watching, event))
+        assertFalse(SportsLiveAlertEngine.isPlaying(item(name = "Indiana at Philadelphia", id = "x"), watching, null))
+    }
+
+    // ▲ Both
+
+    @Test
+    fun `Up opens both games from a card in the full player, and is not offered in dual screen`() {
+        val fullPlayer = AlertKeyContext(cardActionable = true, canPeek = true, peeking = false, canBoth = true)
+        assertEquals(AlertKeyAction.BOTH, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_UP, fullPlayer))
+        assertEquals(AlertKeyAction.WATCH, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_CENTER, fullPlayer))
+        assertEquals(AlertKeyAction.PEEK, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_DOWN, fullPlayer))
+        val dual = AlertKeyContext(cardActionable = true, canPeek = false, peeking = false, canBoth = false)
+        assertEquals(AlertKeyAction.PASS, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_UP, dual))
+        assertEquals(AlertKeyAction.WATCH, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_CENTER, dual))
+        // No card to act on: Up is the screen's.
+        assertEquals(AlertKeyAction.PASS, SportsLiveAlertKeys.route(KeyEvent.KEYCODE_DPAD_UP, fullPlayer.copy(cardActionable = false)))
+    }
+}

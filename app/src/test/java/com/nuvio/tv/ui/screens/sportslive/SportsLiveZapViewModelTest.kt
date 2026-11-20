@@ -8,7 +8,6 @@ import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.core.sportslive.SportsLiveFullTimeAnnouncements
 import com.nuvio.tv.core.sportslive.SportsLiveLinkVerdicts
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
-import com.nuvio.tv.core.sportslive.scores.ChipScore
 import com.nuvio.tv.core.sportslive.scores.EspnFixtures
 import com.nuvio.tv.core.sportslive.scores.EspnLeagueMap
 import com.nuvio.tv.core.sportslive.scores.LiveScoresRepository
@@ -43,6 +42,11 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import com.nuvio.tv.core.sportslive.GameEndReason
+import com.nuvio.tv.core.sportslive.GameEndStrings
+import com.nuvio.tv.core.sportslive.SportsLiveEndCountdown
+import com.nuvio.tv.core.sportslive.SportsLiveGameEnd
+import com.nuvio.tv.core.sportslive.SportsLiveGameWatch
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SportsLiveZapViewModelTest {
@@ -82,7 +86,8 @@ class SportsLiveZapViewModelTest {
         mode: ScoresMode,
         playing: SportsLiveItem,
         others: List<SportsLiveItem>,
-        started: Boolean = true
+        started: Boolean = true,
+        watch: SportsLiveGameWatch = SportsLiveGameWatch()
     ): SportsLiveZapViewModel {
         SportsLiveZapSessions.start(
             SportsLiveZapSession.of(listOf(playing) + others, playing.streamKey, SportsLiveTab.LIVE_NOW, null, returnToHomeOnBack = false)!!
@@ -98,9 +103,13 @@ class SportsLiveZapViewModelTest {
         val liveScores = mockk<LiveScoresRepository>(relaxed = true)
         every { liveScores.scores } returns scores
         every { liveScores.mode } returns flowOf(mode)
-        return SportsLiveZapViewModel(SavedStateHandle(mapOf("contentId" to playing.id)), resolver, debrid, profiles, repo, liveScores)
-            .also { it.onPlayerStarted(started) }
+        return SportsLiveZapViewModel(
+            SavedStateHandle(mapOf("contentId" to playing.id)), resolver, debrid, profiles, repo, liveScores,
+            mainDispatcherRule.dispatcher, gameWatch = watch
+        ).also { it.onPlayerStarted(started) }
     }
+
+    private val END_STRINGS = GameEndStrings("Game over", "Final · %1\$s %2\$d–%3\$d %4\$s")
 
     @Test
     fun `the game playing ending shows the full-time toast once on screen, the score per the Scores setting`() = runTest(mainDispatcherRule.dispatcher) {
@@ -108,16 +117,19 @@ class SportsLiveZapViewModelTest {
         val scores = MutableStateFlow(mapOf(pacers.streamKey to inPlay))
         val viewModel = fullTimeViewModel(scores, ScoresMode.SHOW, pacers, emptyList())
         runCurrent()
-        assertNull(viewModel.fullTime.value)
+        assertNull(viewModel.endCard.value)
         scores.value = mapOf(pacers.streamKey to final)
         runCurrent()
-        assertEquals(ChipScore(101, 99), viewModel.fullTime.value!!.score)
+        val card = viewModel.endCard.value!!
+        assertEquals(GameEndReason.FINAL, card.reason)
+        assertEquals("Final · Indiana Pacers 101–99 Philadelphia 76ers", SportsLiveGameEnd.title(card.item, card.snapshot, card.mode, END_STRINGS))
         // Not on screen yet (the controls are up): not claimed.
         assertFalse(SportsLiveFullTimeAnnouncements.isAnnounced(final.eventId))
-        viewModel.onFullTimeVisible(true)
+        viewModel.onEndCardVisible(true)
         assertTrue(SportsLiveFullTimeAnnouncements.isAnnounced(final.eventId))
+        // Nothing else live and the stream plays on: the card leaves by itself.
         advanceTimeBy(FULL_TIME_TOAST_MS + 1)
-        assertNull(viewModel.fullTime.value)
+        assertNull(viewModel.endCard.value)
 
         // Hide until focused: "Full time" with no score.
         SportsLiveFullTimeAnnouncements.clear()
@@ -126,8 +138,9 @@ class SportsLiveZapViewModelTest {
         runCurrent()
         hiddenScores.value = mapOf(pacers.streamKey to final)
         runCurrent()
-        assertNull(hidden.fullTime.value!!.score)
-        hidden.dismissFullTime()
+        val hiddenCard = hidden.endCard.value!!
+        assertEquals("Game over", SportsLiveGameEnd.title(hiddenCard.item, hiddenCard.snapshot, hiddenCard.mode, END_STRINGS))
+        hidden.dismissEndCard()
 
         // Off: nothing.
         SportsLiveFullTimeAnnouncements.clear()
@@ -136,7 +149,7 @@ class SportsLiveZapViewModelTest {
         runCurrent()
         offScores.value = mapOf(pacers.streamKey to final)
         runCurrent()
-        assertNull(off.fullTime.value)
+        assertNull(off.endCard.value)
     }
 
     @Test
@@ -147,11 +160,11 @@ class SportsLiveZapViewModelTest {
         runCurrent()
         scores.value = mapOf(pacers.streamKey to final)
         runCurrent()
-        assertTrue(viewModel.fullTime.value != null)
+        assertTrue(viewModel.endCard.value != null)
         // The followed-team toast (#42) shows first, while this one waits behind the controls.
         assertTrue(SportsLiveFullTimeAnnouncements.claim(final.eventId))
-        viewModel.onFullTimeVisible(true)
-        assertNull(viewModel.fullTime.value)
+        viewModel.onEndCardVisible(true)
+        assertNull(viewModel.endCard.value)
 
         // Already announced before it ended here: never raised.
         SportsLiveFullTimeAnnouncements.clear()
@@ -161,7 +174,7 @@ class SportsLiveZapViewModelTest {
         runCurrent()
         laterScores.value = mapOf(pacers.streamKey to final)
         runCurrent()
-        assertNull(later.fullTime.value)
+        assertNull(later.endCard.value)
 
         // Never shown (controls up the whole time): dropped, unclaimed.
         SportsLiveFullTimeAnnouncements.clear()
@@ -171,13 +184,76 @@ class SportsLiveZapViewModelTest {
         waitingScores.value = mapOf(pacers.streamKey to final)
         runCurrent()
         advanceTimeBy(FULL_TIME_PENDING_MS + 1)
-        assertNull(waiting.fullTime.value)
+        assertNull(waiting.endCard.value)
         assertFalse(SportsLiveFullTimeAnnouncements.isAnnounced(final.eventId))
 
         // A game opened already over did not end while watching.
         val already = fullTimeViewModel(MutableStateFlow(mapOf(pacers.streamKey to final)), ScoresMode.SHOW, pacers, emptyList())
         runCurrent()
-        assertNull(already.fullTime.value)
+        assertNull(already.endCard.value)
+    }
+
+    @Test
+    fun `a stream stopping at the game's end shows the card with the countdown, and any key cancels it`() = runTest(mainDispatcherRule.dispatcher) {
+        val pacers = game("Indiana Pacers at Philadelphia 76ers")
+        val hawks = game("Atlanta Hawks at San Antonio Spurs")
+        val watch = SportsLiveGameWatch()
+        val viewModel = fullTimeViewModel(MutableStateFlow(emptyMap()), ScoresMode.SHOW, pacers, listOf(hawks), watch = watch)
+        val events = mutableListOf<SportsLiveZapEvent>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.events.collect { events += it } }
+        runCurrent()
+        watch.reportEnd(pacers.id, GameEndReason.STREAM_ENDED)
+        runCurrent()
+        val card = viewModel.endCard.value!!
+        assertTrue(card.streamStopped)
+        assertEquals(hawks, card.next)
+        viewModel.onEndCardVisible(true)
+        assertTrue(viewModel.endCard.value!!.countdownEndsAtMs != null)
+        // Any key: the countdown stops, the card waits for OK.
+        assertTrue(viewModel.cancelEndCountdown())
+        advanceTimeBy(30_000L)
+        runCurrent()
+        assertTrue(events.isEmpty())
+        assertTrue(viewModel.endCard.value != null)
+        // Back now closes it (Stay).
+        assertTrue(viewModel.endCardOnBack())
+        assertNull(viewModel.endCard.value)
+    }
+
+    @Test
+    fun `the countdown running out moves to Up next`() = runTest(mainDispatcherRule.dispatcher) {
+        val pacers = game("Indiana Pacers at Philadelphia 76ers")
+        val hawks = game("Atlanta Hawks at San Antonio Spurs")
+        val watch = SportsLiveGameWatch()
+        val viewModel = fullTimeViewModel(MutableStateFlow(emptyMap()), ScoresMode.SHOW, pacers, listOf(hawks), watch = watch)
+        val events = mutableListOf<SportsLiveZapEvent>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.events.collect { events += it } }
+        runCurrent()
+        watch.reportEnd(pacers.id, GameEndReason.STREAM_ENDED)
+        runCurrent()
+        viewModel.onEndCardVisible(true)
+        advanceTimeBy(SportsLiveEndCountdown.DURATION_MS + 1)
+        advanceUntilIdle()
+        assertNull(viewModel.endCard.value)
+        assertEquals(hawks, (events.single() as SportsLiveZapEvent.Navigate).target.item)
+    }
+
+    @Test
+    fun `Both from an alert pairs the game playing, on its link, with the alert's game`() = runTest(mainDispatcherRule.dispatcher) {
+        val pacers = game("Indiana Pacers at Philadelphia 76ers")
+        val hawks = game("Atlanta Hawks at San Antonio Spurs")
+        val elsewhere = game("Boston Celtics at New York Knicks")
+        val viewModel = fullTimeViewModel(MutableStateFlow(emptyMap()), ScoresMode.SHOW, pacers, listOf(hawks))
+        val session = viewModel.bothFromAlert(hawks)!!
+        assertEquals(pacers, session.left)
+        assertEquals(hawks, session.right)
+        assertEquals(pacers, session.backTo)
+        // A game the list leaves out is added to it.
+        val added = viewModel.bothFromAlert(elsewhere)!!
+        assertEquals(elsewhere, added.right)
+        assertTrue(added.items.any { it.streamKey == elsewhere.streamKey })
+        // Never the game playing beside itself.
+        assertNull(viewModel.bothFromAlert(pacers))
     }
 
     @Test
@@ -205,11 +281,11 @@ class SportsLiveZapViewModelTest {
         viewModel.onPlayerStarted(false)
         scores.value = mapOf(pacers.streamKey to final)
         runCurrent()
-        assertNull(viewModel.fullTime.value)
+        assertNull(viewModel.endCard.value)
         // Back to the player: the toast is raised then.
         viewModel.onPlayerStarted(true)
         runCurrent()
-        assertTrue(viewModel.fullTime.value != null)
+        assertTrue(viewModel.endCard.value != null)
 
         // Never started: never seen live, so nothing.
         SportsLiveFullTimeAnnouncements.clear()
@@ -218,7 +294,7 @@ class SportsLiveZapViewModelTest {
         runCurrent()
         stoppedScores.value = mapOf(pacers.streamKey to final)
         runCurrent()
-        assertNull(stopped.fullTime.value)
+        assertNull(stopped.endCard.value)
     }
 
     @Test
@@ -242,14 +318,14 @@ class SportsLiveZapViewModelTest {
             runCurrent()
             // Raised but hidden (the controls are up): Right is left to the player.
             assertFalse(viewModel.nextLiveGame())
-            viewModel.onFullTimeVisible(true)
-            viewModel.onFullTimeVisible(false)
+            viewModel.onEndCardVisible(true)
+            viewModel.onEndCardVisible(false)
             assertFalse(viewModel.nextLiveGame())
             // On screen: Right moves on, past the final and the dead-checked game.
-            viewModel.onFullTimeVisible(true)
+            viewModel.onEndCardVisible(true)
             assertTrue(viewModel.nextLiveGame())
             advanceUntilIdle()
-            assertNull(viewModel.fullTime.value)
+            assertNull(viewModel.endCard.value)
             assertEquals(hawks, (events.single() as SportsLiveZapEvent.Navigate).target.item)
         } finally {
             SportsLiveLinkVerdicts.shared.clear(dead.streamKey)

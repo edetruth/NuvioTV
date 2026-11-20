@@ -41,7 +41,11 @@ internal enum class SportsLiveSetting(
     FULL_TIME_ALERTS(SportsLiveSettingsSection.ALERTS, R.string.sports_live_setting_full_time_alerts, R.string.sports_live_setting_full_time_alerts_subtitle),
     /** Crunch-time alerts (#137): close games late in My sports. */
     CLOSE_GAME_ALERTS(SportsLiveSettingsSection.ALERTS, R.string.sports_live_setting_close_game_alerts, R.string.sports_live_setting_close_game_alerts_subtitle),
+    /** Reminder-only teams (#154): a summary row opening its page, where OK takes a team off. */
+    REMINDED_TEAMS(SportsLiveSettingsSection.ALERTS, R.string.sports_live_setting_reminded_teams, R.string.sports_live_setting_reminded_teams_help),
     OPEN_GAME(SportsLiveSettingsSection.PLAYING, R.string.sports_live_setting_open_game, R.string.sports_live_setting_open_game_subtitle),
+    /** "When a game ends" (#161): Move to the next game / Ask / Stay. */
+    GAME_END(SportsLiveSettingsSection.PLAYING, R.string.sports_live_setting_game_end, R.string.sports_live_setting_game_end_help),
     /** "Hide links this TV can't play" (#166): DRM links with no licence are left out of the stream lists. */
     HIDE_UNPLAYABLE(SportsLiveSettingsSection.PLAYING, R.string.sports_live_setting_hide_unplayable, R.string.sports_live_setting_hide_unplayable_subtitle),
     PICTURE_IN_PICTURE(SportsLiveSettingsSection.PLAYING, R.string.sports_live_setting_pip, R.string.sports_live_setting_pip_subtitle),
@@ -73,7 +77,7 @@ internal enum class SportsLiveSetting(
             CATCH_UP_ROW -> section && state.showHomeRow && scores != ScoresMode.OFF
             HOVER_PREVIEW -> section && !state.dataSaver
             // The device's own picture-in-picture support is checked by the screen on top of this.
-            MY_SPORTS, SCORES, OPEN_GAME, HIDE_UNPLAYABLE, PICTURE_IN_PICTURE, HOME_ROW, REMIND_MY_TEAMS,
+            MY_SPORTS, SCORES, OPEN_GAME, GAME_END, HIDE_UNPLAYABLE, PICTURE_IN_PICTURE, HOME_ROW, REMIND_MY_TEAMS, REMINDED_TEAMS,
             SCORES_STATUS, DATA_SAVER, CATALOGS -> section
         }
     }
@@ -165,6 +169,16 @@ internal sealed interface SportsLiveSettingsItem {
         override val key get() = "hidden_$title"
     }
 
+    /** A reminder-only team (#154): OK takes it off the list. */
+    data class RemindedTeam(val team: FollowedTeam) : SportsLiveSettingsItem {
+        override val key get() = "reminded_${team.espnId ?: team.name}_${team.league ?: team.sport}"
+    }
+
+    /** No reminder-only team: one row that says how to add one (OK does nothing). */
+    data object NoRemindedTeams : SportsLiveSettingsItem {
+        override val key get() = "no_reminded_teams"
+    }
+
     /** Nothing hidden: one row that says how to hide a title (it keeps focus on the page; OK does nothing). */
     data object NoHidden : SportsLiveSettingsItem {
         override val key get() = "no_hidden"
@@ -238,6 +252,10 @@ internal fun myTeamsItems(teams: List<FollowedTeam>): List<SportsLiveSettingsIte
 internal fun hiddenItems(titles: List<String>): List<SportsLiveSettingsItem> =
     if (titles.isEmpty()) listOf(SportsLiveSettingsItem.NoHidden) else titles.map { SportsLiveSettingsItem.HiddenTitle(it) }
 
+/** Alerts → "Teams I'm reminded about" (#154): the reminder-only teams in the order added, or a note. */
+internal fun remindedTeamsItems(teams: List<FollowedTeam>): List<SportsLiveSettingsItem> =
+    if (teams.isEmpty()) listOf(SportsLiveSettingsItem.NoRemindedTeams) else teams.map { SportsLiveSettingsItem.RemindedTeam(it) }
+
 /** True for an item the D-pad can land on (headers and the My teams note are plain text). */
 internal val SportsLiveSettingsItem.isFocusable: Boolean
     get() = this !is SportsLiveSettingsItem.Header && this != SportsLiveSettingsItem.NoTeams
@@ -272,6 +290,8 @@ internal fun sportsLiveHelpFor(
 ): SportsLiveHelp? = when (item) {
     is SportsLiveSettingsItem.Header, SportsLiveSettingsItem.NoTeams -> null
     SportsLiveSettingsItem.NoHidden -> SportsLiveHelp(R.string.sports_live_setting_hidden_empty)
+    SportsLiveSettingsItem.NoRemindedTeams -> SportsLiveHelp(R.string.sports_live_setting_reminded_teams_empty)
+    is SportsLiveSettingsItem.RemindedTeam -> SportsLiveHelp(R.string.sports_live_setting_reminded_team_help)
     is SportsLiveSettingsItem.Setting -> {
         val reason = item.setting.offReason(state, pipSupported)
         SportsLiveHelp(

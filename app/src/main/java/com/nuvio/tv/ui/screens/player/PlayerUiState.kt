@@ -198,6 +198,8 @@ data class PlayerUiState(
     val sportsReconnecting: Boolean = false,
     /** A Sports & Live link is starting (#138): the starting card shows; null once it plays. */
     val sportsStarting: SportsLiveStartingInfo? = null,
+    /** A Sports & Live game's links are not live yet near kickoff (#162): the waiting card shows; null otherwise. */
+    val sportsWaiting: SportsLiveWaitingInfo? = null,
     val showSwitchToMpvErrorAction: Boolean = false,
     val playbackIssueReportStatus: PlaybackIssueReportStatus = PlaybackIssueReportStatus.Idle,
     val playbackIssueReportId: String? = null,
@@ -493,6 +495,9 @@ data class StreamInfoData(
  * The sports starting card (#138): link [linkNumber] (of the game's links this player started) from
  * [sourceName] began loading at [startedAtMs].
  */
+/** "Waiting for the stream to start…" (#162): the game's scheduled [startMs], when known. */
+data class SportsLiveWaitingInfo(val startMs: Long?)
+
 data class SportsLiveStartingInfo(
     val linkNumber: Int,
     val sourceName: String?,

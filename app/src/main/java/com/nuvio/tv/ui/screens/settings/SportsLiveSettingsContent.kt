@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.settings
 
+import com.nuvio.tv.core.sportslive.SportsLiveGameEndAction
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -68,6 +69,8 @@ internal sealed interface SportsLiveSettingsPage {
     data object Catalogs : SportsLiveSettingsPage
     /** More → Hidden: titles hidden from Live Now (#134). */
     data object Hidden : SportsLiveSettingsPage
+    /** Alerts → Teams I'm reminded about (#154). */
+    data object RemindedTeams : SportsLiveSettingsPage
 
     /** Where Back goes, and the row there that opened this page (focus returns to it). */
     val parent: SportsLiveSettingsPage get() = if (this is Leagues) MySports else Main
@@ -79,6 +82,7 @@ internal sealed interface SportsLiveSettingsPage {
             is Leagues -> Item.Sport(sport).key
             Catalogs -> Item.Setting(SportsLiveSetting.CATALOGS).key
             Hidden -> Item.Setting(SportsLiveSetting.HIDDEN).key
+            RemindedTeams -> Item.Setting(SportsLiveSetting.REMINDED_TEAMS).key
         }
 }
 
@@ -103,6 +107,8 @@ internal fun SportsLiveSettingsContent(
     val alerts by viewModel.alertSettings.collectAsStateWithLifecycle()
     val newSportsHint by viewModel.newSportsHint.collectAsStateWithLifecycle()
     val hiddenTitles by viewModel.hiddenTitles.collectAsStateWithLifecycle()
+    val remindedTeams by viewModel.remindedTeams.collectAsStateWithLifecycle()
+    val gameEndAction by viewModel.gameEndAction.collectAsStateWithLifecycle()
     // Scores status (#70): worked out on a 30 s clock, so a feed no longer in use drops out.
     val feedHealth by viewModel.feedHealth.collectAsStateWithLifecycle()
     val clockMs by rememberSportsLiveClockMs()
@@ -143,6 +149,7 @@ internal fun SportsLiveSettingsContent(
         )
         SportsLiveSettingsPage.MyTeams -> myTeamsItems(state.followedTeams)
         SportsLiveSettingsPage.Hidden -> hiddenItems(hiddenTitles)
+        SportsLiveSettingsPage.RemindedTeams -> remindedTeamsItems(remindedTeams)
         SportsLiveSettingsPage.MySports -> mySportsItems()
         is SportsLiveSettingsPage.Leagues -> sportLeagueItems(current.sport)
         SportsLiveSettingsPage.Catalogs -> state.catalogs.flatMap { catalog ->
@@ -243,6 +250,9 @@ internal fun SportsLiveSettingsContent(
                     ?: stringResource(R.string.sports_live_my_teams_none)) to { goTo(SportsLiveSettingsPage.MyTeams, null) }
                 SportsLiveSetting.MY_SPORTS -> mySportsSummary(state.mySports) to { goTo(SportsLiveSettingsPage.MySports, null) }
                 SportsLiveSetting.OPEN_GAME -> openGameLabel(state.openGame) to { picker = ScorePicker.OPEN_GAME }
+                SportsLiveSetting.GAME_END -> gameEndLabel(gameEndAction) to { picker = ScorePicker.GAME_END }
+                SportsLiveSetting.REMINDED_TEAMS -> (summarise(remindedTeams.map { it.name })
+                    ?: stringResource(R.string.sports_live_my_teams_none)) to { goTo(SportsLiveSettingsPage.RemindedTeams, null) }
                 SportsLiveSetting.SCORES_STATUS -> scoresStatusText(scoresStatus) to { picker = ScorePicker.STATUS }
                 SportsLiveSetting.RESET_STREAM_MEMORY ->
                     (if (streamMemoryReset) stringResource(R.string.sports_live_setting_reset_stream_memory_done) else null) to {
@@ -301,6 +311,21 @@ internal fun SportsLiveSettingsContent(
                 title = item.title,
                 value = stringResource(R.string.sports_live_setting_hidden_show),
                 onClick = { viewModel.unhide(item.title) },
+                modifier = modifier,
+                onFocused = onFocused
+            )
+            is Item.RemindedTeam -> SportsLiveSettingRow(
+                title = item.team.name,
+                tag = teamTag(item.team)?.uppercase(),
+                value = stringResource(R.string.sports_live_setting_reminded_team_remove),
+                onClick = { viewModel.removeRemindedTeam(item.team) },
+                modifier = modifier,
+                onFocused = onFocused
+            )
+            Item.NoRemindedTeams -> SportsLiveSettingRow(
+                title = stringResource(R.string.sports_live_setting_reminded_teams_none),
+                onClick = {},
+                enabled = false,
                 modifier = modifier,
                 onFocused = onFocused
             )
@@ -442,6 +467,17 @@ internal fun SportsLiveSettingsContent(
             },
             onDismiss = { picker = null }
         )
+        ScorePicker.GAME_END -> SettingsSingleChoiceDialog(
+            title = stringResource(R.string.sports_live_setting_game_end),
+            subtitle = stringResource(R.string.sports_live_setting_game_end_help),
+            options = SportsLiveGameEndAction.entries.map { SettingsPickerOption(it, gameEndLabel(it)) },
+            selectedValue = gameEndAction,
+            onOptionSelected = { action ->
+                picker = null
+                viewModel.setGameEndAction(action)
+            },
+            onDismiss = { picker = null }
+        )
         ScorePicker.STATUS -> ScoresStatusDialog(
             status = scoresStatus,
             onRetry = viewModel::retryScores,
@@ -489,6 +525,7 @@ internal val SportsLiveSettingsPage.token: String
         is SportsLiveSettingsPage.Leagues -> LEAGUES_PREFIX + sport.id
         SportsLiveSettingsPage.Catalogs -> "catalogs"
         SportsLiveSettingsPage.Hidden -> "hidden"
+        SportsLiveSettingsPage.RemindedTeams -> "reminded_teams"
     }
 
 internal fun sportsLiveSettingsPageOf(token: String): SportsLiveSettingsPage = when (token) {
@@ -496,6 +533,7 @@ internal fun sportsLiveSettingsPageOf(token: String): SportsLiveSettingsPage = w
     "sports" -> SportsLiveSettingsPage.MySports
     "catalogs" -> SportsLiveSettingsPage.Catalogs
     "hidden" -> SportsLiveSettingsPage.Hidden
+    "reminded_teams" -> SportsLiveSettingsPage.RemindedTeams
     else -> if (token.startsWith(LEAGUES_PREFIX)) {
         MySport.ofId(token.removePrefix(LEAGUES_PREFIX))?.let { SportsLiveSettingsPage.Leagues(it) } ?: SportsLiveSettingsPage.Main
     } else {
@@ -508,7 +546,7 @@ private const val LEAGUES_PREFIX = "leagues:"
 private val PageSaver = Saver<SportsLiveSettingsPage, String>(save = { it.token }, restore = ::sportsLiveSettingsPageOf)
 
 /** The dialog open: scores mode, score delay, "When I open a game", or Scores status. */
-private enum class ScorePicker { MODE, DELAY, OPEN_GAME, STATUS }
+private enum class ScorePicker { MODE, DELAY, OPEN_GAME, GAME_END, STATUS }
 
 /** Asked for the first row of a page, once it has composed. */
 private const val FIRST_ROW = "\u0000first"
@@ -534,6 +572,8 @@ private fun PageHeader(page: SportsLiveSettingsPage, newSportsHint: Boolean) {
             stringResource(R.string.sports_live_setting_catalogs) to stringResource(R.string.sports_live_setting_catalogs_subtitle)
         SportsLiveSettingsPage.Hidden ->
             stringResource(R.string.sports_live_setting_hidden) to stringResource(R.string.sports_live_setting_hidden_subtitle)
+        SportsLiveSettingsPage.RemindedTeams ->
+            stringResource(R.string.sports_live_setting_reminded_teams) to stringResource(R.string.sports_live_setting_reminded_teams_help)
     }
     SettingsDetailHeader(title = title, subtitle = subtitle)
 }
@@ -618,6 +658,15 @@ private fun openGameLabel(openGame: SportsLiveOpenGame): String = stringResource
     when (openGame) {
         SportsLiveOpenGame.PLAY_BEST -> R.string.sports_live_open_game_play_best
         SportsLiveOpenGame.LET_ME_CHOOSE -> R.string.sports_live_open_game_let_me_choose
+    }
+)
+
+@Composable
+private fun gameEndLabel(action: SportsLiveGameEndAction): String = stringResource(
+    when (action) {
+        SportsLiveGameEndAction.MOVE -> R.string.sports_live_game_end_move
+        SportsLiveGameEndAction.ASK -> R.string.sports_live_game_end_ask
+        SportsLiveGameEndAction.STAY -> R.string.sports_live_game_end_stay
     }
 )
 

@@ -7,6 +7,8 @@ import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.CATALOGS
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.CATCH_UP_ROW
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.DATA_SAVER
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.FULL_TIME_ALERTS
+import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.GAME_END
+import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.REMINDED_TEAMS
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.HIDDEN
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.HOME_ROW
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.HOVER_PREVIEW
@@ -55,8 +57,8 @@ class SportsLiveSettingsSectionsTest {
             listOf(
                 SCORES_AND_SPOILERS to listOf(SCORES, SCORE_DELAY),
                 WHAT_I_FOLLOW to listOf(MY_TEAMS, MY_SPORTS),
-                ALERTS to listOf(REMIND_MY_TEAMS, SCORE_ALERTS, FULL_TIME_ALERTS, CLOSE_GAME_ALERTS),
-                PLAYING to listOf(OPEN_GAME, HIDE_UNPLAYABLE, PICTURE_IN_PICTURE),
+                ALERTS to listOf(REMIND_MY_TEAMS, SCORE_ALERTS, FULL_TIME_ALERTS, CLOSE_GAME_ALERTS, REMINDED_TEAMS),
+                PLAYING to listOf(OPEN_GAME, GAME_END, HIDE_UNPLAYABLE, PICTURE_IN_PICTURE),
                 HOME_AND_ROWS to listOf(SHOW_SECTION, HOME_ROW, CATCH_UP_ROW, HOVER_PREVIEW),
                 SETUP to listOf(RUN_SETUP),
                 STATUS to listOf(SCORES_STATUS),
@@ -74,7 +76,9 @@ class SportsLiveSettingsSectionsTest {
             setOf(
                 SHOW_SECTION, HOME_ROW, HOVER_PREVIEW, DATA_SAVER, OPEN_GAME, RESET_STREAM_MEMORY,
                 PICTURE_IN_PICTURE, SCORES, SCORE_DELAY, SCORES_STATUS, REMIND_MY_TEAMS, SCORE_ALERTS,
-                FULL_TIME_ALERTS, CLOSE_GAME_ALERTS, MY_SPORTS, MY_TEAMS, CATCH_UP_ROW, RUN_SETUP, HIDDEN, CATALOGS, HIDE_UNPLAYABLE
+                FULL_TIME_ALERTS, CLOSE_GAME_ALERTS, MY_SPORTS, MY_TEAMS, CATCH_UP_ROW, RUN_SETUP, HIDDEN, CATALOGS, HIDE_UNPLAYABLE,
+                // #161 and #154.
+                GAME_END, REMINDED_TEAMS
             ),
             shown.toSet()
         )

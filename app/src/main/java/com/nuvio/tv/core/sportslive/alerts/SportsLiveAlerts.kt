@@ -9,6 +9,8 @@ import androidx.annotation.VisibleForTesting
 import com.nuvio.tv.BuildConfig
 import com.nuvio.tv.core.sportslive.SportsLiveDisplayText
 import com.nuvio.tv.core.sportslive.SportsLiveItemBucketer
+import com.nuvio.tv.core.sportslive.SportsLiveLiveCheck
+import com.nuvio.tv.data.repository.SportsLiveKickoffProbe
 import com.nuvio.tv.core.sportslive.scores.EspnLeague
 import com.nuvio.tv.core.sportslive.scores.LiveScoresRepository
 import com.nuvio.tv.core.sportslive.scores.ScoreChips
@@ -26,6 +28,10 @@ import com.nuvio.tv.domain.model.SportsLiveTab
 import com.nuvio.tv.domain.repository.SportsLiveLoad
 import com.nuvio.tv.domain.repository.SportsLiveRepository
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.coroutineScope
@@ -67,12 +73,32 @@ enum class AlertAnswer { WATCH, LATER, DISMISS, TIMEOUT }
 class SportsLiveAlerts @Inject constructor(
     private val repo: SportsLiveRepository,
     private val prefs: SportsLivePreferencesDataStore,
-    private val liveScores: LiveScoresRepository
+    private val liveScores: LiveScoresRepository,
+    /** Probes a game's links at kickoff (#162); null (tests): every kickoff fires unchecked. */
+    private val kickoffProbe: SportsLiveKickoffProbe? = null
 ) {
     private val engine = SportsLiveAlertEngine()
     /** Crunch-time alerts' limits (#137); guarded by [lock]. */
     private val crunch = CrunchAlerts()
     private val lock = Any()
+
+    /** Kickoff prompts waiting for a live link (#162); guarded by [holdsLock], probed while holding it. */
+    private val holds = SportsLiveKickoffHolds(
+        probe = { item ->
+            if (System.currentTimeMillis() < debugNotLiveUntilMs) {
+                android.util.Log.d("SportsLiveAlerts", "kickoff hold: no live link yet (debug)")
+                SportsLiveLiveCheck.Outcome(live = null, checkable = true)
+            } else {
+                kickoffProbe?.probe(item) ?: SportsLiveLiveCheck.Outcome(live = null, checkable = false)
+            }
+        }
+    )
+
+    /** Debug builds only: until then the kickoff probe finds no live link (the #162 emulator check). */
+    @Volatile
+    private var debugNotLiveUntilMs = 0L
+    private val holdsLock = Mutex()
+    private val holdsScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     /** Waiting overlays with when they were raised; guarded by [lock]. */
     private val queue = ArrayList<Pair<SportsLiveAlert, Long>>()
@@ -99,6 +125,15 @@ class SportsLiveAlerts @Inject constructor(
     /** Bell on an ESPN game with no card pressed (a Team page's next game): reminded now? */
     suspend fun toggleReminder(event: ScoreSnapshot): Boolean =
         prefs.updateReminders { GameReminders.toggle(it, event, System.currentTimeMillis()) }.isReminded(event)
+
+    /** "Remind me for every ‹team› game" (or Stop reminding…) on [side] of [event] (#154): on the list now? */
+    suspend fun toggleTeamReminder(event: ScoreSnapshot, side: ScoreTeam): Boolean =
+        GameReminders.isTeamReminded(prefs.updateReminders { GameReminders.toggleTeam(it, event, side) }, event, side)
+
+    /** Settings → Alerts → "Teams I'm reminded about": OK takes [team] off (#154). */
+    suspend fun removeTeamReminder(team: FollowedTeam) {
+        prefs.updateReminders { GameReminders.removeTeam(it, team) }
+    }
 
     private val reminderNoticeFlow = MutableStateFlow<ReminderNotice?>(null)
     private var reminderNoticeCount = 0L
@@ -157,6 +192,26 @@ class SportsLiveAlerts @Inject constructor(
             launch {
                 tracked.map { it.isNotEmpty() }.distinctUntilChanged().collectLatest { any ->
                     if (any) liveScores.scores.collect { }
+                }
+            }
+            // Kickoff prompts held for a live link (#162): probed when due, outside the alerts' lock.
+            launch {
+                while (true) {
+                    val events = holdsLock.withLock {
+                        if (holds.isEmpty) {
+                            emptyList()
+                        } else {
+                            holds.tick { alert -> SportsLiveAlertEngine.isPlaying(alert.item, watching.value, alert.snapshot) }
+                        }
+                    }
+                    for (event in events) {
+                        val alert = when (event) {
+                            is SportsLiveKickoffHolds.Event.Fire -> event.alert
+                            is SportsLiveKickoffHolds.Event.GiveUp -> event.alert.copy(noStreamYet = true)
+                        }
+                        enqueue(listOf(alert), System.currentTimeMillis())
+                    }
+                    delay(TICK_MS)
                 }
             }
             combine(base.filterNotNull(), liveScores.mode, watching, clock) { b, mode, now, _ ->
@@ -234,13 +289,18 @@ class SportsLiveAlerts @Inject constructor(
     private fun evaluate(inputs: Inputs, scores: Map<String, ScoreSnapshot>, nowMs: Long) {
         val reminders = inputs.reminders.copy(remindMyTeams = inputs.settings.remindMyTeams)
         val games = inputs.cards.mapNotNull { item ->
-            val reminded = reminders.isReminded(item)
-            if (!reminded && !item.followed) return@mapNotNull null
             val event = if (inputs.mode == ScoresMode.OFF) null else ScoreChips.matchedEvent(item, scores[item.streamKey])
+            // Reminder-only teams (#154) by ESPN id on the strict game, else by name: one game, one prompt.
+            val reminded = reminders.isReminded(item, event)
+            if (!reminded && !item.followed) return@mapNotNull null
             AlertGame(item, event, reminded, event?.let { followedSides(inputs.followed, it) }.orEmpty())
         }
         val raised = synchronized(lock) { engine.update(nowMs, games, inputs.settings, inputs.mode, inputs.watching) }
-        if (raised.isNotEmpty()) enqueue(raised, nowMs)
+        if (raised.isEmpty()) return
+        // A first kickoff prompt waits for a live link (#162); a re-ask after Later shows as it comes.
+        val (held, shown) = raised.partition { it is SportsLiveAlert.Kickoff && SportsLiveAlerts.holdsFirst(it) }
+        if (held.isNotEmpty()) holdsScope.launch { holdsLock.withLock { held.forEach { holds.hold(it as SportsLiveAlert.Kickoff) } } }
+        if (shown.isNotEmpty()) enqueue(shown, nowMs)
     }
 
     /**
@@ -311,7 +371,11 @@ class SportsLiveAlerts @Inject constructor(
     fun close(card: AlertCard, answer: AlertAnswer) = synchronized(lock) {
         val nowMs = System.currentTimeMillis()
         val alert = card.first
-        if (alert is SportsLiveAlert.Kickoff) {
+        if (alert is SportsLiveAlert.Kickoff && alert.noStreamYet) {
+            // The note (#162): Remind me in 10 min probes once more then; anything else, done.
+            engine.answered(alert.item)
+            if (answer == AlertAnswer.LATER) holdsScope.launch { holdsLock.withLock { holds.remindLater(alert) } }
+        } else if (alert is SportsLiveAlert.Kickoff) {
             when (answer) {
                 AlertAnswer.WATCH, AlertAnswer.DISMISS -> engine.answered(alert.item)
                 AlertAnswer.LATER, AlertAnswer.TIMEOUT -> engine.later(alert.item, nowMs)
@@ -330,7 +394,8 @@ class SportsLiveAlerts @Inject constructor(
     private fun showable(queued: SportsLiveAlert, nowMs: Long, raisedAt: Long): SportsLiveAlert? {
         val next = SportsLiveAlertEngine.stillShowable(queued, lastMode, lastSettings) ?: return null
         if (next !is SportsLiveAlert.Kickoff && nowMs - raisedAt > TOAST_STALE_MS) return null
-        if (SportsLiveAlertEngine.isPlaying(next.item, watching.value)) {
+        if (SportsLiveAlertEngine.isPlaying(next.item, watching.value, SportsLiveAlertEngine.snapshotOf(next))) {
+            // A reminder for a game on screen is satisfied: it never fires later either.
             if (next is SportsLiveAlert.Kickoff) engine.answered(next.item)
             return null
         }
@@ -415,6 +480,22 @@ class SportsLiveAlerts @Inject constructor(
         if (card != null) enqueue(listOf(SportsLiveAlert.Kickoff(card, null)), System.currentTimeMillis())
     }
 
+    /**
+     * Debug builds only (the #162 emulator check): a kickoff prompt for a live game now listed and not playing,
+     * held as at a real kickoff, its probe finding nothing live for [notLiveMs]; then the real probe decides.
+     * [giveUp]: the hold gives up at once (the "no stream yet" note).
+     */
+    suspend fun debugKickoffHold(notLiveMs: Long, giveUp: Boolean) {
+        if (!BuildConfig.IS_DEBUG_BUILD) return
+        val card = candidates(repo.latest.value, repo.claimedCatalogs.first(), repo.followedTeams.first())
+            .firstOrNull { it.isLive && it.teams != null && !SportsLiveAlertEngine.isPlaying(it, watching.value) } ?: return
+        debugNotLiveUntilMs = System.currentTimeMillis() + notLiveMs
+        val alert = SportsLiveAlert.Kickoff(card, null)
+        android.util.Log.d("SportsLiveAlerts", "debugKickoffHold: held, not live for ${notLiveMs / 1000} s")
+        if (giveUp) enqueue(listOf(alert.copy(noStreamYet = true)), System.currentTimeMillis())
+        else holdsLock.withLock { holds.hold(alert) }
+    }
+
     private fun ticks(): Flow<Unit> = flow {
         while (true) {
             emit(Unit)
@@ -424,6 +505,9 @@ class SportsLiveAlerts @Inject constructor(
 
     companion object {
         private const val TICK_MS = 5_000L
+
+        /** A first kickoff prompt waits for a live link (#162); a re-ask after Later or the note does not. */
+        fun holdsFirst(alert: SportsLiveAlert): Boolean = alert is SportsLiveAlert.Kickoff && !alert.again && !alert.noStreamYet
 
         /** A score or full-time toast not shown within this long is dropped. */
         private const val TOAST_STALE_MS = 30_000L

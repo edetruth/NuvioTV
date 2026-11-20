@@ -135,7 +135,13 @@ internal fun SportsLiveCardMenu(
     /** "Watch postgame" (#140): the in-player panel's Just ended game, whose OK opens its box score; null hides it. */
     onWatchPostgame: (() -> Unit)? = null,
     /** "Hide from Live Now" (#134): an unmatched item leaves Live Now; null hides it. */
-    onHide: (() -> Unit)? = null
+    onHide: (() -> Unit)? = null,
+    /**
+     * "Remind me for every ‹team› game" (#154): each offered side's name and whether it is on the reminder-only
+     * list ("Stop reminding for ‹team› games"); [onToggleTeamReminder] gets its index.
+     */
+    teamReminders: List<Pair<String, Boolean>> = emptyList(),
+    onToggleTeamReminder: (Int) -> Unit = {}
 ) {
     var teamsOpen by remember { mutableStateOf(false) }
     SportsLiveSheet(
@@ -187,6 +193,13 @@ internal fun SportsLiveCardMenu(
             SportsLiveMenuButton(
                 text = stringResource(if (reminded) R.string.sports_live_cancel_reminder else R.string.sports_live_remind_me),
                 onClick = onToggleReminder,
+                modifier = first()
+            )
+        }
+        teamReminders.forEachIndexed { index, (team, on) ->
+            SportsLiveMenuButton(
+                text = stringResource(if (on) R.string.sports_live_stop_reminding_team else R.string.sports_live_remind_every_team, team),
+                onClick = { onToggleTeamReminder(index) },
                 modifier = first()
             )
         }

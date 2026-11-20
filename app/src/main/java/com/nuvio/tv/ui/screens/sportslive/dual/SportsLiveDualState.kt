@@ -1,6 +1,7 @@
 package com.nuvio.tv.ui.screens.sportslive.dual
 
 import com.nuvio.tv.domain.model.SportsLiveItem
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveEndCard
 import com.nuvio.tv.domain.model.Stream
 
 enum class Side {
@@ -19,6 +20,9 @@ sealed interface PaneStatus {
 
     /** The device had no decoder left for this pane while the other one played. */
     data object DeviceLimit : PaneStatus
+
+    /** The pane's game ended (#161): its end card ([DualPane.end]), or "Game over" once it was closed. */
+    data object Ended : PaneStatus
 }
 
 data class DualPane(
@@ -32,7 +36,9 @@ data class DualPane(
     /** Which of the game's links [stream] is, for the starting card (#138): 1 for the first one tried. */
     val linkNumber: Int = 1,
     /** How many links the game has, as far as known (#138); 0 when unknown. */
-    val linkCount: Int = 0
+    val linkCount: Int = 0,
+    /** The end card in the pane (#161) while [status] is [PaneStatus.Ended]; null once Stay closed it. */
+    val end: SportsLiveEndCard? = null
 )
 
 /** The pane's link is starting (#138): its starting card shows (Try next link / Sources / Back). */
@@ -60,7 +66,7 @@ data class DualState(
      */
     val audibleSide: Side
         get() {
-            val failed = pane(highlighted).status.let { it == PaneStatus.Error || it == PaneStatus.DeviceLimit }
+            val failed = pane(highlighted).status.let { it == PaneStatus.Error || it == PaneStatus.DeviceLimit || it == PaneStatus.Ended }
             return if (failed && pane(highlighted.other).status == PaneStatus.Playing) highlighted.other else highlighted
         }
 
@@ -119,6 +125,12 @@ data class DualState(
                 reconnecting = true,
                 linkNumber = pane.linkNumber + 1
             )
+        }
+        is DualAction.Ended -> updatePaneOf(action.item) { pane ->
+            pane.copy(status = PaneStatus.Ended, end = action.card, reconnecting = false)
+        }
+        is DualAction.EndChanged -> updatePaneOf(action.item) { pane ->
+            if (pane.status != PaneStatus.Ended) null else pane.copy(end = action.card)
         }
         is DualAction.LinkCount -> updatePaneOf(action.item) { pane ->
             if (pane.linkCount == action.count) null else pane.copy(linkCount = action.count)
@@ -208,4 +220,10 @@ sealed interface DualAction {
 
     /** [item]'s game has [count] links, as far as known (#138). */
     data class LinkCount(val item: SportsLiveItem, val count: Int) : DualAction
+
+    /** [item]'s game ended (#161): its pane shows [card]; the other pane plays on. */
+    data class Ended(val item: SportsLiveItem, val card: SportsLiveEndCard) : DualAction
+
+    /** [item]'s ended pane's card changed (its countdown stopped) or closed ([card] null: Stay). */
+    data class EndChanged(val item: SportsLiveItem, val card: SportsLiveEndCard?) : DualAction
 }

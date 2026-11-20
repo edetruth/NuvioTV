@@ -75,6 +75,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
@@ -101,6 +102,7 @@ import com.nuvio.tv.core.sportslive.alerts.AlertAnswer
 import com.nuvio.tv.core.sportslive.alerts.AlertContent
 import com.nuvio.tv.core.sportslive.alerts.AlertSide
 import com.nuvio.tv.core.sportslive.alerts.KickoffStyle
+import com.nuvio.tv.core.sportslive.SportsLiveGameWatch
 import com.nuvio.tv.core.sportslive.alerts.ReminderNotice
 import com.nuvio.tv.core.sportslive.alerts.SportsLiveAlert
 import com.nuvio.tv.core.sportslive.alerts.SportsLiveAlertContent
@@ -181,11 +183,16 @@ fun SportsLiveAlertsHost(
     val dualPanes by SportsLiveAlertSurfaces.dualPanes.collectAsState()
     val panes = dualPanes?.takeIf { dualRoute }
     LaunchedEffect(inPlayer, playerContentId, playerTitle, miniItem, streamStartedAt, route, panes) {
-        // In dual screen the highlighted pane's game is the one watched; the other pane's may still alert (#136).
-        val heard = panes?.let { if (it.leftHighlighted) it.left else it.right }
+        // Every game on screen (the full player's, both dual panes', the mini player's) is watched: none of them
+        // alerts, matched by card, game identity or ESPN event, never by title.
+        val playerItem = playerContentId?.let { id -> SportsLiveZapSessions.activeFor(id)?.current ?: SportsLiveGameWatch.shared.item(id) }
+        val onScreen = listOfNotNull(playerItem, miniItem, panes?.left, panes?.right)
+        val (ids, gameKeys, eventIds) = SportsLiveAlertEngine.watchingKeys(onScreen) { SportsLiveGameWatch.shared.snapshot(it.id)?.eventId }
         alerts.setWatching(
             SportsLiveWatching(
-                playingIds = setOfNotNull(playerContentId) + listOfNotNull(miniItem, heard).flatMap { listOf(it) + it.alternates }.map { it.id },
+                playingIds = setOfNotNull(playerContentId) + ids,
+                playingGameKeys = gameKeys,
+                playingEventIds = eventIds,
                 inPlayer = inPlayer,
                 // A game or channel played from Sports & Live; anything else is a movie or show.
                 sportsPlayback = inPlayer && SportsLiveExtraSources.isSportsPlayback(playerContentId),
@@ -326,13 +333,17 @@ fun SportsLiveAlertsHost(
     }
     fun keyContext(): AlertKeyContext {
         val on = currentSurface
+        // ▲ Both: the full player only; dual screen already shows two games (OK replaces the highlighted one).
+        // A kickoff with no live stream yet (#162) has nothing to put beside the game.
+        val kickoff = currentCard?.first as? SportsLiveAlert.Kickoff
         return SportsLiveAlertKeys.context(
             card = currentCard,
             canActHere = canActHere,
             surfaceBusy = on?.busy(),
             canPeek = currentInPlayer && on?.peek?.canPeek() == true,
             peeking = peek != null,
-            promptChoice = promptPick?.takeIf { it.first == currentCard?.id }?.second ?: PromptChoice.WATCH
+            promptChoice = promptPick?.takeIf { it.first == currentCard?.id }?.second ?: PromptChoice.WATCH,
+            canBoth = currentInPlayer && kickoff?.noStreamYet != true && on?.offersBoth() == true
         )
     }
     /** Watch on the kickoff prompt over the player or dual screen (#173): the game's fresh card, played here. */
@@ -353,9 +364,14 @@ fun SportsLiveAlertsHost(
                     AlertKeyAction.PEEK_RETURN -> onPeek(PeekEvent.Back)
                     AlertKeyAction.PROMPT_CHOOSE_WATCH -> choose(PromptChoice.WATCH)
                     AlertKeyAction.PROMPT_CHOOSE_LATER -> choose(PromptChoice.LATER)
-                    AlertKeyAction.PROMPT_WATCH -> currentCard?.let { watchFromPrompt(it) }
-                    AlertKeyAction.PROMPT_LATER -> currentCard?.let { alerts.close(it, AlertAnswer.LATER) }
-                    AlertKeyAction.WATCH, AlertKeyAction.PEEK, AlertKeyAction.DISMISS -> {
+                    // No live stream yet (#162): the buttons are Remind me in 10 min (Later's answer) and Dismiss.
+                    AlertKeyAction.PROMPT_WATCH -> currentCard?.let {
+                        if (it.noStreamYet()) alerts.close(it, AlertAnswer.LATER) else watchFromPrompt(it)
+                    }
+                    AlertKeyAction.PROMPT_LATER -> currentCard?.let {
+                        alerts.close(it, if (it.noStreamYet()) AlertAnswer.DISMISS else AlertAnswer.LATER)
+                    }
+                    AlertKeyAction.WATCH, AlertKeyAction.PEEK, AlertKeyAction.BOTH, AlertKeyAction.DISMISS -> {
                         val shown = currentCard ?: return
                         // OK acts on the alert the card shows now (of those it shows: the ones with words).
                         val worded = shown.alerts.filter { SportsLiveAlertContent.of(it) != null }.ifEmpty { shown.alerts }
@@ -369,6 +385,15 @@ fun SportsLiveAlertsHost(
                             AlertKeyAction.PEEK -> {
                                 alerts.close(shown, AlertAnswer.WATCH)
                                 on?.let { startPeek(alert.item, it) }
+                            }
+                            AlertKeyAction.BOTH -> {
+                                alerts.close(shown, AlertAnswer.WATCH)
+                                when {
+                                    on?.watchBoth(alert.item) == true -> Unit
+                                    // A kickoff's fresh card plays its live link (#162), as Watch on the prompt.
+                                    shown.first is SportsLiveAlert.Kickoff -> scope.launch { playHere(alerts.cardToWatch(alert.item), on) }
+                                    else -> playHere(alert.item, on)
+                                }
                             }
                             else -> alerts.close(shown, AlertAnswer.DISMISS)
                         }
@@ -408,10 +433,20 @@ fun SportsLiveAlertsHost(
             // Over the player or dual screen the prompt takes its keys by the dispatcher (#173), not by focus;
             // Back is Later, by the back callback as by the key.
             val keyChoice = keyContext().prompt
-            TakeBack(keyChoice != null && peek == null) { currentCard?.let { alerts.close(it, AlertAnswer.LATER) } }
+            TakeBack(keyChoice != null && peek == null) {
+                currentCard?.let { alerts.close(it, if (it.noStreamYet()) AlertAnswer.DISMISS else AlertAnswer.LATER) }
+            }
             KickoffPrompt(
                 content = content,
                 compact = style == KickoffStyle.COMPACT,
+                noStreamYet = first.noStreamYet,
+                // ▲ Both (the full player only, never dual screen): this game and the kickoff's side by side.
+                onBoth = surface?.takeIf { inPlayer && !dualRoute && style == KickoffStyle.COMPACT && !first.noStreamYet && it.offersBoth() }?.let { on ->
+                    {
+                        alerts.close(current, AlertAnswer.WATCH)
+                        if (!on.watchBoth(first.item)) scope.launch { playViewModel.play(alerts.cardToWatch(first.item)) }
+                    }
+                },
                 watchingTitle = playerTitle,
                 kickoffLabel = rememberSportsLiveStateLabeler(SportsLiveTab.UPCOMING)(first.item.copy(isLive = false)),
                 keyChoice = keyChoice,
@@ -466,10 +501,15 @@ fun SportsLiveAlertsHost(
         val keys = keyContext()
         // Back closes an actionable card only (never the player under it), by the back callback as by the key.
         TakeBack(keys.cardActionable && peek == null) { currentCard?.let { alerts.close(it, AlertAnswer.DISMISS) } }
-        val hint = when {
-            peek != null || !keys.cardActionable -> null
-            keys.canPeek -> stringResource(R.string.sports_live_alert_hint_watch) + HINT_SEPARATOR + stringResource(R.string.sports_live_alert_hint_peek)
-            else -> stringResource(R.string.sports_live_alert_hint_watch)
+        val hint = if (peek != null || !keys.cardActionable) {
+            null
+        } else {
+            // "OK Watch · ▲ Both · ▼ Peek", each part only where it works.
+            listOfNotNull(
+                stringResource(R.string.sports_live_alert_hint_watch),
+                stringResource(R.string.sports_live_alert_hint_both).takeIf { keys.canBoth },
+                stringResource(R.string.sports_live_alert_hint_peek).takeIf { keys.canPeek }
+            ).joinToString(HINT_SEPARATOR)
         }
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             val (end, top) = alertCardOffset(SportsLiveAlertPlacement.spot(alert, panes), maxWidth, maxHeight)
@@ -615,6 +655,10 @@ private fun SportsLivePeekLayer(state: PeekState, stream: Stream?, onFirstFrame:
 private fun KickoffPrompt(
     content: AlertContent.Kickoff,
     compact: Boolean,
+    /** The quiet note (#162): no link came up within 20 minutes; Remind me in 10 min / Dismiss, no Watch. */
+    noStreamYet: Boolean,
+    /** ▲ Both over the full player; null where dual screen cannot open. */
+    onBoth: (() -> Unit)?,
     watchingTitle: String?,
     kickoffLabel: String?,
     keyChoice: PromptChoice?,
@@ -649,6 +693,13 @@ private fun KickoffPrompt(
     Column(
         modifier = modifier
             .claimsTopRight()
+            // ▲ Both (the full player): the key works wherever focus is on the prompt.
+            .onPreviewKeyEvent { event ->
+                val both = onBoth ?: return@onPreviewKeyEvent false
+                if (event.nativeKeyEvent.keyCode != android.view.KeyEvent.KEYCODE_DPAD_UP) return@onPreviewKeyEvent false
+                if (event.nativeKeyEvent.action == android.view.KeyEvent.ACTION_DOWN && event.nativeKeyEvent.repeatCount == 0) both()
+                true
+            }
             .widthIn(max = if (compact) 460.dp else 620.dp)
             .clip(shape)
             .background(ArtColors.Panel.copy(alpha = 0.96f))
@@ -657,19 +708,21 @@ private fun KickoffPrompt(
         verticalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 12.dp)
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (!noStreamYet) {
+                Text(
+                    text = stringResource(R.string.sports_live_live_pill),
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                    color = ArtColors.Text,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(ArtColors.LiveRed)
+                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                )
+            }
             Text(
-                text = stringResource(R.string.sports_live_live_pill),
-                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                color = ArtColors.Text,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(ArtColors.LiveRed)
-                    .padding(horizontal = 8.dp, vertical = 2.dp)
-            )
-            Text(
-                text = stringResource(R.string.sports_live_alert_kicking_off),
+                text = stringResource(if (noStreamYet) R.string.sports_live_alert_no_stream_yet else R.string.sports_live_alert_kicking_off),
                 style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                color = ArtColors.LiveText
+                color = if (noStreamYet) ArtColors.Secondary else ArtColors.LiveText
             )
             if (content.followed) StarIcon()
         }
@@ -686,11 +739,15 @@ private fun KickoffPrompt(
             )
             logos?.let { TeamLogoSlot(it.second, it.shown, logoSize) }
         }
-        val details = listOfNotNull(
-            content.league,
-            kickoffLabel,
-            watchingTitle?.takeIf { it.isNotBlank() }?.let { stringResource(R.string.sports_live_alert_watching, it) }
-        )
+        val details = if (noStreamYet) {
+            listOf(stringResource(R.string.sports_live_alert_no_stream_line))
+        } else {
+            listOfNotNull(
+                content.league,
+                kickoffLabel,
+                watchingTitle?.takeIf { it.isNotBlank() }?.let { stringResource(R.string.sports_live_alert_watching, it) }
+            )
+        }
         if (details.isNotEmpty()) {
             Text(
                 text = details.joinToString(" · "),
@@ -703,20 +760,32 @@ private fun KickoffPrompt(
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
             if (keyChoice != null) {
                 SportsLiveDrawnButton(
-                    text = stringResource(R.string.sports_live_watch),
+                    text = stringResource(if (noStreamYet) R.string.sports_live_alert_remind_in_10 else R.string.sports_live_watch),
                     primary = true,
                     focused = keyChoice == PromptChoice.WATCH,
-                    icon = Icons.Rounded.PlayArrow
+                    icon = Icons.Rounded.PlayArrow.takeIf { !noStreamYet }
                 )
                 SportsLiveDrawnButton(
-                    text = stringResource(R.string.sports_live_alert_later),
+                    text = stringResource(if (noStreamYet) R.string.sports_live_alert_dismiss else R.string.sports_live_alert_later),
                     primary = false,
                     focused = keyChoice == PromptChoice.LATER
                 )
+            } else if (noStreamYet) {
+                SportsLivePaneButton(onClick = onLater, modifier = Modifier.focusRequester(watchFocus), primary = true) {
+                    Text(stringResource(R.string.sports_live_alert_remind_in_10), maxLines = 1)
+                }
+                SportsLivePaneButton(onClick = onBack) {
+                    Text(stringResource(R.string.sports_live_alert_dismiss), maxLines = 1)
+                }
             } else {
                 SportsLivePaneButton(onClick = onWatch, modifier = Modifier.focusRequester(watchFocus), primary = true) {
                     Icon(imageVector = Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
                     Text(stringResource(R.string.sports_live_watch), maxLines = 1)
+                }
+                if (onBoth != null) {
+                    SportsLivePaneButton(onClick = onBoth) {
+                        Text(stringResource(R.string.sports_live_alert_both_button), maxLines = 1)
+                    }
                 }
                 SportsLivePaneButton(onClick = onLater) {
                     Text(stringResource(R.string.sports_live_alert_later), maxLines = 1)
@@ -729,9 +798,12 @@ private fun KickoffPrompt(
                 maxLines = 1
             )
         }
-        if (keyDriven) {
+        if (keyDriven && !noStreamYet) {
             Text(
-                text = stringResource(R.string.sports_live_alert_prompt_hint),
+                text = listOfNotNull(
+                    stringResource(R.string.sports_live_alert_prompt_hint),
+                    stringResource(R.string.sports_live_alert_hint_both).takeIf { onBoth != null }
+                ).joinToString(HINT_SEPARATOR),
                 style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag),
                 color = SportsLiveTokens.Alert.Hint,
                 maxLines = 1
@@ -984,3 +1056,6 @@ private const val REMINDER_TOAST_MS = 5_000L
 
 /** The prompt closes by itself after this long, as Later (the design's 15 s). */
 private const val PROMPT_MS = 15_000L
+
+/** A kickoff prompt with no live stream yet (#162): Remind me in 10 min and Dismiss, no Watch. */
+private fun AlertCard.noStreamYet(): Boolean = (first as? SportsLiveAlert.Kickoff)?.noStreamYet == true
