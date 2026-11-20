@@ -535,8 +535,30 @@ private fun YourTeamsSlimFace(art: GameArt, face: SlimFace) {
             SlimNames(art, SportsLiveTokens.style(SportsLiveTokens.Type.RowName).copy(fontWeight = FontWeight.Bold), Colors.TextPrimary)
         }
         Spacer(modifier = Modifier.weight(1f))
+        val score = face.score
         when {
-            face.score != null -> SlimText(face.score, meta.copy(fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum"), Colors.TextPrimary)
+            // User TV report (live.20): the names stay beside the logos with the score between them; the names give
+            // way (ellipsis), the score is never cut ([PanelSides]: it goes whole when even that does not fit).
+            score != null && logosShown -> PanelSides(
+                first = { SlimText(art.first.short, meta, Colors.TextSecondary) },
+                middle = {
+                    Text(
+                        text = score,
+                        style = meta.copy(fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum"),
+                        color = Colors.TextPrimary,
+                        maxLines = 1,
+                        softWrap = false
+                    )
+                },
+                second = { SlimText(art.second.short, meta, Colors.TextSecondary) }
+            )
+            score != null -> Text(
+                text = score,
+                style = meta.copy(fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum"),
+                color = Colors.TextPrimary,
+                maxLines = 1,
+                softWrap = false
+            )
             face.resume != null -> SlimText(face.resume, meta.copy(fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum"), Colors.TextPrimary)
             logosShown -> SlimNames(art, meta, Colors.TextSecondary)
             else -> Spacer(modifier = Modifier.height(meta.lineHeight.value.dp))

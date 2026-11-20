@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -203,15 +204,32 @@ private fun DrawnMatchup(art: GameArt, logoSize: androidx.compose.ui.unit.Dp, mo
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (logos != null && !logos.failed) {
-            TeamLogoSlot(logos.first, logos.shown, logoSize)
+            // User TV report (live.20): crests alone name no one; each logo has its short name under it.
+            LogoWithName(logos.first, logos.shown, art.first, logoSize)
             VsText()
-            TeamLogoSlot(logos.second, logos.shown, logoSize)
+            LogoWithName(logos.second, logos.shown, art.second, logoSize)
         } else {
             // No logos (#130): the short names, never letters in a circle.
             DrawnName(art.first, Modifier.weight(1f, fill = false))
             VsText()
             DrawnName(art.second, Modifier.weight(1f, fill = false))
         }
+    }
+}
+
+/** A logo with the team's short name ("MINN") under it, cut with an ellipsis at the logo's width and a half. */
+@Composable
+private fun LogoWithName(logo: androidx.compose.ui.graphics.painter.Painter, shown: Boolean, team: GameArtTeam, logoSize: androidx.compose.ui.unit.Dp) {
+    androidx.compose.foundation.layout.Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        TeamLogoSlot(logo, shown, logoSize)
+        Text(
+            text = team.short.trim().ifEmpty { team.shortName },
+            style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag).copy(fontWeight = FontWeight.Bold),
+            color = Colors.TextSecondary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.widthIn(max = logoSize * 1.6f)
+        )
     }
 }
 

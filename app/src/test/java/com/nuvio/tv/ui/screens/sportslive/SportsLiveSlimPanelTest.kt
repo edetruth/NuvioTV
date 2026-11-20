@@ -425,6 +425,25 @@ class SportsLiveSlimPanelTest {
     }
 
     @Test
+    fun `the score is never cut - the names give way first, then the score goes whole (user TV report)`() {
+        // "38–37" is 40 px, gaps 5, a name keeps at least 26 px.
+        // Room for all: each name its own width, the score whole.
+        assertEquals(SidesFit(60, 70, middle = true), panelSidesFit(60, 70, middle = 40, gap = 5, minName = 26, available = 200))
+        // Tight: the names share what the score leaves (they ellipsize), the score stays whole.
+        assertEquals(SidesFit(30, 30, middle = true), panelSidesFit(100, 100, middle = 40, gap = 5, minName = 26, available = 110))
+        assertEquals(SidesFit(26, 26, middle = true), panelSidesFit(100, 100, middle = 40, gap = 5, minName = 26, available = 102))
+        // Too tight for both names at their least beside the score: the score goes, whole, and the names stay.
+        val dropped = panelSidesFit(100, 100, middle = 40, gap = 5, minName = 26, available = 90)
+        assertFalse(dropped.middle)
+        assertEquals(40 to 40, dropped.first to dropped.second)
+        // Short names need less than the least: they only need their own width.
+        assertTrue(panelSidesFit(12, 12, middle = 40, gap = 5, minName = 26, available = 80).middle)
+        // A three-digit score is measured like any other middle.
+        assertTrue(panelSidesFit(30, 30, middle = 60, gap = 5, minName = 26, available = 130).middle)
+        assertFalse(panelSidesFit(30, 30, middle = 60, gap = 5, minName = 26, available = 100).middle)
+    }
+
+    @Test
     fun `a player's side steps down to last names, a team's never`() {
         assertEquals(listOf("Neal Skupski / Joe Salisbury", "Skupski / Salisbury"), panelSideChoices("Neal Skupski / Joe Salisbury", individual = true))
         assertEquals(listOf("Novak Djokovic", "Djokovic"), panelSideChoices("Novak Djokovic", individual = true))

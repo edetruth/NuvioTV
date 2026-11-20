@@ -37,6 +37,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.Icon
@@ -256,6 +257,25 @@ internal fun panelSideWidths(first: Int, second: Int, available: Int): Pair<Int,
     }
 }
 
+/**
+ * How a line's two names and the score (or "vs", the eye) between them share [available] px (user TV report, live.20:
+ * "38–3" is a wrong score). The middle is never cut: it keeps its whole width ([middle]) while each name still gets
+ * [minName] px (or all it needs, when less); the names then share the rest by need ([panelSideWidths]) and ellipsize.
+ * When even that does not fit, the middle is dropped whole ([SidesFit.middle] false) and the names share the line.
+ * [gap] sits on each side of the middle.
+ */
+internal data class SidesFit(val first: Int, val second: Int, val middle: Boolean)
+
+internal fun panelSidesFit(wantFirst: Int, wantSecond: Int, middle: Int, gap: Int, minName: Int, available: Int): SidesFit {
+    val room = available - middle - 2 * gap
+    if (room >= minOf(wantFirst, minName) + minOf(wantSecond, minName)) {
+        val (first, second) = panelSideWidths(wantFirst, wantSecond, room)
+        return SidesFit(first, second, middle = true)
+    }
+    val (first, second) = panelSideWidths(wantFirst, wantSecond, available - 2 * gap)
+    return SidesFit(first, second, middle = false)
+}
+
 /** A side the art names by the card's own words: no ESPN abbreviation or short name was found for it. */
 private val GameArtTeam.unmatched: Boolean get() = short.trim() == name.trim()
 
@@ -454,24 +474,16 @@ private fun ReadyMark(mark: SportsLiveReadyMark) {
 private fun RowScope.GameLine(row: ScoreboardRow, line: PanelLine, individual: Boolean) {
     LineTag(line.tag, line.live)
     val logos = rememberTeamLogoPair(row.art)?.takeIf { !it.failed }
-    // A matched game with both logos shown: abbreviations that no longer fit (a revealed score and clock) go whole,
-    // never as "B…": the logos name the teams. An unmatched game's names are cut per side instead. Taken afresh
-    // for each new line.
-    var namesFit by remember(line) { mutableStateOf(true) }
+    // User TV report (live.20): the names always show beside the logos (crests alone name no one), cut per side; the
+    // score is never cut ([panelSidesFit]: it goes whole first).
     val matched = row.art?.let { !it.first.unmatched && !it.second.unmatched } == true
-    val logosShown = logos?.shown == true && matched
-    val onOverflow: (() -> Unit)? = if (logosShown) ({ namesFit = false }) else null
     if (logos != null) TeamLogoSlot(logos.first, logos.shown, Size.PanelLogo)
-    if (namesFit || !logosShown) {
-        PanelSides(
-            first = { SideText(line.first.orEmpty(), individual && !matched, onOverflow) },
-            middle = { LineMiddle(line.scores) },
-            second = { SideText(line.second.orEmpty(), individual && !matched, onOverflow) },
-            modifier = Modifier.weight(1f, fill = false)
-        )
-    } else {
-        LineMiddle(line.scores)
-    }
+    PanelSides(
+        first = { SideText(line.first.orEmpty(), individual && !matched, null) },
+        middle = { LineMiddle(line.scores) },
+        second = { SideText(line.second.orEmpty(), individual && !matched, null) },
+        modifier = Modifier.weight(1f, fill = false)
+    )
     if (logos != null) TeamLogoSlot(logos.second, logos.shown, Size.PanelLogo)
     if (row.followed) Icon(imageVector = Icons.Rounded.Star, contentDescription = null, tint = Colors.FollowedGold, modifier = Modifier.size(10.dp))
 }
@@ -516,12 +528,12 @@ private fun SideText(name: String, individual: Boolean, onOverflow: (() -> Unit)
 }
 
 /**
- * "[first] [middle] [second]" on one line (live.20 F5): the middle (score, eye or "vs") at its own width, and the
- * names sharing the rest by need ([panelSideWidths]), so a short name never leaves room unused that the long one
- * could take. As narrow as its content.
+ * "[first] [middle] [second]" on one line (live.20 F5): the middle (score, eye or "vs") at its own width, never cut,
+ * and the names sharing the rest by need ([panelSidesFit]), so a short name never leaves room unused that the long one
+ * could take; with too little room the middle is left out whole. As narrow as its content.
  */
 @Composable
-private fun PanelSides(
+internal fun PanelSides(
     first: @Composable () -> Unit,
     middle: @Composable () -> Unit,
     second: @Composable () -> Unit,
@@ -530,19 +542,20 @@ private fun PanelSides(
     Layout(content = { first(); middle(); second() }, modifier = modifier) { measurables, constraints ->
         val gap = PANEL_SIDE_GAP.roundToPx()
         val loose = constraints.copy(minWidth = 0, minHeight = 0)
-        val mid = measurables[1].measure(loose)
+        val mid = measurables[1].measure(loose.copy(maxWidth = Constraints.Infinity))
         val wantFirst = measurables[0].maxIntrinsicWidth(loose.maxHeight)
         val wantSecond = measurables[2].maxIntrinsicWidth(loose.maxHeight)
-        val room = if (loose.hasBoundedWidth) loose.maxWidth - mid.width - 2 * gap else wantFirst + wantSecond
-        val (firstWidth, secondWidth) = panelSideWidths(wantFirst, wantSecond, room)
-        val a = measurables[0].measure(loose.copy(maxWidth = firstWidth))
-        val b = measurables[2].measure(loose.copy(maxWidth = secondWidth))
-        val height = maxOf(a.height, mid.height, b.height)
-        val width = (a.width + gap + mid.width + gap + b.width).coerceAtMost(loose.maxWidth)
+        val available = if (loose.hasBoundedWidth) loose.maxWidth else wantFirst + wantSecond + mid.width + 2 * gap
+        val fit = panelSidesFit(wantFirst, wantSecond, mid.width, gap, PANEL_MIN_NAME.roundToPx(), available)
+        val a = measurables[0].measure(loose.copy(maxWidth = fit.first.coerceAtLeast(0)))
+        val b = measurables[2].measure(loose.copy(maxWidth = fit.second.coerceAtLeast(0)))
+        val midWidth = if (fit.middle) mid.width else 0
+        val height = maxOf(a.height, if (fit.middle) mid.height else 0, b.height)
+        val width = (a.width + gap + midWidth + gap + b.width).coerceAtMost(available)
         layout(width, height) {
             a.placeRelative(0, (height - a.height) / 2)
-            mid.placeRelative(a.width + gap, (height - mid.height) / 2)
-            b.placeRelative(a.width + gap + mid.width + gap, (height - b.height) / 2)
+            if (fit.middle) mid.placeRelative(a.width + gap, (height - mid.height) / 2)
+            b.placeRelative(a.width + gap + midWidth + gap, (height - b.height) / 2)
         }
     }
 }
@@ -703,5 +716,8 @@ private val PANEL_LINE_ACCENT = 2.dp
 /** Fits [SportsLiveTags.MAX_CHARS] capitals at the Tag size ("FOOTBALL" is about 57 dp), never cut (live.20 F5). */
 private val PANEL_TAG_COLUMN = 62.dp
 private val PANEL_SIDE_GAP = 5.dp
+
+/** The least a name keeps beside the score before the score goes (about three letters and an ellipsis). */
+private val PANEL_MIN_NAME = 26.dp
 private val LIVE_DOT = 6.dp
 private const val JUST_ENDED_LINE_ALPHA = 0.6f
