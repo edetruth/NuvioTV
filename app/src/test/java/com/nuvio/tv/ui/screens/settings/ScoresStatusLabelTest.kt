@@ -14,7 +14,7 @@ class ScoresStatusLabelTest {
 
     @Test
     fun `each status has its text, failures with the time they began`() {
-        assertEquals(ScoresStatusLabel(R.string.sports_live_scores_off), ScoresStatusLabel.of(ScoresStatus.Off))
+        assertEquals(ScoresStatusLabel(R.string.sports_live_scores_status_off), ScoresStatusLabel.of(ScoresStatus.Off))
         assertEquals(ScoresStatusLabel(R.string.sports_live_scores_status_not_checked), ScoresStatusLabel.of(ScoresStatus.NotChecked))
         assertEquals(ScoresStatusLabel(R.string.sports_live_scores_status_working), ScoresStatusLabel.of(ScoresStatus.Working))
         assertEquals(

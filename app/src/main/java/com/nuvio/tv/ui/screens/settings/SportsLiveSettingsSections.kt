@@ -34,7 +34,10 @@ internal enum class SportsLiveSetting(
 ) {
     SCORES(SportsLiveSettingsSection.SCORES_AND_SPOILERS, R.string.sports_live_setting_scores, R.string.sports_live_setting_scores_help),
     SCORE_DELAY(SportsLiveSettingsSection.SCORES_AND_SPOILERS, R.string.sports_live_setting_score_delay, R.string.sports_live_setting_score_delay_subtitle),
-    /** "Hide scores of my teams' games until I've watched" (#151): off by default. */
+    /**
+     * "Hide scores for my teams only" (#151, research item 5): on is Hide until I reveal for my teams' games only
+     * ([com.nuvio.tv.core.sportslive.scores.ScoresChoice]); off by default.
+     */
     MY_TEAMS_SPOILERS(SportsLiveSettingsSection.SCORES_AND_SPOILERS, R.string.sports_live_setting_my_teams_spoilers, R.string.sports_live_setting_my_teams_spoilers_subtitle),
     MY_TEAMS(SportsLiveSettingsSection.WHAT_I_FOLLOW, R.string.sports_live_my_teams_title, R.string.sports_live_my_teams_subtitle),
     MY_SPORTS(SportsLiveSettingsSection.WHAT_I_FOLLOW, R.string.sports_live_my_sports_title, R.string.sports_live_my_sports_subtitle),

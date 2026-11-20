@@ -241,7 +241,7 @@ internal fun SportsLiveSettingsContent(
                 SportsLiveSetting.SHOW_SECTION -> state.showSection
                 SportsLiveSetting.HOME_ROW -> state.showHomeRow
                 SportsLiveSetting.CATCH_UP_ROW -> state.catchUpRow
-                SportsLiveSetting.MY_TEAMS_SPOILERS -> state.hideMyTeamsScores
+                SportsLiveSetting.MY_TEAMS_SPOILERS -> state.scoresChoice.myTeamsOnly
                 SportsLiveSetting.HOVER_PREVIEW -> state.hoverPreview
                 else -> state.dataSaver
             }
@@ -256,7 +256,7 @@ internal fun SportsLiveSettingsContent(
             )
         } else {
             val (value, onClick) = when (setting) {
-                SportsLiveSetting.SCORES -> scoresModeLabel(state.scores.mode) to { picker = ScorePicker.MODE }
+                SportsLiveSetting.SCORES -> scoresModeLabel(state.scoresChoice.mode) to { picker = ScorePicker.MODE }
                 SportsLiveSetting.SCORE_DELAY -> scoreDelayLabel(state.scores.delaySeconds) to { picker = ScorePicker.DELAY }
                 SportsLiveSetting.MY_TEAMS -> (summarise(state.followedTeams.map { it.name })
                     ?: stringResource(R.string.sports_live_my_teams_none)) to { goTo(SportsLiveSettingsPage.MyTeams, null) }
@@ -456,7 +456,7 @@ internal fun SportsLiveSettingsContent(
         ScorePicker.MODE -> SettingsSingleChoiceDialog(
             title = stringResource(R.string.sports_live_setting_scores),
             options = ScoresMode.entries.map { SettingsPickerOption(it, scoresModeLabel(it)) },
-            selectedValue = state.scores.mode,
+            selectedValue = state.scoresChoice.mode,
             onOptionSelected = { mode ->
                 picker = null
                 viewModel.setScoresMode(mode)

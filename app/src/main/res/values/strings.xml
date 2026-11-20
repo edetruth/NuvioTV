@@ -483,10 +483,11 @@
     <string name="sports_live_setting_data_saver">Data saver</string>
     <string name="sports_live_scores_title">Scores</string>
     <string name="sports_live_setting_scores">Scores</string>
-    <string name="sports_live_setting_scores_subtitle">Live and final scores on game cards. Off stops all score checks.</string>
+    <string name="sports_live_setting_scores_subtitle">Live and final scores on game cards. Never show stops all score checks.</string>
     <string name="sports_live_scores_show">Show</string>
-    <string name="sports_live_scores_hide_until_focused">Hide until focused</string>
-    <string name="sports_live_scores_off">Off</string>
+    <string name="sports_live_scores_hide_until_focused">Hide until I reveal</string>
+    <string name="sports_live_scores_off">Never show</string>
+    <string name="sports_live_scores_status_off">Off</string>
     <string name="sports_live_setting_score_delay">Score delay</string>
     <string name="sports_live_setting_score_delay_subtitle">Holds back score changes so they do not spoil a stream that runs behind the broadcast</string>
     <string name="sports_live_score_delay_off">Off</string>
@@ -498,7 +499,7 @@
     <string name="sports_live_scores_status_some_failing">Some leagues failing since %1$s</string>
     <string name="sports_live_scores_status_not_responding">Not responding since %1$s</string>
     <string name="sports_live_scores_status_all_ok">Every score feed in use is answering.</string>
-    <string name="sports_live_scores_status_off_detail">Scores is Off, so nothing is checked.</string>
+    <string name="sports_live_scores_status_off_detail">Scores is set to Never show, so nothing is checked.</string>
     <string name="sports_live_scores_status_not_checked_detail">No scores have been fetched yet. Open Sports &amp; Live to check.</string>
     <string name="sports_live_scores_feed_failing">%1$s: %2$s (since %3$s)</string>
     <string name="sports_live_scores_feed_game_details">Game details</string>
@@ -3833,8 +3834,8 @@
     <string name="sports_live_watch_later_toast_line">Hidden for 7 days. Undo it with Reveal result</string>
     <string name="sports_live_reveal_result_menu">Reveal result</string>
     <string name="sports_live_replays_saved">Saved for later</string>
-    <string name="sports_live_setting_my_teams_spoilers">Hide scores of my teams\' games until I\'ve watched</string>
-    <string name="sports_live_setting_my_teams_spoilers_subtitle">Your teams\' games you missed stay hidden 7 days, until you watch them or pick Reveal result</string>
+    <string name="sports_live_setting_my_teams_spoilers">Hide scores for my teams only</string>
+    <string name="sports_live_setting_my_teams_spoilers_subtitle">On: only your teams\' games hide their score, until you watch them or pick Reveal result (up to 7 days). Other games show scores. Off: Hide until I reveal hides every game.</string>
     <string name="sports_live_game_hidden">Score and stats are hidden</string>
     <string name="sports_live_game_hidden_reveal_note">Reveal shows the score, records, box score and highlights for this game.</string>
     <string name="sports_live_game_hidden_replay_note">Watch replay starts the game without showing the score.</string>
@@ -3971,7 +3972,7 @@
     <string name="sports_live_setting_score_alerts">Score alerts</string>
     <string name="sports_live_setting_score_alerts_subtitle">A short note when a followed team\'s game changes score while you watch something else. Only when Scores is Show</string>
     <string name="sports_live_setting_full_time_alerts">Full-time alerts</string>
-    <string name="sports_live_setting_full_time_alerts_subtitle">A short note when a followed team\'s game ends. Names only under Hide until focused</string>
+    <string name="sports_live_setting_full_time_alerts_subtitle">A short note when a followed team\'s game ends. Names only under Hide until I reveal</string>
     <string name="sports_live_setting_close_game_alerts">Close-game alerts</string>
     <string name="sports_live_setting_close_game_alerts_subtitle">A note when a game in My sports is close near the end. Never the game you\'re watching</string>
     <!-- Sports & Live settings screen, grouped (#72) -->
@@ -4016,7 +4017,7 @@
     <string name="sports_live_setting_pip_system_subtitle">Your TV\'s own picture-in-picture switch for this app</string>
     <string name="sports_live_setting_catalogs_subtitle">Which addon catalogs feed Sports &amp; Live. OK cycles Auto, Included, Excluded</string>
     <!-- Settings → Sports & Live V2 (#134 phase 6): one help line, On/Off switches, why a row is off (#89). -->
-    <string name="sports_live_setting_scores_help">Show: scores everywhere · Hide until focused: a score shows after 1 s on its game · Off: no scores and no score checks.</string>
+    <string name="sports_live_setting_scores_help">Show: scores everywhere · Hide until I reveal: a score shows when you rest on its game for 1 s or pick Reveal · Never show: no scores on lists or alerts, and no score checks.</string>
     <string name="sports_live_section_setup">Setup</string>
     <string name="sports_live_setting_run_setup">Run setup again</string>
     <string name="sports_live_setting_run_setup_subtitle">Pick your sports, teams and how scores show, one step at a time</string>
@@ -4039,8 +4040,8 @@
     <string name="sports_live_setup_scores_title">How should scores show?</string>
     <string name="sports_live_setup_scores_subtitle">If you often watch later, hide them. You can change this any time.</string>
     <string name="sports_live_setup_scores_show_help">Live and final scores everywhere.</string>
-    <string name="sports_live_setup_scores_hide_help">A score shows after you rest on its game for 1 s.</string>
-    <string name="sports_live_setup_scores_off_help">No scores, and no score checks at all.</string>
+    <string name="sports_live_setup_scores_hide_help">Hidden until you rest on a game for 1 s or pick Reveal.</string>
+    <string name="sports_live_setup_scores_off_help">No scores on lists or alerts, and no score checks at all.</string>
     <string name="sports_live_setup_sample_home" translatable="false">Celtics</string>
     <string name="sports_live_setup_sample_away" translatable="false">Knicks</string>
     <string name="sports_live_setup_delay_seconds">%1$d s</string>
@@ -4061,7 +4062,7 @@
     <string name="sports_live_switch_on">On</string>
     <string name="sports_live_switch_off">Off</string>
     <string name="sports_live_off_section_hidden">Off because \"Show Sports &amp; Live section\" is off. Turn it on under Home &amp; rows to use this.</string>
-    <string name="sports_live_off_scores_off">Off because Scores is Off. Set Scores to Show or Hide until focused to use this.</string>
+    <string name="sports_live_off_scores_off">Off because Scores is set to Never show. Set Scores to Show or Hide until I reveal to use this.</string>
     <string name="sports_live_off_scores_not_show">Off because Scores isn\'t Show. Set Scores to Show to use this.</string>
     <string name="sports_live_off_home_row">Off because the \"Live now\" row on Home is off. Turn that row on to use this.</string>
     <string name="sports_live_off_data_saver">Off because Data saver is on. Turn it off under More to use this.</string>

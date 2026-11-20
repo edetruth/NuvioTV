@@ -39,7 +39,7 @@ import java.util.Locale
 internal data class ScoresStatusLabel(@StringRes val res: Int, val sinceMs: Long? = null) {
     companion object {
         fun of(status: ScoresStatus): ScoresStatusLabel = when (status) {
-            ScoresStatus.Off -> ScoresStatusLabel(R.string.sports_live_scores_off)
+            ScoresStatus.Off -> ScoresStatusLabel(R.string.sports_live_scores_status_off)
             ScoresStatus.NotChecked -> ScoresStatusLabel(R.string.sports_live_scores_status_not_checked)
             ScoresStatus.Working -> ScoresStatusLabel(R.string.sports_live_scores_status_working)
             is ScoresStatus.SomeFailing -> ScoresStatusLabel(R.string.sports_live_scores_status_some_failing, status.sinceMs)

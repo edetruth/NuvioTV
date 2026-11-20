@@ -24,6 +24,7 @@ import com.nuvio.tv.core.sportslive.scores.MySports
 import com.nuvio.tv.core.sportslive.scores.ProtectedGame
 import com.nuvio.tv.core.sportslive.scores.ScoreDelayChoices
 import com.nuvio.tv.core.sportslive.scores.ScoreSettings
+import com.nuvio.tv.core.sportslive.scores.ScoresChoice
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.core.sportslive.scores.SpoilerProtection
 import com.nuvio.tv.core.sportslive.scores.SportKind
@@ -392,6 +393,25 @@ class SportsLivePreferencesDataStore @Inject constructor(
     suspend fun setScoresMode(mode: ScoresMode) {
         store().edit { it[scoresModeKey] = mode.name }
     }
+
+    /** Scores as Settings shows it (research item 5): the stored mode and "my teams" switch read as one choice. */
+    val scoresChoice: Flow<ScoresChoice> = profileManager.activeProfileId.flatMapLatest { pid ->
+        factory.get(pid, FEATURE).data.map { prefs -> scoresChoiceOf(prefs) }
+    }
+
+    /** Applies [change] to the Scores choice and stores it as the mode plus the "my teams" switch, in one edit. */
+    suspend fun updateScoresChoice(change: (ScoresChoice) -> ScoresChoice) {
+        store().edit { prefs ->
+            val choice = change(scoresChoiceOf(prefs))
+            prefs[scoresModeKey] = choice.storedMode.name
+            prefs[myTeamsSpoilersKey] = choice.storedMyTeams
+        }
+    }
+
+    private fun scoresChoiceOf(prefs: Preferences): ScoresChoice = ScoresChoice.of(
+        mode = ScoresMode.entries.firstOrNull { it.name == prefs[scoresModeKey] } ?: ScoresMode.SHOW,
+        myTeams = prefs[myTeamsSpoilersKey] ?: false
+    )
 
     suspend fun setScoreDelaySeconds(seconds: Int) {
         store().edit { it[scoreDelayKey] = ScoreDelayChoices.coerce(seconds) }

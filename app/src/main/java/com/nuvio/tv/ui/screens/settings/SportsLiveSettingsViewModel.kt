@@ -16,6 +16,7 @@ import com.nuvio.tv.core.sportslive.scores.MyLeague
 import com.nuvio.tv.core.sportslive.scores.MySport
 import com.nuvio.tv.core.sportslive.scores.MySports
 import com.nuvio.tv.core.sportslive.scores.ScoreSettings
+import com.nuvio.tv.core.sportslive.scores.ScoresChoice
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.data.local.PlayerSettingsDataStore
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
@@ -70,7 +71,7 @@ data class SportsLiveSettingsUiState(
     val catalogs: List<SportsLiveCatalogSetting> = emptyList(),
     /** The active profile's followed teams, in follow order. */
     val followedTeams: List<FollowedTeam> = emptyList(),
-    /** Scores (Show / Hide until focused / Off) and the score delay. */
+    /** Scores (stored mode: Show / Hide until I reveal / Never show) and the score delay. */
     val scores: ScoreSettings = ScoreSettings(),
     /** My sports as picked (followed teams' sports are added where it is used, not here). */
     val mySports: MySports = MySports.DEFAULT,
@@ -80,8 +81,8 @@ data class SportsLiveSettingsUiState(
     val catchUpRow: Boolean = true,
     /** "Hide links this TV can't play" (#166). */
     val hideUnplayable: Boolean = true,
-    /** "Hide scores of my teams' games until I've watched" (#151). */
-    val hideMyTeamsScores: Boolean = false
+    /** Scores as the screen shows it (research item 5): the mode and "Hide scores for my teams only". */
+    val scoresChoice: ScoresChoice = ScoresChoice()
 )
 
 @HiltViewModel
@@ -117,14 +118,14 @@ class SportsLiveSettingsViewModel @Inject constructor(
 
     val uiState: StateFlow<SportsLiveSettingsUiState> = combine(
         addonRepository.getInstalledAddons(),
-        combine(prefs.overrides, prefs.catalogOptions, combine(prefs.followedTeams, prefs.catchUpRow, combine(prefs.hideUnplayable, prefs.hideMyTeamsScores, ::Pair), ::Triple), ::Triple),
+        combine(prefs.overrides, prefs.catalogOptions, combine(prefs.followedTeams, prefs.catchUpRow, combine(prefs.hideUnplayable, prefs.scoresChoice, ::Pair), ::Triple), ::Triple),
         prefs.showSection,
         combine(prefs.showHomeRow, prefs.hoverPreview, prefs.dataSaver, ::Triple),
         combine(claimedStats, prefs.pipEnabled, combine(prefs.scoreSettings, prefs.mySports, openGame, ::Triple), ::Triple)
     ) { addons, (overrides, options, teamsAndCatchUp), showSection, (showHomeRow, hoverPreview, dataSaver), (stats, pipEnabled, scoreAndSports) ->
         val (scores, mySports, openGame) = scoreAndSports
         val (followedTeams, catchUpRow, hides) = teamsAndCatchUp
-        val (hideUnplayable, hideMyTeamsScores) = hides
+        val (hideUnplayable, scoresChoice) = hides
         val catalogs = addons.enabledAddons().flatMap { addon ->
             addon.catalogs.filter(SportsLiveCatalogPolicy::isClaimable).map { catalog ->
                 val key = SportsLiveCatalogPolicy.keyFor(addon, catalog)
@@ -147,7 +148,7 @@ class SportsLiveSettingsViewModel @Inject constructor(
                 )
             }
         }
-        SportsLiveSettingsUiState(showSection, showHomeRow, hoverPreview, dataSaver, pipEnabled, catalogs, followedTeams, scores, mySports, openGame, catchUpRow, hideUnplayable, hideMyTeamsScores)
+        SportsLiveSettingsUiState(showSection, showHomeRow, hoverPreview, dataSaver, pipEnabled, catalogs, followedTeams, scores, mySports, openGame, catchUpRow, hideUnplayable, scoresChoice)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SportsLiveSettingsUiState())
 
     /** A switch row of the screen (#72) set to [on], through the same setter (and pref key) as before. */
@@ -164,7 +165,7 @@ class SportsLiveSettingsViewModel @Inject constructor(
             SportsLiveSetting.SCORE_ALERTS -> setScoreAlerts(on)
             SportsLiveSetting.FULL_TIME_ALERTS -> setFullTimeAlerts(on)
             SportsLiveSetting.CLOSE_GAME_ALERTS -> viewModelScope.launch { prefs.setCloseGameAlerts(on) }
-            SportsLiveSetting.MY_TEAMS_SPOILERS -> viewModelScope.launch { prefs.setHideMyTeamsScores(on) }
+            SportsLiveSetting.MY_TEAMS_SPOILERS -> viewModelScope.launch { prefs.updateScoresChoice { it.withMyTeamsOnly(on) } }
             // Not switches: pickers, lists and actions with their own calls.
             SportsLiveSetting.MY_SPORTS, SportsLiveSetting.MY_TEAMS, SportsLiveSetting.SCORES,
             SportsLiveSetting.SCORE_DELAY, SportsLiveSetting.OPEN_GAME, SportsLiveSetting.SCORES_STATUS,
@@ -263,8 +264,9 @@ class SportsLiveSettingsViewModel @Inject constructor(
         viewModelScope.launch { prefs.setFullTimeAlerts(enabled) }
     }
 
+    /** The Scores picker: Hide until I reveal keeps "my teams only"; Show and Never show turn it off. */
     fun setScoresMode(mode: ScoresMode) {
-        viewModelScope.launch { prefs.setScoresMode(mode) }
+        viewModelScope.launch { prefs.updateScoresChoice { it.withMode(mode) } }
     }
 
     fun setScoreDelaySeconds(seconds: Int) {

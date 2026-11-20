@@ -16,6 +16,7 @@ import com.nuvio.tv.core.sportslive.scores.MyLeague
 import com.nuvio.tv.core.sportslive.scores.MySport
 import com.nuvio.tv.core.sportslive.scores.MySports
 import com.nuvio.tv.core.sportslive.scores.ScoreSettings
+import com.nuvio.tv.core.sportslive.scores.ScoresChoice
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.domain.model.CatalogOption
 import com.nuvio.tv.domain.model.FollowedTeam
@@ -354,6 +355,26 @@ class SportsLivePreferencesDataStoreTest {
         assertEquals(ScoresMode.OFF, store.scoreSettings.first().mode)
         activeProfile.value = 1
         assertEquals(ScoresMode.HIDE_UNTIL_FOCUSED, store.scoreSettings.first().mode)
+    }
+
+    @Test
+    fun `the scores choice reads the stored mode and my teams switch and writes both`() = runTest {
+        val store = SportsLivePreferencesDataStore(factory, profiles)
+        assertEquals(ScoresChoice(), store.scoresChoice.first())
+        // A profile from before live.20: Show plus "Hide scores of my teams' games" reads as my teams only.
+        store.setScoresMode(ScoresMode.SHOW)
+        store.setHideMyTeamsScores(true)
+        assertEquals(ScoresChoice(ScoresMode.HIDE_UNTIL_FOCUSED, myTeamsOnly = true), store.scoresChoice.first())
+        assertEquals(ScoresMode.SHOW, store.scoreSettings.first().mode)
+        assertTrue(store.spoilerProtection.first().myTeams)
+        // Widening to every game stores Hide until I reveal and turns the my teams protection off.
+        store.updateScoresChoice { it.withMyTeamsOnly(false) }
+        assertEquals(ScoresChoice(ScoresMode.HIDE_UNTIL_FOCUSED), store.scoresChoice.first())
+        assertEquals(ScoresMode.HIDE_UNTIL_FOCUSED, store.scoreSettings.first().mode)
+        assertFalse(store.hideMyTeamsScores.first())
+        store.updateScoresChoice { it.withMode(ScoresMode.OFF) }
+        assertEquals(ScoresMode.OFF, store.scoreSettings.first().mode)
+        assertFalse(store.spoilerProtection.first().myTeams)
     }
 
     @Test
