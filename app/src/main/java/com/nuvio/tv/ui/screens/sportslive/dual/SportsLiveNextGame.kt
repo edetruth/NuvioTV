@@ -15,9 +15,11 @@ import com.nuvio.tv.domain.model.SportsLiveKind
  * 4. else the next game in the zap lineup, forward from the one that ended (wrapping).
  *
  * "Big" is a live game the excitement scorer (#43, on the score-delayed snapshot) rates at least
- * [BIG_GAME_MIN]; the strongest wins, ties keep lineup order. Never a game over or with no working stream
- * ([finishedKeys]), one tried and failed this session ([tried], as "Next live game" never offers one), a
- * channel, or one sharing a source with the game that ended. Null: nothing else is live.
+ * [BIG_GAME_MIN]; the strongest wins, ties keep lineup order. Within each step a game ✓ ready ([knownGood],
+ * #147) goes first (#183). Never a game over or with no working stream ([finishedKeys]: Live now's ended and
+ * "Probably ended" games too; [noStream]: game ids marked ⚠ no working stream), one tried and failed this
+ * session ([tried], as "Next live game" never offers one), a channel, or one sharing a source with the game
+ * that ended. Null: nothing else is live.
  */
 internal object SportsLiveNextGame {
     /** A live game rated at least this is a big game (a close game past half way rates about 2). */
@@ -28,13 +30,15 @@ internal object SportsLiveNextGame {
         lineup: List<SportsLiveItem>,
         scores: Map<String, ScoreSnapshot>,
         finishedKeys: Set<String>,
-        tried: Set<String>
+        tried: Set<String>,
+        knownGood: (SportsLiveItem) -> Boolean = { false },
+        noStream: Set<String> = emptySet()
     ): SportsLiveItem? {
         val left = SportsLiveSecondGame.candidates(ended, lineup, scores, finishedKeys)
-            .filter { item -> item.id !in tried && item.alternates.none { it.id in tried } }
+            .filter { item -> item.id !in tried && item.alternates.none { it.id in tried } && item.id !in noStream }
         if (left.isEmpty()) return null
         val forward = forwardFrom(ended, lineup, left)
-        forward.firstOrNull { it.followed }?.let { return it }
+        forward.filter { it.followed }.readyFirst(knownGood).firstOrNull()?.let { return it }
         val rated = forward.mapNotNull { item ->
             // A spoiler-protected game (#151) is never picked for how close it is.
             val event = ScoreChips.matchedEvent(item, scores[item.streamKey])?.takeUnless { it.spoilerProtected } ?: return@mapNotNull null
@@ -43,10 +47,14 @@ internal object SportsLiveNextGame {
         }
         val endedEvent = ScoreChips.matchedEvent(ended, scores[ended.streamKey])
         rated.filter { (item, event, _) -> sameLeague(ended, endedEvent, item, event) }
+            .readyFirst { knownGood(it.first) }
             .maxByOrNull { it.third }?.let { return it.first }
-        rated.maxByOrNull { it.third }?.let { return it.first }
-        return forward.first()
+        rated.readyFirst { knownGood(it.first) }.maxByOrNull { it.third }?.let { return it.first }
+        return forward.readyFirst(knownGood).first()
     }
+
+    /** The ✓ ready ones of these games (#183), when there are any; else all of them. */
+    private fun <T> List<T>.readyFirst(ready: (T) -> Boolean): List<T> = filter(ready).ifEmpty { this }
 
     /**
      * The game the nothing-live state names (#161): the soonest game of [items] still to start (timed, not

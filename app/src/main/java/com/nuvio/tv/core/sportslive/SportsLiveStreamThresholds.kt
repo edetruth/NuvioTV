@@ -24,11 +24,20 @@ object SportsLiveStreamThresholds {
     const val RECOVERY_WINDOW_MS = 10L * 60 * 1000
 
     /**
-     * Links that never show a first frame are failed over one after another for at most this long (#153),
-     * whatever their number; then the viewer chooses. They do not spend [MAX_RECOVERIES], which is for a
-     * game that was playing.
+     * Links that never show a first frame are failed over one after another (#153): at most
+     * [MAX_FAILOVER_LINKS] of them, for at most this long; then the viewer chooses (Choose stream, Next live
+     * game). They do not spend [MAX_RECOVERIES], which is for a game that was playing. Two minutes fit
+     * [MAX_FAILOVER_LINKS] links that each time out at [NO_FIRST_FRAME_MS].
      */
-    const val FAILOVER_RUN_MS = 3L * 60 * 1000
+    const val FAILOVER_RUN_MS = 2L * 60 * 1000
+
+    /**
+     * A failover run auto-tries at most this many links (live.19 QA F1: a game whose 39 links were all dead
+     * cycled them for 2.6 min, never giving up). Eight covers every link of most games and the best-ranked
+     * ones of the rest (links known to work and the race's winners come first); dead links failing at once
+     * (about 4 s each) give up in about 30 s. The viewer's own "Try next link" or Sources pick still plays.
+     */
+    const val MAX_FAILOVER_LINKS = 8
 
     /**
      * A link still starting is never given up sooner than this (#138): live.18's whole start-up

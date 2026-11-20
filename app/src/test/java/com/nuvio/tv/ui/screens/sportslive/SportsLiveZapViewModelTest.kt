@@ -105,6 +105,7 @@ class SportsLiveZapViewModelTest {
         every { liveScores.scores } returns scores
         every { liveScores.mode } returns flowOf(mode)
         every { liveScores.protection } returns MutableStateFlow(SpoilerProtection())
+        every { liveScores.unmatched } returns MutableStateFlow(emptySet())
         return SportsLiveZapViewModel(
             SavedStateHandle(mapOf("contentId" to playing.id)), resolver, debrid, profiles, repo, liveScores,
             mainDispatcherRule.dispatcher, gameWatch = watch
@@ -193,6 +194,25 @@ class SportsLiveZapViewModelTest {
         val already = fullTimeViewModel(MutableStateFlow(mapOf(pacers.streamKey to final)), ScoresMode.SHOW, pacers, emptyList())
         runCurrent()
         assertNull(already.endCard.value)
+    }
+
+    @Test
+    fun `Up next never picks a game Live now shows Probably ended`() = runTest(mainDispatcherRule.dispatcher) {
+        // live.19 QA F2: no ESPN feed covers it and its start plus its sport's length is long past (an estimate).
+        val rugby = game("Leinster vs Munster").let {
+            it.copy(
+                sport = "Rugby", meta = it.meta.copy(genres = listOf("Rugby")),
+                startMs = System.currentTimeMillis() - 6 * 60 * 60_000L, startHasTimeOfDay = true
+            )
+        }
+        val pacers = game("Indiana Pacers at Philadelphia 76ers")
+        val hawks = game("Atlanta Hawks at San Antonio Spurs")
+        val watch = SportsLiveGameWatch()
+        val viewModel = fullTimeViewModel(MutableStateFlow(emptyMap()), ScoresMode.SHOW, pacers, listOf(rugby, hawks), watch = watch)
+        runCurrent()
+        watch.reportEnd(pacers.id, GameEndReason.STREAM_ENDED)
+        runCurrent()
+        assertEquals(hawks, viewModel.endCard.value!!.next)
     }
 
     @Test

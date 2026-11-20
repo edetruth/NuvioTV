@@ -7,6 +7,9 @@ import com.nuvio.tv.core.sportslive.SportsLiveGameEndAction
 import com.nuvio.tv.core.sportslive.SportsLiveGameWatch
 import com.nuvio.tv.core.sportslive.SportsLiveTriedGames
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
+import com.nuvio.tv.core.sportslive.scores.LiveScoresRepository
+import com.nuvio.tv.core.sportslive.SportsLiveEndedGames
+import com.nuvio.tv.core.sportslive.SportsLiveLinkVerdicts
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveEndCard
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
@@ -177,7 +180,12 @@ class SportsLiveDualViewModel internal constructor(
     scoresModes: Flow<ScoresMode?> = flowOf(null),
     /** The profile's saved layout (#123); null: never chosen (split). */
     private val loadLayout: suspend () -> DualLayout? = { null },
-    private val saveLayout: suspend (DualLayout) -> Unit = {}
+    private val saveLayout: suspend (DualLayout) -> Unit = {},
+    /**
+     * Card keys of the games of a list Live now shows over now (F2: ESPN finals, "Probably ended" estimates, dead
+     * link checks), with every source of a merged card; [scoresOff]: the Scores setting is Off.
+     */
+    private val overKeys: (items: List<SportsLiveItem>, scoresOff: Boolean) -> Set<String> = { _, _ -> emptySet() }
 ) : ViewModel() {
 
     @Inject
@@ -185,7 +193,8 @@ class SportsLiveDualViewModel internal constructor(
         resolver: SportsLiveZapResolver,
         repo: SportsLiveRepository,
         directDebridResolver: DirectDebridResolver,
-        preferences: SportsLivePreferencesDataStore
+        preferences: SportsLivePreferencesDataStore,
+        liveScores: LiveScoresRepository
     ) : this(
         // A pane plays a plain url only: no Stream screen preparation (server, YouTube, debrid) or torrent.
         resolve = { item ->
@@ -202,7 +211,13 @@ class SportsLiveDualViewModel internal constructor(
         endActions = preferences.gameEndAction,
         scoresModes = preferences.scoreSettings.map { it.mode },
         loadLayout = { preferences.dualLayout()?.let { name -> DualLayout.entries.firstOrNull { it.name == name } } },
-        saveLayout = { layout -> preferences.setDualLayout(layout.name) }
+        saveLayout = { layout -> preferences.setDualLayout(layout.name) },
+        overKeys = { list, scoresOff ->
+            SportsLiveEndedGames.shared.overSourceKeys(
+                list, liveScores.scores.value, System.currentTimeMillis(),
+                SportsLiveEndedGames.estimateGate(scoresOff, liveScores.unmatched.value)
+            ) + SportsLiveLinkVerdicts.shared.deadKeys
+        }
     )
 
     private val items: List<SportsLiveItem> = session?.items.orEmpty()
@@ -413,7 +428,7 @@ class SportsLiveDualViewModel internal constructor(
             current = current,
             lineup = items.filterNot { it.sharesSourceWith(other) },
             scores = emptyMap(),
-            finishedKeys = endedKeys() + finishedKeys,
+            finishedKeys = overNow(),
             tried = SportsLiveTriedGames.shared.ids(),
             // #147: ✓ ready first; ⚠ no working stream only when no other is left.
             knownGood = { item ->
@@ -426,6 +441,9 @@ class SportsLiveDualViewModel internal constructor(
         load(side, pick)
         return true
     }
+
+    /** Card keys of the games over now (F2): the probe's ended games, those known over when dual opened, and Live now's. */
+    private fun overNow(): Set<String> = endedKeys() + finishedKeys + overKeys(items, scoresMode == ScoresMode.OFF)
 
     /**
      * "Close this side" on the highlighted pane once its recovery gave up (#138): the other pane's game
@@ -494,8 +512,13 @@ class SportsLiveDualViewModel internal constructor(
             ended = item,
             lineup = items.filterNot { it.sharesSourceWith(other) },
             scores = emptyMap(),
-            finishedKeys = endedKeys() + finishedKeys,
-            tried = SportsLiveTriedGames.shared.ids()
+            finishedKeys = overNow(),
+            tried = SportsLiveTriedGames.shared.ids(),
+            // #183: a ✓ ready game first within each step; never one marked ⚠ no working stream.
+            knownGood = { game ->
+                SportsLiveGameReadiness.shared.of(game) == SportsLiveReadyMark.READY || SportsLiveWorkingLinks.shared.goodStream(game.id) != null
+            },
+            noStream = SportsLiveGameReadiness.shared.marks.value.filterValues { it == SportsLiveReadyMark.NO_STREAM }.keys
         )
         val countdown = SportsLiveEndCountdown.runs(endAction, hasNext = next != null, hasSound = hasSound)
         val card = SportsLiveEndCard(
