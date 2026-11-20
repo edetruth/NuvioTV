@@ -8,6 +8,7 @@ import com.nuvio.tv.core.sportslive.scores.MySport
 import com.nuvio.tv.core.sportslive.scores.MySports
 import com.nuvio.tv.core.sportslive.scores.ScoreDelayChoices
 import com.nuvio.tv.core.sportslive.scores.ScoreSettings
+import com.nuvio.tv.core.sportslive.scores.ScoresChoice
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.data.local.ProfileDataStoreFactory
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
@@ -53,7 +54,7 @@ class SportsLiveSetupViewModelTest {
         val state = vm.uiState.value
         assertEquals(SetupStep.WELCOME, state.step)
         assertEquals(MySports.DEFAULT, state.sports)
-        assertEquals(ScoresMode.SHOW, state.scoresMode)
+        assertEquals(SetupScoresOption.SHOW, state.scoresOption)
         // Score delay never set: the 60 s default (#85).
         assertEquals(60, state.delaySeconds)
         assertNull(state.exit)
@@ -105,6 +106,22 @@ class SportsLiveSetupViewModelTest {
         advanceUntilIdle()
         assertEquals(SetupStep.DONE, vm.uiState.value.step)
         assertEquals(ScoreSettings(ScoresMode.HIDE_UNTIL_FOCUSED, 30), prefs.scoreSettings.first())
+    }
+
+    @Test
+    fun `Only my teams saves Hide until I reveal for my teams only, and a re-run shows it`() = runTest {
+        val vm = newViewModel()
+        repeat(3) { vm.next(); advanceUntilIdle() }
+        vm.selectScoresOption(SetupScoresOption.MY_TEAMS)
+        vm.next()
+        advanceUntilIdle()
+        assertEquals(ScoresChoice(ScoresMode.HIDE_UNTIL_FOCUSED, myTeamsOnly = true), prefs.scoresChoice.first())
+        // Stored as Settings stores it: Show, with my teams' games protected.
+        assertEquals(ScoresMode.SHOW, prefs.scoreSettings.first().mode)
+        assertEquals(true, prefs.hideMyTeamsScores.first())
+        assertEquals(SetupScoresOption.MY_TEAMS, newViewModel().uiState.value.scoresOption)
+        // Every card maps to the Scores choice it names.
+        for (option in SetupScoresOption.entries) assertEquals(option, SetupScoresOption.of(option.choice))
     }
 
     @Test
@@ -179,7 +196,7 @@ class SportsLiveSetupViewModelTest {
         val state = vm.uiState.value
         assertEquals(SetupStep.WELCOME, state.step)
         assertEquals(prefs.mySports.first(), state.sports)
-        assertEquals(ScoresMode.OFF, state.scoresMode)
+        assertEquals(SetupScoresOption.NEVER, state.scoresOption)
         assertEquals(60, state.delaySeconds)
         assertEquals(listOf("Arsenal"), state.followed.map { it.name })
 

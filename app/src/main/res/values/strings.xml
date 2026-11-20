@@ -4040,6 +4040,8 @@
     <string name="sports_live_setup_scores_title">How should scores show?</string>
     <string name="sports_live_setup_scores_subtitle">If you often watch later, hide them. You can change this any time.</string>
     <string name="sports_live_setup_scores_show_help">Live and final scores everywhere.</string>
+    <string name="sports_live_setup_scores_my_teams">Only my teams</string>
+    <string name="sports_live_setup_scores_my_teams_help">Your teams\' scores stay hidden until you watch or pick Reveal result. Other games show theirs.</string>
     <string name="sports_live_setup_scores_hide_help">Hidden until you rest on a game for 1 s or pick Reveal.</string>
     <string name="sports_live_setup_scores_off_help">No scores on lists or alerts, and no score checks at all.</string>
     <string name="sports_live_setup_sample_home" translatable="false">Celtics</string>

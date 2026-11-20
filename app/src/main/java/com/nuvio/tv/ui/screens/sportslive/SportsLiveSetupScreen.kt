@@ -164,10 +164,10 @@ fun SportsLiveSetupScreen(
                 )
                 SetupStep.TEAMS -> TeamsStep(next = next)
                 SetupStep.SCORES -> ScoresStep(
-                    mode = state.scoresMode,
+                    option = state.scoresOption,
                     delaySeconds = state.delaySeconds,
                     selectedCard = main,
-                    onMode = viewModel::selectScoresMode,
+                    onOption = viewModel::selectScoresOption,
                     onDelay = viewModel::selectDelay
                 )
                 SetupStep.DONE -> DoneStep(state)
@@ -521,13 +521,13 @@ private fun TeamsStep(next: FocusRequester, searchViewModel: SportsLiveTeamSearc
 
 // --- 4 · Scores and spoilers ------------------------------------------------------------------------------
 
-/** Three cards, each showing a real row in its mode, then the score delay. Next saves both. */
+/** Four cards, each showing a real row as it would read, then the score delay. Next saves both. */
 @Composable
 private fun ScoresStep(
-    mode: ScoresMode,
+    option: SetupScoresOption,
     delaySeconds: Int,
     selectedCard: FocusRequester,
-    onMode: (ScoresMode) -> Unit,
+    onOption: (SetupScoresOption) -> Unit,
     onDelay: (Int) -> Unit
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
@@ -537,14 +537,14 @@ private fun ScoresStep(
         )
         Spacer(Modifier.height(18.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(SetupSize.CardGap), modifier = Modifier.padding(4.dp)) {
-            ScoresMode.entries.forEach { option ->
+            SetupScoresOption.entries.forEach { card ->
                 ScoresCard(
-                    mode = option,
-                    selected = option == mode,
-                    onClick = { onMode(option) },
+                    option = card,
+                    selected = card == option,
+                    onClick = { onOption(card) },
                     modifier = Modifier
                         .weight(1f)
-                        .then(if (option == mode) Modifier.focusRequester(selectedCard) else Modifier)
+                        .then(if (card == option) Modifier.focusRequester(selectedCard) else Modifier)
                 )
             }
         }
@@ -579,7 +579,8 @@ private fun ScoresStep(
 }
 
 @Composable
-private fun ScoresCard(mode: ScoresMode, selected: Boolean, onClick: () -> Unit, modifier: Modifier) {
+private fun ScoresCard(option: SetupScoresOption, selected: Boolean, onClick: () -> Unit, modifier: Modifier) {
+    val mode = option.choice.mode
     val shape = SportsLiveTokens.Radius.RowShape
     val fill = if (selected) Colors.SelectedTint else Colors.Surface
     Surface(
@@ -600,7 +601,7 @@ private fun ScoresCard(mode: ScoresMode, selected: Boolean, onClick: () -> Unit,
         Column(modifier = Modifier.fillMaxSize().padding(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = scoresModeTitle(mode),
+                    text = scoresOptionTitle(option),
                     style = SportsLiveTokens.style(Type.Button),
                     color = Colors.TextPrimary,
                     maxLines = 1,
@@ -611,10 +612,11 @@ private fun ScoresCard(mode: ScoresMode, selected: Boolean, onClick: () -> Unit,
             Spacer(Modifier.height(4.dp))
             Text(
                 text = stringResource(
-                    when (mode) {
-                        ScoresMode.SHOW -> R.string.sports_live_setup_scores_show_help
-                        ScoresMode.HIDE_UNTIL_FOCUSED -> R.string.sports_live_setup_scores_hide_help
-                        ScoresMode.OFF -> R.string.sports_live_setup_scores_off_help
+                    when (option) {
+                        SetupScoresOption.SHOW -> R.string.sports_live_setup_scores_show_help
+                        SetupScoresOption.MY_TEAMS -> R.string.sports_live_setup_scores_my_teams_help
+                        SetupScoresOption.HIDE -> R.string.sports_live_setup_scores_hide_help
+                        SetupScoresOption.NEVER -> R.string.sports_live_setup_scores_off_help
                     }
                 ),
                 style = SportsLiveTokens.style(Type.Tag),
@@ -628,11 +630,12 @@ private fun ScoresCard(mode: ScoresMode, selected: Boolean, onClick: () -> Unit,
 }
 
 @Composable
-private fun scoresModeTitle(mode: ScoresMode): String = stringResource(
-    when (mode) {
-        ScoresMode.SHOW -> R.string.sports_live_scores_show
-        ScoresMode.HIDE_UNTIL_FOCUSED -> R.string.sports_live_scores_hide_until_focused
-        ScoresMode.OFF -> R.string.sports_live_scores_off
+private fun scoresOptionTitle(option: SetupScoresOption): String = stringResource(
+    when (option) {
+        SetupScoresOption.SHOW -> R.string.sports_live_scores_show
+        SetupScoresOption.MY_TEAMS -> R.string.sports_live_setup_scores_my_teams
+        SetupScoresOption.HIDE -> R.string.sports_live_scores_hide_until_focused
+        SetupScoresOption.NEVER -> R.string.sports_live_scores_off
     }
 )
 
@@ -774,7 +777,7 @@ private fun DoneStep(state: SportsLiveSetupUiState) {
                     gold = true
                 )
             }
-            SummaryChip(stringResource(R.string.sports_live_setup_done_scores, scoresModeTitle(state.scoresMode)))
+            SummaryChip(stringResource(R.string.sports_live_setup_done_scores, scoresOptionTitle(state.scoresOption)))
             SummaryChip(
                 stringResource(
                     R.string.sports_live_setup_done_delay,

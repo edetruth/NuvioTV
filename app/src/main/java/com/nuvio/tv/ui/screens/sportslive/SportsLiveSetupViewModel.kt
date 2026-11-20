@@ -6,6 +6,7 @@ import com.nuvio.tv.core.sportslive.scores.MyLeague
 import com.nuvio.tv.core.sportslive.scores.MySport
 import com.nuvio.tv.core.sportslive.scores.MySports
 import com.nuvio.tv.core.sportslive.scores.ScoreDelayChoices
+import com.nuvio.tv.core.sportslive.scores.ScoresChoice
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import com.nuvio.tv.domain.model.FollowedTeam
@@ -44,13 +45,28 @@ enum class SportsLiveSetupExitTarget { BACK, LIVE_NOW }
 fun sportsLiveSetupExitTarget(exit: SetupExit, fromSettings: Boolean): SportsLiveSetupExitTarget =
     if (fromSettings && exit == SetupExit.FINISHED) SportsLiveSetupExitTarget.LIVE_NOW else SportsLiveSetupExitTarget.BACK
 
+/**
+ * Step 4's cards (live.20): Show, Only my teams, Hide until I reveal, Never show; each is a Scores choice as
+ * Settings stores it ([ScoresChoice]: Only my teams is "Hide scores for my teams only").
+ */
+enum class SetupScoresOption(val choice: ScoresChoice) {
+    SHOW(ScoresChoice(ScoresMode.SHOW)),
+    MY_TEAMS(ScoresChoice(ScoresMode.HIDE_UNTIL_FOCUSED, myTeamsOnly = true)),
+    HIDE(ScoresChoice(ScoresMode.HIDE_UNTIL_FOCUSED)),
+    NEVER(ScoresChoice(ScoresMode.OFF));
+
+    companion object {
+        fun of(choice: ScoresChoice): SetupScoresOption = entries.firstOrNull { it.choice == choice } ?: SHOW
+    }
+}
+
 /** What first-run setup draws. Steps 2 and 4 edit a draft that their Next saves. */
 data class SportsLiveSetupUiState(
     val step: SetupStep = SetupStep.WELCOME,
     /** Step 2's sports and leagues, from My sports as saved. */
     val sports: MySports = MySports.DEFAULT,
-    /** Step 4: Show / Hide until focused / Off, and the score delay in seconds. */
-    val scoresMode: ScoresMode = ScoresMode.SHOW,
+    /** Step 4: Show / Only my teams / Hide until I reveal / Never show, and the score delay in seconds. */
+    val scoresOption: SetupScoresOption = SetupScoresOption.SHOW,
     val delaySeconds: Int = 0,
     /** For Done's summary: the followed teams and whether kickoff reminders are on for them. */
     val followed: List<FollowedTeam> = emptyList(),
@@ -62,7 +78,7 @@ data class SportsLiveSetupUiState(
 private data class SetupDraft(
     val step: SetupStep = SetupStep.WELCOME,
     val sports: MySports = MySports.DEFAULT,
-    val scoresMode: ScoresMode = ScoresMode.SHOW,
+    val scores: ScoresChoice = ScoresChoice(),
     val delaySeconds: Int = 0,
     val exit: SetupExit? = null
 )
@@ -84,7 +100,7 @@ class SportsLiveSetupViewModel @Inject constructor(
         SportsLiveSetupUiState(
             step = d.step,
             sports = d.sports,
-            scoresMode = d.scoresMode,
+            scoresOption = SetupScoresOption.of(d.scores),
             delaySeconds = d.delaySeconds,
             followed = followed,
             remindMyTeams = alerts.remindMyTeams,
@@ -97,7 +113,8 @@ class SportsLiveSetupViewModel @Inject constructor(
         viewModelScope.launch {
             val sports = prefs.mySports.first()
             val scores = prefs.scoreSettings.first()
-            draft.update { it.copy(sports = sports, scoresMode = scores.mode, delaySeconds = scores.delaySeconds) }
+            val choice = prefs.scoresChoice.first()
+            draft.update { it.copy(sports = sports, scores = choice, delaySeconds = scores.delaySeconds) }
         }
     }
 
@@ -111,7 +128,10 @@ class SportsLiveSetupViewModel @Inject constructor(
     fun pressAllCompetitions() = draft.update { it.copy(sports = it.sports.pressAllCompetitions()) }
 
     /** Step 4: the scores card picked. */
-    fun selectScoresMode(mode: ScoresMode) = draft.update { it.copy(scoresMode = mode) }
+    fun selectScoresMode(mode: ScoresMode) = draft.update { it.copy(scores = ScoresChoice(mode)) }
+
+    /** Step 4: a scores card picked, Only my teams included. */
+    fun selectScoresOption(option: SetupScoresOption) = draft.update { it.copy(scores = option.choice) }
 
     /** Step 4: the score delay picked. */
     fun selectDelay(seconds: Int) = draft.update { it.copy(delaySeconds = ScoreDelayChoices.coerce(seconds)) }
@@ -148,7 +168,7 @@ class SportsLiveSetupViewModel @Inject constructor(
         when (current.step) {
             SetupStep.SPORTS -> prefs.updateMySports { current.sports }
             SetupStep.SCORES -> {
-                prefs.setScoresMode(current.scoresMode)
+                prefs.updateScoresChoice { current.scores }
                 prefs.setScoreDelaySeconds(current.delaySeconds)
             }
             SetupStep.WELCOME, SetupStep.TEAMS, SetupStep.DONE -> Unit
