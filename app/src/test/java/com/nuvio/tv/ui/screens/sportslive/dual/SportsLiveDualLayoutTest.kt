@@ -12,6 +12,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -197,6 +198,39 @@ class SportsLiveDualLayoutTest {
         val never = newViewModel(loadLayout = { null })
         runCurrent()
         assertEquals(DualLayout.SPLIT, never.state.value!!.layout)
+    }
+
+    @Test
+    fun `the panes wait for the saved layout so a pane view is never laid out at the wrong tile first`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            val read = CompletableDeferred<DualLayout?>()
+            val viewModel = newViewModel(loadLayout = { read.await() })
+            runCurrent()
+            assertFalse(viewModel.layoutReady.value)
+            read.complete(DualLayout.BIG_SMALL)
+            runCurrent()
+            assertTrue(viewModel.layoutReady.value)
+            assertEquals(DualLayout.BIG_SMALL, viewModel.state.value!!.layout)
+        }
+
+    @Test
+    fun `the panes show split when there is no saved layout or it cannot be read`() = runTest(mainDispatcherRule.dispatcher) {
+        val never = newViewModel(loadLayout = { null })
+        val failed = newViewModel(loadLayout = { error("no preferences") })
+        runCurrent()
+        listOf(never, failed).forEach { viewModel ->
+            assertTrue(viewModel.layoutReady.value)
+            assertEquals(DualLayout.SPLIT, viewModel.state.value!!.layout)
+        }
+    }
+
+    @Test
+    fun `MENU held before the saved layout is read shows the panes in the chosen layout`() = runTest(mainDispatcherRule.dispatcher) {
+        val viewModel = newViewModel(loadLayout = { CompletableDeferred<DualLayout?>().await() })
+        runCurrent()
+        viewModel.toggleLayout()
+        assertTrue(viewModel.layoutReady.value)
+        assertEquals(DualLayout.BIG_SMALL, viewModel.state.value!!.layout)
     }
 
     @Test

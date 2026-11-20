@@ -235,6 +235,16 @@ class SportsLiveDualViewModel internal constructor(
     // MENU was held this session: the saved layout read late does not undo it.
     private var layoutChosen = false
 
+    private val _layoutReady = MutableStateFlow(false)
+
+    /**
+     * Whether the panes' layout is known: the profile's saved layout has been read (or could not be), or MENU
+     * was held. The screen places the pane views only then, so each pane's video surface is first laid out at
+     * its real tile: opened straight into big + small, the big pane's SurfaceView was created at the split
+     * tile and resized before a player drew into it, and kept drawing the video at the split tile's size.
+     */
+    val layoutReady: StateFlow<Boolean> = _layoutReady.asStateFlow()
+
     private val jobs = mutableMapOf<Side, Job>()
 
     /** Stream keys of the games whose decoder failure has had its one retry. */
@@ -287,6 +297,7 @@ class SportsLiveDualViewModel internal constructor(
                 // A layout already changed with MENU held before this read wins.
                 val saved = runCatching { loadLayout() }.getOrNull()
                 if (saved != null && !layoutChosen) dispatch(DualAction.SetLayout(saved))
+                _layoutReady.value = true
             }
             load(Side.LEFT, it.left)
             load(Side.RIGHT, it.right)
@@ -370,6 +381,7 @@ class SportsLiveDualViewModel internal constructor(
         val layout = _state.value?.layout?.other ?: return
         layoutChosen = true
         dispatch(DualAction.SetLayout(layout))
+        _layoutReady.value = true
         viewModelScope.launch { runCatching { saveLayout(layout) } }
     }
 
