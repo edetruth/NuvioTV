@@ -143,7 +143,7 @@ fun SportsLiveSetupScreen(
                 .fillMaxWidth()
                 // ↓ out of the step always reaches Next, whichever footer button is below.
                 .focusProperties {
-                    onExit = {
+                    this.onExit = {
                         if (requestedFocusDirection == FocusDirection.Down) {
                             cancelFocusChange()
                             next.requestFocus()
