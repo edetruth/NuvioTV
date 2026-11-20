@@ -161,8 +161,8 @@ fun HomeScreen(
     }
 
     val onNavigateToDetailStable = remember(onNavigateToDetail, sportsLiveNav, viewModel) {
-        open@{ itemId: String, itemType: String, addonBaseUrl: String ->
-            if (sportsLive.onCardClick(itemId, addonBaseUrl, sportsLiveNav)) return@open
+        openDetail@{ itemId: String, itemType: String, addonBaseUrl: String ->
+            if (sportsLive.onCardClick(itemId, addonBaseUrl, sportsLiveNav)) return@openDetail
             viewModel.beginTrailerHandoff(itemId)
             onNavigateToDetail(itemId, itemType, addonBaseUrl)
         }
