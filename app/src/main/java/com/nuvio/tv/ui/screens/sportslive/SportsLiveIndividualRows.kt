@@ -180,6 +180,17 @@ private fun tennisSetCell(player: TennisPlayer, opponent: TennisPlayer?, set: In
  * True when [player] won [set] (its column is bold). After a retirement the last set may be unfinished
  * ("3–0 ret."): it is nobody's unless its score ends a set (6–4, 7–5, 7–6, a match tiebreak).
  */
+/**
+ * The two sides of a tennis match or a fight in the order its row lists them (never the winner first: no spoiler),
+ * for the Results stage's headline (TV QA BUG17: it read the round, "Group Stage", not the match); null for a race
+ * or a tournament, whose name is the headline.
+ */
+internal fun individualSides(result: IndividualResult): Pair<String, String>? = when (result) {
+    is TennisMatch -> result.players.takeIf { it.size >= 2 }?.let { it[0].name to it[1].name }
+    is Fight -> result.fighters.takeIf { it.size >= 2 }?.let { it[0].name to it[1].name }
+    else -> null
+}
+
 internal fun tennisWonSet(match: TennisMatch, player: TennisPlayer, opponent: TennisPlayer, set: Int): Boolean {
     val mine = player.sets[set]
     val theirs = opponent.sets.getOrNull(set) ?: return false

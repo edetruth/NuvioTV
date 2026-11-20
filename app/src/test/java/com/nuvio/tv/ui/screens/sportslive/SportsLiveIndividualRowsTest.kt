@@ -74,6 +74,21 @@ class SportsLiveIndividualRowsTest {
     }
 
     @Test
+    fun `the Results stage names a match's or a fight's sides in row order, never the round (BUG17)`() {
+        // The loser listed first stays first: the headline never gives the winner away.
+        val match = TennisMatch(
+            "Group Stage",
+            listOf(TennisPlayer("B", false, listOf(TennisSet(4))), TennisPlayer("A", true, listOf(TennisSet(6)))),
+            TennisEnding.COMPLETED
+        )
+        assertEquals("B" to "A", individualSides(match))
+        val fight = Fight("Lightweight", listOf(Fighter("C", false), Fighter("D", true)), method = null, round = null, clock = null, bout = 0)
+        assertEquals("C" to "D", individualSides(fight))
+        // A match missing a side keeps its title.
+        assertNull(individualSides(match.copy(players = match.players.take(1))))
+    }
+
+    @Test
     fun `OK on a golf row lists and folds its top five, never while the result is hidden`() {
         assertEquals(setOf("g"), toggleGolf(emptySet(), "g", showScore = true))
         assertEquals(emptySet<String>(), toggleGolf(setOf("g"), "g", showScore = true))

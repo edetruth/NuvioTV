@@ -853,7 +853,10 @@ private fun ResultsStage(
             val awayScore = event.awayScore
             val homeScore = event.homeScore
             val headline = when {
-                event.individual != null -> event.individual.title ?: event.leagueName.orEmpty()
+                // A match or a fight names its sides (BUG17); the round stays in the media box above.
+                event.individual != null -> individualSides(event.individual)?.let { (first, second) ->
+                    stringResource(R.string.sports_live_matchup, first, second)
+                } ?: event.individual.title ?: event.leagueName.orEmpty()
                 showScore && awayScore != null && homeScore != null ->
                     stringResource(R.string.sports_live_details_scoreline, away, awayScore, homeScore, home)
                 else -> stringResource(R.string.sports_live_matchup_at, event.away.shortDisplayName ?: away, event.home.shortDisplayName ?: home)
