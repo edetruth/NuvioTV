@@ -16,6 +16,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nuvio.tv.R
+import com.nuvio.tv.core.sportslive.SportsLiveReplayPositions
+import com.nuvio.tv.core.sportslive.SportsLiveReplayResume
 import com.nuvio.tv.core.sportslive.scores.CatchUpItem
 import com.nuvio.tv.core.sportslive.scores.CatchUpRepository
 import com.nuvio.tv.core.sportslive.scores.GameArt
@@ -41,7 +43,8 @@ import javax.inject.Inject
 @HiltViewModel
 class SportsLiveCatchUpViewModel @Inject constructor(
     private val repository: CatchUpRepository,
-    private val spoilers: SpoilerProtectionStore
+    private val spoilers: SpoilerProtectionStore,
+    private val replayPositions: SportsLiveReplayPositions
 ) : ViewModel() {
     /** The row (Home) and strip (Live Now); empty while Sports & Live, its Home row or the row is off. */
     val items: StateFlow<List<CatchUpItem>> = repository.items
@@ -64,6 +67,26 @@ class SportsLiveCatchUpViewModel @Inject constructor(
     fun toggleKeep(item: CatchUpItem, kept: Boolean) {
         viewModelScope.launch { if (kept) spoilers.reveal(item.event) else spoilers.saveForLater(item.event) }
     }
+
+    /** Where each replay can resume (coordinator 2026-11-20), by ESPN event id: only places worth offering. */
+    val resume: StateFlow<Map<String, Long>> = replayPositions.positions
+        .map { all -> all.mapNotNull { (event, position) -> SportsLiveReplayResume.resumeAt(position)?.let { event to it } }.toMap() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    /**
+     * OK on [item]'s card, just before its replay plays: the player starts it where it was left (what the card said), and
+     * saves its place as it plays. [startOver] (More… → Start over) starts from the beginning and forgets the place.
+     */
+    fun prepareReplay(item: CatchUpItem, startOver: Boolean = false) {
+        if (startOver) replayPositions.forget(item.key)
+        SportsLiveReplayResume.register(item.replays.map { it.id }, item.key, if (startOver) null else resume.value[item.key])
+    }
+}
+
+/** A card's "Resume from 1:12:30" ([short]: "Resume 1:12:30", the slim strip card); null when there is nothing to resume. */
+@Composable
+internal fun replayResumeText(resumeMs: Long?, short: Boolean = false): String? = resumeMs?.let {
+    stringResource(if (short) R.string.sports_live_replay_resume_short else R.string.sports_live_replay_resume_from, SportsLiveReplayResume.clock(it))
 }
 
 /** The catch-up card's title outside composition (the player's, the source picker's): ESPN's "‹away› at ‹home›". */
@@ -100,7 +123,9 @@ internal fun SportsLiveCatchUpMenu(
     fromYourTeams: Boolean = false,
     kept: Boolean = false,
     /** Watch later / Reveal result; null hides it. */
-    onToggleKeep: (() -> Unit)? = null
+    onToggleKeep: (() -> Unit)? = null,
+    /** "Start over": the replay has a place to resume from (OK resumes there); null hides it. */
+    onStartOver: (() -> Unit)? = null
 ) {
     SportsLiveSheet(
         title = catchUpMatchup(item),
@@ -109,6 +134,9 @@ internal fun SportsLiveCatchUpMenu(
         onDismiss = onDismiss,
         onBack = null
     ) { first ->
+        if (onStartOver != null) {
+            SportsLiveMenuButton(text = stringResource(R.string.sports_live_replay_start_over), onClick = onStartOver, modifier = first())
+        }
         SportsLiveMenuButton(text = stringResource(R.string.sports_live_game_stats), onClick = onOpenGame, modifier = first())
         if (onToggleKeep != null) {
             SportsLiveMenuButton(
@@ -212,12 +240,16 @@ internal fun SportsLiveReplaySourceDialog(title: String, sources: List<String>, 
  * with the logos and names, "Final · Sun 15 Nov" and the Replay pill; never a score.
  */
 @Composable
-internal fun rememberCatchUpCardArt(items: List<CatchUpItem>): (String) -> (@Composable () -> Unit)? {
+internal fun rememberCatchUpCardArt(items: List<CatchUpItem>, resume: Map<String, Long> = emptyMap()): (String) -> (@Composable () -> Unit)? {
     val finalWord = stringResource(R.string.sports_live_chip_final_note)
-    return remember(items, finalWord) {
+    val resumeFormat = stringResource(R.string.sports_live_replay_resume_from)
+    return remember(items, finalWord, resume, resumeFormat) {
         val cards = items.associate { item ->
             val art = GameArt.ofEvent(item.event, records = false) // spoiler-free: records move with the result
-            val footer = DrawnCardFooter(lead = SportsLiveHomeMeta.catchUpLead(item.event.startMs, finalWord), trailing = DrawnCardTrailing.Replay)
+            // A replay left part-way says where OK picks it up (coordinator 2026-11-20).
+            val lead = resume[item.key]?.let { resumeFormat.format(SportsLiveReplayResume.clock(it)) }
+                ?: SportsLiveHomeMeta.catchUpLead(item.event.startMs, finalWord)
+            val footer = DrawnCardFooter(lead = lead, trailing = DrawnCardTrailing.Replay)
             val card: @Composable () -> Unit = { SportsLiveDrawnGameCard(art, followed = false, footer = footer, modifier = Modifier.fillMaxSize()) }
             SportsLiveCatchUpHomeRow.cardId(item) to card
         }

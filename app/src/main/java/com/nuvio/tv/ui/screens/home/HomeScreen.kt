@@ -124,9 +124,10 @@ fun HomeScreen(
     // The Catch up row (#58): worked out when Home resumes, never on a timer.
     val catchUpItems by catchUpViewModel.items.collectAsStateWithLifecycle()
     val keptReplays by catchUpViewModel.kept.collectAsStateWithLifecycle()
+    val replayResume by catchUpViewModel.resume.collectAsStateWithLifecycle()
     val catchUpContext = androidx.compose.ui.platform.LocalContext.current
     LaunchedEffect(catchUpItems) { viewModel.setCatchUpItems(catchUpItems) }
-    val catchUpCardArt = rememberCatchUpCardArt(uiState.catchUpItems)
+    val catchUpCardArt = rememberCatchUpCardArt(uiState.catchUpItems, replayResume)
     var catchUpMenuKey by remember { mutableStateOf<String?>(null) }
     uiState.catchUpItems.firstOrNull { it.key == catchUpMenuKey }?.let { item ->
         SportsLiveCatchUpMenu(
@@ -145,7 +146,14 @@ fun HomeScreen(
             onToggleKeep = {
                 catchUpMenuKey = null
                 catchUpViewModel.toggleKeep(item, item.key in keptReplays)
-            }
+            },
+            onStartOver = if (item.key in replayResume) {
+                {
+                    catchUpMenuKey = null
+                    catchUpViewModel.prepareReplay(item, startOver = true)
+                    onPlayCatchUpReplay(item.replays, catchUpTitle(catchUpContext, item))
+                }
+            } else null
         )
     }
 
@@ -254,6 +262,8 @@ fun HomeScreen(
             if (SportsLiveCatchUpHomeRow.isCatchUpRow(addonBaseUrl)) {
                 // OK plays the replay at once: never the addon's page or Stream screen (spoilers).
                 viewModel.findCatchUpItem(itemId)?.let { item ->
+                    // Where it was left, as its card says (coordinator 2026-11-20).
+                    catchUpViewModel.prepareReplay(item)
                     onPlayCatchUpReplay(item.replays, catchUpTitle(catchUpContext, item))
                 }
             } else if (SportsLiveHomeRow.isLiveNowRow(addonBaseUrl)) {

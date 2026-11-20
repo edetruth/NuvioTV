@@ -12,7 +12,9 @@ import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.core.sportslive.SportsLiveHiddenTitles
+import com.nuvio.tv.core.sportslive.ReplayPosition
 import com.nuvio.tv.core.sportslive.SportsLiveOpenGame
+import com.nuvio.tv.core.sportslive.SportsLiveReplayResume
 import com.nuvio.tv.core.sportslive.alerts.GameReminder
 import com.nuvio.tv.core.sportslive.alerts.GameReminders
 import com.nuvio.tv.core.sportslive.alerts.RemindersState
@@ -81,6 +83,8 @@ class SportsLivePreferencesDataStore @Inject constructor(
     private val panelLastOpenKey = longPreferencesKey("sports_live_panel_last_open")
     private val dualLayoutKey = stringPreferencesKey("sports_live_dual_layout")
     private val newSportsHintSeenKey = booleanPreferencesKey("sports_live_new_sports_hint_seen")
+    // Local only (not in SportsLiveSettingsSync): where each followed team's replay was left, by ESPN event id.
+    private val replayPositionsKey = stringPreferencesKey("sports_live_replay_positions")
     // First-run setup (#134 phase 7): set once the profile has had its chance at it (shown, or set up already).
     private val setupDoneKey = booleanPreferencesKey("sports_live_setup_done")
     private val scoresModeKey = stringPreferencesKey("sports_live_scores_mode")
@@ -347,6 +351,24 @@ class SportsLivePreferencesDataStore @Inject constructor(
     /** The catch-up row's watched replays and surfaced games (#58), by ESPN event id. */
     val catchUpMarks: Flow<CatchUpMarks> = profileManager.activeProfileId.flatMapLatest { pid ->
         factory.get(pid, FEATURE).data.map(::catchUpMarksOf)
+    }
+
+    /** Where the profile left each replay (coordinator 2026-11-20), by ESPN event id. */
+    val replayPositions: Flow<Map<String, ReplayPosition>> = profileManager.activeProfileId.flatMapLatest { pid ->
+        factory.get(pid, FEATURE).data.map { decodeReplayPositions(it[replayPositionsKey]) }
+    }
+
+    suspend fun updateReplayPositions(change: (Map<String, ReplayPosition>) -> Map<String, ReplayPosition>) {
+        store().edit { prefs ->
+            prefs[replayPositionsKey] = gson.toJson(SportsLiveReplayResume.encode(change(decodeReplayPositions(prefs[replayPositionsKey]))))
+        }
+    }
+
+    private fun decodeReplayPositions(json: String?): Map<String, ReplayPosition> {
+        if (json.isNullOrBlank()) return emptyMap()
+        return runCatching {
+            SportsLiveReplayResume.decode(gson.fromJson<Map<String, String>?>(json, overridesType).orEmpty())
+        }.getOrDefault(emptyMap())
     }
 
     /** The active profile's id: the catch-up row's visit and played replays belong to it. */

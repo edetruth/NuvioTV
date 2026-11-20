@@ -254,7 +254,9 @@ internal fun SportsLiveReplayStage(
     /** A mini player plays (#157): it docks in the media box and the replay's details read as Selected. */
     miniPlaying: Boolean = false,
     /** The "When" line in place of the replay's date and time (a catch-up's "Replay · Yesterday", #155). */
-    whenText: String? = null
+    whenText: String? = null,
+    /** The primary's words in place of "Watch replay": "Resume from 1:12:30" for a replay left part-way. */
+    watchLabel: String? = null
 ) {
     Column(
         modifier = modifier.width(SportsLiveStageLayout.WIDTH_DP.dp).fillMaxHeight(),
@@ -322,7 +324,7 @@ internal fun SportsLiveReplayStage(
             SportsLiveButton(onClick = onWatch, role = SportsLiveButtonRole.PRIMARY, modifier = watchModifier.widthIn(min = PRIMARY_MIN_WIDTH)) {
                 Icon(imageVector = Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(6.dp))
-                StageButtonLabel(stringResource(R.string.sports_live_game_watch_replay))
+                StageButtonLabel(watchLabel ?: stringResource(R.string.sports_live_game_watch_replay))
             }
             SportsLiveButton(onClick = onMore, role = SportsLiveButtonRole.SECONDARY, modifier = Modifier.widthIn(min = MORE_MIN_WIDTH)) {
                 StageButtonLabel(stringResource(R.string.sports_live_more))

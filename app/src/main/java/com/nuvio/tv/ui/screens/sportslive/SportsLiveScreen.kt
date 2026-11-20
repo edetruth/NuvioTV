@@ -160,6 +160,7 @@ fun SportsLiveScreen(
     // The Catch up strip (#58) at the top of Live Now: worked out when the screen resumes, never on a timer.
     val catchUpItems by catchUpViewModel.items.collectAsStateWithLifecycle()
     val keptReplays by catchUpViewModel.kept.collectAsStateWithLifecycle()
+    val replayResume by catchUpViewModel.resume.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     // Live scores for the Live now and Upcoming cards on screen, polled only while the screen is
@@ -463,7 +464,16 @@ fun SportsLiveScreen(
             catchUpItems = catchUpItems,
             upcomingFollowedRows = upcomingFollowedRows,
             scoresMode = scoresMode,
+            replayResume = replayResume,
+            onStartOverCatchUp = { item ->
+                catchUpViewModel.prepareReplay(item, startOver = true)
+                previewPlayer.release()
+                scoresViewModel.onReplayStarted(item.replays, item.event)
+                playViewModel.playReplay(item.replays, catchUpTitle(context, item))
+            },
             onPlayCatchUp = { item ->
+                // Where it was left, as its card says (coordinator 2026-11-20).
+                catchUpViewModel.prepareReplay(item)
                 // OK plays the replay at once: never the addon's page or Stream screen (spoilers).
                 previewPlayer.release()
                 scoresViewModel.onReplayStarted(item.replays, item.event)
@@ -580,6 +590,10 @@ private fun SportsLiveContent(
     upcomingFollowedRows: List<ScoreboardRow> = emptyList(),
     scoresMode: ScoresMode? = null,
     onPlayCatchUp: (CatchUpItem) -> Unit,
+    /** Where each replay resumes, by ESPN event id (its card's "Resume from …"). */
+    replayResume: Map<String, Long> = emptyMap(),
+    /** More… → Start over on a replay with a place to resume. */
+    onStartOverCatchUp: (CatchUpItem) -> Unit = {},
     onOpenCatchUpGame: (CatchUpItem) -> Unit,
     onMarkCatchUpWatched: (CatchUpItem) -> Unit,
     /** Replays the user kept (research 7), by ESPN event id: they stay in the strip until watched. */
@@ -774,7 +788,13 @@ private fun SportsLiveContent(
             onToggleKeep = {
                 catchUpMenuKey = null
                 onToggleKeep(item, item.key in keptReplays)
-            }
+            },
+            onStartOver = if (item.key in replayResume) {
+                {
+                    catchUpMenuKey = null
+                    onStartOverCatchUp(item)
+                }
+            } else null
         )
     }
     // The strip held focus and has emptied (its last game watched): focus goes to the games, else the tab.
@@ -1247,6 +1267,7 @@ private fun SportsLiveContent(
             selectedKey = stripStageKey?.takeIf { paneHasFocus },
             scoresMode = scoresMode,
             reminded = { item -> reminders.isReminded(item) },
+            resumeOf = { item -> replayResume[item.key] },
             onFocus = { entry ->
                 if (entry is YourTeamsEntry.Live) cardFocused(entry.row.item) else onCardFocus(null)
                 stripStageKey = entry.key
@@ -1973,6 +1994,7 @@ private fun SportsLiveContent(
                         title = catchUpMatchup(stage.item),
                         nowMs = uiState.nowMs,
                         onWatch = { onPlayCatchUp(stage.item) },
+                        watchLabel = replayResumeText(replayResume[stage.item.key]),
                         onMore = { catchUpMenuKey = stage.item.key },
                         modifier = Modifier
                             .padding(top = LIST_FOCUS_ROOM)

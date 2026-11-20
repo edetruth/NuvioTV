@@ -259,6 +259,8 @@ internal fun SportsLiveYourTeamsStrip(
     selectedKey: String?,
     scoresMode: ScoresMode?,
     reminded: (SportsLiveItem) -> Boolean,
+    /** Where a replay resumes (its card reads "Resume 1:12:30"); null: from the start. */
+    resumeOf: (CatchUpItem) -> Long? = { null },
     onFocus: (YourTeamsEntry) -> Unit,
     onClick: (YourTeamsEntry) -> Unit,
     onLongClick: (YourTeamsEntry) -> Unit,
@@ -336,10 +338,11 @@ internal fun SportsLiveYourTeamsStrip(
                                 else -> SlimCorner.Bell(reminded(entry.row.item))
                             }
                         )
-                        // Never a score, a winner or a final note: the Replay pill and the day.
+                        // Never a score, a winner or a final note: the Replay pill and the day; where OK resumes it.
                         is YourTeamsEntry.Replay -> SlimFace(
                             status = SlimStatus.Replay,
-                            corner = SlimCorner.Day(replayDayText(entry.item.event.startMs, todayWord))
+                            corner = SlimCorner.Day(replayDayText(entry.item.event.startMs, todayWord)),
+                            resume = replayResumeText(resumeOf(entry.item), short = true)
                         )
                     }
                     YourTeamsCard(
@@ -418,7 +421,7 @@ private sealed interface SlimCorner {
 }
 
 /** What a slim card says besides the teams; [score] (Show only) takes the short names' line. */
-private data class SlimFace(val status: SlimStatus, val corner: SlimCorner?, val score: String? = null)
+private data class SlimFace(val status: SlimStatus, val corner: SlimCorner?, val score: String? = null, val resume: String? = null)
 
 @Composable
 private fun YourTeamsCard(
@@ -524,6 +527,7 @@ private fun YourTeamsSlimFace(art: GameArt, face: SlimFace) {
         Spacer(modifier = Modifier.weight(1f))
         when {
             face.score != null -> SlimText(face.score, meta.copy(fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum"), Colors.TextPrimary)
+            face.resume != null -> SlimText(face.resume, meta.copy(fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum"), Colors.TextPrimary)
             logosShown -> SlimNames(art, meta, Colors.TextSecondary)
             else -> Spacer(modifier = Modifier.height(meta.lineHeight.value.dp))
         }

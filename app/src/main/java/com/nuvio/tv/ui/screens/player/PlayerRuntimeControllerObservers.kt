@@ -752,6 +752,8 @@ internal fun PlayerRuntimeController.tryApplyPendingResumeProgress(player: Playe
 }
 
 internal fun PlayerRuntimeController.resolvePendingInitialResumePosition(): Long {
+    // A Sports & Live replay resumed from its card starts where it was left (its own store, not watch progress).
+    com.nuvio.tv.core.sportslive.SportsLiveReplayResume.startFor(contentId)?.let { return it }
     val saved = pendingResumeProgress ?: return 0L
     val target = when {
         saved.duration > 0L -> saved.resolveResumePosition(saved.duration)
