@@ -37,6 +37,8 @@ object SportsLiveCrashReport {
     const val TRACE_LINES = 200
     const val MAX_EXITS = 3
 
+    private const val NUMBERS = "<numbers>"
+    private val SCORE_LIKE = Regex("""(?<!\d)\d+\s*[-–:]\s*\d+(?!\d)""")
     private val STAMP = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss xxx", Locale.ROOT)
 
     /** A frame made only of code names (class, method, file, line): nothing a user or an addon wrote can be in it. */
@@ -73,11 +75,17 @@ object SportsLiveCrashReport {
         return out
     }
 
-    /** `Type: message`, the message redacted and on one line. */
+    /** `Type: message`, the message redacted, without anything shaped like a score, and on one line. */
     fun describe(error: Throwable, secrets: Collection<String>): String {
         val message = runCatching { error.message }.getOrNull()
-        return error.javaClass.name + (message?.let { ": " + clean(it, secrets) } ?: "")
+        return error.javaClass.name + (message?.let { ": " + noScores(clean(it, secrets)) } ?: "")
     }
+
+    /**
+     * [text] with every score-like pair of numbers (`2-1`, `3 – 0`, `14:05`) replaced: an exception message or the
+     * system's description could quote a feed's score (spoilers). A clock time goes too; telling them apart is a guess.
+     */
+    fun noScores(text: String): String = SCORE_LIKE.replace(text, NUMBERS)
 
     internal fun frame(text: String, secrets: Collection<String>): String =
         if (CODE_FRAME.matches(text)) text else clean(text, secrets)
@@ -109,7 +117,7 @@ object SportsLiveCrashReport {
             appendLine("Nuvio Live report #$number")
             appendLine("Saved: ${stamp(savedAtMs, zone)}")
             appendLine("Exit: ${kind.label} at ${stamp(record.timestampMs, zone)}, before this start")
-            appendLine("Why: ${record.description?.takeIf { it.isNotBlank() }?.let { clean(it, secrets) } ?: "not given"}")
+            appendLine("Why: ${record.description?.takeIf { it.isNotBlank() }?.let { noScores(clean(it, secrets)) } ?: "not given"}")
             appendLine("App now: ${clean(appVersion, secrets)} (${clean(appBuild, secrets)})")
             appendLine("Device: ${clean(device, secrets)}")
             appendLine("From: ${kind.trigger}")

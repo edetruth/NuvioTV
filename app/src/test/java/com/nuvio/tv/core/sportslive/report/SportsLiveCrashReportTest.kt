@@ -83,6 +83,17 @@ class SportsLiveCrashReportTest {
         assertTrue(text.contains("java.lang.RuntimeException: $long"))
     }
 
+    @Test
+    fun `a score-like pair of numbers never reaches the crash or why lines`() {
+        val error = IllegalArgumentException("bad event Celtics 102-99 76ers, then 3 – 0 at 14:05 in game 7")
+        val text = SportsLiveCrashReport.withCrash("a\nb\n${SportsLiveReport.DETAILS}\n", "main", error, emptyList())
+        for (score in listOf("102-99", "3 – 0", "14:05")) assertFalse("$score in\n$text", text.contains(score))
+        assertTrue(text, text.lines()[2].startsWith("Crash: java.lang.IllegalArgumentException: bad event Celtics <numbers> 76ers"))
+        assertTrue(text, text.contains("game 7"))
+        val why = exit(SportsLiveExitRecord(1_000L, SportsLiveExitKind.ANR, "stuck after 2:1"), null).lines()[3]
+        assertEquals("Why: stuck after <numbers>", why)
+    }
+
     private val anr1 = SportsLiveExitRecord(1_000L, SportsLiveExitKind.ANR, "Input dispatching timed out")
     private val native2 = SportsLiveExitRecord(2_000L, SportsLiveExitKind.NATIVE_CRASH, "crash")
     private val other3 = SportsLiveExitRecord(3_000L, null, "user requested")
