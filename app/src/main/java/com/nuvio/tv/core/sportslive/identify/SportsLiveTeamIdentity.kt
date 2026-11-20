@@ -2,6 +2,7 @@ package com.nuvio.tv.core.sportslive.identify
 
 import com.nuvio.tv.core.sportslive.Memo
 import com.nuvio.tv.core.sportslive.SportsLiveMySportsScope
+import com.nuvio.tv.core.sportslive.SportsLiveNations
 import com.nuvio.tv.core.sportslive.SportsLiveSportKind
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.scores.EspnLeagueMap
@@ -25,6 +26,8 @@ object SportsLiveTeamIdentity {
         if (book.isEmpty || item.isChannel || item.teams == null) return item
         val (first, second) = sides(item.meta.name) ?: return item
         val identity = book.identityOf(first, second) ?: return item
+        // Two nations (#204): a sport only from a live list of that sport (cricket's), never a team search's answer.
+        if (identity.sport != CRICKET && sportUnknown(item) && SportsLiveNations.isNationalPair(first, second)) return item
         // A sport-only identity (live.20: no league both sides share) adds no genre.
         val genres = if (identity.league.isBlank() || item.meta.genres.any { it.equals(identity.league, ignoreCase = true) }) item.meta.genres
         else item.meta.genres + identity.league
@@ -45,6 +48,7 @@ object SportsLiveTeamIdentity {
 
     private val SOCCER_ALL_ONLY = listOf(EspnLeagueMap.SOCCER_ALL)
     private const val SOCCER = "soccer"
+    private const val CRICKET = "cricket"
 
     /** The logos the teams' lookup found for [first] and [second] (item 3), in that order; null unless both. */
     fun logosOf(first: String, second: String, book: TeamIdentityBook = TeamIdentityBook.shared): Pair<String, String>? {

@@ -172,6 +172,8 @@ object SportsLiveSportInference {
         if (item.isChannel || item.kind == SportsLiveKind.CHANNELS || item.teams == null) return null
         if (!SportsLiveTeamIdentity.sportUnknown(item)) return null
         val (first, second) = SportsLiveTeams.writtenOrder(item.meta.name) ?: return null
+        // Two nations play several sports (#204): a national team list never decides.
+        if (SportsLiveNations.isNationalPair(first, second)) return null
         val league = directory.leaguesHolding(first, second).singleOrNull() ?: return null
         if (EspnLeagueMap.saysWomen(item) && league !in EspnLeagueMap.WOMEN_FEEDS) return null
         return league.takeIf { held -> (LEAGUES + COLLEGE).any { it.first == held } }
@@ -187,6 +189,7 @@ object SportsLiveSportInference {
         if (item.isChannel || item.kind == SportsLiveKind.CHANNELS || item.teams == null) return null
         if (!SportsLiveTeamIdentity.sportUnknown(item)) return null
         val (first, second) = SportsLiveTeams.writtenOrder(item.meta.name) ?: return null
+        if (SportsLiveNations.isNationalPair(first, second)) return null
         val held = directory.leaguesHolding(first, second).takeIf { it.size > 1 } ?: return null
         return held.map { it.sport }.distinct().singleOrNull()?.let(TeamIdentityRules::sportWord)
     }

@@ -617,4 +617,20 @@ class ScoreMatcherTest {
         assertNull(match("Bayer Leverkusen vs Köln", "2026-11-20T19:30:00Z", events, now = "2026-11-20T20:00:00Z"))
         assertNull(match("Bayer vs Köln", "2026-11-20T19:30:00Z", events, now = "2026-11-20T20:00:00Z"))
     }
+    // ---- #204 ----
+
+    @Test
+    fun `New Zealand vs India never takes New Zealand U17 at Mali U17 by one side`() {
+        val u17 = soccerGame("u17", "fifa.world.u17", "FIFA U-17 World Cup", espnTeam("1", "MLI", "Mali U17", "Mali U17"),
+            espnTeam("2", "NZL", "New Zealand U17", "New Zealand U17"), "2026-11-20T13:30:00Z").copy(state = ScoreState.POST, isFinal = true)
+        val unknownSlug = u17.copy(eventId = "all", leagueSlug = EspnLeagueMap.SOCCER_ALL.league)
+        for (events in listOf(listOf(u17), listOf(unknownSlug))) {
+            assertNull(match("New Zealand vs India", null, events, now = "2026-11-20T22:40:00Z"))
+            assertNull(match("New Zealand vs India", "2026-11-18T22:00:00Z", events, now = "2026-11-20T22:40:00Z"))
+            // Both sides, but the senior sides: still not the U17 game.
+            assertNull(match("New Zealand vs Mali", "2026-11-20T13:30:00Z", events, now = "2026-11-20T22:40:00Z"))
+        }
+        // The U17 card itself does match.
+        assertEquals("u17", match("New Zealand U17 vs Mali U17", "2026-11-20T13:30:00Z", listOf(u17), now = "2026-11-20T22:40:00Z"))
+    }
 }

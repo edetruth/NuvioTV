@@ -3,6 +3,7 @@ package com.nuvio.tv.core.sportslive.identify
 import android.content.Context
 import android.util.Log
 import com.nuvio.tv.BuildConfig
+import com.nuvio.tv.core.sportslive.SportsLiveNations
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.squareup.moshi.Moshi
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -42,7 +43,8 @@ class TeamIdentifier internal constructor(
     private val now: () -> Long,
     dispatcher: CoroutineDispatcher,
     private val zone: () -> ZoneId = { ZoneId.systemDefault() },
-    private val limiter: TeamLookupRateLimiter = TeamLookupRateLimiter(now)
+    private val limiter: TeamLookupRateLimiter = TeamLookupRateLimiter(now),
+    private val cricket: CricketLiveSource? = null
 ) {
 
     @Inject
@@ -52,7 +54,8 @@ class TeamIdentifier internal constructor(
         store = TeamIdentityStore(File(context.filesDir, STORE_PATH), moshi),
         book = TeamIdentityBook.shared,
         now = System::currentTimeMillis,
-        dispatcher = Dispatchers.IO
+        dispatcher = Dispatchers.IO,
+        cricket = EspnCricketLive(okHttpClient, moshi)
     )
 
     private class Game(val first: String, val second: String)
@@ -65,9 +68,14 @@ class TeamIdentifier internal constructor(
     /** Offered games not answered yet, by [TeamIdentityBook.pairKey]; only the worker removes them. */
     private val pending = LinkedHashMap<String, Game>()
 
+    /** Live games of two nations to look for on ESPN's cricket scorepanel (#204), by [TeamIdentityBook.pairKey]. */
+    private val cricketPending = LinkedHashMap<String, Game>()
+
     // Worker-only state.
     private var loaded = false
     private var dirty = false
+    private var cricketPairs: Set<String> = emptySet()
+    private var cricketAt: Long? = null
 
     /**
      * Queues the two-team games of [items] whose sport is unknown and that are live or start today, and soccer games
@@ -90,9 +98,14 @@ class TeamIdentifier internal constructor(
             val soon = item.isLive || (start != null && start >= at && start - at <= SOCCER_LOOKUP_AHEAD_MS)
             if (!unknownSport && !(soon && SportsLiveTeamIdentity.soccerLeagueUnknown(item))) continue
             val (first, second) = SportsLiveTeamIdentity.sides(item.meta.name) ?: continue
+            // Two nations play several sports (#204): never a team search, only cricket's live list while live.
+            if (unknownSport && SportsLiveNations.isNationalPair(first, second)) {
+                if (item.isLive && cricket != null) offerCricket(first, second)
+                continue
+            }
             offerGame(first, second)
         }
-        val any = synchronized(pending) { pending.isNotEmpty() }
+        val any = synchronized(pending) { pending.isNotEmpty() } || synchronized(cricketPending) { cricketPending.isNotEmpty() }
         if (any) wakeWorker()
     }
 
@@ -106,6 +119,15 @@ class TeamIdentifier internal constructor(
         synchronized(pending) {
             if (key in pending || pending.size >= MAX_PENDING) return
             pending[key] = Game(first, second)
+        }
+    }
+
+    private fun offerCricket(first: String, second: String) {
+        if (book.has(first, second)) return
+        val key = TeamIdentityBook.pairKey(TeamIdentityRules.nameKey(first), TeamIdentityRules.nameKey(second))
+        synchronized(cricketPending) {
+            if (key in cricketPending || cricketPending.size >= MAX_PENDING) return
+            cricketPending[key] = Game(first, second)
         }
     }
 
@@ -133,6 +155,7 @@ class TeamIdentifier internal constructor(
             loaded = true
             store?.read()?.let(cache::restore)
         }
+        checkCricket()
         while (true) {
             val games = synchronized(pending) { pending.entries.map { it.key to it.value } }
             if (games.isEmpty()) break
@@ -177,6 +200,35 @@ class TeamIdentifier internal constructor(
             Log.d(LOG_TAG, "\"${game.first}\" vs \"${game.second}\": ${identity?.let { "${it.sport} / ${it.league}" } ?: "unknown"}")
         }
         return Step(true, true)
+    }
+
+    /**
+     * The queued games of two nations ESPN's cricket scorepanel lists in progress (#204) are cricket; the others
+     * stay unknown (offered again on the next rebuild, answered from the list until it is [CRICKET_REFRESH_MS] old).
+     */
+    private suspend fun checkCricket() {
+        val source = cricket ?: return
+        val games = synchronized(cricketPending) { cricketPending.values.toList() }
+        if (games.isEmpty()) return
+        if (cricketAt.let { it == null || now() - it >= CRICKET_REFRESH_MS }) {
+            if (!mayRequest()) return
+            when (val result = source.livePairs()) {
+                is CricketLiveResult.Found -> {
+                    limiter.onSuccess()
+                    cricketPairs = result.pairs
+                    cricketAt = now()
+                }
+                is CricketLiveResult.Failed -> {
+                    limiter.onFailure(result.rateLimited)
+                    return
+                }
+            }
+        }
+        for (game in games) {
+            val key = TeamIdentityBook.pairKey(SportsLiveNations.key(game.first), SportsLiveNations.key(game.second))
+            if (key in cricketPairs) book.put(game.first, game.second, GameIdentity(CRICKET, "", null to null))
+        }
+        synchronized(cricketPending) { games.forEach { game -> cricketPending.values.remove(game) } }
     }
 
     /** Answers recorded so far: a pass that recorded one moved on (a request alone does not). */
@@ -232,13 +284,7 @@ class TeamIdentifier internal constructor(
 
     /** One request through the limiter; null when it may not go now or it failed. Short waits are waited out. */
     private suspend fun request(search: suspend () -> TeamSearchResult): List<TeamCandidate>? {
-        var wait = limiter.waitMs()
-        while (wait > 0) {
-            if (wait > limiter.spacingMs) return null
-            delay(wait)
-            wait = limiter.waitMs()
-        }
-        limiter.onRequest()
+        if (!mayRequest()) return null
         return when (val result = search()) {
             is TeamSearchResult.Found -> {
                 limiter.onSuccess()
@@ -251,7 +297,22 @@ class TeamIdentifier internal constructor(
         }
     }
 
+    /** Waits out a short pause and counts a request; false when it may not go now. */
+    private suspend fun mayRequest(): Boolean {
+        var wait = limiter.waitMs()
+        while (wait > 0) {
+            if (wait > limiter.spacingMs) return false
+            delay(wait)
+            wait = limiter.waitMs()
+        }
+        limiter.onRequest()
+        return true
+    }
+
     companion object {
+        private const val CRICKET = "cricket"
+        /** How long ESPN's cricket scorepanel answer is used before it is asked again (#204). */
+        internal const val CRICKET_REFRESH_MS = 10 * 60_000L
         private const val STORE_PATH = "sportslive/team_identity.json"
         private const val LOG_TAG = "NuvioIdentify"
         /** Games queued at most; later offers come back on the next rebuild. */

@@ -63,6 +63,8 @@ object SportsLiveMySportsScope {
         SportsLiveSportInference.leagueOf(item, directory)?.let { return listOf(it) }
         if (item.isChannel || item.teams == null) return emptyList()
         val (first, second) = SportsLiveTeams.writtenOrder(item.meta.name) ?: return emptyList()
+        // Two nations play several sports (#204): a national team list never places them.
+        if (SportsLiveNations.isNationalPair(first, second)) return emptyList()
         return directory.leaguesHolding(first, second)
     }
 
