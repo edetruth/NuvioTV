@@ -1,6 +1,8 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import androidx.compose.ui.unit.dp
 import com.nuvio.tv.core.sportslive.SportsLiveToastKind
+import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens.Colors
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -18,6 +20,38 @@ class SportsLiveToastCardTest {
         // Four meanings, four colours.
         val meanings = listOf(SportsLiveToastKind.REMINDER, SportsLiveToastKind.FOLLOWED, SportsLiveToastKind.PROBLEM, SportsLiveToastKind.FINAL)
         assertEquals(meanings.size, meanings.map(::toastIconColor).toSet().size)
+    }
+
+    @Test
+    fun `with the games panel open the corner moves just right of it and keeps the bottom edge`() {
+        val video = sportsLiveVideoCorner(controlsUp = false)
+        val beside = sportsLiveCornerBesidePanel(video)
+        assertEquals(video.bottom, beside.bottom)
+        assertEquals(SportsLiveTokens.Size.PanelWidth + SportsLiveTokens.Size.StageGap, beside.start)
+        assertTrue(beside.start > SportsLiveTokens.Size.PanelWidth)
+        // No panel width to clear: the corner stays where it is.
+        val far = video.copy(start = 400.dp)
+        assertEquals(far, sportsLiveCornerBesidePanel(far))
+    }
+
+    @Test
+    fun `the panel's corner wins while it is open and the player's comes back when it closes`() {
+        val player = Any()
+        val panel = Any()
+        val video = sportsLiveVideoCorner(controlsUp = false)
+        val beside = sportsLiveCornerBesidePanel(video)
+        try {
+            SportsLiveToastPlace.set(player, video)
+            SportsLiveToastPlace.set(panel, beside)
+            // The player's controls come up under the open panel: its corner changes, the panel's still wins.
+            SportsLiveToastPlace.set(player, sportsLiveVideoCorner(controlsUp = true))
+            assertEquals(beside, SportsLiveToastPlace.corner.value)
+            SportsLiveToastPlace.remove(panel)
+            assertEquals(sportsLiveVideoCorner(controlsUp = true), SportsLiveToastPlace.corner.value)
+        } finally {
+            SportsLiveToastPlace.remove(panel)
+            SportsLiveToastPlace.remove(player)
+        }
     }
 
     @Test

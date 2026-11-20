@@ -268,6 +268,23 @@ internal fun sportsLiveVideoCorner(controlsUp: Boolean): SportsLiveCorner = Spor
 )
 
 /**
+ * The corner while the player's games panel is open (research 4): the panel opens from the left over the bottom-left
+ * corner, so toasts and alert cards keep the bottom edge (one consistent corner, never hidden: a heads-up's follow-up
+ * may arrive while the viewer browses games) and sit just right of the panel instead of under it.
+ */
+internal fun sportsLiveCornerBesidePanel(corner: SportsLiveCorner, panelWidth: Dp = SportsLiveTokens.Size.PanelWidth): SportsLiveCorner =
+    corner.copy(start = maxOf(corner.start, panelWidth + SportsLiveTokens.Size.StageGap))
+
+/**
+ * Composed by the player's games panel: while it is [open], toasts and alert cards move beside it
+ * ([sportsLiveCornerBesidePanel]); closed, the player's corner is theirs again.
+ */
+@Composable
+fun SportsLiveToastsBesidePanel(open: Boolean) {
+    if (open) SportsLiveToastsAt(sportsLiveCornerBesidePanel(sportsLiveVideoCorner(controlsUp = false)))
+}
+
+/**
  * Where the toasts and alert cards show: [SportsLiveCorner.SCREEN], or the corner a video screen sets while it shows
  * ([SportsLiveToastsOverVideo], [SportsLiveToastsAt]); the newest screen's when two are composed.
  */

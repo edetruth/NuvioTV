@@ -57,13 +57,13 @@ class SportsLiveKickoffHoldsTest {
     }
 
     @Test
-    fun `Remind me in 10 min probes once more then, and fires only when live`() = runTest {
+    fun `Remind me in 10 min probes once more then, and always answers`() = runTest {
         holds.remindLater(alert)
         assertEquals(emptyList<SportsLiveKickoffHolds.Event>(), holds.tick())
         now += 10 * MINUTE
-        assertEquals(emptyList<SportsLiveKickoffHolds.Event>(), holds.tick())
+        // Still nothing: the note says so again (research 4, never silence), and the hold is done.
+        assertEquals(listOf(SportsLiveKickoffHolds.Event.GiveUp(alert.copy(again = true))), holds.tick())
         assertEquals(1, probes.size)
-        // Still nothing: done, no second note.
         assertTrue(holds.isEmpty)
 
         holds.remindLater(alert)
@@ -104,7 +104,31 @@ class SportsLiveKickoffHoldsTest {
         val later = SportsLiveKickoffHolds(probe = { outcome }, nowMs = { now })
         later.remindLater(alert)
         now += SportsLiveKickoffHolds.REMIND_LATER_MS
-        assertEquals(emptyList<SportsLiveKickoffHolds.Event>(), later.tick())
+        assertTrue(later.tick().none { it is SportsLiveKickoffHolds.Event.HeadsUp })
+    }
+
+    @Test
+    fun `after the heads-up the hold always follows up, even when every later probe fails`() = runTest {
+        holds.hold(alert)
+        assertEquals(listOf(SportsLiveKickoffHolds.Event.HeadsUp(alert)), holds.tick())
+        // The addon stops answering after the heads-up: still the note at the 20th minute, never silence.
+        outcome = null
+        val events = ArrayList<SportsLiveKickoffHolds.Event>()
+        while (!holds.isEmpty && now <= START + 2 * SportsLiveKickoffHolds.GIVE_UP_MS) {
+            now += SportsLiveKickoffHolds.RECHECK_MS
+            events += holds.tick()
+        }
+        assertEquals(listOf(SportsLiveKickoffHolds.Event.GiveUp(alert)), events)
+    }
+
+    @Test
+    fun `the heads-up's only quiet end is the game going on screen`() = runTest {
+        holds.hold(alert)
+        assertEquals(listOf(SportsLiveKickoffHolds.Event.HeadsUp(alert)), holds.tick())
+        now += SportsLiveKickoffHolds.RECHECK_MS
+        // The viewer is watching it: the promise is kept by the game itself.
+        assertEquals(emptyList<SportsLiveKickoffHolds.Event>(), holds.tick { true })
+        assertTrue(holds.isEmpty)
     }
 
     @Test

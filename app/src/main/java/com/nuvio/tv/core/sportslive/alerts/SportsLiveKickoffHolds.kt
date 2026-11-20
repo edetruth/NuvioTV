@@ -11,9 +11,11 @@ import com.nuvio.tv.domain.model.Stream
  * - no link can be checked (none is HLS, e.g. only torrents): the alert fires as before, unchecked;
  * - otherwise it is held and probed again every [RECHECK_MS], for up to [GIVE_UP_MS]; then a quiet note
  *   ([Event.GiveUp]) "‹game› started, but no stream is live yet", whose Remind me in 10 min asks for one
- *   more probe ([remindLater]).
+ *   more probe ([remindLater]); that probe always answers, with the prompt or the note again (research 4: a
+ *   promise is always kept, even when the answer is "still nothing").
  * - The tip-off heads-up (1b): the first probe of a hold that finds nothing live says so once ([Event.HeadsUp],
- *   "No working stream yet for ‹game› — I'll tell you when one is up").
+ *   "No working stream yet for ‹game› — I'll tell you when one is up"). Every hold that gave it ends in [Event.Fire]
+ *   or [Event.GiveUp], unless the game is on screen (the viewer is watching it): never in silence.
  * - A held game with a verified link held elsewhere ([heldLink]: the my-games checks, 1b) fires on the next tick,
  *   unprobed: the prompt comes the moment a link is verified, not at the next minute's probe.
  * A probe that failed outright is retried on the next tick. One game is held once. Main-thread or
@@ -101,7 +103,11 @@ class SportsLiveKickoffHolds(
                     held.remove(key)
                     events += Event.Fire(entry.alert, null)
                 }
-                entry.last -> held.remove(key)
+                // Remind me in 10 min's probe: still nothing, so the note says so again (never silence).
+                entry.last -> {
+                    held.remove(key)
+                    events += Event.GiveUp(entry.alert)
+                }
                 now - entry.sinceMs >= GIVE_UP_MS -> {
                     held.remove(key)
                     events += Event.GiveUp(entry.alert)

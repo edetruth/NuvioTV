@@ -227,6 +227,8 @@ internal fun BoxScope.SportsLiveZapOverlay(
         }
     }
 
+    // Toasts and the kickoff prompt never sit under the panel (research 4): beside it while it is open.
+    com.nuvio.tv.ui.screens.sportslive.SportsLiveToastsBesidePanel(open = panelOpen)
     var wasOpen by remember { mutableStateOf(false) }
     LaunchedEffect(panelOpen) {
         if (wasOpen && !panelOpen) runCatching { playerFocusRequester.requestFocus() }

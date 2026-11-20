@@ -546,11 +546,13 @@ fun SportsLiveAlertsHost(
         val hint = if (peek != null || !keys.cardActionable) {
             null
         } else {
-            // "OK Watch · ▲ Both · ▼ Peek", each part only where it works.
+            // "OK Watch · ▲ Both · ▼ Peek · Back Dismiss", each part only where it works (research 4: every prompt
+            // names its keys, Back too).
             listOfNotNull(
                 stringResource(R.string.sports_live_alert_hint_watch),
                 stringResource(R.string.sports_live_alert_hint_both).takeIf { keys.canBoth },
-                stringResource(R.string.sports_live_alert_hint_peek).takeIf { keys.canPeek }
+                stringResource(R.string.sports_live_alert_hint_peek).takeIf { keys.canPeek },
+                stringResource(R.string.sports_live_alert_hint_dismiss)
             ).joinToString(HINT_SEPARATOR)
         }
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
@@ -895,12 +897,17 @@ private fun KickoffPrompt(
                 maxLines = 1
             )
         }
-        if (keyDriven && !noStreamYet) {
+        // Every prompt names its keys (research 4): the no-stream note's too.
+        if (keyDriven) {
             Text(
-                text = listOfNotNull(
-                    stringResource(R.string.sports_live_alert_prompt_hint),
-                    stringResource(R.string.sports_live_alert_hint_both).takeIf { onBoth != null }
-                ).joinToString(HINT_SEPARATOR),
+                text = if (noStreamYet) {
+                    stringResource(R.string.sports_live_alert_no_stream_hint)
+                } else {
+                    listOfNotNull(
+                        stringResource(R.string.sports_live_alert_prompt_hint),
+                        stringResource(R.string.sports_live_alert_hint_both).takeIf { onBoth != null }
+                    ).joinToString(HINT_SEPARATOR)
+                },
                 style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag),
                 color = SportsLiveTokens.Alert.Hint,
                 maxLines = 1
