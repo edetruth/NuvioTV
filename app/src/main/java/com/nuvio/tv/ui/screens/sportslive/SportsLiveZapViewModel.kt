@@ -37,6 +37,10 @@ import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.core.sportslive.EndedGame
 import com.nuvio.tv.core.sportslive.GameEndReason
 import com.nuvio.tv.core.sportslive.SportsLiveEndCountdown
+import com.nuvio.tv.core.sportslive.SportsLiveEndMove
+import com.nuvio.tv.core.sportslive.SportsLiveMyGames
+import com.nuvio.tv.core.sportslive.SportsLiveStillWatching
+import com.nuvio.tv.core.sportslive.alerts.RemindersState
 import com.nuvio.tv.core.sportslive.SportsLiveGameEndAction
 import com.nuvio.tv.core.sportslive.SportsLiveGameWatch
 import com.nuvio.tv.core.sportslive.alerts.GameReminders
@@ -161,7 +165,11 @@ class SportsLiveZapViewModel internal constructor(
     // live.20 B2: looks up a focused panel row and the zap neighbours ahead of OK and CH±; null (tests): none.
     prefetchHooks: SportsLivePrefetchHooks? = null,
     // Data saver: nothing is looked up ahead while it is on (B2).
-    dataSaver: Flow<Boolean> = flowOf(false)
+    dataSaver: Flow<Boolean> = flowOf(false),
+    // #161, research 6: the end card moves by itself only into my games (followed teams, reminders) showing "▶ Ready".
+    private val reminders: Flow<RemindersState> = flowOf(RemindersState()),
+    // #161: "Are you still watching?" after a few automatic moves or hours with no key press.
+    private val stillWatching: SportsLiveStillWatching = SportsLiveStillWatching.shared
 ) : ViewModel() {
 
     @Inject constructor(
@@ -182,7 +190,8 @@ class SportsLiveZapViewModel internal constructor(
         },
         claimPanelKeysHint = { prefs?.claimPanelKeysHint() == true },
         prefetchHooks = SportsLivePrefetchHooks.of(resolver),
-        dataSaver = prefs?.dataSaver ?: flowOf(false)
+        dataSaver = prefs?.dataSaver ?: flowOf(false),
+        reminders = prefs?.reminders ?: flowOf(RemindersState())
     )
 
     private val contentId: String? = savedStateHandle.get<String>("contentId").also { id ->
@@ -510,6 +519,10 @@ class SportsLiveZapViewModel internal constructor(
     @Volatile
     private var endAction: SportsLiveGameEndAction = SportsLiveGameEndAction.DEFAULT
 
+    // The reminders as last read: which games are mine for the end card's automatic move (#161).
+    @Volatile
+    private var remindersNow: RemindersState = RemindersState()
+
     private val _endCard = MutableStateFlow<SportsLiveEndCard?>(null)
 
     /**
@@ -542,6 +555,7 @@ class SportsLiveZapViewModel internal constructor(
             }
         }
         viewModelScope.launch { gameEndAction.collect { endAction = it } }
+        viewModelScope.launch { reminders.collect { remindersNow = it } }
         nowPlaying?.let { item ->
             gameWatch.watch(item)
             viewModelScope.launch {
@@ -604,16 +618,27 @@ class SportsLiveZapViewModel internal constructor(
         val scores = liveScores.scores.value
         val nowMs = System.currentTimeMillis()
         val finished = overKeys(lineupItems, scores, nowMs)
+        val savedForLater = sportsLiveSavedForLater(liveScores.protection.value, scores)
+        val reminded = remindersNow
+        val isMine = { game: SportsLiveItem ->
+            SportsLiveMyGames.isMine(game, reminded, savedForLater, ScoreChips.matchedEvent(game, scores[game.streamKey]))
+        }
+        val isReady = { game: SportsLiveItem -> readiness.of(game) == SportsLiveReadyMark.READY }
         // #183: a ✓ ready game first within each step; never one with no working stream, nor one saved for later (#184).
+        // One of my games showing "▶ Ready" before all: the only kind the card moves to by itself (research 6).
         val next = SportsLiveNextGame.pick(
             item, lineupItems, scores, finished, tried.ids(),
             knownGood = { game -> readiness.of(game) == SportsLiveReadyMark.READY || workingLinks.goodStream(game.id) != null },
             noStream = noStreamIds(lineupItems),
-            savedForLater = sportsLiveSavedForLater(liveScores.protection.value, scores)
+            savedForLater = savedForLater,
+            mineReady = { game -> isReady(game) && isMine(game) }
         ).takeUnless { gameWatch.debugNoNext }
         val upcoming = if (next != null) null else upcomingGame(nowMs)
         val snapshot = ScoreChips.matchedEvent(item, scores[item.streamKey]) ?: gameWatch.snapshot(item.id)
         val action = endAction
+        val move = SportsLiveEndCountdown.move(
+            action, next, hasSound = true, isMine = isMine, isReady = isReady, mayAutoMove = stillWatching.mayAutoMove()
+        )
         val card = SportsLiveEndCard(
             item = item,
             reason = reason,
@@ -625,8 +650,8 @@ class SportsLiveZapViewModel internal constructor(
             boxScore = nowMode != ScoresMode.OFF && snapshot != null,
             streamStopped = streamStopped,
             toastOnly = action == SportsLiveGameEndAction.STAY && !streamStopped,
-            countdown = SportsLiveEndCountdown.runs(action, hasNext = next != null, hasSound = true) &&
-                !(action == SportsLiveGameEndAction.STAY && !streamStopped)
+            countdown = move == SportsLiveEndMove.COUNTDOWN,
+            stillWatching = move == SportsLiveEndMove.STILL_WATCHING
         )
         // A new card (or its stopped form) is claimed and timed afresh once on screen.
         endClaimed = false
@@ -678,7 +703,7 @@ class SportsLiveZapViewModel internal constructor(
                 endJob = viewModelScope.launch {
                     delay(SportsLiveEndCountdown.DURATION_MS)
                     // The delay is the clock (a cancel clears the countdown and this job), not the wall time.
-                    if (countdown.running) endWatchNext()
+                    if (countdown.running && endWatchNext()) stillWatching.onAutoMove()
                 }
             }
             !card.streamStopped -> endJob = viewModelScope.launch {

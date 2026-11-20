@@ -13,6 +13,7 @@ import com.nuvio.tv.domain.model.SportsLiveKind
 /**
  * Where the end card's "Up next" goes when the game playing ends (#161). Pure: it reads only what is at hand.
  *
+ * 0. one of my games showing "▶ Ready" ([mineReady]): the only kind the end card moves to by itself (research 6);
  * 1. a followed team's live game;
  * 2. else a big game in the same league (ESPN's, when both are matched) or sport;
  * 3. else the top big game live;
@@ -38,13 +39,15 @@ internal object SportsLiveNextGame {
         tried: Set<String>,
         knownGood: (SportsLiveItem) -> Boolean = { false },
         noStream: Set<String> = emptySet(),
-        savedForLater: (SportsLiveItem) -> Boolean = { false }
+        savedForLater: (SportsLiveItem) -> Boolean = { false },
+        mineReady: (SportsLiveItem) -> Boolean = { false }
     ): SportsLiveItem? {
         val left = SportsLiveSecondGame.candidates(ended, lineup, scores, finishedKeys)
             .filter { item -> item.id !in tried && item.alternates.none { it.id in tried } && item.id !in noStream }
             .filterNot(savedForLater)
         if (left.isEmpty()) return null
         val forward = forwardFrom(ended, lineup, left)
+        forward.firstOrNull(mineReady)?.let { return it }
         forward.filter { it.followed }.readyFirst(knownGood).firstOrNull()?.let { return it }
         val rated = forward.mapNotNull { item ->
             // A spoiler-protected game (#151) is never picked for how close it is.

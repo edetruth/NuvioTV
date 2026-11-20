@@ -4,6 +4,7 @@ import com.nuvio.tv.core.sportslive.displayName
 import android.view.KeyEvent
 import com.nuvio.tv.core.sportslive.SportsLiveToastKind
 import com.nuvio.tv.core.sportslive.SportsLiveToasts
+import android.view.ViewConfiguration
 import android.view.ViewGroup
 import androidx.activity.compose.BackHandler
 import androidx.annotation.OptIn
@@ -121,11 +122,13 @@ import kotlin.math.sin
 val LocalOpenSportsLiveDual = staticCompositionLocalOf<(() -> Unit)?> { null }
 
 /**
- * Two Sports & Live games side by side; only the highlighted pane has sound. Left/Right highlight a
- * pane, Up/Down zap it, MENU swaps the panes (held: split or big + small, #123), INFO shows the game info
- * for the game with sound (#139), OK plays the highlighted game in the full player (its
- * playing stream as is; a pane not playing takes the section's path: Stream screen, or a merged
- * game's best stream) and Back leaves, or returns to the full player dual screen was opened in.
+ * Two Sports & Live games side by side; only the highlighted pane has sound. The keys follow the D-pad model in
+ * DualKeyModel.kt (research 8: no Menu or channel keys needed): Left/Right highlight a pane (the sound follows),
+ * Up/Down change its game (through a pane card's buttons first), OK plays the highlighted game in the full player
+ * (its playing stream as is; a pane not playing takes the section's path: Stream screen, or a merged game's best
+ * stream) or, on the small pane of big + small, makes it the big one, and Hold OK switches split / big + small.
+ * MENU (swap; held: layout, #123), CH+/CH- and INFO (the game info for the game with sound, #139) are shortcuts.
+ * Back leaves, or returns to the full player dual screen was opened in.
  * Each pane has a score strip under it (#124). Both layouts use the same two players: no third decoder.
  *
  * Each pane is a [PlayerView] with its default SurfaceView: two SurfaceViews are composited by the
@@ -216,6 +219,7 @@ fun SportsLiveDualScreen(
     val infoItem = dual.pane(dual.infoSide).item
     LaunchedEffect(infoItem) { gameInfo.follow(infoItem) }
     val menuKey = remember { DualMenuKey() }
+    val okKey = remember { DualHoldKey(ViewConfiguration.getLongPressTimeout().toLong()) }
 
     LaunchedEffect(players, dual) {
         val current = players ?: return@LaunchedEffect
@@ -333,6 +337,49 @@ fun SportsLiveDualScreen(
                     }
                     return@onKeyEvent true
                 }
+                // OK (research 8): a short press acts on its release; held, split / big + small (no MENU needed).
+                if (native.keyCode == KeyEvent.KEYCODE_DPAD_CENTER || native.keyCode == KeyEvent.KEYCODE_ENTER ||
+                    native.keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
+                ) {
+                    val press = when (native.action) {
+                        KeyEvent.ACTION_DOWN -> {
+                            // Any key stops an ended pane's countdown (#161), and still does what it does.
+                            if (native.repeatCount == 0) viewModel.cancelEndCountdowns()
+                            okKey.onDown(native.repeatCount)
+                        }
+                        KeyEvent.ACTION_UP -> okKey.onUp(native.eventTime - native.downTime)
+                        else -> null
+                    }
+                    when (press) {
+                        DualPress.HELD -> viewModel.toggleLayout()
+                        DualPress.SHORT -> {
+                            val pane = dual.pane(dual.highlighted)
+                            when (dualOkRoute(dual)) {
+                                DualOk.CARD_BUTTON -> if (pane.isStarting) {
+                                    when (startingSelection) {
+                                        SportsLiveStartingAction.TRY_NEXT_LINK -> viewModel.tryNextLink()
+                                        SportsLiveStartingAction.SOURCES -> playViewModel.chooseStream(pane.item)
+                                    }
+                                } else {
+                                    when (endSelection) {
+                                        SportsLiveEndAction.WATCH_NEXT -> viewModel.endWatchNext()
+                                        else -> viewModel.endStay()
+                                    }
+                                }
+                                // A pane whose recovery gave up offers its streams to choose from (#138).
+                                DualOk.CHOOSE_STREAM -> playViewModel.chooseStream(pane.item)
+                                DualOk.MAKE_BIG -> viewModel.swap()
+                                // A playing pane's stream goes straight to the full player.
+                                DualOk.FULL_SCREEN -> {
+                                    val stream = pane.okStream
+                                    if (stream != null) playViewModel.playResolved(pane.item, stream) else playViewModel.play(pane.item)
+                                }
+                            }
+                        }
+                        null -> Unit
+                    }
+                    return@onKeyEvent true
+                }
                 if (native.action != KeyEvent.ACTION_DOWN) return@onKeyEvent false
                 // Any key stops an ended pane's countdown (#161), and still does what it does.
                 if (native.keyCode != KeyEvent.KEYCODE_BACK) viewModel.cancelEndCountdowns()
@@ -354,69 +401,20 @@ fun SportsLiveDualScreen(
                         return@onKeyEvent true
                     }
                 }
-                // The highlighted ended pane's card: Up/Down move through its buttons, OK presses one.
-                if (endActions != null) {
-                    when (native.keyCode) {
-                        KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN -> {
-                            val at = endActions.indexOf(endSelection).coerceAtLeast(0)
-                            val step = if (native.keyCode == KeyEvent.KEYCODE_DPAD_UP) -1 else 1
-                            endSelection = endActions[(at + step).coerceIn(0, endActions.lastIndex)]
-                            return@onKeyEvent true
-                        }
-                        KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
-                            if (native.repeatCount == 0) {
-                                when (endSelection) {
-                                    SportsLiveEndAction.WATCH_NEXT -> viewModel.endWatchNext()
-                                    else -> viewModel.endStay()
-                                }
-                            }
-                            return@onKeyEvent true
-                        }
+                // The D-pad and the zap keys (DualKeyModel.kt): Left/Right the ring and the sound, Up/Down a card's
+                // buttons, then the pane's game. Every pane zaps, its error card included: flipping on never sticks.
+                val cardSelected = if (highlightedPane.isStarting) startingSelection.ordinal else endActions?.indexOf(endSelection) ?: 0
+                when (val route = dualKeyRoute(dual, native.keyCode, cardSelected) ?: return@onKeyEvent false) {
+                    is DualKeyRoute.Highlight -> viewModel.highlight(route.side)
+                    // On the left pane already, Left opens the other pane's picker (#57).
+                    DualKeyRoute.PickOtherGame -> if (native.repeatCount == 0) viewModel.onLeft()
+                    is DualKeyRoute.CardButton -> if (highlightedPane.isStarting) {
+                        startingSelection = SportsLiveStartingAction.entries[route.index]
+                    } else {
+                        endActions?.getOrNull(route.index)?.let { endSelection = it }
                     }
-                }
-                // A starting pane's card (#138): CH+/CH- still zap, as everywhere.
-                if (dual.pane(dual.highlighted).isStarting) {
-                    val actions = SportsLiveStartingAction.entries
-                    when (native.keyCode) {
-                        KeyEvent.KEYCODE_DPAD_UP -> {
-                            startingSelection = actions[(startingSelection.ordinal - 1).coerceAtLeast(0)]
-                            return@onKeyEvent true
-                        }
-                        KeyEvent.KEYCODE_DPAD_DOWN -> {
-                            startingSelection = actions[(startingSelection.ordinal + 1).coerceAtMost(actions.lastIndex)]
-                            return@onKeyEvent true
-                        }
-                        KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
-                            if (native.repeatCount == 0) {
-                                when (startingSelection) {
-                                    SportsLiveStartingAction.TRY_NEXT_LINK -> viewModel.tryNextLink()
-                                    SportsLiveStartingAction.SOURCES -> playViewModel.chooseStream(dual.pane(dual.highlighted).item)
-                                }
-                            }
-                            return@onKeyEvent true
-                        }
-                    }
-                }
-                when (native.keyCode) {
-                    // On the left pane already, Left opens the right pane's picker (#57).
-                    KeyEvent.KEYCODE_DPAD_LEFT -> if (native.repeatCount == 0) viewModel.onLeft()
-                    KeyEvent.KEYCODE_DPAD_RIGHT -> viewModel.highlight(Side.RIGHT)
-                    KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER ->
-                        if (native.repeatCount == 0) {
-                            val pane = dual.pane(dual.highlighted)
-                            // A playing pane's stream goes straight to the full player; a pane whose
-                            // recovery gave up offers its streams to choose from (#138).
-                            val stream = pane.okStream
-                            if (stream != null) playViewModel.playResolved(pane.item, stream)
-                            else if (pane.status == PaneStatus.Error) playViewModel.chooseStream(pane.item)
-                            else playViewModel.play(pane.item)
-                        }
-                    else -> {
-                        // Every pane zaps, its error card included: flipping on through dead games never sticks.
-                        val forward = dualZapKey(dual.pane(dual.highlighted), native.keyCode) ?: return@onKeyEvent false
-                        if (native.repeatCount == 0 && !viewModel.zap(forward)) {
-                            SportsLiveToasts.show(SportsLiveToastKind.INFO, context.getString(R.string.sports_live_no_other_live_game))
-                        }
+                    is DualKeyRoute.Zap -> if (native.repeatCount == 0 && !viewModel.zap(route.forward)) {
+                        SportsLiveToasts.show(SportsLiveToastKind.INFO, context.getString(R.string.sports_live_no_other_live_game))
                     }
                 }
                 true
@@ -475,14 +473,7 @@ fun SportsLiveDualScreen(
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 32.dp)
         ) {
-            Text(
-                text = stringResource(R.string.sports_live_dual_keys_hint),
-                style = MaterialTheme.typography.bodyMedium,
-                color = NuvioTheme.colors.TextPrimary,
-                modifier = Modifier
-                    .background(Color.Black.copy(alpha = 0.7f), RoundedCornerShape(50))
-                    .padding(horizontal = 20.dp, vertical = 10.dp)
-            )
+            DualKeysHint(dualKeyHints(dual))
         }
         // "Watch with another game" paired the right pane by itself (#57); not focusable either. The
         // last name stays while the hint fades out.
@@ -784,3 +775,51 @@ private fun BoxScope.PaneMessage(text: String, hint: String?, small: Boolean) {
 
 /** How dark a pane's message makes its last frame. */
 private const val PANE_SCRIM_ALPHA = 0.6f
+
+/**
+ * The keys hint (research 8), shown briefly on entry: the D-pad model in V2 key-cap pairs ("◀ ▶  Pick a game, sound
+ * follows"), on the alert card surface, never focusable. Words for what each key does; the key itself in a cap.
+ */
+@Composable
+private fun DualKeysHint(hints: List<DualHint>) {
+    val shape = RoundedCornerShape(SportsLiveTokens.Alert.Radius)
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(20.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .clip(shape)
+            .background(SportsLiveTokens.Colors.Surface.copy(alpha = SportsLiveTokens.Alert.FILL_ALPHA))
+            .border(1.dp, SportsLiveTokens.Alert.Border, shape)
+            .padding(horizontal = 16.dp, vertical = 10.dp)
+    ) {
+        hints.forEach { hint ->
+            val (key, label) = when (hint) {
+                DualHint.MOVE -> R.string.sports_live_dual_hint_key_move to R.string.sports_live_dual_hint_move
+                DualHint.ZAP -> R.string.sports_live_dual_hint_key_zap to R.string.sports_live_dual_hint_zap
+                DualHint.OK_FULL_SCREEN -> R.string.sports_live_dual_hint_key_ok to R.string.sports_live_dual_hint_full_screen
+                DualHint.OK_MAKE_BIG -> R.string.sports_live_dual_hint_key_ok to R.string.sports_live_dual_hint_make_big
+                DualHint.HOLD_OK_BIG_SMALL -> R.string.sports_live_dual_hint_key_hold_ok to R.string.sports_live_dual_hint_big_small
+                DualHint.HOLD_OK_SIDE_BY_SIDE -> R.string.sports_live_dual_hint_key_hold_ok to R.string.sports_live_dual_hint_side_by_side
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                val cap = SportsLiveTokens.Radius.ButtonShape
+                Text(
+                    text = stringResource(key),
+                    style = SportsLiveTokens.style(SportsLiveTokens.Type.ControlSelected),
+                    color = SportsLiveTokens.Colors.TextPrimary,
+                    maxLines = 1,
+                    modifier = Modifier
+                        .border(1.dp, SportsLiveTokens.Colors.OutlineStrong, cap)
+                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                )
+                Text(
+                    text = stringResource(label),
+                    style = SportsLiveTokens.style(SportsLiveTokens.Type.Meta),
+                    color = SportsLiveTokens.Colors.TextSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}

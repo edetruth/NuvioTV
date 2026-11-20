@@ -10,30 +10,18 @@ enum class DualMenuAction {
 }
 
 /**
- * MENU in dual screen (#123): a short press swaps on release; held until the key repeats (the system's
- * long-press time), it changes the layout once and its release does nothing. A release without its
- * press (the press went to the screen before) does nothing either.
+ * MENU in dual screen (#123), an optional shortcut (research 8: Hold OK does the same, for remotes with no Menu): a
+ * short press swaps on release; held until the key repeats (the system's long-press time), it changes the layout
+ * once and its release does nothing. A release without its press (the press went to the screen before) does
+ * nothing either.
  */
 internal class DualMenuKey {
-    private var down = false
-    private var held = false
+    private val key = DualHoldKey()
 
     /** A MENU down event, [repeatCount] as the system counts it; the action to take now, if any. */
-    fun onDown(repeatCount: Int): DualMenuAction? {
-        if (repeatCount == 0) {
-            down = true
-            held = false
-            return null
-        }
-        if (!down || held) return null
-        held = true
-        return DualMenuAction.TOGGLE_LAYOUT
-    }
+    fun onDown(repeatCount: Int): DualMenuAction? = key.onDown(repeatCount)?.toMenu()
 
-    fun onUp(): DualMenuAction? {
-        val action = if (down && !held) DualMenuAction.SWAP else null
-        down = false
-        held = false
-        return action
-    }
+    fun onUp(): DualMenuAction? = key.onUp()?.toMenu()
+
+    private fun DualPress.toMenu(): DualMenuAction = if (this == DualPress.SHORT) DualMenuAction.SWAP else DualMenuAction.TOGGLE_LAYOUT
 }

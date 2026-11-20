@@ -75,7 +75,8 @@ class SportsLivePreferencesDataStore @Inject constructor(
     private val catalogOptionsKey = stringPreferencesKey("sports_live_catalog_options")
     private val followedTeamsKey = stringPreferencesKey("sports_live_followed_teams")
     private val hiddenTitlesKey = stringSetPreferencesKey("sports_live_hidden_titles")
-    private val dualHintShownKey = intPreferencesKey("sports_live_dual_hint_shown")
+    // v2: the D-pad key model (research 8) shows its hint afresh to a profile that saw the MENU one.
+    private val dualHintShownKey = intPreferencesKey("sports_live_dual_hint_shown_v2")
     private val panelHintShownKey = intPreferencesKey("sports_live_panel_hint_shown")
     private val dualLayoutKey = stringPreferencesKey("sports_live_dual_layout")
     private val newSportsHintSeenKey = booleanPreferencesKey("sports_live_new_sports_hint_seen")

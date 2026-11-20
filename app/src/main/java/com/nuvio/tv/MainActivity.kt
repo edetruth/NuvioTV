@@ -1536,6 +1536,7 @@ open class MainActivity : ComponentActivity() {
         super.onUserInteraction()
         ambientIdleController.onInteraction()
         SportsLiveMiniPlayers.controller.onInteraction()
+        com.nuvio.tv.core.sportslive.SportsLiveStillWatching.shared.onInteraction()
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {

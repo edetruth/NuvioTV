@@ -57,6 +57,23 @@ class SportsLiveNextGameTest {
     }
 
     @Test
+    fun `one of my games showing Ready comes before all, even a followed team's`() {
+        // Research 6: the only kind of game the end card moves to by itself, so the card names it when there is one.
+        val followedBlowout = nbaBlowout.copy(followed = true)
+        val pick = SportsLiveNextGame.pick(
+            ended, listOf(ended, followedBlowout, nbaClose, nflOvertime), scores, emptySet(), emptySet(),
+            mineReady = { it == nflOvertime }
+        )
+        assertEquals(nflOvertime, pick)
+        // Never one saved for later, even mine and Ready.
+        val saved = SportsLiveNextGame.pick(
+            ended, listOf(ended, followedBlowout, nflOvertime), scores, emptySet(), emptySet(),
+            savedForLater = { it == nflOvertime }, mineReady = { it == nflOvertime }
+        )
+        assertEquals(followedBlowout, saved)
+    }
+
+    @Test
     fun `then a big game in the same league, over a bigger one elsewhere`() {
         val pick = SportsLiveNextGame.pick(ended, listOf(ended, nflOvertime, nbaClose, nbaBlowout), scores, emptySet(), emptySet())
         assertEquals(nbaClose, pick)

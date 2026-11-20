@@ -3,6 +3,10 @@ package com.nuvio.tv.ui.screens.sportslive.dual
 import com.nuvio.tv.core.sportslive.SportsLiveLinkMarks
 import com.nuvio.tv.core.sportslive.GameEndReason
 import com.nuvio.tv.core.sportslive.SportsLiveEndCountdown
+import com.nuvio.tv.core.sportslive.SportsLiveEndMove
+import com.nuvio.tv.core.sportslive.SportsLiveMyGames
+import com.nuvio.tv.core.sportslive.SportsLiveStillWatching
+import com.nuvio.tv.core.sportslive.alerts.RemindersState
 import com.nuvio.tv.core.sportslive.SportsLiveGameEndAction
 import com.nuvio.tv.core.sportslive.SportsLiveGameWatch
 import com.nuvio.tv.core.sportslive.SportsLiveTriedGames
@@ -191,7 +195,11 @@ class SportsLiveDualViewModel internal constructor(
     /** ✓ ready and ⚠ no working stream (#147), read by the next-game picks. */
     private val readiness: SportsLiveGameReadiness = SportsLiveGameReadiness.shared,
     /** Games tried and failed this session (#138 follow-up). */
-    private val triedGames: SportsLiveTriedGames = SportsLiveTriedGames.shared
+    private val triedGames: SportsLiveTriedGames = SportsLiveTriedGames.shared,
+    /** Which games are mine (#161, research 6): an ended pane moves by itself only into one of them showing "▶ Ready". */
+    reminders: Flow<RemindersState> = flowOf(RemindersState()),
+    /** "Are you still watching?" after a few automatic moves or hours with no key press (#161). */
+    private val stillWatching: SportsLiveStillWatching = SportsLiveStillWatching.shared
 ) : ViewModel() {
 
     @Inject
@@ -224,7 +232,8 @@ class SportsLiveDualViewModel internal constructor(
                 SportsLiveEndedGames.estimateGate(scoresOff, liveScores.unmatched.value)
             ) + SportsLiveLinkVerdicts.shared.deadKeys
         },
-        savedForLater = { sportsLiveSavedForLater(liveScores.protection.value, liveScores.scores.value) }
+        savedForLater = { sportsLiveSavedForLater(liveScores.protection.value, liveScores.scores.value) },
+        reminders = preferences.reminders
     )
 
     private val items: List<SportsLiveItem> = session?.items.orEmpty()
@@ -310,8 +319,12 @@ class SportsLiveDualViewModel internal constructor(
     @Volatile
     private var scoresMode: ScoresMode? = null
 
+    @Volatile
+    private var remindersNow = RemindersState()
+
     init {
         viewModelScope.launch { endActions.collect { endAction = it } }
+        viewModelScope.launch { reminders.collect { remindersNow = it } }
         viewModelScope.launch { scoresModes.collect { scoresMode = it } }
         session?.let { s -> s.leftStream?.let { handOffs[s.left.streamKey] = it } }
         session?.let {
@@ -501,8 +514,9 @@ class SportsLiveDualViewModel internal constructor(
     /**
      * [item]'s pane game ended ([reason], #161): its player stops and its pane shows the end card, Up next picked as
      * the full player picks it ([SportsLiveNextGame], never the other pane's game). The 10 s countdown runs only
-     * when "When a game ends" is Move and this pane had the sound; otherwise the card waits for OK. The other pane
-     * is never touched.
+     * when "When a game ends" is Move, this pane had the sound and Up next is one of my games showing "▶ Ready"
+     * ([SportsLiveEndCountdown.move]); otherwise the card waits for OK, or asks "Are you still watching?" when the
+     * guard holds the move back. The other pane is never touched.
      */
     private fun endPane(side: Side, item: SportsLiveItem, reason: GameEndReason) {
         val state = _state.value ?: return
@@ -511,6 +525,10 @@ class SportsLiveDualViewModel internal constructor(
         val hasSound = state.audibleSide == side
         val other = state.pane(side.other).item
         val lineup = items.filterNot { it.sharesSourceWith(other) }
+        val saved = savedForLater()
+        val reminded = remindersNow
+        val isMine = { game: SportsLiveItem -> SportsLiveMyGames.isMine(game, reminded, saved) }
+        val isReady = { game: SportsLiveItem -> readiness.of(game) == SportsLiveReadyMark.READY }
         val next = SportsLiveNextGame.pick(
             ended = item,
             lineup = lineup,
@@ -521,9 +539,13 @@ class SportsLiveDualViewModel internal constructor(
             // failed), nor one saved with Watch later (#184).
             knownGood = ::knownGood,
             noStream = sportsLiveNoStreamIds(lineup, readiness, workingLinks),
-            savedForLater = savedForLater()
+            savedForLater = saved,
+            mineReady = { game -> isReady(game) && isMine(game) }
         )
-        val countdown = SportsLiveEndCountdown.runs(endAction, hasNext = next != null, hasSound = hasSound)
+        val move = SportsLiveEndCountdown.move(
+            endAction, next, hasSound = hasSound, isMine = isMine, isReady = isReady, mayAutoMove = stillWatching.mayAutoMove()
+        )
+        val countdown = move == SportsLiveEndMove.COUNTDOWN
         val card = SportsLiveEndCard(
             item = item,
             reason = reason,
@@ -535,14 +557,15 @@ class SportsLiveDualViewModel internal constructor(
             boxScore = false,
             streamStopped = true,
             countdown = countdown,
-            countdownEndsAtMs = if (countdown) workingLinks.nowMs() + SportsLiveEndCountdown.DURATION_MS else null
+            countdownEndsAtMs = if (countdown) workingLinks.nowMs() + SportsLiveEndCountdown.DURATION_MS else null,
+            stillWatching = move == SportsLiveEndMove.STILL_WATCHING
         )
         dispatch(DualAction.Ended(item, card))
         if (countdown) {
             jobs[side] = viewModelScope.launch {
                 delay(SportsLiveEndCountdown.DURATION_MS)
                 // The pane the ended game is in now: a swap (#123) may have moved it.
-                _state.value?.sideOf(item)?.let { endWatchNext(it) }
+                if (_state.value?.sideOf(item)?.let { endWatchNext(it) } == true) stillWatching.onAutoMove()
             }
         }
     }
@@ -905,7 +928,7 @@ class SportsLiveDualViewModel internal constructor(
         const val DEVICE_LIMIT_RETRY_MS = 1_000L
 
         /** How long the keys hint shows after the screen opens. */
-        const val KEYS_HINT_MS = 4_000L
+        const val KEYS_HINT_MS = 6_000L
 
         /** How long "Paired with ‹game› · ← to change" shows after "Watch with another game" (#57). */
         const val PAIR_HINT_MS = 3_000L

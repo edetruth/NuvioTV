@@ -4,6 +4,8 @@ import com.nuvio.tv.MainDispatcherRule
 import com.nuvio.tv.core.sportslive.SportsLiveEndCountdown
 import com.nuvio.tv.core.sportslive.SportsLiveEndedGames
 import com.nuvio.tv.core.sportslive.SportsLiveGameEndAction
+import com.nuvio.tv.core.sportslive.SportsLiveGameReadiness
+import com.nuvio.tv.core.sportslive.SportsLiveStillWatching
 import com.nuvio.tv.core.sportslive.SportsLiveGameWatch
 import com.nuvio.tv.core.sportslive.SportsLiveRecoveryBudget
 import com.nuvio.tv.core.sportslive.SportsLiveStreamHealth
@@ -20,6 +22,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -43,9 +46,9 @@ class SportsLiveDualGameEndTest {
         startHasTimeOfDay = true
     )
 
-    // a and b are long over (past their expected end); c and d are mid-game.
+    // a and b are long over (past their expected end); c and d are mid-game. b is one of my games (a followed team).
     private val a = game("a", 4 * hour)
-    private val b = game("b", 4 * hour)
+    private val b = game("b", 4 * hour).copy(followed = true)
     private val c = game("c", hour)
     private val d = game("d", hour)
 
@@ -54,15 +57,26 @@ class SportsLiveDualGameEndTest {
         SportsLiveTriedGames.shared.clear()
     }
 
-    private fun newViewModel(left: SportsLiveItem, right: SportsLiveItem, action: SportsLiveGameEndAction = SportsLiveGameEndAction.MOVE) =
-        SportsLiveDualViewModel(
-            resolve = { item -> dualStream(item.id) },
-            endedKeys = { emptySet() },
-            session = SportsLiveDualSession(left, right, listOf(a, b, c, d), null, SportsLiveTab.LIVE_NOW),
-            recoveryBudget = SportsLiveRecoveryBudget(),
-            gameWatch = SportsLiveGameWatch(SportsLiveEndedGames(), nowMs = { now }),
-            endActions = flowOf(action)
-        )
+    /** "▶ Ready" marks: b holds a verified link unless a test says otherwise. */
+    private fun readyB(): SportsLiveGameReadiness = SportsLiveGameReadiness(nowMs = { now }).also { it.ready(b.id, dualStream("b")) }
+
+    private fun newViewModel(
+        left: SportsLiveItem,
+        right: SportsLiveItem,
+        action: SportsLiveGameEndAction = SportsLiveGameEndAction.MOVE,
+        readiness: SportsLiveGameReadiness = readyB(),
+        lineup: List<SportsLiveItem> = listOf(a, b, c, d),
+        stillWatching: SportsLiveStillWatching = SportsLiveStillWatching(nowMs = { now })
+    ) = SportsLiveDualViewModel(
+        resolve = { item -> dualStream(item.id) },
+        endedKeys = { emptySet() },
+        session = SportsLiveDualSession(left, right, lineup, null, SportsLiveTab.LIVE_NOW),
+        recoveryBudget = SportsLiveRecoveryBudget(),
+        gameWatch = SportsLiveGameWatch(SportsLiveEndedGames(), nowMs = { now }),
+        endActions = flowOf(action),
+        readiness = readiness,
+        stillWatching = stillWatching
+    )
 
     private fun SportsLiveDualViewModel.playing() {
         val state = state.value!!
@@ -231,5 +245,83 @@ class SportsLiveDualGameEndTest {
         assertNotEquals(PaneStatus.Ended, left.status)
         assertNull(left.end)
         assertTrue(left.reconnecting)
+    }
+
+    @Test
+    fun `Up next that is not one of my games waits for OK, with no countdown`() = runTest(mainDispatcherRule.dispatcher) {
+        // Research 6: no leading sports app switches to an unrelated game by itself. c is nobody's team.
+        val viewModel = newViewModel(a, d, lineup = listOf(a, c, d))
+        runCurrent()
+        viewModel.playing()
+        viewModel.onUnhealthy(a, SportsLiveStreamHealth.Problem.UNEXPECTED_END)
+        val left = viewModel.state.value!!.left
+        assertEquals(c, left.end!!.next)
+        assertNull(left.end!!.countdownEndsAtMs)
+        assertFalse(left.end!!.stillWatching)
+        advanceTimeBy(SportsLiveEndCountdown.DURATION_MS * 3)
+        runCurrent()
+        assertEquals(a, viewModel.state.value!!.left.item)
+    }
+
+    @Test
+    fun `my game with no Ready mark waits for OK too`() = runTest(mainDispatcherRule.dispatcher) {
+        val viewModel = newViewModel(a, d, readiness = SportsLiveGameReadiness(nowMs = { now }))
+        runCurrent()
+        viewModel.playing()
+        viewModel.onUnhealthy(a, SportsLiveStreamHealth.Problem.UNEXPECTED_END)
+        val left = viewModel.state.value!!.left
+        assertEquals(b, left.end!!.next)
+        assertNull(left.end!!.countdownEndsAtMs)
+    }
+
+    @Test
+    fun `Up next prefers my Ready game over the next one in the lineup`() = runTest(mainDispatcherRule.dispatcher) {
+        // c comes first after a, but e is mine and Ready: it is the one the card names and moves to.
+        val e = game("e", hour).copy(followed = true)
+        val readiness = SportsLiveGameReadiness(nowMs = { now }).also { it.ready(e.id, dualStream("e")) }
+        val viewModel = newViewModel(a, d, readiness = readiness, lineup = listOf(a, c, d, e))
+        runCurrent()
+        viewModel.playing()
+        viewModel.onUnhealthy(a, SportsLiveStreamHealth.Problem.UNEXPECTED_END)
+        assertEquals(e, viewModel.state.value!!.left.end!!.next)
+        assertNotNull(viewModel.state.value!!.left.end!!.countdownEndsAtMs)
+    }
+
+    @Test
+    fun `after hours with no key press the card asks Are you still watching instead of moving`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            var clock = now
+            val guard = SportsLiveStillWatching(nowMs = { clock })
+            clock += SportsLiveStillWatching.IDLE_LIMIT_MS
+            val viewModel = newViewModel(a, d, stillWatching = guard)
+            runCurrent()
+            viewModel.playing()
+            viewModel.onUnhealthy(a, SportsLiveStreamHealth.Problem.UNEXPECTED_END)
+            val left = viewModel.state.value!!.left
+            assertEquals(b, left.end!!.next)
+            assertTrue(left.end!!.stillWatching)
+            assertNull(left.end!!.countdownEndsAtMs)
+            advanceTimeBy(SportsLiveEndCountdown.DURATION_MS * 3)
+            runCurrent()
+            assertEquals(a, viewModel.state.value!!.left.item)
+            // OK on it: Watch next.
+            assertTrue(viewModel.endWatchNext())
+            assertEquals(b, viewModel.state.value!!.left.item)
+        }
+
+    @Test
+    fun `an automatic move counts toward the still-watching guard`() = runTest(mainDispatcherRule.dispatcher) {
+        val guard = SportsLiveStillWatching(nowMs = { now })
+        val viewModel = newViewModel(a, d, stillWatching = guard)
+        runCurrent()
+        viewModel.playing()
+        viewModel.onUnhealthy(a, SportsLiveStreamHealth.Problem.UNEXPECTED_END)
+        advanceTimeBy(SportsLiveEndCountdown.DURATION_MS + 1)
+        runCurrent()
+        assertEquals(b, viewModel.state.value!!.left.item)
+        repeat(SportsLiveStillWatching.MAX_AUTO_MOVES - 2) { guard.onAutoMove() }
+        assertTrue(guard.mayAutoMove())
+        guard.onAutoMove()
+        assertFalse(guard.mayAutoMove())
     }
 }

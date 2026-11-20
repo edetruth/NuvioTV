@@ -10,7 +10,10 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 
-/** Settings → Sports & Live → "When a game ends" (#161): Move to the next game (default), Ask, or Stay. */
+/**
+ * Settings → Sports & Live → "When a game ends" (#161): Move (default: after 10 s, only into one of my games showing
+ * "▶ Ready", else it asks, [SportsLiveEndCountdown.move]), Ask, or Stay.
+ */
 enum class SportsLiveGameEndAction {
     MOVE, ASK, STAY;
 
@@ -134,7 +137,38 @@ class SportsLiveEndCountdown(private val durationMs: Long = DURATION_MS) {
          */
         fun runs(action: SportsLiveGameEndAction, hasNext: Boolean, hasSound: Boolean): Boolean =
             action == SportsLiveGameEndAction.MOVE && hasNext && hasSound
+
+        /**
+         * What the end card does about Up next [next] (#161, research 6: no leading sports app switches to an
+         * unrelated game by itself). The countdown runs only when [runs] says so and [next] is one of my games
+         * ([isMine]: [SportsLiveMyGames.isMine]) showing "▶ Ready" ([isReady]); otherwise the card waits for OK.
+         * A move the still-watching guard holds back ([mayAutoMove] false) asks "Are you still watching?" instead.
+         */
+        fun move(
+            action: SportsLiveGameEndAction,
+            next: SportsLiveItem?,
+            hasSound: Boolean,
+            isMine: (SportsLiveItem) -> Boolean,
+            isReady: (SportsLiveItem) -> Boolean,
+            mayAutoMove: Boolean
+        ): SportsLiveEndMove {
+            if (next == null || !runs(action, hasNext = true, hasSound = hasSound)) return SportsLiveEndMove.WAIT
+            if (!isMine(next) || !isReady(next)) return SportsLiveEndMove.WAIT
+            return if (mayAutoMove) SportsLiveEndMove.COUNTDOWN else SportsLiveEndMove.STILL_WATCHING
+        }
     }
+}
+
+/** What an end card does about its Up next game (#161). */
+enum class SportsLiveEndMove {
+    /** The 10 s countdown runs, then it moves. */
+    COUNTDOWN,
+
+    /** Up next waits for OK ("OK to switch"). */
+    WAIT,
+
+    /** It would have moved, but nobody pressed a key for long ([SportsLiveStillWatching]): "Are you still watching?". */
+    STILL_WATCHING
 }
 
 /**

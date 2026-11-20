@@ -52,6 +52,8 @@ import com.nuvio.tv.core.sportslive.GameEndStrings
 import com.nuvio.tv.core.sportslive.SportsLiveEndCountdown
 import com.nuvio.tv.core.sportslive.SportsLiveGameEnd
 import com.nuvio.tv.core.sportslive.SportsLiveGameWatch
+import com.nuvio.tv.core.sportslive.SportsLiveGameReadiness
+import com.nuvio.tv.core.sportslive.SportsLiveStillWatching
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SportsLiveZapViewModelTest {
@@ -95,7 +97,9 @@ class SportsLiveZapViewModelTest {
         watch: SportsLiveGameWatch = SportsLiveGameWatch(),
         protection: SpoilerProtection = SpoilerProtection(),
         links: SportsLiveWorkingLinks = SportsLiveWorkingLinks.shared,
-        claimHint: suspend () -> Boolean = { false }
+        claimHint: suspend () -> Boolean = { false },
+        readiness: SportsLiveGameReadiness = SportsLiveGameReadiness.shared,
+        stillWatching: SportsLiveStillWatching = SportsLiveStillWatching()
     ): SportsLiveZapViewModel {
         SportsLiveZapSessions.start(
             SportsLiveZapSession.of(listOf(playing) + others, playing.streamKey, SportsLiveTab.LIVE_NOW, null, returnToHomeOnBack = false)!!
@@ -115,7 +119,8 @@ class SportsLiveZapViewModelTest {
         every { liveScores.unmatched } returns MutableStateFlow(emptySet())
         return SportsLiveZapViewModel(
             SavedStateHandle(mapOf("contentId" to playing.id)), resolver, debrid, profiles, repo, liveScores,
-            mainDispatcherRule.dispatcher, gameWatch = watch, workingLinks = links, claimPanelKeysHint = claimHint
+            mainDispatcherRule.dispatcher, gameWatch = watch, workingLinks = links, claimPanelKeysHint = claimHint,
+            readiness = readiness, stillWatching = stillWatching
         ).also { it.onPlayerStarted(started) }
     }
 
@@ -289,9 +294,11 @@ class SportsLiveZapViewModelTest {
     @Test
     fun `a stream stopping at the game's end shows the card with the countdown, and any key cancels it`() = runTest(mainDispatcherRule.dispatcher) {
         val pacers = game("Indiana Pacers at Philadelphia 76ers")
-        val hawks = game("Atlanta Hawks at San Antonio Spurs")
+        val hawks = game("Atlanta Hawks at San Antonio Spurs").copy(followed = true)
         val watch = SportsLiveGameWatch()
-        val viewModel = fullTimeViewModel(MutableStateFlow(emptyMap()), ScoresMode.SHOW, pacers, listOf(hawks), watch = watch)
+        val viewModel = fullTimeViewModel(
+            MutableStateFlow(emptyMap()), ScoresMode.SHOW, pacers, listOf(hawks), watch = watch, readiness = readyFor(hawks)
+        )
         val events = mutableListOf<SportsLiveZapEvent>()
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.events.collect { events += it } }
         runCurrent()
@@ -316,9 +323,13 @@ class SportsLiveZapViewModelTest {
     @Test
     fun `the countdown running out moves to Up next`() = runTest(mainDispatcherRule.dispatcher) {
         val pacers = game("Indiana Pacers at Philadelphia 76ers")
-        val hawks = game("Atlanta Hawks at San Antonio Spurs")
+        val hawks = game("Atlanta Hawks at San Antonio Spurs").copy(followed = true)
         val watch = SportsLiveGameWatch()
-        val viewModel = fullTimeViewModel(MutableStateFlow(emptyMap()), ScoresMode.SHOW, pacers, listOf(hawks), watch = watch)
+        val guard = SportsLiveStillWatching()
+        val viewModel = fullTimeViewModel(
+            MutableStateFlow(emptyMap()), ScoresMode.SHOW, pacers, listOf(hawks), watch = watch,
+            readiness = readyFor(hawks), stillWatching = guard
+        )
         val events = mutableListOf<SportsLiveZapEvent>()
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.events.collect { events += it } }
         runCurrent()
@@ -329,6 +340,63 @@ class SportsLiveZapViewModelTest {
         advanceUntilIdle()
         assertNull(viewModel.endCard.value)
         assertEquals(hawks, (events.single() as SportsLiveZapEvent.Navigate).target.item)
+        // The move counted toward "Are you still watching?".
+        repeat(SportsLiveStillWatching.MAX_AUTO_MOVES - 1) { guard.onAutoMove() }
+        assertFalse(guard.mayAutoMove())
+    }
+
+    /** "▶ Ready" for [game]: a verified link held now. */
+    private fun readyFor(game: SportsLiveItem) = SportsLiveGameReadiness().also { it.ready(game.id, STREAM) }
+
+    @Test
+    fun `Up next that is not one of my games, or not Ready, waits for OK with no countdown`() = runTest(mainDispatcherRule.dispatcher) {
+        // Research 6: the card moves by itself only into my games showing "▶ Ready".
+        val pacers = game("Indiana Pacers at Philadelphia 76ers")
+        val hawks = game("Atlanta Hawks at San Antonio Spurs")
+        val watch = SportsLiveGameWatch()
+        val notMine = fullTimeViewModel(MutableStateFlow(emptyMap()), ScoresMode.SHOW, pacers, listOf(hawks), watch = watch, readiness = readyFor(hawks))
+        runCurrent()
+        watch.reportEnd(pacers.id, GameEndReason.STREAM_ENDED)
+        runCurrent()
+        notMine.onEndCardVisible(true)
+        assertEquals(hawks, notMine.endCard.value!!.next)
+        assertFalse(notMine.endCard.value!!.countdown)
+        assertNull(notMine.endCard.value!!.countdownEndsAtMs)
+
+        SportsLiveZapSessions.clear()
+        val followed = hawks.copy(followed = true)
+        val watch2 = SportsLiveGameWatch()
+        val notReady = fullTimeViewModel(MutableStateFlow(emptyMap()), ScoresMode.SHOW, pacers, listOf(followed), watch = watch2)
+        runCurrent()
+        watch2.reportEnd(pacers.id, GameEndReason.STREAM_ENDED)
+        runCurrent()
+        notReady.onEndCardVisible(true)
+        assertEquals(followed, notReady.endCard.value!!.next)
+        assertNull(notReady.endCard.value!!.countdownEndsAtMs)
+    }
+
+    @Test
+    fun `with no key press for hours the card asks Are you still watching instead of counting down`() = runTest(mainDispatcherRule.dispatcher) {
+        val pacers = game("Indiana Pacers at Philadelphia 76ers")
+        val hawks = game("Atlanta Hawks at San Antonio Spurs").copy(followed = true)
+        val watch = SportsLiveGameWatch()
+        var clock = 0L
+        val guard = SportsLiveStillWatching(nowMs = { clock })
+        clock = SportsLiveStillWatching.IDLE_LIMIT_MS
+        val viewModel = fullTimeViewModel(
+            MutableStateFlow(emptyMap()), ScoresMode.SHOW, pacers, listOf(hawks), watch = watch,
+            readiness = readyFor(hawks), stillWatching = guard
+        )
+        runCurrent()
+        watch.reportEnd(pacers.id, GameEndReason.STREAM_ENDED)
+        runCurrent()
+        viewModel.onEndCardVisible(true)
+        val card = viewModel.endCard.value!!
+        assertTrue(card.stillWatching)
+        assertNull(card.countdownEndsAtMs)
+        // A key press: the guard starts afresh, the next game end counts down again.
+        guard.onInteraction()
+        assertTrue(guard.mayAutoMove())
     }
 
     @Test

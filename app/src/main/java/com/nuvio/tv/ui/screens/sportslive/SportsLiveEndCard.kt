@@ -63,7 +63,9 @@ data class SportsLiveEndCard(
     /** The countdown runs once the card shows ([SportsLiveEndCountdown.runs]). */
     val countdown: Boolean = false,
     val countdownEndsAtMs: Long? = null,
-    val upcomingReminded: Boolean = false
+    val upcomingReminded: Boolean = false,
+    /** It would have moved by itself, but nobody pressed a key for long: "Are you still watching?" (SportsLiveStillWatching). */
+    val stillWatching: Boolean = false
 )
 
 /** The card's buttons, in the order shown; the first one takes focus. */
@@ -177,6 +179,7 @@ fun SportsLiveEndCardView(
             )
             val waiting = when {
                 secondsLeft != null -> stringResource(R.string.sports_live_end_switching_in, secondsLeft)
+                card.stillWatching -> stringResource(R.string.sports_live_end_still_watching)
                 pane && !card.countdown -> stringResource(R.string.sports_live_end_ok_to_switch)
                 else -> null
             }

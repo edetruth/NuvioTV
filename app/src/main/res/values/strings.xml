@@ -4174,7 +4174,7 @@
     <string name="sports_live_now_playing">Now playing</string>
     <string name="sports_live_expand">Expand</string>
     <string name="sports_live_stop">Stop</string>
-    <string name="sports_live_dual_paired_hint">Paired with %1$s · ← to change</string>
+    <string name="sports_live_dual_paired_hint">Paired with %1$s · ◀ to change</string>
     <string name="sports_live_dual_no_pair">No other live game to watch with</string>
     <string name="sports_live_full_time">Full time</string>
     <string name="sports_live_full_time_score">Full time · %1$s</string>
@@ -4226,7 +4226,16 @@
     <string name="sports_live_dual_no_info">No game info for this one</string>
     <string name="sports_live_dual_sound_on">Sound on</string>
     <string name="sports_live_dual_sound_off">Muted</string>
-    <string name="sports_live_dual_keys_hint">←/→ sound · ↑/↓ change game · OK full screen · Menu swap · hold Menu layout · Info stats</string>
+    <string name="sports_live_dual_hint_key_move">◀ ▶</string>
+    <string name="sports_live_dual_hint_move">Pick a game, sound follows</string>
+    <string name="sports_live_dual_hint_key_zap">▲ ▼</string>
+    <string name="sports_live_dual_hint_zap">Change game</string>
+    <string name="sports_live_dual_hint_key_ok">OK</string>
+    <string name="sports_live_dual_hint_full_screen">Full screen</string>
+    <string name="sports_live_dual_hint_make_big">Make big</string>
+    <string name="sports_live_dual_hint_key_hold_ok">Hold OK</string>
+    <string name="sports_live_dual_hint_big_small">Big + small</string>
+    <string name="sports_live_dual_hint_side_by_side">Side by side</string>
     <string name="sports_live_source_loading">%1$s · loading…</string>
     <string name="sports_live_source_notice">Message from the source · not a stream</string>
     <!-- #156: marks on links that already failed or played for this game, in every stream list. -->
@@ -4324,6 +4333,7 @@
     <string name="sports_live_end_up_next">UP NEXT</string>
     <string name="sports_live_end_switching_in">Switching in %1$d s · any key to stop</string>
     <string name="sports_live_end_ok_to_switch">OK to switch</string>
+    <string name="sports_live_end_still_watching">Are you still watching? OK to switch</string>
     <string name="sports_live_end_nothing_live">Nothing else live</string>
     <string name="sports_live_end_nothing_live_next">Nothing else live · Next: %1$s %2$s</string>
     <string name="sports_live_end_watch_next">Watch next</string>
@@ -4331,8 +4341,8 @@
     <string name="sports_live_end_stay">Stay</string>
     <string name="sports_live_end_staying">Staying for the postgame</string>
     <string name="sports_live_setting_game_end">When a game ends</string>
-    <string name="sports_live_setting_game_end_help">When the game you watch ends: move to the next live game after 10 s, ask, or stay</string>
-    <string name="sports_live_game_end_move">Move to the next game</string>
+    <string name="sports_live_setting_game_end_help">Move: after 10 s, only to one of your games marked ▶ Ready (any other waits for OK) · Ask: always waits for OK · Stay: keeps the postgame on.</string>
+    <string name="sports_live_game_end_move">Move to my next ready game</string>
     <string name="sports_live_game_end_ask">Ask</string>
     <string name="sports_live_game_end_stay">Stay</string>
     <string name="sports_live_waiting_title">Waiting for the stream to start…</string>
