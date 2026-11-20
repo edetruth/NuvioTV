@@ -51,7 +51,9 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -61,6 +63,7 @@ import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.Lifecycle
@@ -248,17 +251,8 @@ internal fun BoxScope.SportsLiveZapOverlay(
         wasOpen = panelOpen
     }
 
-    AnimatedVisibility(
-        visible = panelOpen,
-        enter = fadeIn(tween(120)),
-        exit = fadeOut(tween(120)),
-        modifier = Modifier
-            .align(Alignment.CenterStart)
-            .zIndex(3.1f)
-    ) {
-        // #140/#145: a strong dark fade behind the panel, so its rows read over bright video; clear soon past its edge.
-        Box(modifier = Modifier.fillMaxHeight().width(PANEL_WIDTH + PANEL_FADE).background(PANEL_SCRIM))
-    }
+    // TV QA BUG-H: the panel's backing is drawn by the panel itself ([panelScrim]), under its own rows, not by a layer of
+    // its own beside it (that layer did not show on the TV while the rows did, leaving text bare over the video).
     // Hold OK on a row (#140): the V2 action menu, Watch both first.
     var menu by remember { mutableStateOf<SportsLivePanelMenu?>(null) }
     val scoresAheadToast = stringResource(R.string.sports_live_scores_ahead_toast)
@@ -694,6 +688,7 @@ private fun LiveGamesPanel(
         modifier = Modifier
             .fillMaxHeight()
             .width(PANEL_WIDTH)
+            .panelScrim()
             .onFocusChanged { panelHasFocus = it.hasFocus }
             .focusProperties { onExit = { cancelFocusChange() } }
             .onPreviewKeyEvent {
@@ -958,15 +953,34 @@ private val NOW_PLAYING_GAP = 6.dp
 /** How far past the panel its fade runs out (#140, #145). */
 private val PANEL_FADE = 80.dp
 
+/** One point of the panel's backing ([panelScrimStops]): [at] from the panel's left edge, black at [alpha]. */
+internal data class PanelScrimStop(val at: Dp, val alpha: Float)
+
 /**
  * Behind the panel (#145, TV QA P6): near-opaque black behind the rows (95 % at the left edge, still 90 % at the
- * panel's edge), so muted text keeps its contrast over a white or busy scene (10-ft text over video wants a solid
- * backing, not a tint: Android TV overlay guidance, WCAG 4.5:1 for the muted lines); then a soft fall to clear over
- * the [PANEL_FADE] past it, so the game stays visible beside the panel.
+ * panel's edge, [panelWidth]), so muted text keeps its contrast over a white or busy scene (10-ft text over video wants
+ * a solid backing, not a tint: Android TV overlay guidance, WCAG 4.5:1 for the muted lines); then a soft fall to clear
+ * over the [fade] past it, so the game stays visible beside the panel.
  */
-private val PANEL_SCRIM = Brush.horizontalGradient(
-    0f to Color.Black.copy(alpha = 0.95f),
-    PANEL_WIDTH / (PANEL_WIDTH + PANEL_FADE) to Color.Black.copy(alpha = 0.9f),
-    (PANEL_WIDTH + PANEL_FADE / 3) / (PANEL_WIDTH + PANEL_FADE) to Color.Black.copy(alpha = 0.55f),
-    1f to Color.Transparent
+internal fun panelScrimStops(panelWidth: Dp, fade: Dp): List<PanelScrimStop> = listOf(
+    PanelScrimStop(0.dp, 0.95f),
+    PanelScrimStop(panelWidth, 0.9f),
+    PanelScrimStop(panelWidth + fade / 3, 0.55f),
+    PanelScrimStop(panelWidth + fade, 0f)
 )
+
+/**
+ * The panel's backing ([panelScrimStops]), drawn by the panel's own node under its rows (TV QA BUG-H), past its right
+ * edge over the fade: wherever the rows draw, so does their backing.
+ */
+private fun Modifier.panelScrim(): Modifier = drawWithCache {
+    val stops = panelScrimStops(PANEL_WIDTH, PANEL_FADE)
+    val end = stops.last().at
+    val brush = Brush.horizontalGradient(
+        *stops.map { (it.at / end) to Color.Black.copy(alpha = it.alpha) }.toTypedArray(),
+        startX = 0f,
+        endX = end.toPx()
+    )
+    val scrimSize = Size(end.toPx(), size.height)
+    onDrawBehind { drawRect(brush = brush, size = scrimSize) }
+}
