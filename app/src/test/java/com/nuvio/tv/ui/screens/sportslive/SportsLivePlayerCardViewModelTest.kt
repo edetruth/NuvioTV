@@ -108,6 +108,19 @@ class SportsLivePlayerCardViewModelTest {
     }
 
     @Test
+    fun `opened from a Game page that already shows the score - no second Reveal`() = runTest(mainDispatcherRule.dispatcher) {
+        // A spoiler-safe page the user revealed, under Hide until I reveal or Never show alike.
+        for (mode in listOf(ScoresMode.SHOW, ScoresMode.HIDE_UNTIL_FOCUSED, ScoresMode.OFF)) {
+            settings.value = ScoreSettings(mode = mode)
+            val vm = viewModel(SportsLivePlayerCardRequest(target, spoilerSafe = true, revealed = true))
+            runCurrent()
+            assertEquals("$mode", PlayerCardStatus.READY, vm.uiState.value.status)
+            assertTrue("$mode", vm.uiState.value.showsLastGames)
+            assertFalse("$mode", vm.uiState.value.showsReveal)
+        }
+    }
+
+    @Test
     fun `opened from a spoiler-safe Game page - the last games wait for Reveal even under Show`() = runTest(mainDispatcherRule.dispatcher) {
         val vm = viewModel(SportsLivePlayerCardRequest(target, spoilerSafe = true))
         runCurrent()

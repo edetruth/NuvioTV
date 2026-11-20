@@ -285,7 +285,10 @@ fun SportsLiveGameScreen(
                 onOpenPlayer = { key, target ->
                     returnKey = key
                     returnPending = true
-                    SportsLivePlayerCardRequests.open(SportsLivePlayerCardRequest(target, spoilerSafe = state.spoilerSafe || state.spoilerProtected))
+                    SportsLivePlayerCardRequests.open(
+                        // The score already shows here (Show, or revealed): the card inherits it (BUG19).
+                        SportsLivePlayerCardRequest(target, spoilerSafe = state.spoilerSafe || state.spoilerProtected, revealed = state.showsScore)
+                    )
                     onOpenPlayerCard()
                 }
             )

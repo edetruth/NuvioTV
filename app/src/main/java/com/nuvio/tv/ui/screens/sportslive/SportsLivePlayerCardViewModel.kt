@@ -28,9 +28,14 @@ import javax.inject.Inject
 
 /**
  * What opens a Player card (#63): the athlete, and [spoilerSafe] when the Game page it came from was
- * (Catch up, #58): the last games then stay behind Reveal even under Scores Show.
+ * (Catch up, #58): the last games then stay behind Reveal even under Scores Show. [revealed] when the page it
+ * came from already shows the score (live.20 BUG19, Q11): the card starts revealed, no second Reveal.
  */
-data class SportsLivePlayerCardRequest(val target: PlayerCardTarget, val spoilerSafe: Boolean = false)
+data class SportsLivePlayerCardRequest(
+    val target: PlayerCardTarget,
+    val spoilerSafe: Boolean = false,
+    val revealed: Boolean = false
+)
 
 /** Hands the request to the Player card's ViewModel, once (like the Game page's). */
 internal object SportsLivePlayerCardRequests {
@@ -103,7 +108,7 @@ class SportsLivePlayerCardViewModel internal constructor(
     )
     val uiState: StateFlow<SportsLivePlayerCardUiState> = state.asStateFlow()
 
-    private val revealRequested = MutableStateFlow(false)
+    private val revealRequested = MutableStateFlow(request?.revealed == true)
 
     init {
         val target = request?.target
