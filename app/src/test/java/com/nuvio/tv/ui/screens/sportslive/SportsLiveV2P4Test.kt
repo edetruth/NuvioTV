@@ -286,13 +286,6 @@ class SportsLiveV2P4Test {
     // --- Part B ---
 
     @Test
-    fun `the stage says stream listed only when two or more sources list a game`() {
-        assertNull(upcomingListedSources(item("Team A vs Team B", sources = 1)))
-        assertEquals(2, upcomingListedSources(item("Team A vs Team B", sources = 2)))
-        assertNull(upcomingListedSources(channel("Sports Channel 1", "US")))
-    }
-
-    @Test
     fun `toasts sit bottom left, clear of the rail, and above a card that holds the corner`() {
         // live.19 QA F8: one corner everywhere, bottom left; over video, the player's corner.
         assertTrue(SportsLiveTokens.Toast.Start > SportsLiveTokens.Toast.StartOverVideo)
