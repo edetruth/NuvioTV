@@ -255,11 +255,12 @@ class SportsLiveUpcomingV2Test {
 
     @Test
     fun `two parsed sides that are not team-like draw one line`() {
+        // Since live.20 a pairing where neither side looks like a team names no game: no drawn card, one line.
         val art = GameArt.of(item("Grand Prix Qualifying vs Race Day", now), null)
         assertFalse(scoreboardTwoSided(art, matched = false))
-        // An ESPN match is always two-sided.
-        assertTrue(scoreboardTwoSided(art, matched = true))
         assertFalse(scoreboardTwoSided(null, matched = true))
+        // An ESPN match is always two-sided.
+        assertTrue(scoreboardTwoSided(GameArt.of(item("Celtics vs 76ers", now), null), matched = true))
     }
 
     // Channel stage

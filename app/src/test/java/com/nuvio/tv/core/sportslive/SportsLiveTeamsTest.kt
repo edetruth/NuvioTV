@@ -239,7 +239,9 @@ class SportsLiveTeamsTest {
         val names = fixtureNames("highfly_live.json") + fixtureNames("nebula_live.json") +
             fixtureNames("nebula_replays.json") + fixtureNames("replay_football.json") +
             fixtureNames("cnc_live_events.json").map { it.removePrefix("🔜 ").removePrefix("✅ ").removePrefix("🔴 ") }
-        val games = names.filter { Regex("(?i) (vs\\.?|v|at|@|-) ").containsMatchIn(it) }
+        // A tournament "vs" its event names no game since live.20 (neither side is team-like).
+        val notGames = setOf("ATP 250 vs Stockholm Open")
+        val games = names.filter { Regex("(?i) (vs\\.?|v|at|@|-) ").containsMatchIn(it) && it !in notGames }
         assertTrue(games.size > 20)
         games.forEach { name ->
             val pair = SportsLiveTeams.parse(name)
@@ -303,7 +305,7 @@ class SportsLiveTeamsTest {
         assertEquals("milan", SportsLiveTeams.normalise("AC Milan"))
         assertEquals("roma", SportsLiveTeams.normalise("AS Roma"))
         assertEquals("stuttgart", SportsLiveTeams.normalise("VfB Stuttgart"))
-        assertEquals("koln", SportsLiveTeams.normalise("1. FC Koln"))
+        assertEquals("cologne", SportsLiveTeams.normalise("1. FC Koln"))
         assertEquals("bournemouth", SportsLiveTeams.normalise("AFC Bournemouth"))
         assertEquals("sc state", SportsLiveTeams.normalise("SC State"))
         assertEquals(SportsLiveTeams.canonicalise("Manchester United"), SportsLiveTeams.canonicalise("Man Utd"))
