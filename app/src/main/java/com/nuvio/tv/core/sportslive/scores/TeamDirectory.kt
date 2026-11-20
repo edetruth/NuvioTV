@@ -280,7 +280,10 @@ class TeamDirectory(private val maxLeagues: Int = MAX_LEAGUES) {
                 .mapNotNull { team ->
                     val id = team.id?.trim()?.takeIf { it.isNotEmpty() && clean(it) } ?: return@mapNotNull null
                     val name = team.displayName?.trim()?.takeIf { it.isNotEmpty() && clean(it) } ?: return@mapNotNull null
+                    // An /i/ logo first; a team ESPN gives only a /guid/ logo (live.18: "Coachella Valley Lakers") keeps
+                    // that one, so it is still in the list (team ids, inference) and still drawn, unscaled.
                     val logos = team.logos.orEmpty().filter { logo -> logo.href?.let(::scalable) == true }
+                        .ifEmpty { team.logos.orEmpty().filter { logo -> logo.href?.let(::kept) == true } }
                     val logo = (logos.firstOrNull { "default" in it.rel.orEmpty() } ?: logos.firstOrNull())?.href?.trim()
                         ?: return@mapNotNull null
                     DirectoryTeam(
@@ -301,6 +304,11 @@ class TeamDirectory(private val maxLeagues: Int = MAX_LEAGUES) {
         private val SCALABLE = Regex("""^https?://a\.espncdn\.com/i/[A-Za-z0-9/._-]+\.png$""")
 
         private fun scalable(url: String) = SCALABLE.matches(url.trim())
+
+        // A /guid/ PNG: drawn as it is, for a team with no /i/ logo.
+        private val GUID = Regex("""^https?://a\.espncdn\.com/guid/[A-Za-z0-9/._-]+\.png$""")
+
+        private fun kept(url: String) = scalable(url) || GUID.matches(url.trim())
 
         private fun clean(text: String) = text.none { it == '\t' || it == '\n' || it == '\r' }
 
@@ -323,7 +331,7 @@ class TeamDirectory(private val maxLeagues: Int = MAX_LEAGUES) {
             val fetchedAt = header[1].toLongOrNull() ?: return null
             val teams = lines.drop(1).mapNotNull { line ->
                 val p = line.split('\t')
-                if (p.size != 7 || p[0].isEmpty() || p[1].isEmpty() || !scalable(p[6])) return@mapNotNull null
+                if (p.size != 7 || p[0].isEmpty() || p[1].isEmpty() || !kept(p[6])) return@mapNotNull null
                 DirectoryTeam(p[0], p[1], p[2].ifEmpty { null }, p[3].ifEmpty { null }, p[4].ifEmpty { null }, p[5].ifEmpty { null }, p[6])
             }
             return if (teams.isEmpty()) null else fetchedAt to teams

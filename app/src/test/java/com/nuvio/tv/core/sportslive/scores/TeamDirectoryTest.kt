@@ -80,14 +80,17 @@ class TeamDirectoryTest {
     }
 
     @Test
-    fun `an unreadable body is null and a team without an id or scalable logo is left out`() {
+    fun `an unreadable body is null, a team without an id is left out and a guid-only logo is kept`() {
         assertNull(TeamDirectory.parse("not json", EspnFixtures.moshi))
         val body = """{"sports":[{"leagues":[{"teams":[
             {"team":{"id":"1","displayName":"A","logos":[{"href":"https://a.espncdn.com/guid/x/logos/a.png","rel":["full"]}]}},
             {"team":{"displayName":"B","logos":[{"href":"https://a.espncdn.com/i/teamlogos/x/500/b.png","rel":["default"]}]}},
             {"team":{"id":"3","displayName":"C","logos":[{"href":"https://a.espncdn.com/i/teamlogos/x/500/c.png","rel":["full","default"]}]}}
         ]}]}]}"""
-        assertEquals(listOf("3"), TeamDirectory.parse(body, EspnFixtures.moshi)!!.map { it.id })
+        // live.18: a team ESPN gives only a /guid/ logo ("Coachella Valley Lakers") stays in the list.
+        val teams = TeamDirectory.parse(body, EspnFixtures.moshi)!!
+        assertEquals(listOf("1", "3"), teams.map { it.id })
+        assertEquals("https://a.espncdn.com/guid/x/logos/a.png", teams.first().logo)
     }
 
     // --- Disk cache ---
