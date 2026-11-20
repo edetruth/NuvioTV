@@ -54,9 +54,10 @@ class TeamPageRepository internal constructor(
 
     private class Cached(val data: TeamPageData, val fetchedAt: Long)
 
-    private val teamAdapter = moshi.adapter(EspnTeamResponseDto::class.java)
-    private val scheduleAdapter = moshi.adapter(EspnTeamScheduleDto::class.java)
-    private val summaryAdapter = moshi.adapter(EspnSummaryDto::class.java)
+    private val espnMoshi = EspnJson.guarded(moshi)
+    private val teamAdapter = espnMoshi.adapter(EspnTeamResponseDto::class.java)
+    private val scheduleAdapter = espnMoshi.adapter(EspnTeamScheduleDto::class.java)
+    private val summaryAdapter = espnMoshi.adapter(EspnSummaryDto::class.java)
     private val lock = Mutex()
     private val memory = LinkedHashMap<String, Cached>()
 

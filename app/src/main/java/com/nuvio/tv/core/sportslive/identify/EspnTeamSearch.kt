@@ -1,5 +1,6 @@
 package com.nuvio.tv.core.sportslive.identify
 
+import com.nuvio.tv.core.sportslive.scores.EspnJson
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 import com.squareup.moshi.Moshi
@@ -52,7 +53,7 @@ class EspnTeamSearch internal constructor(
 
         /** [body] as the teams it lists; empty when it lists none, null when unreadable. */
         fun parse(body: String, moshi: Moshi): List<TeamCandidate>? {
-            val dto = runCatching { moshi.adapter(EspnSearchDto::class.java).fromJson(body) }.getOrNull() ?: return null
+            val dto = runCatching { EspnJson.guarded(moshi).adapter(EspnSearchDto::class.java).fromJson(body) }.getOrNull() ?: return null
             return dto.results.orEmpty()
                 .filter { it.type == "team" }
                 .flatMap { it.contents.orEmpty() }

@@ -46,7 +46,7 @@ class EspnScoreProvider internal constructor(
     constructor(okHttpClient: OkHttpClient, moshi: Moshi, health: EspnFeedHealth) :
         this(espnClient(okHttpClient), moshi, BASE_URL, health = health)
 
-    private val adapter = moshi.adapter(EspnScoreboardDto::class.java)
+    private val adapter = EspnJson.guarded(moshi).adapter(EspnScoreboardDto::class.java)
 
     private fun scoreboardUrl(league: EspnLeague, date: LocalDate): String =
         "$baseUrl${league.path}/scoreboard?dates=${date.format(DateTimeFormatter.BASIC_ISO_DATE)}" +

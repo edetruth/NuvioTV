@@ -33,8 +33,9 @@ class PlayerCardRepository internal constructor(
 
     private class Cached(val card: PlayerCard, val fetchedAt: Long)
 
-    private val athleteAdapter = moshi.adapter(EspnAthleteResponseDto::class.java)
-    private val logAdapter = moshi.adapter(EspnGameLogDto::class.java)
+    private val espnMoshi = EspnJson.guarded(moshi)
+    private val athleteAdapter = espnMoshi.adapter(EspnAthleteResponseDto::class.java)
+    private val logAdapter = espnMoshi.adapter(EspnGameLogDto::class.java)
     private val lock = Mutex()
     private val memory = LinkedHashMap<String, Cached>()
 

@@ -40,7 +40,7 @@ class CollegeRankingsRepository internal constructor(
     @Inject
     constructor(source: RankingsSource, moshi: Moshi) : this(source, moshi, System::currentTimeMillis)
 
-    private val adapter by lazy { moshi.adapter(EspnRankingsDto::class.java) }
+    private val adapter by lazy { EspnJson.guarded(moshi).adapter(EspnRankingsDto::class.java) }
     private val lock = Mutex()
     private val byDay = HashMap<EspnLeague, Pair<LocalDate, Map<String, Int>>>()
 

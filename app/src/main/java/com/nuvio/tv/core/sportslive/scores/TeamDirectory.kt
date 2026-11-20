@@ -286,7 +286,7 @@ class TeamDirectory(
 
         /** [body], ESPN's `{sport}/{league}/teams`, as directory teams; null when unreadable. Teams without an id, name or `/i/` logo are left out. */
         fun parse(body: String, moshi: Moshi): List<DirectoryTeam>? {
-            val dto = runCatching { moshi.adapter(EspnTeamListDto::class.java).fromJson(body) }.getOrNull() ?: return null
+            val dto = runCatching { EspnJson.guarded(moshi).adapter(EspnTeamListDto::class.java).fromJson(body) }.getOrNull() ?: return null
             val teams = dto.sports.orEmpty().flatMap { it.leagues.orEmpty() }.flatMap { it.teams.orEmpty() }
                 .mapNotNull { it.team }
                 .filter { it.isActive != false }

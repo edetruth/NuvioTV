@@ -95,7 +95,7 @@ class StandingsRepository internal constructor(
         scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     )
 
-    private val adapter by lazy { moshi.adapter(EspnStandingsNodeDto::class.java) }
+    private val adapter by lazy { EspnJson.guarded(moshi).adapter(EspnStandingsNodeDto::class.java) }
     private val lock = Mutex()
     private val fetchedAt = HashMap<EspnLeague, Long>()
     private val asked = HashSet<EspnLeague>()

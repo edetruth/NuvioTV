@@ -83,7 +83,7 @@ class GameSummaryRepository internal constructor(
 
     private class Cached(val dto: EspnSummaryDto, val fetchedAt: Long, val final: Boolean)
 
-    private val adapter = moshi.adapter(EspnSummaryDto::class.java)
+    private val adapter = EspnJson.guarded(moshi).adapter(EspnSummaryDto::class.java)
     private val lock = Mutex()
     private val memory = LinkedHashMap<String, Cached>()
 
