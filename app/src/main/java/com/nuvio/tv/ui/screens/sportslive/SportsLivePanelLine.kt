@@ -22,7 +22,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -33,7 +32,13 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.IntrinsicMeasurable
+import androidx.compose.ui.layout.IntrinsicMeasureScope
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.Measurable
+import androidx.compose.ui.layout.MeasurePolicy
+import androidx.compose.ui.layout.MeasureResult
+import androidx.compose.ui.layout.MeasureScope
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -234,6 +239,8 @@ private val LEADING_SYMBOLS = Regex("""^[^\p{L}\p{N}(]+""")
 internal fun panelSideChoices(name: String, individual: Boolean, code: String? = null): List<String> {
     val full = name.trim()
     if (!individual) {
+        // Already a code ("UTAH", "ORL", TV QA BUG-C): nothing shorter reads better.
+        if (panelIsCode(full)) return listOf(full)
         val short = code?.trim()?.takeIf { it.isNotEmpty() } ?: panelShortCode(full)
         return listOf(full, short).filter { it.isNotEmpty() }.distinct()
     }
@@ -244,29 +251,35 @@ internal fun panelSideChoices(name: String, individual: Boolean, code: String? =
 
 private val PAIR_SEPARATOR = Regex("""\s*[/&]\s*""")
 
+/** A side that is a code already (TV QA BUG-C): one word of at most four capitals or digits ("UTAH", "ORL", "76"). */
+internal fun panelIsCode(name: String): Boolean {
+    val text = name.trim()
+    return text.length in 1..4 && text.none(Char::isWhitespace) && text == text.uppercase(Locale.ROOT)
+}
+
 /**
- * A team's three-letter code for a tight panel line when ESPN gave none (BUG-C, TV QA: "A… L…"), in capitals as
- * matched rows' codes ("ORL"): club affixes and numbers left out ("FC Andorra", "1. FC Köln"); one word: its first
- * three letters ("Andorra" → "AND", "Leganés" → "LEG", "Köln" → "KÖL"); two words: the first's initial and the
- * second's first two ("Real Madrid" → "RMA"); three or more: the first three initials ("New York Knicks" → "NYK").
- * Empty for a name with no letters.
+ * A team's three-letter code for a tight panel line when ESPN gave none (BUG-C, TV QA: "A… L…", "U…"), in capitals
+ * as matched rows' codes ("ORL"), from the team's place as ESPN's codes are ("Utah Utes" → UTA, "Dayton Flyers" →
+ * DAY, "Pogoń Szczecin" → POG): club affixes, articles and numbers left out ("FC Andorra" → AND, "1. FC Köln" → KÖL,
+ * "AS Nancy Lorraine" → NAN, "Le Havre" → HAV); one or two words: the first word's first three letters, topped up from
+ * the second when it is shorter ("EA Guingamp" → EAG); three or more: the first three initials ("New York Knicks" →
+ * NYK). Empty for a name with no letters.
  */
 internal fun panelShortCode(name: String): String {
     val words = name.trim().split(WHITESPACE).map { word -> word.filter(Char::isLetter) }.filter { it.isNotEmpty() }
     val significant = words.filterNot { it.uppercase(Locale.ROOT) in CLUB_AFFIXES }.ifEmpty { words }
     val code = when (significant.size) {
         0 -> ""
-        1 -> significant[0].take(3)
-        2 -> significant[0].take(1) + significant[1].take(2)
+        1, 2 -> significant.joinToString("").take(3)
         else -> significant.take(3).joinToString("") { it.take(1) }
     }
     return code.uppercase(Locale.ROOT)
 }
 
-/** Club affixes a short code leaves out ("FC", "AFC", "SV"…): they tell no club apart. */
+/** Club affixes and articles a short code leaves out ("FC", "AFC", "SV", "Le"…): they tell no club apart. */
 private val CLUB_AFFIXES = setOf(
     "FC", "CF", "AFC", "SC", "AC", "AS", "CD", "UD", "SD", "SV", "VFB", "VFL", "TSG", "SSC", "RC", "RCD", "FK", "NK",
-    "SK", "BK", "IF", "KV", "CA", "CLUB", "DE"
+    "SK", "BK", "IF", "KV", "CA", "CLUB", "DE", "LE", "LA", "LES", "EL", "AL", "THE"
 )
 
 /** Sports played one on one (or two on two): a side is a player's name, best cut to the last name. */
@@ -369,6 +382,7 @@ internal fun SportsLivePanelLine(
     onReadyHidden: ((Boolean) -> Unit)? = null
 ) {
     val strings = rememberGameStatusStrings()
+    val endedShort = stringResource(R.string.sports_live_panel_probably_ended_short)
     val kickoff = row.art?.let { kickoffText(it) }
     // live.20 F5: the panel's own short tag, so the fixed column never cuts it ("MOTORSPORT" → "MOTOR").
     val sport = remember(row) { row.sportTag ?: SportsLiveSportKind.plainTagOf(row.item) }
@@ -441,7 +455,7 @@ internal fun SportsLivePanelLine(
                             }
                         }
                     },
-                    status = { StatusText(line) },
+                    status = { StatusText(line, compactClock = endedShort.takeIf { line.clock == strings.probablyEnded }) },
                     chips = {
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(5.dp),
@@ -516,30 +530,42 @@ private fun ReadyMark(mark: SportsLiveReadyMark) {
 /**
  * "NBA [logo] ORL 97–92 PHI [logo]" (V2 `Player.dc.html` 3): the tag, a matched game's logos or flags beside the
  * abbreviations around the score (none when they are not both known), the leader's score in real bold, the hidden
- * mark or "vs" when none shows. The names give way (ellipsis) first: the tag, the score and the clock always fit.
- * Between them the names share the room by need ([panelSideWidths]); a player's side in an [individual] sport first
- * steps down to last names ([panelSideChoices]) before it is cut.
+ * mark or "vs" when none shows. Each side shows its longest form that fits ([panelSideChoices], [panelNamesFit]): a
+ * team always keeps a readable code (ESPN's, else derived), never "U…"; the logos go before the codes would be cut.
  */
 @Composable
 private fun RowScope.GameLine(row: ScoreboardRow, line: PanelLine, individual: Boolean) {
     LineTag(line.tag, line.live)
     val logos = rememberTeamLogoPair(row.art)?.takeIf { !it.failed }
-    // User TV report (live.20): the names always show beside the logos (crests alone name no one), cut per side; the
-    // score is never cut ([panelSidesFit]: it goes whole first).
+    // User TV report (live.20): the names always show beside the logos (crests alone name no one).
     val matched = row.art?.let { !it.first.unmatched && !it.second.unmatched } == true
-    if (logos != null) TeamLogoSlot(logos.first, logos.shown, Size.PanelLogo)
     // ESPN's real codes for the names, when the app knows the teams anywhere (BUG-C follow-up): before derived ones.
-    val firstCode = remember(line.first) { line.first?.let(TeamLogoBook.shared::abbreviationAnywhere) }
-    val secondCode = remember(line.second) { line.second?.let(TeamLogoBook.shared::abbreviationAnywhere) }
-    PanelSides(
-        first = { SideText(line.first.orEmpty(), individual && !matched, null, firstCode) },
+    // Looked up by the card's own name first ("Utah Utes"), which a feed knows better than the line's ("Utah").
+    val firstName = row.art?.first?.takeIf { it.unmatched }?.name?.let(::panelCleanText)
+    val secondName = row.art?.second?.takeIf { it.unmatched }?.name?.let(::panelCleanText)
+    val firstCode = remember(line.first, firstName) { panelCodeOf(firstName, line.first) }
+    val secondCode = remember(line.second, secondName) { panelCodeOf(secondName, line.second) }
+    val firstChoices = remember(line.first, individual, matched, firstCode) {
+        panelSideChoices(line.first.orEmpty(), individual && !matched, firstCode)
+    }
+    val secondChoices = remember(line.second, individual, matched, secondCode) {
+        panelSideChoices(line.second.orEmpty(), individual && !matched, secondCode)
+    }
+    PanelNames(
+        firstChoices = firstChoices,
+        secondChoices = secondChoices,
+        firstLogo = { if (logos != null) TeamLogoSlot(logos.first, logos.shown, Size.PanelLogo) },
         middle = { LineMiddle(line.scores) },
-        second = { SideText(line.second.orEmpty(), individual && !matched, null, secondCode) },
+        secondLogo = { if (logos != null) TeamLogoSlot(logos.second, logos.shown, Size.PanelLogo) },
         modifier = Modifier.weight(1f, fill = false)
     )
-    if (logos != null) TeamLogoSlot(logos.second, logos.shown, Size.PanelLogo)
     if (row.followed) Icon(imageVector = Icons.Rounded.Star, contentDescription = null, tint = Colors.FollowedGold, modifier = Modifier.size(10.dp))
 }
+
+/** ESPN's code for a side, by the card's own name ([cardName]) and then by the line's ([lineName]); null when unknown. */
+private fun panelCodeOf(cardName: String?, lineName: String?): String? =
+    sequenceOf(cardName, lineName).filterNotNull().filter { it.isNotBlank() }.distinct()
+        .firstNotNullOfOrNull { TeamLogoBook.shared.abbreviationAnywhere(it) }
 
 /** Between a line's names: the score (the leader's in bold), the hidden-score eye, or "vs". */
 @Composable
@@ -567,24 +593,160 @@ private fun LineMiddle(scores: ScoreboardScores) {
 }
 
 /**
- * One side's name: its longest choice ([panelSideChoices]) that fits the width [PanelSides] gave it, else the
- * shortest cut with an ellipsis; [onOverflow] is told once even the shortest does not fit. Taken afresh per name.
+ * Which form of each side a game line shows, and at what width (TV QA BUG-C): [first] and [second] index the sides'
+ * forms ([panelSideChoices]), [firstWidth] and [secondWidth] are what each gets; [middle] (score, eye or "vs") and
+ * [logos] say whether those show.
+ */
+internal data class PanelNamesFit(
+    val first: Int,
+    val second: Int,
+    val firstWidth: Int,
+    val secondWidth: Int,
+    val middle: Boolean,
+    val logos: Boolean
+)
+
+/**
+ * How a game line's two sides fit [available] px (TV QA BUG-C: "U… 6–7 DAY"), decided from widths alone, never from
+ * a cut text: [first] and [second] are each side's forms' widths, longest first (the name, then its code); [middle]
+ * is the score's (or "vs"'s) width, [gap] the space on each side of it, [logos] both logos with their gaps (0 for
+ * none). The full names and the logos first; while they do not fit the wider side steps down to its next form, then
+ * the other; then the logos go, then the middle, whole. Only when even the two shortest forms alone do not fit are they
+ * cut ([panelSideWidths]), so a code ("UTAH", "DAY") shows whole on any row the panel can draw.
+ */
+internal fun panelNamesFit(first: List<Int>, second: List<Int>, middle: Int, logos: Int, gap: Int, available: Int): PanelNamesFit {
+    fun need(i: Int, j: Int, withLogos: Boolean, withMiddle: Boolean): Int =
+        first[i] + gap + second[j] + (if (withMiddle) middle + gap else 0) + (if (withLogos) logos else 0)
+    var i = 0
+    var j = 0
+    while (need(i, j, withLogos = true, withMiddle = true) > available) {
+        val stepFirst = i < first.lastIndex && (j == second.lastIndex || first[i] >= second[j])
+        when {
+            stepFirst -> i++
+            j < second.lastIndex -> j++
+            else -> break
+        }
+    }
+    return when {
+        need(i, j, withLogos = true, withMiddle = true) <= available ->
+            PanelNamesFit(i, j, first[i], second[j], middle = true, logos = logos > 0)
+        need(i, j, withLogos = false, withMiddle = true) <= available ->
+            PanelNamesFit(i, j, first[i], second[j], middle = true, logos = false)
+        need(i, j, withLogos = false, withMiddle = false) <= available ->
+            PanelNamesFit(i, j, first[i], second[j], middle = false, logos = false)
+        else -> {
+            val (a, b) = panelSideWidths(first[i], second[j], available - gap)
+            PanelNamesFit(i, j, a, b, middle = false, logos = false)
+        }
+    }
+}
+
+/**
+ * "[logo] first middle second [logo]" on one line (TV QA BUG-C): every form of each side ([firstChoices],
+ * [secondChoices], longest first) is laid out as a candidate and the layout keeps the longest that fits
+ * ([panelNamesFit]), in one pass: no form is chosen from a text that was already cut. Its least width (min intrinsic)
+ * is both shortest forms around the middle, which the row keeps for it ([PanelLineParts]).
  */
 @Composable
-private fun SideText(name: String, individual: Boolean, onOverflow: (() -> Unit)?, code: String? = null) {
-    val choices = remember(name, individual, code) { panelSideChoices(name, individual, code) }
-    var level by remember(choices) { mutableIntStateOf(0) }
-    LineText(
-        choices[level.coerceAtMost(choices.lastIndex)],
-        onOverflow = { if (level < choices.lastIndex) level++ else onOverflow?.invoke() }
+private fun PanelNames(
+    firstChoices: List<String>,
+    secondChoices: List<String>,
+    firstLogo: @Composable () -> Unit,
+    middle: @Composable () -> Unit,
+    secondLogo: @Composable () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val firstForms = firstChoices.ifEmpty { listOf("") }
+    val secondForms = secondChoices.ifEmpty { listOf("") }
+    val policy = remember(firstForms.size, secondForms.size) { PanelNamesPolicy(firstForms.size, secondForms.size) }
+    Layout(
+        content = {
+            Box { firstLogo() }
+            firstForms.forEach { LineText(it) }
+            Box { middle() }
+            secondForms.forEach { LineText(it) }
+            Box { secondLogo() }
+        },
+        modifier = modifier,
+        measurePolicy = policy
     )
+}
+
+/** [PanelNames]' layout: its children are the first logo, [firstCount] forms, the middle, [secondCount] forms, the second logo. */
+private class PanelNamesPolicy(private val firstCount: Int, private val secondCount: Int) : MeasurePolicy {
+    private val middleIndex = 1 + firstCount
+    private val secondLogoIndex = 2 + firstCount + secondCount
+
+    private fun <T : IntrinsicMeasurable> firstForms(all: List<T>): List<T> = all.subList(1, 1 + firstCount)
+    private fun <T : IntrinsicMeasurable> secondForms(all: List<T>): List<T> = all.subList(2 + firstCount, 2 + firstCount + secondCount)
+
+    override fun MeasureScope.measure(measurables: List<Measurable>, constraints: Constraints): MeasureResult {
+        val gap = PANEL_SIDE_GAP.roundToPx()
+        val loose = constraints.copy(minWidth = 0, minHeight = 0)
+        val free = loose.copy(maxWidth = Constraints.Infinity)
+        val firstWidths = firstForms(measurables).map { it.maxIntrinsicWidth(loose.maxHeight) }
+        val secondWidths = secondForms(measurables).map { it.maxIntrinsicWidth(loose.maxHeight) }
+        val logoA = measurables[0].measure(free)
+        val mid = measurables[middleIndex].measure(free)
+        val logoB = measurables[secondLogoIndex].measure(free)
+        val logos = (if (logoA.width > 0) logoA.width + gap else 0) + (if (logoB.width > 0) logoB.width + gap else 0)
+        val available = if (loose.hasBoundedWidth) {
+            loose.maxWidth
+        } else {
+            firstWidths.first() + secondWidths.first() + mid.width + 2 * gap + logos
+        }
+        val fit = panelNamesFit(firstWidths, secondWidths, mid.width, logos, gap, available)
+        val a = measurables[1 + fit.first].measure(loose.copy(maxWidth = fit.firstWidth.coerceAtLeast(0)))
+        val b = measurables[2 + firstCount + fit.second].measure(loose.copy(maxWidth = fit.secondWidth.coerceAtLeast(0)))
+        val parts = buildList {
+            if (fit.logos && logoA.width > 0) add(logoA)
+            add(a)
+            if (fit.middle) add(mid)
+            add(b)
+            if (fit.logos && logoB.width > 0) add(logoB)
+        }
+        val height = parts.maxOf { it.height }
+        val width = (parts.sumOf { it.width } + gap * (parts.size - 1)).coerceAtMost(available)
+        return layout(width, height) {
+            var x = 0
+            parts.forEach { part ->
+                part.placeRelative(x, (height - part.height) / 2)
+                x += part.width + gap
+            }
+        }
+    }
+
+    /** At its least: both shortest forms around the middle, no logos. */
+    override fun IntrinsicMeasureScope.minIntrinsicWidth(measurables: List<IntrinsicMeasurable>, height: Int): Int {
+        val gap = PANEL_SIDE_GAP.roundToPx()
+        return firstForms(measurables).last().maxIntrinsicWidth(height) + gap +
+            measurables[middleIndex].maxIntrinsicWidth(height) + gap +
+            secondForms(measurables).last().maxIntrinsicWidth(height)
+    }
+
+    /** At its most: the logos and both full names around the middle. */
+    override fun IntrinsicMeasureScope.maxIntrinsicWidth(measurables: List<IntrinsicMeasurable>, height: Int): Int {
+        val gap = PANEL_SIDE_GAP.roundToPx()
+        val logoA = measurables[0].maxIntrinsicWidth(height).let { if (it > 0) it + gap else 0 }
+        val logoB = measurables[secondLogoIndex].maxIntrinsicWidth(height).let { if (it > 0) it + gap else 0 }
+        return logoA + firstForms(measurables).first().maxIntrinsicWidth(height) + gap +
+            measurables[middleIndex].maxIntrinsicWidth(height) + gap +
+            secondForms(measurables).first().maxIntrinsicWidth(height) + logoB
+    }
+
+    override fun IntrinsicMeasureScope.minIntrinsicHeight(measurables: List<IntrinsicMeasurable>, width: Int): Int =
+        measurables.maxOf { it.minIntrinsicHeight(width) }
+
+    override fun IntrinsicMeasureScope.maxIntrinsicHeight(measurables: List<IntrinsicMeasurable>, width: Int): Int =
+        measurables.maxOf { it.maxIntrinsicHeight(width) }
 }
 
 /**
  * A panel row's three parts on one line (BUG-C, TV QA): [main] (the tag and the names, or the title) from the start,
- * then [status] (the clock: never left out) and [chips] ("▶ Ready", the checking mark, "New", the OK hint) at the end.
- * The chips give way first: they show only while [main] keeps all it needs or at least [PANEL_NAMES_FLOOR]
- * ([panelChipsShown]); else they are left out whole, so names never read "A… L…".
+ * then [status] (the clock) and [chips] ("▶ Ready", the checking mark, "New", the OK hint) at the end. The chips give
+ * way first: they show only while [main] keeps all it needs or at least [PANEL_NAMES_FLOOR] and its own least
+ * ([panelChipsShown]); else they are left out whole. Then the status gives way to the main part's least (a game's
+ * codes and score, TV QA: "U… 6–7 DAY"): it steps down to its shorter form ([panelStatusWidth], [PanelFirstFit]).
  */
 @Composable
 private fun PanelLineParts(
@@ -599,16 +761,22 @@ private fun PanelLineParts(
     Layout(content = { Box { main() }; Box { status() }; Box { chips() } }, modifier = modifier) { measurables, constraints ->
         val gap = PANEL_PART_GAP.roundToPx()
         val loose = constraints.copy(minWidth = 0, minHeight = 0)
-        val statusPlaced = measurables[1].measure(loose)
         val chipsPlaced = measurables[2].measure(loose)
-        val statusWidth = if (statusPlaced.width > 0) statusPlaced.width + gap else 0
         val chipsWidth = if (chipsPlaced.width > 0) chipsPlaced.width + gap else 0
         val wantMain = measurables[0].maxIntrinsicWidth(loose.maxHeight)
+        val leastMain = measurables[0].minIntrinsicWidth(loose.maxHeight).coerceAtMost(wantMain)
+        val wantStatus = measurables[1].maxIntrinsicWidth(loose.maxHeight)
+        val wantStatusWidth = if (wantStatus > 0) wantStatus + gap else 0
         val bounded = loose.hasBoundedWidth
-        val end = if (bounded) loose.maxWidth else wantMain + statusWidth + chipsWidth
-        val showChips = !bounded || panelChipsShown(end, statusWidth, chipsWidth, wantMain, PANEL_NAMES_FLOOR.roundToPx())
+        val end = if (bounded) loose.maxWidth else wantMain + wantStatusWidth + chipsWidth
+        val floor = maxOf(PANEL_NAMES_FLOOR.roundToPx(), leastMain)
+        val showChips = !bounded || panelChipsShown(end, wantStatusWidth, chipsWidth, wantMain, floor)
         onChipsShown(showChips || chipsPlaced.width == 0)
-        val mainMax = (end - statusWidth - if (showChips) chipsWidth else 0).coerceAtLeast(0)
+        val chipsUsed = if (showChips) chipsWidth else 0
+        val statusMax = panelStatusWidth(end - chipsUsed, wantStatus, leastMain, gap)
+        val statusPlaced = measurables[1].measure(loose.copy(maxWidth = statusMax))
+        val statusWidth = if (statusPlaced.width > 0) statusPlaced.width + gap else 0
+        val mainMax = (end - statusWidth - chipsUsed).coerceAtLeast(0)
         val mainPlaced = measurables[0].measure(loose.copy(maxWidth = mainMax))
         val height = if (loose.hasBoundedHeight) loose.maxHeight else maxOf(mainPlaced.height, statusPlaced.height, chipsPlaced.height)
         layout(end, height) {
@@ -622,6 +790,50 @@ private fun PanelLineParts(
             if (statusPlaced.width > 0) statusPlaced.placeRelative(x - statusPlaced.width, (height - statusPlaced.height) / 2)
         }
     }
+}
+
+/**
+ * The status's room on a panel row (TV QA BUG-C): all it wants ([wantStatus] px) while the main part keeps its least
+ * ([leastMain] px: a game's codes and score) in [room] px with the [gap] between them; else what is left, so the status
+ * steps down ("15:47 1st" → "15:47") rather than the codes being cut. 0 when there is no status.
+ */
+internal fun panelStatusWidth(room: Int, wantStatus: Int, leastMain: Int, gap: Int): Int =
+    if (wantStatus <= 0) 0 else (room - leastMain - gap).coerceIn(0, wantStatus)
+
+/** The first of [widths] (forms, longest first) that fits [available] px; else the last (shortest), to be cut. */
+internal fun panelFirstFit(widths: List<Int>, available: Int): Int =
+    widths.indexOfFirst { it <= available }.takeIf { it >= 0 } ?: widths.lastIndex
+
+/**
+ * Forms of one part, longest first, as [content]'s children (the status: "● 15:47 1st", then "● 15:47"): the first
+ * that fits the width given ([panelFirstFit]). At least the last form's width, at most the first's.
+ */
+@Composable
+private fun PanelFirstFit(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    Layout(content = content, modifier = modifier, measurePolicy = PanelFirstFitPolicy)
+}
+
+private object PanelFirstFitPolicy : MeasurePolicy {
+    override fun MeasureScope.measure(measurables: List<Measurable>, constraints: Constraints): MeasureResult {
+        if (measurables.isEmpty()) return layout(0, 0) {}
+        val loose = constraints.copy(minWidth = 0, minHeight = 0)
+        val widths = measurables.map { it.maxIntrinsicWidth(loose.maxHeight) }
+        val available = if (loose.hasBoundedWidth) loose.maxWidth else widths.first()
+        val placeable = measurables[panelFirstFit(widths, available)].measure(loose)
+        return layout(placeable.width, placeable.height) { placeable.placeRelative(0, 0) }
+    }
+
+    override fun IntrinsicMeasureScope.minIntrinsicWidth(measurables: List<IntrinsicMeasurable>, height: Int): Int =
+        measurables.lastOrNull()?.maxIntrinsicWidth(height) ?: 0
+
+    override fun IntrinsicMeasureScope.maxIntrinsicWidth(measurables: List<IntrinsicMeasurable>, height: Int): Int =
+        measurables.firstOrNull()?.maxIntrinsicWidth(height) ?: 0
+
+    override fun IntrinsicMeasureScope.minIntrinsicHeight(measurables: List<IntrinsicMeasurable>, width: Int): Int =
+        measurables.maxOfOrNull { it.minIntrinsicHeight(width) } ?: 0
+
+    override fun IntrinsicMeasureScope.maxIntrinsicHeight(measurables: List<IntrinsicMeasurable>, width: Int): Int =
+        measurables.maxOfOrNull { it.maxIntrinsicHeight(width) } ?: 0
 }
 
 /**
@@ -716,9 +928,7 @@ private fun RowScope.EventLine(line: PanelLine) {
 private fun LineText(
     text: String,
     modifier: Modifier = Modifier,
-    color: Color = Colors.TextPrimary,
-    /** Called when [text] does not fit whole. */
-    onOverflow: (() -> Unit)? = null
+    color: Color = Colors.TextPrimary
 ) {
     Text(
         text = text,
@@ -726,32 +936,73 @@ private fun LineText(
         color = color,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
-        modifier = modifier,
-        onTextLayout = { if (onOverflow != null && it.hasVisualOverflow) onOverflow() }
+        modifier = modifier
     )
 }
 
 /**
  * The status at the row's end: the red dot and the clock with its period while live (the dot alone when no clock is
- * known: the LIVE header says the word), else the time or final word.
+ * known: the LIVE header says the word), else the time or final word. TV QA BUG-C ("15:47 1st" crowding the score):
+ * the period is short ([panelPeriodShort]) and smaller, beside the clock; where the row is tight the status steps down
+ * ([PanelFirstFit]) to the clock alone, and a [compactClock] ("Ended?") stands in for a long word ("Probably ended").
  */
 @Composable
-private fun StatusText(line: PanelLine) {
+private fun StatusText(line: PanelLine, compactClock: String? = null) {
     val clock = line.clock
     if (clock == null && !line.live) return
+    val period = line.period?.let(::panelPeriodShort)
+    PanelFirstFit {
+        StatusForm(line.live, clock, period)
+        if (period != null) StatusForm(line.live, clock, null)
+        if (compactClock != null && compactClock != clock) StatusForm(line.live, compactClock, null)
+    }
+}
+
+/** One form of a row's status ([StatusText]): the live dot, the [clock] and, smaller, its [period]. */
+@Composable
+private fun StatusForm(live: Boolean, clock: String?, period: String?) {
     Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-        if (line.live) Box(modifier = Modifier.size(LIVE_DOT).clip(CircleShape).background(Colors.LiveRed))
+        if (live) Box(modifier = Modifier.size(LIVE_DOT).clip(CircleShape).background(Colors.LiveRed))
         if (clock != null) {
             Text(
-                text = line.period?.let { stringResource(R.string.sports_live_panel_clock, clock, it) } ?: clock,
+                text = clock,
                 style = SportsLiveTokens.style(SportsLiveTokens.Type.PanelScore),
-                color = if (line.live) Colors.TextPrimary else Colors.TextSecondary,
+                color = if (live) Colors.TextPrimary else Colors.TextSecondary,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        if (period != null) {
+            Text(
+                text = period,
+                style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag),
+                color = Colors.TextSecondary,
                 maxLines = 1,
                 softWrap = false
             )
         }
     }
 }
+
+/**
+ * A period short for a panel row's status (TV QA BUG-C): "1st half" → "1H", "2nd quarter" → "Q2", "3rd period" →
+ * "3rd", "overtime" → "OT"; anything else ("1st", "Q4", "OT2") as it is.
+ */
+internal fun panelPeriodShort(period: String): String {
+    val text = period.trim()
+    PERIOD_WORDS.matchEntire(text)?.let { match ->
+        val (number, suffix, unit) = match.destructured
+        return when (unit.lowercase(Locale.ROOT)) {
+            "half" -> "${number}H"
+            "quarter" -> "Q$number"
+            else -> number + suffix.lowercase(Locale.ROOT)
+        }
+    }
+    return if (text.equals("overtime", ignoreCase = true)) "OT" else text
+}
+
+private val PERIOD_WORDS = Regex("""^(\d+)(st|nd|rd|th)\s+(half|quarter|period)$""", RegexOption.IGNORE_CASE)
 
 /** [text] ("97–92") with the leader's score in [bold] and the trailer's muted; level scores both plain. */
 private fun panelScoreText(text: String, scores: ScoreboardScores.Shown, bold: SpanStyle): AnnotatedString = buildAnnotatedString {

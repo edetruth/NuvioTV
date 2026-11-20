@@ -449,7 +449,7 @@ class SportsLiveSlimPanelTest {
         assertEquals(listOf("Novak Djokovic", "Djokovic"), panelSideChoices("Novak Djokovic", individual = true))
         assertEquals(listOf("Arevalo & Pavic", "Arevalo / Pavic"), panelSideChoices("Arevalo & Pavic", individual = true))
         assertEquals(listOf("Slovenia"), panelSideChoices("Slovenia", individual = true))
-        assertEquals(listOf("Real Madrid", "RMA"), panelSideChoices("Real Madrid", individual = false))
+        assertEquals(listOf("Real Madrid", "REA"), panelSideChoices("Real Madrid", individual = false))
         assertTrue(SportsLiveSportKind.TENNIS in PANEL_INDIVIDUAL_SPORTS)
         assertFalse(SportsLiveSportKind.SOCCER in PANEL_INDIVIDUAL_SPORTS)
 
@@ -466,7 +466,8 @@ class SportsLiveSlimPanelTest {
         assertEquals("KÖL", panelShortCode("Köln"))
         assertEquals("KÖL", panelShortCode("1. FC Köln"))
         assertEquals("NYK", panelShortCode("New York Knicks"))
-        assertEquals("RMA", panelShortCode("Real Madrid"))
+        // From the place, as ESPN's codes are (TV QA BUG-C: "Utah Utes" is UTA, not UUT); Real Madrid's RMA comes from ESPN.
+        assertEquals("REA", panelShortCode("Real Madrid"))
         // Only affixes: kept rather than left empty.
         assertEquals("FC", panelShortCode("FC"))
         assertEquals("", panelShortCode("76"))
@@ -488,6 +489,80 @@ class SportsLiveSlimPanelTest {
         assertTrue(panelChipsShown(total = 400, status = 50, chips = 60, wantMain = 300, floor = 190))
         // No chips: nothing to drop.
         assertTrue(panelChipsShown(total = 100, status = 50, chips = 0, wantMain = 300, floor = 190))
+    }
+
+    @Test
+    fun `the TV QA rows keep readable codes - never U or Pogon S cut short (BUG-C)`() {
+        // The names the TV showed cut ("U… 6–7 DAY", "Pogoń S… vs Śląsk Wr…", "EAG Ro…", "AS… Dij…").
+        assertEquals("UTA", panelShortCode("Utah Utes"))
+        assertEquals("DAY", panelShortCode("Dayton Flyers"))
+        assertEquals("POG", panelShortCode("Pogoń Szczecin"))
+        assertEquals("ŚLĄ", panelShortCode("Śląsk Wrocław"))
+        assertEquals("EAG", panelShortCode("EA Guingamp"))
+        assertEquals("ROD", panelShortCode("Rodez AF"))
+        assertEquals("NAN", panelShortCode("AS Nancy Lorraine"))
+        assertEquals("DIJ", panelShortCode("Dijon FCO"))
+        assertEquals("HAV", panelShortCode("Le Havre"))
+        // ESPN's code when known, else the derived one: every team side has a short form.
+        assertEquals(listOf("Utah Utes", "UTAH"), panelSideChoices("Utah Utes", individual = false, code = "UTAH"))
+        assertEquals(listOf("Dayton Flyers", "DAY"), panelSideChoices("Dayton Flyers", individual = false))
+        assertEquals(listOf("Pogoń Szczecin", "POG"), panelSideChoices("Pogoń Szczecin", individual = false))
+        assertEquals(listOf("Śląsk Wrocław", "ŚLĄ"), panelSideChoices("Śląsk Wrocław", individual = false))
+        // A matched side is ESPN's code already: it never steps down to a made-up one ("UTAH" stays, not "UTA").
+        assertEquals(listOf("UTAH"), panelSideChoices("UTAH", individual = false))
+        assertEquals(listOf("DAY"), panelSideChoices("DAY", individual = false, code = "XYZ"))
+        assertTrue(panelIsCode("UTAH"))
+        assertFalse(panelIsCode("Utah"))
+        assertFalse(panelIsCode("EA G"))
+    }
+
+    @Test
+    fun `a game line steps the wider name down to its code before anything is cut (BUG-C)`() {
+        // Widths at the TV's density, px: "Utah Utes" 140, "UTAH" 74, "DAY" 52, "6–7" 46, gaps 10, logos 2 x (36 + 10).
+        val utah = listOf(140, 74)
+        val dayton = listOf(52)
+        // The room the TV row had for the names (about 176 px): UTAH 6–7 DAY, whole, the logos left out.
+        val tight = panelNamesFit(utah, dayton, middle = 46, logos = 92, gap = 10, available = 196)
+        assertEquals(PanelNamesFit(1, 0, 74, 52, middle = true, logos = false), tight)
+        // With room for the logos too, they stay.
+        assertEquals(PanelNamesFit(1, 0, 74, 52, middle = true, logos = true), panelNamesFit(utah, dayton, 46, 92, 10, 300))
+        // A wide row keeps the full names and the logos.
+        assertEquals(PanelNamesFit(0, 0, 140, 52, middle = true, logos = true), panelNamesFit(utah, dayton, 46, 92, 10, 400))
+        // "Pogoń Szczecin vs Śląsk Wrocław", no score: the wider side goes to its code first, the other keeps its name.
+        val pogon = listOf(190, 62)
+        val slask = listOf(180, 60)
+        assertEquals(PanelNamesFit(1, 0, 62, 180, middle = true, logos = false), panelNamesFit(pogon, slask, 28, 0, 10, 300))
+        // Tighter: both codes, "vs" kept.
+        assertEquals(PanelNamesFit(1, 1, 62, 60, middle = true, logos = false), panelNamesFit(pogon, slask, 28, 0, 10, 200))
+        // Too tight for both codes beside the score: the score goes whole; the codes stay whole.
+        assertEquals(PanelNamesFit(1, 1, 62, 60, middle = false, logos = false), panelNamesFit(pogon, slask, 28, 0, 10, 140))
+        // Narrower than two codes: only then are they cut.
+        val cut = panelNamesFit(pogon, slask, 28, 0, 10, 100)
+        assertEquals(1 to 1, cut.first to cut.second)
+        assertTrue(cut.firstWidth < 62 && cut.secondWidth <= 60)
+        assertFalse(cut.middle)
+    }
+
+    @Test
+    fun `the status gives way to the codes - its period first, a long word for a short one (BUG-C)`() {
+        // Row 492 px, codes and score need 324: the status ("15:47 1st", 132) keeps all it wants.
+        assertEquals(132, panelStatusWidth(room = 492, wantStatus = 132, leastMain = 324, gap = 10))
+        // "Probably ended" (200) on a row whose codes need 290: it gets 192 and steps down to its short form.
+        assertEquals(192, panelStatusWidth(room = 492, wantStatus = 200, leastMain = 290, gap = 10))
+        assertEquals(1, panelFirstFit(listOf(200, 84), 192))
+        assertEquals(0, panelFirstFit(listOf(132, 96), 132))
+        // Nothing fits: the shortest form, to be cut.
+        assertEquals(1, panelFirstFit(listOf(132, 96), 40))
+        // No status: no room taken.
+        assertEquals(0, panelStatusWidth(room = 492, wantStatus = 0, leastMain = 290, gap = 10))
+        // Periods short beside the clock: "15:47 1H", never "15:47 1st half".
+        assertEquals("1H", panelPeriodShort("1st half"))
+        assertEquals("2H", panelPeriodShort("2nd Half"))
+        assertEquals("Q2", panelPeriodShort("2nd quarter"))
+        assertEquals("3rd", panelPeriodShort("3rd period"))
+        assertEquals("OT", panelPeriodShort("Overtime"))
+        assertEquals("1st", panelPeriodShort("1st"))
+        assertEquals("Q4", panelPeriodShort("Q4"))
     }
 
     @Test
