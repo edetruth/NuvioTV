@@ -60,7 +60,8 @@ class GameSummaryDiskCache(private val dir: File, private val maxFiles: Int = MA
  * - a game not final yet is reused for at most [LIVE_TTL_MS], so a live page refreshing every 30 s makes
  *   one request per 30 s, and reopening it within that time makes none.
  * The caller decides whether to load at all (Scores Off: not before Reveal) and polls only while the
- * page is visible. Failure-silent.
+ * page is visible. Failure-silent. A load under Scores Off (after Reveal) records nothing in [health] and
+ * writes no disk copy (live.20).
  */
 @Singleton
 class GameSummaryRepository internal constructor(
@@ -86,7 +87,7 @@ class GameSummaryRepository internal constructor(
     private val lock = Mutex()
     private val memory = LinkedHashMap<String, Cached>()
 
-    suspend fun load(league: EspnLeague, eventId: String): GameSummaryLoad {
+    suspend fun load(league: EspnLeague, eventId: String, scoresOff: Boolean = false): GameSummaryLoad {
         val key = "${league.sport}_${league.league}_$eventId"
         lock.withLock {
             memory[key]?.takeIf { it.final || now() - it.fetchedAt < ttlOf(it) }?.let { return loaded(it, league, eventId) }
@@ -100,16 +101,17 @@ class GameSummaryRepository internal constructor(
                 return loaded(cached, league, eventId)
             }
         }
-        val json = source.summary(league, eventId) ?: return GameSummaryLoad.Failed
+        val json = (if (scoresOff) source.unrecordedSummary(league, eventId) else source.summary(league, eventId))
+            ?: return GameSummaryLoad.Failed
         // Read, but without the game's two sides: ESPN changed its data format.
         val dto = parse(json)?.takeIf { it.header?.competitions?.firstOrNull()?.competitors.orEmpty().isNotEmpty() }
         if (dto == null) {
-            health.recordFailure(EspnFeedKey.SUMMARY, FeedFailureKind.FORMAT)
+            if (!scoresOff) health.recordFailure(EspnFeedKey.SUMMARY, FeedFailureKind.FORMAT)
             return GameSummaryLoad.Failed
         }
-        health.recordSuccess(EspnFeedKey.SUMMARY)
+        if (!scoresOff) health.recordSuccess(EspnFeedKey.SUMMARY)
         val final = GameSummaryParser.isFinal(dto)
-        if (final) disk?.let { cache -> withContext(Dispatchers.IO) { cache.write(diskKey, adapter.toJson(dto)) } }
+        if (final && !scoresOff) disk?.let { cache -> withContext(Dispatchers.IO) { cache.write(diskKey, adapter.toJson(dto)) } }
         val cached = Cached(dto, now(), final)
         remember(key, cached)
         return loaded(cached, league, eventId)

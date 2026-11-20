@@ -103,6 +103,9 @@ class ResultsRepository internal constructor(
     @Volatile
     var chosenDay: Int? = null
 
+    /** Results' time away, for its fresh open after a while (live.20). */
+    val resultsAway = ResultsAway()
+
     /** The clock the days and the score delay go by. */
     fun nowMs(): Long = now()
 

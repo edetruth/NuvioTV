@@ -1,6 +1,7 @@
 package com.nuvio.tv.core.sportslive.scores
 
 import com.nuvio.tv.core.sportslive.Memo
+import com.nuvio.tv.core.sportslive.SportsLiveSportInference
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.squareup.moshi.JsonClass
 import com.squareup.moshi.Moshi
@@ -36,9 +37,14 @@ data class DirectoryTeam(
  * a card side resolves only when exactly one team of that league answers to it (the names [ScoreMatcher]
  * reads, through the alias layer), and a card resolves only when exactly one of its leagues resolves both
  * sides and every one of its leagues is known. Soccer leagues stay apart here (no merged "soccer" book),
- * and `soccer/all` has no list. Least recently used leagues go past [maxLeagues].
+ * and `soccer/all` has no list. Least recently used leagues go past [maxLeagues], never one of [kept] (live.20: the
+ * lists league inference reads, so a pass of many on-screen leagues cannot push them out) nor the one just stored.
  */
-class TeamDirectory(private val maxLeagues: Int = MAX_LEAGUES) {
+class TeamDirectory(
+    private val maxLeagues: Int = MAX_LEAGUES,
+    kept: Collection<EspnLeague> = SportsLiveSportInference.leagues
+) {
+    private val keptPaths: Set<String> = kept.mapTo(HashSet()) { it.path }
 
     private class Entry(val teams: List<DirectoryTeam>, val fetchedAt: Long, val keys: List<Set<String>>)
 
@@ -73,6 +79,7 @@ class TeamDirectory(private val maxLeagues: Int = MAX_LEAGUES) {
             val iterator = leagues.keys.iterator()
             while (leagues.size > maxLeagues && iterator.hasNext()) {
                 val path = iterator.next()
+                if (path in keptPaths || path == league.path) continue
                 iterator.remove()
                 leagueOf(path)?.let(dropped::add)
             }

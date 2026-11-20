@@ -582,11 +582,18 @@ class SportsLiveZapViewModel internal constructor(
             gameWatch.watch(item)
             viewModelScope.launch {
                 // Paused while the player is stopped: nothing is scored or raised behind Home.
+                // The directory moving re-places the game (live.20): an untagged game is tracked once its league is known.
                 playerStarted.flatMapLatest { started ->
-                    if (started) combine(liveScores.scores, liveScores.mode) { scores, mode -> scores[item.streamKey] to mode } else emptyFlow()
+                    if (started) {
+                        combine(liveScores.scores, liveScores.mode, TeamDirectory.shared.revision) { scores, mode, _ ->
+                            scores[item.streamKey] to mode
+                        }
+                    } else {
+                        emptyFlow()
+                    }
                 }.collect { (snapshot, mode) ->
                     nowMode = mode
-                    nowTracker.update(listOf(item), enabled = mode != ScoresMode.OFF)
+                    nowTracker.update(listOf(playerTrackedCard(item)), enabled = mode != ScoresMode.OFF)
                     gameWatch.note(item.id, ScoreChips.matchedEvent(item, snapshot))
                     if (SportsLiveFullTimeToasts.isLive(item, snapshot)) nowSeenLive = true
                     val toast = SportsLiveFullTimeToasts.of(item, snapshot, mode, nowSeenLive) ?: return@collect
@@ -1197,6 +1204,13 @@ private const val BANNER_MS = 3_000L
  * usually zaps on (tens of seconds).
  */
 internal const val NEIGHBOUR_PREFETCH_DELAY_MS = 5_000L
+
+/**
+ * The game playing as the score tracker gets it (live.20): placed in its inferred league with its teams identified, as
+ * the panel and My sports place it, so an untagged game still gets its score while the panel is closed. Same stream key.
+ */
+internal fun playerTrackedCard(item: SportsLiveItem, directory: TeamDirectory = TeamDirectory.shared): SportsLiveItem =
+    SportsLiveTeamIdentity.identified(SportsLiveSportInference.infer(item, directory))
 
 /** How long the end card stays over a stream still playing with no countdown (#60, #161); then the postgame plays on. */
 internal const val FULL_TIME_TOAST_MS = 10_000L

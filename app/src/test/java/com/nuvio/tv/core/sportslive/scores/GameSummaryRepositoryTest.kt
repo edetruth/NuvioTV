@@ -19,6 +19,11 @@ class GameSummaryRepositoryTest {
             requests += "${league.path}/$eventId"
             return body
         }
+
+        override suspend fun unrecordedSummary(league: EspnLeague, eventId: String): String? {
+            requests += "off ${league.path}/$eventId"
+            return body
+        }
     }
 
     private var nowMs = 1_000_000L
@@ -89,6 +94,30 @@ class GameSummaryRepositoryTest {
         repo.load(EspnLeagueMap.NBA, "401909994")
         assertEquals(2, source.requests.size)
         assertTrue(folder.root.listFiles().isNullOrEmpty())
+    }
+
+    @Test
+    fun `under Scores Off a final is read without feed health and never written to disk`() = runTest {
+        val health = EspnFeedHealth { nowMs }
+        val source = FakeSource(finalJson)
+        val repo = GameSummaryRepository(source, GameSummaryDiskCache(folder.root), EspnFixtures.moshi, now = { nowMs }, health = health)
+        val loaded = repo.load(EspnLeagueMap.NBA, "401909994", scoresOff = true) as GameSummaryLoad.Loaded
+        assertTrue(loaded.final)
+        assertEquals(listOf("off basketball/nba/401909994"), source.requests)
+        assertTrue(folder.root.listFiles().isNullOrEmpty())
+        assertTrue(health.feeds.value.isEmpty())
+
+        // A format change under Off is not recorded either.
+        source.body = "{}"
+        assertEquals(GameSummaryLoad.Failed, repo.load(EspnLeagueMap.NBA, "2", scoresOff = true))
+        assertTrue(health.feeds.value.isEmpty())
+
+        // The normal read (a new session: nothing in memory) still records and keeps its final.
+        source.body = finalJson
+        GameSummaryRepository(source, GameSummaryDiskCache(folder.root), EspnFixtures.moshi, now = { nowMs }, health = health)
+            .load(EspnLeagueMap.NBA, "401909994")
+        assertTrue(EspnFeedKey.SUMMARY in health.feeds.value)
+        assertEquals(1, folder.root.listFiles()!!.size)
     }
 
     @Test

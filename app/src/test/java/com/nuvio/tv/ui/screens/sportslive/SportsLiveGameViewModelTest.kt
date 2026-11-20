@@ -67,7 +67,12 @@ class SportsLiveGameViewModelTest {
         follow = { team -> followed.update { it + team } },
         unfollow = { team -> followed.update { list -> list.filterNot { it == team } } },
         now = { testScheduler.currentTime },
-        failedHighlights = failedHighlights
+        failedHighlights = failedHighlights,
+        // Scores Off's read (no feed health, no disk copy) is told apart from the normal one.
+        loadSummaryScoresOff = { league: EspnLeague, id: String ->
+            requests += "off ${league.path}/$id"
+            nextLoad()
+        }
     ).also { vm -> backgroundScope.launch { vm.uiState.collect {} } }
 
     @Test
@@ -94,6 +99,19 @@ class SportsLiveGameViewModelTest {
     }
 
     @Test
+    fun `the page tells Results when it comes on screen and leaves it (live20)`() = runTest(mainDispatcherRule.dispatcher) {
+        settings.value = ScoreSettings(mode = ScoresMode.OFF)
+        val shown = mutableListOf<Boolean>()
+        val vm = viewModel(SportsLiveGameRequest(palaceGame, onShown = { shown += it }))
+        vm.setVisible(true)
+        vm.setVisible(false)
+        assertEquals(listOf(true, false), shown)
+        // A page opened elsewhere tells no one.
+        viewModel(SportsLiveGameRequest(palaceGame)).apply { setVisible(true); setVisible(false) }
+        assertEquals(listOf(true, false), shown)
+    }
+
+    @Test
     fun `Scores Off - nothing is requested until Reveal, and nothing shows`() = runTest(mainDispatcherRule.dispatcher) {
         settings.value = ScoreSettings(mode = ScoresMode.OFF)
         val vm = viewModel(SportsLiveGameRequest(palaceGame))
@@ -105,10 +123,23 @@ class SportsLiveGameViewModelTest {
 
         vm.reveal()
         runCurrent()
-        assertEquals(listOf("soccer/eng.1/401879243"), requests)
+        // live.20: Reveal under Off reads the summary without feed health or a disk copy.
+        assertEquals(listOf("off soccer/eng.1/401879243"), requests)
         assertEquals(GameLoadStatus.READY, vm.uiState.value.status)
         assertTrue(vm.uiState.value.showsScore)
         assertEquals(listOf(GameSection.GAME, GameSection.STANDINGS), vm.uiState.value.sections)
+    }
+
+    @Test
+    fun `Reveal under Hide until focused reads the summary the normal way`() = runTest(mainDispatcherRule.dispatcher) {
+        settings.value = ScoreSettings(mode = ScoresMode.HIDE_UNTIL_FOCUSED)
+        val vm = viewModel(SportsLiveGameRequest(palaceGame, revealed = false))
+        vm.setVisible(true)
+        vm.reveal()
+        runCurrent()
+        assertTrue(requests.isNotEmpty())
+        assertTrue("$requests", requests.all { it == "soccer/eng.1/401879243" })
+        vm.setVisible(false)
     }
 
     @Test

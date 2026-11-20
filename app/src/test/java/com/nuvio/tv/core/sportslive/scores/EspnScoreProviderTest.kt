@@ -162,6 +162,21 @@ class EspnScoreProviderTest {
     }
 
     @Test
+    fun `a failed Scores-Off summary read records no health, a normal one does`() = runTest {
+        val health = EspnFeedHealth { 0L }
+        val p = EspnScoreProvider(
+            OkHttpClient.Builder().addInterceptor(respond(503, "")).build(), EspnFixtures.moshi,
+            "https://example.invalid/apis/site/v2/sports/", today = { day }, health = health
+        )
+        assertNull(p.unrecordedSummary(EspnLeagueMap.NBA, "1"))
+        assertTrue(health.feeds.value.isEmpty())
+        assertTrue(requested.single().endsWith("basketball/nba/summary?event=1"))
+
+        assertNull(p.summary(EspnLeagueMap.NBA, "1"))
+        assertTrue(EspnFeedKey.SUMMARY in health.feeds.value)
+    }
+
+    @Test
     fun `Retry-After in seconds is kept on a failure`() {
         assertEquals(120_000L, EspnScoreProvider.retryAfterMs("120"))
         assertEquals(900_000L, EspnScoreProvider.retryAfterMs("99999"))

@@ -116,13 +116,16 @@ class TeamDirectoryTest {
         try {
             val store = TeamDirectoryStore(dir)
             val directory = TeamDirectory(maxLeagues = 2)
-            val sync = TeamDirectorySync(directory, { league -> if (league == NBA) nbaTeams else nhlTeams }, store, { 0L })
-            sync.refresh(listOf(NBA, NHL))
-            // A third league (answered with the NHL list here): the oldest, the NBA, goes from memory and disk.
-            sync.refresh(listOf(EspnLeagueMap.NFL))
+            // Leagues inference never reads (its lists are kept, live.20), answered with the NBA or NHL list here.
+            val ned = EspnLeague("soccer", "ned.1")
+            val por = EspnLeague("soccer", "por.1")
+            val sync = TeamDirectorySync(directory, { league -> if (league == ned) nbaTeams else nhlTeams }, store, { 0L })
+            sync.refresh(listOf(ned, por))
+            // A third league: the oldest, ned.1, goes from memory and disk.
+            sync.refresh(listOf(EspnLeague("soccer", "sco.1")))
             assertEquals(2, dir.listFiles()!!.count { it.name.endsWith(".tsv") })
-            assertNull(directory.fetchedAt(NBA))
-            assertFalse(File(dir, "basketball__nba.tsv").exists())
+            assertNull(directory.fetchedAt(ned))
+            assertFalse(File(dir, "soccer__ned.1.tsv").exists())
         } finally {
             dir.deleteRecursively()
         }
@@ -139,6 +142,33 @@ class TeamDirectoryTest {
         TeamDirectorySync(TeamDirectory(), { asked += it; nbaTeams }, null, { 0L }).refresh(order)
         assertTrue(asked.containsAll(inference))
         assertEquals(TeamDirectorySync.MAX_PER_PASS, asked.size)
+    }
+
+    @Test
+    fun `the inference lists are never evicted, even when they are the least recently used`() = runTest {
+        val inference = com.nuvio.tv.core.sportslive.SportsLiveSportInference.leagues
+        val directory = TeamDirectory(maxLeagues = inference.size + 2)
+        // The inference lists first (the oldest), then a full pass of other leagues.
+        val dropped = mutableListOf<EspnLeague>()
+        inference.forEach { dropped += directory.put(it, nhlTeams, 0L) }
+        val others = (1..10).map { EspnLeague("soccer", "test.$it") }
+        others.forEach { dropped += directory.put(it, nhlTeams, 0L) }
+        assertTrue(inference.all { directory.fetchedAt(it) != null })
+        assertEquals(others.take(8), dropped)
+        // Only the two newest others are left beside them.
+        assertEquals(others.takeLast(2), others.filter { directory.fetchedAt(it) != null })
+    }
+
+    @Test
+    fun `a league just stored stays even when every older one is kept`() {
+        val directory = TeamDirectory(maxLeagues = 1, kept = listOf(NBA))
+        directory.put(NBA, nbaTeams, 0L)
+        val stored = EspnLeague("soccer", "test.1")
+        assertTrue(directory.put(stored, nhlTeams, 0L).isEmpty())
+        assertNotNull(directory.fetchedAt(stored))
+        // The next one takes the unkept slot.
+        assertEquals(listOf(stored), directory.put(EspnLeague("soccer", "test.2"), nhlTeams, 0L))
+        assertNotNull(directory.fetchedAt(NBA))
     }
 
     // --- Weekly refresh ---

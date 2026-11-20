@@ -22,6 +22,7 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
@@ -128,6 +129,168 @@ class SportsLiveResultsTodayTest {
         assertEquals(4, again.selectedDay.value)
         assertTrue(again.earlierShown.value)
         again.close()
+    }
+
+    @Test
+    fun `the chosen day is kept under 10 min away on the same ESPN day`() {
+        val at = base // 17 00 US Eastern
+        assertFalse(resultsDayExpired(at, at + 60_000L))
+        assertFalse(resultsDayExpired(at, at + SportsLiveRefreshPlan.OPEN_STALE_MS - 1))
+        assertTrue(resultsDayExpired(at, at + SportsLiveRefreshPlan.OPEN_STALE_MS))
+        // One 10-minute rule: Replays refreshes on opening after it too.
+        assertEquals(10 * 60_000L, SportsLiveRefreshPlan.OPEN_STALE_MS)
+        assertEquals(SportsLiveRefreshPlan.OPEN_STALE_MS, SportsLiveRefreshPlan.of(com.nuvio.tv.domain.model.SportsLiveTab.REPLAYS)?.openStaleMs)
+        // 23 58 US Eastern: a minute later is the same ESPN day, three minutes later a new one.
+        val beforeMidnight = Instant.parse("2026-11-17T04:58:00Z").toEpochMilli()
+        assertFalse(resultsDayExpired(beforeMidnight, beforeMidnight + 60_000L))
+        assertTrue(resultsDayExpired(beforeMidnight, beforeMidnight + 3 * 60_000L))
+    }
+
+    @Test
+    fun `a quick hop away from Results keeps the chosen day (live20 user report)`() = runTest {
+        todayHasFinal(true)
+        val repo = repository()
+        val vm = viewModel(repo)
+        backgroundScope.launch { vm.uiState.collect {} }
+        vm.selectDay(3)
+        vm.setActive(true)
+        advanceTimeBy(1_000); runCurrent()
+        // Live now for a few minutes, then back.
+        vm.setActive(false)
+        advanceTimeBy(SportsLiveRefreshPlan.OPEN_STALE_MS - 60_000L); runCurrent()
+        vm.setActive(true)
+        runCurrent()
+        assertEquals(3, vm.selectedDay.value)
+        assertEquals(3, repo.chosenDay)
+        assertEquals(0, vm.uiState.value.freshOpens)
+        vm.setActive(false)
+        vm.close()
+    }
+
+    @Test
+    fun `back on Results after 10 min away it opens afresh at the top (live20 user report)`() = runTest {
+        todayHasFinal(true)
+        val repo = repository()
+        val vm = viewModel(repo)
+        backgroundScope.launch { vm.uiState.collect {} }
+        val basketball = mySports.value.effectiveSports.first { it.espnSport == aFinal.league.sport }
+        vm.selectDay(SportsResults.YESTERDAY)
+        vm.selectSport(basketball)
+        vm.setActive(true)
+        advanceTimeBy(1_000); runCurrent()
+        // Watching games on Live now, then back to Results.
+        vm.setActive(false)
+        advanceTimeBy(SportsLiveRefreshPlan.OPEN_STALE_MS); runCurrent()
+        vm.setActive(true)
+        advanceTimeBy(1_000); runCurrent()
+        // Today, ★ My sports, a new list (its key changes, so it starts at its top).
+        assertEquals(SportsResults.TODAY, vm.selectedDay.value)
+        assertEquals(SportsResults.TODAY, repo.chosenDay)
+        assertFalse(vm.earlierShown.value)
+        val state = vm.uiState.value
+        assertEquals(1, state.freshOpens)
+        assertNull(state.selectedSport)
+        assertEquals(ResultsStatus.READY, state.status)
+        // A screen built soon after (another visit) opens on Today too.
+        vm.setActive(false)
+        vm.close()
+        assertEquals(SportsResults.TODAY, viewModel(repo).also { it.close() }.selectedDay.value)
+    }
+
+    @Test
+    fun `time on a Game page opened from Results is not time away`() = runTest {
+        todayHasFinal(true)
+        val repo = repository()
+        val vm = viewModel(repo)
+        vm.selectDay(3)
+        vm.setActive(true)
+        advanceTimeBy(1_000); runCurrent()
+        // OK on a row: the Game page for 30 min, then back.
+        vm.setActive(false)
+        vm.onGamePageShown(true)
+        advanceTimeBy(30 * 60_000L); runCurrent()
+        vm.onGamePageShown(false)
+        vm.setActive(true)
+        advanceTimeBy(1_000); runCurrent()
+        assertEquals(3, vm.selectedDay.value)
+        // Again, but Watch replay from the Game page plays for 11 min: that counts.
+        vm.setActive(false)
+        vm.onGamePageShown(true)
+        advanceTimeBy(60_000L); runCurrent()
+        vm.onGamePageShown(false)
+        advanceTimeBy(SportsLiveRefreshPlan.OPEN_STALE_MS + 60_000L); runCurrent()
+        vm.onGamePageShown(true)
+        advanceTimeBy(60_000L); runCurrent()
+        vm.onGamePageShown(false)
+        vm.setActive(true)
+        advanceTimeBy(1_000); runCurrent()
+        assertEquals(SportsResults.TODAY, vm.selectedDay.value)
+        vm.setActive(false)
+        vm.close()
+    }
+
+    @Test
+    fun `a new ESPN day opens Results afresh even after a quick hop`() = runTest {
+        todayHasFinal(true)
+        val repo = repository()
+        val vm = viewModel(repo)
+        backgroundScope.launch { vm.uiState.collect {} }
+        // 23 57 US Eastern.
+        advanceTimeBy(7 * 60 * 60_000L - 3 * 60_000L); runCurrent()
+        vm.selectDay(3)
+        vm.setActive(true)
+        advanceTimeBy(1_000); runCurrent()
+        vm.setActive(false)
+        // Back at 00 03: "3 days ago" would now be another date.
+        advanceTimeBy(5 * 60_000L); runCurrent()
+        vm.setActive(true)
+        advanceTimeBy(1_000); runCurrent()
+        assertEquals(1, vm.uiState.value.freshOpens)
+        // Always Today after a reset, even with no final yet (its empty state offers Yesterday).
+        assertEquals(SportsResults.TODAY, vm.selectedDay.value)
+        assertEquals(SportsResults.TODAY, repo.chosenDay)
+        vm.setActive(false)
+        vm.close()
+    }
+
+    @Test
+    fun `a fresh open hides again the scores Hide until focused revealed`() = runTest {
+        settings.value = ScoreSettings(mode = ScoresMode.HIDE_UNTIL_FOCUSED)
+        todayHasFinal(true)
+        val vm = viewModel()
+        backgroundScope.launch { vm.uiState.collect {} }
+        vm.setActive(true)
+        advanceTimeBy(1_000); runCurrent()
+        vm.onRowFocus("final")
+        advanceTimeBy(ResultSpoilerReveal.REVEAL_AFTER_MS); runCurrent()
+        assertEquals(setOf("final"), vm.uiState.value.revealed)
+        // A quick hop keeps it revealed.
+        vm.setActive(false)
+        advanceTimeBy(60_000L); runCurrent()
+        vm.setActive(true)
+        advanceTimeBy(1_000); runCurrent()
+        assertEquals(setOf("final"), vm.uiState.value.revealed)
+        // Back after 10 min: hidden again.
+        vm.setActive(false)
+        advanceTimeBy(SportsLiveRefreshPlan.OPEN_STALE_MS); runCurrent()
+        vm.setActive(true)
+        advanceTimeBy(1_000); runCurrent()
+        assertTrue(vm.uiState.value.revealed.isEmpty())
+        vm.setActive(false)
+        vm.close()
+    }
+
+    @Test
+    fun `the first open still uses the opening rule`() = runTest {
+        todayHasFinal(false)
+        val repo = repository()
+        val vm = viewModel(repo)
+        vm.setActive(true)
+        runCurrent()
+        assertEquals(SportsResults.YESTERDAY, vm.selectedDay.value)
+        assertNull(repo.chosenDay)
+        vm.setActive(false)
+        vm.close()
     }
 
     @Test
