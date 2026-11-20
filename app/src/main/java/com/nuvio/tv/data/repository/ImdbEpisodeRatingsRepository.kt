@@ -1,6 +1,7 @@
 package com.nuvio.tv.data.repository
 
 import android.util.Log
+import com.nuvio.tv.BuildConfig
 import com.nuvio.tv.data.remote.api.ImdbTapframeApi
 import com.nuvio.tv.data.remote.api.SeriesGraphApi
 import kotlinx.coroutines.CoroutineScope
@@ -29,6 +30,11 @@ class ImdbEpisodeRatingsRepository @Inject constructor(
     private val inFlight = mutableMapOf<String, kotlinx.coroutines.Deferred<List<ExternalEpisodeRating>>>()
     private val inFlightMutex = Mutex()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    // A build without these base urls points both APIs at a localhost placeholder (NetworkModule): skip them
+    // instead of a failed request per series on every Home load.
+    private val primaryConfigured = BuildConfig.IMDB_TAPFRAME_API_BASE_URL.isNotBlank()
+    private val fallbackConfigured = BuildConfig.IMDB_RATINGS_API_BASE_URL.isNotBlank()
 
     internal suspend fun getEpisodeRatings(
         imdbId: String?,
@@ -89,13 +95,13 @@ class ImdbEpisodeRatingsRepository @Inject constructor(
         imdbId: String?,
         tmdbId: Int?
     ): List<ExternalEpisodeRating> {
-        if (!imdbId.isNullOrBlank()) {
+        if (!imdbId.isNullOrBlank() && primaryConfigured) {
             val primary = fetchFromImdbTapframe(imdbId)
             if (primary.any { it.rating != null }) return primary
             Log.w(tag, "Primary episode ratings empty for imdbId=$imdbId, trying fallback.")
         }
 
-        if (tmdbId != null && tmdbId > 0) {
+        if (tmdbId != null && tmdbId > 0 && fallbackConfigured) {
             return fetchFromSeriesGraph(tmdbId)
         }
 
