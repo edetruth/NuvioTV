@@ -11,8 +11,8 @@ import com.nuvio.tv.core.sportslive.alerts.SportsLiveAlertKeys
 import com.nuvio.tv.domain.model.SportsLiveKind
 
 /**
- * The full player's OK over a Sports & Live game (TV QA C5 / Q19), for the player's key handler: true when the
- * key was taken ([SportsLiveGameInfoKeys.fullScreenOk] decides; a bare OK never pauses a live game or channel).
+ * The full player's OK over a Sports & Live game (TV QA C5, research Q19), for the player's key handler: true when
+ * the key was taken ([SportsLiveGameInfoKeys.fullScreenOk] decides: on live the first OK shows the controls).
  * Called with the key event, whether a watch party runs, and whether the controls (or the pause overlay) show.
  */
 @Composable
@@ -31,7 +31,6 @@ fun rememberSportsLiveOkHandler(
             if (event.action != KeyEvent.ACTION_DOWN || partyActive || !SportsLiveAlertKeys.isOk(event.keyCode)) {
                 false
             } else {
-                val playing = zap.nowPlaying
                 val live = sportsLiveOkLive(zap)
                 val open = currentOpenGame
                 val request = if (info.shown && open != null) info.gameRequest() else null
@@ -39,17 +38,13 @@ fun rememberSportsLiveOkHandler(
                     live = live,
                     controlsShown = controlsShown,
                     infoShown = info.shown,
-                    infoAvailable = info.available(playing),
-                    canOpenGame = request != null
+                    canOpenGame = request != null,
+                    okPausesLive = zap.okPausesLive.value
                 )
                 // A held OK repeats: only its first press acts, the rest are taken with it.
                 val first = event.repeatCount == 0
                 when (action) {
                     SportsLiveOkAction.PASS -> false
-                    SportsLiveOkAction.SHOW_INFO -> {
-                        if (first && playing != null) info.show(playing)
-                        true
-                    }
                     SportsLiveOkAction.HIDE_INFO -> {
                         info.hide()
                         true

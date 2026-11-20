@@ -103,6 +103,39 @@ object SportsLiveRewind {
     }
 }
 
+/**
+ * A live game paused (research Q19): "Paused · −0:23 behind live · OK resume · ▶▶ Go live". [behindMs]: how far
+ * behind the live edge, shown from [SportsLiveRewind.INDICATOR_MIN_BEHIND_MS]; [canGoLive]: ▶▶ (fast-forward)
+ * jumps to the live edge (a seekable live window of a zap session's ExoPlayer stream).
+ */
+data class SportsLivePausedLive(val behindMs: Long?, val canGoLive: Boolean) {
+    companion object {
+        /** The paused chip's facts for [window]; behind and Go live only where the window can be sought. */
+        fun of(hasSession: Boolean, engine: InternalPlayerEngine, window: LiveWindow?): SportsLivePausedLive {
+            val canGoLive = window != null && SportsLiveRewind.seekDeltaMs(
+                hasSession, engine, window.isDynamic, window.windowMs, window.liveEdgeMs, window.behindEdgeMs,
+                LiveRewindKey.FAST_FORWARD
+            ) != null
+            val behind = window?.behindEdgeMs?.takeIf { canGoLive && it >= SportsLiveRewind.INDICATOR_MIN_BEHIND_MS }
+            return SportsLivePausedLive(behind, canGoLive)
+        }
+    }
+}
+
+/**
+ * ▶▶ on a paused live game (research Q19): back to the live edge, playing. True when the key was used; false leaves
+ * it to the player (playing, a replay, a window that cannot be sought, another engine).
+ */
+fun goLiveFromPause(event: KeyEvent, hasSession: Boolean, engine: InternalPlayerEngine, player: ExoPlayer?): Boolean {
+    if (event.action != KeyEvent.ACTION_DOWN || event.repeatCount > 0 || event.keyCode != KeyEvent.KEYCODE_MEDIA_FAST_FORWARD) return false
+    if (!hasSession || player == null || player.playWhenReady) return false
+    if (!SportsLivePausedLive.of(hasSession, engine, player.liveWindow()).canGoLive) return false
+    // Exo's default position is the live edge, and seeking to it resets its live offset target.
+    player.seekToDefaultPosition()
+    player.play()
+    return true
+}
+
 /** The current item's live window, read from Exo's timeline; null without a timeline. */
 fun ExoPlayer.liveWindow(): LiveWindow? {
     val timeline = currentTimeline

@@ -71,6 +71,7 @@ import com.nuvio.tv.data.local.InternalPlayerEngine
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.ui.screens.sportslive.LiveWindow
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveRewind
+import com.nuvio.tv.ui.screens.sportslive.SportsLivePausedLive
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapBanner
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveZapPanelState
 import com.nuvio.tv.core.sportslive.scores.ScoreChip
@@ -127,7 +128,9 @@ internal fun BoxScope.SportsLiveZapOverlay(
     /** Back to Live Now on the end card's nothing-live state (#161): the player leaves. */
     onBackToLiveNow: () -> Unit = {},
     /** A card above the end card is up ([SportsLivePlayerLayers], live.19 QA F10): the end card waits for it. */
-    endCardCovered: Boolean = false
+    endCardCovered: Boolean = false,
+    /** The player is paused (not buffering): a live game shows "Paused · behind live · Go live" (research Q19). */
+    paused: () -> Boolean = { false }
 ) {
     if (!viewModel.hasSession) return
     // In picture-in-picture only the video shows: no banner, indicator or panel.
@@ -156,7 +159,15 @@ internal fun BoxScope.SportsLiveZapOverlay(
     }
     val banner by viewModel.banner.collectAsState()
     val panelOpen by viewModel.panelOpen.collectAsState()
-    BehindLiveIndicator(liveWindow = liveWindow, engine = engine, covered = playerOverlayVisible || panelOpen)
+    // Research Q19: after any pause on a live game, how far behind live and how to get back; it replaces the indicator.
+    val pausedLive = PausedLiveChip(
+        live = viewModel.nowPlaying?.kind != com.nuvio.tv.domain.model.SportsLiveKind.REPLAY,
+        paused = paused,
+        liveWindow = liveWindow,
+        engine = engine,
+        covered = panelOpen
+    )
+    BehindLiveIndicator(liveWindow = liveWindow, engine = engine, covered = playerOverlayVisible || panelOpen || pausedLive)
     val panel by viewModel.panel.collectAsState()
     val panelReadiness by viewModel.panelReadiness.collectAsState()
     val panelKeysHint by viewModel.panelKeysHint.collectAsState()
@@ -338,6 +349,50 @@ internal fun BoxScope.SportsLiveZapOverlay(
             }
         )
     }
+}
+
+/**
+ * "Paused · −0:23 behind live · OK resume · ▶▶ Go live" (research Q19), top right, while a live game is paused, the
+ * controls up or not ([covered]: the live games panel). True while it shows.
+ */
+@Composable
+private fun BoxScope.PausedLiveChip(
+    live: Boolean,
+    paused: () -> Boolean,
+    liveWindow: () -> LiveWindow?,
+    engine: () -> InternalPlayerEngine,
+    covered: Boolean
+): Boolean {
+    var state by remember { mutableStateOf<SportsLivePausedLive?>(null) }
+    LaunchedEffect(live) {
+        while (live) {
+            state = if (paused()) SportsLivePausedLive.of(hasSession = true, engine = engine(), window = liveWindow()) else null
+            delay(500)
+        }
+        state = null
+    }
+    val shown = state?.takeIf { !covered } ?: return false
+    val separator = stringResource(R.string.sports_live_game_info_separator)
+    val text = listOfNotNull(
+        stringResource(R.string.sports_live_paused),
+        shown.behindMs?.let { stringResource(R.string.sports_live_paused_behind, SportsLiveRewind.formatBehind(it)) },
+        stringResource(R.string.sports_live_paused_resume),
+        stringResource(R.string.sports_live_paused_go_live).takeIf { shown.canGoLive }
+    ).joinToString(separator)
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelLarge,
+        color = NuvioTheme.colors.TextPrimary,
+        maxLines = 1,
+        modifier = Modifier
+            .align(Alignment.TopEnd)
+            .padding(top = 32.dp, end = 32.dp)
+            .zIndex(3f)
+            .clip(RoundedCornerShape(NuvioTheme.radii.xl))
+            .background(NuvioTheme.colors.BackgroundElevated.copy(alpha = 0.92f))
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    )
+    return true
 }
 
 @Composable

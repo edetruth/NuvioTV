@@ -4110,6 +4110,20 @@
     <string name="sports_live_alert_hint_dismiss">Back Dismiss</string>
     <string name="sports_live_info_hint_game">OK Game page · Back close</string>
     <string name="sports_live_info_hint_close">Back close</string>
+    <!-- Research Q19 / Q17: Settings → Sports & Live. -->
+    <string name="sports_live_setting_ok_on_live">OK on live</string>
+    <string name="sports_live_setting_ok_on_live_help">What OK does while a live game plays. Replays always pause on OK; Play/Pause always pauses</string>
+    <string name="sports_live_ok_on_live_controls">Show controls</string>
+    <string name="sports_live_ok_on_live_pause">Pause</string>
+    <string name="sports_live_setting_tip_off">At tip-off</string>
+    <string name="sports_live_setting_tip_off_help">When a reminded or followed game starts. Switch never cuts into a live game you are watching</string>
+    <string name="sports_live_tip_off_remind">Remind me</string>
+    <string name="sports_live_tip_off_switch">Switch automatically</string>
+    <!-- Research Q19: a live game paused. -->
+    <string name="sports_live_paused">Paused</string>
+    <string name="sports_live_paused_behind">−%1$s behind live</string>
+    <string name="sports_live_paused_resume">OK resume</string>
+    <string name="sports_live_paused_go_live">▶▶ Go live</string>
     <string name="sports_live_alert_hint_peek">▼ Peek</string>
     <string name="sports_live_alert_peeking">Peeking · %1$s</string>
     <string name="sports_live_alert_peek_hint">OK Stay · Back Return · %1$d s</string>

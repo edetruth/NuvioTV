@@ -1,6 +1,8 @@
 package com.nuvio.tv.ui.screens.settings
 
 import com.nuvio.tv.core.sportslive.SportsLiveGameEndAction
+import com.nuvio.tv.core.sportslive.SportsLiveOkOnLive
+import com.nuvio.tv.core.sportslive.SportsLiveTipOff
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -109,6 +111,7 @@ internal fun SportsLiveSettingsContent(
     val hiddenTitles by viewModel.hiddenTitles.collectAsStateWithLifecycle()
     val remindedTeams by viewModel.remindedTeams.collectAsStateWithLifecycle()
     val gameEndAction by viewModel.gameEndAction.collectAsStateWithLifecycle()
+    val okOnLive by viewModel.okOnLive.collectAsStateWithLifecycle()
     // Scores status (#70): worked out on a 30 s clock, so a feed no longer in use drops out.
     val feedHealth by viewModel.feedHealth.collectAsStateWithLifecycle()
     val clockMs by rememberSportsLiveClockMs()
@@ -260,6 +263,8 @@ internal fun SportsLiveSettingsContent(
                 SportsLiveSetting.MY_SPORTS -> mySportsSummary(state.mySports) to { goTo(SportsLiveSettingsPage.MySports, null) }
                 SportsLiveSetting.OPEN_GAME -> openGameLabel(state.openGame) to { picker = ScorePicker.OPEN_GAME }
                 SportsLiveSetting.GAME_END -> gameEndLabel(gameEndAction) to { picker = ScorePicker.GAME_END }
+                SportsLiveSetting.OK_ON_LIVE -> okOnLiveLabel(okOnLive) to { picker = ScorePicker.OK_ON_LIVE }
+                SportsLiveSetting.TIP_OFF -> tipOffLabel(alerts.tipOff) to { picker = ScorePicker.TIP_OFF }
                 SportsLiveSetting.REMINDED_TEAMS -> (summarise(remindedTeams.map { it.name })
                     ?: stringResource(R.string.sports_live_my_teams_none)) to { goTo(SportsLiveSettingsPage.RemindedTeams, null) }
                 SportsLiveSetting.SCORES_STATUS -> scoresStatusText(scoresStatus) to { picker = ScorePicker.STATUS }
@@ -491,6 +496,28 @@ internal fun SportsLiveSettingsContent(
             },
             onDismiss = { picker = null }
         )
+        ScorePicker.OK_ON_LIVE -> SettingsSingleChoiceDialog(
+            title = stringResource(R.string.sports_live_setting_ok_on_live),
+            subtitle = stringResource(R.string.sports_live_setting_ok_on_live_help),
+            options = SportsLiveOkOnLive.entries.map { SettingsPickerOption(it, okOnLiveLabel(it)) },
+            selectedValue = okOnLive,
+            onOptionSelected = { value ->
+                picker = null
+                viewModel.setOkOnLive(value)
+            },
+            onDismiss = { picker = null }
+        )
+        ScorePicker.TIP_OFF -> SettingsSingleChoiceDialog(
+            title = stringResource(R.string.sports_live_setting_tip_off),
+            subtitle = stringResource(R.string.sports_live_setting_tip_off_help),
+            options = SportsLiveTipOff.entries.map { SettingsPickerOption(it, tipOffLabel(it)) },
+            selectedValue = alerts.tipOff,
+            onOptionSelected = { value ->
+                picker = null
+                viewModel.setTipOff(value)
+            },
+            onDismiss = { picker = null }
+        )
         ScorePicker.STATUS -> ScoresStatusDialog(
             status = scoresStatus,
             onRetry = viewModel::retryScores,
@@ -570,7 +597,7 @@ private const val LEAGUES_PREFIX = "leagues:"
 private val PageSaver = Saver<SportsLiveSettingsPage, String>(save = { it.token }, restore = ::sportsLiveSettingsPageOf)
 
 /** The dialog open: scores mode, score delay, "When I open a game", or Scores status. */
-private enum class ScorePicker { MODE, DELAY, OPEN_GAME, GAME_END, STATUS }
+private enum class ScorePicker { MODE, DELAY, OPEN_GAME, GAME_END, OK_ON_LIVE, TIP_OFF, STATUS }
 
 /** Asked for the first row of a page, once it has composed. */
 private const val FIRST_ROW = "\u0000first"
@@ -682,6 +709,22 @@ private fun openGameLabel(openGame: SportsLiveOpenGame): String = stringResource
     when (openGame) {
         SportsLiveOpenGame.PLAY_BEST -> R.string.sports_live_open_game_play_best
         SportsLiveOpenGame.LET_ME_CHOOSE -> R.string.sports_live_open_game_let_me_choose
+    }
+)
+
+@Composable
+private fun okOnLiveLabel(value: SportsLiveOkOnLive): String = stringResource(
+    when (value) {
+        SportsLiveOkOnLive.SHOW_CONTROLS -> R.string.sports_live_ok_on_live_controls
+        SportsLiveOkOnLive.PAUSE -> R.string.sports_live_ok_on_live_pause
+    }
+)
+
+@Composable
+private fun tipOffLabel(value: SportsLiveTipOff): String = stringResource(
+    when (value) {
+        SportsLiveTipOff.REMIND -> R.string.sports_live_tip_off_remind
+        SportsLiveTipOff.SWITCH -> R.string.sports_live_tip_off_switch
     }
 )
 

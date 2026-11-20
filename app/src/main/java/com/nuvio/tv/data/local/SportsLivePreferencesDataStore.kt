@@ -98,6 +98,9 @@ class SportsLivePreferencesDataStore @Inject constructor(
     private val remindedTeamsKey = stringPreferencesKey("sports_live_reminded_teams")
     // "When a game ends" (#161): a [SportsLiveGameEndAction] name.
     private val gameEndActionKey = stringPreferencesKey("sports_live_game_end_action")
+    // Research Q19 / Q17: "OK on live" and "At tip-off" ([SportsLiveOkOnLive], [SportsLiveTipOff] names).
+    private val okOnLiveKey = stringPreferencesKey("sports_live_ok_on_live")
+    private val tipOffKey = stringPreferencesKey("sports_live_tip_off")
     // Spoiler protection (#151): games saved for later, and "Hide scores of my teams' games until I've watched".
     private val watchLaterKey = stringPreferencesKey(SportsLiveSettingsSync.WATCH_LATER)
     private val myTeamsSpoilersKey = booleanPreferencesKey("sports_live_my_teams_spoilers")
@@ -248,7 +251,8 @@ class SportsLivePreferencesDataStore @Inject constructor(
                 remindMyTeams = prefs[remindMyTeamsKey] ?: true,
                 scoreAlerts = prefs[scoreAlertsKey] ?: true,
                 fullTimeAlerts = prefs[fullTimeAlertsKey] ?: true,
-                closeGameAlerts = prefs[closeGameAlertsKey] ?: true
+                closeGameAlerts = prefs[closeGameAlertsKey] ?: true,
+                tipOff = com.nuvio.tv.core.sportslive.SportsLiveTipOff.fromStored(prefs[tipOffKey])
             )
         }
     }
@@ -268,6 +272,20 @@ class SportsLivePreferencesDataStore @Inject constructor(
     /** "Close-game alerts" (#137): crunch-time alerts for games in My sports. */
     suspend fun setCloseGameAlerts(v: Boolean) {
         store().edit { it[closeGameAlertsKey] = v }
+    }
+
+    /** "At tip-off" (research Q17): Remind me by default; Switch automatically is opt-in. */
+    suspend fun setTipOff(value: com.nuvio.tv.core.sportslive.SportsLiveTipOff) {
+        store().edit { it[tipOffKey] = value.name }
+    }
+
+    /** "OK on live" (research Q19): Show controls by default. */
+    val okOnLive: Flow<com.nuvio.tv.core.sportslive.SportsLiveOkOnLive> = profileManager.activeProfileId.flatMapLatest { pid ->
+        factory.get(pid, FEATURE).data.map { com.nuvio.tv.core.sportslive.SportsLiveOkOnLive.fromStored(it[okOnLiveKey]) }
+    }
+
+    suspend fun setOkOnLive(value: com.nuvio.tv.core.sportslive.SportsLiveOkOnLive) {
+        store().edit { it[okOnLiveKey] = value.name }
     }
 
     /** "When a game ends" (#161): Move to the next game by default. */

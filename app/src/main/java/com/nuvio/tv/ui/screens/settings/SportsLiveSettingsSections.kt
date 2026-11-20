@@ -39,6 +39,8 @@ internal enum class SportsLiveSetting(
     MY_TEAMS(SportsLiveSettingsSection.WHAT_I_FOLLOW, R.string.sports_live_my_teams_title, R.string.sports_live_my_teams_subtitle),
     MY_SPORTS(SportsLiveSettingsSection.WHAT_I_FOLLOW, R.string.sports_live_my_sports_title, R.string.sports_live_my_sports_subtitle),
     REMIND_MY_TEAMS(SportsLiveSettingsSection.ALERTS, R.string.sports_live_setting_remind_my_teams, R.string.sports_live_setting_remind_my_teams_subtitle),
+    /** "At tip-off" (research Q17): Remind me (a toast) / Switch automatically (opt-in, 10 s countdown). */
+    TIP_OFF(SportsLiveSettingsSection.ALERTS, R.string.sports_live_setting_tip_off, R.string.sports_live_setting_tip_off_help),
     SCORE_ALERTS(SportsLiveSettingsSection.ALERTS, R.string.sports_live_setting_score_alerts, R.string.sports_live_setting_score_alerts_subtitle),
     FULL_TIME_ALERTS(SportsLiveSettingsSection.ALERTS, R.string.sports_live_setting_full_time_alerts, R.string.sports_live_setting_full_time_alerts_subtitle),
     /** Crunch-time alerts (#137): close games late in My sports. */
@@ -46,6 +48,8 @@ internal enum class SportsLiveSetting(
     /** Reminder-only teams (#154): a summary row opening its page, where OK takes a team off. */
     REMINDED_TEAMS(SportsLiveSettingsSection.ALERTS, R.string.sports_live_setting_reminded_teams, R.string.sports_live_setting_reminded_teams_help),
     OPEN_GAME(SportsLiveSettingsSection.PLAYING, R.string.sports_live_setting_open_game, R.string.sports_live_setting_open_game_subtitle),
+    /** "OK on live" (research Q19): Show controls (default) / Pause. */
+    OK_ON_LIVE(SportsLiveSettingsSection.PLAYING, R.string.sports_live_setting_ok_on_live, R.string.sports_live_setting_ok_on_live_help),
     /** "When a game ends" (#161): Move to the next game / Ask / Stay. */
     GAME_END(SportsLiveSettingsSection.PLAYING, R.string.sports_live_setting_game_end, R.string.sports_live_setting_game_end_help),
     /** "Hide links this TV can't play" (#166): DRM links with no licence are left out of the stream lists. */
@@ -80,6 +84,7 @@ internal enum class SportsLiveSetting(
             HOVER_PREVIEW -> section && !state.dataSaver
             // The device's own picture-in-picture support is checked by the screen on top of this.
             MY_SPORTS, SCORES, OPEN_GAME, GAME_END, HIDE_UNPLAYABLE, PICTURE_IN_PICTURE, HOME_ROW, REMIND_MY_TEAMS, REMINDED_TEAMS,
+            TIP_OFF, OK_ON_LIVE,
             SCORES_STATUS, DATA_SAVER, CATALOGS -> section
         }
     }

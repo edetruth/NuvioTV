@@ -48,6 +48,8 @@ object SportsLiveSettingsSync {
         "sports_live_full_time_alerts" to Kind.BOOLEAN,
         "sports_live_close_game_alerts" to Kind.BOOLEAN,
         "sports_live_game_end_action" to Kind.STRING,
+        "sports_live_ok_on_live" to Kind.STRING,
+        "sports_live_tip_off" to Kind.STRING,
         "sports_live_catch_up_row" to Kind.BOOLEAN,
         "sports_live_my_teams_spoilers" to Kind.BOOLEAN,
         "sports_live_my_sports" to Kind.STRING_SET

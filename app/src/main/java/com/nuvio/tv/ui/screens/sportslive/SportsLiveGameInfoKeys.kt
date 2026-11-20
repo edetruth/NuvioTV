@@ -19,11 +19,8 @@ enum class GameInfoKeyAction {
 
 /** What OK does in the full player over a Sports & Live game ([SportsLiveGameInfoKeys.fullScreenOk]). */
 enum class SportsLiveOkAction {
-    /** The player's own OK (a replay's pause, the focused control). */
+    /** The player's own OK (a replay's pause, "OK on live: Pause", the focused control). */
     PASS,
-
-    /** The game info card opens. */
-    SHOW_INFO,
 
     /** The game info card closes (no Game page to open). */
     HIDE_INFO,
@@ -37,8 +34,8 @@ enum class SportsLiveOkAction {
 
 /**
  * The game info overlay's keys (#139), chosen not to fight the keys already taken:
- * - Full screen: ▲/▼ and CH± zap, ◀ opens the live games panel, ▶ the controls, OK opens it on a live game
- *   ([fullScreenOk]: never a pause, TV QA C5) and pauses a replay, so none of the others
+ * - Full screen: ▲/▼ and CH± zap, ◀ opens the live games panel, ▶ the controls, OK shows the controls on a live
+ *   game ([fullScreenOk]: never a pause by itself, research Q19) and pauses a replay, so none of them
  *   can open it (and a held ▲ would zap first). INFO opens it, and so does MENU, which the sports
  *   player leaves free (remotes without an Info key have one). With the overlay up, INFO again goes on
  *   to the stream details as INFO did before; any other key closes it and does its own job. Only with the
@@ -60,16 +57,16 @@ object SportsLiveGameInfoKeys {
     }
 
     /**
-     * OK in the full player with its controls hidden (TV QA C5 / Q19): a bare OK never pauses a [live] game (two
-     * accidental pauses in ten minutes on the user's TV; pausing stays on the Play/Pause key and on the controls'
-     * own Play button). With the game info up ([infoShown]) OK opens its Game page ([canOpenGame]), else just
-     * closes it; otherwise OK opens the game info when it has something to show ([infoAvailable]), else the
-     * controls. A replay (not [live]) and the controls ([controlsShown]) keep the player's own OK.
+     * OK in the full player with its controls hidden (TV QA C5, research Q19), the one place this is decided: on a
+     * [live] game or channel the first OK shows the controls with ⏸ focused, so pausing takes a second, deliberate OK
+     * (live-TV practice: Google's Live Channels, TiviMate); the Play/Pause key still pauses at once. With the game
+     * info up ([infoShown], opened by INFO) OK opens its Game page ([canOpenGame]), else just closes it. "OK on live:
+     * Pause" ([okPausesLive]), a replay (not [live]) and the controls ([controlsShown]) keep the player's own OK.
      */
-    fun fullScreenOk(live: Boolean, controlsShown: Boolean, infoShown: Boolean, infoAvailable: Boolean, canOpenGame: Boolean): SportsLiveOkAction = when {
+    fun fullScreenOk(live: Boolean, controlsShown: Boolean, infoShown: Boolean, canOpenGame: Boolean, okPausesLive: Boolean = false): SportsLiveOkAction = when {
         !live || controlsShown -> SportsLiveOkAction.PASS
         infoShown -> if (canOpenGame) SportsLiveOkAction.OPEN_GAME else SportsLiveOkAction.HIDE_INFO
-        infoAvailable -> SportsLiveOkAction.SHOW_INFO
+        okPausesLive -> SportsLiveOkAction.PASS
         else -> SportsLiveOkAction.SHOW_CONTROLS
     }
 
@@ -78,7 +75,7 @@ object SportsLiveGameInfoKeys {
      * the words always follow the routing (switching OK on a live game to "show controls" changes neither).
      */
     fun infoCardOpensGame(live: Boolean, canOpenGame: Boolean): Boolean =
-        fullScreenOk(live = live, controlsShown = false, infoShown = true, infoAvailable = true, canOpenGame = canOpenGame) ==
+        fullScreenOk(live = live, controlsShown = false, infoShown = true, canOpenGame = canOpenGame) ==
             SportsLiveOkAction.OPEN_GAME
 
     fun dual(keyCode: Int, shown: Boolean, available: Boolean): GameInfoKeyAction = when {

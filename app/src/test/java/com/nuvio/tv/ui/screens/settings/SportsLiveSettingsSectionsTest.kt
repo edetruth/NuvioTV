@@ -8,6 +8,8 @@ import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.CATCH_UP_ROW
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.DATA_SAVER
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.FULL_TIME_ALERTS
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.GAME_END
+import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.OK_ON_LIVE
+import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.TIP_OFF
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.REMINDED_TEAMS
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.HIDDEN
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.HOME_ROW
@@ -58,8 +60,8 @@ class SportsLiveSettingsSectionsTest {
             listOf(
                 SCORES_AND_SPOILERS to listOf(SCORES, SCORE_DELAY, MY_TEAMS_SPOILERS),
                 WHAT_I_FOLLOW to listOf(MY_TEAMS, MY_SPORTS),
-                ALERTS to listOf(REMIND_MY_TEAMS, SCORE_ALERTS, FULL_TIME_ALERTS, CLOSE_GAME_ALERTS, REMINDED_TEAMS),
-                PLAYING to listOf(OPEN_GAME, GAME_END, HIDE_UNPLAYABLE, PICTURE_IN_PICTURE),
+                ALERTS to listOf(REMIND_MY_TEAMS, TIP_OFF, SCORE_ALERTS, FULL_TIME_ALERTS, CLOSE_GAME_ALERTS, REMINDED_TEAMS),
+                PLAYING to listOf(OPEN_GAME, OK_ON_LIVE, GAME_END, HIDE_UNPLAYABLE, PICTURE_IN_PICTURE),
                 HOME_AND_ROWS to listOf(SHOW_SECTION, HOME_ROW, CATCH_UP_ROW, HOVER_PREVIEW),
                 SETUP to listOf(RUN_SETUP),
                 STATUS to listOf(SCORES_STATUS),
@@ -81,7 +83,9 @@ class SportsLiveSettingsSectionsTest {
                 // #161 and #154.
                 GAME_END, REMINDED_TEAMS,
                 // #151.
-                MY_TEAMS_SPOILERS
+                MY_TEAMS_SPOILERS,
+                // Research Q17 / Q19.
+                TIP_OFF, OK_ON_LIVE
             ),
             shown.toSet()
         )

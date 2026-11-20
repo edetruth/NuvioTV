@@ -19,7 +19,9 @@ data class SportsLiveAlertSettings(
     /** The full-time toast (names only under Hide until focused; none under Off). */
     val fullTimeAlerts: Boolean = true,
     /** Crunch-time alerts (#137): a close game late, in My sports (no score under Hide until focused; none under Off). */
-    val closeGameAlerts: Boolean = true
+    val closeGameAlerts: Boolean = true,
+    /** "At tip-off" (research Q17): Remind me (a toast, default) or Switch automatically (opt-in, 10 s countdown). */
+    val tipOff: com.nuvio.tv.core.sportslive.SportsLiveTipOff = com.nuvio.tv.core.sportslive.SportsLiveTipOff.DEFAULT
 )
 
 /** What is on screen now, as far as alerts care. */

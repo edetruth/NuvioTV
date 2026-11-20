@@ -42,6 +42,7 @@ import com.nuvio.tv.core.sportslive.SportsLiveMyGames
 import com.nuvio.tv.core.sportslive.SportsLiveStillWatching
 import com.nuvio.tv.core.sportslive.alerts.RemindersState
 import com.nuvio.tv.core.sportslive.SportsLiveGameEndAction
+import com.nuvio.tv.core.sportslive.SportsLiveOkOnLive
 import com.nuvio.tv.core.sportslive.SportsLiveGameWatch
 import com.nuvio.tv.core.sportslive.alerts.GameReminders
 import com.nuvio.tv.core.sportslive.alerts.SportsLiveAlerts
@@ -169,7 +170,9 @@ class SportsLiveZapViewModel internal constructor(
     // #161, research 6: the end card moves by itself only into my games (followed teams, reminders) showing "▶ Ready".
     private val reminders: Flow<RemindersState> = flowOf(RemindersState()),
     // #161: "Are you still watching?" after a few automatic moves or hours with no key press.
-    private val stillWatching: SportsLiveStillWatching = SportsLiveStillWatching.shared
+    private val stillWatching: SportsLiveStillWatching = SportsLiveStillWatching.shared,
+    // "OK on live" (research Q19): Show controls (default) or Pause.
+    okOnLive: Flow<SportsLiveOkOnLive> = flowOf(SportsLiveOkOnLive.DEFAULT)
 ) : ViewModel() {
 
     @Inject constructor(
@@ -191,8 +194,13 @@ class SportsLiveZapViewModel internal constructor(
         claimPanelKeysHint = { prefs?.claimPanelKeysHint() == true },
         prefetchHooks = SportsLivePrefetchHooks.of(resolver),
         dataSaver = prefs?.dataSaver ?: flowOf(false),
-        reminders = prefs?.reminders ?: flowOf(RemindersState())
+        reminders = prefs?.reminders ?: flowOf(RemindersState()),
+        okOnLive = prefs?.okOnLive ?: flowOf(SportsLiveOkOnLive.DEFAULT)
     )
+
+    /** "OK on live" is Pause (research Q19): a bare OK pauses a live game at once, as Google's TV-PC says. */
+    val okPausesLive: StateFlow<Boolean> = okOnLive.map { it == SportsLiveOkOnLive.PAUSE }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     private val contentId: String? = savedStateHandle.get<String>("contentId").also { id ->
         // A player for other content ends the session; zap targets match because the

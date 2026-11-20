@@ -19,6 +19,8 @@ import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.CATCH_UP_ROW
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.DATA_SAVER
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.FULL_TIME_ALERTS
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.GAME_END
+import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.OK_ON_LIVE
+import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.TIP_OFF
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.REMINDED_TEAMS
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.HIDDEN
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.HOME_ROW
@@ -69,8 +71,8 @@ class SportsLiveSettingsHelpTest {
             listOf(
                 header(SCORES_AND_SPOILERS), row(SCORES), row(SCORE_DELAY), row(MY_TEAMS_SPOILERS),
                 header(WHAT_I_FOLLOW), row(MY_TEAMS), row(MY_SPORTS),
-                header(ALERTS), row(REMIND_MY_TEAMS), row(SCORE_ALERTS), row(FULL_TIME_ALERTS), row(CLOSE_GAME_ALERTS), row(REMINDED_TEAMS),
-                header(PLAYING), row(OPEN_GAME), row(GAME_END), row(HIDE_UNPLAYABLE), row(PICTURE_IN_PICTURE),
+                header(ALERTS), row(REMIND_MY_TEAMS), row(TIP_OFF), row(SCORE_ALERTS), row(FULL_TIME_ALERTS), row(CLOSE_GAME_ALERTS), row(REMINDED_TEAMS),
+                header(PLAYING), row(OPEN_GAME), row(OK_ON_LIVE), row(GAME_END), row(HIDE_UNPLAYABLE), row(PICTURE_IN_PICTURE),
                 header(HOME_AND_ROWS), row(SHOW_SECTION), row(HOME_ROW), row(CATCH_UP_ROW), row(HOVER_PREVIEW),
                 header(STATUS), row(SCORES_STATUS),
                 header(MORE), Item.MoreToggle
@@ -83,7 +85,7 @@ class SportsLiveSettingsHelpTest {
     fun `setup, the system pip row, more and catalogs slot into their places`() {
         val items = sportsLiveSettingsItems(moreExpanded = true, setupAvailable = true, pipSystemAvailable = true, catalogCount = 3)
         assertEquals(
-            listOf(row(OPEN_GAME), row(GAME_END), row(HIDE_UNPLAYABLE), row(PICTURE_IN_PICTURE), Item.PipSystem),
+            listOf(row(OPEN_GAME), row(OK_ON_LIVE), row(GAME_END), row(HIDE_UNPLAYABLE), row(PICTURE_IN_PICTURE), Item.PipSystem),
             items.subList(items.indexOf(header(PLAYING)) + 1, items.indexOf(header(HOME_AND_ROWS)))
         )
         assertEquals(listOf(header(SETUP), row(RUN_SETUP), header(STATUS)), items.subList(items.indexOf(header(SETUP)), items.indexOf(header(STATUS)) + 1))

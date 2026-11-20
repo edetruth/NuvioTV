@@ -91,6 +91,19 @@ class SportsLiveRewindTest {
     }
 
     @Test
+    fun `a paused live game says how far behind live it is and offers Go live where the window can be sought (Q19)`() {
+        val exo = InternalPlayerEngine.EXOPLAYER
+        val behind = LiveWindow(isDynamic = true, windowMs = 120_000L, liveEdgeMs = 100_000L, behindEdgeMs = 23_000L)
+        assertEquals(SportsLivePausedLive(behindMs = 23_000L, canGoLive = true), SportsLivePausedLive.of(true, exo, behind))
+        // Just paused (a moment behind): Go live, no time yet.
+        assertEquals(SportsLivePausedLive(behindMs = null, canGoLive = true), SportsLivePausedLive.of(true, exo, behind.copy(behindEdgeMs = 2_000L)))
+        // A window that cannot be sought (short, static, another engine, unknown): only Paused and OK resume.
+        assertEquals(SportsLivePausedLive(null, false), SportsLivePausedLive.of(true, exo, behind.copy(windowMs = 20_000L)))
+        assertEquals(SportsLivePausedLive(null, false), SportsLivePausedLive.of(true, InternalPlayerEngine.MVP_PLAYER, behind))
+        assertEquals(SportsLivePausedLive(null, false), SportsLivePausedLive.of(true, exo, null))
+    }
+
+    @Test
     fun `behind time formats as minutes and seconds`() {
         assertEquals("0:00", SportsLiveRewind.formatBehind(0L))
         assertEquals("1:20", SportsLiveRewind.formatBehind(80_000L))

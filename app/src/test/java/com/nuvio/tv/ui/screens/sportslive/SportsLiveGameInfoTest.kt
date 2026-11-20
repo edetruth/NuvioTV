@@ -84,17 +84,17 @@ class SportsLiveGameInfoTest {
     // Keys: dual
 
     @Test
-    fun `a bare OK never pauses a live game, it opens the game info and then its Game page (TV QA C5)`() {
-        fun ok(live: Boolean = true, controls: Boolean = false, shown: Boolean = false, available: Boolean = true, game: Boolean = true) =
-            SportsLiveGameInfoKeys.fullScreenOk(live, controls, shown, available, game)
-        assertEquals(SportsLiveOkAction.SHOW_INFO, ok())
-        assertEquals(SportsLiveOkAction.OPEN_GAME, ok(shown = true))
-        // No Game page to open (an individual sport): OK only closes the card, still no pause.
-        assertEquals(SportsLiveOkAction.HIDE_INFO, ok(shown = true, game = false))
-        // Nothing to show (no ESPN match, Scores Off): the controls, Play focused, so pausing takes a second OK.
-        assertEquals(SportsLiveOkAction.SHOW_CONTROLS, ok(available = false))
-        // The controls' own buttons and a replay keep the player's OK (a replay pauses as any video does).
+    fun `on live the first OK shows the controls and never pauses, the second OK is the focused pause (Q19)`() {
+        fun ok(live: Boolean = true, controls: Boolean = false, shown: Boolean = false, game: Boolean = true, pauses: Boolean = false) =
+            SportsLiveGameInfoKeys.fullScreenOk(live, controls, shown, game, pauses)
+        assertEquals(SportsLiveOkAction.SHOW_CONTROLS, ok())
+        // With the controls up OK is the focused button's: ⏸ pauses.
         assertEquals(SportsLiveOkAction.PASS, ok(controls = true))
+        // The game info, opened by INFO: OK opens its Game page, or only closes it with no page (never a pause).
+        assertEquals(SportsLiveOkAction.OPEN_GAME, ok(shown = true))
+        assertEquals(SportsLiveOkAction.HIDE_INFO, ok(shown = true, game = false))
+        // "OK on live: Pause" and a replay keep Google's OK = pause.
+        assertEquals(SportsLiveOkAction.PASS, ok(pauses = true))
         assertEquals(SportsLiveOkAction.PASS, ok(live = false))
         assertEquals(SportsLiveOkAction.PASS, ok(live = false, shown = true))
     }

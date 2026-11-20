@@ -233,7 +233,7 @@ fun PlayerScreen(
     val sportsLiveZap: SportsLiveZapViewModel = hiltViewModel()
     // Sports & Live game info (#139): on demand over the game this player plays.
     val sportsLiveGameInfo: SportsLiveGameInfoViewModel = hiltViewModel()
-    // Sports & Live (TV QA C5): a bare OK never pauses a live game.
+    // Sports & Live (research Q19): on live the first OK shows the controls, ⏸ focused; a second OK pauses.
     val sportsLiveOk = com.nuvio.tv.ui.screens.sportslive.rememberSportsLiveOkHandler(sportsLiveZap, sportsLiveGameInfo, showControls = { viewModel.onEvent(PlayerEvent.OnToggleControls) }, isPlaying = { viewModel.uiState.value.isPlaying })
     val playerBadges = rememberPlayerBadges(viewModel, uiState)
     val partyState by viewModel.party.state.collectAsState()
@@ -956,6 +956,8 @@ fun PlayerScreen(
                 }
 
                 if (keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
+                    // Sports & Live (research Q19): ▶▶ on a paused live game goes back to the live edge.
+                    if (com.nuvio.tv.ui.screens.sportslive.goLiveFromPause(keyEvent.nativeKeyEvent, sportsLiveZap.hasSession && !partyActive, viewModel.controller.currentInternalPlayerEngine, viewModel.exoPlayer)) return@onKeyEvent true
                     if (uiState.showPauseOverlay) {
                         when (keyEvent.nativeKeyEvent.keyCode) {
                             KeyEvent.KEYCODE_DPAD_CENTER,
@@ -995,7 +997,7 @@ fun PlayerScreen(
                     when (keyEvent.nativeKeyEvent.keyCode) {
                         KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
                             if (!uiState.showControls) {
-                                // Sports & Live (TV QA C5): on a live game the game info or the controls, never a pause.
+                                // Sports & Live (research Q19): on a live game the controls first, never a pause by itself.
                                 if (!sportsLiveOk(keyEvent.nativeKeyEvent, partyActive, false)) viewModel.onEvent(PlayerEvent.OnPlayPause)
                                 true
                             } else {
@@ -2442,7 +2444,8 @@ fun PlayerScreen(
                 uiState.showSubtitleTimingDialog || uiState.showMoreDialog,
             isPlaying = { viewModel.uiState.value.isPlaying },
             onBackToLiveNow = { exitPlayerFromError() },
-            endCardCovered = SportsLivePlayerLayers.covered(SportsLivePlayerLayer.END_CARD, sportsLayers)
+            endCardCovered = SportsLivePlayerLayers.covered(SportsLivePlayerLayer.END_CARD, sportsLayers),
+            paused = { viewModel.uiState.value.let { !it.isPlaying && !it.isBuffering && it.error == null } }
         )
 
         // Sports & Live game info (#139): a slim card at the bottom, on demand only.

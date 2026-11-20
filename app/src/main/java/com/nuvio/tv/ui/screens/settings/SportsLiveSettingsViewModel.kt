@@ -169,7 +169,7 @@ class SportsLiveSettingsViewModel @Inject constructor(
             SportsLiveSetting.MY_SPORTS, SportsLiveSetting.MY_TEAMS, SportsLiveSetting.SCORES,
             SportsLiveSetting.SCORE_DELAY, SportsLiveSetting.OPEN_GAME, SportsLiveSetting.SCORES_STATUS,
             SportsLiveSetting.RESET_STREAM_MEMORY, SportsLiveSetting.RUN_SETUP, SportsLiveSetting.HIDDEN, SportsLiveSetting.CATALOGS,
-            SportsLiveSetting.GAME_END, SportsLiveSetting.REMINDED_TEAMS -> Unit
+            SportsLiveSetting.GAME_END, SportsLiveSetting.REMINDED_TEAMS, SportsLiveSetting.TIP_OFF, SportsLiveSetting.OK_ON_LIVE -> Unit
         }
     }
 
@@ -228,6 +228,19 @@ class SportsLiveSettingsViewModel @Inject constructor(
         viewModelScope.launch {
             prefs.updateReminders { com.nuvio.tv.core.sportslive.alerts.GameReminders.removeTeam(it, team) }
         }
+    }
+
+    /** "OK on live" (research Q19). */
+    val okOnLive: StateFlow<com.nuvio.tv.core.sportslive.SportsLiveOkOnLive> = prefs.okOnLive
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), com.nuvio.tv.core.sportslive.SportsLiveOkOnLive.DEFAULT)
+
+    fun setOkOnLive(value: com.nuvio.tv.core.sportslive.SportsLiveOkOnLive) {
+        viewModelScope.launch { prefs.setOkOnLive(value) }
+    }
+
+    /** "At tip-off" (research Q17), read with the alert settings. */
+    fun setTipOff(value: com.nuvio.tv.core.sportslive.SportsLiveTipOff) {
+        viewModelScope.launch { prefs.setTipOff(value) }
     }
 
     /** "When a game ends" (#161). */
