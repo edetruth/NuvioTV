@@ -536,8 +536,8 @@ internal fun SportsLiveSettingsContent(
 internal fun sportsLiveSettingsInitialKey(onMainRoot: Boolean, showSection: Boolean, returnKey: String?, firstFocusable: String?): String? = when {
     !onMainRoot -> firstFocusable
     returnKey != null -> returnKey
-    showSection -> SportsLiveSettingsItem.Setting(SportsLiveSetting.SCORES).key
-    else -> SportsLiveSettingsItem.Setting(SportsLiveSetting.SHOW_SECTION).key
+    showSection -> Item.Setting(SportsLiveSetting.SCORES).key
+    else -> Item.Setting(SportsLiveSetting.SHOW_SECTION).key
 }
 
 /** A page as a saved token: "main", "teams", "leagues:soccer"… (unknown tokens fall back to Main). */
