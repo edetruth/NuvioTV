@@ -15,8 +15,9 @@ import java.net.URI
  *   target either (no url, or a placeholder or junk link), so a real stream titled "4K not available ·
  *   1080p" or "if it buffers, try again" is left alone;
  * - a tip, info or how-to entry ("Tip: use an external player", "If streams are not working…", "You can
- *   disable this tip") is one unless its url is plainly media (a playlist or video file, a streaming
- *   protocol, a torrent, a prepared target, or request headers to play it with) (N2). A real stream with
+ *   disable this tip"), or a request for support ("Support Us", "Donation Center"), is one unless its
+ *   url is plainly media (a playlist or video file, a streaming protocol, a torrent, a prepared target,
+ *   or request headers to play it with) (N2). A real stream with
  *   a bare page-like link and tip words would read as a notice, which is why only tip wording counts here;
  *   soft words alone still never flag a valid media url;
  * - an entry with nothing to play at all, or a placeholder (an image, a text file, a tiny clip), is one.
@@ -62,7 +63,13 @@ object SportsLiveNoticeEntries {
         """\bif\s+(?:the\s+)?(?:streams?|links?|channels?)\s+(?:are\s+|is\s+|do(?:es)?\s+)?(?:not|n't)\s+(?:working|work|loading|load|playing|play)\b""",
         """\b(?:disable|hide|turn\s+off)\s+this\s+(?:tip|message|notice|hint)\b""",
         """\bhow\s+to\s+(?:watch|play|use|install|fix|set\s*up)\b""",
-        """\buse\s+(?:an?\s+)?external\s+player\b"""
+        """\buse\s+(?:an?\s+)?external\s+player\b""",
+        // A source asking for support (live.19 QA F9): "Support Us", "Donation Center", "Ko-fi", "Patreon".
+        """\bsupport\s+(?:us|the\s+(?:addon|project|dev(?:eloper)?s?))\b""",
+        """\bdonat(?:e|ions?)\b""",
+        """\bko-fi\b""",
+        """\bpatreon\b""",
+        """\bbuy\s+(?:me|us)\s+a\s+coffee\b"""
     ).map { Regex(it, RegexOption.IGNORE_CASE) }
 
     /** A url path that names a media file or playlist, wherever the query string starts. */

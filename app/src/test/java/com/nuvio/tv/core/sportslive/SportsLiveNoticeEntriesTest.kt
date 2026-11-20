@@ -163,6 +163,18 @@ class SportsLiveNoticeEntriesTest {
         ).forEach { assertFalse(SportsLiveNoticeEntries.text(it), SportsLiveNoticeEntries.isNotice(it)) }
     }
 
+    @Test
+    fun `a source asking for support is a notice, not a source (F9)`() {
+        listOf(
+            stream(name = "Support Us", description = "Help keep servers and streams alive\nTap to open Donation Center (Ko-fi / Crypto)", url = "https://addon.example.invalid/donate"),
+            stream(title = "Donate to keep the links up", url = "https://addon.example.invalid/page"),
+            stream(title = "Buy me a coffee", url = null, externalUrl = "https://pay.example.invalid/x")
+        ).forEach { assertTrue(SportsLiveNoticeEntries.text(it), SportsLiveNoticeEntries.isNotice(it)) }
+        // A real stream is never one, whatever its wording.
+        assertFalse(SportsLiveNoticeEntries.isNotice(stream(name = "Support Us", url = "https://cdn.example.invalid/live/index.m3u8")))
+        assertFalse(SportsLiveNoticeEntries.isNotice(stream(title = "Supporters Cup Final", url = "https://cdn.example.invalid/ch/3")))
+    }
+
     private fun withHeaders(stream: Stream) = stream.copy(
         behaviorHints = StreamBehaviorHints(
             notWebReady = true, bingeGroup = null, countryWhitelist = null,
