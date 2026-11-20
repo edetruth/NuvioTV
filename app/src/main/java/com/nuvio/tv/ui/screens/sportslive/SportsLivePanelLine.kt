@@ -46,15 +46,16 @@ import com.nuvio.tv.R
 import com.nuvio.tv.core.sportslive.GameStatusStrings
 import com.nuvio.tv.core.sportslive.SportsLiveReadyMark
 import com.nuvio.tv.core.sportslive.SportsLiveSportKind
+import com.nuvio.tv.core.sportslive.SportsLiveTags
 import com.nuvio.tv.core.sportslive.SportsLiveDisplayText
 import com.nuvio.tv.core.sportslive.scores.GameArtTeam
 import com.nuvio.tv.core.sportslive.scores.TeamDirectory
 import com.nuvio.tv.core.sportslive.scores.ScoreChip
+import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveFocus
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens.Colors
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens.Size
-import java.util.Locale
 
 /** What a one-line panel row draws (#140): two teams and their score, an event's title, or a channel. */
 internal enum class PanelLineKind { GAME, EVENT, CHANNEL }
@@ -76,7 +77,9 @@ internal data class PanelLine(
     val clock: String? = null,
     val period: String? = null,
     val live: Boolean = false,
-    val tag: String = ""
+    val tag: String = "",
+    /** What tells this event or channel from another row of the same title ("Onboard", "UK"); null for none (live.20). */
+    val suffix: String? = null
 ) {
     /** Always one line: the row is [Size.PanelLine] tall. */
     val lines: Int get() = 1
@@ -92,6 +95,8 @@ internal fun panelLineOf(
     strings: GameStatusStrings,
     kickoff: String?,
     tag: String = "",
+    /** What tells an event or channel from a row of the same title ([panelTitleSuffixes]); null for none. */
+    suffix: String? = null,
     /** An unmatched side's name for the line ([panelSideName]); as is by default. */
     sideName: (String) -> String = { it }
 ): PanelLine {
@@ -103,9 +108,10 @@ internal fun panelLineOf(
     return when {
         row.group == ScoreboardGroup.CHANNELS -> PanelLine(
             PanelLineKind.CHANNEL,
-            title = panelCleanText(SportsLiveDisplayText.of(row.item.meta.name).name),
+            title = panelTitleOf(row.item),
             clock = clock,
-            live = status.live
+            live = status.live,
+            suffix = suffix
         )
         row.twoSided && art != null -> PanelLine(
             PanelLineKind.GAME,
@@ -118,9 +124,87 @@ internal fun panelLineOf(
             live = status.live,
             tag = tag
         )
-        else -> PanelLine(PanelLineKind.EVENT, title = panelCleanText(singleLineTitle(row.item)), clock = clock, period = period, live = status.live, tag = tag)
+        else -> PanelLine(
+            PanelLineKind.EVENT, title = panelTitleOf(row.item), clock = clock, period = period, live = status.live,
+            tag = tag, suffix = suffix
+        )
     }
 }
+
+/** An event's or a channel's one-line title on a panel row: the clean title, no leading decoration. */
+internal fun panelTitleOf(item: SportsLiveItem): String =
+    if (item.isChannel) panelCleanText(SportsLiveDisplayText.of(item.meta.name).name) else panelCleanText(singleLineTitle(item))
+
+/**
+ * The panel footer's line for [row] (live.20): who is playing, never cut short by the row's width. A two-sided game's
+ * full names ("Orlando Magic vs Philadelphia 76ers", [vs] between them), else the clean title and its [suffix].
+ */
+internal fun panelFullName(row: ScoreboardRow, vs: String, suffix: String? = null): String {
+    val art = row.art
+    if (row.group != ScoreboardGroup.CHANNELS && row.twoSided && art != null) {
+        return "${panelCleanText(art.first.name)} $vs ${panelCleanText(art.second.name)}"
+    }
+    return listOfNotNull(panelTitleOf(row.item), suffix).joinToString(PANEL_SUFFIX_SEPARATOR)
+}
+
+/**
+ * What tells apart rows of one title (live.20: four "MotoGP" rows), by stream key; rows with a title of their own get
+ * none. For each group of two or more rows whose [titleOf] reads the same, the first of these that differs between
+ * them: the title's region and quality ("UK HD"), the description's first line, the catalog's name, the addon's name;
+ * else "Feed 1", "Feed 2"… ([feed]). Each part is a clean label, never a web address, at most [PANEL_SUFFIX_MAX_CHARS].
+ */
+internal fun panelTitleSuffixes(
+    items: List<SportsLiveItem>,
+    feed: (Int) -> String,
+    titleOf: (SportsLiveItem) -> String = ::panelTitleOf
+): Map<String, String> {
+    val result = HashMap<String, String>()
+    items.distinctBy { it.streamKey }
+        .groupBy { titleOf(it).lowercase() }
+        .values
+        .filter { it.size > 1 }
+        .forEach { group ->
+            val title = titleOf(group.first()).lowercase()
+            val parts = SUFFIX_SOURCES.asSequence()
+                .map { source -> group.map { item -> source(item)?.let { panelSuffixPart(it, title) } } }
+                .firstOrNull { values -> values.filterNotNull().distinct().size > 1 }
+                ?: group.indices.map { feed(it + 1) }
+            group.forEachIndexed { index, item -> parts[index]?.let { result[item.streamKey] = it } }
+        }
+    return result
+}
+
+/** Where a same-title row's suffix may come from, in order ([panelTitleSuffixes]). */
+private val SUFFIX_SOURCES: List<(SportsLiveItem) -> String?> = listOf(
+    { item -> SportsLiveDisplayText.of(item.meta.name).let { listOfNotNull(it.region, it.quality).joinToString(" ") } },
+    { item -> SportsLiveDisplayText.description(item.meta.description)?.lineSequence()?.firstOrNull() },
+    { item -> SportsLiveDisplayText.label(item.catalogName) },
+    { item -> SportsLiveDisplayText.label(item.addonName) }
+)
+
+/** [text] fit for a suffix: trimmed, at most [PANEL_SUFFIX_MAX_CHARS] (whole words), null when blank, the [title] itself or a web address. */
+private fun panelSuffixPart(text: String, title: String): String? {
+    val clean = panelCleanText(text).trim()
+    if (clean.isEmpty() || clean.lowercase() == title || WEB_ADDRESS.containsMatchIn(clean)) return null
+    if (clean.length <= PANEL_SUFFIX_MAX_CHARS) return clean
+    val words = clean.split(WHITESPACE)
+    val fitted = StringBuilder()
+    for (word in words) {
+        val next = if (fitted.isEmpty()) word else "$fitted $word"
+        if (next.length > PANEL_SUFFIX_MAX_CHARS) break
+        fitted.clear().append(next)
+    }
+    return fitted.toString().ifEmpty { clean.take(PANEL_SUFFIX_MAX_CHARS) }
+}
+
+/** A web address or a path in a label ("example.com", "a/b"): never shown as a suffix. */
+private val WEB_ADDRESS = Regex("""/|[\p{L}\p{N}-]\.\p{L}{2,}""")
+
+/** A same-title row's suffix's longest. */
+internal const val PANEL_SUFFIX_MAX_CHARS = 22
+
+/** Between a title and its suffix. */
+internal const val PANEL_SUFFIX_SEPARATOR = " · "
 
 /**
  * [text] without the addon's leading decoration (live.20 F5, #179): emoji or symbols ("📺 Portugal Free Practice"),
@@ -135,54 +219,6 @@ internal fun panelCleanText(text: String): String {
 private val LEADING_DECORATION = Regex("""^[^\p{L}\p{N}(\[]+""")
 private val LEADING_BRACKET = Regex("""^\[[^\]]*]\s*""")
 private val LEADING_SYMBOLS = Regex("""^[^\p{L}\p{N}(]+""")
-
-/**
- * A row's tag in the panel's fixed tag column (live.20 F5, #179): at most [PANEL_TAG_MAX_CHARS] capitals, so it never
- * cuts and names start at one x on every row. A short league or sport tag ("NBA", "NCAAM", "TENNIS", "CRICKET") as it
- * is; a long league its known short form ("BUNDESLIGA" → "BUNDES"); a long sport word its panel word ("MOTORSPORT" →
- * "MOTOR", "BASKETBALL" → "BBALL"); any other long tag the row's [sport] word, else its first word, else its start.
- */
-internal fun panelTag(tag: String, sport: SportsLiveSportKind?): String {
-    val text = tag.trim().uppercase(Locale.ROOT)
-    if (text.isEmpty()) return ""
-    PANEL_LEAGUE_SHORT[text]?.let { return it }
-    if (text.length <= PANEL_TAG_MAX_CHARS) return text
-    SportsLiveSportKind.of(text)?.let { return panelSportWord(it) }
-    sport?.let { return panelSportWord(it) }
-    text.split(' ').first().takeIf { it.isNotEmpty() && it.length <= PANEL_TAG_MAX_CHARS }?.let { return it }
-    return text.take(PANEL_TAG_MAX_CHARS).trim()
-}
-
-/** A sport's word in the panel's tag column: its name, the three long ones shortened. */
-internal fun panelSportWord(sport: SportsLiveSportKind): String = when (sport) {
-    SportsLiveSportKind.BASKETBALL -> "BBALL"
-    SportsLiveSportKind.MOTORSPORT -> "MOTOR"
-    SportsLiveSportKind.WRESTLING -> "WRESTLE"
-    else -> sport.name
-}
-
-/** The panel's short form of the league tags longer than its column ([com.nuvio.tv.core.sportslive.SportsLiveLeagueTags]). */
-private val PANEL_LEAGUE_SHORT = mapOf(
-    "WORLD CUP" to "WC",
-    "WOMEN'S WC" to "WWC",
-    "U21 FRNDLY" to "U21",
-    "NATIONS LG" to "NATIONS",
-    "EURO QUAL" to "EURO Q",
-    "AFCON QUAL" to "AFCON Q",
-    "ASIAN CUP" to "ASIA CUP",
-    "CHAMPNSHP" to "EFL CH",
-    "LEAGUE CUP" to "EFL CUP",
-    "BUNDESLIGA" to "BUNDES",
-    "DFB POKAL" to "POKAL",
-    "EREDIVISIE" to "EREDIV",
-    "SUPER LIG" to "SUPERLIG",
-    "SAUDI PRO" to "SAUDI",
-    "LIGA 1 ROU" to "LIGA 1",
-    "EUROLEAGUE" to "EUROLG"
-)
-
-/** The panel tag's longest: eight capitals fit its [PANEL_TAG_COLUMN] at the Tag size ("FOOTBALL", "BASEBALL"). */
-internal const val PANEL_TAG_MAX_CHARS = 8
 
 /**
  * The names an unmatched side may take on a panel line, longest first (live.20 F5): the side as given, then, for a
@@ -275,16 +311,18 @@ internal fun SportsLivePanelLine(
     /** Gone from the list since the panel opened (#164): kept in place, dimmed. */
     gone: Boolean = false,
     /** What the check-ahead found (#147, live.20 1b): "▶ Ready" or no working stream ("No stream yet"); null: not known, no mark. */
-    readyMark: SportsLiveReadyMark? = null
+    readyMark: SportsLiveReadyMark? = null,
+    /** What tells this row from another of the same title ([panelTitleSuffixes]); null for none. */
+    titleSuffix: String? = null
 ) {
     val strings = rememberGameStatusStrings()
     val kickoff = row.art?.let { kickoffText(it) }
     // live.20 F5: the panel's own short tag, so the fixed column never cuts it ("MOTORSPORT" → "MOTOR").
     val sport = remember(row) { row.sportTag ?: SportsLiveSportKind.plainTagOf(row.item) }
-    val tag = panelTag(rowTagText(row), sport)
+    val tag = SportsLiveTags.short(rowTagText(row), sport)
     val individual = sport in PANEL_INDIVIDUAL_SPORTS
-    val line = remember(row, strings, kickoff, tag, individual) {
-        panelLineOf(row, strings, kickoff, tag) { side ->
+    val line = remember(row, strings, kickoff, tag, individual, titleSuffix) {
+        panelLineOf(row, strings, kickoff, tag, titleSuffix) { side ->
             panelSideName(
                 side,
                 TeamDirectory.shared.abbreviationOf(row.item, side),
@@ -342,12 +380,8 @@ internal fun SportsLivePanelLine(
                     ) {
                         when (line.kind) {
                             PanelLineKind.GAME -> GameLine(row, line, individual = individual)
-                            PanelLineKind.EVENT -> EventLine(line)
-                            PanelLineKind.CHANNEL -> {
-                                // The empty tag column too (live.20 F5): a channel's name starts where games' names do.
-                                LineTag(line.tag)
-                                LineText(line.title.orEmpty(), Modifier.weight(1f, fill = false))
-                            }
+                            // A channel keeps the empty tag column too (live.20 F5): its name starts where games' names do.
+                            PanelLineKind.EVENT, PanelLineKind.CHANNEL -> EventLine(line)
                         }
                     }
                     StatusText(line)
@@ -418,7 +452,7 @@ private fun ReadyMark(mark: SportsLiveReadyMark) {
  */
 @Composable
 private fun RowScope.GameLine(row: ScoreboardRow, line: PanelLine, individual: Boolean) {
-    LineTag(line.tag)
+    LineTag(line.tag, line.live)
     val logos = rememberTeamLogoPair(row.art)?.takeIf { !it.failed }
     // A matched game with both logos shown: abbreviations that no longer fit (a revealed score and clock) go whole,
     // never as "B…": the logos name the teams. An unmatched game's names are cut per side instead. Taken afresh
@@ -514,18 +548,18 @@ private fun PanelSides(
 }
 
 /**
- * A row's league or sport tag ("NBA", "TENNIS", [panelTag]) at the start of one fixed column (live.20 F5): every tag
- * fits it whole, its left edge is one line down the panel and names start at one x on every row; the column stays,
- * empty, when no tag is known.
+ * A row's league or sport tag ("NBA", "TENNIS", [SportsLiveTags.short]) at the start of one fixed column (live.20 F5):
+ * every tag fits it whole, its left edge is one line down the panel and names start at one x on every row; the column
+ * stays, empty, when no tag is known. A [live] row's tag is in the live colour (V2), so the live games read at a glance.
  */
 @Composable
-private fun LineTag(tag: String) {
+private fun LineTag(tag: String, live: Boolean) {
     Box(modifier = Modifier.width(PANEL_TAG_COLUMN), contentAlignment = Alignment.CenterStart) {
         if (tag.isNotEmpty()) {
             Text(
                 text = tag,
                 style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag),
-                color = Colors.TextSecondary,
+                color = if (live) Colors.LiveText else Colors.TextSecondary,
                 maxLines = 1,
                 softWrap = false,
                 overflow = TextOverflow.Ellipsis
@@ -534,11 +568,23 @@ private fun LineTag(tag: String) {
     }
 }
 
-/** A single-line event: its sport tag, then its clean title. */
+/**
+ * A single-line event or a channel: its sport tag, its clean title, then (muted, never cut) what tells it from a row of
+ * the same title ("· Onboard"): the title gives way first.
+ */
 @Composable
 private fun RowScope.EventLine(line: PanelLine) {
-    LineTag(line.tag)
+    LineTag(line.tag, line.live)
     LineText(line.title.orEmpty(), Modifier.weight(1f, fill = false))
+    line.suffix?.let { suffix ->
+        Text(
+            text = PANEL_SUFFIX_SEPARATOR.trimStart() + suffix,
+            style = SportsLiveTokens.style(SportsLiveTokens.Type.PanelLine),
+            color = Colors.TextMuted,
+            maxLines = 1,
+            softWrap = false
+        )
+    }
 }
 
 @Composable
@@ -654,7 +700,7 @@ internal fun SportsLivePanelHeader(group: ScoreboardGroup, count: Int) {
 
 private val PANEL_LINE_RADIUS = 6.dp
 private val PANEL_LINE_ACCENT = 2.dp
-/** Fits [PANEL_TAG_MAX_CHARS] capitals at the Tag size ("FOOTBALL" is about 57 dp), never cut (live.20 F5). */
+/** Fits [SportsLiveTags.MAX_CHARS] capitals at the Tag size ("FOOTBALL" is about 57 dp), never cut (live.20 F5). */
 private val PANEL_TAG_COLUMN = 62.dp
 private val PANEL_SIDE_GAP = 5.dp
 private val LIVE_DOT = 6.dp

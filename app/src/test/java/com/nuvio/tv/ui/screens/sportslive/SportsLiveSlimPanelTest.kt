@@ -7,6 +7,8 @@ import com.nuvio.tv.core.sportslive.GameStatusStrings
 import com.nuvio.tv.core.sportslive.SportsLiveReadyMark
 import com.nuvio.tv.core.sportslive.SportsLiveSportKind
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
+import com.nuvio.tv.data.local.PANEL_KEYS_HINT_OPENS
+import com.nuvio.tv.data.local.shouldShowPanelKeysHint
 import com.nuvio.tv.core.sportslive.scores.ChipScore
 import com.nuvio.tv.core.sportslive.scores.GameArt
 import com.nuvio.tv.core.sportslive.scores.GameArtTeam
@@ -334,37 +336,6 @@ class SportsLiveSlimPanelTest {
     // ---- live.20 F5 / #179: the panel's tag column, names and readiness ----
 
     @Test
-    fun `a panel tag is one short word that always fits the fixed column`() {
-        // Short league and sport tags stay as they are.
-        listOf("NBA", "NCAAM", "TENNIS", "CRICKET", "HOCKEY", "SOCCER", "BASEBALL", "FOOTBALL", "ATP", "U17 WC", "SERIE A")
-            .forEach { assertEquals(it, panelTag(it, null)) }
-        // Long sport words take their panel word, the row's sport unknown or not.
-        assertEquals("MOTOR", panelTag("MOTORSPORT", null))
-        assertEquals("MOTOR", panelTag("Motorsport", SportsLiveSportKind.MOTORSPORT))
-        assertEquals("BBALL", panelTag("BASKETBALL", null))
-        assertEquals("WRESTLE", panelTag("WRESTLING", null))
-        assertEquals("HOCKEY", panelTag("ICE HOCKEY", null))
-        // Long league tags take their short form.
-        assertEquals("BUNDES", panelTag("BUNDESLIGA", SportsLiveSportKind.SOCCER))
-        assertEquals("NATIONS", panelTag("NATIONS LG", null))
-        assertEquals("EUROLG", panelTag("EUROLEAGUE", SportsLiveSportKind.BASKETBALL))
-        // Any other long tag: the row's sport word, else its first word, else its start.
-        assertEquals("SOCCER", panelTag("EKSTRAKLASA", SportsLiveSportKind.SOCCER))
-        assertEquals("GRAND", panelTag("GRAND SLAM CUP", null))
-        assertEquals("EKSTRAKL", panelTag("EKSTRAKLASA", null))
-        assertEquals("", panelTag("  ", SportsLiveSportKind.SOCCER))
-
-        // Every word of the vocabulary fits the column.
-        SportsLiveSportKind.values().forEach { assertTrue(it.name, panelSportWord(it).length <= PANEL_TAG_MAX_CHARS) }
-        val longLeagueTags = listOf(
-            "WORLD CUP", "WOMEN'S WC", "U21 FRNDLY", "NATIONS LG", "EURO QUAL", "AFCON QUAL", "ASIAN CUP", "CHAMPNSHP",
-            "LEAGUE CUP", "BUNDESLIGA", "DFB POKAL", "EREDIVISIE", "SUPER LIG", "SAUDI PRO", "LIGA 1 ROU", "EUROLEAGUE",
-            "SOME LONG UNKNOWN LEAGUE"
-        )
-        longLeagueTags.forEach { assertTrue(it, panelTag(it, null).length in 1..PANEL_TAG_MAX_CHARS) }
-    }
-
-    @Test
     fun `a live row with no clock shows the dot alone, and a real clock stays`() {
         val art = GameArt(GameArtTeam("Slovenia", "Slovenia", null), GameArtTeam("Indonesia", "Indonesia", null), null, null, false)
         val row = ScoreboardRow(
@@ -434,6 +405,82 @@ class SportsLiveSlimPanelTest {
         assertTrue(panelNoStreamDimmed(SportsLiveReadyMark.NO_STREAM, focused = false))
         assertFalse(panelNoStreamDimmed(SportsLiveReadyMark.NO_STREAM, focused = true))
         assertFalse(panelNoStreamDimmed(SportsLiveReadyMark.READY, focused = false))
+    }
+
+    @Test
+    fun `rows of one title each say what tells them apart, rows with their own title say nothing`() {
+        fun motogp(id: String, name: String = "MotoGP", description: String? = null, catalog: String = "Live", addon: String = "Sports") =
+            game(id, now - minute, sport = "Motorsport").let {
+                it.copy(meta = it.meta.copy(name = name, description = description), catalogName = catalog, addonName = addon, teams = null)
+            }
+        val feed: (Int) -> String = { "Feed $it" }
+        val title: (SportsLiveItem) -> String = { it.meta.name.substringBefore(" (").trim() }
+
+        // The description's first line tells them apart.
+        val main = motogp("m1", description = "Main feed\nRound 22")
+        val onboard = motogp("m2", description = "Onboard\nRound 22")
+        val other = motogp("x", name = "Moto3")
+        assertEquals(
+            mapOf(main.streamKey to "Main feed", onboard.streamKey to "Onboard"),
+            panelTitleSuffixes(listOf(main, onboard, other), feed, title)
+        )
+        // Nothing but the addon differs: its name.
+        val a = motogp("a1", addon = "Alpha Sports")
+        val b = motogp("b1", addon = "Beta TV")
+        assertEquals(mapOf(a.streamKey to "Alpha Sports", b.streamKey to "Beta TV"), panelTitleSuffixes(listOf(a, b), feed, title))
+        // Never a web address; nothing tells them apart: numbered feeds.
+        val c = motogp("c1", addon = "https://example.invalid/manifest.json")
+        val d = motogp("d1", addon = "example.invalid.tv")
+        val e = motogp("e1", addon = "streams.example.com")
+        val numbered = panelTitleSuffixes(listOf(c, d, e), feed, title)
+        assertEquals(listOf("Feed 1", "Feed 2", "Feed 3"), listOf(c, d, e).map { numbered[it.streamKey] })
+        // A long part is cut at a word, at most the suffix's longest.
+        val long1 = motogp("l1", description = "Onboard camera feed for the Portugal Grand Prix")
+        val long2 = motogp("l2", description = "Pit lane")
+        val cut = panelTitleSuffixes(listOf(long1, long2), feed, title)
+        assertTrue(cut.values.all { it.length <= PANEL_SUFFIX_MAX_CHARS && !it.endsWith(" ") })
+        assertEquals("Onboard camera feed", cut[long1.streamKey])
+        assertEquals("Pit lane", cut[long2.streamKey])
+
+        // On the line: an event carries its suffix; a game never.
+        val row = ScoreboardRow(
+            item = main, group = ScoreboardGroup.LIVE, chip = null, art = null,
+            firstFollowed = false, secondFollowed = false, probablyEnded = false, status = GameStatus.Live(null), twoSided = false
+        )
+        assertEquals("Onboard", panelLineOf(row, strings, kickoff = null, suffix = "Onboard").suffix)
+    }
+
+    @Test
+    fun `the footer names the focused row in full - both sides, else the whole title and its suffix`() {
+        val art = GameArt(GameArtTeam("Orlando Magic", "ORL", null), GameArtTeam("Philadelphia 76ers", "PHI", null), "NBA", null, false)
+        val gameRow = ScoreboardRow(
+            item = game("m", now - minute), group = ScoreboardGroup.LIVE, chip = ScoreChip.Live("Q4 11:22", ChipScore(97, 92)),
+            art = art, firstFollowed = false, secondFollowed = false, probablyEnded = false, status = GameStatus.Live(null), twoSided = true
+        )
+        assertEquals("Orlando Magic vs Philadelphia 76ers", panelFullName(gameRow, "vs"))
+        val event = gameRow.copy(
+            item = game("t", now).let { it.copy(meta = it.meta.copy(name = "\uD83D\uDCFA MotoGP Portugal Free Practice"), teams = null) },
+            chip = null, art = null, twoSided = false
+        )
+        assertEquals("MotoGP Portugal Free Practice · Onboard", panelFullName(event, "vs", suffix = "Onboard"))
+        assertEquals("MotoGP Portugal Free Practice", panelFullName(event, "vs"))
+    }
+
+    @Test
+    fun `the keys hint shows for the first 3 panel openings only`() {
+        assertEquals(3, PANEL_KEYS_HINT_OPENS)
+        assertEquals(listOf(true, true, true, false, false), (0..4).map { shouldShowPanelKeysHint(it) })
+    }
+
+    @Test
+    fun `the panel has no video preview any more`() {
+        val overlay = listOf(
+            File("src/main/java/com/nuvio/tv/ui/screens/player/SportsLiveZapOverlay.kt"),
+            File("app/src/main/java/com/nuvio/tv/ui/screens/player/SportsLiveZapOverlay.kt")
+        ).first { it.exists() }.readText()
+        assertFalse(overlay.contains("SportsLivePreviewPlayer"))
+        assertFalse(overlay.contains("SportsLivePreviewVideo"))
+        assertTrue(overlay.contains("panelFullName"))
     }
 
     private val strings = GameStatusStrings(

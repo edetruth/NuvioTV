@@ -76,6 +76,7 @@ class SportsLivePreferencesDataStore @Inject constructor(
     private val followedTeamsKey = stringPreferencesKey("sports_live_followed_teams")
     private val hiddenTitlesKey = stringSetPreferencesKey("sports_live_hidden_titles")
     private val dualHintShownKey = intPreferencesKey("sports_live_dual_hint_shown")
+    private val panelHintShownKey = intPreferencesKey("sports_live_panel_hint_shown")
     private val dualLayoutKey = stringPreferencesKey("sports_live_dual_layout")
     private val newSportsHintSeenKey = booleanPreferencesKey("sports_live_new_sports_hint_seen")
     // live.20: Upcoming's one-time tip on its remote keys (time slots, days).
@@ -411,6 +412,20 @@ class SportsLivePreferencesDataStore @Inject constructor(
         return show
     }
 
+    /**
+     * Called once per in-player panel opening (live.20): true when its keys hint shows this time (the profile's first
+     * [PANEL_KEYS_HINT_OPENS] openings), which is then counted.
+     */
+    suspend fun claimPanelKeysHint(): Boolean {
+        var show = false
+        store().edit { prefs ->
+            val shown = prefs[panelHintShownKey] ?: 0
+            show = shouldShowPanelKeysHint(shown)
+            if (show) prefs[panelHintShownKey] = shown + 1
+        }
+        return show
+    }
+
     /** The dual screen layout the profile chose last (#123): a [com.nuvio.tv.ui.screens.sportslive.dual.DualLayout] name; null: never chosen. */
     suspend fun dualLayout(): String? = store().data.first()[dualLayoutKey]
 
@@ -674,3 +689,9 @@ const val DUAL_KEYS_HINT_ENTRIES = 3
 
 /** Whether the dual screen's keys hint shows, after it has shown [shownCount] times. */
 fun shouldShowDualKeysHint(shownCount: Int): Boolean = shownCount < DUAL_KEYS_HINT_ENTRIES
+
+/** In-player panel openings that show the keys hint (live.20). */
+const val PANEL_KEYS_HINT_OPENS = 3
+
+/** Whether the in-player panel's keys hint shows, after it has shown [shownCount] times. */
+fun shouldShowPanelKeysHint(shownCount: Int): Boolean = shownCount < PANEL_KEYS_HINT_OPENS

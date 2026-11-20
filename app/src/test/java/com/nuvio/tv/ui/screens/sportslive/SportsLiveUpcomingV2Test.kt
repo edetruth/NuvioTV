@@ -290,12 +290,6 @@ class SportsLiveUpcomingV2Test {
     // In-player panel
 
     @Test
-    fun `the panel corner shows only a playing preview`() {
-        assertTrue(panelPreviewCornerShown(previewPlaying = true))
-        assertFalse(panelPreviewCornerShown(previewPlaying = false))
-    }
-
-    @Test
     fun `the panel's chips drop catch-alls that only repeat All`() {
         val items = listOf(
             item("A vs B", now, sport = "Basketball", isLive = true),

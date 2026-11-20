@@ -518,12 +518,6 @@ data class SportsLiveZapPanelState(
     internal val guide: PanelGuide by lazy { panelGuide(rows, currentKey, hiddenByMySports) }
 }
 
-/**
- * Whether the panel's top-right corner shows (V2 P3): only while the focused game's preview video loads or
- * plays ([previewPlaying]); never a logos-and-time card in its place.
- */
-internal fun panelPreviewCornerShown(previewPlaying: Boolean): Boolean = previewPlaying
-
 /** What OK on a panel row does (#140): play its stream, or open its Game page on the box score. */
 internal enum class PanelRowOk { PLAY, BOX_SCORE }
 

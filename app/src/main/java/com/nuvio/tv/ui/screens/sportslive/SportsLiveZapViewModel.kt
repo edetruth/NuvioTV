@@ -154,7 +154,9 @@ class SportsLiveZapViewModel internal constructor(
     private val gameWatch: SportsLiveGameWatch = SportsLiveGameWatch.shared,
     // #147, 1b: "▶ Ready" / "No stream yet", shown on the panel's rows and read by Next live game. The panel checks no
     // game itself (1b: only my games are checked ahead, by [SportsLiveReadyKeeper]).
-    private val readiness: SportsLiveGameReadiness = SportsLiveGameReadiness.shared
+    private val readiness: SportsLiveGameReadiness = SportsLiveGameReadiness.shared,
+    // live.20: the panel's keys hint, claimed per opening (the profile's first few show it).
+    private val claimPanelKeysHint: suspend () -> Boolean = { false }
 ) : ViewModel() {
 
     @Inject constructor(
@@ -172,7 +174,8 @@ class SportsLiveZapViewModel internal constructor(
         gameEndAction = prefs?.gameEndAction ?: flowOf(SportsLiveGameEndAction.DEFAULT),
         toggleReminder = { item ->
             prefs?.updateReminders { GameReminders.toggle(it, item, System.currentTimeMillis()) }?.isReminded(item) == true
-        }
+        },
+        claimPanelKeysHint = { prefs?.claimPanelKeysHint() == true }
     )
 
     private val contentId: String? = savedStateHandle.get<String>("contentId").also { id ->
@@ -265,6 +268,10 @@ class SportsLiveZapViewModel internal constructor(
 
     private val _panelOpen = MutableStateFlow(false)
     val panelOpen: StateFlow<Boolean> = _panelOpen.asStateFlow()
+
+    // live.20: "OK switch · Hold OK more · Back close" under the panel, for the profile's first few openings only.
+    private val _panelKeysHint = MutableStateFlow(false)
+    val panelKeysHint: StateFlow<Boolean> = _panelKeysHint.asStateFlow()
 
     // The panel's games are tracked for live scores only while it is open: the section stops its own
     // tracking when the player covers it (ON_STOP), so the player has its own scope.
@@ -810,6 +817,16 @@ class SportsLiveZapViewModel internal constructor(
         panelChip.value = openingChip(session)
         panelSession.value = session
         _panelOpen.value = true
+        _panelKeysHint.value = false
+        viewModelScope.launch {
+            _panelKeysHint.value = try {
+                claimPanelKeysHint()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                false
+            }
+        }
         viewModelScope.launch {
             try {
                 repo.load(force = false, includeChannels = false)

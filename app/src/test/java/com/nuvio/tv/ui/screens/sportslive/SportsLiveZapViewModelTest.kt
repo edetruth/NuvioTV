@@ -14,6 +14,7 @@ import com.nuvio.tv.core.sportslive.scores.LiveScoresRepository
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.ScoreState
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
+import com.nuvio.tv.data.local.shouldShowPanelKeysHint
 import com.nuvio.tv.core.sportslive.scores.SpoilerProtection
 import com.nuvio.tv.core.sportslive.scores.ProtectedGame
 import com.nuvio.tv.core.sportslive.SportsLiveTriedGames
@@ -93,7 +94,8 @@ class SportsLiveZapViewModelTest {
         started: Boolean = true,
         watch: SportsLiveGameWatch = SportsLiveGameWatch(),
         protection: SpoilerProtection = SpoilerProtection(),
-        links: SportsLiveWorkingLinks = SportsLiveWorkingLinks.shared
+        links: SportsLiveWorkingLinks = SportsLiveWorkingLinks.shared,
+        claimHint: suspend () -> Boolean = { false }
     ): SportsLiveZapViewModel {
         SportsLiveZapSessions.start(
             SportsLiveZapSession.of(listOf(playing) + others, playing.streamKey, SportsLiveTab.LIVE_NOW, null, returnToHomeOnBack = false)!!
@@ -113,8 +115,24 @@ class SportsLiveZapViewModelTest {
         every { liveScores.unmatched } returns MutableStateFlow(emptySet())
         return SportsLiveZapViewModel(
             SavedStateHandle(mapOf("contentId" to playing.id)), resolver, debrid, profiles, repo, liveScores,
-            mainDispatcherRule.dispatcher, gameWatch = watch, workingLinks = links
+            mainDispatcherRule.dispatcher, gameWatch = watch, workingLinks = links, claimPanelKeysHint = claimHint
         ).also { it.onPlayerStarted(started) }
+    }
+
+    @Test
+    fun `the panel's keys hint shows for the profile's first 3 openings, then never`() = runTest(mainDispatcherRule.dispatcher) {
+        var shown = 0
+        val pacers = game("Indiana Pacers at Philadelphia 76ers")
+        val viewModel = fullTimeViewModel(
+            MutableStateFlow(emptyMap()), ScoresMode.SHOW, pacers, emptyList(),
+            claimHint = { shouldShowPanelKeysHint(shown).also { if (it) shown++ } }
+        )
+        val seen = (1..5).map {
+            viewModel.openPanel()
+            runCurrent()
+            viewModel.panelKeysHint.value.also { viewModel.closePanel() }
+        }
+        assertEquals(listOf(true, true, true, false, false), seen)
     }
 
     private val END_STRINGS = GameEndStrings("Game over", "Final · %1\$s %2\$d–%3\$d %4\$s")
