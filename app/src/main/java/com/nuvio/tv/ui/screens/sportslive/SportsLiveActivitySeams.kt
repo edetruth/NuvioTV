@@ -153,7 +153,7 @@ class SportsLiveActivityServices @Inject constructor(
      * stores have loaded; the sidebar treats null as not available.
      */
     @Composable
-    fun availability(vararg keys: Any?): Boolean? = key(*keys) {
+    fun availability(profileKey: Any?, sessionKey: Any?): Boolean? = key(profileKey, sessionKey) {
         remember(repository) {
             repository.sectionAvailable
         }.collectAsState(initial = null as Boolean?)
