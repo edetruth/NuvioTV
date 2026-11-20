@@ -60,7 +60,7 @@ class SportsLiveQaPolishTest {
 
     @Test
     fun `the unanswered sources line is a plural, without a (s)`() {
-        val document = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(File("src/main/res/values/strings.xml"))
+        val document = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(File("src/main/res/values/strings_sports_live.xml"))
         val plurals = document.getElementsByTagName("plurals")
         val items = (0 until plurals.length).map { plurals.item(it) }
             .single { it.attributes.getNamedItem("name").nodeValue == "sports_live_partial_failure" }
