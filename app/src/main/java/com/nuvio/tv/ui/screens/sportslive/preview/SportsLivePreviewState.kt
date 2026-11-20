@@ -60,6 +60,17 @@ fun SportsLiveTab.offersPreview(): Boolean = this == SportsLiveTab.LIVE_NOW || t
  * leave the art in place, silently, until the focus moves; no stream at all shows as [NoStream]
  * until then. A preview stopped for idleness leaves the art until the next key, which starts a fresh
  * settle (moving or not), or until the focus moves.
+ *
+ * ```
+ * Idle --settleMs on a card, inputs allow--> Resolving --Found--> Playing --first frame--> Playing(rendering)
+ *                                             |--NotPreviewable--> Idle (art until focus moves)
+ *                                             `--NoStream-------> NoStream (until focus moves)
+ * Playing, no first frame in firstFrameTimeoutMs --> Idle (art until focus moves)
+ * Playing, idleStopMs with no key -----------------> Idle, idle-stopped --first key--> settle again
+ * Playing, any key --------------------------------> same, idle wait restarts
+ * Any state, focus / tab / setting / visible / ambient change --> Idle, then a fresh settle if allowed
+ * takeOver (rendering) / player error --------------> Idle (no settle until an input changes)
+ * ```
  */
 class SportsLivePreviewController(
     private val scope: CoroutineScope,
