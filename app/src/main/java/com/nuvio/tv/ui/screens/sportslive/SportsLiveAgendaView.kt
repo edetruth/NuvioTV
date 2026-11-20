@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material.icons.Icons
@@ -333,15 +332,8 @@ internal fun SportsLiveReplayStage(
 }
 
 /**
- * The stage's "Stream listed by N sources" (P4): only when two or more addons list the game; one source is
- * every game's case, so it says nothing. Null hides the line (and for a channel).
- */
-internal fun upcomingListedSources(item: com.nuvio.tv.domain.model.SportsLiveItem): Int? =
-    item.sourceCount.takeIf { !item.isChannel && it >= 2 }
-
-/**
  * Upcoming's stage (V2, P3): the same fixed 360 dp as Live Now's. The drawn matchup (or the preview, or the
- * mini player) in the media box; the title, "When" and "Stream listed by N sources"; then **Remind me**
+ * mini player) in the media box; the title, "When" and "▶ Stream ready"; then **Remind me**
  * (primary while the start is over 15 minutes away, the bell showing its state) or **Watch**, and **More…**.
  */
 @Composable
@@ -401,23 +393,8 @@ internal fun SportsLiveUpcomingStage(
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            val sources = upcomingListedSources(row.item)
-            if (ready || sources != null) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    if (ready) SportsLiveReadyPill()
-                    sources?.let { count ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(Colors.ReplayGreen))
-                            Text(
-                                text = pluralStringResource(R.plurals.sports_live_stream_listed_by, count, count),
-                                style = SportsLiveTokens.style(SportsLiveTokens.Type.Meta),
-                                color = Colors.ReplayGreen,
-                                maxLines = 1
-                            )
-                        }
-                    }
-                }
-            }
+            // "▶ Stream ready" (research 6); the number of addons listing the game is left to Choose stream (jargon here).
+            if (ready) SportsLiveReadyPill(stage = true)
             if (noStream) {
                 Text(
                     text = stringResource(R.string.sports_live_no_streams_now),

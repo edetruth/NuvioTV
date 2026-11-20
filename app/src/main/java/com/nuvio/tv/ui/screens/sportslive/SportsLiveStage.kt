@@ -72,7 +72,7 @@ import java.util.Locale
  * Live Now's stage (V2, #132): 360 dp wide for every row. The media box (360×203) holds the muted preview, else
  * the drawn matchup (or our drawn event card, [stageArtKind]) at the same size, and the mini player when one plays
  * ([miniInStage]: it takes this slot instead of floating over the screen). Under it the score block (the 32 sp
- * scoreline, the status line, the facts line: "▶ Ready · Started 7:30 PM · Stream listed by 5 sources", the
+ * scoreline, the status line, the facts line: "▶ Stream ready · Started 7:30 PM", the
  * linescore) or, for a channel, its clean name and "Now: …"; then, right under it (live.20), one row of two
  * buttons: **Watch** and **More…**.
  */
@@ -95,7 +95,7 @@ internal fun SportsLiveStage(
     /** How the stage reads with the mini player in its media box (#157). */
     header: SportsLiveStageHeader = SportsLiveStageHeader.NO_MINI,
     /** The facts line under the status (live.20): "▶ Ready", the start of a game in play, its sources. */
-    facts: StageFacts = StageFacts(ready = false, startedAtMs = null, sources = null)
+    facts: StageFacts = StageFacts(ready = false, startedAtMs = null)
 ) {
     val headed = header == SportsLiveStageHeader.SELECTED
     Column(

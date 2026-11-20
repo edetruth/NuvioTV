@@ -79,22 +79,21 @@ class SportsLiveStageInfoTest {
     // ---- Facts line ----
 
     @Test
-    fun `a live game's facts name its start, its sources and Ready`() {
+    fun `a live game's facts name Stream ready and its start, never how many sources list it`() {
         val start = NOW - 63 * MINUTE
         val game = item("g", startMs = start, timed = true, alternates = 4)
         val facts = sportsLiveStageFacts(row(game, art = ART), ready = true, nowMs = NOW)
-        assertEquals(StageFacts(ready = true, startedAtMs = start, sources = 5), facts)
+        assertEquals(StageFacts(ready = true, startedAtMs = start), facts)
         assertFalse(facts.isEmpty)
     }
 
     @Test
-    fun `no start for a date without a time, a game not started or a channel, and one source says nothing`() {
+    fun `no start for a date without a time, a game not started or a channel, and nothing else says nothing`() {
         assertNull(sportsLiveStageFacts(row(item("d", startMs = NOW - HOUR, timed = false)), ready = false, nowMs = NOW).startedAtMs)
         assertNull(sportsLiveStageFacts(row(item("s", startMs = NOW + HOUR, timed = true), group = ScoreboardGroup.STARTING_SOON), false, NOW).startedAtMs)
         val channel = item("c", channel = true, startMs = NOW - HOUR, timed = true)
         assertNull(sportsLiveStageFacts(row(channel, group = ScoreboardGroup.CHANNELS), false, NOW).startedAtMs)
-        val alone = sportsLiveStageFacts(row(item("one")), ready = false, nowMs = NOW)
-        assertNull(alone.sources)
+        val alone = sportsLiveStageFacts(row(item("one", alternates = 4)), ready = false, nowMs = NOW)
         assertTrue(alone.isEmpty)
     }
 

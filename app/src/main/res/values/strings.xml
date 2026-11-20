@@ -4192,6 +4192,7 @@
     <string name="sports_live_panel_new">New</string>
     <!-- live.20 1b: readiness in words (✓ means Watched / Selected in Nuvio). -->
     <string name="sports_live_ready_pill">▶ Ready</string>
+    <string name="sports_live_stage_stream_ready">▶ Stream ready</string>
     <string name="sports_live_no_stream_yet_mark">No stream yet</string>
     <string name="sports_live_kickoff_stream_ready">Stream ready · Watch now?</string>
     <string name="sports_live_kickoff_waiting_stream">Waiting for a working stream…</string>
@@ -4287,10 +4288,6 @@
     <plurals name="sports_live_agenda_games">
         <item quantity="one">%1$d game</item>
         <item quantity="other">%1$d games</item>
-    </plurals>
-    <plurals name="sports_live_stream_listed_by">
-        <item quantity="one">Stream listed by %1$d source</item>
-        <item quantity="other">Stream listed by %1$d sources</item>
     </plurals>
     <string name="sports_live_matchup_at">%1$s at %2$s</string>
     <string name="sports_live_season_pre">Preseason</string>

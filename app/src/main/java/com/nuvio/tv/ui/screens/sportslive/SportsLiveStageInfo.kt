@@ -26,7 +26,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -49,7 +48,7 @@ import java.util.Locale
 
 /*
  * The stage's information (live.20 layout from the user's TV photos): which row it shows, what its media box draws,
- * and the facts line under the status ("▶ Ready · Started 7:30 PM · Stream listed by 5 sources"), so the stage reads
+ * and the facts line under the status ("▶ Stream ready · Started 7:30 PM"), so the stage reads
  * full without a gap above its buttons.
  */
 
@@ -193,16 +192,17 @@ internal fun SportsLiveChannelNameArt(item: SportsLiveItem) {
 }
 
 /**
- * The facts under a stage's status line (live.20 layout): [ready] ("▶ Ready", my games' held link, 1b), when a live
- * game [startedAtMs] started (a timed start only), and how many addons list it ([sources], two or more).
+ * The facts under a stage's status line (live.20 layout, research 6): [ready] ("▶ Stream ready", my games' held link,
+ * 1b) and when a live game [startedAtMs] started (a timed start only). How many addons list it is not a stage fact
+ * (jargon for most viewers): Choose stream lists the sources.
  */
-internal data class StageFacts(val ready: Boolean, val startedAtMs: Long?, val sources: Int?) {
-    val isEmpty: Boolean get() = !ready && startedAtMs == null && sources == null
+internal data class StageFacts(val ready: Boolean, val startedAtMs: Long?) {
+    val isEmpty: Boolean get() = !ready && startedAtMs == null
 }
 
 /**
  * [row]'s facts on Live Now's stage: the start of a game in play when its time of day is known (ESPN's, else the
- * card's), the number of addons listing it ([upcomingListedSources]); [ready] as given. A channel has no start.
+ * card's); [ready] as given. A channel has no start.
  */
 internal fun sportsLiveStageFacts(row: ScoreboardRow, ready: Boolean, nowMs: Long): StageFacts {
     val item = row.item
@@ -210,23 +210,21 @@ internal fun sportsLiveStageFacts(row: ScoreboardRow, ready: Boolean, nowMs: Lon
     val start = row.art?.takeIf { it.hasTimeOfDay }?.startMs ?: item.startMs?.takeIf { item.startHasTimeOfDay }
     return StageFacts(
         ready = ready,
-        startedAtMs = start?.takeIf { live && !item.isChannel && it <= nowMs },
-        sources = upcomingListedSources(item)
+        startedAtMs = start?.takeIf { live && !item.isChannel && it <= nowMs }
     )
 }
 
-/** The facts line: the "▶ Ready" pill, then the rest in words, one line; nothing when there is nothing to say. */
+/** The facts line, "▶ Stream ready · Started 7:30 PM" (research 6), one line; nothing when there is nothing to say. */
 @Composable
 internal fun SportsLiveStageFactsLine(facts: StageFacts, modifier: Modifier = Modifier) {
     if (facts.isEmpty) return
     val started = facts.startedAtMs?.let { stringResource(R.string.sports_live_stage_started, agendaTimeText(it)) }
-    val sources = facts.sources?.let { pluralStringResource(R.plurals.sports_live_stream_listed_by, it, it) }
-    val words = listOfNotNull(started, sources).joinToString(stringResource(R.string.sports_live_game_info_separator))
     Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        if (facts.ready) SportsLiveReadyPill()
-        if (words.isNotEmpty()) {
+        // The stage spells it out once, "Stream ready" (a bare "Ready" reads as "ready for what?"); rows keep "▶ Ready".
+        if (facts.ready) SportsLiveReadyPill(stage = true)
+        if (started != null) {
             Text(
-                text = words,
+                text = started,
                 style = SportsLiveTokens.style(SportsLiveTokens.Type.Meta),
                 color = Colors.TextSecondary,
                 maxLines = 1,

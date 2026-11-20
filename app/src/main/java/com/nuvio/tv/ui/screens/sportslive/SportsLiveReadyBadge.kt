@@ -32,12 +32,15 @@ import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens.Colors
  * the game plays that link (the resolver's lookup serves it first).
  */
 
-/** "▶ Ready": the game holds a link verified live (1b). Tag size, green outline on a green tint, one line. */
+/**
+ * "▶ Ready": the game holds a link verified live (1b). Tag size, green outline on a green tint, one line. On a
+ * [stage] it is spelled out once, "▶ Stream ready" (research 6); rows keep the short pill.
+ */
 @Composable
-fun SportsLiveReadyPill(modifier: Modifier = Modifier) {
+fun SportsLiveReadyPill(modifier: Modifier = Modifier, stage: Boolean = false) {
     val shape = SportsLiveTokens.Radius.PillShape
     Text(
-        text = stringResource(R.string.sports_live_ready_pill),
+        text = stringResource(if (stage) R.string.sports_live_stage_stream_ready else R.string.sports_live_ready_pill),
         style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag).sportsLiveBold(),
         color = Colors.ReplayGreen,
         maxLines = 1,
