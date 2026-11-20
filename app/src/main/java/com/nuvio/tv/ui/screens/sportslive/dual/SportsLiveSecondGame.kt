@@ -19,7 +19,8 @@ import com.nuvio.tv.domain.model.Stream
  *
  * "Next" is by start time from [first]'s start, wrapping round. A finished game is never picked: one in
  * [finishedKeys] (Just ended, the probe's ended games), one ESPN shows final or postponed, a channel,
- * or anything sharing a source with [first].
+ * or anything sharing a source with [first]; nor one saved with Watch later ([savedForLater], #151): pairing it
+ * would show it live.
  */
 internal object SportsLiveSecondGame {
 
@@ -27,9 +28,10 @@ internal object SportsLiveSecondGame {
         first: SportsLiveItem,
         items: List<SportsLiveItem>,
         scores: Map<String, ScoreSnapshot>,
-        finishedKeys: Set<String>
+        finishedKeys: Set<String>,
+        savedForLater: (SportsLiveItem) -> Boolean = { false }
     ): SportsLiveItem? {
-        val candidates = candidates(first, items, scores, finishedKeys)
+        val candidates = candidates(first, items, scores, finishedKeys).filterNot(savedForLater)
         if (candidates.isEmpty()) return null
         candidates.filter { it.followed }.takeIf { it.isNotEmpty() }?.let { return nextByStart(first, it) }
         val rated = candidates.mapNotNull { item ->
@@ -109,7 +111,8 @@ internal object SportsLiveSecondGame {
  * "Watch with another game" (#57) on [first], from Live now: dual screen with [first] in slot 1 (the
  * left pane, on [leftStream] when its preview plays one) and [SportsLiveSecondGame]'s pick in slot 2,
  * with the "Paired with" hint. [items]: the list shown (dual Up/Down), [zapItems]: every Live now game,
- * where slot 2 is picked from. Null when there is no game to pair with.
+ * where slot 2 is picked from, never a game saved with Watch later ([savedForLater], #151). Null when there is
+ * no game to pair with.
  */
 internal fun sportsLiveWatchWithSession(
     first: SportsLiveItem,
@@ -118,9 +121,10 @@ internal fun sportsLiveWatchWithSession(
     filter: String?,
     scores: Map<String, ScoreSnapshot>,
     finishedKeys: Set<String>,
-    leftStream: Stream? = null
+    leftStream: Stream? = null,
+    savedForLater: (SportsLiveItem) -> Boolean = { false }
 ): SportsLiveDualSession? {
-    val second = SportsLiveSecondGame.pick(first, zapItems, scores, finishedKeys) ?: return null
+    val second = SportsLiveSecondGame.pick(first, zapItems, scores, finishedKeys, savedForLater) ?: return null
     return SportsLiveDualSession(
         left = first,
         right = second,

@@ -21,6 +21,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertFalse
 import com.nuvio.tv.ui.screens.sportslive.offersWatchWith
 import com.nuvio.tv.ui.screens.sportslive.watchWithFor
+import com.nuvio.tv.ui.screens.sportslive.watchWithSession
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -248,6 +249,29 @@ class SportsLiveSecondGameTest {
         assertNull(liveNow.copy(visibleItems = listOf(first)).watchWithFor(first, emptyMap()))
         // Upcoming and Replays offer nothing.
         assertFalse(channels.copy(selectedTab = SportsLiveTab.UPCOMING).offersWatchWith(channel, null))
+    }
+
+    // Watch later (#151, live.20): "Watch with another game" never pairs a saved game
+
+    @Test
+    fun `the pick never pairs a game saved with Watch later, even a followed or the next one`() {
+        val followedLater = later.copy(followed = true)
+        val saved: (SportsLiveItem) -> Boolean = { it.id == followedLater.id }
+        assertEquals(earlier, SportsLiveSecondGame.pick(first, listOf(first, followedLater, earlier), emptyMap(), emptySet(), saved))
+        // Only saved games left: nothing to pair with.
+        assertNull(SportsLiveSecondGame.pick(first, listOf(first, followedLater), emptyMap(), emptySet(), saved))
+    }
+
+    @Test
+    fun `the Game page's session skips a saved game, through the screen state`() {
+        val state = com.nuvio.tv.ui.screens.sportslive.SportsLiveUiState(
+            tabs = mapOf(SportsLiveTab.LIVE_NOW to listOf(first, later, earlier)),
+            selectedTab = SportsLiveTab.LIVE_NOW,
+            visibleItems = listOf(first, later, earlier)
+        )
+        assertEquals(later, state.watchWithSession(first, emptyMap())!!.right)
+        assertEquals(earlier, state.watchWithSession(first, emptyMap()) { it.id == later.id }!!.right)
+        assertNull(state.watchWithSession(first, emptyMap()) { it.id != first.id })
     }
 
     private companion object {

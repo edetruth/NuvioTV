@@ -143,9 +143,14 @@ internal fun SportsLiveUiState.watchWithFor(item: SportsLiveItem, scores: Map<St
 
 /**
  * The dual session "Watch with another game" starts on the live game [item]: the pick made now, over
- * Live now's games (its list as shown while Live now is the tab).
+ * Live now's games (its list as shown while Live now is the tab), never pairing a game saved with Watch later
+ * ([savedForLater], #151).
  */
-internal fun SportsLiveUiState.watchWithSession(item: SportsLiveItem, scores: Map<String, ScoreSnapshot>): SportsLiveDualSession? {
+internal fun SportsLiveUiState.watchWithSession(
+    item: SportsLiveItem,
+    scores: Map<String, ScoreSnapshot>,
+    savedForLater: (SportsLiveItem) -> Boolean = { false }
+): SportsLiveDualSession? {
     val liveNow = tabs[SportsLiveTab.LIVE_NOW].orEmpty()
     return sportsLiveWatchWithSession(
         first = item,
@@ -153,7 +158,8 @@ internal fun SportsLiveUiState.watchWithSession(item: SportsLiveItem, scores: Ma
         zapItems = liveNow,
         filter = selectedFilter.takeIf { selectedTab == SportsLiveTab.LIVE_NOW },
         scores = scores,
-        finishedKeys = finishedKeys(scores)
+        finishedKeys = finishedKeys(scores),
+        savedForLater = savedForLater
     )
 }
 

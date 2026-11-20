@@ -99,6 +99,7 @@ import com.nuvio.tv.domain.model.SportsLiveTab
 import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualSession
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualSessions
+import com.nuvio.tv.ui.screens.sportslive.dual.sportsLiveSavedForLater
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniGeometry
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniDock
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniFocus
@@ -369,7 +370,12 @@ fun SportsLiveScreen(
                         card = item,
                         // A live game's page offers "Watch with another game" (#57), paired when pressed.
                         watchWith = if (event.state == ScoreState.IN && !item.isChannel && canWatchWith(item)) {
-                            { viewModel.uiState.value.watchWithSession(item, scoresViewModel.scores.value) }
+                            {
+                                val scoresNow = scoresViewModel.scores.value
+                                viewModel.uiState.value.watchWithSession(
+                                    item, scoresNow, sportsLiveSavedForLater(scoresViewModel.protection.value, scoresNow)
+                                )
+                            }
                         } else {
                             null
                         }
