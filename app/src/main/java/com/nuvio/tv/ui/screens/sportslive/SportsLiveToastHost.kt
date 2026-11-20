@@ -5,11 +5,12 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -36,6 +37,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.Icon
@@ -136,75 +138,131 @@ private fun ToastIcon(kind: SportsLiveToastKind) {
 }
 
 /**
- * Where every Sports & Live toast shows (#134): top right, in the alert cards' spot (#136), over every screen
- * and the player. One at a time, the newest replacing the one up ([SportsLiveToastQueue]), each for
- * [SportsLiveToastQueue.SHOW_MS]. It never takes focus: the screen under it keeps the D-pad.
+ * Where every Sports & Live toast shows (#134, live.19 QA F8): one corner, the bottom left of the safe area, on
+ * every screen (clear of the side rail) and over video ([SportsLiveToastPlace.overVideo]: the player's corner,
+ * where its starting card sits). It slides in from the left and sits above a card that holds the corner
+ * ([claimsBottomLeft]: the starting, waiting and error cards, the kickoff prompt), never over it. One at a time,
+ * the newest replacing the one up ([SportsLiveToastQueue]), each for [SportsLiveToastQueue.SHOW_MS]. It never
+ * takes focus: the screen under it keeps the D-pad.
  */
 @Composable
-fun BoxScope.SportsLiveToastHost(queue: SportsLiveToastQueue = SportsLiveToasts.shared) {
+fun SportsLiveToastHost(queue: SportsLiveToastQueue = SportsLiveToasts.shared) {
     val toast by queue.current.collectAsStateWithLifecycle()
-    // Under an alert card or prompt at the top right (#136), never over it.
-    val claimedBottomPx by SportsLiveTopRight.bottomPx.collectAsStateWithLifecycle()
-    val claimedTop = with(LocalDensity.current) { claimedBottomPx.toDp() } + SportsLiveTokens.Size.RowGap
+    val claimedTopPx by SportsLiveBottomLeft.topPx.collectAsStateWithLifecycle()
+    val overVideo by SportsLiveToastPlace.overVideo.collectAsStateWithLifecycle()
     LaunchedEffect(toast?.id) {
         val id = toast?.id ?: return@LaunchedEffect
         delay(SportsLiveToastQueue.SHOW_MS)
         queue.dismiss(id)
     }
-    // The last toast stays composed while it fades out.
+    // The last toast stays composed while it slides out.
     val shown = remember { ToastHolder() }
     toast?.let { shown.last = it }
-    AnimatedVisibility(
-        visible = toast != null,
-        enter = slideInHorizontally(tween(SportsLiveTokens.Alert.SLIDE_MS)) { width -> width / 2 } +
-            fadeIn(tween(SportsLiveTokens.Alert.SLIDE_MS)),
-        exit = fadeOut(tween(SportsLiveTokens.Toast.ENTER_MS)),
-        modifier = Modifier
-            .align(Alignment.TopEnd)
-            .padding(top = maxOf(SportsLiveTokens.Toast.Top, if (claimedBottomPx > 0) claimedTop else 0.dp), end = SportsLiveTokens.Toast.End)
-    ) {
-        shown.last?.let { SportsLiveToastCard(it) }
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val density = LocalDensity.current
+        val claimedTop = claimedTopPx?.let { with(density) { it.toDp() } }
+        val bottom = sportsLiveToastBottom(
+            base = if (overVideo) SportsLiveTokens.Toast.BottomOverVideo else SportsLiveTokens.Toast.Bottom,
+            height = maxHeight,
+            claimedTop = claimedTop,
+            gap = SportsLiveTokens.Size.RowGap
+        )
+        AnimatedVisibility(
+            visible = toast != null,
+            enter = slideInHorizontally(tween(SportsLiveTokens.Alert.SLIDE_MS)) { width -> -width } +
+                fadeIn(tween(SportsLiveTokens.Alert.SLIDE_MS)),
+            exit = slideOutHorizontally(tween(SportsLiveTokens.Toast.ENTER_MS)) { width -> -width } +
+                fadeOut(tween(SportsLiveTokens.Toast.ENTER_MS)),
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(
+                    start = if (overVideo) SportsLiveTokens.Toast.StartOverVideo else SportsLiveTokens.Toast.Start,
+                    bottom = bottom
+                )
+        ) {
+            shown.last?.let { SportsLiveToastCard(it) }
+        }
     }
 }
+
+/**
+ * The toast's distance from the bottom of a screen [height] tall: [base], or [gap] above a card whose top edge
+ * is at [claimedTop] (null: nothing claims the corner), whichever is higher up.
+ */
+internal fun sportsLiveToastBottom(base: Dp, height: Dp, claimedTop: Dp?, gap: Dp): Dp =
+    if (claimedTop == null) base else maxOf(base, height - claimedTop + gap)
 
 private class ToastHolder {
     var last: SportsLiveToast? = null
 }
 
 /**
- * Who holds the top right spot (#134, #136): the alert cards, the reminder notice and the kickoff prompt claim
- * it with [claimsTopRight], and the toast sits under the lowest of them, so the two never overlap.
+ * Who holds the bottom left corner (#134, live.19 QA F8): the player's starting, waiting and error cards and the
+ * kickoff prompt claim it with [claimsBottomLeft], and the toast sits above the highest of them, so the two
+ * never overlap.
  */
-object SportsLiveTopRight {
+object SportsLiveBottomLeft {
     private val claims = HashMap<Any, Int>()
-    private val _bottomPx = MutableStateFlow(0)
+    private val _topPx = MutableStateFlow<Int?>(null)
 
-    /** The lowest bottom edge (window px) of what claims the spot; 0 when nothing does. */
-    val bottomPx: StateFlow<Int> = _bottomPx.asStateFlow()
+    /** The highest top edge (window px) of what claims the corner; null when nothing does. */
+    val topPx: StateFlow<Int?> = _topPx.asStateFlow()
 
     @Synchronized
-    fun claim(owner: Any, bottomPx: Int) {
-        claims[owner] = bottomPx
-        _bottomPx.value = claims.values.maxOrNull() ?: 0
+    fun claim(owner: Any, topPx: Int) {
+        claims[owner] = topPx
+        _topPx.value = claims.values.minOrNull()
     }
 
     @Synchronized
     fun release(owner: Any) {
         claims.remove(owner)
-        _bottomPx.value = claims.values.maxOrNull() ?: 0
+        _topPx.value = claims.values.minOrNull()
     }
 }
 
-/** Claims the top right spot for as long as this is composed: the toast then shows under it. */
+/** Claims the bottom left corner for as long as this is composed: the toast then shows above it. */
 @Composable
-fun Modifier.claimsTopRight(): Modifier {
+fun Modifier.claimsBottomLeft(): Modifier {
     val owner = remember { Any() }
-    DisposableEffect(owner) { onDispose { SportsLiveTopRight.release(owner) } }
-    return onGloballyPositioned { coordinates -> SportsLiveTopRight.claim(owner, coordinates.boundsInWindow().bottom.toInt()) }
+    DisposableEffect(owner) { onDispose { SportsLiveBottomLeft.release(owner) } }
+    return onGloballyPositioned { coordinates -> SportsLiveBottomLeft.claim(owner, coordinates.boundsInWindow().top.toInt()) }
+}
+
+/**
+ * Whether the toast shows over full-screen video (the player): then it takes the player's corner, lined up with
+ * its starting card, instead of the corner beside the side rail. A screen says so with [SportsLiveToastsOverVideo].
+ */
+object SportsLiveToastPlace {
+    private val owners = HashSet<Any>()
+    private val _overVideo = MutableStateFlow(false)
+    val overVideo: StateFlow<Boolean> = _overVideo.asStateFlow()
+
+    @Synchronized
+    fun add(owner: Any) {
+        owners += owner
+        _overVideo.value = true
+    }
+
+    @Synchronized
+    fun remove(owner: Any) {
+        owners -= owner
+        _overVideo.value = owners.isNotEmpty()
+    }
+}
+
+/** Composed by a full-screen video screen: toasts take the player's corner while it shows. */
+@Composable
+fun SportsLiveToastsOverVideo() {
+    val owner = remember { Any() }
+    DisposableEffect(owner) {
+        SportsLiveToastPlace.add(owner)
+        onDispose { SportsLiveToastPlace.remove(owner) }
+    }
 }
 
 /** The host laid over the whole window (MainActivity): a full-size box that draws only the card. */
 @Composable
 fun SportsLiveToastLayer() {
-    Box(modifier = Modifier.fillMaxSize()) { SportsLiveToastHost() }
+    SportsLiveToastHost()
 }

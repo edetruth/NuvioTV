@@ -18,8 +18,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.NotificationsActive
-import androidx.compose.material.icons.rounded.NotificationsOff
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Star
 import android.view.SurfaceView
@@ -105,6 +103,7 @@ import com.nuvio.tv.core.sportslive.alerts.AlertAnswer
 import com.nuvio.tv.core.sportslive.alerts.AlertContent
 import com.nuvio.tv.core.sportslive.alerts.AlertSide
 import com.nuvio.tv.core.sportslive.alerts.KickoffStyle
+import com.nuvio.tv.core.sportslive.SportsLiveDisplayText
 import com.nuvio.tv.core.sportslive.SportsLiveGameWatch
 import com.nuvio.tv.core.sportslive.alerts.ReminderNotice
 import com.nuvio.tv.core.sportslive.alerts.SportsLiveAlert
@@ -223,28 +222,36 @@ fun SportsLiveAlertsHost(
         cooldownToasts = false
     )
 
-    // "Reminder set" / "Reminder removed" (#44): the app's dark toast card, never taking focus. Every toast
-    // and prompt sits in one spot (#101, P4): top right, over the stage, clear of the list and the rail.
-    // Outside the player no wider than the stage, so it never covers the list.
-    val toastPlace = Modifier
-        .padding(top = sportsLiveToastTop(inPlayer), end = TOAST_END)
-        .then(if (inPlayer) Modifier else Modifier.widthIn(max = TOAST_MAX_WIDTH))
+    // "Reminder set" / "Reminder removed" (#44): the one toast card (#134, live.19 QA F8), bottom left, never
+    // taking focus. The kickoff prompt sits in the same corner; over video, in the player's.
+    val overVideo = inPlayer || dualRoute
+    val promptPlace = Modifier.padding(
+        start = if (overVideo) SportsLiveTokens.Toast.StartOverVideo else SportsLiveTokens.Toast.Start,
+        bottom = if (overVideo) SportsLiveTokens.Toast.BottomOverVideo else SportsLiveTokens.Toast.Bottom
+    )
     val notice by alerts.reminderNotice.collectAsState()
-    notice?.let { shown ->
-        key(shown.id) {
-            LaunchedEffect(shown.id) {
-                delay(REMINDER_TOAST_MS)
-                alerts.closeReminderNotice(shown)
-            }
-            Box(modifier = Modifier.fillMaxSize()) {
-                ReminderToast(
-                    notice = shown,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .then(toastPlace)
-                )
-            }
+    val toastContext = LocalContext.current
+    val reminderLabelOf = rememberSportsLiveStateLabeler(SportsLiveTab.UPCOMING)
+    val reminderSet = stringResource(R.string.sports_live_reminder_toast_set)
+    val reminderRemoved = stringResource(R.string.sports_live_reminder_toast_removed)
+    val reminderAsk = stringResource(R.string.sports_live_reminder_toast_ask)
+    val separator = stringResource(R.string.sports_live_game_info_separator)
+    val reminderGameOf: (ReminderNotice) -> String = { shown ->
+        shown.title ?: toastContext.getString(R.string.sports_live_results_menu_title, shown.away.orEmpty(), shown.home.orEmpty())
+    }
+    LaunchedEffect(notice?.id) {
+        val shown = notice ?: return@LaunchedEffect
+        val locale = Locale.getDefault()
+        val kickoff = shown.item?.let(reminderLabelOf) ?: shown.startMs?.let { start ->
+            SimpleDateFormat(DateFormat.getBestDateTimePattern(locale, "EEEjmm"), locale).format(Date(start))
         }
+        val game = reminderGameOf(shown)
+        SportsLiveToasts.show(
+            SportsLiveToastKind.REMINDER,
+            title = listOf(if (shown.on) reminderSet else reminderRemoved, game).joinToString(separator),
+            line = if (shown.on) listOfNotNull(kickoff, reminderAsk).joinToString(separator) else null
+        )
+        alerts.closeReminderNotice(shown)
     }
 
     val card by alerts.current.collectAsState()
@@ -439,6 +446,12 @@ fun SportsLiveAlertsHost(
             TakeBack(keyChoice != null && peek == null) {
                 currentCard?.let { alerts.close(it, if (it.noStreamYet()) AlertAnswer.DISMISS else AlertAnswer.LATER) }
             }
+            // While it is up, the player's own cards wait under it (live.19 QA F11: one focused button at a time).
+            DisposableEffect(current.id) {
+                SportsLiveAlertSurfaces.setPromptUp(true)
+                onDispose { SportsLiveAlertSurfaces.setPromptUp(false) }
+            }
+            val kickoffLabelOf = rememberSportsLiveStateLabeler(SportsLiveTab.UPCOMING)
             KickoffPrompt(
                 content = content,
                 compact = style == KickoffStyle.COMPACT,
@@ -450,8 +463,10 @@ fun SportsLiveAlertsHost(
                         if (!on.watchBoth(first.item)) scope.launch { playViewModel.play(alerts.cardToWatch(first.item)) }
                     }
                 },
-                watchingTitle = playerTitle,
-                kickoffLabel = rememberSportsLiveStateLabeler(SportsLiveTab.UPCOMING)(first.item.copy(isLive = false)),
+                watchingTitle = playerTitle?.let(::sportsLivePlainTitle),
+                // "Kicking off now" already says when: a time only when it is the real kickoff (F11: never "12:00 AM").
+                kickoffLabel = kickoffLabelOf(first.item.copy(isLive = false))
+                    .takeIf { sportsLiveKickoffShowsTime(first.item.startMs, first.item.startHasTimeOfDay, System.currentTimeMillis()) },
                 keyChoice = keyChoice,
                 onWatch = {
                     alerts.close(current, AlertAnswer.WATCH)
@@ -471,8 +486,8 @@ fun SportsLiveAlertsHost(
                     if (keyChoice == null) giveFocusBack()
                 },
                 modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .then(toastPlace)
+                    .align(Alignment.BottomStart)
+                    .then(promptPlace)
             )
             return@Box
         }
@@ -697,7 +712,7 @@ private fun KickoffPrompt(
     val logoSize = if (compact) 36.dp else 52.dp
     Column(
         modifier = modifier
-            .claimsTopRight()
+            .claimsBottomLeft()
             // ▲ Both (the full player): the key works wherever focus is on the prompt.
             .onPreviewKeyEvent { event ->
                 val both = onBoth ?: return@onPreviewKeyEvent false
@@ -705,10 +720,11 @@ private fun KickoffPrompt(
                 if (event.nativeKeyEvent.action == android.view.KeyEvent.ACTION_DOWN && event.nativeKeyEvent.repeatCount == 0) both()
                 true
             }
-            .widthIn(max = if (compact) 460.dp else 620.dp)
+            .widthIn(max = if (compact) 440.dp else 560.dp)
             .clip(shape)
-            .background(ArtColors.Panel.copy(alpha = 0.96f))
-            .border(1.dp, PANEL_BORDER, shape)
+            // V2 (#134): the toast card's raised surface, in the toasts' corner (live.19 QA F11).
+            .background(SportsLiveTokens.Colors.SurfaceRaised.copy(alpha = 0.96f))
+            .border(1.dp, SportsLiveTokens.Colors.Outline, shape)
             .padding(if (compact) 16.dp else 24.dp),
         verticalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 12.dp)
     ) {
@@ -738,7 +754,8 @@ private fun KickoffPrompt(
                 text = stringResource(R.string.sports_live_alert_matchup, content.first.name, content.second.name),
                 style = (if (compact) MaterialTheme.typography.titleMedium else MaterialTheme.typography.headlineSmall).sportsLiveBold(),
                 color = ArtColors.Text,
-                maxLines = 2,
+                // One line (F11): it never wraps over the screen behind.
+                maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f, fill = false)
             )
@@ -748,7 +765,7 @@ private fun KickoffPrompt(
             listOf(stringResource(R.string.sports_live_alert_no_stream_line))
         } else {
             listOfNotNull(
-                content.league,
+                SportsLiveDisplayText.label(content.league),
                 kickoffLabel,
                 watchingTitle?.takeIf { it.isNotBlank() }?.let { stringResource(R.string.sports_live_alert_watching, it) }
             )
@@ -840,7 +857,6 @@ private fun AlertCardView(
     ) {
         Column(
             modifier = Modifier
-                .claimsTopRight()
                 .width(SportsLiveTokens.Alert.Width)
                 .clip(shape)
                 .background(ArtColors.Panel.copy(alpha = SportsLiveTokens.Alert.FILL_ALPHA))
@@ -951,54 +967,6 @@ private fun AlertBody(content: AlertContent, followed: Boolean) {
     }
 }
 
-/** "Reminder set · ‹game› · ‹kickoff› / We'll ask …" or "Reminder removed · ‹game›", with the bell (`Prompts.dc.html`). */
-@Composable
-private fun ReminderToast(notice: ReminderNotice, modifier: Modifier) {
-    val shape = RoundedCornerShape(14.dp)
-    val labelOf = rememberSportsLiveStateLabeler(SportsLiveTab.UPCOMING)
-    val locale = Locale.getDefault()
-    val kickoff = notice.item?.let(labelOf) ?: notice.startMs?.let { start ->
-        remember(start, locale) {
-            SimpleDateFormat(DateFormat.getBestDateTimePattern(locale, "EEEjmm"), locale).format(Date(start))
-        }
-    }
-    val game = notice.title ?: stringResource(R.string.sports_live_results_menu_title, notice.away.orEmpty(), notice.home.orEmpty())
-    Row(
-        modifier = modifier
-            .claimsTopRight()
-            .widthIn(max = 520.dp)
-            .clip(shape)
-            .background(ArtColors.Panel.copy(alpha = 0.96f))
-            .border(1.dp, PANEL_BORDER, shape)
-            .padding(16.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(
-            imageVector = if (notice.on) Icons.Rounded.NotificationsActive else Icons.Rounded.NotificationsOff,
-            contentDescription = null,
-            tint = if (notice.on) FOLLOWED_STAR_COLOR else ArtColors.Muted,
-            modifier = Modifier.size(28.dp)
-        )
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(
-                text = stringResource(if (notice.on) R.string.sports_live_reminder_toast_set else R.string.sports_live_reminder_toast_removed),
-                style = MaterialTheme.typography.titleMedium.sportsLiveBold(),
-                color = ArtColors.Text,
-                maxLines = 1
-            )
-            Text(
-                text = listOfNotNull(game, kickoff?.takeIf { notice.on }).joinToString(stringResource(R.string.sports_live_game_info_separator)),
-                style = MaterialTheme.typography.bodyMedium,
-                color = ArtColors.Text,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-            if (notice.on) SmallLine(stringResource(R.string.sports_live_reminder_toast_ask), ArtColors.Secondary)
-        }
-    }
-}
-
 @Composable
 private fun ScoreLine(first: AlertSide, second: AlertSide) {
     val firstScore = first.score ?: return
@@ -1036,8 +1004,6 @@ private fun StarIcon() {
     Icon(imageVector = Icons.Rounded.Star, contentDescription = null, tint = FOLLOWED_STAR_COLOR, modifier = Modifier.size(18.dp))
 }
 
-private val PANEL_BORDER = Color(0xFF1E2632)
-
 /** A toast card and a peek check their time this often. */
 private const val CARD_TICK_MS = 250L
 
@@ -1045,19 +1011,6 @@ private const val CARD_TICK_MS = 250L
 private const val PEEK_TICK_MS = 500L
 
 private const val HINT_SEPARATOR = " · "
-
-/**
- * How far below the top every toast and prompt sits, at the top right (#101, P4): under the section's header,
- * over the stage, so it never covers the list or the side rail; in the player, just under its top edge.
- */
-internal fun sportsLiveToastTop(inPlayer: Boolean): Dp =
-    if (inPlayer) 40.dp else SportsLiveTokens.Size.SafeTop + SportsLiveTokens.Size.HeaderHeight + 16.dp
-
-private val TOAST_END = 48.dp
-private val TOAST_MAX_WIDTH = 360.dp
-
-/** "Reminder set" / "Reminder removed" hides after this long. */
-private const val REMINDER_TOAST_MS = 5_000L
 
 /** The prompt closes by itself after this long, as Later (the design's 15 s). */
 private const val PROMPT_MS = 15_000L

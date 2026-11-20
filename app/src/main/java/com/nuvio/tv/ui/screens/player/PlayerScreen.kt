@@ -600,6 +600,8 @@ fun PlayerScreen(
     // The waiting card (#162) holds the focus the same way.
     val sportsStartingVisible = (uiState.sportsStarting != null || uiState.sportsWaiting != null) && uiState.error == null &&
         !uiState.showSourcesPanel && !uiState.showControls && !postPlayRecommendationState.isVisible
+    // Sports & Live (live.19 QA F10, F11): one card owns the screen and the keys at a time (SportsLivePlayerLayers).
+    val sportsLayers = rememberSportsLivePlayerLayers(uiState, viewModel.controller.contentId, sportsLiveZap, sportsStartingVisible)
 
     // Request focus for key events when controls visibility or panel state changes
     LaunchedEffect(
@@ -1475,7 +1477,7 @@ fun PlayerScreen(
         )
 
         // Sports & Live (#138): a link is starting; the viewer can move on instead of waiting.
-        uiState.sportsStarting?.takeIf { sportsStartingVisible }?.let { starting ->
+        uiState.sportsStarting?.takeIf { SportsLivePlayerLayers.shows(SportsLivePlayerLayer.STARTING, sportsLayers) }?.let { starting ->
             val linkCount = remember(uiState.sourceAllStreams) {
                 uiState.sourceAllStreams
                     .filterNot(com.nuvio.tv.ui.screens.sportslive.SportsLiveZapResolver::isNonStream)
@@ -1500,25 +1502,35 @@ fun PlayerScreen(
                 // V2: a bottom-left card, not a modal, so the game's first frames show beside it.
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .padding(start = 48.dp, bottom = 48.dp)
+                    .padding(
+                        start = com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens.Player.CornerStart,
+                        bottom = com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens.Player.CornerBottom
+                    )
                     .zIndex(2.5f)
             )
         }
 
         // Sports & Live (#162): the game's links are not live yet near kickoff; it plays as soon as one is.
-        uiState.sportsWaiting?.takeIf { sportsStartingVisible }?.let { waiting ->
+        // V2 (live.19 QA F12): the starting card's corner, not a modal; Back is the Back key's.
+        uiState.sportsWaiting?.takeIf { SportsLivePlayerLayers.shows(SportsLivePlayerLayer.WAITING, sportsLayers) }?.let { waiting ->
             com.nuvio.tv.ui.screens.sportslive.SportsLiveWaitingCard(
                 game = uiState.title,
                 startMs = waiting.startMs,
                 onAction = { action ->
                     when (action) {
-                        com.nuvio.tv.ui.screens.sportslive.SportsLiveWaitingAction.BACK -> handleBackPress()
                         com.nuvio.tv.ui.screens.sportslive.SportsLiveWaitingAction.SOURCES ->
                             viewModel.onEvent(PlayerEvent.OnShowSourcesPanel)
+                        com.nuvio.tv.ui.screens.sportslive.SportsLiveWaitingAction.NEXT_LIVE_GAME ->
+                            sportsLiveZap.nextLiveGameAfterFailure()
                     }
                 },
+                canNextLiveGame = sportsLiveZap.hasSession,
                 modifier = Modifier
-                    .align(Alignment.Center)
+                    .align(Alignment.BottomStart)
+                    .padding(
+                        start = com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens.Player.CornerStart,
+                        bottom = com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens.Player.CornerBottom
+                    )
                     .zIndex(2.5f)
             )
         }
@@ -1544,7 +1556,9 @@ fun PlayerScreen(
 
         PauseOverlay(
             visible = uiState.showPauseOverlay && uiState.error == null &&
-                !uiState.showLoadingOverlay && !postPlayRecommendationState.isVisible,
+                !uiState.showLoadingOverlay && !postPlayRecommendationState.isVisible &&
+                // Sports & Live (live.19 QA F10): never under the end card or another Sports & Live card.
+                !SportsLivePlayerLayers.covered(SportsLivePlayerLayer.PAUSE_INFO, sportsLayers),
             onClose = { viewModel.onEvent(PlayerEvent.OnDismissPauseOverlay) },
             title = uiState.title,
             logo = uiState.logo,
@@ -1553,7 +1567,8 @@ fun PlayerScreen(
             episode = uiState.currentEpisode,
             year = uiState.releaseYear,
             type = uiState.contentType,
-            description = uiState.description,
+            // Sports & Live (F10): the addon's taglines and ids ("Live on …") never show as a description.
+            description = sportsLivePauseDescription(viewModel.controller.contentId, uiState.description),
             cast = uiState.castMembers,
             showClock = !uiState.isLive,
             modifier = Modifier
@@ -1626,7 +1641,9 @@ fun PlayerScreen(
         }
 
         // Error state
-        if (uiState.error != null) {
+        // Sports & Live (live.19 QA F9): a game or channel gets the V2 recovery card instead.
+        SportsLivePlayerRecovery(uiState, sportsLiveZap, sportsLayers, viewModel::onEvent, exitPlayerFromError)
+        if (uiState.error != null && SportsLivePlayerLayer.ERROR !in sportsLayers) {
             ErrorOverlay(
                 message = uiState.error!!,
                 onChooseSource = if (uiState.canChooseAnotherSource) {
@@ -1654,20 +1671,6 @@ fun PlayerScreen(
                 reportError = uiState.playbackIssueReportError,
                 onReport = { viewModel.onEvent(PlayerEvent.OnReportPlaybackIssue) },
                 onBack = exitPlayerFromError
-            )
-        }
-        // Sports & Live (#138 follow-up): Next live game found every other game tried and failed: say so, no loop.
-        val sportsNextExhausted by sportsLiveZap.nextExhausted.collectAsState()
-        if (uiState.error != null && sportsNextExhausted) {
-            com.nuvio.tv.ui.screens.sportslive.SportsLiveNoLiveGameCard(
-                onTryAgain = { sportsLiveZap.retryNextLiveGame() },
-                onBackToLiveNow = {
-                    sportsLiveZap.dismissNextExhausted()
-                    exitPlayerFromError()
-                },
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .zIndex(5f)
             )
         }
 
@@ -2419,6 +2422,8 @@ fun PlayerScreen(
             )
         }
         RegisterSportsLiveAlertSurface(alertSurface)
+        // Toasts over the player take its bottom left corner, above its Sports & Live cards (live.19 QA F8).
+        com.nuvio.tv.ui.screens.sportslive.SportsLiveToastsOverVideo()
 
         SportsLiveZapOverlay(
             viewModel = sportsLiveZap,
@@ -2431,7 +2436,8 @@ fun PlayerScreen(
                 uiState.showSpeedDialog || uiState.showSubtitleDelayOverlay ||
                 uiState.showSubtitleTimingDialog || uiState.showMoreDialog,
             isPlaying = { viewModel.uiState.value.isPlaying },
-            onBackToLiveNow = { exitPlayerFromError() }
+            onBackToLiveNow = { exitPlayerFromError() },
+            endCardCovered = SportsLivePlayerLayers.covered(SportsLivePlayerLayer.END_CARD, sportsLayers)
         )
 
         // Sports & Live game info (#139): a slim card at the bottom, on demand only.

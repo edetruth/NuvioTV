@@ -63,6 +63,8 @@ import com.nuvio.tv.ui.screens.sportslive.SportsLiveSourceNoticeRow
 import com.nuvio.tv.core.sportslive.SportsLiveLinkMark
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveDidntWorkHeader
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveLinkMarksView
+import com.nuvio.tv.ui.screens.sportslive.sportsLivePlainTitle
+import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens
 import com.nuvio.tv.ui.screens.sportslive.sportsLiveNoticesLast
 import com.nuvio.tv.ui.util.localizeEpisodeTitle
 import androidx.compose.ui.platform.LocalContext
@@ -301,7 +303,8 @@ internal fun StreamSourcesSidePanel(
             .fillMaxHeight()
             .width(520.dp)
             .clip(RoundedCornerShape(topStart = NuvioTheme.spacing.lg, bottomStart = NuvioTheme.spacing.lg))
-            .background(NuvioTheme.colors.BackgroundElevated)
+            // Sports & Live (live.19 QA F9): the V2 surface for a game's links.
+            .background(if (linkMarks != null) SportsLiveTokens.Colors.Surface else NuvioTheme.colors.BackgroundElevated)
     ) {
         Column(modifier = Modifier.padding(NuvioTheme.spacing.xl)) {
             Row(
@@ -354,7 +357,8 @@ internal fun StreamSourcesSidePanel(
             val contentInfoText = when {
                 seasonEpisodeCode != null && localizedEpisodeTitle != null -> "$seasonEpisodeCode • $localizedEpisodeTitle"
                 seasonEpisodeCode != null -> seasonEpisodeCode
-                else -> uiState.title
+                // Sports & Live (F9): the game in words, no emoji.
+                else -> if (linkMarks != null) sportsLivePlainTitle(uiState.title) else uiState.title
             }
             Text(
                 text = contentInfoText,

@@ -203,8 +203,12 @@ object SportsLiveTokens {
      * bugs, which sit top left or along the bottom); in dual screen, the top right of a pane.
      */
     object Alert {
-        val Top = Size.SafeTop + Size.HeaderHeight + 16.dp
-        val End = Size.SafeEnd
+        /** Bottom left of the safe area on every screen (the board: x 256, bottom 1026 px), clear of the side rail (F8). */
+        val Start = 128.dp
+        val Bottom = Size.SafeBottom
+        /** Over full-screen video: the player's corner, lined up with its starting card. */
+        val StartOverVideo = Player.CornerStart
+        val BottomOverVideo = Player.CornerBottom
         /** Inside a dual screen pane, from its top right corner. */
         val PaneInset = 12.dp
         val Width = 340.dp
@@ -280,11 +284,21 @@ object SportsLiveTokens {
      * carries the meaning, a 28 px title over a 26 px line, each one line with an ellipsis. It sits top right, in
      * the same spot as the alert cards (#136), on every screen: inside the stage's top right on browse screens.
      */
+    /** The full player's Sports & Live corner (#138, F8): its starting, waiting and error cards, the toast above them. */
+    object Player {
+        val CornerStart = 48.dp
+        val CornerBottom = 48.dp
+    }
+
     object Toast {
         /** The alert cards' width (#136), so a toast stacked under one lines up with it (the board's 640 px + 40). */
         val Width = Alert.Width
-        val Top = Size.SafeTop + Size.HeaderHeight + 16.dp
-        val End = Size.SafeEnd
+        /** Bottom left of the safe area on every screen (the board: x 256, bottom 1026 px), clear of the side rail (F8). */
+        val Start = 128.dp
+        val Bottom = Size.SafeBottom
+        /** Over full-screen video: the player's corner, lined up with its starting card. */
+        val StartOverVideo = Player.CornerStart
+        val BottomOverVideo = Player.CornerBottom
         val PaddingHorizontal = 12.dp
         val PaddingVertical = 9.dp
         val IconColumn = 20.dp

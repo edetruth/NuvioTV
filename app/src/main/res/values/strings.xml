@@ -3830,7 +3830,7 @@
     <string name="sports_live_game_reveal_result">Reveal result</string>
     <string name="sports_live_watch_later">Watch later (no spoilers)</string>
     <string name="sports_live_watch_later_toast">Saved for later: %1$s</string>
-    <string name="sports_live_watch_later_toast_line">Its score stays hidden for 7 days, until you watch or reveal it</string>
+    <string name="sports_live_watch_later_toast_line">Score hidden for 7 days</string>
     <string name="sports_live_reveal_result_menu">Reveal result</string>
     <string name="sports_live_replays_saved">Saved for later</string>
     <string name="sports_live_setting_my_teams_spoilers">Hide scores of my teams\' games until I\'ve watched</string>
@@ -4217,6 +4217,11 @@
     <string name="sports_live_link_age_now">just now</string>
     <string name="sports_live_link_age_minutes">%1$d min ago</string>
     <string name="sports_live_nothing_playing">Nothing is playing. Choose a stream or go back.</string>
+    <!-- live.19 QA F9: the recovery card once the automatic tries gave up. -->
+    <plurals name="sports_live_no_working_stream_after">
+        <item quantity="one">No working stream found after %1$d link</item>
+        <item quantity="other">No working stream found after %1$d links</item>
+    </plurals>
     <!-- V2 Upcoming: Agenda + Stage (#132, P3) -->
     <string name="sports_live_agenda_today">Today</string>
     <string name="sports_live_agenda_tomorrow">Tomorrow</string>

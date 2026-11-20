@@ -41,18 +41,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Icon
-import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.nuvio.tv.R
 import com.nuvio.tv.core.sportslive.SportsLiveDisplayText
 import com.nuvio.tv.core.sportslive.SportsLiveStreamThresholds
-import com.nuvio.tv.ui.screens.player.PlayerOverlayButton
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveButton
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveButtonRole
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveFocus
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens.Colors
-import com.nuvio.tv.ui.theme.NuvioTheme
 import kotlinx.coroutines.delay
 
 /** The starting card's buttons (#138), in order; the first one is focused (or selected) first. Back is the Back key's (V2). */
@@ -109,6 +106,8 @@ fun SportsLiveStartingCard(
     Column(
         verticalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 6.dp),
         modifier = modifier
+            // The full player's card holds the bottom left corner: a toast shows above it (live.19 QA F8).
+            .then(if (selected == null) Modifier.claimsBottomLeft() else Modifier)
             .widthIn(max = if (compact) COMPACT_WIDTH else SportsLiveTokens.Alert.Width)
             .clip(shape)
             .background(Colors.SurfaceRaised.copy(alpha = SportsLiveTokens.Alert.FILL_ALPHA))
@@ -116,9 +115,10 @@ fun SportsLiveStartingCard(
             .padding(SportsLiveTokens.Alert.Padding)
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            StartingSpinner()
+            SportsLiveCardSpinner()
             Text(
-                text = game?.takeIf(String::isNotBlank)?.let { stringResource(R.string.sports_live_starting_game, it) }
+                // In words, no emoji gap (live.19 QA F24): "Starting Moto3 · Round 21 · …".
+                text = game?.takeIf(String::isNotBlank)?.let { stringResource(R.string.sports_live_starting_game, sportsLivePlainTitle(it)) }
                     ?: stringResource(R.string.sports_live_starting_untitled),
                 style = SportsLiveTokens.style(SportsLiveTokens.Toast.Title),
                 color = Colors.TextPrimary,
@@ -170,9 +170,9 @@ fun SportsLiveStartingCard(
     }
 }
 
-/** A small turning arc: the link is starting. */
+/** A small turning arc: a link is starting, or the card waits for one (#162). */
 @Composable
-private fun StartingSpinner() {
+internal fun SportsLiveCardSpinner() {
     val turn by rememberInfiniteTransition(label = "startingSpinner").animateFloat(
         initialValue = 0f,
         targetValue = 360f,
@@ -242,45 +242,3 @@ internal fun SportsLiveDrawnButton(
 
 private val COMPACT_WIDTH = 300.dp
 private val COMPACT_BUTTON_HEIGHT = 28.dp
-
-/**
- * "No other live game is playing right now" (#138 follow-up): Next live game found every other game tried and
- * failed this session. **Try again** (focused first) forgets the tried games and looks again; **Back to Live Now**
- * leaves the player. Never a loop back to a dead game.
- */
-@Composable
-fun SportsLiveNoLiveGameCard(
-    onTryAgain: () -> Unit,
-    onBackToLiveNow: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val firstFocus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { firstFocus.requestFocus() } }
-    Column(
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = modifier
-            .widthIn(max = 420.dp)
-            .clip(RoundedCornerShape(NuvioTheme.radii.md))
-            .background(Color.Black.copy(alpha = 0.85f))
-            .padding(horizontal = 24.dp, vertical = 20.dp)
-    ) {
-        Text(
-            text = stringResource(R.string.sports_live_no_other_live_game),
-            style = MaterialTheme.typography.titleMedium,
-            color = NuvioTheme.colors.TextPrimary
-        )
-        PlayerOverlayButton(
-            text = stringResource(R.string.sports_live_state_try_again),
-            onClick = onTryAgain,
-            primary = true,
-            modifier = Modifier.fillMaxWidth().focusRequester(firstFocus)
-        )
-        PlayerOverlayButton(
-            text = stringResource(R.string.sports_live_back_to_live_now),
-            onClick = onBackToLiveNow,
-            primary = false,
-            modifier = Modifier.fillMaxWidth()
-        )
-    }
-}

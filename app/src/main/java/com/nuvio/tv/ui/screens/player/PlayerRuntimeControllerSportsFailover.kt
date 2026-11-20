@@ -66,6 +66,8 @@ internal fun PlayerRuntimeController.recordSportsSourceFirstFrame() {
     // A link plays: the failover run is over, the next failure starts a new one (#153).
     sportsFailoverRunStartedAtMs = null
     sportsFailoverAttempts = 0
+    // A link plays: the waiting card (#162) is over, never left over a playing stream (live.19 QA F12).
+    cancelSportsWaiting()
     // The stream playing now, for dual screen to take over as is (#65).
     if (SportsLiveExtraSources.isSportsPlayback(contentId)) {
         currentSportsStream()?.let {
@@ -183,7 +185,7 @@ internal fun PlayerRuntimeController.trySportsLiveFailoverAfterError(
     if (videoId == null || !autoTry || !canTrySportsLink(manual)) {
         // The run gave up (F1: its cap of links or its time): no working stream for now.
         if (videoId != null && autoTry) markSportsGameNoStream()
-        surfaceSportsFailoverError(errorMessage)
+        surfaceSportsFailoverError(if (autoTry) sportsGaveUpMessage(errorMessage) else errorMessage)
         return true
     }
     val season = currentSeason
@@ -251,10 +253,22 @@ internal fun PlayerRuntimeController.trySportsLiveFailoverAfterError(
             return@launch
         }
         markSportsGameNoStream()
-        surfaceSportsFailoverError(errorMessage)
+        surfaceSportsFailoverError(sportsGaveUpMessage(errorMessage))
     }
     return true
 }
+
+/**
+ * What the recovery card says once the tries gave up (live.19 QA F9): with two links or more started for the game,
+ * "No working stream found after N links", not the last link's own error ("That link was slow to start").
+ */
+private fun PlayerRuntimeController.sportsGaveUpMessage(errorMessage: String): String =
+    sportsLiveGaveUpLinks(sportsStartedLinks.size)
+        ?.let { links -> context.resources.getQuantityString(R.plurals.sports_live_no_working_stream_after, links, links) }
+        ?: errorMessage
+
+/** The number of links the recovery card names (F9): the links started for the game, when two or more were. */
+internal fun sportsLiveGaveUpLinks(startedLinks: Int): Int? = startedLinks.takeIf { it >= 2 }
 
 private fun PlayerRuntimeController.canTrySportsLink(manual: Boolean): Boolean =
     SportsLiveFailover.canTryNext(sportsFailoverRunStartedAtMs, System.currentTimeMillis(), sportsFailoverAttempts, manual)
@@ -511,11 +525,10 @@ internal fun PlayerRuntimeController.scheduleSportsStartupTimeout() {
         return
     }
     if (url.isNotBlank()) sportsStartedLinks += url
-    // Debug builds only (the #162 emulator check): this start goes straight to the waiting card.
-    if (BuildConfig.IS_DEBUG_BUILD && SportsLiveGameWatch.shared.consumeDebugWait()) {
-        scope.launch { trySportsWaitForKickoff() }
-        return
-    }
+    // Debug builds only (the #162 emulator check): this start fails at once, as a link not live yet does, so the
+    // waiting card comes the real way: the link is stopped first (live.19 QA F12: it played behind the card when
+    // the card was raised before the player had even loaded it).
+    val debugWait = BuildConfig.IS_DEBUG_BUILD && SportsLiveGameWatch.shared.consumeDebugWait()
     val number = sportsStartedLinks.indexOf(url) + 1
     _uiState.update {
         it.copy(
@@ -539,11 +552,15 @@ internal fun PlayerRuntimeController.scheduleSportsStartupTimeout() {
         }
     }
     sportsStartupJob = scope.launch {
-        // A slow link that keeps loading is not cut off (#158): only one that stopped making progress.
-        SportsLiveStartupTimeout.await(
-            requestFailed = { sportsStartRequestFailed },
-            progress = { sportsStartProgress() }
-        )
+        if (debugWait) {
+            awaitSportsLinkLoading(url)
+        } else {
+            // A slow link that keeps loading is not cut off (#158): only one that stopped making progress.
+            SportsLiveStartupTimeout.await(
+                requestFailed = { sportsStartRequestFailed },
+                progress = { sportsStartProgress() }
+            )
+        }
         // The viewer is choosing a source: the link is left alone until the panel closes.
         while (_uiState.value.showSourcesPanel) delay(SportsLiveStreamThresholds.POLL_INTERVAL_MS)
         if (hasRenderedFirstFrame || currentStreamUrl != url) return@launch
@@ -554,6 +571,19 @@ internal fun PlayerRuntimeController.scheduleSportsStartupTimeout() {
         recoverSportsHealth(SportsLiveStreamHealth.Problem.NO_START, context.getString(R.string.sports_live_link_slow))
     }
 }
+
+/** Debug builds only: waits until the player is loading [url] (at most a few seconds), so stopping it stops it. */
+private suspend fun PlayerRuntimeController.awaitSportsLinkLoading(url: String) {
+    repeat(DEBUG_WAIT_POLLS) {
+        // First a beat: the new load resets the first-frame flag after this job is launched.
+        delay(DEBUG_WAIT_POLL_MS)
+        val exoLoading = _exoPlayer?.let { it.playbackState != androidx.media3.common.Player.STATE_IDLE } == true
+        if (currentStreamUrl != url || hasRenderedFirstFrame || exoLoading || mpvView != null) return
+    }
+}
+
+private const val DEBUG_WAIT_POLLS = 50
+private const val DEBUG_WAIT_POLL_MS = 100L
 
 /** What the sports link still starting has loaded so far (#158), for its start-up timeout. */
 private fun PlayerRuntimeController.sportsStartProgress(): SportsLiveStartupTimeout.Progress? =
@@ -593,9 +623,13 @@ private fun PlayerRuntimeController.stopPendingSportsStart() {
  * it) and the next one is tried, as an automatic failover would.
  */
 internal fun PlayerRuntimeController.sportsTryNextLink() {
-    if (!SportsLiveExtraSources.isSportsPlayback(contentId) || hasRenderedFirstFrame) return
+    if (!SportsLiveExtraSources.isSportsPlayback(contentId)) return
     if (sourceFallbackJob?.isActive == true) return
-    stopPendingSportsStart()
+    // From the recovery card (live.19 QA F9): nothing plays, whether or not a link played before; the next link
+    // plays even once the automatic tries reached their cap (manual, F1).
+    val fromError = _uiState.value.error != null
+    if (hasRenderedFirstFrame && !fromError) return
+    if (fromError) _uiState.update { it.copy(error = null) } else stopPendingSportsStart()
     trySportsLiveFailoverAfterError(context.getString(R.string.sports_live_link_not_working), recordFailure = false, manual = true)
 }
 

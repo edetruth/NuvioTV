@@ -136,7 +136,9 @@ internal fun BoxScope.SportsLiveZapOverlay(
     /** Whether the game is playing now: a Game page opened over it resumes it on return (#145). */
     isPlaying: () -> Boolean = { false },
     /** Back to Live Now on the end card's nothing-live state (#161): the player leaves. */
-    onBackToLiveNow: () -> Unit = {}
+    onBackToLiveNow: () -> Unit = {},
+    /** A card above the end card is up ([SportsLivePlayerLayers], live.19 QA F10): the end card waits for it. */
+    endCardCovered: Boolean = false
 ) {
     if (!viewModel.hasSession) return
     // In picture-in-picture only the video shows: no banner, indicator or panel.
@@ -189,7 +191,8 @@ internal fun BoxScope.SportsLiveZapOverlay(
     // The end-of-game card (#161, in place of #60's full-time toast): over the last frame while nothing else is up.
     val endCard by viewModel.endCard.collectAsState()
     val openGameFromEnd = LocalOpenSportsLiveGame.current
-    val endShown = endCard != null && banner == null && !panelOpen && !playerOverlayVisible
+    val endShown = endCard != null && banner == null && !panelOpen && !playerOverlayVisible &&
+        (endCard?.toastOnly == true || !endCardCovered)
     // Claimed, and its countdown started, only once on screen.
     DisposableEffect(endShown, viewModel) {
         viewModel.onEndCardVisible(endShown)

@@ -5,6 +5,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -29,20 +31,23 @@ import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens
 import java.text.DateFormat
 import java.util.Date
 
-/** The waiting card's buttons (#162), in order; the first takes focus. */
-enum class SportsLiveWaitingAction { BACK, SOURCES }
+/** The waiting card's buttons (#162), in order; the first takes focus. Back is the Back key's (V2: no Back button). */
+enum class SportsLiveWaitingAction { SOURCES, NEXT_LIVE_GAME }
 
 /**
  * "Waiting for the stream to start…" (#162): a calm V2 card, never an error, while a game opened around its
- * kickoff has no live link yet. The game, its scheduled time ([startMs]) and "Checking every 30 s"; Back /
- * Sources. It goes by itself as soon as a link is live and plays.
+ * kickoff has no live link yet. Shown only while nothing plays (live.19 QA F12). Like the starting card it sits in
+ * the player's bottom left corner, not as a modal (its owner places it): a spinner and "Waiting for the stream to
+ * start…", then the game, its scheduled time ([startMs]) and "Checking every 30 s"; **Sources** (PRIMARY) and,
+ * with a zap session ([canNextLiveGame]), **Next live game**. It goes by itself as soon as a link is live and plays.
  */
 @Composable
 fun SportsLiveWaitingCard(
     game: String?,
     startMs: Long?,
     onAction: (SportsLiveWaitingAction) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    canNextLiveGame: Boolean = false
 ) {
     val firstFocus = remember { FocusRequester() }
     LaunchedEffect(Unit) {
@@ -52,48 +57,49 @@ fun SportsLiveWaitingCard(
     val shape = RoundedCornerShape(SportsLiveTokens.Alert.Radius)
     val time = remember(startMs) { startMs?.let { DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(it)) } }
     Column(
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
         modifier = modifier
-            .widthIn(max = 460.dp)
+            .claimsBottomLeft()
+            .widthIn(max = SportsLiveTokens.Alert.Width + 60.dp)
             .clip(shape)
-            .background(SportsLiveTokens.Colors.Surface.copy(alpha = 0.94f))
-            .border(1.dp, SportsLiveTokens.Colors.Outline, shape)
-            .padding(horizontal = 24.dp, vertical = 20.dp)
+            .background(SportsLiveTokens.Colors.SurfaceRaised.copy(alpha = SportsLiveTokens.Alert.FILL_ALPHA))
+            .border(1.dp, SportsLiveTokens.Alert.Border, shape)
+            .padding(SportsLiveTokens.Alert.Padding)
     ) {
-        game?.takeIf(String::isNotBlank)?.let {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            SportsLiveCardSpinner()
             Text(
-                text = it,
-                style = SportsLiveTokens.style(SportsLiveTokens.Type.PanelTitle),
+                text = stringResource(R.string.sports_live_waiting_title),
+                style = SportsLiveTokens.style(SportsLiveTokens.Toast.Title),
                 color = SportsLiveTokens.Colors.TextPrimary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
         }
         Text(
-            text = stringResource(R.string.sports_live_waiting_title),
-            style = SportsLiveTokens.style(SportsLiveTokens.Type.RowName),
-            color = SportsLiveTokens.Colors.TextPrimary
-        )
-        Text(
             text = listOfNotNull(
+                game?.takeIf(String::isNotBlank)?.let(::sportsLivePlainTitle),
                 time?.let { stringResource(R.string.sports_live_waiting_starts, it) },
                 stringResource(R.string.sports_live_waiting_checking, (SportsLiveKickoffWait.RECHECK_MS / 1_000).toInt())
-            ).joinToString(" · "),
-            style = SportsLiveTokens.style(SportsLiveTokens.Type.Meta),
+            ).joinToString(stringResource(R.string.sports_live_game_info_separator)),
+            style = SportsLiveTokens.style(SportsLiveTokens.Toast.Line),
             color = SportsLiveTokens.Colors.TextSecondary,
-            maxLines = 1
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
+        Spacer(modifier = Modifier.height(4.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(SportsLiveTokens.Size.ButtonGap)) {
             SportsLiveButton(
-                onClick = { onAction(SportsLiveWaitingAction.BACK) },
+                onClick = { onAction(SportsLiveWaitingAction.SOURCES) },
                 role = SportsLiveButtonRole.PRIMARY,
                 modifier = Modifier.focusRequester(firstFocus)
             ) {
-                Text(stringResource(R.string.action_back), style = SportsLiveTokens.style(SportsLiveTokens.Type.Button), maxLines = 1)
-            }
-            SportsLiveButton(onClick = { onAction(SportsLiveWaitingAction.SOURCES) }) {
                 Text(stringResource(R.string.sources_title), style = SportsLiveTokens.style(SportsLiveTokens.Type.Button), maxLines = 1)
+            }
+            if (canNextLiveGame) {
+                SportsLiveButton(onClick = { onAction(SportsLiveWaitingAction.NEXT_LIVE_GAME) }) {
+                    Text(stringResource(R.string.sports_live_next_live_game), style = SportsLiveTokens.style(SportsLiveTokens.Type.Button), maxLines = 1)
+                }
             }
         }
     }

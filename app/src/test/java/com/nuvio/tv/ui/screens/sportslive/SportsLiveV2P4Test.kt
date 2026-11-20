@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import androidx.compose.ui.unit.dp
 import com.nuvio.tv.core.sportslive.SportsLiveChannelRegions
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.scores.EspnLeague
@@ -292,10 +293,15 @@ class SportsLiveV2P4Test {
     }
 
     @Test
-    fun `toasts sit top right under the header, over the stage, and under the player's top edge in the player`() {
-        val outside = sportsLiveToastTop(inPlayer = false)
-        assertTrue(outside >= SportsLiveTokens.Size.SafeTop + SportsLiveTokens.Size.HeaderHeight)
-        assertTrue(sportsLiveToastTop(inPlayer = true) < outside)
+    fun `toasts sit bottom left, clear of the rail, and above a card that holds the corner`() {
+        // live.19 QA F8: one corner everywhere, bottom left; over video, the player's corner.
+        assertTrue(SportsLiveTokens.Toast.Start > SportsLiveTokens.Toast.StartOverVideo)
+        val base = SportsLiveTokens.Toast.Bottom
+        assertEquals(base, sportsLiveToastBottom(base, height = 540.dp, claimedTop = null, gap = 6.dp))
+        // A starting card whose top is at 440 dp: the toast sits 6 dp above it.
+        assertEquals(106.dp, sportsLiveToastBottom(base, height = 540.dp, claimedTop = 440.dp, gap = 6.dp))
+        // A claim lower than the base never pulls the toast down.
+        assertEquals(base, sportsLiveToastBottom(base, height = 540.dp, claimedTop = 539.dp, gap = 0.dp))
     }
 
     @Test

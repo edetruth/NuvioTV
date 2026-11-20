@@ -54,7 +54,8 @@ fun SportsLivePlayHost(
                     is SportsLivePlayEvent.Play -> {
                         currentOnPlayTarget(event.target)
                         // Shown over the player for a few seconds: where the auto-picked stream comes from.
-                        event.source?.let { source ->
+                        // The source by its clean name: no emoji or symbols (V2, live.19 QA F8).
+                        event.source?.let { com.nuvio.tv.core.sportslive.SportsLiveDisplayText.label(it) ?: it }?.let { source ->
                             SportsLiveToasts.show(SportsLiveToastKind.INFO, context.getString(R.string.sports_live_playing_from, source))
                         }
                     }

@@ -76,6 +76,18 @@ internal object SportsLiveAlertSurfaces {
         _dualPanes.value = panes
     }
 
+    private val _promptUp = MutableStateFlow(false)
+
+    /**
+     * A kickoff prompt is on screen (#173): it holds the keys, so the full player's own Sports & Live cards
+     * wait under it ([com.nuvio.tv.ui.screens.player.SportsLivePlayerLayers], live.19 QA F11).
+     */
+    val promptUp: StateFlow<Boolean> = _promptUp.asStateFlow()
+
+    fun setPromptUp(up: Boolean) {
+        _promptUp.value = up
+    }
+
     /** The host's key context and actions while a card or a peek is up; null otherwise. */
     var keys: AlertKeyHandler? = null
 
