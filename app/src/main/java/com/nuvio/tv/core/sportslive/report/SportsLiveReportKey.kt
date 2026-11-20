@@ -15,9 +15,10 @@ enum class SportsLiveReportKeyAction {
 }
 
 /**
- * The remote shortcut for Report a problem (#172): hold one of [KEYS] for [holdMs]. The ★ key of Google TV remotes
- * (KEYCODE_MACRO_1, first: the onn remote has no Play/Pause or Info, TV QA), the TV key (KEYCODE_GUIDE) as a backup,
- * Play/Pause (none has Menu, Google TV quality rule TV-DM) and Info. The first press still does its usual job (the player pauses);
+ * The remote shortcut for Report a problem (#172): hold one of [KEYS] for [holdMs]: Play/Pause (none has Menu, Google
+ * TV quality rule TV-DM) and Info, on remotes that have them. Not ★ (KEYCODE_MACRO_1) or TV (KEYCODE_GUIDE): Google TV
+ * takes both before any app sees them (TV QA, onn remote), and TV must keep opening Google TV's Live tab. Remotes with
+ * neither key report from Hold OK → More… → Report a problem. The first press still does its usual job (the player pauses);
  * the key's repeats are eaten while it is held, so a held Play/Pause no longer flips the player on every repeat and a
  * held Info no longer flickers the stream details. The report fires once per hold, and its release is eaten too.
  * No other key or press changes.
@@ -53,6 +54,6 @@ class SportsLiveReportKey(private val holdMs: Long = HOLD_MS) {
 
     companion object {
         const val HOLD_MS = 2_000L
-        val KEYS = setOf(KeyEvent.KEYCODE_MACRO_1, KeyEvent.KEYCODE_GUIDE, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_INFO)
+        val KEYS = setOf(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_INFO)
     }
 }
