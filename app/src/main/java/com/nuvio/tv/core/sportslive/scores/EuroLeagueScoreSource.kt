@@ -32,7 +32,7 @@ class EuroLeagueScoreSource internal constructor(
     private val health: EspnFeedHealth? = null
 ) : LeagueScoreSource {
 
-    constructor(base: OkHttpClient, moshi: Moshi, health: EspnFeedHealth) : this(feedClient(base), moshi, health = health)
+    constructor(base: OkHttpClient, moshi: Moshi, health: EspnFeedHealth) : this(feedClient(base), moshi, BASE_URL, health = health)
 
     private val adapter = moshi.adapter(EuroLeagueGamesDto::class.java)
 

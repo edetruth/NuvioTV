@@ -220,7 +220,8 @@ class EspnLeagueMapTest {
 
     @Test
     fun `a curly apostrophe still reads as women's`() {
-        assertEquals(emptyList<String>(), slugs("Soccer", "Women’s Super League: Arsenal vs Chelsea"))
+        // Read as women's: the women's competition's own feed (#169), never a men's one.
+        assertEquals(listOf("soccer/eng.w.1"), slugs("Soccer", "Women’s Super League: Arsenal vs Chelsea"))
     }
 
     @Test
