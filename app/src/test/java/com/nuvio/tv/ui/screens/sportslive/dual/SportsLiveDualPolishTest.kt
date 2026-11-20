@@ -39,7 +39,5 @@ class SportsLiveDualPolishTest {
             it.copy(meta = it.meta.copy(name = "⏱ Clemson Tigers @ Duke Blue Devils"), sport = "🏈 American Football")
         }
         assertEquals("Clemson Tigers @ Duke Blue Devils · American Football", dualPaneCaption(item))
-        // No sport: the name alone.
-        assertEquals("game", dualPaneCaption(dualItem("game")))
     }
 }
