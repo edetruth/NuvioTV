@@ -44,6 +44,7 @@ import com.nuvio.tv.R
 import com.nuvio.tv.core.sportslive.GameStatusStrings
 import com.nuvio.tv.core.sportslive.SportsLiveDisplayText
 import com.nuvio.tv.core.sportslive.scores.GameArtTeam
+import com.nuvio.tv.core.sportslive.scores.TeamDirectory
 import com.nuvio.tv.core.sportslive.scores.ScoreChip
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveFocus
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens
@@ -81,7 +82,14 @@ internal data class PanelLine(
  * same groups, scores (spoiler setting applied) and status words ([scoreboardStatusLines]); [kickoff] words
  * its start. A live game keeps its period beside the clock; any other row only the first status line.
  */
-internal fun panelLineOf(row: ScoreboardRow, strings: GameStatusStrings, kickoff: String?, tag: String = ""): PanelLine {
+internal fun panelLineOf(
+    row: ScoreboardRow,
+    strings: GameStatusStrings,
+    kickoff: String?,
+    tag: String = "",
+    /** An unmatched side's name for the line ([panelSideName]); as is by default. */
+    sideName: (String) -> String = { it }
+): PanelLine {
     val status = scoreboardStatusLines(row, strings, kickoff)
     val period = status.secondary.takeIf { status.live }
     val art = row.art
@@ -94,8 +102,8 @@ internal fun panelLineOf(row: ScoreboardRow, strings: GameStatusStrings, kickoff
         )
         row.twoSided && art != null -> PanelLine(
             PanelLineKind.GAME,
-            first = panelTeamLabel(art.first),
-            second = panelTeamLabel(art.second),
+            first = panelTeamLabel(art.first).let { if (art.first.unmatched) sideName(it) else it },
+            second = panelTeamLabel(art.second).let { if (art.second.unmatched) sideName(it) else it },
             scores = scoreboardScoresOf(row.chip),
             // Score hidden: the eye between the names says so; the words would push the names out (#167).
             clock = status.primary.takeUnless { row.chip is ScoreChip.Hidden },
@@ -106,6 +114,25 @@ internal fun panelLineOf(row: ScoreboardRow, strings: GameStatusStrings, kickoff
         else -> PanelLine(PanelLineKind.EVENT, title = singleLineTitle(row.item), clock = status.primary, period = period, live = status.live, tag = tag)
     }
 }
+
+/** A side the art names by the card's own words: no ESPN abbreviation or short name was found for it. */
+private val GameArtTeam.unmatched: Boolean get() = short.trim() == name.trim()
+
+/**
+ * An unmatched side's name on a one-line panel row (#167): its directory [abbreviation] ("SUU") when it has one;
+ * else the name without its trailing nickname when what is left is a place, two words or more or a known
+ * location ([isPlace]): "Southern Utah Thunderbirds" → "Southern Utah", "Stetson Hatters" → "Stetson"; else the
+ * name as it is. Whatever still does not fit is cut per side on the line, so both sides stay visible.
+ */
+internal fun panelSideName(name: String, abbreviation: String?, isPlace: (String) -> Boolean = { false }): String {
+    abbreviation?.trim()?.takeIf { it.isNotEmpty() }?.let { return it }
+    val words = name.trim().split(WHITESPACE)
+    if (words.size < 2) return name.trim()
+    val place = words.dropLast(1).joinToString(" ")
+    return if (words.size - 1 >= 2 || isPlace(place)) place else name.trim()
+}
+
+private val WHITESPACE = Regex("""\s+""")
 
 /** A team's name on a one-line row: its abbreviation ("ORL"), else its short name, else its name. */
 internal fun panelTeamLabel(team: GameArtTeam): String =
@@ -138,7 +165,11 @@ internal fun SportsLivePanelLine(
     val strings = rememberGameStatusStrings()
     val kickoff = row.art?.let { kickoffText(it) }
     val tag = rowTagText(row)
-    val line = remember(row, strings, kickoff, tag) { panelLineOf(row, strings, kickoff, tag) }
+    val line = remember(row, strings, kickoff, tag) {
+        panelLineOf(row, strings, kickoff, tag) { side ->
+            panelSideName(side, TeamDirectory.shared.abbreviationOf(row.item, side), TeamDirectory.shared::isLocation)
+        }
+    }
     val shape = RoundedCornerShape(PANEL_LINE_RADIUS)
     var focused by remember { mutableStateOf(false) }
     val (longPress, click) = if (onLongClick != null) rememberSportsLiveLongPress(menuOpen, onLongClick, onClick) else Modifier to onClick

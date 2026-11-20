@@ -99,6 +99,24 @@ class TeamDirectory(private val maxLeagues: Int = MAX_LEAGUES) {
      */
     fun leaguesHolding(first: String, second: String): List<EspnLeague> = holding(Triple(first, second, generation))
 
+    /**
+     * [side]'s abbreviation ("SUU", "STET") when it resolves in one of [item]'s listed leagues (#167): a panel
+     * line names an unmatched game's side by it. Kept per side, card leagues and directory generation.
+     */
+    fun abbreviationOf(item: SportsLiveItem, side: String): String? = abbreviations(Triple(side, leaguesFor(item), generation))
+
+    private val abbreviations = Memo<Triple<String, List<EspnLeague>, Long>, String?>(HOLDING_MEMO) { (side, leagues, _) ->
+        leagues.firstNotNullOfOrNull { league -> resolve(league, side)?.abbreviation?.trim()?.takeIf(String::isNotEmpty) }
+    }
+
+    /** True when [text] is a listed team's location ("Stetson", "Southern Utah") in a loaded league: a place, not a nickname. */
+    fun isLocation(text: String): Boolean = text.trim().lowercase() in locations(generation)
+
+    private val locations = Memo<Long, Set<String>>(2) { _ ->
+        synchronized(this) { leagues.values.flatMap { it.teams } }
+            .mapNotNullTo(HashSet()) { team -> team.location?.trim()?.lowercase()?.takeIf(String::isNotEmpty) }
+    }
+
     private val holding = Memo<Triple<String, String, Long>, List<EspnLeague>>(HOLDING_MEMO) { (first, second, _) ->
         val loaded = synchronized(this) { leagues.keys.toList() }.mapNotNull(::leagueOf)
         loaded.filter { league ->

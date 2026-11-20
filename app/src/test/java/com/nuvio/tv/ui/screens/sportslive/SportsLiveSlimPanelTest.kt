@@ -305,6 +305,30 @@ class SportsLiveSlimPanelTest {
         assertEquals("", panelLineOf(channel, strings, kickoff = null, tag = "TV").tag)
     }
 
+    @Test
+    fun `an unmatched side is shortened for the panel line - abbreviation, else the place without its nickname`() {
+        val places = setOf("Stetson", "Texas")
+        fun short(name: String, abbreviation: String? = null) = panelSideName(name, abbreviation) { it in places }
+        // The team directory's abbreviation first, as on matched rows.
+        assertEquals("SUU", short("Southern Utah Thunderbirds", abbreviation = "SUU"))
+        // Two words of place or more left: the nickname goes.
+        assertEquals("Southern Utah", short("Southern Utah Thunderbirds"))
+        // One word left: only when it is a known place.
+        assertEquals("Stetson", short("Stetson Hatters"))
+        assertEquals("Real Madrid", short("Real Madrid"))
+        assertEquals("Arsenal", short("Arsenal"))
+
+        // On the line: only unmatched sides are shortened; a matched side keeps its abbreviation.
+        val art = GameArt(GameArtTeam("Southern Utah Thunderbirds", "Southern Utah Thunderbirds", null), GameArtTeam("Texas Longhorns", "TEX", null), null, null, false)
+        val row = ScoreboardRow(
+            item = game("u", now - minute), group = ScoreboardGroup.LIVE, chip = null, art = art,
+            firstFollowed = false, secondFollowed = false, probablyEnded = false, status = GameStatus.Live(null), twoSided = true
+        )
+        val line = panelLineOf(row, strings, kickoff = null) { panelSideName(it, null) { place -> place in places } }
+        assertEquals("Southern Utah", line.first)
+        assertEquals("TEX", line.second)
+    }
+
     private val strings = GameStatusStrings(
         liveClock = "● %1\$s", live = "LIVE", clockPeriod = "%1\$s · %2\$s", timeCountdown = "%1\$s · %2\$s",
         inHoursMinutes = "in %1\$d h %2\$d m", inHours = "in %1\$d h", inMinutes = "in %1\$d min",
