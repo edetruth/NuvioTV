@@ -16,6 +16,7 @@ import com.nuvio.tv.core.sportslive.SportsLiveReadyMark
 import com.nuvio.tv.core.sportslive.SportsLiveToastKind
 import com.nuvio.tv.core.sportslive.SportsLiveToasts
 import com.nuvio.tv.core.sportslive.SportsLiveUnidentified
+import com.nuvio.tv.core.sportslive.report.SportsLiveCrashReport
 import com.nuvio.tv.core.sportslive.report.SportsLiveReport
 import com.nuvio.tv.core.sportslive.report.SportsLiveReportFiles
 import com.nuvio.tv.core.sportslive.report.SportsLiveReportInput
@@ -77,8 +78,36 @@ class SportsLiveReporter @Inject constructor(
     private val dir: File
         get() = File(context.getExternalFilesDir(null) ?: context.filesDir, SportsLiveReportFiles.FOLDER)
 
-    private val files: SportsLiveReportFiles
+    internal val files: SportsLiveReportFiles
         get() = SportsLiveReportFiles(dir)
+
+    /** The addons' secrets and the scores line kept current for a crash report, which cannot wait for them. */
+    @Volatile private var addonSecrets: List<String> = emptyList()
+    @Volatile private var scoresNow: String? = null
+
+    /** Keeps [addonSecrets] and [scoresNow] current; once, from [SportsLiveCrashCapture.install]. */
+    internal fun startCrashCaches() {
+        scope.launch { runCatching { addonRepository.getInstalledAddons().collect { addonSecrets = addonSecretsOf(it) } } }
+        scope.launch { runCatching { prefs.scoreSettings.collect { scoresNow = scoresLine(it) } } }
+    }
+
+    /** The secrets known now, without waiting: for a crash. */
+    internal fun secretsNow(): List<String> = addonSecrets + accountSecrets()
+
+    /** The report's snapshot at a crash: in-memory state only. */
+    internal fun crashInput(number: Int, now: Long, zone: ZoneId): SportsLiveReportInput =
+        input(number, now, zone, SportsLiveCrashReport.TRIGGER, scoresNow ?: "unknown")
+
+    /** Saves one report with [text] under the report lock; the file. */
+    internal suspend fun saveText(text: (number: Int, now: Long, zone: ZoneId) -> String): File = withContext(Dispatchers.IO) {
+        lock.withLock {
+            val files = files
+            val number = files.nextNumber()
+            val now = System.currentTimeMillis()
+            val zone = ZoneId.systemDefault()
+            files.save(number, text(number, now, zone), now, zone)
+        }
+    }
 
     /** Where `adb pull` finds the reports; null when the TV has no external files folder (then only the QR code helps). */
     val pullPath: String?
@@ -198,12 +227,16 @@ class SportsLiveReporter @Inject constructor(
         "${settings.mode.name.lowercase()} · delay ${settings.delaySeconds} s · real-time ${if (settings.realTime) "on" else "off"}"
 
     /** What must never be in a report: every addon's names, id, link and host, and the account's e-mail and id. */
-    private suspend fun secrets(): List<String> {
+    internal suspend fun secrets(): List<String> {
         val addons = withTimeoutOrNull(LOOKUP_MS) { runCatching { addonRepository.getInstalledAddons().first() }.getOrNull() }.orEmpty()
-        val account = (authManager.authState.value as? AuthState.FullAccount)?.let { listOf(it.email, it.userId) }.orEmpty()
-        return addons.flatMap { addon ->
-            listOfNotNull(addon.name, addon.displayName, addon.id, addon.baseUrl, runCatching { URI(addon.baseUrl).host }.getOrNull())
-        } + account
+        return addonSecretsOf(addons) + accountSecrets()
+    }
+
+    private fun accountSecrets(): List<String> =
+        (authManager.authState.value as? AuthState.FullAccount)?.let { listOf(it.email, it.userId) }.orEmpty()
+
+    private fun addonSecretsOf(addons: List<com.nuvio.tv.domain.model.Addon>): List<String> = addons.flatMap { addon ->
+        listOfNotNull(addon.name, addon.displayName, addon.id, addon.baseUrl, runCatching { URI(addon.baseUrl).host }.getOrNull())
     }
 
     private companion object {
