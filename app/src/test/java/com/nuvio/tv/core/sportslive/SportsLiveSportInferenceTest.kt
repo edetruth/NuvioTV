@@ -10,6 +10,7 @@ import com.nuvio.tv.domain.model.PosterShape
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveKind
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
@@ -409,5 +410,28 @@ class SportsLiveSportInferenceTest {
         val dir = TeamDirectory().apply { put(EspnLeague("soccer", "ger.1"), bundesliga, 0L) }
         val item = card("Bayern vs Köln", genres = listOf("Women's"))
         assertSame(item, SportsLiveSportInference.infer(item, dir))
+    }
+
+    // ---- Schools addons name otherwise than ESPN (TV report #5) ----
+
+    private val fsu = team("Florida State Seminoles", "Florida St", "Florida State", "FSU")
+    private val greenBay = team("Green Bay Phoenix", "Green Bay", "Green Bay", "GB")
+    private val mtsu = team("Middle Tennessee Blue Raiders", "MTSU", "Middle Tennessee", "MTSU")
+    private val temple = team("Temple Owls", "Temple", "Temple", "TEM")
+    private val badgers = team("Wisconsin Badgers", "Wisconsin", "Wisconsin", "WIS")
+
+    @Test
+    fun `Florida State vs Wisconsin-Green Bay and Middle Tennessee State vs Temple are NCAAM, not Basketball`() {
+        val dir = directory(EspnLeagueMap.NBA to nba, EspnLeagueMap.COLLEGE_BASKETBALL to listOf(fsu, greenBay, mtsu, temple, badgers))
+        for (name in listOf("Florida State vs Wisconsin-Green Bay", "FSU vs UW-Green Bay", "Middle Tennessee State vs Temple", "Middle Tenn. St. vs Temple")) {
+            val inferred = SportsLiveSportInference.infer(card(name, sport = "Basketball"), dir)
+            assertEquals(name, "NCAAM", inferred.sport)
+            assertEquals(name, listOf(EspnLeagueMap.COLLEGE_BASKETBALL), EspnLeagueMap.leaguesFor(inferred))
+        }
+        assertEquals("GB", dir.resolve(EspnLeagueMap.COLLEGE_BASKETBALL, "Wisconsin-Green Bay")?.abbreviation)
+        assertEquals("MTSU", dir.resolve(EspnLeagueMap.COLLEGE_BASKETBALL, "Middle Tennessee State")?.abbreviation)
+        // Plain "Wisconsin" stays the Badgers, never Green Bay.
+        assertEquals("WIS", dir.resolve(EspnLeagueMap.COLLEGE_BASKETBALL, "Wisconsin")?.abbreviation)
+        assertFalse(SportsLiveTeams.matches("Wisconsin", "Green Bay Phoenix"))
     }
 }

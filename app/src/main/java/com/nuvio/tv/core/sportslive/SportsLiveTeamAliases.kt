@@ -98,6 +98,12 @@ object SportsLiveTeamAliases {
             "uic" to listOf("illinois chicago"),
             "umbc" to listOf("maryland baltimore county"),
             "utrgv" to listOf("texas rio grande valley", "ut rio grande valley"),
+            // The University of Wisconsin's branch campuses, which ESPN names by their city ("Green Bay Phoenix"), addons
+            // by the system ("Wisconsin-Green Bay", TV report #5). Plain "Wisconsin" stays the Badgers.
+            "green bay" to listOf("wisconsin green bay", "uw green bay", "wisc green bay", "wis green bay"),
+            "milwaukee" to listOf("wisconsin milwaukee", "uw milwaukee", "wisc milwaukee", "wis milwaukee"),
+            // ESPN's "Middle Tennessee" (MTSU) is Middle Tennessee State University (TV report #5). One school.
+            "middle tennessee" to listOf("middle tennessee state", "middle tennessee st", "middle tenn st", "middle tenn state", "middle tenn"),
             // Renamed in 2024: addons still write the old name (live.18).
             "east texas a and m" to listOf("texas a and m commerce", "east texas a and m lions", "texas a and m commerce lions")
         )
