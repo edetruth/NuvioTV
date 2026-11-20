@@ -253,7 +253,10 @@ fun SportsLiveTeamScreen(
                                     onClick = target?.let { open ->
                                         {
                                             opening(teamLeaderKey(leader.category))
-                                            SportsLivePlayerCardRequests.open(SportsLivePlayerCardRequest(open))
+                                            // The page's results already show (Show, or revealed) and none is saved for later: the
+                                            // card inherits it (as BUG19).
+                                            val shown = state.showsResults && data.recent.none { state.protection.protects(it) }
+                                            SportsLivePlayerCardRequests.open(SportsLivePlayerCardRequest(open, revealed = shown))
                                             onOpenPlayerCard()
                                         }
                                     }
