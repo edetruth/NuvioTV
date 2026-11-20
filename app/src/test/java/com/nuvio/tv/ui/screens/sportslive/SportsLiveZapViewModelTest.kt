@@ -99,7 +99,8 @@ class SportsLiveZapViewModelTest {
         links: SportsLiveWorkingLinks = SportsLiveWorkingLinks.shared,
         claimHint: suspend () -> Boolean = { false },
         readiness: SportsLiveGameReadiness = SportsLiveGameReadiness.shared,
-        stillWatching: SportsLiveStillWatching = SportsLiveStillWatching()
+        stillWatching: SportsLiveStillWatching = SportsLiveStillWatching(),
+        report: (String) -> Unit = {}
     ): SportsLiveZapViewModel {
         SportsLiveZapSessions.start(
             SportsLiveZapSession.of(listOf(playing) + others, playing.streamKey, SportsLiveTab.LIVE_NOW, null, returnToHomeOnBack = false)!!
@@ -120,7 +121,7 @@ class SportsLiveZapViewModelTest {
         return SportsLiveZapViewModel(
             SavedStateHandle(mapOf("contentId" to playing.id)), resolver, debrid, profiles, repo, liveScores,
             mainDispatcherRule.dispatcher, gameWatch = watch, workingLinks = links, claimPanelKeysHint = claimHint,
-            readiness = readiness, stillWatching = stillWatching
+            readiness = readiness, stillWatching = stillWatching, report = report
         ).also { it.onPlayerStarted(started) }
     }
 
@@ -151,6 +152,24 @@ class SportsLiveZapViewModelTest {
         assertFalse(viewModel.panelKeysHint.value)
         viewModel.onPanelKey(android.view.KeyEvent.KEYCODE_INFO)
         assertTrue(viewModel.panelKeysHint.value)
+        // The open panel ticks forever; close it so the test can end.
+        viewModel.closePanel()
+    }
+
+    @Test
+    fun `the panel's hold OK menu ends with Report a problem, which saves one report through the reporter`() = runTest(mainDispatcherRule.dispatcher) {
+        val triggers = mutableListOf<String>()
+        val pacers = game("Indiana Pacers at Philadelphia 76ers")
+        val celtics = game("Boston Celtics at New York Knicks")
+        val viewModel = fullTimeViewModel(MutableStateFlow(emptyMap()), ScoresMode.SHOW, pacers, listOf(celtics), report = { triggers += it })
+        viewModel.openPanel()
+        runCurrent()
+
+        assertEquals(SportsLiveMoreEntry.REPORT, viewModel.panelMenu(celtics).entries.last())
+        assertEquals(SportsLiveMoreEntry.REPORT, viewModel.panelMenu(pacers).entries.last())
+        viewModel.onPanelReport()
+        runCurrent()
+        assertEquals(listOf("Hold OK › More… › Report a problem (player)"), triggers)
         // The open panel ticks forever; close it so the test can end.
         viewModel.closePanel()
     }

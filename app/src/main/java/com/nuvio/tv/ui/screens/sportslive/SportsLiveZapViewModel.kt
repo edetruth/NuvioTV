@@ -177,7 +177,9 @@ class SportsLiveZapViewModel internal constructor(
     // Q18 (#85): "Scores ahead? +15 s" for a source (addon id); its new seconds.
     private val nudgeScores: suspend (String) -> Int = { 0 },
     // live.20 (#168): the panel's games whose sport is unknown are looked up too, also when the section was never opened.
-    private val identify: (List<SportsLiveItem>) -> Unit = {}
+    private val identify: (List<SportsLiveItem>) -> Unit = {},
+    // #172, TV QA: Hold OK → More… → Report a problem saves a report by its trigger ([SportsLiveReporter.report]).
+    private val report: (String) -> Unit = {}
 ) : ViewModel() {
 
     @Inject constructor(
@@ -190,7 +192,9 @@ class SportsLiveZapViewModel internal constructor(
         // My sports (#146); null in tests that do not scope.
         prefs: SportsLivePreferencesDataStore? = null,
         // The team lookup (#168); null in tests.
-        identifier: TeamIdentifier? = null
+        identifier: TeamIdentifier? = null,
+        // Report a problem (#172); null in tests.
+        reporter: SportsLiveReporter? = null
     ) : this(
         savedStateHandle, resolver, directDebridResolver, profileManager, repo, liveScores, Dispatchers.Default,
         mySports = prefs?.mySports ?: flowOf(MySports.DEFAULT),
@@ -204,7 +208,8 @@ class SportsLiveZapViewModel internal constructor(
         reminders = prefs?.reminders ?: flowOf(RemindersState()),
         okOnLive = prefs?.okOnLive ?: flowOf(SportsLiveOkOnLive.DEFAULT),
         nudgeScores = { source -> prefs?.nudgeScores(source) ?: 0 },
-        identify = { items -> identifier?.offer(items) }
+        identify = { items -> identifier?.offer(items) },
+        report = { trigger -> reporter?.report(trigger) }
     )
 
     /** "OK on live" is Pause (research Q19): a bare OK pauses a live game at once, as Google's TV-PC says. */
@@ -1177,6 +1182,14 @@ class SportsLiveZapViewModel internal constructor(
     /** Follow (or unfollow) [target]'s team from the panel's Hold OK menu (#140, #134). */
     fun onPanelToggleFollow(target: FollowTarget) {
         viewModelScope.launch { repo.toggleFollowTarget(target) }
+    }
+
+    /**
+     * Report a problem from the panel's Hold OK menu (TV QA: the onn remote has no Play/Pause or Info to hold): saved
+     * as a held key saves it, with the "Report #N saved" toast (a video plays, so never the QR dialog).
+     */
+    fun onPanelReport() {
+        report("Hold OK › More… › Report a problem (player)")
     }
 
     override fun onCleared() {

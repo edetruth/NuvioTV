@@ -100,6 +100,7 @@ import com.nuvio.tv.ui.screens.sportslive.panelTitleSuffixes
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveHiddenByMySportsLine
 import com.nuvio.tv.ui.util.dpadRepeatThrottle
 import com.nuvio.tv.ui.screens.sportslive.SportsLivePanelMenu
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveMoreEntry
 import com.nuvio.tv.core.sportslive.scores.ScoreWatch
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens
 import com.nuvio.tv.core.sportslive.displayName
@@ -345,6 +346,15 @@ internal fun BoxScope.SportsLiveZapOverlay(
                 {
                     menu = null
                     viewModel.onPanelChooseStream(item)
+                }
+            } else {
+                null
+            },
+            // TV QA: the one way to report on a remote with no Play/Pause or Info to hold.
+            onReport = if (SportsLiveMoreEntry.REPORT in shown.entries) {
+                {
+                    menu = null
+                    viewModel.onPanelReport()
                 }
             } else {
                 null
