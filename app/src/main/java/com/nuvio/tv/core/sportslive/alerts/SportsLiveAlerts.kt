@@ -496,6 +496,33 @@ class SportsLiveAlerts @Inject constructor(
         else holdsLock.withLock { holds.hold(alert) }
     }
 
+    /**
+     * Debug builds only (the on-screen check): a score toast for the game playing now, through a listed copy of it
+     * (another addon's, when one is listed, matched by game identity or ESPN event, never by title). It must be
+     * dropped: the log says whether it was.
+     */
+    suspend fun debugRaiseForPlaying() {
+        if (!BuildConfig.IS_DEBUG_BUILD) return
+        val now = watching.value
+        val cards = candidates(repo.latest.value, repo.claimedCatalogs.first(), emptyList())
+        val onScreen = cards.filter { it.teams != null && SportsLiveAlertEngine.isPlaying(it, now) }
+        val card = onScreen.firstOrNull { it.id !in now.playingIds } ?: onScreen.firstOrNull()
+        if (card == null) {
+            android.util.Log.d("SportsLiveAlerts", "debugRaiseForPlaying: no listed copy of the game on screen")
+            return
+        }
+        val teams = checkNotNull(card.teams)
+        fun side(name: String, score: Int) = ScoreTeam(null, null, name, name, name, null, null, score, emptyList())
+        val snapshot = ScoreSnapshot(
+            eventId = "debug-${card.streamKey}", league = EspnLeague("debug", "debug"), startMs = card.startMs,
+            state = ScoreState.IN, clockText = null, isFinal = false, home = side(teams.home, 1), away = side(teams.away, 0)
+        )
+        val sameCard = card.id in now.playingIds
+        enqueue(listOf(SportsLiveAlert.ScoreChange(card, snapshot, ScoreSide.HOME)), System.currentTimeMillis())
+        val shown = currentFlow.value?.alerts?.any { SportsLiveAlertEngine.gameKey(it.item) == SportsLiveAlertEngine.gameKey(card) } == true
+        android.util.Log.d("SportsLiveAlerts", "debugRaiseForPlaying: otherCopy=${!sameCard} shown=$shown")
+    }
+
     private fun ticks(): Flow<Unit> = flow {
         while (true) {
             emit(Unit)

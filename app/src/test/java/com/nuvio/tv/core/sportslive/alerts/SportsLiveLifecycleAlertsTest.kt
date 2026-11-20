@@ -97,6 +97,32 @@ class SportsLiveLifecycleAlertsTest {
     }
 
     @Test
+    fun `no score or full-time card for the game playing, under another addon's copy or by its ESPN game`() {
+        val listed = item(id = "addon-b-copy", addonId = "b")
+        val playingCopy = item(id = "addon-a-copy", addonId = "a")
+        val awaySide = setOf(com.nuvio.tv.core.sportslive.scores.ScoreSide.AWAY)
+        val byCopy = SportsLiveAlertEngine.watchingKeys(listOf(playingCopy)) { null }
+        val byEvent = SportsLiveAlertEngine.watchingKeys(listOf(item(name = "Indiana at Philadelphia", id = "espn-only"))) { event.eventId }
+        for ((ids, keys, events) in listOf(byCopy, byEvent)) {
+            val engine = SportsLiveAlertEngine()
+            val watching = SportsLiveWatching(
+                playingIds = ids, playingGameKeys = keys, playingEventIds = events,
+                inPlayer = true, sportsPlayback = true, streamStartedAtMs = START - 60 * MINUTE
+            )
+            fun step(at: Long, snapshot: com.nuvio.tv.core.sportslive.scores.ScoreSnapshot) =
+                engine.update(at, listOf(AlertGame(listed, snapshot, reminded = false, followedSides = awaySide)), SportsLiveAlertSettings(), ScoresMode.SHOW, watching)
+            assertEquals(emptyList<SportsLiveAlert>(), step(START + 10 * MINUTE, live(10, 10)))
+            assertEquals(emptyList<SportsLiveAlert>(), step(START + 20 * MINUTE, live(10, 13)))
+            assertEquals(emptyList<SportsLiveAlert>(), step(START + 180 * MINUTE, AlertFixtures.final(99, 101)))
+        }
+        // The same game not on screen does alert: the rule is the screen, not the game.
+        val engine = SportsLiveAlertEngine()
+        engine.update(START + 10 * MINUTE, listOf(AlertGame(listed, live(10, 10), false, awaySide)), SportsLiveAlertSettings(), ScoresMode.SHOW, SportsLiveWatching(inPlayer = true, sportsPlayback = true, playingIds = setOf("other"), streamStartedAtMs = START - 60 * MINUTE))
+        val alerts = engine.update(START + 20 * MINUTE, listOf(AlertGame(listed, live(10, 13), false, awaySide)), SportsLiveAlertSettings(), ScoresMode.SHOW, SportsLiveWatching(inPlayer = true, sportsPlayback = true, playingIds = setOf("other"), streamStartedAtMs = START - 60 * MINUTE))
+        assertEquals(1, alerts.count { it is SportsLiveAlert.ScoreChange })
+    }
+
+    @Test
     fun `a card matched to the ESPN game on screen is that game`() {
         val watching = SportsLiveWatching(playingEventIds = setOf(event.eventId))
         assertTrue(SportsLiveAlertEngine.isPlaying(item(name = "Indiana at Philadelphia", id = "x"), watching, event))

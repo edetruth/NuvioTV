@@ -1475,6 +1475,8 @@ open class MainActivity : ComponentActivity() {
             if (intent.getBooleanExtra("debugSportsCrunch", false)) lifecycleScope.launch { sportsLiveAlerts.debugCrunch() }
             // #161/#162 emulator checks: the game playing ends (optionally with nothing else live), every stream
             // stopping is a game end (dual, mini), the next link start waits, a kickoff is held or given up.
+            // A score toast for the game on screen (through another addon's copy where listed): must not show.
+            if (intent.getBooleanExtra("debugSportsAlertPlaying", false)) lifecycleScope.launch { sportsLiveAlerts.debugRaiseForPlaying() }
             val watch = com.nuvio.tv.core.sportslive.SportsLiveGameWatch.shared
             if (intent.hasExtra("debugSportsNoNext")) watch.debugNoNext = intent.getBooleanExtra("debugSportsNoNext", false)
             if (intent.hasExtra("debugSportsEndAll")) watch.debugEndAll = intent.getBooleanExtra("debugSportsEndAll", false)
