@@ -51,7 +51,11 @@ jobs:
         with:
           ref: ${{ env.WORK_BRANCH }}
           fetch-depth: 0
-          persist-credentials: false
+          # Not persist-credentials: false — its auth removal walks submodules and fails on upstream's
+          # url-less libmpv-android gitlink. The (read-only) token is dropped in the next step instead.
+
+      - name: Drop the checkout token
+        run: git config --local --unset-all http.https://github.com/.extraheader || true
 
       - name: Merge upstream (in the runner only)
         id: merge
