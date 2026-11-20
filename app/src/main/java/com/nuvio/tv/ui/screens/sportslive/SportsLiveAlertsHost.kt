@@ -846,7 +846,7 @@ private fun KickoffPrompt(
         }
         if (!noStreamYet) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (streamReady) SportsLiveReadyPill()
+                // The words say "Stream ready" already: no "▶ Ready" pill beside them (coordinator, live.20).
                 Text(
                     text = stringResource(if (streamReady) R.string.sports_live_kickoff_stream_ready else R.string.sports_live_kickoff_waiting_stream),
                     style = MaterialTheme.typography.bodyMedium,

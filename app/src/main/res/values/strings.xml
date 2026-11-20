@@ -4108,6 +4108,8 @@
     <string name="sports_live_alert_prompt_hint">OK Watch · Back Later</string>
     <string name="sports_live_alert_no_stream_hint">OK Remind me in 10 min · Back Dismiss</string>
     <string name="sports_live_alert_hint_dismiss">Back Dismiss</string>
+    <string name="sports_live_info_hint_game">OK Game page · Back close</string>
+    <string name="sports_live_info_hint_close">Back close</string>
     <string name="sports_live_alert_hint_peek">▼ Peek</string>
     <string name="sports_live_alert_peeking">Peeking · %1$s</string>
     <string name="sports_live_alert_peek_hint">OK Stay · Back Return · %1$d s</string>

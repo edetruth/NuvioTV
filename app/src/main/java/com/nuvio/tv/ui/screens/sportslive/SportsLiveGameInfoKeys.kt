@@ -73,6 +73,14 @@ object SportsLiveGameInfoKeys {
         else -> SportsLiveOkAction.SHOW_CONTROLS
     }
 
+    /**
+     * The info card's hint (full player): whether OK on it opens the Game page, read from [fullScreenOk] itself, so
+     * the words always follow the routing (switching OK on a live game to "show controls" changes neither).
+     */
+    fun infoCardOpensGame(live: Boolean, canOpenGame: Boolean): Boolean =
+        fullScreenOk(live = live, controlsShown = false, infoShown = true, infoAvailable = true, canOpenGame = canOpenGame) ==
+            SportsLiveOkAction.OPEN_GAME
+
     fun dual(keyCode: Int, shown: Boolean, available: Boolean): GameInfoKeyAction = when {
         keyCode != KeyEvent.KEYCODE_INFO -> GameInfoKeyAction.PASS
         shown -> GameInfoKeyAction.HIDE

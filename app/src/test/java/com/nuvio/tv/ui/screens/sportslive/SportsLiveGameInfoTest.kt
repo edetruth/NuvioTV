@@ -100,6 +100,14 @@ class SportsLiveGameInfoTest {
     }
 
     @Test
+    fun `the info card names OK Game page only while OK opens it, from the same routing`() {
+        assertTrue(SportsLiveGameInfoKeys.infoCardOpensGame(live = true, canOpenGame = true))
+        assertFalse(SportsLiveGameInfoKeys.infoCardOpensGame(live = true, canOpenGame = false))
+        // A replay's OK closes the card and pauses as before: only "Back close".
+        assertFalse(SportsLiveGameInfoKeys.infoCardOpensGame(live = false, canOpenGame = true))
+    }
+
+    @Test
     fun `dual INFO opens and closes the overlay, MENU stays the swap`() {
         assertEquals(GameInfoKeyAction.SHOW, SportsLiveGameInfoKeys.dual(KeyEvent.KEYCODE_INFO, shown = false, available = true))
         assertEquals(GameInfoKeyAction.HIDE, SportsLiveGameInfoKeys.dual(KeyEvent.KEYCODE_INFO, shown = true, available = true))

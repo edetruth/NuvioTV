@@ -178,7 +178,7 @@ class SportsLiveGameInfoViewModel internal constructor(
  * one line per top performer. [compact]: stacked for a dual pane's column, else one slim bottom row.
  */
 @Composable
-internal fun SportsLiveGameInfoOverlay(info: GameInfo?, compact: Boolean, modifier: Modifier = Modifier) {
+internal fun SportsLiveGameInfoOverlay(info: GameInfo?, compact: Boolean, modifier: Modifier = Modifier, hint: String? = null) {
     // The last content stays while the card fades out.
     var last by remember { mutableStateOf(info) }
     LaunchedEffect(info) { if (info != null) last = info }
@@ -196,10 +196,14 @@ internal fun SportsLiveGameInfoOverlay(info: GameInfo?, compact: Boolean, modifi
                 InfoLeaders(shown.leaders, heading = false)
             }
         } else {
-            Row(modifier = padded, horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { InfoScore(shown) }
-                InfoLinescore(shown)
-                if (shown.leaders.isNotEmpty()) Column(modifier = Modifier.width(300.dp)) { InfoLeaders(shown.leaders, heading = true) }
+            Column(modifier = padded, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { InfoScore(shown) }
+                    InfoLinescore(shown)
+                    if (shown.leaders.isNotEmpty()) Column(modifier = Modifier.width(300.dp)) { InfoLeaders(shown.leaders, heading = true) }
+                }
+                // Its keys, named (research 4): "OK Game page · Back close" ([sportsLiveInfoCardHint]).
+                hint?.let { InfoLine(it, SportsLiveTokens.Alert.Hint) }
             }
         }
     }

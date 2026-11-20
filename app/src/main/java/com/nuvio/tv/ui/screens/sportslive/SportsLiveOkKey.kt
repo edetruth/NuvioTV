@@ -5,6 +5,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.res.stringResource
+import com.nuvio.tv.R
 import com.nuvio.tv.core.sportslive.alerts.SportsLiveAlertKeys
 import com.nuvio.tv.domain.model.SportsLiveKind
 
@@ -30,7 +32,7 @@ fun rememberSportsLiveOkHandler(
                 false
             } else {
                 val playing = zap.nowPlaying
-                val live = zap.hasSession && playing != null && playing.kind != SportsLiveKind.REPLAY
+                val live = sportsLiveOkLive(zap)
                 val open = currentOpenGame
                 val request = if (info.shown && open != null) info.gameRequest() else null
                 val action = SportsLiveGameInfoKeys.fullScreenOk(
@@ -69,4 +71,23 @@ fun rememberSportsLiveOkHandler(
             }
         }
     }
+}
+
+/** The player plays a live Sports & Live game or channel (a zap session, not a replay): OK never pauses it. */
+private fun sportsLiveOkLive(zap: SportsLiveZapViewModel): Boolean {
+    val playing = zap.nowPlaying
+    return zap.hasSession && playing != null && playing.kind != SportsLiveKind.REPLAY
+}
+
+/**
+ * The full player's info card hint (coordinator, live.20): "OK Game page · Back close" while OK on it opens the Game
+ * page ([SportsLiveGameInfoKeys.infoCardOpensGame]), else "Back close". Read while the card shows.
+ */
+@Composable
+fun sportsLiveInfoCardHint(zap: SportsLiveZapViewModel, info: SportsLiveGameInfoViewModel): String {
+    val canOpenGame = LocalOpenSportsLiveGame.current != null && info.gameRequest() != null
+    return stringResource(
+        if (SportsLiveGameInfoKeys.infoCardOpensGame(sportsLiveOkLive(zap), canOpenGame)) R.string.sports_live_info_hint_game
+        else R.string.sports_live_info_hint_close
+    )
 }

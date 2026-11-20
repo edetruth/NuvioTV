@@ -2453,7 +2453,7 @@ fun PlayerScreen(
                 .padding(horizontal = 48.dp, vertical = 32.dp),
             contentAlignment = Alignment.BottomCenter
         ) {
-            SportsLiveGameInfoOverlay(info = sportsLiveInfo, compact = false)
+            SportsLiveGameInfoOverlay(info = sportsLiveInfo, compact = false, hint = sportsLiveInfo?.let { com.nuvio.tv.ui.screens.sportslive.sportsLiveInfoCardHint(sportsLiveZap, sportsLiveGameInfo) })
         }
     }
 }
