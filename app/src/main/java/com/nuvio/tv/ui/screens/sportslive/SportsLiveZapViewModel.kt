@@ -181,6 +181,21 @@ class SportsLiveZapViewModel internal constructor(
     /** True when this player was opened with a zap session for its content; only then is the overlay shown. */
     val hasSession: Boolean = SportsLiveZapSessions.activeFor(contentId) != null
 
+    init {
+        // Watch from outside Sports & Live (#173 follow-up): the shared list may not be loaded; the panel fills once it is.
+        if (hasSession && repo.latest.value == null) {
+            viewModelScope.launch {
+                try {
+                    repo.load(force = false, includeChannels = false)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    // The panel shows Now playing alone; opening it tries again.
+                }
+            }
+        }
+    }
+
     // A player reached by a zap shows the banner for BANNER_MS.
     private val arrival = MutableStateFlow(
         SportsLiveZapSessions.activeFor(contentId)?.takeIf { SportsLiveZapSessions.consumeZapArrival() }
@@ -343,7 +358,8 @@ class SportsLiveZapViewModel internal constructor(
                         current.list.scoped.count { it.streamKey !in current.finished }).coerceAtLeast(0)
                 } else {
                     0
-                }
+                },
+                loading = repo.latest.value == null
             )
             // Laid out here, off the main thread.
             state.guide

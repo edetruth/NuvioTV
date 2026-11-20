@@ -19,6 +19,37 @@ class SportsLiveZapSessionTest {
         SportsLiveZapSessions.clear()
     }
 
+    // One session for every Watch (#173 follow-up)
+
+    @Test
+    fun `a Watch from outside Live now starts a Live now session over the shared list, on its game`() {
+        val lineup = listOf(item("a"), item("b"), item("c"))
+        val session = SportsLiveZapSessions.ensureFor(item("b"), lineup)
+        assertEquals("b", session.current.id)
+        assertEquals(listOf("a", "b", "c"), session.items.map { it.id })
+        assertEquals(SportsLiveTab.LIVE_NOW, session.tab)
+        assertSame(session, SportsLiveZapSessions.activeFor("b"))
+    }
+
+    @Test
+    fun `a game the shared list lacks, or a list not loaded yet, still gets a session`() {
+        val missing = SportsLiveZapSessions.ensureFor(item("x"), listOf(item("a")))
+        assertEquals(listOf("x", "a"), missing.items.map { it.id })
+        SportsLiveZapSessions.clear()
+        val alone = SportsLiveZapSessions.ensureFor(item("x"), emptyList())
+        assertEquals(listOf("x"), alone.items.map { it.id })
+        assertSame(alone, SportsLiveZapSessions.activeFor("x"))
+    }
+
+    @Test
+    fun `the session already on the game, from Live now or Home, is kept`() {
+        val home = session(listOf(item("a"), item("b")), index = 1).copy(returnToHomeOnBack = true)
+        SportsLiveZapSessions.start(home)
+        assertSame(home, SportsLiveZapSessions.ensureFor(item("b"), listOf(item("c"))))
+        // On another game it is replaced.
+        assertEquals(listOf("c"), SportsLiveZapSessions.ensureFor(item("c"), listOf(item("c"))).items.map { it.id })
+    }
+
     @Test
     fun `next and previous wrap around`() {
         val session = session(listOf(item("a"), item("b"), item("c")), index = 0)

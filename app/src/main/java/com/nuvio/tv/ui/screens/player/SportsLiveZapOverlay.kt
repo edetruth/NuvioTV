@@ -797,9 +797,9 @@ private fun LiveGamesPanel(
             }
             if (firstKey == null) {
                 // Nothing else on: Now playing alone, or the empty line when even that is unknown.
-                if (nowRow == null) {
+                if (nowRow == null || state.loading) {
                     Text(
-                        text = stringResource(R.string.sports_live_zap_panel_empty),
+                        text = stringResource(if (state.loading) R.string.sports_live_zap_panel_loading else R.string.sports_live_zap_panel_empty),
                         style = SportsLiveTokens.style(SportsLiveTokens.Type.PanelLine),
                         color = SportsLiveTokens.Colors.TextSecondary,
                         modifier = Modifier

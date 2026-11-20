@@ -497,7 +497,9 @@ data class SportsLiveZapPanelState(
      */
     val nowPlayingRow: ZapPanelRow? = rows.firstOrNull { it.item.streamKey == currentKey },
     /** Games My sports hides while the panel is on All (My sports, #167): the list's last line offers them. */
-    val hiddenByMySports: Int = 0
+    val hiddenByMySports: Int = 0,
+    /** The shared Live now list is not loaded yet (Watch from outside Sports & Live): "Loading games…" shows. */
+    val loading: Boolean = false
 ) {
     val items: List<SportsLiveItem> = rows.map { it.item }
 

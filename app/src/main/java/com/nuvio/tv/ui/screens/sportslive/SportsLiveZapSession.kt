@@ -182,6 +182,23 @@ internal object SportsLiveZapSessions {
         this.session = session
     }
 
+    /**
+     * The one way a Sports & Live Watch outside Live now's own list opens the full player (#173 follow-up):
+     * an alert or kickoff prompt from any screen, the Game page, a Team page, the Resume chip, the Upcoming
+     * stage. The session already on [item] (Live now's, Home's row, a zap's) is kept; otherwise one over
+     * [lineup] (the shared Live now list, as the panel builds it) starts on [item], with [item] put first
+     * when the list lacks it (not loaded yet, a game about to start). So the panel and CH± always work.
+     */
+    fun ensureFor(item: SportsLiveItem, lineup: List<SportsLiveItem>, returnToHomeOnBack: Boolean = false): SportsLiveZapSession {
+        activeFor(item.id)?.let { return it }
+        val items = if (lineup.any { it.streamKey == item.streamKey }) lineup else listOf(item) + lineup
+        val session = checkNotNull(
+            SportsLiveZapSession.of(items, item.streamKey, SportsLiveTab.LIVE_NOW, filter = null, returnToHomeOnBack = returnToHomeOnBack)
+        )
+        start(session)
+        return session
+    }
+
     fun markZapArrival() {
         zapArrivalPending = true
     }

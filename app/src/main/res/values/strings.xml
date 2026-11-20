@@ -4031,6 +4031,7 @@
     <string name="sports_live_zap_down_hint">▼ All games</string>
     <string name="sports_live_zap_panel_title">Live now</string>
     <string name="sports_live_zap_panel_empty">Nothing live right now</string>
+    <string name="sports_live_zap_panel_loading">Loading games…</string>
     <plurals name="sports_live_sources_count">
         <item quantity="one">%1$d source</item>
         <item quantity="other">%1$d sources</item>

@@ -10,12 +10,14 @@ import com.nuvio.tv.core.sportslive.SportsLiveWorkingLinks
 import com.nuvio.tv.data.local.PlayerSettingsDataStore
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import com.nuvio.tv.data.local.StreamAutoPlayMode
+import com.nuvio.tv.domain.repository.SportsLiveRepository
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveKind
 import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.ui.screens.player.SportsLiveLaunchHeaders
 import com.nuvio.tv.ui.screens.stream.streamPlaybackInfoFor
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -183,7 +185,9 @@ class SportsLivePlayViewModel @Inject constructor(
     private val playerSettingsDataStore: PlayerSettingsDataStore,
     private val directDebridResolver: DirectDebridResolver,
     private val profileManager: ProfileManager,
-    private val sportsLivePreferences: SportsLivePreferencesDataStore
+    private val sportsLivePreferences: SportsLivePreferencesDataStore,
+    // The shared Live now list every Watch's zap session is built from (#173 follow-up); null in tests that skip it.
+    private val repo: SportsLiveRepository? = null
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<SportsLivePlayState>(SportsLivePlayState.Idle)
@@ -229,7 +233,7 @@ class SportsLivePlayViewModel @Inject constructor(
             }
             when (found.size) {
                 0 -> _events.send(SportsLivePlayEvent.NoStream(title))
-                1 -> playStream(found[0].first, found[0].second, token = token)
+                1 -> playStream(found[0].first, found[0].second, token = token, zapSession = false)
                 else -> Unit
             }
         }
@@ -241,7 +245,7 @@ class SportsLivePlayViewModel @Inject constructor(
         val (replay, stream) = picking.sources.getOrNull(index) ?: return
         _state.value = SportsLivePlayState.Idle
         val token = gate.begin(replay.streamKey)
-        job = viewModelScope.launch { playStream(replay, stream, token = token) }
+        job = viewModelScope.launch { playStream(replay, stream, token = token, zapSession = false) }
     }
 
     /** "Choose stream" on [item]: its streams to pick from (the Stream screen, or a merged card's picker). */
@@ -378,7 +382,8 @@ class SportsLivePlayViewModel @Inject constructor(
      * [item]'s Stream screen, marked sports so its full player still auto-fails over across the
      * addon's links (and a merged card's other sources) and shows the recovery overlay.
      */
-    private fun openStreamScreen(item: SportsLiveItem, manualSelection: Boolean, noStreamFound: Boolean = false) {
+    private suspend fun openStreamScreen(item: SportsLiveItem, manualSelection: Boolean, noStreamFound: Boolean = false) {
+        ensureZapSession(item)
         SportsLiveExtraSources.markSportsPlayback(item.id, item)
         if (item.alternates.isNotEmpty()) SportsLiveExtraSources.register(item.id, item)
         _events.trySend(SportsLivePlayEvent.OpenStreamScreen(item, manualSelection, noStreamFound))
@@ -390,7 +395,9 @@ class SportsLivePlayViewModel @Inject constructor(
         autoPicked: Boolean = false,
         announce: Boolean = false,
         liveEdge: Boolean = false,
-        token: SportsLiveRequestToken
+        token: SportsLiveRequestToken,
+        /** False for a replay: it has no live games to zap through. */
+        zapSession: Boolean = true
     ) {
         val target = sportsLiveZapTarget(
             item = item,
@@ -402,11 +409,39 @@ class SportsLivePlayViewModel @Inject constructor(
         ).copy(liveEdge = liveEdge)
         // A start made stale meanwhile (#175) opens nothing.
         if (!gate.mayPlay(token)) return
+        if (zapSession) ensureZapSession(item)
         // The player (or the primary's Stream screen) gets the other addons' streams for fallback and Sources.
         SportsLiveExtraSources.register(item.id, item)
         // A stream that opens the Stream screen for preparation is not announced: it is not playing yet.
         val source = stream.addonName.takeIf { announce && target.playback != null && it.isNotBlank() }
         _events.send(SportsLivePlayEvent.Play(target, source))
+    }
+
+    /**
+     * Before [item]'s player opens: its zap session ([SportsLiveZapSessions.ensureFor]) over the shared Live now
+     * list as it stands, so the panel and CH± work whichever screen Watch came from. A list not loaded yet
+     * leaves [item] alone in it; the player loads the list and the panel fills in.
+     */
+    private suspend fun ensureZapSession(item: SportsLiveItem) {
+        val repo = repo ?: return
+        // Games only: a replay or a channel keeps the session its own list started, if any.
+        if (item.kind != SportsLiveKind.EVENTS || SportsLiveZapSessions.activeFor(item.id) != null) return
+        val lineup = try {
+            val claimed = repo.claimedCatalogs.first()
+            liveGamesPanelItems(
+                items = repo.latest.value?.items.orEmpty(),
+                claimedKeys = claimed.mapTo(HashSet()) { it.key },
+                endedKeys = repo.endedKeys.value,
+                followed = repo.followedTeams.first(),
+                nowMs = System.currentTimeMillis(),
+                addonOrder = claimed.map { it.addon.id }.distinct()
+            )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            emptyList()
+        }
+        SportsLiveZapSessions.ensureFor(item, lineup, returnToHomeOnBack)
     }
 
     private suspend fun noStream(item: SportsLiveItem) {

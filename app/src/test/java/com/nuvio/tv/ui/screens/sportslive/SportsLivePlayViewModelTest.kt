@@ -8,7 +8,12 @@ import com.nuvio.tv.data.local.PlayerSettings
 import com.nuvio.tv.data.local.PlayerSettingsDataStore
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import com.nuvio.tv.data.local.StreamAutoPlayMode
+import androidx.lifecycle.SavedStateHandle
+import com.nuvio.tv.domain.model.ClaimedCatalog
 import com.nuvio.tv.domain.model.ContentType
+import com.nuvio.tv.domain.model.SportsLiveTab
+import com.nuvio.tv.domain.repository.SportsLiveLoad
+import com.nuvio.tv.domain.repository.SportsLiveRepository
 import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.domain.model.PosterShape
 import com.nuvio.tv.domain.model.SportsLiveItem
@@ -46,7 +51,7 @@ class SportsLivePlayViewModelTest {
     private var modeChosen = true
     private val openGame = MutableStateFlow<SportsLiveOpenGame?>(null)
 
-    private fun newViewModel(): SportsLivePlayViewModel {
+    private fun newViewModel(repo: SportsLiveRepository? = null): SportsLivePlayViewModel {
         val settings = mockk<PlayerSettingsDataStore>()
         every { settings.playerSettings } answers { flowOf(PlayerSettings(streamAutoPlayMode = mode, streamAutoPlayModeChosen = modeChosen)) }
         val debrid = mockk<DirectDebridResolver>()
@@ -55,7 +60,7 @@ class SportsLivePlayViewModelTest {
         every { profiles.activeProfileId } returns MutableStateFlow(1)
         val sportsPrefs = mockk<SportsLivePreferencesDataStore>()
         every { sportsPrefs.openGame } returns openGame
-        return SportsLivePlayViewModel(resolver, settings, debrid, profiles, sportsPrefs)
+        return SportsLivePlayViewModel(resolver, settings, debrid, profiles, sportsPrefs, repo)
     }
 
     private fun TestScope.eventsOf(viewModel: SportsLivePlayViewModel): List<SportsLivePlayEvent> {
@@ -387,6 +392,88 @@ class SportsLivePlayViewModelTest {
         assertEquals(SINGLE, target.item)
         assertEquals(STREAM.url, target.playback?.url)
         assertTrue(!target.autoPicked)
+    }
+
+    // --- Every Watch opens the player with a zap session (#173 follow-up): the panel and CH± work ---
+
+    private fun lineupRepo(items: List<SportsLiveItem>?): SportsLiveRepository {
+        val claimed = mockk<ClaimedCatalog>(relaxed = true)
+        every { claimed.key } returns SINGLE.catalogKey
+        every { claimed.addon.id } returns "one"
+        val repo = mockk<SportsLiveRepository>(relaxed = true)
+        every { repo.latest } returns MutableStateFlow(items?.let { SportsLiveLoad(it, emptyList(), 0L, setOf(SINGLE.catalogKey)) })
+        every { repo.claimedCatalogs } returns flowOf(listOf(claimed))
+        every { repo.endedKeys } returns MutableStateFlow(emptySet())
+        every { repo.followedTeams } returns flowOf(emptyList())
+        return repo
+    }
+
+    private fun zapViewModelFor(contentId: String, repo: SportsLiveRepository): SportsLiveZapViewModel {
+        val debrid = mockk<DirectDebridResolver>()
+        coEvery { debrid.shouldResolveToPlayableStream(any()) } returns false
+        val profiles = mockk<ProfileManager>()
+        every { profiles.activeProfileId } returns MutableStateFlow(1)
+        return SportsLiveZapViewModel(SavedStateHandle(mapOf("contentId" to contentId)), resolver, debrid, profiles, repo, mockk(relaxed = true))
+    }
+
+    @Test
+    fun `an alert Watch from outside Sports Live opens the player with a session over the shared list`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            SportsLiveZapSessions.clear()
+            val other = item("other", "one").copy(meta = item("other", "one").meta.copy(name = "C vs D"))
+            val repo = lineupRepo(listOf(other, SINGLE))
+            val viewModel = newViewModel(repo)
+            val events = eventsOf(viewModel)
+
+            viewModel.playResolved(SINGLE, STREAM)
+            advanceUntilIdle()
+
+            assertTrue(events.single() is SportsLivePlayEvent.Play)
+            val session = SportsLiveZapSessions.activeFor(SINGLE.id)!!
+            assertEquals(SINGLE.streamKey, session.current.streamKey)
+            assertEquals(setOf(SINGLE.id, other.id), session.items.map { it.id }.toSet())
+            // The player that opens has its panel and CH±.
+            assertTrue(zapViewModelFor(SINGLE.id, repo).hasSession)
+            SportsLiveZapSessions.clear()
+        }
+
+    @Test
+    fun `with the shared list not loaded yet the game still gets a session, and the player loads the list`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            SportsLiveZapSessions.clear()
+            coEvery { resolver.lookup(any()) } returns SportsLiveLookup.Found(STREAM)
+            val repo = lineupRepo(null)
+            val viewModel = newViewModel(repo)
+            eventsOf(viewModel)
+
+            viewModel.play(SINGLE)
+            advanceUntilIdle()
+
+            assertEquals(listOf(SINGLE.id), SportsLiveZapSessions.activeFor(SINGLE.id)!!.items.map { it.id })
+            val zap = zapViewModelFor(SINGLE.id, repo)
+            advanceUntilIdle()
+            assertTrue(zap.hasSession)
+            coVerify { repo.load(any(), false, any()) }
+            SportsLiveZapSessions.clear()
+        }
+
+    @Test
+    fun `a replay starts no session, and a session already on the game is kept`() = runTest(mainDispatcherRule.dispatcher) {
+        SportsLiveZapSessions.clear()
+        val repo = lineupRepo(listOf(SINGLE))
+        val viewModel = newViewModel(repo)
+        eventsOf(viewModel)
+        coEvery { resolver.lookup(any()) } returns SportsLiveLookup.Found(STREAM)
+        viewModel.playReplay(listOf(REPLAY), "A vs B")
+        advanceUntilIdle()
+        assertNull(SportsLiveZapSessions.current())
+
+        val fromLiveNow = SportsLiveZapSession.of(listOf(SINGLE), SINGLE.streamKey, SportsLiveTab.LIVE_NOW, "x", returnToHomeOnBack = true)!!
+        SportsLiveZapSessions.start(fromLiveNow)
+        viewModel.playResolved(SINGLE, STREAM)
+        advanceUntilIdle()
+        assertTrue(SportsLiveZapSessions.current() === fromLiveNow)
+        SportsLiveZapSessions.clear()
     }
 
     // --- Catch up replays (#58): played at once, never the addon's page or Stream screen ---
