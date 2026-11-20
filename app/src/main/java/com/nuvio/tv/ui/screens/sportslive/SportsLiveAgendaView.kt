@@ -202,7 +202,7 @@ internal fun agendaWhenText(row: ScoreboardRow, nowMs: Long): String? {
 internal fun agendaStageTitle(row: ScoreboardRow): String {
     val art = row.art?.takeIf { row.twoSided } ?: return singleLineTitle(row.item)
     return stringResource(
-        if (agendaWrittenAt(row.item.meta.name)) R.string.sports_live_matchup_at else R.string.sports_live_matchup,
+        if (agendaSaysAt(row)) R.string.sports_live_matchup_at else R.string.sports_live_matchup,
         art.first.shortName,
         art.second.shortName
     )
@@ -212,7 +212,7 @@ internal fun agendaStageTitle(row: ScoreboardRow): String {
 internal fun agendaStageTitleText(row: ScoreboardRow, context: android.content.Context): String {
     val art = row.art?.takeIf { row.twoSided } ?: return singleLineTitle(row.item)
     return context.getString(
-        if (agendaWrittenAt(row.item.meta.name)) R.string.sports_live_matchup_at else R.string.sports_live_matchup,
+        if (agendaSaysAt(row)) R.string.sports_live_matchup_at else R.string.sports_live_matchup,
         art.first.shortName,
         art.second.shortName
     )

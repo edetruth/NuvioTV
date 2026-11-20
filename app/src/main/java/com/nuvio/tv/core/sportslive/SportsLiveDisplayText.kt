@@ -216,7 +216,9 @@ object SportsLiveDisplayText {
     private val COMPETITION_SUFFIX = Regex(
         """(?:\s+[-|·]?\s*|\s*[(\[])((?:euro ?league|euro ?cup|liga (?:acb|endesa)|lega basket|basketball champions league|""" +
             """nba|wnba|ncaa[mbfw]?|nhl|khl|nfl|mlb|mls|premier league|la ?liga|serie a|bundesliga|ligue 1|eredivisie|""" +
-            """champions league|europa league|conference league|super lig|primeira liga))[)\]]?\s*$""",
+            """champions league|europa league|conference league|super lig|primeira liga|""" +
+            // Tennis events glued to a player's name (live.20: "Arthur Fils ATP Finals").
+            """(?:atp|wta)(?: tour)? finals|next gen atp finals|(?:atp|wta)(?: \d{3,4})?|davis cup|billie jean king cup|united cup|laver cup))[)\]]?\s*$""",
         RegexOption.IGNORE_CASE
     )
 

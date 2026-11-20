@@ -776,7 +776,9 @@ object SportsLiveItemBucketer {
     /**
      * What a game an addon files under motorsport really is when its title says otherwise (F4): figure skating
      * ("ISU Grand Prix") is "Skating"; horse racing ("Live racing from Catterick") is "Racing", as is any title
-     * that says "racing" with no motor word. Null when the title is motorsport, or says nothing.
+     * that says "racing" with no motor word. A title naming another individual sport outright is that sport
+     * (live.20: a tennis replay "Arthur Fils ATP Finals @ Alexander Zverev" filed under "MotoGP" read as MotoGP).
+     * Null when the title is motorsport, or says nothing.
      */
     internal fun misfiledMotorsport(title: String): String? {
         val words = wordsOf(title)
@@ -784,9 +786,20 @@ object SportsLiveItemBucketer {
             words.any { it in SKATING_WORDS } -> SKATING
             words.any { it in HORSE_WORDS } -> RACING
             "racing" in words && words.none { it in MOTOR_WORDS } -> RACING
-            else -> null
+            else -> SportsLiveSportKind.of(title)?.let(MISFILED_INDIVIDUAL::get)
         }
     }
+
+    /** Individual sports a title can name outright, as the sport word a card then carries. */
+    private val MISFILED_INDIVIDUAL = mapOf(
+        SportsLiveSportKind.TENNIS to "Tennis",
+        SportsLiveSportKind.GOLF to "Golf",
+        SportsLiveSportKind.BOXING to "Boxing",
+        SportsLiveSportKind.MMA to "MMA",
+        SportsLiveSportKind.DARTS to "Darts",
+        SportsLiveSportKind.SNOOKER to "Snooker",
+        SportsLiveSportKind.CYCLING to "Cycling"
+    )
 
     private val SKATING_WORDS = setOf("isu", "skating", "skate", "skater", "skaters")
     private val HORSE_WORDS = setOf("horse", "horses", "racecourse", "hurdle", "hurdles", "steeplechase", "greyhound", "greyhounds", "thoroughbred", "equestrian")

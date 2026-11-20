@@ -49,6 +49,7 @@ import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
 import com.nuvio.tv.R
 import com.nuvio.tv.core.sportslive.SportsLiveDisplayText
+import com.nuvio.tv.core.sportslive.SportsLiveSportKind
 import com.nuvio.tv.core.sportslive.displayName
 import com.nuvio.tv.core.sportslive.GameStatusStrings
 import com.nuvio.tv.core.sportslive.scores.GameArt
@@ -378,6 +379,17 @@ internal fun seasonLabelRes(type: Int): Int? = when (type) {
 
 /** The title writes the game "A at B" or "A @ B" (away first): the stage says "at", else "vs". */
 internal fun agendaWrittenAt(title: String): Boolean = title.contains(" at ", ignoreCase = true) || title.contains(" @ ")
+
+/** Sports with no home side: "at" says nothing there, so their matchups read "A vs B" in the written order. */
+private val NO_HOME_SIDE = setOf(
+    SportsLiveSportKind.TENNIS, SportsLiveSportKind.GOLF, SportsLiveSportKind.BOXING, SportsLiveSportKind.MMA,
+    SportsLiveSportKind.DARTS, SportsLiveSportKind.SNOOKER, SportsLiveSportKind.WRESTLING, SportsLiveSportKind.MOTORSPORT,
+    SportsLiveSportKind.CYCLING
+)
+
+/** Whether [row]'s matchup reads "A at B": written so, and a sport with a home side (live.20: never tennis). */
+internal fun agendaSaysAt(row: ScoreboardRow): Boolean =
+    agendaWrittenAt(row.item.meta.name) && (row.sportTag ?: SportsLiveSportKind.tagOf(row.item)) !in NO_HOME_SIDE
 
 /**
  * What the drawn matchup says under "vs" (Live Now's stage before its preview plays): [row]'s status in the one
