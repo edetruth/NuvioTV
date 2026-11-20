@@ -1251,10 +1251,7 @@ private fun SportsLiveContent(
                     // Where to undo it: the one place hidden titles are listed.
                     SportsLiveToasts.show(
                         SportsLiveToastKind.INFO,
-                        context.getString(
-                            if (uiState.selectedTab == SportsLiveTab.LIVE_NOW) R.string.sports_live_hidden_toast else R.string.sports_live_hidden_toast_any,
-                            heading.title
-                        ),
+                        context.getString(R.string.sports_live_hidden_toast, heading.title),
                         context.getString(R.string.sports_live_hidden_toast_line)
                     )
                 }

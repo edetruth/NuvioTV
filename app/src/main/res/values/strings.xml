@@ -3812,13 +3812,12 @@
     <!-- More… as a sheet over the stage (#134). -->
     <string name="sports_live_team_pages">Team pages…</string>
     <string name="sports_live_hide_from_live_now">Hide from Live Now</string>
-    <string name="sports_live_hidden_toast">Hidden from Live Now: %1$s</string>
-    <string name="sports_live_hidden_toast_line">Undo in Settings → More → Hidden</string>
+    <string name="sports_live_hidden_toast">Hidden: %1$s</string>
+    <string name="sports_live_hidden_toast_line">Undo in Settings → More → Hidden titles</string>
     <string name="sports_live_hide_this">Hide this</string>
-    <string name="sports_live_hidden_toast_any">Hidden: %1$s</string>
     <!-- Settings → More → Hidden (#134). -->
-    <string name="sports_live_setting_hidden">Hidden from Live Now</string>
-    <string name="sports_live_setting_hidden_subtitle">OK shows a title on Live Now again</string>
+    <string name="sports_live_setting_hidden">Hidden titles</string>
+    <string name="sports_live_setting_hidden_subtitle">OK shows the title again</string>
     <string name="sports_live_setting_hidden_empty">Nothing hidden. More… → Hide from Live Now takes a title off Live Now.</string>
     <string name="sports_live_setting_hidden_show">Show</string>
     <string name="sports_live_follow">Follow %1$s</string>
@@ -4090,7 +4089,7 @@
     <string name="sports_live_my_sports_all_competitions_help">Every soccer game. Pick competitions below to narrow it down.</string>
     <string name="sports_live_my_teams_add_hint">Search by name, city or nickname</string>
     <string name="sports_live_setting_hidden_none">Nothing hidden</string>
-    <string name="sports_live_setting_hidden_row_help">Titles you hid from Live Now. OK lists them, so you can bring one back</string>
+    <string name="sports_live_setting_hidden_row_help">Titles you hid. OK lists them, so you can bring one back</string>
     <string name="sports_live_setting_catalogs_row_help">Which addon catalogs feed Sports &amp; Live. OK lists them. This TV only</string>
     <string name="sports_live_more_show">Show</string>
     <string name="sports_live_more_hide">Hide</string>
