@@ -125,7 +125,8 @@ private fun DrawnCardFrame(
         val scoreStyle = SportsLiveTokens.style(SportsLiveTokens.Type.RowScore).let { if (big) it.copy(fontSize = 17.sp, lineHeight = 20.sp) else it.copy(fontSize = 15.sp, lineHeight = 18.sp) }
         league?.takeIf { it.isNotBlank() }?.let { text ->
             Text(
-                text = text.uppercase(Locale.getDefault()),
+                // The one shared tag vocabulary (live.20), as Live Now's rows and the panel.
+                text = com.nuvio.tv.core.sportslive.SportsLiveTags.short(text.uppercase(Locale.getDefault()), null),
                 style = tagStyle,
                 color = Colors.TextMuted,
                 maxLines = 1,

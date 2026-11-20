@@ -264,7 +264,7 @@ private fun GameCells(row: ScoreboardRow, reminded: Boolean, hasReplay: Boolean,
         horizontalArrangement = Arrangement.spacedBy(COLUMN_GAP),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        LeagueTag(rowTagText(row), live)
+        LeagueTag(boardTagText(row), live)
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
             val art = row.art
             if (art != null) {
@@ -292,6 +292,10 @@ private fun GameCells(row: ScoreboardRow, reminded: Boolean, hasReplay: Boolean,
 
 /** The row's tag: ESPN's league, the card's sport, else the sport its text tells ("TENNIS", "CRICKET"). */
 @Composable
+/** The board's tag in the one shared vocabulary (live.20: same short tags as the panel, Home and dual). */
+internal fun boardTagText(row: ScoreboardRow): String =
+    com.nuvio.tv.core.sportslive.SportsLiveTags.short(rowTagText(row), row.sportTag ?: SportsLiveSportKind.plainTagOf(row.item))
+
 internal fun rowTagText(row: ScoreboardRow): String =
     rowTagOf(row, row.sportTag?.let { sportKindLabel(it) }, SportsLiveSportKind.plainTagOf(row.item)?.let { sportKindLabel(it) })
 
@@ -326,7 +330,7 @@ private fun SingleLineCells(row: ScoreboardRow, hasReplay: Boolean, ready: Boole
         horizontalArrangement = Arrangement.spacedBy(COLUMN_GAP),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        LeagueTag(rowTagText(row), row.group == ScoreboardGroup.LIVE)
+        LeagueTag(boardTagText(row), row.group == ScoreboardGroup.LIVE)
         // The logo slot holds the event's mark (live.20 item 4: a tournament feed's trophy, else its sport), so the
         // title starts where team names do and the slot is never empty.
         SportsLiveEventMarkIcon(row.sportTag, Modifier.size(ROW_LOGO_SIZE))
@@ -356,7 +360,7 @@ private fun AgendaCells(row: ScoreboardRow, side: AgendaRowSide, shortNames: Boo
         verticalAlignment = Alignment.CenterVertically
     ) {
         // No score column here: the tag gets the room to read at its full size, as on every other row.
-        LeagueTag(rowTagText(row), live = false)
+        LeagueTag(boardTagText(row), live = false)
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
             val art = row.art
             if (art != null && row.twoSided) {

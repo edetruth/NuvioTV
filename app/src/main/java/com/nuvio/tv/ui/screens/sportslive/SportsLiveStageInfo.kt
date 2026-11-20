@@ -248,8 +248,8 @@ internal fun rowBadgeOf(ready: Boolean, excitement: Boolean, closeGame: Boolean)
 
 /**
  * The stage's compact linescore (live.20): the last [maxPeriods] periods on one line, each "3rd 25–20" (first side
- * first, as the scoreline), an overtime or extra time by its own name ("OT 7–5"); a period a side has not played reads
- * [ScoreDetailsStrings.emptyPeriod]. Null with no periods. The full table is the Game page's.
+ * first, as the scoreline), an overtime or extra time by its own name ("OT 7–5"); a period the first side has not played reads
+ * [ScoreDetailsStrings.emptyPeriod]; one the second side has not played ends at the dash ("9th 1–"). Null with no periods. The full table is the Game page's.
  */
 internal fun stageLinescoreText(
     details: ScoreDetails.Shown,
@@ -264,9 +264,10 @@ internal fun stageLinescoreText(
             is PeriodLabel.Number -> ordinal(period.n)
             else -> ScoreDetailsBuilder.periodText(period, strings)
         }
-        val first = details.first.linescores.getOrNull(index)?.toString() ?: strings.emptyPeriod
-        val second = details.second.linescores.getOrNull(index)?.toString() ?: strings.emptyPeriod
-        "$label $first–$second"
+        val first = details.first.linescores.getOrNull(index)?.toString()
+        val second = details.second.linescores.getOrNull(index)?.toString()
+        // A side that has not played the period yet shows nothing after the dash ("9th 1–"), never a doubled dash.
+        "$label ${first ?: strings.emptyPeriod}–${second.orEmpty()}"
     }
 }
 

@@ -116,7 +116,7 @@ class SportsLiveStageInfoTest {
             periods = listOf(PeriodLabel.Number(1), PeriodLabel.Number(2), PeriodLabel.Number(3), PeriodLabel.Number(4)),
             soccer = false
         )
-        assertEquals("2nd 25–30 · 3rd 31–25 · 4th 13––", stageLinescoreText(shown, DETAIL_STRINGS))
+        assertEquals("2nd 25–30 · 3rd 31–25 · 4th 13–", stageLinescoreText(shown, DETAIL_STRINGS))
         val overtime = shown.copy(
             first = shown.first.copy(linescores = listOf(22, 25, 7)),
             second = shown.second.copy(linescores = listOf(20, 30, 5)),
