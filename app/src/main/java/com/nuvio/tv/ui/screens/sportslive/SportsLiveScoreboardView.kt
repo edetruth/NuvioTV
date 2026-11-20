@@ -293,6 +293,7 @@ private fun GameCells(row: ScoreboardRow, reminded: Boolean, hasReplay: Boolean,
 /** The row's tag: ESPN's league, the card's sport, else the sport its text tells ("TENNIS", "CRICKET"). */
 @Composable
 /** The board's tag in the one shared vocabulary (live.20: same short tags as the panel, Home and dual). */
+@Composable
 internal fun boardTagText(row: ScoreboardRow): String =
     com.nuvio.tv.core.sportslive.SportsLiveTags.short(rowTagText(row), row.sportTag ?: SportsLiveSportKind.plainTagOf(row.item))
 
