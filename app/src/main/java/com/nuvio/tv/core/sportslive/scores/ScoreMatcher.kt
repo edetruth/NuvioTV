@@ -49,9 +49,10 @@ data class ScoreCard(
  *   5, so one side must match STRONG.
  * - A (W)/Women or U21-style qualifier must agree: the card's against the competitor's names or, when
  *   they carry none, the event's league slug (`eng.w.1`, `fifa.friendly_u21`).
- * - Time: within ±3 h of a timed card's start. A card with a bare date is matched on that day first,
- *   ranked by distance from mid-day, and on the day before only when that day has no match, in the
- *   device time zone.
+ * - Time: within ±3 h of a timed card's start; with no game there at all, the pair's one meeting within ±14 h when
+ *   both sides match STRONG and the pair meets no other time within ±38 h (#181, a timezone slip). A card with a
+ *   bare date is matched on that day first, ranked by distance from mid-day, and on the day before only when that
+ *   day has no match, in the device time zone.
  * - A card with no start (chiefly a channel's "[A vs B]") is matched on ESPN's days, US Eastern: today
  *   and yesterday, whatever the device's zone. One meeting of the pair is the match; when there are
  *   more (a series, a home-and-home, a back-to-back), only the one live game, or else the one
@@ -92,6 +93,7 @@ class ScoreMatcher(
         // The day before is tried only when the day has no candidate at all, not when it is ambiguous.
         val pick = if (timed) {
             best(home, away, events, (start - WINDOW_MS)..(start + WINDOW_MS), reference = start, byStart = true)
+                ?: offsetPick(home, away, events, start)
         } else {
             bestOnDay(home, away, events, day, zoneId)
                 ?: if (previousDayFallback) bestOnDay(home, away, events, day.minusDays(1), zoneId) else null
@@ -131,6 +133,25 @@ class ScoreMatcher(
         }
         if (pick == null && BuildConfig.DEBUG) Log.d(TAG, "ambiguous: ${candidates.size} meetings for ${home.base} / ${away.base}")
         return pick?.takeUnless { doubleHeader(home, away, it, events) }
+    }
+
+    /**
+     * A timed card whose addon clock is hours off ESPN's (#181: a timezone slip, ~6 h), tried only when ±3 h has no
+     * candidate at all (never when it is ambiguous): the pair's one meeting within [OFFSET_WINDOW_MS] of the card's
+     * start, both sides matched STRONG ([BOTH_STRONG]), and no other meeting of the pair within [UNIQUE_WINDOW_MS]
+     * (a back-to-back or a series is never paired across days). A women's-feed game never takes a card that names no
+     * women's side (the namesake rule; a youth or women's slug already fails the qualifier check). Teams over time.
+     */
+    private fun offsetPick(home: Side, away: Side, events: List<ScoreSnapshot>, start: Long): Pick? {
+        val meetings = events
+            .filter { event -> event.startMs != null && abs(event.startMs - start) <= UNIQUE_WINDOW_MS && score(home, away, event) != null }
+            .distinctBy { it.eventId }
+        val only = meetings.singleOrNull() ?: return null
+        if (abs(only.startMs!! - start) > OFFSET_WINDOW_MS) return null
+        if (isWomenFeed(only) && home.qualifier != "w" && away.qualifier != "w") return null
+        if ((score(home, away, only) ?: 0) < BOTH_STRONG) return null
+        if (BuildConfig.DEBUG) Log.d(TAG, "time-off match: ${home.base} / ${away.base}")
+        return Pick(only)
     }
 
     private fun bestOnDay(home: Side, away: Side, events: List<ScoreSnapshot>, day: LocalDate, zoneId: ZoneId): Pick? {
@@ -199,8 +220,8 @@ class ScoreMatcher(
     private fun score(home: Side, away: Side, event: ScoreSnapshot): Int? {
         val slugQualifier = eventQualifier(event)
         val women = isWomenFeed(event)
-        val eventHome = competitor(event.home, slugQualifier)
-        val eventAway = competitor(event.away, slugQualifier)
+        val eventHome = competitor(event.home, slugQualifier, isCollegeFeed(event))
+        val eventAway = competitor(event.away, slugQualifier, isCollegeFeed(event))
         val least = if (unknownLeague(event, eventHome, eventAway)) BOTH_STRONG else minScore
         return listOfNotNull(
             pairScore(eventHome.score(home, women), eventAway.score(away, women), least),
@@ -237,7 +258,12 @@ class ScoreMatcher(
     }
 
     /** A competitor's names, qualifiers removed: STRONG keys, the WEAK location key, suffix-rule names. */
-    private class Competitor(team: ScoreTeam, slugQualifier: String?) {
+    /**
+     * [college]: the team is on a college feed, where its location is the school's own name ("Central Michigan",
+     * ESPN's short name "C Michigan"; item 4), one team per school, so it matches STRONG; a pro city ("Los
+     * Angeles") names several teams and stays WEAK.
+     */
+    private class Competitor(team: ScoreTeam, slugQualifier: String?, private val college: Boolean = false) {
         private val names: List<Pair<String, String?>> =
             (listOfNotNull(team.displayName, team.shortDisplayName, team.name) + team.alternateNames).map { splitQualifier(fold(it)) }
 
@@ -266,7 +292,7 @@ class ScoreMatcher(
             (if (womenFeed && side.qualifier == "w") null else side.qualifier) != qualifier -> 0
             side.keys.any { it in strongKeys } -> STRONG
             side.collegeKeys.any { it in strongKeys } -> STRONG
-            side.keys.any { it in locationKeys } -> WEAK
+            side.keys.any { it in locationKeys } -> if (college) STRONG else WEAK
             fullNames.any { SportsLiveTeams.matches(side.base, it) } -> WEAK
             else -> 0
         }
@@ -278,6 +304,10 @@ class ScoreMatcher(
 
         private const val TAG = "ScoreMatcher"
         private const val WINDOW_MS = 3 * 60 * 60 * 1000L
+        /** How far a timed card's start may be off its one strongly matched game (#181). */
+        private const val OFFSET_WINDOW_MS = 14 * 60 * 60 * 1000L
+        /** No other meeting of the pair may be this close to the card's start for [OFFSET_WINDOW_MS] to apply. */
+        private const val UNIQUE_WINDOW_MS = OFFSET_WINDOW_MS + 24 * 60 * 60 * 1000L
         /** How close to a timed card's start a game must be to win a tie with another league's game (#163). */
         private const val TIE_BREAK_MS = 45 * 60 * 1000L
         private const val STRONG = 3
@@ -310,9 +340,15 @@ class ScoreMatcher(
         // A card is scored against every event of its feeds on every poll, and each card side and each
         // team folds the same names every time (#152): the folded forms are kept.
         private val sides = Memo(4_096) { name: String -> sideOfUncached(name) }
-        private val competitors = Memo(4_096) { (team, qualifier): Pair<ScoreTeam, String?> -> Competitor(team, qualifier) }
+        private val competitors = Memo(4_096) { (team, qualifier, college): Triple<ScoreTeam, String?, Boolean> -> Competitor(team, qualifier, college) }
 
-        private fun competitor(team: ScoreTeam, qualifier: String?): Competitor = competitors(team to qualifier)
+        private fun competitor(team: ScoreTeam, qualifier: String?, college: Boolean = false): Competitor =
+            competitors(Triple(team, qualifier, college))
+
+        /** A college feed (item 4): a team's location is its school. */
+        private fun isCollegeFeed(event: ScoreSnapshot): Boolean = event.league in COLLEGE_FEEDS
+
+        private val COLLEGE_FEEDS = setOf(EspnLeagueMap.COLLEGE_BASKETBALL, EspnLeagueMap.COLLEGE_BASKETBALL_WOMEN, EspnLeagueMap.COLLEGE_FOOTBALL)
 
         private fun sideOf(name: String): Side = sides(name)
 
@@ -372,8 +408,8 @@ class ScoreMatcher(
             }
             val qualifier = eventQualifier(event)
             val women = isWomenFeed(event)
-            val home = competitor(event.home, qualifier)
-            val away = competitor(event.away, qualifier)
+            val home = competitor(event.home, qualifier, isCollegeFeed(event))
+            val away = competitor(event.away, qualifier, isCollegeFeed(event))
             val firstSide = sideOf(first)
             val secondSide = sideOf(second)
             fun total(a: Int, b: Int) = if (a > 0 && b > 0) a + b else 0

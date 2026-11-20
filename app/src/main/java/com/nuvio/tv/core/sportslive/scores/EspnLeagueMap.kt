@@ -33,6 +33,12 @@ object EspnLeagueMap {
         genderOf((listOfNotNull(sport) + hints + routing).map(::fold))
     }
 
+    /**
+     * The sport tag of a college basketball game whose gender is not known (item 4: a bare "Basketball" card of two
+     * schools both college lists hold): it routes to the men's and the women's college feeds alike.
+     */
+    const val COLLEGE_BASKETBALL_EITHER = "College Basketball (NCAA)"
+
     val NBA = EspnLeague("basketball", "nba")
     val NFL = EspnLeague("football", "nfl")
     val NHL = EspnLeague("hockey", "nhl")
@@ -88,6 +94,8 @@ object EspnLeagueMap {
     // Competitions named on the card. In order: the first rule found in a hint wins, so the more specific
     // rule ("AFCON qualifiers", "Conference League") comes before the general one.
     private val COMPETITIONS: List<Rule> = listOf(
+        // A college basketball game of either gender (item 4): both college feeds; the one with the game at its time decides.
+        Rule(Regex.escape(COLLEGE_BASKETBALL_EITHER.lowercase()), listOf(COLLEGE_BASKETBALL, COLLEGE_BASKETBALL_WOMEN)),
         // Women's competitions first (#163): "Women's College Basketball" also says "college basketball".
         Rule("""\bwnba\b""", listOf(WNBA)),
         Rule(

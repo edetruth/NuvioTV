@@ -3,6 +3,7 @@ package com.nuvio.tv.core.sportslive.scores
 import com.nuvio.tv.core.sportslive.SportsLiveDisplayText
 import com.nuvio.tv.core.sportslive.SportsLivePillTime
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
+import com.nuvio.tv.core.sportslive.identify.SportsLiveTeamIdentity
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveKind
 import java.time.ZoneId
@@ -59,7 +60,8 @@ data class GameArt(
             val event = snapshot?.takeIf { firstIsHome != null }
             val firstTeam = event?.let { if (firstIsHome == true) it.home else it.away }
             val secondTeam = event?.let { if (firstIsHome == true) it.away else it.home }
-            val remembered = if (event == null) known.forCard(item, first, second) else null
+            // Else the badges the teams' lookup found (#168, item 3: a game no ESPN list names).
+            val remembered = if (event == null) known.forCard(item, first, second) ?: identityLogos(first, second) else null
             // ESPN's own time beats an addon's, unless ESPN has none yet (TBD).
             val eventStart = event?.takeIf { it.timeValid }?.startMs
             // A game saved for later (#151) shows no records: they move with the result.
@@ -74,6 +76,9 @@ data class GameArt(
                 ranksOnRows = event != null && RankDisplay.onRows(event.league)
             )
         }
+
+        private fun identityLogos(first: String, second: String): Pair<KnownTeam, KnownTeam>? =
+            SportsLiveTeamIdentity.logosOf(first, second)?.let { (a, b) -> KnownTeam(a, null) to KnownTeam(b, null) }
 
         /**
          * A replay's drawn card (#90, P4): the two sides its spoiler-free [title] names (never the addon's poster,

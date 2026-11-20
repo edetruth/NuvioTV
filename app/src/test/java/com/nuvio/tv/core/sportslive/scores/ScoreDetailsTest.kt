@@ -184,4 +184,35 @@ class ScoreDetailsTest {
         val off = pacers.copy(state = ScoreState.OFF, isFinal = false, clockText = "Postponed")
         assertEquals(ScoreDetails.Status("Postponed"), ScoreDetailsBuilder.of(item("Pacers @ 76ers"), off, ScoresMode.SHOW, revealed = true))
     }
+
+    // A live tennis match: Alcaraz (first listed) and Cobolli, sets as the scoreboard's live copy has them.
+    private fun tennis(first: List<TennisSet>, second: List<TennisSet>, firstWon: Int, secondWon: Int): ScoreSnapshot {
+        val a = TennisPlayer("Carlos Alcaraz", false, first, serving = true, setsWon = firstWon)
+        val b = TennisPlayer("Flavio Cobolli", false, second, setsWon = secondWon)
+        fun side(player: TennisPlayer) = ScoreTeam(
+            id = null, abbreviation = null, displayName = player.name, shortDisplayName = TennisNames.shortName(player.members),
+            name = TennisNames.shortName(player.members), location = null, logo = null, score = player.setsWon,
+            linescores = player.sets.map { it.games }
+        )
+        return ScoreSnapshot(
+            eventId = "tennis-live:1", league = EspnLeagueMap.ATP, startMs = null, state = ScoreState.IN, clockText = "1st",
+            isFinal = false, home = side(a), away = side(b),
+            individual = TennisMatch("Group Stage", listOf(a, b), TennisEnding.COMPLETED, live = true)
+        )
+    }
+
+    @Test
+    fun `a live tennis headline shows the games its row shows, never a sets-won 0-0 (N3)`() {
+        val firstSet = tennis(listOf(TennisSet(2)), listOf(TennisSet(1)), firstWon = 0, secondWon = 0)
+        val details = shown(item("Carlos Alcaraz vs Flavio Cobolli", sport = "Tennis"), firstSet)
+        assertEquals("Alcaraz 2–1 Cobolli", ScoreDetailsBuilder.scorelineText(details, strings))
+        // The card's order decides whose games come first.
+        val flipped = shown(item("Flavio Cobolli vs Carlos Alcaraz", sport = "Tennis"), firstSet)
+        assertEquals("Cobolli 1–2 Alcaraz", ScoreDetailsBuilder.scorelineText(flipped, strings))
+        // A finished set and the one being played.
+        val secondSet = tennis(listOf(TennisSet(6, won = true), TennisSet(3)), listOf(TennisSet(4), TennisSet(1)), firstWon = 1, secondWon = 0)
+        assertEquals("Alcaraz 6–4 3–1 Cobolli", ScoreDetailsBuilder.scorelineText(shown(item("Carlos Alcaraz vs Flavio Cobolli", sport = "Tennis"), secondSet), strings))
+        // Other sports keep their scoreline.
+        assertNull(shown(item("Indiana Pacers at Philadelphia 76ers"), pacers).tennisSets)
+    }
 }

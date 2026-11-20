@@ -114,12 +114,48 @@ class ScoreMatcherTest {
     }
 
     @Test
-    fun `games outside the window are rejected`() {
+    fun `games outside the window are rejected unless both sides match strongly`() {
         assertEquals("401927170", match("NAM vs CMR", "2026-11-16T15:59:00Z", caf))
         assertEquals("401927170", match("NAM vs CMR", "2026-11-16T10:01:00Z", caf))
-        assertNull(match("NAM vs CMR", "2026-11-16T16:01:00Z", caf))
-        assertNull(match("NAM vs CMR", "2026-11-16T09:59:00Z", caf))
+        // Past 3 h only the pair's one meeting with both sides STRONG (181); a day off is too far.
+        assertEquals("401927170", match("NAM vs CMR", "2026-11-16T16:01:00Z", caf))
         assertNull(match("NAM vs CMR", "2026-11-17T13:00:00Z", caf))
+        // One side matched by its city alone stays within 3 h.
+        assertEquals("401873063", match("San Francisco 49ers vs Dallas", "2026-11-15T21:25:00Z", nfl))
+        assertNull(match("San Francisco 49ers vs Dallas", "2026-11-16T01:30:00Z", nfl))
+    }
+
+    @Test
+    fun `an addon clock 6 hours off still matches the pair's one game (181)`() {
+        val game = caf.first { it.eventId == "401927170" }
+        assertEquals("401927170", match("Namibia vs Cameroon", Instant.ofEpochMilli(game.startMs!! - 6 * hour).toString(), caf))
+        assertEquals("401927170", match("Cameroon vs Namibia", Instant.ofEpochMilli(game.startMs!! + 6 * hour).toString(), caf))
+    }
+
+    @Test
+    fun `back-to-back meetings on consecutive days are never paired across days (181)`() {
+        val game = caf.first { it.eventId == "401927170" }
+        val nextDay = game.copy(eventId = "next-day", startMs = game.startMs!! + 24 * hour)
+        val events = caf + nextDay
+        // 6 h after the first game: no game within 3 h, and the pair meets twice within the wide window.
+        assertNull(match("Namibia vs Cameroon", Instant.ofEpochMilli(game.startMs!! + 6 * hour).toString(), events))
+        assertNull(match("Namibia vs Cameroon", Instant.ofEpochMilli(nextDay.startMs!! - 6 * hour).toString(), events))
+        // Within 3 h each day's own game still matches.
+        assertEquals("next-day", match("Namibia vs Cameroon", Instant.ofEpochMilli(nextDay.startMs!!).toString(), events))
+    }
+
+    @Test
+    fun `a women's or youth namesake hours off is never matched (181)`() {
+        val game = caf.first { it.eventId == "401927170" }
+        val off = Instant.ofEpochMilli(game.startMs!! + 6 * hour).toString()
+        // The same clubs on a women's feed: no women's marker on either side of the card.
+        val women = game.copy(eventId = "w", league = EspnLeagueMap.WOMEN_FEEDS.first())
+        assertNull(match("Namibia vs Cameroon", off, listOf(women)))
+        // A women's or youth slug never fits an unmarked card, near or far.
+        assertNull(match("Namibia vs Cameroon", off, listOf(game.copy(eventId = "ws", leagueSlug = "fifa.wworldq.caf"))))
+        assertNull(match("Namibia vs Cameroon", off, listOf(game.copy(eventId = "u", leagueSlug = "fifa.friendly_u21"))))
+        // The card that names the youth sides does not take the senior game either.
+        assertNull(match("Namibia U21 vs Cameroon U21", off, caf))
     }
 
     @Test

@@ -296,4 +296,63 @@ class SportsLiveSportInferenceTest {
         val item = card("Devils v Canadiens", kind = SportsLiveKind.CHANNELS)
         assertSame(item, SportsLiveSportInference.infer(item, full))
     }
+
+    // ---- Two schools on a bare "Basketball" card (item 4) ----
+
+    private val pitt = team("Pittsburgh Panthers", "Pittsburgh", "Pittsburgh", "PITT")
+    // ESPN's short name is "C Michigan": the school answers to its location.
+    private val cmu = DirectoryTeam("cmu", "Central Michigan Chippewas", "C Michigan", "CMU", "Central Michigan", "Chippewas", "https://a.espncdn.com/i/teamlogos/ncaa/500/2117.png")
+
+    @Test
+    fun `Pittsburgh vs Central Michigan on a bare Basketball card is NCAAM with both logos`() {
+        val dir = directory(EspnLeagueMap.NBA to nba, EspnLeagueMap.COLLEGE_BASKETBALL to listOf(pitt, cmu))
+        val item = card("Pittsburgh vs Central Michigan", sport = "Basketball")
+        assertEquals(listOf(EspnLeagueMap.COLLEGE_BASKETBALL), SportsLiveSportInference.collegeLeaguesOf(item, dir))
+        val inferred = SportsLiveSportInference.infer(item, dir)
+        assertEquals("NCAAM", inferred.sport)
+        assertEquals(listOf(EspnLeagueMap.COLLEGE_BASKETBALL), EspnLeagueMap.leaguesFor(inferred))
+        val logos = dir.forCard(inferred, "Pittsburgh", "Central Michigan")!!
+        assertEquals("https://a.espncdn.com/i/teamlogos/ncaa/500/2117.png", logos.second.logo)
+    }
+
+    @Test
+    fun `two schools both college lists hold are neutral college, on both feeds`() {
+        val both = listOf(pitt, cmu)
+        val dir = directory(EspnLeagueMap.NBA to nba, EspnLeagueMap.COLLEGE_BASKETBALL to both, EspnLeagueMap.COLLEGE_BASKETBALL_WOMEN to both)
+        val item = card("Pittsburgh vs Central Michigan", sport = "Basketball")
+        // Never a guess at the men's game.
+        assertNull(SportsLiveSportInference.leagueOf(item, dir))
+        val inferred = SportsLiveSportInference.infer(item, dir)
+        assertEquals(EspnLeagueMap.COLLEGE_BASKETBALL_EITHER, inferred.sport)
+        assertEquals(listOf(EspnLeagueMap.COLLEGE_BASKETBALL, EspnLeagueMap.COLLEGE_BASKETBALL_WOMEN), EspnLeagueMap.leaguesFor(inferred))
+        assertEquals("COLLEGE", SportsLiveLeagueTags.of(inferred.sport!!))
+        // A school's logos are one on both lists.
+        assertEquals(pitt.logo, dir.forCard(inferred, "Pittsburgh", "Central Michigan")!!.first.logo)
+        // The women's list not loaded yet: neutral too.
+        val menOnly = TeamDirectory().apply {
+            listOf(EspnLeagueMap.NBA to nba, EspnLeagueMap.G_LEAGUE to emptyList(), EspnLeagueMap.WNBA to emptyList(), EspnLeagueMap.COLLEGE_BASKETBALL to both)
+                .forEach { (league, teams) -> put(league, teams, 0L) }
+        }
+        assertEquals(EspnLeagueMap.COLLEGE_BASKETBALL_EITHER, SportsLiveSportInference.infer(item, menOnly).sport)
+    }
+
+    @Test
+    fun `a school that shares a pro team's name keeps the strict rules`() {
+        // A pro list answering to "Pittsburgh" too.
+        val pros = nba + team("Pittsburgh Pros", "Pittsburgh", "Pittsburgh", "PGH")
+        val dir = directory(EspnLeagueMap.NBA to pros, EspnLeagueMap.COLLEGE_BASKETBALL to listOf(pitt, cmu))
+        val item = card("Pittsburgh vs Central Michigan", sport = "Basketball")
+        assertNull(SportsLiveSportInference.collegeLeaguesOf(item, dir))
+        assertNull(SportsLiveSportInference.leagueOf(item, dir))
+        // A pro list not loaded: no inference either.
+        val partial = TeamDirectory().apply { put(EspnLeagueMap.COLLEGE_BASKETBALL, listOf(pitt, cmu), 0L) }
+        assertNull(SportsLiveSportInference.collegeLeaguesOf(card("Pittsburgh vs Central Michigan", sport = "Basketball"), partial))
+    }
+
+    @Test
+    fun `an unidentified college game is listed only when My sports takes college basketball`() {
+        val dir = directory(EspnLeagueMap.NBA to nba, EspnLeagueMap.COLLEGE_BASKETBALL to listOf(pitt, cmu))
+        val item = card("Pittsburgh vs Central Michigan", sport = "Basketball")
+        assertEquals(listOf(EspnLeagueMap.COLLEGE_BASKETBALL), SportsLiveMySportsScope.directoryLeaguesOf(item, dir))
+    }
 }

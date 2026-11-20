@@ -86,10 +86,24 @@ object SportsLiveTeams {
             val second = display(secondText)
             if (first.isEmpty() || second.isEmpty()) continue
             if (dash && (!isTeamLike(first) || !isTeamLike(second))) continue
+            // "ATP 250 vs Stockholm Open" (F4): a tournament written as a game, no side a team, names no game.
+            if (!isTeamLike(first) && !isTeamLike(second)) continue
             return Triple(first, second, separator in AWAY_FIRST)
         }
         return null
     }
+
+    /**
+     * The two parts of a title written as a game whose sides are both no team ("ATP 250 vs Stockholm Open", F4:
+     * a tournament and its event), for display; null when [title] has no "vs" / "v" or either part reads as a team.
+     */
+    fun nonGamePair(title: String): Pair<String, String>? {
+        val parts = VERSUS.split(title, limit = 2).map { it.trim() }
+        if (parts.size != 2 || parts.any { it.isEmpty() }) return null
+        return (parts[0] to parts[1]).takeIf { (first, second) -> !isTeamLike(first) && !isTeamLike(second) }
+    }
+
+    private val VERSUS = Regex("""\s+v(?:s\.?|\.)?\s+""", RegexOption.IGNORE_CASE)
 
     private const val DASH = " - "
     private const val X_SEPARATOR = " x "
@@ -153,11 +167,20 @@ object SportsLiveTeams {
         val base = if (qualifier == null) cleaned else cleaned.substring(0, qualifier.range.first)
         // A possessive joins its word ("St. John's" is "st johns", as addons write it), before punctuation splits.
         val words = base.replace("&", " and ").replace(POSSESSIVE, "s").replace(PUNCTUATION, " ").trim()
-        val tokens = words.replace(LEADING_RANK, "").split(WHITESPACE).filter { it.isNotEmpty() }.toMutableList()
+        val tokens = words.replace(LEADING_RANK, "").split(WHITESPACE).filter { it.isNotEmpty() }.map { EXONYMS[it] ?: it }.toMutableList()
         while (tokens.size > 1 && tokens.first() in CLUB_PREFIXES) tokens.removeAt(0)
         while (tokens.size > 1 && tokens.last() in CLUB_SUFFIXES) tokens.removeAt(tokens.lastIndex)
         return (tokens.joinToString(" ") + " " + qualifier?.let(::qualifierText).orEmpty()).trim()
     }
+
+    // A club's city in its own language and in English (F4: "FC Bayern München" is "Bayern Munich", "1. FC Köln" is
+    // "FC Cologne"): the English word, as ESPN writes them. Only cities whose clubs addons name both ways.
+    private val EXONYMS = mapOf(
+        "münchen" to "munich", "munchen" to "munich", "muenchen" to "munich",
+        "köln" to "cologne", "koln" to "cologne", "koeln" to "cologne",
+        "praha" to "prague",
+        "københavn" to "copenhagen", "kobenhavn" to "copenhagen", "koebenhavn" to "copenhagen"
+    )
 
     private val POSSESSIVE = Regex("""['\u2019]s(?![\p{L}\p{N}])""")
     private val PUNCTUATION = Regex("""[^\p{L}\p{N}\s]+""")
@@ -205,8 +228,14 @@ object SportsLiveTeams {
         // One word set inside the other (#174). Two significant words, so filler alone ("Racing Club") never stands
         // for a club; two clubs of one city differ by a word ("City" / "United"), so neither is inside the other.
         val subset = shorter.words.count(::isSignificantWord) >= 2 && longer.words.containsAll(shorter.words)
-        return if (prefix || subset) MergeMatch.PREFIX else MergeMatch.NONE
+        // "Sporting Delhi" / "Sporting Club Delhi" (F4): the longer adds only a club word, and the shorter has a word of its own.
+        val clubWord = shorter.words.any(::isSignificantWord) && longer.words.containsAll(shorter.words) &&
+            (longer.words - shorter.words.toSet()).let { extra -> extra.isNotEmpty() && extra.all { it in CLUB_WORDS } }
+        return if (prefix || subset || clubWord) MergeMatch.PREFIX else MergeMatch.NONE
     }
+
+    // Words a club's full name adds to its short one ("Sporting Club Delhi"): never a word that tells two clubs apart.
+    private val CLUB_WORDS = setOf("club", "the", "de", "of", "and", "football")
 
     /**
      * [teams] read as a women's game (#174): a side with no (W)/U21 qualifier gets the women's marker ("Arsenal"
@@ -389,7 +418,8 @@ object SportsLiveTeams {
      * ("US| PEACOCK PPV 004 [Celtics"), then trailing `[...]` / `(...)` groups and a stray `]` or `)`.
      */
     private fun clean(side: String): String {
-        var text = side.trim()
+        // "⏱ FC Bayern München" (F4): an emoji before or in a side is no part of its name.
+        var text = SportsLiveDisplayText.withoutSymbols(side).replace(WHITESPACE, " ").trim()
         val open = text.lastIndexOf('[')
         if (open >= 0 && text.indexOf(']', open) < 0) text = text.substring(open + 1).trim()
         while (true) {

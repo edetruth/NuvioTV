@@ -58,6 +58,8 @@ object SportsLiveMySportsScope {
      * else every loaded league whose list holds both of its teams. Empty: no match.
      */
     internal fun directoryLeaguesOf(item: SportsLiveItem, directory: TeamDirectory): List<EspnLeague> {
+        // Two schools of either gender (item 4): both college leagues; the user's picks place it.
+        SportsLiveSportInference.collegeLeaguesOf(item, directory)?.let { return it }
         SportsLiveSportInference.leagueOf(item, directory)?.let { return listOf(it) }
         if (item.isChannel || item.teams == null) return emptyList()
         val (first, second) = SportsLiveTeams.writtenOrder(item.meta.name) ?: return emptyList()

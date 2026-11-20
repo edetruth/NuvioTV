@@ -641,7 +641,10 @@ class LiveScoresRepository internal constructor(
         picked: MySports,
         followed: List<EspnLeague>
     ): List<EspnLeague> {
-        val onScreen = cards.values.flatten().flatMap { it.leagues + listOfNotNull(it.fallback) }
+        // A bare "Basketball" card's women's college list too (item 4): two schools are told men's or women's by both lists.
+        val onScreen = cards.values.flatten().flatMap { card ->
+            card.leagues + listOfNotNull(card.fallback, EspnLeagueMap.COLLEGE_BASKETBALL_WOMEN.takeIf { card.fallback == EspnLeagueMap.COLLEGE_BASKETBALL })
+        }
         // The leagues an unrouted two-team card may be inferred into (#132 P4) come last: small lists, kept a week.
         // The named My sports leagues' lists (#159, soccer competitions included) tell games with no league apart.
         return (onScreen + picked.feeds() + picked.teamListLeagues() + followed + SportsLiveSportInference.leagues)

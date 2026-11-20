@@ -2,7 +2,9 @@ package com.nuvio.tv.core.sportslive.identify
 
 import com.nuvio.tv.core.sportslive.Memo
 import com.nuvio.tv.core.sportslive.SportsLiveMySportsScope
+import com.nuvio.tv.core.sportslive.SportsLiveSportKind
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
+import com.nuvio.tv.core.sportslive.scores.EspnLeagueMap
 import com.nuvio.tv.domain.model.SportsLiveItem
 
 /**
@@ -23,10 +25,30 @@ object SportsLiveTeamIdentity {
         if (book.isEmpty || item.isChannel || item.teams == null) return item
         val (first, second) = sides(item.meta.name) ?: return item
         val identity = book.identityOf(first, second) ?: return item
-        if (!sportUnknown(item)) return item
         val genres = if (item.meta.genres.any { it.equals(identity.league, ignoreCase = true) }) item.meta.genres
         else item.meta.genres + identity.league
+        // A soccer game that names no competition (item 3: "FC Porto vs USC Paredes", tagged Soccer) takes its league.
+        if (identity.sport == SOCCER && soccerLeagueUnknown(item)) return item.copy(meta = item.meta.copy(genres = genres))
+        if (!sportUnknown(item)) return item
         return item.copy(sport = TeamIdentityRules.sportWord(identity.sport), meta = item.meta.copy(genres = genres))
+    }
+
+    /**
+     * True when [item] is a soccer game that names no competition (item 3): its sport says soccer and every source
+     * routes to soccer/all alone, so no league list or feed can place it; its teams are looked up as an unknown
+     * sport's are.
+     */
+    internal fun soccerLeagueUnknown(item: SportsLiveItem): Boolean =
+        SportsLiveMySportsScope.kindOf(item) == SportsLiveSportKind.SOCCER &&
+            (listOf(item) + item.alternates).all { EspnLeagueMap.leaguesFor(it) == SOCCER_ALL_ONLY }
+
+    private val SOCCER_ALL_ONLY = listOf(EspnLeagueMap.SOCCER_ALL)
+    private const val SOCCER = "soccer"
+
+    /** The logos the teams' lookup found for [first] and [second] (item 3), in that order; null unless both. */
+    fun logosOf(first: String, second: String, book: TeamIdentityBook = TeamIdentityBook.shared): Pair<String, String>? {
+        val (a, b) = book.identityOf(first, second)?.badges ?: return null
+        return if (a.isNullOrBlank() || b.isNullOrBlank()) null else a to b
     }
 
     /** True when neither [item] nor any of its alternates tells a sport. */

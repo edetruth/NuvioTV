@@ -70,7 +70,8 @@ class TeamIdentifier internal constructor(
     private var dirty = false
 
     /**
-     * Queues the two-team games of [items] whose sport is unknown and that are live or start today. Cheap
+     * Queues the two-team games of [items] whose sport (or, for soccer, competition: item 3) is unknown and that are
+     * live or start today. Cheap
      * and non-blocking: the lookups run on the worker.
      */
     fun offer(items: List<SportsLiveItem>) {
@@ -84,7 +85,7 @@ class TeamIdentifier internal constructor(
             if (item.isChannel || item.teams == null) continue
             val start = item.startMs
             if (!item.isLive && (start == null || start < dayStart || start >= dayEnd)) continue
-            if (!SportsLiveTeamIdentity.sportUnknown(item)) continue
+            if (!SportsLiveTeamIdentity.sportUnknown(item) && !SportsLiveTeamIdentity.soccerLeagueUnknown(item)) continue
             val (first, second) = SportsLiveTeamIdentity.sides(item.meta.name) ?: continue
             offerGame(first, second)
         }

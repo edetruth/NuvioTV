@@ -78,6 +78,8 @@ object SportsLiveLeagueTags {
         // Basketball (#169)
         tag("EUROLEAGUE", "EuroLeague", "Turkish Airlines EuroLeague", "euroleague"),
         tag("EUROCUP", "EuroCup", "BKT EuroCup", "eurocup"),
-        tag("G LEAGUE", "NBA G League", "nba-development")
+        tag("G LEAGUE", "NBA G League", "nba-development"),
+        // A college basketball game whose gender is not known yet (item 4).
+        tag("COLLEGE", com.nuvio.tv.core.sportslive.scores.EspnLeagueMap.COLLEGE_BASKETBALL_EITHER)
     ).flatten().toMap()
 }

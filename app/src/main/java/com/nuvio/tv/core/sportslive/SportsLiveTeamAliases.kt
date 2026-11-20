@@ -134,6 +134,8 @@ object SportsLiveTeamAliases {
             "internazionale" to listOf("inter milan", "internazionale milano", "inter milano"),
             "milan" to emptyList(),
             "bayern munich" to listOf("bayern", "bayern munchen", "bayern münchen"),
+            // F4: the Basque club addons call by its city, ESPN by its own name.
+            "athletic club" to listOf("athletic bilbao", "athletic club bilbao"),
             "borussia dortmund" to listOf("dortmund", "bvb"),
             "bayer leverkusen" to listOf("leverkusen"),
             "barcelona" to listOf("barca", "barça"),

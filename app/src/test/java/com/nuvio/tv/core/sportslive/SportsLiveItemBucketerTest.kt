@@ -669,19 +669,21 @@ class SportsLiveItemBucketerTest {
         assertEquals("Las Vegas Raiders vs Seattle Seahawks", game.meta.name)
         assertEquals(listOf("cnc"), game.alternates.map { it.addonId })
         assertEquals(2, game.sourceCount)
-        // Both fixtures carry the same SportzX feed: these five games merge; "NFL vs REDZONE" and
-        // "ATP 250 vs Stockholm Open" do not match Nebula's "NFL REDZONE" / "ATP 250".
+        // Both fixtures carry the same SportzX feed: these five games merge, and so does "ATP 250 vs Stockholm Open"
+        // with Nebula's "ATP 250", whose description names Stockholm Open (F4); "NFL vs REDZONE" does not match
+        // Nebula's "NFL REDZONE".
         assertEquals(
             setOf(
                 "Las Vegas Raiders vs Seattle Seahawks",
                 "Arizona Cardinals vs Los Angeles Rams",
                 "Dallas Cowboys vs San Francisco 49ers",
                 "Phoenix Suns vs Los Angeles Lakers",
-                "Los Angeles Clippers vs Charlotte Hornets"
+                "Los Angeles Clippers vs Charlotte Hornets",
+                "ATP 250"
             ),
             live.filter { it.alternates.isNotEmpty() }.map { it.meta.name }.toSet()
         )
-        assertEquals(separate - 5, live.size)
+        assertEquals(separate - 6, live.size)
 
         // By default the first addon seen leads: CNC's copy.
         val byDefault = SportsLiveItemBucketer.bucket(items, now).getValue(SportsLiveTab.LIVE_NOW)

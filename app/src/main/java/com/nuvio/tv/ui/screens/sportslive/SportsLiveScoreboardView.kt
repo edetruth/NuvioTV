@@ -290,16 +290,19 @@ private fun GameCells(row: ScoreboardRow, reminded: Boolean, hasReplay: Boolean,
 
 /** The row's tag: ESPN's league, the card's sport, else the sport its text tells ("TENNIS", "CRICKET"). */
 @Composable
-internal fun rowTagText(row: ScoreboardRow): String = rowTagOf(row, row.sportTag?.let { sportKindLabel(it) })
+internal fun rowTagText(row: ScoreboardRow): String =
+    rowTagOf(row, row.sportTag?.let { sportKindLabel(it) }, SportsLiveSportKind.plainTagOf(row.item)?.let { sportKindLabel(it) })
 
 /**
  * [rowTagText] with the sport its text tells already worded ([sportLabel]): ESPN's league, the card's sport, else
  * [sportLabel] in capitals; empty when none is known. The same for a two-team row as for a single-line one (#167).
  */
-internal fun rowTagOf(row: ScoreboardRow, sportLabel: String?): String {
+internal fun rowTagOf(row: ScoreboardRow, sportLabel: String?, plainLabel: String? = null): String {
     // A tennis match's tour (#160): "ATP", never its tournament's initials.
     row.leagueTag?.let { return it }
     val item = row.item
+    // One word per sport (F4): an addon's plain sport word ("Football", "Soccer") as the sport's one name, unless ESPN named the league.
+    plainLabel?.takeIf { row.art?.league.let { league -> league == null || league == item.sport } }?.let { return it.uppercase(Locale.getDefault()) }
     // A non-sport tag ("OTHER", #145) says nothing about the game: the sport its title names, else none.
     val tag = scoreboardRowTag(
         row.art?.league,

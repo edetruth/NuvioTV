@@ -59,7 +59,13 @@ class TeamDirectory(private val maxLeagues: Int = MAX_LEAGUES) {
 
     /** Stores [teams] as [league]'s list, fetched at [fetchedAt]; returns the leagues dropped to stay bounded. */
     fun put(league: EspnLeague, teams: List<DirectoryTeam>, fetchedAt: Long): List<EspnLeague> {
-        val entry = Entry(teams, fetchedAt, teams.map { TeamLogoBook.namesOf(it.asScoreTeam()) })
+        // A college team also answers to its location, the school's own name (item 4: "Central Michigan", whose ESPN
+        // short name is "C Michigan"); a pro city names several teams and is never a key. A shared one resolves to none.
+        val college = league in COLLEGE_LEAGUES
+        val entry = Entry(teams, fetchedAt, teams.map { team ->
+            val names = TeamLogoBook.namesOf(team.asScoreTeam())
+            if (college) names + team.location?.takeIf { it.isNotBlank() }?.let { TeamLogoBook.sideKeys(it.replace(BRACKETS, " ")) }.orEmpty() else names
+        })
         val dropped = ArrayList<EspnLeague>()
         synchronized(this) {
             generation++

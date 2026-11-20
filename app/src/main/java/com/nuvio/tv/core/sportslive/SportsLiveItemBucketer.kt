@@ -92,7 +92,7 @@ object SportsLiveItemBucketer {
         val catalog = claimed.catalog
         // An events catalog's item tagged as a TV network (#145) is a channel listing, never a game.
         val network = claimed.kind == SportsLiveKind.EVENTS &&
-            rawMeta.genres.any { SportsLiveKeywords.containsKeyword(it, SportsLiveKeywords.NETWORKS) }
+            (rawMeta.genres.any { SportsLiveKeywords.containsKeyword(it, SportsLiveKeywords.NETWORKS) } || isChannelName(rawMeta.name))
         val kind = if (network) SportsLiveKind.CHANNELS else claimed.kind
         // A leading 🔴 / 🔜 / ✅ (CNCVerse) is a status, not part of the name.
         val trimmedName = rawMeta.name.trimStart()
@@ -146,6 +146,21 @@ object SportsLiveItemBucketer {
     }
 
     /**
+     * True when [title] is a channel's name, not a game (F4: "NFL Network", "Tennis Channel" in a live-events catalog):
+     * its clean name ends in "Network", "Channel" or "TV", with or without a number ("Sports Channel 2"), and it
+     * names no two sides and no show on a channel ("Raw on USA Network").
+     */
+    internal fun isChannelName(title: String): Boolean {
+        val words = SportsLiveDisplayText.name(title).lowercase().split(' ').filter { it.isNotEmpty() }
+        // "Raw on USA Network" is a show on a channel.
+        if (words.size < 2 || "on" in words || SportsLiveTeams.parse(title) != null) return false
+        val last = if (words.last().all(Char::isDigit)) words[words.size - 2] else words.last()
+        return last in CHANNEL_WORDS && words.size >= (if (last == words.last()) 2 else 3)
+    }
+
+    private val CHANNEL_WORDS = setOf("network", "channel", "tv")
+
+    /**
      * Every tab is present in the result (possibly empty), each sorted live first, then by start
      * (newest first on Replays), then by name. Finished items are in no tab.
      * An addon often lists the same item in several catalogs (Live Now and Today); within a tab it
@@ -174,7 +189,7 @@ object SportsLiveItemBucketer {
     ): List<SportsLiveItem> =
         items.filter { !it.isFinished && belongsTo(it, tab, nowMs) }
             .distinctBy { it.addonId to it.id }
-            .let { if (tab == SportsLiveTab.REPLAYS) it else merge(it, addonOrder, nowMs) }
+            .let { if (tab == SportsLiveTab.REPLAYS) it else mergeSameTitle(merge(it, addonOrder, nowMs), addonOrder) }
             .sortedWith(if (tab == SportsLiveTab.REPLAYS) replayOrder else tabOrder)
 
     /**
@@ -276,6 +291,50 @@ object SportsLiveItemBucketer {
             } ?: merged
         }
     }
+
+    /**
+     * Copies of one event that names no two sides folded into one row (F4: "MotoGP" listed five times, "UEFA Nations
+     * League Draw" tagged Soccer by one addon and Football by another): events (not channels, never replays) with
+     * no teams and the same clean title (case, accents, emoji, symbols and spacing aside), whose sports agree
+     * ([sportsAgree]) and which are both live (an upcoming listing's time cannot tell two such events apart). As
+     * in [merge], the primary is the first in [addonOrder] (then catalog name, then id) and the others become its
+     * alternates; the rest is unchanged, in place.
+     */
+    internal fun mergeSameTitle(items: List<SportsLiveItem>, addonOrder: List<String>): List<SportsLiveItem> {
+        val groups = items
+            .filter { it.kind == SportsLiveKind.EVENTS && !it.isChannel && it.teams == null && it.isLive }
+            .groupBy(::titleKey)
+            .filterKeys { it.isNotEmpty() }
+            .values.filter { it.size > 1 }
+        if (groups.isEmpty()) return items
+        val rank = addonOrder.withIndex().associate { (index, id) -> id to index }
+        val alternatesOf = HashMap<String, MutableList<SportsLiveItem>>()
+        val folded = HashSet<String>()
+        for (group in groups) {
+            val primaries = mutableListOf<SportsLiveItem>()
+            for (item in group.sortedWith(compareBy({ rank[it.addonId] ?: Int.MAX_VALUE }, { it.catalogName }, { it.id }))) {
+                val primary = primaries.firstOrNull { sportsAgree(it, item) }
+                if (primary == null) {
+                    primaries += item
+                } else {
+                    alternatesOf.getOrPut(primary.streamKey) { mutableListOf() } += item
+                    folded += item.streamKey
+                }
+            }
+        }
+        if (folded.isEmpty()) return items
+        return items.mapNotNull { item ->
+            if (item.streamKey in folded) return@mapNotNull null
+            val extra = alternatesOf[item.streamKey] ?: return@mapNotNull item
+            val alternates = item.alternates + extra.flatMap { listOf(it) + it.alternates }
+            item.copy(alternates = alternates, sport = mergedSport(item, alternates))
+        }
+    }
+
+    // A teamless event's title as rows show it ([displayName]), folded: "MotoGP", "MOTOGP 📺" and "MotoGP " are one,
+    // as are "ATP 250 vs Stockholm Open" and an "ATP 250" whose description names Stockholm Open.
+    private fun titleKey(item: SportsLiveItem): String =
+        SportsLiveTeams.foldAccents(item.displayName).lowercase().trim()
 
     private fun mergedSport(primary: SportsLiveItem, alternates: List<SportsLiveItem>): String? =
         SportsLiveTeams.knownSport(primary) ?: alternates.firstNotNullOfOrNull(SportsLiveTeams::knownSport) ?: primary.sport
@@ -550,10 +609,39 @@ object SportsLiveItemBucketer {
     fun sportOf(meta: MetaPreview, catalogName: String): String? {
         val sport = meta.genres.firstOrNull { it.isNotBlank() }?.trim()
             ?: catalogName.trim().takeIf { it.isNotEmpty() }
-        return if (SportsLiveSportKind.isWrestlingShow(meta.name, sport)) WRESTLING else sport
+        return when {
+            SportsLiveSportKind.isWrestlingShow(meta.name, sport) -> WRESTLING
+            SportsLiveSportKind.of(sport) == SportsLiveSportKind.MOTORSPORT -> misfiledMotorsport(meta.name) ?: sport
+            else -> sport
+        }
     }
 
+    /**
+     * What a game an addon files under motorsport really is when its title says otherwise (F4): figure skating
+     * ("ISU Grand Prix") is "Skating"; horse racing ("Live racing from Catterick") is "Racing", as is any title
+     * that says "racing" with no motor word. Null when the title is motorsport, or says nothing.
+     */
+    internal fun misfiledMotorsport(title: String): String? {
+        val words = wordsOf(title)
+        return when {
+            words.any { it in SKATING_WORDS } -> SKATING
+            words.any { it in HORSE_WORDS } -> RACING
+            "racing" in words && words.none { it in MOTOR_WORDS } -> RACING
+            else -> null
+        }
+    }
+
+    private val SKATING_WORDS = setOf("isu", "skating", "skate", "skater", "skaters")
+    private val HORSE_WORDS = setOf("horse", "horses", "racecourse", "hurdle", "hurdles", "steeplechase", "greyhound", "greyhounds", "thoroughbred", "equestrian")
+    private val MOTOR_WORDS = setOf(
+        "motor", "motorsport", "motorsports", "moto", "motogp", "moto2", "moto3", "motorgp", "f1", "f2", "f3", "formula", "nascar",
+        "indycar", "rally", "wrc", "superbike", "superbikes", "wsbk", "karting", "dtm", "wec", "imsa", "supercars", "gt",
+        "touring", "endurance", "prix", "gp", "speedway", "drift", "drag", "truck", "trucks", "ferrari", "porsche"
+    )
+
     private const val WRESTLING = "Wrestling"
+    private const val SKATING = "Skating"
+    private const val RACING = "Racing"
 
     private fun belongsTo(item: SportsLiveItem, tab: SportsLiveTab, nowMs: Long): Boolean {
         val replay = item.kind == SportsLiveKind.REPLAY

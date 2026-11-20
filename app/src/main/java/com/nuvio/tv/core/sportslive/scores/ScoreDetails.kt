@@ -47,7 +47,12 @@ sealed interface ScoreDetails {
         val status: String?,
         val live: Boolean,
         val periods: List<PeriodLabel>,
-        val soccer: Boolean
+        val soccer: Boolean,
+        /**
+         * A tennis match's games per set from [first]'s side ("6–4 2–1", [TennisSets.line]), the row's set columns as
+         * one line; null for any other sport. Its sides' [ScoreDetailsSide.score] are sets won, "0–0" all first set.
+         */
+        val tennisSets: String? = null
     ) : ScoreDetails
 }
 
@@ -120,7 +125,9 @@ object ScoreDetailsBuilder {
             status = status,
             live = live,
             periods = if (hasRow) periodLabels(event.league, periods, shootout = isShootout(event)) else emptyList(),
-            soccer = soccer
+            soccer = soccer,
+            // The same sets the row's columns show (N3): never a sets-won "0–0" while games are being played.
+            tennisSets = (event.individual as? TennisMatch)?.let { TennisSets.line(it, firstIsHome) }?.takeIf { it.isNotBlank() }
         )
     }
 
@@ -164,8 +171,12 @@ object ScoreDetailsBuilder {
 
     private val SHOOTOUT = Regex("""\bSO\b""")
 
-    /** "ARS 2–1 CHE", or "ARS – CHE" while a live game has no score yet. */
+    /**
+     * "ARS 2–1 CHE", or "ARS – CHE" while a live game has no score yet; a tennis match by its sets' games, as its row
+     * shows them: "Alcaraz 6–4 2–1 Cobolli".
+     */
     fun scorelineText(details: ScoreDetails.Shown, strings: ScoreDetailsStrings): String {
+        details.tennisSets?.let { sets -> return "${details.first.short} $sets ${details.second.short}" }
         val a = details.first.score
         val b = details.second.score
         return if (a != null && b != null) {

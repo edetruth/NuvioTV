@@ -57,6 +57,8 @@ object SportsLiveSportInference {
     fun leagueOf(item: SportsLiveItem, directory: TeamDirectory): EspnLeague? {
         // A game listed live, upcoming or as a replay (#132): never a channel or a channels catalog's item.
         if (item.isChannel || item.kind == SportsLiveKind.CHANNELS || item.teams == null) return null
+        // Two schools on a bare "Basketball" card: their college league, never a guess at the men's (item 4).
+        collegeLeaguesOf(item, directory)?.let { return it.singleOrNull() }
         val routed = EspnLeagueMap.leaguesFor(item)
         val college = EspnLeagueMap.collegeFallbackFor(item)
         // A "College" card naming no sport (#145): routed to both college feeds.
@@ -116,8 +118,40 @@ object SportsLiveSportInference {
         else -> SportsLiveSportKind.SOCCER
     }
 
+    /**
+     * The college basketball leagues a bare "Basketball" card of two schools is on (item 4), told by the names alone,
+     * before and whatever its score match: both sides resolve to two teams of a loaded college list, and neither side
+     * to a team of the pro lists ([PRO_BASKETBALL], all loaded; a pro name keeps the strict rules). [NCAAM][EspnLeagueMap.COLLEGE_BASKETBALL]
+     * or [NCAAW][EspnLeagueMap.COLLEGE_BASKETBALL_WOMEN] when only that list holds both and the other is loaded;
+     * both when both hold them or the other is not loaded yet: the scoreboard with the pairing at that time decides
+     * ([ScoreMatcher][com.nuvio.tv.core.sportslive.scores.ScoreMatcher]'s start tie-break; at one time, no score).
+     * Null when it is no such card.
+     */
+    fun collegeLeaguesOf(item: SportsLiveItem, directory: TeamDirectory): List<EspnLeague>? {
+        if (item.isChannel || item.kind == SportsLiveKind.CHANNELS || item.teams == null) return null
+        if (EspnLeagueMap.leaguesFor(item) != listOf(EspnLeagueMap.NBA)) return null
+        if (EspnLeagueMap.collegeFallbackFor(item) != EspnLeagueMap.COLLEGE_BASKETBALL) return null
+        val (first, second) = SportsLiveTeams.writtenOrder(item.meta.name) ?: return null
+        if (PRO_BASKETBALL.any { directory.fetchedAt(it) == null }) return null
+        if (PRO_BASKETBALL.any { directory.resolve(it, first) != null || directory.resolve(it, second) != null }) return null
+        val holding = COLLEGE_BASKETBALL_LISTS.filter { league ->
+            if (directory.fetchedAt(league) == null) return@filter false
+            val a = directory.resolve(league, first) ?: return@filter false
+            val b = directory.resolve(league, second) ?: return@filter false
+            a.id != b.id
+        }
+        if (holding.isEmpty()) return null
+        val allLoaded = COLLEGE_BASKETBALL_LISTS.all { directory.fetchedAt(it) != null }
+        return if (holding.size == 1 && allLoaded) holding else COLLEGE_BASKETBALL_LISTS
+    }
+
+    private val PRO_BASKETBALL = listOf(EspnLeagueMap.NBA, EspnLeagueMap.G_LEAGUE, EspnLeagueMap.WNBA)
+    private val COLLEGE_BASKETBALL_LISTS = listOf(EspnLeagueMap.COLLEGE_BASKETBALL, EspnLeagueMap.COLLEGE_BASKETBALL_WOMEN)
+
     /** [item] as its inferred league's card (its sport set to that league's name), else [item] unchanged. */
     fun infer(item: SportsLiveItem, directory: TeamDirectory): SportsLiveItem {
+        // Two schools on a bare "Basketball" card whose gender is not known: the neutral college tag, both college feeds.
+        collegeLeaguesOf(item, directory)?.takeIf { it.size > 1 }?.let { return item.copy(sport = EspnLeagueMap.COLLEGE_BASKETBALL_EITHER) }
         val league = leagueOf(item, directory) ?: return item
         // The league's tag ("NHL", "NCAAM"), never the generic sport word.
         val sport = (LEAGUES + COLLEGE).first { it.first == league }.second

@@ -35,7 +35,7 @@ enum class SportsLiveSportKind {
             GOLF to """golf|\bpga\b|\blpga\b|\bliv golf\b""",
             MMA to """\bmma\b|\bufc\b|\bpfl\b|bellator""",
             BOXING to """boxing""",
-            MOTORSPORT to """motorsport|motor sport|formula 1|formula one|\bf1\b|motogp|nascar|indycar|grand prix""",
+            MOTORSPORT to """motorsport|motor sport|formula 1|formula one|\bf1\b|motogp|nascar|indycar|(?<!\bisu )grand prix""",
             DARTS to """darts""",
             SNOOKER to """snooker""",
             WRESTLING to """wrestling|\bwwe\b|\baew\b|\bnxt\b|smackdown""",
@@ -75,9 +75,38 @@ enum class SportsLiveSportKind {
          * description (where addons name the competition: "ICC World Test Championship") or catalog name
          * ("ATP 250 - Stockholm Open" → TENNIS). Null when none names one.
          */
-        fun tagOf(item: SportsLiveItem): SportsLiveSportKind? =
-            (listOf(item.sport, item.meta.name) + item.meta.genres + item.meta.description + item.catalogName).firstNotNullOfOrNull(::of)
-                ?: CRICKET.takeIf { SportsLiveCricket.isCricketGame(item.teams) }
+        fun tagOf(item: SportsLiveItem): SportsLiveSportKind? {
+            val texts = listOf(item.meta.name) + item.meta.genres + item.meta.description + item.catalogName
+            val sport = of(item.sport)
+            // A bare "Football" is soccer, unless the card's own text says American football ("NFL", F4).
+            if (sport == SOCCER && isBareFootball(item.sport) && texts.any { of(it) == FOOTBALL }) return FOOTBALL
+            return sport ?: texts.firstNotNullOfOrNull(::of) ?: CRICKET.takeIf { SportsLiveCricket.isCricketGame(item.teams) }
+        }
+
+        /**
+         * The sport whose one name a row's tag uses when [item]'s sport is a plain sport word ("Soccer", "Futbol",
+         * "Ice Hockey", "Motorsport"), so one addon's "FOOTBALL" and another's "SOCCER" read the same (F4); null for a
+         * league or competition ("NBA", "Premier League"), which stays as written. A bare "Football" may be American
+         * football: it is soccer only when the card says so elsewhere (a copy tagged "Soccer", or its title, genres,
+         * description or catalog naming a soccer competition), else null and it stays as written.
+         */
+        fun plainTagOf(item: SportsLiveItem): SportsLiveSportKind? {
+            val sport = item.sport ?: return null
+            if (fold(SportsLiveDisplayText.label(sport) ?: return null) !in PLAIN_SPORT_WORDS) return null
+            val kind = of(sport) ?: return null
+            if (!isBareFootball(sport)) return kind
+            val others = item.alternates.map { it.sport } + item.meta.name + item.meta.genres + item.meta.description + item.catalogName
+            val kinds = others.filterNot { it == null || isBareFootball(it) }.mapNotNull(::of)
+            return SOCCER.takeIf { SOCCER in kinds && FOOTBALL !in kinds }
+        }
+
+        private fun isBareFootball(text: String?): Boolean = text != null && fold(text) == "football"
+
+        private val PLAIN_SPORT_WORDS = setOf(
+            "soccer", "football", "futbol", "futebol", "fussball", "american football", "basketball", "hockey", "ice hockey",
+            "baseball", "tennis", "cricket", "rugby", "rugby union", "rugby league", "golf", "mma", "boxing", "motorsport",
+            "motorsports", "motor sport", "motor sports", "darts", "snooker", "wrestling", "cycling"
+        )
 
         // A promotion or its weekly show ("AEW Dynamite", "WWE Raw"): addons file these under MMA (#145).
         private val WRESTLING_SHOW = Regex("""\b(wwe|aew|nxt|smackdown|raw|dynamite|collision|rampage)\b""")

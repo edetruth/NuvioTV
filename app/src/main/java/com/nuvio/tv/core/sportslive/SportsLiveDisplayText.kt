@@ -19,6 +19,8 @@ data class SportsLiveDisplayTitle(
  * - quality prefixes and suffixes ("(FHD) :", "[HD]", "HD", "FHD", "UHD", "4K", "SD") go to [SportsLiveDisplayTitle.quality];
  * - a leading region code ("US :", "UK |") goes to [SportsLiveDisplayTitle.region];
  * - taglines and ids ("Live IPTV Recording", "Live on ‹ID›", "LIVE NOW") are dropped;
+ * - emoji and symbols go, a pipe inside a name reads " · ", and a tournament written as a game ("ATP 250 vs
+ *   Stockholm Open") reads as its two parts ("ATP 250 · Stockholm Open", F4);
  * - repeated whitespace collapses, and an ALL-CAPS name becomes Title Case, keeping known acronyms.
  *
  * Generic: it knows no addon. Matching and scores keep reading the raw title.
@@ -30,17 +32,37 @@ object SportsLiveDisplayText {
         cache.getOrPut(raw) { parse(raw) }
     }
 
+    /** [text] with its emoji and symbols ("⏱", "📺", "🏆") made spaces; the rest as written (team names, F4). */
+    fun withoutSymbols(text: String): String = if (text.all { it.code < 128 }) text else SYMBOLS.replace(text, " ")
+
     /** [raw]'s clean name alone. */
     fun name(raw: String): String = of(raw).name
 
     /**
-     * A description without taglines and ids: lines that are only a tagline go, taglines inside a line
+     * [raw]'s clean name, or the first line of [description] that says more after it (F4: a tennis feed titled
+     * "ATP 250" whose description reads "ATP 250 v Stockholm Open" is "ATP 250 · Stockholm Open"), cleaned the same way.
+     */
+    fun fullName(raw: String, description: String?): String =
+        if (description.isNullOrBlank()) name(raw) else fullNames(raw to description)
+
+    private val fullNames = Memo(1_024) { (raw, description): Pair<String, String> ->
+        val short = name(raw)
+        description.lines().asSequence()
+            .map { it.trim() }
+            .filter { it.length > short.length }
+            .map(::name)
+            .firstOrNull { line -> line.length > short.length && line.startsWith(short, ignoreCase = true) && !line[short.length].isLetterOrDigit() }
+            ?: short
+    }
+
+    /**
+     * A description without taglines, ids, emoji or symbols: lines that are only a tagline go, taglines inside a line
      * are cut out, blank lines collapse. Null when nothing is left.
      */
     fun description(raw: String?): String? {
         if (raw.isNullOrBlank()) return null
         return raw.lines()
-            .map { stripTaglines(it) }
+            .map { stripTaglines(SYMBOLS.replace(it, " ")) }
             .map { collapse(it) }
             .filter { it.isNotEmpty() }
             .joinToString("\n")
@@ -60,7 +82,8 @@ object SportsLiveDisplayText {
     private val LABEL_DECORATION = Regex("""[^\p{L}\p{N}\s/\-&'.]""")
 
     private fun parse(raw: String): SportsLiveDisplayTitle {
-        var text = collapse(raw)
+        // Emoji and symbols ("📺 Moto3", "🏆") are decoration (F4, F24): they go first, so a prefix behind one still reads.
+        var text = collapse(SYMBOLS.replace(raw, " "))
         var quality: String? = null
         var region: String? = null
         // Prefixes in any order: "(FHD) : US : Name", "US | (HD) Name".
@@ -102,7 +125,12 @@ object SportsLiveDisplayText {
             text = stripped
         }
         text = trimSeparators(collapse(text))
+        // "Moto2 | Round 22 | Portugal": a pipe inside a name reads as the section's dot (F4).
+        text = INNER_PIPE.replace(text, " · ")
+        text = MISSPELT.fold(text) { out, (wrong, right) -> wrong.replace(out, right) }
         if (isAllCaps(text)) text = titleCase(text)
+        // "ATP 250 vs Stockholm Open": a tournament written as a game is no pairing (F4); it reads "ATP 250 · Stockholm Open".
+        SportsLiveTeams.nonGamePair(text)?.let { (first, second) -> text = "$first · $second" }
         val name = text.ifEmpty { collapse(raw) }
         return SportsLiveDisplayTitle(name = name, quality = quality, region = region, raw = raw)
     }
@@ -213,6 +241,15 @@ object SportsLiveDisplayText {
 
     private val WHITESPACE = Regex("""[\s   ]+""")
 
+    /** Emoji and symbols (Unicode "other symbols", skin tones, joiners, variation selectors); never the degree sign. */
+    private val SYMBOLS = Regex("""[[\p{So}\x{1F3FB}-\x{1F3FF}\x{FE0E}\x{FE0F}\x{200D}\x{20E3}]&&[^\x{00B0}]]""")
+
+    /** A pipe between two parts of a name, with any spaces round it. */
+    private val INNER_PIPE = Regex("""\s*\|+\s*""")
+
+    /** Sport names addons misspell ("MotorGP"). */
+    private val MISSPELT = listOf(Regex("""\bMotorGP\b""", RegexOption.IGNORE_CASE) to "MotoGP")
+
     private val TAGLINES = listOf(
         Regex("""\blive\s+iptv\s+recording\b""", RegexOption.IGNORE_CASE),
         // "Live on ‹ID›": the id is one token with a digit or a dash ("Live on Sky Sports" is a name).
@@ -255,5 +292,13 @@ object SportsLiveDisplayText {
     private const val CACHE_SIZE = 1024
 }
 
-/** [SportsLiveItem]'s clean title for the screen (#100); the raw `meta.name` stays for matching and Details. */
-val com.nuvio.tv.domain.model.SportsLiveItem.displayName: String get() = SportsLiveDisplayText.name(meta.name)
+/**
+ * [SportsLiveItem]'s clean title for the screen (#100); the raw `meta.name` stays for matching and Details. A live or
+ * upcoming event naming no two sides takes the fuller line its description gives ([SportsLiveDisplayText.fullName]).
+ */
+val com.nuvio.tv.domain.model.SportsLiveItem.displayName: String
+    get() = if (isChannel || teams != null || kind != com.nuvio.tv.domain.model.SportsLiveKind.EVENTS) {
+        SportsLiveDisplayText.name(meta.name)
+    } else {
+        SportsLiveDisplayText.fullName(meta.name, meta.description)
+    }
