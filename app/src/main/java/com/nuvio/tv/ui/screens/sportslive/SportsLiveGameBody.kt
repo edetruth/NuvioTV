@@ -94,6 +94,8 @@ internal fun GameBody(
 ) {
     val summary = state.summary
     when {
+        // The Scores setting and spoiler protection not read yet (a frame or two): neither the hidden card nor stats.
+        !state.settled -> Unit
         // An upcoming game's Preview is spoiler-neutral (#171): it shows with the score hidden too.
         !state.showsScore && section != GameSection.PREVIEW -> HiddenGameBody(hasReplay = state.replay != null)
         state.status == GameLoadStatus.FAILED && summary == null -> SportsLivePageMessage(stringResource(R.string.sports_live_game_unavailable))

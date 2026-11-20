@@ -121,10 +121,16 @@ data class SportsLiveGameUiState(
     /** Opened on a chosen section (a panel row's "Box score ›", #145): its tab takes the first focus. */
     val openedOnSection: Boolean = false,
     /** Spoiler-protected (#151): nothing shows until Reveal result, which ends the protection. */
-    val spoilerProtected: Boolean = false
+    val spoilerProtected: Boolean = false,
+    /**
+     * The Scores setting and the spoiler protection have been read. Before that nothing is known to be safe to
+     * show, so the score stays hidden and the page has no actions yet (live.19 F18: a protected game opened from
+     * Results first drew as a plain final, with its score and only More…).
+     */
+    val settled: Boolean = true
 ) {
     /** Score, records and stats show: Scores Show (unless [spoilerSafe]), or revealed; never while [spoilerProtected]. */
-    val showsScore: Boolean get() = !spoilerProtected && ((mode == ScoresMode.SHOW && !spoilerSafe) || revealed)
+    val showsScore: Boolean get() = settled && !spoilerProtected && ((mode == ScoresMode.SHOW && !spoilerSafe) || revealed)
 
     /**
      * The sections with something to show. While the score is hidden only an upcoming game's Preview (#171), which is
@@ -157,6 +163,8 @@ class SportsLiveGameViewModel internal constructor(
     protection: Flow<SpoilerProtection> = flowOf(SpoilerProtection()),
     /** Reveal result on a protected game: its protection ends. */
     private val endProtection: suspend (ScoreSnapshot) -> Unit = {},
+    /** Watch later (no spoilers) from the page's More… (F22): the game is protected from now on. */
+    private val saveForLater: suspend (ScoreSnapshot) -> Unit = {},
     /** Watch replay pressed: played to its end, it ends the game's protection. */
     private val replayStarted: suspend (SportsLiveItem, ScoreSnapshot) -> Unit = { _, _ -> }
 ) : ViewModel() {
@@ -173,13 +181,15 @@ class SportsLiveGameViewModel internal constructor(
         now = System::currentTimeMillis,
         protection = protection.protection,
         endProtection = protection::reveal,
+        saveForLater = protection::saveForLater,
         replayStarted = { replay, event -> protection.onReplayStarted(listOf(replay) + replay.alternates, event) }
     )
 
     private data class Page(
         val summary: GameSummary? = null,
         val status: GameLoadStatus = GameLoadStatus.LOADING,
-        val mode: ScoresMode = ScoresMode.SHOW,
+        /** Null until the Scores setting has been read. */
+        val mode: ScoresMode? = null,
         val revealed: Boolean = false,
         val selected: GameSection? = null
     )
@@ -198,7 +208,7 @@ class SportsLiveGameViewModel internal constructor(
                 if (kept.size == summary.highlights.size) summary else summary.copy(highlights = kept)
             },
             status = page.status,
-            mode = page.mode,
+            mode = page.mode ?: ScoresMode.SHOW,
             revealed = page.revealed,
             selected = page.selected,
             replay = request?.replay,
@@ -210,7 +220,8 @@ class SportsLiveGameViewModel internal constructor(
             // Live games only: gone once the page's summary says the game is over.
             offersWatchWith = request?.watchWith != null && (page.summary?.state ?: event?.state) == ScoreState.IN,
             openedOnSection = request?.section != null,
-            spoilerProtected = event != null && protection.protects(event)
+            spoilerProtected = event != null && protection.protects(event),
+            settled = page.mode != null
         )
     }.stateIn(
         viewModelScope,
@@ -226,7 +237,8 @@ class SportsLiveGameViewModel internal constructor(
             selected = request?.section,
             openedOnSection = request?.section != null,
             // As stamped where the page was opened, until the protection is read.
-            spoilerProtected = request?.event?.spoilerProtected == true
+            spoilerProtected = request?.event?.spoilerProtected == true,
+            settled = false
         )
     )
 
@@ -306,6 +318,12 @@ class SportsLiveGameViewModel internal constructor(
         revealRequested.value = true
         val event = request?.event ?: return
         if (uiState.value.spoilerProtected) viewModelScope.launch { endProtection(event) }
+    }
+
+    /** Watch later (no spoilers) from More… (F22): score, records and stats hide until Reveal result. */
+    fun watchLater() {
+        val event = request?.event ?: return
+        viewModelScope.launch { saveForLater(event) }
     }
 
     /** Watch replay pressed on this page (#151). */

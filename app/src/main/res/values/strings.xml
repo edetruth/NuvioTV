@@ -477,7 +477,7 @@
     <string name="settings_content_discovery_plugins_subtitle">Manage repositories and stream providers</string>
     <string name="settings_sports_live">Sports &amp; Live</string>
     <string name="sports_live_setting_show_section">Show Sports &amp; Live section</string>
-    <string name="sports_live_setting_show_section_subtitle">Moves live sports and TV catalogs out of Home into their own section</string>
+    <string name="sports_live_setting_show_section_subtitle">Moves live sports and TV catalogs out of Home into their own section. This TV only</string>
     <string name="sports_live_setting_home_row">Show \"Live now\" row on Home</string>
     <string name="sports_live_setting_hover_preview">Preview games on hover</string>
     <string name="sports_live_setting_data_saver">Data saver</string>
@@ -509,16 +509,16 @@
     <string name="sports_live_scores_retry_now">Retry now</string>
     <string name="sports_live_scores_outage_toast">Live scores aren\'t available right now</string>
     <string name="sports_live_setting_hide_unplayable">Hide links this TV can\'t play</string>
-    <string name="sports_live_setting_hide_unplayable_subtitle">Links protected by DRM that this TV has no licence for are left out of Sources and never picked. Off, they show at the bottom, marked Protected.</string>
+    <string name="sports_live_setting_hide_unplayable_subtitle">Leaves out DRM links this TV can\'t play. Off: they show last, marked Protected. This TV only</string>
     <string name="sports_live_setting_pip">Picture-in-picture</string>
-    <string name="sports_live_setting_pip_subtitle">Home while a game plays keeps it in a small window over other apps. Off, or where unsupported, the in-app mini player is used.</string>
+    <string name="sports_live_setting_pip_subtitle">Home during a game keeps it playing in a small window over other apps. Off: the mini player. This TV only</string>
     <string name="sports_live_setting_pip_supported">Picture-in-picture: supported on this device</string>
     <string name="sports_live_setting_pip_unsupported">Picture-in-picture: not supported on this device</string>
     <string name="sports_live_setting_pip_system">Open system picture-in-picture setting</string>
     <string name="sports_live_setting_reset_stream_memory">Reset stream memory</string>
     <string name="sports_live_setting_reset_stream_memory_subtitle">Forget which stream sources worked on this device, so every source is tried fresh</string>
     <string name="sports_live_setting_reset_stream_memory_done">Cleared</string>
-    <string name="sports_live_setting_data_saver_subtitle">For limited or metered providers: turns off hover previews and background checks so streams load only when you play or flip to them</string>
+    <string name="sports_live_setting_data_saver_subtitle">For metered providers: no hover previews or background checks; streams load only when played. This TV only</string>
     <string name="sports_live_setting_open_game">When I open a game</string>
     <string name="sports_live_setting_open_game_subtitle">OK on a live game or channel. Choose stream in the long-press menu always lets you pick.</string>
     <string name="sports_live_open_game_play_best">Play best stream</string>
@@ -3830,11 +3830,11 @@
     <string name="sports_live_game_reveal_result">Reveal result</string>
     <string name="sports_live_watch_later">Watch later (no spoilers)</string>
     <string name="sports_live_watch_later_toast">Saved for later: %1$s</string>
-    <string name="sports_live_watch_later_toast_line">Score hidden for 7 days</string>
+    <string name="sports_live_watch_later_toast_line">Hidden for 7 days. Undo it with Reveal result</string>
     <string name="sports_live_reveal_result_menu">Reveal result</string>
     <string name="sports_live_replays_saved">Saved for later</string>
     <string name="sports_live_setting_my_teams_spoilers">Hide scores of my teams\' games until I\'ve watched</string>
-    <string name="sports_live_setting_my_teams_spoilers_subtitle">Followed teams\' games you didn\'t watch live stay spoiler-free for 7 days</string>
+    <string name="sports_live_setting_my_teams_spoilers_subtitle">Your teams\' games you missed stay hidden 7 days, until you watch them or pick Reveal result</string>
     <string name="sports_live_game_hidden">Score and stats are hidden</string>
     <string name="sports_live_game_hidden_reveal_note">Reveal shows the score, records, box score and highlights for this game.</string>
     <string name="sports_live_game_hidden_replay_note">Watch replay starts the game without showing the score.</string>
@@ -3971,9 +3971,9 @@
     <string name="sports_live_setting_full_time_alerts">Full-time alerts</string>
     <string name="sports_live_setting_full_time_alerts_subtitle">A short note when a followed team\'s game ends. Names only under Hide until focused</string>
     <string name="sports_live_setting_close_game_alerts">Close-game alerts</string>
-    <string name="sports_live_setting_close_game_alerts_subtitle">A close game late in My sports, whoever plays: at most one every 3 minutes, never the game you\'re watching. No score under Hide until focused</string>
+    <string name="sports_live_setting_close_game_alerts_subtitle">A note when a game in My sports is close near the end. Never the game you\'re watching</string>
     <!-- Sports & Live settings screen, grouped (#72) -->
-    <string name="sports_live_settings_subtitle">Scores, what you follow, alerts and playing</string>
+    <string name="sports_live_settings_subtitle">Scores, what you follow, alerts and playing. Signed in to Nuvio, they sync to your other TVs</string>
     <string name="sports_live_section_what_i_follow">What I follow</string>
     <string name="sports_live_section_scores_and_spoilers">Scores &amp; spoilers</string>
     <string name="sports_live_section_playing">Playing</string>
@@ -4009,8 +4009,8 @@
     <string name="sports_live_league_tag_ncaam">NCAAM</string>
     <string name="sports_live_league_tag_ncaaf">NCAAF</string>
     <string name="sports_live_league_tag_ncaaw">NCAAW</string>
-    <string name="sports_live_setting_home_row_subtitle">Games on now, in a row on the Home screen</string>
-    <string name="sports_live_setting_hover_preview_subtitle">Rest on a game for 2 s to watch it muted. Off under Data saver</string>
+    <string name="sports_live_setting_home_row_subtitle">Games on now, in a row on the Home screen. This TV only</string>
+    <string name="sports_live_setting_hover_preview_subtitle">Rest on a game for 2 s to watch it muted. Off under Data saver. This TV only</string>
     <string name="sports_live_setting_pip_system_subtitle">Your TV\'s own picture-in-picture switch for this app</string>
     <string name="sports_live_setting_catalogs_subtitle">Which addon catalogs feed Sports &amp; Live. OK cycles Auto, Included, Excluded</string>
     <!-- Settings → Sports & Live V2 (#134 phase 6): one help line, On/Off switches, why a row is off (#89). -->
@@ -4082,7 +4082,7 @@
     <string name="sports_live_my_teams_add_hint">Search by name, city or nickname</string>
     <string name="sports_live_setting_hidden_none">Nothing hidden</string>
     <string name="sports_live_setting_hidden_row_help">Titles you hid from Live Now. OK lists them, so you can bring one back</string>
-    <string name="sports_live_setting_catalogs_row_help">Which addon catalogs feed Sports &amp; Live. OK lists them</string>
+    <string name="sports_live_setting_catalogs_row_help">Which addon catalogs feed Sports &amp; Live. OK lists them. This TV only</string>
     <string name="sports_live_more_show">Show</string>
     <string name="sports_live_more_hide">Hide</string>
     <string name="sports_live_catalog_filter_help">Pins one filter value of this catalog, so Sports &amp; Live loads only that</string>
@@ -4150,11 +4150,11 @@
     <string name="sports_live_dual_watch_with">Watch with another game</string>
     <string name="sports_live_dual_pick">Pick another to watch</string>
     <string name="sports_live_preview_label">Preview</string>
-    <string name="sports_live_mini_hint">%1$s · Play/Pause to expand</string>
-    <string name="sports_live_mini_ok_hint">%1$s · OK to expand · Back to close</string>
-    <string name="sports_live_mini_watching">WATCHING</string>
-    <string name="sports_live_mini_watching_hint">▶❚❚ to expand</string>
-    <string name="sports_live_mini_watching_ok_hint">OK to expand · Back ✕ to stop</string>
+    <string name="sports_live_mini_hint">%1$s · Play/Pause full screen</string>
+    <string name="sports_live_mini_ok_hint">%1$s · OK full screen · Back stop</string>
+    <string name="sports_live_mini_watching">PLAYING</string>
+    <string name="sports_live_mini_watching_hint">Play/Pause full screen</string>
+    <string name="sports_live_mini_watching_ok_hint">OK full screen · Back stop</string>
     <string name="sports_live_stage_selected">Selected</string>
     <string name="sports_live_row_watching">▶ Watching</string>
     <!-- #148: Live now's header chip after Back from a paused game. -->
@@ -4311,7 +4311,7 @@
     <string name="sports_live_end_stay">Stay</string>
     <string name="sports_live_end_staying">Staying for the postgame</string>
     <string name="sports_live_setting_game_end">When a game ends</string>
-    <string name="sports_live_setting_game_end_help">What the player does when the game you watch ends: move to the next live game after 10 s, ask, or stay</string>
+    <string name="sports_live_setting_game_end_help">When the game you watch ends: move to the next live game after 10 s, ask, or stay</string>
     <string name="sports_live_game_end_move">Move to the next game</string>
     <string name="sports_live_game_end_ask">Ask</string>
     <string name="sports_live_game_end_stay">Stay</string>
@@ -4327,7 +4327,7 @@
     <string name="sports_live_remind_every_team">Remind me for every %1$s game</string>
     <string name="sports_live_stop_reminding_team">Stop reminding for %1$s games</string>
     <string name="sports_live_setting_reminded_teams">Teams I\'m reminded about</string>
-    <string name="sports_live_setting_reminded_teams_help">A Watch now? prompt at the start of each of their games, with no follow or score alerts. Add a team from a game\'s More… menu</string>
+    <string name="sports_live_setting_reminded_teams_help">A Watch now? prompt at each of their games, without following them. Add a team from a game\'s More…</string>
     <string name="sports_live_setting_reminded_teams_empty">Add a team from a game\'s More… menu: Remind me for every game</string>
     <string name="sports_live_setting_reminded_teams_none">No teams yet</string>
     <string name="sports_live_setting_reminded_team_help">OK stops the reminders for this team\'s games</string>

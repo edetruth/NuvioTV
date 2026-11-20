@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -32,6 +33,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
@@ -61,11 +65,14 @@ import java.util.Locale
 
 /**
  * The Player card (#63; V2 #134, `TeamPage-PlayerCard.dc.html`): a header with no card (the headshot only when
- * ESPN has one, name, position and number, team and bio line); up to 6 season tiles that never overflow and take
- * no focus; the last 5 games as focusable 64 px rows ("@ Lions", the Team page's wording) that scroll with ↓.
+ * ESPN has one and it loads, name, position and number, team and bio line), then two columns as on the Team page
+ * (live.19 F17: the right third was empty): the last 5 games as focusable 64 px rows ("@ Lions", the Team page's
+ * wording) that scroll with ↓, and beside them up to 6 season tiles, 2 a row, that never overflow and take no
+ * focus. The first game takes focus, so the page always shows where focus is.
  * No Back button and no key hints: the Back key returns, and the page that opened the card puts focus back on
  * the leader or performer. Spoilers: Hide until focused shows each game's result and line while its row has
- * focus; Off (or a spoiler-safe opener, #58) keeps them behind Reveal.
+ * focus once a key has been pressed here (the first row's focus on opening gives nothing away; OK or a move
+ * shows it); Off (or a spoiler-safe opener, #58) keeps them behind Reveal.
  */
 @Composable
 fun SportsLivePlayerCardScreen(
@@ -85,9 +92,10 @@ fun SportsLivePlayerCardScreen(
     val revealFocus = remember { FocusRequester() }
     val firstGameFocus = remember { FocusRequester() }
     val card = state.card
-    // Under Hide until focused a focused row shows its result, so the first game never takes focus by itself:
-    // the first ↓ moves onto it.
-    val hasGames = card != null && card.lastGames.isNotEmpty() && !state.showsReveal && !state.revealsOnFocus
+    // The first game takes focus as the card opens. Under Hide until focused a focused row shows its result only
+    // once a key has been pressed on the card, so arriving on it gives nothing away.
+    val hasGames = card != null && card.lastGames.isNotEmpty() && !state.showsReveal
+    var keyPressed by remember { mutableStateOf(false) }
     // Reveal while it shows, else the first game.
     LaunchedEffect(state.showsReveal, hasGames) {
         withFrameNanos { }
@@ -103,39 +111,29 @@ fun SportsLivePlayerCardScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Colors.Background)
+            .onPreviewKeyEvent { if (it.type == KeyEventType.KeyDown) keyPressed = true; false }
             .padding(start = PAGE_SIDE, end = PAGE_SIDE, top = PAGE_TOP)
     ) {
         PlayerHeader(card = card, fallbackName = target.name, fallbackTeam = target.team)
         Spacer(Modifier.height(20.dp))
-        LazyColumn(
-            modifier = Modifier.weight(1f).fillMaxWidth().dpadRepeatThrottle(),
-            verticalArrangement = Arrangement.spacedBy(SportsLiveTokens.Size.RowGap),
-            // Room for the focused row's lift and ring at both ends of the scroll.
-            contentPadding = PaddingValues(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 24.dp)
-        ) {
-            when {
-                state.status == PlayerCardStatus.WAITING_REVEAL -> item(key = "hidden") {
-                    HiddenBlock(
-                        message = stringResource(R.string.sports_live_player_hidden),
-                        button = stringResource(R.string.sports_live_player_reveal_all),
-                        focusRequester = revealFocus,
-                        onReveal = viewModel::reveal
-                    )
-                }
-                state.status == PlayerCardStatus.FAILED -> item(key = "failed") {
-                    SportsLivePageMessage(stringResource(R.string.sports_live_player_unavailable))
-                }
-                card == null -> item(key = "loading") {
-                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { LoadingIndicator() }
-                }
-                else -> {
-                    if (card.season.isNotEmpty()) {
-                        item(key = "season_title") { SportsLivePageHeading(card.seasonTitle ?: stringResource(R.string.sports_live_player_season)) }
-                        item(key = "season") { SeasonTiles(card.season) }
-                    }
-                    item(key = "last_title") {
-                        SportsLivePageHeading(stringResource(R.string.sports_live_player_last_games), modifier = Modifier.padding(top = 12.dp))
-                    }
+        when {
+            state.status == PlayerCardStatus.WAITING_REVEAL -> HiddenBlock(
+                message = stringResource(R.string.sports_live_player_hidden),
+                button = stringResource(R.string.sports_live_player_reveal_all),
+                focusRequester = revealFocus,
+                onReveal = viewModel::reveal
+            )
+            state.status == PlayerCardStatus.FAILED -> SportsLivePageMessage(stringResource(R.string.sports_live_player_unavailable))
+            card == null -> Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { LoadingIndicator() }
+            else -> Row(modifier = Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(COLUMN_GAP)) {
+                // Left: the last 5 games, where focus lives.
+                LazyColumn(
+                    modifier = Modifier.weight(1f).fillMaxHeight().dpadRepeatThrottle(),
+                    verticalArrangement = Arrangement.spacedBy(SportsLiveTokens.Size.RowGap),
+                    // Room for the focused row's lift and ring at both ends of the scroll.
+                    contentPadding = PaddingValues(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 24.dp)
+                ) {
+                    item(key = "last_title") { SportsLivePageHeading(stringResource(R.string.sports_live_player_last_games)) }
                     when {
                         state.showsReveal -> item(key = "last_hidden") {
                             HiddenBlock(
@@ -149,13 +147,21 @@ fun SportsLivePlayerCardScreen(
                         else -> itemsIndexed(card.lastGames, key = { _, game -> game.eventId }) { index, game ->
                             GameRow(
                                 game = game,
-                                showsGame = state::showsGame,
-                                // The board's rows: about 62 % of the page, never stretched edge to edge.
-                                modifier = Modifier
-                                    .widthIn(max = LAST_GAMES_WIDTH)
-                                    .then(if (index == 0) Modifier.focusRequester(firstGameFocus) else Modifier)
+                                showsGame = { focused -> state.showsGame(focused && keyPressed) },
+                                modifier = if (index == 0) Modifier.focusRequester(firstGameFocus) else Modifier
                             )
                         }
+                    }
+                }
+                // Right: the season tiles, 2 a row; not focusable, so ↓ and ↑ stay in the games.
+                if (card.season.isNotEmpty()) {
+                    Column(
+                        modifier = Modifier.width(SEASON_COLUMN).padding(top = 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(SportsLiveTokens.Size.RowGap)
+                    ) {
+                        // ESPN's "2026-27 regular season stats" is wider than two tiles: it may take a second line.
+                        SportsLivePageHeading(card.seasonTitle ?: stringResource(R.string.sports_live_player_season), maxLines = 2)
+                        SeasonTiles(card.season)
                     }
                 }
             }
@@ -170,15 +176,25 @@ private fun PlayerHeader(card: PlayerCard?, fallbackName: String, fallbackTeam: 
     val name = bio?.name ?: fallbackName
     val separator = stringResource(R.string.sports_live_game_info_separator)
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        // The headshot when ESPN has one; else nothing, never initials (#130).
+        // The headshot when ESPN has one; else nothing, never initials (#130). Its circle draws only once the image
+        // has loaded, and a headshot that fails gives its room back (live.19 F17: an empty grey circle).
         playerHeadshot(card)?.let { url ->
-            AsyncImage(
-                model = rememberSizedImage(url, HEADSHOT_SIZE, HEADSHOT_SIZE),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.size(HEADSHOT_SIZE).clip(CircleShape).background(Colors.SurfaceRaised)
-            )
-            Spacer(Modifier.width(18.dp))
+            var loaded by remember(url) { mutableStateOf(false) }
+            var failed by remember(url) { mutableStateOf(false) }
+            if (!failed) {
+                AsyncImage(
+                    model = rememberSizedImage(url, HEADSHOT_SIZE, HEADSHOT_SIZE),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    onSuccess = { loaded = true },
+                    onError = { failed = true },
+                    modifier = Modifier
+                        .size(HEADSHOT_SIZE)
+                        .clip(CircleShape)
+                        .then(if (loaded) Modifier.background(Colors.SurfaceRaised) else Modifier)
+                )
+                Spacer(Modifier.width(18.dp))
+            }
         }
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
@@ -218,29 +234,33 @@ private fun PlayerHeader(card: PlayerCard?, fallbackName: String, fallbackTeam: 
     }
 }
 
-/** Board ⑥: up to 6 season tiles, 200 × 120 px, not focusable; a 22 px caps label over a 48 px tabular value. */
+/** Board ⑥: up to 6 season tiles, 200 × 120 px, 2 a row, not focusable; a 22 px caps label over a 48 px tabular value. */
 @Composable
 private fun SeasonTiles(stats: List<PlayerStat>) {
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        stats.take(PlayerCards.MAX_SEASON_STATS).forEach { stat ->
-            Column(
-                modifier = Modifier
-                    .width(TILE_WIDTH)
-                    .height(TILE_HEIGHT)
-                    .clip(SportsLiveTokens.Radius.RowShape)
-                    .background(Colors.Surface)
-                    .padding(horizontal = 10.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.SpaceBetween
-            ) {
-                SportsLivePageHeading(stat.label)
-                Text(
-                    stat.value,
-                    style = SportsLiveTokens.style(TILE_VALUE).sportsLiveBold(),
-                    color = Colors.TextPrimary,
-                    maxLines = 1,
-                    softWrap = false,
-                    overflow = TextOverflow.Clip
-                )
+    Column(verticalArrangement = Arrangement.spacedBy(TILE_GAP)) {
+        stats.take(PlayerCards.MAX_SEASON_STATS).chunked(TILES_PER_ROW).forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(TILE_GAP)) {
+                row.forEach { stat ->
+                    Column(
+                        modifier = Modifier
+                            .width(TILE_WIDTH)
+                            .height(TILE_HEIGHT)
+                            .clip(SportsLiveTokens.Radius.RowShape)
+                            .background(Colors.Surface)
+                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        SportsLivePageHeading(stat.label)
+                        Text(
+                            stat.value,
+                            style = SportsLiveTokens.style(TILE_VALUE).sportsLiveBold(),
+                            color = Colors.TextPrimary,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Clip
+                        )
+                    }
+                }
             }
         }
     }
@@ -265,7 +285,9 @@ private fun GameRow(game: PlayerGame, showsGame: (Boolean) -> Boolean, modifier:
         )
         Row(modifier = Modifier.width(OPPONENT_WIDTH), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(modifier = Modifier.size(LOGO), contentAlignment = Alignment.Center) {
-                rememberTeamLogo(game.opponentLogo, px = 64)?.let { TeamLogoSlot(it.painter, it.shown, LOGO) }
+                // At the card size, so it is the image the Results and Team pages already loaded (live.19 F17: logos
+                // missing on 3 of 5 rows while a size of its own was fetched).
+                rememberTeamLogo(game.opponentLogo)?.let { TeamLogoSlot(it.painter, it.shown, LOGO) }
             }
             val opponent = game.opponentName ?: game.opponent
             Text(
@@ -330,10 +352,15 @@ private val HEADSHOT_SIZE = 70.dp
 private val TILE_WIDTH = 100.dp
 private val TILE_HEIGHT = 60.dp
 private val TILE_VALUE = TextStyle(fontSize = 24.sp, lineHeight = 28.sp, fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum")
+private const val TILES_PER_ROW = 2
+private val TILE_GAP = 10.dp
+/** The season column: 2 tiles and their gap, so the games keep the board's 640 dp. */
+private val SEASON_COLUMN = TILE_WIDTH * TILES_PER_ROW + TILE_GAP * (TILES_PER_ROW - 1)
+private val COLUMN_GAP = 24.dp
 /** Last 5 rows: 64 px. */
 private val GAME_ROW = 32.dp
 private val DATE_WIDTH = 84.dp
-private val OPPONENT_WIDTH = 160.dp
+private val OPPONENT_WIDTH = 180.dp
 private val RESULT_WIDTH = 96.dp
-private val LOGO = 14.dp
-private val LAST_GAMES_WIDTH = 640.dp
+/** The opponent's logo: 40 px, readable from the sofa (28 px was a smudge). */
+private val LOGO = 20.dp

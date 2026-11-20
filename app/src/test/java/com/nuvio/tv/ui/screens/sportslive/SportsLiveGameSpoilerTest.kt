@@ -13,6 +13,8 @@ import com.nuvio.tv.core.sportslive.scores.SpoilerProtection
 import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveKind
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
@@ -39,7 +41,7 @@ class SportsLiveGameSpoilerTest {
     private val protection = MutableStateFlow(SpoilerProtection(nowMs = now))
     private val ended = mutableListOf<ScoreSnapshot>()
 
-    private fun TestScope.viewModel(request: SportsLiveGameRequest) = SportsLiveGameViewModel(
+    private fun TestScope.viewModel(request: SportsLiveGameRequest, settings: Flow<ScoreSettings> = this@SportsLiveGameSpoilerTest.settings) = SportsLiveGameViewModel(
         request = request,
         loadSummary = { _: EspnLeague, _: String -> GameSummaryLoad.Loaded(summary, final = true) },
         settings = settings,
@@ -52,6 +54,9 @@ class SportsLiveGameSpoilerTest {
         endProtection = { event ->
             ended += event
             protection.value = SpoilerProtection(SpoilerProtection.ended(protection.value.games, event, now), nowMs = now)
+        },
+        saveForLater = { event ->
+            protection.value = SpoilerProtection(SpoilerProtection.saved(protection.value.games, event, now), nowMs = now)
         }
     ).also { vm -> backgroundScope.launch { vm.uiState.collect {} } }
 
@@ -114,5 +119,61 @@ class SportsLiveGameSpoilerTest {
         protection.value = SpoilerProtection(SpoilerProtection.saved(emptyList(), game, now), nowMs = now)
         runCurrent()
         assertFalse(vm.uiState.value.showsScore)
+    }
+
+    @Test
+    fun `nothing shows until the Scores setting is read - no flash of the score under Hide until focused`() = runTest(mainDispatcherRule.dispatcher) {
+        // live.19 F18: the page used to start as Show, so a hidden game drew its score and only More… for a moment.
+        val pending = MutableSharedFlow<ScoreSettings>()
+        val vm = viewModel(SportsLiveGameRequest(game, revealed = false), settings = pending)
+        assertFalse(vm.uiState.value.settled)
+        assertFalse(vm.uiState.value.showsScore)
+        runCurrent()
+        assertFalse(vm.uiState.value.settled)
+        assertFalse(vm.uiState.value.showsScore)
+
+        pending.emit(ScoreSettings(mode = ScoresMode.HIDE_UNTIL_FOCUSED))
+        runCurrent()
+        assertTrue(vm.uiState.value.settled)
+        assertFalse(vm.uiState.value.showsScore)
+    }
+
+    @Test
+    fun `a saved game opened from Results reads as protected, so More… offers Reveal result`() = runTest(mainDispatcherRule.dispatcher) {
+        // Results does not stamp its events: the page reads the protection itself.
+        protection.value = SpoilerProtection(SpoilerProtection.saved(emptyList(), game, now), nowMs = now)
+        val vm = viewModel(SportsLiveGameRequest(game, revealed = false))
+        runCurrent()
+        assertTrue(vm.uiState.value.settled)
+        assertTrue(vm.uiState.value.spoilerProtected)
+        assertFalse(vm.uiState.value.showsScore)
+    }
+
+    @Test
+    fun `Watch later from the page hides the game, and Reveal result undoes it`() = runTest(mainDispatcherRule.dispatcher) {
+        // F22: the Game page's More… offers both, worded as on Results.
+        val vm = viewModel(SportsLiveGameRequest(game, revealed = true))
+        vm.setVisible(true)
+        runCurrent()
+        assertTrue(vm.uiState.value.showsScore)
+        assertFalse(vm.uiState.value.spoilerProtected)
+
+        vm.watchLater()
+        runCurrent()
+        assertTrue(vm.uiState.value.spoilerProtected)
+        assertFalse(vm.uiState.value.showsScore)
+
+        vm.reveal()
+        runCurrent()
+        assertEquals(listOf(game.eventId), ended.map { it.eventId })
+        assertFalse(vm.uiState.value.spoilerProtected)
+        assertTrue(vm.uiState.value.showsScore)
+    }
+
+    @Test
+    fun `an upcoming game keeps its records in the header, as its Preview lists them`() {
+        val side = HeaderSide(name = "Nuggets", logo = null, record = "8-5", score = null)
+        assertEquals("8-5", side.shownRecord(showsScore = false, upcoming = true))
+        assertEquals(null, side.shownRecord(showsScore = false))
     }
 }

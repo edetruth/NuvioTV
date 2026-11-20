@@ -8,12 +8,15 @@ import com.nuvio.tv.core.sportslive.scores.EspnLeagueMap
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.ScoreState
 import com.nuvio.tv.domain.model.SportsLiveItem
+import com.nuvio.tv.domain.model.SportsLiveTab
 import com.nuvio.tv.ui.screens.sportslive.dual.dualItem
 import com.nuvio.tv.ui.screens.sportslive.dual.dualStream
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniPlayerController
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveResumeOffer
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** #148: Live now's Resume chip, from the offer and the screen's one status source. */
@@ -87,5 +90,24 @@ class SportsLiveResumeChipTest {
             SportsLiveResumeOk.OpenGame(game, final),
             sportsLiveResumeOk(SportsLiveResumeChip.Final(game, GameStatus.Final(final), final))
         )
+    }
+
+    @Test
+    fun `Live now and Channels show the chip, the other tabs do not`() {
+        // live.19 F15: Back from a channel paused on Channels showed nothing there.
+        assertTrue(sportsLiveResumeShownOn(SportsLiveTab.LIVE_NOW))
+        assertTrue(sportsLiveResumeShownOn(SportsLiveTab.CHANNELS))
+        listOf(SportsLiveTab.UPCOMING, SportsLiveTab.REPLAYS, SportsLiveTab.RESULTS).forEach { assertFalse(sportsLiveResumeShownOn(it)) }
+    }
+
+    @Test
+    fun `the paused card is found on Channels too, Live now's card first`() {
+        val channel = game.copy(isChannel = true)
+        assertEquals(channel, sportsLiveResumeListed(offer, mapOf(SportsLiveTab.CHANNELS to listOf(dualItem("other"), channel))))
+        val live = game.copy(isLive = true)
+        assertEquals(live, sportsLiveResumeListed(offer, mapOf(SportsLiveTab.LIVE_NOW to listOf(live), SportsLiveTab.CHANNELS to listOf(channel))))
+        // Other tabs never list it, and no offer finds nothing.
+        assertNull(sportsLiveResumeListed(offer, mapOf(SportsLiveTab.REPLAYS to listOf(game))))
+        assertNull(sportsLiveResumeListed(null, mapOf(SportsLiveTab.LIVE_NOW to listOf(game))))
     }
 }

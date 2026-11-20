@@ -141,4 +141,18 @@ class SportsLiveSettingsSectionsTest {
         assertTrue(SportsLiveSettingsUiState().hideUnplayable)
         assertFalse(HIDE_UNPLAYABLE.isEnabled(SportsLiveSettingsUiState(showSection = false)))
     }
+
+    @Test
+    fun `the first focus - Scores, the Show switch while hidden, Run setup after it, a sub-page's first row`() {
+        val scores = SportsLiveSettingsItem.Setting(SCORES).key
+        val runSetup = SportsLiveSettingsItem.Setting(RUN_SETUP).key
+        assertEquals(scores, sportsLiveSettingsInitialKey(onMainRoot = true, showSection = true, returnKey = null, firstFocusable = "x"))
+        assertEquals(
+            SportsLiveSettingsItem.Setting(SHOW_SECTION).key,
+            sportsLiveSettingsInitialKey(onMainRoot = true, showSection = false, returnKey = null, firstFocusable = "x")
+        )
+        // live.19 F19: Back from first run lands on Run setup again.
+        assertEquals(runSetup, sportsLiveSettingsInitialKey(onMainRoot = true, showSection = true, returnKey = runSetup, firstFocusable = "x"))
+        assertEquals("x", sportsLiveSettingsInitialKey(onMainRoot = false, showSection = true, returnKey = runSetup, firstFocusable = "x"))
+    }
 }

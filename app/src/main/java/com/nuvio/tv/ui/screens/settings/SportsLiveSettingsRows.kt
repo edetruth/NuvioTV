@@ -3,6 +3,7 @@ package com.nuvio.tv.ui.screens.settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -192,13 +193,22 @@ internal fun SportsLiveSettingsNote(text: String) {
 
 /**
  * The one help line (#134): the focused row's explanation, fixed at the bottom of the pane, so rows stay
- * one line and nothing re-flows when focus moves. Two lines at most.
+ * one line and nothing re-flows when focus moves. Two lines at most, under a hairline that sets it apart from
+ * the list scrolling above it (live.19 F19: it read as part of the last section).
  */
 @Composable
-internal fun SportsLiveHelpLine(text: String?, modifier: Modifier = Modifier) {
-    Row(
-        modifier = modifier
+internal fun SportsLiveHelpLine(text: String?, modifier: Modifier = Modifier) = Column(modifier = modifier.fillMaxWidth()) {
+    Box(
+        modifier = Modifier
             .fillMaxWidth()
+            .padding(horizontal = 4.dp)
+            .height(1.dp)
+            .background(Colors.Divider)
+    )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 6.dp)
             .height(Settings.HelpLineHeight)
             .padding(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically

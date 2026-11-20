@@ -36,7 +36,9 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -137,17 +139,21 @@ fun SportsLiveGameScreen(
     val sections = state.sections
     val section = state.section
     val showsScore = state.showsScore
-    // Remind me (#44): an upcoming game opened from its card.
+    // Remind me (#44): an upcoming game, by the card it was opened from, else by ESPN's game itself (live.19 F18:
+    // opened from Upcoming or Results with no card, an upcoming game had no PRIMARY), as the Team page does.
     val reminders by remindersViewModel.state.collectAsStateWithLifecycle()
-    val remindCard = state.card?.takeIf { event.state == ScoreState.PRE && GameReminders.canRemind(it, System.currentTimeMillis()) }
+    val nowMs = System.currentTimeMillis()
+    val remindCard = state.card?.takeIf { event.state == ScoreState.PRE && GameReminders.canRemind(it, nowMs) }
+    val remindEvent = event.takeIf { remindCard == null && state.card?.isChannel != true && GameReminders.canRemind(it, nowMs) }
     val gameState = state.summary?.state ?: event.state
     // Watch: a live game opened from a card that plays it.
     val liveCard = state.card?.takeIf { gameState == ScoreState.IN && !it.isChannel }
-    val actions = gameActions(
+    // Nothing until the Scores setting and the spoiler protection are read: the row then appears once, as it stays.
+    val actions = if (!state.settled) emptyList() else gameActions(
         showsScore = showsScore,
         hasReplay = state.replay != null,
         canWatchLive = liveCard != null,
-        canRemind = remindCard != null
+        canRemind = remindCard != null || remindEvent != null
     )
 
     val actionFocus = remember { GameAction.entries.associateWith { FocusRequester() } }
@@ -166,7 +172,14 @@ fun SportsLiveGameScreen(
     // ↓ reads it at once. The header holds focus until the summary has loaded.
     var sectionFocusPending by rememberSaveable { mutableStateOf(state.openedOnSection) }
     val returnFocus = remember { FocusRequester() }
-    LaunchedEffect(Unit) {
+    // A key pressed on the page: from then on focus moves only when the user moves it.
+    var keyPressed by remember { mutableStateOf(false) }
+    var firstFocusDone by remember { mutableStateOf(false) }
+    // The first focus waits for the page to settle (the PRIMARY, live.19 F18: hidden mode focused More… because
+    // Reveal result was not there yet). Until a key is pressed it follows the first action as the row fills in.
+    LaunchedEffect(state.settled, headerFirst) {
+        if (!state.settled || (firstFocusDone && keyPressed)) return@LaunchedEffect
+        firstFocusDone = true
         withFrameNanos { }
         if (returnPending) {
             returnPending = false
@@ -174,6 +187,8 @@ fun SportsLiveGameScreen(
             // An element scrolled out of the list has no focus target: the header instead.
             if (runCatching { returnFocus.requestFocus() }.isSuccess) return@LaunchedEffect
         }
+        // Opened on a section: its tab takes focus instead (below).
+        if (state.openedOnSection && !sectionFocusPending) return@LaunchedEffect
         runCatching { headerFirst.requestFocus() }
     }
     LaunchedEffect(selectedTab, showsScore) {
@@ -207,6 +222,7 @@ fun SportsLiveGameScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Colors.Background)
+            .onPreviewKeyEvent { if (it.type == KeyEventType.KeyDown) keyPressed = true; false }
             .padding(start = PAGE_SIDE, end = PAGE_SIDE, top = PAGE_TOP)
     ) {
         GameHero(state = state, event = event, first = sideOf(firstSide), second = sideOf(secondSide))
@@ -217,13 +233,13 @@ fun SportsLiveGameScreen(
             moreFocus = moreFocus,
             // No tabs (scores hidden, or nothing to show): Down stays put.
             downFocus = selectedTab,
-            reminded = remindCard != null && reminders.isReminded(remindCard),
+            reminded = remindCard?.let { reminders.isReminded(it) } ?: remindEvent?.let { reminders.isReminded(it) } ?: false,
             // A replay's or a saved game's page (#151): "Reveal result".
             revealResult = state.spoilerProtected || state.spoilerSafe,
             onAction = { action ->
                 when (action) {
                     GameAction.WATCH -> liveCard?.let { playViewModel.play(it) }
-                    GameAction.REMIND -> remindCard?.let(remindersViewModel::toggle)
+                    GameAction.REMIND -> remindCard?.let { remindersViewModel.toggle(it) } ?: remindEvent?.let { remindersViewModel.toggle(it) }
                     GameAction.REPLAY -> state.replay?.let { replay ->
                         viewModel.onReplayStarted(replay)
                         if (replay.apiType == "series") onOpenDetail(replay) else playViewModel.play(replay)
@@ -298,6 +314,25 @@ fun SportsLiveGameScreen(
                 }
             } else null,
             followingLabel = true,
+            // Watch later (no spoilers) and its undo, Reveal result, worded as on Results and Live Now (#151, F22):
+            // a game under way or over whose score is not already behind Reveal for another reason.
+            onWatchLater = if (state.settled && !state.spoilerSafe && event.individual == null && gameState != ScoreState.PRE) {
+                {
+                    menuOpen = false
+                    if (state.spoilerProtected) {
+                        revealPressed = true
+                        viewModel.reveal()
+                    } else {
+                        viewModel.watchLater()
+                        SportsLiveToasts.show(
+                            SportsLiveToastKind.INFO,
+                            context.getString(R.string.sports_live_watch_later_toast, context.getString(R.string.sports_live_matchup, names[0], names[1])),
+                            context.getString(R.string.sports_live_watch_later_toast_line)
+                        )
+                    }
+                }
+            } else null,
+            savedForLater = state.spoilerProtected,
             // A pro team with ESPN's id only (#62).
             teamPages = order.mapNotNull { side ->
                 TeamPages.refOf(event, side)?.let { ref ->
@@ -314,8 +349,11 @@ fun SportsLiveGameScreen(
 
 /** One side of the header: from the summary when loaded, else from the event as opened. */
 internal data class HeaderSide(val name: String, val logo: String?, val record: String?, val score: Int?, val rank: Int? = null) {
-    /** The record the header shows: none while the score is hidden (#184), as a record after the game tells how it ended. */
-    fun shownRecord(showsScore: Boolean): String? = record.takeIf { showsScore }
+    /**
+     * The record the header shows: none while the score is hidden (#184), as a record after the game tells how it
+     * ended; before an [upcoming] game it gives nothing away (its Preview lists it too), so it stays.
+     */
+    fun shownRecord(showsScore: Boolean, upcoming: Boolean = false): String? = record.takeIf { showsScore || upcoming }
 }
 
 internal fun headerSides(summary: GameSummary?, event: ScoreSnapshot): Pair<HeaderSide, HeaderSide> {
@@ -360,7 +398,8 @@ private fun GameHero(state: SportsLiveGameUiState, event: ScoreSnapshot, first: 
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.Top
     ) {
-        HeroTeam(first, logos?.first, logos?.shown == true, showsScore)
+        val upcoming = gameState == ScoreState.PRE
+        HeroTeam(first, logos?.first, logos?.shown == true, showsScore, upcoming)
         Column(
             modifier = Modifier.width(HERO_MIDDLE_WIDTH),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -372,6 +411,8 @@ private fun GameHero(state: SportsLiveGameUiState, event: ScoreSnapshot, first: 
             Box(modifier = Modifier.height(HERO_SCORE_HEIGHT), contentAlignment = Alignment.Center) {
                 Text(
                     text = when {
+                        // Not known yet whether the score may show: nothing, rather than a flash of either.
+                        !state.settled -> ""
                         // Before tip-off there is no score to hide: "vs" (#171).
                         !showsScore && played -> stringResource(R.string.sports_live_results_score_hidden)
                         !showsScore -> stringResource(R.string.sports_live_art_vs)
@@ -387,12 +428,12 @@ private fun GameHero(state: SportsLiveGameUiState, event: ScoreSnapshot, first: 
             }
             GameStatusLine(summary = summary, event = event, showsScore = showsScore, live = gameState == ScoreState.IN)
         }
-        HeroTeam(second, logos?.second, logos?.shown == true, showsScore)
+        HeroTeam(second, logos?.second, logos?.shown == true, showsScore, upcoming)
     }
 }
 
 @Composable
-private fun HeroTeam(side: HeaderSide, logo: Painter?, logoShown: Boolean, showRecord: Boolean) {
+private fun HeroTeam(side: HeaderSide, logo: Painter?, logoShown: Boolean, showRecord: Boolean, upcoming: Boolean) {
     Column(modifier = Modifier.width(HERO_TEAM_WIDTH), horizontalAlignment = Alignment.CenterHorizontally) {
         // The logo's room stays, so both names sit on one line whether or not logos load (#130).
         Box(modifier = Modifier.height(HERO_LOGO), contentAlignment = Alignment.Center) {
@@ -421,9 +462,10 @@ private fun HeroTeam(side: HeaderSide, logo: Painter?, logoShown: Boolean, showR
             )
         }
         // The record after the game would tell how it ended: hidden with the score.
-        side.shownRecord(showRecord)?.let { record ->
+        side.shownRecord(showRecord, upcoming)?.let { record ->
             Text(
-                record,
+                // "8–5", with the en dash the Preview and the Team page use.
+                record.replace('-', '–'),
                 style = SportsLiveTokens.style(SportsLiveTokens.Type.Meta).copy(fontFeatureSettings = "tnum"),
                 color = Colors.TextMuted,
                 maxLines = 1

@@ -49,6 +49,7 @@ import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onKeyEvent
@@ -419,13 +420,13 @@ class SportsLiveMiniPlayerViewModel @Inject constructor(
 
 /**
  * The in-app mini player, drawn above the NavHost: bottom-right, 24% of the screen's width, 16:9,
- * with "<game> · Play/Pause to expand" under it. [onExpand] opens the full player for an expand's
+ * with "<game> · Play/Pause full screen" under it. [onExpand] opens the full player for an expand's
  * target, after the mini player has stopped.
  *
  * It is focusable but never asks for focus: it comes after the whole app in the hierarchy, so a
  * screen's initial focus never lands on it, and only a D-pad move (Down/Right) with nothing else
  * that way reaches it (a list scrolls its items in before focus leaves it). Focused, it shows a
- * ring and "OK to expand · Back to close": OK expands, Back stops it and focus goes back up to the
+ * ring and "OK full screen · Back stop": OK expands, Back stops it and focus goes back up to the
  * content, and any arrow hands focus back to [contentFocusRequester] (the content, which restores
  * its last focused element) while the mini player plays on.
  */
@@ -637,7 +638,7 @@ fun SportsLiveMiniPlayerHost(
                 if (playback.reconnecting) {
                     SportsLiveReconnectingChip(small = true, modifier = Modifier.align(Alignment.TopStart).padding(6.dp))
                 }
-                // Docked, the WATCHING strip along the video's top (#157): which game plays, never read as the
+                // Docked, the PLAYING strip along the video's top (#157): which game plays, never read as the
                 // stage's selected one; never over the broadcast's scorebug along the bottom.
                 if (!playback.reconnecting && stageSlot != null &&
                     SportsLiveMiniGeometry.captionSpot(inStage = true) == SportsLiveMiniCaptionSpot.TOP_START
@@ -672,13 +673,22 @@ private fun animatedDockBounds(slot: SportsLiveMiniSlot, hostX: Int, hostY: Int)
     return offset to size
 }
 
-/** The docked mini player's label strip (#157): "WATCHING <game>" and how to expand, on a dark band. */
+/**
+ * The docked mini player's label strip (#157): "PLAYING <game>" and its keys, on a scrim that is near-solid behind
+ * the text and fades out below it, so the broadcast's own graphics never show through the words (live.19 F14).
+ */
 @Composable
 private fun WatchingStrip(name: String, hint: String, modifier: Modifier = Modifier) {
     Row(
         modifier = modifier
-            .background(SportsLiveTokens.Colors.Background.copy(alpha = 0.78f))
-            .padding(horizontal = 8.dp, vertical = 4.dp),
+            .background(
+                Brush.verticalGradient(
+                    0f to SportsLiveTokens.Colors.Background.copy(alpha = 0.94f),
+                    0.62f to SportsLiveTokens.Colors.Background.copy(alpha = 0.88f),
+                    1f to Color.Transparent
+                )
+            )
+            .padding(start = 8.dp, end = 8.dp, top = 5.dp, bottom = 14.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -706,7 +716,7 @@ private fun WatchingStrip(name: String, hint: String, modifier: Modifier = Modif
     }
 }
 
-/** The mini player's caption ("<game> · Play/Pause to expand"), on a dark chip. */
+/** The mini player's caption ("<game> · Play/Pause full screen"), on a dark chip. */
 @Composable
 private fun MiniCaption(text: String, modifier: Modifier = Modifier, small: Boolean = false) {
     Text(

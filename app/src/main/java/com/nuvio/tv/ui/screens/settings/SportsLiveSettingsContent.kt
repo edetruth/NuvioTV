@@ -135,6 +135,12 @@ internal fun SportsLiveSettingsContent(
     // The focused row (the help line follows it), and the row to focus once a page change has composed.
     var focusedKey by remember { mutableStateOf<String?>(null) }
     var pendingFocusKey by remember { mutableStateOf<String?>(null) }
+    // The row that opened another screen (Run setup): Back from it lands there again (live.19 F19), not on
+    // whichever row is nearest once the pane's first row has scrolled away.
+    var returnFocusKey by rememberSaveable { mutableStateOf<String?>(null) }
+    LaunchedEffect(focusedKey) {
+        if (focusedKey != null && focusedKey != returnFocusKey) returnFocusKey = null
+    }
     val requesters = remember { mutableMapOf<String, FocusRequester>() }
     fun requester(key: String) = requesters.getOrPut(key) { FocusRequester() }
     val rootListState = rememberLazyListState()
@@ -193,12 +199,14 @@ internal fun SportsLiveSettingsContent(
         pendingFocusKey = next?.let { Item.Team(it).key } ?: Item.AddTeam.key
     }
 
-    // The pane opens on Scores; while the section is hidden, on its Show switch, scrolled into view.
-    val initialKey = when {
-        rootPage != SportsLiveSettingsPage.Main || page != rootPage -> items.firstOrNull { it.isFocusable }?.key
-        state.showSection -> Item.Setting(SportsLiveSetting.SCORES).key
-        else -> Item.Setting(SportsLiveSetting.SHOW_SECTION).key
-    }
+    // The pane opens on Scores; while the section is hidden, on its Show switch, scrolled into view; back from Run
+    // setup, on Run setup.
+    val initialKey = sportsLiveSettingsInitialKey(
+        onMainRoot = rootPage == SportsLiveSettingsPage.Main && page == rootPage,
+        showSection = state.showSection,
+        returnKey = returnFocusKey,
+        firstFocusable = items.firstOrNull { it.isFocusable }?.key
+    )
     LaunchedEffect(state.showSection) {
         if (rootPage != SportsLiveSettingsPage.Main || page != rootPage || state.showSection || focusedKey != null) return@LaunchedEffect
         val index = currentItems.indexOfFirst { it.key == initialKey }
@@ -262,7 +270,11 @@ internal fun SportsLiveSettingsContent(
                     }
                 SportsLiveSetting.CATALOGS -> state.catalogs.size.toString() to { goTo(SportsLiveSettingsPage.Catalogs, null) }
                 SportsLiveSetting.HIDDEN -> hiddenTitles.size.toString() to { goTo(SportsLiveSettingsPage.Hidden, null) }
-                SportsLiveSetting.RUN_SETUP -> null to { onRunSetup?.invoke(); Unit }
+                SportsLiveSetting.RUN_SETUP -> null to {
+                    returnFocusKey = Item.Setting(SportsLiveSetting.RUN_SETUP).key
+                    onRunSetup?.invoke()
+                    Unit
+                }
                 else -> null to {}
             }
             SportsLiveSettingRow(
@@ -515,6 +527,17 @@ internal fun SportsLiveSettingsContent(
             onDismiss = { unfollowTeam = null }
         )
     }
+}
+
+/**
+ * The row the pane's first focus goes to: a sub-page's first row; on the main page the row that opened another
+ * screen ([returnKey], Back from Run setup), else Scores, or Show Sports & Live while the section is hidden.
+ */
+internal fun sportsLiveSettingsInitialKey(onMainRoot: Boolean, showSection: Boolean, returnKey: String?, firstFocusable: String?): String? = when {
+    !onMainRoot -> firstFocusable
+    returnKey != null -> returnKey
+    showSection -> SportsLiveSettingsItem.Setting(SportsLiveSetting.SCORES).key
+    else -> SportsLiveSettingsItem.Setting(SportsLiveSetting.SHOW_SECTION).key
 }
 
 /** A page as a saved token: "main", "teams", "leagues:soccer"… (unknown tokens fall back to Main). */

@@ -27,12 +27,13 @@ import com.nuvio.tv.R
 import com.nuvio.tv.core.sportslive.GameStatus
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.domain.model.SportsLiveItem
+import com.nuvio.tv.domain.model.SportsLiveTab
 import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveResumeOffer
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveHeaderControl
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens
 
-/** Live now's Resume chip (#148), after Back from a paused game. */
+/** The Resume chip (#148) of Live now and Channels, after Back from a paused game. */
 internal sealed interface SportsLiveResumeChip {
     val item: SportsLiveItem
 
@@ -41,6 +42,26 @@ internal sealed interface SportsLiveResumeChip {
 
     /** Ended meanwhile ([status]: ESPN's final): "<game> · Final 2–3", spoiler setting applied. */
     data class Final(override val item: SportsLiveItem, val status: GameStatus, val event: ScoreSnapshot) : SportsLiveResumeChip
+}
+
+/**
+ * The tabs that show the Resume chip (#148): where live games and channels are played from, so Back from a paused
+ * one finds it on the tab it was played from (live.19 F15: Back to Channels showed nothing there).
+ */
+internal val SPORTS_LIVE_RESUME_TABS: Set<SportsLiveTab> = linkedSetOf(SportsLiveTab.LIVE_NOW, SportsLiveTab.CHANNELS)
+
+/** Whether [tab] shows the Resume chip. */
+internal fun sportsLiveResumeShownOn(tab: SportsLiveTab): Boolean = tab in SPORTS_LIVE_RESUME_TABS
+
+/**
+ * [offer]'s card as listed now on the chip's tabs ([tabs]): by its stream key, else by its id; Live now first. Null
+ * when none lists it (the chip then shows only a final).
+ */
+internal fun sportsLiveResumeListed(offer: SportsLiveResumeOffer?, tabs: Map<SportsLiveTab, List<SportsLiveItem>>): SportsLiveItem? {
+    if (offer == null) return null
+    val lists = SPORTS_LIVE_RESUME_TABS.map { tabs[it].orEmpty() }
+    return lists.firstNotNullOfOrNull { list -> list.firstOrNull { it.streamKey == offer.item.streamKey } }
+        ?: lists.firstNotNullOfOrNull { list -> list.firstOrNull { it.id == offer.item.id } }
 }
 
 /** What OK on the chip does. */

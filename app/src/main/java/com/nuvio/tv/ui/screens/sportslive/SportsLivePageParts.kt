@@ -100,12 +100,12 @@ internal fun SportsLivePageRow(
 
 /** A section's heading: 24 px caps, 0.08 em apart, muted ("TOP PERFORMERS", "LAST 5"). */
 @Composable
-internal fun SportsLivePageHeading(text: String, modifier: Modifier = Modifier, color: Color = Colors.TextMuted) {
+internal fun SportsLivePageHeading(text: String, modifier: Modifier = Modifier, color: Color = Colors.TextMuted, maxLines: Int = 1) {
     Text(
         text = text.uppercase(Locale.getDefault()),
         style = SportsLiveTokens.style(SportsLiveTokens.Type.SectionHeader),
         color = color,
-        maxLines = 1,
+        maxLines = maxLines,
         overflow = TextOverflow.Ellipsis,
         modifier = modifier
     )

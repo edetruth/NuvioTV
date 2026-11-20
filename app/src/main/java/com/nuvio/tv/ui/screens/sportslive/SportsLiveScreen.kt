@@ -720,17 +720,11 @@ private fun SportsLiveContent(
         withFrameNanos { }
         runCatching { (entryCardFocusRequester ?: activeTabFocusRequester).requestFocus() }
     }
-    // Back from a paused game (#148): Live now's first row offers Resume while it is live, its final once it ended.
+    // Back from a paused game (#148): Live now's and Channels' first row offers Resume while it is live, its final
+    // once it ended (live.19 F15).
     val resumeOffer by SportsLiveMiniPlayers.controller.resume.collectAsStateWithLifecycle()
-    val liveNowItems = uiState.tabs[SportsLiveTab.LIVE_NOW]
-    val resumeListed = remember(resumeOffer, liveNowItems) {
-        resumeOffer?.let { offer ->
-            liveNowItems.orEmpty().let { list ->
-                list.firstOrNull { it.streamKey == offer.item.streamKey } ?: list.firstOrNull { it.id == offer.item.id }
-            }
-        }
-    }
-    val resumeChip = if (uiState.selectedTab == SportsLiveTab.LIVE_NOW) {
+    val resumeListed = remember(resumeOffer, uiState.tabs) { sportsLiveResumeListed(resumeOffer, uiState.tabs) }
+    val resumeChip = if (sportsLiveResumeShownOn(uiState.selectedTab)) {
         sportsLiveResumeChip(resumeOffer, resumeListed, statusOf, uiState.nowMs)
     } else {
         null
