@@ -1173,6 +1173,7 @@ private fun PlaybackNavHost(
                     onDispose { SportsLiveHighlights.playerLeft(url) }
                 }
             }
+            val openSportsLiveDual = com.nuvio.tv.ui.screens.sportslive.dual.LocalOpenSportsLiveDual.current
             PlayerScreen(
                 viewModel = playerViewModel,
                 onBackPress = { currentVideoId, currentSeason, currentEpisode, autoPlayEnabled, playbackCompleted ->

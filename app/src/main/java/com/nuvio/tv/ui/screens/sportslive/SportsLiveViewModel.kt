@@ -819,11 +819,12 @@ class SportsLiveViewModel internal constructor(
         val built = last.builtLiveNow
         if (built != null) {
             val focusedId = selection.itemId.takeIf { selection.tab == SportsLiveTab.LIVE_NOW }
+            // Same rule as the full build below (BUG7 freeze); any difference falls back to the full build.
             val kept = if (selection.browsing && selection.tab == SportsLiveTab.LIVE_NOW) {
-                sportsLiveKeepShown(shownLiveNow, built)
+                sportsLiveFreeze(shownLiveNow, built).items
             } else {
                 sportsLiveKeepFocused(shownLiveNow, built, focusedId)
-            }
+            }.let { listed -> sportsLiveKeepFocused(shownLiveNow, listed, miniPlayingNow) }
             val shown = SportsLiveHiddenTitles.filter(kept, hiddenNow)
             val shownBefore = shownLiveNow
             if (shown.size != shownBefore.size || shown.indices.any { shown[it] !== shownBefore[it] }) return null
