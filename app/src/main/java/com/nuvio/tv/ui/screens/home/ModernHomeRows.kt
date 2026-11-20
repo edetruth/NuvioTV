@@ -551,6 +551,7 @@ internal fun ModernRowSection(
         val textModifier = remember(rowTitleBottom) {
             Modifier.padding(start = 52.dp, bottom = rowTitleBottom)
         }
+        SportsLiveHomeTodayLine(row.addonId, row.catalogId, Modifier.padding(start = 52.dp, bottom = 2.dp))
         Text(
             text = rowTitle,
             style = rowTitleStyle.copy(textDirection = rowTitle.contentTextDirection()),

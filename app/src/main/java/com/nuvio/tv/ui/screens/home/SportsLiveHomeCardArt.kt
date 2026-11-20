@@ -7,19 +7,25 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import com.nuvio.tv.R
+import com.nuvio.tv.core.sportslive.SportsLiveReadyMark
+import com.nuvio.tv.core.sportslive.SportsLiveTeams
+import com.nuvio.tv.core.sportslive.displayName
 import com.nuvio.tv.core.sportslive.scores.GameArt
 import com.nuvio.tv.core.sportslive.scores.ScoreChips
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.domain.model.SportsLiveItem
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveDrawnEventCard
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveDrawnGameCard
+import com.nuvio.tv.ui.screens.sportslive.rememberSportsLiveReadyMark
 import com.nuvio.tv.ui.screens.sportslive.rememberScoreChipStrings
 
 /**
  * Home's drawn Live now cards (V2 phase 10), by card id ([com.nuvio.tv.ui.components.LocalDrawnCardArt]): the
  * section's game card with the league, both logos, the red dot and clock, and the score (Show), "Score hidden"
- * (Hide until focused) or nothing more (Off); a gold ★ for a followed team. Channels and items naming no two sides
- * keep their own art (null).
+ * (Hide until focused) or nothing more (Off); a gold ★ for a followed team; "▶ Ready" while a verified link is held
+ * (live.20 1b). A game naming no two sides gets the neutral card, its clean title in place of the addon's art (live.19
+ * F3, #182: that art may show only a channel's logo, or a final score). Channels keep their own art (null).
  */
 @Composable
 internal fun rememberLiveNowCardArt(
@@ -32,13 +38,23 @@ internal fun rememberLiveNowCardArt(
     return remember(items, scores, mode, strings, liveWord) {
         val cards = HashMap<String, @Composable () -> Unit>()
         for (item in items) {
-            if (item.id in cards) continue
+            if (item.id in cards || !SportsLiveHomeMeta.drawsCard(item)) continue
             val snapshot = scores[item.streamKey]
-            val art = GameArt.of(item, snapshot) ?: continue
             // Home has no focus reveal: Hide until focused shows "Score hidden" on every game.
             val chip = ScoreChips.of(item, snapshot, mode, revealed = false)
             val footer = SportsLiveHomeMeta.cardFooter(chip, mode, strings, liveWord)
-            cards[item.id] = { SportsLiveDrawnGameCard(art = art, followed = item.followed, footer = footer, modifier = Modifier.fillMaxSize()) }
+            val art = GameArt.of(item, snapshot)
+            val title = SportsLiveHomeMeta.cleanTitle(item.displayName)
+            val league = item.sport?.takeUnless(SportsLiveTeams::isNonSportTag)
+            val card: @Composable () -> Unit = {
+                val ready = rememberSportsLiveReadyMark(item) == SportsLiveReadyMark.READY
+                if (art != null) {
+                    SportsLiveDrawnGameCard(art = art, followed = item.followed, footer = footer, modifier = Modifier.fillMaxSize(), ready = ready)
+                } else {
+                    SportsLiveDrawnEventCard(title = title, league = league, followed = item.followed, footer = footer, modifier = Modifier.fillMaxSize(), ready = ready)
+                }
+            }
+            cards[item.id] = card
         }
         val lookup: (String) -> (@Composable () -> Unit)? = { id -> cards[id] }
         lookup

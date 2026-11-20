@@ -26,8 +26,10 @@ object SportsLiveHomeRow {
      * info), so a live game shows its clock and score under its title and in the hero.
      *
      * With [words] (V2 phase 10) a game's card carries no addon image at all (Home draws the section's game card in
-     * its place, [rememberLiveNowCardArt]), and the hero reads "NBA · Live now" (the genres line) and
-     * "★ Your team · 2 streams" (the description) instead of the addon's type, date and blurb.
+     * its place, [rememberLiveNowCardArt]: two sides, or the neutral card for any other game, live.19 F3 / #182, so no
+     * addon art that may carry a score or only a channel's logo), and the hero reads "NBA · Live now" (the genres
+     * line) and "★ Your team · 2 streams" (the description) instead of the addon's type, date and blurb. Titles are
+     * cleaned of pipes and stray spaces ([SportsLiveHomeMeta.cleanTitle]).
      */
     fun build(
         items: List<SportsLiveItem>,
@@ -45,9 +47,12 @@ object SportsLiveHomeRow {
         items = items.map { item ->
             // Clean addon text (#100): the card and hero show the display name and no taglines; Details
             // loads the addon's own meta.
-            val clean = item.meta.copy(name = item.displayName, description = SportsLiveDisplayText.description(item.meta.description))
+            val clean = item.meta.copy(
+                name = SportsLiveHomeMeta.cleanTitle(item.displayName),
+                description = SportsLiveDisplayText.description(item.meta.description)
+            )
             val labelled = scoreLabels[item.streamKey]?.let { clean.copy(releaseInfo = it) } ?: clean
-            val drawn = words != null && GameArt.of(item, null) != null
+            val drawn = words != null && SportsLiveHomeMeta.drawsCard(item)
             val meta = if (words == null) {
                 labelled
             } else {
@@ -60,7 +65,7 @@ object SportsLiveHomeRow {
                         words.liveNow
                     )),
                     description = SportsLiveHomeMeta.extraLine(item.followed, item.sourceCount, words.yourTeam, words.streams),
-                    // A game is drawn (logos, clock, score): never the addon's art with LIVE baked in.
+                    // A game is drawn (logos, clock, score): never the addon's art with LIVE or a score baked in.
                     poster = if (drawn) null else labelled.poster,
                     background = if (drawn) null else labelled.background,
                     landscapePoster = if (drawn) null else labelled.landscapePoster,

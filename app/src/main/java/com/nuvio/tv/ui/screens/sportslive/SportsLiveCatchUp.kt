@@ -62,13 +62,17 @@ internal val ScoreTeam.catchUpName: String get() = displayName ?: shortDisplayNa
 internal fun catchUpMatchup(item: CatchUpItem): String =
     stringResource(R.string.sports_live_results_menu_title, item.event.away.catchUpName, item.event.home.catchUpName)
 
-/** Hold OK on a catch-up card (Home or Live Now): Game stats (score behind Reveal) and Mark as watched. */
+/**
+ * Hold OK on a catch-up card (Home or Live Now): Game stats (score behind Reveal) and Mark as watched, which reads
+ * "Remove from Your teams" on Live Now's strip ([fromYourTeams], live.20 1c).
+ */
 @Composable
 internal fun SportsLiveCatchUpMenu(
     item: CatchUpItem,
     onOpenGame: () -> Unit,
     onMarkWatched: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    fromYourTeams: Boolean = false
 ) {
     val firstFocusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { firstFocusRequester.requestFocus() } }
@@ -78,7 +82,10 @@ internal fun SportsLiveCatchUpMenu(
             onClick = onOpenGame,
             modifier = Modifier.focusRequester(firstFocusRequester)
         )
-        SportsLiveMenuButton(text = stringResource(R.string.sports_live_catch_up_mark_watched), onClick = onMarkWatched)
+        SportsLiveMenuButton(
+            text = stringResource(if (fromYourTeams) R.string.sports_live_your_teams_remove else R.string.sports_live_catch_up_mark_watched),
+            onClick = onMarkWatched
+        )
     }
 }
 

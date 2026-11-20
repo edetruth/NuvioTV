@@ -4291,8 +4291,16 @@
     <string name="sports_live_sport_cycling">Cycling</string>
     <!-- Your teams strip on Live Now (#155) and Home's drawn sports cards (V2 phase 10). -->
     <string name="sports_live_your_teams_title">Your teams</string>
-    <string name="sports_live_your_teams_today">Today %1$s</string>
     <string name="sports_live_your_teams_replay_when">Replay · %1$s</string>
+    <!-- live.20 1c: the strip's heading counts ("Your teams · 1 live · 2 replays · 3 tonight"), its more cue, its menu. -->
+    <string name="sports_live_your_teams_live">%1$d live</string>
+    <plurals name="sports_live_your_teams_replays">
+        <item quantity="one">%1$d replay</item>
+        <item quantity="other">%1$d replays</item>
+    </plurals>
+    <string name="sports_live_your_teams_tonight">%1$d tonight</string>
+    <string name="sports_live_your_teams_more">+%1$d ›</string>
+    <string name="sports_live_your_teams_remove">Remove from Your teams</string>
     <string name="sports_live_your_team">Your team</string>
     <string name="sports_live_home_your_team">★ Your team</string>
     <plurals name="sports_live_home_streams">

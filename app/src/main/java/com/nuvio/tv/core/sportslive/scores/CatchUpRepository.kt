@@ -1,5 +1,6 @@
 package com.nuvio.tv.core.sportslive.scores
 
+import com.nuvio.tv.core.sportslive.SportsLiveGameLength
 import com.nuvio.tv.core.sportslive.SportsLiveItemBucketer
 import com.nuvio.tv.core.sportslive.SportsLivePlayedTime
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
@@ -41,6 +42,8 @@ import javax.inject.Singleton
  * a time) when Home or Sports & Live opens ([onOpened], at most once per [RELOAD_AFTER_MS]) or the followed
  * teams or the settings change; never on a timer. Nothing is loaded and the row is empty while it is off,
  * Scores is Off (no score data at all), Sports & Live or its Home row is off, or no team is followed.
+ * How long each game stays is [ReplayLifetime]'s (live.20 1c), from the days loaded (the team's next game), what
+ * was played, the results known ([ResultSeen]) and Watch later (#151); it is checked again on each open.
  * The visit and the played replays belong to the active profile; a profile switch starts over.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -55,7 +58,9 @@ class CatchUpRepository internal constructor(
     /** Real playing time per content id, from the full player. */
     private val played: SportsLivePlayedTime,
     private val now: () -> Long,
-    private val scope: CoroutineScope
+    private val scope: CoroutineScope,
+    /** The results known this process (final scores shown, games watched live a while). */
+    private val resultSeen: ResultSeen = ResultSeen()
 ) {
     @Inject
     constructor(results: ResultsRepository, prefs: SportsLivePreferencesDataStore, sportsLive: SportsLiveRepository) : this(
@@ -72,13 +77,17 @@ class CatchUpRepository internal constructor(
         sectionEnabled = sportsLive.enabled,
         played = SportsLivePlayedTime.shared,
         now = System::currentTimeMillis,
-        scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        scope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
+        resultSeen = ResultSeen.shared
     )
 
     /** One (re)load of the row for [profileId]: its "since", and when it was asked for. */
     private data class Visit(val profileId: Int, val sinceMs: Long, val atMs: Long)
 
     private val visit = MutableStateFlow<Visit?>(null)
+
+    /** When the lifetime was last checked: each open checks it again (time passes, replays play). */
+    private val checkedAt = MutableStateFlow(0L)
 
     private data class Inputs(val on: Boolean, val followed: List<FollowedTeam>, val visit: Visit?)
 
@@ -101,7 +110,8 @@ class CatchUpRepository internal constructor(
             if (!on || followed.isEmpty() || visit == null) return@mapLatest null
             val feeds = CatchUp.feeds(followed)
             if (feeds.isEmpty()) return@mapLatest null
-            val range = CatchUp.daysAgo(visit.sinceMs, prefs.catchUpMarks.first(), now(), CatchUp::easternDate)
+            val saved = prefs.spoilerProtection.first().games.filter { it.endedAtMs == null }.mapNotNull { it.startMs }
+            val range = CatchUp.daysAgo(visit.sinceMs, prefs.catchUpMarks.first(), now(), CatchUp::easternDate, saved)
             // Days in parallel, two at a time; each feed and day is asked once at most.
             val gate = Semaphore(MAX_PARALLEL_DAYS)
             val days = coroutineScope {
@@ -117,8 +127,13 @@ class CatchUpRepository internal constructor(
             if (loaded == null) {
                 flowOf(CatchUpSelection(emptyList(), emptyMap()))
             } else {
-                combine(replays, prefs.followedTeams, prefs.catchUpMarks) { replays, followed, marks ->
-                    CatchUp.select(loaded.days, replays, followed, loaded.sinceMs, marks, now())
+                combine(replays, prefs.followedTeams, prefs.catchUpMarks, prefs.spoilerProtection, checkedAt) { replays, followed, marks, protection, _ ->
+                    val nowMs = now()
+                    // Watch later (#151): saved and still protected.
+                    val saved = protection.games.filter { it.endedAtMs == null }.associate { it.eventId to it.savedAtMs }
+                    val selection = CatchUp.select(loaded.days, replays, followed, loaded.sinceMs, marks, nowMs, saved.keys)
+                    val events = loaded.days.flatMap { it.events }
+                    selection.copy(items = selection.items.filter { ReplayLifetime.keeps(factsOf(it, events, followed, marks, saved), nowMs) })
                 }
             }
         }
@@ -132,20 +147,63 @@ class CatchUpRepository internal constructor(
         scope.launch {
             prefs.activeProfileId.drop(1).collect {
                 played.clear()
+                resultSeen.clear()
                 visit.value = null
+            }
+        }
+        // A result now known (a final score shown, a game watched live a while) is remembered for the profile.
+        scope.launch {
+            resultSeen.known.collect { ids ->
+                if (ids.isEmpty()) return@collect
+                val fresh = ids - prefs.catchUpMarks.first().known.keys
+                if (fresh.isEmpty()) return@collect
+                val nowMs = now()
+                prefs.updateCatchUpMarks(nowMs) { marks -> marks.copy(known = marks.known + fresh.associateWith { nowMs }) }
+            }
+        }
+        // A listed replay played to its end is watched, however short it was (a condensed game).
+        scope.launch {
+            played.finished.collect { contentId ->
+                val item = items.value.firstOrNull { item -> item.replays.any { it.id == contentId } } ?: return@collect
+                val nowMs = now()
+                prefs.updateCatchUpMarks(nowMs) { it.copy(seen = it.seen + (item.key to nowMs)) }
             }
         }
     }
 
+    /** The lifetime's inputs for [item] ([ReplayLifetime]). */
+    private fun factsOf(
+        item: CatchUpItem,
+        events: List<ScoreSnapshot>,
+        followed: List<FollowedTeam>,
+        marks: CatchUpMarks,
+        saved: Map<String, Long>
+    ): ReplayFacts {
+        val event = item.event
+        val start = event.startMs ?: 0L
+        return ReplayFacts(
+            endMs = CatchUp.estimatedEndMs(event, start),
+            lengthMs = SportsLiveGameLength.ofEspnSport(event.league.sport),
+            nextGameStartMs = ReplayLifetime.nextGameStartMs(event, events, followed),
+            replayPlayedMs = item.replays.maxOf { played.playedMs(it.id) },
+            liveWatchedMs = resultSeen.liveWatchedMs(event.eventId),
+            resultSeen = event.eventId in marks.known,
+            big = ReplayLifetime.big(event),
+            savedAtMs = saved[event.eventId]
+        )
+    }
+
     /**
-     * Home or Sports & Live is on screen (each resume): a listed replay that has really played
-     * [CatchUp.WATCHED_AFTER_MS] or more (the player's playing time, wherever it was started) is marked
-     * watched; "since" is worked out, and the days are loaded again unless they were within [RELOAD_AFTER_MS].
+     * Home or Sports & Live is on screen (each resume): a listed replay that has really played past halfway
+     * ([ReplayLifetime.replayWatched]: the player's playing time, wherever it was started) is marked watched; the
+     * lifetime is checked again; "since" is worked out, and the days are loaded again unless they were within
+     * [RELOAD_AFTER_MS].
      */
     fun onOpened() {
         scope.launch {
             val nowMs = now()
             markPlayed(nowMs)
+            checkedAt.value = nowMs
             val since = prefs.openCatchUp(nowMs)
             val profileId = prefs.activeProfileId.value
             val last = visit.value
@@ -155,7 +213,7 @@ class CatchUpRepository internal constructor(
         }
     }
 
-    /** "Mark as watched": the item leaves the row. */
+    /** "Mark as watched" (Home) or "Remove from Your teams" (Live Now): the item leaves the row and the strip. */
     fun markWatched(item: CatchUpItem) {
         scope.launch {
             val nowMs = now()
@@ -164,7 +222,10 @@ class CatchUpRepository internal constructor(
     }
 
     private suspend fun markPlayed(nowMs: Long) {
-        val watched = items.value.filter { item -> item.replays.any { played.playedMs(it.id) >= CatchUp.WATCHED_AFTER_MS } }
+        val watched = items.value.filter { item ->
+            val lengthMs = SportsLiveGameLength.ofEspnSport(item.event.league.sport)
+            item.replays.any { ReplayLifetime.replayWatched(played.playedMs(it.id), lengthMs) }
+        }
         if (watched.isEmpty()) return
         prefs.updateCatchUpMarks(nowMs) { marks -> marks.copy(seen = marks.seen + watched.associate { it.key to nowMs }) }
         watched.forEach { item -> item.replays.forEach { played.forget(it.id) } }

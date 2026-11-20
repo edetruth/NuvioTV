@@ -174,7 +174,7 @@ object LiveExcitement {
     const val BASEBALL = "baseball"
 
     /** "Close" by sport: points, goals or runs. */
-    private val CLOSE_WITHIN = mapOf(BASKETBALL to 5, FOOTBALL to 8, SOCCER to 1, HOCKEY to 1, BASEBALL to 2)
+    internal val CLOSE_WITHIN = mapOf(BASKETBALL to 5, FOOTBALL to 8, SOCCER to 1, HOCKEY to 1, BASEBALL to 2)
 
     private val PERIODS = mapOf(
         BASKETBALL to Periods(count = 4, minutes = 12, halfMinutes = 20),

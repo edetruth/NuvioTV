@@ -19,7 +19,7 @@ import org.junit.Test
 import java.time.Instant
 import java.time.ZoneOffset
 
-/** Live Now's Your teams strip (#155): its order, the 48 h cutoff, the stage following it and the first focus. */
+/** Live Now's Your teams strip (#155, live.20 1c): its order, the replay cap, the heading, the stage and the first focus. */
 class SportsLiveYourTeamsTest {
 
     private val zone = ZoneOffset.UTC
@@ -29,6 +29,7 @@ class SportsLiveYourTeamsTest {
     private val liveFollowed = row("live-f", followed = true, group = ScoreboardGroup.LIVE)
     private val liveOther = row("live-o", followed = false, group = ScoreboardGroup.LIVE)
     private val soonFollowed = row("soon-f", followed = true, group = ScoreboardGroup.STARTING_SOON, startMs = now + hour)
+    private val soon = row("soon", followed = true, group = ScoreboardGroup.STARTING_SOON, startMs = now + 30 * 60_000L)
 
     private val tonight = row("tonight", followed = true, group = ScoreboardGroup.LATER, startMs = ms("2026-11-19T23:30:00Z"))
     private val evening = row("evening", followed = true, group = ScoreboardGroup.LATER, startMs = ms("2026-11-19T19:00:00Z"))
@@ -48,20 +49,42 @@ class SportsLiveYourTeamsTest {
     }
 
     @Test
-    fun `the strip lists live now, then later today soonest first, then replays newest first`() {
+    fun `the strip lists live now, then starting within the hour, then replays newest first, then the rest of today`() {
         val older = replay("older", hoursAgo = 30.0)
         val newer = replay("newer", hoursAgo = 5.0)
         val strip = YourTeams.strip(
             liveRows = listOf(liveFollowed, liveOther, soonFollowed),
-            upcomingRows = listOf(tonight, tomorrow, evening, started, notFollowed),
+            upcomingRows = listOf(tonight, tomorrow, evening, started, notFollowed, soon),
             catchUp = listOf(older, newer),
             nowMs = now,
             zone = zone
         )
         assertEquals(
-            listOf("live|a|live-f", "today|a|evening", "today|a|tonight", "replay|newer", "replay|older"),
+            listOf("live|a|live-f", "today|a|soon", "replay|newer", "replay|older", "today|a|evening", "today|a|tonight"),
             strip.map { it.key }
         )
+    }
+
+    @Test
+    fun `a game exactly an hour away is starting soon, one just over is later today`() {
+        val atHour = row("at-hour", followed = true, group = ScoreboardGroup.STARTING_SOON, startMs = now + hour)
+        val overHour = row("over-hour", followed = true, group = ScoreboardGroup.LATER, startMs = now + hour + 60_000L)
+        val strip = YourTeams.strip(emptyList(), listOf(overHour, atHour), listOf(replay("r", 5.0)), now, zone)
+        assertEquals(listOf("today|a|at-hour", "replay|r", "today|a|over-hour"), strip.map { it.key })
+    }
+
+    @Test
+    fun `at most 3 replays, the newest`() {
+        val replays = listOf(1.0, 9.0, 3.0, 20.0, 6.0).mapIndexed { index, hours -> replay("r$index", hoursAgo = hours) }
+        val strip = YourTeams.strip(emptyList(), emptyList(), replays, now, zone)
+        assertEquals(listOf("replay|r0", "replay|r2", "replay|r4"), strip.map { it.key })
+    }
+
+    @Test
+    fun `the heading counts live games, replays and games later today`() {
+        val strip = YourTeams.strip(listOf(liveFollowed), listOf(soon, evening, tonight), listOf(replay("a", 2.0), replay("b", 4.0)), now, zone)
+        assertEquals(YourTeamsSummary(live = 1, replays = 2, later = 3), YourTeams.summary(strip))
+        assertEquals(YourTeamsSummary(0, 0, 0), YourTeams.summary(emptyList()))
     }
 
     @Test
@@ -72,18 +95,8 @@ class SportsLiveYourTeamsTest {
     }
 
     @Test
-    fun `catch-ups older than about 48 h leave the strip`() {
-        val fresh = replay("fresh", hoursAgo = 47.0)
-        val stale = replay("stale", hoursAgo = 49.0)
-        assertTrue(YourTeams.fresh(fresh, now))
-        assertTrue(!YourTeams.fresh(stale, now))
-        val strip = YourTeams.strip(emptyList(), emptyList(), listOf(stale, fresh), now, zone)
-        assertEquals(listOf("replay|fresh"), strip.map { it.key })
-    }
-
-    @Test
     fun `an empty strip when nothing qualifies`() {
-        assertTrue(YourTeams.strip(listOf(liveOther), listOf(tomorrow, notFollowed), listOf(replay("stale", 60.0)), now, zone).isEmpty())
+        assertTrue(YourTeams.strip(listOf(liveOther), listOf(tomorrow, notFollowed, started), emptyList(), now, zone).isEmpty())
     }
 
     @Test
@@ -118,18 +131,17 @@ class SportsLiveYourTeamsTest {
     }
 
     @Test
-    fun `first focus never lands on a catch-up replay`() {
-        val replays = YourTeams.strip(emptyList(), emptyList(), listOf(replay("r", 5.0)), now, zone)
-        assertEquals(LiveNowEntry.LIST, YourTeams.entry(resumeShown = false, strip = replays, listHasRows = true))
-        assertEquals(LiveNowEntry.EMPTY, YourTeams.entry(resumeShown = false, strip = replays, listHasRows = false))
+    fun `with nothing live, first focus lands on the strip's first card, a replay included`() {
+        val replays = YourTeams.strip(emptyList(), listOf(evening), listOf(replay("r", 5.0)), now, zone)
+        assertTrue(replays.first() is YourTeamsEntry.Replay)
+        assertEquals(LiveNowEntry.STRIP, YourTeams.entry(resumeShown = false, strip = replays, listHasRows = false))
+        assertEquals(LiveNowEntry.EMPTY, YourTeams.entry(resumeShown = false, strip = emptyList(), listHasRows = false))
     }
 
     @Test
     fun `first focus is the first live game when no followed team is live`() {
         val later = YourTeams.strip(emptyList(), listOf(evening), listOf(replay("r", 5.0)), now, zone)
         assertEquals(LiveNowEntry.LIST, YourTeams.entry(resumeShown = false, strip = later, listHasRows = true))
-        // Nothing live at all: the game later today.
-        assertEquals(LiveNowEntry.STRIP, YourTeams.entry(resumeShown = false, strip = later, listHasRows = false))
         assertEquals(LiveNowEntry.LIST, YourTeams.entry(resumeShown = false, strip = emptyList(), listHasRows = true))
     }
 

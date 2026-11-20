@@ -16,6 +16,7 @@ import com.nuvio.tv.ui.screens.sportslive.DrawnCardFooter
 import com.nuvio.tv.ui.screens.sportslive.DrawnCardTrailing
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveCatchUpHomeRow
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -173,6 +174,35 @@ class SportsLiveHomeMetaTest {
         val card = item("m", "A Movie").meta
         val row = SportsLiveHomeRow.build(listOf(item("m", "A Movie")), "Popular").copy(addonBaseUrl = "https://addon.example")
         assertNull(sportsLiveHeroPreview(card, row))
+    }
+
+    @Test
+    fun `addon titles lose their pipes and stray spaces`() {
+        assertEquals("Moto3 · Round 21 · Portugal Free Practice 1", SportsLiveHomeMeta.cleanTitle(" Moto3 | Round 21 |  Portugal Free Practice 1"))
+        assertEquals("Celtics vs Knicks", SportsLiveHomeMeta.cleanTitle("Celtics vs Knicks"))
+        assertEquals("NBA", SportsLiveHomeMeta.cleanTitle("| NBA |"))
+    }
+
+    @Test
+    fun `every game gets a drawn card on Home, a channel keeps its art`() {
+        assertTrue(SportsLiveHomeMeta.drawsCard(item("g", "Celtics vs Knicks")))
+        assertTrue(SportsLiveHomeMeta.drawsCard(item("m", "Moto3 Round 21")))
+        assertFalse(SportsLiveHomeMeta.drawsCard(item("c", "Sports Channel 1").copy(isChannel = true, kind = SportsLiveKind.CHANNELS)))
+    }
+
+    @Test
+    fun `a game naming no two sides carries no addon art and a clean title`() {
+        val art = "https://example.invalid/channel-logo.png"
+        val event = item("m", " Moto3 | Round 21 | Portugal Free Practice 1").let {
+            it.copy(meta = it.meta.copy(poster = art, background = art, landscapePoster = art, logo = art))
+        }
+        val words = SportsLiveHomeRow.Words(liveNow = "Live now", yourTeam = "★ Your team", streams = { "$it streams" })
+        val card = SportsLiveHomeRow.build(listOf(event), "Live now", emptyMap(), words).items.single()
+        assertNull(card.poster)
+        assertNull(card.background)
+        assertNull(card.landscapePoster)
+        assertNull(card.logo)
+        assertTrue(card.name, '|' !in card.name && !card.name.startsWith(" "))
     }
 
     private fun item(id: String, name: String, followed: Boolean = false) = SportsLiveItem(

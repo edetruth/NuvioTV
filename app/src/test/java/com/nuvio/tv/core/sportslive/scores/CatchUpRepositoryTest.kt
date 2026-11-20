@@ -75,6 +75,7 @@ class CatchUpRepositoryTest {
     private val sectionEnabled = MutableStateFlow(true)
     private var playerClock = 0L
     private val played = SportsLivePlayedTime { playerClock }
+    private val resultSeen = ResultSeen()
 
     private fun replay(name: String, start: String, addonId: String = "a") = SportsLiveItem(
         meta = MetaPreview(
@@ -96,7 +97,7 @@ class CatchUpRepositoryTest {
             now = { clock },
             zone = { SportsResults.EASTERN }
         )
-        val repo = CatchUpRepository(results, prefs, replays, sectionEnabled, played, { clock }, backgroundScope)
+        val repo = CatchUpRepository(results, prefs, replays, sectionEnabled, played, { clock }, backgroundScope, resultSeen)
         backgroundScope.launch { repo.items.collect { } }
         return repo
     }
@@ -118,8 +119,8 @@ class CatchUpRepositoryTest {
         val repo = repository()
         open(repo)
         assertEquals(listOf(pacersId), keys(repo))
-        // Never opened before: 3 days back. Only the NBA (the followed team's feed), one request per day.
-        val expected = (0..3).map { ScoreFeed(EspnLeagueMap.NBA, LocalDate.of(2026, 11, 16).minusDays(it.toLong())) }
+        // Never opened before: 4 days back. Only the NBA (the followed team's feed), one request per day.
+        val expected = (0..4).map { ScoreFeed(EspnLeagueMap.NBA, LocalDate.of(2026, 11, 16).minusDays(it.toLong())) }
         assertEquals(expected.toSet(), provider.calls.toSet())
         assertEquals(expected.size, provider.calls.size)
         assertEquals(setOf(pacersId), prefs.catchUpMarks.first().surfaced.keys)
@@ -132,11 +133,11 @@ class CatchUpRepositoryTest {
         val repo = repository()
         repo.onOpened()
         runCurrent()
-        repeat(4) {
+        repeat(5) {
             advanceTimeBy(1_000L)
             runCurrent()
         }
-        assertEquals(4, provider.calls.size)
+        assertEquals(5, provider.calls.size)
         assertEquals(CatchUpRepository.MAX_PARALLEL_DAYS, provider.maxActive)
         assertEquals(listOf(pacersId), keys(repo))
     }
@@ -214,26 +215,91 @@ class CatchUpRepositoryTest {
     // --- Watched ---
 
     @Test
-    fun `2 min of real playback clears the item, time away does not`() = runTest {
+    fun `playback past halfway clears the item, 2 min or time away does not`() = runTest {
         followPacers()
         val repo = repository()
         open(repo)
 
-        // Away 30 min, the replay playing only 1 min of it: stays.
+        // Away 30 min, the replay playing only 2 min of it: stays (live.20 1c: not 2 min any more).
         played.onPlaying(pacersReplay.id, playing = true)
-        playerClock += minute
+        playerClock += 2 * minute
         played.onPlaying(pacersReplay.id, playing = false)
         clock += 30 * minute
         open(repo)
         assertEquals(listOf(pacersId), keys(repo))
 
-        // Another minute of playback, wherever it was started (Results, the Game page): watched.
+        // Past half the game (an NBA game reads 200 min), wherever it was started (Results, the Game page): watched.
         played.onPlaying(pacersReplay.id, playing = true)
-        playerClock += minute
+        playerClock += 98 * minute
         played.onPlaying(pacersReplay.id, playing = false)
         open(repo)
         assertTrue(repo.items.value.isEmpty())
         assertEquals(setOf(pacersId), prefs.catchUpMarks.first().seen.keys)
+    }
+
+    @Test
+    fun `a replay played to its end clears the item, however short`() = runTest {
+        followPacers()
+        val repo = repository()
+        open(repo)
+        played.onFinished(pacersReplay.id)
+        runCurrent()
+        assertTrue(repo.items.value.isEmpty())
+    }
+
+    // --- The smart lifetime (live.20 1c) ---
+
+    @Test
+    fun `a result seen elsewhere clears the item and is remembered`() = runTest {
+        followPacers()
+        val repo = repository()
+        open(repo)
+        assertEquals(listOf(pacersId), keys(repo))
+        resultSeen.finalScoreShown(pacersId)
+        runCurrent()
+        assertTrue(repo.items.value.isEmpty())
+        assertEquals(setOf(pacersId), prefs.catchUpMarks.first().known.keys)
+    }
+
+    @Test
+    fun `the team's next game starting clears the item`() = runTest {
+        val pacersGame = nba.first { it.eventId == pacersId }
+        val next = pacersGame.copy(
+            eventId = "next",
+            startMs = Instant.parse("2026-11-16T23:00:00Z").toEpochMilli(),
+            state = ScoreState.PRE,
+            isFinal = false
+        )
+        provider.respond = { feed ->
+            ScoreboardResult(
+                when {
+                    feed.league != EspnLeagueMap.NBA -> emptyList()
+                    feed.date == nov15 -> nba
+                    feed.date == LocalDate.of(2026, 11, 16) -> listOf(next)
+                    else -> emptyList()
+                }
+            )
+        }
+        followPacers()
+        val repo = repository()
+        open(repo)
+        assertEquals(listOf(pacersId), keys(repo))
+        clock = Instant.parse("2026-11-16T23:01:00Z").toEpochMilli()
+        open(repo)
+        assertTrue(repo.items.value.isEmpty())
+    }
+
+    @Test
+    fun `a game saved for later stays past 48 h`() = runTest {
+        followPacers()
+        val repo = repository()
+        open(repo)
+        val pacersGame = nba.first { it.eventId == pacersId }
+        prefs.updateProtectedGames { SpoilerProtection.saved(it, pacersGame, clock) }
+        // 49 h after the game's estimated end (18:00Z + 200 min).
+        clock = Instant.parse("2026-11-17T22:21:00Z").toEpochMilli()
+        open(repo)
+        assertEquals(listOf(pacersId), keys(repo))
     }
 
     @Test
@@ -291,14 +357,18 @@ class CatchUpRepositoryTest {
     }
 
     @Test
-    fun `a listed game stays after since moves on, until 3 days after its start`() = runTest {
+    fun `a listed game stays after since moves on, until 48 h after its end`() = runTest {
         followPacers()
         val repo = repository()
         open(repo)
         clock += 10 * 60 * minute
         open(repo)
         assertEquals(listOf(pacersId), keys(repo))
-        clock = Instant.parse("2026-11-18T18:01:00Z").toEpochMilli()
+        // The game's estimated end: 18:00Z + 200 min = 21:20Z.
+        clock = Instant.parse("2026-11-17T21:19:00Z").toEpochMilli()
+        open(repo)
+        assertEquals(listOf(pacersId), keys(repo))
+        clock = Instant.parse("2026-11-17T21:21:00Z").toEpochMilli()
         open(repo)
         assertTrue(repo.items.value.isEmpty())
     }

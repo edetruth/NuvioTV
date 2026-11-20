@@ -5,6 +5,8 @@ import com.nuvio.tv.core.sportslive.scores.ScoreChip
 import com.nuvio.tv.core.sportslive.scores.ScoreChipStrings
 import com.nuvio.tv.core.sportslive.scores.ScoreChips
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
+import com.nuvio.tv.domain.model.SportsLiveItem
+import com.nuvio.tv.domain.model.SportsLiveKind
 import com.nuvio.tv.ui.screens.sportslive.DrawnCardFooter
 import com.nuvio.tv.ui.screens.sportslive.DrawnCardTrailing
 import java.time.Instant
@@ -97,6 +99,16 @@ internal object SportsLiveHomeMeta {
         val date = DateTimeFormatter.ofPattern("EEE d MMM", locale).format(Instant.ofEpochMilli(start).atZone(zone))
         return finalWord + SEPARATOR + date
     }
+
+    /**
+     * Home draws a card for [item] (live.19 F3, #182): every game, the neutral card when it names no two sides; a
+     * channel keeps its own art.
+     */
+    fun drawsCard(item: SportsLiveItem): Boolean = !item.isChannel && item.kind == SportsLiveKind.EVENTS
+
+    /** An addon title made readable (live.19 F3): " Moto3 | Round 21 | FP1" → "Moto3 · Round 21 · FP1". */
+    fun cleanTitle(title: String): String =
+        title.split('|').map { it.trim().replace(WHITESPACE, " ") }.filter { it.isNotEmpty() }.joinToString(SEPARATOR).ifEmpty { title.trim() }
 
     private const val SEPARATOR = " · "
 

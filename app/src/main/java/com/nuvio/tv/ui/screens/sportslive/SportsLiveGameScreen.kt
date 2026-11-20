@@ -408,6 +408,8 @@ private fun GameHero(state: SportsLiveGameUiState, event: ScoreSnapshot, first: 
             val secondScore = second.score
             val played = gameState == ScoreState.IN || gameState == ScoreState.POST
             val scoreShown = showsScore && played && firstScore != null && secondScore != null
+            // The final score on screen: its result is known, its replay leaves Your teams (live.20 1c).
+            if (scoreShown && gameState == ScoreState.POST) LaunchedEffect(event.eventId) { com.nuvio.tv.core.sportslive.scores.ResultSeen.shared.finalScoreShown(event.eventId) }
             Box(modifier = Modifier.height(HERO_SCORE_HEIGHT), contentAlignment = Alignment.Center) {
                 Text(
                     text = when {

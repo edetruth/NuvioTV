@@ -119,7 +119,7 @@ class CatchUpTest {
     }
 
     @Test
-    fun `a pending game expires 3 days after its start`() {
+    fun `a pending game expires 4 days after its start`() {
         val marks = CatchUpMarks(pending = mapOf(pacersId to pacersStart))
         val later = pacersStart + CatchUp.WINDOW_MS + hour
         assertTrue(select(since = later, marks = marks, nowMs = later).isEmpty())
@@ -163,9 +163,19 @@ class CatchUpTest {
     }
 
     @Test
-    fun `nothing older than 3 days, whatever the last visit`() {
+    fun `nothing older than 4 days, whatever the last visit`() {
         val later = pacersStart + CatchUp.WINDOW_MS + hour
         assertEquals(listOf(knicksId), select(followed = listOf(pacers, knicks), since = 0L, nowMs = later))
+    }
+
+    @Test
+    fun `a game saved for later is listed past the window, until its protection ends`() {
+        val later = pacersStart + CatchUp.WINDOW_MS + 24 * hour
+        val items = CatchUp.select(listOf(day), listOf(pacersReplay), listOf(pacers), later, CatchUpMarks(), later, savedForLater = setOf(pacersId)).items
+        assertEquals(listOf(pacersId), items.map { it.key })
+        // Watched: gone, saved or not.
+        val watched = CatchUpMarks(seen = mapOf(pacersId to later))
+        assertTrue(CatchUp.select(listOf(day), listOf(pacersReplay), listOf(pacers), later, watched, later, savedForLater = setOf(pacersId)).items.isEmpty())
     }
 
     @Test
@@ -175,7 +185,7 @@ class CatchUpTest {
     }
 
     @Test
-    fun `since is the last visit before a gap, else the one kept, and 3 days back when never opened`() {
+    fun `since is the last visit before a gap, else the one kept, and 4 days back when never opened`() {
         assertEquals(now - CatchUp.WINDOW_MS, CatchUp.since(null, null, now))
         val lastOpened = now - 5 * hour
         assertEquals(lastOpened, CatchUp.since(lastOpened, now - 30 * hour, now))
@@ -184,10 +194,13 @@ class CatchUpTest {
     }
 
     @Test
-    fun `the days loaded go back to since, never past 3 days`() {
+    fun `the days loaded go back to since, never past 4 days, and to games saved for later`() {
         val easternDate = CatchUp::easternDate
         assertEquals(0..1, CatchUp.daysAgo(pacersStart, CatchUpMarks(), now, easternDate))
-        assertEquals(0..3, CatchUp.daysAgo(0L, CatchUpMarks(), now, easternDate))
+        assertEquals(0..4, CatchUp.daysAgo(0L, CatchUpMarks(), now, easternDate))
+        // A game saved for later 6 days back is loaded; one saved longer ago than Watch later lasts is not.
+        assertEquals(0..6, CatchUp.daysAgo(now, CatchUpMarks(), now, easternDate, savedStarts = listOf(ms("2026-11-10T18:00:00Z"))))
+        assertEquals(0..6, CatchUp.daysAgo(now, CatchUpMarks(), now, easternDate, savedStarts = listOf(ms("2026-11-01T18:00:00Z"))))
         assertEquals(0..0, CatchUp.daysAgo(now, CatchUpMarks(), now, easternDate))
         assertEquals(0..1, CatchUp.daysAgo(now, CatchUpMarks(surfaced = mapOf(pacersId to pacersStart)), now, easternDate))
     }
@@ -201,12 +214,21 @@ class CatchUpTest {
     }
 
     @Test
-    fun `marks older than the window are dropped`() {
+    fun `marks older than the window are dropped, watched and known ones after Watch later's length`() {
+        val oldWatched = now - ReplayLifetime.WATCH_LATER_MS - 24 * hour
         val marks = CatchUpMarks(
-            seen = mapOf("old" to now - CatchUp.WINDOW_MS - 6 * hour, pacersId to now),
-            surfaced = mapOf("old" to now - CatchUp.WINDOW_MS - 6 * hour, pacersId to pacersStart)
+            seen = mapOf("old" to oldWatched, "kept" to now - CatchUp.WINDOW_MS - 6 * hour, pacersId to now),
+            surfaced = mapOf("old" to now - CatchUp.WINDOW_MS - 6 * hour, pacersId to pacersStart),
+            known = mapOf("old" to oldWatched, pacersId to now)
         )
-        assertEquals(CatchUpMarks(mapOf(pacersId to now), mapOf(pacersId to pacersStart)), CatchUp.pruned(marks, now))
+        assertEquals(
+            CatchUpMarks(
+                seen = mapOf("kept" to now - CatchUp.WINDOW_MS - 6 * hour, pacersId to now),
+                surfaced = mapOf(pacersId to pacersStart),
+                known = mapOf(pacersId to now)
+            ),
+            CatchUp.pruned(marks, now)
+        )
     }
 
     @Test

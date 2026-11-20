@@ -14,6 +14,7 @@ import com.nuvio.tv.core.sportslive.SportsLiveLiveCheck
 import com.nuvio.tv.data.repository.SportsLiveKickoffProbe
 import com.nuvio.tv.core.sportslive.scores.EspnLeague
 import com.nuvio.tv.core.sportslive.scores.LiveScoresRepository
+import com.nuvio.tv.core.sportslive.scores.ResultSeen
 import com.nuvio.tv.core.sportslive.scores.ScoreChips
 import com.nuvio.tv.core.sportslive.scores.ScoreSide
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
@@ -273,6 +274,7 @@ class SportsLiveAlerts @Inject constructor(
                     launch { loadQuietly() }
                 }
                 val watchedLive = evaluate(inputs, scores, nowMs)
+                ResultSeen.shared.onLiveTick(watchedLive.map { it.eventId }, nowMs) // live.20 1c: watched live a while
                 if (watchedLive.isNotEmpty()) launch { spoilers.onWatchedLive(watchedLive) }
                 evaluateCrunch(inputs, crunchCards, scores, nowMs)
             }
@@ -330,6 +332,8 @@ class SportsLiveAlerts @Inject constructor(
             val (held, shown) = raised.partition { it is SportsLiveAlert.Kickoff && SportsLiveAlerts.holdsFirst(it) }
             if (held.isNotEmpty()) holdsScope.launch { holdsLock.withLock { held.forEach { holds.hold(it as SportsLiveAlert.Kickoff) } } }
             if (shown.isNotEmpty()) enqueue(shown, nowMs)
+            // A Full time alert with its score: the result is known (live.20 1c).
+            shown.forEach { if (it is SportsLiveAlert.FullTime && !it.namesOnly) ResultSeen.shared.finalScoreShown(it.snapshot.eventId) }
         }
         return games.mapNotNull { game ->
             game.snapshot?.takeIf {

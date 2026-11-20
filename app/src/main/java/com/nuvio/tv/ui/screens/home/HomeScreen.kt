@@ -116,7 +116,8 @@ fun HomeScreen(
     /** OK on a Catch up card (#58): its replay plays at once ([SportsLivePlayViewModel.playReplay]), titled by ESPN's matchup. */
     onPlayCatchUpReplay: (replays: List<SportsLiveItem>, title: String) -> Unit = { _, _ -> },
     liveScoresViewModel: SportsLiveScoresViewModel = hiltViewModel(),
-    catchUpViewModel: SportsLiveCatchUpViewModel = hiltViewModel()
+    catchUpViewModel: SportsLiveCatchUpViewModel = hiltViewModel(),
+    myGamesTodayViewModel: SportsLiveMyGamesTodayViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -149,7 +150,8 @@ fun HomeScreen(
     TrackLiveScores(
         screenId = LiveScoresRepository.SCREEN_HOME,
         cards = uiState.liveNowItems,
-        enabled = liveScoresMode == ScoresMode.SHOW,
+        // Under Hide too: the matched game gives the cards their logos (#182); the score stays hidden.
+        enabled = liveScoresMode != null && liveScoresMode != ScoresMode.OFF,
         tracking = liveScoresViewModel.tracking
     )
     val scoreChipStrings = rememberScoreChipStrings()
@@ -375,7 +377,13 @@ fun HomeScreen(
     }
 
     // Catch up cards (#58) and Live now games (V2 phase 10) carry no image: the section's drawn game card stands in.
-    CompositionLocalProvider(LocalDrawnCardArt provides sportsCardArt, LocalSportsLiveSeeAll provides liveNowSeeAll) {
+    // My games today (live.20 1b extra a): the quiet line above Live now.
+    val myGamesToday by myGamesTodayViewModel.today.collectAsStateWithLifecycle()
+    CompositionLocalProvider(
+        LocalDrawnCardArt provides sportsCardArt,
+        LocalSportsLiveSeeAll provides liveNowSeeAll,
+        LocalSportsLiveMyGamesToday provides myGamesToday
+    ) {
     Box(
         modifier = Modifier.fillMaxSize()
     ) {

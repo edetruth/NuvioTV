@@ -114,6 +114,7 @@ class SportsLivePreferencesDataStore @Inject constructor(
     private val catchUpSeenKey = stringSetPreferencesKey("sports_live_catch_up_seen")
     private val catchUpSurfacedKey = stringSetPreferencesKey("sports_live_catch_up_surfaced")
     private val catchUpPendingKey = stringSetPreferencesKey("sports_live_catch_up_pending")
+    private val catchUpKnownKey = stringSetPreferencesKey("sports_live_catch_up_known")
 
     val showSection: Flow<Boolean> = profileManager.activeProfileId.flatMapLatest { pid ->
         factory.get(pid, FEATURE).data.map { it[showSectionKey] ?: true }
@@ -331,7 +332,8 @@ class SportsLivePreferencesDataStore @Inject constructor(
     private fun catchUpMarksOf(prefs: Preferences) = CatchUpMarks(
         seen = decodeMarks(prefs[catchUpSeenKey]),
         surfaced = decodeMarks(prefs[catchUpSurfacedKey]),
-        pending = decodeMarks(prefs[catchUpPendingKey])
+        pending = decodeMarks(prefs[catchUpPendingKey]),
+        known = decodeMarks(prefs[catchUpKnownKey])
     )
 
     /** Saves [change] of the catch-up marks in one edit, dropping marks too old to matter ([CatchUp.pruned]). */
@@ -341,6 +343,7 @@ class SportsLivePreferencesDataStore @Inject constructor(
             prefs[catchUpSeenKey] = encodeMarks(next.seen)
             prefs[catchUpSurfacedKey] = encodeMarks(next.surfaced)
             prefs[catchUpPendingKey] = encodeMarks(next.pending)
+            prefs[catchUpKnownKey] = encodeMarks(next.known)
         }
     }
 

@@ -748,7 +748,8 @@ private fun SportsLiveContent(
                 catchUpMenuKey = null
                 onMarkCatchUpWatched(item)
             },
-            onDismiss = { catchUpMenuKey = null }
+            onDismiss = { catchUpMenuKey = null },
+            fromYourTeams = true
         )
     }
     // The strip held focus and has emptied (its last game watched): focus goes to the games, else the tab.
@@ -796,7 +797,8 @@ private fun SportsLiveContent(
     } else {
         entryCardFocusRequester ?: emptyStateFocusRequester.takeIf { selected == null && uiState.selectedTab != SportsLiveTab.RESULTS }
     }
-    // Down from the header (#155): Resume, else a followed team's live game, else the first live game; never a replay.
+    // Down from the header (#155, live.20 1c): Resume, else a followed team's live game, else the first live game, else
+    // the strip's first card (a replay may take it).
     val liveNowEntry = YourTeams.entry(resumeShown, yourTeams, listHasRows = entryCardFocusRequester != null)
     val contentEntryFocusRequester = when (liveNowEntry) {
         LiveNowEntry.RESUME -> resumeFocusRequester
@@ -818,7 +820,7 @@ private fun SportsLiveContent(
         }
         if (boardPending) return@LaunchedEffect
         // The Resume row when shown, else a followed team's live game in Your teams (#155), else the list's first row,
-        // scrolled in; never a catch-up replay.
+        // scrolled in, else the strip's first card.
         if (liveNowEntry == LiveNowEntry.RESUME || liveNowEntry == LiveNowEntry.STRIP || items.isEmpty()) {
             withFrameNanos { }
             focusLiveNowList = false

@@ -3,6 +3,7 @@ package com.nuvio.tv.ui.screens.sportslive
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,7 +21,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Icon
@@ -61,11 +64,53 @@ internal sealed interface DrawnCardTrailing {
 
 /**
  * The section's own game card face (V2 phase 10): the league tag, a gold ★ for a followed team, both logos (or the
- * short names, #130) around "vs", and [footer]. It fills its box: Home draws it at its 16:9 card size, the Your teams
- * strip at the strip's. The frame, focus and click belong to the caller.
+ * short names, #130) around "vs", and [footer]; "▶ Ready" at the top right while [ready] (live.20 1b). It fills its
+ * box: Home draws it at its 16:9 card size. The frame, focus and click belong to the caller.
  */
 @Composable
-internal fun SportsLiveDrawnGameCard(art: GameArt, followed: Boolean, footer: DrawnCardFooter, modifier: Modifier = Modifier) {
+internal fun SportsLiveDrawnGameCard(art: GameArt, followed: Boolean, footer: DrawnCardFooter, modifier: Modifier = Modifier, ready: Boolean = false) {
+    DrawnCardFrame(league = art.league, followed = followed, footer = footer, ready = ready, modifier = modifier) { logoSize, pad ->
+        DrawnMatchup(art, logoSize, Modifier.align(Alignment.Center).padding(horizontal = pad))
+    }
+}
+
+/**
+ * The neutral drawn card (live.19 F3, #182) for a game that names no two sides ("Moto3 · Round 21 · FP1"): the
+ * league tag, the title in two lines at most, and [footer]. Never the addon's art, which may show only a channel's
+ * logo or a final score.
+ */
+@Composable
+internal fun SportsLiveDrawnEventCard(
+    title: String,
+    league: String?,
+    followed: Boolean,
+    footer: DrawnCardFooter,
+    modifier: Modifier = Modifier,
+    ready: Boolean = false
+) {
+    DrawnCardFrame(league = league, followed = followed, footer = footer, ready = ready, modifier = modifier) { logoSize, pad ->
+        Text(
+            text = title,
+            style = SportsLiveTokens.style(SportsLiveTokens.Type.RowName).copy(fontWeight = FontWeight.Bold),
+            color = Colors.TextPrimary,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.align(Alignment.Center).padding(horizontal = pad + logoSize / 4)
+        )
+    }
+}
+
+/** A drawn card's frame: the gradient, the league tag, ▶ Ready and the ★ at the top, [footer] at the bottom. */
+@Composable
+private fun DrawnCardFrame(
+    league: String?,
+    followed: Boolean,
+    footer: DrawnCardFooter,
+    ready: Boolean,
+    modifier: Modifier,
+    middle: @Composable BoxScope.(logoSize: Dp, pad: Dp) -> Unit
+) {
     BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
@@ -78,25 +123,35 @@ internal fun SportsLiveDrawnGameCard(art: GameArt, followed: Boolean, footer: Dr
         val tagStyle = SportsLiveTokens.style(SportsLiveTokens.Type.Tag).let { if (big) it.copy(fontSize = 13.sp, lineHeight = 16.sp) else it }
         val leadStyle = SportsLiveTokens.style(SportsLiveTokens.Type.Meta).let { if (big) it.copy(fontSize = 16.sp, lineHeight = 20.sp) else it }
         val scoreStyle = SportsLiveTokens.style(SportsLiveTokens.Type.RowScore).let { if (big) it.copy(fontSize = 17.sp, lineHeight = 20.sp) else it.copy(fontSize = 15.sp, lineHeight = 18.sp) }
-        art.league?.takeIf { it.isNotBlank() }?.let { league ->
+        league?.takeIf { it.isNotBlank() }?.let { text ->
             Text(
-                text = league.uppercase(Locale.getDefault()),
+                text = text.uppercase(Locale.getDefault()),
                 style = tagStyle,
                 color = Colors.TextMuted,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.align(Alignment.TopStart).padding(start = pad, top = pad, end = pad + logoSize / 2)
+                // Room for ▶ Ready and the ★ at the right.
+                modifier = Modifier.align(Alignment.TopStart).padding(start = pad, top = pad, end = pad + logoSize / 2 + if (ready) READY_ROOM else 0.dp)
             )
         }
-        if (followed) {
-            Icon(
-                imageVector = Icons.Rounded.Star,
-                contentDescription = stringResource(R.string.sports_live_your_team),
-                tint = Colors.FollowedGold,
-                modifier = Modifier.align(Alignment.TopEnd).padding(top = pad, end = pad).size(if (big) 18.dp else 14.dp)
-            )
+        if (followed || ready) {
+            Row(
+                modifier = Modifier.align(Alignment.TopEnd).padding(top = pad, end = pad),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (ready) SportsLiveReadyPill()
+                if (followed) {
+                    Icon(
+                        imageVector = Icons.Rounded.Star,
+                        contentDescription = stringResource(R.string.sports_live_your_team),
+                        tint = Colors.FollowedGold,
+                        modifier = Modifier.size(if (big) 18.dp else 14.dp)
+                    )
+                }
+            }
         }
-        DrawnMatchup(art, logoSize, Modifier.align(Alignment.Center).padding(horizontal = pad))
+        middle(logoSize, pad)
         Row(
             modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(horizontal = pad, vertical = pad * 0.8f),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -194,3 +249,6 @@ private fun DrawnReplayPill(fontSize: Float) {
 
 /** From this height on a drawn card uses Home's larger type. */
 private val BIG_CARD_HEIGHT = 110.dp
+
+/** The league tag stops short of "▶ Ready". */
+private val READY_ROOM = 64.dp
