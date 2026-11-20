@@ -2,6 +2,7 @@ package com.nuvio.tv.ui.screens.sportslive
 
 import com.nuvio.tv.core.sportslive.SportsLiveGameReadiness
 import com.nuvio.tv.core.sportslive.SportsLiveMyGamesToday
+import com.nuvio.tv.core.sportslive.SportsLiveReadyMark
 import com.nuvio.tv.core.sportslive.SportsLiveStreamThresholds
 import com.nuvio.tv.core.sportslive.alerts.AlertFixtures.MINUTE
 import com.nuvio.tv.core.sportslive.alerts.AlertFixtures.START
@@ -15,6 +16,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -133,5 +135,27 @@ class SportsLiveReadyKeeperTest {
         verified = { if (it.id == "mine") link(it) else null }
         keeper.tick()
         assertEquals(SportsLiveMyGamesToday(games = 2, ready = 1), keeper.today.first())
+    }
+
+    @Test
+    fun `only my games' rows read Ready, a prefetched random game's row does not`() = runTest {
+        verified = { if (it.id == "mine") link(it) else null }
+        keeper.tick()
+        // A zap neighbour's prefetch verified the random game too.
+        readiness.ready(random.id, link(random))
+        assertEquals(setOf("mine", "reminded"), readiness.mine.value)
+        assertEquals(SportsLiveReadyMark.READY, readiness.rowOf(followed))
+        assertNull(readiness.rowOf(random))
+        // The stage of the selected game may still say "Stream ready".
+        assertEquals(SportsLiveReadyMark.READY, readiness.of(random))
+    }
+
+    @Test
+    fun `a game no longer mine loses its row Ready at the next pass`() = runTest {
+        verified = { if (it.id == "mine") link(it) else null }
+        keeper.tick()
+        cards = listOf(random, reminded)
+        keeper.tick()
+        assertNull(readiness.rowOf(followed))
     }
 }

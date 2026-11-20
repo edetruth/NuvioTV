@@ -229,4 +229,9 @@ class SportsLiveSetupViewModelTest {
         assertEquals(SetupExit.FINISHED, vm.uiState.value.exit)
         assertFalse(prefs.claimFirstRunSetup())
     }
+
+    @Test
+    fun `Skip setup shows on every step but the last (TV QA P3)`() {
+        SetupStep.entries.forEach { step -> assertEquals(step != SetupStep.DONE, setupShowsSkip(step)) }
+    }
 }

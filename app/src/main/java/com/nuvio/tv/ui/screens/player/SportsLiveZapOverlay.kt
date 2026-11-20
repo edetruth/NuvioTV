@@ -88,6 +88,7 @@ import com.nuvio.tv.ui.screens.sportslive.SportsLiveFilterOption
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveGameRequests
 import com.nuvio.tv.ui.screens.sportslive.SportsLivePanelHeader
 import com.nuvio.tv.ui.screens.sportslive.SportsLivePanelLine
+import com.nuvio.tv.ui.screens.sportslive.panelFooterText
 import com.nuvio.tv.ui.screens.sportslive.panelFullName
 import com.nuvio.tv.ui.screens.sportslive.panelTitleSuffixes
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveHiddenByMySportsLine
@@ -463,7 +464,8 @@ private fun ZapBanner(banner: SportsLiveZapBanner) {
         modifier = Modifier
             .widthIn(max = BANNER_MAX_WIDTH)
             .clip(shape)
-            .background(SportsLiveTokens.Colors.SurfaceRaised.copy(alpha = SportsLiveTokens.Alert.FILL_ALPHA))
+            // TV QA P6: near-opaque over video (the shared alert fill let bright scenes wash the hint lines out).
+            .background(SportsLiveTokens.Colors.SurfaceRaised.copy(alpha = BANNER_FILL_ALPHA))
             .border(1.dp, SportsLiveTokens.Alert.Border, shape)
             .padding(SportsLiveTokens.Alert.Padding)
     ) {
@@ -518,7 +520,8 @@ private fun ZapBanner(banner: SportsLiveZapBanner) {
             Text(
                 text = line,
                 style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag),
-                color = SportsLiveTokens.Colors.TextMuted,
+                // TV QA P6: secondary, not muted: these lines name where ▲ ▼ go and read at a glance from the sofa.
+                color = SportsLiveTokens.Colors.TextSecondary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -548,6 +551,9 @@ private fun ZapBanner(banner: SportsLiveZapBanner) {
 }
 
 private val LEADING_SYMBOLS = Regex("""^[^\p{L}\p{N}\[(]+""")
+
+/** The zap banner's fill (TV QA P6): near-opaque, as the banner sits over live video. */
+private const val BANNER_FILL_ALPHA = 0.95f
 
 /** The banner's widest: 720 px, clear of the game's own scorebug. */
 private val BANNER_MAX_WIDTH = 360.dp
@@ -611,6 +617,8 @@ private fun LiveGamesPanel(
         (state.rows.firstOrNull { it.item.streamKey == focusedKey } ?: nowRow?.takeIf { it.item.streamKey == focusedKey })
             ?.let { row -> state.boards[row.item.streamKey]?.board ?: panelBoards(listOf(row), emptyMap(), null, emptySet(), 0L).single().board }
     }
+    // BUG-C: the rows whose "▶ Ready" had no room; the footer says it for the focused one.
+    var readyHiddenKeys by remember { mutableStateOf(emptySet<String>()) }
     // live.20: rows of one title ("MotoGP" four times) each say what tells them apart ("· Onboard").
     val feedFormat = stringResource(R.string.sports_live_panel_feed)
     val suffixes = remember(state.rows, nowRow, feedFormat) {
@@ -830,6 +838,9 @@ private fun LiveGamesPanel(
                                         onFocus = { lineFocus(item.streamKey, item.streamKey) },
                                         okHint = boxScoreHint.takeIf { item.streamKey in state.boxScores },
                                         readyMark = readiness[item.streamKey],
+                                        onReadyHidden = { hidden ->
+                                            readyHiddenKeys = if (hidden) readyHiddenKeys + item.streamKey else readyHiddenKeys - item.streamKey
+                                        },
                                         modifier = when {
                                             entry.key == firstKey && upFromFirst != null ->
                                                 Modifier.focusRequester(requesterOf(entry.key)).focusProperties { up = upFromFirst }
@@ -846,8 +857,13 @@ private fun LiveGamesPanel(
             // live.20: the focused row's full name, which its one line may cut (both sides, the whole title). The line
             // stays, blank, while nothing is focused, so the list never jumps.
             val vs = stringResource(R.string.sports_live_panel_vs)
+            val readyWord = stringResource(R.string.sports_live_ready_pill)
+            val separator = stringResource(R.string.sports_live_game_info_separator)
             Text(
-                text = focusedBoard?.let { panelFullName(it, vs, suffixes[it.item.streamKey]) }.orEmpty(),
+                text = focusedBoard?.let {
+                    val key = it.item.streamKey
+                    panelFooterText(panelFullName(it, vs, suffixes[key]), key in readyHiddenKeys, readyWord, separator)
+                }.orEmpty(),
                 style = SportsLiveTokens.style(SportsLiveTokens.Type.PanelLine),
                 color = SportsLiveTokens.Colors.TextSecondary,
                 maxLines = 1,
@@ -943,11 +959,14 @@ private val NOW_PLAYING_GAP = 6.dp
 private val PANEL_FADE = 80.dp
 
 /**
- * Behind the panel (#145): about 85 % black at the left edge, still about 75 % at the panel's edge (rows stay
- * readable over a yellow or white scene), then clear over the [PANEL_FADE] past it.
+ * Behind the panel (#145, TV QA P6): near-opaque black behind the rows (95 % at the left edge, still 90 % at the
+ * panel's edge), so muted text keeps its contrast over a white or busy scene (10-ft text over video wants a solid
+ * backing, not a tint: Android TV overlay guidance, WCAG 4.5:1 for the muted lines); then a soft fall to clear over
+ * the [PANEL_FADE] past it, so the game stays visible beside the panel.
  */
 private val PANEL_SCRIM = Brush.horizontalGradient(
-    0f to Color.Black.copy(alpha = 0.85f),
-    0.75f to Color.Black.copy(alpha = 0.75f),
+    0f to Color.Black.copy(alpha = 0.95f),
+    PANEL_WIDTH / (PANEL_WIDTH + PANEL_FADE) to Color.Black.copy(alpha = 0.9f),
+    (PANEL_WIDTH + PANEL_FADE / 3) / (PANEL_WIDTH + PANEL_FADE) to Color.Black.copy(alpha = 0.55f),
     1f to Color.Transparent
 )

@@ -489,9 +489,12 @@ class SportsLiveZapViewModel internal constructor(
         shown.state
     }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
-    /** The open panel's "▶ Ready" / "No stream yet" marks (#147, 1b), by stream key; none for a game with no mark. */
-    val panelReadiness: StateFlow<Map<String, SportsLiveReadyMark>> = combine(panel, readiness.marks) { state, _ ->
-        state?.rows.orEmpty().mapNotNull { row -> readiness.of(row.item)?.let { row.item.streamKey to it } }.toMap()
+    /**
+     * The open panel's "▶ Ready" / "No stream yet" marks (#147, 1b), by stream key; none for a game with no mark.
+     * "▶ Ready" only on my games' rows (BUG-F): a zap neighbour's prefetch verifies links without marking its row.
+     */
+    val panelReadiness: StateFlow<Map<String, SportsLiveReadyMark>> = combine(panel, readiness.marks, readiness.mine) { state, _, _ ->
+        state?.rows.orEmpty().mapNotNull { row -> readiness.rowOf(row.item)?.let { row.item.streamKey to it } }.toMap()
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
 
     // Hide until focused: rows reveal only once the user has pressed a key in the panel, so opening it

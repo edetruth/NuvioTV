@@ -444,17 +444,56 @@ class SportsLiveSlimPanelTest {
     }
 
     @Test
-    fun `a player's side steps down to last names, a team's never`() {
+    fun `a player's side steps down to last names, a team's to its short code`() {
         assertEquals(listOf("Neal Skupski / Joe Salisbury", "Skupski / Salisbury"), panelSideChoices("Neal Skupski / Joe Salisbury", individual = true))
         assertEquals(listOf("Novak Djokovic", "Djokovic"), panelSideChoices("Novak Djokovic", individual = true))
         assertEquals(listOf("Arevalo & Pavic", "Arevalo / Pavic"), panelSideChoices("Arevalo & Pavic", individual = true))
         assertEquals(listOf("Slovenia"), panelSideChoices("Slovenia", individual = true))
-        assertEquals(listOf("Real Madrid"), panelSideChoices("Real Madrid", individual = false))
+        assertEquals(listOf("Real Madrid", "RMA"), panelSideChoices("Real Madrid", individual = false))
         assertTrue(SportsLiveSportKind.TENNIS in PANEL_INDIVIDUAL_SPORTS)
         assertFalse(SportsLiveSportKind.SOCCER in PANEL_INDIVIDUAL_SPORTS)
 
         // A player's full name is never cut as a team's nickname.
         assertEquals("Neal Skupski / Joe Salisbury", panelSideName("Neal Skupski / Joe Salisbury", null, individual = true) { true })
+    }
+
+    @Test
+    fun `a team with no ESPN code gets a sensible three-letter code, never an ellipsis (BUG-C)`() {
+        assertEquals("AND", panelShortCode("Andorra"))
+        assertEquals("AND", panelShortCode("FC Andorra"))
+        assertEquals("LEG", panelShortCode("Leganés"))
+        assertEquals("BAY", panelShortCode("Bayern"))
+        assertEquals("KÖL", panelShortCode("Köln"))
+        assertEquals("KÖL", panelShortCode("1. FC Köln"))
+        assertEquals("NYK", panelShortCode("New York Knicks"))
+        assertEquals("RMA", panelShortCode("Real Madrid"))
+        // Only affixes: kept rather than left empty.
+        assertEquals("FC", panelShortCode("FC"))
+        assertEquals("", panelShortCode("76"))
+        // A side that is already a code steps nowhere.
+        assertEquals(listOf("ORL"), panelSideChoices("ORL", individual = false))
+        assertEquals(listOf("Leganes", "LEG"), panelSideChoices("Leganes", individual = false))
+        // ESPN's real code, when the app knows the team, before a derived one.
+        assertEquals(listOf("Bayern Munich", "BAY"), panelSideChoices("Bayern Munich", individual = false, code = "BAY"))
+    }
+
+    @Test
+    fun `a row's chips give way before the names (BUG-C)`() {
+        // 266 px row, status 50, Ready 60, names floor 190.
+        // Short names: all fit, the chip shows.
+        assertTrue(panelChipsShown(total = 266, status = 50, chips = 60, wantMain = 150, floor = 190))
+        // Long names: the chip would leave them 156 px, under the floor: the chip goes.
+        assertFalse(panelChipsShown(total = 266, status = 50, chips = 60, wantMain = 300, floor = 190))
+        // A wide row keeps the chip while the names keep the floor.
+        assertTrue(panelChipsShown(total = 400, status = 50, chips = 60, wantMain = 300, floor = 190))
+        // No chips: nothing to drop.
+        assertTrue(panelChipsShown(total = 100, status = 50, chips = 0, wantMain = 300, floor = 190))
+    }
+
+    @Test
+    fun `the footer says Ready when the focused row had no room for the chip`() {
+        assertEquals("FC Andorra vs Leganés · ▶ Ready", panelFooterText("FC Andorra vs Leganés", true, "▶ Ready", " · "))
+        assertEquals("FC Andorra vs Leganés", panelFooterText("FC Andorra vs Leganés", false, "▶ Ready", " · "))
     }
 
     @Test

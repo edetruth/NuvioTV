@@ -20,10 +20,12 @@ import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -51,12 +53,14 @@ import com.nuvio.tv.core.sportslive.SportsLiveTags
 import com.nuvio.tv.core.sportslive.SportsLiveDisplayText
 import com.nuvio.tv.core.sportslive.scores.GameArtTeam
 import com.nuvio.tv.core.sportslive.scores.TeamDirectory
+import com.nuvio.tv.core.sportslive.scores.TeamLogoBook
 import com.nuvio.tv.core.sportslive.scores.ScoreChip
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveFocus
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens.Colors
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens.Size
+import java.util.Locale
 
 /** What a one-line panel row draws (#140): two teams and their score, an event's title, or a channel. */
 internal enum class PanelLineKind { GAME, EVENT, CHANNEL }
@@ -224,17 +228,46 @@ private val LEADING_SYMBOLS = Regex("""^[^\p{L}\p{N}(]+""")
 /**
  * The names an unmatched side may take on a panel line, longest first (live.20 F5): the side as given, then, for a
  * one-on-one sport ([individual]: tennis, fights, darts…), each player's last name ("Neal Skupski / Joe Salisbury" →
- * "Skupski / Salisbury", "Novak Djokovic" → "Djokovic"). The line steps down only when the longer one does not fit.
+ * "Skupski / Salisbury", "Novak Djokovic" → "Djokovic"); a team's code: ESPN's real one when known ([code], BUG-C
+ * follow-up), else one derived from its name ([panelShortCode]). The line steps down only when the longer one does not fit.
  */
-internal fun panelSideChoices(name: String, individual: Boolean): List<String> {
+internal fun panelSideChoices(name: String, individual: Boolean, code: String? = null): List<String> {
     val full = name.trim()
-    if (!individual) return listOf(full)
+    if (!individual) {
+        val short = code?.trim()?.takeIf { it.isNotEmpty() } ?: panelShortCode(full)
+        return listOf(full, short).filter { it.isNotEmpty() }.distinct()
+    }
     val players = full.split(PAIR_SEPARATOR).map { it.trim() }.filter { it.isNotEmpty() }
     val surnames = players.joinToString(" / ") { it.split(WHITESPACE).last() }
     return listOf(full, surnames).filter { it.isNotEmpty() }.distinct()
 }
 
 private val PAIR_SEPARATOR = Regex("""\s*[/&]\s*""")
+
+/**
+ * A team's three-letter code for a tight panel line when ESPN gave none (BUG-C, TV QA: "A… L…"), in capitals as
+ * matched rows' codes ("ORL"): club affixes and numbers left out ("FC Andorra", "1. FC Köln"); one word: its first
+ * three letters ("Andorra" → "AND", "Leganés" → "LEG", "Köln" → "KÖL"); two words: the first's initial and the
+ * second's first two ("Real Madrid" → "RMA"); three or more: the first three initials ("New York Knicks" → "NYK").
+ * Empty for a name with no letters.
+ */
+internal fun panelShortCode(name: String): String {
+    val words = name.trim().split(WHITESPACE).map { word -> word.filter(Char::isLetter) }.filter { it.isNotEmpty() }
+    val significant = words.filterNot { it.uppercase(Locale.ROOT) in CLUB_AFFIXES }.ifEmpty { words }
+    val code = when (significant.size) {
+        0 -> ""
+        1 -> significant[0].take(3)
+        2 -> significant[0].take(1) + significant[1].take(2)
+        else -> significant.take(3).joinToString("") { it.take(1) }
+    }
+    return code.uppercase(Locale.ROOT)
+}
+
+/** Club affixes a short code leaves out ("FC", "AFC", "SV"…): they tell no club apart. */
+private val CLUB_AFFIXES = setOf(
+    "FC", "CF", "AFC", "SC", "AC", "AS", "CD", "UD", "SD", "SV", "VFB", "VFL", "TSG", "SSC", "RC", "RCD", "FK", "NK",
+    "SK", "BK", "IF", "KV", "CA", "CLUB", "DE"
+)
 
 /** Sports played one on one (or two on two): a side is a player's name, best cut to the last name. */
 internal val PANEL_INDIVIDUAL_SPORTS = setOf(
@@ -331,7 +364,9 @@ internal fun SportsLivePanelLine(
     /** What the check-ahead found (#147, live.20 1b): "▶ Ready" or no working stream ("No stream yet"); null: not known, no mark. */
     readyMark: SportsLiveReadyMark? = null,
     /** What tells this row from another of the same title ([panelTitleSuffixes]); null for none. */
-    titleSuffix: String? = null
+    titleSuffix: String? = null,
+    /** Told whether the row's "▶ Ready" was left out for want of room (BUG-C), so the footer can say it instead. */
+    onReadyHidden: ((Boolean) -> Unit)? = null
 ) {
     val strings = rememberGameStatusStrings()
     val kickoff = row.art?.let { kickoffText(it) }
@@ -352,6 +387,11 @@ internal fun SportsLivePanelLine(
     val shape = RoundedCornerShape(PANEL_LINE_RADIUS)
     var focused by remember { mutableStateOf(false) }
     val checking = rememberSportsLiveChecking(row.item)
+    // Set by the row's layout: its chips were left out so the names keep their room (BUG-C).
+    var chipsDropped by remember { mutableStateOf(false) }
+    val readyHidden = chipsDropped && panelReadyMarkShown(readyMark, focused) == SportsLiveReadyMark.READY
+    val currentOnReadyHidden by rememberUpdatedState(onReadyHidden)
+    LaunchedEffect(readyHidden) { currentOnReadyHidden?.invoke(readyHidden) }
     val (longPress, click) = if (onLongClick != null) rememberSportsLiveLongPress(menuOpen, onLongClick, onClick) else Modifier to onClick
     Column(modifier = Modifier.fillMaxWidth()) {
         if (nowPlaying) {
@@ -387,45 +427,52 @@ internal fun SportsLivePanelLine(
             border = ClickableSurfaceDefaults.border(focusedBorder = SportsLiveFocus.ring(shape), pressedBorder = SportsLiveFocus.ring(shape))
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
-                Row(
-                    modifier = Modifier.fillMaxSize().padding(start = 8.dp, end = 6.dp),
-                    horizontalArrangement = Arrangement.spacedBy(5.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        modifier = Modifier.weight(1f),
-                        horizontalArrangement = Arrangement.spacedBy(5.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        when (line.kind) {
-                            PanelLineKind.GAME -> GameLine(row, line, individual = individual)
-                            // A channel keeps the empty tag column too (live.20 F5): its name starts where games' names do.
-                            PanelLineKind.EVENT, PanelLineKind.CHANNEL -> EventLine(line)
+                // BUG-C (TV QA): the chips give way before the names ([PanelLineParts]), never squeezing them.
+                PanelLineParts(
+                    main = {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(5.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            when (line.kind) {
+                                PanelLineKind.GAME -> GameLine(row, line, individual = individual)
+                                // A channel keeps the empty tag column too (live.20 F5): its name starts where games' names do.
+                                PanelLineKind.EVENT, PanelLineKind.CHANNEL -> EventLine(line)
+                            }
                         }
-                    }
-                    StatusText(line)
-                    panelReadyMarkShown(readyMark, focused)?.let { ReadyMark(it) }
-                    if (panelCheckingShown(readyMark, focused, checking)) SportsLiveCheckingMark()
-                    val tag = if (isNew) stringResource(R.string.sports_live_panel_new) else null
-                    if (tag != null) {
-                        Text(
-                            text = tag,
-                            style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag),
-                            color = Colors.TextSecondary,
-                            maxLines = 1,
-                            softWrap = false
-                        )
-                    }
-                    if (focused && okHint != null) {
-                        Text(
-                            text = okHint,
-                            style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag),
-                            color = Colors.TextSecondary,
-                            maxLines = 1,
-                            softWrap = false
-                        )
-                    }
-                }
+                    },
+                    status = { StatusText(line) },
+                    chips = {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(5.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            panelReadyMarkShown(readyMark, focused)?.let { ReadyMark(it) }
+                            if (panelCheckingShown(readyMark, focused, checking)) SportsLiveCheckingMark()
+                            val tag = if (isNew) stringResource(R.string.sports_live_panel_new) else null
+                            if (tag != null) {
+                                Text(
+                                    text = tag,
+                                    style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag),
+                                    color = Colors.TextSecondary,
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
+                            }
+                            if (focused && okHint != null) {
+                                Text(
+                                    text = okHint,
+                                    style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag),
+                                    color = Colors.TextSecondary,
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize().padding(start = 8.dp, end = 6.dp),
+                    onChipsShown = { shown -> chipsDropped = !shown }
+                )
                 if (nowPlaying) {
                     Box(
                         modifier = Modifier
@@ -481,10 +528,13 @@ private fun RowScope.GameLine(row: ScoreboardRow, line: PanelLine, individual: B
     // score is never cut ([panelSidesFit]: it goes whole first).
     val matched = row.art?.let { !it.first.unmatched && !it.second.unmatched } == true
     if (logos != null) TeamLogoSlot(logos.first, logos.shown, Size.PanelLogo)
+    // ESPN's real codes for the names, when the app knows the teams anywhere (BUG-C follow-up): before derived ones.
+    val firstCode = remember(line.first) { line.first?.let(TeamLogoBook.shared::abbreviationAnywhere) }
+    val secondCode = remember(line.second) { line.second?.let(TeamLogoBook.shared::abbreviationAnywhere) }
     PanelSides(
-        first = { SideText(line.first.orEmpty(), individual && !matched, null) },
+        first = { SideText(line.first.orEmpty(), individual && !matched, null, firstCode) },
         middle = { LineMiddle(line.scores) },
-        second = { SideText(line.second.orEmpty(), individual && !matched, null) },
+        second = { SideText(line.second.orEmpty(), individual && !matched, null, secondCode) },
         modifier = Modifier.weight(1f, fill = false)
     )
     if (logos != null) TeamLogoSlot(logos.second, logos.shown, Size.PanelLogo)
@@ -521,14 +571,73 @@ private fun LineMiddle(scores: ScoreboardScores) {
  * shortest cut with an ellipsis; [onOverflow] is told once even the shortest does not fit. Taken afresh per name.
  */
 @Composable
-private fun SideText(name: String, individual: Boolean, onOverflow: (() -> Unit)?) {
-    val choices = remember(name, individual) { panelSideChoices(name, individual) }
+private fun SideText(name: String, individual: Boolean, onOverflow: (() -> Unit)?, code: String? = null) {
+    val choices = remember(name, individual, code) { panelSideChoices(name, individual, code) }
     var level by remember(choices) { mutableIntStateOf(0) }
     LineText(
         choices[level.coerceAtMost(choices.lastIndex)],
         onOverflow = { if (level < choices.lastIndex) level++ else onOverflow?.invoke() }
     )
 }
+
+/**
+ * A panel row's three parts on one line (BUG-C, TV QA): [main] (the tag and the names, or the title) from the start,
+ * then [status] (the clock: never left out) and [chips] ("▶ Ready", the checking mark, "New", the OK hint) at the end.
+ * The chips give way first: they show only while [main] keeps all it needs or at least [PANEL_NAMES_FLOOR]
+ * ([panelChipsShown]); else they are left out whole, so names never read "A… L…".
+ */
+@Composable
+private fun PanelLineParts(
+    main: @Composable () -> Unit,
+    status: @Composable () -> Unit,
+    chips: @Composable () -> Unit,
+    modifier: Modifier = Modifier,
+    /** Told at each layout whether the chips show. */
+    onChipsShown: (Boolean) -> Unit = {}
+) {
+    // Each part in a Box: a part that draws nothing (no clock) still takes its place, at no width.
+    Layout(content = { Box { main() }; Box { status() }; Box { chips() } }, modifier = modifier) { measurables, constraints ->
+        val gap = PANEL_PART_GAP.roundToPx()
+        val loose = constraints.copy(minWidth = 0, minHeight = 0)
+        val statusPlaced = measurables[1].measure(loose)
+        val chipsPlaced = measurables[2].measure(loose)
+        val statusWidth = if (statusPlaced.width > 0) statusPlaced.width + gap else 0
+        val chipsWidth = if (chipsPlaced.width > 0) chipsPlaced.width + gap else 0
+        val wantMain = measurables[0].maxIntrinsicWidth(loose.maxHeight)
+        val bounded = loose.hasBoundedWidth
+        val end = if (bounded) loose.maxWidth else wantMain + statusWidth + chipsWidth
+        val showChips = !bounded || panelChipsShown(end, statusWidth, chipsWidth, wantMain, PANEL_NAMES_FLOOR.roundToPx())
+        onChipsShown(showChips || chipsPlaced.width == 0)
+        val mainMax = (end - statusWidth - if (showChips) chipsWidth else 0).coerceAtLeast(0)
+        val mainPlaced = measurables[0].measure(loose.copy(maxWidth = mainMax))
+        val height = if (loose.hasBoundedHeight) loose.maxHeight else maxOf(mainPlaced.height, statusPlaced.height, chipsPlaced.height)
+        layout(end, height) {
+            mainPlaced.placeRelative(0, (height - mainPlaced.height) / 2)
+            var x = end
+            if (showChips && chipsPlaced.width > 0) {
+                x -= chipsPlaced.width
+                chipsPlaced.placeRelative(x, (height - chipsPlaced.height) / 2)
+                x -= gap
+            }
+            if (statusPlaced.width > 0) statusPlaced.placeRelative(x - statusPlaced.width, (height - statusPlaced.height) / 2)
+        }
+    }
+}
+
+/**
+ * The panel footer's line (live.20): the focused row's [fullName], then "▶ Ready" ([ready], after [separator]) when
+ * its row had no room for the chip (BUG-C), so the mark is never lost on a tight row.
+ */
+internal fun panelFooterText(fullName: String, readyHidden: Boolean, ready: String, separator: String): String =
+    if (readyHidden) fullName + separator + ready else fullName
+
+/**
+ * Whether a panel row's chips show (BUG-C): only while the main part ([wantMain] px at its longest) still gets all it
+ * wants, or at least [floor] px, beside the status ([status] px with its gap) and the chips ([chips] px with theirs)
+ * in [total] px. No chips: nothing to decide.
+ */
+internal fun panelChipsShown(total: Int, status: Int, chips: Int, wantMain: Int, floor: Int): Boolean =
+    chips <= 0 || total - status - chips >= minOf(wantMain, floor)
 
 /**
  * "[first] [middle] [second]" on one line (live.20 F5): the middle (score, eye or "vs") at its own width, never cut,
@@ -719,6 +828,13 @@ private val PANEL_LINE_ACCENT = 2.dp
 /** Fits [SportsLiveTags.MAX_CHARS] capitals at the Tag size ("FOOTBALL" is about 57 dp), never cut (live.20 F5). */
 private val PANEL_TAG_COLUMN = 62.dp
 private val PANEL_SIDE_GAP = 5.dp
+private val PANEL_PART_GAP = 5.dp
+
+/**
+ * The least a panel row's tag and names keep before its chips go (BUG-C): the tag column, two logos and two
+ * three-letter names around "vs" ("NBA [logo] AND vs LEG [logo]") at the panel's line size.
+ */
+private val PANEL_NAMES_FLOOR = 190.dp
 
 /** The least a name keeps beside the score before the score goes (about three letters and an ellipsis). */
 private val PANEL_MIN_NAME = 26.dp
