@@ -89,10 +89,11 @@ object SportsLiveItemBucketer {
     private fun describeWithSignal(rawMeta: MetaPreview, claimed: ClaimedCatalog, nowMs: Long): Pair<SportsLiveItem, Boolean> {
         val catalog = claimed.catalog
         // An events catalog's item tagged as a TV network (#145) is a channel listing, never a game; so is a broadcaster's
-        // channel without a suffix ("Fox Footy", live.20) and a title naming nothing but a stream ("Streams").
+        // channel without a suffix ("Fox Footy", live.20), a title naming nothing but a stream ("Streams") and one naming
+        // nothing but a sport or tour ("Tennis", "ATP": a rolling feed, TV report #5).
         val network = claimed.kind == SportsLiveKind.EVENTS &&
             (rawMeta.genres.any { SportsLiveKeywords.containsKeyword(it, SportsLiveKeywords.NETWORKS) } || isChannelName(rawMeta.name) ||
-                isPlaceholderChannel(rawMeta, catalog.name))
+                isPlaceholderChannel(rawMeta, catalog.name) || isSportFeed(rawMeta))
         // A leading 🔴 / 🔜 / ✅ (CNCVerse) is a status, not part of the name.
         val trimmedName = rawMeta.name.trimStart()
         val status = listOf(LIVE_EMOJI, SOON_EMOJI, DONE_EMOJI).firstOrNull { trimmedName.startsWith(it) }
@@ -185,6 +186,14 @@ object SportsLiveItemBucketer {
     }
 
     private val CHANNEL_WORDS = setOf("network", "channel", "tv")
+
+    /**
+     * True when [meta] is titled by a sport or a tour alone ([SportsLiveBroadcasters.isSportFeed]: "Tennis", "ATP") and its
+     * description names no fuller event ("ATP v Stockholm Open" makes it that event's feed): a rolling feed, a channel.
+     */
+    internal fun isSportFeed(meta: MetaPreview): Boolean =
+        SportsLiveBroadcasters.isSportFeed(meta.name) &&
+            SportsLiveDisplayText.fullName(meta.name, meta.description) == SportsLiveDisplayText.name(meta.name)
 
     /**
      * True when [meta] is titled as nothing but a stream ("Streams", "Live Stream 2", live.20) and names no sport in its

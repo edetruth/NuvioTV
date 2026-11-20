@@ -63,12 +63,23 @@ object SportsLiveBroadcasters {
 
     private val broadcaster = Memo(4_096) { title: String -> broadcasterUncached(title) }
     private val placeholder = Memo(4_096) { title: String -> placeholderUncached(title) }
+    private val sportFeed = Memo(4_096) { title: String -> sportFeedUncached(title) }
+
+    // Tours named alone as a feed's title; a plain sport word ("Tennis", "Ice Hockey") is one too.
+    private val TOURS = setOf("atp", "wta", "itf", "atp tour", "wta tour")
 
     /** True when [title] is a broadcaster's channel name; see the class doc. */
     fun isBroadcaster(title: String): Boolean = broadcaster(title)
 
     /** True when [title] names nothing but a stream ("Streams", "Live Stream 2", "Backup Links"). */
     fun isPlaceholder(title: String): Boolean = placeholder(title)
+
+    /**
+     * True when [title] names nothing but a sport or a tour, with at most a stream word ("Tennis", "ATP", "WTA",
+     * "Live Tennis", "Ice Hockey HD"; TV report #5): a rolling feed of whatever is on, like a channel, and no event to
+     * list on Live now. A title naming more ("ATP Finals 2026", "ATP 250 · Stockholm", "Court 3") is an event.
+     */
+    fun isSportFeed(title: String): Boolean = sportFeed(title)
 
     private fun words(title: String): List<String> =
         TeamIdentityRules.nameKey(SportsLiveDisplayText.name(title)).split(' ').filter { it.isNotEmpty() }
@@ -81,6 +92,11 @@ object SportsLiveBroadcasters {
             start + brand.size <= words.size && brand.indices.all { words[start + it] == brand[it] }
         } ?: return false
         return words.drop(start + brand.size).all { it in FILLER || it in REGIONS || it.all(Char::isDigit) }
+    }
+
+    private fun sportFeedUncached(title: String): Boolean {
+        val core = words(title).filter { it !in PLACEHOLDER }.joinToString(" ")
+        return core.isNotEmpty() && (core in TOURS || SportsLiveSportKind.isPlainSportWord(core))
     }
 
     private fun placeholderUncached(title: String): Boolean {

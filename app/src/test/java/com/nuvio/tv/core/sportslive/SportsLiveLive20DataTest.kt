@@ -165,7 +165,8 @@ class SportsLiveLive20DataTest {
 
     @Test
     fun `a generic title never merges, even across addons`() {
-        for (title in listOf("Tennis", "ATP", "WTA", "Court 3", "Day 6 Singles", "Main Feed")) {
+        // A bare "Tennis" / "ATP" / "WTA" is a sport feed, listed on Channels (TV report #5).
+        for (title in listOf("Court 3", "Day 6 Singles", "Main Feed")) {
             val rows = live(event("a", "1", title, listOf("Tennis")), event("b", "2", title, listOf("Tennis")))
             assertEquals(title, 2, rows.size)
         }
@@ -224,5 +225,23 @@ class SportsLiveLive20DataTest {
         val rows = live(event("a", "1", "NFL Network", listOf("AF")), event("a", "5", "Arsenal vs Chelsea"))
         assertEquals(listOf("5"), rows.map { it.id })
         assertNotNull(SportsLiveItemBucketer.bucketTab(listOf(event("a", "1", "NFL Network")), SportsLiveTab.CHANNELS, now).singleOrNull())
+    }
+
+    @Test
+    fun `a title naming only a sport or a tour is a feed on Channels, a tournament stays an event`() {
+        for (title in listOf("Tennis", "ATP", "WTA", "Live Tennis", "ATP Tour", "Ice Hockey HD", "Soccer")) {
+            val feed = event("a", title, title, listOf("Tennis"))
+            assertTrue(title, feed.isChannel)
+            assertTrue(title, live(feed).isEmpty())
+            assertNotNull(title, SportsLiveItemBucketer.bucketTab(listOf(feed), SportsLiveTab.CHANNELS, now).singleOrNull())
+        }
+        for (title in listOf("ATP Finals 2026", "ATP 250 · Stockholm", "ATP 250", "Court 3", "Main Feed", "Sinner vs Alcaraz")) {
+            assertFalse(title, event("a", title, title, listOf("Tennis")).isChannel)
+        }
+        // A description naming the event it carries keeps it that event's feed.
+        assertFalse(event("a", "d", "ATP", listOf("Tennis"), description = "ATP v Stockholm Open").isChannel)
+        // A channel's name with a sport tag from the addon is still a channel (NFL Network tagged AF, Tennis Channel tagged Tennis).
+        assertTrue(event("a", "n", "NFL Network", listOf("AF")).isChannel)
+        assertTrue(event("a", "t", "Tennis Channel", listOf("Tennis")).isChannel)
     }
 }
