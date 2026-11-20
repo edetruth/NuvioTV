@@ -128,6 +128,19 @@ class TeamDirectoryTest {
         }
     }
 
+    @Test
+    fun `the inference lists are asked for first, so a full pass never leaves them out`() = runTest {
+        // More on-screen soccer leagues than one pass takes (live.20): inference still gets every list it reads.
+        val inference = com.nuvio.tv.core.sportslive.SportsLiveSportInference.leagues
+        val order = LiveScoresRepository.directoryLeagueOrder((1..60).map { EspnLeague("soccer", "test.$it") } + NBA)
+        assertEquals(inference, order.take(inference.size))
+        assertEquals(1, order.count { it == NBA })
+        val asked = mutableListOf<EspnLeague>()
+        TeamDirectorySync(TeamDirectory(), { asked += it; nbaTeams }, null, { 0L }).refresh(order)
+        assertTrue(asked.containsAll(inference))
+        assertEquals(TeamDirectorySync.MAX_PER_PASS, asked.size)
+    }
+
     // --- Weekly refresh ---
 
     @Test

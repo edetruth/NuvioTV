@@ -744,7 +744,10 @@ class LiveScoresRepository internal constructor(
         publishLocked()
     }
 
-    /** The leagues whose team lists are kept: those of the cards on screen first, then My sports, then followed teams'. */
+    /**
+     * The leagues whose team lists are kept ([directoryLeagueOrder]): the inference lists, then those of the cards on
+     * screen, then My sports, then followed teams'.
+     */
     private fun directoryLeagues(
         cards: Map<String, List<TrackedCard>>,
         picked: MySports,
@@ -754,10 +757,8 @@ class LiveScoresRepository internal constructor(
         val onScreen = cards.values.flatten().flatMap { card ->
             card.leagues + listOfNotNull(card.fallback, EspnLeagueMap.COLLEGE_BASKETBALL_WOMEN.takeIf { card.fallback == EspnLeagueMap.COLLEGE_BASKETBALL })
         }
-        // The leagues an unrouted two-team card may be inferred into (#132 P4) come last: small lists, kept a week.
         // The named My sports leagues' lists (#159, soccer competitions included) tell games with no league apart.
-        return (onScreen + picked.feeds() + picked.teamListLeagues() + followed + SportsLiveSportInference.leagues)
-            .filter(TeamDirectory::covers).distinct()
+        return directoryLeagueOrder(onScreen + picked.feeds() + picked.teamListLeagues() + followed)
     }
 
     /** Both ESPN teams of a matched game: their logos, abbreviations and names, by ESPN identity. */
@@ -926,6 +927,14 @@ class LiveScoresRepository internal constructor(
             away = event.away.copy(score = null, linescores = emptyList(), record = null, form = null)
         )
         private val EASTERN: ZoneId = ZoneId.of("America/New_York")
+
+        /**
+         * The team lists asked for, in order: the leagues an unrouted two-team card may be inferred into (#132 P4) first,
+         * small lists kept a week, so a pass bounded to [TeamDirectorySync.MAX_PER_PASS] never leaves inference without
+         * one (live.20); then [others] in their order. Only leagues the directory covers, each once.
+         */
+        internal fun directoryLeagueOrder(others: List<EspnLeague>): List<EspnLeague> =
+            (SportsLiveSportInference.leagues + others).filter(TeamDirectory::covers).distinct()
 
         /** A followed team's stored "sport/league", as a league; null when it has none. */
         internal fun leagueOfPath(path: String?): EspnLeague? =
