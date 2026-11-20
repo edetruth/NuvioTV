@@ -675,10 +675,10 @@ private fun ResultBoardRow(
     // The winner bold (name and score), never while the score is hidden.
     val homeWon = sportsLiveWinnerBold(showScore, event.homeScore, event.awayScore)
     val awayWon = sportsLiveWinnerBold(showScore, event.awayScore, event.homeScore)
-    // A followed team's final score on screen: its result is known, its replay leaves Your teams (live.20 1c).
-    if (showScore && row.followed) LaunchedEffect(event.eventId) { com.nuvio.tv.core.sportslive.scores.ResultSeen.shared.finalScoreShown(event.eventId) }
     val (longPress, click) = rememberSportsLiveLongPress(menuOpen = menuOpen, onLongClick = onLongClick, onClick = onClick)
     var focused by remember { mutableStateOf(false) }
+    // A followed team's final score focused (not merely on screen): its result is known, its replay leaves Your teams (live.20 1c).
+    if (showScore && row.followed && focused) LaunchedEffect(event.eventId) { com.nuvio.tv.core.sportslive.scores.ResultSeen.shared.finalScoreShown(event.eventId) }
     Surface(
         onClick = click,
         modifier = modifier

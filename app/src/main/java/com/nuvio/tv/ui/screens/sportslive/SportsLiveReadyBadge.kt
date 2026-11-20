@@ -88,7 +88,9 @@ fun rememberSportsLiveReadyMark(item: SportsLiveItem, readiness: SportsLiveGameR
 @Composable
 fun sportsLiveMyGamesTodayText(today: SportsLiveMyGamesToday): String {
     val context = LocalContext.current
-    val games = context.resources.getQuantityString(R.plurals.sports_live_my_games_tonight, today.games, today.games)
+    // "today" before 5 pm, "tonight" from 5 pm (live.20, as Your teams' heading).
+    val plural = if (YourTeams.isEvening(System.currentTimeMillis())) R.plurals.sports_live_my_games_tonight else R.plurals.sports_live_my_games_today
+    val games = context.resources.getQuantityString(plural, today.games, today.games)
     if (today.ready <= 0) return games
     return listOf(games, context.getString(R.string.sports_live_my_games_ready, today.ready))
         .joinToString(stringResource(R.string.sports_live_game_info_separator))

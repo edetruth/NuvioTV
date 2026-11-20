@@ -165,17 +165,30 @@ internal object YourTeams {
         focusedKey?.let { key -> strip.firstOrNull { it.key == key } }?.let(::stageOf)
 
     /**
-     * Where Down from the header lands on Live Now (user 2026-11-20): the Resume row (#148) while offered; else a live
-     * game: a followed team's in the strip, else the list's first; else the strip's first card, whatever it is (a
-     * game starting soon, a replay, a game later today); else the empty card.
+     * Where Down from the header lands on Live Now (user decision 2026-11-20): the Resume row (#148) while offered;
+     * else the strip's first card, whatever it is (a followed team's live game comes first; else a game starting
+     * soon, a replay, a game later today), never another team's live game in the list; else the list; else the
+     * empty card.
      */
     fun entry(resumeShown: Boolean, strip: List<YourTeamsEntry>, listHasRows: Boolean): LiveNowEntry = when {
         resumeShown -> LiveNowEntry.RESUME
-        strip.firstOrNull() is YourTeamsEntry.Live -> LiveNowEntry.STRIP
-        listHasRows -> LiveNowEntry.LIST
         strip.isNotEmpty() -> LiveNowEntry.STRIP
+        listHasRows -> LiveNowEntry.LIST
         else -> LiveNowEntry.EMPTY
     }
+
+    /**
+     * OK on a strip card plays (live, replay); on a game not started yet it plays only once its verified link is held
+     * ([mark] READY: "Watch now", the held link at once, 1b HARD RULE), else it sets the reminder.
+     */
+    fun okPlays(entry: YourTeamsEntry, mark: SportsLiveReadyMark?): Boolean =
+        entry !is YourTeamsEntry.LaterToday || mark == SportsLiveReadyMark.READY
+
+    /** From 5 pm local the day's games read "tonight", before it "today" (the heading and Home's line). */
+    fun isEvening(nowMs: Long, zone: ZoneId = ZoneId.systemDefault()): Boolean =
+        Instant.ofEpochMilli(nowMs).atZone(zone).hour >= EVENING_HOUR
+
+    private const val EVENING_HOUR = 17
 
     /** The row the Replay stage draws for a catch-up: the replay under ESPN's teams and start, never its poster. */
     fun replayStageRow(item: CatchUpItem): ScoreboardRow {
@@ -284,6 +297,7 @@ internal fun SportsLiveYourTeamsStrip(
                                 score = (footer.trailing as? DrawnCardTrailing.Score)?.text
                             )
                         }
+                        // Ready: OK is Watch now (the held link), the pill says so; else OK is Remind me, the bell.
                         is YourTeamsEntry.LaterToday -> SlimFace(
                             status = SlimStatus.Time(agendaTimeText(entry.startMs)),
                             corner = if (ready) SlimCorner.Ready else SlimCorner.Bell(reminded(entry.row.item))
@@ -327,7 +341,7 @@ internal fun SportsLiveYourTeamsStrip(
     }
 }
 
-/** "Your teams · 1 live · 2 replays · 3 tonight": the counts that are not zero. */
+/** "Your teams · 1 live · 2 replays · 3 tonight" ("3 today" before 5 pm): the counts that are not zero. */
 @Composable
 private fun yourTeamsHeading(summary: YourTeamsSummary): String {
     val context = LocalContext.current
@@ -335,7 +349,10 @@ private fun yourTeamsHeading(summary: YourTeamsSummary): String {
         stringResource(R.string.sports_live_your_teams_title),
         summary.live.takeIf { it > 0 }?.let { context.getString(R.string.sports_live_your_teams_live, it) },
         summary.replays.takeIf { it > 0 }?.let { context.resources.getQuantityString(R.plurals.sports_live_your_teams_replays, it, it) },
-        summary.later.takeIf { it > 0 }?.let { context.getString(R.string.sports_live_your_teams_tonight, it) }
+        summary.later.takeIf { it > 0 }?.let {
+            val evening = YourTeams.isEvening(System.currentTimeMillis())
+            context.getString(if (evening) R.string.sports_live_your_teams_tonight else R.string.sports_live_your_teams_today_count, it)
+        }
     )
     return parts.joinToString(stringResource(R.string.sports_live_game_info_separator))
 }

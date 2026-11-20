@@ -797,8 +797,8 @@ private fun SportsLiveContent(
     } else {
         entryCardFocusRequester ?: emptyStateFocusRequester.takeIf { selected == null && uiState.selectedTab != SportsLiveTab.RESULTS }
     }
-    // Down from the header (#155, live.20 1c): Resume, else a followed team's live game, else the first live game, else
-    // the strip's first card (a replay may take it).
+    // Down from the header (#155, live.20 1c): Resume, else the strip's first card (a followed team's live game comes
+    // first; a replay may take it), else the list.
     val liveNowEntry = YourTeams.entry(resumeShown, yourTeams, listHasRows = entryCardFocusRequester != null)
     val contentEntryFocusRequester = when (liveNowEntry) {
         LiveNowEntry.RESUME -> resumeFocusRequester
@@ -819,8 +819,8 @@ private fun SportsLiveContent(
             return@LaunchedEffect
         }
         if (boardPending) return@LaunchedEffect
-        // The Resume row when shown, else a followed team's live game in Your teams (#155), else the list's first row,
-        // scrolled in, else the strip's first card.
+        // The Resume row when shown, else Your teams' first card (#155, live.20 1c), else the list's first row,
+        // scrolled in.
         if (liveNowEntry == LiveNowEntry.RESUME || liveNowEntry == LiveNowEntry.STRIP || items.isEmpty()) {
             withFrameNanos { }
             focusLiveNowList = false
@@ -1202,8 +1202,14 @@ private fun SportsLiveContent(
             onClick = { entry ->
                 when (entry) {
                     is YourTeamsEntry.Live -> cardClick(entry.row.item)
-                    // OK on a later-today card is Remind me (#155); the bell shows the state.
-                    is YourTeamsEntry.LaterToday -> onToggleReminder(entry.row.item)
+                    // OK on a later-today card is Remind me (#155), the bell showing the state; once "▶ Ready" it is
+                    // Watch now: the held verified link plays at once (live.20 1b HARD RULE).
+                    is YourTeamsEntry.LaterToday ->
+                        if (YourTeams.okPlays(entry, com.nuvio.tv.core.sportslive.SportsLiveGameReadiness.shared.of(entry.row.item))) {
+                            cardClick(entry.row.item)
+                        } else {
+                            onToggleReminder(entry.row.item)
+                        }
                     is YourTeamsEntry.Replay -> onPlayCatchUp(entry.item)
                 }
             },

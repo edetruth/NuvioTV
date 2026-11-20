@@ -4196,6 +4196,10 @@
         <item quantity="one">%1$d game tonight</item>
         <item quantity="other">%1$d games tonight</item>
     </plurals>
+    <plurals name="sports_live_my_games_today">
+        <item quantity="one">%1$d game today</item>
+        <item quantity="other">%1$d games today</item>
+    </plurals>
     <string name="sports_live_my_games_ready">%1$d ready</string>
     <string name="sports_live_hidden_by_my_sports">%1$d more hidden by My sports · Show all</string>
     <string name="sports_live_zap_looking">Looking for streams…</string>
@@ -4299,6 +4303,7 @@
         <item quantity="other">%1$d replays</item>
     </plurals>
     <string name="sports_live_your_teams_tonight">%1$d tonight</string>
+    <string name="sports_live_your_teams_today_count">%1$d today</string>
     <string name="sports_live_your_teams_more">+%1$d ›</string>
     <string name="sports_live_your_teams_remove">Remove from Your teams</string>
     <string name="sports_live_your_team">Your team</string>

@@ -12,7 +12,9 @@ import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.domain.model.PosterShape
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveKind
+import com.nuvio.tv.core.sportslive.SportsLiveReadyMark
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -139,10 +141,29 @@ class SportsLiveYourTeamsTest {
     }
 
     @Test
-    fun `first focus is the first live game when no followed team is live`() {
+    fun `other teams' live games in the list never take first focus from the strip`() {
         val later = YourTeams.strip(emptyList(), listOf(evening), listOf(replay("r", 5.0)), now, zone)
-        assertEquals(LiveNowEntry.LIST, YourTeams.entry(resumeShown = false, strip = later, listHasRows = true))
+        assertEquals(LiveNowEntry.STRIP, YourTeams.entry(resumeShown = false, strip = later, listHasRows = true))
+        // No strip: the list.
         assertEquals(LiveNowEntry.LIST, YourTeams.entry(resumeShown = false, strip = emptyList(), listHasRows = true))
+    }
+
+    @Test
+    fun `OK on a game not started is Watch now once Ready, else Remind me`() {
+        val strip = YourTeams.strip(listOf(liveFollowed), listOf(evening), listOf(replay("r", 5.0)), now, zone)
+        val later = strip.first { it is YourTeamsEntry.LaterToday }
+        assertTrue(YourTeams.okPlays(later, SportsLiveReadyMark.READY))
+        assertFalse(YourTeams.okPlays(later, null))
+        assertFalse(YourTeams.okPlays(later, SportsLiveReadyMark.NO_STREAM))
+        // Live games and replays always play.
+        assertTrue(strip.filter { it !is YourTeamsEntry.LaterToday }.all { YourTeams.okPlays(it, null) })
+    }
+
+    @Test
+    fun `the day's games read today before 5 pm and tonight from 5 pm`() {
+        assertFalse(YourTeams.isEvening(ms("2026-11-19T16:59:00Z"), zone))
+        assertTrue(YourTeams.isEvening(ms("2026-11-19T17:00:00Z"), zone))
+        assertTrue(YourTeams.isEvening(ms("2026-11-19T23:30:00Z"), zone))
     }
 
     @Test
