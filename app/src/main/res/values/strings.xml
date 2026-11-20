@@ -501,7 +501,7 @@
     <string name="sports_live_scores_status_some_failing">Some leagues failing since %1$s</string>
     <string name="sports_live_scores_status_not_responding">Not responding since %1$s</string>
     <string name="sports_live_scores_status_all_ok">Every score feed in use is answering.</string>
-    <string name="sports_live_scores_status_off_detail">Scores is set to Never show, so nothing is checked.</string>
+    <string name="sports_live_scores_status_off_detail">Scores is set to Never show: only live games\' start times are read, and no score is kept.</string>
     <string name="sports_live_scores_status_not_checked_detail">No scores have been fetched yet. Open Sports &amp; Live to check.</string>
     <string name="sports_live_scores_feed_failing">%1$s: %2$s (since %3$s)</string>
     <string name="sports_live_scores_feed_game_details">Game details</string>
