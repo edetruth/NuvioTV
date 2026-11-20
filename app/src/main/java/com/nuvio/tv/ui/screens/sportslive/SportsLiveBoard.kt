@@ -1,5 +1,7 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import com.nuvio.tv.core.sportslive.scores.ScoreMatcher
+import com.nuvio.tv.core.sportslive.scores.BigGameReasonKind
 import com.nuvio.tv.core.sportslive.scores.TeamStanding
 import com.nuvio.tv.core.sportslive.scores.StandingsRepository
 import com.nuvio.tv.core.sportslive.scores.ScoreState
@@ -88,7 +90,15 @@ data class SportsLiveBoard(
             val event = ScoreChips.matchedEvent(row.item, scores[row.item.streamKey])?.takeIf { it.state == ScoreState.PRE }
                 ?: return@map row
             val rating = BigGame.rate(event, standings[StandingsRepository.leagueOf(event)].orEmpty(), followed = row.followed)
-            if (rating.isBig) row.copy(bigGame = rating) else row
+            if (!rating.isBig) return@map row
+            // The records read in the card's own order, as its two names above them.
+            val sides = ScoreChips.orderedSides(row.item)
+            val homeFirst = sides?.let { ScoreMatcher.firstIsHome(it.first, it.second, event) } == true
+            val reasons = if (!homeFirst) rating.reasons else rating.reasons.map { reason ->
+                val text = reason.text
+                if (reason.kind == BigGameReasonKind.RECORDS && text != null) reason.copy(text = text.split(" vs ").reversed().joinToString(" vs ")) else reason
+            }
+            row.copy(bigGame = rating.copy(reasons = reasons, eventId = event.eventId))
         }
 
         /** Builds the board for [inputs]: pure, and slow for a large list, so callers run it off the main thread. */

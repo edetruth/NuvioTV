@@ -77,7 +77,9 @@ data class ScoreboardRow(
     /** A tennis match's round ("Semifinal", "Group Stage"), for the stage (#160). */
     val tennisRound: String? = null,
     /** Crunch time (#137): a close game late, the "Close game" badge (Scores not Off). */
-    val closeGame: Boolean = false
+    val closeGame: Boolean = false,
+    /** The tag in place of the league's name (#160): a tennis match's tour, "ATP", never a tournament's initials. */
+    val leagueTag: String? = null
 ) {
     /** A followed team plays in it: the gold left bar. */
     val followed: Boolean get() = firstFollowed || secondFollowed || item.followed
@@ -158,6 +160,7 @@ internal fun scoreboardRowOf(
             null
         },
         tennisRound = tennisMatch?.title?.takeIf { it.isNotBlank() },
+        leagueTag = tennisMatch?.let { event!!.league.league.uppercase() },
         closeGame = group == ScoreboardGroup.LIVE && !estimate && event != null && CrunchTime.isCrunch(event)
     )
 }

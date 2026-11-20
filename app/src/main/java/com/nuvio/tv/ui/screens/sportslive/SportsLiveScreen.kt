@@ -637,7 +637,20 @@ private fun SportsLiveContent(
             )
         }
     }
-    val entryCardFocusRequester = items.firstOrNull { it.listKey == entryKey }?.let(::cardFocusRequester) ?: selectedCardFocusRequester
+    // Upcoming lists a big game twice (#137: its day's Games to watch and its time slot): the way in is the copy on
+    // screen (the focused game's when shown, else the first game shown), by its own requester.
+    val agendaEntryGame by remember(listState) {
+        derivedStateOf {
+            val shown = currentAgenda ?: return@derivedStateOf null
+            val visible = listState.layoutInfo.visibleItemsInfo.mapNotNull { shown.gameAt(it.index) }
+            visible.firstOrNull { shown.games.getOrNull(it)?.row?.item?.listKey == focusedCardKey } ?: visible.firstOrNull()
+        }
+    }
+    val agendaEntryRequester = agendaEntryGame?.let { agenda?.games?.getOrNull(it) }?.let { game ->
+        if (game.pick) pickFocusRequester(game.row.item) else cardFocusRequester(game.row.item)
+    }
+    val entryCardFocusRequester = agendaEntryRequester
+        ?: items.firstOrNull { it.listKey == entryKey }?.let(::cardFocusRequester) ?: selectedCardFocusRequester
     // The Catch up strip (#58) sits between the header and Live Now's games: Down from the header lands
     // on it, Up from the first game goes back to it.
     val catchUpShown = uiState.selectedTab == SportsLiveTab.LIVE_NOW && catchUpItems.isNotEmpty()

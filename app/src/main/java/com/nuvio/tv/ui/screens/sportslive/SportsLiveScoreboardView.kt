@@ -297,6 +297,8 @@ internal fun rowTagText(row: ScoreboardRow): String = rowTagOf(row, row.sportTag
  * [sportLabel] in capitals; empty when none is known. The same for a two-team row as for a single-line one (#167).
  */
 internal fun rowTagOf(row: ScoreboardRow, sportLabel: String?): String {
+    // A tennis match's tour (#160): "ATP", never its tournament's initials.
+    row.leagueTag?.let { return it }
     val item = row.item
     // A non-sport tag ("OTHER", #145) says nothing about the game: the sport its title names, else none.
     val tag = scoreboardRowTag(

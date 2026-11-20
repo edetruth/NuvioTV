@@ -126,5 +126,23 @@ class SportsLiveGamesToWatchTest {
         )
         val rated = SportsLiveBoard.withBigGames(rows(big to null, small to null), scores, emptyMap())
         assertEquals("Florida vs Duke", rated.single { it.bigGame != null }.item.meta.name)
+        assertEquals("1", rated.single { it.bigGame != null }.bigGame?.eventId)
+    }
+
+    @Test
+    fun `two cards of one game are one pick, and records read in each card's order`() {
+        fun team(name: String, record: String) = ScoreTeam(null, null, name, name, name, null, null, null, emptyList(), record = record)
+        val first = item("Houston Rockets vs Denver Nuggets", at(18, 20))
+        val second = item("Denver Nuggets vs Houston Rockets", at(18, 20)).copy(addonId = "b")
+        // Rockets at Nuggets: ESPN reads the away team first.
+        val event = ScoreSnapshot(
+            eventId = "9", league = EspnLeagueMap.NBA, startMs = at(18, 20), state = ScoreState.PRE, clockText = null, isFinal = false,
+            home = team("Denver Nuggets", "8-5"), away = team("Houston Rockets", "12-4"), broadcasts = listOf("Prime Video"), headline = "NBA Cup - Group Play"
+        )
+        val rated = SportsLiveBoard.withBigGames(rows(first to null, second to null), mapOf(first.streamKey to event, second.streamKey to event), emptyMap())
+        val lines = rated.map { row -> row.bigGame!!.reasons.first { it.kind == BigGameReasonKind.RECORDS }.text }
+        assertEquals(listOf("12-4 vs 8-5", "8-5 vs 12-4"), lines)
+        val agenda = SportsLiveAgenda.of(rated, now, zone)
+        assertEquals(1, agenda.games.count { it.pick })
     }
 }

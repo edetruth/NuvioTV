@@ -213,10 +213,11 @@ private fun PreviewInjuries(summary: GameSummary, preview: GamePreview, homeFirs
     sidesInOrder(homeFirst).forEach { side ->
         val injuries = preview.injuries.filter { it.side == side }
         if (injuries.isEmpty()) return@forEach
-        val line = injuries.joinToString(", ") { injury ->
-            listOfNotNull(injury.player, injury.status.takeUnless { it.equals("Out", ignoreCase = true) }?.let { "($it)" }).joinToString(" ")
-        }
+        // All out: "Out: A, B". Mixed: each player with his own status, so no one reads as another's.
         val out = injuries.all { it.status.equals("Out", ignoreCase = true) }
+        val line = injuries.joinToString(", ") { injury ->
+            if (out) injury.player else "${injury.player} (${injury.status})"
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(teamOf(summary, side), style = SportsLiveTokens.style(SportsLiveTokens.Type.Meta).sportsLiveBold(), color = Colors.TextSecondary, maxLines = 1, modifier = Modifier.width(56.dp))
             Text(

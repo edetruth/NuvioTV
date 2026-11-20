@@ -43,7 +43,12 @@ enum class BigGameReasonKind {
 data class BigGameReason(val kind: BigGameReasonKind, val text: String? = null, val a: Int? = null, val b: Int? = null)
 
 /** A game's stakes (#137): its [score] and the [reasons] its line shows, most telling first (at most three). */
-data class BigGameRating(val score: Double, val reasons: List<BigGameReason>) {
+data class BigGameRating(
+    val score: Double,
+    val reasons: List<BigGameReason>,
+    /** The ESPN game rated, when known: two addon cards of one game are one pick ([GamesToWatch]). */
+    val eventId: String? = null
+) {
     /** Big enough for the badge, Games to watch and the Live Now big-game slot. */
     val isBig: Boolean get() = score >= BigGame.BIG
 }

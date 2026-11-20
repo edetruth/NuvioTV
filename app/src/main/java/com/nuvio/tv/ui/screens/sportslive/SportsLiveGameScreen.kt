@@ -366,7 +366,9 @@ private fun GameHero(state: SportsLiveGameUiState, event: ScoreSnapshot, first: 
             Box(modifier = Modifier.height(HERO_SCORE_HEIGHT), contentAlignment = Alignment.Center) {
                 Text(
                     text = when {
-                        !showsScore -> stringResource(R.string.sports_live_results_score_hidden)
+                        // Before tip-off there is no score to hide: "vs" (#171).
+                        !showsScore && played -> stringResource(R.string.sports_live_results_score_hidden)
+                        !showsScore -> stringResource(R.string.sports_live_art_vs)
                         scoreShown -> stringResource(R.string.sports_live_details_sides, firstScore.toString(), secondScore.toString())
                         else -> stringResource(R.string.sports_live_art_vs)
                     },

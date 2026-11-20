@@ -57,8 +57,8 @@ object BigGameText {
 
 /**
  * "Games to watch" (#137): the day's best games for the top of each Upcoming day, and Tonight's best. Only big
- * games ([BigGameRating.isBig]) qualify, the biggest first, at most [MAX]; a followed team's game is boosted in its
- * score but never picked for that alone. Ties keep the listed order (start time).
+ * games ([BigGameRating.isBig]) qualify, the biggest first, at most [MAX], one card per ESPN game; a followed team's
+ * game is boosted in its score but never picked for that alone. Ties keep the listed order (start time).
  */
 object GamesToWatch {
     const val MAX = 3
@@ -66,6 +66,8 @@ object GamesToWatch {
     fun <T> pick(games: List<T>, rating: (T) -> BigGameRating?): List<Pair<T, BigGameRating>> =
         games.mapIndexedNotNull { index, game -> rating(game)?.takeIf { it.isBig && it.reasons.isNotEmpty() }?.let { Triple(game, it, index) } }
             .sortedWith(compareByDescending<Triple<T, BigGameRating, Int>> { it.second.score }.thenBy { it.third })
+            // Two cards of one ESPN game (two addons, either team first) are one pick.
+            .distinctBy { it.second.eventId ?: it.third }
             .take(MAX)
             .map { it.first to it.second }
 }

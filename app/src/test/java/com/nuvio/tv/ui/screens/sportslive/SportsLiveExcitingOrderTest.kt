@@ -74,7 +74,8 @@ class SportsLiveExcitingOrderTest {
         val lakers = item("Los Angeles Lakers at Phoenix Suns", startMs = NOW - 1_800_000L)
         val scores = mapOf(
             pacers.streamKey to live(pacersEvent, 60, 40, "5:00 - 2nd"),
-            lakers.streamKey to live(lakersEvent, 100, 99, "1:00 - 4th")
+            // Not crunch time (#137 would move it into Live Now's big-game slot): the badge alone never re-orders.
+            lakers.streamKey to live(lakersEvent, 100, 92, "1:00 - 4th")
         )
         val badge = WhyTag(WhyKind.CLOSE_LATE, 1)
         val rows = scoreboardRows(

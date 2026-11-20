@@ -127,7 +127,7 @@ data class GameArt(
         fun kickoff(art: GameArt, nowMs: Long, zone: ZoneId, locale: Locale): SportsLivePillTime? =
             art.startMs?.let { SportsLivePillTime.of(it, art.hasTimeOfDay, nowMs, zone, locale) }
 
-        private fun team(cardName: String, espn: ScoreTeam?, known: KnownTeam?, league: EspnLeague?): GameArtTeam {
+        private fun team(cardName: String, espn: ScoreTeam?, known: KnownTeam?, league: EspnLeague? = null): GameArtTeam {
             val own = displayName(cardName)
             val name = espn?.displayName?.takeIf { it.isNotBlank() } ?: own
             val short = espn?.abbreviation?.takeIf { it.isNotBlank() } ?: espn?.shortDisplayName?.takeIf { it.isNotBlank() }
