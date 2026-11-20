@@ -7,6 +7,7 @@ import com.nuvio.tv.core.sportslive.GameStatusStrings
 import com.nuvio.tv.core.sportslive.SportsLiveReadyMark
 import com.nuvio.tv.core.sportslive.SportsLiveSportKind
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
+import com.nuvio.tv.data.local.PANEL_KEYS_HINT_GAP_MS
 import com.nuvio.tv.data.local.PANEL_KEYS_HINT_OPENS
 import com.nuvio.tv.data.local.shouldShowPanelKeysHint
 import com.nuvio.tv.core.sportslive.scores.ChipScore
@@ -530,6 +531,15 @@ class SportsLiveSlimPanelTest {
     fun `the keys hint shows for the first 3 panel openings only`() {
         assertEquals(3, PANEL_KEYS_HINT_OPENS)
         assertEquals(listOf(true, true, true, false, false), (0..4).map { shouldShowPanelKeysHint(it) })
+    }
+
+    @Test
+    fun `the keys hint comes back after a long gap without opening the panel`() {
+        val day = 24 * 60 * 60 * 1000L
+        val now = 100 * day
+        assertFalse(shouldShowPanelKeysHint(5, lastOpenAtMs = now - day, nowMs = now))
+        assertTrue(shouldShowPanelKeysHint(5, lastOpenAtMs = now - PANEL_KEYS_HINT_GAP_MS, nowMs = now))
+        assertFalse(shouldShowPanelKeysHint(5, lastOpenAtMs = null, nowMs = now))
     }
 
     @Test

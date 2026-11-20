@@ -78,6 +78,7 @@ class SportsLivePreferencesDataStore @Inject constructor(
     private val followedTeamsKey = stringPreferencesKey("sports_live_followed_teams")
     private val hiddenTitlesKey = stringSetPreferencesKey("sports_live_hidden_titles")
     private val panelHintShownKey = intPreferencesKey("sports_live_panel_hint_shown")
+    private val panelLastOpenKey = longPreferencesKey("sports_live_panel_last_open")
     private val dualLayoutKey = stringPreferencesKey("sports_live_dual_layout")
     private val newSportsHintSeenKey = booleanPreferencesKey("sports_live_new_sports_hint_seen")
     // First-run setup (#134 phase 7): set once the profile has had its chance at it (shown, or set up already).
@@ -481,14 +482,15 @@ class SportsLivePreferencesDataStore @Inject constructor(
 
     /**
      * Called once per in-player panel opening (live.20): true when its keys hint shows this time (the profile's first
-     * [PANEL_KEYS_HINT_OPENS] openings), which is then counted.
+     * [PANEL_KEYS_HINT_OPENS] openings, or the first after [PANEL_KEYS_HINT_GAP_MS] without one), which is then counted.
      */
-    suspend fun claimPanelKeysHint(): Boolean {
+    suspend fun claimPanelKeysHint(nowMs: Long = System.currentTimeMillis()): Boolean {
         var show = false
         store().edit { prefs ->
             val shown = prefs[panelHintShownKey] ?: 0
-            show = shouldShowPanelKeysHint(shown)
+            show = shouldShowPanelKeysHint(shown, prefs[panelLastOpenKey], nowMs)
             if (show) prefs[panelHintShownKey] = shown + 1
+            prefs[panelLastOpenKey] = nowMs
         }
         return show
     }
@@ -743,5 +745,15 @@ private const val REMINDER_KEY_SEPARATOR = "\u001F"
 /** In-player panel openings that show the keys hint (live.20). */
 const val PANEL_KEYS_HINT_OPENS = 3
 
-/** Whether the in-player panel's keys hint shows, after it has shown [shownCount] times. */
-fun shouldShowPanelKeysHint(shownCount: Int): Boolean = shownCount < PANEL_KEYS_HINT_OPENS
+/**
+ * A gap without opening the panel after which its keys hint shows again (research 8: help must be easy to recall; a
+ * viewer who watches once a week, as NFL fans do, has forgotten the keys after a couple of weeks).
+ */
+const val PANEL_KEYS_HINT_GAP_MS = 14L * 24 * 60 * 60 * 1000
+
+/**
+ * Whether the in-player panel's keys hint shows, after it has shown [shownCount] times and the panel was last opened
+ * at [lastOpenAtMs] (null: never recorded): the first few openings, then again after a long gap ([PANEL_KEYS_HINT_GAP_MS]).
+ */
+fun shouldShowPanelKeysHint(shownCount: Int, lastOpenAtMs: Long? = null, nowMs: Long = 0L): Boolean =
+    shownCount < PANEL_KEYS_HINT_OPENS || (lastOpenAtMs != null && nowMs - lastOpenAtMs >= PANEL_KEYS_HINT_GAP_MS)

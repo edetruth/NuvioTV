@@ -505,8 +505,10 @@ class SportsLiveZapViewModel internal constructor(
     internal val revealedRows: Set<String> get() = reveal.revealed.value
 
     /** A key was pressed inside the panel: from now on a row focused for a second reveals its score. */
-    fun onPanelKey() {
+    fun onPanelKey(keyCode: Int = 0) {
         lastPanelKeyAtMs = System.currentTimeMillis()
+        // Research 8: Info brings the keys hint back, whenever the viewer wants it.
+        if (keyCode == android.view.KeyEvent.KEYCODE_INFO) _panelKeysHint.value = true
         if (panelKeyPressed) return
         panelKeyPressed = true
         reveal.onFocus(focusedRowKey)

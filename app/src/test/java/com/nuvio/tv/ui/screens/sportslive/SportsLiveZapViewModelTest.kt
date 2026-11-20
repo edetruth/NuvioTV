@@ -140,6 +140,19 @@ class SportsLiveZapViewModelTest {
         assertEquals(listOf(true, true, true, false, false), seen)
     }
 
+    @Test
+    fun `Info in the open panel brings the keys hint back, other keys do not`() = runTest(mainDispatcherRule.dispatcher) {
+        val pacers = game("Indiana Pacers at Philadelphia 76ers")
+        val viewModel = fullTimeViewModel(MutableStateFlow(emptyMap()), ScoresMode.SHOW, pacers, emptyList(), claimHint = { false })
+        viewModel.openPanel()
+        runCurrent()
+
+        viewModel.onPanelKey(android.view.KeyEvent.KEYCODE_DPAD_DOWN)
+        assertFalse(viewModel.panelKeysHint.value)
+        viewModel.onPanelKey(android.view.KeyEvent.KEYCODE_INFO)
+        assertTrue(viewModel.panelKeysHint.value)
+    }
+
     private val END_STRINGS = GameEndStrings("Game over", "Final · %1\$s %2\$d–%3\$d %4\$s")
 
     @Test

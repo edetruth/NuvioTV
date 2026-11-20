@@ -575,8 +575,8 @@ private fun LiveGamesPanel(
     onChip: (String?) -> Unit,
     /** A game row took focus (Hide until focused reveals its score after a second). */
     onRowFocus: (String?) -> Unit,
-    /** Any key pressed inside the panel (Hide until focused reveals only after one). */
-    onKey: () -> Unit,
+    /** Any key pressed inside the panel, by key code (Hide until focused reveals only after one; Info shows the keys hint). */
+    onKey: (Int) -> Unit,
     /** The panel is open (false while it fades out): only then is lost focus given back. */
     open: Boolean,
     /** Ready / no working stream by stream key (#147, live.20 1b); a game with none has no mark. */
@@ -690,7 +690,7 @@ private fun LiveGamesPanel(
             .focusProperties { onExit = { cancelFocusChange() } }
             .onPreviewKeyEvent {
                 val native = it.nativeKeyEvent
-                if (native.action == KeyEvent.ACTION_DOWN) onKey()
+                if (native.action == KeyEvent.ACTION_DOWN) onKey(native.keyCode)
                 false
             }
             .focusGroup()
@@ -858,7 +858,7 @@ private fun LiveGamesPanel(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.fillMaxWidth().padding(start = PANEL_FOOTER_START, end = PANEL_ROW_ROOM, top = NuvioTheme.spacing.xs)
             )
-            // #140: the keys hint, for the profile's first few openings only (live.20): then the line is the list's.
+            // #140: the keys hint, for the profile's first few openings, after a long gap, or on Info (live.20, research 8).
             if (keysHint) {
                 Text(
                     text = stringResource(R.string.sports_live_panel_footer_hint),
