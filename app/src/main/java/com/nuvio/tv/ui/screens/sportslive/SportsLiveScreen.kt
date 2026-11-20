@@ -441,7 +441,7 @@ fun SportsLiveScreen(
             onOpenResult = { row, section ->
                 // The Game page (#18), which carries the strict replay match (Watch replay) and Follow; the
                 // stage's Game stats opens it on its Box score.
-                SportsLiveGameRequests.open(resultsState.gameRequestFor(row).copy(section = section))
+                SportsLiveGameRequests.open(resultsState.gameRequestFor(row).copy(section = section, onShown = resultsViewModel::onGamePageShown))
                 onOpenGame()
             },
             onToggleResultFollow = resultsViewModel::toggleFollow,

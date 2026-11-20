@@ -195,6 +195,38 @@ class SportsLiveResultsTodayTest {
     }
 
     @Test
+    fun `time on a Game page opened from Results is not time away`() = runTest {
+        todayHasFinal(true)
+        val repo = repository()
+        val vm = viewModel(repo)
+        vm.selectDay(3)
+        vm.setActive(true)
+        advanceTimeBy(1_000); runCurrent()
+        // OK on a row: the Game page for 30 min, then back.
+        vm.setActive(false)
+        vm.onGamePageShown(true)
+        advanceTimeBy(30 * 60_000L); runCurrent()
+        vm.onGamePageShown(false)
+        vm.setActive(true)
+        advanceTimeBy(1_000); runCurrent()
+        assertEquals(3, vm.selectedDay.value)
+        // Again, but Watch replay from the Game page plays for 11 min: that counts.
+        vm.setActive(false)
+        vm.onGamePageShown(true)
+        advanceTimeBy(60_000L); runCurrent()
+        vm.onGamePageShown(false)
+        advanceTimeBy(RESULTS_DAY_KEPT_MS + 60_000L); runCurrent()
+        vm.onGamePageShown(true)
+        advanceTimeBy(60_000L); runCurrent()
+        vm.onGamePageShown(false)
+        vm.setActive(true)
+        advanceTimeBy(1_000); runCurrent()
+        assertEquals(SportsResults.TODAY, vm.selectedDay.value)
+        vm.setActive(false)
+        vm.close()
+    }
+
+    @Test
     fun `a new ESPN day opens Results afresh even after a quick hop`() = runTest {
         todayHasFinal(true)
         val repo = repository()

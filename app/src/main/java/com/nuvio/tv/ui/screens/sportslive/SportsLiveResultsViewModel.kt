@@ -301,12 +301,12 @@ class SportsLiveResultsViewModel internal constructor(
      */
     fun setActive(isActive: Boolean) {
         if (isActive == active.value) return
+        val now = results.nowMs()
         if (isActive) {
-            val leftAt = results.resultsLeftAtMs
-            results.resultsLeftAtMs = null
-            if (leftAt != null && resultsDayExpired(leftAt, results.nowMs())) openAfresh()
+            val back = results.resultsAway.back(now)
+            if (back != null && resultsDayExpired(back.leftAtMs, now, back.awayMs)) openAfresh()
         } else {
-            results.resultsLeftAtMs = results.nowMs()
+            results.resultsAway.leave(now)
         }
         active.value = isActive
         if (!isActive) reveal.onFocus(null)
@@ -324,8 +324,11 @@ class SportsLiveResultsViewModel internal constructor(
 
     override fun onCleared() {
         // Left with the screen itself: the next Results remembers when.
-        if (active.value) results.resultsLeftAtMs = results.nowMs()
+        if (active.value) results.resultsAway.leave(results.nowMs())
     }
+
+    /** A Game page opened from Results is on screen ([shown]) or not: its time does not count as away. */
+    fun onGamePageShown(shown: Boolean) = results.resultsAway.gamePageShown(shown, results.nowMs())
 
     /**
      * A new day keeps the chosen sport and league (when that day has them); long tails collapse again.
@@ -428,11 +431,12 @@ internal fun defaultResultsDay(today: ResultsLoad): Int =
 internal const val RESULTS_DAY_KEPT_MS = 10 * 60_000L
 
 /**
- * Back on Results [nowMs], left at [leftAtMs]: it opens afresh once [RESULTS_DAY_KEPT_MS] have passed or
- * ESPN's day (US Eastern, what "Yesterday" counts from) has moved on.
+ * Back on Results [nowMs], left at [leftAtMs] and away for [awayMs] (Game page time from Results left out):
+ * it opens afresh once [RESULTS_DAY_KEPT_MS] have counted or ESPN's day (US Eastern, what "Yesterday"
+ * counts from) has moved on.
  */
-internal fun resultsDayExpired(leftAtMs: Long, nowMs: Long): Boolean {
-    if (nowMs - leftAtMs >= RESULTS_DAY_KEPT_MS) return true
+internal fun resultsDayExpired(leftAtMs: Long, nowMs: Long, awayMs: Long = nowMs - leftAtMs): Boolean {
+    if (awayMs >= RESULTS_DAY_KEPT_MS) return true
     fun espnDay(ms: Long) = java.time.Instant.ofEpochMilli(ms).atZone(SportsResults.EASTERN).toLocalDate()
     return espnDay(leftAtMs) != espnDay(nowMs)
 }

@@ -99,6 +99,19 @@ class SportsLiveGameViewModelTest {
     }
 
     @Test
+    fun `the page tells Results when it comes on screen and leaves it (live20)`() = runTest(mainDispatcherRule.dispatcher) {
+        settings.value = ScoreSettings(mode = ScoresMode.OFF)
+        val shown = mutableListOf<Boolean>()
+        val vm = viewModel(SportsLiveGameRequest(palaceGame, onShown = { shown += it }))
+        vm.setVisible(true)
+        vm.setVisible(false)
+        assertEquals(listOf(true, false), shown)
+        // A page opened elsewhere tells no one.
+        viewModel(SportsLiveGameRequest(palaceGame)).apply { setVisible(true); setVisible(false) }
+        assertEquals(listOf(true, false), shown)
+    }
+
+    @Test
     fun `Scores Off - nothing is requested until Reveal, and nothing shows`() = runTest(mainDispatcherRule.dispatcher) {
         settings.value = ScoreSettings(mode = ScoresMode.OFF)
         val vm = viewModel(SportsLiveGameRequest(palaceGame))

@@ -61,7 +61,9 @@ data class SportsLiveGameRequest(
     /** Opened on a live Live now game: "Watch with another game" pairs it when pressed (#57); null: not offered. */
     val watchWith: (() -> SportsLiveDualSession?)? = null,
     /** The section the page opens on when it has one (a Just ended panel row's "Box score ›", #145); null: the first. */
-    val section: GameSection? = null
+    val section: GameSection? = null,
+    /** Told when the page comes on screen and leaves it (opened from Results: its time is not time away, live.20). */
+    val onShown: ((Boolean) -> Unit)? = null
 )
 
 /**
@@ -342,6 +344,7 @@ class SportsLiveGameViewModel internal constructor(
     /** The page is on screen (started): only then does it load and refresh. */
     fun setVisible(isVisible: Boolean) {
         visible.value = isVisible
+        request?.onShown?.invoke(isVisible)
     }
 
     /** Reveal: score and stats show; under Scores Off this is when the first request is made. */
