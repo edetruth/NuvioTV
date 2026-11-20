@@ -19,6 +19,11 @@ on:
         required: false
         type: boolean
         default: false
+      skip_preview_check:
+        description: Release even if the nightly Upstream preview found a problem with this exact live and upstream commit
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -33,6 +38,7 @@ env:
   UPSTREAM_BRANCH: dev
   LIVE_BRANCH: live
   CONFLICT_ISSUE_TITLE: Upstream merge needs attention
+  PREVIEW_ISSUE_TITLE: "Upstream preview: needs attention"
 
 jobs:
   sync-release:
@@ -69,6 +75,7 @@ jobs:
 
           before_merge="$(git rev-parse HEAD)"
           echo "before_merge=${before_merge}" >> "${GITHUB_OUTPUT}"
+          echo "upstream_sha=$(git rev-parse "${upstream_ref}")" >> "${GITHUB_OUTPUT}"
           new_commits="$(git rev-list --count "HEAD..${upstream_ref}")"
           echo "new_commits=${new_commits}" >> "${GITHUB_OUTPUT}"
           echo "Upstream commits not yet in ${LIVE_BRANCH}: ${new_commits}"
@@ -130,6 +137,36 @@ jobs:
             echo "release=false" >> "${GITHUB_OUTPUT}"
             echo "No new upstream commits and not a forced run: nothing to do." >> "${GITHUB_STEP_SUMMARY}"
           fi
+
+      # Fail fast: upstream-preview.yml already merged and tested this exact pair overnight and found a
+      # problem. Only binds when live is the commit the preview tested (it previews the work branch) and
+      # upstream has not moved since; otherwise there is no evidence and the release goes ahead.
+      - name: Check the nightly upstream preview
+        if: steps.decide.outputs.release == 'true' && inputs.skip_preview_check != true
+        env:
+          BEFORE_MERGE: ${{ steps.merge.outputs.before_merge }}
+          UPSTREAM_SHA: ${{ steps.merge.outputs.upstream_sha }}
+        run: |
+          issue_number="$(gh issue list --repo "${GITHUB_REPOSITORY}" --state open \
+            --search "\"${PREVIEW_ISSUE_TITLE}\" in:title" --json number,title \
+            --jq "map(select(.title == \"${PREVIEW_ISSUE_TITLE}\")) | .[0].number // empty")"
+          if [[ -z "${issue_number}" ]]; then
+            echo "No open upstream preview issue."
+            exit 0
+          fi
+          state="$(gh issue view "${issue_number}" --repo "${GITHUB_REPOSITORY}" --json body --jq .body \
+            | head -n 1 | tr -d '\r')"
+          if [[ "${state}" == *" base=${BEFORE_MERGE} upstream=${UPSTREAM_SHA} "* ]]; then
+            result="$(sed -nE 's/.*result=([a-z]+).*/\1/p' <<< "${state}")"
+            {
+              echo "The nightly Upstream preview already found a problem (${result}) with this exact pair:"
+              echo "${LIVE_BRANCH} ${BEFORE_MERGE:0:9} + ${UPSTREAM_REPO}@${UPSTREAM_BRANCH} ${UPSTREAM_SHA:0:9}."
+              echo "Details: issue #${issue_number}. Not releasing."
+              echo "Fix it and push, or rerun with skip_preview_check if the preview was wrong (for example a network failure)."
+            } | tee -a "${GITHUB_STEP_SUMMARY}" >&2
+            exit 1
+          fi
+          echo "Preview issue #${issue_number} is about another commit pair; no evidence against this one."
 
       - name: Set up Java
         if: steps.decide.outputs.release == 'true'
@@ -208,13 +245,20 @@ jobs:
 
       # One invocation: the release variant is compiled once for both the tests and the APKs. A failing
       # test fails the build, and so this step, before anything is committed, tagged or published.
+      # A failed test is rerun once (.github/ci-test-retry.gradle); one that then passes does not block.
       # Known failing upstream tests are excluded, by method where possible, by the init script.
       - name: Run unit tests and build full release APKs
         if: steps.decide.outputs.release == 'true'
         run: |
           ./gradlew :app:testFullReleaseUnitTest :app:assembleFullRelease \
             --init-script .github/exclude-known-failing-tests.gradle \
+            --init-script .github/ci-test-retry.gradle \
             -PunitTestForks=3 --stacktrace
+
+      # Lists failed tests, and FLAKY ones that passed only on the retry (.github/ci-test-retry.gradle).
+      - name: Summarise unit tests
+        if: always() && steps.decide.outputs.release == 'true'
+        run: python3 .github/scripts/junit-summary.py app/build/test-results/testFullReleaseUnitTest >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Read version
         if: steps.decide.outputs.release == 'true'

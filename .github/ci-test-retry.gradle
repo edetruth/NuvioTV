@@ -1,0 +1,27 @@
+// Gradle init script, CI only: rerun a failed unit test once, so a single timing flake on the shared runner
+// does not block a release. A test that fails both times still fails the build. A test that passes only on
+// the rerun is recorded as <flakyFailure> in the JUnit XML (mergeReruns), and .github/scripts/junit-summary.py
+// lists it as FLAKY in the job summary. Used by live-sync-release.yml and upstream-preview.yml; local runs
+// (tools/full-suite.sh) do not use it, so a flake still shows there.
+initscript {
+    repositories {
+        gradlePluginPortal()
+    }
+    dependencies {
+        classpath 'org.gradle:test-retry-gradle-plugin:1.6.6'
+    }
+}
+
+allprojects {
+    apply plugin: org.gradle.testretry.TestRetryPlugin
+
+    tasks.withType(Test).configureEach {
+        retry {
+            maxRetries.set(1)
+            // Many failures at once is a real break, not a flake: do not spend time rerunning them.
+            maxFailures.set(10)
+            failOnPassedAfterRetry.set(false)
+        }
+        reports.junitXml.mergeReruns.set(true)
+    }
+}

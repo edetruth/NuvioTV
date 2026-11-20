@@ -1,0 +1,232 @@
+name: Upstream preview
+
+# Fork-only: every night, merges upstream NuvioMedia/NuvioTV `dev` into the work branch inside the
+# runner and runs the full release-variant unit suite the way the release job does, so an upstream
+# change that conflicts, breaks compilation or fails a test shows up hours before the daily release
+# (live-sync-release.yml) meets it. It never pushes, publishes or reads a secret.
+# Reports to ONE issue, "Upstream preview: needs attention" (assigned to the repo owner), and closes
+# it with a comment when a later run is clean. The release job refuses to start when that issue
+# reports a problem for the exact live commit and upstream commit it is about to build.
+
+on:
+  schedule:
+    - cron: "17 3 * * *" # nightly, about six hours before the daily sync and release
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: Branch to merge upstream into (in the runner only; nothing is pushed)
+        required: false
+        type: string
+        default: feature/sports-live-section
+
+permissions: {}
+
+concurrency:
+  group: upstream-preview
+  cancel-in-progress: false
+
+env:
+  UPSTREAM_REPO: NuvioMedia/NuvioTV
+  UPSTREAM_BRANCH: dev
+  WORK_BRANCH: ${{ inputs.branch || 'feature/sports-live-section' }}
+  ISSUE_TITLE: "Upstream preview: needs attention"
+
+jobs:
+  # Runs upstream's code (Gradle executes build scripts), so it gets a read-only token and no secrets.
+  preview:
+    if: github.repository == 'edetruth/NuvioTV'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      result: ${{ steps.verdict.outputs.result }}
+      base_sha: ${{ steps.merge.outputs.base_sha }}
+      upstream_sha: ${{ steps.merge.outputs.upstream_sha }}
+      report: ${{ steps.verdict.outputs.report }}
+
+    steps:
+      - name: Check out the work branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.WORK_BRANCH }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Merge upstream (in the runner only)
+        id: merge
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # The fork keeps its own README.md (.gitattributes: README.md merge=ours).
+          git config merge.ours.driver true
+
+          git remote add upstream "https://github.com/${UPSTREAM_REPO}.git"
+          git fetch --no-tags upstream "${UPSTREAM_BRANCH}"
+          upstream_ref="upstream/${UPSTREAM_BRANCH}"
+
+          echo "base_sha=$(git rev-parse HEAD)" >> "${GITHUB_OUTPUT}"
+          echo "upstream_sha=$(git rev-parse "${upstream_ref}")" >> "${GITHUB_OUTPUT}"
+          new_commits="$(git rev-list --count "HEAD..${upstream_ref}")"
+          echo "new_commits=${new_commits}" >> "${GITHUB_OUTPUT}"
+          echo "Upstream commits not yet in ${WORK_BRANCH}: ${new_commits}"
+
+          conflict=false
+          if (( new_commits > 0 )); then
+            if ! git merge --no-ff --no-edit "${upstream_ref}" \
+                -m "Preview merge of ${UPSTREAM_REPO} ${UPSTREAM_BRANCH} into ${WORK_BRANCH}"; then
+              conflict=true
+              git diff --name-only --diff-filter=U > "${RUNNER_TEMP}/conflicts.txt"
+              git merge --abort
+            fi
+          fi
+          echo "conflict=${conflict}" >> "${GITHUB_OUTPUT}"
+
+      - name: Set up Java
+        if: steps.merge.outputs.conflict == 'false'
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Set up Gradle
+        if: steps.merge.outputs.conflict == 'false'
+        uses: gradle/actions/setup-gradle@v6
+
+      # The release job's invocation without :app:assembleFullRelease (packaging needs the signing key,
+      # compiling and testing the release variant do not). No local.properties: optional keys default.
+      - name: Compile and run the release unit suite
+        id: gradle
+        if: steps.merge.outputs.conflict == 'false'
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          ./gradlew :app:testFullReleaseUnitTest \
+            --init-script .github/exclude-known-failing-tests.gradle \
+            --init-script .github/ci-test-retry.gradle \
+            -PunitTestForks=3 --stacktrace 2>&1 | tee "${RUNNER_TEMP}/gradle.log"
+
+      - name: Summarise unit tests
+        id: tests
+        if: steps.merge.outputs.conflict == 'false'
+        run: |
+          python3 .github/scripts/junit-summary.py app/build/test-results/testFullReleaseUnitTest \
+            > "${RUNNER_TEMP}/tests.md"
+          cat "${RUNNER_TEMP}/tests.md" >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Verdict
+        id: verdict
+        env:
+          CONFLICT: ${{ steps.merge.outputs.conflict }}
+          GRADLE_OUTCOME: ${{ steps.gradle.outcome }}
+          FAILED_TESTS: ${{ steps.tests.outputs.failed }}
+          BASE_SHA: ${{ steps.merge.outputs.base_sha }}
+          UPSTREAM_SHA: ${{ steps.merge.outputs.upstream_sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [[ "${CONFLICT}" == "true" ]]; then
+            result=conflicts
+          elif [[ "${GRADLE_OUTCOME}" == "success" ]]; then
+            result=clean
+          elif (( ${FAILED_TESTS:-0} > 0 )); then
+            result=tests
+          else
+            result=build
+          fi
+          echo "result=${result}" >> "${GITHUB_OUTPUT}"
+
+          report="${RUNNER_TEMP}/report.md"
+          {
+            # Read by the report job and by the release job's preview check: keep the format.
+            echo "<!-- upstream-preview result=${result} base=${BASE_SHA} upstream=${UPSTREAM_SHA} -->"
+            echo "Nightly preview of merging \`${UPSTREAM_REPO}@${UPSTREAM_BRANCH}\` (${UPSTREAM_SHA:0:9}) into \`${WORK_BRANCH}\` (${BASE_SHA:0:9}), in the runner only. Nothing was pushed."
+            echo
+            case "${result}" in
+              clean)
+                echo "Result: **clean** (merges, compiles, unit suite passes)." ;;
+              conflicts)
+                echo "Result: **merge conflicts**. Conflicting files:"
+                echo
+                sed 's/^/- `/; s/$/`/' "${RUNNER_TEMP}/conflicts.txt" ;;
+              tests)
+                echo "Result: **failing unit tests** (the merge itself is clean)."
+                echo
+                cat "${RUNNER_TEMP}/tests.md" ;;
+              build)
+                echo "Result: **the build failed** (no git conflict; usually an upstream change that breaks fork code)."
+                echo
+                echo '```'
+                errors="$(grep -E '^e: |: error: ' "${RUNNER_TEMP}/gradle.log" | head -n 40 || true)"
+                if [[ -z "${errors}" ]]; then
+                  errors="$(sed -n '/^\* What went wrong:/,/^\* Try:/p' "${RUNNER_TEMP}/gradle.log" | head -n 30 || true)"
+                fi
+                printf '%s\n' "${errors:-No error lines found; see the run log.}" \
+                  | sed -e "s#file://${GITHUB_WORKSPACE}/##g" -e "s#${GITHUB_WORKSPACE}/##g"
+                echo '```' ;;
+            esac
+            echo
+            echo "Run: ${RUN_URL}"
+            if [[ "${result}" != "clean" ]]; then
+              echo
+              echo "Fix: merge \`upstream/${UPSTREAM_BRANCH}\` into \`${WORK_BRANCH}\` locally, fix, push; the next preview (or a manual run of this workflow) closes this issue when clean."
+            fi
+          } > "${report}"
+          cat "${report}" >> "${GITHUB_STEP_SUMMARY}"
+
+          delimiter="report_$(openssl rand -hex 8)"
+          {
+            echo "report<<${delimiter}"
+            cat "${report}"
+            echo "${delimiter}"
+          } >> "${GITHUB_OUTPUT}"
+
+  # Touches only issues; never checks out or runs code.
+  report:
+    needs: preview
+    if: always() && github.repository == 'edetruth/NuvioTV'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PREVIEW_JOB: ${{ needs.preview.result }}
+      RESULT: ${{ needs.preview.outputs.result }}
+      REPORT: ${{ needs.preview.outputs.report }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+    steps:
+      - name: Create, update or close the preview issue
+        run: |
+          if [[ "${PREVIEW_JOB}" != "success" || -z "${RESULT}" ]]; then
+            echo "The preview job did not finish (${PREVIEW_JOB}); the issue is left as it is. Run: ${RUN_URL}" >&2
+            exit 1
+          fi
+
+          issue_number="$(gh issue list --repo "${GITHUB_REPOSITORY}" --state open \
+            --search "\"${ISSUE_TITLE}\" in:title" --json number,title \
+            --jq "map(select(.title == \"${ISSUE_TITLE}\")) | .[0].number // empty")"
+
+          if [[ "${RESULT}" == "clean" ]]; then
+            if [[ -n "${issue_number}" ]]; then
+              printf '%s\n' "${REPORT}" | sed 1d > comment.md
+              gh issue close "${issue_number}" --repo "${GITHUB_REPOSITORY}" --comment "$(cat comment.md)"
+            fi
+            echo "Clean." >> "${GITHUB_STEP_SUMMARY}"
+            exit 0
+          fi
+
+          printf '%s\n' "${REPORT}" > body.md
+          state="$(head -n 1 body.md)"
+          if [[ -n "${issue_number}" ]]; then
+            previous="$(gh issue view "${issue_number}" --repo "${GITHUB_REPOSITORY}" --json body --jq .body | head -n 1 | tr -d '\r')"
+            gh issue edit "${issue_number}" --repo "${GITHUB_REPOSITORY}" --body-file body.md
+            # Comment (and so notify) only when something changed: the result, the branch or upstream.
+            if [[ "${previous}" != "${state}" ]]; then
+              printf '%s\n' "${REPORT}" | sed 1d > comment.md
+              gh issue comment "${issue_number}" --repo "${GITHUB_REPOSITORY}" --body-file comment.md
+            fi
+          else
+            gh issue create --repo "${GITHUB_REPOSITORY}" --title "${ISSUE_TITLE}" --body-file body.md \
+              --assignee "${GITHUB_REPOSITORY_OWNER}"
+          fi
+          # A red run also shows in the Actions tab and triggers GitHub's failed-run email.
+          exit 1
