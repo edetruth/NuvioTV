@@ -93,7 +93,9 @@ class HomeSportsLiveExclusionTest {
         val first = rows.first() as HomeRow.Catalog
         assertEquals(SportsLiveHomeRow.ADDON_ID, first.row.addonId)
         assertEquals("Live now", first.row.catalogName)
-        assertEquals(items.map { it.meta }, first.row.items)
+        // The cards carry the hero's words (V2 phase 10): the genres line reads "‹league› · Live now".
+        assertEquals(items.map { it.meta.id }, first.row.items.map { it.id })
+        assertEquals(items.map { it.meta.name }, first.row.items.map { it.name })
         assertEquals(2, rows.size)
         assertEquals(items.first(), viewModel.findLiveNowItem("match-1"))
     }
