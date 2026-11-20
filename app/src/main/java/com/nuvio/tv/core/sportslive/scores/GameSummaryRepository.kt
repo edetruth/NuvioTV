@@ -104,12 +104,21 @@ class GameSummaryRepository internal constructor(
         val json = (if (scoresOff) source.unrecordedSummary(league, eventId) else source.summary(league, eventId))
             ?: return GameSummaryLoad.Failed
         // Read, but without the game's two sides: ESPN changed its data format.
-        val dto = parse(json)?.takeIf { it.header?.competitions?.firstOrNull()?.competitors.orEmpty().isNotEmpty() }
+        val (read, skips) = EspnJson.counting { runCatching { adapter.fromJson(json) } }
+        val dto = read.getOrNull()?.takeIf { it.header?.competitions?.firstOrNull()?.competitors.orEmpty().isNotEmpty() }
         if (dto == null) {
-            if (!scoresOff) health.recordFailure(EspnFeedKey.SUMMARY, FeedFailureKind.FORMAT)
+            if (!scoresOff) {
+                health.recordFailure(EspnFeedKey.SUMMARY, FeedFailureKind.FORMAT)
+                // ESPN answered with a body this app cannot read (live.20): a data error too.
+                val what = read.exceptionOrNull()?.let { "unreadable (${it.javaClass.simpleName})" } ?: "game without its teams"
+                health.recordDataError(EspnFeedKey.SUMMARY, "$what, event $eventId")
+            }
             return GameSummaryLoad.Failed
         }
-        if (!scoresOff) health.recordSuccess(EspnFeedKey.SUMMARY)
+        if (!scoresOff) {
+            health.recordSuccess(EspnFeedKey.SUMMARY)
+            if (skips.count > 0) health.recordDataError(EspnFeedKey.SUMMARY, "${skips.count} skipped, first ${skips.first}, event $eventId")
+        }
         val final = GameSummaryParser.isFinal(dto)
         if (final && !scoresOff) disk?.let { cache -> withContext(Dispatchers.IO) { cache.write(diskKey, adapter.toJson(dto)) } }
         val cached = Cached(dto, now(), final)

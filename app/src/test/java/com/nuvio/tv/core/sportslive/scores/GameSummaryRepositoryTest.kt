@@ -160,4 +160,13 @@ class GameSummaryRepositoryTest {
         values.push("x", 70_000, 0)
         assertEquals("x", values.current(70_000))
     }
+
+    @Test
+    fun `a summary ESPN answered that cannot be read is a data error`() = runTest {
+        val health = EspnFeedHealth { nowMs }
+        val repo = GameSummaryRepository(FakeSource("{\"header\": \"none\"}"), null, EspnFixtures.moshi, now = { nowMs }, health = health)
+        assertTrue(repo.load(EspnLeagueMap.NBA, "401909994") is GameSummaryLoad.Failed)
+        assertEquals(FeedFailureKind.FORMAT, health.feeds.value.getValue(EspnFeedKey.SUMMARY).lastFailure)
+        assertEquals("unreadable (JsonDataException), event 401909994", health.dataErrors.value.getValue(EspnFeedKey.SUMMARY).what)
+    }
 }

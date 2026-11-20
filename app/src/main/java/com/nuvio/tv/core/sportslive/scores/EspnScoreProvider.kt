@@ -132,17 +132,33 @@ class EspnScoreProvider internal constructor(
                         if (fromNetwork) health.recordFailure(key, FeedFailureKind.HTTP, response.code)
                         ScoreboardResult.FAILED.copy(retryAfterMs = retryAfterMs(response.header("Retry-After")))
                     } else {
-                        val dto = adapter.fromJson(body)
+                        // ESPN answered: a body that cannot be read is a data error as well as a failed feed (live.20).
+                        val (dto, skips) = try {
+                            EspnJson.counting { adapter.fromJson(body) }
+                        } catch (e: Exception) {
+                            if (fromNetwork) health.recordDataError(key, "unreadable (${e.javaClass.simpleName})")
+                            throw e
+                        }
                         val individual = EspnIndividualResults.covers(league)
                         // Read, but games lost their competitors: ESPN changed its data, not an empty day.
                         if (dto == null || (!individual && EspnFeedHealth.formatChanged(dto))) {
                             debugLog("${league.path} $date: format changed")
-                            if (fromNetwork) health.recordFailure(key, FeedFailureKind.FORMAT)
+                            if (fromNetwork) {
+                                health.recordFailure(key, FeedFailureKind.FORMAT)
+                                health.recordDataError(key, if (dto == null) "empty body" else "games without their teams")
+                            }
                             ScoreboardResult.FAILED
                         } else {
                             if (fromNetwork) health.recordSuccess(key)
-                            if (individual) ScoreboardResult(EspnIndividualResults.toSnapshots(dto, league, date) + EspnIndividualResults.tennisLive(dto, league, date))
-                            else ScoreboardResult(toSnapshots(dto, league))
+                            val dropped = ArrayList<String>()
+                            val result = if (individual) ScoreboardResult(EspnIndividualResults.toSnapshots(dto, league, date) + EspnIndividualResults.tennisLive(dto, league, date))
+                            else ScoreboardResult(toSnapshots(dto, league) { dropped += it })
+                            // Entries or games that could not be read were left out; the rest stand.
+                            val count = skips.count + dropped.size
+                            if (fromNetwork && count > 0) {
+                                health.recordDataError(key, "$count ${if (count == 1) "entry" else "entries"} skipped, first ${skips.first ?: dropped.first()}")
+                            }
+                            result
                         }
                     }
                 }
@@ -340,7 +356,7 @@ class EspnScoreProvider internal constructor(
          * sent in a shape it cannot be read in (live.20 TV report: one game's `"odds": [null]` failed the whole feed, so
          * every game on it, soccer/all included, kept LIVE with no score).
          */
-        internal fun toSnapshots(dto: EspnScoreboardDto, league: EspnLeague): List<ScoreSnapshot> {
+        internal fun toSnapshots(dto: EspnScoreboardDto, league: EspnLeague, skipped: (String) -> Unit = {}): List<ScoreSnapshot> {
             // The feed's own league names ("NBA", "Premier League"); soccer/all lists none.
             val names = dto.leagues.orEmpty().mapNotNull { dtoLeague ->
                 val slug = dtoLeague.slug?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
@@ -351,6 +367,7 @@ class EspnScoreProvider internal constructor(
                 try {
                     toSnapshot(event, league, names)
                 } catch (e: RuntimeException) {
+                    skipped("event ${event.id} (${e.javaClass.simpleName})")
                     null
                 }
             }

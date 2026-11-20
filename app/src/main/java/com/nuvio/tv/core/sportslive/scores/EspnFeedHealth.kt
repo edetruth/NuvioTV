@@ -1,5 +1,6 @@
 package com.nuvio.tv.core.sportslive.scores
 
+import android.util.Log
 import com.squareup.moshi.JsonDataException
 import com.squareup.moshi.JsonEncodingException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -77,6 +78,13 @@ data class FeedHealth(
 }
 
 /**
+ * A feed ESPN answered (HTTP success) whose data could not be read, whole or in part (live.20 TV report: one game's
+ * `"odds": [null]` failed whole score feeds, silently). Kept apart from request failures: [what] it was the last time
+ * ("unreadable (JsonDataException)", "2 entries skipped, first $.events[3]"), never a link.
+ */
+data class FeedDataError(val key: EspnFeedKey, val lastAt: Long, val times: Int, val what: String)
+
+/**
  * Process-wide, in-memory health of ESPN's feeds (#70): every scoreboard and summary request that reached
  * the network reports its outcome here (an HTTP-cache hit proves nothing about ESPN). Read by Settings →
  * Sports & Live → Scores status and the one-time outage toast, both driven by the live feeds only.
@@ -118,6 +126,29 @@ class EspnFeedHealth internal constructor(private val now: () -> Long) {
         }
     }
 
+    private val dataErrorState = MutableStateFlow<Map<EspnFeedKey, FeedDataError>>(emptyMap())
+
+    /** The feeds whose data could not be read since the app started, by key (live.20). */
+    val dataErrors: StateFlow<Map<EspnFeedKey, FeedDataError>> = dataErrorState.asStateFlow()
+
+    /**
+     * [key]'s answer could not be read, whole or in part ([what], no link): kept apart from [recordFailure] and logged
+     * under [DATA_TAG]. A request that failed is not a data error.
+     */
+    fun recordDataError(key: EspnFeedKey, what: String) {
+        val at = now()
+        dataErrorState.update { all ->
+            val times = (all[key]?.times ?: 0) + 1
+            all + (key to FeedDataError(key, at, times, what))
+        }
+        Log.w(DATA_TAG, "${feedName(key)}: $what")
+    }
+
+    /** Report a problem's lines (#172), newest first: "scoreboard soccer/ger.1 2026-11-20 · 3x · 12 min ago · 1 entry skipped...". */
+    fun dataErrorLines(nowMs: Long): List<String> = dataErrorState.value.values.sortedByDescending { it.lastAt }.map { error ->
+        "${feedName(error.key)} · ${error.times}x · ${(nowMs - error.lastAt).coerceAtLeast(0L) / 60_000L} min ago · ${error.what}"
+    }
+
     /** Live feeds asked for within [RELEVANT_MS] of [nowMs]: the ones in use now. */
     fun relevant(nowMs: Long): List<FeedHealth> = inUse(state.value.values, nowMs)
 
@@ -136,6 +167,13 @@ class EspnFeedHealth internal constructor(private val now: () -> Long) {
     }
 
     companion object {
+        /** The log tag of [recordDataError]. */
+        const val DATA_TAG = "NuvioFeedData"
+
+        /** "scoreboard soccer/ger.1 2026-11-20", "summary": a feed's name with no link. */
+        fun feedName(key: EspnFeedKey): String =
+            listOfNotNull(key.family.name.lowercase(), key.league?.path, key.date?.toString()).joinToString(" ")
+
         /** A feed not asked for in this long no longer counts (its screen closed, its day ended). */
         const val RELEVANT_MS = 20 * 60_000L
 

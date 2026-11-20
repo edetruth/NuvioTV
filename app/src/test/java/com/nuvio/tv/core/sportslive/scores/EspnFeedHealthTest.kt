@@ -273,4 +273,26 @@ class EspnFeedHealthTest {
         assertNull(provider(500, "").summary(EspnLeagueMap.NBA, "1"))
         assertEquals(FeedFailureKind.HTTP, feed(EspnFeedKey.SUMMARY).lastFailure)
     }
+
+    // --- Data errors (live.20) ---
+
+    @Test
+    fun `a data error is kept apart from failures, counted, and named without a link`() {
+        val ger1 = EspnFeedKey.scoreboard(EspnLeague("soccer", "ger.1"), LocalDate.of(2026, 11, 20))
+        health.recordSuccess(ger1)
+        health.recordDataError(ger1, "1 entry skipped, first event 401884736 (NullPointerException)")
+        nowMs += 3 * 60_000L
+        health.recordDataError(ger1, "unreadable (JsonDataException)")
+        assertFalse(feed(ger1).failing)
+        assertNull(feed(ger1).lastFailure)
+        val error = health.dataErrors.value.getValue(ger1)
+        assertEquals(2, error.times)
+        assertEquals(nowMs, error.lastAt)
+        nowMs += 2 * 60_000L
+        assertEquals(
+            listOf("scoreboard soccer/ger.1 2026-11-20 · 2x · 2 min ago · unreadable (JsonDataException)"),
+            health.dataErrorLines(nowMs)
+        )
+        assertEquals("summary", EspnFeedHealth.feedName(EspnFeedKey.SUMMARY))
+    }
 }

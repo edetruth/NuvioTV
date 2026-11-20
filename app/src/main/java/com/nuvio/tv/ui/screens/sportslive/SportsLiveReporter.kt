@@ -17,6 +17,7 @@ import com.nuvio.tv.core.sportslive.SportsLiveToastKind
 import com.nuvio.tv.core.sportslive.SportsLiveToasts
 import com.nuvio.tv.core.sportslive.SportsLiveUnidentified
 import com.nuvio.tv.core.sportslive.report.SportsLiveCrashReport
+import com.nuvio.tv.core.sportslive.scores.EspnFeedHealth
 import com.nuvio.tv.core.sportslive.report.SportsLiveReport
 import com.nuvio.tv.core.sportslive.report.SportsLiveReportFiles
 import com.nuvio.tv.core.sportslive.report.SportsLiveReportInput
@@ -58,7 +59,8 @@ class SportsLiveReporter @Inject constructor(
     @ApplicationContext private val context: Context,
     private val addonRepository: AddonRepository,
     private val prefs: SportsLivePreferencesDataStore,
-    private val authManager: AuthManager
+    private val authManager: AuthManager,
+    private val feedHealth: EspnFeedHealth
 ) {
     /** One saved report: its [number], its [file] and the [text] in it. */
     data class Saved(val number: Int, val file: File, val text: String)
@@ -219,7 +221,8 @@ class SportsLiveReporter @Inject constructor(
             playbackEvents = LoggingDataSource.recentEvents(),
             signInLog = SportsLiveReportTrail.signInLines(),
             unplaced = SportsLiveUnidentified.shared.snapshot().take(MAX_UNPLACED).map { "${it.loads}x | ${it.title}" },
-            nearMisses = if (BuildConfig.IS_DEBUG_BUILD) SportsLiveReportTrail.nearMissLines() else null
+            nearMisses = if (BuildConfig.IS_DEBUG_BUILD) SportsLiveReportTrail.nearMissLines() else null,
+            feedDataErrors = feedHealth.dataErrorLines(now)
         )
     }
 

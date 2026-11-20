@@ -389,4 +389,42 @@ class EspnScoreProviderTest {
         assertEquals(3, events.size)
         assertTrue(events.none { it.eventId == dto.events!!.first().id })
     }
+
+    @Test
+    fun `ESPN's data the app cannot read is a data error, kept apart from request failures`() = runTest {
+        val friday = LocalDate.of(2026, 11, 20)
+        val ger1 = EspnLeague("soccer", "ger.1")
+        val key = EspnFeedKey.scoreboard(ger1, friday)
+        fun provider(body: String, health: EspnFeedHealth) = EspnScoreProvider(
+            OkHttpClient.Builder().addInterceptor(respond(200, body)).build(), EspnFixtures.moshi,
+            "https://example.invalid/apis/site/v2/sports/", today = { friday }, health = health
+        )
+        // One competitor of another shape: that game is left out, the feed answers, the skip is a data error.
+        val health = EspnFeedHealth { 0L }
+        val odd = EspnFixtures.json(EspnFixtures.SOCCER_ALL_20261120).replaceFirst("\"homeAway\": \"home\"", "\"homeAway\": {\"x\": 1}")
+        val result = provider(odd, health).scoreboard(EspnLeagueMap.SOCCER_ALL, friday)
+        assertFalse(result.failed)
+        assertEquals(3, result.events.size)
+        val allKey = EspnFeedKey.scoreboard(EspnLeagueMap.SOCCER_ALL, friday)
+        assertFalse(health.feeds.value.getValue(allKey).failing)
+        assertEquals("1 entry skipped, first $.events[0].competitions[0].competitors[0]", health.dataErrors.value.getValue(allKey).what)
+
+        // A body that cannot be read at all: the feed fails (format) and it is a data error too.
+        val broken = EspnFeedHealth { 0L }
+        assertTrue(provider("{\"events\": \"none\"}", broken).scoreboard(ger1, friday).failed)
+        assertEquals(FeedFailureKind.FORMAT, broken.feeds.value.getValue(key).lastFailure)
+        assertTrue(broken.dataErrors.value.getValue(key).what.startsWith("unreadable ("))
+
+        // A clean read records none; nor does a request that failed.
+        val clean = EspnFeedHealth { 0L }
+        assertFalse(provider(EspnFixtures.json(EspnFixtures.GER1_20261120), clean).scoreboard(ger1, friday).failed)
+        assertTrue(clean.dataErrors.value.isEmpty())
+        val refused = EspnFeedHealth { 0L }
+        EspnScoreProvider(
+            OkHttpClient.Builder().addInterceptor(respond(503, "")).build(), EspnFixtures.moshi,
+            "https://example.invalid/apis/site/v2/sports/", today = { friday }, health = refused
+        ).scoreboard(ger1, friday)
+        assertTrue(refused.feeds.value.getValue(key).failing)
+        assertTrue(refused.dataErrors.value.isEmpty())
+    }
 }

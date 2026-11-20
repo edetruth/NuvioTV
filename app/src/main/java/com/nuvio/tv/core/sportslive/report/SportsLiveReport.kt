@@ -33,7 +33,9 @@ data class SportsLiveReportInput(
     /** The titles the app could not place, `<loads>x | <title>` (no addon). */
     val unplaced: List<String> = emptyList(),
     /** Recent merge near misses; null when this build does not collect them (release). */
-    val nearMisses: List<String>? = null
+    val nearMisses: List<String>? = null,
+    /** Score feeds ESPN answered with data the app could not read, newest first (live.20, [com.nuvio.tv.core.sportslive.scores.EspnFeedHealth.dataErrorLines]). */
+    val feedDataErrors: List<String> = emptyList()
 ) {
     /** The game playing (or watched last). */
     data class Game(
@@ -87,7 +89,7 @@ object SportsLiveReport {
             appendLine("Focused: ${input.focused?.let(::clean) ?: "none"}")
             appendLine("Game: ${game?.let { clean(gameLine(it)) } ?: "none"}")
             appendLine("Links: ${linksLine(input.linkChecks)}")
-            appendLine("Scores: ${clean(input.scores)}")
+            appendLine("Scores: ${clean(input.scores)}" + if (input.feedDataErrors.isEmpty()) "" else " · ${input.feedDataErrors.size} feed data errors")
             appendLine("Device: ${clean(input.device)}")
             appendLine("From: ${clean(input.trigger)}")
             appendLine(DETAILS)
@@ -95,6 +97,7 @@ object SportsLiveReport {
             section("Sign-in log", input.signInLog.map(::clean))
             section("Titles not placed, loads | title", input.unplaced.map(::clean))
             section("Merge near misses", input.nearMisses?.map(::clean) ?: listOf("not collected in this build"))
+            section("Score feed data errors, newest first", input.feedDataErrors.map(::clean))
             appendLine("Links, hosts, IP addresses, tokens, addon names and ids, e-mail and account ids are removed. No scores.")
         }
     }

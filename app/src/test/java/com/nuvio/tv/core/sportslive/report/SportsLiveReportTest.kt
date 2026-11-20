@@ -209,4 +209,13 @@ class SportsLiveReportTest {
             assertFalse("$max", Character.isHighSurrogate(qr.last()))
         }
     }
+
+    @Test
+    fun `score feed data errors are counted in the summary and listed in the details`() {
+        val errors = listOf("scoreboard soccer/ger.1 2026-11-20 · 2x · 3 min ago · 1 entry skipped, first event 401884736 (NullPointerException)")
+        val text = SportsLiveReport.text(input().copy(feedDataErrors = errors), secrets)
+        assertTrue(text, text.contains("Scores: show · delay 30 s · real-time off · 1 feed data errors"))
+        assertTrue(text, text.contains("[Score feed data errors, newest first]\n" + errors.single()))
+        assertTrue(SportsLiveReport.text(input(), secrets).contains("[Score feed data errors, newest first]\nnone"))
+    }
 }
