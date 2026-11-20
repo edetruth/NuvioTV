@@ -1,5 +1,7 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import com.nuvio.tv.core.sportslive.scores.Performer
+import com.nuvio.tv.core.sportslive.scores.ScoreSide
 import com.nuvio.tv.core.sportslive.scores.StandingsRow
 import com.nuvio.tv.core.sportslive.scores.StandingsTable
 import org.junit.Assert.assertEquals
@@ -30,6 +32,22 @@ class SportsLiveGameTablesTest {
         assertEquals(listOf(51, 51, 40), widths)
         // A column with no value at all keeps the minimum.
         assertEquals(listOf(40), tableColumnWidthsDp(listOf(emptyList()), minDp = 40))
+    }
+
+    private fun performer(side: ScoreSide, name: String) = Performer(side, side.name, name, emptyList())
+
+    @Test
+    fun `top performers follow the header's team order`() {
+        val parsed = listOf(
+            performer(ScoreSide.AWAY, "a1"), performer(ScoreSide.HOME, "h1"),
+            performer(ScoreSide.AWAY, "a2"), performer(ScoreSide.HOME, "h2")
+        )
+        assertEquals(listOf("a1", "h1", "a2", "h2"), performersInCardOrder(parsed, homeFirst = false).map { it.player })
+        // A page naming the home team first shows its players in the left column.
+        assertEquals(listOf("h1", "a1", "h2", "a2"), performersInCardOrder(parsed, homeFirst = true).map { it.player })
+        // A side with one leader only: the other side's second still comes last.
+        val uneven = listOf(performer(ScoreSide.AWAY, "a1"), performer(ScoreSide.HOME, "h1"), performer(ScoreSide.HOME, "h2"))
+        assertEquals(listOf("h1", "a1", "h2"), performersInCardOrder(uneven, homeFirst = true).map { it.player })
     }
 
     private fun table(size: Int, inGame: Set<Int>) = StandingsTable(

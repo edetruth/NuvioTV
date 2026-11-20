@@ -219,6 +219,17 @@ private fun HiddenGameBody(hasReplay: Boolean) {
     }
 }
 
+/**
+ * Top performers in the header's team order (live.20 TV QA: they were always away first, so a page naming the
+ * home team first showed them the other way round): the first side's players in the left column, row by row.
+ */
+internal fun performersInCardOrder(performers: List<Performer>, homeFirst: Boolean): List<Performer> {
+    val (firstSide, secondSide) = inCardOrder(ScoreSide.AWAY, ScoreSide.HOME, homeFirst)
+    val first = performers.filter { it.side == firstSide }
+    val second = performers.filter { it.side == secondSide }
+    return (0 until maxOf(first.size, second.size)).flatMap { listOfNotNull(first.getOrNull(it), second.getOrNull(it)) }
+}
+
 /** The Player card a top performer opens (#63), or null: pro leagues with an ESPN athlete id only. */
 internal fun gamePlayerTarget(state: SportsLiveGameUiState): (Performer) -> PlayerCardTarget? = { performer ->
     state.summary?.let { summary ->
@@ -249,7 +260,7 @@ private fun LazyListScope.gameTab(
     onOpenPlayer: (Int, PlayerCardTarget) -> Unit
 ) {
     val details = summary.scoreDetails()?.takeIf { it.periods.isNotEmpty() || it.soccer }
-    val performers = summary.performers
+    val performers = performersInCardOrder(summary.performers, homeFirst)
     val stats = summary.teamStats
     val firstPanel = when {
         details != null -> 0
