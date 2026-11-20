@@ -68,8 +68,9 @@ object SportsLiveCrashCapture {
         val store = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val last = if (store.contains(KEY_EXIT_HANDLED)) store.getLong(KEY_EXIT_HANDLED, 0L) else null
         val pending = SportsLiveCrashReport.pendingExits(records, last)
-        // Remembered before saving: a record that makes saving fail is still never tried twice.
-        SportsLiveCrashReport.handledThrough(records, last)?.let { store.edit().putLong(KEY_EXIT_HANDLED, it).commit() }
+        // Remembered before saving: a record that makes saving fail is still never tried twice. The first start only
+        // sets the mark (older records are not reported).
+        store.edit().putLong(KEY_EXIT_HANDLED, SportsLiveCrashReport.handledThrough(records, last, System.currentTimeMillis())).commit()
         if (pending.isEmpty()) return
         val secrets = reporter.secrets()
         for (record in pending) {

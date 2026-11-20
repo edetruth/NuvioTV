@@ -2,7 +2,6 @@ package com.nuvio.tv.core.sportslive.report
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.ZoneId
@@ -101,17 +100,26 @@ class SportsLiveCrashReportTest {
     @Test
     fun `only ANRs and native crashes newer than the last handled are reported, oldest first`() {
         val records = listOf(other3, native2, anr1)
-        assertEquals(listOf(anr1, native2), SportsLiveCrashReport.pendingExits(records, null))
+        assertEquals(listOf(anr1, native2), SportsLiveCrashReport.pendingExits(records, 0L))
         assertEquals(listOf(native2), SportsLiveCrashReport.pendingExits(records, 1_000L))
         assertEquals(emptyList<SportsLiveExitRecord>(), SportsLiveCrashReport.pendingExits(records, 2_000L))
     }
 
     @Test
+    fun `the first start reports nothing and only sets the mark`() {
+        val records = listOf(anr1, native2, other3)
+        assertEquals(emptyList<SportsLiveExitRecord>(), SportsLiveCrashReport.pendingExits(records, null))
+        assertEquals(3_000L, SportsLiveCrashReport.handledThrough(records, null, 50_000L))
+        val anr4 = SportsLiveExitRecord(4_000L, SportsLiveExitKind.ANR, null)
+        assertEquals(listOf(anr4), SportsLiveCrashReport.pendingExits(records + anr4, 3_000L))
+    }
+
+    @Test
     fun `an exit record is reported once across starts`() {
         val records = listOf(anr1, native2, other3)
-        var last: Long? = null
+        var last: Long? = 0L
         val first = SportsLiveCrashReport.pendingExits(records, last)
-        last = SportsLiveCrashReport.handledThrough(records, last)
+        last = SportsLiveCrashReport.handledThrough(records, last, 50_000L)
         assertEquals(2, first.size)
         assertEquals(3_000L, last)
         assertEquals(emptyList<SportsLiveExitRecord>(), SportsLiveCrashReport.pendingExits(records, last))
@@ -120,15 +128,17 @@ class SportsLiveCrashReportTest {
     }
 
     @Test
-    fun `the handled time never goes back and stays unset with no records`() {
-        assertNull(SportsLiveCrashReport.handledThrough(emptyList(), null))
-        assertEquals(9_000L, SportsLiveCrashReport.handledThrough(listOf(anr1), 9_000L))
+    fun `the handled time never goes back and a first start with no records marks now`() {
+        assertEquals(50_000L, SportsLiveCrashReport.handledThrough(emptyList(), null, 50_000L))
+        assertEquals(9_000L, SportsLiveCrashReport.handledThrough(listOf(anr1), 9_000L, 50_000L))
+        val anr = SportsLiveExitRecord(60_000L, SportsLiveExitKind.ANR, null)
+        assertEquals(listOf(anr), SportsLiveCrashReport.pendingExits(listOf(anr), 50_000L))
     }
 
     @Test
     fun `at most the newest few exits are reported at one start`() {
         val many = (1..10).map { SportsLiveExitRecord(it * 1_000L, SportsLiveExitKind.ANR, null) }
-        val pending = SportsLiveCrashReport.pendingExits(many, null)
+        val pending = SportsLiveCrashReport.pendingExits(many, 0L)
         assertEquals(SportsLiveCrashReport.MAX_EXITS, pending.size)
         assertEquals(10_000L, pending.last().timestampMs)
     }

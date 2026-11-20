@@ -90,15 +90,23 @@ object SportsLiveCrashReport {
     internal fun frame(text: String, secrets: Collection<String>): String =
         if (CODE_FRAME.matches(text)) text else clean(text, secrets)
 
-    /** The records to report now: an ANR or native crash newer than [lastHandledMs], oldest first, the newest [MAX_EXITS]. */
-    fun pendingExits(records: List<SportsLiveExitRecord>, lastHandledMs: Long?): List<SportsLiveExitRecord> =
-        records.filter { it.kind != null && (lastHandledMs == null || it.timestampMs > lastHandledMs) }
+    /**
+     * The records to report now: an ANR or native crash newer than [lastHandledMs], oldest first, the newest
+     * [MAX_EXITS]. None on the first start with crash reports ([lastHandledMs] null): older records only set the mark.
+     */
+    fun pendingExits(records: List<SportsLiveExitRecord>, lastHandledMs: Long?): List<SportsLiveExitRecord> {
+        if (lastHandledMs == null) return emptyList()
+        return records.filter { it.kind != null && it.timestampMs > lastHandledMs }
             .sortedBy { it.timestampMs }
             .takeLast(MAX_EXITS)
+    }
 
-    /** What to remember as handled after this start: the newest record seen, never earlier than before. */
-    fun handledThrough(records: List<SportsLiveExitRecord>, lastHandledMs: Long?): Long? =
-        (records.map { it.timestampMs } + listOfNotNull(lastHandledMs)).maxOrNull()
+    /**
+     * What to remember as handled after this start: the newest record seen, never earlier than before; [nowMs] on a
+     * first start with no record, so the next start is no longer a first one.
+     */
+    fun handledThrough(records: List<SportsLiveExitRecord>, lastHandledMs: Long?, nowMs: Long): Long =
+        (records.map { it.timestampMs } + listOfNotNull(lastHandledMs)).maxOrNull() ?: nowMs
 
     /** A short report for an exit record: reason, the system's description, when, and an ANR's trace (first lines). */
     fun exitText(
