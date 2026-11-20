@@ -207,6 +207,22 @@ class TeamPagesTest {
     }
 
     @Test
+    fun `a standings row opens its team's page, a team of the game as its own side (BUG11)`() {
+        val home = TeamPages.refOfStanding(nbaGame, nbaGame.home.id, "Home")
+        assertEquals(TeamPages.refOf(nbaGame, ScoreSide.HOME), home)
+        assertEquals(TeamPages.refOf(nbaGame, ScoreSide.AWAY), TeamPages.refOfStanding(nbaGame, nbaGame.away.id, "Away"))
+        // Another team of the table: its id and name on a stand-in of the game.
+        val other = TeamPages.refOfStanding(nbaGame, " 999 ", "Springfield")!!
+        assertEquals("999", other.teamId)
+        assertEquals(EspnLeagueMap.NBA, other.league)
+        assertEquals("Springfield", other.name)
+        // No id, or a league without team pages: nothing to open.
+        assertNull(TeamPages.refOfStanding(nbaGame, null, "Springfield"))
+        assertNull(TeamPages.refOfStanding(nbaGame, " ", "Springfield"))
+        assertNull(TeamPages.refOfStanding(nbaGame.copy(league = EspnLeagueMap.EUROLEAGUE, leagueSlug = "euroleague"), "999", "Springfield"))
+    }
+
+    @Test
     fun `a side without ESPN's team id has no page`() {
         val noId = nbaGame.copy(home = nbaGame.home.copy(id = null), away = nbaGame.away.copy(id = " "))
         assertNull(TeamPages.refOf(noId, ScoreSide.HOME))

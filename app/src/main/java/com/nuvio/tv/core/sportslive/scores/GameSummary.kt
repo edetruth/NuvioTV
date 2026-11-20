@@ -89,7 +89,7 @@ data class BoxScoreTable(val title: String?, val labels: List<String>, val rows:
 
 data class BoxScoreTeam(val side: ScoreSide, val team: String, val tables: List<BoxScoreTable>)
 
-data class StandingsRow(val team: String, val values: List<String>, val inGame: Boolean)
+data class StandingsRow(val team: String, val values: List<String>, val inGame: Boolean, val teamId: String? = null)
 
 /** A standings table ("2026-27 Atlantic Division Standings") with ESPN's column abbreviations. */
 data class StandingsTable(val title: String?, val columns: List<String>, val rows: List<StandingsRow>)
@@ -371,7 +371,15 @@ object GameSummaryParser {
             ?: group.name?.trim()?.takeIf { name -> name.isNotEmpty() && name.all { it.isLowerCase() } }?.replaceFirstChar { it.uppercase() }
 
     private val SOCCER_STANDINGS = listOf("gamesPlayed", "wins", "ties", "losses", "pointDifferential", "points")
-    private val STANDINGS = listOf("wins", "losses", "ties", "otLosses", "winPercent", "gamesBehind", "pointsFor", "pointsAgainst", "points", "streak")
+    // College tables (BUG18) give "overall" and "vs. Conf." records (ESPN's "Season" / "VS CONF") and a GB that is
+    // all "-" until conference play: both records first, under plain words; an empty column is left out.
+    private val STANDINGS = listOf(
+        "overall", "vs. Conf.", "wins", "losses", "ties", "otLosses", "winPercent", "gamesBehind", "pointsFor", "pointsAgainst", "points", "streak"
+    )
+    private val STANDINGS_LABELS = mapOf("overall" to "W-L", "vs. Conf." to "CONF")
+
+    /** A column with nothing in it ("-" all the way down, as a college GB in November) tells nothing. */
+    private fun isEmptyColumn(values: List<String>): Boolean = values.all { it.isBlank() || it.trim() == "-" }
 
     /** ESPN's standings tables with the sport's columns in the usual order; [gameTeamIds] mark the two teams. */
     internal fun standings(dto: EspnStandingsDto?, sport: String, gameTeamIds: Set<String>): List<StandingsTable> =
@@ -379,17 +387,23 @@ object GameSummaryParser {
             val entries = group.standings?.entries.orEmpty().filter { !it.team.isNullOrBlank() }
             if (entries.isEmpty()) return@mapNotNull null
             val first = entries.first().stats.orEmpty()
-            val columns = (if (sport == SOCCER) SOCCER_STANDINGS else STANDINGS).filter { name -> first.any { it.name == name } }
+            fun valuesOf(name: String) = entries.map { entry -> entry.stats.orEmpty().firstOrNull { it.name == name }?.displayValue.orEmpty() }
+            val columns = (if (sport == SOCCER) SOCCER_STANDINGS else STANDINGS)
+                .filter { name -> first.any { it.name == name } }
+                .filterNot { name -> isEmptyColumn(valuesOf(name)) }
             if (columns.isEmpty()) return@mapNotNull null
             StandingsTable(
                 title = (group.header ?: dto?.header)?.takeIf { it.isNotBlank() },
-                columns = columns.map { name -> first.first { it.name == name }.abbreviation?.takeIf { it.isNotBlank() } ?: name },
+                columns = columns.map { name ->
+                    STANDINGS_LABELS[name] ?: first.first { it.name == name }.abbreviation?.takeIf { it.isNotBlank() } ?: name
+                },
                 rows = entries.map { entry ->
                     val stats = entry.stats.orEmpty()
                     StandingsRow(
                         team = entry.team.orEmpty(),
                         values = columns.map { name -> stats.firstOrNull { it.name == name }?.displayValue.orEmpty() },
-                        inGame = entry.id != null && entry.id in gameTeamIds
+                        inGame = entry.id != null && entry.id in gameTeamIds,
+                        teamId = entry.id?.trim()?.takeIf { it.isNotEmpty() }
                     )
                 }
             )

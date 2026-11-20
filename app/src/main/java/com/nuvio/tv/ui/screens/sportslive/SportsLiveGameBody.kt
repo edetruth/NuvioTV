@@ -52,6 +52,10 @@ import com.nuvio.tv.core.sportslive.scores.GameSummary
 import com.nuvio.tv.core.sportslive.scores.Performer
 import com.nuvio.tv.core.sportslive.scores.PlayerCardTarget
 import com.nuvio.tv.core.sportslive.scores.PlayerCards
+import com.nuvio.tv.core.sportslive.scores.RankDisplay
+import com.nuvio.tv.core.sportslive.scores.StandingsRow
+import com.nuvio.tv.core.sportslive.scores.TeamPages
+import com.nuvio.tv.core.sportslive.scores.TeamRef
 import com.nuvio.tv.core.sportslive.scores.ScoreDetails
 import com.nuvio.tv.core.sportslive.scores.ScoreDetailsBuilder
 import com.nuvio.tv.core.sportslive.scores.ScoreSide
@@ -90,7 +94,9 @@ internal fun GameBody(
     returnFocus: FocusRequester,
     onPlayHighlights: (List<GameHighlight>) -> Unit,
     /** A performer's or Box score player's Player card: its return key and target. */
-    onOpenPlayer: (String, PlayerCardTarget) -> Unit
+    onOpenPlayer: (String, PlayerCardTarget) -> Unit,
+    /** A Standings row's Team page (BUG11). */
+    onOpenTeam: (TeamRef) -> Unit = {}
 ) {
     val summary = state.summary
     when {
@@ -102,7 +108,10 @@ internal fun GameBody(
         summary == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { LoadingIndicator() }
         section == null -> SportsLivePageMessage(stringResource(R.string.sports_live_game_no_stats))
         else -> androidx.compose.runtime.key(section) {
-            val listState = rememberLazyListState()
+            // Standings open on the game's teams (BUG18).
+            val listState = rememberLazyListState(
+                initialFirstVisibleItemIndex = if (section == GameSection.STANDINGS) standingsEntry(summary.standings).scrollIndex else 0
+            )
             LazyColumn(
                 state = listState,
                 modifier = Modifier
@@ -133,7 +142,17 @@ internal fun GameBody(
                     GameSection.BOX_SCORE -> boxScoreTab(summary, first, gameBoxScoreTarget(state), { modifier, key -> modifier.returning(key) }) { key, target ->
                         onOpenPlayer(key, target)
                     }
-                    GameSection.STANDINGS -> standingsTab(summary.standings, first)
+                    GameSection.STANDINGS -> standingsTab(
+                        summary.standings,
+                        first,
+                        ranks = listOf(summary.home, summary.away).mapNotNull { team ->
+                            val id = team.id ?: return@mapNotNull null
+                            RankDisplay.rank(summary.league, team.rank)?.let { id to it }
+                        }.toMap(),
+                        teamPage = { row ->
+                            state.event?.let { event -> TeamPages.refOfStanding(event, row.teamId, row.team) }?.let { ref -> { onOpenTeam(ref) } }
+                        }
+                    )
                     GameSection.HIGHLIGHTS -> highlightsTab(summary.highlights, first, { modifier, key -> modifier.returning(key) }, onPlayHighlights)
                 }
             }
@@ -454,19 +473,36 @@ private fun GameStat.labelRes(): Int = when (this) {
 
 /** A table line's cells: the name takes what the [column]-wide stat cells leave. */
 @Composable
-private fun RowScope.TableCells(name: String, values: List<String>, style: TextStyle, color: androidx.compose.ui.graphics.Color, column: Dp) {
+private fun RowScope.TableCells(name: String, values: List<String>, style: TextStyle, color: androidx.compose.ui.graphics.Color, widths: List<Dp>) {
     Text(name, style = style, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-    values.forEach { value ->
-        Text(value, style = style, color = color, maxLines = 1, textAlign = TextAlign.Center, modifier = Modifier.width(column))
+    values.forEachIndexed { index, value ->
+        Text(value, style = style, color = color, maxLines = 1, softWrap = false, textAlign = TextAlign.Center, modifier = Modifier.width(widths.getOrElse(index) { widths.lastOrNull() ?: MIN_TABLE_COLUMN }))
     }
 }
 
+/**
+ * Each column's width (BUG1: a Totals "28-48" was cut to "28-4" in a fixed 44 dp column): the widest of its head
+ * and values at [CELL_CHAR_DP] a character plus [CELL_PAD_DP], never under [minDp]. One rule for every sport
+ * ("28-48", "22/31", "21:34").
+ */
+internal fun tableColumnWidthsDp(columns: List<List<String>>, minDp: Int): List<Int> =
+    columns.map { values -> maxOf(minDp, (values.maxOfOrNull { it.trim().length } ?: 0) * CELL_CHAR_DP + CELL_PAD_DP) }
+
+/** [labels] with every row's values (and [totals]) as columns, for [tableColumnWidthsDp]. */
+internal fun tableColumns(labels: List<String>, rows: List<List<String>>, totals: List<String>? = null): List<List<String>> =
+    labels.indices.map { i -> listOf(labels[i]) + rows.mapNotNull { it.getOrNull(i) } + listOfNotNull(totals?.getOrNull(i)) }
+
+internal const val CELL_CHAR_DP = 9
+internal const val CELL_PAD_DP = 6
+
+private fun widthsOf(columns: List<List<String>>, min: Dp): List<Dp> = tableColumnWidthsDp(columns, min.value.toInt()).map { it.dp }
+
 /** A table's column heads, lined up with its rows' cells (the rows' 12 dp inner padding). */
 @Composable
-private fun TableHeads(first: String, labels: List<String>, column: Dp) {
+private fun TableHeads(first: String, labels: List<String>, widths: List<Dp>) {
     Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         val style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag)
-        TableCells(first, labels, style, Colors.TextMuted, column)
+        TableCells(first, labels, style, Colors.TextMuted, widths)
     }
 }
 
@@ -487,6 +523,7 @@ private fun LazyListScope.boxScoreTab(
         // "Milwaukee Bucks · Passing": the team's full name, not the feed's abbreviation.
         val teamName = (if (team.side == ScoreSide.HOME) summary.home else summary.away).displayName ?: team.team
         team.tables.forEachIndexed { tableIndex, table ->
+            val widths = widthsOf(tableColumns(table.labels, table.rows.map { it.values }, table.totals), BOX_COLUMN)
             item(key = "h|${team.side}|$tableIndex") {
                 val separator = stringResource(R.string.sports_live_game_info_separator)
                 Column(modifier = Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -497,7 +534,7 @@ private fun LazyListScope.boxScoreTab(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    TableHeads(stringResource(R.string.sports_live_game_player), table.labels, BOX_COLUMN)
+                    TableHeads(stringResource(R.string.sports_live_game_player), table.labels, widths)
                 }
             }
             table.rows.forEachIndexed { rowIndex, row ->
@@ -511,14 +548,14 @@ private fun LazyListScope.boxScoreTab(
                         onClick = target?.let { open -> { onOpenPlayer(key, open) } } ?: {},
                         lift = false
                     ) {
-                        TableCells(listOfNotNull(row.player, row.position).joinToString(" "), row.values, tableStyle(), Colors.TextPrimary, BOX_COLUMN)
+                        TableCells(listOfNotNull(row.player, row.position).joinToString(" "), row.values, tableStyle(), Colors.TextPrimary, widths)
                     }
                 }
             }
             table.totals?.let { totals ->
                 item(key = "t|${team.side}|$tableIndex") {
                     SportsLivePageRow(height = PAGE_TABLE_ROW, container = Colors.Surface, lift = false) {
-                        TableCells(stringResource(R.string.sports_live_game_totals), totals, tableStyle().sportsLiveBold(), Colors.TextPrimary, BOX_COLUMN)
+                        TableCells(stringResource(R.string.sports_live_game_totals), totals, tableStyle().sportsLiveBold(), Colors.TextPrimary, widths)
                     }
                 }
             }
@@ -535,15 +572,55 @@ private fun tableStyle(): TextStyle = SportsLiveTokens.style(TABLE_CELL)
  */
 internal fun standingsColumns(tables: List<StandingsTable>): List<List<StandingsTable>> = tables.chunked(2)
 
-/** Standings: focusable 56 px rows; the game's two teams on the selected tint, bold. */
-private fun LazyListScope.standingsTab(tables: List<StandingsTable>, first: Modifier) {
-    var firstUsed = false
+/**
+ * Where the Standings tab opens (BUG18): the first row of one of the game's teams ([group], [table], [row]) takes
+ * the entry focus, and the list starts at [scrollIndex] so that row is on screen (a team 12th of 16 was off it).
+ */
+internal data class StandingsEntry(val group: Int, val table: Int, val row: Int, val scrollIndex: Int)
+
+/** Rows from the top of a group the list shows without scrolling, under its heads. */
+internal const val STANDINGS_ROWS_ON_SCREEN = 5
+
+/**
+ * [StandingsEntry] for [tables] laid out as [standingsTab] does (each group: one heads item, then one item per row):
+ * the game's team highest in its table, in the first group that has one; the top when none is marked. The list
+ * stays at the group's heads while that row is among its first [STANDINGS_ROWS_ON_SCREEN], else starts two rows
+ * above it.
+ */
+internal fun standingsEntry(tables: List<StandingsTable>): StandingsEntry {
+    var item = 0
     standingsColumns(tables).forEachIndexed { groupIndex, group ->
-        val groupFirst = if (firstUsed) Modifier else first.also { firstUsed = true }
+        val hit = group.withIndex()
+            .mapNotNull { (tableIndex, table) -> table.rows.indexOfFirst { it.inGame }.takeIf { it >= 0 }?.let { tableIndex to it } }
+            .minByOrNull { it.second }
+        if (hit != null) {
+            val (tableIndex, row) = hit
+            val scroll = if (row < STANDINGS_ROWS_ON_SCREEN) item else item + 1 + row - 2
+            return StandingsEntry(groupIndex, tableIndex, row, scroll)
+        }
+        item += 1 + (group.maxOfOrNull { it.rows.size } ?: 0)
+    }
+    return StandingsEntry(0, 0, 0, 0)
+}
+
+/**
+ * Standings: focusable 56 px rows; the game's two teams on the selected tint, bold, with a ranked college team's
+ * "#3" ([ranks] by ESPN team id). The entry focus is on [standingsEntry]'s row; OK opens the row's Team page
+ * ([teamPage], BUG11: rows took focus and did nothing).
+ */
+private fun LazyListScope.standingsTab(
+    tables: List<StandingsTable>,
+    first: Modifier,
+    ranks: Map<String, Int> = emptyMap(),
+    teamPage: (StandingsRow) -> (() -> Unit)? = { null }
+) {
+    val entry = standingsEntry(tables)
+    standingsColumns(tables).forEachIndexed { groupIndex, group ->
         val column = if (group.size == 1) STANDINGS_COLUMN else STANDINGS_PAIRED_COLUMN
+        val widths = group.map { table -> widthsOf(tableColumns(table.columns, table.rows.map { it.values }), column) }
         item(key = "sh|$groupIndex") {
             Row(modifier = Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                group.forEach { table ->
+                group.forEachIndexed { tableIndex, table ->
                     Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(
                             table.title.orEmpty(),
@@ -552,7 +629,7 @@ private fun LazyListScope.standingsTab(tables: List<StandingsTable>, first: Modi
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
-                        TableHeads(stringResource(R.string.sports_live_game_team), table.columns, column)
+                        TableHeads(stringResource(R.string.sports_live_game_team), table.columns, widths[tableIndex])
                     }
                 }
             }
@@ -564,18 +641,21 @@ private fun LazyListScope.standingsTab(tables: List<StandingsTable>, first: Modi
                     group.forEachIndexed { tableIndex, table ->
                         Box(modifier = Modifier.weight(1f)) {
                             table.rows.getOrNull(rowIndex)?.let { row ->
+                                val isEntry = groupIndex == entry.group && tableIndex == entry.table && rowIndex == entry.row
+                                val rank = row.teamId?.let(ranks::get)
                                 SportsLivePageRow(
                                     height = PAGE_TABLE_ROW,
-                                    modifier = if (tableIndex == 0 && rowIndex == 0) groupFirst else Modifier,
+                                    modifier = if (isEntry) first else Modifier,
+                                    onClick = teamPage(row) ?: {},
                                     container = if (row.inGame) Colors.SelectedTint else Colors.Row,
                                     lift = false
                                 ) {
                                     TableCells(
-                                        row.team,
+                                        rank?.let { RankDisplay.label(it) + " " + row.team } ?: row.team,
                                         row.values,
                                         tableStyle().let { if (row.inGame) it.sportsLiveBold() else it },
                                         Colors.TextPrimary,
-                                        column
+                                        widths[tableIndex]
                                     )
                                 }
                             }
@@ -685,6 +765,7 @@ private val PERFORMER_HEIGHT = 68.dp
 /** Box score and Standings cells: 28 px tabular. */
 private val TABLE_CELL = TextStyle(fontSize = 14.sp, lineHeight = 18.sp, fontWeight = FontWeight.Normal, fontFeatureSettings = "tnum")
 private val BOX_COLUMN = 44.dp
+private val MIN_TABLE_COLUMN = 40.dp
 private val STANDINGS_COLUMN = 56.dp
 private val STANDINGS_PAIRED_COLUMN = 40.dp
 private val THUMB_WIDTH = 160.dp

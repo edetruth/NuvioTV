@@ -271,6 +271,53 @@ class GameSummaryParserTest {
         assertTrue(GameSummaryParser.isFinal(again))
         assertFalse(GameSummaryParser.isFinal(GameSummaryFixtures.dto(GameSummaryFixtures.NBA_PRE)))
     }
+
+    @Test
+    fun `college standings in November - overall and conference records, no empty GB (BUG18)`() {
+        // As ESPN's NCAAM summary gives them: "Season" and "VS CONF" records, and a GB of "-" for every team.
+        fun entry(team: String, id: String, overall: String, conf: String) = EspnStandingsEntryDto(
+            team = team,
+            id = id,
+            stats = listOf(
+                EspnStandingsStatDto("overall", "Season", overall),
+                EspnStandingsStatDto("gamesBehind", "GB", "-"),
+                EspnStandingsStatDto("vs. Conf.", "VS CONF", conf)
+            )
+        )
+        val dto = EspnStandingsDto(
+            header = "2026-27 Standings",
+            groups = listOf(
+                EspnStandingsGroupDto(
+                    header = "2026-27 Southeastern Conference Standings",
+                    standings = EspnStandingsTableDto(listOf(entry("Texas A&M", "245", "6-0", "0-0"), entry("Florida", "57", "6-1", "0-0")))
+                )
+            )
+        )
+        val table = GameSummaryParser.standings(dto, "basketball", setOf("57", "277")).single()
+        assertEquals(listOf("W-L", "CONF"), table.columns)
+        assertEquals(listOf("6-1", "0-0"), table.rows[1].values)
+        assertEquals(listOf(false, true), table.rows.map { it.inGame })
+        // Each row keeps its ESPN team id: OK opens that team's page.
+        assertEquals(listOf("245", "57"), table.rows.map { it.teamId })
+    }
+
+    @Test
+    fun `a GB column with a real gap is kept`() {
+        val dto = EspnStandingsDto(
+            groups = listOf(
+                EspnStandingsGroupDto(
+                    header = "Atlantic",
+                    standings = EspnStandingsTableDto(
+                        listOf(
+                            EspnStandingsEntryDto("Boston", "2", listOf(EspnStandingsStatDto("wins", "W", "10"), EspnStandingsStatDto("gamesBehind", "GB", "-"))),
+                            EspnStandingsEntryDto("New York", "18", listOf(EspnStandingsStatDto("wins", "W", "8"), EspnStandingsStatDto("gamesBehind", "GB", "2")))
+                        )
+                    )
+                )
+            )
+        )
+        assertEquals(listOf("W", "GB"), GameSummaryParser.standings(dto, "basketball", emptySet()).single().columns)
+    }
 }
 
 /** Trimmed real ESPN summaries under test resources `sportslive/scores/`. */

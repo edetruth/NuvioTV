@@ -311,6 +311,10 @@ fun SportsLiveGameScreen(
                         SportsLivePlayerCardRequest(target, spoilerSafe = state.spoilerSafe || state.spoilerProtected, revealed = state.showsScore)
                     )
                     onOpenPlayerCard()
+                },
+                onOpenTeam = { ref ->
+                    SportsLiveTeamRequests.open(SportsLiveTeamRequest(ref))
+                    onOpenTeam()
                 }
             )
         }

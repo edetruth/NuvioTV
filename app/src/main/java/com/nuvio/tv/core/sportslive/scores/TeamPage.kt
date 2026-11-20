@@ -117,6 +117,23 @@ object TeamPages {
         return refsOf(event, homeFirst = false)
     }
 
+    /**
+     * The Team page a Standings row opens (BUG11): one of [event]'s teams as its side, any other team of the table
+     * on a stand-in of [event] with that team at home (its page loads everything else by [teamId]). Null when the
+     * league has no team pages or the row has no ESPN id.
+     */
+    fun refOfStanding(event: ScoreSnapshot, teamId: String?, name: String): TeamRef? {
+        val id = teamId?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        val league = leagueOf(event) ?: return null
+        if (event.home.id == id) return refOf(event, ScoreSide.HOME)
+        if (event.away.id == id) return refOf(event, ScoreSide.AWAY)
+        val team = ScoreTeam(
+            id = id, abbreviation = null, displayName = name, shortDisplayName = name, name = null, location = null,
+            logo = null, score = null, linescores = emptyList()
+        )
+        return TeamRef(league, id, event.copy(home = team), ScoreSide.HOME)
+    }
+
     /** Both sides' Team pages in the order shown ([homeFirst]: the card names the home team first); only those offered. */
     fun refsOf(event: ScoreSnapshot, homeFirst: Boolean): List<TeamRef> {
         val sides = if (homeFirst) listOf(ScoreSide.HOME, ScoreSide.AWAY) else listOf(ScoreSide.AWAY, ScoreSide.HOME)
