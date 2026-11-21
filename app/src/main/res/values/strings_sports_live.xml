@@ -691,6 +691,12 @@
     <string name="sports_live_zap_panel_title">Live now</string>
     <string name="sports_live_zap_panel_empty">Nothing live right now</string>
     <string name="sports_live_zap_panel_loading">Loading games…</string>
+    <!-- The stream picker's count line (stream picker cleanup): "6 links · 3 sources". -->
+    <string name="sports_live_picker_count">%1$s · %2$s</string>
+    <plurals name="sports_live_picker_links">
+        <item quantity="one">%1$d link</item>
+        <item quantity="other">%1$d links</item>
+    </plurals>
     <plurals name="sports_live_sources_count">
         <item quantity="one">%1$d source</item>
         <item quantity="other">%1$d sources</item>

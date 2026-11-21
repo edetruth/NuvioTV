@@ -44,6 +44,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -288,6 +289,8 @@ internal fun SportsLiveSheet(
     onDismiss: () -> Unit,
     onBack: (() -> Unit)?,
     page: Any? = null,
+    /** The panel's width: the menu's 360 dp; the stream picker's wider, for a link's name and its source. */
+    width: Dp = SportsLiveTokens.Sheet.Width,
     content: @Composable (first: () -> Modifier) -> Unit
 ) {
     val firstFocusRequester = remember { FocusRequester() }
@@ -312,7 +315,7 @@ internal fun SportsLiveSheet(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(top = SportsLiveTokens.Sheet.Top, end = SportsLiveTokens.Sheet.End, bottom = SportsLiveTokens.Sheet.Bottom)
-                    .width(SportsLiveTokens.Sheet.Width)
+                    .width(width)
                     .fillMaxHeight()
                     .background(Colors.SurfaceRaised, shape)
                     .border(1.dp, Colors.Outline, shape)

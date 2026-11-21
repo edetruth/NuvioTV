@@ -1,51 +1,29 @@
 package com.nuvio.tv.ui.screens.sportslive
 
-import com.nuvio.tv.core.sportslive.displayName
-import com.nuvio.tv.core.sportslive.SportsLiveLinkGroups
-import com.nuvio.tv.core.sportslive.SportsLiveLinkMark
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.draw.alpha
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
-import androidx.tv.material3.Button
-import androidx.tv.material3.ButtonDefaults
-import androidx.tv.material3.MaterialTheme
-import androidx.tv.material3.Text
 import com.nuvio.tv.R
+import com.nuvio.tv.core.sportslive.SportsLiveLinkGroups
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.ui.components.LoadingIndicator
 import com.nuvio.tv.ui.components.NuvioDialog
-import com.nuvio.tv.ui.theme.NuvioTheme
-import kotlinx.coroutines.delay
-
-private const val FOCUS_ATTEMPTS = 5
-private const val FOCUS_RETRY_MS = 50L
+import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens
 
 /**
- * The streams of every source of a merged game, under their addon's name, in the order given
- * (primary's first). Picking one plays it; Back dismisses.
+ * Choose stream… (stream picker cleanup, docs/design/stream-picker-cleanup.md): the V2 sheet with the player's Sources
+ * rows ([SportsLiveSourceRow]), so both pickers look and work the same. The heading is the clean matchup (local time,
+ * never UTC) over "6 links · 3 sources"; each link carries its source's clean name at the end instead of per-addon
+ * headers; links that failed for this game (#156) go under "Didn't work", and the sources' messages (N2) last under
+ * "From the sources", as small lines nothing can focus or play. The first link takes focus; picking one plays it; Back
+ * closes.
  */
 @Composable
 internal fun SportsLiveStreamPickerDialog(
@@ -54,88 +32,78 @@ internal fun SportsLiveStreamPickerDialog(
     onPick: (Stream) -> Unit,
     onDismiss: () -> Unit
 ) {
-    // A source's notices (N2) go after every stream, as info rows; otherwise the order is kept as given.
+    val context = LocalContext.current
     val notices = remember(streams) { streams.filter(SportsLiveZapResolver::isNoticeEntry).toSet() }
-    // Links that failed for this game (#156) go to a trailing "Didn't work" group; protected ones too,
-    // unless hidden (#166).
+    // Links that failed for this game (#156) go to a trailing "Didn't work" group; protected ones too, unless hidden (#166).
     val linkMarks = rememberSportsLiveLinkMarks(item.id, knownSports = true)
     val grouped = remember(streams, notices, linkMarks) {
         val noticesLast = sportsLiveNoticesLast(streams) { it in notices }
-        linkMarks?.group(noticesLast, isNotice = { it in notices })
-            ?: SportsLiveLinkGroups(noticesLast, -1)
+        linkMarks?.group(noticesLast, isNotice = { it in notices }) ?: SportsLiveLinkGroups(noticesLast, -1)
     }
     val ordered = grouped.items
-    val firstPlayable = ordered.firstOrNull { it !in notices }
-    val didntWorkTitle = stringResource(R.string.sports_live_links_didnt_work)
-    // Consecutive streams of one addon share a header; the failed links share "Didn't work".
-    val groups = remember(grouped, didntWorkTitle) {
-        ordered.foldIndexed(mutableListOf<Pair<String, MutableList<Stream>>>()) { index, acc, stream ->
-            val failed = grouped.didntWorkFrom >= 0 && index >= grouped.didntWorkFrom && stream !in notices
-            val title = if (failed) didntWorkTitle else stream.addonName
-            if (acc.lastOrNull()?.first == title) acc.last().second += stream else acc += title to mutableListOf(stream)
-            acc
-        }
+    val headers = remember(grouped, notices) {
+        sportsLivePickerHeaders(
+            size = ordered.size,
+            isNotice = { ordered[it] in notices },
+            isFailed = { grouped.didntWorkFrom >= 0 && it >= grouped.didntWorkFrom }
+        )
     }
-    val firstFocusRequester = remember { FocusRequester() }
-    val firstFocused = remember { mutableStateOf(false) }
-    // The first row may not be laid out yet when the dialog opens: retry until it has focus
-    // (a request can throw, or be ignored, before the row is attached).
-    LaunchedEffect(Unit) {
-        repeat(2) { withFrameNanos { } }
-        repeat(FOCUS_ATTEMPTS) {
-            runCatching { firstFocusRequester.requestFocus() }
-            withFrameNanos { }
-            if (firstFocused.value) return@LaunchedEffect
-            delay(FOCUS_RETRY_MS)
-        }
-    }
-
-    NuvioDialog(
+    val heading = rememberMoreHeading(item, null)
+    val title = remember(heading.title) { sportsLiveLocalStamps(context, heading.title) ?: heading.title }
+    val (links, sources) = remember(streams, notices) { sportsLivePickerCounts(streams) { it in notices } }
+    val status = stringResource(
+        R.string.sports_live_picker_count,
+        pluralStringResource(R.plurals.sports_live_picker_links, links, links),
+        pluralStringResource(R.plurals.sports_live_sources_count, sources, sources)
+    )
+    SportsLiveSheet(
+        title = title,
+        status = status,
+        statusLive = false,
         onDismiss = onDismiss,
-        title = item.displayName,
-        subtitle = pluralStringResource(R.plurals.sports_live_sources_count, item.sourceCount, item.sourceCount),
-        width = 640.dp
-    ) {
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(max = 420.dp),
-            verticalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.sm)
-        ) {
-            groups.forEachIndexed { groupIndex, (addon, groupStreams) ->
-                item(key = "header-$groupIndex") {
-                    Text(
-                        text = addon,
-                        style = MaterialTheme.typography.titleSmall,
-                        color = NuvioTheme.colors.TextSecondary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(top = if (groupIndex == 0) 0.dp else NuvioTheme.spacing.sm)
-                    )
-                }
-                items(groupStreams.size, key = { "stream-$groupIndex-$it" }) { index ->
-                    val stream = groupStreams[index]
-                    if (stream in notices) {
-                        SportsLiveSourceNoticeRow(stream)
-                        return@items
-                    }
-                    StreamButton(
-                        stream = stream,
-                        mark = linkMarks?.markOf(stream),
-                        nowMs = linkMarks?.nowMs ?: 0L,
-                        onClick = { onPick(stream) },
-                        modifier = if (stream === firstPlayable) {
-                            Modifier
-                                .focusRequester(firstFocusRequester)
-                                .onFocusChanged { firstFocused.value = it.isFocused }
-                        } else {
-                            Modifier
-                        }
-                    )
-                }
+        onBack = null,
+        width = SportsLiveTokens.Sheet.PickerWidth
+    ) { first ->
+        ordered.forEachIndexed { index, stream ->
+            val header = headers[index]
+            if (stream in notices) {
+                SportsLiveSourceNoticeRow(stream, header = header)
+                return@forEachIndexed
             }
+            header?.let { SportsLiveSourceGroupHeader(it) }
+            SportsLiveSourceRow(
+                stream = stream,
+                focusRequester = null,
+                requestInitialFocus = false,
+                isCurrentStream = false,
+                nowPlayingAnimates = false,
+                linkMark = linkMarks?.markOf(stream),
+                linkMarkNowMs = linkMarks?.nowMs ?: 0L,
+                onClick = { onPick(stream) },
+                onFocusChanged = null,
+                onUpKey = null,
+                modifier = first()
+            )
         }
     }
+}
+
+/**
+ * The picker's group headers (stream picker cleanup): the Sources panel's ([sportsLiveSourceGroupHeaders]) with no
+ * playing link, and none over the first links, which need no "Links" heading of their own.
+ */
+internal fun sportsLivePickerHeaders(
+    size: Int,
+    isNotice: (Int) -> Boolean,
+    isFailed: (Int) -> Boolean
+): Map<Int, SportsLiveSourceGroup> =
+    sportsLiveSourceGroupHeaders(size, currentIndex = -1, isNotice = isNotice, isFailed = isFailed)
+        .filterValues { it != SportsLiveSourceGroup.LINKS }
+
+/** The picker's count line: (links, sources). A source's messages are not links, and a source with only messages is not counted. */
+internal fun sportsLivePickerCounts(streams: List<Stream>, isNotice: (Stream) -> Boolean): Pair<Int, Int> {
+    val links = streams.filterNot(isNotice)
+    return links.size to links.mapTo(HashSet()) { it.addonName }.size
 }
 
 /** Shown while a merged game's streams are looked up; Back cancels. */
@@ -147,44 +115,6 @@ internal fun SportsLiveResolvingDialog(item: SportsLiveItem, onDismiss: () -> Un
     ) {
         Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
             LoadingIndicator()
-        }
-    }
-}
-
-@Composable
-private fun StreamButton(
-    stream: Stream,
-    mark: SportsLiveLinkMark?,
-    nowMs: Long,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val name = stream.name?.takeIf { it.isNotBlank() } ?: stream.addonName
-    val detail = (stream.title ?: stream.description)?.takeIf { it.isNotBlank() && it != name }
-    var focused by remember { mutableStateOf(false) }
-    Button(
-        onClick = onClick,
-        modifier = modifier
-            .fillMaxWidth()
-            .onFocusChanged { focused = it.isFocused }
-            // A link that failed for this game is dimmed while not focused (#156).
-            .then(if (mark is SportsLiveLinkMark.Failed && !focused) Modifier.alpha(SPORTS_LIVE_FAILED_LINK_ALPHA) else Modifier),
-        colors = ButtonDefaults.colors(
-            containerColor = NuvioTheme.colors.BackgroundCard,
-            contentColor = NuvioTheme.colors.TextPrimary
-        )
-    ) {
-        Column {
-            Text(name, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (detail != null) {
-                Text(
-                    detail,
-                    style = MaterialTheme.typography.bodySmall,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            if (mark != null) SportsLiveLinkMarkLine(mark, nowMs)
         }
     }
 }
