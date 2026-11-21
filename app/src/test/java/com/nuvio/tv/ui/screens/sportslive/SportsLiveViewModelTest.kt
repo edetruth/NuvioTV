@@ -28,6 +28,7 @@ import com.nuvio.tv.domain.model.Addon
 import com.nuvio.tv.domain.model.CatalogDescriptor
 import com.nuvio.tv.domain.model.ClaimedCatalog
 import com.nuvio.tv.domain.model.ContentType
+import com.nuvio.tv.core.sportslive.SportsLiveSharedBuckets
 import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.domain.model.PosterShape
@@ -947,6 +948,35 @@ class SportsLiveViewModelTest {
         assertEquals(listOf("Inferred"), tabs.getValue(SportsLiveTab.UPCOMING).map { it.sport })
         assertEquals(listOf("Inferred"), tabs.getValue(SportsLiveTab.REPLAYS).map { it.sport })
         assertFalse(tabs.getValue(SportsLiveTab.CHANNELS).any { it.sport == "Inferred" })
+    }
+
+    @Test
+    fun `a re-pin infers only the cards it has not seen`() = runTest {
+        var inferred = 0
+        val live = item("a", isLive = true, sport = "Basketball", name = "Bulls vs Heat")
+        val next = item("u", isLive = false, sport = "Basketball", startMs = NOW + HOUR, name = "Bulls vs Nets")
+        nextLoad = load(listOf(live, next))
+        val viewModel = SportsLiveViewModel(
+            repo,
+            inferSport = { inferred++; it.copy(sport = "Inferred") },
+            sharedBuckets = SportsLiveSharedBuckets(),
+            computeDispatcher = compute
+        )
+        viewModel.nowMs = { NOW }
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        advanceUntilIdle()
+        assertEquals(2, inferred)
+
+        // live.24: a follow re-pins, with nothing new to infer.
+        followedFlow.value = listOf(FollowedTeam("Heat", "Basketball"))
+        advanceUntilIdle()
+        assertEquals(2, inferred)
+
+        // A refresh listing one more game (the others as new, equal objects): only that one is inferred.
+        latestFlow.value = load(listOf(live.copy(), next.copy(), item("n", isLive = false, sport = "Basketball", startMs = NOW + 2 * HOUR, name = "Knicks vs Celtics")))
+        advanceUntilIdle()
+        assertEquals(3, inferred)
+        assertEquals(listOf("Inferred", "Inferred"), viewModel.uiState.value.tabs.getValue(SportsLiveTab.UPCOMING).map { it.sport })
     }
 
     @Test

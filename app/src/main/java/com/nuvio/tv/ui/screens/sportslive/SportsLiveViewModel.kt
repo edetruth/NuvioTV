@@ -100,6 +100,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.IdentityHashMap
 import javax.inject.Inject
 
 @HiltViewModel
@@ -495,14 +496,25 @@ class SportsLiveViewModel internal constructor(
     // again whenever the team directory changes (it bumps the logo revision). Channels are never inferred.
     // Titles hidden from Live Now (#134) are left off its list, and off Upcoming's (live.20: "Hide this" there).
     // RC regression (#143): re-inferring every card (3-4 s on the onn) at most once per pinSettleMs for learned logos.
-    private val pinned = combine(bucketed, repo.followedTeams, logoRevision.firstThenCoalesce(pinSettleMs), hiddenTitles) { bucketed, followed, _, hidden ->
+    // live.24: each card's inferred copy, kept while the learned logos, identities and team directory are as they were, so
+    // a re-pin (a refreshed catalog, a follow, a hidden title, the open's second step) infers only the cards it has not
+    // seen. By object: rows a re-bucketing did not change keep theirs ([SportsLiveItemBucketer.bucketClockedIncremental]).
+    private var pinMemo = IdentityHashMap<SportsLiveItem, SportsLiveItem>()
+    private var pinMemoKey: Pair<Int, Long>? = null
+
+    private val pinned = combine(bucketed, repo.followedTeams, logoRevision.firstThenCoalesce(pinSettleMs), hiddenTitles) { bucketed, followed, revision, hidden ->
         hiddenNow = hidden
         val startedAt = System.nanoTime()
+        val memoKey = revision to directoryStamp()
+        val before = if (memoKey == pinMemoKey) pinMemo else IdentityHashMap()
+        val memo = IdentityHashMap<SportsLiveItem, SportsLiveItem>()
+        var inferredCount = 0
+        fun inferred(item: SportsLiveItem): SportsLiveItem = memo.getOrPut(item) { before[item] ?: inferSport(item).also { inferredCount++ } }
         bucketed.copy(
             followed = followed,
             tabs = bucketed.tabs.mapValues { (tab, all) ->
                 val listed = if (tab == SportsLiveTab.LIVE_NOW || tab == SportsLiveTab.UPCOMING) SportsLiveHiddenTitles.filter(all, hidden) else all
-                val items = if (tab in INFERRED_TABS) listed.map(inferSport) else listed
+                val items = if (tab in INFERRED_TABS) listed.map { inferred(it) } else listed
                 if (tab == SportsLiveTab.CHANNELS) {
                     SportsLiveItemBucketer.markFollowed(items, followed)
                 } else {
@@ -513,7 +525,12 @@ class SportsLiveViewModel internal constructor(
                 }
             }
         ).also {
-            SportsLiveDebugTiming.log { "sportsOpen stage=pinned ms=${(System.nanoTime() - startedAt) / 1_000_000} t=${sinceOpenMs()}" }
+            pinMemo = memo
+            pinMemoKey = memoKey
+            SportsLiveDebugTiming.log {
+                "sportsOpen stage=pinned ms=${(System.nanoTime() - startedAt) / 1_000_000} t=${sinceOpenMs()} " +
+                    "inferred=$inferredCount reused=${memo.size - inferredCount}"
+            }
         }
     }.flowOn(computeDispatcher)
 
