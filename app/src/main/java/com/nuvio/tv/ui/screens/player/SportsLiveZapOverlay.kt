@@ -335,7 +335,7 @@ internal fun BoxScope.SportsLiveZapOverlay(
     }
 
     // #218: Hold OK while watching (nothing else open): the player menu, Report a problem first (its snapshot was taken
-    // as the hold started), then Choose stream and Scores ahead.
+    // as the hold started), then Choose stream and Scores ahead (a game only: a channel has no score to hold back).
     val playerMenu by viewModel.playerMenu.collectAsState()
     val playingNow = viewModel.nowPlaying
     if (playerMenu && playingNow != null) {
@@ -348,13 +348,17 @@ internal fun BoxScope.SportsLiveZapOverlay(
             onReport = viewModel::onPlayerMenuReport,
             reportFirst = true,
             onChooseStream = viewModel::onPlayerMenuChooseStream,
-            onScoresAhead = {
-                viewModel.dismissPlayerMenu()
-                viewModel.onScoresAhead { seconds ->
-                    com.nuvio.tv.core.sportslive.SportsLiveToasts.show(
-                        com.nuvio.tv.core.sportslive.SportsLiveToastKind.INFO,
-                        scoresAheadToast.format(SportsLiveRewind.formatBehind(seconds * 1_000L))
-                    )
+            onScoresAhead = if (playingNow.isChannel) {
+                null
+            } else {
+                {
+                    viewModel.dismissPlayerMenu()
+                    viewModel.onScoresAhead { seconds ->
+                        com.nuvio.tv.core.sportslive.SportsLiveToasts.show(
+                            com.nuvio.tv.core.sportslive.SportsLiveToastKind.INFO,
+                            scoresAheadToast.format(SportsLiveRewind.formatBehind(seconds * 1_000L))
+                        )
+                    }
                 }
             }
         )
@@ -372,7 +376,7 @@ internal fun BoxScope.SportsLiveZapOverlay(
             onDetails = null,
             onDismiss = { menu = null },
             // Q18 (#85): other games' scores ahead of this stream? Each press makes them wait 15 s more for its source.
-            onScoresAhead = if (viewModel.nowPlaying != null) {
+            onScoresAhead = if (viewModel.nowPlaying?.isChannel == false) {
                 {
                     menu = null
                     viewModel.onScoresAhead { seconds ->
