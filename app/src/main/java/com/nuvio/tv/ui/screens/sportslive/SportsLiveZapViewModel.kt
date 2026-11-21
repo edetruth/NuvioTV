@@ -534,7 +534,7 @@ class SportsLiveZapViewModel internal constructor(
             // player's life, and the guide's scores and clocks stood still). Until it recovers, the last lineup stays; a
             // player whose sources cannot be read keeps the session's own order (null).
             .retryAfterError(LINEUP_RETRY_MS) { error ->
-                if (BuildConfig.IS_DEBUG_BUILD) android.util.Log.w("SportsLiveZap", "panel lineup update failed, retrying", error)
+                if (BuildConfig.IS_DEBUG_BUILD) android.util.Log.w("SportsLiveZap", "panel lineup update failed, retrying", com.nuvio.tv.core.LogRedact.error(error))
             }
             .stateIn(viewModelScope, SharingStarted.Eagerly, null)
     }
