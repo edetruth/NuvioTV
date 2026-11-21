@@ -749,7 +749,7 @@
     <string name="sports_live_dual_menu_change_other">Change the other game</string>
     <string name="sports_live_dual_menu_full_screen">Full screen</string>
     <string name="sports_live_source_loading">%1$s · loading…</string>
-    <string name="sports_live_source_notice">Message from the source · not a stream</string>
+    <string name="sports_live_source_notice_line">Note from the source: %1$s</string>
     <!-- #156: marks on links that already failed or played for this game, in every stream list. -->
     <string name="sports_live_links_didnt_work">Didn\'t work</string>
     <!-- live.20: the Sources panel's groups for a game: its working and untried links, and the sources' messages. -->

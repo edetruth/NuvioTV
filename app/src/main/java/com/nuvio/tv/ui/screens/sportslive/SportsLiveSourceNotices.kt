@@ -1,7 +1,6 @@
 package com.nuvio.tv.ui.screens.sportslive
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -51,9 +50,9 @@ internal fun sportsLiveStreamScreenOrder(videoId: String?, streams: List<Stream>
     else sportsLiveNoticesLast(streams, SportsLiveZapResolver::isNoticeEntry)
 
 /**
- * A source's message in a stream list (N2): "Message from the source · not a stream" over its text in words (V2,
- * live.20: no emoji), dimmed, never focusable and never playable. [header]: the Sources panel's group header over
- * the first one.
+ * A source's message in a stream list (N2): one small dimmed line, "Note from the source: ‹its text in words›" (V2,
+ * live.20: no emoji; TV QA live.20: the two-to-four-line card was as big as a real stream), never focusable and never
+ * playable. [header]: the Sources panel's group header over the first one.
  */
 @Composable
 internal fun SportsLiveSourceNoticeRow(stream: Stream, modifier: Modifier = Modifier, header: SportsLiveSourceGroup? = null) {
@@ -69,21 +68,16 @@ internal fun SportsLiveSourceNoticeRow(stream: Stream, modifier: Modifier = Modi
             .fillMaxWidth()
             .clip(SportsLiveTokens.Radius.RowShape)
             .background(SportsLiveTokens.Colors.Row.copy(alpha = NOTICE_ROW_ALPHA))
-            .padding(horizontal = 14.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp)
+            .padding(horizontal = 14.dp, vertical = 4.dp)
     ) {
         Text(
-            text = stringResource(R.string.sports_live_source_notice),
-            style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag),
+            text = stringResource(
+                R.string.sports_live_source_notice_line,
+                sportsLivePlainSourceName(SportsLiveNoticeEntries.text(stream).ifEmpty { stream.addonName })
+            ),
+            style = SportsLiveTokens.style(SportsLiveTokens.Type.Meta),
             color = SportsLiveTokens.Colors.TextMuted,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-        Text(
-            text = sportsLivePlainSourceName(SportsLiveNoticeEntries.text(stream).ifEmpty { stream.addonName }),
-            style = SportsLiveTokens.style(SportsLiveTokens.Type.Meta),
-            color = SportsLiveTokens.Colors.TextSecondary,
-            maxLines = 3,
             overflow = TextOverflow.Ellipsis
         )
     }
