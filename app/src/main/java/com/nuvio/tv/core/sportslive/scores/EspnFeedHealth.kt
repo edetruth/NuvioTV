@@ -133,13 +133,16 @@ class EspnFeedHealth internal constructor(private val now: () -> Long) {
 
     /**
      * [key]'s answer could not be read, whole or in part ([what], no link): kept apart from [recordFailure] and logged
-     * under [DATA_TAG]. A request that failed is not a data error.
+     * under [DATA_TAG]. A request that failed is not a data error. Bounded (release review): errors older than
+     * [DATA_ERROR_MAX_AGE_MS] go, and only the [MAX_DATA_ERRORS] newest feeds are kept, as a TV app runs for days.
      */
     fun recordDataError(key: EspnFeedKey, what: String) {
         val at = now()
         dataErrorState.update { all ->
             val times = (all[key]?.times ?: 0) + 1
-            all + (key to FeedDataError(key, at, times, what))
+            val kept = all.filter { (other, error) -> other != key && at - error.lastAt < DATA_ERROR_MAX_AGE_MS }
+            val newest = kept.values.sortedByDescending { it.lastAt }.take(MAX_DATA_ERRORS - 1)
+            newest.associateBy { it.key } + (key to FeedDataError(key, at, times, what))
         }
         Log.w(DATA_TAG, "${feedName(key)}: $what")
     }
@@ -169,6 +172,10 @@ class EspnFeedHealth internal constructor(private val now: () -> Long) {
     companion object {
         /** The log tag of [recordDataError]. */
         const val DATA_TAG = "NuvioFeedData"
+
+        /** The most feeds [recordDataError] keeps, newest first, and how long one is kept after its last error. */
+        const val MAX_DATA_ERRORS = 50
+        const val DATA_ERROR_MAX_AGE_MS = 2 * 24 * 60 * 60_000L
 
         /** "scoreboard soccer/ger.1 2026-11-20", "summary": a feed's name with no link. */
         fun feedName(key: EspnFeedKey): String =
