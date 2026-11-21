@@ -26,30 +26,30 @@ class SportsLiveSourceLabelsTest {
 
     @Test
     fun `of labels a shared addon's sources by provider and a lone source by addon name`() {
-        val primary = item("cnc", "CNCVerse", "g0", "⚡SportzX Live Events (tv)")
+        val primary = item("example", "Example Addon", "g0", "⚡SportzX Live Events (tv)")
         val merged = primary.copy(
             alternates = listOf(
-                item("cnc", "CNCVerse", "g1", "⚡LivXow Live Events (tv)"),
-                item("cnc", "CNCVerse", "g2", "⚡SKTech Live Events (tv)"),
+                item("example", "Example Addon", "g1", "⚡LivXow Live Events (tv)"),
+                item("example", "Example Addon", "g2", "⚡SKTech Live Events (tv)"),
                 item("neb", "Nebula Sports", "g3", "Nebula Sports: Live Now")
             )
         )
 
         val labels = SportsLiveSourceLabels.of(merged)
 
-        assertEquals("SportzX", labels["cnc|g0"])
-        assertEquals("LivXow", labels["cnc|g1"])
-        assertEquals("SKTech", labels["cnc|g2"])
+        assertEquals("SportzX", labels["example|g0"])
+        assertEquals("LivXow", labels["example|g1"])
+        assertEquals("SKTech", labels["example|g2"])
         // The lone source of its addon keeps the addon name, not the cleaned catalog name.
         assertEquals("Nebula Sports", labels["neb|g3"])
     }
 
     @Test
     fun `of falls back to the addon name when the catalog cleans to nothing`() {
-        val primary = item("cnc", "CNCVerse", "g0", "⚡")
-        val merged = primary.copy(alternates = listOf(item("cnc", "CNCVerse", "g1", "⚡LivXow Live Events (tv)")))
+        val primary = item("example", "Example Addon", "g0", "⚡")
+        val merged = primary.copy(alternates = listOf(item("example", "Example Addon", "g1", "⚡LivXow Live Events (tv)")))
 
-        assertEquals("CNCVerse", SportsLiveSourceLabels.of(merged)["cnc|g0"])
+        assertEquals("Example Addon", SportsLiveSourceLabels.of(merged)["example|g0"])
     }
 
     private fun item(addonId: String, addonName: String, id: String, catalogName: String) = SportsLiveItem(

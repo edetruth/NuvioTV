@@ -29,8 +29,8 @@ class SportsLiveItemBucketerTest {
     private val highflyLive = claimed("sport", "sports_live", "Live Now", SportsLiveKind.EVENTS)
     private val highflyToday = claimed("sport", "sports_today", "Today", SportsLiveKind.EVENTS)
     private val highflyFootball = claimed("sport", "sports_football", "Football", SportsLiveKind.EVENTS)
-    private val cncEvents = claimed("tv", "cnc_SportzXLiveEvents_tv", "⚡SportzX Live Events (tv)", SportsLiveKind.EVENTS)
-    private val cncLiveTv = claimed("tv", "cnc_EasyPlayLiveTV_tv", "EasyPlay Live TV (tv)", SportsLiveKind.CHANNELS)
+    private val exampleEvents = claimed("tv", "cnc_SportzXLiveEvents_tv", "⚡SportzX Live Events (tv)", SportsLiveKind.EVENTS)
+    private val exampleLiveTv = claimed("tv", "cnc_EasyPlayLiveTV_tv", "EasyPlay Live TV (tv)", SportsLiveKind.CHANNELS)
 
     @Test
     fun `highfly live fixture's games land in LIVE_NOW and its broadcaster channels in CHANNELS`() {
@@ -343,9 +343,9 @@ class SportsLiveItemBucketerTest {
     }
 
     @Test
-    fun `CNCVerse soon items are upcoming time TBA and live dot items are live, both with clean names`() {
+    fun `Example Addon soon items are upcoming time TBA and live dot items are live, both with clean names`() {
         val raw = loadMetas("cnc_live_events.json", "tv")
-        val items = describeAll(raw, cncEvents)
+        val items = describeAll(raw, exampleEvents)
         val tabs = SportsLiveItemBucketer.bucket(items, now)
         val soonIds = raw.filter { it.name.startsWith(soonEmoji) }.map { it.id }.toSet()
         val liveIds = raw.filter { it.name.startsWith(liveEmoji) }.map { it.id }.toSet()
@@ -363,7 +363,7 @@ class SportsLiveItemBucketerTest {
 
     @Test
     fun `stripped name keeps the match for team parsing`() {
-        val item = SportsLiveItemBucketer.describe(meta("afg", "$soonEmoji  AFG vs ZIM"), cncEvents, now)
+        val item = SportsLiveItemBucketer.describe(meta("afg", "$soonEmoji  AFG vs ZIM"), exampleEvents, now)
 
         assertEquals("AFG vs ZIM", item.meta.name)
         assertEquals(listOf("AFG", "ZIM"), item.meta.name.split(" vs "))
@@ -373,9 +373,9 @@ class SportsLiveItemBucketerTest {
     @Test
     fun `live dot is live even with a future start and soon is not live even with a LIVE marker`() {
         val live = SportsLiveItemBucketer.describe(
-            meta("l", "$liveEmoji A vs B", releaseInfo = "15 Nov 2026 · 18:00 UTC"), cncEvents, now
+            meta("l", "$liveEmoji A vs B", releaseInfo = "15 Nov 2026 · 18:00 UTC"), exampleEvents, now
         )
-        val soon = SportsLiveItemBucketer.describe(meta("s", "$soonEmoji C vs D", releaseInfo = "LIVE"), cncEvents, now)
+        val soon = SportsLiveItemBucketer.describe(meta("s", "$soonEmoji C vs D", releaseInfo = "LIVE"), exampleEvents, now)
 
         assertTrue(live.isLive)
         assertEquals("A vs B", live.meta.name)
@@ -383,8 +383,8 @@ class SportsLiveItemBucketerTest {
     }
 
     @Test
-    fun `CNCVerse Live TV channels are channels, never live, grouped by prefix`() {
-        val items = describeAll(loadMetas("cnc_live_tv_sample.json", "tv"), cncLiveTv)
+    fun `Example Addon Live TV channels are channels, never live, grouped by prefix`() {
+        val items = describeAll(loadMetas("cnc_live_tv_sample.json", "tv"), exampleLiveTv)
         val tabs = SportsLiveItemBucketer.bucket(items, now)
 
         assertEquals(200, items.size)
@@ -437,7 +437,7 @@ class SportsLiveItemBucketerTest {
     fun `a Live TV genre makes an events catalog item a channel, which shows live only from an events catalog`() {
         val liveChannel = meta("ch", "Stadium 1", releaseInfo = "LIVE", genres = listOf("Live TV"))
         val fromEvents = SportsLiveItemBucketer.describe(liveChannel, highflyLive, now)
-        val fromChannels = SportsLiveItemBucketer.describe(liveChannel, cncLiveTv, now)
+        val fromChannels = SportsLiveItemBucketer.describe(liveChannel, exampleLiveTv, now)
 
         assertTrue(fromEvents.isChannel && fromChannels.isChannel)
         assertEquals(listOf("ch"), SportsLiveItemBucketer.bucket(listOf(fromEvents), now).getValue(SportsLiveTab.LIVE_NOW).map { it.id })
@@ -470,11 +470,11 @@ class SportsLiveItemBucketerTest {
     }
 
     @Test
-    fun `CNCVerse finished items are in no tab and lose the emoji`() {
+    fun `Example Addon finished items are in no tab and lose the emoji`() {
         val doneEmoji = "✅"
         val raw = loadMetas("cnc_live_events.json", "tv")
         val doneIds = raw.filter { it.name.startsWith(doneEmoji) }.map { it.id }.toSet()
-        val items = describeAll(raw, cncEvents)
+        val items = describeAll(raw, exampleEvents)
         val tabs = SportsLiveItemBucketer.bucket(items, now)
 
         assertTrue(doneIds.isNotEmpty())
@@ -488,7 +488,7 @@ class SportsLiveItemBucketerTest {
     fun `channel groups differing only in case make one filter`() {
         val items = describeAll(
             listOf(meta("a", "BiH| FACE TV"), meta("b", "BIH| N1"), meta("c", "bih| HAYAT")),
-            cncLiveTv
+            exampleLiveTv
         )
         val groups = SportsLiveItemBucketer.bucket(items, now).getValue(SportsLiveTab.CHANNELS).mapNotNull { it.group }
 
@@ -498,9 +498,9 @@ class SportsLiveItemBucketerTest {
     @Test
     fun `describe parses teams for events and for channels only inside brackets`() {
         val event = SportsLiveItemBucketer.describe(meta("e", "Celtics vs 76ers"), highflyToday, now)
-        val channel = SportsLiveItemBucketer.describe(meta("c", "Sky Sports - HD"), cncLiveTv, now)
+        val channel = SportsLiveItemBucketer.describe(meta("c", "Sky Sports - HD"), exampleLiveTv, now)
         val ppv = SportsLiveItemBucketer.describe(
-            meta("p", "US| PEACOCK PPV 004 [Celtics vs. 76ers (2026-11-10 19:00:05)]"), cncLiveTv, now
+            meta("p", "US| PEACOCK PPV 004 [Celtics vs. 76ers (2026-11-10 19:00:05)]"), exampleLiveTv, now
         )
         val other = SportsLiveItemBucketer.describe(meta("o", "NFL RedZone"), highflyToday, now)
 
@@ -661,24 +661,24 @@ class SportsLiveItemBucketerTest {
 
     @Test
     fun `the same live game from two addons is one card, primary from the first addon`() {
-        val cnc = describeAll(
+        val example = describeAll(
             loadMetas("cnc_live_events.json", "tv"),
-            claimed("tv", "cnc_events", "⚡SportzX Live Events (tv)", SportsLiveKind.EVENTS, addonId = "cnc")
+            claimed("tv", "example_events", "⚡SportzX Live Events (tv)", SportsLiveKind.EVENTS, addonId = "example")
         )
         val nebula = describeAll(
             loadMetas("nebula_live.json", "sports"),
             claimed("sports", "streamed-events-live-now", "Nebula Sports: Live Now", SportsLiveKind.EVENTS, addonId = "nebula")
         )
-        val items = cnc + nebula
-        val separate = SportsLiveItemBucketer.bucketTab(cnc, SportsLiveTab.LIVE_NOW, now).size +
+        val items = example + nebula
+        val separate = SportsLiveItemBucketer.bucketTab(example, SportsLiveTab.LIVE_NOW, now).size +
             SportsLiveItemBucketer.bucketTab(nebula, SportsLiveTab.LIVE_NOW, now).size
 
-        val live = SportsLiveItemBucketer.bucketTab(items, SportsLiveTab.LIVE_NOW, now, addonOrder = listOf("nebula", "cnc"))
+        val live = SportsLiveItemBucketer.bucketTab(items, SportsLiveTab.LIVE_NOW, now, addonOrder = listOf("nebula", "example"))
         val game = live.single { "Raiders" in it.meta.name }
 
         assertEquals("nebula", game.addonId)
         assertEquals("Las Vegas Raiders vs Seattle Seahawks", game.meta.name)
-        assertEquals(listOf("cnc"), game.alternates.map { it.addonId })
+        assertEquals(listOf("example"), game.alternates.map { it.addonId })
         assertEquals(2, game.sourceCount)
         // Both fixtures carry the same SportzX feed: these five games merge, and so does "ATP 250 vs Stockholm Open"
         // with Nebula's "ATP 250", whose description names Stockholm Open (F4); "NFL vs REDZONE" does not match
@@ -696,10 +696,10 @@ class SportsLiveItemBucketerTest {
         )
         assertEquals(separate - 6, live.size)
 
-        // By default the first addon seen leads: CNC's copy.
+        // By default the first addon seen leads: the example addon's copy.
         val byDefault = SportsLiveItemBucketer.bucket(items, now).getValue(SportsLiveTab.LIVE_NOW)
             .single { "Raiders" in it.meta.name }
-        assertEquals("cnc", byDefault.addonId)
+        assertEquals("example", byDefault.addonId)
         assertEquals(listOf("nebula"), byDefault.alternates.map { it.addonId })
     }
 
@@ -766,7 +766,7 @@ class SportsLiveItemBucketerTest {
         val items = providers.mapIndexed { i, (id, name) ->
             SportsLiveItemBucketer.describe(
                 meta("game-$i", "PAK vs SL", releaseInfo = "LIVE"),
-                claimed("tv", id, name, SportsLiveKind.EVENTS, addonId = "cnc"),
+                claimed("tv", id, name, SportsLiveKind.EVENTS, addonId = "example"),
                 now
             )
         }
@@ -776,7 +776,7 @@ class SportsLiveItemBucketerTest {
 
         assertEquals(4, card.sourceCount)
         // Each pooled source keeps its own stream key (resolveAll fetches each separately).
-        assertEquals(listOf("cnc|game-0", "cnc|game-1", "cnc|game-2", "cnc|game-3"), sourceKeys.sorted())
+        assertEquals(listOf("example|game-0", "example|game-1", "example|game-2", "example|game-3"), sourceKeys.sorted())
         assertEquals(4, sourceKeys.toSet().size)
         // Labeled by provider, not by the one shared addon name.
         assertEquals(
@@ -787,14 +787,14 @@ class SportsLiveItemBucketerTest {
 
     @Test
     fun `a cross-addon abbreviation and full name pool into one card`() {
-        val abbrev = event("cnc", "g1", "PAK vs SL", "LIVE")
+        val abbrev = event("example", "g1", "PAK vs SL", "LIVE")
         val full = event("neb", "g2", "Pakistan vs Sri Lanka", "LIVE")
 
         val card = SportsLiveItemBucketer.bucketTab(
-            listOf(abbrev, full), SportsLiveTab.LIVE_NOW, now, addonOrder = listOf("cnc", "neb")
+            listOf(abbrev, full), SportsLiveTab.LIVE_NOW, now, addonOrder = listOf("example", "neb")
         ).single()
 
-        assertEquals("cnc", card.addonId)
+        assertEquals("example", card.addonId)
         assertEquals(2, card.sourceCount)
         assertEquals(listOf("g2"), card.alternates.map { it.id })
     }

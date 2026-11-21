@@ -37,7 +37,7 @@ class SportsLiveChannelGrouperTest {
     }
 
     @Test
-    fun `pipe name prefixes from CNCVerse`() {
+    fun `pipe name prefixes from Example Addon`() {
         assertEquals("UK", group("UK| SKY SPORTS 1", emptyList()))
         assertEquals("ASIA-IN", group("ASIA-IN| JIO EVENTS FHD", emptyList()))
         assertEquals("DSTV", group("DSTV| SUPERSPORT FOOTBALL", emptyList()))

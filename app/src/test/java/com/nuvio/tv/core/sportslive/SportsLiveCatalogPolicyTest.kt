@@ -131,7 +131,7 @@ class SportsLiveCatalogPolicyTest {
     fun `tv catalog named Live TV is CHANNELS and Live Events stays EVENTS`() {
         val liveTv = catalog("tv", "cnc_EasyPlayLiveTV_tv", "EasyPlay Live TV (tv)")
         val events = catalog("tv", "cnc_SportzXLiveEvents_tv", "⚡SportzX Live Events (tv)")
-        val addon = addon("com.cncverse.stremiobridge", "CNCVerse Bridge", liveTv, events)
+        val addon = addon("com.example.addon", "Example Addon Bridge", liveTv, events)
 
         assertEquals(SportsLiveKind.CHANNELS, classify(addon, liveTv)?.kind)
         assertEquals(SportsLiveKind.EVENTS, classify(addon, events)?.kind)

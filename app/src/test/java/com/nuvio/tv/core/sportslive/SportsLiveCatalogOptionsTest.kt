@@ -15,8 +15,8 @@ import org.junit.Test
 
 class SportsLiveCatalogOptionsTest {
     @Test
-    fun `the CNCVerse live TV catalog offers its genre extra of countries`() {
-        val liveTv = cncCatalogs().single { it.id == "cnc_EasyPlayLiveTV_tv" }
+    fun `the Example Addon live TV catalog offers its genre extra of countries`() {
+        val liveTv = exampleCatalogs().single { it.id == "cnc_EasyPlayLiveTV_tv" }
 
         val extra = SportsLiveCatalogOptions.eligibleExtra(liveTv)!!
 
@@ -26,8 +26,8 @@ class SportsLiveCatalogOptionsTest {
     }
 
     @Test
-    fun `every CNCVerse tv catalog offers genre, not search or skip`() {
-        val catalogs = cncCatalogs()
+    fun `every Example Addon tv catalog offers genre, not search or skip`() {
+        val catalogs = exampleCatalogs()
         assertTrue(catalogs.size > 1)
         catalogs.forEach { assertEquals(it.id, "genre", SportsLiveCatalogOptions.eligibleExtra(it)?.name) }
     }
@@ -78,8 +78,8 @@ class SportsLiveCatalogOptionsTest {
 
     internal data class ManifestCatalogs(val catalogs: List<CatalogDescriptorDto>)
 
-    /** Catalog descriptors from CNCVerse's manifest (tv catalogs only, no URLs). */
-    private fun cncCatalogs(): List<CatalogDescriptor> {
+    /** Catalog descriptors from Example Addon's manifest (tv catalogs only, no URLs). */
+    private fun exampleCatalogs(): List<CatalogDescriptor> {
         val json = javaClass.classLoader!!.getResourceAsStream("sportslive/cnc_manifest_catalogs.json")!!
             .bufferedReader(Charsets.UTF_8).use { it.readText() }
         return Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
