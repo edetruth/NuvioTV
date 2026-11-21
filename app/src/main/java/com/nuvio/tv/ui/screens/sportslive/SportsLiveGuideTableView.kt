@@ -256,11 +256,11 @@ internal fun SportsLiveGuideTable(
             )
             Spacer(modifier = Modifier.height(14.dp))
             state?.let { GuideChips(it) }
-            // #216: All sports says so (it resets when the guide opens again).
+            // #216: More live says so (it resets when the guide opens again).
             if (state?.chip == SportsLiveUiState.ALL_SPORTS_FILTER) {
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    text = stringResource(R.string.sports_live_panel_all_sports_scope),
+                    text = stringResource(R.string.sports_live_more_live_scope),
                     style = SportsLiveTokens.style(GuideType.Label),
                     color = Colors.TextSecondary,
                     maxLines = 1,
@@ -307,7 +307,7 @@ internal fun SportsLiveGuideTable(
                         val row = memory.stable(fresh, line.row.matched, System.currentTimeMillis())
                         GuideTableRow(row, board.art, selected)
                     }
-                    is PanelGuideEntry.HiddenByMySports -> GuideHiddenRow(line.count, selected)
+                    is PanelGuideEntry.HiddenByMySports -> GuideHiddenRow(line.count, selected, line.summary)
                     is PanelGuideEntry.Header -> Unit
                 }
                 if (at < end - 1) GuideRowGap()
@@ -324,7 +324,7 @@ internal fun SportsLiveGuideTable(
     }
 }
 
-/** OK on "N more hidden by My sports · Show all": the guide switches to All sports. */
+/** OK on "More live: …": the guide shows More live's games (the All sports value, user 2026-11-21). */
 private fun stepToAllSports(state: SportsLiveZapPanelState?, onChip: (String?) -> Unit) {
     if (state != null) onChip(SportsLiveUiState.ALL_SPORTS_FILTER)
 }
@@ -374,7 +374,7 @@ private fun GuideChips(state: SportsLiveZapPanelState) {
     if (chips.size <= 1) return
     val selected = chips.indexOf(state.chip).coerceAtLeast(0)
     val window = guideChipWindow(chips.size, selected)
-    val scoped = SportsLiveUiState.ALL_SPORTS_FILTER in chips
+    val scoped = state.moreLive.isNotEmpty() || SportsLiveUiState.ALL_SPORTS_FILTER in chips
     // #213: only chips that fit whole are drawn ([guideChipsFit]), the picked one always; ▸ / ◂ say more are there.
     Layout(content = {
         GuideChipArrow("◂")
@@ -383,7 +383,7 @@ private fun GuideChips(state: SportsLiveZapPanelState) {
             val name = when (chip) {
                 null -> stringResource(if (scoped) R.string.sports_live_filter_my_sports else R.string.sports_live_filter_all)
                 SportsLiveUiState.MY_TEAMS_FILTER -> stringResource(R.string.sports_live_filter_my_teams)
-                SportsLiveUiState.ALL_SPORTS_FILTER -> stringResource(R.string.sports_live_filter_all_sports)
+                SportsLiveUiState.ALL_SPORTS_FILTER -> stringResource(R.string.sports_live_more_live_title)
                 else -> sportFilterLabel(chip)
             }
             GuideChip(
@@ -557,7 +557,7 @@ private fun GuideTableRow(row: GuideRow, art: GameArt?, selected: Boolean) {
 
 /** "N more hidden by My sports · Show all" as the table's last line: OK switches to All sports. */
 @Composable
-private fun GuideHiddenRow(count: Int, selected: Boolean) {
+private fun GuideHiddenRow(count: Int, selected: Boolean, summary: List<Pair<String, Int>> = emptyList()) {
     val shape = RoundedCornerShape(GUIDE_ROW_RADIUS)
     Box(
         modifier = Modifier
@@ -568,7 +568,7 @@ private fun GuideHiddenRow(count: Int, selected: Boolean) {
         contentAlignment = Alignment.CenterStart
     ) {
         Text(
-            text = stringResource(R.string.sports_live_hidden_by_my_sports, count),
+            text = if (summary.isNotEmpty()) moreLiveRowText(summary) else stringResource(R.string.sports_live_hidden_by_my_sports, count),
             style = SportsLiveTokens.style(GuideType.Name),
             color = if (selected) Colors.TextPrimary else Colors.TextSecondary,
             maxLines = 1,

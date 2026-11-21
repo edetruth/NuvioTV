@@ -65,7 +65,8 @@ internal fun panelChips(items: List<SportsLiveItem>, selected: String?, scoped: 
     val sports = scoped.mapNotNull({ SportsLiveSportKind.filterKeyOf(it) }).toMutableSet()
     if (selected != null && selected != SportsLiveUiState.MY_TEAMS_FILTER && selected != allSports) sports += selected
     val myTeams = scoped.any { it.followed } || selected == SportsLiveUiState.MY_TEAMS_FILTER
-    val offersAllSports = scoped.size < items.size || selected == allSports
+    // More live (user 2026-11-21) replaced the All sports chip: its view (the All sports value) is a chip only while shown.
+    val offersAllSports = selected == allSports
     return listOfNotNull(SportsLiveUiState.MY_TEAMS_FILTER.takeIf { myTeams }) + null +
         listOfNotNull(allSports.takeIf { offersAllSports }) + sports.sortedWith(String.CASE_INSENSITIVE_ORDER)
 }
@@ -398,8 +399,11 @@ internal sealed interface PanelGuideEntry {
         override val key: String get() = row.item.streamKey
     }
 
-    /** "N more hidden by My sports · Show all" (#167): OK switches the panel to All sports. */
-    data class HiddenByMySports(val count: Int) : PanelGuideEntry {
+    /**
+     * The list's last line under My sports: "More live: 4 Racing · 3 Cricket ›" ([summary], user 2026-11-21; #167's
+     * "N more hidden by My sports" before), OK opens More live's games.
+     */
+    data class HiddenByMySports(val count: Int, val summary: List<Pair<String, Int>> = emptyList()) : PanelGuideEntry {
         override val key: String get() = HIDDEN_BY_MY_SPORTS_KEY
     }
 }
@@ -464,7 +468,9 @@ internal fun panelGuide(
     currentKey: String?,
     hiddenByMySports: Int = 0,
     /** The game playing when the lineup leaves it out (a chip, My sports): its copies are left out all the same. */
-    playing: SportsLiveItem? = null
+    playing: SportsLiveItem? = null,
+    /** More live's row ([SportsLiveMoreLive.summary]) for the last line. */
+    moreLive: List<Pair<String, Int>> = emptyList()
 ): PanelGuide {
     val current = lineup.firstOrNull { it.item.streamKey == currentKey }
     // J5: another addon's copy of the game playing (same teams, same day) is the game playing: not listed again.
@@ -488,7 +494,7 @@ internal fun panelGuide(
             }
             start = end
         }
-        if (hiddenByMySports > 0) add(PanelGuideEntry.HiddenByMySports(hiddenByMySports))
+        if (hiddenByMySports > 0) add(PanelGuideEntry.HiddenByMySports(hiddenByMySports, moreLive))
     }
     return PanelGuide(current, entries, lineup)
 }
@@ -587,13 +593,15 @@ data class SportsLiveZapPanelState(
     val nowPlayingRow: ZapPanelRow? = rows.firstOrNull { it.item.streamKey == currentKey },
     /** Games My sports hides while the panel is on All (My sports, #167): the list's last line offers them. */
     val hiddenByMySports: Int = 0,
+    /** More live's row (user 2026-11-21): (group key, count), largest first; empty with nothing hidden. */
+    val moreLive: List<Pair<String, Int>> = emptyList(),
     /** The shared Live now list is not loaded yet (Watch from outside Sports & Live): "Loading games…" shows. */
     val loading: Boolean = false
 ) {
     val items: List<SportsLiveItem> = rows.map { it.item }
 
     /** The list under Now playing, in the lineup's own order (#140, #164). */
-    internal val guide: PanelGuide by lazy { panelGuide(rows, currentKey, hiddenByMySports, playing = nowPlayingRow?.item) }
+    internal val guide: PanelGuide by lazy { panelGuide(rows, currentKey, hiddenByMySports, playing = nowPlayingRow?.item, moreLive = moreLive) }
 }
 
 /** What OK on a panel row does (#140): play its stream, or open its Game page on the box score. */

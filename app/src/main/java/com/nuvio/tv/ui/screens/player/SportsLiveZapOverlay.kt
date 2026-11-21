@@ -844,10 +844,10 @@ private fun LiveGamesPanel(
                         if (it) focusedKey = null
                     }
                 }
-                // #216: All sports says so, as it lists sports the user never picked (it resets when the panel opens again).
+                // #216: More live says so, as it lists sports the user never picked (it resets when the panel opens again).
                 if (state.chip == com.nuvio.tv.ui.screens.sportslive.SportsLiveUiState.ALL_SPORTS_FILTER) {
                     Text(
-                        text = stringResource(R.string.sports_live_panel_all_sports_scope),
+                        text = stringResource(R.string.sports_live_more_live_scope),
                         style = SportsLiveTokens.style(SportsLiveTokens.Type.Meta),
                         color = SportsLiveTokens.Colors.TextSecondary,
                         maxLines = 1,
@@ -925,6 +925,7 @@ private fun LiveGamesPanel(
                                 is PanelGuideEntry.HiddenByMySports -> item(key = entry.key) {
                                     SportsLiveHiddenByMySportsLine(
                                         count = entry.count,
+                                        summary = entry.summary,
                                         onClick = { onChip(SportsLiveUiState.ALL_SPORTS_FILTER) },
                                         onFocus = { lineFocus(entry.key, null) },
                                         modifier = Modifier
@@ -1015,9 +1016,10 @@ private fun PanelFilter(
     onOpenChange: (Boolean) -> Unit,
     onFocused: (Boolean) -> Unit
 ) {
-    val scoped = SportsLiveUiState.ALL_SPORTS_FILTER in state.chips
+    val scoped = state.moreLive.isNotEmpty() || SportsLiveUiState.ALL_SPORTS_FILTER in state.chips
     val allLabel = stringResource(if (scoped) R.string.sports_live_filter_my_sports else R.string.sports_live_filter_all)
-    val allSportsLabel = stringResource(R.string.sports_live_filter_all_sports)
+    // More live (user 2026-11-21): the All sports value is More live's view.
+    val allSportsLabel = stringResource(R.string.sports_live_more_live_title)
     val myTeamsLabel = stringResource(R.string.sports_live_filter_my_teams)
     val options = state.chips.map { chip ->
         val name = when (chip) {

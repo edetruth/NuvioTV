@@ -3,6 +3,8 @@ package com.nuvio.tv.ui.screens.sportslive
 import com.nuvio.tv.core.sportslive.SportsLiveToastKind
 import com.nuvio.tv.core.sportslive.SportsLiveToasts
 import com.nuvio.tv.core.sportslive.SportsLivePlayingGame
+import com.nuvio.tv.core.sportslive.SportsLiveMoreLive
+import com.nuvio.tv.core.sportslive.SportsLiveOtherEvents
 import com.nuvio.tv.core.sportslive.scores.FollowTarget
 import com.nuvio.tv.core.sportslive.scores.WatchingNow
 import com.nuvio.tv.core.sportslive.scores.FollowTargets
@@ -430,9 +432,14 @@ class SportsLiveZapViewModel internal constructor(
         val items = combine(all, panelChip, mySports, logos.revision) { (list, followed), chip, sports, _ ->
             // #218: every report says what My sports holds.
             SportsLiveReportTrail.onMySports(mySportsReportLine(sports))
-            val scoped = SportsLiveMySportsScope.scope(list, sports)
-            val base = if (chip == SportsLiveUiState.ALL_SPORTS_FILTER) list else scoped
-            PanelList(list, chip, filterPanelItems(base, chip), followed, scoped)
+            // More live (user 2026-11-21): under My sports the listings that are no game (H) are never in the lineup, and the
+            // All sports value shows More live's games, by sport (the games My sports leaves out), not everything.
+            val (games, others) = if (sports.isDefault) list to emptyList() else SportsLiveOtherEvents.split(list)
+            val scoped = SportsLiveMySportsScope.scope(games, sports)
+            val scopedKeys = scoped.mapTo(HashSet()) { it.streamKey }
+            val moreLive = SportsLiveMoreLive.groups(games.filter { it.streamKey !in scopedKeys }, others)
+            val base = if (chip == SportsLiveUiState.ALL_SPORTS_FILTER) moreLive.flatMap { it.items } else scoped
+            PanelList(list, chip, filterPanelItems(base, chip), followed, scoped, moreLive)
         }
         // Ticks while the panel is open, so a grace or an estimate running out regroups its games.
         // A logo learned while open (a score feed answering, the map loading) redraws the rows.
@@ -517,11 +524,19 @@ class SportsLiveZapViewModel internal constructor(
                     .mapTo(HashSet()) { it.item.streamKey },
                 nowPlayingRow = nowRow,
                 // #167: under My sports (All picked), the list ends with the live games it hides, one press from All sports.
+                // More live (user 2026-11-21): under My sports (All picked), the list ends with its row.
                 hiddenByMySports = if (current.list.chip == null) {
-                    (current.list.all.count { it.streamKey !in current.finished } -
-                        current.list.scoped.count { it.streamKey !in current.finished }).coerceAtLeast(0)
+                    current.list.moreLive.sumOf { group -> group.items.count { it.streamKey !in current.finished } }
                 } else {
                     0
+                },
+                moreLive = if (current.list.chip == null) {
+                    SportsLiveMoreLive.summary(
+                        current.list.moreLive.map { group -> group.copy(items = group.items.filter { it.streamKey !in current.finished }) }
+                            .filter { it.items.isNotEmpty() }
+                    )
+                } else {
+                    emptyList()
                 },
                 loading = repo.latest.value == null
             )
@@ -1420,7 +1435,9 @@ private data class PanelList(
     val shown: List<SportsLiveItem>,
     val followed: List<FollowedTeam> = emptyList(),
     /** [all] as My sports lists them (#146). */
-    val scoped: List<SportsLiveItem> = all
+    val scoped: List<SportsLiveItem> = all,
+    /** More live's groups (user 2026-11-21): the live games My sports leaves out and the listings that are no game. */
+    val moreLive: List<SportsLiveMoreLive.Group> = emptyList()
 )
 
 /**

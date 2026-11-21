@@ -455,6 +455,9 @@
     <string name="sports_live_more_live_count">%1$d %2$s</string>
     <string name="sports_live_more_live_fights">Fights</string>
     <string name="sports_live_more_live_other">Other</string>
+    <!-- The player's panel and guide: the chip and the line over the list while More live is shown. -->
+    <string name="sports_live_more_live_title">More live</string>
+    <string name="sports_live_more_live_scope">More live: games outside My sports</string>
     <string name="sports_live_channels_browse_all">All channels</string>
     <string name="sports_live_channels_browse_sports">Sports channels</string>
     <string name="sports_live_channels_browse_popular">Popular now</string>
@@ -837,8 +840,6 @@
     <string name="sports_live_replays_undated">Other replays</string>
     <string name="sports_live_filter_all_regions">All regions</string>
     <string name="sports_live_filter_all_sports">All sports</string>
-    <!-- #216: under the in-player panel and guide chips while All sports is picked (it resets when they open again). -->
-    <string name="sports_live_panel_all_sports_scope">All sports · showing sports you don\'t follow</string>
     <string name="sports_live_region_other">Other</string>
     <string name="sports_live_filter_title_region">Region</string>
     <string name="sports_live_filter_title_sport">Sport</string>

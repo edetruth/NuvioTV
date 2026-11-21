@@ -37,9 +37,9 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -104,7 +104,7 @@ class ZapPanelLineupTest {
     }
 
     @Test
-    fun `the lineup and the panel follow My sports, and All sports in the panel brings every game back`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `the lineup and the panel follow My sports, and More live in the panel lists the games it leaves out`() = runTest(mainDispatcherRule.dispatcher) {
         // Earliest start first: a (basketball), c (cricket), b (basketball).
         val a = item("a", now - 90 * MINUTE)
         val c = item("c", now - 60 * MINUTE, sport = "Cricket")
@@ -120,19 +120,19 @@ class ZapPanelLineupTest {
         viewModel.openPanel()
         val panel = viewModel.panel.first { it != null }!!
         assertEquals(listOf("a", "b"), panel.items.map { it.id })
-        // The game playing listed in its place too (#140), then the line offering the game My sports hides (#167).
+        // The game playing listed in its place too (#140), then More live's row with the game My sports leaves out.
         assertEquals(listOf("a", "b"), panel.guide.rows.map { it.item.id })
         assertEquals(1, panel.hiddenByMySports)
-        assertEquals(PanelGuideEntry.HiddenByMySports(1), panel.guide.entries.last())
-        assertTrue(SportsLiveUiState.ALL_SPORTS_FILTER in panel.chips)
+        assertEquals(PanelGuideEntry.HiddenByMySports(1, listOf("CRICKET" to 1)), panel.guide.entries.last())
+        // No All sports chip any more (user 2026-11-21).
+        assertFalse(SportsLiveUiState.ALL_SPORTS_FILTER in panel.chips)
         assertEquals(2, panel.counts[null])
-        assertEquals(3, panel.counts[SportsLiveUiState.ALL_SPORTS_FILTER])
 
-        // All sports: the panel lists every game, and the zaps walk them all.
+        // OK on More live's row: the panel lists its games, and the zaps walk them.
         viewModel.onPanelChip(SportsLiveUiState.ALL_SPORTS_FILTER)
-        val everything = viewModel.panel.first { it?.items?.size == 3 }!!
-        assertEquals(listOf("a", "c", "b"), everything.guide.rows.map { it.item.id })
-        assertEquals(0, everything.hiddenByMySports)
+        val moreLive = viewModel.panel.first { it?.chip == SportsLiveUiState.ALL_SPORTS_FILTER && it.items.isNotEmpty() }!!
+        assertEquals(listOf("c"), moreLive.items.map { it.id })
+        assertEquals(0, moreLive.hiddenByMySports)
         viewModel.closePanel()
         runCurrent()
         assertEquals("c", zap(viewModel, KeyEvent.KEYCODE_CHANNEL_DOWN))
