@@ -223,6 +223,31 @@ class SportsLiveSlimPanelTest {
     // ---- live.24 (user): channel up and down are predictable ----
 
     @Test
+    fun `the frozen zap order stays bounded however often the list updates`() {
+        // live.24 RC: a zap order must never grow with updates (each update adds only games it has never seen).
+        val first = sessionOn(a, lineupOf(all)).withFrozenLineup(lineupOf(all))
+        var session = first
+        val late = game("late", now - minute)
+        repeat(500) { round ->
+            // The list re-sorts, loses a game and gets it back, and a late game comes and goes.
+            val list = when (round % 4) {
+                0 -> all.map { if (it == f) it.copy(followed = false) else it }
+                1 -> all.filterNot { it == s2 }
+                2 -> all + late
+                else -> all
+            }
+            session = session.withFrozenLineup(lineupOf(list))
+        }
+        val keys = (all + late).map { it.streamKey }.toSet()
+        assertTrue(session.lineup!!.size <= keys.size)
+        assertEquals(session.lineup!!.size, session.lineup!!.toSet().size)
+        assertTrue(session.items.size <= keys.size)
+        assertEquals(session.items.size, session.items.map { it.streamKey }.toSet().size)
+        // The games first seen keep their places.
+        assertEquals(first.lineup, session.lineup!!.take(first.lineup!!.size))
+    }
+
+    @Test
     fun `up then down returns to the game you were on, even when the ranking reorders in between`() {
         val before = lineupOf(all)
         val first = sessionOn(a, before).withFrozenLineup(before)

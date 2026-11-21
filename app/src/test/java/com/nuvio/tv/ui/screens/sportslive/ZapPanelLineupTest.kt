@@ -71,8 +71,10 @@ class ZapPanelLineupTest {
         return landed
     }
 
+    // live.24 (user): CH+ then CH- always return to the game you were on. The zap order is frozen at the session's first
+    // zap; the panel may re-sort as it opens, the zaps keep their order until a guide pick or a new session.
     @Test
-    fun `channel keys walk the panel's list, and an order change moves both the panel and the zaps`() = runTest(mainDispatcherRule.dispatcher) {
+    fun `channel keys walk the panel's list, and an order change re-sorts the panel but never the zaps`() = runTest(mainDispatcherRule.dispatcher) {
         // Live now is earliest start first: a, b, c, d.
         val a = item("a", now - 90 * MINUTE)
         val b = item("b", now - 60 * MINUTE)
@@ -91,16 +93,20 @@ class ZapPanelLineupTest {
         latest.value = SportsLiveLoad(listOf(d, c.copy(startMs = now - 120 * MINUTE), b, a), emptyList(), 1L, setOf(CATALOG))
         runCurrent()
         viewModel.openPanel()
-        val shown = viewModel.panel.first { it?.items?.size == 4 }!!.items.map { it.id }
-        assertEquals(listOf("c", "a", "b", "d"), shown)
-        // The zaps follow the same list at once.
-        assertEquals("d", zap(viewModel, KeyEvent.KEYCODE_CHANNEL_DOWN))
-        assertEquals("a", zap(viewModel, KeyEvent.KEYCODE_CHANNEL_UP))
-        // The panel still shows that order.
-        assertEquals(shown, viewModel.panel.value!!.items.map { it.id })
-
-        viewModel.closePanel()
-        runCurrent()
+        // The panel is closed whatever happens: an open panel ticks on and the run never ends (it ran the test JVM out
+        // of memory on the live.24 RC when an assertion here failed with the panel open).
+        try {
+            val shown = viewModel.panel.first { it?.items?.size == 4 }!!.items.map { it.id }
+            assertEquals(listOf("c", "a", "b", "d"), shown)
+            // The zaps keep the order frozen at the first zap: from b, down is c and up is a, as before the re-sort.
+            assertEquals("c", zap(viewModel, KeyEvent.KEYCODE_CHANNEL_DOWN))
+            assertEquals("a", zap(viewModel, KeyEvent.KEYCODE_CHANNEL_UP))
+            // The panel still shows its own order.
+            assertEquals(shown, viewModel.panel.value!!.items.map { it.id })
+        } finally {
+            viewModel.closePanel()
+            runCurrent()
+        }
     }
 
     @Test
