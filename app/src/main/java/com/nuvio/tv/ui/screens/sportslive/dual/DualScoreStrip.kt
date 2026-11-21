@@ -95,7 +95,7 @@ internal data class DualScoreStrip(
     /** The game grammar's clock ("4th 4:12", "78'", "End 2H"), "Final/OT", "Postponed", "Score hidden"; null for a live game ESPN gives no clock for, or no chip. */
     fun status(strings: ScoreChipStrings): String? = when (chip) {
         is ScoreChip.Live -> chip.clock?.let { gameClockText(it, halves) }
-        is ScoreChip.Final -> chip.note ?: strings.finalNote
+        is ScoreChip.Final -> ScoreChips.finalWords(chip.note, strings.finalNote)
         is ScoreChip.Status -> chip.text ?: strings.postponed
         is ScoreChip.Hidden -> strings.hidden
         null -> null

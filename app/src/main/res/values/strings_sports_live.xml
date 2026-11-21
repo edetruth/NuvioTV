@@ -167,10 +167,6 @@
     <string name="sports_live_setting_catch_up_row">Catch-up row</string>
     <string name="sports_live_setting_catch_up_row_subtitle">Your teams\' replays since you last watched, on Home and Live Now. Never shows a score.</string>
     <string name="sports_live_results_note_ft">FT</string>
-    <string name="sports_live_results_note_ot">OT</string>
-    <string name="sports_live_results_note_so">SO</string>
-    <string name="sports_live_results_note_aet">AET</string>
-    <string name="sports_live_results_note_pens">Pens</string>
     <string name="sports_live_results_sport_basketball">Basketball</string>
     <string name="sports_live_results_sport_football">American Football</string>
     <string name="sports_live_results_sport_hockey">Hockey</string>
@@ -998,9 +994,12 @@
         <item quantity="other">See %d games in other sports</item>
     </plurals>
     <string name="sports_live_results_my_sports_empty_on">Nothing from My sports · %1$s</string>
-    <string name="sports_live_results_did_not_play">%1$s didn\'t play</string>
-    <string name="sports_live_results_no_game_today">%1$s: no game today</string>
-    <string name="sports_live_results_next">next: %1$s</string>
+    <string name="sports_live_results_did_not_play_short">Didn\'t play</string>
+    <string name="sports_live_results_no_game">No game</string>
+    <plurals name="sports_live_results_not_played_more">
+        <item quantity="one">%1$d of your teams didn\'t play ›</item>
+        <item quantity="other">%1$d of your teams didn\'t play ›</item>
+    </plurals>
     <string name="sports_live_results_next_today">Today %1$s</string>
     <string name="sports_live_results_no_game_page">No game page for %1$s yet</string>
     <string name="sports_live_results_hidden_saved">Saved to watch later. More… › Reveal result shows it.</string>

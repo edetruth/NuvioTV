@@ -155,14 +155,37 @@ class SportsLiveResultsTest {
         )
         assertEquals(listOf("1"), items.rows())
         assertEquals(listOf(true), items.headers().map { it.yourTeams })
-        assertEquals(ResultListItem.NotPlayed("Chicago Bears", 1_000L, today = false), items.last())
+        assertEquals(ResultListItem.NotPlayed(listOf(NotPlayedTeam("Chicago Bears", "CHI", null, 1_000L)), today = false), items.last())
         // Under every league too, right under YOUR TEAMS' games, even when none played.
         val none = resultListItems(
             rows.drop(1), MySports.DEFAULT, null, emptySet(), emptySet(),
             notPlayed = listOf(ResultsNotPlayed("Chicago Bears", null)), today = true
         )
-        assertEquals(ResultListItem.NotPlayed("Chicago Bears", null, today = true), none[1])
+        assertEquals(ResultListItem.NotPlayed(listOf(NotPlayedTeam("Chicago Bears", "CHI", null, null)), today = true), none[1])
         assertTrue((none.first() as ResultListItem.Header).yourTeams)
+    }
+
+    @Test
+    fun `more than three teams that did not play collapse to one focusable line, which expands to compact lines`() {
+        val teams = (1..5).map { ResultsNotPlayed("Team $it", null, code = "T$it") }
+        val collapsed = resultListItems(emptyList(), MySports.DEFAULT, null, emptySet(), emptySet(), notPlayed = teams)
+        assertEquals(ResultListItem.NotPlayedMore(5), collapsed.last())
+        val open = resultListItems(emptyList(), MySports.DEFAULT, null, setOf(RESULTS_NOT_PLAYED_KEY), emptySet(), notPlayed = teams)
+        val lines = open.filterIsInstance<ResultListItem.NotPlayed>()
+        assertEquals(listOf(listOf("T1", "T2", "T3"), listOf("T4", "T5")), lines.map { line -> line.teams.map { it.code } })
+        assertEquals(listOf("np|0", "np|1"), lines.map { it.key })
+        // Three or fewer: one line, no summary.
+        val few = resultListItems(emptyList(), MySports.DEFAULT, null, emptySet(), emptySet(), notPlayed = teams.take(3))
+        assertEquals(1, few.count { it is ResultListItem.NotPlayed })
+        assertTrue(few.none { it is ResultListItem.NotPlayedMore })
+    }
+
+    @Test
+    fun `a team's code on the did-not-play line is the game identity's, never a cut name`() {
+        val nuggets = FollowedTeam("Denver Nuggets", "Basketball", espnId = "7", abbreviation = "DEN", league = "basketball/nba")
+        assertEquals("DEN", resultsNotPlayedCode(nuggets) { null })
+        assertEquals("UTA", resultsNotPlayedCode(FollowedTeam("Utah Jazz", "Basketball", espnId = "26", league = "basketball/nba")) { null })
+        assertEquals("UTAH", resultsNotPlayedCode(FollowedTeam("Utah Jazz", "Basketball", espnId = "26", league = "basketball/nba")) { "UTAH" })
     }
 
     @Test
@@ -175,8 +198,8 @@ class SportsLiveResultsTest {
         assertEquals(listOf("Chicago Bears"), resultsNotPlayedTeams(listOf(bears, celtics, nameOnly), listOf(game)).map { it.name })
         // An upcoming or live game that day counts as playing.
         assertTrue(resultsNotPlayedTeams(listOf(celtics), listOf(game.copy(state = ScoreState.PRE))).isEmpty())
-        // At most three lines.
-        val many = (1..5).map { FollowedTeam("Team $it", "Hockey", espnId = "$it", league = "hockey/nhl") }
+        // At most RESULTS_NOT_PLAYED_MAX teams.
+        val many = (1..RESULTS_NOT_PLAYED_MAX + 3).map { FollowedTeam("Team $it", "Hockey", espnId = "$it", league = "hockey/nhl") }
         assertEquals(RESULTS_NOT_PLAYED_MAX, resultsNotPlayedTeams(many, emptyList()).size)
     }
 

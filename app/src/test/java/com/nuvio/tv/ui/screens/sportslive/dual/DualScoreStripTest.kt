@@ -99,7 +99,7 @@ class DualScoreStripTest {
         val strip = strip(item("76ers vs Pacers"), pacers)
         assertEquals("PHI 131–124 IND" to "Final", texts(strip))
         assertFalse(strip!!.live)
-        assertEquals("PHI 131–124 IND" to "Final/OT", texts(strip(item("76ers vs Pacers"), pacers.copy(clockText = "Final/OT"))))
+        assertEquals("PHI 131–124 IND" to "Final · OT", texts(strip(item("76ers vs Pacers"), pacers.copy(clockText = "Final/OT"))))
         val home = palace.home.abbreviation
         val away = palace.away.abbreviation
         assertEquals("$home 1–3 $away" to "FT", texts(strip(item("Crystal Palace vs Liverpool", "Soccer"), palace)))

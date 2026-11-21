@@ -16,6 +16,7 @@ import com.nuvio.tv.core.sportslive.scores.TeamFollows
 import com.nuvio.tv.core.sportslive.scores.SportsResults
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import com.nuvio.tv.domain.model.FollowedTeam
+import com.nuvio.tv.core.sportslive.scores.GameArtTeam
 import com.nuvio.tv.domain.model.SportsLiveItem
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineDispatcher
@@ -110,17 +111,36 @@ sealed interface ResultListItem {
         override val key: String get() = "m|$groupKey"
     }
 
-    /** "‹[team]› didn't play · next: Sun 12:00 PM" under YOUR TEAMS ([nextStartMs] null: not known); not focusable. */
-    data class NotPlayed(val team: String, val nextStartMs: Long?, val today: Boolean) : ResultListItem {
-        override val key: String get() = "np|$team"
+    /**
+     * One compact line under YOUR TEAMS's results (live.24, TV report #19): up to [RESULTS_NOT_PLAYED_ROW] followed teams
+     * with no game on the day, each as its logo, code and next game ("Tomorrow 6:00 PM") or a muted "No game"; not
+     * focusable. [index]: the line's place when the list is expanded past one line.
+     */
+    data class NotPlayed(val teams: List<NotPlayedTeam>, val today: Boolean, val index: Int = 0) : ResultListItem {
+        override val key: String get() = "np|$index"
+    }
+
+    /** "3 of your teams didn't play ›" in place of the lines while more than [RESULTS_NOT_PLAYED_ROW] teams did not play; OK expands. */
+    data class NotPlayedMore(val count: Int) : ResultListItem {
+        override val key: String get() = "np|more"
     }
 }
+
+/** A followed team that did not play, as the compact line draws it: the game identity's [code], its [logo], its next start. */
+data class NotPlayedTeam(val name: String, val code: String, val logo: String?, val nextStartMs: Long?)
 
 /**
  * A followed team with no game on the day shown, and its next game's start when known. [lastFinal]: the team's last
  * final ([ResultsNextGames.TeamNext.lastFinal]); while it is hidden the next start is left out ([resultsNotPlayedShown]).
  */
-data class ResultsNotPlayed(val team: String, val nextStartMs: Long?, val lastFinal: ScoreSnapshot? = null)
+data class ResultsNotPlayed(
+    val team: String,
+    val nextStartMs: Long?,
+    val lastFinal: ScoreSnapshot? = null,
+    /** The game identity's code for the team ([GameIdentities.code]); empty: made from the name when drawn. */
+    val code: String = "",
+    val logo: String? = null
+)
 
 /**
  * [notPlayed] as Results shows it (live.23 review S4): a team whose last final is still hidden for the profile (Scores
@@ -278,7 +298,11 @@ class SportsLiveResultsViewModel internal constructor(
     }
         .distinctUntilChanged()
         .mapLatest { teams ->
-            teams.map { team -> runCatching { nextGame(team) }.getOrNull().let { ResultsNotPlayed(team.name, it?.startMs, it?.lastFinal) } }
+            teams.map { team ->
+                runCatching { nextGame(team) }.getOrNull().let {
+                    ResultsNotPlayed(team.name, it?.startMs, it?.lastFinal, code = resultsNotPlayedCode(team), logo = team.logo)
+                }
+            }
         }
         .onStart { emit(emptyList()) }
         .let { lines -> combine(lines, mode, prefs.spoilerProtection, ::resultsNotPlayedShown) }
@@ -715,8 +739,18 @@ internal fun resultsOtherWanted(asked: Boolean, jump: ResultsJump?, rows: List<R
     else -> !hasMyFinals && !today
 }
 
-/** At most this many "didn't play" lines under YOUR TEAMS. */
-internal const val RESULTS_NOT_PLAYED_MAX = 3
+/** At most this many followed teams that did not play under YOUR TEAMS. */
+internal const val RESULTS_NOT_PLAYED_MAX = 9
+
+/** Teams on one compact "didn't play" line; more than this collapse to "N of your teams didn't play ›" until expanded. */
+internal const val RESULTS_NOT_PLAYED_ROW = 3
+
+/** The expand key of the collapsed "didn't play" line ([ResultListItem.NotPlayedMore]). */
+internal const val RESULTS_NOT_PLAYED_KEY = "np|teams"
+
+/** [team]'s code on the "didn't play" line: the game identity's rule ([GameIdentities.code]), never a cut name. */
+internal fun resultsNotPlayedCode(team: FollowedTeam, codeOf: (String) -> String? = GameIdentities::knownCode): String =
+    GameIdentities.code(GameArtTeam(name = team.name, short = team.abbreviation ?: team.name, logo = team.logo), codeOf)
 
 /**
  * The followed teams with no game at all in [events] (the day's events, live and upcoming included): only teams
@@ -757,7 +791,13 @@ internal fun resultListItems(
         if (teams.isEmpty() && notPlayed.isEmpty()) return
         items += ResultListItem.Header(YOUR_TEAMS_KEY, name = null, sport = null, yourTeams = true)
         teams.forEach(::add)
-        notPlayed.forEach { items += ResultListItem.NotPlayed(it.team, it.nextStartMs, today) }
+        // One compact line (live.24): more than one line's worth collapses to "N of your teams didn't play ›".
+        val lines = notPlayed.map { NotPlayedTeam(it.team, it.code.ifEmpty { panelShortCode(it.team) }, it.logo, it.nextStartMs) }
+        if (lines.size > RESULTS_NOT_PLAYED_ROW && RESULTS_NOT_PLAYED_KEY !in expanded) {
+            items += ResultListItem.NotPlayedMore(lines.size)
+        } else {
+            lines.chunked(RESULTS_NOT_PLAYED_ROW).forEachIndexed { index, chunk -> items += ResultListItem.NotPlayed(chunk, today, index) }
+        }
     }
     fun sections(listed: List<ResultRow>, whole: Boolean) {
         for (group in SportsResults.groups(listed)) {
