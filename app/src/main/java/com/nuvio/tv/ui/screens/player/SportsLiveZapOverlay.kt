@@ -266,6 +266,8 @@ internal fun BoxScope.SportsLiveZapOverlay(
     LaunchedEffect(panelOpen) { if (!panelOpen) menu = null }
     // B2: the guide stays open while its Hold OK menu is up, and its idle wait starts again once the menu goes.
     LaunchedEffect(menu != null) { viewModel.onGuideMenu(held = menu != null) }
+    // live.21 TV test: each guide row keeps one reading (ESPN's once matched) across renders and openings.
+    val guideMemory = remember { com.nuvio.tv.ui.screens.sportslive.GuideRowMemory() }
     if (guideTable) {
         val guideStyle by viewModel.guideStyle.collectAsState()
         val fadeMs = com.nuvio.tv.ui.screens.sportslive.guideFadeMs(com.nuvio.tv.ui.screens.sportslive.guideSqueezeModeOf(guideStyle))
@@ -294,7 +296,8 @@ internal fun BoxScope.SportsLiveZapOverlay(
                 onRowFocus = viewModel::onPanelRowFocus,
                 onKey = viewModel::onPanelKey,
                 onClose = { viewModel.closePanel() },
-                registerKeys = { handler -> viewModel.guideKeyHandler = handler }
+                registerKeys = { handler -> viewModel.guideKeyHandler = handler },
+                memory = guideMemory
             )
         }
     } else {

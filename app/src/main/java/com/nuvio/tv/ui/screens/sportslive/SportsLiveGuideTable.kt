@@ -145,6 +145,40 @@ internal fun guideNameChoices(team: GameArtTeam, individual: Boolean, codeOf: (S
     return listOf(name, short, code).map { it.trim() }.filter { it.isNotEmpty() }.distinct()
 }
 
+// ---- One reading per row ----
+
+/** How long a row keeps ESPN's reading after its match drops out (a missed poll, the scores re-tracked on opening). */
+internal const val GUIDE_MATCH_HOLD_MS = 2 * 60_000L
+
+/**
+ * One source of truth per guide row (TV test, live.21: "Air Force / UTEP · LIVE" and "Air Force Falcons / UTEP Miners ·
+ * 7:00 PM · in 7 min" in turn, the addon's reading and ESPN's): once a row was read from its ESPN match, that reading
+ * (names, score, status) stays while the match is missing, for up to [holdMs] since it was last seen; a new match
+ * replaces it at once. Only how the row is drawn now (dimmed, New, Ready, your team) follows the fresh row. Kept for
+ * the player's life, so reopening the guide does not flip either. Composition-thread use.
+ */
+internal class GuideRowMemory(private val holdMs: Long = GUIDE_MATCH_HOLD_MS) {
+    private class Seen(val row: GuideRow, val atMs: Long)
+
+    private val seen = HashMap<String, Seen>()
+
+    /** [fresh] as drawn: itself when [matched] (and remembered), else the last matched reading still held, if any. */
+    fun stable(fresh: GuideRow, matched: Boolean, nowMs: Long): GuideRow {
+        if (matched) {
+            seen[fresh.key] = Seen(fresh, nowMs)
+            return fresh
+        }
+        val last = seen[fresh.key]
+        if (last == null || nowMs - last.atMs > holdMs) {
+            seen.remove(fresh.key)
+            return fresh
+        }
+        val marks = (last.row.marks.filter { it == GuideMark.CLOSE_LATE } + fresh.marks.filter { it != GuideMark.CLOSE_LATE })
+            .sortedBy { it.ordinal }
+        return last.row.copy(dimmedAtRest = fresh.dimmedAtRest, isNew = fresh.isNew, marks = marks)
+    }
+}
+
 // ---- The footer's legend ----
 
 /** What the footer's legend explains, in order (B2: the profile's first few openings, or Info). */

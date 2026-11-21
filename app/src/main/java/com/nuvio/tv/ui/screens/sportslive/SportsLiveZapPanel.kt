@@ -188,7 +188,9 @@ data class ZapPanelRow(
     /** Listed since the panel opened (#164): appended to the end of its group, with a "New" tag. */
     val isNew: Boolean = false,
     /** Gone from the list since the panel opened (#164): kept in place, dimmed, until the panel closes. */
-    val gone: Boolean = false
+    val gone: Boolean = false,
+    /** Its status and teams were read from a strictly matched ESPN event (live.21: the guide keeps ESPN's reading). */
+    val matched: Boolean = false
 ) {
     /** CH+/CH− stop on it (F11): every row but a final, a just ended game or one gone, which the panel still lists. */
     val zappable: Boolean get() = section != ScoreboardGroup.JUST_ENDED && !gone
@@ -243,7 +245,7 @@ internal fun groupPanelRows(
         // A live score shows only for a game in play that strictly matches its event (any score provider).
         val liveScored = group == ZapPanelGroup.LIVE_NOW && event != null
         val rank = lineupRankOf(item, liveScored, bigGame = liveScored && isLiveBigGame(event!!))
-        Entry(ZapPanelRow(item, group, chip, art, teams, status, scoreboardGroupOf(status, item)), start, index, rank)
+        Entry(ZapPanelRow(item, group, chip, art, teams, status, scoreboardGroupOf(status, item), matched = event != null), start, index, rank)
     }
     val order = compareBy<Entry> { it.row.group.ordinal }
         .thenBy { it.rank }

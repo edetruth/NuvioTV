@@ -157,6 +157,34 @@ class SportsLiveGuideTableTest {
         assertEquals(emptyList<GuideLegend>(), guideLegend(shown = false))
     }
 
+    @Test
+    fun `a row keeps ESPN's reading while its match is briefly missing, then the fresh one, and a new match wins at once`() {
+        val memory = GuideRowMemory(holdMs = 120_000L)
+        val espnArt = GameArt(
+            GameArtTeam("Air Force Falcons", "AF", null, shortName = "Air Force"),
+            GameArtTeam("UTEP Miners", "UTEP", null, shortName = "UTEP"), "NCAAM", null, false
+        )
+        val cardArt = GameArt(GameArtTeam("Air Force", "Air Force", null), GameArtTeam("UTEP", "UTEP", null), null, null, false)
+        val espn = guideRowOf(
+            live.copy(group = ScoreboardGroup.STARTING_SOON, chip = null, art = espnArt, status = GameStatus.StartingSoon(now + 7 * minute, 0 to 7), startsIn = 0 to 7),
+            strings, kickoff = "7:00 PM", tag = "NCAAM"
+        )
+        val card = guideRowOf(live.copy(chip = null, art = cardArt), strings, kickoff = null, tag = "NCAAM", readyMark = SportsLiveReadyMark.READY)
+        assertEquals(espn, memory.stable(espn, matched = true, nowMs = 0L))
+        // The match missing a poll: still ESPN's names and status, with the fresh row's Ready.
+        val held = memory.stable(card, matched = false, nowMs = 30_000L)
+        assertEquals(espn.firstNames, held.firstNames)
+        assertEquals("7:00 PM · in 7 min", held.time)
+        assertEquals(listOf(GuideMark.READY), held.marks)
+        // Gone for longer than the hold: the card's own reading.
+        assertEquals(card, memory.stable(card, matched = false, nowMs = 200_000L))
+        // A row never matched is drawn as it is.
+        assertEquals(card, GuideRowMemory().stable(card, matched = false, nowMs = 0L))
+        // A new match replaces the held one at once.
+        val later = espn.copy(time = "6:58 PM · in 5 min")
+        assertEquals(later, memory.stable(later, matched = true, nowMs = 210_000L))
+    }
+
     // ---- Selection ----
 
     private fun row(id: String, group: ZapPanelGroup = ZapPanelGroup.LIVE_NOW) = ZapPanelRow(game(id, now), group, chip = null, art = null)

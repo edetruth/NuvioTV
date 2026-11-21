@@ -113,6 +113,8 @@ internal fun SportsLiveGuideTable(
      * every key to it first, so the table never depends on holding focus (TV test, live.21).
      */
     registerKeys: (((android.view.KeyEvent) -> Boolean)?) -> Unit = {},
+    /** Each row's one reading ([GuideRowMemory]), kept by the player across openings. */
+    memory: GuideRowMemory = remember { GuideRowMemory() },
     modifier: Modifier = Modifier
 ) {
     val guide = state?.guide
@@ -249,7 +251,8 @@ internal fun SportsLiveGuideTable(
             Spacer(modifier = Modifier.height(22.dp))
             nowRow?.let { row ->
                 val board = boardOf(state, row)
-                GuideNowPlaying(rememberGuideRow(board, ready = null, nowPlaying = true, suffix = suffixes[row.item.streamKey]), board.art, nowSelected)
+                val fresh = rememberGuideRow(board, ready = null, nowPlaying = true, suffix = suffixes[row.item.streamKey])
+                GuideNowPlaying(memory.stable(fresh, row.matched, System.currentTimeMillis()), board.art, nowSelected)
             }
         }
         // The table: five rows under the video, the selected one ringed.
@@ -274,7 +277,7 @@ internal fun SportsLiveGuideTable(
                 when (val line = lines[at]) {
                     is PanelGuideEntry.Game -> {
                         val board = boardOf(state, line.row)
-                        val row = rememberGuideRow(
+                        val fresh = rememberGuideRow(
                             board,
                             ready = readiness[line.key],
                             nowPlaying = false,
@@ -282,6 +285,7 @@ internal fun SportsLiveGuideTable(
                             isNew = line.row.isNew,
                             suffix = suffixes[line.key]
                         )
+                        val row = memory.stable(fresh, line.row.matched, System.currentTimeMillis())
                         GuideTableRow(row, board.art, selected)
                     }
                     is PanelGuideEntry.HiddenByMySports -> GuideHiddenRow(line.count, selected)
