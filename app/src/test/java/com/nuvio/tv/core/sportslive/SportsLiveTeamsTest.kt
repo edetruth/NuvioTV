@@ -381,4 +381,29 @@ class SportsLiveTeamsTest {
         assertTrue(SportsLiveTeams.matches("Brøndby IF", "Brondby IF"))
         assertEquals("lodz", SportsLiveTeams.normalise("Łódź").let(SportsLiveTeams::foldAccents))
     }
+
+    @Test
+    fun `copies naming one club two ways merge as one side, live 23 nightly near misses`() {
+        val full = SportsLiveTeams.MergeMatch.FULL
+        val none = SportsLiveTeams.MergeMatch.NONE
+        listOf(
+            "Borussia M'gladbach" to "Borussia Mönchengladbach",
+            "Hearts" to "Heart of Midlothian",
+            "Amedspor" to "Amed Sportif",
+            "Çaykur Rizespor" to "Rizespor",
+            "Alavés" to "Deportivo Alavés",
+            "Deportivo" to "Deportivo de A Coruña",
+            "U. Calera" to "Unión La Calera",
+            "U. De Concepcion" to "Univ. Concepción",
+            "LOSC Lille" to "Lille",
+            "Olympique Lyonnais" to "Lyon",
+            "Louisiana-Monroe" to "UL Monroe"
+        ).forEach { (a, b) ->
+            assertEquals("$a / $b", full, SportsLiveTeams.mergeMatch(a, b))
+            assertTrue("$a / $b", SportsLiveTeams.matches(a, b))
+        }
+        // Two different known clubs stay apart.
+        assertEquals(none, SportsLiveTeams.mergeMatch("Deportivo", "Deportivo Alavés"))
+        assertFalse(SportsLiveTeams.matches("Everton", "Everton CD"))
+    }
 }

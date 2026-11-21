@@ -105,7 +105,12 @@ object SportsLiveTeamAliases {
             // ESPN's "Middle Tennessee" (MTSU) is Middle Tennessee State University (TV report #5). One school.
             "middle tennessee" to listOf("middle tennessee state", "middle tennessee st", "middle tenn st", "middle tenn state", "middle tenn"),
             // Renamed in 2024: addons still write the old name (live.18).
-            "east texas a and m" to listOf("texas a and m commerce", "east texas a and m lions", "texas a and m commerce lions")
+            "east texas a and m" to listOf("texas a and m commerce", "east texas a and m lions", "texas a and m commerce lions"),
+            // ESPN's short names for schools addons write in full (nightly alias candidates, live.23).
+            "sam houston" to listOf("sam houston state", "sam houston st"),
+            "app state" to listOf("appalachian state", "appalachian st"),
+            "usc" to listOf("southern cal", "southern california"),
+            "ul monroe" to listOf("louisiana monroe")
         )
 
     /**
@@ -148,7 +153,34 @@ object SportsLiveTeamAliases {
             "barcelona" to listOf("barca", "barça"),
             "inter miami" to emptyList(),
             "new york red bulls" to listOf("red bulls", "ny red bulls"),
-            "new york city" to listOf("nycfc")
+            "new york city" to listOf("nycfc"),
+            // The nightly run's alias candidates and merge near misses (live.23): ESPN's name for a club against the
+            // full or local name addons write, each checked to be the same club. Written without accents ([canonical] folds them).
+            "deportivo la coruna" to listOf(
+                "deportivo", "deportivo de la coruna", "deportivo de a coruna", "deportivo a coruna", "deportivo coruna",
+                "real club deportivo de la coruna", "real club deportivo de a coruna"
+            ),
+            "alaves" to listOf("deportivo alaves"),
+            "atletico madrid" to listOf("atletico de madrid", "club atletico de madrid"),
+            "real sociedad ii" to listOf("real sociedad b"),
+            "lyon" to listOf("olympique lyonnais", "olympique lyon", "ol lyon"),
+            "lille" to listOf("losc lille", "losc"),
+            "brest" to listOf("stade brestois", "stade brestois 29"),
+            "bochum" to listOf("bochum 1848"),
+            "borussia monchengladbach" to listOf("borussia m gladbach", "borussia mgladbach", "monchengladbach", "m gladbach", "gladbach"),
+            "club brugge" to listOf("club brugge kv"),
+            "lask" to listOf("lask linz"),
+            "wsg tirol" to listOf("wsg swarovski tirol"),
+            "heart of midlothian" to listOf("hearts"),
+            "estoril" to listOf("estoril praia"),
+            "maritimo" to listOf("cs maritimo"),
+            "uniao da serra" to listOf("uniao desportiva da serra"),
+            "amed sfk" to listOf("amed sportif", "amedspor", "amed sportif faaliyetler"),
+            "rizespor" to listOf("caykur rizespor"),
+            "atletico de san luis" to listOf("atletico san luis"),
+            "everton de vina del mar" to listOf("everton cd", "everton vina del mar"),
+            "union la calera" to listOf("u calera", "u la calera", "union calera"),
+            "universidad de concepcion" to listOf("u de concepcion", "univ concepcion", "univ de concepcion", "u concepcion")
         )
 
     private val TO_CANONICAL: Map<String, String> = buildMap {
@@ -171,8 +203,15 @@ object SportsLiveTeamAliases {
      * the name is not a known abbreviation/alias. A canonical name resolves to itself, so a full name
      * and its abbreviation both return the same value.
      */
-    fun canonical(normalisedName: String): String? =
-        TO_CANONICAL[normalisedName]
+    fun canonical(normalisedName: String): String? {
+        lookup(normalisedName)?.let { return it }
+        // Accents folded (live.23): "Deportivo de A Coruña" is listed as "deportivo de a coruna".
+        val folded = SportsLiveTeams.foldAccents(normalisedName)
+        return if (folded != normalisedName) lookup(folded) else null
+    }
+
+    private fun lookup(name: String): String? =
+        TO_CANONICAL[name]
             // A national A side ("BAN-A", "Bangladesh A", #145): the nation's canonical name, then "a".
-            ?: normalisedName.takeIf { it.endsWith(" a") }?.let { TO_CANONICAL[it.dropLast(2)] }?.let { "$it a" }
+            ?: name.takeIf { it.endsWith(" a") }?.let { TO_CANONICAL[it.dropLast(2)] }?.let { "$it a" }
 }
