@@ -1283,6 +1283,31 @@ class LiveScoresRepositoryTest {
         assertEquals(55, repo.scores.value.getValue(key).homeScore)
     }
 
+    @Test
+    fun `a followed team's live game polls its feed every 15 s, an unfollowed one every 30 s`() = runTest {
+        var score = 50
+        provider.respond = { ScoreboardResult(listOf(game(ScoreState.IN, score, 48))) }
+        val repo = repository("2026-11-15T19:00:00Z")
+        collect(repo)
+        val followedCard = pacersCard.copy(followed = true)
+        repo.track(SECTION, listOf(followedCard))
+        runCurrent()
+        assertEquals(1, provider.calls.count { it == nba15 })
+        score = 53
+        advanceTimeBy(ScoreCadence.FOLLOWED_LIVE_MS); runCurrent()
+        assertEquals(2, provider.calls.count { it == nba15 })
+        assertEquals(53, repo.scores.value.getValue(followedCard.streamKey).homeScore)
+        // Unfollowed: the fetch already due runs, then back to the live pace.
+        repo.track(SECTION, listOf(pacersCard))
+        advanceTimeBy(ScoreCadence.FOLLOWED_LIVE_MS); runCurrent()
+        val before = provider.calls.count { it == nba15 }
+        assertEquals(3, before)
+        advanceTimeBy(ScoreCadence.FOLLOWED_LIVE_MS); runCurrent()
+        assertEquals(before, provider.calls.count { it == nba15 })
+        advanceTimeBy(ScoreCadence.LIVE_MS - ScoreCadence.FOLLOWED_LIVE_MS); runCurrent()
+        assertEquals(before + 1, provider.calls.count { it == nba15 })
+    }
+
     // --- live.20 Q18 (#85): the game being watched, and the others while video plays ---
 
     @Test

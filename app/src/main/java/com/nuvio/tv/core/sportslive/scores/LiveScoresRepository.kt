@@ -597,6 +597,10 @@ class LiveScoresRepository internal constructor(
         }
     }
 
+    /** The matched games of followed teams' cards, by event id: their feeds poll at [ScoreCadence.FOLLOWED_LIVE_MS]. */
+    private fun followedEventIds(): Set<String> =
+        trackedUnion().filter { it.followed }.mapNotNullTo(HashSet()) { raw[it.card.key]?.eventId }
+
     /** Millis to wait before [feed]'s next fetch, or null when it stops (or is no longer needed). */
     private fun waitLocked(feed: ScoreFeed): Long? {
         val state = feeds[feed] ?: return null
@@ -609,7 +613,8 @@ class LiveScoresRepository internal constructor(
             failures = state.failures,
             retryAfterMs = state.retryAfterMs,
             today = today(),
-            nowMs = now()
+            nowMs = now(),
+            followed = followedEventIds()
         )
         state.intervalMs = interval
         if (interval == null) return null
@@ -982,7 +987,7 @@ class LiveScoresRepository internal constructor(
 
         private const val WINDOW_MS = 3 * 60 * 60 * 1000L
         private const val MAX_REMEMBERED = 2_000
-        /** Feeds polled at once, at most; followed teams' games claim theirs first. */
+        /** Feeds polled at once, at most; followed teams' games claim theirs first (and poll faster while live). */
         internal const val MAX_FEEDS = 16
         private const val RETAIN_RETIRED_MS = 10 * 60_000L
         private const val LOGO_WRITE_DELAY_MS = 2_000L

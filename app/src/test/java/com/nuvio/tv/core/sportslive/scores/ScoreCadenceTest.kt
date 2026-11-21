@@ -53,4 +53,18 @@ class ScoreCadenceTest {
         assertNull(interval(EspnLeagueMap.NBA, listOf(postponed, game)))
         assertNull(interval(EspnLeagueMap.NBA, listOf(game)))
     }
+
+    @Test
+    fun `a feed with a followed team's live game polls every 15 s, others stay at 30 s`() {
+        val other = live.copy(eventId = "other")
+        fun withFollowed(matched: List<ScoreSnapshot>, followed: Set<String>, league: EspnLeague = EspnLeagueMap.NBA, failures: Int = 0) =
+            ScoreCadence.nextIntervalMs(ScoreFeed(league, today), matched, matched, failures, null, today, now, followed)
+        assertEquals(15_000L, withFollowed(listOf(live, other), setOf(live.eventId)))
+        assertEquals(30_000L, withFollowed(listOf(other), setOf(live.eventId)))
+        // A followed game not live yet: the usual pace.
+        assertEquals(300_000L, withFollowed(listOf(game.copy(state = ScoreState.OFF, mayResume = true)), setOf(game.eventId)))
+        // Backoff and the soccer/all floor still win.
+        assertEquals(60_000L, withFollowed(listOf(live), setOf(live.eventId), failures = 2))
+        assertEquals(60_000L, withFollowed(listOf(live), setOf(live.eventId), league = EspnLeagueMap.SOCCER_ALL))
+    }
 }
