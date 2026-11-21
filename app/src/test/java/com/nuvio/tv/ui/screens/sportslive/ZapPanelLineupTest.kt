@@ -137,13 +137,17 @@ class ZapPanelLineupTest {
         runCurrent()
         assertEquals("c", zap(viewModel, KeyEvent.KEYCODE_CHANNEL_DOWN))
 
-        // #216: All sports is for one look: the panel opens on My sports again, and the zaps follow it.
+        // #216: All sports is for one look: the panel opens on My sports again (never a frame of the old scope), and the
+        // zaps follow it. The panel is closed whatever happens: an open panel ticks on and the run never ends.
         viewModel.openPanel()
-        val reopened = viewModel.panel.first { it != null }!!
-        assertNull(reopened.chip)
-        assertTrue(reopened.items.none { it.id == "c" })
-        viewModel.closePanel()
-        runCurrent()
+        try {
+            val reopened = viewModel.panel.first { it != null }!!
+            assertNull(reopened.chip)
+            assertEquals(listOf("a", "b"), reopened.items.map { it.id })
+        } finally {
+            viewModel.closePanel()
+            runCurrent()
+        }
         assertNotEquals("c", zap(viewModel, KeyEvent.KEYCODE_CHANNEL_DOWN))
     }
 

@@ -94,6 +94,7 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.transform
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
@@ -505,7 +506,11 @@ class SportsLiveZapViewModel internal constructor(
             state.guide
             ShownPanel(current, state, session)
         }
-    }.flowOn(computeDispatcher).map { shown ->
+    }.flowOn(computeDispatcher)
+        // A lineup built under another chip is never drawn (#216): opening resets All sports to My sports, and the
+        // lineup kept from before would show the old scope (and its rows) until the new one lands; the old state stays.
+        .filter { shown -> shown == null || shown.lineup.list.chip == panelChip.value }
+        .map { shown ->
         shown ?: return@map null
         // A list built before closePanel can arrive after it: it must not become the tracker's cards, or
         // the next open would start tracking this session's list.
