@@ -177,7 +177,7 @@ class DualKeyModelTest {
     }
 
     @Test
-    fun `a pane's error or end card owns OK and Back wherever it sits, the small pane of big and small too (audit G1)`() {
+    fun `a pane's error or end card owns OK and Back in big and small wherever it sits, the small pane too (audit G1)`() {
         val error = DualPane(b, dualStream("b"), PaneStatus.Error)
         // The ring stays on the big game; the small pane's game failed.
         val state = bigSmall.copy(right = error)
@@ -187,12 +187,27 @@ class DualKeyModelTest {
         val ended = bigSmall.copy(right = ended(next = true).copy(item = b))
         assertEquals(Side.RIGHT, dualKeySide(ended))
         assertEquals(DualOk.CARD_BUTTON, dualOkRoute(ended))
-        // Split too: the card names OK, so OK is the card's.
-        assertEquals(DualOk.CHOOSE_STREAM, dualOkRoute(split.copy(right = error)))
         // The ringed pane's own card goes first; with no card anywhere, OK is full screen as before.
         assertEquals(Side.LEFT, dualKeySide(bigSmall.copy(left = starting, right = error)))
         assertEquals(Side.LEFT, dualKeySide(bigSmall))
         assertEquals(DualOk.FULL_SCREEN, dualOkRoute(bigSmall))
+    }
+
+    @Test
+    fun `side by side a card on the other pane never takes OK from the ringed game (live24 RC review H3)`() {
+        // Coordinator decision (live.24 RC review H3), replacing the split half of audit G1: the ring reaches either pane
+        // with left and right, so OK on the healthy ringed game plays it full screen, whatever the other pane shows.
+        val error = DualPane(b, dualStream("b"), PaneStatus.Error)
+        val endedRight = ended(next = true).copy(item = b)
+        for (other in listOf(error, endedRight)) {
+            val state = split.copy(right = other)
+            assertEquals(Side.LEFT, dualKeySide(state))
+            assertEquals(DualOk.FULL_SCREEN, dualOkRoute(state))
+            // The ring moved onto that card: OK is the card's.
+            assertEquals(Side.RIGHT, dualKeySide(state.copy(highlighted = Side.RIGHT)))
+        }
+        assertEquals(DualOk.CHOOSE_STREAM, dualOkRoute(split.copy(right = error, highlighted = Side.RIGHT)))
+        assertEquals(DualOk.CARD_BUTTON, dualOkRoute(split.copy(right = endedRight, highlighted = Side.RIGHT)))
     }
 
     @Test

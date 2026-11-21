@@ -174,7 +174,7 @@ class SportsLiveDualPickerLive24Test {
     }
 
     @Test
-    fun `a pane's error card has one action - OK tries another link, Back closes the side, no arrows named`() {
+    fun `a pane's error card has one action - OK chooses a link, Back closes the side, no arrows named`() {
         val error = DualState(DualPane(a, dualStream("a"), PaneStatus.Error), DualPane(b, dualStream("b"), PaneStatus.Playing))
         assertEquals(DualOk.CHOOSE_STREAM, dualOkRoute(error))
         // ▲ ▼ still zap that pane (the frozen lineup), they are just not named on the card.
@@ -182,7 +182,8 @@ class SportsLiveDualPickerLive24Test {
         val strings = listOf(java.io.File("src/main/res/values/strings_sports_live.xml"), java.io.File("app/src/main/res/values/strings_sports_live.xml"))
             .first { it.exists() }.readText()
         val hint = Regex("<string name=\"sports_live_dual_recovery_choices\">([^<]*)</string>").find(strings)!!.groupValues[1]
-        assertTrue(hint, hint.startsWith("OK  Try another link"))
+        // OK opens the game's streams to choose from (live.24 RC review H3, audit G31): the card says so.
+        assertTrue(hint, hint.startsWith("OK  Choose a link"))
         assertTrue(hint, hint.contains("BACK  Close this side"))
         assertFalse(hint, hint.contains("▲") || hint.contains("▼"))
     }

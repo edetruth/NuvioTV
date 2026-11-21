@@ -801,7 +801,7 @@
     <string name="sports_live_no_other_live_game">No other live game is playing right now</string>
     <string name="sports_live_back_to_live_now">Back to Live Now</string>
     <string name="sports_live_dual_stream_error">Couldn\'t play this stream</string>
-    <string name="sports_live_dual_recovery_choices">OK  Try another link · BACK  Close this side</string>
+    <string name="sports_live_dual_recovery_choices">OK  Choose a link · BACK  Close this side</string>
     <string name="sports_live_reconnecting">Reconnecting…</string>
     <string name="sports_live_next_live_game">Next live game</string>
     <string name="sports_live_starting_game">Starting %1$s</string>

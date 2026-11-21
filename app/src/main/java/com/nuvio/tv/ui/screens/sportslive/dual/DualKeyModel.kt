@@ -94,12 +94,15 @@ internal enum class DualOk {
 
 /**
  * The pane a short OK and Back act on (live.24, audit G1: a card owns its keys wherever it sits): the ringed pane; or,
- * when it has no card of its own, the other pane while that one shows the error card ("OK Try another link · BACK
+ * when it has no card of its own, the other pane while that one shows the error card ("OK Choose a link · BACK
  * Close this side") or an end card. In big + small the ring never sits on the small pane, which is where an alert's
- * game lands, so its cards must be reachable without it.
+ * game lands, so its cards must be reachable without it. Side by side the ring reaches either pane with ◀ ▶, so a card
+ * on the other pane never takes OK from the ringed game (live.24 RC review H3, coordinator decision): OK there plays
+ * the ringed game full screen, as the keys hint says.
  */
 internal fun dualKeySide(state: DualState): Side {
     val ringed = state.highlighted
+    if (state.layout != DualLayout.BIG_SMALL) return ringed
     if (dualPaneOwnsKeys(state.pane(ringed)) || dualCardButtons(state.pane(ringed)) > 0) return ringed
     return if (dualPaneOwnsKeys(state.pane(ringed.other))) ringed.other else ringed
 }

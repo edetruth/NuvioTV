@@ -509,6 +509,9 @@ fun SportsLiveDualScreen(
                     pane = pane,
                     handoff = handoffFrame?.takeIf { dualShowsHandoffFrame(it.atMs, handoffKey, pane, System.currentTimeMillis()) }?.image,
                     highlighted = side == dual.highlighted,
+                    // The card OK and Back act on shows its buttons: the ringed pane's, or the small pane's error or end
+                    // card in big + small (live.24 RC review H3: it took OK with its buttons hidden).
+                    cardActions = side == dual.highlighted || side == dualKeySide(dual),
                     small = dual.layout == DualLayout.BIG_SMALL && side == Side.RIGHT,
                     startingSelection = startingSelection,
                     endSelection = endSelection,
@@ -639,6 +642,8 @@ private fun DualPaneView(
     /** The full player's last frame (live.20), shown over the pane's still black video until its first frame. */
     handoff: ImageBitmap?,
     highlighted: Boolean,
+    /** Whether the pane's card shows its buttons: OK and Back act on it ([dualKeySide]). */
+    cardActions: Boolean,
     /** The corner tile of big + small (#123): a smaller strip. */
     small: Boolean,
     startingSelection: SportsLiveStartingAction,
@@ -688,7 +693,7 @@ private fun DualPaneView(
                 modifier = Modifier.fillMaxSize()
             )
             handoff?.let { Image(bitmap = it, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize()) }
-            PaneStatusOverlay(pane, highlighted, small, startingSelection, endSelection)
+            PaneStatusOverlay(pane, cardActions, small, startingSelection, endSelection)
         }
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -880,6 +885,7 @@ private fun SoundBars(color: Color, modifier: Modifier = Modifier) {
 @Composable
 private fun BoxScope.PaneStatusOverlay(
     pane: DualPane,
+    /** The card's buttons show: OK and Back act on this pane ([dualKeySide]). */
     highlighted: Boolean,
     small: Boolean,
     startingSelection: SportsLiveStartingAction,
@@ -917,7 +923,8 @@ private fun BoxScope.PaneStatusOverlay(
         PaneStatus.Playing -> Unit
         PaneStatus.Error -> PaneMessage(
             text = stringResource(R.string.sports_live_dual_stream_error),
-            hint = stringResource(R.string.sports_live_dual_recovery_choices),
+            // Its keys only while OK and Back act on it: side by side, the ring moves to it first.
+            hint = if (highlighted) stringResource(R.string.sports_live_dual_recovery_choices) else null,
             small = small
         )
         PaneStatus.DeviceLimit -> PaneMessage(text = stringResource(R.string.sports_live_dual_device_limit), hint = null, small = small)
