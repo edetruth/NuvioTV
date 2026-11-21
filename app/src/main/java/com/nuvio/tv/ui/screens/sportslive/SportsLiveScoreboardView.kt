@@ -860,9 +860,9 @@ internal val JUST_ENDED_SCORE_LINE = 17.sp
 /** A Just ended row is dimmed until focused (#60). */
 private const val JUST_ENDED_ALPHA = 0.6f
 
-/** A Channels region's label (P4): its country code as is, a long group name cleaned, else [other] ("Other"). */
-internal fun channelRegionLabel(value: String, other: String): String = when {
+/** A Channels region's label (P4, P8): a country code in words ("Albania"), a long group name cleaned, else [other] ("Other"). */
+internal fun channelRegionLabel(value: String, other: String, locale: java.util.Locale = java.util.Locale.getDefault()): String = when {
     value == com.nuvio.tv.core.sportslive.SportsLiveChannelRegions.OTHER -> other
-    value.length <= 3 -> value
+    value.length <= 3 -> com.nuvio.tv.core.sportslive.SportsLiveChannelRegions.label(value, locale) ?: value
     else -> SportsLiveDisplayText.name(value)
 }

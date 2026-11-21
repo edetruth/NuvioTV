@@ -64,12 +64,22 @@ object SportsLiveBroadcasters {
     private val broadcaster = Memo(4_096) { title: String -> broadcasterUncached(title) }
     private val placeholder = Memo(4_096) { title: String -> placeholderUncached(title) }
     private val sportFeed = Memo(4_096) { title: String -> sportFeedUncached(title) }
+    private val sportsChannel = Memo(4_096) { title: String -> sportsChannelUncached(title) }
+
+    /** A word that makes a channel's name a sports channel's. */
+    private val SPORTS_CHANNEL_WORDS = setOf("sport", "sports", "sportv", "deportes", "esporte", "esportes")
 
     // Tours named alone as a feed's title; a plain sport word ("Tennis", "Ice Hockey") is one too.
     private val TOURS = setOf("atp", "wta", "itf", "atp tour", "wta tour")
 
     /** True when [title] is a broadcaster's channel name; see the class doc. */
     fun isBroadcaster(title: String): Boolean = broadcaster(title)
+
+    /**
+     * True when [title] is a sports channel (P9): a [BRANDS] name after any region codes ("Eurosport 1 HD", "US: ESPN 2",
+     * "FOX Sports 502"), with any more words, or a name with a sport word in it ("Arena Sport 3", "Canal+ Sport").
+     */
+    fun isSportsChannel(title: String): Boolean = sportsChannel(title)
 
     /** True when [title] names nothing but a stream ("Streams", "Live Stream 2", "Backup Links"). */
     fun isPlaceholder(title: String): Boolean = placeholder(title)
@@ -92,6 +102,14 @@ object SportsLiveBroadcasters {
             start + brand.size <= words.size && brand.indices.all { words[start + it] == brand[it] }
         } ?: return false
         return words.drop(start + brand.size).all { it in FILLER || it in REGIONS || it.all(Char::isDigit) }
+    }
+
+    private fun sportsChannelUncached(title: String): Boolean {
+        val words = words(title)
+        var start = 0
+        while (start < words.size && words[start] in REGIONS) start++
+        val branded = BRANDS.any { brand -> start + brand.size <= words.size && brand.indices.all { words[start + it] == brand[it] } }
+        return branded || words.any { it in SPORTS_CHANNEL_WORDS }
     }
 
     private fun sportFeedUncached(title: String): Boolean {
