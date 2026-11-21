@@ -164,7 +164,7 @@ class SportsLiveDualLayoutTest {
         val column = DualGeometry.smallColumn(DualLayout.BIG_SMALL, 960.dp, 540.dp)!!
         assertEquals(small.start, column.start)
         assertEquals((small.bottom + 56.dp).value, column.top.value, 0.01f)
-        assertTrue((column.top + 84.dp + 100.dp).value <= big.bottom.value)
+        assertTrue((column.top + 84.dp + 100.dp).value <= 540f - 27f) // inside the safe area (design audit A4)
         assertEquals(null, DualGeometry.smallColumn(DualLayout.SPLIT, 960.dp, 540.dp))
         // (live.24 design audit A4) the small tile's game info now lives in smallColumn, checked above.
     }
