@@ -1278,7 +1278,7 @@ class SportsLiveViewModelTest {
     private val celticsGame = item("celtics", isLive = true, sport = "Basketball", name = "Dallas Mavericks at Boston Celtics", startMs = NOW - 30 * MINUTE)
 
     @Test
-    fun `the excitement badge shows with scores shown only and never re-orders Live Now`() = runTest {
+    fun `the excitement badge shows with scores shown only, and only then moves a close game up its tier`() = runTest {
         followedFlow.value = listOf(FollowedTeam("Celtics", "Basketball"))
         nextLoad = load(listOf(pacersGame, hornetsGame, lakersGame, celticsGame))
         val inputs = flowOf(
@@ -1305,14 +1305,45 @@ class SportsLiveViewModelTest {
         }
 
         val shown = state(ScoresMode.SHOW)
-        // Start order, followed first: the close game is badged, not moved (F2: no sort, no why-tag circle).
-        assertEquals(listOf("celtics", "pacers", "hornets", "lakers"), shown.visibleItems.map { it.id })
+        // J2 (live.23): followed first; the close game leads its tier (scores on screen), the rest by start.
+        assertEquals(listOf("celtics", "lakers", "pacers", "hornets"), shown.visibleItems.map { it.id })
         assertEquals(mapOf(lakersGame.streamKey to WhyTag(WhyKind.CLOSE_LATE, 1)), shown.whyTags)
-        // Hide until focused and Off: the same order, no badges.
+        // Hide until focused and Off: no badges, and no score moves a row (start order).
         val hidden = state(ScoresMode.HIDE_UNTIL_FOCUSED)
-        assertEquals(shown.visibleItems, hidden.visibleItems)
+        assertEquals(listOf("celtics", "pacers", "hornets", "lakers"), hidden.visibleItems.map { it.id })
         assertTrue(hidden.whyTags.isEmpty())
-        assertTrue(state(ScoresMode.OFF).whyTags.isEmpty())
+        val off = state(ScoresMode.OFF)
+        assertEquals(hidden.visibleItems.map { it.id }, off.visibleItems.map { it.id })
+        assertTrue(off.whyTags.isEmpty())
+    }
+
+    @Test
+    fun `listings that are no game fold into Other events, which open after the games`() = runTest {
+        val game = item("g", isLive = true, sport = "Soccer", name = "Arsenal vs Chelsea")
+        val tour = item("t1", isLive = true, sport = null, name = "ATP 250 vs Stockholm Open")
+        val tourCopy = item("t2", isLive = true, sport = null, name = "ATP 250 vs Stockholm Open")
+        val promotion = item("p", isLive = true, sport = null, name = "BKFC")
+        nextLoad = load(listOf(tour, game, tourCopy, promotion))
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+
+        val folded = viewModel.uiState.value
+        assertEquals(listOf("g"), folded.visibleItems.map { it.id })
+        assertEquals(listOf("g"), folded.tabs.getValue(SportsLiveTab.LIVE_NOW).map { it.id })
+        // The two copies of one entry are one row.
+        assertEquals(listOf("t1", "p"), folded.otherEvents.map { it.id })
+        assertFalse(folded.otherEventsOpen)
+
+        viewModel.toggleOtherEvents()
+        advanceUntilIdle()
+        assertEquals(listOf("g", "t1", "p"), viewModel.uiState.value.visibleItems.map { it.id })
+        assertTrue(viewModel.uiState.value.otherEventsOpen)
+        // Never zapped through: CH± and the player's panel walk the games only.
+        assertEquals(listOf("g"), viewModel.uiState.value.zapItems.map { it.id })
+
+        viewModel.toggleOtherEvents()
+        advanceUntilIdle()
+        assertEquals(listOf("g"), viewModel.uiState.value.visibleItems.map { it.id })
     }
 
     @Test

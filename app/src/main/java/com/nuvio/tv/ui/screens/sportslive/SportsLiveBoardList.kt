@@ -51,7 +51,11 @@ internal data class SportsLiveListModel(
     /** #167: the games My sports hides, the list's last line (0: none). */
     val hiddenByMySports: Int,
     /** Channels phase 2: each browse row's letter (◂ ▸ jump between them); null elsewhere. */
-    val channelLetters: List<String>?
+    val channelLetters: List<String>?,
+    /** Live now's "Other events" (H): how many; 0: no such row. */
+    val otherEvents: Int = 0,
+    /** They are open: the last [otherEvents] of [items] are theirs, listed under the row. */
+    val otherEventsOpen: Boolean = false
 )
 
 /**
@@ -93,6 +97,9 @@ internal class SportsLiveListActions {
 
     /** #167: OK on the "hidden by My sports" line. */
     var onShowAllSports: () -> Unit = {}
+
+    /** H: OK on Live now's "Other events (N) ›" row. */
+    var onToggleOtherEvents: () -> Unit = {}
 }
 
 /**
@@ -139,11 +146,22 @@ internal fun SportsLiveBoardList(
             // Read here, not through [model] in each row's key handler: a score poll builds a new model, and the handler
             // (part of the row's modifier) must stay equal so an unchanged row skips (#143).
             val letters = model.channelLetters
+            // H: the open "Other events" are the list's last rows; their row rides on the first of them.
+            val firstOther = if (model.otherEventsOpen) items.size - model.otherEvents else Int.MAX_VALUE
             itemsIndexed(items, key = { _, item -> item.listKey }, contentType = { _, _ -> ROW_CONTENT }) { index, item ->
                 val boardRow = rowOf[item.listKey] ?: return@itemsIndexed
                 // The group's heading rides on its first row, so list indices stay the rows' own.
                 Column {
-                    if (model.channelsTab) {
+                    if (index == firstOther) {
+                        SportsLiveChannelEntryLine(
+                            text = stringResource(R.string.sports_live_other_events_open, model.otherEvents),
+                            onClick = { actions.onToggleOtherEvents() },
+                            modifier = Modifier.focusProperties { right = stageFocusRequester }
+                        )
+                    }
+                    if (index >= firstOther) {
+                        // No group headings among the other events: they are one quiet list under their row.
+                    } else if (model.channelsTab) {
                         val section = boardRow.section
                         if (index == 0 && model.favoritesHint) SportsLiveFavoritesHint()
                         // Phase 2: every section is headed (Favorites, Recent, Popular now, a letter); no region headings.
@@ -216,6 +234,16 @@ internal fun SportsLiveBoardList(
                     )
                 }
             }
+            // H: listings that are no game, folded into one quiet row at the bottom (opened, it rides on the first of them).
+            if (model.otherEvents > 0 && !model.otherEventsOpen) {
+                item(key = OTHER_EVENTS_KEY, contentType = ENTRY_CONTENT) {
+                    SportsLiveChannelEntryLine(
+                        text = stringResource(R.string.sports_live_other_events, model.otherEvents),
+                        onClick = { actions.onToggleOtherEvents() },
+                        modifier = Modifier.focusProperties { right = stageFocusRequester }
+                    )
+                }
+            }
             // #167: under My sports, the games it hides are one press away (OK: All sports).
             if (model.hiddenByMySports > 0) {
                 item(key = HIDDEN_BY_MY_SPORTS_KEY, contentType = HIDDEN_CONTENT) {
@@ -238,6 +266,9 @@ internal fun SportsLiveBoardList(
 private const val CHANNEL_POPULAR_KEY = "\u0000channels:popular"
 private const val CHANNEL_SPORTS_KEY = "\u0000channels:sports"
 private const val CHANNEL_ALL_KEY = "\u0000channels:all"
+
+/** H: Live now's "Other events" row's list key. */
+private const val OTHER_EVENTS_KEY = "live:other_events"
 
 /** The list's content types (#143): game rows, entry lines and the hidden-games line are reused only as their own kind. */
 private const val ROW_CONTENT = "row"

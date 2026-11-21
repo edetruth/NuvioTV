@@ -67,7 +67,11 @@ data class SportsLiveUiState(
      */
     val staleListAtMs: Long? = null,
     /** Live now's new rows waiting while it is browsed (TV QA BUG7 / Q5): "N new" on Refresh shows them. */
-    val newLiveRows: Int = 0
+    val newLiveRows: Int = 0,
+    /** Live now's "Other events" (H): listings that are no game nor an event of their own, behind one bottom row. */
+    val otherEvents: List<SportsLiveItem> = emptyList(),
+    /** That row is open: [otherEvents] follow the games in [visibleItems]. */
+    val otherEventsOpen: Boolean = false
 ) {
     /** The selected chip has no games left (#79): it stays shown with 0 until the user moves, then All. */
     val selectedFilterEmpty: Boolean get() = selectedFilter != null && (filterCounts[selectedFilter] ?: 0) == 0

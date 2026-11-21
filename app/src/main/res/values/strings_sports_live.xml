@@ -449,6 +449,9 @@
     <string name="sports_live_channels_see_all_popular">See all popular · %1$d ›</string>
     <string name="sports_live_channels_sports_entry">Sports · %1$d ›</string>
     <string name="sports_live_channels_all_entry">All channels · %1$d ›</string>
+    <!-- H (live.23): Live now's last row, folding listings that are no game; OK opens them under it, or closes them. -->
+    <string name="sports_live_other_events">Other events (%1$d) ›</string>
+    <string name="sports_live_other_events_open">Other events (%1$d) ⌄</string>
     <string name="sports_live_channels_browse_all">All channels</string>
     <string name="sports_live_channels_browse_sports">Sports channels</string>
     <string name="sports_live_channels_browse_popular">Popular now</string>

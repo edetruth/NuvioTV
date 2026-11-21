@@ -84,7 +84,7 @@ object SportsLiveOtherEvents {
 
     /** Words a listing's title carries beside what it names: a stream's, a quality's or a status's. */
     private val FILLER = setOf(
-        "live", "now", "hd", "fhd", "uhd", "sd", "4k", "stream", "streams", "feed", "feeds", "tv", "event", "events", "watch"
+        "live", "now", "hd", "fhd", "uhd", "sd", "4k", "stream", "streams", "feed", "feeds", "tv", "watch"
     )
 
     /** Promotions, leagues and weekly shows named alone (name keys); four letters or fewer need no entry. */

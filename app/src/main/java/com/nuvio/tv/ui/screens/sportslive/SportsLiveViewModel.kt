@@ -20,6 +20,8 @@ import com.nuvio.tv.core.sportslive.SportsLiveItemBucketer
 import com.nuvio.tv.core.sportslive.SportsLiveLiveDuration
 import com.nuvio.tv.core.sportslive.SportsLiveSportKind
 import com.nuvio.tv.core.sportslive.SportsLiveMySportsScope
+import com.nuvio.tv.core.sportslive.SportsLiveImportance
+import com.nuvio.tv.core.sportslive.SportsLiveOtherEvents
 import com.nuvio.tv.core.sportslive.scores.FollowTarget
 import com.nuvio.tv.core.sportslive.scores.MySports
 import com.nuvio.tv.core.sportslive.scores.ExcitementHistory
@@ -252,6 +254,8 @@ class SportsLiveViewModel internal constructor(
         val browsing: Boolean = false,
         /** Bumped by "N new" on Refresh ([showNewRows]): the next build shows Live now as it is now, once. */
         val thaw: Int = 0,
+        /** Live now's "Other events (N) ›" row is open (H): its listings follow the games. */
+        val otherEventsOpen: Boolean = false,
         val isRefreshing: Boolean = false,
         val failures: List<SportsLiveFailure> = emptyList(),
         val lastRefreshedMs: Long? = null,
@@ -608,6 +612,7 @@ class SportsLiveViewModel internal constructor(
                 ended = if (live) state.justEnded else emptyMap(),
                 noStreams = if (live) state.noStreams else emptySet(),
                 excitement = if (live) state.whyTags else emptyMap(),
+                otherEvents = if (live && state.otherEventsOpen) state.otherEvents.mapTo(HashSet()) { it.streamKey } else emptySet(),
                 followed = followed,
                 clockMs = state.nowMs / MINUTE_MS * MINUTE_MS,
                 logoRevision = revision,
@@ -713,7 +718,7 @@ class SportsLiveViewModel internal constructor(
         // stage jumped to the addon's first item).
         if (!changed) return
         if (tab == SportsLiveTab.CHANNELS) takeChannelOrder() else channelBrowseState.value = null
-        selectionState.update { it.copy(tab = tab, filter = remembered, itemId = null, browsing = false) }
+        selectionState.update { it.copy(tab = tab, filter = remembered, itemId = null, browsing = false, otherEventsOpen = false) }
         previewController.onTab(tab)
         // The new tab's catalogs on its own cadence (#71).
         if (changed) restartAutoRefresh()
@@ -745,6 +750,11 @@ class SportsLiveViewModel internal constructor(
      */
     fun setBrowsing(focused: Boolean) {
         if (selectionState.value.browsing != focused) selectionState.update { it.copy(browsing = focused) }
+    }
+
+    /** OK on Live now's "Other events (N) ›" row (H): opens its listings under it, or closes them. */
+    fun toggleOtherEvents() {
+        selectionState.update { it.copy(otherEventsOpen = !it.otherEventsOpen) }
     }
 
     /** "N new" on Refresh (TV QA Q5): Live now as it is now, the waiting rows in their places; then frozen again. */
@@ -972,8 +982,12 @@ class SportsLiveViewModel internal constructor(
         var finals = emptySet<String>()
         excitementHistory.observe(inputs.scores.values, now)
         var whyTags = emptyMap<String, WhyTag>()
-        val tabs = bucketed.tabs.mapValues { (tab, tabItems) ->
+        var otherEvents = emptyList<SportsLiveItem>()
+        val tabs = bucketed.tabs.mapValues { (tab, allItems) ->
             if (tab == SportsLiveTab.LIVE_NOW) {
+                // H (live.23): listings that are no game and no event of their own leave the list for its "Other events" row.
+                val (tabItems, others) = SportsLiveOtherEvents.split(allItems)
+                otherEvents = SportsLiveHiddenTitles.filter(others, hiddenNow)
                 val scores = inputs.scores
                 noStreams = tabItems.filter { it.hasEnded(endedKeys) }.mapTo(HashSet()) { it.streamKey }
                 val split = endedGames.split(tabItems, scores, now, inputs.canEstimate)
@@ -1023,7 +1037,10 @@ class SportsLiveViewModel internal constructor(
                         }
                     }
                 }
-                val built = live + split.justEnded + overdueEnded.map { it.first } + linkEnded
+                // J2 (live.23): by importance (followed, My sports by tier, other leagues, unplaced); a close or late game
+                // leads its tier only with the scores shown (the badges exist only then), so no hidden score moves a row.
+                val ranked = SportsLiveImportance.sort(live, mySports, bumped = whyTags.keys)
+                val built = ranked + split.justEnded + overdueEnded.map { it.first } + linkEnded
                 lastBuiltLiveNow = built
                 // The focused card is never taken from under the user: kept in place until focus moves on. While Live now
                 // is browsed nothing moves at all (F6, TV QA BUG7): no row leaves, none re-orders, new ones wait for
@@ -1042,7 +1059,7 @@ class SportsLiveViewModel internal constructor(
                 // A title just hidden (#134) leaves at once, even with focus on it: the keep step must not bring it back.
                 SportsLiveHiddenTitles.filter(kept, hiddenNow).also { shownLiveNow = it }
             } else {
-                tabItems
+                allItems
             }
         }
         // #146: My sports scopes Live now, Upcoming and Replays (never Channels): followed teams' games stay, games of
@@ -1081,8 +1098,10 @@ class SportsLiveViewModel internal constructor(
         val filters = sportsLiveShownFilters(values, counts, filter.takeIf { !allSports })
             .let { if (channels) SportsLiveChannelRegions.ordered(it) else it }
             .let { shown -> if (mySportsScoped || allSports) withAllSports(shown) else shown }
+        // H: Live now's "Other events" under All (My sports or All sports), whatever My sports picks; opened, they follow the games.
+        val otherShown = if (selection.tab == SportsLiveTab.LIVE_NOW && (filter == null || allSports)) otherEvents else emptyList()
         val visible = when (filter) {
-            null, SportsLiveUiState.ALL_SPORTS_FILTER -> tabItems
+            null, SportsLiveUiState.ALL_SPORTS_FILTER -> if (selection.otherEventsOpen) tabItems + otherShown else tabItems
             SportsLiveUiState.MY_TEAMS_FILTER -> tabItems.filter { it.followed }
             else -> tabItems.filter { filterOf(it) == filter }
         }
@@ -1129,7 +1148,9 @@ class SportsLiveViewModel internal constructor(
             whyTags = whyTags,
             // Stale-while-revalidate (live.20 B1): a list over 5 minutes old shown while the refresh runs says when it is from.
             staleListAtMs = bucketed.listAtMs?.takeIf { selection.isRefreshing && now - it >= STALE_MARK_MS },
-            newLiveRows = newRows
+            newLiveRows = newRows,
+            otherEvents = otherShown,
+            otherEventsOpen = selection.otherEventsOpen && otherShown.isNotEmpty()
         ).also { state ->
             if (!state.isLoading && hasClaimed && firstStateLogged.compareAndSet(false, true)) {
                 SportsLiveDebugTiming.log {

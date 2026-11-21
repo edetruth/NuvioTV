@@ -11,6 +11,7 @@ import com.nuvio.tv.core.sportslive.scores.EspnLeague
 import com.nuvio.tv.core.sportslive.scores.BigGame
 import androidx.compose.runtime.Immutable
 import com.nuvio.tv.core.sportslive.EndedGame
+import com.nuvio.tv.core.sportslive.GameStatus
 import com.nuvio.tv.core.sportslive.SportsLiveChannelList
 import com.nuvio.tv.core.sportslive.SportsLiveChannelLists
 import com.nuvio.tv.core.sportslive.SportsLiveChannelSummary
@@ -62,7 +63,9 @@ data class SportsLiveBoardInputs(
     /** Standings by league (#137): Upcoming's big games read them; empty on the other tabs. */
     val standings: Map<EspnLeague, Map<String, TeamStanding>> = emptyMap(),
     /** Channels' favorites, recent plays, browse view and countries (phases 1 and 2); none on the other tabs. */
-    val channelLists: SportsLiveChannelLists = SportsLiveChannelLists.NONE
+    val channelLists: SportsLiveChannelLists = SportsLiveChannelLists.NONE,
+    /** Live now's "Other events" (H) among [items], by card key: listed last, LIVE only when ESPN has them in play. */
+    val otherEvents: Set<String> = emptySet()
 )
 
 /**
@@ -140,9 +143,16 @@ data class SportsLiveBoard(
                 null
             }
             val scores = inputs.scores
+            // Live now (J2, H): its games come in importance order; its open "Other events" follow them, last.
+            val liveNow = tab == SportsLiveTab.LIVE_NOW
+            val (otherItems, gameItems) = if (liveNow && inputs.otherEvents.isNotEmpty()) {
+                inputs.items.partition { it.streamKey in inputs.otherEvents }
+            } else {
+                emptyList<SportsLiveItem>() to inputs.items
+            }
             val rows = if (isScoreboard(tab)) {
                 scoreboardRows(
-                    items = inputs.items,
+                    items = gameItems,
                     tab = tab,
                     scores = scores.scores,
                     mode = scores.mode,
@@ -154,9 +164,11 @@ data class SportsLiveBoard(
                         val event = ScoreChips.matchedEvent(item, scores.scores[item.streamKey])
                         inputs.followed.any { TeamFollows.followsCardSide(it, side, item, event) }
                     },
-                    excitement = inputs.excitement
+                    excitement = inputs.excitement,
+                    keepOrder = liveNow
                 ).map { row -> if (row.item.streamKey in inputs.noStreams) row.copy(noStreams = true) else row }
                     .let { built -> if (tab == SportsLiveTab.UPCOMING) withBigGames(built, scores.scores, inputs.standings) else built }
+                    .let { built -> if (otherItems.isEmpty()) built else built + otherEventRows(otherItems, scores, inputs.clockMs) }
             } else {
                 when (tab) {
                     // Channels (phases 1 and 2): Favorites, Recent and Popular now, or the browse view; Replays under
@@ -185,6 +197,25 @@ data class SportsLiveBoard(
         }
     }
 }
+
+/**
+ * Live now's open "Other events" (H) as rows, in their order: LIVE only when ESPN has the event in play; otherwise no
+ * status at all (the addon's own LIVE is not trusted for these).
+ */
+internal fun otherEventRows(items: List<SportsLiveItem>, scores: SportsLiveBoardScores, nowMs: Long): List<ScoreboardRow> =
+    scoreboardRows(
+        items = items,
+        tab = SportsLiveTab.LIVE_NOW,
+        scores = scores.scores,
+        mode = scores.mode,
+        revealed = scores.revealed,
+        nowMs = nowMs,
+        keepOrder = true
+    ).sortedBy { row -> items.indexOfFirst { it.streamKey == row.item.streamKey } }.map { row ->
+        val status = row.status
+        val confirmed = status is GameStatus.Live && status.event != null
+        if (confirmed) row else row.copy(status = GameStatus.Upcoming(null, hasTimeOfDay = false), group = ScoreboardGroup.STARTING_SOON, chip = null, progress = null)
+    }
 
 /**
  * This board with [previous]'s row instances wherever a row did not change (#143). A score poll builds every row of the

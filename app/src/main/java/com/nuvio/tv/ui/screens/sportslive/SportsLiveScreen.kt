@@ -512,6 +512,7 @@ fun SportsLiveScreen(
             onRevealResult = scoresViewModel::revealResult,
             onBrowsing = viewModel::setBrowsing,
             onShowNewRows = viewModel::showNewRows,
+            onToggleOtherEvents = viewModel::toggleOtherEvents,
             onToggleChannelFavorite = viewModel::toggleChannelFavorite,
             channelBrowse = channelBrowse,
             channelActions = remember(viewModel) {
@@ -646,6 +647,8 @@ private fun SportsLiveContent(
     onBrowsing: (Boolean) -> Unit = {},
     /** "N new" on Refresh (TV QA Q5): the rows that waited while Live now was browsed. */
     onShowNewRows: () -> Unit = {},
+    /** H: OK on Live now's "Other events (N) ›" row. */
+    onToggleOtherEvents: () -> Unit = {},
     /** Hold OK → Add to / Remove from favorites on a Channels row (phase 1): the channel, and whether it is one now. */
     onToggleChannelFavorite: (SportsLiveItem, Boolean) -> Unit = { _, _ -> },
     /** Channels' browse view (phase 2); null while the tab shows its own sections. */
@@ -1584,6 +1587,7 @@ private fun SportsLiveContent(
     }
     listActions.onOpenBrowse = openChannelBrowse
     listActions.onShowAllSports = { onSelectFilter(SportsLiveUiState.ALL_SPORTS_FILTER) }
+    listActions.onToggleOtherEvents = onToggleOtherEvents
     val currentSelectedFilterEmpty by rememberUpdatedState(uiState.selectedFilterEmpty)
     val currentOnPreviewKey by rememberUpdatedState(onPreviewKey)
     Column(
@@ -2106,7 +2110,10 @@ private fun SportsLiveContent(
                     // Channels (P4): one list, under a header per region while more than one region shows.
                     val channelsTab = uiState.selectedTab == SportsLiveTab.CHANNELS
                     // What the list shows, once per board, tab and filter (#115).
-                    val listModel = remember(shownBoard, channelsTab, channelBrowse, uiState.selectedFilter, uiState.hiddenByMySports, otherRegionLabel, channelLetters) {
+                    val listModel = remember(
+                        shownBoard, channelsTab, channelBrowse, uiState.selectedFilter, uiState.hiddenByMySports, otherRegionLabel, channelLetters,
+                        uiState.otherEvents.size, uiState.otherEventsOpen
+                    ) {
                         val rows = shownBoard?.rows.orEmpty()
                         val sectionCounts = rows.mapNotNull { it.section }.groupingBy { it }.eachCount()
                         SportsLiveListModel(
@@ -2121,7 +2128,11 @@ private fun SportsLiveContent(
                             otherRegionLabel = otherRegionLabel,
                             channelEntries = channelSummary?.takeIf { channelsTab && channelBrowse == null && uiState.selectedFilter == null && !it.fallback },
                             hiddenByMySports = if (channelsTab) 0 else uiState.hiddenByMySports,
-                            channelLetters = channelLetters
+                            channelLetters = channelLetters,
+                            otherEvents = if (channelsTab) 0 else uiState.otherEvents.size,
+                            // Open only once the board lists them (the last rows), never before it is built.
+                            otherEventsOpen = !channelsTab && uiState.otherEventsOpen &&
+                                uiState.otherEvents.isNotEmpty() && items.takeLast(uiState.otherEvents.size).map { it.streamKey } == uiState.otherEvents.map { it.streamKey }
                         )
                     }
                     // The rows' marks (#143): equal from one D-pad move to the next while the list holds focus.
