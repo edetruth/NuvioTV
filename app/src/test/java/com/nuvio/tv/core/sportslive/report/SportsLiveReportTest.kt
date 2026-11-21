@@ -135,6 +135,31 @@ class SportsLiveReportTest {
         assertFalse(text, text.contains("score:", ignoreCase = true))
     }
 
+    @Test
+    fun `a title carrying its result never puts the score in the report or its qr code`() {
+        val game = SportsLiveReportInput.Game(
+            title = "Arsenal 2-1 Chelsea",
+            teams = "Arsenal 2 vs 1 Chelsea",
+            sport = "soccer",
+            league = "Premier League",
+            live = false,
+            sources = 1,
+            espn = null
+        )
+        val nearMiss = "[Replays] \"Lakers 110 - 102 Celtics\" (NBA) ~ \"Lakers v Celtics\" (no tags): one side alike"
+        val text = SportsLiveReport.text(
+            input(game = game, nearMisses = listOf(nearMiss)).copy(focused = "Bayern 3:0 Koln", unplaced = listOf("2x | Final 4–3 OT")),
+            secrets
+        )
+        for (score in listOf("2-1", "2 vs 1", "110 - 102", "3:0", "4–3")) {
+            assertFalse(text, text.contains(score))
+            assertFalse(score, SportsLiveReport.qrPayload(text).contains(score))
+        }
+        assertTrue(text, text.contains("Game: Arsenal <numbers> Chelsea · Arsenal <numbers> Chelsea · Premier League"))
+        assertTrue(text, text.contains("Focused: Bayern <numbers> Koln"))
+        assertTrue(text, text.contains("Saved: 2025-11-20 19:42:05 +00:00"))
+    }
+
     // The voice note
 
     @Test

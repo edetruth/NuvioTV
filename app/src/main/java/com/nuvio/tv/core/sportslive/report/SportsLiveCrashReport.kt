@@ -37,7 +37,7 @@ object SportsLiveCrashReport {
     const val TRACE_LINES = 200
     const val MAX_EXITS = 3
 
-    private const val NUMBERS = "<numbers>"
+    internal const val NUMBERS = "<numbers>"
     private val SCORE_LIKE = Regex("""(?<!\d)\d+\s*[-–:]\s*\d+(?!\d)""")
     private val STAMP = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss xxx", Locale.ROOT)
 
