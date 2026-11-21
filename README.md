@@ -22,8 +22,11 @@ already use. It installs next to the official app (`io.github.edetruth.nuviotv`)
   scores, records and rankings with spoiler controls (Scores Show / Hide / Off, Watch later); Game, Team and Player
   pages with a pre-game Preview; followed teams, reminders and actionable alerts; channel zapping with an in-player
   games panel; dual screen (side by side or big + small) and a mini player; stream health with automatic failover
-  and faster starts; first-run setup; settings synced with your Nuvio account.
-- **Planned:** a Results redesign, a Channels batch (logos, naming, guide), a "Report a problem" shortcut and more —
+  and fast starts (about 4 s on an onn 4K Pro); "▶ Ready" for your teams' games; a Your teams strip; Report a
+  problem (Hold OK → More…) with privacy-safe reports and crash capture; first-run setup; settings synced with your
+  Nuvio account.
+- **Planned:** a new in-player games guide (a table with the video in a corner), a Results redesign, a Channels batch
+  (logos, naming, guide), stream language tags and more —
   see the [issues](https://github.com/edetruth/NuvioTV/issues).
 
 ## Get Nuvio TV
