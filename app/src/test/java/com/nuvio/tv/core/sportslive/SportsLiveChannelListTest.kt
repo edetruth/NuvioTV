@@ -201,6 +201,13 @@ class SportsLiveChannelListTest {
     }
 
     @Test
+    fun `the rail shows plain letters when given the rows' sections`() {
+        val sections = listOf("A", "B", "B", "D").map { l.LETTER + it }
+        assertEquals(Triple("A", "B", "D"), l.around(sections, 1))
+        assertEquals(Triple(null, "A", "B"), l.around(sections, 0))
+    }
+
+    @Test
     fun `channels sort A to Z with digits and symbols first under hash`() {
         val items = listOf(channel("1", "Zee"), channel("2", "1 Sports"), channel("3", "Élan"), channel("4", "alpha"))
         assertEquals(listOf("1 Sports", "alpha", "Élan", "Zee"), l.sortedAZ(items).map { it.meta.name })

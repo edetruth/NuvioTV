@@ -346,7 +346,7 @@ private fun PanelLabel(text: String) {
 private val ENTRY_HEIGHT = 40.dp
 
 /** The room the browse list keeps at its right edge for [SportsLiveChannelLetterRail]. */
-internal val LETTER_RAIL_WIDTH = 36.dp
+internal val LETTER_RAIL_WIDTH = 44.dp
 
 private val BROWSE_TITLE = TextStyle(fontSize = 18.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold)
 private val BIG_LETTER = TextStyle(fontSize = 34.sp, lineHeight = 38.sp, fontWeight = FontWeight.Bold)

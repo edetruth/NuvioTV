@@ -158,12 +158,15 @@ object SportsLiveChannelList {
         }
     }
 
-    /** The letters round the row at [index]: the one before, its own and the next (the big letter at the right edge). */
+    /**
+     * The letters round the row at [index]: the one before, its own and the next (the big letter at the right edge).
+     * [letters] may be the rows' sections: each is shown as its letter, without the [LETTER] prefix (#220).
+     */
     fun around(letters: List<String>, index: Int): Triple<String?, String, String?>? {
         val current = letters.getOrNull(index) ?: return null
         val before = (index downTo 0).map { letters[it] }.firstOrNull { it != current }
         val after = (index until letters.size).map { letters[it] }.firstOrNull { it != current }
-        return Triple(before, current, after)
+        return Triple(before?.removePrefix(LETTER), current.removePrefix(LETTER), after?.removePrefix(LETTER))
     }
 
     /** Find a channel: [item]'s clean name, or its brand family, holds every word of [query]. */
