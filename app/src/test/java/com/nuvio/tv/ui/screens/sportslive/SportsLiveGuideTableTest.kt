@@ -105,6 +105,22 @@ class SportsLiveGuideTableTest {
     }
 
     @Test
+    fun `the footer says how long the scores are held for the stream, to 5 s, only under Show`() {
+        // TV report #14: the guide's scores trail ESPN on purpose while the stream plays; it says so.
+        assertEquals("1:15", scoreHoldText(75_000L, com.nuvio.tv.core.sportslive.scores.ScoresMode.SHOW))
+        assertEquals("1:15", scoreHoldText(73_000L, com.nuvio.tv.core.sportslive.scores.ScoresMode.SHOW))
+        assertEquals("1:20", scoreHoldText(77_600L, com.nuvio.tv.core.sportslive.scores.ScoresMode.SHOW))
+        assertEquals("4:05", scoreHoldText(245_000L, com.nuvio.tv.core.sportslive.scores.ScoresMode.SHOW))
+        // No hold (nothing playing, Real time), Hide until focused and Off: no line.
+        assertNull(scoreHoldText(null, com.nuvio.tv.core.sportslive.scores.ScoresMode.SHOW))
+        assertNull(scoreHoldText(0L, com.nuvio.tv.core.sportslive.scores.ScoresMode.SHOW))
+        com.nuvio.tv.core.sportslive.scores.ScoresMode.entries.filter { it != com.nuvio.tv.core.sportslive.scores.ScoresMode.SHOW }.forEach { mode ->
+            assertNull(mode.name, scoreHoldText(75_000L, mode))
+        }
+        assertNull(scoreHoldText(75_000L, null))
+    }
+
+    @Test
     fun `the first chip reads My sports whenever My sports is picked, even with nothing hidden`() {
         // TV report #14: "★ My teams 1 · All 52 · Basketball 4" under My sports, as no game was left out.
         val base = SportsLiveZapPanelState(rows = emptyList(), currentKey = "x", chips = listOf(SportsLiveUiState.MY_TEAMS_FILTER, null, "Basketball"))

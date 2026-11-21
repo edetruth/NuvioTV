@@ -388,6 +388,13 @@ class SportsLiveZapViewModel internal constructor(
     private val _panelKeysHint = MutableStateFlow(false)
     val panelKeysHint: StateFlow<Boolean> = _panelKeysHint.asStateFlow()
 
+    /**
+     * The guide's and the panel's "Scores held 1:15 to match your stream" hold (TV report #14), m:ss; null when no hold
+     * applies or Scores is not Show ([scoreHoldText]).
+     */
+    val scoreHold: StateFlow<String?> = combine(liveScores.scoreHoldMs, liveScores.mode) { holdMs, mode -> scoreHoldText(holdMs, mode) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
     // The panel's games are tracked for live scores only while it is open: the section stops its own
     // tracking when the player covers it (ON_STOP), so the player has its own scope.
     private val scoreTracker = LiveScoresTracker(LiveScoresRepository.SCREEN_PLAYER_PANEL, liveScores)

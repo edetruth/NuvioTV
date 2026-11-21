@@ -1077,6 +1077,26 @@ class LiveScoresRepositoryTest {
     }
 
     @Test
+    fun `the hold the scores keep for the stream playing is told, and none while nothing plays`() = runTest {
+        // TV report #14: the guide says "Scores held 1:15 to match your stream".
+        provider.respond = { ScoreboardResult(listOf(game(ScoreState.IN, 50, 48, "Q2 5:00"))) }
+        val repo = repository("2026-11-15T19:00:00Z")
+        collect(repo)
+        repo.track(SECTION, listOf(pacersCard))
+        runCurrent()
+        assertNull(repo.scoreHoldMs.value)
+        watching.watch("player", setOf("another game"), "addon")
+        runCurrent()
+        assertEquals(ScoreWatch.MIN_PLAYING_DELAY_MS, repo.scoreHoldMs.value)
+        watching.behindLive("player", 70_000L)
+        runCurrent()
+        assertEquals(70_000L + ScoreWatch.MARGIN_MS, repo.scoreHoldMs.value)
+        watching.stop("player")
+        runCurrent()
+        assertNull(repo.scoreHoldMs.value)
+    }
+
+    @Test
     fun `after a pause no old score shows until a fresh fetch`() = runTest {
         provider.respond = { ScoreboardResult(listOf(game(ScoreState.IN, 50, 48, "Q2 5:00"))) }
         val repo = repository("2026-11-15T19:00:00Z")

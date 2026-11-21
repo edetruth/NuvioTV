@@ -7,6 +7,7 @@ import com.nuvio.tv.core.sportslive.GameStatusStrings
 import com.nuvio.tv.core.sportslive.SportsLiveGuideStyle
 import com.nuvio.tv.core.sportslive.SportsLiveReadyMark
 import com.nuvio.tv.core.sportslive.scores.GameArtTeam
+import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveGuideKey.CONSUMED
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -131,6 +132,19 @@ private const val GUIDE_TIME_SEPARATOR = " · "
 
 /** ESPN's end-of-period words as [splitClock] leaves them. */
 private const val END_OF = "End of"
+
+/**
+ * The footer's "Scores held 1:15 to match your stream" (TV report #14), the hold as m:ss rounded to 5 s: while every
+ * score is held back for the stream playing ([holdMs], the scores' own delay), under Scores Show only (Hide until focused
+ * and Off show no scores to explain). Null when no hold applies.
+ */
+internal fun scoreHoldText(holdMs: Long?, mode: ScoresMode?): String? {
+    if (holdMs == null || holdMs <= 0L || mode != ScoresMode.SHOW) return null
+    val seconds = (holdMs + SCORE_HOLD_STEP_MS / 2) / SCORE_HOLD_STEP_MS * (SCORE_HOLD_STEP_MS / 1_000L)
+    return "%d:%02d".format(seconds / 60, seconds % 60)
+}
+
+private const val SCORE_HOLD_STEP_MS = 5_000L
 
 /** A row's marks (B2), in drawing order: stopwatch, ★, Ready. */
 internal fun guideMarks(closeLate: Boolean, myTeam: Boolean, ready: SportsLiveReadyMark?, nowPlaying: Boolean): List<GuideMark> =

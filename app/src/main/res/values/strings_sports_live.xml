@@ -16,6 +16,8 @@
     <string name="sports_live_guide_style_jump">Table (jump)</string>
     <string name="sports_live_guide_title">Live games</string>
     <string name="sports_live_guide_footer">OK Watch  ·  ◂ ▸ Sport  ·  Back Close</string>
+    <!-- TV report #14: every score is held back while a stream plays; %1$s is the hold, m:ss. -->
+    <string name="sports_live_scores_held">Scores held %1$s to match your stream</string>
     <string name="sports_live_guide_more_below">▼ %1$d more</string>
     <string name="sports_live_guide_legend_hold_ok">Hold OK More</string>
     <string name="sports_live_guide_legend_close">Close, late</string>
