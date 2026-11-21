@@ -105,4 +105,22 @@ class SportsLiveReportFilesTest {
         assertEquals("second with a note", File(dir(), SportsLiveReportFiles.LATEST).readText())
         assertFalse(first.name == second.name)
     }
+    @Test
+    fun `Report a problem shows the newest report only while it is fresh`() {
+        val name = "report-003-20261120-194205.txt"
+        val text = "Nuvio Live report #3\nFrom: Settings\n${SportsLiveReport.DETAILS}\n"
+        val saved = 1_000_000L
+        assertTrue(SportsLiveReportFiles.showsAsIs(name, text, saved, saved))
+        assertTrue(SportsLiveReportFiles.showsAsIs(name, text, saved, saved + SportsLiveReportFiles.FRESH_MS))
+        assertFalse(SportsLiveReportFiles.showsAsIs(name, text, saved, saved + SportsLiveReportFiles.FRESH_MS + 1))
+        // A clock set back since: not fresh either.
+        assertFalse(SportsLiveReportFiles.showsAsIs(name, text, saved, saved - 60_000L))
+    }
+
+    @Test
+    fun `a crash report is shown as it is however old`() {
+        val name = "report-004-20261120-194205.txt"
+        val text = "Nuvio Live report #4\nCrash: java.lang.IllegalStateException\nFrom: crash\n${SportsLiveReport.DETAILS}\n"
+        assertTrue(SportsLiveReportFiles.showsAsIs(name, text, 0L, 3 * 24 * 60 * 60_000L))
+    }
 }

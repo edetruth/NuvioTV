@@ -85,8 +85,15 @@ internal fun SportsLiveReportDialog(onDismiss: () -> Unit) {
     }
 
     LaunchedEffect(Unit) {
-        saved = reporter.latest()
-        if (saved == null) saveNew() else loading = false
+        // The newest report as it is only while it is fresh (or a crash's): an old one would show a stale state.
+        val latest = reporter.latest()
+        if (latest != null && SportsLiveReportFiles.showsAsIs(latest.file.name, latest.text, latest.file.lastModified(), System.currentTimeMillis())) {
+            saved = latest
+            loading = false
+        } else {
+            saved = latest
+            saveNew()
+        }
     }
 
     val qr by produceState<Bitmap?>(null, saved?.text) {
