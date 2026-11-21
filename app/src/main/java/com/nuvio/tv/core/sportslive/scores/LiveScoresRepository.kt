@@ -5,6 +5,7 @@ import com.nuvio.tv.R
 import com.nuvio.tv.core.sportslive.SportsLiveEspnStarts
 import com.nuvio.tv.core.sportslive.SportsLiveSportInference
 import com.nuvio.tv.core.sportslive.SportsLiveSportKind
+import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.SportsLiveToastKind
 import com.nuvio.tv.core.sportslive.SportsLiveToasts
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
@@ -197,7 +198,9 @@ class LiveScoresRepository internal constructor(
          * A two-team card that names no sport and no feed covers (#206: "Troyes vs Le Havre", untagged): matched, both
          * sides STRONG, only on the feeds other cards already poll, so it never asks for a feed of its own.
          */
-        val piggyback: Boolean = false
+        val piggyback: Boolean = false,
+        /** A [piggyback] card's ESPN sports when a source names one no feed covers; null: told by its teams. */
+        val piggybackSports: Set<String>? = null
     )
 
     private class FeedState {
@@ -342,7 +345,10 @@ class LiveScoresRepository internal constructor(
                 // No sport anywhere on the card (#206): only the feeds already polled for others.
                 if (item.isChannel || item.teams == null || sources.any { SportsLiveSportKind.tagOf(it) != null }) return@mapNotNull null
                 val liveKeys = if (item.isLive) sources.filter { !it.isChannel }.map { it.streamKey } else emptyList()
-                return@mapNotNull TrackedCard(card, emptyList(), item.followed, fallback = null, liveKeys = liveKeys, piggyback = true)
+                val sports = sources.firstNotNullOfOrNull { source -> SportsLiveTeams.knownSport(source)?.let(EspnLeagueMap::espnSportsOf) }
+                return@mapNotNull TrackedCard(
+                    card, emptyList(), item.followed, fallback = null, liveKeys = liveKeys, piggyback = true, piggybackSports = sports
+                )
             }
             val (source, leagues) = routed
             val liveKeys = if (item.isLive && !item.isChannel) sources.filter { !it.isChannel }.map { it.streamKey } else emptyList()
@@ -750,7 +756,7 @@ class LiveScoresRepository internal constructor(
         // Cards that name no sport (#206): the polled feeds' games, both sides STRONG; no feed is asked for them.
         val polled = needed.toList()
         for (entry in piggybacks) {
-            val match = matchOn(entry.card, polled, strictMatcher) ?: continue
+            val match = piggybackMatch(entry, polled) ?: continue
             noteStart(entry, emptyList(), match)
             unmatchedKeys -= entry.card.key
             learnLogos(match)
@@ -850,6 +856,25 @@ class LiveScoresRepository internal constructor(
         if (sport !in sports.effectiveSports) return false
         if (sport == MySport.SOCCER) return true
         return MyLeague.ofFeed(league)?.let { it in sports.leaguesOf(sport) } ?: false
+    }
+
+    /**
+     * A [TrackedCard.piggyback] card's game among the [polled] feeds (#206, release review): only for a card with a
+     * start time, only on the feeds of its sport (the one a source names, else the sport whose loaded team list holds
+     * both its sides), and only a game starting within [PIGGYBACK_NEAR_MS] of the card. A wrong sport's score is
+     * worse than none, so a card no sport can be told for gets nothing.
+     */
+    private fun piggybackMatch(entry: TrackedCard, polled: List<ScoreFeed>): ScoreSnapshot? {
+        val card = entry.card
+        val start = card.startMs?.takeIf { card.hasTimeOfDay } ?: return null
+        val sports = entry.piggybackSports
+            ?: logos.directory.leaguesHolding(card.teams.home, card.teams.away).mapTo(HashSet()) { it.sport }
+        if (sports.isEmpty()) return null
+        val feeds = polled.filter { it.league.sport in sports }
+        if (feeds.isEmpty()) return null
+        return matchOn(card, feeds, strictMatcher)?.takeIf { match ->
+            match.startMs != null && kotlin.math.abs(match.startMs - start) <= PIGGYBACK_NEAR_MS
+        }
     }
 
     private fun matchOn(card: ScoreCard, cardFeeds: List<ScoreFeed>, using: ScoreMatcher = matcher, tennis: Boolean = false): ScoreSnapshot? {
@@ -953,6 +978,9 @@ class LiveScoresRepository internal constructor(
         internal const val RETRY_MIN_INTERVAL_MS = 30_000L
         /** Scores Off: how often a live card's ESPN start is read again ([checkSchedules]). */
         internal const val SCHEDULE_CHECK_MS = 15 * 60_000L
+
+        /** How far from a feed-less card's start its game may start ([piggybackMatch]): the matcher's own window. */
+        internal const val PIGGYBACK_NEAR_MS = 3 * 60 * 60_000L
         private val SLUG = Regex("""[a-z0-9._-]+""")
 
         /** [event] with no score: no points, clock, scorers, situation or record (Scores Off reads starts only). */
