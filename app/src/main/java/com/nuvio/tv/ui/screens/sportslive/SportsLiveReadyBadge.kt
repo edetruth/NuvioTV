@@ -56,11 +56,14 @@ fun SportsLiveReadyPill(modifier: Modifier = Modifier, stage: Boolean = false) {
     )
 }
 
-/** "No stream yet": no working stream was found (1b). Muted, calm: never the alarming ⚠. Panel and prompt only. */
+/**
+ * "No stream yet": no working stream was found (1b). Muted, calm: never the alarming ⚠. [short]: "No stream", for a Live
+ * Now row's 88 dp status column, where the longer words were cut under the clock (l24 polish P4).
+ */
 @Composable
-fun SportsLiveNoStreamYet(modifier: Modifier = Modifier) {
+fun SportsLiveNoStreamYet(modifier: Modifier = Modifier, short: Boolean = false) {
     Text(
-        text = stringResource(R.string.sports_live_no_stream_yet_mark),
+        text = stringResource(if (short) R.string.sports_live_no_stream_row_mark else R.string.sports_live_no_stream_yet_mark),
         style = SportsLiveTokens.style(SportsLiveTokens.Type.Pill),
         color = Colors.TextMuted,
         maxLines = 1,

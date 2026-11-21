@@ -782,6 +782,7 @@
     </plurals>
     <string name="sports_live_agenda_later">Later ›</string>
     <string name="sports_live_no_stream_yet_mark">No stream yet</string>
+    <string name="sports_live_no_stream_row_mark">No stream</string>
     <string name="sports_live_checking_mark">…</string>
     <string name="sports_live_checking_description">Checking for a stream</string>
     <string name="sports_live_kickoff_stream_ready_short">Stream ready</string>

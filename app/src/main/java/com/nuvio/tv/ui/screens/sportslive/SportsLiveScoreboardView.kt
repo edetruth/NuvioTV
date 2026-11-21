@@ -742,7 +742,7 @@ private fun StatusCell(row: ScoreboardRow, hasReplay: Boolean, singleLine: Boole
             // BUG-D: the mini player's game says so in the badge's place (after its excitement or close badge), never on "LIVE".
             RowBadge.WATCHING -> SportsLiveWatchingPill()
             RowBadge.READY -> SportsLiveReadyPill()
-            RowBadge.NO_STREAM -> SportsLiveNoStreamYet()
+            RowBadge.NO_STREAM -> SportsLiveNoStreamYet(short = true)
             RowBadge.EXCITEMENT -> excitement?.let { ExcitementBadge(whyTagTexts(it)) }
             RowBadge.CLOSE_GAME -> ExcitementBadge(listOf(stringResource(R.string.sports_live_close_game)))
             // A link check running (live.20), with no other badge to show: the faint mark in the badge's place.
