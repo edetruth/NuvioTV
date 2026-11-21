@@ -424,7 +424,7 @@ object SportsLiveItemBucketer {
             val timed = adoptedStart[item.streamKey]
             val merged = item.copy(
                 alternates = alternates,
-                sport = mergedSport(item, alternates),
+                sport = SportsLiveItemBucketer.mergedSport(item, alternates),
                 startMs = timed?.startMs ?: item.startMs,
                 startHasTimeOfDay = timed != null || item.startHasTimeOfDay
             )
