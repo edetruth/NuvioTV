@@ -582,6 +582,10 @@ class SportsLiveViewModel internal constructor(
         viewModelScope.launch { runCatching { updateChannelPicks { SportsLiveChannelFavorites.played(it, item, at) } } }
     }
 
+    /** The board last built ([SportsLiveBoard.reusingRows]). */
+    @Volatile
+    private var lastBoard: SportsLiveBoard? = null
+
     /** Builds a board; tests swap it to see where it runs. */
     @VisibleForTesting
     internal var buildBoard: suspend (SportsLiveBoardInputs) -> SportsLiveBoard = { SportsLiveBoard.build(it) }
@@ -618,7 +622,9 @@ class SportsLiveViewModel internal constructor(
             .mapFinishing({ running, next -> running.tab != next.tab || running.filter != next.filter }) { inputs ->
                 withContext(computeDispatcher) {
                     val startedAt = System.nanoTime()
-                    buildBoard(inputs).also {
+                    // #143: unchanged rows keep their instances, so the list redraws only the rows that changed.
+                    buildBoard(inputs).reusingRows(lastBoard).also {
+                        lastBoard = it
                         SportsLiveDebugTiming.log {
                             "sportsOpen stage=board ms=${(System.nanoTime() - startedAt) / 1_000_000} t=${sinceOpenMs()} tab=${inputs.tab.name} items=${inputs.items.size}"
                         }

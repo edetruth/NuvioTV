@@ -233,6 +233,30 @@ class SportsLiveOpenSpeedTest {
     }
 
     @Test
+    fun `a board built again keeps the rows that did not change, so only changed rows draw again`() {
+        val a = item("a", isLive = true)
+        val b = item("b", isLive = true)
+        fun row(item: SportsLiveItem, followed: Boolean = false) = ScoreboardRow(
+            item = item, group = ScoreboardGroup.LIVE, chip = null, art = null,
+            firstFollowed = followed, secondFollowed = false, probablyEnded = false
+        )
+        fun board(filter: String?, vararg rows: ScoreboardRow) =
+            SportsLiveBoard(SportsLiveTab.LIVE_NOW, filter, rows.map { it.item }, rows.toList(), emptyMap())
+        val before = board(null, row(a), row(b))
+
+        // One row changed (a follow): the other keeps its instance.
+        val changed = board(null, row(a), row(b, followed = true)).reusingRows(before)
+        assertSame(before.rows!![0], changed.rows!![0])
+        assertTrue(changed.rows!![1].firstFollowed)
+        // Nothing changed: the same list.
+        assertSame(before.rows, board(null, row(a), row(b)).reusingRows(before).rows)
+        // Another filter (or tab) reuses nothing.
+        val other = board("Basketball", row(a))
+        assertSame(other, other.reusingRows(before))
+        assertSame(other, other.reusingRows(null))
+    }
+
+    @Test
     fun `back on the section with a list over 3 minutes old, it refreshes at once`() = runTest {
         latestFlow.value = load(listOf(item("a", isLive = true)))
         val viewModel = newViewModel(SportsLiveListCache.NONE)
