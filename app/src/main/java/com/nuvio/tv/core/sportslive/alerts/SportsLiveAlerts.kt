@@ -21,6 +21,7 @@ import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.ScoreTeam
 import com.nuvio.tv.core.sportslive.scores.ScoreState
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
+import com.nuvio.tv.core.sportslive.scores.SpoilerProtection
 import com.nuvio.tv.core.sportslive.scores.SpoilerProtectionStore
 import com.nuvio.tv.core.sportslive.scores.TeamFollows
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
@@ -179,6 +180,16 @@ class SportsLiveAlerts @Inject constructor(
     @Volatile
     private var lastSettings = SportsLiveAlertSettings()
 
+    /**
+     * Spoiler protection as last read (live.24 RC2 review R2): a waiting score or full time is checked against it
+     * before it shows, as Watch later or "Hide my teams' results" may have changed while it waited.
+     */
+    @Volatile
+    private var lastProtection = SpoilerProtection()
+
+    /** The profile the waiting alerts were raised under; guarded by [lock]. */
+    private var lastProfile: Int? = null
+
     /** Games ESPN said are over (by [SportsLiveAlertEngine.gameKey]): no longer tracked. Guarded by [lock]. */
     private val endedGames = HashSet<String>()
 
@@ -206,6 +217,8 @@ class SportsLiveAlerts @Inject constructor(
         val clock = base.map { it?.hasWork == true }.distinctUntilChanged().flatMapLatest { busy -> if (busy) ticks() else flowOf(Unit) }
         val tracked = MutableStateFlow<List<SportsLiveItem>>(emptyList())
         try {
+            launch { liveScores.protection.collect { onProtection(it) } }
+            launch { prefs.activeProfileId.collect { onProfile(it) } }
             // The tracked cards are polled only while someone collects the scores: this, while any are tracked.
             launch {
                 tracked.map { it.isNotEmpty() }.distinctUntilChanged().collectLatest { any ->
@@ -382,6 +395,22 @@ class SportsLiveAlerts @Inject constructor(
         enqueue(listOf(SportsLiveAlert.Crunch(card, snapshot, moment, namesOnly = mode == ScoresMode.HIDE_UNTIL_FOCUSED)), System.currentTimeMillis())
     }
 
+    /** The spoiler protection now in force; read when a waiting alert is about to show. */
+    @VisibleForTesting
+    internal fun onProtection(protection: SpoilerProtection) {
+        lastProtection = protection
+    }
+
+    /**
+     * The active profile is [profileId]: after a switch the alerts still waiting belong to the profile before, whose
+     * spoiler protection may differ (live.24 RC2 review R2), so they go.
+     */
+    @VisibleForTesting
+    internal fun onProfile(profileId: Int) = synchronized(lock) {
+        if (lastProfile != null && lastProfile != profileId) queue.clear()
+        lastProfile = profileId
+    }
+
     @VisibleForTesting
     internal fun enqueue(alerts: List<SportsLiveAlert>, nowMs: Long) = synchronized(lock) {
         // One alert per card (live.24); the others wait their turn, one per game and kind, a few at most (live.24 RC
@@ -415,10 +444,12 @@ class SportsLiveAlerts @Inject constructor(
     /**
      * [queued] as it may show now, or null: the Scores setting or a switch may have changed while it
      * waited; a toast that waited too long is old news; nothing about the game now playing; a full time
-     * already announced (the toast for the game playing, #60) is dropped.
+     * already announced (the toast for the game playing, #60) is dropped; spoiler protection is read again
+     * ([underProtection]).
      */
     private fun showable(queued: SportsLiveAlert, nowMs: Long, raisedAt: Long): SportsLiveAlert? {
-        val next = SportsLiveAlertEngine.stillShowable(queued, lastMode, lastSettings) ?: return null
+        val allowed = SportsLiveAlertEngine.stillShowable(queued, lastMode, lastSettings) ?: return null
+        val next = underProtection(allowed, lastProtection.copy(nowMs = nowMs)) ?: return null
         if (SportsLiveAlertCards.expired(next, raisedAt, nowMs)) return null
         if (!mayShowOver(next, watching.value)) return null
         if (SportsLiveAlertEngine.isPlaying(next.item, watching.value, SportsLiveAlertEngine.snapshotOf(next))) {
@@ -610,6 +641,25 @@ class SportsLiveAlerts @Inject constructor(
         fun holdsFirst(alert: SportsLiveAlert): Boolean = alert is SportsLiveAlert.Kickoff && !alert.again && !alert.noStreamYet
 
         private const val MAX_ENDED = 500
+
+        /**
+         * [alert] under spoiler [protection] as it is now (live.24 RC2 review R2): a score or close finish of a game now
+         * protected (saved for Watch later, my teams' scores hidden) is dropped; a full time of one becomes the "result
+         * hidden" card, as when it is raised protected. A kickoff carries no score.
+         */
+        fun underProtection(alert: SportsLiveAlert, protection: SpoilerProtection): SportsLiveAlert? = when (alert) {
+            is SportsLiveAlert.Kickoff -> alert
+            is SportsLiveAlert.ScoreChange -> alert.takeUnless { protection.protects(it.snapshot) }
+            is SportsLiveAlert.Crunch -> alert.takeUnless { protection.protects(it.snapshot) }
+            is SportsLiveAlert.FullTime -> if (alert.resultHidden || !protection.protects(alert.snapshot)) {
+                alert
+            } else {
+                val event = alert.snapshot
+                val side = followedSides(protection.followed, event).firstOrNull()?.let { if (it == ScoreSide.HOME) event.home else event.away }
+                val team = side?.let { listOf(it.shortDisplayName, it.displayName, it.name).firstOrNull { name -> !name.isNullOrBlank() } }
+                alert.copy(namesOnly = true, resultHidden = true, team = team)
+            }
+        }
 
         /** The sides of [event] a followed team is, by ESPN data (strict). */
         fun followedSides(followed: List<FollowedTeam>, event: ScoreSnapshot): Set<ScoreSide> = buildSet {

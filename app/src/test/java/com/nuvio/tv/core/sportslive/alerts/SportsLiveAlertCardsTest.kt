@@ -6,9 +6,12 @@ import com.nuvio.tv.core.sportslive.alerts.AlertFixtures.START
 import com.nuvio.tv.core.sportslive.alerts.AlertFixtures.final
 import com.nuvio.tv.core.sportslive.alerts.AlertFixtures.item
 import com.nuvio.tv.core.sportslive.alerts.AlertFixtures.live
+import com.nuvio.tv.core.sportslive.scores.ProtectedGame
 import com.nuvio.tv.core.sportslive.scores.ScoreSide
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
+import com.nuvio.tv.core.sportslive.scores.SpoilerProtection
+import com.nuvio.tv.domain.model.FollowedTeam
 import io.mockk.mockk
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -136,6 +139,70 @@ class SportsLiveAlertCardsTest {
         // It gets its own time to show from now, not a wait that already ran out behind the other card.
         assertTrue(shown.raisedAtMs >= now)
         alerts.close(shown, AlertAnswer.TIMEOUT)
+        assertEquals(null, alerts.current.value)
+    }
+
+    // live.24 RC2 review R2: spoiler protection is read again when a waiting card is about to show.
+
+    private fun otherScore() = SportsLiveAlert.ScoreChange(lakers, live(10, 11).copy(eventId = "r2-other"), ScoreSide.AWAY)
+
+    private val sixers = listOf(FollowedTeam("Philadelphia 76ers", "Basketball"))
+
+    @Test
+    fun `a waiting score is not shown once its game is saved for Watch later`() {
+        val alerts = SportsLiveAlerts(mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true))
+        val now = System.currentTimeMillis()
+        alerts.enqueue(listOf(otherScore()), now)
+        val card = alerts.current.value!!
+        alerts.enqueue(listOf(score(pacers)), now + 1_000)
+        // Saved for later while it waited behind the card up.
+        val game = live(10, 11)
+        alerts.onProtection(SpoilerProtection(games = listOf(ProtectedGame(game.eventId, "Philadelphia 76ers", "Indiana Pacers", START, savedAtMs = now))))
+        alerts.close(card, AlertAnswer.TIMEOUT)
+        assertEquals(null, alerts.current.value)
+    }
+
+    @Test
+    fun `a waiting score is not shown once my teams' scores are hidden`() {
+        val alerts = SportsLiveAlerts(mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true))
+        val now = System.currentTimeMillis()
+        alerts.enqueue(listOf(otherScore()), now)
+        val card = alerts.current.value!!
+        alerts.enqueue(listOf(score(pacers)), now + 1_000)
+        alerts.onProtection(SpoilerProtection(myTeams = true, followed = sixers))
+        alerts.close(card, AlertAnswer.TIMEOUT)
+        assertEquals(null, alerts.current.value)
+    }
+
+    @Test
+    fun `a waiting full time shows as result hidden once my teams' results are hidden`() {
+        val alerts = SportsLiveAlerts(mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true))
+        val now = System.currentTimeMillis()
+        alerts.enqueue(listOf(otherScore()), now)
+        val card = alerts.current.value!!
+        val fullTime = SportsLiveAlert.FullTime(pacers, final(101, 99).copy(eventId = "r2-final-$now"), namesOnly = false)
+        alerts.enqueue(listOf(fullTime), now + 1_000)
+        alerts.onProtection(SpoilerProtection(myTeamsResults = true, followed = sixers))
+        alerts.close(card, AlertAnswer.TIMEOUT)
+        val shown = alerts.current.value!!.alert as SportsLiveAlert.FullTime
+        assertTrue(shown.resultHidden)
+        assertTrue(shown.namesOnly)
+        assertEquals(fullTime.snapshot, shown.snapshot)
+    }
+
+    @Test
+    fun `a profile switch empties the waiting alerts`() {
+        val alerts = SportsLiveAlerts(mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true))
+        val now = System.currentTimeMillis()
+        alerts.onProfile(1)
+        alerts.enqueue(listOf(otherScore()), now)
+        val card = alerts.current.value!!
+        val fullTime = SportsLiveAlert.FullTime(pacers, final(101, 99).copy(eventId = "r2-switch-$now"), namesOnly = false)
+        alerts.enqueue(listOf(score(pacers), fullTime), now + 1_000)
+        // The same profile read again keeps them.
+        alerts.onProfile(1)
+        alerts.onProfile(2)
+        alerts.close(card, AlertAnswer.TIMEOUT)
         assertEquals(null, alerts.current.value)
     }
 
