@@ -228,7 +228,9 @@ internal fun PlayerRuntimeController.initializePlayer(
                     "Tunneled playback skipped: media audio goes to USB (route=${currentAudioOutputRoute?.key})"
                 )
             }
-            val tunnelingActive = playerSettings.effectiveTunnelingEnabled && !tunnelingBlockedByUsbAudio
+            // Software decoders can't tunnel: a stream rebuilt on one plays untunneled.
+            val tunnelingActive = playerSettings.effectiveTunnelingEnabled && !tunnelingBlockedByUsbAudio &&
+                softwareVideoDecoderUrl != url
             if (rememberAudioDelayPerDeviceEnabled) {
                 applyStoredAudioDelayForCurrentRouteIfEnabled()
             }
@@ -871,7 +873,14 @@ internal fun PlayerRuntimeController.initializePlayer(
             isMapDv7ToHevcActiveForCurrentPlayback = mapDv7ToHevcEnabled
             val convertToDv81Active = !mapDv7ToHevcEnabled &&
                     dv7AutoResult?.decision == DolbyVisionBaseLayerPolicy.Decision.CONVERT_TO_DV81
-            val codecSelector = createDolbyVisionFallbackCodecSelector(convertToDv81Active = convertToDv81Active)
+            val baseCodecSelector = createDolbyVisionFallbackCodecSelector(convertToDv81Active = convertToDv81Active)
+            // A link whose hardware video decoder failed plays on a software one ([tryVideoDecoderRecovery]).
+            val codecSelector = if (softwareVideoDecoderUrl == url) {
+                Log.i(PlayerRuntimeController.TAG, "VIDEO_DECODER: this stream uses a software decoder after a hardware failure")
+                softwareVideoCodecSelector(baseCodecSelector)
+            } else {
+                debugFailingHardwareVideoSelector(baseCodecSelector)
+            }
             scope.launch(kotlinx.coroutines.Dispatchers.Default) { softwareOnlyDecoderNames }
             // Bluetooth media sink (A2DP / LE Audio): Media3 only advertises PCM. Do not attempt
             // optical/HDMI passthrough — decode to PCM and let the BT stack encode SBC/AAC/aptX/LDAC.
@@ -1658,6 +1667,12 @@ internal fun PlayerRuntimeController.initializePlayer(
                         val responseCode = (error.cause as? androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException)?.responseCode
                         if (responseCode == 416 && !hasRetriedCurrentStreamAfter416 && retried416Url != currentStreamUrl) {
                             retryCurrentStreamFromStartAfter416()
+                            return
+                        }
+
+                        // A failed video decoder: a preview lets go of its second one, or the stream plays again
+                        // on the hardware or software decoder, once each per link, before anything else.
+                        if (tryVideoDecoderRecovery(error)) {
                             return
                         }
 

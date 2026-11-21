@@ -48,7 +48,10 @@ object SportsLiveSecondDecoders {
 
     private val instances = ConcurrentHashMap<String, Int>()
 
-    /** How many [mime] videos this TV's hardware decoders say they play at once (the best one); 0 when none. */
+    /**
+     * How many [mime] videos this TV's hardware decoders say they play at once (the best one); 0 when none.
+     * Adapted from NuvioPlusIPTV's SeekThumbDecoders (github.com/homelessbrian/NuvioPlusIPTV, GPL-3.0).
+     */
     fun hardwareInstances(mime: String): Int = instances.getOrPut(mime) {
         runCatching {
             MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos

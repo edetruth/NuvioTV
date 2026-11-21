@@ -106,7 +106,9 @@ internal fun isRetryablePlaybackError(error: PlaybackException): Boolean {
         PlaybackException.ERROR_CODE_DECODER_INIT_FAILED,
         PlaybackException.ERROR_CODE_DECODING_FAILED,
         PlaybackException.ERROR_CODE_DECODING_FORMAT_EXCEEDS_CAPABILITIES,
-        PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED -> true
+        PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED,
+        // The TV took the video decoder away (another app or a second player needed it).
+        PlaybackException.ERROR_CODE_DECODING_RESOURCES_RECLAIMED -> true
 
         // --- Behind-the-scenes / unexpected errors (often IllegalStateException / NPE) ---
         PlaybackException.ERROR_CODE_UNSPECIFIED -> {
