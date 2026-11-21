@@ -277,8 +277,8 @@ class SportsLiveSecondGameTest {
             visibleItems = listOf(first, later, earlier)
         )
         assertEquals(later, state.watchWithSession(first, emptyMap())!!.right)
-        assertEquals(earlier, state.watchWithSession(first, emptyMap()) { it.id == later.id }!!.right)
-        assertNull(state.watchWithSession(first, emptyMap()) { it.id != first.id })
+        assertEquals(earlier, state.watchWithSession(first, emptyMap(), savedForLater = { it.id == later.id })!!.right)
+        assertNull(state.watchWithSession(first, emptyMap(), savedForLater = { it.id != first.id }))
     }
 
     private companion object {
