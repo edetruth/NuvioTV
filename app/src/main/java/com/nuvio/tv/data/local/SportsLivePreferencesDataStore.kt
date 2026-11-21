@@ -11,6 +11,8 @@ import androidx.datastore.preferences.core.stringSetPreferencesKey
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.nuvio.tv.core.profile.ProfileManager
+import com.nuvio.tv.core.sportslive.SportsLiveChannelPicks
+import com.nuvio.tv.core.sportslive.SportsLiveChannelRef
 import com.nuvio.tv.core.sportslive.SportsLiveHiddenTitles
 import com.nuvio.tv.core.sportslive.ReplayPosition
 import com.nuvio.tv.core.sportslive.SportsLiveOpenGame
@@ -87,6 +89,9 @@ class SportsLivePreferencesDataStore @Inject constructor(
     private val newSportsHintSeenKey = booleanPreferencesKey("sports_live_new_sports_hint_seen")
     // Local only (not in SportsLiveSettingsSync): where each followed team's replay was left, by ESPN event id.
     private val replayPositionsKey = stringPreferencesKey("sports_live_replay_positions")
+    // Local only (not in SportsLiveSettingsSync: they hold addon ids): Channels' favorites and recent plays (phase 1).
+    private val channelFavoritesKey = stringPreferencesKey("sports_live_channel_favorites")
+    private val channelRecentKey = stringPreferencesKey("sports_live_channel_recent")
     // First-run setup (#134 phase 7): set once the profile has had its chance at it (shown, or set up already).
     private val setupDoneKey = booleanPreferencesKey("sports_live_setup_done")
     private val scoresModeKey = stringPreferencesKey("sports_live_scores_mode")
@@ -380,6 +385,40 @@ class SportsLivePreferencesDataStore @Inject constructor(
         return runCatching {
             SportsLiveReplayResume.decode(gson.fromJson<Map<String, String>?>(json, overridesType).orEmpty())
         }.getOrDefault(emptyMap())
+    }
+
+    /** Channels' favorites and recent plays (phase 1) of the active profile; this TV only. */
+    val channelPicks: Flow<SportsLiveChannelPicks> = profileManager.activeProfileId.flatMapLatest { pid ->
+        factory.get(pid, FEATURE).data.map(::channelPicksOf)
+    }
+
+    /** Saves [change] of the active profile's channel picks in one edit. */
+    suspend fun updateChannelPicks(change: (SportsLiveChannelPicks) -> SportsLiveChannelPicks) {
+        store().edit { prefs ->
+            val changed = change(channelPicksOf(prefs))
+            prefs[channelFavoritesKey] = gson.toJson(encodeChannelRefs(changed.favorites))
+            prefs[channelRecentKey] = gson.toJson(encodeChannelRefs(changed.recent))
+        }
+    }
+
+    private fun channelPicksOf(prefs: Preferences) = SportsLiveChannelPicks(
+        favorites = decodeChannelRefs(prefs[channelFavoritesKey]),
+        recent = decodeChannelRefs(prefs[channelRecentKey])
+    )
+
+    // [{"addon": addon id, "id": channel id, "name": name key}]; plain maps, like the follows.
+    private fun encodeChannelRefs(refs: List<SportsLiveChannelRef>): List<Map<String, String>> =
+        refs.map { mapOf("addon" to it.addonId, "id" to it.id, "name" to it.name) }
+
+    private fun decodeChannelRefs(json: String?): List<SportsLiveChannelRef> {
+        if (json.isNullOrBlank()) return emptyList()
+        return runCatching {
+            gson.fromJson<List<Map<String, String?>?>?>(json, followedType).orEmpty().mapNotNull { stored ->
+                val addon = stored?.get("addon")?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                val id = stored["id"]?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                SportsLiveChannelRef(addon, id, stored["name"].orEmpty())
+            }
+        }.getOrDefault(emptyList())
     }
 
     /** The active profile's id: the catch-up row's visit and played replays belong to it. */
