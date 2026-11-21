@@ -919,7 +919,13 @@ class LiveScoresRepository internal constructor(
                 cardFeeds += feedsOf(listOf(EspnLeagueMap.SOCCER_ALL), dates)
             }
             // Over the budget: a card whose feeds are not polled already gets no score (never a stale one).
-            if (!fits(cardFeeds)) continue
+            if (!fits(cardFeeds)) {
+                // Debug builds name the skipped league so a TV run shows a full feed budget (live.23 RC6 missing scores).
+                if (com.nuvio.tv.BuildConfig.DEBUG) {
+                    android.util.Log.d("LiveScores", "no feed slot: ${leagues.joinToString { it.path }} live=${entry.live}")
+                }
+                continue
+            }
             // A card matched on its college fallback stays held to both sides STRONG.
             val strict = entry.fallback != null && remembered[card.key] == entry.fallback
             var match = if (entry.tennis) matchOn(card, cardFeeds, tennis = true) else matchOn(card, cardFeeds, if (strict) strictMatcher else matcher)
