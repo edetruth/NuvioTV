@@ -1046,7 +1046,7 @@ private fun PanelFilter(
     onOpenChange: (Boolean) -> Unit,
     onFocused: (Boolean) -> Unit
 ) {
-    val scoped = state.moreLive.isNotEmpty() || SportsLiveUiState.ALL_SPORTS_FILTER in state.chips
+    val scoped = state.mySportsScoped
     val allLabel = stringResource(if (scoped) R.string.sports_live_filter_my_sports else R.string.sports_live_filter_all)
     // More live (user 2026-11-21): the All sports value is More live's view.
     val allSportsLabel = stringResource(R.string.sports_live_more_live_title)

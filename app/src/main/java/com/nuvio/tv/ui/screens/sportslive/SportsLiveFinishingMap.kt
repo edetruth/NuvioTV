@@ -5,6 +5,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -99,4 +100,21 @@ internal fun <T> Flow<T>.firstThenCoalesce(ms: Long): Flow<T> {
             }
         }
     }
+}
+
+/**
+ * [this] collected again [delayMs] after a failure (the backoff doubling up to [maxDelayMs]), [onError] told each time,
+ * instead of ending: a list computed from live data must never stop updating for the rest of the screen's life because
+ * one update threw (TV report #14: the in-player guide's scores and clocks stood still while it was open). Cancellation
+ * is never retried.
+ */
+internal fun <T> Flow<T>.retryAfterError(
+    delayMs: Long,
+    maxDelayMs: Long = delayMs * 16,
+    onError: (Throwable) -> Unit = {}
+): Flow<T> = retryWhen { cause, attempt ->
+    if (cause is kotlinx.coroutines.CancellationException) return@retryWhen false
+    onError(cause)
+    delay((delayMs shl attempt.coerceAtMost(16L).toInt()).coerceAtMost(maxDelayMs))
+    true
 }

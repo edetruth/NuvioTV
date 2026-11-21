@@ -120,12 +120,17 @@ internal fun guideRowOf(
 internal fun guideTimeText(status: ScoreboardStatusLines, halves: Boolean = false): String? {
     if (status.live) {
         val period = status.secondary?.let { panelPeriodShort(it, halves) }
+        // ESPN's "End of 2nd" splits into "End of" and the period (#209): "End 2H", never "2H End of" (TV report #14).
+        if (period != null && status.primary?.trim().equals(END_OF, ignoreCase = true)) return "End $period"
         return listOfNotNull(period, status.primary).joinToString(" ").ifEmpty { null }
     }
     return listOfNotNull(status.primary, status.secondary).joinToString(GUIDE_TIME_SEPARATOR).ifEmpty { null }
 }
 
 private const val GUIDE_TIME_SEPARATOR = " · "
+
+/** ESPN's end-of-period words as [splitClock] leaves them. */
+private const val END_OF = "End of"
 
 /** A row's marks (B2), in drawing order: stopwatch, ★, Ready. */
 internal fun guideMarks(closeLate: Boolean, myTeam: Boolean, ready: SportsLiveReadyMark?, nowPlaying: Boolean): List<GuideMark> =

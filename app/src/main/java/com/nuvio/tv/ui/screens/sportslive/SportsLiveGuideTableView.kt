@@ -376,7 +376,7 @@ private fun GuideChips(state: SportsLiveZapPanelState) {
     if (chips.size <= 1) return
     val selected = chips.indexOf(state.chip).coerceAtLeast(0)
     val window = guideChipWindow(chips.size, selected)
-    val scoped = state.moreLive.isNotEmpty() || SportsLiveUiState.ALL_SPORTS_FILTER in chips
+    val scoped = state.mySportsScoped
     // #213: only chips that fit whole are drawn ([guideChipsFit]), the picked one always; ▸ / ◂ say more are there.
     Layout(content = {
         GuideChipArrow("◂")

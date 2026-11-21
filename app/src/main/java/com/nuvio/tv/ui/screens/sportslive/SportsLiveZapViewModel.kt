@@ -458,7 +458,7 @@ class SportsLiveZapViewModel internal constructor(
             val scopedKeys = scoped.mapTo(HashSet()) { it.streamKey }
             val moreLive = SportsLiveMoreLive.groups(games.filter { it.streamKey !in scopedKeys }, others)
             val base = if (chip == SportsLiveUiState.ALL_SPORTS_FILTER) moreLive.flatMap { it.items } else scoped
-            PanelList(list, chip, filterPanelItems(base, chip), followed, scoped, moreLive)
+            PanelList(list, chip, filterPanelItems(base, chip), followed, scoped, moreLive, mySportsPicked = !sports.isDefault)
         }
         // Ticks while the panel is open, so a grace or an estimate running out regroups its games.
         // A logo learned while open (a score feed answering, the map loading) redraws the rows.
@@ -510,8 +510,12 @@ class SportsLiveZapViewModel internal constructor(
             val finished = splitFinished + rows.filterNot { it.zappable }.map { it.item.streamKey }
             PanelLineup(panelList, rows, scoresMode, boardScores, ended, revealed, nowMs, loaded, finished, favorites)
         }.flowOn(computeDispatcher)
-            // A player whose sources cannot be read keeps the session's own order.
-            .catch { }
+            // An update that throws is retried, never the end of the lineup (TV report #14: `.catch { }` here ended it for the
+            // player's life, and the guide's scores and clocks stood still). Until it recovers, the last lineup stays; a
+            // player whose sources cannot be read keeps the session's own order (null).
+            .retryAfterError(LINEUP_RETRY_MS) { error ->
+                if (BuildConfig.IS_DEBUG_BUILD) android.util.Log.w("SportsLiveZap", "panel lineup update failed, retrying", error)
+            }
             .stateIn(viewModelScope, SharingStarted.Eagerly, null)
     }
 
@@ -580,7 +584,8 @@ class SportsLiveZapViewModel internal constructor(
                 } else {
                     emptyList()
                 },
-                loading = repo.latest.value == null
+                loading = repo.latest.value == null,
+                mySportsPicked = current.list.mySportsPicked
             )
             // Laid out here, off the main thread.
             state.guide
@@ -1491,7 +1496,9 @@ private data class PanelList(
     /** [all] as My sports lists them (#146). */
     val scoped: List<SportsLiveItem> = all,
     /** More live's groups (user 2026-11-21): the live games My sports leaves out and the listings that are no game. */
-    val moreLive: List<SportsLiveMoreLive.Group> = emptyList()
+    val moreLive: List<SportsLiveMoreLive.Group> = emptyList(),
+    /** My sports is picked (not the default): the first chip reads "My sports" (TV report #14). */
+    val mySportsPicked: Boolean = false
 )
 
 /**
@@ -1568,3 +1575,6 @@ private const val PANEL_TICK_MS = 30_000L
 
 /** How long the team directory must be still before the panel list is merged again (live.18). */
 private const val REBUCKET_DEBOUNCE_MS = 2_000L
+
+/** The panel lineup is computed again this long after an update threw (doubling, [retryAfterError]). */
+private const val LINEUP_RETRY_MS = 1_000L
