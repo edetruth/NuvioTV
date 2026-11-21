@@ -677,6 +677,11 @@ private fun SportsLiveContent(
     val channelViewKey = SportsLiveChannelSummary.viewKey(channelBrowse).takeIf { uiState.selectedTab == SportsLiveTab.CHANNELS }
     val shownBoard = board?.takeIf { it.shows(uiState.selectedTab, uiState.selectedFilter) && (channelViewKey == null || it.channels?.view == channelViewKey) }
     val boardPending = shownBoard == null
+    // A tab switch whose list is still being built keeps the mini player docked (no corner flash over the tabs).
+    // Results draws no board of its own here, so it never waits for one.
+    val awaitingStage = boardPending && uiState.selectedTab != SportsLiveTab.RESULTS
+    SideEffect { SportsLiveMiniPlacement.setAwaitingStage(awaitingStage) }
+    DisposableEffect(Unit) { onDispose { SportsLiveMiniPlacement.setAwaitingStage(false) } }
     // V2 (#132): Live now and Upcoming are the Scoreboard + stage; Channels and Replays list cards.
     val scoreboard = shownBoard?.rows != null
     // V2 Upcoming (P3): the Agenda, whose list has a sticky day header above each day's games.
