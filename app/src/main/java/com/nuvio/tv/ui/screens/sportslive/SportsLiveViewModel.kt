@@ -6,6 +6,7 @@ import com.nuvio.tv.core.sportslive.scores.EspnLeague
 import androidx.annotation.VisibleForTesting
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.core.sportslive.SportsLiveDataSaver
 import com.nuvio.tv.core.sportslive.EndedGame
 import com.nuvio.tv.core.sportslive.EndedInputs
@@ -186,7 +187,9 @@ class SportsLiveViewModel internal constructor(
     /** Card keys the score feeds confirmed they do not have (#215): an addon-live one reads "Listed live". */
     unmatchedScores: Flow<Set<String>> = flowOf(emptySet()),
     /** The spoiler protection the kept boards depend on (live.23 review S2). */
-    protectionScope: Flow<SportsLiveBoardCache.ProtectionScope> = flowOf(SportsLiveBoardCache.ProtectionScope.NONE)
+    protectionScope: Flow<SportsLiveBoardCache.ProtectionScope> = flowOf(SportsLiveBoardCache.ProtectionScope.NONE),
+    /** The active profile's id: part of every kept board's scope (live.23 review F3), so a switch drops them. */
+    activeProfile: Flow<Int?> = flowOf(null)
 ) : ViewModel() {
 
     @Inject
@@ -200,7 +203,8 @@ class SportsLiveViewModel internal constructor(
         identifier: TeamIdentifier,
         standingsRepository: StandingsRepository,
         listStore: SportsLiveListSnapshotStore,
-        reporter: SportsLiveReporter
+        reporter: SportsLiveReporter,
+        profileManager: ProfileManager
     ) : this(
         repo = repo,
         // The zap's pick, which joins the stream search the ended-games probe started on settle; a
@@ -265,7 +269,8 @@ class SportsLiveViewModel internal constructor(
         scoresSettleMs = SCORES_SETTLE_MS,
         prefetchUpcomingScores = liveScores::prefetchUpcoming,
         unmatchedScores = liveScores.unmatched,
-        protectionScope = liveScores.protection.map { SportsLiveBoardCache.ProtectionScope.of(it) }.distinctUntilChanged()
+        protectionScope = liveScores.protection.map { SportsLiveBoardCache.ProtectionScope.of(it) }.distinctUntilChanged(),
+        activeProfile = profileManager.activeProfileId
     )
 
     private data class Selection(
@@ -672,16 +677,16 @@ class SportsLiveViewModel internal constructor(
             combine(
                 standings,
                 combine(channelLists, unmatchedScores, ::Pair),
-                combine(combine(repo.claimedCatalogs, mySports, hiddenTitles, ::Triple), protectionScope, ::Pair),
+                combine(combine(repo.claimedCatalogs, mySports, hiddenTitles, ::Triple), activeProfile, protectionScope, ::Triple),
                 ::Triple
             )
-        ) { state, scores, followed, revision, (books, listsAndUnmatched, profileAndProtection) ->
+        ) { state, scores, followed, revision, (books, listsAndUnmatched, profileIdAndProtection) ->
             val (lists, unmatched) = listsAndUnmatched
             // #143: another profile or setting drops every tab's kept board before any is shown again; so does a
             // spoiler protection change (a Watch later save, Hide my teams' scores; review S2).
-            val (profile, protection) = profileAndProtection
+            val (profile, profileId, protection) = profileIdAndProtection
             val (claimed, sports, hidden) = profile
-            boardCache.scopeTo(SportsLiveBoardScope(claimed.mapTo(HashSet()) { it.key }, sports, hidden, followed, scores.mode, protection))
+            boardCache.scopeTo(SportsLiveBoardScope(profileId, claimed.mapTo(HashSet()) { it.key }, sports, hidden, followed, scores.mode, protection))
             val tab = state.selectedTab
             val live = tab == SportsLiveTab.LIVE_NOW
             SportsLiveBoardInputs(
@@ -755,7 +760,8 @@ class SportsLiveViewModel internal constructor(
             if (selection.tab != SportsLiveTab.LIVE_NOW || !screenVisible || ambientShowing) return@launch
             if (selection.filterByTab[SportsLiveTab.UPCOMING] != null || boardCache.has(SportsLiveTab.UPCOMING, null)) return@launch
             // Upcoming's scoreboards for today and tomorrow too, so its games match at once on open (capped in the repository).
-            launch {
+            // Not under Data saver (live.23 review F4), as the link prefetch.
+            if (SportsLiveDataSaver.prefetchAllowed(dataSaverActive)) launch {
                 val asked = prefetchUpcomingScores()
                 SportsLiveDebugTiming.log { "sportsOpen stage=prefetchScores requests=$asked" }
             }
@@ -1495,12 +1501,16 @@ internal suspend fun SportsLiveRepository.toggleFollowTarget(target: FollowTarge
     }
 }
 
-/** What every kept board was built for (#143, [SportsLiveBoardCache.scopeTo]): the profile's catalogs and settings. */
-private data class SportsLiveBoardScope(
+/**
+ * What every kept board was built for (#143, [SportsLiveBoardCache.scopeTo]): the profile (F3: two profiles with the same
+ * catalogs and settings never share a board) and its catalogs and settings.
+ */
+internal data class SportsLiveBoardScope(
+    val profileId: Int?,
     val claimed: Set<String>,
     val mySports: MySports,
     val hidden: Set<String>,
     val followed: List<FollowedTeam>,
     val mode: ScoresMode?,
-    val protection: SportsLiveBoardCache.ProtectionScope
+    val protection: SportsLiveBoardCache.ProtectionScope = SportsLiveBoardCache.ProtectionScope.NONE
 )

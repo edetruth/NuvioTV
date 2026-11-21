@@ -57,6 +57,31 @@ class SportsLiveFullScreenHoldTest {
     }
 
     @Test
+    fun `the held picture covers only its own game's player, and only while held (L1)`() {
+        assertEquals(false, hold.covers("game-a"))
+        hold.hold("game-a", paneA, nowMs = 0L)
+        assertEquals(true, hold.covers("game-a"))
+        assertEquals(false, hold.covers("game-b"))
+        assertEquals(false, hold.covers(null))
+        hold.step("game-a", firstFrame = true, failed = false, nextLink = false, nowMs = 1_000L)
+        assertEquals(false, hold.covers("game-a"))
+    }
+
+    @Test
+    fun `the app going to the background lets the held player go at once, a configuration change does not (L2)`() {
+        hold.hold("game-a", paneA, nowMs = 0L)
+        hold.onAppStop(changingConfigurations = true)
+        assertSame(paneA, hold.held.value!!.player)
+        assertEquals(emptyList<FakePlayer>(), released)
+        hold.onAppStop(changingConfigurations = false)
+        assertNull(hold.held.value)
+        assertEquals(listOf(paneA), released)
+        // Nothing held: nothing to release.
+        hold.onAppStop(changingConfigurations = false)
+        assertEquals(listOf(paneA), released)
+    }
+
+    @Test
     fun `a first frame wins over a failure seen at the same check`() {
         assertEquals(SportsLiveHoldStep.CROSS_OVER, sportsLiveHoldStep(firstFrame = true, failed = true, nextLink = true, heldMs = 0L, capMs = 1L))
     }

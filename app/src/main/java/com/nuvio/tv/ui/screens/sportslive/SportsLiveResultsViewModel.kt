@@ -67,8 +67,11 @@ interface ResultsActions {
     /** Jump to ▾ picked [jump] (null: all leagues); the list's first game takes focus. */
     fun jumpTo(jump: ResultsJump?)
 
-    /** Jump to › Other sports opened: the day's other sports are fetched. */
+    /** Jump to › Other sports opened: the day's other sports are fetched (again, when they failed). */
     fun loadOtherSports()
+
+    /** "Couldn't load other sports · Retry" (M3): the day's other sports are fetched again. */
+    fun retryOtherSports()
 
     /** More… → Reveal result: [rows]' scores show, a followed team's or a protected game's for good. */
     fun reveal(rows: List<ResultRow>)
@@ -149,6 +152,8 @@ data class SportsLiveResultsUiState(
     /** Jump to › Other sports: all of them, then each league; null until fetched ([otherLoading] while it is). */
     val otherEntries: List<ResultsJumpEntry>? = null,
     val otherLoading: Boolean = false,
+    /** Every other-sports feed of the day failed (M3): "Couldn't load other sports · Retry", never "No games". */
+    val otherFailed: Boolean = false,
     /** Bumped by each [ResultsActions.jumpTo]: the list's first game takes focus once the new list is drawn. */
     val jumpFocus: Int = 0,
     /** The list: YOUR TEAMS first, then league sections, long tails collapsed. */
@@ -236,6 +241,8 @@ class SportsLiveResultsViewModel internal constructor(
     /** The ESPN day Jump to › Other sports was opened on: its other sports are fetched. */
     private val otherAsked = MutableStateFlow<LocalDate?>(null)
     private val other = MutableStateFlow<OtherDay?>(null)
+    /** Bumped by [retryOtherSports]: a failed day's other sports are fetched again. */
+    private val otherRetry = MutableStateFlow(0)
     private val replayItems = MutableStateFlow<List<SportsLiveItem>>(emptyList())
     private val load = MutableStateFlow<ResultsLoad?>(null)
 
@@ -247,7 +254,8 @@ class SportsLiveResultsViewModel internal constructor(
     /** The other sports' rows of the day on screen; null while not fetched for it. */
     private val otherRows = combine(load, other) { load, other ->
         val loaded = load as? ResultsLoad.Loaded
-        if (loaded == null || other == null || other.date != loaded.date) null else other.rows.orEmpty()
+        // A failed fetch (rows null) is not "no other sports" (M3): nothing is listed for it.
+        if (loaded == null || other == null || other.date != loaded.date) null else other.rows
     }
 
     private val replayIndex = combine(load, otherRows, replayItems) { load, otherRows, replays ->
@@ -313,6 +321,7 @@ class SportsLiveResultsViewModel internal constructor(
             jumpEntries = listing.entries,
             otherEntries = listing.otherEntries,
             otherLoading = loaded != null && other?.date != loaded.date && otherWanted(loaded, asked, jump),
+            otherFailed = loaded != null && other != null && other.date == loaded.date && other.rows == null,
             jumpFocus = listing.focusRequests,
             items = listing.items,
             mode = mode,
@@ -407,13 +416,15 @@ class SportsLiveResultsViewModel internal constructor(
         // Other sports are fetched only when wanted (results redesign): Jump to › Other sports opened, a jump that
         // needs them, or a past day with nothing from My sports (its "See N games in other sports").
         viewModelScope.launch {
-            combine(active, load, otherAsked, selection) { isActive, load, asked, selected ->
+            combine(active, load, otherAsked, selection, otherRetry) { isActive, load, asked, selected, retry ->
                 val loaded = load as? ResultsLoad.Loaded
-                if (!isActive || loaded == null || !otherWanted(loaded, asked, selected.jump)) null else loaded.date
+                if (!isActive || loaded == null || !otherWanted(loaded, asked, selected.jump)) null else loaded.date to retry
             }
                 .distinctUntilChanged()
-                .collectLatest { date ->
-                    if (date == null || other.value?.date == date) return@collectLatest
+                .collectLatest { wanted ->
+                    val date = wanted?.first ?: return@collectLatest
+                    // A day fetched is kept; a failed one is not remembered (M3): Retry, or reopening Other sports, asks again.
+                    if (other.value?.let { it.date == date && it.rows != null } == true) return@collectLatest
                     val days = results.days().firstOrNull { it.date == date }?.daysAgo ?: return@collectLatest
                     other.value = OtherDay(date, results.loadOther(days))
                 }
@@ -501,7 +512,15 @@ class SportsLiveResultsViewModel internal constructor(
 
     /** Jump to › Other sports opened: the day on screen fetches its other sports ([ResultsRepository.loadOther]). */
     override fun loadOtherSports() {
-        (load.value as? ResultsLoad.Loaded)?.let { otherAsked.value = it.date }
+        val loaded = load.value as? ResultsLoad.Loaded ?: return
+        otherAsked.value = loaded.date
+        if (other.value?.let { it.date == loaded.date && it.rows == null } == true) retryOtherSports()
+    }
+
+    override fun retryOtherSports() {
+        // Loading shows again while it is asked for.
+        other.update { current -> current?.takeIf { it.rows != null } }
+        otherRetry.update { it + 1 }
     }
 
     /**

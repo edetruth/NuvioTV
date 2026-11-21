@@ -54,8 +54,7 @@ class SportsLiveSetupViewModelTest {
         val state = vm.uiState.value
         assertEquals(SetupStep.WELCOME, state.step)
         assertEquals(MySports.DEFAULT, state.sports)
-        // Results redesign Q1: my teams' scores hide until the profile chooses otherwise.
-        assertEquals(SetupScoresOption.MY_TEAMS, state.scoresOption)
+        assertEquals(SetupScoresOption.SHOW, state.scoresOption)
         // Score delay never set: the 60 s default (#85).
         assertEquals(60, state.delaySeconds)
         assertNull(state.exit)

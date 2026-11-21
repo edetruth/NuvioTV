@@ -121,6 +121,21 @@ class SpoilerProtectionTest {
     }
 
     @Test
+    fun `hide my teams' results protects a followed team's finished game only, apart from the live choice (M2)`() {
+        val followed = listOf(FollowedTeam(name = "Philadelphia 76ers", sport = "Basketball"))
+        val results = SpoilerProtection(myTeamsResults = true, followed = followed, nowMs = now)
+        assertTrue(results.protects(final))
+        assertTrue(results.stamp(final).spoilerProtected)
+        // Its live game keeps its score chip: live scores follow the older "my teams" choice, off here.
+        assertFalse(results.protects(live))
+        assertTrue(results.copy(myTeams = true).protects(live))
+        // Never another team's game; watched live or revealed ends it; off protects nothing.
+        assertFalse(results.copy(followed = listOf(FollowedTeam(name = "Boston Celtics", sport = "Basketball"))).protects(final))
+        assertFalse(results.copy(games = SpoilerProtection.ended(emptyList(), live, now)).protects(final))
+        assertFalse(results.copy(myTeamsResults = false).protects(final))
+    }
+
+    @Test
     fun `a saved game's replays are found by their strict match or by their sides`() {
         val replay = AlertFixtures.item(name = "76ers vs Pacers", id = "replay").copy(kind = SportsLiveKind.REPLAY, startMs = START + 4 * 60 * MINUTE)
         val other = AlertFixtures.item(name = "Celtics vs Knicks", id = "other").copy(kind = SportsLiveKind.REPLAY)

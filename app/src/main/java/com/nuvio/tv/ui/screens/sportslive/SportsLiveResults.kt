@@ -426,8 +426,20 @@ internal fun SportsLiveResultsView(
                     // Jump to ▾ narrowed to nothing (Other sports with no games): back to every league.
                     firstFocusableKey == null && state.jump != null -> SportsLiveStateCard(
                         title = stringResource(R.string.sports_live_state_filter_empty),
-                        line = if (state.otherLoading) stringResource(R.string.sports_live_results_other_loading) else null,
+                        line = when {
+                            state.otherLoading -> stringResource(R.string.sports_live_results_other_loading)
+                            state.otherFailed -> stringResource(R.string.sports_live_results_other_failed)
+                            else -> null
+                        },
                         primary = SportsLiveStateAction(stringResource(R.string.sports_live_results_jump_all), { actions.jumpTo(null) }),
+                        modifier = cardModifier,
+                        primaryModifier = cardButton
+                    )
+                    // Nothing from My sports on a past day and other sports could not be loaded (M3): say so, with Retry.
+                    firstFocusableKey == null && !offersYesterday && state.otherFailed -> SportsLiveStateCard(
+                        title = stringResource(R.string.sports_live_results_my_sports_empty_on, selectedDay?.let { resultsDayText(it) }.orEmpty()),
+                        line = stringResource(R.string.sports_live_results_other_failed),
+                        primary = SportsLiveStateAction(stringResource(R.string.action_retry), { actions.retryOtherSports() }),
                         modifier = cardModifier,
                         primaryModifier = cardButton
                     )

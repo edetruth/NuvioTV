@@ -134,6 +134,8 @@ object SportsLiveActivityHooks {
     }
 
     fun onStop(isInPictureInPictureMode: Boolean, isChangingConfigurations: Boolean) {
+        // L2: a dual pane held for the full player stops with the app, not 30 s later.
+        SportsLiveFullScreenHold.onAppStop(isChangingConfigurations)
         when {
             // The PiP window was closed: its playback stops and the players are released.
             isInPictureInPictureMode -> SportsLivePip.onClosed()

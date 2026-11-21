@@ -436,6 +436,47 @@ class SportsLiveResultsTodayTest {
     }
 
     @Test
+    fun `other sports that fail to load say so with Retry, and are not remembered as none for the day (M3)`() = runTest {
+        // Yesterday: nothing in basketball; every other sport's feed fails.
+        var espnDown = true
+        provider.respond = { feed ->
+            when {
+                feed.league.sport == "basketball" -> ScoreboardResult(emptyList())
+                espnDown -> ScoreboardResult.FAILED
+                feed.date == today.minusDays(1) && feed.league == EspnLeagueMap.NHL ->
+                    ScoreboardResult(listOf(aFinal.copy(eventId = "nhl", league = EspnLeagueMap.NHL, leagueSlug = "nhl", competitionId = null, leagueName = "NHL")))
+                else -> ScoreboardResult(emptyList())
+            }
+        }
+        val vm = viewModel()
+        backgroundScope.launch { vm.uiState.collect {} }
+        vm.selectDay(SportsResults.YESTERDAY)
+        vm.setActive(true)
+        advanceTimeBy(1_000); runCurrent()
+        vm.loadOtherSports()
+        advanceTimeBy(1_000); runCurrent()
+        val failed = vm.uiState.value
+        assertTrue(failed.otherFailed)
+        assertNull(failed.otherEntries)
+        assertNull(failed.otherCount)
+        assertFalse(failed.otherLoading)
+        // Retry once ESPN answers: the hockey final is there.
+        espnDown = false
+        vm.retryOtherSports()
+        advanceTimeBy(1_000); runCurrent()
+        val loaded = vm.uiState.value
+        assertFalse(loaded.otherFailed)
+        assertEquals(1, loaded.otherCount)
+        // Reopening Other sports after a failure asks again too.
+        val asked = provider.calls.size
+        vm.loadOtherSports()
+        advanceTimeBy(1_000); runCurrent()
+        assertEquals(asked, provider.calls.size)
+        vm.setActive(false)
+        vm.close()
+    }
+
+    @Test
     fun `a followed team's result stays hidden on open, focus and return, until revealed`() = runTest {
         val celtics = aFinal.home
         followed.value = listOf(FollowedTeam(celtics.displayName.orEmpty(), "Basketball", espnId = celtics.id, league = "basketball/nba"))

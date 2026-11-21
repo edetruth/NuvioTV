@@ -244,6 +244,7 @@ internal fun SportsLiveSettingsContent(
                 SportsLiveSetting.HOME_ROW -> state.showHomeRow
                 SportsLiveSetting.CATCH_UP_ROW -> state.catchUpRow
                 SportsLiveSetting.MY_TEAMS_SPOILERS -> state.scoresChoice.myTeamsOnly
+                SportsLiveSetting.MY_TEAMS_RESULTS -> state.hideMyTeamsResults
                 SportsLiveSetting.REAL_TIME_SCORES -> state.scores.realTime
                 SportsLiveSetting.HOVER_PREVIEW -> state.hoverPreview
                 else -> state.dataSaver

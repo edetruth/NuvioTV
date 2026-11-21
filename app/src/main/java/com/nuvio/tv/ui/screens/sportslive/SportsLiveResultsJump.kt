@@ -69,7 +69,6 @@ private fun ResultsJumpMenu(
     // Opens on Other sports when the list shows one of them, so the choice is in view.
     var otherPage by remember { mutableStateOf(state.jump == ResultsJump.OtherSports || state.jump.inOther(state)) }
     val firstFocus = remember(otherPage) { FocusRequester() }
-    var focusTaken by remember(otherPage) { mutableStateOf(false) }
     BackHandler(enabled = otherPage) { otherPage = false }
     if (otherPage) LaunchedEffect(Unit) { actions.loadOtherSports() }
     val pick: (ResultsJump?) -> Unit = { jump ->
@@ -96,8 +95,28 @@ private fun ResultsJumpMenu(
         }
         if (otherPage) {
             when {
-                state.otherEntries == null -> QuietLine(stringResource(R.string.sports_live_results_other_loading))
-                entries.isEmpty() -> QuietLine(stringResource(R.string.sports_live_results_other_none))
+                // M3: an ESPN failure is said as such, with a focusable Retry; never "No games".
+                state.otherFailed -> {
+                    QuietLine(stringResource(R.string.sports_live_results_other_failed))
+                    SportsLiveMenuButton(
+                        text = stringResource(R.string.action_retry),
+                        onClick = actions::retryOtherSports,
+                        modifier = Modifier.focusRequester(firstFocus)
+                    )
+                }
+                state.otherEntries == null || entries.isEmpty() -> {
+                    QuietLine(
+                        stringResource(
+                            if (state.otherEntries == null) R.string.sports_live_results_other_loading else R.string.sports_live_results_other_none
+                        )
+                    )
+                    // Something to hold focus while it loads or when there is nothing (M3): Back to the first page.
+                    SportsLiveMenuButton(
+                        text = stringResource(R.string.action_back),
+                        onClick = { otherPage = false },
+                        modifier = Modifier.focusRequester(firstFocus)
+                    )
+                }
                 else -> entries.forEach { entry(it) }
             }
         } else {
@@ -115,15 +134,24 @@ private fun ResultsJumpMenu(
                 }
             )
         }
-        // Focus once the page's entries are drawn (Other sports: once they have loaded).
-        val ready = !otherPage || !state.otherEntries.isNullOrEmpty()
-        LaunchedEffect(ready, otherPage) {
-            if (!ready || focusTaken) return@LaunchedEffect
+        // Focus once the page is drawn, and again each time Other sports changes what it shows (loading, failed,
+        // none, its entries): the button that held focus is gone then (M3).
+        val shows = when {
+            !otherPage -> OtherSportsShows.FIRST_PAGE
+            state.otherFailed -> OtherSportsShows.FAILED
+            state.otherEntries == null -> OtherSportsShows.LOADING
+            entries.isEmpty() -> OtherSportsShows.NONE
+            else -> OtherSportsShows.ENTRIES
+        }
+        LaunchedEffect(shows) {
             withFrameNanos { }
-            focusTaken = runCatching { firstFocus.requestFocus() }.isSuccess
+            runCatching { firstFocus.requestFocus() }
         }
     }
 }
+
+/** What Jump to's menu shows, for its focus: the first page, or Other sports loading, failed, empty or listed. */
+private enum class OtherSportsShows { FIRST_PAGE, LOADING, FAILED, NONE, ENTRIES }
 
 /** A choice's text: "All leagues · 23", "★ Your teams · 2", "NBA · 9", "All other sports · 41". */
 @Composable

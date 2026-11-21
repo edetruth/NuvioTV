@@ -113,6 +113,21 @@ internal fun holdOkScreen(route: String?): String =
 /** The report's "From:" for Hold OK on [route]'s screen: "Hold OK (settings)". */
 internal fun holdOkTrigger(route: String?): String = "Hold OK (${holdOkScreen(route)})"
 
+/**
+ * The sheet for a hold on [route]'s screen, its report snapshot taken now ([capture]). Runs inside dispatchKeyEvent: a
+ * snapshot that fails to build never crashes key handling (live.23 review L6); Report a problem then saves one built at
+ * that moment ([reportLater]), with the usual saved or failed toast.
+ */
+internal fun holdOkSheet(route: String?, capture: (String) -> () -> Unit, reportLater: (String) -> Unit): SportsLiveHoldOk.Sheet {
+    val trigger = holdOkTrigger(route)
+    val save: () -> Unit = try {
+        capture(trigger)
+    } catch (_: Exception) {
+        { reportLater(trigger) }
+    }
+    return SportsLiveHoldOk.Sheet(holdOkTitle(route), save)
+}
+
 /** The sheet's title: the screen in words ("playback_settings" -> "Playback settings"). */
 internal fun holdOkTitle(route: String?): String =
     holdOkScreen(route).replace('_', ' ').replaceFirstChar { it.uppercaseChar() }
@@ -138,7 +153,7 @@ object SportsLiveHoldOk {
             windowFocused = windowFocused,
             screens = { screens(event) }
         ) { route ->
-            _sheet.value = Sheet(holdOkTitle(route), reporter.capture(holdOkTrigger(route)))
+            _sheet.value = holdOkSheet(route, reporter::capture, reporter::report)
         }
 
     internal fun dismiss() {

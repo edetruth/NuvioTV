@@ -389,6 +389,27 @@ class SportsLiveOpenSpeedTest {
     }
 
     @Test
+    fun `two profiles with the same catalogs and settings never share a kept board (F3)`() {
+        val cache = SportsLiveBoardCache()
+        val inputs = SportsLiveBoardInputs(
+            tab = SportsLiveTab.UPCOMING, filter = null, items = listOf(item("a", isLive = false, startMs = NOW + HOUR)),
+            scores = SportsLiveBoardScores(), ended = emptyMap(), excitement = emptyMap(), followed = emptyList(),
+            clockMs = NOW, logoRevision = 0
+        )
+        val board = SportsLiveBoard(SportsLiveTab.UPCOMING, null, emptyList(), emptyList(), emptyMap())
+        fun scope(profile: Int) = SportsLiveBoardScope(
+            profile, setOf("addon:tv:live"), com.nuvio.tv.core.sportslive.scores.MySports.DEFAULT, emptySet(), emptyList(),
+            com.nuvio.tv.core.sportslive.scores.ScoresMode.SHOW
+        )
+        cache.scopeTo(scope(1))
+        cache.put(inputs, board)
+        cache.scopeTo(scope(1))
+        assertSame(board, cache.shownFor(inputs))
+        cache.scopeTo(scope(2))
+        assertNull(cache.shownFor(inputs))
+    }
+
+    @Test
     fun `back on the section with a list over 3 minutes old, it refreshes at once`() = runTest {
         latestFlow.value = load(listOf(item("a", isLive = true)))
         val viewModel = newViewModel(SportsLiveListCache.NONE)

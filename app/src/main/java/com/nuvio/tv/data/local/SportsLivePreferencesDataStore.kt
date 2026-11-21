@@ -58,11 +58,11 @@ class SportsLivePreferencesDataStore @Inject constructor(
         const val FEATURE = "sports_live_settings"
 
         /**
-         * "Hide scores of my teams' games" for a profile that never set it (results redesign Q1, 2026-11-21): on, so a
-         * followed team's result never shows before the viewer chooses to see it. It protects nothing until a team is
-         * followed; a stored choice (Settings → Scores) always wins.
+         * "Hide my teams' results until I reveal" for a profile that never set it (results redesign Q1, M2 of the live.23
+         * review): on, so a followed team's finished game never shows its result before the viewer chooses to see it. Its
+         * own key: the older "Hide scores for my teams only" choice (live scores) never turns it off.
          */
-        const val MY_TEAMS_SPOILERS_DEFAULT = true
+        const val MY_TEAMS_RESULTS_HIDDEN_DEFAULT = true
     }
 
     private val gson = Gson()
@@ -136,6 +136,7 @@ class SportsLivePreferencesDataStore @Inject constructor(
     // Spoiler protection (#151): games saved for later, and "Hide scores of my teams' games until I've watched".
     private val watchLaterKey = stringPreferencesKey(SportsLiveSettingsSync.WATCH_LATER)
     private val myTeamsSpoilersKey = booleanPreferencesKey("sports_live_my_teams_spoilers")
+    private val myTeamsResultsHiddenKey = booleanPreferencesKey("sports_live_my_teams_results_hidden")
 
     // [{"keys": source keys joined by REMINDER_KEY_SEPARATOR, "title": ..., "home": ..., "away": ..., "start": "epoch ms"}]; plain maps, like the follows.
     private val remindersType = object : TypeToken<List<Map<String, String?>>>() {}.type
@@ -279,26 +280,36 @@ class SportsLivePreferencesDataStore @Inject constructor(
 
     /**
      * Spoiler protection (#151) of the active profile: the games saved for later (and recently ended ones),
-     * "Hide scores of my teams' games until I've watched" (on until the profile sets it, results redesign Q1: it protects only once a team is followed) and the followed teams it reads.
+     * "Hide scores of my teams' games until I've watched" (off by default) and the followed teams it reads.
      */
     val spoilerProtection: Flow<SpoilerProtection> = profileManager.activeProfileId.flatMapLatest { pid ->
         factory.get(pid, FEATURE).data.map { prefs ->
             SpoilerProtection(
                 games = decodeProtected(prefs[watchLaterKey]),
-                myTeams = prefs[myTeamsSpoilersKey] ?: MY_TEAMS_SPOILERS_DEFAULT,
+                myTeams = prefs[myTeamsSpoilersKey] ?: false,
+                myTeamsResults = prefs[myTeamsResultsHiddenKey] ?: MY_TEAMS_RESULTS_HIDDEN_DEFAULT,
                 followed = decodeFollowed(prefs[followedTeamsKey]),
                 nowMs = nowMs()
             )
         }
     }
 
-    /** "Hide scores of my teams' games until I've watched" (#151); on until the profile sets it (results redesign Q1). */
+    /** "Hide scores of my teams' games until I've watched" (#151); off by default. */
     val hideMyTeamsScores: Flow<Boolean> = profileManager.activeProfileId.flatMapLatest { pid ->
-        factory.get(pid, FEATURE).data.map { it[myTeamsSpoilersKey] ?: MY_TEAMS_SPOILERS_DEFAULT }
+        factory.get(pid, FEATURE).data.map { it[myTeamsSpoilersKey] ?: false }
     }
 
     suspend fun setHideMyTeamsScores(v: Boolean) {
         store().edit { it[myTeamsSpoilersKey] = v }
+    }
+
+    /** "Hide my teams' results until I reveal" (M2): followed teams' finished games; on until the profile sets it. */
+    val hideMyTeamsResults: Flow<Boolean> = profileManager.activeProfileId.flatMapLatest { pid ->
+        factory.get(pid, FEATURE).data.map { it[myTeamsResultsHiddenKey] ?: MY_TEAMS_RESULTS_HIDDEN_DEFAULT }
+    }
+
+    suspend fun setHideMyTeamsResults(v: Boolean) {
+        store().edit { it[myTeamsResultsHiddenKey] = v }
     }
 
     /** Saves [change] of the protected games in one edit. */
@@ -550,7 +561,7 @@ class SportsLivePreferencesDataStore @Inject constructor(
 
     private fun scoresChoiceOf(prefs: Preferences): ScoresChoice = ScoresChoice.of(
         mode = ScoresMode.entries.firstOrNull { it.name == prefs[scoresModeKey] } ?: ScoresMode.SHOW,
-        myTeams = prefs[myTeamsSpoilersKey] ?: MY_TEAMS_SPOILERS_DEFAULT
+        myTeams = prefs[myTeamsSpoilersKey] ?: false
     )
 
     suspend fun setScoreDelaySeconds(seconds: Int) {
