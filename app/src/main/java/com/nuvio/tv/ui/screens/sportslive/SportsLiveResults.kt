@@ -302,8 +302,9 @@ internal fun SportsLiveResultsView(
     var menuRowKey by remember { mutableStateOf<String?>(null) }
     // Golf rows whose top five OK has listed.
     var expandedGolf by remember { mutableStateOf<Set<String>>(emptySet()) }
-    // More… → Reveal all for this day: offered while a listed result is hidden.
-    val dayHasHidden = items.any { it is ResultListItem.Row && !state.showsScore(it.row) }
+    // More… → Reveal all for this day: offered while a listed result is hidden by the Scores setting (review S3: your
+    // teams' and saved games keep their own Reveal result).
+    val dayHasHidden = items.any { it is ResultListItem.Row && state.hiddenReason(it.row) == ResultHiddenReason.SETTING }
     items.firstNotNullOfOrNull { (it as? ResultListItem.Row)?.row?.takeIf { row -> row.key == menuRowKey } }?.let { row ->
         val sides = listOf(ScoreSide.AWAY to row.event.away, ScoreSide.HOME to row.event.home)
         val rowHiddenForGood = state.hiddenReason(row).let { it == ResultHiddenReason.SAVED || it == ResultHiddenReason.YOUR_TEAM }

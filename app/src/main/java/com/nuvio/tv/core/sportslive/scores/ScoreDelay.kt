@@ -16,6 +16,8 @@ package com.nuvio.tv.core.sportslive.scores
  * and scorers withheld when it is live, or a final that may have just ended ([mayHaveJustEnded]: ESPN's
  * scoreboard gives no end time, so a final whose start is within [RECENT_START_MS]). Its picture runs
  * behind, so its newest score would leak. A game first seen before play, or long over, shows as it is.
+ * The hold lasts one full delay after the game stops being watched (a zap, CH+/-, the mini player closed): the
+ * picture seen was that far behind, so its row must not jump ahead of it (live.23 review S1).
  *
  * Adapted from SportsScoreDelay in homelessbrian/NuvioPlusIPTV (GPL-3.0, as this project).
  */
@@ -44,6 +46,9 @@ internal class ScoreDelay {
     /** Event id → its versions, oldest first. Kept for [FORGET_AFTER_MS] after the event was last seen. */
     private val history = HashMap<String, History>()
 
+    /** Event id → until when it keeps the watched game's hold after it was last watched (S1). */
+    private val watchedUntil = HashMap<String, Long>()
+
     /** When the next held-back change is due (null: nothing waiting); set by [apply]. */
     var nextChangeAt: Long? = null
         private set
@@ -62,10 +67,13 @@ internal class ScoreDelay {
     ): Map<String, ScoreSnapshot> {
         if (delayMs <= 0) {
             history.clear()
+            watchedUntil.clear()
             nextChangeAt = null
             return raw
         }
         val cutoff = now - delayMs
+        for (id in holdFirstSeen) watchedUntil[id] = now + delayMs
+        watchedUntil.values.removeAll { it <= now }
         var next: Long? = null
         // Several cards can show one event: record each event once.
         val shownByEvent = HashMap<String, ScoreSnapshot>()
@@ -81,7 +89,7 @@ internal class ScoreDelay {
             while (versions.size > 1 && versions[1].at <= cutoff) versions.removeFirst()
             val first = versions.first()
             // A game being watched with nothing known from the delay ago: its score waits.
-            val held = snapshot.eventId in holdFirstSeen && first.at > cutoff &&
+            val held = snapshot.eventId in watchedUntil && first.at > cutoff &&
                 (first.snapshot.state == ScoreState.IN || mayHaveJustEnded(first.snapshot, now))
             val due = if (held) first.at + delayMs else versions.getOrNull(1)?.let { it.at + delayMs }
             if (due != null && (next == null || due < next!!)) next = due

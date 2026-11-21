@@ -27,9 +27,12 @@ object SportsLiveTags {
         if (text.length <= MAX_CHARS) return text
         SportsLiveSportKind.of(text)?.let { return sportWord(it) }
         // "INDIAN SUPER LEAGUE" no table knows: its country, never "INDIAN" (live.23); else the sport, else its next word.
+        // The country only when a league word follows ("INDIAN WELLS", "CHINESE TAIPEI" are no Indian or Chinese
+        // league: live.23 review C3).
         val adjective = leadingNationality(text)
         if (adjective != null) {
-            COUNTRIES[adjective]?.let { return it }
+            val next = text.removePrefix(adjective).trim().split(' ').first()
+            if (next in LEAGUE_WORDS) COUNTRIES[adjective]?.let { return it }
             sport?.let { return sportWord(it) }
             text.removePrefix(adjective).trim().split(' ').first().takeIf { it.isNotEmpty() && it.length <= MAX_CHARS }?.let { return it }
             return text.take(MAX_CHARS).trim()
@@ -60,6 +63,12 @@ object SportsLiveTags {
         "PERUVIAN" to "PERU", "URUGUAYAN" to "URUGUAY", "PARAGUAYAN" to "PARAGUAY", "ECUADORIAN" to "ECUADOR",
         "VENEZUELAN" to "VENEZUELA", "BOLIVIAN" to "BOLIVIA", "HONDURAN" to "HONDURAS", "GUATEMALAN" to "GUATEMALA",
         "COSTA RICAN" to "COSTA RICA", "EGYPTIAN" to "EGYPT", "MOROCCAN" to "MOROCCO", "NIGERIAN" to "NIGERIA", "GHANAIAN" to "GHANA"
+    )
+
+    // The words that make "‹nationality› ‹word›…" a national competition ([short]).
+    private val LEAGUE_WORDS = setOf(
+        "LEAGUE", "LIGA", "LIGUE", "SUPER", "PREMIER", "PREMIERSHIP", "CUP", "CHAMPIONSHIP", "DIVISION", "FIRST", "SECOND",
+        "THIRD", "PRIMERA", "SEGUNDA", "SERIE", "NATIONAL"
     )
 
     // Nationalities whose country does not fit a tag: never a tag alone either.

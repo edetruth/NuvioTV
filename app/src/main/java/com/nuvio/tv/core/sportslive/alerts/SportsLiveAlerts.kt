@@ -286,7 +286,9 @@ class SportsLiveAlerts @Inject constructor(
                 }
                 val watchedLive = evaluate(inputs, scores, nowMs)
                 ResultSeen.shared.onLiveTick(watchedLive.map { it.eventId }, nowMs) // live.20 1c: watched live a while
-                if (watchedLive.isNotEmpty()) launch { spoilers.onWatchedLive(watchedLive) }
+                // Review S5: zapping past a followed team's game no longer ends its protection; a stretch of play does.
+                val watchedAWhile = watchedLongEnough(watchedLive, ResultSeen.shared::liveWatchedMs)
+                if (watchedAWhile.isNotEmpty()) launch { spoilers.onWatchedLive(watchedAWhile) }
                 evaluateCrunch(inputs, crunchCards, scores, nowMs)
             }
         } finally {
@@ -587,6 +589,16 @@ class SportsLiveAlerts @Inject constructor(
 
     companion object {
         private const val TICK_MS = 5_000L
+
+        /**
+         * A followed team's live game ends its spoiler protection ("until I've watched") only once it has played this
+         * long ([ResultSeen.liveWatchedMs]): zapping past it for a few seconds does not (live.23 review S5).
+         */
+        const val PROTECTION_WATCHED_MS = 2 * 60_000L
+
+        /** Of [playing] (followed teams' live games playing now), those played for [PROTECTION_WATCHED_MS] so far. */
+        internal fun watchedLongEnough(playing: List<ScoreSnapshot>, watchedMs: (String) -> Long): List<ScoreSnapshot> =
+            playing.filter { watchedMs(it.eventId) >= PROTECTION_WATCHED_MS }
 
         /** A first kickoff prompt waits for a live link (#162); a re-ask after Later or the note does not. */
         fun holdsFirst(alert: SportsLiveAlert): Boolean = alert is SportsLiveAlert.Kickoff && !alert.again && !alert.noStreamYet

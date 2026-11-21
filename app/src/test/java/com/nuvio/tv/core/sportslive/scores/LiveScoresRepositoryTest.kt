@@ -1368,12 +1368,53 @@ class LiveScoresRepositoryTest {
         runCurrent()
         assertEquals(50, second.scores.value.getValue(key).homeScore)
         assertTrue(second.scores.value.getValue(key).kept)
+        // Score only: the kept clock may be minutes old (review A4).
+        assertNull(second.scores.value.getValue(key).clockText)
         // ...then the fresh one, first seen, at once.
         provider.gate = null
         gate.complete(Unit)
         runCurrent()
         assertEquals(55, second.scores.value.getValue(key).homeScore)
         assertEquals("Q3 9:00", second.scores.value.getValue(key).clockText)
+    }
+
+    @Test
+    fun `the game being watched and a protected game are never written to the kept file`() = runTest {
+        val lakers = item("Los Angeles Lakers at Phoenix Suns", "Basketball", "2026-11-15T20:30:00Z")
+        val lakersGame = nbaFixture.first { it.eventId == "401909986" }.let {
+            it.copy(state = ScoreState.IN, isFinal = false, clockText = "Q1 2:00", home = it.home.copy(score = 20), away = it.away.copy(score = 18))
+        }
+        provider.respond = { ScoreboardResult(listOf(game(ScoreState.IN, 50, 48, "Q2 5:00"), lakersGame)) }
+
+        // The Pacers game is playing: only the Lakers game is written.
+        val watchedFile = keptFile()
+        val first = repository("2026-11-15T19:00:00Z", keptFile = watchedFile)
+        val looking = collect(first)
+        watching.watch("player", setOf(pacersCard.streamKey), "addon-a")
+        first.track(SECTION, listOf(pacersCard, lakers))
+        runCurrent()
+        advanceTimeBy(LiveScoresRepository.KEPT_WRITE_DELAY_MS + 1); runCurrent()
+        looking.cancel()
+        runCurrent()
+        val nowMs = ms("2026-11-15T19:00:00Z") + testScheduler.currentTime
+        assertEquals(setOf(lakers.streamKey), KeptScores.decode(watchedFile.read()!!, nowMs)!!.games.keys)
+
+        // Nothing playing, the 76ers followed with "hide my teams' scores": their game is not written either.
+        watching.watch("player", setOf("another card"), "addon-a")
+        val followed = listOf(com.nuvio.tv.domain.model.FollowedTeam(name = "Philadelphia 76ers", sport = "Basketball"))
+        val protectedFile = keptFile()
+        val second = repository(
+            "2026-11-15T19:00:00Z", keptFile = protectedFile,
+            protection = kotlinx.coroutines.flow.flowOf(SpoilerProtection(myTeams = true, followed = followed))
+        )
+        val again = collect(second)
+        second.track(SECTION, listOf(pacersCard, lakers))
+        runCurrent()
+        advanceTimeBy(LiveScoresRepository.KEPT_WRITE_DELAY_MS + 1); runCurrent()
+        again.cancel()
+        runCurrent()
+        val later = ms("2026-11-15T19:00:00Z") + testScheduler.currentTime
+        assertEquals(setOf(lakers.streamKey), KeptScores.decode(protectedFile.read()!!, later)!!.games.keys)
     }
 
     @Test
@@ -1394,7 +1435,7 @@ class LiveScoresRepositoryTest {
     }
 
     @Test
-    fun `a kept score is not drawn when older than 10 minutes, for another game, or for the game being watched`() = runTest {
+    fun `a kept score is not drawn when older than 2 minutes, for another game, or for the game being watched`() = runTest {
         val base = ms("2026-11-15T19:00:00Z")
         val lakers = item("Los Angeles Lakers at Phoenix Suns", "Basketball", "2026-11-15T20:30:00Z")
         val shown = mapOf(pacersCard.streamKey to game(ScoreState.IN, 50, 48), lakers.streamKey to game(ScoreState.IN, 50, 48))
@@ -1489,18 +1530,19 @@ class LiveScoresRepositoryTest {
         // First seen while video plays: at once.
         assertEquals(50, repo.scores.value.getValue(key).homeScore)
         assertEquals("Q2 5:00", repo.scores.value.getValue(key).clockText)
-        // Closed for five minutes: the feed is stale by then and fetched again on the reopen.
+        // Closed for 90 s: the feed is stale by then and fetched again on the reopen.
         repo.untrack(panel)
         runCurrent()
         assertTrue(key !in repo.scores.value)
-        advanceTimeBy(5 * 60_000L); runCurrent()
+        advanceTimeBy(90_000L); runCurrent()
         val gate = CompletableDeferred<Unit>()
         provider.gate = gate
         repo.track(panel, listOf(pacersCard))
         runCurrent()
         repo.scores.value.getValue(key).let {
             assertEquals(50, it.homeScore)
-            assertEquals("Q2 5:00", it.clockText)
+            // Score only until the fresh answer (review A4).
+            assertNull(it.clockText)
             assertTrue(it.kept)
         }
         // The fetch lands: the delayed score takes over.
@@ -1899,6 +1941,23 @@ class LiveScoresRepositoryTest {
         // Its sides sit on the game one way round, so the score shows (and the row's tag is the WSL's).
         assertEquals(true, ScoreMatcher.firstIsHome("Liverpool", "Chelsea", wslGame))
         assertEquals("WSL", com.nuvio.tv.core.sportslive.SportsLiveLeagueTags.of(wslGame.leagueName!!))
+        com.nuvio.tv.core.sportslive.SportsLiveWomenGames.shared.clear()
+    }
+
+    @Test
+    fun `the women's league gives no score for a card more than 3 hours from its game, or with no time`() = runTest {
+        // Review B1: a men's game missing from ESPN took the WSL meeting up to 14 h away, or yesterday's for an undated card.
+        com.nuvio.tv.core.sportslive.SportsLiveWomenGames.shared.clear()
+        provider.respond = { feed -> ScoreboardResult(if (feed.league == wslLeague) listOf(wslGame) else emptyList()) }
+        val repo = repository("2026-11-21T13:30:00Z")
+        collect(repo)
+        val evening = item("Liverpool vs Chelsea", "Premier League", "2026-11-21T19:30:00Z")
+        val undated = item("Liverpool vs Chelsea", "Premier League", null, addon = "b")
+        repo.track(SECTION, listOf(evening, undated))
+        runCurrent()
+        assertFalse(evening.streamKey in repo.scores.value)
+        assertFalse(undated.streamKey in repo.scores.value)
+        assertFalse(com.nuvio.tv.core.sportslive.SportsLiveWomenGames.shared.has(evening.streamKey))
         com.nuvio.tv.core.sportslive.SportsLiveWomenGames.shared.clear()
     }
 

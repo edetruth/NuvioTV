@@ -100,4 +100,16 @@ class SportsLiveLeagueTagsTest {
         // A league that names its sport keeps the sport word.
         assertEquals("HOCKEY", SportsLiveTags.short("SWEDISH HOCKEY LEAGUE", null))
     }
+
+    @Test
+    fun `a nationality names the country only when a league word follows`() {
+        // Review C3: the Indian Wells tennis event read INDIA, Chinese Taipei read CHINA.
+        assertEquals("TENNIS", SportsLiveTags.short("INDIAN WELLS MASTERS", SportsLiveSportKind.TENNIS))
+        assertEquals("WELLS", SportsLiveTags.short("INDIAN WELLS MASTERS", null))
+        assertEquals("TAIPEI", SportsLiveTags.short("CHINESE TAIPEI", null))
+        assertEquals("BASEBALL", SportsLiveTags.short("CHINESE TAIPEI", SportsLiveSportKind.BASEBALL))
+        // A league word after it: the country, as before.
+        assertEquals("INDIA", SportsLiveTags.short("INDIAN PREMIER DIVISION", null))
+        assertEquals("CHINA", SportsLiveTags.short("CHINESE LEAGUE ONE", null))
+    }
 }

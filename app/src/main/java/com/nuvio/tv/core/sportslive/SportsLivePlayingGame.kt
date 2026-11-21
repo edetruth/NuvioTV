@@ -16,7 +16,9 @@ object SportsLivePlayingGame {
     /**
      * True when [item] is [playing]'s game: the same source (its stream key, or one of either's merged sources), or the
      * same two sides either way round once names are folded (club suffixes, accents, aliases: [SportsLiveTeams.mergeMatch])
-     * on the same day. A channel or an entry with no two sides is only ever itself.
+     * on the same day, of the same sport and the same men's or women's ([SportsLiveItemBucketer.sameSportAndGender],
+     * live.23 review A3: Real Madrid vs Barcelona in football and basketball, NCAAM and NCAAW Duke vs North Carolina). A
+     * channel or an entry with no two sides is only ever itself.
      */
     fun isSameGame(item: SportsLiveItem, playing: SportsLiveItem): Boolean {
         val keys = sourceKeys(playing)
@@ -26,7 +28,7 @@ object SportsLivePlayingGame {
         val b = playing.teams ?: return false
         if (SportsLiveTeams.isPlaceholderGame(a) || SportsLiveTeams.isPlaceholderGame(b)) return false
         val sides = (sameSide(a.home, b.home) && sameSide(a.away, b.away)) || (sameSide(a.home, b.away) && sameSide(a.away, b.home))
-        return sides && sameDay(item, playing)
+        return sides && sameDay(item, playing) && SportsLiveItemBucketer.sameSportAndGender(item, playing)
     }
 
     private fun sourceKeys(item: SportsLiveItem): Set<String> = (listOf(item) + item.alternates).mapTo(HashSet()) { it.streamKey }

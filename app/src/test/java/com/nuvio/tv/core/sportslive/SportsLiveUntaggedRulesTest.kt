@@ -80,38 +80,20 @@ class SportsLiveUntaggedRulesTest {
     }
 
     @Test
-    fun `two cricket nations with a mainly-cricket one are cricket, unless soccer or field hockey lists the pairing that day`() {
-        // Coordinator decision 2026-11-21.
-        val none = SportsLiveOtherSportPairs()
-        val now = 1_800_000_000_000L
-        fun cricket(name: String, pairs: SportsLiveOtherSportPairs = none) =
-            SportsLiveCricket.isCricketGame(SportsLiveTeams.parse(name), pairs, now)
+    fun `two plain nations are never guessed cricket, whatever nations they are`() {
+        // Review A2 (replaces the 2026-11-21 "mainly cricket nation" guess): untagged AFC, SAFF and CAF qualifiers and
+        // field hockey (India vs Singapore, Zimbabwe vs Nigeria) were tagged CRICKET. A pair of nations is cricket only
+        // once ESPN's live cricket list confirms it (TeamIdentifier) or a text names cricket.
         listOf(
-            "Sri Lanka vs Hong Kong", "South Africa vs Bangladesh", "Ireland Women vs Zimbabwe Women",
-            "Netherlands Women vs Sri Lanka Women", "Pakistan Women vs Scotland Women", "India U19 vs USA U19",
-            "UAE vs Nepal", "West Indies vs Afghanistan"
-        ).forEach { assertTrue(it, cricket(it)) }
-        // No mainly-cricket side, or a side that is no cricket nation: unknown.
-        listOf("Australia vs England", "Ireland vs Scotland", "India vs Brazil", "Bangladesh vs Bangladesh").forEach { assertFalse(it, cricket(it)) }
-
-        // ESPN's soccer feed has Bangladesh v Nepal today (SAFF): the same pairing is not guessed cricket, any form.
-        fun team(name: String) = com.nuvio.tv.core.sportslive.scores.ScoreTeam(
-            id = name, abbreviation = null, displayName = name, shortDisplayName = name, name = name, location = name,
-            logo = null, score = null, linescores = emptyList()
-        )
-        val saff = com.nuvio.tv.core.sportslive.scores.ScoreSnapshot(
-            eventId = "saff", league = com.nuvio.tv.core.sportslive.scores.EspnLeagueMap.SOCCER_ALL, startMs = now + 3 * 60 * 60_000L,
-            state = com.nuvio.tv.core.sportslive.scores.ScoreState.PRE, clockText = null, isFinal = false,
-            home = team("Bangladesh"), away = team("Nepal")
-        )
-        val pairs = SportsLiveOtherSportPairs().apply { record(listOf(saff)) }
-        assertFalse(cricket("Nepal vs Bangladesh", pairs))
-        assertFalse(cricket("Bangladesh Women vs Nepal Women", pairs))
-        assertTrue(cricket("Bangladesh vs Afghanistan", pairs))
-        // A day away it says nothing.
-        assertTrue(SportsLiveCricket.isCricketGame(SportsLiveTeams.parse("Nepal vs Bangladesh"), pairs, now + 3 * 24 * 60 * 60_000L))
-        // A basketball feed never counts.
-        val hoops = saff.copy(league = com.nuvio.tv.core.sportslive.scores.EspnLeagueMap.NBA)
-        assertTrue(cricket("Nepal vs Bangladesh", SportsLiveOtherSportPairs().apply { record(listOf(hoops)) }))
+            "Sri Lanka vs Hong Kong", "South Africa vs Bangladesh", "Ireland Women vs Zimbabwe Women", "India vs Singapore",
+            "Bangladesh vs Hong Kong", "Afghanistan vs Kuwait", "Zimbabwe vs South Africa", "Zimbabwe vs Nigeria",
+            "India vs Germany", "UAE vs Nepal", "West Indies vs Afghanistan"
+        ).forEach { name ->
+            assertFalse(name, SportsLiveCricket.isCricketGame(SportsLiveTeams.parse(name)))
+            assertKind(null, item(name))
+        }
+        // A side against a cricket nation, or two franchises: still cricket from the teams alone.
+        assertTrue(SportsLiveCricket.isCricketGame(SportsLiveTeams.parse("Bangladesh A vs Hong Kong")))
+        assertTrue(SportsLiveCricket.isCricketGame(SportsLiveTeams.parse("Mumbai Indians vs Chennai Super Kings")))
     }
 }

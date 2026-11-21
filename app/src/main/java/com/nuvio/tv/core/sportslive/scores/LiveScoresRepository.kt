@@ -729,8 +729,6 @@ class LiveScoresRepository internal constructor(
             state.failures = 0
             state.retryAfterMs = null
             state.events = result.events
-            // Soccer pairings of the day keep two nations from being guessed as cricket (2026-11-21).
-            com.nuvio.tv.core.sportslive.SportsLiveOtherSportPairs.shared.record(result.events)
             state.fetched = true
             state.lastSuccessAt = state.lastAttemptAt
         }
@@ -829,8 +827,8 @@ class LiveScoresRepository internal constructor(
             // Copies matched to one ESPN game merge on the next list build; a women's soccer game is never a men's
             // club's "my team" (live.23, TV report #10).
             val sources = listOf(card.key) + entry.liveKeys
-            SportsLiveMatchedEvents.shared.record(sources, match)
-            if (match.league.sport == "soccer" && ScoreMatcher.isWomenGame(match)) SportsLiveWomenGames.shared.record(sources)
+            SportsLiveMatchedEvents.shared.record(sources, match, nowMs)
+            if (match.league.sport == "soccer" && ScoreMatcher.isWomenGame(match)) SportsLiveWomenGames.shared.record(sources, nowMs)
             if (match.league == EspnLeagueMap.SOCCER_ALL && match.leagueSlug != EspnLeagueMap.SOCCER_ALL.league &&
                 SLUG.matches(match.leagueSlug) && card.key !in remembered
             ) {
@@ -898,8 +896,10 @@ class LiveScoresRepository internal constructor(
             val college = feedsOf(listOf(wait.fallback), wait.dates)
             // No budget left: no score for it this time, and not confirmed unmatched either.
             if (!fits(college)) continue
-            // Both sides STRONG, on the college feed alone.
+            // Both sides STRONG, on the college feed alone. The women's league only for its game within 3 h of the card's
+            // own start (live.23 review B1): never another meeting of the pair, nor for an undated card.
             val match = matchOn(wait.entry.card, college, strictMatcher)
+                ?.takeIf { !EspnLeagueMap.isWomenFallback(wait.fallback) || nearCardStart(wait.entry.card, it) }
             if (match != null) {
                 // Matched there: the card is polled on its college feed alone from now on.
                 if (remembered.size >= MAX_REMEMBERED) remembered.clear()
@@ -1078,6 +1078,13 @@ class LiveScoresRepository internal constructor(
         }
     }
 
+    /** True when [match] starts within [WOMEN_FALLBACK_NEAR_MS] of [card]'s timed start (none: false). */
+    private fun nearCardStart(card: ScoreCard, match: ScoreSnapshot): Boolean {
+        val start = card.startMs?.takeIf { card.hasTimeOfDay } ?: return false
+        val at = match.startMs ?: return false
+        return kotlin.math.abs(at - start) <= WOMEN_FALLBACK_NEAR_MS
+    }
+
     private fun matchOn(card: ScoreCard, cardFeeds: List<ScoreFeed>, using: ScoreMatcher = matcher, tennis: Boolean = false): ScoreSnapshot? {
         val nowMs = now()
         // A card with no start is matched across ESPN's days: a league counts only once all its days are
@@ -1125,7 +1132,7 @@ class LiveScoresRepository internal constructor(
         val delay = ScoreWatch.delayMs(settingDelayMs, realTime, playing, nudgeSeconds)
         // A game first seen shows its score at once, except the games being watched (their picture runs behind).
         val delayed = scoreDelay.apply(raw, delay, now(), holdFirstSeen = ScoreWatch.watchedEvents(playing, raw))
-        saveKept(delayed)
+        saveKept(keepable(delayed))
         lastDelayed = delayed
         val keptNow = keptServedLocked()
         val shown = if (keptNow.isEmpty()) delayed else keptNow + delayed
@@ -1143,6 +1150,8 @@ class LiveScoresRepository internal constructor(
     /**
      * The kept scores to serve now (live.23), flagged [ScoreSnapshot.kept]: each for one poll at most from when it was
      * first served, and none of a game being watched (its picture runs behind; it keeps the delay's first-seen hold).
+     * A live game's kept score is drawn without its clock, scorers and situation (live.23 review A4): it may be minutes
+     * old, so only the score shows until the first fresh answer.
      */
     private fun keptServedLocked(): Map<String, ScoreSnapshot> {
         if (keptShown.isEmpty()) return emptyMap()
@@ -1156,9 +1165,22 @@ class LiveScoresRepository internal constructor(
                 kept -= key
                 continue
             }
-            served[key] = keptCard.snapshot.copy(kept = true)
+            served[key] = keptCard.snapshot.let { s ->
+                if (s.state == ScoreState.IN) s.copy(kept = true, clockText = null, scorers = emptyList(), situation = null) else s.copy(kept = true)
+            }
         }
         return served
+    }
+
+    /**
+     * The [delayed] scores fit to keep on disk: never the games being watched (their picture runs behind) nor a
+     * protected game (live.23 review): a hidden score is never written where it could be read back.
+     */
+    private fun keepable(delayed: Map<String, ScoreSnapshot>): Map<String, ScoreSnapshot> {
+        if (delayed.isEmpty()) return delayed
+        val watched = ScoreWatch.watchedEvents(playing, delayed)
+        val protection = protectionState.value.copy(nowMs = now())
+        return delayed.filterValues { it.eventId !in watched && !protection.protects(it) }
     }
 
     /** Writes [shown] (the delayed scores, unmasked) to [keptFile] a moment after the last change, off the poll path. */
@@ -1219,6 +1241,8 @@ class LiveScoresRepository internal constructor(
         const val SCREEN_PLAYER_NOW = "player_now"
 
         private const val WINDOW_MS = 3 * 60 * 60 * 1000L
+        /** The women's-league fallback's game is at most this far from the card's start (live.23 review B1). */
+        private const val WOMEN_FALLBACK_NEAR_MS = 3 * 60 * 60 * 1000L
         private const val MAX_REMEMBERED = 2_000
         /** Feeds polled at once, at most; followed teams' games claim theirs first (and poll faster while live). */
         internal const val MAX_FEEDS = 16

@@ -290,6 +290,18 @@ internal class SportsLiveBoardCache(private val maxViews: Int = MAX_VIEWS) {
 
     private var scope: Any? = null
 
+    /**
+     * What of the spoiler protection a kept board depends on (live.23 review S2): the saved / ended games and "Hide my
+     * teams' scores". Not the whole [SpoilerProtection]: its clock changes on every read.
+     */
+    internal data class ProtectionScope(val games: Set<Pair<String, Long?>>, val myTeams: Boolean) {
+        companion object {
+            val NONE = ProtectionScope(emptySet(), false)
+            fun of(protection: SpoilerProtection) =
+                ProtectionScope(protection.games.mapTo(HashSet()) { it.eventId to it.endedAtMs }, protection.myTeams)
+        }
+    }
+
     /** Bumped each time the boards are dropped: a board built before it is never put back ([putIfCurrent]). */
     @get:Synchronized
     var generation = 0
@@ -297,8 +309,8 @@ internal class SportsLiveBoardCache(private val maxViews: Int = MAX_VIEWS) {
 
     /**
      * The profile and settings every board was built for (#143): a profile switch, or a change of My sports, the followed
-     * teams, the Scores setting or the hidden titles, drops every board, so another profile's or setting's list never
-     * shows, not even for a moment.
+     * teams, the Scores setting, the hidden titles or the spoiler protection ([ProtectionScope]), drops every board, so
+     * another profile's or setting's list, or a score just protected, never shows, not even for a moment.
      */
     @Synchronized
     fun scopeTo(next: Any) {

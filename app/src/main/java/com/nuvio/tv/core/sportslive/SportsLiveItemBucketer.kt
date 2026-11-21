@@ -569,6 +569,17 @@ object SportsLiveItemBucketer {
         SportsLiveTeamIdentity.identified(SportsLiveSportInference.infer(item, directory))
 
     /**
+     * True when [a] and [b] may be one game by sport and gender (live.23 review A3, the game playing): their sports agree
+     * ([sportsAgree]: an unknown one agrees) and neither says women's unless both do (as [idGuardFailure]'s gender rule).
+     */
+    internal fun sameSportAndGender(a: SportsLiveItem, b: SportsLiveItem): Boolean {
+        if (!sportsAgree(a, b)) return false
+        val womenA = EspnLeagueMap.saysWomen(a) || saysWomenCompetition(a)
+        val womenB = EspnLeagueMap.saysWomen(b) || saysWomenCompetition(b)
+        return womenA == womenB && !EspnLeagueMap.otherGender(a, b)
+    }
+
+    /**
      * Why two copies whose team ids agree are still not one game, or null when they are: their sports must both be
      * known and agree ("Basketball" and "NBA"), neither may say women's unless both do, and they are at one time.
      */
