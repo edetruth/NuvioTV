@@ -460,7 +460,10 @@ class SportsLiveZapViewModel internal constructor(
             val protection = liveScores.protection.value
             val boardScores = protection.stampAll(split.scoresWithFinals(scores))
             val ended = split.ended.mapValues { (_, game) -> game.event?.let { game.copy(event = protection.stamp(it)) } ?: game }
-            val grouped = groupPanelRows(split.live + split.justEnded, boardScores, scoresMode, revealed, nowMs, ended, logos)
+            // H: a listing that is no game (More live's Other) says LIVE only when ESPN has it in play.
+            val unconfirmed = panelList.moreLive.firstOrNull { it.key == SportsLiveMoreLive.OTHER }?.items
+                ?.filter(SportsLiveOtherEvents::isOtherEvent)?.mapTo(HashSet()) { it.streamKey }.orEmpty()
+            val grouped = groupPanelRows(split.live + split.justEnded, boardScores, scoresMode, revealed, nowMs, ended, logos, unconfirmed = unconfirmed)
             // #164: while the panel is open its order stays as it opened (rows update in place, new ones go to the end of
             // their group, gone ones stay dimmed); a new chip or two idle minutes take the fresh order. Closed: fresh.
             val open = _panelOpen.value

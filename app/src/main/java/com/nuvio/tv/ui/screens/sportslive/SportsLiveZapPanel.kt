@@ -233,7 +233,9 @@ internal fun groupPanelRows(
     /** The list says its games are live (Live now, the panel); Upcoming's are not: ESPN alone makes one live there. */
     listedLive: Boolean = true,
     /** Live now (J2, live.23): [items] come in importance order ([SportsLiveImportance]), kept inside each group. */
-    keepOrder: Boolean = false
+    keepOrder: Boolean = false,
+    /** Card keys never taken as live on the list's word (H: listings that are no game): live only when ESPN says so. */
+    unconfirmed: Set<String> = emptySet()
 ): List<ZapPanelRow> {
     class Entry(val row: ZapPanelRow, val startMs: Long?, val index: Int, val rank: Int)
     val entries = items.mapIndexed { index, item ->
@@ -243,7 +245,7 @@ internal fun groupPanelRows(
         val event = ScoreChips.matchedEvent(item, snapshot)
         // One status source (#102): a final is grouped as one in every mode, as the cards label it (C3);
         // Hide until focused keeps only its score hidden (the chip).
-        val status = GameStatus.of(item, snapshot, endedGame, nowMs, listedLive)
+        val status = GameStatus.of(item, snapshot, endedGame, nowMs, listedLive && item.streamKey !in unconfirmed)
         val group = panelGroupOf(status)
         val start = when (status) {
             is GameStatus.StartingSoon -> status.startMs

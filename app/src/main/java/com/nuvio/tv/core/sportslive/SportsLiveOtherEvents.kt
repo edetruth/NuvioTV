@@ -8,8 +8,8 @@ import com.nuvio.tv.domain.model.SportsLiveKind
  * Live listings that are neither a two-sided game nor a known event (H, user report #6, live.23): one addon's live
  * events catalogs list "ATP 250 vs Stockholm Open" (a tournament as the opponent, in November), a bare "ATP", "WTA" or
  * "Tennis", and promotions, leagues or shows alone ("BKFC", "ISL", "NPL", "Raw", "Dynamite", "Friday Fights",
- * "Gromda"). Live now and the player's panel fold them into one quiet bottom row, "Other events (N) ›", which opens
- * them; they say LIVE only when ESPN confirms the event is on.
+ * "Gromda"). Under My sports they leave Live now and the player's panel for More live's Other ([SportsLiveMoreLive]);
+ * they say LIVE only when ESPN confirms the event is on.
  *
  * Rules, on the row's clean title ([displayName]), for an events listing (never a channel, never a replay) that names
  * no two sides:
