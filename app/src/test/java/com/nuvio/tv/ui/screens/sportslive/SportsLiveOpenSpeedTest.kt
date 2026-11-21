@@ -283,6 +283,30 @@ class SportsLiveOpenSpeedTest {
     }
 
     @Test
+    fun `another profile or setting drops every kept board, and one built before never comes back`() {
+        val cache = SportsLiveBoardCache()
+        val inputs = SportsLiveBoardInputs(
+            tab = SportsLiveTab.UPCOMING, filter = null, items = listOf(item("a", isLive = false, startMs = NOW + HOUR)),
+            scores = SportsLiveBoardScores(), ended = emptyMap(), excitement = emptyMap(), followed = emptyList(),
+            clockMs = NOW, logoRevision = 0
+        )
+        val board = SportsLiveBoard(SportsLiveTab.UPCOMING, null, emptyList(), emptyList(), emptyMap())
+        cache.scopeTo("profile A")
+        cache.put(inputs, board)
+        cache.scopeTo("profile A")
+        assertSame(board, cache.shownFor(inputs))
+
+        val before = cache.generation
+        cache.scopeTo("profile B")
+        assertNull(cache.shownFor(inputs))
+        // A board built ahead for profile A lands late: dropped.
+        cache.putIfCurrent(before, inputs, board)
+        assertNull(cache.shownFor(inputs))
+        cache.putIfCurrent(cache.generation, inputs, board)
+        assertSame(board, cache.shownFor(inputs))
+    }
+
+    @Test
     fun `back on the section with a list over 3 minutes old, it refreshes at once`() = runTest {
         latestFlow.value = load(listOf(item("a", isLive = true)))
         val viewModel = newViewModel(SportsLiveListCache.NONE)

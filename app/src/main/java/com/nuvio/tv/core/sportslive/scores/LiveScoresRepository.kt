@@ -11,6 +11,7 @@ import com.nuvio.tv.core.sportslive.SportsLiveToasts
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import com.nuvio.tv.domain.model.SportsLiveItem
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
@@ -525,6 +526,46 @@ class LiveScoresRepository internal constructor(
         if (outage.check(now(), scoresMode, inUse)) notifyOutage()
     }
 
+    /** When each feed was last asked for by [prefetchUpcoming] (#143). */
+    private val upcomingPrefetchedAt = HashMap<ScoreFeed, Long>()
+
+    /**
+     * Upcoming's scoreboards asked for ahead (#143): while Live now shows, My sports' feeds for ESPN's (US Eastern) today
+     * and tomorrow are fetched once, so opening Upcoming matches its games (times, logos) from the HTTP cache's recent
+     * copy ([ScoreProvider.recentScoreboard], the pollers' warm start) instead of waiting on each feed. Capped: each feed
+     * at most once per [UPCOMING_PREFETCH_EVERY_MS] (and not when anything asked for it within that time), never inside
+     * its Retry-After or after a failure, never under Scores Off; shared with a request in flight. Returns how many
+     * requests it made.
+     */
+    suspend fun prefetchUpcoming(): Int {
+        val requests = lock.withLock {
+            if (scoresMode == ScoresMode.OFF) return@withLock emptyList()
+            val at = now()
+            val lastAsked = health.feeds.value
+            feedsOf(sports.feeds().distinct(), laterDates(at)).filter { feed ->
+                val prefetched = upcomingPrefetchedAt[feed]
+                if (prefetched != null && at - prefetched < UPCOMING_PREFETCH_EVERY_MS) return@filter false
+                val asked = lastAsked[EspnFeedKey.scoreboard(feed.league, feed.date)]?.lastAttemptAt
+                if (asked != null && at - asked < UPCOMING_PREFETCH_EVERY_MS) return@filter false
+                val state = feeds[feed]
+                val retryAfter = state?.retryAfterMs?.let { wait -> state.lastAttemptAt?.let { at - it < wait } } == true
+                !retryAfter && (state?.failures ?: 0) == 0
+            }.map { feed ->
+                upcomingPrefetchedAt[feed] = at
+                fetchLocked(feed)
+            }
+        }
+        for (request in requests) {
+            try {
+                request.await()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+            }
+        }
+        return requests.size
+    }
+
     /**
      * Settings → Scores status → Retry now (#70): one immediate fetch of each live scoreboard in use (today's
      * and yesterday's, never a past day), shared with any request in flight. At most one per
@@ -990,6 +1031,9 @@ class LiveScoresRepository internal constructor(
         internal const val DIRECTORY_START_DELAY_MS = 2_000L
         /** "Retry now" at most this often, and never on a feed asked for within this long. */
         internal const val RETRY_MIN_INTERVAL_MS = 30_000L
+
+        /** [prefetchUpcoming]: each feed at most once in this time (#143). */
+        internal const val UPCOMING_PREFETCH_EVERY_MS = 15 * 60_000L
         /** Scores Off: how often a live card's ESPN start is read again ([checkSchedules]). */
         internal const val SCHEDULE_CHECK_MS = 15 * 60_000L
 

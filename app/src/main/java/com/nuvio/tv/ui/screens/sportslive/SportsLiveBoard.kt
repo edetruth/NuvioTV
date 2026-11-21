@@ -233,6 +233,36 @@ internal class SportsLiveBoardCache(private val maxViews: Int = MAX_VIEWS) {
         entries[viewOf(inputs)] = inputs to board
     }
 
+    private var scope: Any? = null
+
+    /** Bumped each time the boards are dropped: a board built before it is never put back ([putIfCurrent]). */
+    @get:Synchronized
+    var generation = 0
+        private set
+
+    /**
+     * The profile and settings every board was built for (#143): a profile switch, or a change of My sports, the followed
+     * teams, the Scores setting or the hidden titles, drops every board, so another profile's or setting's list never
+     * shows, not even for a moment.
+     */
+    @Synchronized
+    fun scopeTo(next: Any) {
+        if (scope != null && scope != next) clear()
+        scope = next
+    }
+
+    @Synchronized
+    fun clear() {
+        entries.clear()
+        generation++
+    }
+
+    /** [put], unless the boards were dropped since [builtIn] (a board built ahead for a profile no longer shown). */
+    @Synchronized
+    fun putIfCurrent(builtIn: Int, inputs: SportsLiveBoardInputs, board: SportsLiveBoard) {
+        if (builtIn == generation) put(inputs, board)
+    }
+
     /** True when a board is held for [tab] with [filter] and no Channels browse view. */
     @Synchronized
     fun has(tab: SportsLiveTab, filter: String?): Boolean = entries.containsKey(viewOf(tab, filter, null))

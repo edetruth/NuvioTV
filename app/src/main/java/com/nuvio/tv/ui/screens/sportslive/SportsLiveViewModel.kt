@@ -79,9 +79,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
-import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.emptyFlow
-import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
@@ -91,7 +89,6 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -169,7 +166,11 @@ class SportsLiveViewModel internal constructor(
     /** Saves the countries chosen (null: back to the viewer's own). */
     private val saveChannelCountries: suspend (Set<String>?) -> Unit = {},
     /** This TV's region, a viewer's own country (phase 2); null in tests. */
-    tvRegion: String? = null
+    tvRegion: String? = null,
+    /** #143: a burst of score updates rebuilds the board once, this long after its first (0: each, as in tests). */
+    scoresSettleMs: Long = 0L,
+    /** #143: Upcoming's ESPN scoreboards asked for ahead ([LiveScoresRepository.prefetchUpcoming]); the requests made. */
+    private val prefetchUpcomingScores: suspend () -> Int = { 0 }
 ) : ViewModel() {
 
     @Inject
@@ -198,7 +199,7 @@ class SportsLiveViewModel internal constructor(
         onResolveFailed = resolver::invalidate,
         endedInputs = combine(liveScores.scores, liveScores.mode, liveScores.unmatched) { scores, mode, unmatched ->
             EndedInputs(scores, SportsLiveEndedGames.estimateGate(mode == ScoresMode.OFF, unmatched))
-        },
+        }.firstThenCoalesce(SCORES_SETTLE_MS),
         endedGames = SportsLiveEndedGames.shared,
         clock = flow {
             while (true) {
@@ -219,9 +220,10 @@ class SportsLiveViewModel internal constructor(
         },
         // A game's teams identified in the background (#168) rebuild the lists as a learned logo does. A score feed or a
         // team list landing learns many logos one by one: each bump re-inferred every card and rebuilt the board
-        // (live.20 B1, GC churn on the TV), so a burst counts once, LOGO_DEBOUNCE_MS after its last bump.
+        // (live.20 B1, GC churn on the TV), so a burst counts once. #143: LOGO_SETTLE_MS after its first bump (was a
+        // debounce after its last, which a steady trickle of feeds could hold back for seconds).
         logoRevision = combine(TeamLogoBook.shared.revision, TeamIdentityBook.shared.revision) { logos, identities -> logos * 31 + identities }
-            .firstThenDebounce(LOGO_DEBOUNCE_MS),
+            .firstThenCoalesce(LOGO_SETTLE_MS),
         inferSport = { item -> SportsLiveTeamIdentity.identified(SportsLiveSportInference.infer(item, TeamDirectory.shared)) },
         identify = identifier::offer,
         directoryChanges = SportsLiveSharedBuckets.stampChanges().map { },
@@ -240,7 +242,9 @@ class SportsLiveViewModel internal constructor(
         updateChannelPicks = prefs::updateChannelPicks,
         channelCountries = prefs.channelCountries,
         saveChannelCountries = prefs::setChannelCountries,
-        tvRegion = SportsLiveChannelCountries.tvRegion()
+        tvRegion = SportsLiveChannelCountries.tvRegion(),
+        scoresSettleMs = SCORES_SETTLE_MS,
+        prefetchUpcomingScores = liveScores::prefetchUpcoming
     )
 
     private data class Selection(
@@ -613,7 +617,16 @@ class SportsLiveViewModel internal constructor(
      */
     @OptIn(ExperimentalCoroutinesApi::class)
     val board: StateFlow<SportsLiveBoard?> =
-        combine(uiState, boardScores, repo.followedTeams, logoRevision, combine(standings, channelLists, ::Pair)) { state, scores, followed, revision, (books, lists) ->
+        combine(
+            uiState,
+            boardScores.firstThenCoalesce(scoresSettleMs),
+            repo.followedTeams,
+            logoRevision,
+            combine(standings, channelLists, combine(repo.claimedCatalogs, mySports, hiddenTitles, ::Triple), ::Triple)
+        ) { state, scores, followed, revision, (books, lists, profile) ->
+            // #143: another profile or setting drops every tab's kept board before any is shown again.
+            val (claimed, sports, hidden) = profile
+            boardCache.scopeTo(SportsLiveBoardScope(claimed.mapTo(HashSet()) { it.key }, sports, hidden, followed, scores.mode))
             val tab = state.selectedTab
             val live = tab == SportsLiveTab.LIVE_NOW
             SportsLiveBoardInputs(
@@ -640,6 +653,7 @@ class SportsLiveViewModel internal constructor(
                 supersedes = { running, next -> running.tab != next.tab || running.filter != next.filter },
                 instant = { inputs -> boardCache.shownFor(inputs) }
             ) { inputs ->
+                val generation = boardCache.generation
                 withContext(computeDispatcher) {
                     // Nothing it reads changed since it was built (back on a tab within the minute): no build at all. Not
                     // Channels, whose Popular now also reads the links found dead this session (outside the inputs).
@@ -647,7 +661,7 @@ class SportsLiveViewModel internal constructor(
                     val startedAt = System.nanoTime()
                     // #143: unchanged rows keep their instances, so the list redraws only the rows that changed.
                     buildBoard(inputs).reusingRows(boardCache.shownFor(inputs)).also {
-                        boardCache.put(inputs, it)
+                        boardCache.putIfCurrent(generation, inputs, it)
                         SportsLiveDebugTiming.log {
                             "sportsOpen stage=board ms=${(System.nanoTime() - startedAt) / 1_000_000} t=${sinceOpenMs()} tab=${inputs.tab.name} items=${inputs.items.size}"
                         }
@@ -682,6 +696,12 @@ class SportsLiveViewModel internal constructor(
             val selection = selectionState.value
             if (selection.tab != SportsLiveTab.LIVE_NOW || !screenVisible || ambientShowing) return@launch
             if (selection.filterByTab[SportsLiveTab.UPCOMING] != null || boardCache.has(SportsLiveTab.UPCOMING, null)) return@launch
+            // Upcoming's scoreboards for today and tomorrow too, so its games match at once on open (capped in the repository).
+            launch {
+                val asked = prefetchUpcomingScores()
+                SportsLiveDebugTiming.log { "sportsOpen stage=prefetchScores requests=$asked" }
+            }
+            val generation = boardCache.generation
             val state = uiState.value
             val items = state.tabs[SportsLiveTab.UPCOMING].orEmpty()
             if (items.isEmpty()) return@launch
@@ -698,7 +718,7 @@ class SportsLiveViewModel internal constructor(
             )
             val startedAt = System.nanoTime()
             val built = withContext(computeDispatcher) { buildBoard(inputs) }
-            if (!boardCache.has(SportsLiveTab.UPCOMING, null)) boardCache.put(inputs, built)
+            if (!boardCache.has(SportsLiveTab.UPCOMING, null)) boardCache.putIfCurrent(generation, inputs, built)
             SportsLiveDebugTiming.log { "sportsOpen stage=prewarm ms=${(System.nanoTime() - startedAt) / 1_000_000} tab=UPCOMING items=${items.size}" }
         }
     }
@@ -1232,8 +1252,12 @@ class SportsLiveViewModel internal constructor(
         /** Coming back to the section, a list this old refreshes at once (live.20). */
         const val RETURN_STALE_MS = 3 * 60_000L
 
-        /** A burst of learned logos counts once, this long after its last one (live.20 B1). */
-        const val LOGO_DEBOUNCE_MS = 750L
+        /**
+         * #143, tunable on the TV (NuvioTiming stage=pinned / stage=state / stage=board counts): a burst of learned logos
+         * or of score updates rebuilds the lists once, this long after its first update.
+         */
+        const val LOGO_SETTLE_MS = 750L
+        const val SCORES_SETTLE_MS = 300L
 
         /** A shown list this old is marked "Updated ‹time›" while a refresh runs (live.20 B1); the 3-minute Live now refresh never is. */
         const val STALE_MARK_MS = 5 * 60_000L
@@ -1292,9 +1316,11 @@ internal suspend fun SportsLiveRepository.toggleFollowTarget(target: FollowTarge
     }
 }
 
-/**
- * This flow's first value at once, then each later one only once [ms] pass without another (live.20 B1): a burst
- * counts once, and the first build never waits.
- */
-@OptIn(FlowPreview::class)
-internal fun <T> Flow<T>.firstThenDebounce(ms: Long): Flow<T> = merge(take(1), drop(1).debounce(ms))
+/** What every kept board was built for (#143, [SportsLiveBoardCache.scopeTo]): the profile's catalogs and settings. */
+private data class SportsLiveBoardScope(
+    val claimed: Set<String>,
+    val mySports: MySports,
+    val hidden: Set<String>,
+    val followed: List<FollowedTeam>,
+    val mode: ScoresMode?
+)

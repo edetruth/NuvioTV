@@ -339,6 +339,28 @@ class LiveScoresRepositoryTest {
     private fun TestScope.collect(repo: LiveScoresRepository) = backgroundScope.launch { repo.scores.collect {} }
 
     @Test
+    fun `Upcoming's scoreboards asked for ahead, each feed at most once in 15 min, never under Scores Off`() = runTest {
+        mySports.value = MySports(mapOf(MySport.BASKETBALL to setOf(MyLeague.NBA)))
+        val repo = repository("2026-11-16T17:00:00Z")
+        collect(repo)
+        runCurrent()
+        val asked = repo.prefetchUpcoming()
+        // My sports' feeds for ESPN's today and tomorrow.
+        assertTrue(asked > 0)
+        assertEquals(0, asked % 2)
+        assertTrue(provider.calls.size >= asked)
+        advanceTimeBy(10 * 60_000L)
+        assertEquals(0, repo.prefetchUpcoming())
+        advanceTimeBy(6 * 60_000L)
+        assertEquals(asked, repo.prefetchUpcoming())
+
+        settings.value = ScoreSettings(ScoresMode.OFF)
+        runCurrent()
+        advanceTimeBy(16 * 60_000L)
+        assertEquals(0, repo.prefetchUpcoming())
+    }
+
+    @Test
     fun `cards on one feed share one request`() = runTest {
         provider.respond = { ScoreboardResult(nbaFixture) }
         val repo = repository("2026-11-16T12:00:00Z")

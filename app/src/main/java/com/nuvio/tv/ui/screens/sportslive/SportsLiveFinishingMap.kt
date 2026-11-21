@@ -2,6 +2,7 @@ package com.nuvio.tv.ui.screens.sportslive
 
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.launch
@@ -62,3 +63,40 @@ internal fun <T, R> Flow<T>.mapFinishing(
 
 /** A value held as running or waiting (a wrapper, so a null value is still told from none). */
 private class Held<T>(val value: T)
+
+/**
+ * The first value at once; after it, a burst of values comes out as one (#143): the first value after a quiet spell opens
+ * a [ms] window, and when it closes the latest value of the window is sent. Unlike a debounce, a steady trickle (score
+ * feeds answering one by one, logos learned one by one) never holds the update back for longer than [ms]. 0 or less:
+ * every value as it comes.
+ */
+internal fun <T> Flow<T>.firstThenCoalesce(ms: Long): Flow<T> {
+    if (ms <= 0L) return this
+    return channelFlow {
+        val lock = Mutex()
+        var first = true
+        var pending: Held<T>? = null
+        var window: Job? = null
+        collect { value ->
+            lock.withLock {
+                if (first) {
+                    first = false
+                    send(value)
+                    return@withLock
+                }
+                pending = Held(value)
+                if (window == null) {
+                    window = launch {
+                        delay(ms)
+                        lock.withLock {
+                            val latest = pending
+                            pending = null
+                            window = null
+                            if (latest != null) send(latest.value)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
