@@ -1032,6 +1032,38 @@ class SportsLiveViewModelTest {
     }
 
     @Test
+    fun `a replay played from the Replays list starts no zap session and ends any held one (G4)`() = runTest {
+        nextLoad = load(
+            listOf(
+                item("r1", isLive = false, sport = "Basketball", startMs = NOW - HOUR, name = "Lakers 110-99 Suns")
+                    .copy(kind = SportsLiveKind.REPLAY),
+                item("r2", isLive = false, sport = "Basketball", startMs = NOW - 2 * HOUR, name = "Celtics 101-98 Suns")
+                    .copy(kind = SportsLiveKind.REPLAY)
+            )
+        )
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+        viewModel.selectTab(SportsLiveTab.REPLAYS)
+        runCurrent()
+        val raw = viewModel.uiState.value.visibleItems.first()
+        // As played: the clean title, never the addon's (spoilerSafeReplay).
+        val played = spoilerSafeReplay(raw, "Suns at Lakers")
+
+        try {
+            // A game's player zaps over the list shown; a replay's would zap over the raw replay titles.
+            viewModel.startZapSession(SportsLiveZapTarget(played, playback = null, returnToHomeOnBack = false))
+            assertTrue(SportsLiveZapSessions.current() != null)
+
+            viewModel.startZapSession(SportsLiveZapTarget(played, playback = null, returnToHomeOnBack = false, replay = true))
+            assertNull(SportsLiveZapSessions.current())
+            // So Back from it starts no mini player (it needs the content's session) and no caption shows a raw title.
+            assertNull(SportsLiveZapSessions.activeFor(played.id))
+        } finally {
+            SportsLiveZapSessions.clear()
+        }
+    }
+
+    @Test
     fun `a game started from my teams carries every live now game, followed ones first (#68)`() = runTest {
         followedFlow.value = listOf(FollowedTeam("Celtics", null))
         nextLoad = load(

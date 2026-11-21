@@ -410,7 +410,7 @@ class SportsLivePlayViewModel @Inject constructor(
             returnToHomeOnBack = returnToHomeOnBack,
             directDebridResolver = directDebridResolver,
             autoPicked = autoPicked
-        ).copy(liveEdge = liveEdge)
+        ).copy(liveEdge = liveEdge, replay = !zapSession)
         // A start made stale meanwhile (#175) opens nothing.
         if (!gate.mayPlay(token)) return
         if (zapSession) ensureZapSession(item)
