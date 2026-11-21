@@ -57,6 +57,9 @@ internal data class GuideRow(
     val time: String? = null,
     val live: Boolean = false,
     val marks: List<GuideMark> = emptyList(),
+    /** Which team a followed team is (#212): Now playing draws ★ beside that team's line. */
+    val firstMyTeam: Boolean = false,
+    val secondMyTeam: Boolean = false,
     val dimmedAtRest: Boolean = false,
     val isNew: Boolean = false
 )
@@ -101,6 +104,8 @@ internal fun guideRowOf(
         live = status.live,
         // "Close and late" says how the game is going: only beside a score that shows (Hide until focused keeps it).
         marks = guideMarks(closeLate = board.closeGame && shown != null, myTeam = board.followed, ready = readyMark, nowPlaying = nowPlaying),
+        firstMyTeam = board.firstFollowed,
+        secondMyTeam = board.secondFollowed,
         dimmedAtRest = board.dimmed(focused = false) || gone || readyMark == SportsLiveReadyMark.NO_STREAM,
         isNew = isNew
     )
@@ -128,6 +133,17 @@ internal fun guideMarks(closeLate: Boolean, myTeam: Boolean, ready: SportsLiveRe
         if (myTeam) add(GuideMark.MY_TEAM)
         if (ready == SportsLiveReadyMark.READY && !nowPlaying) add(GuideMark.READY)
     }
+
+/**
+ * Now playing's marks for its two team lines (#212): ★ beside the followed team's line (both when both are followed;
+ * the first when only the card says a followed team plays), every other mark after the first line.
+ */
+internal fun guideNowPlayingMarks(row: GuideRow): Pair<List<GuideMark>, List<GuideMark>> {
+    if (GuideMark.MY_TEAM !in row.marks) return row.marks to emptyList()
+    val onFirst = row.firstMyTeam || !row.secondMyTeam
+    val first = if (onFirst) row.marks else row.marks.filter { it != GuideMark.MY_TEAM }
+    return first to if (row.secondMyTeam) listOf(GuideMark.MY_TEAM) else emptyList()
+}
 
 /**
  * A team's names on a guide row, longest first (B2, ~480 px per team): its full name ("Maryland Eastern Shore"),

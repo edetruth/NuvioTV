@@ -369,8 +369,27 @@ object SportsLiveTeams {
             val teamSport = team.sport?.takeUnless(::isGenericSport)
             teamSport == null || itemSport == null || teamSport.equals(itemSport, ignoreCase = true)
         }
-        return sportsAgree && matches(team.name, side)
+        return sportsAgree && matches(team.name, side) && !(isCollegeTeam(team, espnLeague) && isNicknameOf(team.name, side))
     }
+
+    /**
+     * A college team ([FollowedTeam.league], else its sport word, routes only to college feeds): its nickname is shared
+     * by schools and pro teams alike ("Rockets": Toledo and Houston, #212), so it never names the team on its own.
+     */
+    private fun isCollegeTeam(team: FollowedTeam, espnLeague: EspnLeague?): Boolean {
+        if (espnLeague != null) return espnLeague in COLLEGE_FEEDS
+        val feeds = team.sport?.let { EspnLeagueMap.leaguesFor(sport = it, hints = emptyList()) }.orEmpty()
+        return feeds.isNotEmpty() && feeds.all { it in COLLEGE_FEEDS }
+    }
+
+    /** True when [side] is only the end of [teamName] ("Rockets" of "Toledo Rockets"), not the whole team. */
+    private fun isNicknameOf(teamName: String, side: String): Boolean {
+        val team = canonicalise(teamName)
+        val written = canonicalise(side)
+        return team != written && team.endsWith(" $written")
+    }
+
+    private val COLLEGE_FEEDS = setOf(EspnLeagueMap.COLLEGE_FOOTBALL, EspnLeagueMap.COLLEGE_BASKETBALL, EspnLeagueMap.COLLEGE_BASKETBALL_WOMEN)
 
     /** The ESPN feed a team followed from ESPN came from ("basketball/nba"); null for a name-only follow. */
     private fun espnLeagueOf(team: FollowedTeam): EspnLeague? {
@@ -389,9 +408,27 @@ object SportsLiveTeams {
 
     private const val SOCCER = "soccer"
 
-    /** [followsSide] for a merged card: true when [team] is [side] in the card or any of its alternates. */
+    /** [followsSide] for a merged card: true when [team] is [side] in the card or any of its alternates ([alternatesMayFollow]). */
     fun followsSideOfAnySource(team: FollowedTeam, side: String, item: SportsLiveItem): Boolean =
-        followsSide(team, side, item) || item.alternates.any { followsSide(team, side, it) }
+        followsSide(team, side, item) || (alternatesMayFollow(team, item) && item.alternates.any { followsSide(team, side, it) })
+
+    /** [follows] for a merged card: [item] or any of its alternates ([alternatesMayFollow]). */
+    fun followsAnySource(team: FollowedTeam, item: SportsLiveItem): Boolean =
+        follows(team, item) || (alternatesMayFollow(team, item) && item.alternates.any { follows(team, it) })
+
+    /**
+     * Whether a merged card's alternates may make [team] follow it: always for a name-only follow (the copies' sport
+     * words may differ, "NBA" and "Basketball"), and for a team followed from ESPN unless the card's own feeds (with its
+     * college fallback) are known and leave the team's league out (#212: an "NFL" Panthers game is no NHL Panthers game
+     * because a copy of no sport names "Panthers").
+     */
+    private fun alternatesMayFollow(team: FollowedTeam, item: SportsLiveItem): Boolean {
+        val league = espnLeagueOf(team) ?: return true
+        if (item.isChannel) return true
+        val feeds = EspnLeagueMap.leaguesFor(item) + listOfNotNull(EspnLeagueMap.collegeFallbackFor(item))
+        if (feeds.isEmpty()) return true
+        return if (league.sport == SOCCER) feeds.any { it.sport == SOCCER } else league in feeds
+    }
 
     /**
      * The item's sport when it is one: taken from its genres, not its catalog's name ("⚡SportzX Live

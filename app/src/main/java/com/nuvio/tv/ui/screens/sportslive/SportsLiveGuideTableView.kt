@@ -435,11 +435,16 @@ private fun GuideNowPlaying(row: GuideRow, art: GameArt?, selected: Boolean) {
             when (row.kind) {
                 GuideRowKind.GAME -> {
                     val logos = rememberTeamLogoPair(art)?.takeIf { !it.failed }
+                    // ★ beside the followed team's own line (#212), not always the first.
+                    val (firstMarks, secondMarks) = guideNowPlayingMarks(row)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         GuideTeam(logos?.first, logos?.shown == true, row.firstNames, GuideType.NowName, GUIDE_NOW_LOGO, Modifier.weight(1f, fill = false))
-                        GuideMarks(row.marks, isNew = false)
+                        GuideMarks(firstMarks, isNew = false)
                     }
-                    GuideTeam(logos?.second, logos?.shown == true, row.secondNames, GuideType.NowName, GUIDE_NOW_LOGO)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        GuideTeam(logos?.second, logos?.shown == true, row.secondNames, GuideType.NowName, GUIDE_NOW_LOGO, Modifier.weight(1f, fill = false))
+                        GuideMarks(secondMarks, isNew = false)
+                    }
                 }
                 GuideRowKind.TITLE -> Row(verticalAlignment = Alignment.CenterVertically) {
                     GuideTitle(row, GuideType.NowName, maxLines = 2, modifier = Modifier.weight(1f, fill = false))

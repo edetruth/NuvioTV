@@ -131,4 +131,66 @@ class TeamFollowsTest {
         val unlinked = palaceGame.copy(league = EspnLeagueMap.SOCCER_ALL)
         assertEquals("soccer/all", TeamFollows.teamToFollow(unlinked, unlinked.away)!!.league)
     }
+
+    // #212 (TV test live.22): following Toledo Rockets (NCAA) starred Houston Rockets (NBA) on an addon card of no sport.
+
+    private val toledoFootball = FollowedTeam("Toledo Rockets", "College Football", espnId = "2649", abbreviation = "TOL", league = "football/college-football")
+    private val toledoBasketball = FollowedTeam("Toledo Rockets", "College Basketball", espnId = "2649", abbreviation = "TOL", league = "basketball/mens-college-basketball")
+    private val houston = FollowedTeam("Houston Rockets", "Basketball", espnId = "10", abbreviation = "HOU", league = "basketball/nba")
+
+    private fun espnTeam(id: String, abbreviation: String, location: String, nickname: String) = ScoreTeam(
+        id = id, abbreviation = abbreviation, displayName = "$location $nickname", shortDisplayName = nickname, name = nickname,
+        location = location, logo = null, score = 50, linescores = emptyList()
+    )
+
+    // DEN @ HOU, live on the NBA feed.
+    private val nuggetsAtRockets = ScoreSnapshot(
+        eventId = "401", league = EspnLeagueMap.NBA, leagueName = "NBA", startMs = null, state = ScoreState.IN,
+        clockText = "Q2 5:00", isFinal = false,
+        home = espnTeam("10", "HOU", "Houston", "Rockets"), away = espnTeam("7", "DEN", "Denver", "Nuggets")
+    )
+
+    @Test
+    fun `a college follow never stars a pro team that shares its nickname on a card of no sport`() {
+        // The addon's card names the teams by nickname only and gives no sport (its catalog's name).
+        val untagged = card("Nuggets vs Rockets", null)
+        assertTrue(EspnLeagueMap.leaguesFor(untagged).isEmpty())
+        listOf(toledoFootball, toledoBasketball, FollowedTeam("Toledo Rockets", "College Basketball")).forEach { toledo ->
+            assertFalse(SportsLiveTeams.isFollowed(untagged, listOf(toledo)))
+            assertFalse(SportsLiveTeams.followsSide(toledo, "Rockets", untagged))
+            assertFalse(SportsLiveItemBucketer.markFollowed(listOf(untagged), listOf(toledo)).single().followed)
+        }
+        // The NBA team is still starred there, and the college team on a card that names the school.
+        assertTrue(SportsLiveTeams.isFollowed(untagged, listOf(houston)))
+        assertTrue(SportsLiveTeams.followsSide(houston, "Rockets", untagged))
+        assertTrue(SportsLiveTeams.isFollowed(card("Bowling Green Falcons at Toledo Rockets", "College Football"), listOf(toledoFootball)))
+    }
+
+    @Test
+    fun `a merged card of a known league is not followed through a copy of no sport by another league's namesake`() {
+        val floridaPanthers = FollowedTeam("Florida Panthers", "Hockey", espnId = "26", abbreviation = "FLA", league = "hockey/nhl")
+        val merged = card("Panthers vs Falcons", "NFL").copy(alternates = listOf(card("Panthers vs Falcons", null)))
+        assertFalse(SportsLiveItemBucketer.markFollowed(listOf(merged), listOf(floridaPanthers)).single().followed)
+        assertFalse(SportsLiveTeams.followsSideOfAnySource(floridaPanthers, "Panthers", merged))
+        // The NFL team still is, and a copy of no sport still counts when the card's own league is not known.
+        assertTrue(SportsLiveItemBucketer.markFollowed(listOf(merged), listOf(nflPanthers)).single().followed)
+        val unknown = card("Panthers vs Falcons", null).copy(alternates = listOf(card("Panthers vs Falcons", null)))
+        assertTrue(SportsLiveTeams.followsSideOfAnySource(nflPanthers, "Panthers", unknown))
+    }
+
+    @Test
+    fun `a card matched to its ESPN game stars a side by ESPN id in the game's league`() {
+        val nbaCard = card("Nuggets vs Rockets", "NBA")
+        assertEquals(nuggetsAtRockets, ScoreChips.matchedEvent(nbaCard, nuggetsAtRockets))
+        // The NBA team: its own side only, by id.
+        assertTrue(TeamFollows.followsCardSide(houston, "Rockets", nbaCard, nuggetsAtRockets))
+        assertFalse(TeamFollows.followsCardSide(houston, "Nuggets", nbaCard, nuggetsAtRockets))
+        assertFalse(TeamFollows.followsCardSide(houston.copy(espnId = "999"), "Rockets", nbaCard, nuggetsAtRockets))
+        // A college team is never a side of an NBA game, whatever the card's names.
+        assertFalse(TeamFollows.followsCardSide(toledoBasketball, "Rockets", nbaCard, nuggetsAtRockets))
+        assertFalse(TeamFollows.followsCardSide(toledoFootball, "Rockets", card("Nuggets vs Rockets", null), nuggetsAtRockets))
+        // No game matched: the card's names decide, as before.
+        assertTrue(TeamFollows.followsCardSide(houston, "Rockets", nbaCard, null))
+        assertFalse(TeamFollows.followsCardSide(toledoBasketball, "Rockets", card("Nuggets vs Rockets", null), null))
+    }
 }

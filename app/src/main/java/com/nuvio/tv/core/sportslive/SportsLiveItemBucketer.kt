@@ -778,8 +778,7 @@ object SportsLiveItemBucketer {
         } else {
             // A merged game is followed when any of its sources is (their sports may differ).
             items.map { item ->
-                val isFollowed = SportsLiveTeams.isFollowed(item, followed) ||
-                    item.alternates.any { SportsLiveTeams.isFollowed(it, followed) }
+                val isFollowed = followed.any { SportsLiveTeams.followsAnySource(it, item) }
                 if (isFollowed) item.copy(followed = true) else item
             }
         }

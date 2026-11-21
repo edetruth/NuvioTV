@@ -1,6 +1,8 @@
 package com.nuvio.tv.core.sportslive.scores
 
+import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.domain.model.FollowedTeam
+import com.nuvio.tv.domain.model.SportsLiveItem
 
 /**
  * Following a team from ESPN data (Results rows, the Game page, #54): what is stored, and whether a
@@ -93,6 +95,35 @@ object TeamFollows {
         val sports = SportsResults.sportsOf(team)
         if (sports != null && event.league.sport !in sports) return false
         return ScoreMatcher.isStrongSide(team.name, side, event.leagueSlug, event.leagueName)
+    }
+
+    /**
+     * True when [team] is the card side [side] of [item] (a side as [ScoreChips.orderedSides] names it). With the card's
+     * strict ESPN game [event] ([ScoreChips.matchedEvent]), a team followed from ESPN is that side only in the game's
+     * league (soccer: its sport), by ESPN id (#212: a followed Toledo Rockets is never Houston's side of an NBA game);
+     * otherwise the card's names decide ([SportsLiveTeams.followsSideOfAnySource]).
+     */
+    fun followsCardSide(team: FollowedTeam, side: String, item: SportsLiveItem, event: ScoreSnapshot?): Boolean {
+        val espnSide = event?.let { espnSideOf(item, side, it) }
+        val stored = team.league?.split('/')
+        if (event != null && espnSide != null && team.espnId != null && stored != null && stored.size == 2) {
+            if (stored[0] != event.league.sport) return false
+            if (stored[0] != SOCCER && stored[1] != event.league.league) return false
+            if (espnSide.id != null) return team.espnId == espnSide.id
+        }
+        return SportsLiveTeams.followsSideOfAnySource(team, side, item)
+    }
+
+    // The ESPN team that is [side] of [item] on its strict game [event]; null for a one-on-one sport or no strict match.
+    private fun espnSideOf(item: SportsLiveItem, side: String, event: ScoreSnapshot): ScoreTeam? {
+        if (event.individual != null) return null
+        val (first, second) = ScoreChips.orderedSides(item) ?: return null
+        val firstIsHome = ScoreMatcher.firstIsHome(first, second, event) ?: return null
+        return when (side) {
+            first -> if (firstIsHome) event.home else event.away
+            second -> if (firstIsHome) event.away else event.home
+            else -> null
+        }
     }
 
     /** The followed teams that are [side] of [event]: unfollowing removes them all. */

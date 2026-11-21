@@ -6,11 +6,11 @@ import com.nuvio.tv.core.sportslive.scores.TeamStanding
 import com.nuvio.tv.core.sportslive.scores.StandingsRepository
 import com.nuvio.tv.core.sportslive.scores.ScoreState
 import com.nuvio.tv.core.sportslive.scores.ScoreChips
+import com.nuvio.tv.core.sportslive.scores.TeamFollows
 import com.nuvio.tv.core.sportslive.scores.EspnLeague
 import com.nuvio.tv.core.sportslive.scores.BigGame
 import androidx.compose.runtime.Immutable
 import com.nuvio.tv.core.sportslive.EndedGame
-import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.scores.GameArt
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
@@ -122,7 +122,11 @@ data class SportsLiveBoard(
                     revealed = scores.revealed,
                     nowMs = inputs.clockMs,
                     ended = inputs.ended.mapValues { (_, ended) -> ended.event?.let { ended.copy(event = scores.protection.stamp(it)) } ?: ended },
-                    followsSide = { item, side -> inputs.followed.any { SportsLiveTeams.followsSideOfAnySource(it, side, item) } },
+                    followsSide = { item, side ->
+                        // #212: with the card's strict ESPN game, ESPN ids decide which side a followed team is.
+                        val event = ScoreChips.matchedEvent(item, scores.scores[item.streamKey])
+                        inputs.followed.any { TeamFollows.followsCardSide(it, side, item, event) }
+                    },
                     excitement = inputs.excitement
                 ).map { row -> if (row.item.streamKey in inputs.noStreams) row.copy(noStreams = true) else row }
                     .let { built -> if (tab == SportsLiveTab.UPCOMING) withBigGames(built, scores.scores, inputs.standings) else built }

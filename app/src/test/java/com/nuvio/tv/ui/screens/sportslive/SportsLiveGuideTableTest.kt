@@ -149,6 +149,21 @@ class SportsLiveGuideTableTest {
     }
 
     @Test
+    fun `Now playing draws the star beside the followed team's line, not always the first`() {
+        // #212: the second team is followed, so the star sits on the second line; the stopwatch stays on the first.
+        val second = guideRowOf(live.copy(secondFollowed = true, closeGame = true), strings, null, "NBA", nowPlaying = true)
+        assertEquals(listOf(GuideMark.CLOSE_LATE) to listOf(GuideMark.MY_TEAM), guideNowPlayingMarks(second))
+        val first = guideRowOf(live.copy(firstFollowed = true), strings, null, "NBA", nowPlaying = true)
+        assertEquals(listOf(GuideMark.MY_TEAM) to emptyList<GuideMark>(), guideNowPlayingMarks(first))
+        val both = guideRowOf(live.copy(firstFollowed = true, secondFollowed = true), strings, null, "NBA", nowPlaying = true)
+        assertEquals(listOf(GuideMark.MY_TEAM) to listOf(GuideMark.MY_TEAM), guideNowPlayingMarks(both))
+        // Only the card says a followed team plays (no side known): the first line, as before.
+        val cardOnly = guideRowOf(live.copy(item = live.item.copy(followed = true)), strings, null, "NBA", nowPlaying = true)
+        assertEquals(listOf(GuideMark.MY_TEAM) to emptyList<GuideMark>(), guideNowPlayingMarks(cardOnly))
+        assertEquals(emptyList<GuideMark>() to emptyList<GuideMark>(), guideNowPlayingMarks(guideRowOf(live, strings, null, "NBA")))
+    }
+
+    @Test
     fun `the first openings' legend names Hold OK More first, then the three marks, and is gone after`() {
         assertEquals(
             listOf(GuideLegend.HOLD_OK, GuideLegend.CLOSE_LATE, GuideLegend.MY_TEAM, GuideLegend.READY),

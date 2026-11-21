@@ -18,6 +18,7 @@ import com.nuvio.tv.core.sportslive.scores.ScoreChip
 import com.nuvio.tv.core.sportslive.scores.ScoreChips
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.ScoresMode
+import com.nuvio.tv.core.sportslive.scores.TeamFollows
 import com.nuvio.tv.core.sportslive.scores.TeamLogoBook
 import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveItem
@@ -512,8 +513,10 @@ internal fun panelBoards(
     followed: List<FollowedTeam> = emptyList()
 ): List<ZapPanelBoard> {
     val scoresOn = mode != null && mode != ScoresMode.OFF
+    // #212: with the card's strict ESPN game, ESPN ids decide which side a followed team is (the star sits on that side).
     val followsSide: (SportsLiveItem, String) -> Boolean = { item, side ->
-        followed.any { SportsLiveTeams.followsSideOfAnySource(it, side, item) }
+        val event = ScoreChips.matchedEvent(item, scores[item.streamKey] ?: ended[item.streamKey]?.event)
+        followed.any { TeamFollows.followsCardSide(it, side, item, event) }
     }
     return rows.map { row ->
         val item = row.item
