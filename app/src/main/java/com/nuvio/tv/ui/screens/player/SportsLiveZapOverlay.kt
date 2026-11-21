@@ -403,6 +403,7 @@ internal fun BoxScope.SportsLiveZapOverlay(
                 null
             },
             watchWithText = R.string.sports_live_watch_both,
+            watchWithFirst = true,
             // OK opens this Just ended game's box score: its postgame stream stays here (#140).
             onWatchPostgame = if (shown.postgame) {
                 {

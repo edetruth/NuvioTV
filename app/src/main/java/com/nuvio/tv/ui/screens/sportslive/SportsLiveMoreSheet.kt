@@ -118,6 +118,8 @@ internal fun SportsLiveCardMenu(
     onWatchWith: (() -> Unit)? = null,
     /** [onWatchWith]'s label: the in-player panel's says "Watch both" (#140). */
     @StringRes watchWithText: Int = R.string.sports_live_dual_watch_with,
+    /** [onWatchWith] before Choose stream (the in-player panel's "Watch both", which Hold OK on a row is for). */
+    watchWithFirst: Boolean = false,
     /** "Choose stream…": the card's streams to pick from; null hides it (live games and channels offer it). */
     onChooseStream: (() -> Unit)? = null,
     /** "Game stats": the Game page (#18); null hides it (only a game with a strict ESPN match offers it). */
@@ -160,6 +162,28 @@ internal fun SportsLiveCardMenu(
     favorite: Boolean = false
 ) {
     var teamsOpen by remember { mutableStateOf(false) }
+    // Hold OK menu trim (docs/design/hold-ok-menu-trim.md): at most 7 entries, the teams' ones behind Teams….
+    val slots = sportsLiveMenuSlots(
+        SportsLiveMenuOffer(
+            report = onReport != null,
+            reportFirst = reportFirst,
+            favorite = onToggleFavorite != null,
+            hide = onHide != null,
+            hideFirst = hideFirst,
+            postgame = onWatchPostgame != null,
+            remind = onToggleReminder != null,
+            chooseStream = onChooseStream != null,
+            watchWith = onWatchWith != null,
+            watchWithFirst = watchWithFirst,
+            gameStats = onGameStats != null,
+            follows = sides.size,
+            teamReminders = teamReminders.size,
+            teamPages = teamPages.size,
+            watchLater = onWatchLater != null,
+            scoresAhead = onScoresAhead != null,
+            details = onDetails != null
+        )
+    )
     SportsLiveSheet(
         title = title,
         status = status,
@@ -169,110 +193,192 @@ internal fun SportsLiveCardMenu(
         page = teamsOpen
     ) { first ->
         if (teamsOpen) {
+            // Teams…: Follow, the team reminders (#154) and the team pages (#62), each kind together.
+            sides.indices.forEach { index ->
+                SportsLiveFollowEntry(sides[index], followingLabel, onClick = { onToggleFollow(index) }, modifier = first())
+            }
+            teamReminders.indices.forEach { index ->
+                SportsLiveTeamReminderEntry(teamReminders[index], onClick = { onToggleTeamReminder(index) }, modifier = first())
+            }
             teamPages.forEach { (name, open) ->
                 SportsLiveMenuButton(text = stringResource(R.string.sports_live_team_page, name), onClick = open, modifier = first())
             }
             return@SportsLiveSheet
         }
-        if (onReport != null && reportFirst) {
-            SportsLiveMenuButton(text = stringResource(R.string.sports_live_setting_report_problem), onClick = onReport, modifier = first())
-        }
-        if (onToggleFavorite != null) {
-            SportsLiveMenuButton(
-                text = stringResource(if (favorite) R.string.sports_live_channel_favorite_remove else R.string.sports_live_channel_favorite_add),
-                onClick = onToggleFavorite,
-                modifier = first(),
-                icon = if (favorite) Icons.Rounded.Star else Icons.Rounded.StarOutline,
-                iconTint = Colors.FollowedGold
-            )
-        }
-        if (onHide != null && hideFirst) {
-            SportsLiveMenuButton(
-                text = stringResource(R.string.sports_live_hide_this),
-                onClick = onHide,
-                modifier = first(),
-                icon = Icons.Rounded.Block,
-                iconTint = Colors.TextSecondary
-            )
-        }
-        if (onWatchPostgame != null) {
-            SportsLiveMenuButton(text = stringResource(R.string.sports_live_watch_postgame), onClick = onWatchPostgame, modifier = first())
-        }
-        if (onWatchWith != null) {
-            SportsLiveMenuButton(text = stringResource(watchWithText), onClick = onWatchWith, modifier = first())
-        }
-        if (onChooseStream != null) {
-            SportsLiveMenuButton(text = stringResource(R.string.sports_live_choose_stream_menu), onClick = onChooseStream, modifier = first())
-        }
-        if (onGameStats != null) {
-            SportsLiveMenuButton(
-                text = stringResource(if (gamePreview) R.string.sports_live_game_preview else R.string.sports_live_game_stats),
-                onClick = onGameStats,
-                modifier = first()
-            )
-        }
-        sides.forEachIndexed { index, (side, followed) ->
-            val label = when {
-                !followed -> R.string.sports_live_follow
-                followingLabel -> R.string.sports_live_game_following
-                else -> R.string.sports_live_unfollow
+        slots.forEach { slot ->
+            when (slot) {
+                SportsLiveMenuSlot.REPORT -> onReport?.let {
+                    SportsLiveMenuButton(text = stringResource(R.string.sports_live_setting_report_problem), onClick = it, modifier = first())
+                }
+                SportsLiveMenuSlot.FAVORITE -> onToggleFavorite?.let {
+                    SportsLiveMenuButton(
+                        text = stringResource(if (favorite) R.string.sports_live_channel_favorite_remove else R.string.sports_live_channel_favorite_add),
+                        onClick = it,
+                        modifier = first(),
+                        icon = if (favorite) Icons.Rounded.Star else Icons.Rounded.StarOutline,
+                        iconTint = Colors.FollowedGold
+                    )
+                }
+                SportsLiveMenuSlot.HIDE -> onHide?.let {
+                    SportsLiveMenuButton(
+                        text = stringResource(if (hideFirst) R.string.sports_live_hide_this else R.string.sports_live_hide_from_live_now),
+                        onClick = it,
+                        modifier = first(),
+                        icon = Icons.Rounded.Block,
+                        iconTint = Colors.TextSecondary
+                    )
+                }
+                SportsLiveMenuSlot.POSTGAME -> onWatchPostgame?.let {
+                    SportsLiveMenuButton(text = stringResource(R.string.sports_live_watch_postgame), onClick = it, modifier = first())
+                }
+                SportsLiveMenuSlot.REMIND -> onToggleReminder?.let {
+                    SportsLiveMenuButton(
+                        text = stringResource(if (reminded) R.string.sports_live_cancel_reminder else R.string.sports_live_remind_me),
+                        onClick = it,
+                        modifier = first()
+                    )
+                }
+                SportsLiveMenuSlot.CHOOSE_STREAM -> onChooseStream?.let {
+                    SportsLiveMenuButton(text = stringResource(R.string.sports_live_choose_stream_menu), onClick = it, modifier = first())
+                }
+                SportsLiveMenuSlot.WATCH_WITH -> onWatchWith?.let {
+                    SportsLiveMenuButton(text = stringResource(watchWithText), onClick = it, modifier = first())
+                }
+                SportsLiveMenuSlot.GAME_STATS -> onGameStats?.let {
+                    SportsLiveMenuButton(
+                        text = stringResource(if (gamePreview) R.string.sports_live_game_preview else R.string.sports_live_game_stats),
+                        onClick = it,
+                        modifier = first()
+                    )
+                }
+                SportsLiveMenuSlot.WATCH_LATER -> onWatchLater?.let {
+                    SportsLiveMenuButton(
+                        text = stringResource(if (savedForLater) R.string.sports_live_reveal_result_menu else R.string.sports_live_watch_later),
+                        onClick = it,
+                        modifier = first()
+                    )
+                }
+                SportsLiveMenuSlot.FOLLOW ->
+                    SportsLiveFollowEntry(sides.single(), followingLabel, onClick = { onToggleFollow(0) }, modifier = first())
+                SportsLiveMenuSlot.TEAM_REMINDER ->
+                    SportsLiveTeamReminderEntry(teamReminders.single(), onClick = { onToggleTeamReminder(0) }, modifier = first())
+                SportsLiveMenuSlot.TEAM_PAGE -> teamPages.single().let { (name, open) ->
+                    SportsLiveMenuButton(text = stringResource(R.string.sports_live_team_page, name), onClick = open, modifier = first())
+                }
+                SportsLiveMenuSlot.TEAMS -> {
+                    // The followed teams stay visible on the entry: "★ Teams… · Lakers".
+                    val followedNames = sides.filter { it.second }.map { it.first }
+                    SportsLiveMenuButton(
+                        text = if (followedNames.isEmpty()) {
+                            stringResource(R.string.sports_live_teams_menu)
+                        } else {
+                            stringResource(R.string.sports_live_teams_menu_followed, followedNames.joinToString(", "))
+                        },
+                        onClick = { teamsOpen = true },
+                        modifier = first(),
+                        icon = if (followedNames.isEmpty()) null else Icons.Rounded.Star,
+                        iconTint = Colors.FollowedGold
+                    )
+                }
+                SportsLiveMenuSlot.SCORES_AHEAD -> onScoresAhead?.let {
+                    SportsLiveMenuButton(text = stringResource(R.string.sports_live_scores_ahead), onClick = it, modifier = first())
+                }
+                SportsLiveMenuSlot.DETAILS -> onDetails?.let {
+                    SportsLiveMenuButton(text = stringResource(R.string.sports_live_details), onClick = it, modifier = first())
+                }
             }
-            SportsLiveMenuButton(
-                text = stringResource(label, side),
-                onClick = { onToggleFollow(index) },
-                modifier = first(),
-                icon = if (followed) Icons.Rounded.Star else Icons.Rounded.StarOutline,
-                iconTint = Colors.FollowedGold,
-                followed = followed
-            )
-        }
-        if (onToggleReminder != null) {
-            SportsLiveMenuButton(
-                text = stringResource(if (reminded) R.string.sports_live_cancel_reminder else R.string.sports_live_remind_me),
-                onClick = onToggleReminder,
-                modifier = first()
-            )
-        }
-        teamReminders.forEachIndexed { index, (team, on) ->
-            SportsLiveMenuButton(
-                text = stringResource(if (on) R.string.sports_live_stop_reminding_team else R.string.sports_live_remind_every_team, team),
-                onClick = { onToggleTeamReminder(index) },
-                modifier = first()
-            )
-        }
-        if (onWatchLater != null) {
-            SportsLiveMenuButton(
-                text = stringResource(if (savedForLater) R.string.sports_live_reveal_result_menu else R.string.sports_live_watch_later),
-                onClick = onWatchLater,
-                modifier = first()
-            )
-        }
-        when (teamPages.size) {
-            0 -> Unit
-            1 -> teamPages.single().let { (name, open) ->
-                SportsLiveMenuButton(text = stringResource(R.string.sports_live_team_page, name), onClick = open, modifier = first())
-            }
-            else -> SportsLiveMenuButton(text = stringResource(R.string.sports_live_team_pages), onClick = { teamsOpen = true }, modifier = first())
-        }
-        if (onScoresAhead != null) {
-            SportsLiveMenuButton(text = stringResource(R.string.sports_live_scores_ahead), onClick = onScoresAhead, modifier = first())
-        }
-        if (onDetails != null) {
-            SportsLiveMenuButton(text = stringResource(R.string.sports_live_details), onClick = onDetails, modifier = first())
-        }
-        if (onHide != null && !hideFirst) {
-            SportsLiveMenuButton(
-                text = stringResource(R.string.sports_live_hide_from_live_now),
-                onClick = onHide,
-                modifier = first(),
-                icon = Icons.Rounded.Block,
-                iconTint = Colors.TextSecondary
-            )
-        }
-        if (onReport != null && !reportFirst) {
-            SportsLiveMenuButton(text = stringResource(R.string.sports_live_setting_report_problem), onClick = onReport, modifier = first())
         }
     }
+}
+
+/** Follow ‹team› / Unfollow (or Following) ‹team›, with its ☆ / ★ in gold. */
+@Composable
+private fun SportsLiveFollowEntry(side: Pair<String, Boolean>, followingLabel: Boolean, onClick: () -> Unit, modifier: Modifier) {
+    val (name, followed) = side
+    val label = when {
+        !followed -> R.string.sports_live_follow
+        followingLabel -> R.string.sports_live_game_following
+        else -> R.string.sports_live_unfollow
+    }
+    SportsLiveMenuButton(
+        text = stringResource(label, name),
+        onClick = onClick,
+        modifier = modifier,
+        icon = if (followed) Icons.Rounded.Star else Icons.Rounded.StarOutline,
+        iconTint = Colors.FollowedGold,
+        followed = followed
+    )
+}
+
+/** Remind me for every ‹team› game / Stop reminding for ‹team› games (#154). */
+@Composable
+private fun SportsLiveTeamReminderEntry(team: Pair<String, Boolean>, onClick: () -> Unit, modifier: Modifier) {
+    val (name, on) = team
+    SportsLiveMenuButton(
+        text = stringResource(if (on) R.string.sports_live_stop_reminding_team else R.string.sports_live_remind_every_team, name),
+        onClick = onClick,
+        modifier = modifier
+    )
+}
+
+/** A top-level entry of the Hold OK / More… sheet (Hold OK menu trim), in [sportsLiveMenuSlots]' order. */
+internal enum class SportsLiveMenuSlot {
+    REPORT, FAVORITE, HIDE, POSTGAME, REMIND, CHOOSE_STREAM, WATCH_WITH, GAME_STATS, WATCH_LATER,
+    FOLLOW, TEAM_REMINDER, TEAM_PAGE, TEAMS, SCORES_AHEAD, DETAILS
+}
+
+/** What one sheet offers: each flag an entry it has; the counts, its team entries (Follow per side, #154, #62). */
+internal data class SportsLiveMenuOffer(
+    val report: Boolean = false,
+    val reportFirst: Boolean = false,
+    val favorite: Boolean = false,
+    val hide: Boolean = false,
+    val hideFirst: Boolean = false,
+    val postgame: Boolean = false,
+    val remind: Boolean = false,
+    val chooseStream: Boolean = false,
+    val watchWith: Boolean = false,
+    val watchWithFirst: Boolean = false,
+    val gameStats: Boolean = false,
+    val follows: Int = 0,
+    val teamReminders: Int = 0,
+    val teamPages: Int = 0,
+    val watchLater: Boolean = false,
+    val scoresAhead: Boolean = false,
+    val details: Boolean = false
+)
+
+/**
+ * The sheet's top level (Hold OK menu trim, docs/design/hold-ok-menu-trim.md; NN/g contextual menus: frequency order,
+ * short enough never to scroll). Things for this game first, the teams' in one entry, info and support last:
+ * Report (first only where [SportsLiveMenuOffer.reportFirst], the player menu, #218) · ★ Add to favorites (a channel) ·
+ * Hide this ([SportsLiveMenuOffer.hideFirst]) · Watch postgame · Remind me · Choose stream… · Watch with another game
+ * (before Choose stream where [SportsLiveMenuOffer.watchWithFirst], the player's "Watch both") · Game stats ·
+ * Watch later · **Teams…** · Scores ahead · Details · Hide from Live Now · Report a problem (last, always on screen).
+ * Teams… holds Follow ‹team›, Remind me for every ‹team› game and the team pages when there is more than one of them;
+ * a lone one is listed as itself.
+ */
+internal fun sportsLiveMenuSlots(offer: SportsLiveMenuOffer): List<SportsLiveMenuSlot> = buildList {
+    if (offer.report && offer.reportFirst) add(SportsLiveMenuSlot.REPORT)
+    if (offer.favorite) add(SportsLiveMenuSlot.FAVORITE)
+    if (offer.hide && offer.hideFirst) add(SportsLiveMenuSlot.HIDE)
+    if (offer.postgame) add(SportsLiveMenuSlot.POSTGAME)
+    if (offer.remind) add(SportsLiveMenuSlot.REMIND)
+    if (offer.watchWith && offer.watchWithFirst) add(SportsLiveMenuSlot.WATCH_WITH)
+    if (offer.chooseStream) add(SportsLiveMenuSlot.CHOOSE_STREAM)
+    if (offer.watchWith && !offer.watchWithFirst) add(SportsLiveMenuSlot.WATCH_WITH)
+    if (offer.gameStats) add(SportsLiveMenuSlot.GAME_STATS)
+    if (offer.watchLater) add(SportsLiveMenuSlot.WATCH_LATER)
+    when {
+        offer.follows + offer.teamReminders + offer.teamPages > 1 -> add(SportsLiveMenuSlot.TEAMS)
+        offer.follows == 1 -> add(SportsLiveMenuSlot.FOLLOW)
+        offer.teamReminders == 1 -> add(SportsLiveMenuSlot.TEAM_REMINDER)
+        offer.teamPages == 1 -> add(SportsLiveMenuSlot.TEAM_PAGE)
+    }
+    if (offer.scoresAhead) add(SportsLiveMenuSlot.SCORES_AHEAD)
+    if (offer.details) add(SportsLiveMenuSlot.DETAILS)
+    if (offer.hide && !offer.hideFirst) add(SportsLiveMenuSlot.HIDE)
+    if (offer.report && !offer.reportFirst) add(SportsLiveMenuSlot.REPORT)
 }
 
 /**

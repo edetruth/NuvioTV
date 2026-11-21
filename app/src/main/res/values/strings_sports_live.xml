@@ -295,6 +295,9 @@
     <string name="sports_live_state_empty_day_line">No finals were played that day</string>
     <!-- More… as a sheet over the stage (#134). -->
     <string name="sports_live_team_pages">Team pages…</string>
+    <!-- Hold OK menu trim: one entry for Follow, team reminders and team pages; %1$s the followed teams ("Lakers"). -->
+    <string name="sports_live_teams_menu">Teams…</string>
+    <string name="sports_live_teams_menu_followed">Teams… · %1$s</string>
     <string name="sports_live_hide_from_live_now">Hide this</string>
     <string name="sports_live_hidden_toast">Hidden: %1$s</string>
     <string name="sports_live_hidden_toast_line">Undo in Settings → More → Hidden titles</string>
