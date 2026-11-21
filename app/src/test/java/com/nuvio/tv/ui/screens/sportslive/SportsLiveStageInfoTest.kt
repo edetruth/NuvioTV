@@ -182,6 +182,20 @@ class SportsLiveStageInfoTest {
     }
 
     @Test
+    fun `a view opened again shows its last result at once, then the fresh one`() = runTest {
+        val held = mapOf("upcoming" to ("upcoming" to 0))
+        val results = flow {
+            emit("live" to 1)
+            delay(200)
+            emit("upcoming" to 1)
+        }.mapFinishing({ running, next -> running.first != next.first }, instant = { held[it.first] }) { value ->
+            delay(100)
+            value
+        }.toList()
+        assertEquals(listOf("live" to 1, "upcoming" to 0, "upcoming" to 1), results)
+    }
+
+    @Test
     fun `values far apart are each built`() = runTest {
         val results = flow {
             emit(1)

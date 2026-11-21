@@ -208,3 +208,40 @@ internal fun SportsLiveBoard.reusingRows(previous: SportsLiveBoard?): SportsLive
     val sameList = rows.size == before.size && rows.indices.all { rows[it] === before[it] }
     return copy(rows = if (sameList) before else rows)
 }
+
+/**
+ * The boards last built for each view (#143: tab, filter and Channels' browse view), with the inputs each was built
+ * from. A tab opened again shows its last board at once ([shownFor]) while the fresh one is built, and builds nothing
+ * when its inputs did not change ([reusable]). Bounded to the [maxViews] views used last; thread-safe.
+ */
+internal class SportsLiveBoardCache(private val maxViews: Int = MAX_VIEWS) {
+    private val entries = object : LinkedHashMap<String, Pair<SportsLiveBoardInputs, SportsLiveBoard>>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Pair<SportsLiveBoardInputs, SportsLiveBoard>>?): Boolean =
+            size > maxViews
+    }
+
+    /** The board last built for [inputs]' view, whatever it was built from; null when none. */
+    @Synchronized
+    fun shownFor(inputs: SportsLiveBoardInputs): SportsLiveBoard? = entries[viewOf(inputs)]?.second
+
+    /** The board last built for [inputs]' view when it was built from these very inputs; null otherwise. */
+    @Synchronized
+    fun reusable(inputs: SportsLiveBoardInputs): SportsLiveBoard? = entries[viewOf(inputs)]?.takeIf { it.first == inputs }?.second
+
+    @Synchronized
+    fun put(inputs: SportsLiveBoardInputs, board: SportsLiveBoard) {
+        entries[viewOf(inputs)] = inputs to board
+    }
+
+    /** True when a board is held for [tab] with [filter] and no Channels browse view. */
+    @Synchronized
+    fun has(tab: SportsLiveTab, filter: String?): Boolean = entries.containsKey(viewOf(tab, filter, null))
+
+    companion object {
+        const val MAX_VIEWS = 8
+
+        fun viewOf(inputs: SportsLiveBoardInputs): String = viewOf(inputs.tab, inputs.filter, inputs.channelLists.browse?.kind?.name)
+
+        private fun viewOf(tab: SportsLiveTab, filter: String?, browse: String?): String = "${tab.name}|${filter.orEmpty()}|${browse.orEmpty()}"
+    }
+}

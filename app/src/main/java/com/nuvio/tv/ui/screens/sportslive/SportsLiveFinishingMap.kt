@@ -16,9 +16,14 @@ import kotlinx.coroutines.sync.withLock
  * F21: on entering Live Now the scores feeds, logos and the sports found in the background each change the board's
  * inputs within the first second or two; with mapLatest every change cancelled the board being built, so the first one
  * only landed once the inputs settled. Now the first board shows after one build and the newest follows.
+ *
+ * [instant] (#143): when a value starts a new run (another tab or filter, or nothing was running), a result it already
+ * has for that value's view is sent at once, before [transform] runs: a tab opened again shows its last list while
+ * the fresh one is built.
  */
 internal fun <T, R> Flow<T>.mapFinishing(
     supersedes: (running: T, next: T) -> Boolean,
+    instant: (T) -> R? = { null },
     transform: suspend (T) -> R
 ): Flow<R> = channelFlow {
     val lock = Mutex()
@@ -34,6 +39,7 @@ internal fun <T, R> Flow<T>.mapFinishing(
                 worker?.cancel()
                 waiting = null
                 running = Held(value)
+                instant(value)?.let { send(it) }
                 worker = launch {
                     val self = currentCoroutineContext()[Job]
                     var next: T = value

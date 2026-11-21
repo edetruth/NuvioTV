@@ -88,6 +88,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.take
@@ -485,7 +486,13 @@ class SportsLiveViewModel internal constructor(
         ) { pinned, endedKeys, (selection, mode, sports), (inputs, linkDead), tick ->
             // A focus move alone (live.20): the last build with the new selection, unless it changes which rows Live now keeps.
             stateForFocus(pinned, endedKeys, selection, inputs, mode, linkDead, sports, tick)
-                ?: buildState(pinned, endedKeys, selection, inputs, mode, linkDead, sports).also { state ->
+                ?: run {
+                    val startedAt = System.nanoTime()
+                    buildState(pinned, endedKeys, selection, inputs, mode, linkDead, sports).also {
+                        // #143: what a tab switch, a scores update or a learned logo costs before any board is built.
+                        SportsLiveDebugTiming.log { "sportsOpen stage=state ms=${(System.nanoTime() - startedAt) / 1_000_000} tab=${selection.tab.name}" }
+                    }
+                }.also { state ->
                     stateBuilds++
                     lastBuild = StateBuild(pinned, endedKeys, selection, inputs, mode, linkDead, sports, tick, lastBuiltLiveNow, state)
                 }
@@ -582,9 +589,18 @@ class SportsLiveViewModel internal constructor(
         viewModelScope.launch { runCatching { updateChannelPicks { SportsLiveChannelFavorites.played(it, item, at) } } }
     }
 
-    /** The board last built ([SportsLiveBoard.reusingRows]). */
+    /**
+     * Each view's last board (#143): a tab opened again shows it at once while the fresh one is built, builds nothing
+     * when nothing it reads changed, and keeps the rows that did not change ([SportsLiveBoard.reusingRows]).
+     */
+    private val boardCache = SportsLiveBoardCache()
+
+    /** Debug timing (#143): the tab just selected and when, until its first board is shown. */
     @Volatile
-    private var lastBoard: SportsLiveBoard? = null
+    private var tabOpening: Pair<SportsLiveTab, Long>? = null
+
+    /** Upcoming's board built ahead while Live now is browsed (#143), so its first open shows at once. */
+    private var prewarmJob: Job? = null
 
     /** Builds a board; tests swap it to see where it runs. */
     @VisibleForTesting
@@ -619,19 +635,73 @@ class SportsLiveViewModel internal constructor(
             .distinctUntilChanged()
             // F21: an update of the same tab and filter lets the board being built finish (the newest follows); another
             // tab or filter cancels it.
-            .mapFinishing({ running, next -> running.tab != next.tab || running.filter != next.filter }) { inputs ->
+            // #143: a tab or filter opened again shows its last board at once ([SportsLiveBoardCache.shownFor]).
+            .mapFinishing(
+                supersedes = { running, next -> running.tab != next.tab || running.filter != next.filter },
+                instant = { inputs -> boardCache.shownFor(inputs) }
+            ) { inputs ->
                 withContext(computeDispatcher) {
+                    // Nothing it reads changed since it was built (back on a tab within the minute): no build at all. Not
+                    // Channels, whose Popular now also reads the links found dead this session (outside the inputs).
+                    if (inputs.tab != SportsLiveTab.CHANNELS) boardCache.reusable(inputs)?.let { return@withContext it }
                     val startedAt = System.nanoTime()
                     // #143: unchanged rows keep their instances, so the list redraws only the rows that changed.
-                    buildBoard(inputs).reusingRows(lastBoard).also {
-                        lastBoard = it
+                    buildBoard(inputs).reusingRows(boardCache.shownFor(inputs)).also {
+                        boardCache.put(inputs, it)
                         SportsLiveDebugTiming.log {
                             "sportsOpen stage=board ms=${(System.nanoTime() - startedAt) / 1_000_000} t=${sinceOpenMs()} tab=${inputs.tab.name} items=${inputs.items.size}"
                         }
                     }
                 }
             }
+            .onEach(::onBoardShown)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** Each board as it is published: the tab-open timing line, and Upcoming built ahead from Live now. */
+    private fun onBoardShown(shown: SportsLiveBoard) {
+        val opening = tabOpening
+        if (opening != null && opening.first == shown.tab) {
+            tabOpening = null
+            SportsLiveDebugTiming.log {
+                "tab ${shown.tab.name} ready in ${(System.nanoTime() - opening.second) / 1_000_000} ms rows=${shown.items.size}"
+            }
+        }
+        if (shown.tab == SportsLiveTab.LIVE_NOW) prewarmUpcoming()
+    }
+
+    /**
+     * Upcoming's board, built ahead (#143): a while after Live now's list shows, while it is still the tab and the section
+     * is on screen, Upcoming (All, no browse) is built once off the main thread from what is known now, so opening it
+     * shows its games at once; the fresh board (with Upcoming's own scores and standings) follows as before. Its inputs
+     * never equal a real build's (the logo revision is left unknown), so it is never taken as up to date.
+     */
+    private fun prewarmUpcoming() {
+        if (prewarmJob?.isActive == true || boardCache.has(SportsLiveTab.UPCOMING, null)) return
+        prewarmJob = viewModelScope.launch {
+            delay(PREWARM_DELAY_MS)
+            val selection = selectionState.value
+            if (selection.tab != SportsLiveTab.LIVE_NOW || !screenVisible || ambientShowing) return@launch
+            if (selection.filterByTab[SportsLiveTab.UPCOMING] != null || boardCache.has(SportsLiveTab.UPCOMING, null)) return@launch
+            val state = uiState.value
+            val items = state.tabs[SportsLiveTab.UPCOMING].orEmpty()
+            if (items.isEmpty()) return@launch
+            val inputs = SportsLiveBoardInputs(
+                tab = SportsLiveTab.UPCOMING,
+                filter = null,
+                items = items,
+                scores = boardScores.value,
+                ended = emptyMap(),
+                excitement = emptyMap(),
+                followed = followedTeams.value,
+                clockMs = state.nowMs / MINUTE_MS * MINUTE_MS,
+                logoRevision = PREWARM_LOGO_REVISION
+            )
+            val startedAt = System.nanoTime()
+            val built = withContext(computeDispatcher) { buildBoard(inputs) }
+            if (!boardCache.has(SportsLiveTab.UPCOMING, null)) boardCache.put(inputs, built)
+            SportsLiveDebugTiming.log { "sportsOpen stage=prewarm ms=${(System.nanoTime() - startedAt) / 1_000_000} tab=UPCOMING items=${items.size}" }
+        }
+    }
 
     /** The active profile's followed teams, for the card menu's Follow / Unfollow labels. */
     val followedTeams: StateFlow<List<FollowedTeam>> =
@@ -712,6 +782,7 @@ class SportsLiveViewModel internal constructor(
         // F23: focus coming back to the tab already selected changes nothing (it used to clear the selection, and the
         // stage jumped to the addon's first item).
         if (!changed) return
+        tabOpening = tab to System.nanoTime()
         if (tab == SportsLiveTab.CHANNELS) takeChannelOrder() else channelBrowseState.value = null
         selectionState.update { it.copy(tab = tab, filter = remembered, itemId = null, browsing = false) }
         previewController.onTab(tab)
@@ -1141,6 +1212,11 @@ class SportsLiveViewModel internal constructor(
     }
 
     private companion object {
+        /** How long Live now's list shows before Upcoming is built ahead (#143): never during the opening rush. */
+        const val PREWARM_DELAY_MS = 4_000L
+
+        /** A built-ahead board's logo revision: no real build has it, so the board is only shown, never reused. */
+        const val PREWARM_LOGO_REVISION = Int.MIN_VALUE
         /** How long the team directory must be still before the load is merged again (live.18). */
         const val REBUCKET_DEBOUNCE_MS = 2_000L
         const val MINUTE_MS = 60_000L

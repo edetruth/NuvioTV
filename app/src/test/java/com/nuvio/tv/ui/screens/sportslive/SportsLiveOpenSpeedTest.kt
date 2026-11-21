@@ -257,6 +257,32 @@ class SportsLiveOpenSpeedTest {
     }
 
     @Test
+    fun `each view keeps its last board, reused as up to date only for the inputs it was built from`() {
+        val cache = SportsLiveBoardCache(maxViews = 2)
+        fun inputs(tab: SportsLiveTab, clockMs: Long = NOW, filter: String? = null) = SportsLiveBoardInputs(
+            tab = tab, filter = filter, items = listOf(item("a", isLive = false, startMs = NOW + HOUR)),
+            scores = SportsLiveBoardScores(), ended = emptyMap(), excitement = emptyMap(), followed = emptyList(),
+            clockMs = clockMs, logoRevision = 0
+        )
+        fun board(tab: SportsLiveTab) = SportsLiveBoard(tab, null, emptyList(), emptyList(), emptyMap())
+        val upcoming = board(SportsLiveTab.UPCOMING)
+        cache.put(inputs(SportsLiveTab.UPCOMING), upcoming)
+        cache.put(inputs(SportsLiveTab.LIVE_NOW), board(SportsLiveTab.LIVE_NOW))
+
+        // Back on Upcoming with nothing changed: nothing to build.
+        assertSame(upcoming, cache.reusable(inputs(SportsLiveTab.UPCOMING)))
+        // A minute on: shown at once, built again.
+        assertNull(cache.reusable(inputs(SportsLiveTab.UPCOMING, clockMs = NOW + MINUTE)))
+        assertSame(upcoming, cache.shownFor(inputs(SportsLiveTab.UPCOMING, clockMs = NOW + MINUTE)))
+        // Another filter is its own view.
+        assertNull(cache.shownFor(inputs(SportsLiveTab.UPCOMING, filter = "soccer")))
+        // Bounded: the view used least recently goes.
+        cache.put(inputs(SportsLiveTab.CHANNELS), board(SportsLiveTab.CHANNELS))
+        assertTrue(cache.has(SportsLiveTab.UPCOMING, null))
+        assertFalse(cache.has(SportsLiveTab.LIVE_NOW, null))
+    }
+
+    @Test
     fun `back on the section with a list over 3 minutes old, it refreshes at once`() = runTest {
         latestFlow.value = load(listOf(item("a", isLive = true)))
         val viewModel = newViewModel(SportsLiveListCache.NONE)

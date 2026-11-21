@@ -276,6 +276,7 @@ class SportsLiveResultsViewModel internal constructor(
                     }
                     loadedDays = days
                     load.value = loaded
+                    logReady(loaded)
                     // Finals the score delay holds back: the day loads again (from memory) once they are
                     // due. Today, and a day with games still live: again every 2 min (the repository asks
                     // ESPN at most that often). At US Eastern midnight the days move on: loaded again.
@@ -310,6 +311,22 @@ class SportsLiveResultsViewModel internal constructor(
         }
         active.value = isActive
         if (!isActive) reveal.onFocus(null)
+        // Debug timing (#143): back on the day it shows, its list is kept (ready at once); else when the load lands.
+        openedAtNs = if (isActive) System.nanoTime() else null
+        if (isActive && loadedDays == daysAgo.value) logReady(load.value)
+    }
+
+    /** Debug timing (#143): when Results was last selected, until its list shows. */
+    @Volatile
+    private var openedAtNs: Long? = null
+
+    private fun logReady(shown: ResultsLoad?) {
+        val opened = openedAtNs ?: return
+        if (shown !is ResultsLoad.Loaded) return
+        openedAtNs = null
+        com.nuvio.tv.core.sportslive.SportsLiveDebugTiming.log {
+            "tab RESULTS ready in ${(System.nanoTime() - opened) / 1_000_000} ms rows=${shown.rows.size}"
+        }
     }
 
     private fun openAfresh() {
