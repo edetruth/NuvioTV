@@ -201,7 +201,10 @@ class SportsLiveDisplayTextTest {
         assertEquals("NFL Network", of("NFL Network [BK]").name)
         assertEquals("NFL Network", of("NFL Network [Backup]").name)
         assertEquals("Sports Channel", of("Sports Channel [ALT]").name)
-        assertEquals("Sports Channel", of("Sports Channel [2]").name)
+        assertEquals("Sports Channel", of("Sports Channel [Alt 2]").name)
+        // A bare number or a feed number may name a different channel: it stays, so the two are not merged.
+        assertEquals("Sports Channel [2]", of("Sports Channel [2]").name)
+        assertEquals("Sports Channel [Feed 2]", of("Sports Channel [Feed 2]").name)
         val both = of("US: Sports Channel HD [BK]")
         assertEquals("Sports Channel", both.name)
         assertEquals("HD", both.quality)

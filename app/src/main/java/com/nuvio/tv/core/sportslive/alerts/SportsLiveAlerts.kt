@@ -401,11 +401,15 @@ class SportsLiveAlerts @Inject constructor(
 
     /**
      * The active profile is [profileId]: after a switch the alerts still waiting belong to the profile before, whose
-     * spoiler protection may differ (live.24 RC2 review R2), so they go.
+     * spoiler protection may differ (live.24 RC2 review R2), so they go, with the card up.
      */
     @VisibleForTesting
     internal fun onProfile(profileId: Int) = synchronized(lock) {
-        if (lastProfile != null && lastProfile != profileId) queue.clear()
+        if (lastProfile != null && lastProfile != profileId) {
+            queue.clear()
+            // The card up belongs to the profile before too (live.24 RC3 review L1).
+            currentFlow.value = null
+        }
         lastProfile = profileId
     }
 

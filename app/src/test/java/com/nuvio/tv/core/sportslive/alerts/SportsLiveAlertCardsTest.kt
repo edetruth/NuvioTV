@@ -227,6 +227,8 @@ class SportsLiveAlertCardsTest {
         // The same profile read again keeps them.
         alerts.onProfile(1)
         alerts.onProfile(2)
+        // The card up was the profile before's too: it goes at once (live.24 RC3 review L1).
+        assertEquals(null, alerts.current.value)
         alerts.close(card, AlertAnswer.TIMEOUT)
         assertEquals(null, alerts.current.value)
     }

@@ -307,11 +307,12 @@ object SportsLiveDisplayText {
     private val QUALITY_SUFFIX = Regex("""[\s:|\-–]+[(\[]?($QUALITY)[)\]]?\s*$""", RegexOption.IGNORE_CASE)
 
     /**
-     * A trailing square-bracketed source tag: "[BK]", "[Backup]", "[ALT]", "[Alt 2]", "[2]". Only a tag at the very end,
-     * and only these words or a bare number, so a name with brackets inside ("Name [Lakers vs Suns]") keeps them.
+     * A trailing square-bracketed source tag: "[BK]", "[Backup]", "[ALT]", "[Alt 2]". Only a tag at the very end,
+     * and only these backup words: a bare "[2]" or "[Feed 2]" may be a different channel (live.24 RC3 review M1), and a
+     * name with brackets inside ("Name [Lakers vs Suns]") keeps them.
      */
     private val SOURCE_TAG_SUFFIX = Regex(
-        """\s*\[\s*(?:(?:bk|backup|back-up|alt|alternate|alternative|mirror|source|src|link|server|feed)\s*\d{0,2}|\d{1,2})\s*]\s*$""",
+        """\s*\[\s*(?:bk|backup|back-up|alt|alternate|alternative|mirror)\s*\d{0,2}\s*]\s*$""",
         RegexOption.IGNORE_CASE
     )
 
