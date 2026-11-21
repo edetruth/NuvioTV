@@ -195,14 +195,21 @@ class TeamDirectory(
         if (leagues.isEmpty()) return null
         if (leagues.any { fetchedAt(it) == null }) return null
         val found = leagues.mapNotNull { league ->
-            val a = resolve(league, first) ?: return@mapNotNull null
-            val b = resolve(league, second) ?: return@mapNotNull null
+            val a = resolveAnyCity(league, first) ?: return@mapNotNull null
+            val b = resolveAnyCity(league, second) ?: return@mapNotNull null
             if (a.id == b.id) return@mapNotNull null
             KnownTeam(a.logo, a.abbreviation) to KnownTeam(b.logo, b.abbreviation)
         }
         // A school's men's and women's teams share their logos (#163): a "College" card on both feeds still gets them.
         return found.distinct().singleOrNull()
     }
+
+    /**
+     * [resolve] for [cardSide] as written; only when that finds no team, its city written the other way ([cityVariants]:
+     * "Los Angeles Clippers" is ESPN's "LA Clippers", J4 follow-up), when exactly one team answers to it.
+     */
+    private fun resolveAnyCity(league: EspnLeague, cardSide: String): DirectoryTeam? =
+        resolve(league, cardSide) ?: cityVariants(cardSide).drop(1).mapNotNull { resolve(league, it) }.distinctBy { it.id }.singleOrNull()
 
     /**
      * A stand-in game for [item] from this directory (#62, #134): its two teams (first away, second home, in the

@@ -306,6 +306,11 @@ class ScoreMatcher(
             for (name in fullNames) {
                 add(SportsLiveTeams.normalise(name))
                 add(SportsLiveTeams.canonicalise(name))
+                // J4 follow-up: the city written the other way ("LA Clippers" is the addons' "Los Angeles Clippers"), the
+                // nickname kept: a variant that folds to one word ("la" from "Los Angeles FC") would be a bare city or code.
+                for (variant in TeamDirectory.cityVariants(name).drop(1)) {
+                    SportsLiveTeams.normalise(variant).takeIf { ' ' in it }?.let(::add)
+                }
             }
             remove("")
         }

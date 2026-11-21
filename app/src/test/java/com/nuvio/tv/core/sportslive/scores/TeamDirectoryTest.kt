@@ -239,6 +239,19 @@ class TeamDirectoryTest {
     }
 
     @Test
+    fun `a city written the other way still finds the team (J4)`() {
+        val dir = directory(NBA to nbaTeams)
+        // ESPN's "LA Clippers" as addons write it; ESPN's "Los Angeles Lakers" written short.
+        val logos = cardLogos(dir, item("Dallas Mavericks vs Los Angeles Clippers", "NBA"))!!
+        assertEquals(setOf("DAL", "LAC"), setOf(logos.first.abbreviation, logos.second.abbreviation))
+        assertTrue(logos.first.logo.isNotEmpty() && logos.second.logo.isNotEmpty())
+        val lakers = cardLogos(dir, item("LA Lakers vs Dallas Mavericks", "NBA"))!!
+        assertEquals(setOf("LAL", "DAL"), setOf(lakers.first.abbreviation, lakers.second.abbreviation))
+        // A city alone is still no name.
+        assertNull(cardLogos(dir, item("Los Angeles vs Dallas Mavericks", "NBA")))
+    }
+
+    @Test
     fun `soccer names resolve through the alias layer`() {
         val dir = directory(ENG1 to eng1Teams)
         assertNotNull(cardLogos(dir, item("Arsenal FC vs Chelsea", "Soccer", listOf("Premier League"))))
