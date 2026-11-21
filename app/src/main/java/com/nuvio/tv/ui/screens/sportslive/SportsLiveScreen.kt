@@ -1853,6 +1853,8 @@ private fun SportsLiveContent(
                                                         menuOpen = item.listKey == menuCardKey,
                                                         agenda = AgendaRowSide(
                                                             bell = agendaBellOf(remindable(item), reminders.isReminded(item)),
+                                                            // A Games to watch row sits under no time header (P7): it says its own start.
+                                                            trailing = if (game.pick) agendaStartOf(game.row)?.let { agendaTimeText(it) } else null,
                                                             bigGame = !game.pick && game.row.bigGame != null
                                                         ),
                                                         watching = item.listKey == nowPlaying?.listKey,

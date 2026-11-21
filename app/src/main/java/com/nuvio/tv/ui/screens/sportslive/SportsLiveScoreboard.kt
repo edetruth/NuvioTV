@@ -259,6 +259,14 @@ internal fun scoreboardNameChoices(team: GameArtTeam): List<String> =
     listOf(team.name, team.shortName, team.short).map { it.trim() }.filter { it.isNotEmpty() }.distinct()
         .ifEmpty { listOf(team.name) }
 
+/**
+ * The names level after a team line at level [from] did not fit: one step down, once per level, never past [max].
+ * Both lines of a row can overflow in one layout pass ("Pittsburgh Panthers" over "Central Michigan Chippewas"); a
+ * plain `level++` from each skipped the short names and read "PITT" over "CMU" (TV QA live.20).
+ */
+internal fun nextNameLevel(current: Int, from: Int, max: Int): Int =
+    if (current == from && current < max) current + 1 else current
+
 /** What a row's scores column shows. */
 internal sealed interface ScoreboardScores {
     /** Both scores, stacked; [leader] is 0 (first), 1 (second) or null (level), set semibold / white. */
@@ -327,9 +335,13 @@ internal fun scoreboardStatusLines(row: ScoreboardRow, strings: GameStatusString
     }
 }
 
-/** ESPN's clock as (clock, period): "9:51 - 2nd Half" → ("9:51", "2nd half"), "Q4 4:12" → ("4:12", "Q4"); else whole on line 1. */
+/**
+ * ESPN's clock as (clock, period): "9:51 - 2nd Half" → ("9:51", "2nd half"), "Q4 4:12" → ("4:12", "Q4"),
+ * "End of 2nd" → ("End of", "2nd") (#209: one line beside the dot cut it to "End of …"); else whole on line 1.
+ */
 internal fun splitClock(clockText: String): Pair<String, String?> {
     val text = clockText.trim()
+    END_OF_PERIOD.matchEntire(text)?.let { return it.groupValues[1] to it.groupValues[2].let { p -> if (p.first().isDigit()) p.lowercase() else p } }
     val parts = text.split(" - ", limit = 2).map { it.trim() }
     if (parts.size == 2 && parts.all { it.isNotEmpty() }) {
         val period = parts[1].let { if (it.first().isDigit()) it.lowercase() else it }
@@ -340,6 +352,7 @@ internal fun splitClock(clockText: String): Pair<String, String?> {
 }
 
 private val QUARTER_CLOCK = Regex("""^(Q\d|OT\d?)\s+(\d{1,2}:\d{2})$""", RegexOption.IGNORE_CASE)
+private val END_OF_PERIOD = Regex("""^(End of)\s+(\S.*)$""", RegexOption.IGNORE_CASE)
 
 /** An entry of the More… sheet (V2, #132, #134), in the order it lists them. */
 internal enum class SportsLiveMoreEntry { WATCH_WITH, CHOOSE_STREAM, GAME_STATS, FOLLOW, REMIND, DETAILS, HIDE, REPORT }

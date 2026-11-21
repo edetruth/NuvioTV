@@ -183,7 +183,7 @@ class AddonManagerViewModel @Inject constructor(
                     }
                 }
                 is NetworkResult.Error -> {
-                    val message = result.message
+                    val message = addonInstallErrorText(context, result)
                     _uiState.update {
                         it.copy(
                             isInstalling = false,

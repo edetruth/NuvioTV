@@ -2,6 +2,7 @@ package com.nuvio.tv.ui.screens.stream
 
 import android.content.Context
 import android.util.Log
+import com.nuvio.tv.ui.screens.sportslive.sportsLiveLocalStamps
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -1236,7 +1237,7 @@ class StreamScreenViewModel @Inject constructor(
             if (!requiresMetadataLookup) return@launch
             val metaGenres = meta.genres.takeIf { it.isNotEmpty() }
                 ?.joinToString(" • ") { localizedGenreLabel(context, it) }
-            val metaYear = meta.releaseInfo
+            val metaYear = sportsLiveLocalStamps(context, meta.releaseInfo)
                 ?.substringBefore("-")
                 ?.takeIf { it.isNotBlank() }
             val metaRuntime = extractRuntimeMinutes(meta)

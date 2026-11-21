@@ -172,6 +172,49 @@ class LiveExcitementTest {
     }
 
     @Test
+    fun `just scored only where a score is news - goals and runs, football touchdowns, never basketball baskets`() {
+        val history = ExcitementHistory()
+        val t0 = 1_000_000L
+        fun g(sport: String, id: String, home: Int, away: Int, clock: String) = game(sport, home, away, clock, id = id)
+        history.observe(
+            listOf(
+                g("basketball", "nba", 50, 48, "6:00 - 2nd"),
+                g("football", "fg", 7, 7, "8:00 - 2nd"),
+                g("football", "td", 7, 7, "8:00 - 2nd"),
+                g("hockey", "nhl", 1, 1, "5:00 - 2nd"),
+                g("baseball", "mlb", 2, 1, "Top 5th")
+            ),
+            t0
+        )
+        val t1 = t0 + 30_000
+        history.observe(
+            listOf(
+                // Both teams scored again: not news in basketball, and no lead change.
+                g("basketball", "nba", 54, 51, "5:10 - 2nd"),
+                g("football", "fg", 10, 7, "6:00 - 2nd"),
+                g("football", "td", 7, 13, "6:00 - 2nd"),
+                g("hockey", "nhl", 1, 2, "6:00 - 2nd"),
+                g("baseball", "mlb", 3, 1, "Top 5th")
+            ),
+            t1
+        )
+        assertEquals(RecentChange.NONE, history.recent("nba", t1))
+        assertEquals(RecentChange.NONE, history.recent("fg", t1))
+        assertTrue(history.recent("td", t1).scored)
+        assertTrue(history.recent("nhl", t1).scored)
+        assertTrue(history.recent("mlb", t1).scored)
+    }
+
+    @Test
+    fun `a basketball lead change still counts`() {
+        val history = ExcitementHistory()
+        val t0 = 1_000_000L
+        history.observe(listOf(game("basketball", 50, 51, "6:00 - 2nd", id = "e1")), t0)
+        history.observe(listOf(game("basketball", 53, 51, "5:40 - 2nd", id = "e1")), t0 + 30_000)
+        assertEquals(RecentChange(leadChange = true, scored = false), history.recent("e1", t0 + 30_000))
+    }
+
+    @Test
     fun `a snapshot briefly without a score keeps the history`() {
         val history = ExcitementHistory()
         val t0 = 1_000_000L

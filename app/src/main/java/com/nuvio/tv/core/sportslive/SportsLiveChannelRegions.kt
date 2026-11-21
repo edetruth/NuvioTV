@@ -24,15 +24,42 @@ object SportsLiveChannelRegions {
             ?: OTHER
     }
 
-    /** [regions] in the list's order: country codes A to Z, then long names A to Z, [OTHER] last. */
-    fun ordered(regions: Collection<String>): List<String> =
-        regions.distinct().sortedWith(compareBy<String>({ rankOf(it) }, { it.lowercase(Locale.ROOT) }))
+    /** [regions] in the list's order: country codes A to Z by [label], then long names A to Z, [OTHER] last. */
+    fun ordered(regions: Collection<String>, locale: Locale = Locale.getDefault()): List<String> =
+        regions.distinct().sortedWith(compareBy<String>({ rankOf(it) }, { (label(it, locale) ?: it).lowercase(locale) }))
 
-    /** [items] grouped by region in [ordered] order, each region's channels as listed. */
-    fun grouped(items: List<SportsLiveItem>): List<Pair<String, List<SportsLiveItem>>> {
-        val byRegion = items.groupBy(::regionOf)
-        return ordered(byRegion.keys).map { it to byRegion.getValue(it) }
+    /**
+     * [items] grouped by region (P9, TV QA live.20: a sports app's Channels opened on religious and news channels):
+     * the regions with a sports channel ([isSports]) first, then the rest, each part in [ordered] order and [OTHER]
+     * last; in each region its sports channels first, each part as listed.
+     */
+    fun grouped(
+        items: List<SportsLiveItem>,
+        isSports: (SportsLiveItem) -> Boolean = { SportsLiveBroadcasters.isSportsChannel(it.meta.name) }
+    ): List<Pair<String, List<SportsLiveItem>>> {
+        val byRegion = items.groupBy(::regionOf).mapValues { (_, channels) ->
+            val (sports, others) = channels.partition(isSports)
+            sports + others
+        }
+        val (withSports, without) = ordered(byRegion.keys).partition { it != OTHER && byRegion.getValue(it).any(isSports) }
+        return (withSports + without).map { it to byRegion.getValue(it) }
     }
+
+    /**
+     * A region's name in words (P8, TV QA live.20: "AF · 6", "AL · 2" read as codes): a country code by its name in
+     * [locale] ("AL" → "Albania", "UK" → "United Kingdom"), the non-ISO ones by [NAMES]; a long group name as is;
+     * null for [OTHER]. "AF" is Africa, not Afghanistan: sports addons file African channels (Gabon, Senegal,
+     * Cameroon) under it.
+     */
+    fun label(region: String, locale: Locale = Locale.getDefault()): String? {
+        if (region == OTHER) return null
+        if (code(region) == null) return region
+        NAMES[region]?.let { return it }
+        val name = Locale("", if (region == "UK") "GB" else region).getDisplayCountry(locale)
+        return name.takeIf { it.isNotBlank() && !it.equals(region, ignoreCase = true) } ?: region
+    }
+
+    private val NAMES = mapOf("AF" to "Africa", "EU" to "Europe", "LAT" to "Latin America", "INT" to "International")
 
     private fun rankOf(region: String): Int = when {
         region == OTHER -> 2

@@ -717,8 +717,14 @@ private fun ResultBoardRow(
                     // Away first, as ESPN and US scoreboards list them.
                     // Logos only when both teams have one and both loaded (#130); never an empty circle.
                     val logos = rememberTeamLogoPair(event.away.logo, event.home.logo)
-                    TeamLine(event.away, logos?.first, logos?.shown == true, bold = awayWon, rank = RankDisplay.rank(event.league, event.away.rank)?.takeIf { RankDisplay.onRows(event.league) })
-                    TeamLine(event.home, logos?.second, logos?.shown == true, bold = homeWon, rank = RankDisplay.rank(event.league, event.home.rank)?.takeIf { RankDisplay.onRows(event.league) })
+                    // Both lines step down together to the first names that fit (P10: "Maryland Eastern Shore Ha…").
+                    val awayChoices = remember(event.away) { resultNameChoices(event.away) }
+                    val homeChoices = remember(event.home) { resultNameChoices(event.home) }
+                    var nameLevel by remember(awayChoices, homeChoices) { mutableStateOf(0) }
+                    val maxLevel = maxOf(awayChoices.lastIndex, homeChoices.lastIndex)
+                    val tooLong: (Int) -> Unit = { from -> nameLevel = nextNameLevel(nameLevel, from, maxLevel) }
+                    TeamLine(awayChoices, nameLevel, tooLong, logos?.first, logos?.shown == true, bold = awayWon, rank = RankDisplay.rank(event.league, event.away.rank)?.takeIf { RankDisplay.onRows(event.league) })
+                    TeamLine(homeChoices, nameLevel, tooLong, logos?.second, logos?.shown == true, bold = homeWon, rank = RankDisplay.rank(event.league, event.home.rank)?.takeIf { RankDisplay.onRows(event.league) })
                 }
                 if (showScore) {
                     Column(modifier = Modifier.width(ResultRowColumns.SCORES_DP.dp), horizontalAlignment = Alignment.End) {
@@ -949,7 +955,16 @@ internal fun ReplayPill() {
 }
 
 @Composable
-private fun TeamLine(team: ScoreTeam, logo: Painter?, logoShown: Boolean, bold: Boolean, rank: Int? = null) {
+private fun TeamLine(
+    choices: List<String>,
+    level: Int,
+    onTooLong: (Int) -> Unit,
+    logo: Painter?,
+    logoShown: Boolean,
+    bold: Boolean,
+    rank: Int? = null
+) {
+    val index = level.coerceAtMost(choices.lastIndex)
     Row(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -968,17 +983,28 @@ private fun TeamLine(team: ScoreTeam, logo: Painter?, logoShown: Boolean, bold: 
             )
         }
         Text(
-            text = team.listName,
+            text = choices[index],
             style = resultLineStyle().let { if (bold) it.sportsLiveBold() else it },
             color = Colors.TextPrimary,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            overflow = TextOverflow.Ellipsis,
+            onTextLayout = { layout ->
+                if (index < choices.lastIndex && (layout.hasVisualOverflow || layout.isLineEllipsized(0))) onTooLong(level)
+            }
         )
     }
 }
 
 /** A Results team line's name: ESPN's full name, else a shorter one. */
 private val ScoreTeam.listName: String get() = displayName ?: shortDisplayName ?: name ?: abbreviation.orEmpty()
+
+/**
+ * The names a Results team line may give [team], longest first (P10, as the Scoreboard's N1): ESPN's full name,
+ * its short name, then the abbreviation; the row shows the first that fits both lines. Blanks and repeats dropped.
+ */
+internal fun resultNameChoices(team: ScoreTeam): List<String> =
+    listOf(team.displayName, team.shortDisplayName, team.abbreviation).mapNotNull { it?.trim()?.takeIf(String::isNotEmpty) }.distinct()
+        .ifEmpty { listOf(team.listName) }
 
 /** An ESPN sport key as a chip or row label. */
 @Composable

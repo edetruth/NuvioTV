@@ -57,8 +57,9 @@ class SportsLiveExcitingOrderTest {
         assertNull(excitementOf(pacers, live(lakersEvent, 100, 99, "1:00 - 4th"), history, NOW))
         assertNull(excitementOf(pacers, null, history, NOW))
         // Hide until focused leaves recent changes out, so a goal never lifts a card on its own.
-        history.observe(listOf(live(pacersEvent, 60, 40, "5:00 - 2nd")), NOW)
-        val after = live(pacersEvent, 60, 43, "5:00 - 2nd")
+        // A lead change (a basketball basket alone is not news, #209).
+        history.observe(listOf(live(pacersEvent, 59, 60, "5:00 - 2nd")), NOW)
+        val after = live(pacersEvent, 62, 60, "5:00 - 2nd")
         history.observe(listOf(after), NOW + 1_000)
         val shown = excitementOf(pacers, after, history, NOW + 1_000)!!
         val hidden = excitementOf(pacers, after, history, NOW + 1_000, recentChanges = false)!!

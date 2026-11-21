@@ -264,7 +264,7 @@ private fun GameCells(row: ScoreboardRow, reminded: Boolean, hasReplay: Boolean,
                 val secondChoices = remember(art.second) { scoreboardNameChoices(art.second) }
                 var level by remember(firstChoices, secondChoices, shortNames) { mutableIntStateOf(if (shortNames) 1 else 0) }
                 val maxLevel = maxOf(firstChoices.lastIndex, secondChoices.lastIndex)
-                val tooLong: () -> Unit = { if (level < maxLevel) level++ }
+                val tooLong: (Int) -> Unit = { from -> level = nextNameLevel(level, from, maxLevel) }
                 val logos = rememberTeamLogoPair(art)?.takeIf { !it.failed }
                 val leader = row.tennis?.leader ?: (scores as? ScoreboardScores.Shown)?.leader
                 val ranks = art.takeIf { it.ranksOnRows }
@@ -382,7 +382,7 @@ private fun AgendaCells(row: ScoreboardRow, side: AgendaRowSide, shortNames: Boo
                 val secondChoices = remember(art.second) { scoreboardNameChoices(art.second) }
                 var level by remember(firstChoices, secondChoices, shortNames) { mutableIntStateOf(if (shortNames) 1 else 0) }
                 val maxLevel = maxOf(firstChoices.lastIndex, secondChoices.lastIndex)
-                val tooLong: () -> Unit = { if (level < maxLevel) level++ }
+                val tooLong: (Int) -> Unit = { from -> level = nextNameLevel(level, from, maxLevel) }
                 val logos = rememberTeamLogoPair(art)?.takeIf { !it.failed }
                 val ranks = art.takeIf { it.ranksOnRows }
                 TeamLine(firstChoices, level, logos?.first, logos?.shown == true, row.firstFollowed, false, false, tooLong, ranks?.first?.rank)
@@ -546,7 +546,8 @@ private fun TeamLine(
     followed: Boolean,
     leading: Boolean,
     compact: Boolean,
-    onTooLong: () -> Unit,
+    /** Called with the [level] that did not fit. */
+    onTooLong: (Int) -> Unit,
     /** A ranked college team (#137): a small muted "#3" before the name. */
     rank: Int? = null
 ) {
@@ -573,7 +574,7 @@ private fun TeamLine(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f, fill = false),
                 onTextLayout = { layout ->
-                    if (index < choices.lastIndex && (layout.hasVisualOverflow || layout.isLineEllipsized(0))) onTooLong()
+                    if (index < choices.lastIndex && (layout.hasVisualOverflow || layout.isLineEllipsized(0))) onTooLong(level)
                 }
             )
             if (followed) StarMark()
@@ -860,9 +861,9 @@ internal val JUST_ENDED_SCORE_LINE = 17.sp
 /** A Just ended row is dimmed until focused (#60). */
 private const val JUST_ENDED_ALPHA = 0.6f
 
-/** A Channels region's label (P4): its country code as is, a long group name cleaned, else [other] ("Other"). */
-internal fun channelRegionLabel(value: String, other: String): String = when {
+/** A Channels region's label (P4, P8): a country code in words ("Albania"), a long group name cleaned, else [other] ("Other"). */
+internal fun channelRegionLabel(value: String, other: String, locale: java.util.Locale = java.util.Locale.getDefault()): String = when {
     value == com.nuvio.tv.core.sportslive.SportsLiveChannelRegions.OTHER -> other
-    value.length <= 3 -> value
+    value.length <= 3 -> com.nuvio.tv.core.sportslive.SportsLiveChannelRegions.label(value, locale) ?: value
     else -> SportsLiveDisplayText.name(value)
 }

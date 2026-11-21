@@ -6,6 +6,7 @@ import com.nuvio.tv.core.network.NetworkResult
 import com.nuvio.tv.data.repository.TrackingAddonConsentController
 import com.nuvio.tv.data.repository.isTrackingAddon
 import com.nuvio.tv.domain.repository.AddonRepository
+import com.nuvio.tv.ui.screens.addon.addonInstallErrorText
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 
@@ -27,7 +28,7 @@ class DeepLinkHandler @Inject constructor(
                     context.getString(R.string.addon_install_success, addonName)
                 )
             }
-            is NetworkResult.Error -> DeepLinkInstallResult.Error(result.message)
+            is NetworkResult.Error -> DeepLinkInstallResult.Error(addonInstallErrorText(context, result))
             NetworkResult.Loading -> DeepLinkInstallResult.Error(context.getString(R.string.addon_error_invalid_url))
         }
     }

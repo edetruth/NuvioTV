@@ -1,6 +1,7 @@
 package com.nuvio.tv.ui.screens.sportslive
 
 import androidx.compose.ui.unit.dp
+import com.nuvio.tv.core.sportslive.SportsLiveBroadcasters
 import com.nuvio.tv.core.sportslive.SportsLiveChannelRegions
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.scores.EspnLeague
@@ -105,10 +106,57 @@ class SportsLiveV2P4Test {
     }
 
     @Test
-    fun `a region's label is its code, a long name cleaned, or Other`() {
-        assertEquals("US", channelRegionLabel("US", "Other"))
-        assertEquals("United Kingdom TV", channelRegionLabel("UNITED KINGDOM TV", "Other"))
-        assertEquals("Other", channelRegionLabel(SportsLiveChannelRegions.OTHER, "Other"))
+    fun `a region's label is its country in words, a long name cleaned, or Other`() {
+        assertEquals("United States", channelRegionLabel("US", "Other", Locale.US))
+        assertEquals("United Kingdom", channelRegionLabel("UK", "Other", Locale.US))
+        assertEquals("Albania", channelRegionLabel("AL", "Other", Locale.US))
+        assertEquals("Australia", channelRegionLabel("AU", "Other", Locale.US))
+        // Sports addons file African channels under AF (P8).
+        assertEquals("Africa", channelRegionLabel("AF", "Other", Locale.US))
+        assertEquals("Latin America", channelRegionLabel("LAT", "Other", Locale.US))
+        assertEquals("United Kingdom TV", channelRegionLabel("UNITED KINGDOM TV", "Other", Locale.US))
+        assertEquals("Other", channelRegionLabel(SportsLiveChannelRegions.OTHER, "Other", Locale.US))
+    }
+
+    @Test
+    fun `sports channels lead - regions with one first, and in each region its sports channels first`() {
+        val items = listOf(
+            channel("Better Life TV", "AF"), channel("Gabon TV", "AF"),
+            channel("Peace TV HD", "AL"), channel("Eurosport 1 HD", "AL"),
+            channel("9GEM TV", "AU"), channel("FOX Sports 502", "AU"),
+            channel("Mystery Sports", "NOW")
+        )
+        val grouped = SportsLiveChannelRegions.grouped(items)
+        // Other stays last, even with a sports channel.
+        assertEquals(listOf("AL", "AU", "AF", SportsLiveChannelRegions.OTHER), grouped.map { it.first })
+        assertEquals(listOf("Eurosport 1 HD", "Peace TV HD"), grouped[0].second.map { it.meta.name })
+        assertEquals(listOf("FOX Sports 502", "9GEM TV"), grouped[1].second.map { it.meta.name })
+        assertEquals(listOf("Better Life TV", "Gabon TV"), grouped[2].second.map { it.meta.name })
+    }
+
+    @Test
+    fun `a sports channel is a broadcaster brand or a name with a sport word`() {
+        assertTrue(SportsLiveBroadcasters.isSportsChannel("Eurosport 1 HD"))
+        assertTrue(SportsLiveBroadcasters.isSportsChannel("US: ESPN 2"))
+        assertTrue(SportsLiveBroadcasters.isSportsChannel("Sky Sports Main Event"))
+        assertTrue(SportsLiveBroadcasters.isSportsChannel("Arena Sport 3"))
+        assertFalse(SportsLiveBroadcasters.isSportsChannel("BFM TV"))
+        assertFalse(SportsLiveBroadcasters.isSportsChannel("Peace TV HD"))
+        assertFalse(SportsLiveBroadcasters.isSportsChannel("Better Life TV"))
+    }
+
+    @Test
+    fun `a Results line steps from the full name to the short name and abbreviation`() {
+        val umes = ScoreTeam(
+            id = "1", abbreviation = "UMES", displayName = "Maryland Eastern Shore Hawks", shortDisplayName = "MD Eastern",
+            name = "Hawks", location = "Maryland Eastern Shore", logo = null, score = 60, linescores = emptyList()
+        )
+        assertEquals(listOf("Maryland Eastern Shore Hawks", "MD Eastern", "UMES"), resultNameChoices(umes))
+        // Blanks and repeats drop; a team with no names keeps one line.
+        val plain = umes.copy(abbreviation = " ", shortDisplayName = "Maryland Eastern Shore Hawks")
+        assertEquals(listOf("Maryland Eastern Shore Hawks"), resultNameChoices(plain))
+        val bare = umes.copy(abbreviation = null, displayName = null, shortDisplayName = null)
+        assertEquals(listOf("Hawks"), resultNameChoices(bare))
     }
 
     @Test

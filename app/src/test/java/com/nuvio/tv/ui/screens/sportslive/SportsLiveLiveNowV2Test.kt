@@ -155,6 +155,21 @@ class SportsLiveLiveNowV2Test {
         assertEquals("4:12" to "Q4", splitClock("Q4 4:12"))
         assertEquals("67'" to null, splitClock("67'"))
         assertEquals("9:51" to "2nd half", splitClock("9:51 - 2nd Half"))
+        // #209: "End of 2nd" no longer ends in an ellipsis on one line.
+        assertEquals("End of" to "2nd", splitClock("End of 2nd"))
+        assertEquals("End of" to "1st half", splitClock("End of 1st Half"))
+        assertEquals("End of" to "OT", splitClock("End of OT"))
+    }
+
+    @Test
+    fun `both team lines too long at once step the names down one level, not two`() {
+        // Both lines report level 0 in the same pass: the second report changes nothing.
+        val afterFirst = nextNameLevel(current = 0, from = 0, max = 2)
+        assertEquals(1, afterFirst)
+        assertEquals(1, nextNameLevel(current = afterFirst, from = 0, max = 2))
+        // The short names too long as well: then the abbreviations.
+        assertEquals(2, nextNameLevel(current = 1, from = 1, max = 2))
+        assertEquals(2, nextNameLevel(current = 2, from = 2, max = 2))
     }
 
     @Test
