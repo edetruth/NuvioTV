@@ -61,7 +61,9 @@ object SportsLiveCatalogPolicy {
         if (isReplay) return SportsLiveKind.REPLAY
         val isChannels = listOf(catalog.name, catalog.id).any {
             SportsLiveKeywords.containsKeyword(it, SportsLiveKeywords.CHANNELS)
-        } || isLiveTv(catalog) || isNetworks(catalog)
+        } || isLiveTv(catalog) || isNetworks(catalog) ||
+            // live.24: a tv catalog named as a channel list ("<Brand> IPTV", "<Brand> TV +").
+            (catalog.apiType.equals("tv", ignoreCase = true) && SportsLiveChannelCatalogs.namesChannels(catalog.name))
         return if (isChannels) SportsLiveKind.CHANNELS else SportsLiveKind.EVENTS
     }
 

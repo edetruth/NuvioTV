@@ -96,7 +96,7 @@ object SportsLiveChannelList {
         val rows = groups.values.mapNotNull { group ->
             val alive = group.filterNot { (_, item) -> dead(item) }
             if (alive.isEmpty()) return@mapNotNull null
-            val ordered = alive.sortedBy { (_, item) -> if (SportsLiveChannelCountries.countryOf(item) == SportsLiveChannelRegions.OTHER) 1 else 0 } +
+            val ordered = alive.sortedBy { (_, item) -> countryRank(item) } +
                 group.filter { it !in alive }
             val primary = ordered.first().second
             val others = ordered.drop(1).flatMap { (_, item) -> listOf(item.copy(alternates = emptyList())) + item.alternates }
@@ -124,6 +124,13 @@ object SportsLiveChannelList {
             }
         }
         return capped.map { it.item }
+    }
+
+    // A row's primary: a variant with a written country, then one whose country its network implies (live.24), then none.
+    private fun countryRank(item: SportsLiveItem): Int = when {
+        SportsLiveChannelCountries.countryOf(item) == SportsLiveChannelRegions.OTHER -> 2
+        SportsLiveChannelRegions.inferred(item) -> 1
+        else -> 0
     }
 
     /** A sports channel for the browse view's Sports only: a sports brand of either list, or a sport word in its name. */

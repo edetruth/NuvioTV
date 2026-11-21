@@ -2262,11 +2262,13 @@ private fun SportsLiveContent(
                         )
                     }
                     // The rows' marks (#143): equal from one D-pad move to the next while the list holds focus.
-                    val remindedKeys = remember(items, reminders, uiState.nowMs) {
-                        items.asSequence().filter { remindedCard(it) }.map { it.listKey }.toSet()
+                    // Never on Channels (live.24): no channel is reminded or Ready, and thousands of rows would be walked on
+                    // the main thread at every clock tick.
+                    val remindedKeys = remember(items, reminders, uiState.nowMs, channelsTab) {
+                        if (channelsTab) emptySet() else items.asSequence().filter { remindedCard(it) }.map { it.listKey }.toSet()
                     }
-                    val readyKeys = remember(items, rowReadyOf, uiState.nowMs) {
-                        items.asSequence().filter(rowReadyOf).map { it.listKey }.toSet()
+                    val readyKeys = remember(items, rowReadyOf, uiState.nowMs, channelsTab) {
+                        if (channelsTab) emptySet() else items.asSequence().filter(rowReadyOf).map { it.listKey }.toSet()
                     }
                     val rowMarks = SportsLiveRowMarks(
                         stageKey = selected.listKey.takeIf { paneHasFocus && stripStageKey == null },
