@@ -161,11 +161,15 @@ class SportsLiveQaPass3Test {
     // --- Design 10 and Results rows ---
 
     @Test
-    fun `scoreboard league tags shorten long names instead of cutting them`() {
+    fun `scoreboard league tags are league names or plain sport words, never initials`() {
         assertEquals("NBA", scoreboardTag("NBA"))
         assertEquals("BASKETBALL", scoreboardTag("Basketball"))
-        assertEquals("BSA", scoreboardTag("Brazil Serie A"))
-        assertEquals("AF", scoreboardTag("American Football"))
+        // #217: no initials ("BSA", "AF", "CS", "ALM").
+        assertEquals("BRAZIL A", scoreboardTag("Brazil Serie A"))
+        assertEquals("FOOTBALL", scoreboardTag("American Football"))
+        assertEquals("FIGHT", scoreboardTag("Combat Sports"))
+        assertEquals("AFL", scoreboardTag("Australian Football"))
+        assertEquals("A-LEAGUE", scoreboardTag("ALM"))
         assertEquals("CHAMPIONSH", scoreboardTag("Championships"))
     }
 

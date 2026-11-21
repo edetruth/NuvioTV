@@ -16,24 +16,30 @@ class SportsLiveTagsTest {
     }
 
     @Test
-    fun `a long sport word takes its sport's word, known or not`() {
-        assertEquals("MOTOR", SportsLiveTags.short("MOTORSPORT", null))
-        assertEquals("MOTOR", SportsLiveTags.short("Motorsport", SportsLiveSportKind.MOTORSPORT))
-        assertEquals("BBALL", SportsLiveTags.short("BASKETBALL", null))
-        assertEquals("WRESTLE", SportsLiveTags.short("WRESTLING", null))
-        assertEquals("HOCKEY", SportsLiveTags.short("ICE HOCKEY", null))
+    fun `a sport reads as its whole plain word, never an invented abbreviation`() {
+        // #217: "BBALL", "CS", "AF" and "ALM" were unreadable on the TV.
+        assertEquals("BASKETBALL", SportsLiveTags.short("BASKETBALL", null))
+        assertEquals("BASKETBALL", SportsLiveTags.short("Basketball", SportsLiveSportKind.BASKETBALL))
+        assertEquals("WRESTLING", SportsLiveTags.short("WRESTLING", null))
+        assertEquals("RACING", SportsLiveTags.short("MOTORSPORT", null))
+        assertEquals("RACING", SportsLiveTags.short("Motorsport", SportsLiveSportKind.MOTORSPORT))
+        assertEquals("FIGHT", SportsLiveTags.short("Combat Sports", null))
+        assertEquals("AFL", SportsLiveTags.short("Australian Football", null))
+        assertEquals("ICE HOCKEY", SportsLiveTags.short("ICE HOCKEY", null))
+        assertEquals("HOCKEY", SportsLiveTags.short("FIELD HOCKEY LEAGUE", null))
     }
 
     @Test
     fun `a long league tag takes its short form, else the row's sport, else its first word, else its start`() {
-        assertEquals("BUNDES", SportsLiveTags.short("BUNDESLIGA", SportsLiveSportKind.SOCCER))
-        assertEquals("NATIONS", SportsLiveTags.short("NATIONS LG", null))
-        assertEquals("EUROLG", SportsLiveTags.short("EUROLEAGUE", SportsLiveSportKind.BASKETBALL))
+        // League names of up to ten capitals are written whole.
+        assertEquals("BUNDESLIGA", SportsLiveTags.short("BUNDESLIGA", SportsLiveSportKind.SOCCER))
+        assertEquals("NATIONS LG", SportsLiveTags.short("NATIONS LG", null))
+        assertEquals("EUROLEAGUE", SportsLiveTags.short("EUROLEAGUE", SportsLiveSportKind.BASKETBALL))
         assertEquals("SOCCER", SportsLiveTags.short("EKSTRAKLASA", SportsLiveSportKind.SOCCER))
         assertEquals("GRAND", SportsLiveTags.short("GRAND SLAM CUP", null))
         // A league that names its sport reads as the sport (live.20 told Ekstraklasa as soccer); an unknown one is cut.
         assertEquals("SOCCER", SportsLiveTags.short("EKSTRAKLASA", null))
-        assertEquals("SUPERETT", SportsLiveTags.short("SUPERETTAN", null))
+        assertEquals("SUPERETTAN", SportsLiveTags.short("SUPERETTAN", null))
     }
 
     @Test

@@ -70,11 +70,11 @@ object SportsLiveLeagueTags {
         tag("SAUDI PRO", "Saudi Pro League", "ksa.1"),
         tag("LIGA 1 ROU", "Romanian Liga 1", "Romanian Liga I", "rou.1"),
         tag("LIGA MX", "Mexican Liga MX", "mex.1"),
-        tag("BRAZIL A", "Brazilian Serie A", "Brasileirão", "Brasileirao", "bra.1"),
+        tag("BRAZIL A", "Brazilian Serie A", "Brazil Serie A", "Brasileirão", "Brasileirao", "bra.1"),
         // ESPN's own abbreviation is the key rows use: "Argentine LPF" read "AL" by its initials (TV QA live.20).
         tag("ARG LIGA", "Argentine Liga Profesional de Fútbol", "Argentine Liga Profesional", "Argentine LPF", "arg.1"),
         // More leagues whose ESPN abbreviation reads as bare initials ("Austrian Bundesliga" → "AB").
-        tag("A-LEAGUE", "A-League Men", "Australian A-League Men", "aus.1"),
+        tag("A-LEAGUE", "A-League Men", "Australian A-League Men", "ALM", "aus.1"),
         tag("COLOMBIA", "Colombian Primera A", "col.1"),
         tag("CHILE", "Chilean Primera", "Chilean Primera División", "chi.1"),
         tag("URUGUAY", "Liga AUF Uruguaya", "uru.1"),

@@ -798,10 +798,9 @@ internal fun channelNowText(item: com.nuvio.tv.domain.model.SportsLiveItem): Str
 internal fun scoreboardTag(name: String): String {
     // Addon decoration goes first (#100): emoji and symbols, and bracketed parts ("⚡ Live Events (X)").
     val upper = scoreboardTagText(name).uppercase()
-    if (upper.length <= TAG_MAX_CHARS) return upper
-    val words = upper.split(' ', '-', '/').filter { it.isNotBlank() }
-    if (words.size > 1) return words.take(TAG_MAX_WORDS).joinToString("") { if (it.all(Char::isDigit)) it else it.take(1) }
-    return upper.take(TAG_MAX_CHARS)
+    // #217: a long name is never cut to its initials ("Combat Sports" read "CS"): a known league, else plain words.
+    SportsLiveLeagueTags.of(upper)?.let { return it }
+    return com.nuvio.tv.core.sportslive.SportsLiveTags.short(upper, null)
 }
 
 /**
@@ -835,8 +834,6 @@ internal fun scoreboardRowTag(league: String?, sport: String?, catalogName: Stri
 }
 
 
-private const val TAG_MAX_CHARS = 10
-private const val TAG_MAX_WORDS = 4
 
 private val ROW_LOGO_SIZE = 18.dp
 

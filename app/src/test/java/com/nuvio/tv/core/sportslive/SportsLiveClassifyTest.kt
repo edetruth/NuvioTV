@@ -199,12 +199,12 @@ class SportsLiveClassifyTest {
         assertEquals("Basketball", identified.sport)
         assertEquals(game.meta.genres, identified.meta.genres)
         assertEquals(SportsLiveSportKind.BASKETBALL, SportsLiveSportKind.tagOf(identified))
-        assertEquals("BBALL", SportsLiveTags.short("Basketball", SportsLiveSportKind.tagOf(identified)))
+        assertEquals("BASKETBALL", SportsLiveTags.short("Basketball", SportsLiveSportKind.tagOf(identified)))
     }
 
     @Test
     fun `a sport with no kind of its own gets a readable short tag`() {
-        assertEquals("VOLLEY", SportsLiveTags.short("Volleyball", null))
+        assertEquals("VOLLEYBALL", SportsLiveTags.short("Volleyball", null))
         assertEquals("HANDBALL", SportsLiveTags.short("Handball", null))
     }
 

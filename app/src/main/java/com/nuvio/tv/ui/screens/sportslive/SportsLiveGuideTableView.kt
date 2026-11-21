@@ -840,7 +840,8 @@ private val GUIDE_ROW_PADDING_START = 13.dp
 private val GUIDE_ROW_PADDING_END = 15.dp
 
 /** The tag column (152 px) and the first team's column (538 px: logo, gap and a ~460 px name). */
-private val GUIDE_TAG_WIDTH = 76.dp
+// Ten capitals at the guide's 13 sp tag ("BASKETBALL", #217).
+private val GUIDE_TAG_WIDTH = 92.dp
 private val GUIDE_TEAM_WIDTH = 269.dp
 private val GUIDE_LOGO = 24.dp
 private val GUIDE_LOGO_GAP = 7.dp

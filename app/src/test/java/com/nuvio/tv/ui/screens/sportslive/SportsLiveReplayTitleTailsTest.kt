@@ -90,7 +90,7 @@ class SportsLiveReplayTitleTailsTest {
         assertEquals("La Liga", art.league)
         assertEquals("LA LIGA", tagOf(spain))
         assertEquals("Koln", germany.art!!.second.name)
-        assertEquals("BUNDES", tagOf(germany))
+        assertEquals("BUNDESLIGA", tagOf(germany))
         assertEquals("Chelsea", england.art!!.second.name)
         assertEquals("EPL", tagOf(england))
         // No league written: the card's sport, as before.

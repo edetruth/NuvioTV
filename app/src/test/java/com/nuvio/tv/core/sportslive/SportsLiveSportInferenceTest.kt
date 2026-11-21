@@ -383,7 +383,7 @@ class SportsLiveSportInferenceTest {
             val inferred = SportsLiveSportInference.infer(item, dir)
             assertEquals(name, "Bundesliga", inferred.sport)
             assertEquals(name, listOf(EspnLeague("soccer", "ger.1")), EspnLeagueMap.leaguesFor(inferred))
-            assertEquals(name, "BUNDES", SportsLiveTags.short("BUNDESLIGA", SportsLiveSportKind.tagOf(inferred)))
+            assertEquals(name, "BUNDESLIGA", SportsLiveTags.short("BUNDESLIGA", SportsLiveSportKind.tagOf(inferred)))
         }
     }
 

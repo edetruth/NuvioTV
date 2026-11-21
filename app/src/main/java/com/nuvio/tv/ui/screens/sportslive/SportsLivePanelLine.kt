@@ -405,7 +405,7 @@ internal fun SportsLivePanelLine(
     val strings = rememberGameStatusStrings()
     val endedShort = stringResource(R.string.sports_live_panel_probably_ended_short)
     val kickoff = row.art?.let { kickoffText(it) }
-    // live.20 F5: the panel's own short tag, so the fixed column never cuts it ("MOTORSPORT" → "MOTOR").
+    // live.20 F5: the panel's own short tag, so the fixed column never cuts it ("MOTORSPORT" → "RACING").
     val sport = rememberRowPlainTag(row)
     val tag = SportsLiveTags.short(rowTagText(row), sport)
     val individual = sport in PANEL_INDIVIDUAL_SPORTS
@@ -1107,8 +1107,8 @@ internal fun SportsLivePanelHeader(group: ScoreboardGroup, count: Int) {
 
 private val PANEL_LINE_RADIUS = 6.dp
 private val PANEL_LINE_ACCENT = 2.dp
-/** Fits [SportsLiveTags.MAX_CHARS] capitals at the Tag size ("FOOTBALL" is about 57 dp), never cut (live.20 F5). */
-private val PANEL_TAG_COLUMN = 62.dp
+/** Fits [SportsLiveTags.MAX_CHARS] capitals at the Tag size ("BASKETBALL" is about 72 dp, #217), never cut (live.20 F5). */
+private val PANEL_TAG_COLUMN = 76.dp
 
 /**
  * The panel rows' tag column (TV QA BUG-C follow-up, coordinator decision): as wide as the widest tag the panel shows
