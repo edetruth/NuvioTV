@@ -122,7 +122,7 @@ class DualScoreStripTest {
     }
 
     @Test
-    fun `no score when Scores is Off or not read yet, unmatched, or not started: the teams alone (live 24)`() {
+    fun `no score when Scores is Off or not read yet, unmatched, or not started - the teams alone (live 24)`() {
         val event = live(pacers, "4:12 - 4th", home = 88, away = 91)
         listOf(
             strip(item("76ers vs Pacers"), event, ScoresMode.OFF),
