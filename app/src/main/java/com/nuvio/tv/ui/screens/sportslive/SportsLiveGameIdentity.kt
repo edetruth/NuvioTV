@@ -24,6 +24,29 @@ import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens.Colors
 
 /*
+ * THE GAME GRAMMAR (live.24, design audit A1): every surface writes a game by these rules; check each one against this
+ * table at release review (Live Now, Upcoming, Results, Home row and hero, panel, table guide, Your teams strip, stage,
+ * dual captions and picker).
+ *
+ * | Part          | Rule                                                                                               |
+ * |---------------|----------------------------------------------------------------------------------------------------|
+ * | Name form     | Longest that fits, never cut: full ("Philadelphia 76ers") → short ("76ers") → code ("PHI").        |
+ * |               | A one-on-one sport steps to last names. A ranked college team: small muted "#5" before any form.  |
+ * | Team order    | The card's own order (its title's), the same on every surface of that card; never flipped when    |
+ * |               | ESPN matches later (a row must not swap its lines mid-view).                                       |
+ * | Connector     | "at" when the first side is the away side (ESPN says so, or the title wrote "at" / "@") and the    |
+ * |               | sport has a home side; otherwise "vs" ([GameIdentity.saysAt]).                                     |
+ * | Clock         | One line, period first: "4th 3:40", "Q4 2:31", "2H 9:51" (men's college basketball halves),        |
+ * |               | "67'", "Halftime", "End 2H" / "End 3rd" ([gameClockLine]); never "2H End of" or "4:12 - 4th".      |
+ * | League tag    | Live Now's short tag ([GameIdentities.tag]): ESPN's league, else the sport word; grey, 26 px.      |
+ * | Status words  | LIVE (red dot, the only red), Final / FT, Postponed, Score hidden, kickoff time + countdown; a live |
+ * |               | game with no score of ours: "LIVE" + muted "No score yet" (never "Listed live").                    |
+ * | Score         | Card order, "97–92", only as the Scores setting, spoiler protection and the watched-game delay     |
+ * |               | allow ([GameIdentity.chip]).                                                                       |
+ * | Pills         | One per row: Ready > Close / excitement > No stream yet.                                           |
+ */
+
+/*
  * One game identity (live.24, lessons 2026-11-21 "Cross-surface consistency gaps"): every surface that lists games (Live
  * Now and Upcoming rows, Results, Home's Live now row and hero, the in-player panel and table guide, the dual panes and
  * picker, the Your teams strip, the stage) names a game from this one model, so a game reads the same everywhere: the
@@ -67,7 +90,9 @@ internal data class GameIdentity(
     val sport: SportsLiveSportKind?,
     val chip: ScoreChip?,
     /** A followed team plays (either side, or the addon's own mark). */
-    val followed: Boolean
+    val followed: Boolean,
+    /** The grammar's connector: "A at B" (true: the first side is away, the sport has a home side), else "A vs B". */
+    val saysAt: Boolean = false
 ) {
     val twoSided: Boolean get() = first != null && second != null
 }
@@ -130,6 +155,23 @@ internal object GameIdentities {
         label: (SportsLiveSportKind) -> String
     ): String = SportsLiveTags.short(itemTagOf(item, art, sportTag, leagueTag, sportTag?.let(label), plain?.let(label)), sportTag ?: plain)
 
+    /** Sports with no home side: "at" says nothing there, so their matchups read "A vs B". */
+    private val NO_HOME_SIDE = setOf(
+        SportsLiveSportKind.TENNIS, SportsLiveSportKind.GOLF, SportsLiveSportKind.BOXING, SportsLiveSportKind.MMA,
+        SportsLiveSportKind.DARTS, SportsLiveSportKind.SNOOKER, SportsLiveSportKind.WRESTLING, SportsLiveSportKind.MOTORSPORT,
+        SportsLiveSportKind.CYCLING
+    )
+
+    /**
+     * The grammar's connector for [item] drawn as [art]: "at" when its first side is the away side (ESPN's match says so,
+     * else the title wrote "at" / "@") in a [sport] with a home side; otherwise "vs".
+     */
+    fun saysAt(item: SportsLiveItem, art: GameArt?, sport: SportsLiveSportKind?): Boolean {
+        if (sport in NO_HOME_SIDE) return false
+        art?.firstIsHome?.let { return !it }
+        return agendaWrittenAt(item.meta.name)
+    }
+
     /** A live tennis match's tour ("ATP", #160) from [item]'s strict ESPN match in [snapshot]; null otherwise. */
     fun leagueTagOf(item: SportsLiveItem, snapshot: ScoreSnapshot?): String? {
         val event = ScoreChips.matchedEvent(item, snapshot) ?: return null
@@ -159,7 +201,8 @@ internal object GameIdentities {
             tag = tag(item, art, row.sportTag, row.leagueTag, plain, label),
             sport = sport,
             chip = row.chip,
-            followed = row.followed || row.favorite
+            followed = row.followed || row.favorite,
+            saysAt = game && saysAt(item, art, sport)
         )
     }
 
@@ -195,7 +238,8 @@ internal object GameIdentities {
             tag = tag(item, art, sportTag, leagueTagOf(item, snapshot), plain, label),
             sport = sport,
             chip = chip,
-            followed = firstFollowed || secondFollowed || item.followed
+            followed = firstFollowed || secondFollowed || item.followed,
+            saysAt = game && saysAt(item, art, sport)
         )
     }
 }
@@ -234,3 +278,23 @@ internal fun rankedName(name: String, rank: Int?, rankSize: androidx.compose.ui.
             append(name)
         }
     }
+
+/**
+ * The grammar's clock line (period first, one line): [primary] / [secondary] as [splitClock] reads ESPN's clock
+ * ("4:12" / "4th") → "4th 4:12"; "End of" / "2nd" → "End 2H" (halves) or "End 2nd"; a clock with no period as it is
+ * ("67'", "Halftime"). [halves]: men's college basketball ([panelPlaysHalves]).
+ */
+internal fun gameClockLine(primary: String?, secondary: String?, halves: Boolean): String? {
+    val period = secondary?.let { panelPeriodShort(it, halves) }
+    if (primary != null && period != null && primary.trim().equals(END_OF, ignoreCase = true)) return "$END $period"
+    return listOfNotNull(period, primary).joinToString(" ").ifEmpty { null }
+}
+
+/** [clockText] (ESPN's "4:12 - 4th", "End of 2nd") in the grammar's one line ([gameClockLine]). */
+internal fun gameClockText(clockText: String, halves: Boolean): String {
+    val (clock, period) = splitClock(clockText)
+    return gameClockLine(clock, period, halves) ?: clockText
+}
+
+private const val END_OF = "End of"
+private const val END = "End"

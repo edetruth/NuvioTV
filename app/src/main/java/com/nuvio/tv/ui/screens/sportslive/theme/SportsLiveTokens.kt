@@ -90,6 +90,10 @@ object SportsLiveTokens {
     object Type {
         /** Tags (league, period, badges): 22 px. */
         val Tag = TextStyle(fontSize = 11.sp, lineHeight = 14.sp, fontWeight = FontWeight.SemiBold)
+        /** The 26 px floor (live.24, audit A2) for status words, periods, ranks and pills: nothing a row reads is smaller. */
+        val Pill = TextStyle(fontSize = 13.sp, lineHeight = 16.sp, fontWeight = FontWeight.SemiBold)
+        /** League tags (live.24, audit B2): 26 px grey on every surface. */
+        val LeagueTag = TextStyle(fontSize = 13.sp, lineHeight = 16.sp, fontWeight = FontWeight.SemiBold)
         /** Metadata ("Today · 3:30 PM · in 2 h 21 m"): 26 px. */
         val Meta = TextStyle(fontSize = 13.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium)
         /** Row names: 30 px. */
@@ -170,7 +174,8 @@ object SportsLiveTokens {
         val ColumnLeague = 80.dp
         val ColumnNames = 188.dp
         val ColumnScores = 48.dp
-        val ColumnStatus = 75.dp
+        /** 176 px (live.24): "4th 12:34" on one line and one 26 px pill under it. */
+        val ColumnStatus = 88.dp
         /** The list (800 px) and the stage (720 px). */
         val ListWidth = 400.dp
         val StageWidth = 360.dp

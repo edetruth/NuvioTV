@@ -65,7 +65,7 @@ class SportsLiveGameIdentityConsistencyTest {
         "firstCode" to first?.code, "secondCode" to second?.code,
         "firstRank" to first?.rank, "secondRank" to second?.rank,
         "firstLogo" to first?.logo, "secondLogo" to second?.logo,
-        "tag" to tag
+        "tag" to tag, "saysAt" to saysAt
     )
 
     private fun GameSideIdentity.fields(prefix: String): Map<String, Any?> = mapOf(
@@ -88,8 +88,14 @@ class SportsLiveGameIdentityConsistencyTest {
         val dual = DualScoreStrip.of(item, snapshot, mode, revealed = false, label = label, codeOf = codeOf)
         val picker = dualPickerRows(listOf(item), scores, mode, emptySet(), now).getValue(item.streamKey)
         val art = liveNow.art!!
+        // The game grammar's clock (live.24), as each surface words it.
+        val halves = panelPlaysHalves(snapshot?.league)
+        val liveLines = scoreboardStatusLines(liveNow, strings, null)
+        val rowClock = if (liveNow.chip is com.nuvio.tv.core.sportslive.scores.ScoreChip.Live) gameClockLine(liveLines.primary, liveLines.secondary, halves) else null
+        fun clockOf(chip: com.nuvio.tv.core.sportslive.scores.ScoreChip?): String? =
+            SportsLiveHomeMetaClock.of(chip, strings, halves)
         return buildMap {
-            put("Live Now row", GameIdentities.of(liveNow, label, plain, codeOf).fields())
+            put("Live Now row", GameIdentities.of(liveNow, label, plain, codeOf).fields() + mapOf("clock" to rowClock, "saysAt" to agendaSaysAt(liveNow)))
             put("Upcoming row", GameIdentities.of(upcoming, label, plain, codeOf).fields())
             put("In-player panel", boardIdentity.fields())
             put(
@@ -99,9 +105,22 @@ class SportsLiveGameIdentityConsistencyTest {
                     "firstRank" to guide.firstRank, "secondRank" to guide.secondRank, "tag" to guide.tag
                 )
             )
-            put("Slim panel line", mapOf("firstRank" to line.firstRank, "secondRank" to line.secondRank, "tag" to line.tag))
-            put("Home card and hero", home.fields() + mapOf("tag" to liveNowItemTag(item, snapshot, label)))
-            put("Dual pane caption", dual!!.first.fields("first") + dual.second.fields("second") + mapOf("tag" to dual.tag))
+            put(
+                "Slim panel line",
+                mapOf(
+                    "firstRank" to line.firstRank, "secondRank" to line.secondRank, "tag" to line.tag,
+                    // Drawn period first ("2H 12:00"), the grammar's order.
+                    "clock" to listOfNotNull(line.period, line.clock).joinToString(" ").takeIf { line.live && rowClock != null }
+                )
+            )
+            put("Table guide clock", mapOf("clock" to guide.time.takeIf { rowClock != null }))
+            put("Home card and hero", home.fields() + mapOf("tag" to liveNowItemTag(item, snapshot, label), "clock" to clockOf(chip)))
+            put(
+                "Dual pane caption",
+                dual!!.first.fields("first") + dual.second.fields("second") +
+                    mapOf("tag" to dual.tag, "clock" to dual.status(strings.chip).takeIf { dual.live })
+            )
+            put("Dual picker clock", mapOf("clock" to (picker.chip as? com.nuvio.tv.core.sportslive.scores.ScoreChip.Live)?.let { scoreChipParts(it, strings.chip, halves).first.removeSuffix(" ·").trim() }))
             put("Dual picker", GameIdentities.of(item, null, picker.chip, label, plain, art = picker.teams, codeOf = codeOf).fields())
             put("Your teams strip", mapOf("firstCode" to yourTeamsShortName(art.first, codeOf), "secondCode" to yourTeamsShortName(art.second, codeOf)))
             // Results lists ESPN's own events (away first, as this card).
@@ -126,6 +145,9 @@ class SportsLiveGameIdentityConsistencyTest {
     @Test
     fun `a ranked college game reads the same on every surface, rank included`() {
         val reference = assertConsistent(item("Indiana Pacers at Philadelphia 76ers"), ranked)
+        // The grammar: away first written "at", men's college basketball's halves, period first.
+        assertEquals(true, reference["saysAt"])
+        assertEquals("2H 12:00", reference["clock"])
         assertEquals(null, reference["firstRank"])
         assertEquals(5, reference["secondRank"])
         assertEquals("IND", reference["firstCode"])
@@ -149,4 +171,12 @@ class SportsLiveGameIdentityConsistencyTest {
         assertEquals("Los Angeles Clippers", names.first())
         assertTrue(names.last(), names.last().length <= GameIdentities.CODE_MAX)
     }
+}
+
+/** Home's card clock (the drawn card's lead) for a live [chip]; null otherwise. */
+private object SportsLiveHomeMetaClock {
+    fun of(chip: com.nuvio.tv.core.sportslive.scores.ScoreChip?, strings: GameStatusStrings, halves: Boolean): String? =
+        (chip as? com.nuvio.tv.core.sportslive.scores.ScoreChip.Live)?.let {
+            com.nuvio.tv.ui.screens.home.SportsLiveHomeMeta.cardFooter(it, ScoresMode.SHOW, strings.chip, "LIVE", halves = halves).lead
+        }
 }

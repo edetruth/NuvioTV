@@ -76,8 +76,8 @@ internal fun rememberScoreChipStrings(): ScoreChipStrings {
 
 /** A card's score chip: a red dot while live, then the clock and score ("Q3 4:12 · 88–80", "FT 3–1"). */
 @Composable
-internal fun SportsLiveScoreChip(chip: ScoreChip, modifier: Modifier = Modifier) {
-    val (lead, score) = scoreChipParts(chip, rememberScoreChipStrings())
+internal fun SportsLiveScoreChip(chip: ScoreChip, modifier: Modifier = Modifier, halves: Boolean = false) {
+    val (lead, score) = scoreChipParts(chip, rememberScoreChipStrings(), halves)
     val live = chip is ScoreChip.Live
     val color = when {
         live -> ArtColors.LiveText
@@ -117,8 +117,10 @@ internal fun SportsLiveScoreChip(chip: ScoreChip, modifier: Modifier = Modifier)
  * The chip's words split for layout: the lead (clock or note, with its separator) and the score, or
  * null when the chip shows none ("Postponed", "Score hidden", a clock alone). The lead may be empty.
  */
-internal fun scoreChipParts(chip: ScoreChip, strings: ScoreChipStrings): Pair<String, String?> {
-    val text = ScoreChips.text(chip, strings)
+internal fun scoreChipParts(chip: ScoreChip, strings: ScoreChipStrings, halves: Boolean = false): Pair<String, String?> {
+    // The game grammar's clock (live.24): "2nd 11:39", never ESPN's "11:39 - 2nd".
+    val graded = if (chip is ScoreChip.Live) chip.copy(clock = chip.clock?.let { gameClockText(it, halves) }) else chip
+    val text = ScoreChips.text(graded, strings)
     val score = when (chip) {
         is ScoreChip.Live -> chip.score
         is ScoreChip.Final -> chip.score
@@ -392,12 +394,19 @@ private fun rememberLogoPainter(url: String, px: Int): AsyncImagePainter {
  */
 @Composable
 internal fun TeamLogoSlot(painter: Painter, shown: Boolean, size: Dp, modifier: Modifier = Modifier) {
+    val dark = rememberDarkLogo(painter)
     Box(modifier = Modifier.height(size), contentAlignment = Alignment.Center) {
         AnimatedVisibility(visible = shown, enter = LOGO_ENTER, exit = LOGO_EXIT) {
-            Image(painter = painter, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.size(size).then(modifier))
+            Image(painter = painter, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.size(size).logoPlate(dark, size).then(modifier))
         }
     }
 }
+
+/** A dark logo's light plate (live.24, audit B5, [DarkLogos]): a soft disc behind it, the logo inset a little. */
+private fun Modifier.logoPlate(dark: Boolean, size: Dp): Modifier =
+    if (dark) this.background(LOGO_PLATE, CircleShape).padding(size * LOGO_PLATE_INSET) else this
+
+private const val LOGO_PLATE_INSET = 0.12f
 
 /** A game's two logos side by side (the dual picker): nothing until both have loaded, then they fade in together. */
 @Composable
@@ -405,8 +414,10 @@ internal fun TeamLogoPairSlot(logos: TeamLogoPair, size: Dp, gap: Dp) {
     Box(modifier = Modifier.height(size), contentAlignment = Alignment.Center) {
         AnimatedVisibility(visible = logos.shown, enter = LOGO_ENTER, exit = LOGO_EXIT) {
             Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
-                Image(painter = logos.first, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.size(size))
-                Image(painter = logos.second, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.size(size))
+                val firstDark = rememberDarkLogo(logos.first)
+                val secondDark = rememberDarkLogo(logos.second)
+                Image(painter = logos.first, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.size(size).logoPlate(firstDark, size))
+                Image(painter = logos.second, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.size(size).logoPlate(secondDark, size))
             }
         }
     }

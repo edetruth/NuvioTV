@@ -23,6 +23,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
+import com.nuvio.tv.core.sportslive.GameStatus
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.rounded.Notifications
@@ -107,7 +109,8 @@ internal fun SportsLiveScoreboardHeader(group: ScoreboardGroup, count: Int, modi
     Text(
         text = text,
         style = SportsLiveTokens.style(SportsLiveTokens.Type.SectionHeader),
-        color = if (group == ScoreboardGroup.LIVE) Colors.LiveRed else Colors.TextPrimary.copy(alpha = 0.6f),
+        // Red only for live itself (the dot, the clock line, the progress bar; live.24 audit B2): headers are all one grey.
+        color = Colors.TextPrimary.copy(alpha = 0.6f),
         maxLines = 1,
         modifier = modifier.padding(top = 8.dp, bottom = 4.dp)
     )
@@ -550,17 +553,23 @@ private fun ChannelCells(row: ScoreboardRow, watching: Boolean) {
  * ten-letter sport word ("BASKETBALL"), so a tag is never shrunk; anything longer is already initials ([scoreboardTag]).
  */
 @Composable
-private fun LeagueTag(tag: String, live: Boolean) {
+private fun LeagueTag(tag: String, @Suppress("UNUSED_PARAMETER") live: Boolean) {
     Box(modifier = Modifier.width(Size.ColumnLeague), contentAlignment = Alignment.CenterEnd) {
+        // live.24 (audit B2): one grey on every row, live or not (red is for the dot and the clock), at 26 px; only a
+        // ten-letter sport word ("BASKETBALL") steps down to fit the column, never cut.
         BasicText(
             text = tag,
-            style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag).copy(
-                color = if (live) Colors.LiveText else Colors.TextSecondary,
+            style = SportsLiveTokens.style(SportsLiveTokens.Type.LeagueTag).copy(
+                color = Colors.TextSecondary,
                 textAlign = TextAlign.End
             ),
             maxLines = 1,
             softWrap = false,
-            overflow = TextOverflow.Ellipsis
+            autoSize = TextAutoSize.StepBased(
+                minFontSize = SportsLiveTokens.Type.Tag.fontSize,
+                maxFontSize = SportsLiveTokens.Type.LeagueTag.fontSize,
+                stepSize = 1.sp
+            )
         )
     }
 }
@@ -590,7 +599,7 @@ private fun TeamLine(
             rank?.let {
                 Text(
                     text = RankDisplay.label(it),
-                    style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag).copy(fontWeight = FontWeight.Medium, fontFeatureSettings = "tnum"),
+                    style = SportsLiveTokens.style(SportsLiveTokens.Type.Pill).copy(fontWeight = FontWeight.Medium, fontFeatureSettings = "tnum"),
                     color = Colors.TextMuted,
                     maxLines = 1
                 )
@@ -674,8 +683,16 @@ private fun ScoresCell(scores: ScoreboardScores, reminded: Boolean, compact: Boo
 private fun StatusCell(row: ScoreboardRow, hasReplay: Boolean, singleLine: Boolean = false, ready: Boolean = false, watching: Boolean = false) {
     val strings = rememberGameStatusStrings()
     val kickoff = row.art?.let { kickoffText(it) }
-    val lines = scoreboardStatusLines(row, strings, kickoff)
-    // A one-line live event with no clock: the red dot and LIVE at the tag's size (#134).
+    val raw = scoreboardStatusLines(row, strings, kickoff)
+    // The game grammar (live.24, audit A2): a live clock and its period on ONE line, period first ("4th 3:40", "End 2H"),
+    // which leaves the second line to the row's one pill. A scoreless live game keeps its muted "No score yet" there.
+    val halves = panelPlaysHalves((row.status as? GameStatus.Live)?.event?.league)
+    val lines = if (raw.live && !raw.listed && raw.secondary != null) {
+        raw.copy(primary = gameClockLine(raw.primary, raw.secondary, halves), secondary = null)
+    } else {
+        raw
+    }
+    // A one-line live event with no clock: the red dot and LIVE (#134).
     val liveMark = singleLine && lines.live && lines.secondary == null && lines.primary == strings.live
     Column(modifier = Modifier.width(Size.ColumnStatus), verticalArrangement = Arrangement.spacedBy(1.dp, Alignment.CenterVertically)) {
         lines.primary?.let { primary ->
@@ -683,36 +700,45 @@ private fun StatusCell(row: ScoreboardRow, hasReplay: Boolean, singleLine: Boole
                 if (lines.live) Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(Colors.LiveRed))
                 Text(
                     text = primary,
-                    style = if (liveMark) SportsLiveTokens.style(SportsLiveTokens.Type.Tag) else SportsLiveTokens.style(STATUS_STYLE),
-                    // #215: "Listed live" is quieter than a confirmed LIVE.
-                    color = if (liveMark) Colors.LiveText else if (lines.listed) Colors.TextSecondary else Colors.TextPrimary,
+                    style = if (liveMark) SportsLiveTokens.style(SportsLiveTokens.Type.Pill) else SportsLiveTokens.style(STATUS_STYLE),
+                    color = Colors.TextPrimary,
                     maxLines = if (lines.secondary == null && !lines.live) 2 else 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
         }
         lines.secondary?.let { secondary ->
-            val style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag).copy(fontWeight = FontWeight.Medium)
+            // 26 px at the least (live.24 floor), never grey-on-grey for the period or countdown.
+            val style = SportsLiveTokens.style(SportsLiveTokens.Type.Pill).copy(fontWeight = FontWeight.Medium)
             if (lines.urgent) {
+                // Red is for live only (audit B2): the last hour's countdown is outlined in the neutral strong outline.
                 Text(
                     text = secondary,
                     style = style,
-                    color = Colors.LiveText,
+                    color = Colors.TextPrimary,
                     maxLines = 1,
                     modifier = Modifier
-                        .border(1.dp, Colors.LiveRed, SportsLiveTokens.Radius.PillShape)
+                        .border(1.dp, Colors.OutlineStrong, SportsLiveTokens.Radius.PillShape)
                         .padding(horizontal = 5.dp)
                 )
             } else {
-                Text(text = secondary, style = style, color = Colors.TextPrimary.copy(alpha = 0.7f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    text = secondary,
+                    style = style,
+                    // "No score yet" is quieter than the clock it stands in for.
+                    color = if (lines.listed) Colors.TextSecondary else Colors.TextPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
         }
-        // One badge fits (live.20): "▶ Ready" on my game, else the excitement badge (Scores shown), else "Close game" in
-        // crunch time (#137, under Hide too: it tells no score).
+        // ONE pill per row (live.24 grammar): "▶ Ready" on my game, else the excitement badge (Scores shown), else "Close
+        // game" in crunch time (#137, under Hide too: it tells no score), else "No stream yet"; a Just ended row's Replay
+        // pill stands in for all of them.
         val excitement = row.excitement
         // A live row whose last lookup found nothing playable (#145, BUG2) says so in words, beside its dimming.
         val noStream = row.noStreams && row.group == ScoreboardGroup.LIVE
-        when (rowBadgeOf(ready, excitement != null, row.closeGame, noStream, watching)) {
+        if (hasReplay && row.group == ScoreboardGroup.JUST_ENDED) ReplayPill() else when (rowBadgeOf(ready, excitement != null, row.closeGame, noStream, watching)) {
             // BUG-D: the mini player's game says so in the badge's place (after its excitement or close badge), never on "LIVE".
             RowBadge.WATCHING -> SportsLiveWatchingPill()
             RowBadge.READY -> SportsLiveReadyPill()
@@ -722,7 +748,6 @@ private fun StatusCell(row: ScoreboardRow, hasReplay: Boolean, singleLine: Boole
             // A link check running (live.20), with no other badge to show: the faint mark in the badge's place.
             RowBadge.NONE -> if (rememberSportsLiveChecking(row.item)) SportsLiveCheckingMark()
         }
-        if (hasReplay && row.group == ScoreboardGroup.JUST_ENDED) ReplayPill()
     }
 }
 
@@ -759,7 +784,7 @@ private fun TennisSetsCell(columns: TennisColumns, live: Boolean, compact: Boole
 private fun SportsLiveWatchingPill() {
     Text(
         text = stringResource(R.string.sports_live_row_watching),
-        style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag).copy(fontSize = 10.sp, lineHeight = 12.sp),
+        style = SportsLiveTokens.style(SportsLiveTokens.Type.Pill),
         color = Colors.OnPrimary,
         maxLines = 1,
         softWrap = false,
@@ -787,7 +812,8 @@ private fun BigGameBadge() {
 /** The excitement badge (#43, F2): small and blue, so it never reads as live (red) or followed (gold). */
 @Composable
 private fun ExcitementBadge(texts: List<String>) {
-    val style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag).copy(fontSize = 10.sp, lineHeight = 12.sp)
+    // 26 px (live.24 floor): the longest wording that fits, else the shortest ("Close").
+    val style = SportsLiveTokens.style(SportsLiveTokens.Type.Pill)
     val measurer = rememberTextMeasurer()
     // The first of [texts] (longest first) whose one line fits the column beside the badge's padding (live.20: never
     // "Close · 8 m…"); the last, the shortest, otherwise.

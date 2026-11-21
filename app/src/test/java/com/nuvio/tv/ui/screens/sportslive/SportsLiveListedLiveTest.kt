@@ -81,7 +81,8 @@ class SportsLiveListedLiveTest {
         val row = board(ScoresMode.SHOW, setOf(unverified.streamKey)).rowOf(unverified)
         assertTrue(row.listedOnly)
         assertEquals(ScoreboardGroup.LIVE, row.group)
-        assertEquals(ScoreboardStatusLines("Listed live", listed = true), scoreboardStatusLines(row, strings, kickoff = null))
+        // live.24 grammar: one scoreless label, "LIVE" with its dot over the muted no-score word.
+        assertEquals(ScoreboardStatusLines("LIVE", "Listed live", live = true, listed = true), scoreboardStatusLines(row, strings, kickoff = null))
     }
 
     @Test
@@ -136,7 +137,7 @@ class SportsLiveListedLiveTest {
         assertFalse(SportsLiveHomeMeta.listedLiveOnly(ScoresMode.SHOW, confirmedUnmatched = false, matched = false))
         assertFalse(SportsLiveHomeMeta.listedLiveOnly(ScoresMode.SHOW, confirmedUnmatched = true, matched = true))
         val footer = SportsLiveHomeMeta.cardFooter(null, ScoresMode.HIDE_UNTIL_FOCUSED, strings.chip, "Live", listedLive = "Listed live")
-        assertEquals(DrawnCardFooter(lead = "Listed live"), footer)
+        assertEquals(DrawnCardFooter(lead = "Live", live = true, trailing = DrawnCardTrailing.Note("Listed live")), footer)
         val unchanged = SportsLiveHomeMeta.cardFooter(null, ScoresMode.SHOW, strings.chip, "Live")
         assertEquals(DrawnCardFooter(lead = "Live", live = true), unchanged)
     }

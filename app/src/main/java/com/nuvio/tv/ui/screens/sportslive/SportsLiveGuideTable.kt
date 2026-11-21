@@ -125,10 +125,8 @@ internal fun guideRowOf(
  * "Score hidden"). Null when there is nothing to say (a channel).
  */
 internal fun guideTimeText(status: ScoreboardStatusLines, halves: Boolean = false): String? {
-    if (status.live) {
-        val period = status.secondary?.let { panelPeriodShort(it, halves) }
-        return listOfNotNull(period, status.primary).joinToString(" ").ifEmpty { null }
-    }
+    // The game grammar's clock (live.24): "Q4 2:31", "End 2H", never "2H End of"; a scoreless live game "LIVE · No score yet".
+    if (status.live && !status.listed) return gameClockLine(status.primary, status.secondary, halves)
     return listOfNotNull(status.primary, status.secondary).joinToString(GUIDE_TIME_SEPARATOR).ifEmpty { null }
 }
 

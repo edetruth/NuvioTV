@@ -1029,6 +1029,28 @@ private fun SportsLiveContent(
         }
         focusLiveNowList = false
     }
+    // Entry focus (live.24, audit A7): when the section opens on Live now, focus lands in the content, never left on the
+    // side rail with no ring: the first live "Your teams" card when one exists (one press to watch my team), else the
+    // list's first row. Once per visit (saved, so a return from the player keeps its own focus).
+    var entryFocusDone by rememberSaveable { mutableStateOf(false) }
+    val entryTarget = when {
+        uiState.selectedTab != SportsLiveTab.LIVE_NOW || boardPending -> null
+        yourTeams.firstOrNull() is YourTeamsEntry.Live -> catchUpFocusRequester
+        else -> entryCardFocusRequester
+    }
+    // Not keyed on the flag: setting it must not cancel the move it marks.
+    LaunchedEffect(entryTarget != null, uiState.selectedTab) {
+        if (entryFocusDone) return@LaunchedEffect
+        // Opened on (or moved to) another tab first: the header keeps focus, and Live now never takes it later.
+        if (uiState.selectedTab != SportsLiveTab.LIVE_NOW) {
+            entryFocusDone = true
+            return@LaunchedEffect
+        }
+        if (entryTarget == null) return@LaunchedEffect
+        repeat(2) { withFrameNanos { } }
+        runCatching { entryTarget.requestFocus() }
+        entryFocusDone = true
+    }
     // On the Results tab: the day in the title (P4), and where the header's Down lands in its content.
     val resultsDateFocusRequester = remember { FocusRequester() }
     val resultsTopFocusRequester = remember { FocusRequester() }

@@ -67,12 +67,12 @@ class DualScoreStripTest {
     @Test
     fun `live basketball shows both teams, the score in the title's order and the clock with the live dot`() {
         val strip = strip(item("Indiana Pacers at Philadelphia 76ers"), live(pacers, "4:12 - 4th", home = 88, away = 91))
-        assertEquals("IND 91–88 PHI" to "4:12 - 4th", texts(strip))
+        assertEquals("IND 91–88 PHI" to "4th 4:12", texts(strip))
         assertTrue(strip!!.live)
         assertEquals(pacers.away.logo, strip.first.logo)
         assertEquals(pacers.home.logo, strip.second.logo)
         // The other way round, the other order.
-        assertEquals("PHI 88–91 IND" to "4:12 - 4th", texts(strip(item("76ers vs Pacers"), live(pacers, "4:12 - 4th", home = 88, away = 91))))
+        assertEquals("PHI 88–91 IND" to "4th 4:12", texts(strip(item("76ers vs Pacers"), live(pacers, "4:12 - 4th", home = 88, away = 91))))
     }
 
     @Test
@@ -86,12 +86,12 @@ class DualScoreStripTest {
     fun `live football shows the quarter clock`() {
         val event = live(seahawks, "8:41 - 3rd", home = 17, away = 20)
         val text = texts(strip(item("Seahawks at Raiders", "American Football"), event))
-        assertEquals("${seahawks.away.abbreviation} 20–17 ${seahawks.home.abbreviation}" to "8:41 - 3rd", text)
+        assertEquals("${seahawks.away.abbreviation} 20–17 ${seahawks.home.abbreviation}" to "3rd 8:41", text)
     }
 
     @Test
     fun `a live game before its first score shows the sides and the clock`() {
-        assertEquals("PHI – IND" to "12:00 - 1st", texts(strip(item("76ers vs Pacers"), live(pacers, "12:00 - 1st", null, null))))
+        assertEquals("PHI – IND" to "1st 12:00", texts(strip(item("76ers vs Pacers"), live(pacers, "12:00 - 1st", null, null))))
     }
 
     @Test
@@ -118,7 +118,7 @@ class DualScoreStripTest {
         val hidden = strip(item("76ers vs Pacers"), event, ScoresMode.HIDE_UNTIL_FOCUSED, revealed = false)
         assertEquals("PHI – IND" to "Score hidden", texts(hidden))
         assertFalse(hidden!!.live)
-        assertEquals("PHI 88–91 IND" to "4:12 - 4th", texts(strip(item("76ers vs Pacers"), event, ScoresMode.HIDE_UNTIL_FOCUSED, revealed = true)))
+        assertEquals("PHI 88–91 IND" to "4th 4:12", texts(strip(item("76ers vs Pacers"), event, ScoresMode.HIDE_UNTIL_FOCUSED, revealed = true)))
     }
 
     @Test

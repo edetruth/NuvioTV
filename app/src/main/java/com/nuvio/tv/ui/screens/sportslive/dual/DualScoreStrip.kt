@@ -14,6 +14,8 @@ import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.ui.screens.sportslive.GameIdentities
 import com.nuvio.tv.ui.screens.sportslive.GameSideIdentity
+import com.nuvio.tv.ui.screens.sportslive.gameClockText
+import com.nuvio.tv.ui.screens.sportslive.panelPlaysHalves
 
 /** The dual screen's [com.nuvio.tv.core.sportslive.scores.LiveScoreTracking] screen id: its two panes' games (#124). */
 internal const val SCREEN_DUAL = "dual"
@@ -41,7 +43,14 @@ private val DUAL_SPACES = Regex("""\s+""")
  * chip (Scores Off, not matched, not started, or held back) the logos and codes show alone. Null (the pane's clean name
  * shows, [dualPaneCaption]) for anything that is not a two-sided game.
  */
-internal data class DualScoreStrip(val first: GameSideIdentity, val second: GameSideIdentity, val chip: ScoreChip?, val tag: String = "") {
+internal data class DualScoreStrip(
+    val first: GameSideIdentity,
+    val second: GameSideIdentity,
+    val chip: ScoreChip?,
+    val tag: String = "",
+    /** Men's college basketball's halves, for the game grammar's clock ("2H 9:51"). */
+    val halves: Boolean = false
+) {
 
     /** The red dot shows beside the clock only while the game is live (never on a hidden score). */
     val live: Boolean get() = chip is ScoreChip.Live
@@ -72,7 +81,7 @@ internal data class DualScoreStrip(val first: GameSideIdentity, val second: Game
             val identity = GameIdentities.of(item, shown, chip, label, codeOf = codeOf)
             val first = identity.first ?: return null
             val second = identity.second ?: return null
-            return DualScoreStrip(first, second, chip, identity.tag)
+            return DualScoreStrip(first, second, chip, identity.tag, halves = panelPlaysHalves(shown?.league))
         }
     }
 
@@ -83,9 +92,9 @@ internal data class DualScoreStrip(val first: GameSideIdentity, val second: Game
         else String.format(strings.sides, first.code, second.code)
     }
 
-    /** "Q4 4:12", "78'", "Final/OT", "Postponed", "Score hidden"; null for a live game ESPN gives no clock for, or no chip. */
+    /** The game grammar's clock ("4th 4:12", "78'", "End 2H"), "Final/OT", "Postponed", "Score hidden"; null for a live game ESPN gives no clock for, or no chip. */
     fun status(strings: ScoreChipStrings): String? = when (chip) {
-        is ScoreChip.Live -> chip.clock
+        is ScoreChip.Live -> chip.clock?.let { gameClockText(it, halves) }
         is ScoreChip.Final -> chip.note ?: strings.finalNote
         is ScoreChip.Status -> chip.text ?: strings.postponed
         is ScoreChip.Hidden -> strings.hidden

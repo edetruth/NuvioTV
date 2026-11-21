@@ -215,6 +215,7 @@ data class SportsLiveBoard(
                 ).map { row -> if (row.item.streamKey in inputs.noStreams) row.copy(noStreams = true) else row }
                     .let { built -> withListedLive(built, scoresOn = scores.mode != null && scores.mode != ScoresMode.OFF, unmatched = inputs.unmatched) }
                     .let { built -> if (tab == SportsLiveTab.UPCOMING) withBigGames(built, scores.scores, inputs.standings) else built }
+                    .let { built -> if (liveNow) scoredLiveFirst(built) else built }
             } else {
                 when (tab) {
                     // Channels (phases 1 and 2): Favorites, Recent and Popular now, or the browse view; Replays under
@@ -246,6 +247,14 @@ data class SportsLiveBoard(
         }
     }
 }
+
+/**
+ * Live now's live games with a score of ours first (live.24, audit A6): inside the LIVE group, a game whose row shows no
+ * score (unmatched, or listed live only) moves below the scored ones; each part keeps its importance order. Under Scores
+ * Off no row has a score, so nothing moves; under Hide a hidden score still counts as scored.
+ */
+internal fun scoredLiveFirst(rows: List<ScoreboardRow>): List<ScoreboardRow> =
+    rows.sortedWith(compareBy<ScoreboardRow> { it.group.ordinal }.thenBy { if (it.group == ScoreboardGroup.LIVE && it.chip == null) 1 else 0 })
 
 /**
  * The More live view's rows (user 2026-11-21): [items] in their order (group by group), each under its sport

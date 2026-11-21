@@ -687,7 +687,7 @@ private fun PaneScoreStrip(
     val logos = rememberTeamLogoPair(strip.first.logo, strip.second.logo)?.takeUnless { it.failed }
     val logoSize = if (small) 12.dp else 16.dp
     val style = SportsLiveTokens.style(if (small) SportsLiveTokens.Type.PanelScore else SportsLiveTokens.Type.DualStrip)
-    val rankSize = SportsLiveTokens.Type.Tag.fontSize
+    val rankSize = SportsLiveTokens.Type.Pill.fontSize
     val score = strip.score
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = modifier) {
         logos?.let { TeamLogoSlot(it.first, it.shown, logoSize) }
@@ -715,8 +715,8 @@ private fun PaneScoreStrip(
         if (!small && strip.tag.isNotEmpty()) {
             Text(
                 text = strip.tag,
-                style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag),
-                color = SportsLiveTokens.Colors.TextMuted,
+                style = SportsLiveTokens.style(SportsLiveTokens.Type.LeagueTag),
+                color = SportsLiveTokens.Colors.TextSecondary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f, fill = false)

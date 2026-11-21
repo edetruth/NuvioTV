@@ -702,8 +702,18 @@ fun SportsLiveMiniPlayerHost(
                 }
             }
             if (asChip) {
+                // live.24 (audit B1, "▶ Playing Aston V…"): the game identity's codes, "AVL vs SUN", never a name cut mid-word.
+                val sportWord = com.nuvio.tv.ui.screens.sportslive.rememberSportWord()
+                val vs = stringResource(R.string.sports_live_matchup)
+                val at = stringResource(R.string.sports_live_matchup_at)
+                val chipName = remember(playing.item, sportWord, vs, at) {
+                    val identity = com.nuvio.tv.ui.screens.sportslive.GameIdentities.of(playing.item, null, null, sportWord)
+                    val first = identity.first
+                    val second = identity.second
+                    if (first != null && second != null) String.format(if (identity.saysAt) at else vs, first.code, second.code) else playing.item.displayName
+                }
                 PlayingChip(
-                    name = playing.item.displayName,
+                    name = chipName,
                     hint = stringResource(R.string.sports_live_mini_watching_ok_hint).takeIf { focused && hintShown },
                     focused = focused
                 )

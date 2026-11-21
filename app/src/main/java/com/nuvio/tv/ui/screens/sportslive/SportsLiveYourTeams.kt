@@ -348,7 +348,10 @@ internal fun SportsLiveYourTeamsStrip(
                     }
                     val face = when (entry) {
                         is YourTeamsEntry.Live -> {
-                            val footer = SportsLiveHomeMeta.cardFooter(entry.row.chip, scoresMode, strings, liveWord)
+                            val footer = SportsLiveHomeMeta.cardFooter(
+                                entry.row.chip, scoresMode, strings, liveWord,
+                                halves = panelPlaysHalves((entry.row.status as? com.nuvio.tv.core.sportslive.GameStatus.Live)?.event?.league)
+                            )
                             SlimFace(
                                 status = SlimStatus.Live(footer.lead),
                                 corner = if (ready) SlimCorner.Ready else null,
@@ -524,7 +527,11 @@ private fun YourTeamsSlimFace(art: GameArt, face: SlimFace) {
                     SlimText(status.clock, tag.copy(fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum"), Colors.TextPrimary)
                     Spacer(modifier = Modifier.weight(1f))
                 }
-                is SlimStatus.Time -> SlimText(status.text, tag.copy(fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum"), Colors.TextPrimary, Modifier.weight(1f))
+                is SlimStatus.Time -> {
+                    // live.24 (audit B1, "2… ▶ Ready"): the time is kept whole, as a live clock is; "▶ Ready" steps down to ▶.
+                    SlimText(status.text, tag.copy(fontWeight = FontWeight.Bold, fontFeatureSettings = "tnum"), Colors.TextPrimary)
+                    Spacer(modifier = Modifier.weight(1f))
+                }
                 SlimStatus.Replay -> {
                     Text(
                         text = stringResource(R.string.sports_live_results_replay),

@@ -8,6 +8,7 @@ import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveKind
 import com.nuvio.tv.ui.screens.sportslive.DrawnCardFooter
+import com.nuvio.tv.ui.screens.sportslive.gameClockText
 import com.nuvio.tv.ui.screens.sportslive.DrawnCardTrailing
 import java.time.Instant
 import java.time.ZoneId
@@ -23,31 +24,22 @@ import java.util.Locale
 internal object SportsLiveHomeMeta {
 
     /**
-     * ESPN's clock split into the clock and its period: "Q4 4:12" → (4:12, Q4), "9:51 - 2nd Half" → (9:51, 2nd half);
-     * anything else ("78'", "Halftime") is the clock alone.
-     */
-    fun clockParts(clockText: String): Pair<String, String?> {
-        val text = clockText.trim()
-        val dashed = text.split(" - ", limit = 2).map { it.trim() }
-        if (dashed.size == 2 && dashed.all { it.isNotEmpty() }) {
-            val period = dashed[1].let { if (it.first().isDigit()) it.lowercase(Locale.ROOT) else it }
-            return dashed[0] to period
-        }
-        val words = text.split(WHITESPACE)
-        if (words.size == 2 && CLOCK.matches(words[1]) && !CLOCK.matches(words[0])) return words[1] to words[0]
-        return text to null
-    }
-
-    /**
      * A drawn game card's bottom line for its [chip] (the spoiler setting already applied). Home has no focus
      * reveal: under Hide until focused every game reads "Score hidden", whatever the feed has.
      */
-    fun cardFooter(chip: ScoreChip?, mode: ScoresMode?, strings: ScoreChipStrings, liveWord: String, listedLive: String? = null): DrawnCardFooter = when (chip) {
+    fun cardFooter(
+        chip: ScoreChip?,
+        mode: ScoresMode?,
+        strings: ScoreChipStrings,
+        liveWord: String,
+        listedLive: String? = null,
+        /** Men's college basketball's halves, for the game grammar's clock ("2H 9:51"). */
+        halves: Boolean = false
+    ): DrawnCardFooter = when (chip) {
         is ScoreChip.Live -> {
-            val (clock, period) = chip.clock?.let(::clockParts) ?: (liveWord to null)
+            // The game grammar's one clock line (live.24): "Q4 4:12", period first.
             DrawnCardFooter(
-                lead = clock,
-                detail = period,
+                lead = chip.clock?.let { gameClockText(it, halves) } ?: liveWord,
                 live = true,
                 trailing = chip.score?.let { DrawnCardTrailing.Score(String.format(strings.score, it.first, it.second)) }
             )
@@ -58,8 +50,8 @@ internal object SportsLiveHomeMeta {
             trailing = DrawnCardTrailing.Score(String.format(strings.score, chip.score.first, chip.score.second))
         )
         is ScoreChip.Status -> DrawnCardFooter(lead = chip.text ?: strings.postponed)
-        // #215: a game ESPN confirmed it does not have reads "Listed live": no red dot, and no "Score hidden" to wait for.
-        null -> if (listedLive != null) DrawnCardFooter(lead = listedLive) else DrawnCardFooter(
+        // #215, live.24 grammar: a live game with no score of ours reads "● Live · No score yet", never "Listed live".
+        null -> if (listedLive != null) DrawnCardFooter(lead = liveWord, live = true, trailing = DrawnCardTrailing.Note(listedLive)) else DrawnCardFooter(
             lead = liveWord,
             live = true,
             trailing = if (mode == ScoresMode.HIDE_UNTIL_FOCUSED) DrawnCardTrailing.Note(strings.hidden) else null
@@ -68,19 +60,19 @@ internal object SportsLiveHomeMeta {
 
     /**
      * The hero's status line for a live game, and the card's label line: [liveFormat] ("● %1$s") round
-     * "4:12 · Q4 · BOS 91–88 NYK" (the abbreviations when [art] has short ones, else the score alone). Any other
-     * chip reads as its chip does ("Final 124–131").
+     * "Q4 4:12 · BOS 91–88 NYK" (the game grammar's clock, then the abbreviations when [art] has short ones, else the
+     * score alone). Any other chip reads as its chip does ("Final 124–131").
      */
-    fun statusLine(chip: ScoreChip, art: GameArt?, strings: ScoreChipStrings, liveFormat: String): String = when (chip) {
+    fun statusLine(chip: ScoreChip, art: GameArt?, strings: ScoreChipStrings, liveFormat: String, halves: Boolean = false): String = when (chip) {
         is ScoreChip.Live -> {
-            val (clock, period) = chip.clock?.let(::clockParts) ?: (null to null)
+            val clock = chip.clock?.let { gameClockText(it, halves) }
             val score = chip.score?.let { score ->
                 val numbers = String.format(strings.score, score.first, score.second)
                 val first = art?.first?.short?.takeIf { it.length <= ABBREVIATION_MAX }
                 val second = art?.second?.short?.takeIf { it.length <= ABBREVIATION_MAX }
                 if (first != null && second != null) "$first $numbers $second" else numbers
             }
-            String.format(liveFormat, listOfNotNull(clock, period, score).joinToString(SEPARATOR))
+            String.format(liveFormat, listOfNotNull(clock, score).joinToString(SEPARATOR))
         }
         else -> ScoreChips.text(chip, strings)
     }
@@ -124,5 +116,4 @@ internal object SportsLiveHomeMeta {
     private const val ABBREVIATION_MAX = 5
 
     private val WHITESPACE = Regex("\\s+")
-    private val CLOCK = Regex("\\d{1,2}:\\d{2}(\\.\\d)?")
 }

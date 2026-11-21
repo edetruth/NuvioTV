@@ -368,7 +368,7 @@ internal data class ScoreboardStatusLines(
     val secondary: String? = null,
     val live: Boolean = false,
     val urgent: Boolean = false,
-    /** "Listed live" (#215): drawn muted, with no dot. */
+    /** A live game with no score of ours (#215, live.24): [secondary] is the muted "No score yet", never a period. */
     val listed: Boolean = false
 )
 
@@ -408,7 +408,8 @@ internal fun scoreboardStatusLines(row: ScoreboardRow, strings: GameStatusString
         chip is ScoreChip.Status -> ScoreboardStatusLines(chip.text ?: strings.postponed)
         row.group == ScoreboardGroup.JUST_ENDED -> ScoreboardStatusLines(GameStatusText.finalWord(sport, strings))
         row.group == ScoreboardGroup.LIVE && row.status is GameStatus.Live ->
-            if (row.listedOnly) ScoreboardStatusLines(strings.listedLive, listed = true) else ScoreboardStatusLines(strings.live, live = true)
+            // The game grammar's one scoreless form (live.24, audit A6): LIVE with its dot, then the muted "No score yet".
+            if (row.listedOnly) ScoreboardStatusLines(strings.live, strings.listedLive, live = true, listed = true) else ScoreboardStatusLines(strings.live, live = true)
         row.status is GameStatus.Postponed -> ScoreboardStatusLines((row.status as GameStatus.Postponed).text ?: strings.postponed)
         row.group == ScoreboardGroup.CHANNELS -> ScoreboardStatusLines(null)
         else -> {

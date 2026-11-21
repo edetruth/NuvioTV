@@ -41,7 +41,9 @@ class SportsLiveQaPolishTest {
     fun `a live chip splits into its clock and a score that never gives way`() {
         val chip = ScoreChip.Live(clock = "11:39 - 2nd", score = ChipScore(82, 53))
 
-        assertEquals("11:39 - 2nd ·" to "82–53", scoreChipParts(chip, strings))
+        assertEquals("2nd 11:39 ·" to "82–53", scoreChipParts(chip, strings))
+        // Men's college basketball's halves (live.24 grammar).
+        assertEquals("2H 11:39 ·" to "82–53", scoreChipParts(chip, strings, halves = true))
     }
 
     @Test

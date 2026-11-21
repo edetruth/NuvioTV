@@ -281,7 +281,7 @@ internal fun AgendaStageArt(art: GameArt, item: com.nuvio.tv.domain.model.Sports
     val league = sportsLiveLeagueLabel(art.league, item.catalogName)
     val season = art.seasonType?.let { seasonLabelRes(it) }?.let { stringResource(it) }
     val top = listOfNotNull(league, season).joinToString(" · ").uppercase(Locale.getDefault())
-    MatchupStageArt(art, top, at = agendaWrittenAt(item.meta.name))
+    MatchupStageArt(art, top, at = GameIdentities.saysAt(item, art, SportsLiveSportKind.tagOf(item)))
 }
 
 /**
@@ -384,16 +384,9 @@ internal fun seasonLabelRes(type: Int): Int? = when (type) {
 /** The title writes the game "A at B" or "A @ B" (away first): the stage says "at", else "vs". */
 internal fun agendaWrittenAt(title: String): Boolean = title.contains(" at ", ignoreCase = true) || title.contains(" @ ")
 
-/** Sports with no home side: "at" says nothing there, so their matchups read "A vs B" in the written order. */
-private val NO_HOME_SIDE = setOf(
-    SportsLiveSportKind.TENNIS, SportsLiveSportKind.GOLF, SportsLiveSportKind.BOXING, SportsLiveSportKind.MMA,
-    SportsLiveSportKind.DARTS, SportsLiveSportKind.SNOOKER, SportsLiveSportKind.WRESTLING, SportsLiveSportKind.MOTORSPORT,
-    SportsLiveSportKind.CYCLING
-)
-
-/** Whether [row]'s matchup reads "A at B": written so, and a sport with a home side (live.20: never tennis). */
+/** Whether [row]'s matchup reads "A at B": the game grammar's connector ([GameIdentities.saysAt]). */
 internal fun agendaSaysAt(row: ScoreboardRow): Boolean =
-    agendaWrittenAt(row.item.meta.name) && (row.sportTag ?: SportsLiveSportKind.tagOf(row.item)) !in NO_HOME_SIDE
+    GameIdentities.saysAt(row.item, row.art, row.sportTag ?: SportsLiveSportKind.tagOf(row.item))
 
 /**
  * What the drawn matchup says under "vs" (Live Now's stage before its preview plays): [row]'s status in the one
@@ -512,7 +505,12 @@ private fun GameBlock(row: ScoreboardRow, details: ScoreDetails?, situation: Str
     val shown = details as? ScoreDetails.Shown
     val headline = when {
         shown != null -> ScoreDetailsBuilder.scorelineText(shown, detailStrings)
-        art != null && row.twoSided -> stringResource(R.string.sports_live_matchup, art.first.shortName, art.second.shortName)
+        // The game grammar's connector: "Hornets at Hawks" only when the first side is the away side.
+        art != null && row.twoSided -> stringResource(
+            if (agendaSaysAt(row)) R.string.sports_live_matchup_at else R.string.sports_live_matchup,
+            art.first.shortName,
+            art.second.shortName
+        )
         else -> singleLineTitle(row.item)
     }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -584,7 +582,7 @@ internal fun stageRanksLine(row: ScoreboardRow): String? {
     val ranks = if (ranked) {
         fun side(team: com.nuvio.tv.core.sportslive.scores.GameArtTeam) =
             listOfNotNull(team.rank?.let(RankDisplay::label), team.shortName).joinToString(" ")
-        stringResource(R.string.sports_live_matchup, side(art!!.first), side(art.second))
+        stringResource(if (agendaSaysAt(row)) R.string.sports_live_matchup_at else R.string.sports_live_matchup, side(art!!.first), side(art.second))
     } else {
         null
     }

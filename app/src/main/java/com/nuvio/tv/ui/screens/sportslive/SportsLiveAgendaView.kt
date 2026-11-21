@@ -288,7 +288,7 @@ internal fun SportsLiveReplayStage(
             val league = sportsLiveLeagueLabel(art?.league ?: row.item.sport, row.item.catalogName)
                 ?: row.sportTag?.let { sportKindLabel(it) }
             if (art != null) {
-                MatchupStageArt(art, top = league.orEmpty().uppercase(Locale.getDefault()), at = agendaWrittenAt(row.item.meta.name))
+                MatchupStageArt(art, top = league.orEmpty().uppercase(Locale.getDefault()), at = agendaSaysAt(row))
             } else {
                 // No two sides: the clean title drawn large on the stage's gradient, never the addon's art.
                 Column(

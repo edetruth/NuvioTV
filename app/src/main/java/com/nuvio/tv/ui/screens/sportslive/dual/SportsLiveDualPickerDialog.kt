@@ -37,6 +37,8 @@ import com.nuvio.tv.ui.screens.sportslive.SportsLiveScoreChip
 import com.nuvio.tv.ui.screens.sportslive.TeamLogoPairSlot
 import com.nuvio.tv.ui.screens.sportslive.rememberTeamLogoPair
 import com.nuvio.tv.ui.screens.sportslive.GameIdentities
+import com.nuvio.tv.ui.screens.sportslive.panelPlaysHalves
+import com.nuvio.tv.core.sportslive.GameStatus
 import com.nuvio.tv.ui.screens.sportslive.rememberSportWord
 import com.nuvio.tv.ui.screens.sportslive.ZapPanelRow
 import com.nuvio.tv.ui.screens.sportslive.groupPanelRows
@@ -118,9 +120,21 @@ internal fun SportsLiveDualPickerDialog(
                     ) {
                         val row = rows[item.streamKey]
                         // A game's tag is the one game identity's (live.24): Live Now's "NCAAM", not the addon's sport word.
-                        val tag = remember(item, row, sportWord) {
-                            if (item.isChannel) SportsLiveTeams.sportLabelOf(item)
-                            else GameIdentities.of(item, null, row?.chip, sportWord, art = row?.teams).tag.takeIf { it.isNotEmpty() } ?: SportsLiveTeams.sportLabelOf(item)
+                        val identity = remember(item, row, sportWord) {
+                            if (item.isChannel) null else GameIdentities.of(item, null, row?.chip, sportWord, art = row?.teams)
+                        }
+                        val tag = identity?.tag?.takeIf { it.isNotEmpty() } ?: SportsLiveTeams.sportLabelOf(item)
+                        // The game grammar's matchup (live.24): full names, "at" only when the first side is away.
+                        val first = identity?.first
+                        val second = identity?.second
+                        val title = if (identity != null && first != null && second != null) {
+                            stringResource(
+                                if (identity.saysAt) R.string.sports_live_matchup_at else R.string.sports_live_matchup,
+                                first.full,
+                                second.full
+                            )
+                        } else {
+                            item.displayName
                         }
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -130,14 +144,14 @@ internal fun SportsLiveDualPickerDialog(
                             rememberTeamLogoPair(row?.teams)?.let { logos -> TeamLogoPairSlot(logos, 28.dp, NuvioTheme.spacing.xs) }
                             Column(modifier = Modifier.weight(1f)) {
                                 // The whole name, on two lines when long (live.23 TV test): never cut.
-                                Text(item.displayName)
+                                Text(title)
                                 Text(
                                     text = listOfNotNull(tag, item.addonName).joinToString(" · "),
                                     style = MaterialTheme.typography.bodySmall,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
-                                row?.chip?.let { SportsLiveScoreChip(chip = it, modifier = Modifier.padding(top = NuvioTheme.spacing.xxs)) }
+                                row?.chip?.let { SportsLiveScoreChip(chip = it, halves = panelPlaysHalves((row?.status as? GameStatus.Live)?.event?.league), modifier = Modifier.padding(top = NuvioTheme.spacing.xxs)) }
                             }
                         }
                     }

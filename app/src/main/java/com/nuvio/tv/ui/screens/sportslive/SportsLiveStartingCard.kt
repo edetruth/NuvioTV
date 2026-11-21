@@ -154,13 +154,15 @@ fun SportsLiveStartingCard(
         if (selected == null) {
             val firstFocus = remember { FocusRequester() }
             LaunchedEffect(Unit) { runCatching { firstFocus.requestFocus() } }
+            // live.24 (audit C5): "Try next link" only when there is a next link ("Link 1 of 1" offers Sources alone).
+            val actions = SportsLiveStartingAction.entries.filter { it != SportsLiveStartingAction.TRY_NEXT_LINK || linkCount != 1 }
             Row(horizontalArrangement = Arrangement.spacedBy(SportsLiveTokens.Size.ButtonGap)) {
-                SportsLiveStartingAction.entries.forEach { action ->
+                actions.forEach { action ->
                     val primary = action == SportsLiveStartingAction.TRY_NEXT_LINK
                     SportsLiveButton(
                         onClick = { onAction(action) },
                         role = if (primary) SportsLiveButtonRole.PRIMARY else SportsLiveButtonRole.SECONDARY,
-                        modifier = if (primary) Modifier.focusRequester(firstFocus) else Modifier
+                        modifier = if (action == actions.first()) Modifier.focusRequester(firstFocus) else Modifier
                     ) {
                         Text(text = labels.getValue(action), style = SportsLiveTokens.style(SportsLiveTokens.Type.Button), maxLines = 1)
                     }
