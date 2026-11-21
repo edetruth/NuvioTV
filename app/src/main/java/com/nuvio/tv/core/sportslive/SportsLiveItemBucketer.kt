@@ -236,6 +236,13 @@ object SportsLiveItemBucketer {
             .let { if (tab == SportsLiveTab.REPLAYS) it else mergeSameTitle(merge(it, addonOrder, nowMs), addonOrder) }
             .sortedWith(if (tab == SportsLiveTab.REPLAYS) replayOrder else tabOrder)
 
+    /**
+     * Merged rows of a tab other than Replays, given in the order of their primaries in the tab's listed items, in the
+     * tab's order as [bucketClocked] puts them (teamless copies of one live event folded, then live first, by start).
+     */
+    internal fun orderedForTab(rows: List<SportsLiveItem>, addonOrder: List<String>): List<SportsLiveItem> =
+        mergeSameTitle(rows, addonOrder).sortedWith(tabOrder)
+
     /** The items [tab] lists at [nowMs], before copies are merged: not finished, each stream key once (its first). */
     internal fun listedIn(items: List<SportsLiveItem>, tab: SportsLiveTab, nowMs: Long): List<SportsLiveItem> =
         items.filter { !it.isFinished && belongsTo(it, tab, nowMs) }

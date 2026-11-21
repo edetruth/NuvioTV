@@ -15,6 +15,7 @@ import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualPick
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualSession
 import com.nuvio.tv.ui.screens.sportslive.dual.offersDual
 import com.nuvio.tv.ui.screens.sportslive.dual.sportsLiveWatchWithSession
+import java.time.LocalDate
 
 data class SportsLiveUiState(
     val isLoading: Boolean = true,
@@ -80,7 +81,12 @@ data class SportsLiveUiState(
     /** The card keys of [moreLive]'s listings that are no game: LIVE only when ESPN confirms. */
     val moreLiveOther: Set<String> = emptySet(),
     /** "You watched ‹sport› · Add to My sports?": the sport its card at the top of Live now offers; null for none. */
-    val addSportPrompt: MySport? = null
+    val addSportPrompt: MySport? = null,
+    /**
+     * live.24: Upcoming's later dates whose games are not sorted yet ([SportsLiveUpcomingWindow]): their day tabs show,
+     * and going to one sorts it ([SportsLiveViewModel.showUpcomingDay]).
+     */
+    val upcomingPendingDates: List<LocalDate> = emptyList()
 ) {
     /** Each More live game's group key, by card key. */
     val moreLiveGroupOf: Map<String, String> by lazy {

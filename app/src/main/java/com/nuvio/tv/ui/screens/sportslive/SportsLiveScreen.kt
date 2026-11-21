@@ -103,6 +103,7 @@ import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveKind
 import com.nuvio.tv.domain.model.SportsLiveTab
 import com.nuvio.tv.domain.model.Stream
+import java.time.LocalDate
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualSession
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualSessions
 import com.nuvio.tv.ui.screens.sportslive.dual.sportsLiveSavedForLater
@@ -533,6 +534,7 @@ fun SportsLiveScreen(
             onDeclineSport = viewModel::declineAddSport,
             onCloseMoreLive = viewModel::closeMoreLive,
             onToggleChannelFavorite = viewModel::toggleChannelFavorite,
+            onUpcomingDay = viewModel::showUpcomingDay,
             channelBrowse = channelBrowse,
             channelActions = remember(viewModel) {
                 SportsLiveChannelActions(
@@ -677,7 +679,9 @@ private fun SportsLiveContent(
     onToggleChannelFavorite: (SportsLiveItem, Boolean) -> Unit = { _, _ -> },
     /** Channels' browse view (phase 2); null while the tab shows its own sections. */
     channelBrowse: SportsLiveChannelBrowse? = null,
-    channelActions: SportsLiveChannelActions = SportsLiveChannelActions()
+    channelActions: SportsLiveChannelActions = SportsLiveChannelActions(),
+    /** live.24: the viewer went to an Upcoming day (its tab, Later ›, the list's end): it is sorted if it was not yet. */
+    onUpcomingDay: (LocalDate) -> Unit = {}
 ) {
     val context = LocalContext.current
     val tabFocusRequesters = remember { SportsLiveTab.entries.associateWith { FocusRequester() } }
@@ -978,6 +982,8 @@ private fun SportsLiveContent(
     val currentAgendaDay = currentAgendaGame?.let { game -> dayBarAgenda?.games?.getOrNull(game)?.day } ?: 0
     val dayBarFocusRequester = dayBarAgenda?.let { dayRequester(currentAgendaDay) }
     var dayBarHasFocus by remember { mutableStateOf(false) }
+    // live.24: an Upcoming day asked to be sorted (a pending tab, Later ›), whose first game the stage shows on arrival.
+    var awaitedAgendaDate by remember { mutableStateOf<LocalDate?>(null) }
     BackHandler(enabled = dayBarHasFocus) {
         runCatching { activeTabFocusRequester.requestFocus() }
     }
@@ -2020,6 +2026,19 @@ private fun SportsLiveContent(
                     }
                 }
             }
+            // live.24: a later day is sorted when the viewer goes to it (its tab, Later ›, or the last sorted day's games);
+            // once its games arrive the stage shows its first one, focus staying where it is.
+            val nextPendingDate = remember(agenda) { agenda.days.firstOrNull { it.pending }?.date }
+            val lastSortedDay = remember(agenda) {
+                nextPendingDate?.let { next -> agenda.days.indexOfLast { !it.pending && it.date != null && it.date < next } } ?: -1
+            }
+            LaunchedEffect(agenda, awaitedAgendaDate) {
+                val date = awaitedAgendaDate ?: return@LaunchedEffect
+                val day = agenda.days.indexOfFirst { it.date == date && !it.pending }
+                if (day < 0) return@LaunchedEffect
+                awaitedAgendaDate = null
+                agenda.firstGameOf(day)?.let(::agendaShow)
+            }
             // The row with the stage's bar, read outside the list (#143): a focus move in the list leaves its rows alone.
             val agendaStageKey = selected.listKey.takeIf { paneHasFocus || dayBarHasFocus }
             Row(modifier = Modifier.fillMaxSize()) {
@@ -2033,17 +2052,37 @@ private fun SportsLiveContent(
                         days = agenda.days,
                         currentDay = currentAgendaDay,
                         canEarlier = currentAgendaGame?.let { agenda.timeSlotJump(it, forward = false) } != null,
-                        canLater = currentAgendaGame?.let { agenda.timeSlotJump(it, forward = true) } != null,
+                        canLater = currentAgendaGame?.let { agenda.timeSlotJump(it, forward = true) } != null || nextPendingDate != null,
                         dayFocusRequester = ::dayRequester,
                         upFocusRequester = aboveContentFocusRequester,
                         downFocusRequester = entryCardFocusRequester,
                         // Selection follows focus (TV tab rows); the day already shown keeps its game in view.
-                        onDayFocused = { day -> if (day != currentAgendaDay) agenda.firstGameOf(day)?.let(::agendaShow) },
+                        onDayFocused = { day ->
+                            val tab = agenda.days.getOrNull(day)
+                            // live.24: a day not sorted yet is sorted now; its first game shows once it arrives.
+                            awaitedAgendaDate = if (tab != null && tab.pending) tab.date else null
+                            tab?.date?.let(onUpcomingDay)
+                            if (day != currentAgendaDay) agenda.firstGameOf(day)?.let(::agendaShow)
+                        },
                         onDayOk = { day ->
                             val target = if (day == currentAgendaDay) currentAgendaGame else agenda.firstGameOf(day)
                             target?.let(::agendaJump)
                         },
-                        onStep = { later -> currentAgendaGame?.let { agenda.timeSlotJump(it, forward = later) }?.let(::agendaShow) },
+                        onStep = { later ->
+                            val target = currentAgendaGame?.let { agenda.timeSlotJump(it, forward = later) }
+                            val targetDay = target?.let { agenda.days.getOrNull(agenda.games[it].day) }
+                            // live.24: Later past the last sorted day goes to the next day once it is sorted (not to Any time).
+                            val shownDate = currentAgendaGame?.let { agenda.days.getOrNull(agenda.games[it].day)?.date }
+                            val next = nextPendingDate?.takeIf {
+                                later && shownDate != null && shownDate < it && (targetDay == null || targetDay.date == null || targetDay.date > it)
+                            }
+                            if (next != null) {
+                                awaitedAgendaDate = next
+                                onUpcomingDay(next)
+                            } else {
+                                target?.let(::agendaShow)
+                            }
+                        },
                         modifier = Modifier.onFocusChanged { dayBarHasFocus = it.hasFocus }
                     )
                     key(filterKey) {
@@ -2083,7 +2122,11 @@ private fun SportsLiveContent(
                                                         selected = item.listKey == agendaStageKey,
                                                         onClick = { agendaOk(item, game.row) },
                                                         onLongClick = { cardLongClick(item) },
-                                                        onFocus = { cardFocused(item) },
+                                                        onFocus = {
+                                                            cardFocused(item)
+                                                            // live.24: on the last sorted day, the next day is sorted ahead of the scroll.
+                                                            if (game.day == lastSortedDay) nextPendingDate?.let(onUpcomingDay)
+                                                        },
                                                         menuOpen = item.listKey == menuCardKey,
                                                         agenda = AgendaRowSide(
                                                             bell = agendaBellOf(remindable(item), reminders.isReminded(item)),
