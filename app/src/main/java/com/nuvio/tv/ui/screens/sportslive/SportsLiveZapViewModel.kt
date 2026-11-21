@@ -2,6 +2,7 @@ package com.nuvio.tv.ui.screens.sportslive
 
 import com.nuvio.tv.core.sportslive.SportsLiveToastKind
 import com.nuvio.tv.core.sportslive.SportsLiveToasts
+import com.nuvio.tv.core.sportslive.SportsLivePlayingGame
 import com.nuvio.tv.core.sportslive.scores.FollowTarget
 import com.nuvio.tv.core.sportslive.scores.WatchingNow
 import com.nuvio.tv.core.sportslive.scores.FollowTargets
@@ -1185,10 +1186,15 @@ class SportsLiveZapViewModel internal constructor(
         controller.pickChip(contentId, chip)
     }
 
-    /** [item] was picked in the live games panel: the panel closes and the player zaps to it. */
+    /**
+     * [item] was picked in the live games panel: the panel closes and the player zaps to it. The game playing, or another
+     * addon's copy of it (J5), only closes the panel: the stream plays on, never started again.
+     */
     fun onPanelPick(item: SportsLiveItem) {
         val items = panel.value?.allItems.orEmpty()
+        val playing = panel.value?.nowPlayingRow?.item
         closePanel()
+        if (playing != null && SportsLivePlayingGame.isSameGame(item, playing)) return
         controller.pick(contentId, item, items)
     }
 

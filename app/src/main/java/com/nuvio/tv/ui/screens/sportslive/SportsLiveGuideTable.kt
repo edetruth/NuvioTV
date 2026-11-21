@@ -224,20 +224,12 @@ internal fun guideLines(guide: PanelGuide): List<PanelGuideEntry> = guide.entrie
 }
 
 /**
- * Where the selection opens (brief B): on the game ▼ would zap to, so open + OK does what one zap does: the first
- * zappable row after the game playing ([currentKey]) in the [lineup], wrapping, that the table lists; else the first line.
+ * Where the selection opens (J6, user TV report 2026-11-21: "each time I get back into the table I'm placed in a
+ * different section"): always on Now playing when the game playing is known ([nowPlaying]), the table at its top, so ▼
+ * goes to the first row and OK goes back to the game; else the first line. The side panel opens the same way.
  */
-internal fun guideOpeningKey(lines: List<PanelGuideEntry>, lineup: List<ZapPanelRow>, currentKey: String?): String? {
-    val listed = lines.mapNotNullTo(HashSet()) { (it as? PanelGuideEntry.Game)?.key }
-    val at = lineup.indexOfFirst { it.item.streamKey == currentKey }
-    if (at >= 0) {
-        for (step in 1 until lineup.size) {
-            val row = lineup[(at + step) % lineup.size]
-            if (row.zappable && row.item.streamKey in listed) return row.item.streamKey
-        }
-    }
-    return lines.firstOrNull()?.key
-}
+internal fun guideOpeningKey(lines: List<PanelGuideEntry>, nowPlaying: Boolean): String? =
+    if (nowPlaying) GUIDE_NOW_PLAYING_KEY else lines.firstOrNull()?.key
 
 /** The key Now playing is selected by (coordinator decision 5: selectable, above the table's first row). */
 internal const val GUIDE_NOW_PLAYING_KEY = "guide_now_playing"

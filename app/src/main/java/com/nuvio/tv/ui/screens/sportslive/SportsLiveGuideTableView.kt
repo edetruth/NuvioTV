@@ -124,11 +124,18 @@ internal fun SportsLiveGuideTable(
     // Now playing is selectable above the table (Hold OK on it reaches Choose stream; OK just closes the guide).
     val hasNow = nowRow != null
     val keys = remember(lines, hasNow) { guideSelectableKeys(hasNow, lines) }
-    // The row the user moved to, by key (null: the opening row, the game ▼ would zap to), and where it last was.
+    // The row the user moved to, by key (null: the opening row, Now playing), and where it last was.
     var chosenKey by remember { mutableStateOf<String?>(null) }
     var lastIndex by remember { mutableIntStateOf(0) }
     var windowStart by remember { mutableIntStateOf(0) }
-    val openingKey = remember(lines, guide) { guide?.let { guideOpeningKey(lines, it.rows, state?.currentKey) } }
+    // J6: every opening starts afresh on Now playing, the table at its top.
+    LaunchedEffect(open) {
+        if (!open) return@LaunchedEffect
+        chosenKey = null
+        lastIndex = 0
+        windowStart = 0
+    }
+    val openingKey = remember(lines, hasNow) { guideOpeningKey(lines, hasNow) }
     val index = guideReselect(keys, chosenKey ?: openingKey, lastIndex)
     val tableIndex = guideTableIndex(index, hasNow)
     val start = guideWindowStart(windowStart, tableIndex, lines.size)
