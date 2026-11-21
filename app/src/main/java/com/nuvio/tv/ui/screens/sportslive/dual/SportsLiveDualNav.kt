@@ -43,6 +43,14 @@ fun sportsLiveDualEntryPopTarget(
 }
 
 /**
+ * Leaving dual screen forward (OK, Back keeping a game, an alert: the full player or a Stream screen) is never faded
+ * (live.23 TV test): a cross-fade showed both panes' video surfaces through the fading screens while the held game
+ * moved to full screen, which read as the picture shifting between games. Dual screen covers itself, and the new
+ * screen shows at once with the kept game's picture. Back that only leaves (a pop) fades as before.
+ */
+fun sportsLiveDualLeavesAtOnce(fromRoute: String?, dualRoute: String): Boolean = fromRoute == dualRoute
+
+/**
  * The back stack after OK hands a dual pane off to full screen ([targetRoute], the player or a
  * Stream screen): dual and anything above it go, whatever opened dual (the section, a player, or
  * Home's Live now row), so full screen leaves dual behind and Back from it returns to what was
