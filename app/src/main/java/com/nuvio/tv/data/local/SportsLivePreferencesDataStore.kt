@@ -92,6 +92,9 @@ class SportsLivePreferencesDataStore @Inject constructor(
     // Local only (not in SportsLiveSettingsSync: they hold addon ids): Channels' favorites and recent plays (phase 1).
     private val channelFavoritesKey = stringPreferencesKey("sports_live_channel_favorites")
     private val channelRecentKey = stringPreferencesKey("sports_live_channel_recent")
+    // Phase 2: plays per channel in the last 30 days ({"key": "ms,ms"}), and the countries Channels lists (unset: yours).
+    private val channelPlaysKey = stringPreferencesKey("sports_live_channel_plays")
+    private val channelCountriesKey = stringSetPreferencesKey("sports_live_channel_countries")
     // First-run setup (#134 phase 7): set once the profile has had its chance at it (shown, or set up already).
     private val setupDoneKey = booleanPreferencesKey("sports_live_setup_done")
     private val scoresModeKey = stringPreferencesKey("sports_live_scores_mode")
@@ -398,13 +401,37 @@ class SportsLivePreferencesDataStore @Inject constructor(
             val changed = change(channelPicksOf(prefs))
             prefs[channelFavoritesKey] = gson.toJson(encodeChannelRefs(changed.favorites))
             prefs[channelRecentKey] = gson.toJson(encodeChannelRefs(changed.recent))
+            prefs[channelPlaysKey] = gson.toJson(changed.plays.mapValues { (_, times) -> times.joinToString(",") })
         }
     }
 
     private fun channelPicksOf(prefs: Preferences) = SportsLiveChannelPicks(
         favorites = decodeChannelRefs(prefs[channelFavoritesKey]),
-        recent = decodeChannelRefs(prefs[channelRecentKey])
+        recent = decodeChannelRefs(prefs[channelRecentKey]),
+        plays = decodeChannelPlays(prefs[channelPlaysKey])
     )
+
+    private fun decodeChannelPlays(json: String?): Map<String, List<Long>> {
+        if (json.isNullOrBlank()) return emptyMap()
+        return runCatching {
+            gson.fromJson<Map<String, String>?>(json, overridesType).orEmpty()
+                .mapValues { (_, times) -> times.split(',').mapNotNull { it.trim().toLongOrNull() } }
+                .filterValues { it.isNotEmpty() }
+        }.getOrDefault(emptyMap())
+    }
+
+    /** The countries Channels lists (phase 2) for the active profile: null for the viewer's own; this TV only. */
+    val channelCountries: Flow<Set<String>?> = profileManager.activeProfileId.flatMapLatest { pid ->
+        factory.get(pid, FEATURE).data.map { it[channelCountriesKey] }
+    }
+
+    /** Saves the countries Channels lists; null goes back to the viewer's own. */
+    suspend fun setChannelCountries(countries: Set<String>?) {
+        store().edit { prefs ->
+            prefs.remove(channelCountriesKey)
+            if (countries != null) prefs[channelCountriesKey] = countries
+        }
+    }
 
     // [{"addon": addon id, "id": channel id, "name": name key}]; plain maps, like the follows.
     private fun encodeChannelRefs(refs: List<SportsLiveChannelRef>): List<Map<String, String>> =

@@ -9,10 +9,14 @@ import java.util.Locale
  */
 data class SportsLiveChannelRef(val addonId: String, val id: String, val name: String)
 
-/** A profile's channel picks: [favorites] in the order added, [recent] plays newest first. */
+/**
+ * A profile's channel picks: [favorites] in the order added, [recent] plays newest first, and [plays] (phase 2: when
+ * each channel was played in the last 30 days, by [SportsLiveChannelList.mergeKey]; Popular now reads them, on this TV only).
+ */
 data class SportsLiveChannelPicks(
     val favorites: List<SportsLiveChannelRef> = emptyList(),
-    val recent: List<SportsLiveChannelRef> = emptyList()
+    val recent: List<SportsLiveChannelRef> = emptyList(),
+    val plays: Map<String, List<Long>> = emptyMap()
 ) {
     companion object {
         val NONE = SportsLiveChannelPicks()
@@ -25,7 +29,13 @@ data class SportsLiveChannelPicks(
  */
 data class SportsLiveChannelLists(
     val order: SportsLiveChannelPicks = SportsLiveChannelPicks.NONE,
-    val favorites: List<SportsLiveChannelRef> = emptyList()
+    val favorites: List<SportsLiveChannelRef> = emptyList(),
+    /** Phase 2: the browse view shown (null: the tab's own sections). */
+    val browse: SportsLiveChannelBrowse? = null,
+    /** Phase 2: the countries chosen ([SportsLiveChannelCountries.ALL] for all); null: the viewer's own. */
+    val countries: Set<String>? = null,
+    /** Phase 2: this TV's region ([SportsLiveChannelCountries.tvRegion]). */
+    val tvRegion: String? = null
 ) {
     companion object {
         val NONE = SportsLiveChannelLists()
@@ -82,12 +92,25 @@ object SportsLiveChannelFavorites {
         return picks.copy(favorites = favorites.filterNot { it.addonId == item.addonId && it.name == name })
     }
 
-    /** [picks] with [item] played now: first in recent, once, at most [RECENT_KEPT]. */
-    fun played(picks: SportsLiveChannelPicks, item: SportsLiveItem): SportsLiveChannelPicks {
+    /**
+     * [picks] with [item] played at [nowMs]: first in recent, once, at most [RECENT_KEPT]; and one more play for it,
+     * plays older than 30 days dropped, at most [PLAYS_PER_CHANNEL] per channel and [PLAYS_CHANNELS] channels.
+     */
+    fun played(picks: SportsLiveChannelPicks, item: SportsLiveItem, nowMs: Long = System.currentTimeMillis()): SportsLiveChannelPicks {
         val ref = refOf(item)
         val rest = picks.recent.filterNot { it.addonId == ref.addonId && it.id == ref.id }
-        return picks.copy(recent = (listOf(ref) + rest).take(RECENT_KEPT))
+        val key = SportsLiveChannelList.mergeKey(item)
+        val since = nowMs - SportsLiveChannelList.PLAYS_WINDOW_MS
+        val plays = (picks.plays + (key to (picks.plays[key].orEmpty() + nowMs)))
+            .mapValues { (_, times) -> times.filter { it > since }.takeLast(PLAYS_PER_CHANNEL) }
+            .filterValues { it.isNotEmpty() }
+            .entries.sortedByDescending { it.value.last() }.take(PLAYS_CHANNELS)
+            .associate { it.key to it.value }
+        return picks.copy(recent = (listOf(ref) + rest).take(RECENT_KEPT), plays = plays)
     }
+
+    const val PLAYS_PER_CHANNEL = 30
+    const val PLAYS_CHANNELS = 100
 
     /**
      * The channels of [channels] that [refs] name, in [refs]' order, each once: by addon and id, else by name key in
@@ -97,6 +120,8 @@ object SportsLiveChannelFavorites {
         if (refs.isEmpty() || channels.isEmpty()) return emptyList()
         val byKey = HashMap<String, SportsLiveItem>(channels.size * 2)
         channels.forEach { byKey.putIfAbsent(it.streamKey, it) }
+        // A merged channel (phase 2) is found by any of its copies.
+        channels.forEach { channel -> channel.alternates.forEach { byKey.putIfAbsent(it.streamKey, channel) } }
         // Built only for an addon a ref is not found in by id: name keys cost a parse per channel.
         val byName = HashMap<String, Map<String, SportsLiveItem>>()
         fun namesOf(addonId: String): Map<String, SportsLiveItem> = byName.getOrPut(addonId) {
