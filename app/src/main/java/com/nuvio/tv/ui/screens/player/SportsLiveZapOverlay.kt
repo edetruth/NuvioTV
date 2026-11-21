@@ -364,6 +364,8 @@ internal fun BoxScope.SportsLiveZapOverlay(
         )
     }
 
+    val favoriteAddedToast = stringResource(R.string.sports_live_channel_favorite_added_toast)
+    val favoriteRemovedToast = stringResource(R.string.sports_live_channel_favorite_removed_toast)
     menu?.let { shown ->
         val item = shown.item
         SportsLiveCardMenu(
@@ -429,6 +431,19 @@ internal fun BoxScope.SportsLiveZapOverlay(
                 }
             } else {
                 null
+            },
+            // Channels phase 1: Hold OK on a channel row, Add to / Remove from favorites first.
+            favorite = shown.favorite == true,
+            onToggleFavorite = shown.favorite?.let { wasFavorite ->
+                {
+                    menu = null
+                    viewModel.onPanelToggleFavorite(item, wasFavorite)
+                    val name = com.nuvio.tv.core.sportslive.SportsLiveDisplayText.of(item.meta.name).name
+                    com.nuvio.tv.core.sportslive.SportsLiveToasts.show(
+                        if (wasFavorite) com.nuvio.tv.core.sportslive.SportsLiveToastKind.INFO else com.nuvio.tv.core.sportslive.SportsLiveToastKind.FOLLOWED,
+                        (if (wasFavorite) favoriteRemovedToast else favoriteAddedToast).format(name)
+                    )
+                }
             },
             onGameStats = if (shown.game != null && openGame != null) {
                 {

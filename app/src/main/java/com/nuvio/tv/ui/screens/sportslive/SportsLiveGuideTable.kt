@@ -103,7 +103,8 @@ internal fun guideRowOf(
         time = guideTimeText(status, halves),
         live = status.live,
         // "Close and late" says how the game is going: only beside a score that shows (Hide until focused keeps it).
-        marks = guideMarks(closeLate = board.closeGame && shown != null, myTeam = board.followed, ready = readyMark, nowPlaying = nowPlaying),
+        // ★ for my team, and for a favorite channel (Channels phase 1).
+        marks = guideMarks(closeLate = board.closeGame && shown != null, myTeam = board.followed || board.favorite, ready = readyMark, nowPlaying = nowPlaying),
         firstMyTeam = board.firstFollowed,
         secondMyTeam = board.secondFollowed,
         dimmedAtRest = board.dimmed(focused = false) || gone || readyMark == SportsLiveReadyMark.NO_STREAM,

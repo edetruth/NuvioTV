@@ -297,10 +297,16 @@ internal fun panelGroupOf(status: GameStatus): ZapPanelGroup = when (status) {
 /**
  * The panel's one ordered list (#142), the list the panel shows and CH+/CH− walk: [grouped] ([groupPanelRows]
  * order) listed by V2 group ([ZapPanelRow.section]: live, starting soon, channels, just ended), followed teams'
- * games first inside each group, then as grouped. While the panel is open its order is frozen ([freezePanelLineup]).
+ * games first inside each group, then the profile's [favorites] channels (by stream key, Channels phase 1: so a
+ * Channels session zaps between favorites first), then as grouped. While the panel is open its order is frozen
+ * ([freezePanelLineup]).
  */
-internal fun panelLineup(grouped: List<ZapPanelRow>): List<ZapPanelRow> =
-    grouped.sortedWith(compareBy<ZapPanelRow> { it.section.ordinal }.thenByDescending { it.item.followed })
+internal fun panelLineup(grouped: List<ZapPanelRow>, favorites: Set<String> = emptySet()): List<ZapPanelRow> =
+    grouped.sortedWith(
+        compareBy<ZapPanelRow> { it.section.ordinal }
+            .thenByDescending { it.item.followed }
+            .thenByDescending { it.item.isChannel && it.item.streamKey in favorites }
+    )
 
 /**
  * The open panel's order (#164), taken when it opened: the rows' stream [keys] top to bottom, the group each is
@@ -526,7 +532,9 @@ internal fun panelBoards(
     ended: Map<String, EndedGame> = emptyMap(),
     followed: List<FollowedTeam> = emptyList(),
     /** Card keys the score feeds confirmed they do not have (#215): an addon-live one reads "Listed live". */
-    unmatched: Set<String> = emptySet()
+    unmatched: Set<String> = emptySet(),
+    /** The profile's favorite channels by stream key (Channels phase 1): their rows carry the gold ★. */
+    favorites: Set<String> = emptySet()
 ): List<ZapPanelBoard> {
     val scoresOn = mode != null && mode != ScoresMode.OFF
     // #212: with the card's strict ESPN game, ESPN ids decide which side a followed team is (the star sits on that side).
@@ -540,7 +548,7 @@ internal fun panelBoards(
         val snapshot = (scores[item.streamKey] ?: endedGame?.event).takeIf { scoresOn }
         val board = scoreboardRowOf(row, snapshot, endedGame, nowMs, followsSide, row.teams).let { built ->
             if (listedLiveOnly(built.status, scoresOn, item.streamKey in unmatched)) built.copy(listedOnly = true) else built
-        }
+        }.let { built -> if (item.isChannel && item.streamKey in favorites) built.copy(favorite = true) else built }
         val situation = if (board.chip is ScoreChip.Live) {
             GameSituations.of(item, snapshot, mode, item.streamKey in revealed)
         } else {
@@ -616,7 +624,9 @@ internal data class SportsLivePanelMenu(
     /** OK on the row opens its box score ([PanelRowOk.BOX_SCORE]): **Watch postgame** leads the menu, so its stream stays one press away. */
     val postgame: Boolean = false,
     /** The real teams Follow offers (#134), one per entry of [sides]. */
-    val targets: List<FollowTarget> = emptyList()
+    val targets: List<FollowTarget> = emptyList(),
+    /** A channel: whether it is a favorite now ("Remove from favorites", else "Add to favorites", first); null for a game. */
+    val favorite: Boolean? = null
 ) {
     val watchBoth: Boolean get() = SportsLiveMoreEntry.WATCH_WITH in entries
     val chooseStream: Boolean get() = SportsLiveMoreEntry.CHOOSE_STREAM in entries
