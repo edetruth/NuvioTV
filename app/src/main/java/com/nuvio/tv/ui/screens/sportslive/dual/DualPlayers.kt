@@ -34,6 +34,8 @@ import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniStop
 import com.nuvio.tv.ui.screens.sportslive.playSportsLiveStream
 import com.nuvio.tv.ui.screens.sportslive.retrySportsLiveLink
 import com.nuvio.tv.ui.screens.sportslive.sportsLiveHealthSample
+import com.nuvio.tv.ui.screens.sportslive.behindLiveForScores
+import com.nuvio.tv.ui.screens.sportslive.liveWindow
 import com.nuvio.tv.core.sportslive.SportsLiveStartupTimeout
 
 /**
@@ -82,7 +84,9 @@ internal class DualPlayers(
     /** A manifest or segment request of [item]'s link failed before its first frame (#138). */
     private val onRequestFailed: (item: SportsLiveItem) -> Unit = {},
     /** What [item]'s link has loaded so far, every second (#158): its start-up timeout spares a link still loading. */
-    private val onLoadProgress: (item: SportsLiveItem, progress: SportsLiveStartupTimeout.Progress) -> Unit = { _, _ -> }
+    private val onLoadProgress: (item: SportsLiveItem, progress: SportsLiveStartupTimeout.Progress) -> Unit = { _, _ -> },
+    /** How far [item]'s pane is behind its live edge (null: unknown), every second: the score hold waits that long (G7). */
+    private val onBehindLive: (item: SportsLiveItem, ms: Long?) -> Unit = { _, _ -> }
 ) {
     private val appContext = context.applicationContext
 
@@ -220,6 +224,7 @@ internal class DualPlayers(
         fun checkHealth() {
             val (item, stream) = loaded ?: return
             onLoadProgress(item, SportsLiveStartupTimeout.Progress(mediaSourceFactory.bytesLoaded, player.totalBufferedDuration))
+            onBehindLive(item, behindLiveForScores(player.liveWindow()))
             val problem = health.sample(player.sportsLiveHealthSample())
             if (problem != null) {
                 if (problem.isStall) {

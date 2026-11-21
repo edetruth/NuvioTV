@@ -109,4 +109,11 @@ class SportsLiveRewindTest {
         assertEquals("1:20", SportsLiveRewind.formatBehind(80_000L))
         assertEquals("1:02:03", SportsLiveRewind.formatBehind(3_723_000L))
     }
+
+    @Test
+    fun `the score hold reads a live stream's distance behind its edge, nothing for a replay or no timeline (G7)`() {
+        assertEquals(90_000L, behindLiveForScores(LiveWindow(isDynamic = true, windowMs = 300_000L, liveEdgeMs = 290_000L, behindEdgeMs = 90_000L)))
+        assertNull(behindLiveForScores(LiveWindow(isDynamic = false, windowMs = 300_000L, liveEdgeMs = 300_000L, behindEdgeMs = 90_000L)))
+        assertNull(behindLiveForScores(null))
+    }
 }

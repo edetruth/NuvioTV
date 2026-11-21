@@ -116,6 +116,8 @@ import com.nuvio.tv.ui.screens.sportslive.playSportsLiveStream
 import com.nuvio.tv.ui.screens.sportslive.retrySportsLiveLink
 import com.nuvio.tv.ui.screens.sportslive.sportsLiveHealthSample
 import com.nuvio.tv.ui.screens.sportslive.sportsLiveZapTarget
+import com.nuvio.tv.ui.screens.sportslive.behindLiveForScores
+import com.nuvio.tv.ui.screens.sportslive.liveWindow
 import com.nuvio.tv.ui.theme.NuvioTheme
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineScope
@@ -146,7 +148,9 @@ internal class SportsLiveMiniPlayback(
     /** Whether the link draws frames now (first frame in, not reconnecting): an expand reuses it (#157). */
     private val onLinkPlaying: (sessionId: Long, playing: Boolean) -> Unit = { _, _ -> },
     /** The stream stopped as its game ended (#161): the mini player closes with a small "Final" toast. */
-    private val onGameEnded: (sessionId: Long, item: SportsLiveItem) -> Unit = { id, _ -> onError(id) }
+    private val onGameEnded: (sessionId: Long, item: SportsLiveItem) -> Unit = { id, _ -> onError(id) },
+    /** How far the stream is behind its live edge (null: unknown), every second once it draws: the score hold (G7). */
+    private val onBehindLive: (ms: Long?) -> Unit = ::reportMiniBehindLive
 ) {
     private val appContext = context.applicationContext
     private var player: ExoPlayer? = null
@@ -295,6 +299,7 @@ internal class SportsLiveMiniPlayback(
             }
             return
         }
+        onBehindLive(behindLiveForScores(current.liveWindow()))
         val problem = health.sample(current.sportsLiveHealthSample())
         if (problem != null) {
             recover(problem)
@@ -826,4 +831,10 @@ private fun MiniCaption(text: String, modifier: Modifier = Modifier, small: Bool
 }
 
 /** The mini player's key in [WatchingNow] (live.20 Q18). */
-private const val MINI_WATCH_OWNER = "mini"
+internal const val MINI_WATCH_OWNER = "mini"
+
+/**
+ * The mini player's distance behind its live edge, into the score hold (G7): other games' scores wait that long plus
+ * the margin, as for the full player, instead of a fixed minute. Ignored while the mini player plays nothing.
+ */
+internal fun reportMiniBehindLive(ms: Long?) = WatchingNow.shared.behindLive(MINI_WATCH_OWNER, ms)

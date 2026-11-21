@@ -136,6 +136,13 @@ fun goLiveFromPause(event: KeyEvent, hasSession: Boolean, engine: InternalPlayer
     return true
 }
 
+/**
+ * How far a player is behind its live edge, for the score hold ([com.nuvio.tv.core.sportslive.scores.WatchingNow.behindLive]):
+ * [window]'s distance on a live (dynamic) stream, null when unknown or not live. One rule for the full player, each
+ * dual pane and the mini player (G7), so other games' scores never run ahead of any stream on screen.
+ */
+fun behindLiveForScores(window: LiveWindow?): Long? = window?.takeIf { it.isDynamic }?.behindEdgeMs
+
 /** The current item's live window, read from Exo's timeline; null without a timeline. */
 fun ExoPlayer.liveWindow(): LiveWindow? {
     val timeline = currentTimeline
