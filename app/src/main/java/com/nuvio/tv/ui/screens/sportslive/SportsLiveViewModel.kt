@@ -265,7 +265,7 @@ class SportsLiveViewModel internal constructor(
         scoresSettleMs = SCORES_SETTLE_MS,
         prefetchUpcomingScores = liveScores::prefetchUpcoming,
         unmatchedScores = liveScores.unmatched,
-        protectionScope = liveScores.protection.map(SportsLiveBoardCache.ProtectionScope::of).distinctUntilChanged()
+        protectionScope = liveScores.protection.map { SportsLiveBoardCache.ProtectionScope.of(it) }.distinctUntilChanged()
     )
 
     private data class Selection(

@@ -113,7 +113,7 @@ enum class SportsLiveSportKind {
          * "Handball") is that sport: never placed in another by its teams (live.23 review A1).
          */
         fun fromTeamsOrTitle(item: SportsLiveItem): SportsLiveSportKind? = when {
-            (listOf(item.sport, item.meta.name) + item.meta.genres).any(::namesOtherSport) -> null
+            (listOf(item.sport, item.meta.name) + item.meta.genres).any { namesOtherSport(it) } -> null
             SportsLiveCricket.isCricketGame(item.teams) -> CRICKET
             SportsLiveRugby.isRugbyGame(item.teams) -> RUGBY
             fold(SportsLiveDisplayText.name(item.meta.name)) in WRESTLING_TITLES -> WRESTLING
