@@ -72,6 +72,10 @@ import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveFocus
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens.Colors
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveTokens.Size
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 import java.util.Locale
 
 /** What a one-line panel row draws (#140): two teams and their score, an event's title, or a channel. */
@@ -169,14 +173,17 @@ internal fun panelFullName(row: ScoreboardRow, vs: String, suffix: String? = nul
 /**
  * What tells apart rows of one title (live.20: four "MotoGP" rows), by stream key; rows with a title of their own get
  * none. For each group of two or more rows whose [titleOf] reads the same, the first of these that differs between
- * them: the title's region and quality ("UK HD"), the description's first line, the catalog's name, the addon's name;
- * else "Feed 1", "Feed 2"… ([feed]). Each part is a clean label, never a web address, at most [PANEL_SUFFIX_MAX_CHARS].
+ * them: the title's region and quality ("UK HD"), the start time ([startOf]), the catalog's name, the addon's name;
+ * else "Feed 1", "Feed 2"… ([feed]). Never the description: an addon may put a live score there (release review,
+ * spoilers). Each part is a clean label, never a web address, at most [PANEL_SUFFIX_MAX_CHARS].
  */
 internal fun panelTitleSuffixes(
     items: List<SportsLiveItem>,
     feed: (Int) -> String,
-    titleOf: (SportsLiveItem) -> String = ::panelTitleOf
+    titleOf: (SportsLiveItem) -> String = ::panelTitleOf,
+    startOf: (SportsLiveItem) -> String? = { panelStartLabel(it) }
 ): Map<String, String> {
+    val sources = listOf(SUFFIX_SOURCES.first(), startOf) + SUFFIX_SOURCES.drop(1)
     val result = HashMap<String, String>()
     items.distinctBy { it.streamKey }
         .groupBy { titleOf(it).lowercase() }
@@ -184,7 +191,7 @@ internal fun panelTitleSuffixes(
         .filter { it.size > 1 }
         .forEach { group ->
             val title = titleOf(group.first()).lowercase()
-            val parts = SUFFIX_SOURCES.asSequence()
+            val parts = sources.asSequence()
                 .map { source -> group.map { item -> source(item)?.let { panelSuffixPart(it, title) } } }
                 .firstOrNull { values -> values.filterNotNull().distinct().size > 1 }
                 ?: group.indices.map { feed(it + 1) }
@@ -193,13 +200,18 @@ internal fun panelTitleSuffixes(
     return result
 }
 
-/** Where a same-title row's suffix may come from, in order ([panelTitleSuffixes]). */
+/** Where a same-title row's suffix may come from, in order, the start time put second ([panelTitleSuffixes]). */
 private val SUFFIX_SOURCES: List<(SportsLiveItem) -> String?> = listOf(
     { item -> SportsLiveDisplayText.of(item.meta.name).let { listOfNotNull(it.region, it.quality).joinToString(" ") } },
-    { item -> SportsLiveDisplayText.description(item.meta.description)?.lineSequence()?.firstOrNull() },
     { item -> SportsLiveDisplayText.label(item.catalogName) },
     { item -> SportsLiveDisplayText.label(item.addonName) }
 )
+
+/** [item]'s start as a short local time ("7:30 PM") for a same-title suffix; null when it has no time of day. */
+internal fun panelStartLabel(item: SportsLiveItem, zone: ZoneId = ZoneId.systemDefault(), locale: Locale = Locale.getDefault()): String? {
+    val start = item.startMs?.takeIf { item.startHasTimeOfDay } ?: return null
+    return DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT).withLocale(locale).format(Instant.ofEpochMilli(start).atZone(zone))
+}
 
 /** [text] fit for a suffix: trimmed, at most [PANEL_SUFFIX_MAX_CHARS] (whole words), null when blank, the [title] itself or a web address. */
 private fun panelSuffixPart(text: String, title: String): String? {

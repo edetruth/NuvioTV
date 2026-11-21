@@ -651,14 +651,21 @@ class SportsLiveSlimPanelTest {
         val feed: (Int) -> String = { "Feed $it" }
         val title: (SportsLiveItem) -> String = { it.meta.name.substringBefore(" (").trim() }
 
-        // The description's first line tells them apart.
-        val main = motogp("m1", description = "Main feed\nRound 22")
-        val onboard = motogp("m2", description = "Onboard\nRound 22")
+        // The catalog's name tells them apart; never the description, which may carry a live score (release review).
+        val main = motogp("m1", description = "Live 2-1 Main feed", catalog = "Main feed")
+        val onboard = motogp("m2", description = "Live 2-1 Onboard", catalog = "Onboard")
         val other = motogp("x", name = "Moto3")
         assertEquals(
             mapOf(main.streamKey to "Main feed", onboard.streamKey to "Onboard"),
             panelTitleSuffixes(listOf(main, onboard, other), feed, title)
         )
+        val onlyDescriptions = panelTitleSuffixes(listOf(motogp("d1", description = "Live 2-1"), motogp("d2", description = "Live 0-0")), feed, title)
+        assertEquals(setOf("Feed 1", "Feed 2"), onlyDescriptions.values.toSet())
+        // Copies starting at different times say their start.
+        val early = motogp("t1")
+        val late = motogp("t2")
+        val starts = panelTitleSuffixes(listOf(early, late), feed, title, startOf = { if (it === early) "7:00 PM" else "9:30 PM" })
+        assertEquals(mapOf(early.streamKey to "7:00 PM", late.streamKey to "9:30 PM"), starts)
         // Nothing but the addon differs: its name.
         val a = motogp("a1", addon = "Alpha Sports")
         val b = motogp("b1", addon = "Beta TV")
@@ -670,8 +677,8 @@ class SportsLiveSlimPanelTest {
         val numbered = panelTitleSuffixes(listOf(c, d, e), feed, title)
         assertEquals(listOf("Feed 1", "Feed 2", "Feed 3"), listOf(c, d, e).map { numbered[it.streamKey] })
         // A long part is cut at a word, at most the suffix's longest.
-        val long1 = motogp("l1", description = "Onboard camera feed for the Portugal Grand Prix")
-        val long2 = motogp("l2", description = "Pit lane")
+        val long1 = motogp("l1", catalog = "Onboard camera feed for the Portugal Grand Prix")
+        val long2 = motogp("l2", catalog = "Pit lane")
         val cut = panelTitleSuffixes(listOf(long1, long2), feed, title)
         assertTrue(cut.values.all { it.length <= PANEL_SUFFIX_MAX_CHARS && !it.endsWith(" ") })
         assertEquals("Onboard camera feed", cut[long1.streamKey])
