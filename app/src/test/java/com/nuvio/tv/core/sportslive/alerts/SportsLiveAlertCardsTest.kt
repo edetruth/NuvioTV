@@ -76,26 +76,26 @@ class SportsLiveAlertCardsTest {
     }
 
     @Test
-    fun `alerts raised together show one card, the highest priority, the other toasts are dropped and kickoffs wait`() {
+    fun `alerts raised together show one card at a time, the highest priority first, the others wait their turn`() {
         val alerts = SportsLiveAlerts(mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true))
         val now = System.currentTimeMillis()
         val kickoff = SportsLiveAlert.Kickoff(item("Bulls @ Nets", followed = true), null)
         alerts.enqueue(listOf(score(pacers), score(lakers, lead = true), kickoff), now)
         val first = alerts.current.value!!
         assertEquals(kickoff, first.alert)
-        // The scores raised with it were dropped as stale (the guide and the rows still show them): nothing follows.
+        // live.24 RC review M1: the scores raised with it wait, then show one at a time, the earlier one first.
         alerts.close(first, AlertAnswer.DISMISS)
-        assertEquals(null, alerts.current.value)
-        // Two scores together: the lead change is no more important than the other, so the earlier one shows alone.
-        alerts.enqueue(listOf(score(pacers), score(lakers, lead = true)), now + 1_000)
         val second = alerts.current.value!!
         assertEquals(pacers, second.alert.item)
         alerts.close(second, AlertAnswer.TIMEOUT)
+        val third = alerts.current.value!!
+        assertEquals(lakers, third.alert.item)
+        alerts.close(third, AlertAnswer.TIMEOUT)
         assertEquals(null, alerts.current.value)
     }
 
     @Test
-    fun `while a card is up a toast no more important is dropped, a kickoff waits its turn, nothing cycles`() {
+    fun `while a card is up the next alerts wait, a kickoff first, and nothing cycles`() {
         val alerts = SportsLiveAlerts(mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true))
         val now = System.currentTimeMillis()
         alerts.enqueue(listOf(score(pacers)), now)
@@ -111,8 +111,70 @@ class SportsLiveAlertCardsTest {
         alerts.close(card, AlertAnswer.TIMEOUT)
         assertEquals(kickoff, alerts.current.value!!.alert)
         alerts.close(alerts.current.value!!, AlertAnswer.DISMISS)
-        // The second score was dropped, not queued.
+        // The second score waited its turn (live.24 RC review M1), then nothing more.
+        val waited = alerts.current.value!!
+        assertEquals(lakers, waited.alert.item)
+        alerts.close(waited, AlertAnswer.TIMEOUT)
         assertEquals(null, alerts.current.value)
+    }
+
+    @Test
+    fun `a full time raised while a score card is up shows after it, the result hidden card too (live24 RC review M1)`() {
+        val alerts = SportsLiveAlerts(mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true), mockk(relaxed = true))
+        val now = System.currentTimeMillis()
+        alerts.enqueue(listOf(score(lakers)), now - 90_000)
+        val card = alerts.current.value!!
+        val hidden = SportsLiveAlert.FullTime(
+            pacers, final(101, 99).copy(eventId = "m1-hidden-$now"), namesOnly = true, resultHidden = true, team = "Pacers"
+        )
+        // Raised a minute ago, while the score card was up: it used to be dropped for good.
+        alerts.enqueue(listOf(hidden), now - 60_000)
+        assertEquals(card, alerts.current.value)
+        alerts.close(card, AlertAnswer.TIMEOUT)
+        val shown = alerts.current.value!!
+        assertEquals(hidden, shown.alert)
+        // It gets its own time to show from now, not a wait that already ran out behind the other card.
+        assertTrue(shown.raisedAtMs >= now)
+        alerts.close(shown, AlertAnswer.TIMEOUT)
+        assertEquals(null, alerts.current.value)
+    }
+
+    @Test
+    fun `waiting alerts keep one per game and kind, the newest score, and drop the oldest scores past five`() {
+        val waiting = mutableListOf<Pair<SportsLiveAlert, Long>>()
+        val fullTime = SportsLiveAlert.FullTime(knicks, final(101, 99), namesOnly = false)
+        val kickoff = SportsLiveAlert.Kickoff(item("Bulls @ Nets", followed = true), null)
+        SportsLiveAlertCards.addWaiting(waiting, fullTime, START)
+        SportsLiveAlertCards.addWaiting(waiting, kickoff, START + 1)
+        SportsLiveAlertCards.addWaiting(waiting, score(pacers), START + 2)
+        val newer = SportsLiveAlert.ScoreChange(pacers, live(12, 11), ScoreSide.HOME)
+        SportsLiveAlertCards.addWaiting(waiting, newer, START + 3)
+        // The newer score of the game supersedes the older one.
+        assertEquals(3, waiting.size)
+        assertEquals(newer, waiting.single { it.first is SportsLiveAlert.ScoreChange }.first)
+        // More games score than may wait: the oldest scores go, never the kickoff or the full time.
+        val games = (1..5).map { item("Team$it A @ Team$it B", followed = true) }
+        games.forEachIndexed { i, game -> SportsLiveAlertCards.addWaiting(waiting, score(game), START + 10 + i) }
+        assertEquals(SportsLiveAlertCards.MAX_WAITING, waiting.size)
+        assertTrue(waiting.any { it.first == fullTime })
+        assertTrue(waiting.any { it.first == kickoff })
+        assertFalse(waiting.any { it.first == newer })
+        assertEquals(games.takeLast(3), waiting.mapNotNull { (it.first as? SportsLiveAlert.ScoreChange)?.item })
+    }
+
+    @Test
+    fun `a waiting score goes stale after two minutes, a kickoff or full time never`() {
+        val fullTime = SportsLiveAlert.FullTime(knicks, final(101, 99), namesOnly = false)
+        val kickoff = SportsLiveAlert.Kickoff(lakers, null)
+        val stale = START + SportsLiveAlertCards.WAITING_SCORE_STALE_MS + 1
+        assertFalse(SportsLiveAlertCards.expired(score(), START, START + SportsLiveAlertCards.WAITING_SCORE_STALE_MS))
+        assertTrue(SportsLiveAlertCards.expired(score(), START, stale))
+        assertFalse(SportsLiveAlertCards.expired(fullTime, START, START + 60 * MINUTE))
+        assertFalse(SportsLiveAlertCards.expired(kickoff, START, START + 60 * MINUTE))
+        // A new alert clears the expired ones out of the queue.
+        val waiting = mutableListOf<Pair<SportsLiveAlert, Long>>(score(pacers) to START, fullTime to START)
+        SportsLiveAlertCards.addWaiting(waiting, kickoff, stale)
+        assertEquals(listOf(fullTime, kickoff), waiting.map { it.first })
     }
 
     @Test

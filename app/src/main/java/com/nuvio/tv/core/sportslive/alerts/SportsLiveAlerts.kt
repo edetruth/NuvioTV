@@ -116,7 +116,7 @@ class SportsLiveAlerts @Inject constructor(
 
     /**
      * The overlay to show now; null: none. One alert per card (live.24): when several wait, the highest priority one
-     * shows ([SportsLiveAlertCards.priority]) and the other toasts are dropped as stale.
+     * shows ([SportsLiveAlertCards.priority]) and the others wait their turn ([SportsLiveAlertCards.addWaiting]).
      */
     val current: StateFlow<AlertCard?> = currentFlow.asStateFlow()
 
@@ -384,17 +384,9 @@ class SportsLiveAlerts @Inject constructor(
 
     @VisibleForTesting
     internal fun enqueue(alerts: List<SportsLiveAlert>, nowMs: Long) = synchronized(lock) {
-        val showing = currentFlow.value?.alert
-        for (alert in alerts) {
-            // One alert per card (live.24): a toast no more important than the card up now is old news by the time it
-            // could show; a kickoff always waits its turn.
-            if (showing != null && alert !is SportsLiveAlert.Kickoff &&
-                SportsLiveAlertCards.priority(alert) >= SportsLiveAlertCards.priority(showing)
-            ) {
-                continue
-            }
-            queue.add(alert to nowMs)
-        }
+        // One alert per card (live.24); the others wait their turn, one per game and kind, a few at most (live.24 RC
+        // review M1: they were dropped while a card was up or waiting, a full time for good).
+        for (alert in alerts) SportsLiveAlertCards.addWaiting(queue, alert, nowMs)
         if (currentFlow.value == null) showNextLocked(nowMs)
     }
 
@@ -427,7 +419,7 @@ class SportsLiveAlerts @Inject constructor(
      */
     private fun showable(queued: SportsLiveAlert, nowMs: Long, raisedAt: Long): SportsLiveAlert? {
         val next = SportsLiveAlertEngine.stillShowable(queued, lastMode, lastSettings) ?: return null
-        if (next !is SportsLiveAlert.Kickoff && nowMs - raisedAt > TOAST_STALE_MS) return null
+        if (SportsLiveAlertCards.expired(next, raisedAt, nowMs)) return null
         if (!mayShowOver(next, watching.value)) return null
         if (SportsLiveAlertEngine.isPlaying(next.item, watching.value, SportsLiveAlertEngine.snapshotOf(next))) {
             // A reminder for a game on screen is satisfied: it never fires later either.
@@ -439,16 +431,18 @@ class SportsLiveAlerts @Inject constructor(
     }
 
     /**
-     * The next card (live.24): of the alerts waiting, the highest priority one that may show; the toasts left behind are
-     * dropped as stale (they still show in the guide and the rows), kickoffs wait their turn.
+     * The next card (live.24): of the alerts waiting, the highest priority one that may show; the others keep waiting
+     * (live.24 RC review M1), a score or close finish until it is old news ([SportsLiveAlertCards.expired]).
      */
     private fun showNextLocked(nowMs: Long) {
         while (queue.isNotEmpty()) {
             val at = SportsLiveAlertCards.next(queue) ?: break
             val (queued, raisedAt) = queue.removeAt(at)
             val next = showable(queued, nowMs, raisedAt) ?: continue
-            queue.removeAll { it.first !is SportsLiveAlert.Kickoff }
-            currentFlow.value = AlertCard(++cardCount, next, raisedAt)
+            // A kickoff or full time that waited behind another card gets its own time to show from now; a score stays
+            // dated from when it was raised.
+            val from = if (next is SportsLiveAlert.Kickoff || next is SportsLiveAlert.FullTime) nowMs else raisedAt
+            currentFlow.value = AlertCard(++cardCount, next, from)
             return
         }
         currentFlow.value = null
@@ -615,8 +609,6 @@ class SportsLiveAlerts @Inject constructor(
         /** A first kickoff prompt waits for a live link (#162); a re-ask after Later or the note does not. */
         fun holdsFirst(alert: SportsLiveAlert): Boolean = alert is SportsLiveAlert.Kickoff && !alert.again && !alert.noStreamYet
 
-        /** A score or full-time toast not shown within this long is dropped. */
-        private const val TOAST_STALE_MS = 30_000L
         private const val MAX_ENDED = 500
 
         /** The sides of [event] a followed team is, by ESPN data (strict). */

@@ -53,7 +53,7 @@ object SportsLiveAlertCards {
 
     /**
      * Which alert wins when several wait (lower first): my team's kickoff, then my team's score or lead change, then
-     * full time, then a close finish. The others are dropped as stale: the guide and the rows still show them.
+     * full time, then a close finish. The others wait their turn ([addWaiting]).
      */
     fun priority(alert: SportsLiveAlert): Int = when (alert) {
         is SportsLiveAlert.Kickoff -> 0
@@ -83,6 +83,37 @@ object SportsLiveAlertCards {
      */
     fun next(waiting: List<Pair<SportsLiveAlert, Long>>): Int? =
         waiting.indices.minWithOrNull(compareBy<Int>({ priority(waiting[it].first) }, { waiting[it].second }))
+
+    /** At most this many alerts wait behind the card up ([addWaiting]); kickoffs and full times are never dropped for it. */
+    const val MAX_WAITING = 5
+
+    /** A score or close-finish alert still waiting this long after it was raised is old news ([expired]). */
+    const val WAITING_SCORE_STALE_MS = 120_000L
+
+    /**
+     * [alert], raised at [nowMs], waits in [waiting] for the card up to close (live.24 RC review M1: it was dropped, the
+     * spoiler-free "game is over · result hidden" card too, and never fired again). One per game and kind: the newest
+     * replaces the one waiting (a newer score supersedes the older score of the game). Expired alerts go first; over
+     * [MAX_WAITING], the oldest score or close finish goes, never a kickoff or a full time.
+     */
+    fun addWaiting(waiting: MutableList<Pair<SportsLiveAlert, Long>>, alert: SportsLiveAlert, nowMs: Long) {
+        waiting.removeAll { (queued, raisedAt) -> expired(queued, raisedAt, nowMs) || sameSlot(queued, alert) }
+        waiting.add(alert to nowMs)
+        while (waiting.size > MAX_WAITING) {
+            val oldest = waiting.indices.filter { droppable(waiting[it].first) }.minByOrNull { waiting[it].second } ?: break
+            waiting.removeAt(oldest)
+        }
+    }
+
+    /** A waiting score or close finish raised over [WAITING_SCORE_STALE_MS] before [nowMs]; kickoffs and full times never. */
+    fun expired(alert: SportsLiveAlert, raisedAtMs: Long, nowMs: Long): Boolean =
+        droppable(alert) && nowMs - raisedAtMs > WAITING_SCORE_STALE_MS
+
+    private fun droppable(alert: SportsLiveAlert): Boolean =
+        alert is SportsLiveAlert.ScoreChange || alert is SportsLiveAlert.Crunch
+
+    private fun sameSlot(a: SportsLiveAlert, b: SportsLiveAlert): Boolean =
+        a::class == b::class && a.item.streamKey == b.item.streamKey
 }
 
 /** Where a card sits (#136): top right of the screen, or of one dual screen pane. */
