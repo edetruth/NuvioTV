@@ -382,13 +382,15 @@ class ScoreMatcher(
         // A bare name that is another school than "‹name› University": Miami University is Miami (OH),
         // not Miami (FL); Washington University (St. Louis) is not Washington.
         private val UNIVERSITY_KEEPS = setOf("miami", "washington")
+        private val LEADING_SHORT_FORMS = mapOf("st" to "saint", "saint" to "st", "mt" to "mount", "mount" to "mt")
         private val SCHOOL_WORDS = setOf("university", "college", "univ")
 
         /**
          * The other names a college card side may go by on ESPN (N9), from its [normalised] name: without a
          * trailing "University" / "College" ("georgetown university" → "georgetown") or a leading
          * "University of" ("university of michigan" → "michigan"), and with a trailing "State" written
-         * "St" or the reverse ("michigan state" ↔ "michigan st", ESPN's short form). "State" is never
+         * "St" or the reverse ("michigan state" ↔ "michigan st", ESPN's short form), and a leading "St" / "Mt" written
+         * "Saint" / "Mount" or the reverse ("st marys" ↔ "saint marys", #215). "State" is never
          * dropped ("Ohio State" is not Ohio), a one-word name is left alone ("College"), and
          * [UNIVERSITY_KEEPS] are not shortened. They count only against a team's own names, never its city.
          */
@@ -404,6 +406,8 @@ class ScoreMatcher(
                 if (stripped != words) add(stripped.joinToString(" "))
                 if (stripped.size >= 2 && stripped.last() == "state") add((stripped.dropLast(1) + "st").joinToString(" "))
                 if (stripped.size >= 2 && stripped.last() == "st") add((stripped.dropLast(1) + "state").joinToString(" "))
+                // A leading "St" is Saint, "Mt" is Mount (#215: the addon's "St Mary's" is ESPN's "Saint Mary's").
+                LEADING_SHORT_FORMS[stripped[0]]?.let { other -> if (stripped.size >= 2) add((listOf(other) + stripped.drop(1)).joinToString(" ")) }
             }
         }
 

@@ -103,4 +103,25 @@ class ScoreMatcherCollegeTest {
         val earlier = college("w2", EspnLeagueMap.COLLEGE_BASKETBALL_WOMEN, offsetMs = -2 * 60 * 60_000L)
         assertEquals("m", matcher.match(card.copy(key = "pitt-cmu-apart"), listOf(men, earlier), start)?.eventId)
     }
+
+    // #215: the addon's "St Mary's vs SLU" is ESPN's "Saint Louis Billikens at Saint Mary's Gaels" (live, 57-43).
+    private val saintMarys = team("SMC", "Saint Mary's Gaels", "Saint Mary's", "Gaels", "Saint Mary's")
+    private val saintLouis = team("SLU", "Saint Louis Billikens", "Saint Louis", "Billikens", "Saint Louis")
+
+    @Test
+    fun `a leading St is Saint and Mt is Mount, so St Mary's vs SLU finds Saint Mary's and Saint Louis`() {
+        val strict = ScoreMatcher(zone = { ZoneOffset.UTC }, minScore = ScoreMatcher.BOTH_STRONG)
+        val start = template.startMs!!
+        val game = template.copy(eventId = "smc", league = EspnLeagueMap.COLLEGE_BASKETBALL, leagueSlug = "mens-college-basketball", home = saintMarys, away = saintLouis)
+        for (title in listOf("St Mary's vs SLU", "St. Mary's vs SLU", "SLU vs Saint Mary's", "St Marys vs St Louis")) {
+            val card = ScoreCard("smc-$title", SportsLiveTeams.parse(title)!!, start, hasTimeOfDay = true)
+            assertEquals(title, "smc", strict.match(card, listOf(game), start)?.eventId)
+        }
+        assertEquals(true, ScoreMatcher.firstIsHome("St Mary's", "SLU", game))
+        assertEquals(setOf("saint marys"), ScoreMatcher.collegeAlternates("st marys"))
+        assertEquals(setOf("mount st marys"), ScoreMatcher.collegeAlternates("mt st marys"))
+        assertEquals(setOf("st johns"), ScoreMatcher.collegeAlternates("saint johns"))
+        // A trailing St is still State, never Saint.
+        assertEquals(setOf("kansas state"), ScoreMatcher.collegeAlternates("kansas st"))
+    }
 }
