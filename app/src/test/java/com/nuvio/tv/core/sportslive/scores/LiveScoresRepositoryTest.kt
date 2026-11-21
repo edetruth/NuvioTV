@@ -2233,4 +2233,86 @@ class LiveScoresRepositoryTest {
         assertFalse(card.streamKey in repo.scores.value)
         assertFalse(com.nuvio.tv.core.sportslive.SportsLiveWomenGames.shared.has(card.streamKey))
     }
+
+    // ---- live.24, TV report #18: college games an addon tags only "American Football" ----
+
+    private val cfb21 = EspnFixtures.events(EspnFixtures.CFB_FBS_20261121, EspnLeagueMap.COLLEGE_FOOTBALL)
+
+    private fun americanFootball(name: String, start: String) = item(name, "American Football", start, genres = listOf("American Football"))
+
+    @Test
+    fun `a card that says only American Football polls the NFL and college football as its own feeds and gets the college score`() = runTest {
+        provider.respond = { feed -> ScoreboardResult(if (feed.league == EspnLeagueMap.COLLEGE_FOOTBALL) cfb21 else emptyList()) }
+        val repo = repository("2026-11-21T21:00:00Z")
+        collect(repo)
+        val cards = mapOf(
+            americanFootball("Illinois vs Iowa", "2026-11-21T19:30:00Z") to "401858527",
+            americanFootball("Appalachian State vs Louisiana-Monroe", "2026-11-21T19:30:00Z") to "401869929",
+            americanFootball("Louisiana vs Coastal Carolina", "2026-11-21T20:00:00Z") to "401869946",
+            americanFootball("New Mexico State vs Delaware", "2026-11-21T20:00:00Z") to "401871077"
+        )
+        repo.track(SECTION, cards.keys.toList())
+        runCurrent()
+        val day = LocalDate.of(2026, 11, 21)
+        assertTrue(ScoreFeed(EspnLeagueMap.NFL, day) in provider.calls)
+        assertTrue(ScoreFeed(EspnLeagueMap.COLLEGE_FOOTBALL, day) in provider.calls)
+        for ((card, id) in cards) assertEquals(card.meta.name, id, repo.scores.value[card.streamKey]?.eventId)
+        // The row then reads ESPN's league, as a matched college game does.
+        assertEquals("NCAAF", repo.scores.value.getValue(cards.keys.first().streamKey).leagueName)
+    }
+
+    @Test
+    fun `a generic American Football card needs both sides strong, and a card naming the NFL never asks college football`() = runTest {
+        provider.respond = { feed -> ScoreboardResult(if (feed.league == EspnLeagueMap.COLLEGE_FOOTBALL) cfb21 else emptyList()) }
+        val repo = repository("2026-11-21T21:00:00Z")
+        collect(repo)
+        // "Iowa State" is not Iowa: one side alone never scores.
+        val wrong = americanFootball("Illinois vs Iowa State", "2026-11-21T19:30:00Z")
+        repo.track(SECTION, listOf(wrong))
+        runCurrent()
+        assertFalse(wrong.streamKey in repo.scores.value)
+        provider.calls.clear()
+        repo.track(SECTION, listOf(item("Illinois vs Iowa", "NFL", "2026-11-21T19:30:00Z")))
+        runCurrent()
+        assertTrue(provider.calls.none { it.league == EspnLeagueMap.COLLEGE_FOOTBALL })
+    }
+
+    private fun school(id: String, display: String, short: String, abbr: String, nickname: String) =
+        DirectoryTeam(id, display, short, abbr, short, nickname, "https://a.espncdn.com/i/teamlogos/ncaa/500/$id.png")
+
+    /** The NBA list and a college list holding Baylor and Texas, as the directory loads them. */
+    private fun basketballLists() = TeamLogoBook(directory = TeamDirectory().apply {
+        put(EspnLeagueMap.NBA, nbaTeams, 1L)
+        put(
+            EspnLeagueMap.COLLEGE_BASKETBALL,
+            listOf(school("239", "Baylor Bears", "Baylor", "BAY", "Bears"), school("251", "Texas Longhorns", "Texas", "TEX", "Longhorns")),
+            1L
+        )
+    })
+
+    @Test
+    fun `a Basketball card of two schools polls college basketball as its own feed, at once and with both sides strong`() = runTest {
+        provider.respond = ::nbaAndCollege
+        // The NBA feed hangs: as a fallback, college basketball would wait for it.
+        val nbaHangs = CompletableDeferred<Unit>()
+        provider.gateFor = mapOf(nba15 to nbaHangs)
+        val repo = repository("2026-11-15T21:00:00Z", logos = basketballLists())
+        collect(repo)
+        repo.track(SECTION, listOf(baylorCard))
+        runCurrent()
+        assertTrue(cbb15 in provider.calls)
+        assertEquals("401906866", repo.scores.value.getValue(baylorCard.streamKey).eventId)
+        nbaHangs.complete(Unit)
+    }
+
+    @Test
+    fun `a Basketball card of two NBA teams stays on the NBA feed alone`() = runTest {
+        provider.respond = ::nbaAndCollege
+        val repo = repository("2026-11-15T21:00:00Z", logos = basketballLists())
+        collect(repo)
+        repo.track(SECTION, listOf(pacersCard))
+        runCurrent()
+        assertEquals(listOf(nba15), provider.calls)
+        assertEquals("401909985", repo.scores.value.getValue(pacersCard.streamKey).eventId)
+    }
 }
