@@ -76,6 +76,25 @@ class ZapPanelScoresTest {
         teams = if (isChannel) null else SportsLiveTeams.parse(name), followed = followed
     )
 
+    @Test
+    fun `the big-game lift orders the panel, guide and CH only under Scores Show (sorting model)`() {
+        val now = pacersEvent.startMs!! + 2 * HOUR
+        // Two scored games: the early one is not close; the later one is in crunch time (Q4 2:00, 100-98).
+        val calm = item("Los Angeles Lakers at Phoenix Suns", now - 2 * HOUR)
+        val crunch = item("Indiana Pacers at Philadelphia 76ers", now - HOUR)
+        val scores = mapOf(
+            calm.streamKey to live(lakersEvent, "Q3 9:00", 60, 40),
+            crunch.streamKey to live(pacersEvent, "Q4 2:00", 100, 98)
+        )
+        fun order(mode: ScoresMode) = panelLineup(groupPanelRows(listOf(calm, crunch), scores, mode, emptySet(), now)).map { it.item.id }
+        // Show: the close game moves up (it is on screen, with its score).
+        assertEquals(listOf(crunch.id, calm.id), order(ScoresMode.SHOW))
+        // Hide until focused: no lift, so the order never tells a hidden score is close; start order.
+        assertEquals(listOf(calm.id, crunch.id), order(ScoresMode.HIDE_UNTIL_FOCUSED))
+        // Off: no score at all; start order.
+        assertEquals(listOf(calm.id, crunch.id), order(ScoresMode.OFF))
+    }
+
     private fun live(event: ScoreSnapshot, clock: String, home: Int, away: Int) = event.copy(
         state = ScoreState.IN, isFinal = false, clockText = clock,
         home = event.home.copy(score = home), away = event.away.copy(score = away)

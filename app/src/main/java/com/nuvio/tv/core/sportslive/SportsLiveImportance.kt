@@ -27,26 +27,41 @@ object SportsLiveImportance {
     internal const val GROUP_OTHER_LEAGUES = 2
     internal const val GROUP_UNPLACED = 3
 
-    /** [items] in importance order; see the class doc. [bumped]: card keys of close or late games (Scores shown only). */
+    /**
+     * [items] in importance order; see the class doc. [bumped]: card keys of close or late games (Scores shown only).
+     * [scored]: card keys of games with a score of ours (a chip, live.24 audit A6 / sorting model): inside a league tier
+     * they come before the scoreless ones; never above the followed section or another tier. Empty: nothing moves.
+     */
     fun sort(
         items: List<SportsLiveItem>,
         mySports: MySports,
         bumped: Set<String> = emptySet(),
-        directory: TeamDirectory = TeamDirectory.shared
+        directory: TeamDirectory = TeamDirectory.shared,
+        scored: Set<String>? = null
     ): List<SportsLiveItem> {
         if (items.size < 2) return items
-        val keys = items.associateWith { keyOf(it, mySports, bumped, directory) }
+        val keys = items.associateWith { keyOf(it, mySports, bumped, directory, scored) }
         return items.sortedWith(compareBy<SportsLiveItem> { keys.getValue(it) }.then(withinGroup))
     }
 
-    /** The group and tier of [item], with its bump: what [sort] orders by before the start. */
-    internal data class Key(val group: Int, val tier: Int, val bump: Int) : Comparable<Key> {
-        override fun compareTo(other: Key): Int = compareValuesBy(this, other, Key::group, Key::tier, Key::bump)
+    /**
+     * The group and tier of [item], whether it has a score of ours, and its bump: what [sort] orders by before the start.
+     * Followed teams' games are a section of their own ([GROUP_FOLLOWED]), always first (sorting model, live.24).
+     */
+    internal data class Key(val group: Int, val tier: Int, val bump: Int, val unscored: Int = 0) : Comparable<Key> {
+        override fun compareTo(other: Key): Int = compareValuesBy(this, other, Key::group, Key::tier, Key::unscored, Key::bump)
     }
 
-    internal fun keyOf(item: SportsLiveItem, mySports: MySports, bumped: Set<String>, directory: TeamDirectory = TeamDirectory.shared): Key {
+    internal fun keyOf(
+        item: SportsLiveItem,
+        mySports: MySports,
+        bumped: Set<String>,
+        directory: TeamDirectory = TeamDirectory.shared,
+        scored: Set<String>? = null
+    ): Key {
         val bump = if (item.streamKey in bumped) 0 else 1
-        if (item.followed) return Key(GROUP_FOLLOWED, 0, bump)
+        val unscored = if (scored == null || item.streamKey in scored) 0 else 1
+        if (item.followed) return Key(GROUP_FOLLOWED, 0, bump, unscored)
         val league = leagueOf(item)
         val mine = mySports.isDefault || SportsLiveMySportsScope.shows(item, mySports, directory)
         val group = when {
@@ -56,7 +71,7 @@ object SportsLiveImportance {
             mine && !mySports.isDefault -> GROUP_MY_SPORTS
             else -> GROUP_UNPLACED
         }
-        return Key(group, tierOf(league), bump)
+        return Key(group, tierOf(league), bump, unscored)
     }
 
     private val withinGroup: Comparator<SportsLiveItem> =

@@ -18,6 +18,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import org.junit.Assert.assertFalse
 import com.nuvio.tv.ui.screens.sportslive.offersWatchWith
 import com.nuvio.tv.ui.screens.sportslive.watchWithFor
@@ -101,6 +102,19 @@ class SportsLiveSecondGameTest {
         assertEquals(pacers, pick(listOf(first, later, lakers, pacers), scores))
         // Another game's snapshot under a card rates nothing: start time decides.
         assertEquals(later, pick(listOf(first, later, pacers), mapOf(pacers.streamKey to live(lakersEvent, 100, 99, "1:00 - 4th"))))
+    }
+
+    @Test
+    fun `under Hide until focused or Off the pairing never follows how close a game is (sorting model)`() {
+        val scores = mapOf(
+            pacers.streamKey to live(pacersEvent, 100, 99, "1:00 - 4th"),
+            lakers.streamKey to live(lakersEvent, 30, 10, "5:00 - 2nd")
+        )
+        val items = listOf(first, later, lakers, pacers)
+        val byStart = pick(items)
+        for (mode in listOf(ScoresMode.HIDE_UNTIL_FOCUSED, ScoresMode.OFF, null)) {
+            assertEquals("$mode", byStart, SportsLiveSecondGame.pick(first, items, scores, emptySet(), mode = mode))
+        }
     }
 
     @Test

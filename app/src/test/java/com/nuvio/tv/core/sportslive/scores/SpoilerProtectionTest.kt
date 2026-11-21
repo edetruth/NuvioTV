@@ -87,7 +87,17 @@ class SpoilerProtectionTest {
         }
         // Unprotected: a score toast and a full-time toast.
         assertEquals(2, alerts(SpoilerProtection(nowMs = now)).size)
-        assertEquals(emptyList<SportsLiveAlert>(), alerts(saved))
+        // Protected (review M1, user live.24): no score alert, and full time is the spoiler-free card only: "game is over ·
+        // result hidden", the sides with no score, no OT note, no league line that could read "Final · OT".
+        val hidden = alerts(saved)
+        val fullTime = hidden.single() as SportsLiveAlert.FullTime
+        assertTrue(fullTime.resultHidden)
+        assertTrue(fullTime.namesOnly)
+        val content = com.nuvio.tv.core.sportslive.alerts.SportsLiveAlertContent.of(fullTime)
+        assertTrue(content is com.nuvio.tv.core.sportslive.alerts.AlertContent.FullTimeHidden)
+        content as com.nuvio.tv.core.sportslive.alerts.AlertContent.FullTimeHidden
+        assertNull(content.first.score)
+        assertNull(content.second.score)
     }
 
     @Test

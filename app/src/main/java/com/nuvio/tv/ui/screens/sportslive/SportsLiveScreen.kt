@@ -398,7 +398,7 @@ fun SportsLiveScreen(
                             {
                                 val scoresNow = scoresViewModel.scores.value
                                 viewModel.uiState.value.watchWithSession(
-                                    item, scoresNow, sportsLiveSavedForLater(scoresViewModel.protection.value, scoresNow)
+                                    item, scoresNow, sportsLiveSavedForLater(scoresViewModel.protection.value, scoresNow), scoresMode
                                 )
                             }
                         } else {
@@ -1775,6 +1775,7 @@ private fun SportsLiveContent(
             onShowFailures = { failuresOpen = true },
             // "N new" (Q5): OK shows the rows that waited, at once (no reload); otherwise Refresh as before.
             newRows = if (uiState.selectedTab == SportsLiveTab.LIVE_NOW) uiState.newLiveRows else 0,
+            newRowsTeam = uiState.newLiveFollowedTeam.takeIf { uiState.selectedTab == SportsLiveTab.LIVE_NOW },
             onRefresh = if (uiState.selectedTab == SportsLiveTab.LIVE_NOW && uiState.newLiveRows > 0) {
                 onShowNewRows
             } else {

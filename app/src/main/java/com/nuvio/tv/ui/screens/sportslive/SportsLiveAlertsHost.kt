@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import com.nuvio.tv.core.sportslive.scores.ScoreChips
 import com.nuvio.tv.ui.screens.sportslive.dual.DualGeometry
 import com.nuvio.tv.ui.screens.sportslive.dual.DualLayout
 import com.nuvio.tv.ui.screens.sportslive.dual.Side
@@ -889,7 +890,10 @@ private fun AlertBody(content: AlertContent, followed: Boolean) {
                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                     color = ArtColors.Secondary
                 )
-                val details = listOfNotNull(content.league, content.note)
+                // The game grammar's final words (live.24): "Final · OT", "FT · Pens", never ESPN's raw "Final/OT".
+                val finalWord = rememberScoreChipStrings().finalNote
+                val words = content.note?.let { ScoreChips.finalWords(it, finalWord, fullTimeSport = content.fullTimeSport) }
+                val details = listOfNotNull(content.league, words)
                 if (details.isNotEmpty()) SmallLine(details.joinToString(HINT_SEPARATOR), ArtColors.Muted)
             }
             ScoreLine(content.first, content.second)

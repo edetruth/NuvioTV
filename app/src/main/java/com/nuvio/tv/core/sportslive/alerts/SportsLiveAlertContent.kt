@@ -29,7 +29,15 @@ sealed interface AlertContent {
     data class Score(override val first: AlertSide, override val second: AlertSide, val scorer: AlertSide?, val clock: String?) : AlertContent
 
     /** Full time with the score and ESPN's note ("Final/OT"). */
-    data class FullTime(override val first: AlertSide, override val second: AlertSide, val note: String?, val league: String?) : AlertContent
+    data class FullTime(
+        override val first: AlertSide,
+        override val second: AlertSide,
+        /** ESPN's final note ("Final/OT", "FT-Pens"): drawn as the grammar's words ([com.nuvio.tv.core.sportslive.scores.ScoreChips.finalWords]). */
+        val note: String?,
+        val league: String?,
+        /** The game ends at full time (soccer, rugby): its final word is "FT". */
+        val fullTimeSport: Boolean = false
+    ) : AlertContent
 
     /** Full time under Hide until focused: "‹A› vs ‹B› · Full time", no score, no OT, no winner. */
     data class FullTimeNamesOnly(override val first: AlertSide, override val second: AlertSide) : AlertContent
@@ -73,7 +81,10 @@ object SportsLiveAlertContent {
             sides(alert.item, alert.snapshot, withScore = false)?.let { (first, second, _) -> AlertContent.FullTimeNamesOnly(first, second) }
         } else {
             sides(alert.item, alert.snapshot, withScore = true)?.let { (first, second, art) ->
-                AlertContent.FullTime(first, second, alert.snapshot.clockText, art.league)
+                AlertContent.FullTime(
+                    first, second, alert.snapshot.clockText, art.league,
+                    fullTimeSport = com.nuvio.tv.core.sportslive.GameStatusText.endsAtFullTime(alert.snapshot.league.sport)
+                )
             }
         }
     }

@@ -21,6 +21,7 @@ import com.nuvio.tv.core.sportslive.SportsLiveManifestVerdict
 import com.nuvio.tv.core.sportslive.SportsLiveItemBucketer
 import com.nuvio.tv.core.sportslive.SportsLiveLiveDuration
 import com.nuvio.tv.core.sportslive.SportsLiveSportKind
+import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.SportsLiveMySportsScope
 import com.nuvio.tv.core.sportslive.SportsLiveImportance
 import com.nuvio.tv.core.sportslive.SportsLiveCalmOpen
@@ -1460,11 +1461,14 @@ class SportsLiveViewModel internal constructor(
                 }
                 // J2 (live.23): by importance (followed, My sports by tier, other leagues, unplaced); a close or late game
                 // leads its tier only with the scores shown (the badges exist only then), so no hidden score moves a row.
-                // live.24 (audit A6): live games with a score of ours before the scoreless ones, each part in importance
-                // order. Here, before the calm step (J1), not on the board: a score landing later never moves a shown row;
-                // the order is applied on the first build, a thaw ("N new") and a re-rank. Under Off nothing has a score.
-                val ranked = SportsLiveImportance.sort(live, mySports, bumped = whyTags.keys)
-                    .sortedBy { item -> if (ScoreChips.of(item, scores[item.streamKey], mode, revealed = false) == null) 1 else 0 }
+                // live.24 (audit A6, sorting model): followed teams' games first as a section; inside each league tier the
+                // games with a score of ours before the scoreless ones. Here, before the calm step (J1), not on the board:
+                // a score landing later never moves a shown row; the order is applied on the first build, a thaw ("N new")
+                // and a re-rank. Under Off nothing has a score, so nothing moves; under Hide a hidden score counts (it tells
+                // only that ESPN has the game, never the score).
+                val scored = live.filter { item -> ScoreChips.of(item, scores[item.streamKey], mode, revealed = false) != null }
+                    .mapTo(HashSet()) { it.streamKey }
+                val ranked = SportsLiveImportance.sort(live, mySports, bumped = whyTags.keys, scored = scored)
                 val built = ranked + split.justEnded + overdueEnded.map { it.first } + linkEnded
                 lastBuiltLiveNow = built
                 lastBuiltLiveCount = ranked.size
@@ -1550,15 +1554,20 @@ class SportsLiveViewModel internal constructor(
         val selectedId = selection.itemId?.takeIf { id -> visible.any { it.id == id } }
             ?: visible.firstOrNull()?.id
         // "N new" (TV QA Q5): the waiting rows this tab and filter would list.
-        val newRows = if (heldBack.isEmpty() || selection.tab != SportsLiveTab.LIVE_NOW) {
-            0
+        val newList = if (heldBack.isEmpty() || selection.tab != SportsLiveTab.LIVE_NOW) {
+            emptyList<SportsLiveItem>()
         } else {
             val scoped = if (allSports) heldBack else SportsLiveMySportsScope.scope(heldBack, mySports)
             when (filter) {
                 null, SportsLiveUiState.ALL_SPORTS_FILTER -> scoped
                 SportsLiveUiState.MY_TEAMS_FILTER -> scoped.filter { it.followed }
                 else -> scoped.filter { filterOf(it) == filter }
-            }.size
+            }
+        }
+        val newRows = newList.size
+        // Sorting model (live.24): "2 new · Lakers game" when a followed team's game is among them.
+        val newFollowedTeam = newList.firstOrNull { it.followed }?.let { game ->
+            bucketed.followed.orEmpty().firstOrNull { team -> SportsLiveTeams.followsAnySource(team, game) }?.name
         }
         return SportsLiveUiState(
             // Only a load with no data yet shows as loading, so a refresh does not blank the list.
@@ -1587,6 +1596,7 @@ class SportsLiveViewModel internal constructor(
             // Stale-while-revalidate (live.20 B1): a list over 5 minutes old shown while the refresh runs says when it is from.
             staleListAtMs = bucketed.listAtMs?.takeIf { selection.isRefreshing && now - it >= STALE_MARK_MS },
             newLiveRows = newRows,
+            newLiveFollowedTeam = newFollowedTeam,
             moreLive = moreLiveGroups,
             moreLiveOpen = moreLiveOpen,
             moreLiveOther = otherEvents.mapTo(HashSet()) { it.streamKey },

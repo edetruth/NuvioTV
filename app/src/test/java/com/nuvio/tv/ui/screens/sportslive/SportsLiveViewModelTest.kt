@@ -582,6 +582,29 @@ class SportsLiveViewModelTest {
     }
 
     @Test
+    fun `N new names a followed team's game when one is among the new rows (sorting model)`() = runTest {
+        followedFlow.value = listOf(FollowedTeam("Lakers", null))
+        val items = listOf("a", "b").map { item(it, isLive = true, sport = "Soccer", name = it.uppercase()) }
+        nextLoad = load(items)
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+        viewModel.setBrowsing(true)
+        runCurrent()
+
+        val plain = item("n1", isLive = true, sport = "Soccer", name = "N1")
+        latestFlow.value = load(items + plain)
+        runCurrent()
+        assertEquals(1, viewModel.uiState.value.newLiveRows)
+        assertNull(viewModel.uiState.value.newLiveFollowedTeam)
+
+        val mine = item("n2", isLive = true, sport = "Basketball", name = "Lakers vs Suns")
+        latestFlow.value = load(items + plain + mine)
+        runCurrent()
+        assertEquals(2, viewModel.uiState.value.newLiveRows)
+        assertEquals("Lakers", viewModel.uiState.value.newLiveFollowedTeam)
+    }
+
+    @Test
     fun `while Live now is browsed new rows wait behind N new, which shows them once (BUG7, Q5)`() = runTest {
         val items = listOf("a", "b", "c").map { item(it, isLive = true, sport = "Soccer", name = it.uppercase()) }
         nextLoad = load(items)
@@ -1449,12 +1472,14 @@ class SportsLiveViewModelTest {
         // J2 (live.23): followed first; the close game leads its tier (scores on screen), the rest by start.
         assertEquals(listOf("celtics", "lakers", "pacers", "hornets"), shown.visibleItems.map { it.id })
         assertEquals(mapOf(lakersGame.streamKey to WhyTag(WhyKind.CLOSE_LATE, 1)), shown.whyTags)
-        // Hide until focused and Off: no badges, and no score moves a row (start order).
+        // Hide until focused: no badges and no bump; inside the tier the games ESPN has (a hidden score) come before the
+        // one it has none of (sorting model, live.24: it tells only that ESPN has the game), then by start.
         val hidden = state(ScoresMode.HIDE_UNTIL_FOCUSED)
-        assertEquals(listOf("celtics", "pacers", "hornets", "lakers"), hidden.visibleItems.map { it.id })
+        assertEquals(listOf("celtics", "pacers", "lakers", "hornets"), hidden.visibleItems.map { it.id })
         assertTrue(hidden.whyTags.isEmpty())
+        // Off: no score of ours at all, so start order; the followed game is first under every setting.
         val off = state(ScoresMode.OFF)
-        assertEquals(hidden.visibleItems.map { it.id }, off.visibleItems.map { it.id })
+        assertEquals(listOf("celtics", "pacers", "hornets", "lakers"), off.visibleItems.map { it.id })
         assertTrue(off.whyTags.isEmpty())
     }
 

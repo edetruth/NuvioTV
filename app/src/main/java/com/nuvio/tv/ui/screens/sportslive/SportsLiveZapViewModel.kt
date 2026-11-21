@@ -331,7 +331,12 @@ class SportsLiveZapViewModel internal constructor(
     @Volatile
     private var dataSaverOn = false
 
+    // The Scores setting as last read: the end card's next game is picked for how close it is under Show only.
+    @Volatile
+    private var scoresModeNow: ScoresMode? = null
+
     init {
+        viewModelScope.launch { liveScores.mode.catch { }.collect { scoresModeNow = it } }
         if (prefetcher != null) viewModelScope.launch { dataSaver.collect { dataSaverOn = it } }
         // The TV's decoder list is read once, off the main thread, as the player starts (live.23 review L4): a peek weighed
         // later reads the kept count instead of building MediaCodecList on the main thread (100 ms or more on the box).
@@ -823,7 +828,8 @@ class SportsLiveZapViewModel internal constructor(
             knownGood = { game -> readiness.of(game) == SportsLiveReadyMark.READY || workingLinks.goodStream(game.id) != null },
             noStream = noStreamIds(lineupItems),
             savedForLater = savedForLater,
-            mineReady = { game -> isReady(game) && isMine(game) }
+            mineReady = { game -> isReady(game) && isMine(game) },
+            mode = scoresModeNow
         ).takeUnless { gameWatch.debugNoNext }
         val upcoming = if (next != null) null else upcomingGame(nowMs)
         val snapshot = ScoreChips.matchedEvent(item, scores[item.streamKey]) ?: gameWatch.snapshot(item.id)

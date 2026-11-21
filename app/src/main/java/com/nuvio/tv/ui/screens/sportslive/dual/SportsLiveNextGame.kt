@@ -4,6 +4,7 @@ import com.nuvio.tv.core.sportslive.SportsLiveGameReadiness
 import com.nuvio.tv.core.sportslive.SportsLiveReadyMark
 import com.nuvio.tv.core.sportslive.SportsLiveWorkingLinks
 import com.nuvio.tv.core.sportslive.scores.LiveExcitement
+import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.core.sportslive.scores.ScoreChips
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.SpoilerProtection
@@ -40,7 +41,9 @@ internal object SportsLiveNextGame {
         knownGood: (SportsLiveItem) -> Boolean = { false },
         noStream: Set<String> = emptySet(),
         savedForLater: (SportsLiveItem) -> Boolean = { false },
-        mineReady: (SportsLiveItem) -> Boolean = { false }
+        mineReady: (SportsLiveItem) -> Boolean = { false },
+        /** The Scores setting: big games are picked for how close they are under Show only (sorting model, live.24). */
+        mode: ScoresMode? = ScoresMode.SHOW
     ): SportsLiveItem? {
         val left = SportsLiveSecondGame.candidates(ended, lineup, scores, finishedKeys)
             .filter { item -> item.id !in tried && item.alternates.none { it.id in tried } && item.id !in noStream }
@@ -49,7 +52,7 @@ internal object SportsLiveNextGame {
         val forward = forwardFrom(ended, lineup, left)
         forward.firstOrNull(mineReady)?.let { return it }
         forward.filter { it.followed }.readyFirst(knownGood).firstOrNull()?.let { return it }
-        val rated = forward.mapNotNull { item ->
+        val rated = if (mode != ScoresMode.SHOW) emptyList() else forward.mapNotNull { item ->
             // A spoiler-protected game (#151) is never picked for how close it is.
             val event = ScoreChips.matchedEvent(item, scores[item.streamKey])?.takeUnless { it.spoilerProtected } ?: return@mapNotNull null
             val score = LiveExcitement.rate(event)?.score ?: return@mapNotNull null

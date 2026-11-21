@@ -265,7 +265,9 @@ internal fun groupPanelRows(
         val art = teams.takeIf { group == ZapPanelGroup.STARTING_SOON }
         // A live score shows only for a game in play that strictly matches its event (any score provider).
         val liveScored = group == ZapPanelGroup.LIVE_NOW && event != null
-        val rank = lineupRankOf(item, liveScored, bigGame = liveScored && isLiveBigGame(event!!))
+        // The big-game lift (#137) only under Scores Show (sorting model, live.24): under Hide until focused a game moving
+        // up for its crunch time would tell the score is close; under Off there is no score.
+        val rank = lineupRankOf(item, liveScored, bigGame = liveScored && mode == ScoresMode.SHOW && isLiveBigGame(event!!))
         Entry(ZapPanelRow(item, group, chip, art, teams, status, scoreboardGroupOf(status, item), matched = event != null), start, index, rank)
     }
     val order = if (keepOrder) {

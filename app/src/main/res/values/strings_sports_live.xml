@@ -774,6 +774,8 @@
     <string name="sports_live_ready_pill">▶ Ready</string>
     <string name="sports_live_stage_stream_ready">▶ Stream ready</string>
     <string name="sports_live_agenda_earlier">‹ Earlier</string>
+    <!-- "N new" naming a followed team's game among them (live.24 sorting model): "2 new games · Lakers game". -->
+    <string name="sports_live_new_rows_followed">%1$s · %2$s game</string>
     <plurals name="sports_live_new_rows">
         <item quantity="one">%1$d new game</item>
         <item quantity="other">%1$d new games</item>

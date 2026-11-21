@@ -6,6 +6,7 @@ import com.nuvio.tv.core.sportslive.EndedGame
 import com.nuvio.tv.core.sportslive.EndedSignal
 import com.nuvio.tv.core.sportslive.SportsLiveEndedGames
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
+import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.core.sportslive.scores.WhyTag
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveKind
@@ -71,6 +72,8 @@ data class SportsLiveUiState(
     val staleListAtMs: Long? = null,
     /** Live now's new rows waiting while it is browsed (TV QA BUG7 / Q5): "N new" on Refresh shows them. */
     val newLiveRows: Int = 0,
+    /** A followed team among [newLiveRows]' games (sorting model, live.24): the pill reads "2 new · ‹team› game". */
+    val newLiveFollowedTeam: String? = null,
     /**
      * More live (user 2026-11-21): under My sports, the live games Live now leaves out and the listings that are no game
      * (H), by sport, largest first, Other last ([SportsLiveMoreLive]); empty with nothing picked, or on a chip.
@@ -185,7 +188,8 @@ internal fun SportsLiveUiState.watchWithFor(item: SportsLiveItem, scores: Map<St
 internal fun SportsLiveUiState.watchWithSession(
     item: SportsLiveItem,
     scores: Map<String, ScoreSnapshot>,
-    savedForLater: (SportsLiveItem) -> Boolean = { false }
+    savedForLater: (SportsLiveItem) -> Boolean = { false },
+    mode: ScoresMode? = ScoresMode.SHOW
 ): SportsLiveDualSession? {
     val liveNow = tabs[SportsLiveTab.LIVE_NOW].orEmpty()
     return sportsLiveWatchWithSession(
@@ -195,7 +199,8 @@ internal fun SportsLiveUiState.watchWithSession(
         filter = selectedFilter.takeIf { selectedTab == SportsLiveTab.LIVE_NOW },
         scores = scores,
         finishedKeys = finishedKeys(scores),
-        savedForLater = savedForLater
+        savedForLater = savedForLater,
+        mode = mode
     )
 }
 

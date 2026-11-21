@@ -99,13 +99,13 @@ class SportsLiveHomeRowTest {
         val scores = mapOf(game.streamKey to event)
         fun labels(mode: ScoresMode) = SportsLiveHomeRow.scoreLabels(listOf(game, unmatched), scores, mode, strings, "● %1\$s")
 
-        assertEquals(mapOf(game.streamKey to "● 4:12 · Q3 · IND 80–88 PHI"), labels(ScoresMode.SHOW))
+        assertEquals(mapOf(game.streamKey to "● Q3 4:12 · IND 80–88 PHI"), labels(ScoresMode.SHOW))
         // No focus reveal on Home: Hide until focused shows nothing there (and nothing is polled for it).
         assertEquals(emptyMap<String, String>(), labels(ScoresMode.HIDE_UNTIL_FOCUSED))
         assertEquals(emptyMap<String, String>(), labels(ScoresMode.OFF))
 
         val row = SportsLiveHomeRow.build(listOf(game, unmatched), "Live now", labels(ScoresMode.SHOW))
-        assertEquals(listOf("● 4:12 · Q3 · IND 80–88 PHI", null), row.items.map { it.releaseInfo })
+        assertEquals(listOf("● Q3 4:12 · IND 80–88 PHI", null), row.items.map { it.releaseInfo })
     }
 
     @Test

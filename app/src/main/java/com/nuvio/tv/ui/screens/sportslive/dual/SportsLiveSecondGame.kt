@@ -4,6 +4,7 @@ import com.nuvio.tv.core.sportslive.scores.LiveExcitement
 import com.nuvio.tv.core.sportslive.scores.ScoreChips
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.ScoreState
+import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveKind
 import com.nuvio.tv.domain.model.SportsLiveTab
@@ -29,11 +30,15 @@ internal object SportsLiveSecondGame {
         items: List<SportsLiveItem>,
         scores: Map<String, ScoreSnapshot>,
         finishedKeys: Set<String>,
-        savedForLater: (SportsLiveItem) -> Boolean = { false }
+        savedForLater: (SportsLiveItem) -> Boolean = { false },
+        /** The Scores setting: the most exciting game is picked under Show only (sorting model, live.24). */
+        mode: ScoresMode? = ScoresMode.SHOW
     ): SportsLiveItem? {
         val candidates = candidates(first, items, scores, finishedKeys).filterNot(savedForLater)
         if (candidates.isEmpty()) return null
         candidates.filter { it.followed }.takeIf { it.isNotEmpty() }?.let { return nextByStart(first, it) }
+        // Under Hide until focused (or Off) no pick is made for how close a game is: the pairing would tell the score.
+        if (mode != ScoresMode.SHOW) return nextByStart(first, candidates)
         val rated = candidates.mapNotNull { item ->
             val event = ScoreChips.matchedEvent(item, scores[item.streamKey]) ?: return@mapNotNull null
             LiveExcitement.rate(event)?.let { item to it.score }
@@ -122,9 +127,10 @@ internal fun sportsLiveWatchWithSession(
     scores: Map<String, ScoreSnapshot>,
     finishedKeys: Set<String>,
     leftStream: Stream? = null,
-    savedForLater: (SportsLiveItem) -> Boolean = { false }
+    savedForLater: (SportsLiveItem) -> Boolean = { false },
+    mode: ScoresMode? = ScoresMode.SHOW
 ): SportsLiveDualSession? {
-    val second = SportsLiveSecondGame.pick(first, zapItems, scores, finishedKeys, savedForLater) ?: return null
+    val second = SportsLiveSecondGame.pick(first, zapItems, scores, finishedKeys, savedForLater, mode) ?: return null
     return SportsLiveDualSession(
         left = first,
         right = second,
