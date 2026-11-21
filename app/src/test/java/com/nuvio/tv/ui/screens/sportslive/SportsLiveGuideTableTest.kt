@@ -148,6 +148,15 @@ class SportsLiveGuideTableTest {
         )
     }
 
+    @Test
+    fun `the first openings' legend names Hold OK More first, then the three marks, and is gone after`() {
+        assertEquals(
+            listOf(GuideLegend.HOLD_OK, GuideLegend.CLOSE_LATE, GuideLegend.MY_TEAM, GuideLegend.READY),
+            guideLegend(shown = true)
+        )
+        assertEquals(emptyList<GuideLegend>(), guideLegend(shown = false))
+    }
+
     // ---- Selection ----
 
     private fun row(id: String, group: ZapPanelGroup = ZapPanelGroup.LIVE_NOW) = ZapPanelRow(game(id, now), group, chip = null, art = null)

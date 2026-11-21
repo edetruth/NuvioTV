@@ -145,6 +145,17 @@ internal fun guideNameChoices(team: GameArtTeam, individual: Boolean, codeOf: (S
     return listOf(name, short, code).map { it.trim() }.filter { it.isNotEmpty() }.distinct()
 }
 
+// ---- The footer's legend ----
+
+/** What the footer's legend explains, in order (B2: the profile's first few openings, or Info). */
+internal enum class GuideLegend { HOLD_OK, CLOSE_LATE, MY_TEAM, READY }
+
+/**
+ * The legend after the footer's keys while the keys hint is [shown]: "Hold OK More" first (the actions are found
+ * nowhere else on screen), then the three marks; nothing otherwise.
+ */
+internal fun guideLegend(shown: Boolean): List<GuideLegend> = if (shown) GuideLegend.entries.toList() else emptyList()
+
 // ---- Selection ----
 
 /** The table shows this many rows under Now playing (B2). */

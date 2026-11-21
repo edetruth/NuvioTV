@@ -17,6 +17,7 @@
     <string name="sports_live_guide_title">Live games</string>
     <string name="sports_live_guide_footer">OK Watch  ·  ◂ ▸ Sport  ·  Back Close</string>
     <string name="sports_live_guide_more_below">▼ %1$d more</string>
+    <string name="sports_live_guide_legend_hold_ok">Hold OK More</string>
     <string name="sports_live_guide_legend_close">Close, late</string>
     <string name="sports_live_guide_legend_my_team">Your team</string>
     <string name="sports_live_guide_legend_ready">Ready</string>

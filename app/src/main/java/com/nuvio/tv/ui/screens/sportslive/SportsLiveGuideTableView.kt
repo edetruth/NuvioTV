@@ -619,9 +619,14 @@ private fun GuideFooter(legend: Boolean, moreBelow: Int, modifier: Modifier = Mo
         if (legend) {
             Spacer(modifier = Modifier.width(40.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                GuideLegendItem(GuideMark.CLOSE_LATE, R.string.sports_live_guide_legend_close)
-                GuideLegendItem(GuideMark.MY_TEAM, R.string.sports_live_guide_legend_my_team)
-                GuideLegendItem(GuideMark.READY, R.string.sports_live_guide_legend_ready)
+                guideLegend(shown = true).forEach { entry ->
+                    when (entry) {
+                        GuideLegend.HOLD_OK -> GuideLegendText(R.string.sports_live_guide_legend_hold_ok)
+                        GuideLegend.CLOSE_LATE -> GuideLegendItem(GuideMark.CLOSE_LATE, R.string.sports_live_guide_legend_close)
+                        GuideLegend.MY_TEAM -> GuideLegendItem(GuideMark.MY_TEAM, R.string.sports_live_guide_legend_my_team)
+                        GuideLegend.READY -> GuideLegendItem(GuideMark.READY, R.string.sports_live_guide_legend_ready)
+                    }
+                }
             }
         }
         Spacer(modifier = Modifier.weight(1f))
@@ -640,6 +645,11 @@ private fun GuideFooter(legend: Boolean, moreBelow: Int, modifier: Modifier = Mo
 @Composable
 private fun GuideLegendItem(mark: GuideMark, text: Int) {
     GuideMarkIcon(mark)
+    GuideLegendText(text)
+}
+
+@Composable
+private fun GuideLegendText(text: Int) {
     Text(
         text = stringResource(text),
         style = SportsLiveTokens.style(GuideType.Footer),
