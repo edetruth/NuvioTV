@@ -60,6 +60,26 @@ class SportsLiveHomeFocusTest {
         assertNull(sportsLiveRowTakingAutoFocus(listOf(liveNow, movies), "gone", "gone", 0))
     }
 
+    @Test
+    fun `Home first focuses the first row that is not the Catch up held place`() {
+        val held = row("catchup", addonId = SportsLiveHomeRow.ADDON_ID, isLoading = true)
+        assertEquals(movies, homeFirstFocusRow(listOf(held, movies, series)))
+        // Live now landing above that pick then takes the focus, and the held place ending empty takes nothing with it.
+        assertEquals(liveNow, sportsLiveRowTakingAutoFocus(listOf(held, liveNow, movies), "movies", "movies", 0))
+    }
+
+    @Test
+    fun `Home first focus keeps the first row otherwise`() {
+        val cw = row(MODERN_CONTINUE_WATCHING_ROW_KEY)
+        assertEquals(cw, homeFirstFocusRow(listOf(cw, liveNow, movies)))
+        assertEquals(catchUp, homeFirstFocusRow(listOf(catchUp, movies)))
+        val loadingCatalog = row("lazy", isLoading = true)
+        assertEquals(loadingCatalog, homeFirstFocusRow(listOf(loadingCatalog, movies)))
+        val held = row("catchup", addonId = SportsLiveHomeRow.ADDON_ID, isLoading = true)
+        assertEquals(held, homeFirstFocusRow(listOf(held)))
+        assertNull(homeFirstFocusRow(emptyList()))
+    }
+
     private fun row(key: String, addonId: String? = "movies.addon", isLoading: Boolean = false): HeroCarouselRow =
         HeroCarouselRow(
             key = key,
