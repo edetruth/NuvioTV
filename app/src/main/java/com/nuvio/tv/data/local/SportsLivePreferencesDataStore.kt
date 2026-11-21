@@ -60,7 +60,8 @@ class SportsLivePreferencesDataStore @Inject constructor(
         /**
          * "Hide scores of my teams' games" for a profile that never set it (results redesign Q1, 2026-11-21): on, so a
          * followed team's result never shows before the viewer chooses to see it. It protects nothing until a team is
-         * followed; a stored choice (Settings → Scores) always wins.
+         * followed; a stored choice (Settings → Scores) always wins. It covers finished games only (M2, live.23 review):
+         * a followed team's live score chip shows as before ([com.nuvio.tv.core.sportslive.scores.SpoilerProtection]).
          */
         const val MY_TEAMS_SPOILERS_DEFAULT = true
     }

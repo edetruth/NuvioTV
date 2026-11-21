@@ -105,11 +105,16 @@ class SpoilerProtectionTest {
     }
 
     @Test
-    fun `hide my teams' scores protects followed teams' games until watched or revealed`() {
+    fun `hide my teams' results protects followed teams' finished games until watched or revealed`() {
         val followed = listOf(FollowedTeam(name = "Philadelphia 76ers", sport = "Basketball"))
         val auto = SpoilerProtection(myTeams = true, followed = followed, nowMs = now)
         assertTrue(auto.protects(final))
-        assertTrue(auto.protects(live))
+        // M2: results only. A followed team's live game keeps its score chip on Live now, the panel and the guide.
+        assertFalse(auto.protects(live))
+        assertFalse(auto.stamp(live).spoilerProtected)
+        assertTrue(auto.stamp(final).spoilerProtected)
+        // A game saved for later is still hidden while live.
+        assertTrue(auto.copy(games = SpoilerProtection.saved(emptyList(), live, now)).protects(live))
         // Off by default, and never another team's game or one not started.
         assertFalse(auto.copy(myTeams = false).protects(final))
         assertFalse(auto.copy(followed = listOf(FollowedTeam(name = "Boston Celtics", sport = "Basketball"))).protects(final))
