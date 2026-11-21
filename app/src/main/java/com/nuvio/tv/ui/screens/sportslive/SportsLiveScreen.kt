@@ -287,7 +287,14 @@ fun SportsLiveScreen(
     }
     val playing = preview as? SportsLivePreviewState.Playing
     LaunchedEffect(playing?.item?.previewKey, playing?.stream) {
-        if (playing == null) previewPlayer.release() else previewPlayer.play(playing.item, playing.stream)
+        // #143, as the panel (#167): a focus move only stops the preview, keeping the player; releasing and building
+        // one per move held the main thread. It is released when the screen pauses or leaves, or hands its stream over,
+        // and at once when the mini player took over (it wants the decoder now).
+        when {
+            playing != null -> previewPlayer.play(playing.item, playing.stream)
+            SportsLiveMiniPlayers.controller.isActive -> previewPlayer.release()
+            else -> previewPlayer.stop()
+        }
     }
 
     // A live game or channel plays its best stream (#56); other cards keep their behaviour.
