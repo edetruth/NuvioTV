@@ -7,6 +7,8 @@ import com.nuvio.tv.core.sportslive.GameStatus
 import com.nuvio.tv.core.sportslive.GameStatusStrings
 import com.nuvio.tv.core.sportslive.GameStatusText
 import com.nuvio.tv.core.sportslive.SportsLiveDisplayText
+import com.nuvio.tv.core.sportslive.SportsLiveChannelFavorites
+import com.nuvio.tv.core.sportslive.SportsLiveChannelLists
 import com.nuvio.tv.core.sportslive.SportsLiveChannelRegions
 import com.nuvio.tv.core.sportslive.SportsLiveProgress
 import com.nuvio.tv.core.sportslive.displayName
@@ -79,7 +81,9 @@ data class ScoreboardRow(
     /** Crunch time (#137): a close game late, the "Close game" badge (Scores not Off). */
     val closeGame: Boolean = false,
     /** The tag in place of the league's name (#160): a tennis match's tour, "ATP", never a tournament's initials. */
-    val leagueTag: String? = null
+    val leagueTag: String? = null,
+    /** A channel in the profile's favorites now (Channels phase 1): the gold ★, and Remove from favorites in its menu. */
+    val favorite: Boolean = false
 ) {
     /** A followed team plays in it: the gold left bar. */
     val followed: Boolean get() = firstFollowed || secondFollowed || item.followed
@@ -168,18 +172,31 @@ internal fun scoreboardRowOf(
 
 /**
  * The Channels tab's rows (V2 P4): one per channel, grouped by region ([SportsLiveChannelRegions.grouped]:
- * country codes, long names, then Other), each region's channels as listed.
+ * country codes, long names, then Other), each region's channels as listed. With [sections] (All regions, Channels
+ * phase 1) the profile's favorites lead, then its recent plays ([SportsLiveChannelFavorites.sections], in [lists]'
+ * order as frozen when the tab opened), each channel listed once; [lists]' current favorites carry the ★ everywhere.
  */
-internal fun channelRows(items: List<SportsLiveItem>): List<ScoreboardRow> =
-    SportsLiveChannelRegions.grouped(items).flatMap { (region, channels) ->
-        channels.map { item ->
-            ScoreboardRow(
-                item = item, group = ScoreboardGroup.CHANNELS, chip = null, art = null,
-                firstFollowed = false, secondFollowed = false, probablyEnded = false,
-                status = GameStatus.Channel, twoSided = false, section = region
-            )
-        }
+internal fun channelRows(
+    items: List<SportsLiveItem>,
+    lists: SportsLiveChannelLists = SportsLiveChannelLists.NONE,
+    sections: Boolean = true
+): List<ScoreboardRow> {
+    val marked = SportsLiveChannelFavorites.resolve(lists.favorites, items).mapTo(HashSet()) { it.streamKey }
+    fun row(item: SportsLiveItem, section: String) = ScoreboardRow(
+        item = item, group = ScoreboardGroup.CHANNELS, chip = null, art = null,
+        firstFollowed = false, secondFollowed = false, probablyEnded = false,
+        status = GameStatus.Channel, twoSided = false, section = section,
+        favorite = item.streamKey in marked
+    )
+    val top = if (sections) {
+        SportsLiveChannelFavorites.sections(items, lists.order)
+    } else {
+        SportsLiveChannelFavorites.Sections(emptyList(), emptyList(), items)
     }
+    return top.favorites.map { row(it, SportsLiveChannelFavorites.FAVORITES) } +
+        top.recent.map { row(it, SportsLiveChannelFavorites.RECENT) } +
+        SportsLiveChannelRegions.grouped(top.rest).flatMap { (region, channels) -> channels.map { row(it, region) } }
+}
 
 /**
  * The Replays tab's rows (V2 P4, #90): each replay under its spoiler-free title ([SportsLiveDisplayText.spoilerFree])

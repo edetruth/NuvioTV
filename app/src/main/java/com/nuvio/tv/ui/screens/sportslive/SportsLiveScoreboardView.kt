@@ -500,7 +500,8 @@ private fun ChannelCells(row: ScoreboardRow, watching: Boolean) {
                     modifier = Modifier.weight(1f, fill = false)
                 )
                 title.quality?.let { SportsLiveBadge(it) }
-                if (item.followed) StarMark()
+                // Gold ★: a followed team's game on the channel, or a favorite channel (Channels phase 1).
+                if (item.followed || row.favorite) StarMark()
                 if (watching) SportsLiveWatchingPill()
             }
             channelNowText(item)?.let { now ->

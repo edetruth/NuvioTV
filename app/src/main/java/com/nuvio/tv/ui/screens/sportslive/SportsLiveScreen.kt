@@ -2,6 +2,7 @@ package com.nuvio.tv.ui.screens.sportslive
 
 import android.os.SystemClock
 import kotlinx.coroutines.withTimeoutOrNull
+import com.nuvio.tv.core.sportslive.SportsLiveChannelFavorites
 import com.nuvio.tv.core.sportslive.SportsLiveToastKind
 import com.nuvio.tv.core.sportslive.SportsLiveToasts
 import com.nuvio.tv.core.sportslive.SportsLiveUnidentified
@@ -401,6 +402,7 @@ fun SportsLiveScreen(
             onSelectItem = viewModel::selectItem,
             onRefresh = { viewModel.refresh() },
             onPlay = { item ->
+                viewModel.onChannelPlayed(item)
                 // A saved game's replay played to its end ends its protection (#151).
                 if (item.kind == SportsLiveKind.REPLAY) scoresViewModel.onReplayStarted(listOf(item) + item.alternates, replayMatches[item.streamKey])
                 // OK on a playing preview: its stream plays full screen at once (unless the stored
@@ -413,7 +415,10 @@ fun SportsLiveScreen(
                     }
                 }
             },
-            onChooseStream = { item -> playViewModel.chooseStream(item) },
+            onChooseStream = { item ->
+                viewModel.onChannelPlayed(item)
+                playViewModel.chooseStream(item)
+            },
             preview = playing,
             noStreamKey = (preview as? SportsLivePreviewState.NoStream)?.item?.listKey,
             previewPlayer = previewPlayer,
@@ -496,7 +501,8 @@ fun SportsLiveScreen(
             onSaveForLater = scoresViewModel::saveForLater,
             onRevealResult = scoresViewModel::revealResult,
             onBrowsing = viewModel::setBrowsing,
-            onShowNewRows = viewModel::showNewRows
+            onShowNewRows = viewModel::showNewRows,
+            onToggleChannelFavorite = viewModel::toggleChannelFavorite
         )
     }
 }
@@ -619,7 +625,9 @@ private fun SportsLiveContent(
     /** Live now's content holds focus (F6, TV QA BUG7): its rows, order and count hold meanwhile. */
     onBrowsing: (Boolean) -> Unit = {},
     /** "N new" on Refresh (TV QA Q5): the rows that waited while Live now was browsed. */
-    onShowNewRows: () -> Unit = {}
+    onShowNewRows: () -> Unit = {},
+    /** Hold OK → Add to / Remove from favorites on a Channels row (phase 1): the channel, and whether it is one now. */
+    onToggleChannelFavorite: (SportsLiveItem, Boolean) -> Unit = { _, _ -> }
 ) {
     val context = LocalContext.current
     val tabFocusRequesters = remember { SportsLiveTab.entries.associateWith { FocusRequester() } }
@@ -1271,6 +1279,30 @@ private fun SportsLiveContent(
                 null
             },
             hideFirst = hideFirst,
+            // Channels phase 1: first in a channel's menu; the row keeps its place until the tab is opened again.
+            favorite = boardRowOf[item.listKey]?.favorite == true,
+            onToggleFavorite = if (item.isChannel && uiState.selectedTab == SportsLiveTab.CHANNELS) {
+                {
+                    menuCardKey = null
+                    val wasFavorite = boardRowOf[item.listKey]?.favorite == true
+                    onToggleChannelFavorite(item, wasFavorite)
+                    if (wasFavorite) {
+                        SportsLiveToasts.show(
+                            SportsLiveToastKind.INFO,
+                            context.getString(R.string.sports_live_channel_favorite_removed_toast, heading.title),
+                            context.getString(R.string.sports_live_channel_favorite_removed_toast_line)
+                        )
+                    } else {
+                        SportsLiveToasts.show(
+                            SportsLiveToastKind.FOLLOWED,
+                            context.getString(R.string.sports_live_channel_favorite_added_toast, heading.title),
+                            context.getString(R.string.sports_live_channel_favorite_added_toast_line)
+                        )
+                    }
+                }
+            } else {
+                null
+            },
             onReport = if (SportsLiveMoreEntry.REPORT in entries) {
                 {
                     menuCardKey = null
@@ -1963,8 +1995,12 @@ private fun SportsLiveContent(
                                     Column {
                                         if (channelsTab) {
                                             val section = boardRow.section
-                                            if (section != null && sectionCounts.size > 1 && (index == 0 || boardRowOf[items[index - 1].listKey]?.section != section)) {
-                                                SportsLiveSectionHeader(channelRegionLabel(section, otherRegionLabel), sectionCounts[section] ?: 0)
+                                            // Phase 1: under All regions with no favorite listed, the Favorites heading and its hint lead.
+                                            val favoritesHint = uiState.selectedFilter == null && SportsLiveChannelFavorites.FAVORITES !in sectionCounts
+                                            if (index == 0 && favoritesHint) SportsLiveFavoritesHint()
+                                            val headed = sectionCounts.size > 1 || favoritesHint || SportsLiveChannelFavorites.isPickSection(section)
+                                            if (section != null && headed && (index == 0 || boardRowOf[items[index - 1].listKey]?.section != section)) {
+                                                SportsLiveSectionHeader(channelSectionLabel(section, otherRegionLabel), sectionCounts[section] ?: 0)
                                             }
                                         } else if (index == 0 || boardRowOf[items[index - 1].listKey]?.group != boardRow.group) {
                                             SportsLiveScoreboardHeader(boardRow.group, groupCounts[boardRow.group] ?: 0)

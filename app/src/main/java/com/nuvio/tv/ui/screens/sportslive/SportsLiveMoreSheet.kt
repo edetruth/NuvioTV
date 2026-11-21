@@ -151,7 +151,10 @@ internal fun SportsLiveCardMenu(
     /** "Scores ahead? +15 s" (live.20 Q18, #85): in the player only; null hides it. */
     onScoresAhead: (() -> Unit)? = null,
     /** "Report a problem" (#172, TV QA): saves a report as the Play/Pause hold does; always last; null hides it. */
-    onReport: (() -> Unit)? = null
+    onReport: (() -> Unit)? = null,
+    /** "Add to favorites" / "Remove from favorites" (Channels phase 1) by [favorite]: first in a channel's menu; null hides it. */
+    onToggleFavorite: (() -> Unit)? = null,
+    favorite: Boolean = false
 ) {
     var teamsOpen by remember { mutableStateOf(false) }
     SportsLiveSheet(
@@ -167,6 +170,15 @@ internal fun SportsLiveCardMenu(
                 SportsLiveMenuButton(text = stringResource(R.string.sports_live_team_page, name), onClick = open, modifier = first())
             }
             return@SportsLiveSheet
+        }
+        if (onToggleFavorite != null) {
+            SportsLiveMenuButton(
+                text = stringResource(if (favorite) R.string.sports_live_channel_favorite_remove else R.string.sports_live_channel_favorite_add),
+                onClick = onToggleFavorite,
+                modifier = first(),
+                icon = if (favorite) Icons.Rounded.Star else Icons.Rounded.StarOutline,
+                iconTint = Colors.FollowedGold
+            )
         }
         if (onHide != null && hideFirst) {
             SportsLiveMenuButton(

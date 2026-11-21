@@ -10,6 +10,7 @@ import com.nuvio.tv.core.sportslive.scores.EspnLeague
 import com.nuvio.tv.core.sportslive.scores.BigGame
 import androidx.compose.runtime.Immutable
 import com.nuvio.tv.core.sportslive.EndedGame
+import com.nuvio.tv.core.sportslive.SportsLiveChannelLists
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.scores.GameArt
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
@@ -56,7 +57,9 @@ data class SportsLiveBoardInputs(
     /** Learned logos' revision (#66): the drawn cards are built again when it moves. */
     val logoRevision: Int,
     /** Standings by league (#137): Upcoming's big games read them; empty on the other tabs. */
-    val standings: Map<EspnLeague, Map<String, TeamStanding>> = emptyMap()
+    val standings: Map<EspnLeague, Map<String, TeamStanding>> = emptyMap(),
+    /** Channels' favorites and recent plays (phase 1); none on the other tabs. */
+    val channelLists: SportsLiveChannelLists = SportsLiveChannelLists.NONE
 )
 
 /**
@@ -129,7 +132,8 @@ data class SportsLiveBoard(
             } else {
                 when (tab) {
                     // V2 P4: Channels by region, Replays under their spoiler-free titles, by day.
-                    SportsLiveTab.CHANNELS -> channelRows(inputs.items)
+                    // Phase 1: favorites and recent lead under All regions; a region picked lists that region alone.
+                    SportsLiveTab.CHANNELS -> channelRows(inputs.items, inputs.channelLists, sections = inputs.filter == null)
                     SportsLiveTab.REPLAYS -> replayRows(inputs.items)
                     else -> null
                 }

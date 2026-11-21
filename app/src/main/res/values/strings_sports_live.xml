@@ -434,6 +434,16 @@
     <string name="sports_live_group_channels">CHANNELS · %1$d</string>
     <string name="sports_live_group_just_ended">JUST ENDED</string>
     <string name="sports_live_channel_now">Now: %1$s</string>
+    <!-- Channels phase 1: favorites and recent plays above the regions. -->
+    <string name="sports_live_channels_favorites">★ Favorites</string>
+    <string name="sports_live_channels_recent">Recent</string>
+    <string name="sports_live_channels_favorites_hint">Hold OK on a channel to add it here</string>
+    <string name="sports_live_channel_favorite_add">Add to favorites</string>
+    <string name="sports_live_channel_favorite_remove">Remove from favorites</string>
+    <string name="sports_live_channel_favorite_added_toast">%1$s added to Favorites</string>
+    <string name="sports_live_channel_favorite_added_toast_line">Hold OK on it to remove</string>
+    <string name="sports_live_channel_favorite_removed_toast">%1$s removed from Favorites</string>
+    <string name="sports_live_channel_favorite_removed_toast_line">It leaves the list the next time you open Channels</string>
     <string name="sports_live_matchup">%1$s vs %2$s</string>
     <string name="sports_live_more">More…</string>
     <string name="sports_live_preview_muted">Muted</string>
