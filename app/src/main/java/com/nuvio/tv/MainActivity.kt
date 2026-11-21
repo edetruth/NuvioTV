@@ -1463,7 +1463,8 @@ open class MainActivity : ComponentActivity() {
             }
             return true
         }
-        return super.dispatchKeyEvent(event)
+        // Hold OK where nothing focused has a hold of its own: the Report a problem sheet (#218 everywhere).
+        return SportsLiveActivityHooks.dispatchToScreens(event, hasWindowFocus(), sportsLiveReporter) { super.dispatchKeyEvent(it) }
     }
 
     override fun onStart() {
