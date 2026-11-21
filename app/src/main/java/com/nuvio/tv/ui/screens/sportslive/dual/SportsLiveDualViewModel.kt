@@ -65,7 +65,7 @@ data class SportsLiveDualSession(
     val leftStream: Stream? = null,
     /** Every game of [tab] (on Live now, whatever [filter]), for the zap session OK starts (#68). */
     val zapItems: List<SportsLiveItem> = items,
-    /** The game whose full player opened dual screen: Back plays it full screen again (M11); null from the section. */
+    /** The game whose full player opened dual screen; null from the section. Back keeps the game with sound ([SportsLiveDualViewModel.keepOnBack]). */
     val backTo: SportsLiveItem? = null,
     /** "Watch with another game" (#57) paired [right] by itself: "Paired with ‹game› · ← to change" shows. */
     val pairedHint: Boolean = false,
@@ -241,7 +241,6 @@ class SportsLiveDualViewModel internal constructor(
     private val zapItems: List<SportsLiveItem> = session?.zapItems.orEmpty()
     private val filter: String? = session?.filter
     private val tab: SportsLiveTab = session?.tab ?: SportsLiveTab.LIVE_NOW
-    private val backTo: SportsLiveItem? = session?.backTo
     private val finishedKeys: Set<String> = session?.finishedKeys.orEmpty()
 
     private val _state = MutableStateFlow(session?.let { DualState(DualPane(it.left), DualPane(it.right)) })
@@ -736,7 +735,7 @@ class SportsLiveDualViewModel internal constructor(
      */
     fun startZapSession(item: SportsLiveItem, returnToDual: Boolean = true) {
         // Back from that full screen returns here with both games (coordinator decision 1): the other pane's game.
-        // Not when Back from dual is what plays it ([backToPlayer], Close this side): Back then leaves.
+        // Not when Back from dual is what plays it ([keepOnBack], Close this side): Back then leaves.
         val other = if (!returnToDual) null else _state.value?.let { state -> state.sideOf(item)?.let { state.pane(it.other).item } }
         // Every game of the tab, so the player's panel and zaps are not held to the filter (#68).
         val session = SportsLiveZapSession.of(
@@ -750,15 +749,17 @@ class SportsLiveDualViewModel internal constructor(
     }
 
     /**
-     * Back (M11): when a full player opened dual screen, its game and the stream to play it on (the
-     * pane's playing stream, else the one the player handed over unless it failed; null takes the section's play path),
-     * so Back returns to that single player, which replaces dual screen as OK does (#27). Null when dual
-     * screen was opened elsewhere: Back leaves.
+     * Back from dual screen (user, 2026-11-21): the game with sound ([DualState.audibleSide], the highlighted pane
+     * unless it failed while the other plays) goes on full screen, the other one stops; never back to the list.
+     * Returns that game and the stream it plays on, handed over as OK does (the pane's playing stream, else the one
+     * the full player handed over unless it failed; null takes the section's play path). Null, so Back leaves, only
+     * with no session or when the kept game is over.
      */
-    fun backToPlayer(): Pair<SportsLiveItem, Stream?>? {
-        val item = backTo ?: return null
-        val pane = _state.value?.let { state -> state.sideOf(item)?.let(state::pane) }
-        return item to (pane?.okStream ?: handOffs[item.streamKey])
+    fun keepOnBack(): Pair<SportsLiveItem, Stream?>? {
+        val state = _state.value ?: return null
+        val pane = state.pane(state.audibleSide)
+        if (pane.status == PaneStatus.Ended) return null
+        return pane.item to (pane.okStream ?: handOffs[pane.item.streamKey])
     }
 
     /**
