@@ -1377,6 +1377,45 @@ class LiveScoresRepositoryTest {
     }
 
     @Test
+    fun `the game being watched and a protected game are never written to the kept file`() = runTest {
+        val lakers = item("Los Angeles Lakers at Phoenix Suns", "Basketball", "2026-11-15T20:30:00Z")
+        val lakersGame = nbaFixture.first { it.eventId == "401909986" }.let {
+            it.copy(state = ScoreState.IN, isFinal = false, clockText = "Q1 2:00", home = it.home.copy(score = 20), away = it.away.copy(score = 18))
+        }
+        provider.respond = { ScoreboardResult(listOf(game(ScoreState.IN, 50, 48, "Q2 5:00"), lakersGame)) }
+
+        // The Pacers game is playing: only the Lakers game is written.
+        val watchedFile = keptFile()
+        val first = repository("2026-11-15T19:00:00Z", keptFile = watchedFile)
+        val looking = collect(first)
+        watching.watch("player", setOf(pacersCard.streamKey), "addon-a")
+        first.track(SECTION, listOf(pacersCard, lakers))
+        runCurrent()
+        advanceTimeBy(LiveScoresRepository.KEPT_WRITE_DELAY_MS + 1); runCurrent()
+        looking.cancel()
+        runCurrent()
+        val nowMs = ms("2026-11-15T19:00:00Z") + testScheduler.currentTime
+        assertEquals(setOf(lakers.streamKey), KeptScores.decode(watchedFile.read()!!, nowMs)!!.games.keys)
+
+        // Nothing playing, the 76ers followed with "hide my teams' scores": their game is not written either.
+        watching.watch("player", setOf("another card"), "addon-a")
+        val followed = listOf(com.nuvio.tv.domain.model.FollowedTeam(name = "Philadelphia 76ers", sport = "Basketball"))
+        val protectedFile = keptFile()
+        val second = repository(
+            "2026-11-15T19:00:00Z", keptFile = protectedFile,
+            protection = kotlinx.coroutines.flow.flowOf(SpoilerProtection(myTeams = true, followed = followed))
+        )
+        val again = collect(second)
+        second.track(SECTION, listOf(pacersCard, lakers))
+        runCurrent()
+        advanceTimeBy(LiveScoresRepository.KEPT_WRITE_DELAY_MS + 1); runCurrent()
+        again.cancel()
+        runCurrent()
+        val later = ms("2026-11-15T19:00:00Z") + testScheduler.currentTime
+        assertEquals(setOf(lakers.streamKey), KeptScores.decode(protectedFile.read()!!, later)!!.games.keys)
+    }
+
+    @Test
     fun `a kept score is drawn for one poll at most when the feed never answers`() = runTest {
         val file = keptFile()
         val base = ms("2026-11-15T19:00:00Z")

@@ -1125,7 +1125,7 @@ class LiveScoresRepository internal constructor(
         val delay = ScoreWatch.delayMs(settingDelayMs, realTime, playing, nudgeSeconds)
         // A game first seen shows its score at once, except the games being watched (their picture runs behind).
         val delayed = scoreDelay.apply(raw, delay, now(), holdFirstSeen = ScoreWatch.watchedEvents(playing, raw))
-        saveKept(delayed)
+        saveKept(keepable(delayed))
         lastDelayed = delayed
         val keptNow = keptServedLocked()
         val shown = if (keptNow.isEmpty()) delayed else keptNow + delayed
@@ -1159,6 +1159,17 @@ class LiveScoresRepository internal constructor(
             served[key] = keptCard.snapshot.copy(kept = true)
         }
         return served
+    }
+
+    /**
+     * The [delayed] scores fit to keep on disk: never the games being watched (their picture runs behind) nor a
+     * protected game (live.23 review): a hidden score is never written where it could be read back.
+     */
+    private fun keepable(delayed: Map<String, ScoreSnapshot>): Map<String, ScoreSnapshot> {
+        if (delayed.isEmpty()) return delayed
+        val watched = ScoreWatch.watchedEvents(playing, delayed)
+        val protection = protectionState.value.copy(nowMs = now())
+        return delayed.filterValues { it.eventId !in watched && !protection.protects(it) }
     }
 
     /** Writes [shown] (the delayed scores, unmasked) to [keptFile] a moment after the last change, off the poll path. */
