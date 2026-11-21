@@ -8,6 +8,7 @@ import com.nuvio.tv.domain.model.SportsLiveKind
 import com.nuvio.tv.ui.screens.sportslive.ZapPanelGroup
 import com.nuvio.tv.ui.screens.sportslive.ZapPanelRow
 import com.nuvio.tv.ui.screens.sportslive.panelGuide
+import com.nuvio.tv.ui.screens.sportslive.panelPickKeepsPlaying
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -47,6 +48,22 @@ class SportsLivePlayingGameTest {
         // The lineup leaves the game playing out (a chip): its copy is still left out.
         val filtered = panelGuide(lineup.filter { it.item != playing }, playing.streamKey, playing = playing)
         assertEquals(listOf(other.streamKey), filtered.entries.filterIsInstance<com.nuvio.tv.ui.screens.sportslive.PanelGuideEntry.Game>().map { it.key })
+    }
+
+    @Test
+    fun `OK on the game playing or a copy only closes the panel while the stream plays well, else it recovers`() {
+        val playing = game("a", "1", "Liverpool vs Chelsea", start = 0)
+        val copy = game("b", "9", "Liverpool FC vs Chelsea FC", start = 0)
+        val other = game("b", "2", "Arsenal vs Spurs", start = 0)
+        // Healthy: the stream plays on (J5).
+        assertTrue(panelPickKeepsPlaying(playing, playing, streamHealthy = true))
+        assertTrue(panelPickKeepsPlaying(copy, playing, streamHealthy = true))
+        // Buffering, stalled or failed (M1): the pick restarts the game or plays the copy's link.
+        assertFalse(panelPickKeepsPlaying(playing, playing, streamHealthy = false))
+        assertFalse(panelPickKeepsPlaying(copy, playing, streamHealthy = false))
+        // Another game always switches, and with nothing known as playing the pick goes ahead.
+        assertFalse(panelPickKeepsPlaying(other, playing, streamHealthy = true))
+        assertFalse(panelPickKeepsPlaying(playing, null, streamHealthy = true))
     }
 
     private fun game(addon: String, id: String, name: String, start: Long) = SportsLiveItem(

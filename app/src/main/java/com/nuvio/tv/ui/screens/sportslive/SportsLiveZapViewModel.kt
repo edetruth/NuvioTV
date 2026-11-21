@@ -1235,13 +1235,14 @@ class SportsLiveZapViewModel internal constructor(
 
     /**
      * [item] was picked in the live games panel: the panel closes and the player zaps to it. The game playing, or another
-     * addon's copy of it (J5), only closes the panel: the stream plays on, never started again.
+     * addon's copy of it (J5), only closes the panel while [streamHealthy]: the stream plays on, never started again.
+     * A buffering, stalled or failed stream is started again (or the copy's link played) so OK recovers it (M1).
      */
-    fun onPanelPick(item: SportsLiveItem) {
+    fun onPanelPick(item: SportsLiveItem, streamHealthy: Boolean = true) {
         val items = panel.value?.allItems.orEmpty()
         val playing = panel.value?.nowPlayingRow?.item
         closePanel()
-        if (playing != null && SportsLivePlayingGame.isSameGame(item, playing)) return
+        if (panelPickKeepsPlaying(item, playing, streamHealthy)) return
         controller.pick(contentId, item, items)
     }
 
@@ -1307,7 +1308,7 @@ class SportsLiveZapViewModel internal constructor(
      * page's request is returned, the panel closed) where the player can open it ([canOpenGame]); any other row
      * zaps to its game as before ([onPanelPick]) and null is returned.
      */
-    internal fun onPanelOk(item: SportsLiveItem, canOpenGame: Boolean): SportsLiveGameRequest? {
+    internal fun onPanelOk(item: SportsLiveItem, canOpenGame: Boolean, streamHealthy: Boolean = true): SportsLiveGameRequest? {
         val current = lineup.value
         val row = current?.rows?.firstOrNull { it.item.streamKey == item.streamKey }
         val game = current?.let { strictGame(it, item) }
@@ -1315,7 +1316,7 @@ class SportsLiveZapViewModel internal constructor(
             // "Box score ›" (#145): the page opens on its Box Score tab.
             return panelGameRequest(SportsLivePanelMenu(item, emptyList(), emptyList(), game), GameSection.BOX_SCORE)
         }
-        onPanelPick(item)
+        onPanelPick(item, streamHealthy)
         return null
     }
 
@@ -1482,6 +1483,13 @@ private data class PanelList(
     /** More live's groups (user 2026-11-21): the live games My sports leaves out and the listings that are no game. */
     val moreLive: List<SportsLiveMoreLive.Group> = emptyList()
 )
+
+/**
+ * OK on [item] in the panel or guide only closes it (J5) when [item] is the game [playing] (or another addon's copy of
+ * it) and the stream is healthy: playing, not buffering, stalled or failed. Otherwise the pick restarts or switches (M1).
+ */
+internal fun panelPickKeepsPlaying(item: SportsLiveItem, playing: SportsLiveItem?, streamHealthy: Boolean): Boolean =
+    streamHealthy && playing != null && SportsLivePlayingGame.isSameGame(item, playing)
 
 /**
  * The chip the panel opens on (#68): the sport or My teams chip picked earlier in this playback, else All (My sports).

@@ -139,7 +139,9 @@ internal fun BoxScope.SportsLiveZapOverlay(
     /** A card above the end card is up ([SportsLivePlayerLayers], live.19 QA F10): the end card waits for it. */
     endCardCovered: Boolean = false,
     /** The player is paused (not buffering): a live game shows "Paused · behind live · Go live" (research Q19). */
-    paused: () -> Boolean = { false }
+    paused: () -> Boolean = { false },
+    /** The stream plays well (playing, not buffering, stalled or failed): OK on the game playing only closes the panel (M1). */
+    streamHealthy: () -> Boolean = { true }
 ) {
     if (!viewModel.hasSession) return
     // In picture-in-picture only the video shows: no banner, indicator or panel.
@@ -285,7 +287,7 @@ internal fun BoxScope.SportsLiveZapOverlay(
                 keysHint = panelKeysHint,
                 // OK: a matched Just ended game opens its box score (#140); any other row zaps to its game.
                 onPick = { item ->
-                    viewModel.onPanelOk(item, canOpenGame = openGame != null)?.let { request ->
+                    viewModel.onPanelOk(item, canOpenGame = openGame != null, streamHealthy = streamHealthy())?.let { request ->
                         SportsLiveGameRequests.open(request)
                         viewModel.onGameOpened(wasPlaying = isPlaying())
                         openGame?.invoke()
@@ -314,7 +316,7 @@ internal fun BoxScope.SportsLiveZapOverlay(
                     state = state,
                     // OK: a matched Just ended game opens its box score (#140); any other row zaps to its game.
                     onPick = { item ->
-                        viewModel.onPanelOk(item, canOpenGame = openGame != null)?.let { request ->
+                        viewModel.onPanelOk(item, canOpenGame = openGame != null, streamHealthy = streamHealthy())?.let { request ->
                             SportsLiveGameRequests.open(request)
                             viewModel.onGameOpened(wasPlaying = isPlaying())
                             openGame?.invoke()
@@ -410,7 +412,7 @@ internal fun BoxScope.SportsLiveZapOverlay(
             onWatchPostgame = if (shown.postgame) {
                 {
                     menu = null
-                    viewModel.onPanelPick(item)
+                    viewModel.onPanelPick(item, streamHealthy())
                 }
             } else {
                 null

@@ -2452,7 +2452,8 @@ fun PlayerScreen(
             isPlaying = { viewModel.uiState.value.isPlaying },
             onBackToLiveNow = { exitPlayerFromError() },
             endCardCovered = SportsLivePlayerLayers.covered(SportsLivePlayerLayer.END_CARD, sportsLayers),
-            paused = { viewModel.uiState.value.let { !it.isPlaying && !it.isBuffering && it.error == null } }
+            paused = { viewModel.uiState.value.let { !it.isPlaying && !it.isBuffering && it.error == null } },
+            streamHealthy = { viewModel.uiState.value.let { it.isPlaying && !it.isBuffering && it.error == null } }
         )
 
         // Sports & Live game info (#139): a slim card at the bottom, on demand only.
