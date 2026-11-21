@@ -678,11 +678,14 @@ class SportsLiveDualViewModel internal constructor(
 
     /**
      * Back with an end card up (coordinator decision 4: a pane's card has no Stay): the highlighted pane's card closes,
-     * else the other pane's; "Game over" stays. False when neither pane shows one.
+     * else, in big + small only, the other pane's; "Game over" stays. Side by side Back acts on the ringed pane alone, as
+     * OK does (live.24 RC2 review R3): the other pane's card shows no keys, and Back plays the ringed game full screen.
+     * False when no such card shows.
      */
     fun closeEndCard(): Boolean {
         val state = _state.value ?: return false
-        val side = listOf(state.highlighted, state.highlighted.other).firstOrNull { side ->
+        val sides = if (state.layout == DualLayout.BIG_SMALL) listOf(state.highlighted, state.highlighted.other) else listOf(state.highlighted)
+        val side = sides.firstOrNull { side ->
             state.pane(side).let { it.status == PaneStatus.Ended && it.end != null }
         } ?: return false
         jobs.remove(side)?.cancel()

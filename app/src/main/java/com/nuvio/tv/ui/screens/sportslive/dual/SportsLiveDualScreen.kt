@@ -301,9 +301,11 @@ fun SportsLiveDualScreen(
     val handleBack: () -> Unit = handleBack@{
         // The game info overlay closes first.
         if (gameInfo.hide()) return@handleBack
-        // A pane's end card (its countdown with it, #161) (coordinator decision 4: no Stay in a pane): Back closes it.
+        // A pane's end card (its countdown with it, #161) (coordinator decision 4: no Stay in a pane): Back closes it: the
+        // ringed pane's, in big + small else the other's; side by side Back acts on the ringed pane, as OK (live.24 RC2 R3).
         if (viewModel.closeEndCard()) return@handleBack
-        if (viewModel.cancelEndCountdowns()) return@handleBack
+        // Any key stops a countdown left on the other pane (#161), and Back still does what it does.
+        viewModel.cancelEndCountdowns()
         // "Close this side" (#138): the highlighted pane gave up; the other game plays full screen.
         viewModel.closeFailedSide()?.takeUnless { backPlayed }?.let { (item, stream) ->
             backPlayed = true

@@ -333,8 +333,8 @@ class SportsLiveDualGameEndTest {
         viewModel.playing()
         viewModel.onUnhealthy(a, SportsLiveStreamHealth.Problem.UNEXPECTED_END)
         assertNotNull(viewModel.state.value!!.left.end!!.countdownEndsAtMs)
-        // The ring is on the other pane: its card still closes.
-        viewModel.highlight(Side.RIGHT)
+        // The ring on the ended pane: its card closes.
+        assertEquals(Side.LEFT, viewModel.state.value!!.highlighted)
         assertTrue(viewModel.closeEndCard())
         assertNull(viewModel.state.value!!.left.end)
         assertEquals(PaneStatus.Ended, viewModel.state.value!!.left.status)
@@ -343,5 +343,29 @@ class SportsLiveDualGameEndTest {
         assertEquals(a, viewModel.state.value!!.left.item)
         // Nothing left to close: Back goes on as before.
         assertFalse(viewModel.closeEndCard())
+    }
+
+    @Test
+    fun `side by side Back with the ring on the healthy pane leaves the other pane's end card, big and small closes it`() = runTest(mainDispatcherRule.dispatcher) {
+        // live.24 RC2 review R3: side by side, Back acts on the ringed pane as OK does (the other pane's card shows no keys),
+        // so it plays the ringed game full screen; in big + small the other pane's card still takes Back.
+        val viewModel = newViewModel(a, d)
+        runCurrent()
+        viewModel.playing()
+        viewModel.onUnhealthy(a, SportsLiveStreamHealth.Problem.UNEXPECTED_END)
+        viewModel.highlight(Side.RIGHT)
+        assertEquals(DualLayout.SPLIT, viewModel.state.value!!.layout)
+        assertFalse(viewModel.closeEndCard())
+        assertNotNull(viewModel.state.value!!.left.end)
+        // Back goes on: the countdown left on the other pane stops, its card stays.
+        assertTrue(viewModel.cancelEndCountdowns())
+        assertNotNull(viewModel.state.value!!.left.end)
+        viewModel.toggleLayout()
+        runCurrent()
+        assertEquals(DualLayout.BIG_SMALL, viewModel.state.value!!.layout)
+        val ended = viewModel.state.value!!.sideOf(a)!!
+        viewModel.highlight(ended.other)
+        assertTrue(viewModel.closeEndCard())
+        assertNull(viewModel.state.value!!.pane(ended).end)
     }
 }
