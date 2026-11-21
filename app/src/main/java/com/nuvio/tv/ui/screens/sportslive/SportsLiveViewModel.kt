@@ -45,6 +45,8 @@ import com.nuvio.tv.core.sportslive.SportsLiveListCache
 import com.nuvio.tv.core.sportslive.SportsLiveListSnapshot
 import com.nuvio.tv.core.sportslive.SportsLiveListSnapshots
 import com.nuvio.tv.core.sportslive.SportsLiveSharedBuckets
+import com.nuvio.tv.core.sportslive.SportsLiveUpcomingBucket
+import com.nuvio.tv.core.sportslive.SportsLiveUpcomingWindow
 import com.nuvio.tv.data.local.SportsLiveListSnapshotStore
 import com.nuvio.tv.domain.model.ClaimedCatalog
 import com.nuvio.tv.BuildConfig
@@ -85,6 +87,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.combineTransform
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.onStart
@@ -100,6 +103,11 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.temporal.ChronoUnit
+import java.util.IdentityHashMap
 import javax.inject.Inject
 
 @HiltViewModel
@@ -195,7 +203,14 @@ class SportsLiveViewModel internal constructor(
     /** RC regression (#143): learned logos re-infer every card's sport (pinned) at most once in this time (0: each). */
     pinSettleMs: Long = 0L,
     /** live.20 1b: a row rested on is checked ahead only when it is one of my games ([SportsLiveMyGames]). */
-    private val isMyGame: (SportsLiveItem) -> Boolean = { false }
+    private val isMyGame: (SportsLiveItem) -> Boolean = { false },
+    /**
+     * live.24: Upcoming sorts only this many days ahead (plus followed teams' and untimed games, and My sports only) until
+     * a later day or All sports is asked ([SportsLiveUpcomingWindow]); null: every game (tests). Needs [sharedBuckets].
+     */
+    private val upcomingWindowDays: Int? = null,
+    /** The zone Upcoming's days are counted in (the Agenda's). */
+    private val zone: ZoneId = ZoneId.systemDefault()
 ) : ViewModel() {
 
     @Inject
@@ -280,7 +295,8 @@ class SportsLiveViewModel internal constructor(
         activeProfile = profileManager.activeProfileId,
         rebucketGapMs = REBUCKET_GAP_MS,
         pinSettleMs = PIN_SETTLE_MS,
-        isMyGame = { item -> SportsLiveGameReadiness.shared.mine.value.let { mine -> (listOf(item) + item.alternates).any { it.id in mine } } }
+        isMyGame = { item -> SportsLiveGameReadiness.shared.mine.value.let { mine -> (listOf(item) + item.alternates).any { it.id in mine } } },
+        upcomingWindowDays = SportsLiveUpcomingWindow.NEAR_DAYS
     )
 
     private data class Selection(
@@ -318,8 +334,20 @@ class SportsLiveViewModel internal constructor(
         /** Built from this session's own load, not the saved list or nothing (#214). */
         val fromLoad: Boolean = false,
         /** The followed teams the tabs were pinned with (null: not pinned yet). */
-        val followed: List<FollowedTeam>? = null
+        val followed: List<FollowedTeam>? = null,
+        /** live.24: Upcoming's later dates not sorted yet ([SportsLiveUpcomingWindow]). */
+        val upcomingPending: List<LocalDate> = emptyList(),
+        /** live.24: games on Upcoming's sorted days waiting for All sports (a cheap count). */
+        val upcomingWaiting: Int = 0,
+        /** live.24: tabs still being sorted on the cold open (Live now went first): an empty one shows as loading. */
+        val sortingTabs: Set<SportsLiveTab> = emptySet()
     )
+
+    /** What Upcoming's working set was asked to hold (live.24): how many days, and every sport (All sports picked). */
+    private data class UpcomingAsk(val days: Int, val allSports: Boolean = false)
+
+    /** Upcoming's working set as asked, with My sports and the followed teams it reads; null without a window (tests). */
+    private data class UpcomingInputs(val ask: UpcomingAsk, val mySports: MySports, val followed: List<FollowedTeam>)
 
     @VisibleForTesting
     internal var nowMs: () -> Long = { System.currentTimeMillis() }
@@ -388,6 +416,16 @@ class SportsLiveViewModel internal constructor(
     // identities kept landing; now at most once per rebucketGapMs after the first.
     private val rebucket: Flow<Unit> = directoryChanges.debounce(REBUCKET_DEBOUNCE_MS).firstThenCoalesce(rebucketGapMs).onStart { emit(Unit) }
 
+    // live.24: Upcoming's days and sports asked for so far this visit ([showUpcomingDay], All sports).
+    private val upcomingAsk = MutableStateFlow(UpcomingAsk(days = upcomingWindowDays ?: SportsLiveUpcomingWindow.NEAR_DAYS))
+
+    private val upcomingInputs: Flow<UpcomingInputs?> =
+        if (upcomingWindowDays == null || sharedBuckets == null) {
+            flowOf(null)
+        } else {
+            combine(upcomingAsk, mySports, repo.followedTeams) { ask, sports, followed -> UpcomingInputs(ask, sports, followed) }.distinctUntilChanged()
+        }
+
     // live.20 C1: the next tip-off (or live window's end) of the shown list; when it passes, the list is bucketed again,
     // so a game moves from Upcoming to Live now on time without a catalog refresh.
     private val kickoffs = MutableStateFlow(0L)
@@ -404,7 +442,15 @@ class SportsLiveViewModel internal constructor(
     private val firstStateLogged = java.util.concurrent.atomic.AtomicBoolean(false)
     private fun sinceOpenMs(): Long = (System.nanoTime() - openedAtNs) / 1_000_000
 
-    private val bucketed = combine(repo.claimedCatalogs, repo.latest, rebucket, kickoffs) { claimed, latest, _, _ ->
+    // live.24: the cold open's Live now went out before the other tabs were sorted (once per visit), and the last sorting out.
+    private var liveFirstDone = false
+    private var lastSorted: Bucketed? = null
+
+    /** Runs between the cold open's Live now and the other tabs' sorting; tests hold it to see Live now first. */
+    @VisibleForTesting
+    internal var afterLiveFirst: suspend () -> Unit = {}
+
+    private val bucketed = combineTransform(repo.claimedCatalogs, repo.latest, rebucket, kickoffs, upcomingInputs) { claimed, latest, _, _, upcoming ->
         // Only items of catalogs claimed right now: the cache may still hold another profile's load.
         val claimedKeys = claimed.mapTo(HashSet()) { it.key }
         // Claimed catalogs come in the user's addon order, which picks a merged game's primary.
@@ -414,24 +460,61 @@ class SportsLiveViewModel internal constructor(
             // Stale-while-revalidate (live.20 B1): the profile's last list, moved by the clock, while the first load runs.
             savedTabs(claimed, now)?.let { (tabs, savedAtMs) ->
                 scheduleKickoff(SportsLiveItemBucketer.nextClockChange(tabs.values.flatten(), now))
-                return@combine Bucketed(hasClaimed = true, hasLoad = true, tabs = tabs, listAtMs = savedAtMs)
+                emit(Bucketed(hasClaimed = true, hasLoad = true, tabs = tabs, listAtMs = savedAtMs).also { lastSorted = it })
+                return@combineTransform
             }
-            return@combine Bucketed(hasClaimed = claimed.isNotEmpty(), hasLoad = false, tabs = bucket(emptyList(), now, addonOrder))
+            emit(Bucketed(hasClaimed = claimed.isNotEmpty(), hasLoad = false, tabs = bucket(emptyList(), now, addonOrder)))
+            return@combineTransform
         }
         val items = latest.items.filter { it.catalogKey in claimedKeys }
         val stamp = directoryStamp()
         // Back on the section while the load it was built from is still the latest (live.20 B1): no bucketing again,
         // unless the team directory moved or a game started since.
+        // live.24: a windowed Upcoming is kept by the shared sorting itself (per load, per days asked), never by the list cache.
         val reused = listCache.peek()?.takeIf {
-            it.load === latest && it.claimedKeys == claimedKeys && it.addonOrder == addonOrder && it.directoryStamp == stamp &&
+            upcoming == null && it.load === latest && it.claimedKeys == claimedKeys && it.addonOrder == addonOrder && it.directoryStamp == stamp &&
                 !SportsLiveItemBucketer.clockChangedBetween(items, it.builtAtMs, now)
         }
+        var upcomingBucket: SportsLiveUpcomingBucket? = null
         val tabs = if (reused != null) {
             SportsLiveDebugTiming.log { "sportsOpen stage=bucketReused t=${sinceOpenMs()}" }
             reused.tabs
         } else {
             val startedAt = System.nanoTime()
-            (sharedBuckets?.all(latest, claimedKeys, addonOrder, now, stamp) ?: bucket(items, now, addonOrder)).also { tabs ->
+            // live.24: the cold open's first sorting sends Live now (~80 games) out at once, before Upcoming, Channels and
+            // Replays (~3,800) are sorted; those tabs keep what they showed (the saved list) or wait as loading meanwhile.
+            if (sharedBuckets != null && !liveFirstDone) {
+                liveFirstDone = true
+                val live = sharedBuckets.tab(latest, claimedKeys, addonOrder, SportsLiveTab.LIVE_NOW, now, stamp)
+                val before = lastSorted?.tabs.orEmpty()
+                emit(
+                    Bucketed(
+                        hasClaimed = claimed.isNotEmpty(), hasLoad = true, listAtMs = latest.loadedAtMs, fromLoad = true,
+                        tabs = SportsLiveTab.entries.associateWith { tab -> if (tab == SportsLiveTab.LIVE_NOW) live else before[tab].orEmpty() },
+                        sortingTabs = SportsLiveTab.entries.filter { it != SportsLiveTab.LIVE_NOW && before[it].isNullOrEmpty() }.toSet()
+                    )
+                )
+                SportsLiveDebugTiming.log {
+                    "sportsOpen stage=liveFirst ms=${(System.nanoTime() - startedAt) / 1_000_000} t=${sinceOpenMs()} rows=${live.size}"
+                }
+                afterLiveFirst()
+            }
+            val sorted = if (sharedBuckets != null && upcoming != null) {
+                val window = SportsLiveUpcomingWindow(
+                    zone = zone,
+                    days = upcoming.ask.days,
+                    mySports = upcoming.mySports.takeUnless { upcoming.ask.allSports },
+                    followed = upcoming.followed
+                )
+                val windowed = sharedBuckets.upcoming(latest, claimedKeys, addonOrder, now, window, stamp)
+                upcomingBucket = windowed
+                SportsLiveTab.entries.associateWith { tab ->
+                    if (tab == SportsLiveTab.UPCOMING) windowed.rows else sharedBuckets.tab(latest, claimedKeys, addonOrder, tab, now, stamp)
+                }
+            } else {
+                sharedBuckets?.all(latest, claimedKeys, addonOrder, now, stamp) ?: bucket(items, now, addonOrder)
+            }
+            sorted.also { tabs ->
                 SportsLiveDebugTiming.log {
                     "sportsOpen stage=bucket ms=${(System.nanoTime() - startedAt) / 1_000_000} t=${sinceOpenMs()} items=${items.size} " +
                         tabs.entries.joinToString(" ") { (tab, list) -> "${tab.name}=${list.size}" }
@@ -445,7 +528,12 @@ class SportsLiveViewModel internal constructor(
             }
         }
         scheduleKickoff(SportsLiveItemBucketer.nextClockChange(items, now))
-        Bucketed(hasClaimed = claimed.isNotEmpty(), hasLoad = true, tabs = tabs, listAtMs = latest.loadedAtMs, fromLoad = true)
+        val done = Bucketed(
+            hasClaimed = claimed.isNotEmpty(), hasLoad = true, tabs = tabs, listAtMs = latest.loadedAtMs, fromLoad = true,
+            upcomingPending = upcomingBucket?.pendingDates.orEmpty(), upcomingWaiting = upcomingBucket?.waitingBySport ?: 0
+        )
+        lastSorted = done
+        emit(done)
     }.flowOn(computeDispatcher)
 
     /** The saved list's tabs for [claimed] at [now], with when it was loaded; null when there is none to show. */
@@ -495,14 +583,25 @@ class SportsLiveViewModel internal constructor(
     // again whenever the team directory changes (it bumps the logo revision). Channels are never inferred.
     // Titles hidden from Live Now (#134) are left off its list, and off Upcoming's (live.20: "Hide this" there).
     // RC regression (#143): re-inferring every card (3-4 s on the onn) at most once per pinSettleMs for learned logos.
-    private val pinned = combine(bucketed, repo.followedTeams, logoRevision.firstThenCoalesce(pinSettleMs), hiddenTitles) { bucketed, followed, _, hidden ->
+    // live.24: each card's inferred copy, kept while the learned logos, identities and team directory are as they were, so
+    // a re-pin (a refreshed catalog, a follow, a hidden title, the open's second step) infers only the cards it has not
+    // seen. By object: rows a re-bucketing did not change keep theirs ([SportsLiveItemBucketer.bucketClockedIncremental]).
+    private var pinMemo = IdentityHashMap<SportsLiveItem, SportsLiveItem>()
+    private var pinMemoKey: Pair<Int, Long>? = null
+
+    private val pinned = combine(bucketed, repo.followedTeams, logoRevision.firstThenCoalesce(pinSettleMs), hiddenTitles) { bucketed, followed, revision, hidden ->
         hiddenNow = hidden
         val startedAt = System.nanoTime()
+        val memoKey = revision to directoryStamp()
+        val before = if (memoKey == pinMemoKey) pinMemo else IdentityHashMap()
+        val memo = IdentityHashMap<SportsLiveItem, SportsLiveItem>()
+        var inferredCount = 0
+        fun inferred(item: SportsLiveItem): SportsLiveItem = memo.getOrPut(item) { before[item] ?: inferSport(item).also { inferredCount++ } }
         bucketed.copy(
             followed = followed,
             tabs = bucketed.tabs.mapValues { (tab, all) ->
                 val listed = if (tab == SportsLiveTab.LIVE_NOW || tab == SportsLiveTab.UPCOMING) SportsLiveHiddenTitles.filter(all, hidden) else all
-                val items = if (tab in INFERRED_TABS) listed.map(inferSport) else listed
+                val items = if (tab in INFERRED_TABS) listed.map { inferred(it) } else listed
                 if (tab == SportsLiveTab.CHANNELS) {
                     SportsLiveItemBucketer.markFollowed(items, followed)
                 } else {
@@ -513,7 +612,12 @@ class SportsLiveViewModel internal constructor(
                 }
             }
         ).also {
-            SportsLiveDebugTiming.log { "sportsOpen stage=pinned ms=${(System.nanoTime() - startedAt) / 1_000_000} t=${sinceOpenMs()}" }
+            pinMemo = memo
+            pinMemoKey = memoKey
+            SportsLiveDebugTiming.log {
+                "sportsOpen stage=pinned ms=${(System.nanoTime() - startedAt) / 1_000_000} t=${sinceOpenMs()} " +
+                    "inferred=$inferredCount reused=${memo.size - inferredCount}"
+            }
         }
     }.flowOn(computeDispatcher)
 
@@ -903,6 +1007,7 @@ class SportsLiveViewModel internal constructor(
         // The add-sport card shows on Live now only: leaving it unanswered counts; coming back to Live now shows it.
         if (tab != SportsLiveTab.LIVE_NOW) leaveAddSportCard()
         tabOpening = tab to System.nanoTime()
+        noteUpcomingFilter(tab, remembered)
         if (tab == SportsLiveTab.CHANNELS) takeChannelOrder() else channelBrowseState.value = null
         selectionState.update {
             it.copy(
@@ -919,10 +1024,26 @@ class SportsLiveViewModel internal constructor(
     fun selectFilter(value: String?) {
         // Another filter lists other cards: the preview stops until a card is focused again.
         if (value != selectionState.value.filter) previewController.onFocus(null)
+        noteUpcomingFilter(selectionState.value.tab, value)
         selectionState.update {
             val remembered = if (value == null) it.filterByTab - it.tab else it.filterByTab + (it.tab to value)
             it.copy(filter = value, filterByTab = remembered)
         }
+    }
+
+    /** live.24: All sports picked on Upcoming sorts the games My sports left waiting, from then on this visit. */
+    private fun noteUpcomingFilter(tab: SportsLiveTab, filter: String?) {
+        if (tab == SportsLiveTab.UPCOMING && filter == SportsLiveUiState.ALL_SPORTS_FILTER) upcomingAsk.update { it.copy(allSports = true) }
+    }
+
+    /**
+     * live.24: the viewer went to Upcoming's [date] (its day tab, Later › past the last sorted day, the list's end): that
+     * day and every one before it are sorted, once per load. A day already sorted asks nothing.
+     */
+    fun showUpcomingDay(date: LocalDate) {
+        val today = Instant.ofEpochMilli(nowMs()).atZone(zone).toLocalDate()
+        val days = (ChronoUnit.DAYS.between(today, date) + 1).coerceIn(0L, MAX_UPCOMING_DAYS.toLong()).toInt()
+        if (days > upcomingAsk.value.days) upcomingAsk.update { it.copy(days = maxOf(it.days, days)) }
     }
 
     /**
@@ -1361,7 +1482,9 @@ class SportsLiveViewModel internal constructor(
         // looked up in the background, only while the section is on screen and only for Live now and Upcoming.
         if (screenVisible && (selection.tab == SportsLiveTab.LIVE_NOW || selection.tab == SportsLiveTab.UPCOMING)) identify(fullItems)
         val scopedItems = scopedTabs[selection.tab].orEmpty()
-        val mySportsScoped = scopedItems.size < fullItems.size
+        // live.24: Upcoming games My sports leaves waiting are not sorted yet (All sports sorts them): counted, not listed.
+        val waiting = if (selection.tab == SportsLiveTab.UPCOMING) bucketed.upcomingWaiting else 0
+        val mySportsScoped = scopedItems.size < fullItems.size || waiting > 0
         val tabItems = if (allSports) fullItems else scopedItems
         // Channels are filtered by region (P4: country codes, long names, the rest under Other), every other tab
         // by sport: one value per sport ("American Football" and "NFL" are both Football), a catch-all
@@ -1378,7 +1501,7 @@ class SportsLiveViewModel internal constructor(
             items
         }
         val counts = sportsLiveFilterCounts(counted(scopedItems), filterOf, myTeams = selection.tab != SportsLiveTab.CHANNELS)
-            .let { if (mySportsScoped && !onLiveNow) it + (SportsLiveUiState.ALL_SPORTS_FILTER to counted(fullItems).size) else it }
+            .let { if (mySportsScoped && !onLiveNow) it + (SportsLiveUiState.ALL_SPORTS_FILTER to counted(fullItems).size + waiting) else it }
         // "★ My teams" leads whenever a followed team plays in the tab (never on Channels); chips with no
         // games hide, except the selected one, kept with 0 until the user moves (onUserMoved). All sports
         // follows it while My sports hides any of the tab's games (#146).
@@ -1417,8 +1540,8 @@ class SportsLiveViewModel internal constructor(
             // Only a load with no data yet shows as loading, so a refresh does not blank the list.
             isLoading = hasClaimed && !bucketed.hasLoad && selection.isRefreshing,
             // #214: until the first load of this visit lands (or fails), an empty tab is loading, never "nothing here".
-            firstLoadPending = hasClaimed && !bucketed.fromLoad && selection.failures.isEmpty() &&
-                (selection.isRefreshing || selection.lastRefreshedMs == null),
+            firstLoadPending = (hasClaimed && !bucketed.fromLoad && selection.failures.isEmpty() &&
+                (selection.isRefreshing || selection.lastRefreshedMs == null)) || selection.tab in bucketed.sortingTabs,
             hasClaimedCatalogs = hasClaimed,
             tabs = if (allSports) scopedTabs + (selection.tab to fullItems) else scopedTabs,
             selectedTab = selection.tab,
@@ -1446,7 +1569,8 @@ class SportsLiveViewModel internal constructor(
             // The add-sport card: on Live now's own list (not a chip, not More live's view) while shown.
             addSportPrompt = selection.addSport?.takeIf {
                 selection.addSportShown && onLiveNow && filter == null && !moreLiveOpen && !mySports.isDefault
-            }
+            },
+            upcomingPendingDates = bucketed.upcomingPending
         ).also { state ->
             if (!state.isLoading && hasClaimed && firstStateLogged.compareAndSet(false, true)) {
                 SportsLiveDebugTiming.log {
@@ -1495,6 +1619,9 @@ class SportsLiveViewModel internal constructor(
 
         /** A shown list this old is marked "Updated ‹time›" while a refresh runs (live.20 B1); the 3-minute Live now refresh never is. */
         const val STALE_MARK_MS = 5 * 60_000L
+
+        /** live.24: Upcoming never sorts further ahead than this many days, however far the viewer goes. */
+        const val MAX_UPCOMING_DAYS = 60
 
         /** The tabs My sports scopes (#146); never Channels or Results (which has its own My sports). */
         val SCOPED_TABS = setOf(SportsLiveTab.LIVE_NOW, SportsLiveTab.UPCOMING, SportsLiveTab.REPLAYS)

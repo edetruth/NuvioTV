@@ -39,6 +39,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import com.nuvio.tv.core.sportslive.SportsLiveCalmOpen
 import org.junit.Test
+import java.time.Instant
+import java.time.ZoneOffset
 
 /**
  * live.20 B1 and C1: the section opens on the profile's last list while the catalogs load, reuses the list it built
@@ -197,6 +199,62 @@ class SportsLiveOpenSpeedTest {
         assertEquals(0, againBuckets[0])
         assertEquals(listOf("a"), again.uiState.value.visibleItems.map { it.id })
         assertFalse(again.uiState.value.isLoading)
+    }
+
+    @Test
+    fun `on a cold open Live now is published before Upcoming is sorted`() = runTest {
+        // live.24: Live now (a few dozen games) never waits for the thousands of Upcoming, Channels and Replays rows.
+        val gate = CompletableDeferred<Unit>()
+        latestFlow.value = load(listOf(item("live", isLive = true), item("next", isLive = false, startMs = NOW + HOUR)))
+        val viewModel = SportsLiveViewModel(
+            repo,
+            refreshClock = { testScheduler.currentTime },
+            sharedBuckets = SportsLiveSharedBuckets(),
+            computeDispatcher = compute
+        )
+        viewModel.nowMs = { NOW }
+        viewModel.afterLiveFirst = { gate.await() }
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        runCurrent()
+        val first = viewModel.uiState.value
+        assertEquals(listOf("live"), first.visibleItems.map { it.id })
+        assertTrue(first.tabs[SportsLiveTab.UPCOMING].orEmpty().isEmpty())
+
+        // Upcoming sorted: it follows, and Live now stays as shown.
+        gate.complete(Unit)
+        runCurrent()
+        val done = viewModel.uiState.value
+        assertEquals(listOf("next"), done.tabs.getValue(SportsLiveTab.UPCOMING).map { it.id })
+        assertEquals(listOf("live"), done.visibleItems.map { it.id })
+    }
+
+    @Test
+    fun `Upcoming lists the next three days until a later day is asked`() = runTest {
+        // live.24: the working set. A day five days ahead waits behind its tab until the viewer goes to it.
+        val zone = ZoneOffset.UTC
+        val today = Instant.ofEpochMilli(NOW).atZone(zone).toLocalDate()
+        fun at(day: Long) = today.plusDays(day).atTime(23, 30).toInstant(zone).toEpochMilli()
+        latestFlow.value = load(listOf(item("d0", isLive = false, startMs = at(0)), item("d2", isLive = false, startMs = at(2)), item("d5", isLive = false, startMs = at(5))))
+        val viewModel = SportsLiveViewModel(
+            repo,
+            refreshClock = { testScheduler.currentTime },
+            sharedBuckets = SportsLiveSharedBuckets(),
+            computeDispatcher = compute,
+            upcomingWindowDays = 3,
+            zone = zone
+        )
+        viewModel.nowMs = { NOW }
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        runCurrent()
+        val near = viewModel.uiState.value
+        assertEquals(listOf("d0", "d2"), near.tabs.getValue(SportsLiveTab.UPCOMING).map { it.id })
+        assertEquals(listOf(today.plusDays(5)), near.upcomingPendingDates)
+
+        viewModel.showUpcomingDay(today.plusDays(5))
+        runCurrent()
+        val all = viewModel.uiState.value
+        assertEquals(listOf("d0", "d2", "d5"), all.tabs.getValue(SportsLiveTab.UPCOMING).map { it.id })
+        assertTrue(all.upcomingPendingDates.isEmpty())
     }
 
     @Test

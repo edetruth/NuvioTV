@@ -25,6 +25,7 @@ import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.core.sportslive.scores.GameDay
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveTab
+import java.time.LocalDate
 import java.time.ZoneId
 
 /** The scores, setting and reveals the screen has: what the Scoreboard and drawn cards read. */
@@ -69,7 +70,9 @@ data class SportsLiveBoardInputs(
     /** Live now's listings that are no game (H) among [items], by card key: LIVE only when ESPN has them in play. */
     val otherEvents: Set<String> = emptySet(),
     /** Live now's More live view is open: [items] are its games, each by its group key (the list's sections). */
-    val moreLive: Map<String, String> = emptyMap()
+    val moreLive: Map<String, String> = emptyMap(),
+    /** live.24: Upcoming's later dates not sorted yet: their day tabs show ahead of their games. Empty on other tabs. */
+    val pendingDates: List<LocalDate> = emptyList()
 )
 
 /**
@@ -106,6 +109,7 @@ internal fun sportsLiveBoardInputsOf(
         logoRevision = logoRevision,
         // Upcoming's big games (#137) read them.
         standings = if (tab == SportsLiveTab.UPCOMING) standings else emptyMap(),
+        pendingDates = if (tab == SportsLiveTab.UPCOMING) state.upcomingPendingDates else emptyList(),
         channelLists = if (tab == SportsLiveTab.CHANNELS) channelLists else SportsLiveChannelLists.NONE
     )
 }
@@ -226,7 +230,7 @@ data class SportsLiveBoard(
             }
             val agenda = when {
                 rows == null -> null
-                tab == SportsLiveTab.UPCOMING -> SportsLiveAgenda.of(rows, inputs.clockMs, zone)
+                tab == SportsLiveTab.UPCOMING -> SportsLiveAgenda.of(rows, inputs.clockMs, zone, inputs.pendingDates)
                 tab == SportsLiveTab.REPLAYS -> SportsLiveAgenda.ofReplays(rows, inputs.clockMs, zone, scores.savedReplays) {
                     scores.replayMatches[it.streamKey] ?: scores.scores[it.streamKey]
                 }

@@ -23,9 +23,12 @@ enum class AgendaDayKind {
     SAVED
 }
 
-/** A day header: its [kind] and [date] (null for Any time). */
+/**
+ * A day header: its [kind] and [date] (null for Any time). [pending] (live.24): a later day whose games are not sorted
+ * yet; its tab shows, with no games under it until the viewer goes to it.
+ */
 @Immutable
-data class AgendaDay(val kind: AgendaDayKind, val date: LocalDate?)
+data class AgendaDay(val kind: AgendaDayKind, val date: LocalDate?, val pending: Boolean = false)
 
 /**
  * A time slot: the games starting at [startMs] ([count] of them) on day [day]; Any time is one slot with no time.
@@ -127,7 +130,7 @@ data class SportsLiveAgenda(val days: List<AgendaDay>, val slots: List<AgendaSlo
          * The Agenda of Upcoming's [rows] (the Scoreboard's, in their order) at [nowMs] in [zone]: timed games by
          * start (ESPN's when matched), followed teams first within a slot, then as listed; the rest under Any time.
          */
-        fun of(rows: List<ScoreboardRow>, nowMs: Long, zone: ZoneId): SportsLiveAgenda {
+        fun of(rows: List<ScoreboardRow>, nowMs: Long, zone: ZoneId, pendingDates: List<LocalDate> = emptyList()): SportsLiveAgenda {
             val today = Instant.ofEpochMilli(nowMs).atZone(zone).toLocalDate()
             val timed = ArrayList<Pair<ScoreboardRow, Long>>()
             val anyTime = ArrayList<ScoreboardRow>()
@@ -142,7 +145,15 @@ data class SportsLiveAgenda(val days: List<AgendaDay>, val slots: List<AgendaSlo
             val games = ArrayList<AgendaGame>()
             // A start already passed (a late game still waiting) stays under Today; dates follow the start order.
             val byDay = ordered.groupBy { (_, start) -> maxOf(Instant.ofEpochMilli(start).atZone(zone).toLocalDate(), today) }
-            byDay.forEach { (date, dayGames) ->
+            // live.24: a later date not sorted yet shows as its own tab, in date order, before Any time.
+            val waiting = pendingDates.filter { it > today && it !in byDay }
+            val dates = if (waiting.isEmpty()) byDay.keys.toList() else (byDay.keys + waiting).sorted()
+            dates.forEach { date ->
+                val dayGames = byDay[date]
+                if (dayGames == null) {
+                    days += AgendaDay(dayKindOf(date, today), date, pending = true)
+                    return@forEach
+                }
                 days += AgendaDay(dayKindOf(date, today), date)
                 val picks = GamesToWatch.pick(dayGames.map { it.first }) { it.bigGame }
                 if (picks.isNotEmpty()) {
