@@ -811,14 +811,24 @@ object SportsLiveItemBucketer {
         return pinned + rest
     }
 
-    /** Marks the items a followed team plays in, keeping the order (Channels). */
-    fun markFollowed(items: List<SportsLiveItem>, followed: List<FollowedTeam>): List<SportsLiveItem> =
+    /**
+     * Marks the items a followed team plays in, keeping the order (Channels). A game ESPN showed is a women's game
+     * ([SportsLiveWomenGames], live.23) is followed only through a women's team.
+     */
+    fun markFollowed(
+        items: List<SportsLiveItem>,
+        followed: List<FollowedTeam>,
+        womenGames: SportsLiveWomenGames = SportsLiveWomenGames.shared
+    ): List<SportsLiveItem> =
         if (followed.isEmpty()) {
             items
         } else {
             // A merged game is followed when any of its sources is (their sports may differ).
             items.map { item ->
-                val isFollowed = followed.any { SportsLiveTeams.followsAnySource(it, item) }
+                val women = (listOf(item) + item.alternates).any { womenGames.has(it.streamKey) }
+                val isFollowed = followed.any { team ->
+                    SportsLiveTeams.followsAnySource(team, item) && (!women || SportsLiveTeams.followsWomen(team))
+                }
                 if (isFollowed) item.copy(followed = true) else item
             }
         }

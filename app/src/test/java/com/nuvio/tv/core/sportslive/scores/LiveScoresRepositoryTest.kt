@@ -1600,4 +1600,66 @@ class LiveScoresRepositoryTest {
         val later = seen + com.nuvio.tv.core.sportslive.SportsLiveEndedGames.GRACE_MS + 60_000L
         assertEquals(setOf(bayern.streamKey, andorra.streamKey), ended.confirmedEndedKeys(listOf(bayern, andorra), repo.scores.value, later))
     }
+
+    // ---- live.23: a women's game an addon files under the men's league ----
+
+    private val wslLeague = EspnLeague("soccer", "eng.w.1")
+    private val saturday21 = LocalDate.of(2026, 11, 21)
+
+    private fun club(id: String, name: String, abbr: String) = ScoreTeam(
+        id = id, abbreviation = abbr, displayName = name, shortDisplayName = name, name = name, location = name,
+        logo = null, score = 1, linescores = emptyList()
+    )
+
+    // ESPN's WSL game: Chelsea at Liverpool, in progress (TV report 2026-11-21).
+    private val wslGame = ScoreSnapshot(
+        eventId = "wsl-liv-che", league = wslLeague, leagueName = "English Women's Super League", startMs = ms("2026-11-21T12:45:00Z"),
+        state = ScoreState.IN, clockText = "34'", isFinal = false,
+        home = club("liv-w", "Liverpool", "LIV"), away = club("che-w", "Chelsea Women", "CHE")
+    )
+
+    @Test
+    fun `a Premier League card ESPN's men's feed lacks is matched on the WSL, strictly, and marked a women's game`() = runTest {
+        com.nuvio.tv.core.sportslive.SportsLiveWomenGames.shared.clear()
+        provider.respond = { feed -> ScoreboardResult(if (feed.league == wslLeague) listOf(wslGame) else emptyList()) }
+        val repo = repository("2026-11-21T13:30:00Z")
+        collect(repo)
+        val card = item("Liverpool vs Chelsea", "Premier League", "2026-11-21T12:45:00Z")
+        repo.track(SECTION, listOf(card))
+        runCurrent()
+        assertTrue(ScoreFeed(wslLeague, saturday21) in provider.calls)
+        assertEquals("wsl-liv-che", repo.scores.value.getValue(card.streamKey).eventId)
+        assertTrue(com.nuvio.tv.core.sportslive.SportsLiveWomenGames.shared.has(card.streamKey))
+        // Its sides sit on the game one way round, so the score shows (and the row's tag is the WSL's).
+        assertEquals(true, ScoreMatcher.firstIsHome("Liverpool", "Chelsea", wslGame))
+        assertEquals("WSL", com.nuvio.tv.core.sportslive.SportsLiveLeagueTags.of(wslGame.leagueName!!))
+        com.nuvio.tv.core.sportslive.SportsLiveWomenGames.shared.clear()
+    }
+
+    @Test
+    fun `the women's league is never tried when the men's league has the pairing today`() = runTest {
+        com.nuvio.tv.core.sportslive.SportsLiveWomenGames.shared.clear()
+        // The men's game is late that evening, out of the card's reach, but on its ESPN day.
+        val mens = wslGame.copy(
+            eventId = "epl-liv-che", league = EspnLeague("soccer", "eng.1"), leagueName = "Premier League", startMs = ms("2026-11-22T03:00:00Z"),
+            state = ScoreState.PRE, home = club("liv", "Liverpool", "LIV"), away = club("che", "Chelsea", "CHE")
+        )
+        provider.respond = { feed ->
+            ScoreboardResult(
+                when (feed.league) {
+                    wslLeague -> listOf(wslGame)
+                    EspnLeague("soccer", "eng.1") -> listOf(mens)
+                    else -> emptyList()
+                }
+            )
+        }
+        val repo = repository("2026-11-21T13:30:00Z")
+        collect(repo)
+        val card = item("Liverpool vs Chelsea", "Premier League", "2026-11-21T12:45:00Z")
+        repo.track(SECTION, listOf(card))
+        runCurrent()
+        assertTrue(provider.calls.none { it.league == wslLeague })
+        assertFalse(card.streamKey in repo.scores.value)
+        assertFalse(com.nuvio.tv.core.sportslive.SportsLiveWomenGames.shared.has(card.streamKey))
+    }
 }

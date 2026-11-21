@@ -2,6 +2,7 @@ package com.nuvio.tv.core.sportslive
 
 import androidx.annotation.VisibleForTesting
 import com.nuvio.tv.core.sportslive.scores.EspnLeague
+import com.nuvio.tv.core.sportslive.scores.EspnLeagueIndex
 import com.nuvio.tv.core.sportslive.scores.EspnLeagueMap
 import com.nuvio.tv.domain.model.FollowedTeam
 import com.nuvio.tv.domain.model.SportsLiveItem
@@ -412,6 +413,20 @@ object SportsLiveTeams {
     /** [followsSide] for a merged card: true when [team] is [side] in the card or any of its alternates ([alternatesMayFollow]). */
     fun followsSideOfAnySource(team: FollowedTeam, side: String, item: SportsLiveItem): Boolean =
         followsSide(team, side, item) || (alternatesMayFollow(team, item) && item.alternates.any { followsSide(team, side, it) })
+
+    /**
+     * True when [team] is a women's team (live.23): its name carries a women's marker ("Liverpool Women", "Arsenal W"),
+     * its stored ESPN feed is a women's one (WSL, NWSL, WNBA...), or its sport word routes only to women's feeds ("NWSL").
+     */
+    fun followsWomen(team: FollowedTeam): Boolean {
+        if (mergeForms(team.name).qualifier == "w") return true
+        val stored = team.league?.split('/')?.takeIf { it.size == 2 }?.let { EspnLeague(it[0], it[1]) }
+        if (stored != null && isWomenLeague(stored)) return true
+        val feeds = team.sport?.let { EspnLeagueMap.leaguesFor(sport = it, hints = emptyList()) }.orEmpty()
+        return feeds.isNotEmpty() && feeds.all(::isWomenLeague)
+    }
+
+    private fun isWomenLeague(league: EspnLeague): Boolean = league in EspnLeagueMap.WOMEN_FEEDS || EspnLeagueIndex.isWomen(league)
 
     /** [follows] for a merged card: [item] or any of its alternates ([alternatesMayFollow]). */
     fun followsAnySource(team: FollowedTeam, item: SportsLiveItem): Boolean =

@@ -8,6 +8,7 @@ import com.nuvio.tv.core.sportslive.SportsLiveSportKind
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.SportsLiveToastKind
 import com.nuvio.tv.core.sportslive.SportsLiveToasts
+import com.nuvio.tv.core.sportslive.SportsLiveWomenGames
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import com.nuvio.tv.domain.model.SportsLiveItem
@@ -363,7 +364,9 @@ class LiveScoresRepository internal constructor(
             }
             val (source, leagues) = routed
             val liveKeys = if (item.isLive && !item.isChannel) sources.filter { !it.isChannel }.map { it.streamKey } else emptyList()
-            TrackedCard(card, leagues, item.followed, EspnLeagueMap.collegeFallbackFor(source)?.takeIf { it !in leagues }, liveKeys = liveKeys)
+            // A bare sport word's college feed (#66), else a men's soccer league's women's counterpart (live.23).
+            val fallback = (EspnLeagueMap.collegeFallbackFor(source) ?: EspnLeagueMap.womenFallbackFor(source))?.takeIf { it !in leagues }
+            TrackedCard(card, leagues, item.followed, fallback, liveKeys = liveKeys)
         }.distinctBy { it.card.key }
         tracked.update { current -> if (entries.isEmpty()) current - screenId else current + (screenId to entries) }
     }
@@ -728,6 +731,11 @@ class LiveScoresRepository internal constructor(
             if (match == null && fallback != null && card.key !in remembered &&
                 cardFeeds.all { feed -> feeds[feed]?.let { it.fetched && !it.paused && it.isFresh(nowMs) } == true }
             ) {
+                // Never the women's game of a pair its men's league plays today (live.23).
+                if (EspnLeagueMap.isWomenFallback(fallback) && matcher.meets(card, cardFeeds.flatMap { feeds[it]?.events.orEmpty() })) {
+                    settle(entry, dates, cardFeeds, null)
+                    continue
+                }
                 needed += cardFeeds
                 deferred += Deferral(entry, dates, cardFeeds, fallback)
                 continue
@@ -751,6 +759,8 @@ class LiveScoresRepository internal constructor(
                 if (remembered.size >= MAX_REMEMBERED) remembered.clear()
                 remembered[key] = wait.fallback
                 collegeMisses -= key
+                // A women's game (live.23): a followed men's team never makes it "my team".
+                if (EspnLeagueMap.isWomenFallback(wait.fallback)) SportsLiveWomenGames.shared.record(listOf(key) + wait.entry.liveKeys)
             } else {
                 val answered = college.mapNotNull { feed -> feeds[feed]?.takeIf { it.fetched && it.isFresh(nowMs) }?.lastSuccessAt }
                 if (answered.size == college.size) {
@@ -807,7 +817,10 @@ class LiveScoresRepository internal constructor(
     ): List<EspnLeague> {
         // A bare "Basketball" card's women's college list too (item 4): two schools are told men's or women's by both lists.
         val onScreen = cards.values.flatten().flatMap { card ->
-            card.leagues + listOfNotNull(card.fallback, EspnLeagueMap.COLLEGE_BASKETBALL_WOMEN.takeIf { card.fallback == EspnLeagueMap.COLLEGE_BASKETBALL })
+            card.leagues + listOfNotNull(
+                card.fallback?.takeUnless(EspnLeagueMap::isWomenFallback),
+                EspnLeagueMap.COLLEGE_BASKETBALL_WOMEN.takeIf { card.fallback == EspnLeagueMap.COLLEGE_BASKETBALL }
+            )
         }
         // The named My sports leagues' lists (#159, soccer competitions included) tell games with no league apart.
         return directoryLeagueOrder(onScreen + picked.feeds() + picked.teamListLeagues() + followed)
