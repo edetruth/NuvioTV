@@ -81,6 +81,19 @@ class SportsLiveReportTest {
         assertTrue(text, text.lines().first { it.startsWith("Game: ") }.startsWith("Game: AXS TV · "))
     }
 
+    @Test
+    fun `a plain sport word catalog is not removed, so the My sports line keeps its words`() {
+        val generic = CatalogDescriptor(type = ContentType.fromString("tv"), rawType = "tv", id = "bb", name = "Basketball")
+        val named = CatalogDescriptor(type = ContentType.fromString("tv"), rawType = "tv", id = "cl", name = "Clownish Shelf TV")
+        val addon = Addon(
+            id = addonId, name = addonName, version = "1.0.0", description = null, logo = null,
+            baseUrl = "https://$host/$token/manifest.json", catalogs = listOf(generic, named), types = listOf(generic.type), resources = emptyList()
+        )
+        val secrets = SportsLiveReport.addonSecrets(listOf(addon))
+        assertFalse(secrets.toString(), "Basketball" in secrets)
+        assertTrue(secrets.toString(), "Clownish Shelf TV" in secrets)
+    }
+
     private fun assertNoSecret(text: String) {
         for (secret in listOf(host, token, "example.invalid", addonName, "secretaddon", "viewer@", "5b0c7e2a")) {
             assertFalse("$secret in\n$text", text.contains(secret, ignoreCase = true))

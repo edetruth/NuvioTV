@@ -79,8 +79,25 @@ object SportsLiveReport {
      */
     fun addonSecrets(addons: List<Addon>): List<String> = addons.flatMap { addon ->
         listOfNotNull(addon.name, addon.displayName, addon.id, addon.baseUrl, runCatching { URI(addon.baseUrl).host }.getOrNull()) +
-            addon.catalogs.map { it.name }
+            addon.catalogs.map { it.name }.filterNot(::isGenericCatalogName)
     }
+
+    /**
+     * A catalog name made only of plain words ("Basketball", "Live Sports", "TV Channels") names no addon, and
+     * removing it would blank those words everywhere in the report, the My sports line included (TV check, #220).
+     */
+    internal fun isGenericCatalogName(name: String): Boolean {
+        val words = name.lowercase().split(Regex("[^\\p{L}\\p{N}]+")).filter { it.isNotBlank() }
+        return words.isEmpty() || words.all { it in GENERIC_CATALOG_WORDS }
+    }
+
+    private val GENERIC_CATALOG_WORDS = setOf(
+        "sport", "sports", "live", "tv", "channel", "channels", "event", "events", "replay", "replays", "highlights",
+        "movie", "movies", "series", "show", "shows", "all", "top", "popular", "new", "today", "upcoming", "schedule",
+        "basketball", "football", "soccer", "hockey", "baseball", "tennis", "golf", "mma", "ufc", "boxing", "fight",
+        "fights", "wrestling", "motorsport", "motorsports", "racing", "f1", "cricket", "rugby", "nba", "nfl", "nhl",
+        "mlb", "ncaa", "college", "and", "the", "us", "uk", "usa", "hd", "fhd", "4k"
+    )
 
     /** The line between the summary (which the QR code carries) and the details. */
     const val DETAILS = "---- details ----"
