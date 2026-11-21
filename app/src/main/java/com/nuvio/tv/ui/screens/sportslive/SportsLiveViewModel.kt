@@ -501,6 +501,8 @@ class SportsLiveViewModel internal constructor(
         val tick: Long,
         /** Live now as built, before the keep step (null: no Live now tab). */
         val builtLiveNow: List<SportsLiveItem>?,
+        /** How many of [builtLiveNow]'s first rows are live (the rest: the Just ended strip). */
+        val builtLiveCount: Int,
         val state: SportsLiveUiState
     )
 
@@ -509,6 +511,7 @@ class SportsLiveViewModel internal constructor(
     private var lastBuild: StateBuild? = null
     // Live now as the last full build made it, before the keep step.
     private var lastBuiltLiveNow: List<SportsLiveItem>? = null
+    private var lastBuiltLiveCount = 0
 
     /** Full state builds; tests read it. */
     @VisibleForTesting
@@ -532,7 +535,7 @@ class SportsLiveViewModel internal constructor(
                     }
                 }.also { state ->
                     stateBuilds++
-                    lastBuild = StateBuild(pinned, endedKeys, selection, inputs, mode, linkDead, sports, tick, lastBuiltLiveNow, state)
+                    lastBuild = StateBuild(pinned, endedKeys, selection, inputs, mode, linkDead, sports, tick, lastBuiltLiveNow, lastBuiltLiveCount, state)
                 }
         }
             // A rebuild never runs on the main thread (#143).
@@ -1129,7 +1132,7 @@ class SportsLiveViewModel internal constructor(
         if (built != null) {
             val focusedId = selection.itemId.takeIf { selection.tab == SportsLiveTab.LIVE_NOW }
             // Same rule as the full build below (BUG7 freeze); any difference falls back to the full build.
-            val kept = keptLiveNow(selection, built, focusedId, thawed = false).items
+            val kept = keptLiveNow(selection, built, last.builtLiveCount, focusedId, thawed = false).items
                 .let { listed -> sportsLiveKeepFocused(shownLiveNow, listed, miniPlayingNow) }
             val shown = SportsLiveHiddenTitles.filter(kept, hiddenNow)
             val shownBefore = shownLiveNow
@@ -1144,14 +1147,20 @@ class SportsLiveViewModel internal constructor(
      * Live now as shown after a build of [built] (F6, TV QA BUG7; J1): while it holds focus nothing moves at all
      * ([sportsLiveFreeze]); once it has been shown this visit, it stays calm ([sportsLiveCalm]: rows keep their order, a
      * row a load dropped goes, new rows wait for "N new"); otherwise as built. The focused card is never taken away.
+     * [liveCount]: [built]'s first rows that are live; calm keeps their order, but a game that ended (or came back) still
+     * moves between the live rows and the Just ended strip, which comes last as built.
      */
-    private fun keptLiveNow(selection: Selection, built: List<SportsLiveItem>, focusedId: String?, thawed: Boolean): SportsLiveFrozenList {
+    private fun keptLiveNow(selection: Selection, built: List<SportsLiveItem>, liveCount: Int, focusedId: String?, thawed: Boolean): SportsLiveFrozenList {
         if (!thawed) {
             if (selection.tab == SportsLiveTab.LIVE_NOW && selection.browsing) return sportsLiveFreeze(shownLiveNow, built)
             // Calm on another tab too (#143): Live now's kept board is what shows on return, so its rows keep their order.
             if (liveNowShown) {
                 val calm = sportsLiveCalm(shownLiveNow, built)
-                return calm.copy(items = sportsLiveKeepFocused(shownLiveNow, calm.items, focusedId))
+                val liveIds = built.subList(0, liveCount.coerceIn(0, built.size)).mapTo(HashSet()) { it.id }
+                val calmIds = calm.items.mapTo(HashSet()) { it.id }
+                val items = calm.items.filter { it.id in liveIds } +
+                    built.drop(liveCount).filter { it.id in calmIds && it.id !in liveIds }
+                return calm.copy(items = sportsLiveKeepFocused(shownLiveNow, items, focusedId))
             }
         }
         return SportsLiveFrozenList(sportsLiveKeepFocused(shownLiveNow, built, focusedId), emptyList())
@@ -1171,6 +1180,7 @@ class SportsLiveViewModel internal constructor(
     ): SportsLiveUiState {
         lastMySports = mySports
         lastBuiltLiveNow = null
+        lastBuiltLiveCount = 0
         val hasClaimed = bucketed.hasClaimed
         // A live game whose lookup found no streams is not over (#145): it stays where it is, dimmed as
         // "no streams yet", and is looked up again later. Games found over (#60: ESPN, or their addon) move
@@ -1249,13 +1259,14 @@ class SportsLiveViewModel internal constructor(
                 val ranked = SportsLiveImportance.sort(live, mySports, bumped = whyTags.keys)
                 val built = ranked + split.justEnded + overdueEnded.map { it.first } + linkEnded
                 lastBuiltLiveNow = built
+                lastBuiltLiveCount = ranked.size
                 // The focused card is never taken from under the user: kept in place until focus moves on. While Live now
                 // is browsed nothing moves at all (F6, TV QA BUG7): no row leaves, none re-orders, new ones wait for
                 // "N new" on Refresh; once the user leaves it (or asks), the list is as built.
                 val focusedId = selection.itemId.takeIf { selection.tab == SportsLiveTab.LIVE_NOW }
                 val thawed = selection.thaw != thawApplied
                 thawApplied = selection.thaw
-                val kept = keptLiveNow(selection, built, focusedId, thawed).also { heldBack = it.heldBack }.items.let { listed ->
+                val kept = keptLiveNow(selection, built, ranked.size, focusedId, thawed).also { heldBack = it.heldBack }.items.let { listed ->
                     // The game playing in the mini player stays listed while it plays (BUG7: its row vanished).
                     sportsLiveKeepFocused(shownLiveNow, listed, miniPlayingNow)
                 }

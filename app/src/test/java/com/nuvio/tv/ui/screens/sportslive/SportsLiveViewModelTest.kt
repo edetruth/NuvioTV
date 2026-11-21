@@ -312,7 +312,7 @@ class SportsLiveViewModelTest {
     }
 
     @Test
-    fun `each tab refreshes only its own catalogs on its own cadence, and only while visible`() = runTest {
+    fun `each tab refreshes only its own catalogs on its own cadence, and only while visible`() = runTest { hidingShownAtEnd {
         nextLoad = load(listOf(item("a", isLive = true, sport = "Soccer")))
         val viewModel = SportsLiveViewModel(repo, refreshClock = { testScheduler.currentTime }, computeDispatcher = compute)
         viewModel.nowMs = { NOW }
@@ -321,7 +321,7 @@ class SportsLiveViewModelTest {
         // Opening the section loads every catalog once.
         assertEquals(listOf<Set<SportsLiveKind>?>(null), kindsAsked)
 
-        viewModel.onScreenVisible(true)
+        viewModel.show()
         viewModel.onScreenVisible(true) // a second call must not start a second loop
         runCurrent()
         assertEquals("fresher than Live now's 3 min: nothing", 1, kindsAsked.size)
@@ -383,7 +383,7 @@ class SportsLiveViewModelTest {
         advanceTimeBy(30 * MINUTE)
         runCurrent()
         assertEquals(7, kindsAsked.size)
-    }
+    } }
 
     @Test
     fun `a tab opened again shows its last board and builds nothing when nothing it reads changed`() = runTest {
@@ -1148,7 +1148,7 @@ class SportsLiveViewModelTest {
     }
 
     @Test
-    fun `tab, filter, visibility and the setting each reach the hover preview`() = runTest {
+    fun `tab, filter, visibility and the setting each reach the hover preview`() = runTest { hidingShownAtEnd {
         nextLoad = load(listOf(item("a", isLive = true, sport = "Soccer"), item("b", isLive = true, sport = "Tennis")))
         val enabled = MutableStateFlow(false)
         val stream = dualStream("a")
@@ -1159,7 +1159,7 @@ class SportsLiveViewModelTest {
         fun settle() { advanceTimeBy(2_001); runCurrent() }
         val playing = SportsLivePreviewState.Playing(a, stream)
 
-        viewModel.onScreenVisible(true)
+        viewModel.show()
         viewModel.setPreviewFocus(a)
         settle()
         assertEquals("setting off", SportsLivePreviewState.Idle, viewModel.preview.value)
@@ -1179,7 +1179,7 @@ class SportsLiveViewModelTest {
 
         viewModel.onScreenVisible(false)
         assertEquals("screen hidden", SportsLivePreviewState.Idle, viewModel.preview.value)
-        viewModel.onScreenVisible(true)
+        viewModel.show()
         settle()
         assertEquals(playing, viewModel.preview.value)
 
@@ -1198,10 +1198,10 @@ class SportsLiveViewModelTest {
         assertEquals(playing, viewModel.preview.value)
 
         viewModel.onScreenVisible(false)
-    }
+    } }
 
     @Test
-    fun `an active mini player holds the hover preview off, and a fresh settle follows its stop`() = runTest {
+    fun `an active mini player holds the hover preview off, and a fresh settle follows its stop`() = runTest { hidingShownAtEnd {
         nextLoad = load(listOf(item("a", isLive = true, sport = "Soccer")))
         val mini = MutableStateFlow(true)
         val stream = dualStream("a")
@@ -1216,7 +1216,7 @@ class SportsLiveViewModelTest {
         backgroundScope.launch { viewModel.uiState.collect {} }
         val a = item("a", isLive = true, sport = "Soccer")
 
-        viewModel.onScreenVisible(true)
+        viewModel.show()
         viewModel.setPreviewFocus(a)
         advanceTimeBy(10_000)
         runCurrent()
@@ -1236,7 +1236,7 @@ class SportsLiveViewModelTest {
         assertEquals("a new mini player stops the preview", SportsLivePreviewState.Idle, viewModel.preview.value)
 
         viewModel.onScreenVisible(false)
-    }
+    } }
 
     private fun teamsOf(name: String) = SportsLiveTeams.parse(name)
 
@@ -1478,6 +1478,25 @@ class SportsLiveViewModelTest {
 
     // #60 phase 2: link checks confirm a game past its estimate is over
 
+    // Test hygiene: a view model left on screen keeps its auto-refresh loop (a delay loop on the test scheduler) alive, so
+    // runTest's final advanceUntilIdle never ends when an assertion fails before the test hides it. Tests that show the
+    // section use show() and hidingShownAtEnd, which hides every shown view model even after a failure.
+    private val shownModels = mutableListOf<SportsLiveViewModel>()
+
+    private fun SportsLiveViewModel.show() {
+        shownModels += this
+        onScreenVisible(true)
+    }
+
+    private inline fun hidingShownAtEnd(body: () -> Unit) {
+        try {
+            body()
+        } finally {
+            shownModels.forEach { it.onScreenVisible(false) }
+            shownModels.clear()
+        }
+    }
+
     private val linkFetches = mutableListOf<String>()
     private val linkTicks = MutableSharedFlow<Unit>(replay = 1).apply { tryEmit(Unit) }
 
@@ -1523,7 +1542,7 @@ class SportsLiveViewModelTest {
     private val stillOn = item("on", isLive = true, sport = "NFL", name = "Buffalo Bills at Miami Dolphins", startMs = NOW - HOUR)
 
     @Test
-    fun `a game past its estimate with a dead link moves to Just ended as Probably ended, never hidden`() = runTest {
+    fun `a game past its estimate with a dead link moves to Just ended as Probably ended, never hidden`() = runTest { hidingShownAtEnd {
         nextLoad = load(listOf(pastEstimate, stillOn))
         val viewModel = linkCheckedViewModel()
         runCurrent()
@@ -1531,7 +1550,7 @@ class SportsLiveViewModelTest {
         tick()
         assertTrue(linkFetches.isEmpty())
 
-        viewModel.onScreenVisible(true)
+        viewModel.show()
         tick()
         runCurrent()
         // Only the game past its estimate, once.
@@ -1545,14 +1564,14 @@ class SportsLiveViewModelTest {
         assertEquals(1, linkFetches.size)
         assertEquals(listOf("on", "g"), viewModel.uiState.value.visibleItems.map { it.id })
         viewModel.onScreenVisible(false)
-    }
+    } }
 
     @Test
-    fun `a Probably ended card whose links come back returns to live, and leaves the strip only while its verdict stands`() = runTest {
+    fun `a Probably ended card whose links come back returns to live, and leaves the strip only while its verdict stands`() = runTest { hidingShownAtEnd {
         nextLoad = load(listOf(pastEstimate, stillOn))
         var reply: ManifestResponse? = ManifestResponse(404, null)
         val viewModel = linkCheckedViewModel(answer = { reply })
-        viewModel.onScreenVisible(true)
+        viewModel.show()
         tick()
         runCurrent()
         assertEquals(setOf(pastEstimate.streamKey), viewModel.uiState.value.justEnded.keys)
@@ -1572,13 +1591,13 @@ class SportsLiveViewModelTest {
         assertEquals(2, viewModel.uiState.value.countOf(SportsLiveTab.LIVE_NOW))
         assertEquals(2, linkFetches.size)
         viewModel.onScreenVisible(false)
-    }
+    } }
 
     @Test
-    fun `an alive or unclear link, another tab, or a game ESPN follows moves nothing`() = runTest {
+    fun `an alive or unclear link, another tab, or a game ESPN follows moves nothing`() = runTest { hidingShownAtEnd {
         nextLoad = load(listOf(pastEstimate))
         val alive = linkCheckedViewModel(answer = { ManifestResponse(200, "#EXTM3U\n#EXTINF:6,\na.ts\n") })
-        alive.onScreenVisible(true)
+        alive.show()
         tick()
         runCurrent()
         assertEquals(1, linkFetches.size)
@@ -1589,7 +1608,7 @@ class SportsLiveViewModelTest {
         linkFetches.clear()
         val elsewhere = linkCheckedViewModel()
         elsewhere.selectTab(SportsLiveTab.UPCOMING)
-        elsewhere.onScreenVisible(true)
+        elsewhere.show()
         tick()
         assertTrue(linkFetches.isEmpty())
         elsewhere.onScreenVisible(false)
@@ -1599,13 +1618,13 @@ class SportsLiveViewModelTest {
         val game = item("p", isLive = true, sport = "Basketball", name = "Indiana Pacers at Philadelphia 76ers", startMs = NOW - 4 * HOUR)
         nextLoad = load(listOf(game))
         val followed = linkCheckedViewModel(scores = mapOf(game.streamKey to pacers.copy(state = ScoreState.IN, isFinal = false)))
-        followed.onScreenVisible(true)
+        followed.show()
         tick()
         runCurrent()
         assertTrue(linkFetches.isEmpty())
         assertEquals(listOf("p"), followed.uiState.value.visibleItems.map { it.id })
         followed.onScreenVisible(false)
-    }
+    } }
 
     private fun load(items: List<SportsLiveItem>, failures: List<SportsLiveFailure> = emptyList()) =
         SportsLiveLoad(items = items, failures = failures, loadedAtMs = NOW, claimedKeys = setOf(CLAIMED.key))
