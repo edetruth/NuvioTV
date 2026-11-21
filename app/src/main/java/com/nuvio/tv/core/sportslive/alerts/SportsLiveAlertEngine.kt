@@ -159,7 +159,8 @@ class SportsLiveAlertEngine {
         for (game in games.distinctBy { gameKey(it.item) }) {
             val playing = isPlaying(game.item, watching, game.snapshot)
             if (game.reminded) kickoff(game, nowMs, playing, holding = settling || watching.dual)?.let(alerts::add)
-            val event = game.snapshot ?: continue
+            // A score kept from before the app closed (live.23) is old: no change is measured from it.
+            val event = game.snapshot?.takeIf { !it.kept } ?: continue
             val before = seen[event.eventId]
             seen[event.eventId] = Seen(event.state, event.homeScore, event.awayScore)
             if (event.state == ScoreState.PRE) sawPregame += event.eventId

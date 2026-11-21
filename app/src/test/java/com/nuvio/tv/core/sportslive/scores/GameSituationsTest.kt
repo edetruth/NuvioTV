@@ -162,10 +162,9 @@ class GameSituationsTest {
         val delay = ScoreDelay()
         val key = "card"
         val delayMs = 30_000L
-        // First seen live: no score and no situation until the delay has passed.
+        // First seen live: shown at once (live.23); later changes wait the delay.
         val first = delay.apply(mapOf(key to seahawks), delayMs, now = 0L).getValue(key)
-        assertNull(first.situation)
-        assertNull(first.homeScore)
+        assertEquals("2nd & 6", first.situation?.downDistance)
         // The next down arrives at 10 s; at 30 s the first version shows, the new down only at 40 s.
         val next = seahawks.copy(situation = seahawks.situation!!.copy(downDistance = "3rd & 2", yardLine = "LV 30"))
         delay.apply(mapOf(key to next), delayMs, now = 10_000L)

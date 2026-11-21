@@ -5,6 +5,8 @@ import java.time.LocalDate
 /** How often a scoreboard feed is fetched. Pure, so the timing rules are tested on their own. */
 internal object ScoreCadence {
     const val LIVE_MS = 30_000L
+    /** A feed with a followed team's game live (live.23): scores reach the user's own games sooner. */
+    const val FOLLOWED_LIVE_MS = 15_000L
     const val UPCOMING_MS = 5 * 60_000L
     const val SOON_MS = 5 * 60_000L
     /** `soccer/all` is the largest feed: never more often than this. */
@@ -16,10 +18,10 @@ internal object ScoreCadence {
 
     /**
      * Millis from the last fetch to the next, or null to stop: [matched] are the tracked cards' games
-     * found in the feed, [events] the whole feed.
+     * found in the feed, [events] the whole feed, [followed] the event ids of followed teams' games.
      * - After a failure: the backoff for [failures] (30 s → 60 s → 2 min → 5 min), or [retryAfterMs] if longer.
      * - A day before yesterday is final: fetched once.
-     * - Any matched game live: 30 s. All matched games final: stop. Only upcoming: 5 min, tightening to
+     * - A followed team's matched game live: 15 s. Any other matched game live: 30 s. All matched games final: stop. Only upcoming: 5 min, tightening to
      *   30 s from 5 min before the earliest start. Suspended/delayed only: 5 min; postponed/cancelled: stop.
      * - No matched game: 5 min (a miss is retried), or stop when every game in the feed is final.
      * - `soccer/all` never under 60 s.
@@ -31,11 +33,13 @@ internal object ScoreCadence {
         failures: Int,
         retryAfterMs: Long?,
         today: LocalDate,
-        nowMs: Long
+        nowMs: Long,
+        followed: Set<String> = emptySet()
     ): Long? {
         val interval = when {
             failures > 0 -> maxOf(BACKOFF_MS[(failures - 1).coerceAtMost(BACKOFF_MS.lastIndex)], retryAfterMs ?: 0L)
             feed.date.isBefore(today.minusDays(1)) -> return null
+            matched.any { it.state == ScoreState.IN && it.eventId in followed } -> FOLLOWED_LIVE_MS
             else -> stateInterval(matched, events, nowMs) ?: return null
         }
         return if (feed.league == EspnLeagueMap.SOCCER_ALL) maxOf(interval, SOCCER_ALL_FLOOR_MS) else interval

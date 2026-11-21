@@ -86,7 +86,7 @@ class SportsLiveEndedGamesTest {
         val key = card.streamKey
         val delayMs = 60_000L
         val t0 = START + HOUR
-        // Seen live first (withheld for the delay), then final at t1.
+        // Seen live first (shown at once), then final at t1.
         games.verdict(card, delay.apply(mapOf(key to live(pacersFinal)), delayMs, t0).getValue(key), t0)
         games.verdict(card, delay.apply(mapOf(key to live(pacersFinal)), delayMs, t0 + delayMs).getValue(key), t0 + delayMs)
         val t1 = START + 2 * HOUR

@@ -117,7 +117,9 @@ class LiveScoresRepositoryTest {
         notifyOutage: () -> Unit = {},
         logos: TeamLogoBook = TeamLogoBook(),
         followedLeagues: kotlinx.coroutines.flow.Flow<List<EspnLeague>> = kotlinx.coroutines.flow.flowOf(emptyList()),
-        espnStarts: SportsLiveEspnStarts = SportsLiveEspnStarts()
+        espnStarts: SportsLiveEspnStarts = SportsLiveEspnStarts(),
+        keptFile: TeamLogoFile? = null,
+        prewarm: Boolean = false
     ): LiveScoresRepository {
         val base = ms(start)
         return LiveScoresRepository(
@@ -136,7 +138,9 @@ class LiveScoresRepositoryTest {
             logos = logos,
             followedLeagues = followedLeagues,
             watching = watching,
-            espnStarts = espnStarts
+            espnStarts = espnStarts,
+            keptFile = keptFile,
+            prewarm = prewarm
         )
     }
 
@@ -587,14 +591,14 @@ class LiveScoresRepositoryTest {
         repo.track(SECTION, listOf(pacersCard))
         runCurrent()
         val key = pacersCard.streamKey
-        // First seen live: shown without a score until the delay has passed.
+        // First seen live: its score shows at once (live.23).
         repo.scores.value.getValue(key).let {
             assertEquals(ScoreState.IN, it.state)
-            assertNull(it.homeScore)
-            assertNull(it.clockText)
+            assertEquals(50, it.homeScore)
+            assertEquals("Q2 5:00", it.clockText)
         }
         latest = game(ScoreState.IN, 53, 48, "Q2 4:40").let { it.copy(home = it.home.copy(displayName = "Sixers")) }
-        advanceTimeBy(30_000); runCurrent() // fetched at 30 s; the first version is now due
+        advanceTimeBy(30_000); runCurrent() // fetched at 30 s: the new name at once, the score still the first one
         repo.scores.value.getValue(key).let {
             assertEquals(50, it.homeScore)
             assertEquals("Q2 5:00", it.clockText)
@@ -608,7 +612,7 @@ class LiveScoresRepositoryTest {
     }
 
     @Test
-    fun `a game first seen already final is held for the delay when it may have just ended`() = runTest {
+    fun `a game first seen already final shows at once even when it may have just ended`() = runTest {
         settings.value = ScoreSettings(delaySeconds = 30)
         provider.respond = { ScoreboardResult(listOf(game(ScoreState.POST, 110, 100, "Final"))) }
         // Three hours after the start: ESPN gives no end time, so it may have ended a moment ago.
@@ -616,12 +620,7 @@ class LiveScoresRepositoryTest {
         collect(repo)
         repo.track(SECTION, listOf(pacersCard))
         runCurrent()
-        val key = pacersCard.streamKey
-        assertNull(repo.scores.value.getValue(key).homeScore)
-        advanceTimeBy(29_000); runCurrent()
-        assertNull(repo.scores.value.getValue(key).homeScore)
-        advanceTimeBy(1_000); runCurrent()
-        assertEquals(110, repo.scores.value.getValue(key).homeScore)
+        assertEquals(110, repo.scores.value.getValue(pacersCard.streamKey).homeScore)
     }
 
     @Test
@@ -662,8 +661,9 @@ class LiveScoresRepositoryTest {
     }
 
     @Test
-    fun `turning the delay on mid-game shows no score until the delay has passed`() = runTest {
-        provider.respond = { ScoreboardResult(listOf(game(ScoreState.IN, 50, 48, "Q2 5:00"))) }
+    fun `turning the delay on mid-game keeps the score shown and holds the next change`() = runTest {
+        var home = 50
+        provider.respond = { ScoreboardResult(listOf(game(ScoreState.IN, home, 48, "Q2 5:00"))) }
         val repo = repository("2026-11-15T19:00:00Z")
         collect(repo)
         repo.track(SECTION, listOf(pacersCard))
@@ -672,11 +672,13 @@ class LiveScoresRepositoryTest {
         assertEquals(50, repo.scores.value.getValue(key).homeScore)
         settings.value = ScoreSettings(delaySeconds = 60)
         advanceTimeBy(1_000); runCurrent()
-        assertNull(repo.scores.value.getValue(key).homeScore)
-        advanceTimeBy(58_000); runCurrent()
-        assertNull(repo.scores.value.getValue(key).homeScore)
-        advanceTimeBy(1_000); runCurrent()
+        // live.23: first seen under the delay, so it stays; only changes from now on wait.
         assertEquals(50, repo.scores.value.getValue(key).homeScore)
+        home = 53
+        advanceTimeBy(30_000); runCurrent() // fetched
+        assertEquals(50, repo.scores.value.getValue(key).homeScore)
+        advanceTimeBy(60_000); runCurrent()
+        assertEquals(53, repo.scores.value.getValue(key).homeScore)
     }
 
     @Test
@@ -1132,7 +1134,7 @@ class LiveScoresRepositoryTest {
     }
 
     @Test
-    fun `a warm copy is held back by the score delay like any first-seen live game`() = runTest {
+    fun `a warm copy shows at once like any first-seen live game`() = runTest {
         settings.value = ScoreSettings(delaySeconds = 30)
         provider.recent = { ScoreboardResult(listOf(game(ScoreState.IN, 40, 38)), receivedAtMs = ms("2026-11-15T18:59:30Z")) }
         provider.gate = CompletableDeferred()
@@ -1140,7 +1142,7 @@ class LiveScoresRepositoryTest {
         collect(repo)
         repo.track(SECTION, listOf(pacersCard))
         runCurrent()
-        assertNull(repo.scores.value.getValue(pacersCard.streamKey).homeScore)
+        assertEquals(40, repo.scores.value.getValue(pacersCard.streamKey).homeScore)
     }
 
     @Test
@@ -1295,8 +1297,8 @@ class LiveScoresRepositoryTest {
     fun `with a score delay each poll is released the delay after it arrived, without leaving the screen (#81)`() = runTest {
         var score = 50
         val (repo, key) = undatedLiveGame({ score }, delaySeconds = 30)
-        // First seen live: withheld for the delay.
-        assertNull(repo.scores.value.getValue(key).homeScore)
+        // First seen live: at once (live.23).
+        assertEquals(50, repo.scores.value.getValue(key).homeScore)
         score = 53
         advanceTimeBy(30_000); runCurrent()
         assertEquals(50, repo.scores.value.getValue(key).homeScore)
@@ -1305,6 +1307,190 @@ class LiveScoresRepositoryTest {
         assertEquals(53, repo.scores.value.getValue(key).homeScore)
         advanceTimeBy(30_000); runCurrent()
         assertEquals(55, repo.scores.value.getValue(key).homeScore)
+    }
+
+    @Test
+    fun `a followed team's live game polls its feed every 15 s, an unfollowed one every 30 s`() = runTest {
+        var score = 50
+        provider.respond = { ScoreboardResult(listOf(game(ScoreState.IN, score, 48))) }
+        val repo = repository("2026-11-15T19:00:00Z")
+        collect(repo)
+        val followedCard = pacersCard.copy(followed = true)
+        repo.track(SECTION, listOf(followedCard))
+        runCurrent()
+        assertEquals(1, provider.calls.count { it == nba15 })
+        score = 53
+        advanceTimeBy(ScoreCadence.FOLLOWED_LIVE_MS); runCurrent()
+        assertEquals(2, provider.calls.count { it == nba15 })
+        assertEquals(53, repo.scores.value.getValue(followedCard.streamKey).homeScore)
+        // Unfollowed: the fetch already due runs, then back to the live pace.
+        repo.track(SECTION, listOf(pacersCard))
+        advanceTimeBy(ScoreCadence.FOLLOWED_LIVE_MS); runCurrent()
+        val before = provider.calls.count { it == nba15 }
+        assertEquals(3, before)
+        advanceTimeBy(ScoreCadence.FOLLOWED_LIVE_MS); runCurrent()
+        assertEquals(before, provider.calls.count { it == nba15 })
+        advanceTimeBy(ScoreCadence.LIVE_MS - ScoreCadence.FOLLOWED_LIVE_MS); runCurrent()
+        assertEquals(before + 1, provider.calls.count { it == nba15 })
+    }
+
+    // --- live.23: the scores last shown kept for a reopen, and the warm start ---
+
+    private fun keptFile() = TeamLogoFile(java.io.File(java.nio.file.Files.createTempDirectory("kept").toFile(), "last_scores.json"))
+
+    @Test
+    fun `the scores last shown are kept and drawn on a reopen until the feed answers`() = runTest {
+        val file = keptFile()
+        val key = pacersCard.streamKey
+        provider.respond = { ScoreboardResult(listOf(game(ScoreState.IN, 50, 48, "Q2 5:00"))) }
+        val first = repository("2026-11-15T19:00:00Z", keptFile = file)
+        val looking = collect(first)
+        first.track(SECTION, listOf(pacersCard))
+        runCurrent()
+        advanceTimeBy(LiveScoresRepository.KEPT_WRITE_DELAY_MS + 1); runCurrent()
+        looking.cancel()
+        runCurrent()
+        val nowMs = ms("2026-11-15T19:00:00Z") + testScheduler.currentTime
+        assertEquals(50, KeptScores.decode(file.read()!!, nowMs)!!.games.getValue(key).homeScore)
+
+        // Reopened with the delay on: the kept score at once while the fetch is in flight...
+        settings.value = ScoreSettings(delaySeconds = 60)
+        val gate = CompletableDeferred<Unit>()
+        provider.gate = gate
+        provider.respond = { ScoreboardResult(listOf(game(ScoreState.IN, 55, 48, "Q3 9:00"))) }
+        val second = repository("2026-11-15T19:00:00Z", keptFile = file)
+        collect(second)
+        second.track(SECTION, listOf(pacersCard))
+        runCurrent()
+        assertEquals(50, second.scores.value.getValue(key).homeScore)
+        assertTrue(second.scores.value.getValue(key).kept)
+        // ...then the fresh one, first seen, at once.
+        provider.gate = null
+        gate.complete(Unit)
+        runCurrent()
+        assertEquals(55, second.scores.value.getValue(key).homeScore)
+        assertEquals("Q3 9:00", second.scores.value.getValue(key).clockText)
+    }
+
+    @Test
+    fun `a kept score is drawn for one poll at most when the feed never answers`() = runTest {
+        val file = keptFile()
+        val base = ms("2026-11-15T19:00:00Z")
+        file.write(KeptScores.encode(mapOf(pacersCard.streamKey to game(ScoreState.IN, 50, 48, "Q2 5:00")), base - 60_000L))
+        provider.gate = CompletableDeferred()
+        val repo = repository("2026-11-15T19:00:00Z", keptFile = file)
+        collect(repo)
+        repo.track(SECTION, listOf(pacersCard))
+        runCurrent()
+        assertEquals(50, repo.scores.value.getValue(pacersCard.streamKey).homeScore)
+        advanceTimeBy(ScoreCadence.LIVE_MS); runCurrent()
+        assertEquals(50, repo.scores.value.getValue(pacersCard.streamKey).homeScore)
+        advanceTimeBy(2); runCurrent()
+        assertTrue(pacersCard.streamKey !in repo.scores.value)
+    }
+
+    @Test
+    fun `a kept score is not drawn when older than 10 minutes, for another game, or for the game being watched`() = runTest {
+        val base = ms("2026-11-15T19:00:00Z")
+        val lakers = item("Los Angeles Lakers at Phoenix Suns", "Basketball", "2026-11-15T20:30:00Z")
+        val shown = mapOf(pacersCard.streamKey to game(ScoreState.IN, 50, 48), lakers.streamKey to game(ScoreState.IN, 50, 48))
+        provider.gate = CompletableDeferred()
+
+        val old = keptFile().apply { write(KeptScores.encode(shown, base - KeptScores.MAX_AGE_MS - 1)) }
+        val oldRepo = repository("2026-11-15T19:00:00Z", keptFile = old)
+        val looking = collect(oldRepo)
+        oldRepo.track(SECTION, listOf(pacersCard))
+        runCurrent()
+        assertTrue(oldRepo.scores.value.isEmpty())
+        looking.cancel()
+
+        // The Lakers card was kept with the Pacers game: the matcher disagrees, so nothing. The Pacers game is the one
+        // playing: its kept score is never drawn, not even for the guide's Now playing.
+        val fresh = keptFile().apply { write(KeptScores.encode(shown, base - 60_000L)) }
+        val repo = repository("2026-11-15T19:00:00Z", keptFile = fresh)
+        collect(repo)
+        watching.watch("player", setOf(pacersCard.streamKey), "addon-a")
+        repo.track(SECTION, listOf(pacersCard, lakers))
+        runCurrent()
+        assertTrue(repo.scores.value.isEmpty())
+        assertTrue(repo.watchedScores.value.isEmpty())
+        // Another game playing: the Pacers' kept score is drawn.
+        watching.watch("player", setOf("another card"), "addon-a")
+        runCurrent()
+        repo.track(SECTION, listOf(lakers, pacersCard))
+        runCurrent()
+        assertEquals(setOf(pacersCard.streamKey), repo.scores.value.keys)
+        assertEquals(50, repo.scores.value.getValue(pacersCard.streamKey).homeScore)
+    }
+
+    @Test
+    fun `the player's guide closed and reopened draws its games' last scores at once`() = runTest {
+        // TV report: Score delay 0, a game playing; the guide's scores and clocks were gone on every reopen.
+        val panel = LiveScoresRepository.SCREEN_PLAYER_PANEL
+        val key = pacersCard.streamKey
+        watching.watch("player", setOf("another card"), "addon-a")
+        provider.respond = { ScoreboardResult(listOf(game(ScoreState.IN, 50, 48, "Q2 5:00"))) }
+        val repo = repository("2026-11-15T19:00:00Z")
+        collect(repo)
+        repo.track(panel, listOf(pacersCard))
+        runCurrent()
+        // First seen while video plays: at once.
+        assertEquals(50, repo.scores.value.getValue(key).homeScore)
+        assertEquals("Q2 5:00", repo.scores.value.getValue(key).clockText)
+        // Closed for five minutes: the feed is stale by then and fetched again on the reopen.
+        repo.untrack(panel)
+        runCurrent()
+        assertTrue(key !in repo.scores.value)
+        advanceTimeBy(5 * 60_000L); runCurrent()
+        val gate = CompletableDeferred<Unit>()
+        provider.gate = gate
+        repo.track(panel, listOf(pacersCard))
+        runCurrent()
+        repo.scores.value.getValue(key).let {
+            assertEquals(50, it.homeScore)
+            assertEquals("Q2 5:00", it.clockText)
+            assertTrue(it.kept)
+        }
+        // The fetch lands: the delayed score takes over.
+        provider.gate = null
+        gate.complete(Unit)
+        runCurrent()
+        repo.scores.value.getValue(key).let {
+            assertEquals(50, it.homeScore)
+            assertFalse(it.kept)
+        }
+    }
+
+    @Test
+    fun `the warm start fetches followed teams' and My sports' feeds once scores are collected, shared with the cards`() = runTest {
+        val eng = EspnLeague("soccer", "eng.1")
+        val gate = CompletableDeferred<Unit>()
+        provider.gate = gate
+        provider.respond = { feed -> ScoreboardResult(if (feed == nba15) listOf(game(ScoreState.IN, 50, 48)) else emptyList()) }
+        val repo = repository("2026-11-15T19:00:00Z", followedLeagues = kotlinx.coroutines.flow.flowOf(listOf(eng)), prewarm = true)
+        collect(repo)
+        runCurrent()
+        assertEquals(ScoreFeed(eng, LocalDate.of(2026, 11, 15)), provider.calls.first())
+        assertTrue(provider.calls.size <= LiveScoresRepository.PREWARM_FEEDS)
+        assertTrue(provider.calls.none { it.league == EspnLeagueMap.SOCCER_ALL || EspnIndividualResults.covers(it.league) })
+        assertTrue(nba15 in provider.calls)
+        // A card tracked while its feed is in flight shares that request, and shows when it lands.
+        repo.track(SECTION, listOf(pacersCard))
+        runCurrent()
+        assertEquals(1, provider.calls.count { it == nba15 })
+        provider.gate = null
+        gate.complete(Unit)
+        runCurrent()
+        assertEquals(50, repo.scores.value.getValue(pacersCard.streamKey).homeScore)
+    }
+
+    @Test
+    fun `no warm start while Scores is Off`() = runTest {
+        settings.value = ScoreSettings(mode = ScoresMode.OFF)
+        val repo = repository("2026-11-15T19:00:00Z", prewarm = true)
+        collect(repo)
+        runCurrent()
+        assertTrue(provider.calls.isEmpty())
     }
 
     // --- live.20 Q18 (#85): the game being watched, and the others while video plays ---
@@ -1348,16 +1534,22 @@ class LiveScoresRepositoryTest {
     }
 
     @Test
-    fun `while video plays other games' scores wait at least 60 s, then show`() = runTest {
-        val (repo, key) = undatedLiveGame({ 50 })
+    fun `while video plays other games keep their score and changes wait at least 60 s`() = runTest {
+        var score = 50
+        val (repo, key) = undatedLiveGame({ score })
         assertEquals(50, repo.scores.value.getValue(key).homeScore)
-        // Another game plays: this one is no longer known from 60 s ago, so it waits.
+        // Another game plays: this one keeps the score it shows (live.23); its next change waits 60 s.
         watching.watch("player", setOf("another card"), "addon-a")
         runCurrent()
-        assertNull(repo.scores.value.getValue(key).homeScore)
-        assertFalse(repo.scores.value.getValue(key).watched)
-        advanceTimeBy(ScoreWatch.MIN_PLAYING_DELAY_MS); runCurrent()
         assertEquals(50, repo.scores.value.getValue(key).homeScore)
+        assertFalse(repo.scores.value.getValue(key).watched)
+        score = 53
+        advanceTimeBy(30_000); runCurrent() // fetched at 30 s
+        assertEquals(50, repo.scores.value.getValue(key).homeScore)
+        advanceTimeBy(ScoreWatch.MIN_PLAYING_DELAY_MS - 1_000); runCurrent()
+        assertEquals(50, repo.scores.value.getValue(key).homeScore)
+        advanceTimeBy(1_000); runCurrent()
+        assertEquals(53, repo.scores.value.getValue(key).homeScore)
     }
 
     @Test
