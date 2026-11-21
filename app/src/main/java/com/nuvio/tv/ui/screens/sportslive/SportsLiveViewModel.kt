@@ -1,5 +1,6 @@
 package com.nuvio.tv.ui.screens.sportslive
 
+import com.nuvio.tv.core.sportslive.SportsLiveGameReadiness
 import com.nuvio.tv.core.sportslive.scores.TeamStanding
 import com.nuvio.tv.core.sportslive.scores.StandingsRepository
 import com.nuvio.tv.core.sportslive.scores.EspnLeague
@@ -75,7 +76,6 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.FlowPreview
@@ -189,7 +189,13 @@ class SportsLiveViewModel internal constructor(
     /** The spoiler protection the kept boards depend on (live.23 review S2). */
     protectionScope: Flow<SportsLiveBoardCache.ProtectionScope> = flowOf(SportsLiveBoardCache.ProtectionScope.NONE),
     /** The active profile's id: part of every kept board's scope (live.23 review F3), so a switch drops them. */
-    activeProfile: Flow<Int?> = flowOf(null)
+    activeProfile: Flow<Int?> = flowOf(null),
+    /** RC regression (#143): team directory changes bucket the load again at most once in this time (0: each, as in tests). */
+    rebucketGapMs: Long = 0L,
+    /** RC regression (#143): learned logos re-infer every card's sport (pinned) at most once in this time (0: each). */
+    pinSettleMs: Long = 0L,
+    /** live.20 1b: a row rested on is checked ahead only when it is one of my games ([SportsLiveMyGames]). */
+    private val isMyGame: (SportsLiveItem) -> Boolean = { false }
 ) : ViewModel() {
 
     @Inject
@@ -219,7 +225,7 @@ class SportsLiveViewModel internal constructor(
         onResolveFailed = resolver::invalidate,
         endedInputs = combine(liveScores.scores, liveScores.mode, liveScores.unmatched) { scores, mode, unmatched ->
             EndedInputs(scores, SportsLiveEndedGames.estimateGate(mode == ScoresMode.OFF, unmatched))
-        }.firstThenCoalesce(SCORES_SETTLE_MS),
+        }.firstThenCoalesce(STATE_SCORES_SETTLE_MS),
         endedGames = SportsLiveEndedGames.shared,
         clock = flow {
             while (true) {
@@ -255,7 +261,8 @@ class SportsLiveViewModel internal constructor(
         listCache = listStore,
         directoryStamp = { SportsLiveSharedBuckets.currentStamp() },
         sharedBuckets = SportsLiveSharedBuckets.shared,
-        computeDispatcher = Dispatchers.Default,
+        // RC regression (#143): the section's rebuilds on their own two threads at a lower priority than the UI.
+        computeDispatcher = SportsLiveCompute.dispatcher,
         prefetchHooks = SportsLivePrefetchHooks.of(resolver),
         report = reporter::report,
         channelPicks = prefs.channelPicks,
@@ -266,11 +273,14 @@ class SportsLiveViewModel internal constructor(
         addSportMemory = prefs.addSportMemory,
         saveAddSportMemory = prefs::updateAddSportMemory,
         addMySport = { sport -> prefs.updateMySports { if (it.isDefault || sport in it.effectiveSports) it else it.toggleSport(sport) } },
-        scoresSettleMs = SCORES_SETTLE_MS,
+        scoresSettleMs = BOARD_SCORES_SETTLE_MS,
         prefetchUpcomingScores = liveScores::prefetchUpcoming,
         unmatchedScores = liveScores.unmatched,
         protectionScope = liveScores.protection.map { SportsLiveBoardCache.ProtectionScope.of(it) }.distinctUntilChanged(),
-        activeProfile = profileManager.activeProfileId
+        activeProfile = profileManager.activeProfileId,
+        rebucketGapMs = REBUCKET_GAP_MS,
+        pinSettleMs = PIN_SETTLE_MS,
+        isMyGame = { item -> SportsLiveGameReadiness.shared.mine.value.let { mine -> (listOf(item) + item.alternates).any { it.id in mine } } }
     )
 
     private data class Selection(
@@ -374,7 +384,9 @@ class SportsLiveViewModel internal constructor(
     // the same teams fold without waiting for the next catalog refresh; Live now's focused card stays put
     // ([sportsLiveKeepFocused]).
     @OptIn(FlowPreview::class)
-    private val rebucket: Flow<Unit> = directoryChanges.debounce(REBUCKET_DEBOUNCE_MS).onStart { emit(Unit) }
+    // RC regression (#143): bucketing the whole load (4-6 s on the onn) ran every few seconds while team lists and
+    // identities kept landing; now at most once per rebucketGapMs after the first.
+    private val rebucket: Flow<Unit> = directoryChanges.debounce(REBUCKET_DEBOUNCE_MS).firstThenCoalesce(rebucketGapMs).onStart { emit(Unit) }
 
     // live.20 C1: the next tip-off (or live window's end) of the shown list; when it passes, the list is bucketed again,
     // so a game moves from Upcoming to Live now on time without a catalog refresh.
@@ -482,7 +494,8 @@ class SportsLiveViewModel internal constructor(
     // Live now's, Upcoming's and Replays' unrouted two-team cards take the league their teams name (#132 P4),
     // again whenever the team directory changes (it bumps the logo revision). Channels are never inferred.
     // Titles hidden from Live Now (#134) are left off its list, and off Upcoming's (live.20: "Hide this" there).
-    private val pinned = combine(bucketed, repo.followedTeams, logoRevision, hiddenTitles) { bucketed, followed, _, hidden ->
+    // RC regression (#143): re-inferring every card (3-4 s on the onn) at most once per pinSettleMs for learned logos.
+    private val pinned = combine(bucketed, repo.followedTeams, logoRevision.firstThenCoalesce(pinSettleMs), hiddenTitles) { bucketed, followed, _, hidden ->
         hiddenNow = hidden
         val startedAt = System.nanoTime()
         bucketed.copy(
@@ -752,6 +765,9 @@ class SportsLiveViewModel internal constructor(
      * shows its games at once; the fresh board (with Upcoming's own scores and standings) follows as before. Its inputs
      * never equal a real build's (the logo revision is left unknown), so it is never taken as up to date.
      */
+    /** The Upcoming list last built ahead ([prewarmUpcoming]). */
+    private var prewarmedItems: List<SportsLiveItem>? = null
+
     private fun prewarmUpcoming() {
         if (prewarmJob?.isActive == true || boardCache.has(SportsLiveTab.UPCOMING, null)) return
         prewarmJob = viewModelScope.launch {
@@ -768,7 +784,9 @@ class SportsLiveViewModel internal constructor(
             val generation = boardCache.generation
             val state = uiState.value
             val items = state.tabs[SportsLiveTab.UPCOMING].orEmpty()
-            if (items.isEmpty()) return@launch
+            // Once per load (RC regression): a kept board dropped by a scope change is not built ahead again for it.
+            if (items.isEmpty() || items === prewarmedItems) return@launch
+            prewarmedItems = items
             val inputs = SportsLiveBoardInputs(
                 tab = SportsLiveTab.UPCOMING,
                 filter = null,
@@ -826,7 +844,9 @@ class SportsLiveViewModel internal constructor(
         prefetcher?.onFocus(
             item?.takeIf {
                 selectionState.value.tab == SportsLiveTab.LIVE_NOW && sportsLiveAutoPlayEligible(it) &&
-                    SportsLiveDataSaver.prefetchAllowed(dataSaverActive)
+                    SportsLiveDataSaver.prefetchAllowed(dataSaverActive) &&
+                    // live.20 1b: only my games are checked ahead; a random row rested on sends nothing (RC regression).
+                    isMyGame(it)
             }
         )
     }
@@ -1189,6 +1209,20 @@ class SportsLiveViewModel internal constructor(
         return SportsLiveFrozenList(sportsLiveKeepFocused(shownLiveNow, built, focusedId), emptyList())
     }
 
+    /** Each tab's My sports scope as last worked out (RC regression: Upcoming's 2,000+ games scoped on every build). */
+    private val scopeMemo = HashMap<SportsLiveTab, ScopeMemo>()
+
+    private class ScopeMemo(val items: List<SportsLiveItem>, val mySports: MySports, val stamp: Long, val scoped: List<SportsLiveItem>)
+
+    /**
+     * [items] scoped to [mySports]: the same list (by identity) with the same My sports and team directory gives the last
+     * answer. Only from the state build, which runs one at a time.
+     */
+    private fun scopedOnce(tab: SportsLiveTab, items: List<SportsLiveItem>, mySports: MySports, stamp: Long): List<SportsLiveItem> {
+        scopeMemo[tab]?.let { memo -> if (memo.items === items && memo.mySports == mySports && memo.stamp == stamp) return memo.scoped }
+        return SportsLiveMySportsScope.scope(items, mySports).also { scopeMemo[tab] = ScopeMemo(items, mySports, stamp, it) }
+    }
+
     private fun buildState(
         bucketed: Bucketed,
         endedKeys: Set<String>,
@@ -1312,8 +1346,9 @@ class SportsLiveViewModel internal constructor(
         // More live (user 2026-11-21) replaces All sports on Live now: a stored All sports there reads as My sports.
         val onLiveNow = selection.tab == SportsLiveTab.LIVE_NOW
         val allSports = selection.filter == SportsLiveUiState.ALL_SPORTS_FILTER && !onLiveNow
+        val stamp = directoryStamp()
         val scopedTabs = tabs.mapValues { (tab, items) ->
-            if (tab in SCOPED_TABS) SportsLiveMySportsScope.scope(items, mySports) else items
+            if (tab in SCOPED_TABS) scopedOnce(tab, items, mySports, stamp) else items
         }
         val fullItems = tabs[selection.tab].orEmpty()
         // #168: the listed games of unknown sport (shown under All sports, counted as hidden under My sports) are
@@ -1442,7 +1477,15 @@ class SportsLiveViewModel internal constructor(
          * or of score updates rebuilds the lists once, this long after its first update.
          */
         const val LOGO_SETTLE_MS = 750L
-        const val SCORES_SETTLE_MS = 300L
+
+        /**
+         * RC regression (#143), TV-tunable: what score updates, the team directory and learned logos may cost. Each state
+         * build is 1-2 s, a bucketing 4-6 s and a re-pin 3-4 s on the onn, so each window is longer than the work it gates.
+         */
+        const val STATE_SCORES_SETTLE_MS = 3_000L
+        const val BOARD_SCORES_SETTLE_MS = 1_000L
+        const val REBUCKET_GAP_MS = 20_000L
+        const val PIN_SETTLE_MS = 8_000L
 
         /** A shown list this old is marked "Updated ‹time›" while a refresh runs (live.20 B1); the 3-minute Live now refresh never is. */
         const val STALE_MARK_MS = 5 * 60_000L

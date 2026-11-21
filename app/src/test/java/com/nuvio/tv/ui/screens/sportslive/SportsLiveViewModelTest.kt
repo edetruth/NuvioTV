@@ -1148,6 +1148,35 @@ class SportsLiveViewModelTest {
     }
 
     @Test
+    fun `a live row rested on is checked ahead only when it is one of my games`() = runTest { hidingShownAtEnd {
+        SportsLivePrefetchBudget.shared.clear()
+        val mine = item("mine", isLive = true, sport = "Soccer", name = "A vs B")
+        val other = item("other", isLive = true, sport = "Soccer", name = "C vs D")
+        nextLoad = load(listOf(mine, other))
+        val asked = mutableListOf<String>()
+        val hooks = SportsLivePrefetchHooks(
+            prefetch = { asked += it.id; SportsLiveLookup.NothingFound },
+            isWarm = { false },
+            isCooling = { false }
+        )
+        val viewModel = SportsLiveViewModel(repo, prefetchHooks = hooks, isMyGame = { it.id == "mine" }, computeDispatcher = compute)
+        viewModel.nowMs = { NOW }
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        viewModel.show()
+
+        viewModel.setPreviewFocus(other)
+        advanceTimeBy(1_000)
+        runCurrent()
+        viewModel.setPreviewFocus(mine)
+        advanceTimeBy(1_000)
+        runCurrent()
+        assertEquals(listOf("mine"), asked)
+        viewModel.setPreviewFocus(null)
+        viewModel.onScreenVisible(false)
+        SportsLivePrefetchBudget.shared.clear()
+    } }
+
+    @Test
     fun `tab, filter, visibility and the setting each reach the hover preview`() = runTest { hidingShownAtEnd {
         nextLoad = load(listOf(item("a", isLive = true, sport = "Soccer"), item("b", isLive = true, sport = "Tennis")))
         val enabled = MutableStateFlow(false)
