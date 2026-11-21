@@ -151,7 +151,8 @@ fun SportsLiveScreen(
     /** Opens the Team page (#62) on the request just put in [SportsLiveTeamRequests]. */
     onOpenTeam: () -> Unit = {}
 ) {
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    // #143: the state as drawn; a focus move alone (the selected id) does not recompose the section again.
+    val uiState by viewModel.screenState.collectAsStateWithLifecycle()
     val channelBrowse by viewModel.channelBrowse.collectAsStateWithLifecycle()
     // While Sports Live shows, the mini player stays docked in its stage on every tab (#157).
     val miniSection = remember { Any() }

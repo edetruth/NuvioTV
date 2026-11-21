@@ -494,6 +494,14 @@ class SportsLiveViewModel internal constructor(
             .flowOn(computeDispatcher)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SportsLiveUiState())
 
+    /**
+     * [uiState] as the screen draws it (#143): a focus move alone (only the selected id changed, which the screen never
+     * reads) emits nothing, so a D-pad move no longer recomposes the whole section a second time, every row included.
+     */
+    val screenState: StateFlow<SportsLiveUiState> =
+        uiState.distinctUntilChanged(::sportsLiveSameScreen)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SportsLiveUiState())
+
     private val boardScores = MutableStateFlow(SportsLiveBoardScores())
 
     /** The scores, Scores setting and reveals the screen shows: the Scoreboard and drawn cards read them. */

@@ -183,3 +183,11 @@ internal fun SportsLiveUiState.finishedKeys(scores: Map<String, ScoreSnapshot>):
     tabs[SportsLiveTab.LIVE_NOW].orEmpty()
         .filter { it.streamKey in justEnded || SportsLiveEndedGames.isEspnFinal(it, scores[it.streamKey]) }
         .flatMapTo(HashSet()) { item -> (listOf(item) + item.alternates).map { it.streamKey } }
+
+/**
+ * [new] draws exactly as [old] (#143): at most the focused card's id ([SportsLiveUiState.selectedItemId]) differs, which
+ * the screen never reads (its stage follows the focused row). A focus move rebuilds no state ([SportsLiveViewModel]'s
+ * fast path keeps the build's clock), so its copy is told apart from a real build by the clock first, then by value.
+ */
+internal fun sportsLiveSameScreen(old: SportsLiveUiState, new: SportsLiveUiState): Boolean =
+    old.nowMs == new.nowMs && old == new.copy(selectedItemId = old.selectedItemId)

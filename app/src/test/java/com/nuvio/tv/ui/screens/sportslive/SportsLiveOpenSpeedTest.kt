@@ -212,6 +212,27 @@ class SportsLiveOpenSpeedTest {
     }
 
     @Test
+    fun `a focus move alone gives the screen no new state, a tab change does`() = runTest {
+        latestFlow.value = load(listOf(item("a", isLive = true), item("b", isLive = true), item("c", isLive = false, startMs = NOW + HOUR)))
+        val viewModel = newViewModel(SportsLiveListCache.NONE)
+        val drawn = mutableListOf<SportsLiveUiState>()
+        backgroundScope.launch { viewModel.screenState.collect { drawn += it } }
+        runCurrent()
+        val shown = viewModel.screenState.value
+        val emissions = drawn.size
+        viewModel.selectItem("b")
+        runCurrent()
+        assertEquals("b", viewModel.uiState.value.selectedItemId)
+        assertSame(shown, viewModel.screenState.value)
+        assertEquals(emissions, drawn.size)
+
+        viewModel.selectTab(SportsLiveTab.UPCOMING)
+        runCurrent()
+        assertEquals(SportsLiveTab.UPCOMING, viewModel.screenState.value.selectedTab)
+        assertTrue(drawn.size > emissions)
+    }
+
+    @Test
     fun `back on the section with a list over 3 minutes old, it refreshes at once`() = runTest {
         latestFlow.value = load(listOf(item("a", isLive = true)))
         val viewModel = newViewModel(SportsLiveListCache.NONE)
