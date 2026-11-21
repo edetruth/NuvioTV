@@ -33,7 +33,8 @@ object SportsLiveTeamIdentity {
         else item.meta.genres + identity.league
         // A soccer game that names no competition (item 3: "FC Porto vs USC Paredes", tagged Soccer) takes its league.
         if (identity.sport == SOCCER && soccerLeagueUnknown(item)) return item.copy(meta = item.meta.copy(genres = genres))
-        // ESPN's live cricket list confirms a card only its teams suggested cricket for (2026-11-21): it takes the word.
+        // ESPN's live cricket list confirms a card no text names a sport for (two nations, or sides its teams suggested
+        // cricket for): it takes the word (live.23 review A2: the only way two plain nations become cricket).
         if (!sportUnknown(item) && !(identity.sport == CRICKET && sportUnknownByText(item))) return item
         return item.copy(sport = TeamIdentityRules.sportWord(identity.sport), meta = item.meta.copy(genres = genres))
     }

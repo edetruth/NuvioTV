@@ -124,11 +124,10 @@ class SportsLiveAddonNoiseTest {
         assertEquals(SportsLiveSportKind.CRICKET, tag("Bangladesh A vs Hong Kong"))
         assertEquals(SportsLiveSportKind.CRICKET, tag("India A vs SA A"))
         assertEquals(SportsLiveSportKind.CRICKET, tag("BAN-A vs HK"))
-        // Coordinator decision 2026-11-21 (TV report #9, c828ff485): two cricket nations, one of them mainly a cricket nation
-        // (India here), are cricket unless soccer or field hockey lists the pairing that day.
-        assertEquals(SportsLiveSportKind.CRICKET, tag("NZ vs IND"))
-        // Two plain nations, pairs with no mainly-cricket nation, are never guessed (rugby, hockey and football play them
-        // too); an A side needs cricket nations.
+        // Review A2 (live.23, replaces the 2026-11-21 mainly-cricket guess, c828ff485, that pinned this as cricket): two
+        // plain nations are never guessed (rugby, hockey, football and volleyball play them too); ESPN's live cricket list
+        // confirms one while live (NationalPairIdentityTest). An A side needs cricket nations.
+        assertNull(tag("NZ vs IND"))
         assertNull(tag("Australia vs England"))
         assertNull(tag("Brazil A vs Argentina"))
         assertNull(tag("Hobart Hurricanes vs Carolina Hurricanes"))

@@ -176,10 +176,10 @@ class SportsLiveClassifyTest {
     }
 
     @Test
-    fun `two plain nations with nothing else stay untagged unless one is a mainly-cricket nation`() {
-        // Coordinator decision 2026-11-21: a pair of cricket nations with a mainly-cricket one (Bangladesh) is cricket,
-        // unless ESPN's soccer or field-hockey feeds list that pairing that day (SportsLiveOtherSportPairs).
-        assertEquals(SportsLiveSportKind.CRICKET, SportsLiveSportKind.tagOf(item("UAE vs Bangladesh")))
+    fun `two plain nations with nothing else stay untagged`() {
+        // Review A2 (live.23, replaces the 2026-11-21 mainly-cricket guess that pinned this as cricket): a pair of nations
+        // is cricket only once ESPN's live cricket list confirms it or a text names cricket ("2nd T20I" above).
+        assertNull(SportsLiveSportKind.tagOf(item("UAE vs Bangladesh")))
         // Cricket, football and hockey all play these: precision first, the unidentified log records it.
         assertNull(SportsLiveSportKind.tagOf(item("Australia vs England")))
     }
