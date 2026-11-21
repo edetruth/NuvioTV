@@ -87,6 +87,15 @@ object SportsLiveCrashReport {
      */
     fun noScores(text: String): String = SCORE_LIKE.replace(text, NUMBERS)
 
+    /**
+     * An ANR trace line: a code frame ("  at pkg.Class.method(File.kt:12)") as it is; any other line (a thread's name,
+     * a lock's owner, a message) redacted and without anything shaped like a score, as [describe] does (spoilers).
+     */
+    internal fun traceLine(line: String, secrets: Collection<String>): String {
+        val code = line.trim().removePrefix("at ").trim()
+        return if (CODE_FRAME.matches(code)) line.trimEnd() else noScores(LogRedact.report(line, secrets).trimEnd())
+    }
+
     internal fun frame(text: String, secrets: Collection<String>): String =
         if (CODE_FRAME.matches(text)) text else clean(text, secrets)
 
@@ -133,7 +142,7 @@ object SportsLiveCrashReport {
             if (kind == SportsLiveExitKind.ANR) {
                 appendLine("[ANR trace, first $TRACE_LINES lines]")
                 val lines = trace.orEmpty().take(TRACE_LINES)
-                if (lines.isEmpty()) appendLine("not readable") else lines.forEach { appendLine(LogRedact.report(it, secrets).trimEnd()) }
+                if (lines.isEmpty()) appendLine("not readable") else lines.forEach { appendLine(traceLine(it, secrets)) }
                 appendLine()
             }
             appendLine("Links, hosts, IP addresses, tokens, addon names and ids, e-mail and account ids are removed. No scores.")
