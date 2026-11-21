@@ -103,7 +103,7 @@ object CrunchTime {
 data class CrunchCandidate(val key: String, val event: ScoreSnapshot, val bigScore: Double, val watching: Boolean)
 
 /**
- * The crunch alerts' limits (#137): at most one per game ever, at most one every [GAP_MS] overall, never for the
+ * The crunch alerts' limits (#137): at most one per game ever, at most one every [GAP_MS] overall (live.24: 15 min), never for the
  * game being watched; when several games are in crunch time at once, the biggest (the big-game score: ranked and
  * big games first) goes. Pure apart from what it remembers; main-thread or serialised use.
  */
@@ -131,8 +131,8 @@ class CrunchAlerts(private val gapMs: Long = GAP_MS) {
     }
 
     companion object {
-        /** At most one crunch alert this often, whatever the games. */
-        const val GAP_MS = 3 * 60_000L
+        /** At most one crunch alert this often, whatever the games (live.24: the user found one every 3 min noisy). */
+        const val GAP_MS = 15 * 60_000L
         private const val MAX_REMEMBERED = 500
     }
 }

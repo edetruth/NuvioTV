@@ -523,7 +523,7 @@
     <string name="sports_live_setting_full_time_alerts">Full-time alerts</string>
     <string name="sports_live_setting_full_time_alerts_subtitle">A short note when a followed team\'s game ends. Names only under Hide until I reveal</string>
     <string name="sports_live_setting_close_game_alerts">Close-game alerts</string>
-    <string name="sports_live_setting_close_game_alerts_subtitle">A note when a game in My sports is close near the end. Never the game you\'re watching</string>
+    <string name="sports_live_setting_close_game_alerts_subtitle">A note when a big game in My sports is close near the end, at most one every 15 min. Never while you watch your team</string>
     <!-- Sports & Live settings screen, grouped (#72) -->
     <string name="sports_live_settings_subtitle">Scores, what you follow, alerts and playing. Signed in to Nuvio, they sync to your other TVs</string>
     <string name="sports_live_section_what_i_follow">What I follow</string>
@@ -652,13 +652,16 @@
     <string name="sports_live_alert_crunch_final_minutes">final %1$d min</string>
     <string name="sports_live_alert_starting_toast">%1$s is starting · open Sports &amp; Live to watch</string>
     <string name="sports_live_alert_full_time_names">%1$s vs %2$s · Full time</string>
-    <string name="sports_live_alert_hint_watch">▶ or hold OK Watch</string>
-    <string name="sports_live_alert_prompt_hint">▶ or hold OK to watch</string>
-    <string name="sports_live_alert_no_stream_hint">▶ or hold OK: remind me in 10 min</string>
-    <string name="sports_live_alert_switching_hint">Switching in %1$d s · Back cancel · ▶ now</string>
+    <string name="sports_live_alert_hint_ok_watch">OK Watch · Back Close</string>
+    <string name="sports_live_alert_hint_ok_remind">OK Remind me in 10 min · Back Close</string>
+    <string name="sports_live_alert_switching_to">Switching to %1$s in %2$d…</string>
+    <string name="sports_live_alert_switch_to">Switch to %1$s?</string>
+    <string name="sports_live_alert_choice_watch_now">Watch now</string>
+    <string name="sports_live_alert_choice_watch_both">Watch both</string>
+    <string name="sports_live_alert_hint_stay">Back Stay here</string>
+    <string name="sports_live_alert_movie_saved">Your place in %1$s is saved</string>
     <string name="sports_live_alert_just_started">Just started</string>
     <string name="sports_live_your_teams_started">Started</string>
-    <string name="sports_live_alert_hint_dismiss">Back Dismiss</string>
     <string name="sports_live_info_hint_game">OK Game page · Back close</string>
     <string name="sports_live_info_hint_close">Back close</string>
     <!-- Research Q19 / Q17: Settings → Sports & Live. -->
@@ -675,9 +678,6 @@
     <string name="sports_live_paused_behind">−%1$s behind live</string>
     <string name="sports_live_paused_resume">OK resume</string>
     <string name="sports_live_paused_go_live">▶▶ Go live</string>
-    <string name="sports_live_alert_hint_peek">▼ Peek</string>
-    <string name="sports_live_alert_peeking">Peeking · %1$s</string>
-    <string name="sports_live_alert_peek_hint">OK Stay · Back Return · %1$d s</string>
     <string name="sports_live_why_just_scored">Just scored</string>
     <string name="sports_live_why_red_zone">Red zone</string>
     <string name="sports_live_why_bases_loaded">Bases loaded</string>
@@ -780,8 +780,6 @@
     <string name="sports_live_checking_description">Checking for a stream</string>
     <string name="sports_live_kickoff_stream_ready_short">Stream ready</string>
     <string name="sports_live_kickoff_waiting_stream">Waiting for a working stream…</string>
-    <string name="sports_live_heads_up_title">No working stream yet for %1$s</string>
-    <string name="sports_live_heads_up_line">I\'ll tell you when one is up</string>
     <plurals name="sports_live_my_games_tonight">
         <item quantity="one">%1$d game tonight</item>
         <item quantity="other">%1$d games tonight</item>
@@ -938,7 +936,6 @@
     <string name="sports_live_waiting_checking">Checking every %1$d s</string>
     <string name="sports_live_alert_no_stream_yet">NO STREAM YET</string>
     <string name="sports_live_alert_no_stream_line">Started, but no stream is live yet</string>
-    <string name="sports_live_alert_hint_both">▲ Both</string>
     <string name="sports_live_remind_every_team">Remind me for every %1$s game</string>
     <string name="sports_live_stop_reminding_team">Stop reminding for %1$s games</string>
     <string name="sports_live_setting_reminded_teams">Teams I\'m reminded about</string>
@@ -967,7 +964,6 @@
     <string name="sports_live_report_note_missed">Didn\'t catch that. Try again.</string>
     <string name="sports_live_report_note_no_mic">Microphone access is off, so no voice note</string>
     <string name="sports_live_report_new">Save a new report</string>
-    <string name="sports_live_alert_watch_now">Watch now?</string>
     <!-- Addon install errors in plain words (#203) -->
     <string name="addon_install_failed_blocked">Couldn\'t reach this addon. Your network may be blocking it. A VPN or another network can help.</string>
     <string name="addon_install_failed_cleartext">This addon\'s address isn\'t secure (http), so the app can\'t open it. Try its https address.</string>

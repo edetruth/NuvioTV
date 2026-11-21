@@ -30,7 +30,6 @@ import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveTab
 import com.nuvio.tv.domain.repository.SportsLiveLoad
 import com.nuvio.tv.domain.repository.SportsLiveRepository
-import com.nuvio.tv.ui.screens.sportslive.dual.sportsLiveSavedForLater
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
@@ -116,8 +115,8 @@ class SportsLiveAlerts @Inject constructor(
     private var cardCount = 0L
 
     /**
-     * The overlay to show now; null: none. Toasts raised close together share one card that cycles
-     * through them (#136, [SportsLiveAlertCards]); a kickoff prompt is a card of its own.
+     * The overlay to show now; null: none. One alert per card (live.24): when several wait, the highest priority one
+     * shows ([SportsLiveAlertCards.priority]) and the other toasts are dropped as stale.
      */
     val current: StateFlow<AlertCard?> = currentFlow.asStateFlow()
 
@@ -149,21 +148,6 @@ class SportsLiveAlerts @Inject constructor(
 
     /** "Reminder set" / "Reminder removed" after the last bell press, as the app's toast card; null: none. */
     val reminderNotice: StateFlow<ReminderNotice?> = reminderNoticeFlow.asStateFlow()
-
-    private val headsUpFlow = MutableStateFlow<KickoffHeadsUp?>(null)
-    private var headsUpCount = 0L
-
-    /**
-     * The tip-off heads-up (1b), my games only (a held kickoff prompt's game, never one saved for later): "No working
-     * stream yet for ‹game› — I'll tell you when one is up", as the app's toast; null: none. The prompt follows with
-     * "Stream ready" once a link is verified (the kickoff hold, #162).
-     */
-    val headsUp: StateFlow<KickoffHeadsUp?> = headsUpFlow.asStateFlow()
-
-    /** [shown] has been shown: it goes, unless a newer one took its place. */
-    fun closeHeadsUp(shown: KickoffHeadsUp) {
-        headsUpFlow.compareAndSet(shown, null)
-    }
 
     /** Shows "Reminder set" ([on]) or "Reminder removed" for [item]'s game. */
     fun noticeReminder(item: SportsLiveItem, on: Boolean) {
@@ -242,11 +226,9 @@ class SportsLiveAlerts @Inject constructor(
                         val alert = when (event) {
                             is SportsLiveKickoffHolds.Event.Fire -> event.alert
                             is SportsLiveKickoffHolds.Event.GiveUp -> event.alert.copy(noStreamYet = true)
-                            is SportsLiveKickoffHolds.Event.HeadsUp -> {
-                                val saved = sportsLiveSavedForLater(liveScores.protection.value, liveScores.scores.value)
-                                if (!saved(event.alert.item)) headsUpFlow.value = KickoffHeadsUp(++headsUpCount, event.alert.item)
-                                null
-                            }
+                            // No "No working stream yet" heads-up any more (live.24): the game is tagged "Started" in
+                            // Your teams, and the card follows once a stream is up.
+                            is SportsLiveKickoffHolds.Event.HeadsUp -> null
                         }
                         if (alert != null) enqueue(listOf(alert), System.currentTimeMillis())
                     }
@@ -363,7 +345,8 @@ class SportsLiveAlerts @Inject constructor(
     private fun evaluateCrunch(inputs: Inputs, tracked: List<SportsLiveItem>, scores: Map<String, ScoreSnapshot>, nowMs: Long) {
         if (!inputs.settings.closeGameAlerts || inputs.mode == ScoresMode.OFF || tracked.isEmpty()) return
         val watching = inputs.watching
-        if (watching.inPlayer && !watching.sportsPlayback) return
+        val watchingFollowed = inputs.cards.any { it.followed && SportsLiveAlertEngine.isPlaying(it, watching) }
+        if (!crunchMayShow(watching, watchingFollowed)) return
         if (watching.streamStartedAtMs?.let { nowMs - it < SportsLiveAlertEngine.STREAM_SETTLE_MS } == true) return
         val byKey = HashMap<String, SportsLiveItem>()
         val candidates = tracked.mapNotNull { item ->
@@ -372,7 +355,7 @@ class SportsLiveAlerts @Inject constructor(
             byKey[item.streamKey] = item
             CrunchCandidate(item.streamKey, event, BigGame.rate(event, followed = item.followed).score, SportsLiveAlertEngine.isPlaying(item, watching))
         }
-        val pick = synchronized(lock) { crunch.next(nowMs, candidates) } ?: return
+        val pick = synchronized(lock) { crunch.next(nowMs, bigGamesOnly(candidates)) } ?: return
         val moment = CrunchTime.of(pick.event) ?: return
         val item = byKey[pick.key] ?: return
         enqueue(listOf(SportsLiveAlert.Crunch(item, pick.event, moment, namesOnly = inputs.mode == ScoresMode.HIDE_UNTIL_FOCUSED)), nowMs)
@@ -401,20 +384,16 @@ class SportsLiveAlerts @Inject constructor(
 
     @VisibleForTesting
     internal fun enqueue(alerts: List<SportsLiveAlert>, nowMs: Long) = synchronized(lock) {
+        val showing = currentFlow.value?.alert
         for (alert in alerts) {
-            // A toast arriving while a toast card shows joins it (#136), when it may show at all.
-            val card = currentFlow.value
-            if (card != null && SportsLiveAlertCards.canJoin(card, alert, nowMs)) {
-                showable(alert, nowMs, raisedAt = nowMs)?.let { currentFlow.value = SportsLiveAlertCards.join(card, it, nowMs) }
+            // One alert per card (live.24): a toast no more important than the card up now is old news by the time it
+            // could show; a kickoff always waits its turn.
+            if (showing != null && alert !is SportsLiveAlert.Kickoff &&
+                SportsLiveAlertCards.priority(alert) >= SportsLiveAlertCards.priority(showing)
+            ) {
                 continue
             }
-            if (alert is SportsLiveAlert.Kickoff) {
-                // Kickoff prompts go before toasts, in the order raised.
-                val at = queue.indexOfFirst { it.first !is SportsLiveAlert.Kickoff }.let { if (it < 0) queue.size else it }
-                queue.add(at, alert to nowMs)
-            } else {
-                queue.add(alert to nowMs)
-            }
+            queue.add(alert to nowMs)
         }
         if (currentFlow.value == null) showNextLocked(nowMs)
     }
@@ -435,8 +414,9 @@ class SportsLiveAlerts @Inject constructor(
                 AlertAnswer.LATER -> engine.later(alert.item, nowMs)
             }
         }
-        // By id: alerts may have joined the card since the host read it.
-        if (currentFlow.value?.id == card.id) currentFlow.value = null
+        // By id: only the card the host closed goes.
+        if (currentFlow.value?.id != card.id) return@synchronized
+        currentFlow.value = null
         showNextLocked(nowMs)
     }
 
@@ -448,6 +428,7 @@ class SportsLiveAlerts @Inject constructor(
     private fun showable(queued: SportsLiveAlert, nowMs: Long, raisedAt: Long): SportsLiveAlert? {
         val next = SportsLiveAlertEngine.stillShowable(queued, lastMode, lastSettings) ?: return null
         if (next !is SportsLiveAlert.Kickoff && nowMs - raisedAt > TOAST_STALE_MS) return null
+        if (!mayShowOver(next, watching.value)) return null
         if (SportsLiveAlertEngine.isPlaying(next.item, watching.value, SportsLiveAlertEngine.snapshotOf(next))) {
             // A reminder for a game on screen is satisfied: it never fires later either.
             if (next is SportsLiveAlert.Kickoff) engine.answered(next.item)
@@ -457,21 +438,17 @@ class SportsLiveAlerts @Inject constructor(
         return next
     }
 
+    /**
+     * The next card (live.24): of the alerts waiting, the highest priority one that may show; the toasts left behind are
+     * dropped as stale (they still show in the guide and the rows), kickoffs wait their turn.
+     */
     private fun showNextLocked(nowMs: Long) {
         while (queue.isNotEmpty()) {
-            val (queued, raisedAt) = queue.removeAt(0)
+            val at = SportsLiveAlertCards.next(queue) ?: break
+            val (queued, raisedAt) = queue.removeAt(at)
             val next = showable(queued, nowMs, raisedAt) ?: continue
-            var card = AlertCard(++cardCount, listOf(next), nowMs)
-            // Toasts that waited together show together (#136): the ones raised within the window of the last taken.
-            var lastRaisedAt = raisedAt
-            while (SportsLiveAlertCards.groupable(next) && queue.isNotEmpty()) {
-                val (waiting, waitingRaisedAt) = queue.first()
-                if (!SportsLiveAlertCards.groupable(waiting) || waitingRaisedAt - lastRaisedAt > SportsLiveAlertCards.GROUP_WINDOW_MS) break
-                queue.removeAt(0)
-                lastRaisedAt = waitingRaisedAt
-                showable(waiting, nowMs, waitingRaisedAt)?.let { card = SportsLiveAlertCards.join(card, it, nowMs) }
-            }
-            currentFlow.value = card
+            queue.removeAll { it.first !is SportsLiveAlert.Kickoff }
+            currentFlow.value = AlertCard(++cardCount, next, raisedAt)
             return
         }
         currentFlow.value = null
@@ -576,7 +553,7 @@ class SportsLiveAlerts @Inject constructor(
         )
         val sameCard = card.id in now.playingIds
         enqueue(listOf(SportsLiveAlert.ScoreChange(card, snapshot, ScoreSide.HOME)), System.currentTimeMillis())
-        val shown = currentFlow.value?.alerts?.any { SportsLiveAlertEngine.gameKey(it.item) == SportsLiveAlertEngine.gameKey(card) } == true
+        val shown = currentFlow.value?.alert?.let { SportsLiveAlertEngine.gameKey(it.item) == SportsLiveAlertEngine.gameKey(card) } == true
         android.util.Log.d("SportsLiveAlerts", "debugRaiseForPlaying: otherCopy=${!sameCard} shown=$shown")
     }
 
@@ -599,6 +576,28 @@ class SportsLiveAlerts @Inject constructor(
         /** Of [playing] (followed teams' live games playing now), those played for [PROTECTION_WATCHED_MS] so far. */
         internal fun watchedLongEnough(playing: List<ScoreSnapshot>, watchedMs: (String) -> Long): List<ScoreSnapshot> =
             playing.filter { watchedMs(it.eventId) >= PROTECTION_WATCHED_MS }
+
+        /**
+         * Over a movie or show only a kickoff shows (live.24: nothing else interrupts a film); a close finish never on a
+         * Sports & Live screen, whose rows already say "Close late".
+         */
+        internal fun mayShowOver(alert: SportsLiveAlert, watching: SportsLiveWatching): Boolean = when {
+            alert is SportsLiveAlert.Kickoff -> true
+            watching.inPlayer && !watching.sportsPlayback -> false
+            alert is SportsLiveAlert.Crunch -> !watching.sportsLiveScreen
+            else -> true
+        }
+
+        /**
+         * Close finish may be looked for now (live.24): never over a movie or show, never on a Sports & Live screen, and
+         * never while a followed team's game plays ([watchingFollowed]: the viewer is where they want to be).
+         */
+        internal fun crunchMayShow(watching: SportsLiveWatching, watchingFollowed: Boolean): Boolean =
+            !(watching.inPlayer && !watching.sportsPlayback) && !watching.sportsLiveScreen && !watchingFollowed
+
+        /** Close finish for big games only (live.24): those that clear the big-game bar ([BigGame.BIG]). */
+        internal fun bigGamesOnly(candidates: List<CrunchCandidate>): List<CrunchCandidate> =
+            candidates.filter { it.bigScore >= BigGame.BIG }
 
         /** A first kickoff prompt waits for a live link (#162); a re-ask after Later or the note does not. */
         fun holdsFirst(alert: SportsLiveAlert): Boolean = alert is SportsLiveAlert.Kickoff && !alert.again && !alert.noStreamYet
@@ -630,9 +629,6 @@ class SportsLiveAlerts @Inject constructor(
         }
     }
 }
-
-/** The tip-off heads-up (1b) for [item]'s game; [id] tells two apart. */
-data class KickoffHeadsUp(val id: Long, val item: SportsLiveItem)
 
 /**
  * The toast card after a bell press (#44, `Prompts.dc.html`): "Reminder set" ([on]) or "Reminder removed",

@@ -4,74 +4,84 @@ import android.view.KeyEvent
 import com.nuvio.tv.domain.model.SportsLiveItem
 
 /**
- * One overlay on screen (#136): a kickoff prompt alone, or toasts that arrived close together, which the
- * card cycles through. [shownAtMs]: when it appeared; [lastJoinedAtMs]: when the newest alert joined it.
+ * One overlay on screen (#136, live.24): one alert per card, never cycling (Material snackbars: one at a time, a single
+ * action). [raisedAtMs]: when its alert was raised; a card waiting under the screen's own overlays goes stale from it.
  */
 data class AlertCard(
     val id: Long,
-    val alerts: List<SportsLiveAlert>,
-    val shownAtMs: Long,
-    val lastJoinedAtMs: Long = shownAtMs
+    val alert: SportsLiveAlert,
+    val raisedAtMs: Long
 ) {
-    val first: SportsLiveAlert get() = alerts.first()
+    val first: SportsLiveAlert get() = alert
 }
 
-/** Grouping, cycling and timing of the alert cards (#136). Pure, so it is tested without a clock. */
+/**
+ * The cards' rules (live.24 notifications redesign, docs/design/notifications-review.md option A). Pure, so it is tested
+ * without a clock.
+ *
+ * One rule everywhere: if a card shows "OK", OK belongs to the card; if it does not (Full time), the card is only
+ * information and every key works as normal.
+ */
 object SportsLiveAlertCards {
-    /** An alert arriving this soon after the card's newest one joins it instead of waiting its turn. */
-    const val GROUP_WINDOW_MS = 8_000L
+    /** An actionable card's time on screen (NN/g: a toast that fades in 5 s goes before it can be acted on). */
+    const val ACTIONABLE_MS = 10_000L
 
-    /** A toast's time on screen. */
-    const val NORMAL_MS = 6_000L
+    /** A lead change keeps the longer time. */
+    const val LEAD_CHANGE_MS = 12_000L
 
-    /** A big moment's (a lead change, a final). */
-    const val BIG_MS = 9_000L
+    /** A passive card's (Full time): it only informs. */
+    const val PASSIVE_MS = 6_000L
 
-    /** A grouped card shows each of its alerts this long in turn. */
-    const val CYCLE_MS = 3_000L
+    /** An OK pressed this soon after a card appeared was on its way already: it goes to the screen underneath. */
+    const val OK_GRACE_MS = 800L
 
-    /** However many join, a card leaves after this long. */
-    const val MAX_CARD_MS = 20_000L
+    /** OK on a card starts this countdown to the switch; Back keeps you where you are. */
+    const val COUNTDOWN_MS = 3_000L
 
-    /** A lead change or a final: the card stays longer. */
-    fun isBigMoment(alert: SportsLiveAlert): Boolean = when (alert) {
-        is SportsLiveAlert.ScoreChange -> alert.leadChange
-        is SportsLiveAlert.FullTime -> true
-        is SportsLiveAlert.Crunch -> true
-        is SportsLiveAlert.Kickoff -> false
+    /** "At tip-off: Switch automatically": the same countdown card, longer (research Q17: 10 s, Back stays). */
+    const val TIP_OFF_COUNTDOWN_MS = 10_000L
+
+    /** A card that could not show this long after its alert was raised (the screen's overlays stayed open) is old news. */
+    const val STALE_MS = 30_000L
+
+    /**
+     * Whether [alert]'s card shows "OK": everything but Full time (the game is over, there is nothing to switch to). A
+     * kickoff watches (the no-stream note reminds in 10 min); a score, a lead change and a close finish watch.
+     */
+    fun actionable(alert: SportsLiveAlert): Boolean = alert !is SportsLiveAlert.FullTime
+
+    /**
+     * Which alert wins when several wait (lower first): my team's kickoff, then my team's score or lead change, then
+     * full time, then a close finish. The others are dropped as stale: the guide and the rows still show them.
+     */
+    fun priority(alert: SportsLiveAlert): Int = when (alert) {
+        is SportsLiveAlert.Kickoff -> 0
+        is SportsLiveAlert.ScoreChange -> 1
+        is SportsLiveAlert.FullTime -> 2
+        is SportsLiveAlert.Crunch -> 3
     }
 
-    /** How long [alert] stays on screen by itself. */
-    fun durationMs(alert: SportsLiveAlert): Long = if (isBigMoment(alert)) BIG_MS else NORMAL_MS
-
-    /** Score and full-time toasts group; a kickoff prompt (it asks a question) is always alone. */
-    fun groupable(alert: SportsLiveAlert): Boolean = alert !is SportsLiveAlert.Kickoff
-
-    /** When [card] leaves: its longest alert's time, or one turn each when grouped, from the last join; capped. */
-    fun endsAtMs(card: AlertCard): Long {
-        val life = maxOf(card.alerts.maxOf(::durationMs), if (card.alerts.size > 1) card.alerts.size * CYCLE_MS else 0L)
-        return minOf(card.lastJoinedAtMs + life, card.shownAtMs + MAX_CARD_MS)
+    /**
+     * How long [alert]'s card stays on screen (its time counts only while it shows): 10 s actionable, 12 s for a lead
+     * change, 6 s passive; [recommended] scales it as Android's "Time to take action" asks
+     * (AccessibilityManager.getRecommendedTimeoutMillis), never shorter.
+     */
+    fun durationMs(alert: SportsLiveAlert, recommended: (Long, Boolean) -> Long = { ms, _ -> ms }): Long {
+        val actionable = actionable(alert)
+        val base = when {
+            !actionable -> PASSIVE_MS
+            alert is SportsLiveAlert.ScoreChange && alert.leadChange -> LEAD_CHANGE_MS
+            else -> ACTIONABLE_MS
+        }
+        return maxOf(base, recommended(base, actionable))
     }
 
-    /** True when [alert], raised at [nowMs], joins [card] rather than waiting for the next card. */
-    fun canJoin(card: AlertCard, alert: SportsLiveAlert, nowMs: Long): Boolean =
-        groupable(card.first) && groupable(alert) &&
-            nowMs - card.lastJoinedAtMs <= GROUP_WINDOW_MS && nowMs < endsAtMs(card)
-
-    /** [card] with [alert] in it; a newer alert about a game already on the card takes that one's place. */
-    fun join(card: AlertCard, alert: SportsLiveAlert, nowMs: Long): AlertCard {
-        val key = SportsLiveAlertEngine.gameKey(alert.item)
-        val at = card.alerts.indexOfFirst { SportsLiveAlertEngine.gameKey(it.item) == key }
-        val alerts = if (at >= 0) card.alerts.toMutableList().also { it[at] = alert } else card.alerts + alert
-        return card.copy(alerts = alerts, lastJoinedAtMs = nowMs)
-    }
-
-    /** The index of the alert [card] shows at [nowMs]: each in turn for [CYCLE_MS]. OK acts on this one. */
-    fun showingIndex(card: AlertCard, nowMs: Long): Int {
-        if (card.alerts.size <= 1) return 0
-        val elapsed = (nowMs - card.shownAtMs).coerceAtLeast(0L)
-        return ((elapsed / CYCLE_MS) % card.alerts.size).toInt()
-    }
+    /**
+     * The alert of [waiting] (with when each was raised) to show next: the highest [priority], the earliest of those.
+     * Null for none.
+     */
+    fun next(waiting: List<Pair<SportsLiveAlert, Long>>): Int? =
+        waiting.indices.minWithOrNull(compareBy<Int>({ priority(waiting[it].first) }, { waiting[it].second }))
 }
 
 /** Where a card sits (#136): top right of the screen, or of one dual screen pane. */
@@ -103,65 +113,47 @@ object SportsLiveAlertPlacement {
         return a.teams != null && b.teams != null && SportsLiveAlertEngine.gameKey(a) == SportsLiveAlertEngine.gameKey(b)
     }
 }
-
-/** What a remote key does while an alert card or a peek is up (#136). */
+/** What a remote key does while an alert card shows (live.24). */
 enum class AlertKeyAction {
-    /** Not the alert's: the screen below gets it as usual. */
+    /** Not the card's: the screen below gets it as usual. */
     PASS,
 
-    /** Swallowed: nothing happens (a peek covers the player, so its keys must not reach it). */
+    /** Swallowed: the expanded card has the keys, and this one does nothing there. */
     CONSUME,
 
-    /** ▶ (or a held OK) on a card: its game plays here. Never a plain OK (research Q17). */
-    WATCH,
+    /** A plain OK on a card that shows "OK": its action (a countdown to its game, or Remind me in 10 min). */
+    OK,
 
-    /** ▼ on a card: its game plays full screen with sound for a few seconds. */
-    PEEK,
-
-    /** ▲ on a card in the full player: dual screen with the game playing and the card's game beside it, muted. */
-    BOTH,
-
-    /** Back on a card: it goes. */
+    /** Back on a card that shows "OK": it goes. */
     DISMISS,
 
-    /** OK during a peek: stay on the peeked game. */
-    PEEK_STAY,
+    /** OK on the expanded card: its selected choice (Watch now, Watch both). */
+    PRESS,
 
-    /** Back during a peek: the game from before, at its live edge. */
-    PEEK_RETURN,
+    /** Back on the expanded card: no switch, you stay where you are. */
+    CANCEL,
 
-    /** ▶ or a held OK on the kickoff toast (research Q17): its game plays (the no-stream note: remind me in 10 min). */
-    PROMPT_WATCH,
-
-    /** Back while the kickoff toast counts down to switching ("At tip-off: Switch automatically"): no switch. */
-    PROMPT_CANCEL
+    /** ◀ ▶ on the expanded card: the selection moves between Watch now and Watch both. */
+    MOVE
 }
 
 /**
- * Who gets a fresh key press (#136). [cardActionable]: a score or full-time card shows over a screen
- * that can play its game here (the full player of a game, dual screen) and that screen's own overlays
- * (controls, the live games panel, a dialog) are closed. [canPeek]: that screen can peek (the full player).
- * [peeking]: a peek plays.
+ * Who gets a key now (live.24). [cardOk]: a card that shows "OK" is on screen (never under the screen's own overlays: it
+ * waits until they close) and has been for [SportsLiveAlertCards.OK_GRACE_MS]. [cardBack]: such a card is on screen,
+ * however long: Back closes it. [expanded]: OK started the countdown; the card has every key but the volume.
+ * [canBoth]: the expanded card offers Watch both (over a sports stream only).
  */
 data class AlertKeyContext(
-    val cardActionable: Boolean,
-    val canPeek: Boolean,
-    val peeking: Boolean,
-    /**
-     * A kickoff toast shows (research Q17), on any screen: it never takes focus, and only ▶ or a held OK act on it;
-     * every other key, OK and Back included, does what it does underneath.
-     */
-    val kickoff: Boolean = false,
-    /** The kickoff toast counts down to switching: Back cancels the switch (and only that). */
-    val countdown: Boolean = false,
-    /** ▲ opens dual screen with both games: the full player only (never in dual screen, already two games). */
+    val cardOk: Boolean = false,
+    val cardBack: Boolean = false,
+    val expanded: Boolean = false,
     val canBoth: Boolean = false
 )
 
 /**
- * "At tip-off: Switch automatically" (research Q17): the kickoff toast counts down and switches only when opted in
- * ([tipOff]), for a game with a stream (never the no-stream note), and never over anything playing ([inPlayer]: a
- * live game being watched is the most valuable thing on screen; over a movie the toast only informs).
+ * "At tip-off: Switch automatically" (research Q17): the kickoff card opens straight into its countdown, only when
+ * opted in ([tipOff]), for a game with a stream (never the no-stream note), and never over anything playing
+ * ([inPlayer]: a live game being watched is the most valuable thing on screen).
  */
 object SportsLiveTipOffSwitch {
     fun runs(tipOff: com.nuvio.tv.core.sportslive.SportsLiveTipOff, noStreamYet: Boolean, inPlayer: Boolean): Boolean =
@@ -171,73 +163,39 @@ object SportsLiveTipOffSwitch {
 object SportsLiveAlertKeys {
 
     /**
-     * Who takes keys now: [card] (null once it closed, a timeout too) over a screen that can play its game
-     * here ([canActHere]: the full player of a game, dual screen) and registered as a surface ([surfaceBusy]
-     * null when none is). A score card is actionable only while the screen's own overlays are closed
-     * ([surfaceBusy] false). A kickoff takes its keys wherever it shows as the toast ([kickoffKeys]: not over a
-     * movie, where it only informs). [countdown]: its auto-switch countdown runs. [canPeek]: the screen could peek
-     * (the full player). [canBoth]: ▲ could open dual screen with both games (the full player).
+     * Who takes keys now: [card] (null: none) is on screen since [shownAtMs] (null: it waits under the screen's own
+     * overlays, so it takes nothing), [nowMs] now. [expanded]: its countdown card is up; [canBoth]: Watch both is offered.
      */
-    fun context(
-        card: AlertCard?,
-        canActHere: Boolean,
-        surfaceBusy: Boolean?,
-        canPeek: Boolean,
-        peeking: Boolean,
-        canBoth: Boolean = false,
-        kickoffKeys: Boolean = true,
-        countdown: Boolean = false
-    ): AlertKeyContext {
-        val kickoff = card?.first is SportsLiveAlert.Kickoff
-        val onSurface = card != null && canActHere && surfaceBusy != null
-        val actionable = onSurface && !kickoff && surfaceBusy == false
+    fun context(card: AlertCard?, shownAtMs: Long?, nowMs: Long, expanded: Boolean = false, canBoth: Boolean = false): AlertKeyContext {
+        if (card == null || shownAtMs == null) return AlertKeyContext()
+        if (expanded) return AlertKeyContext(expanded = true, canBoth = canBoth)
+        val actionable = SportsLiveAlertCards.actionable(card.alert)
         return AlertKeyContext(
-            cardActionable = actionable,
-            canPeek = actionable && canPeek,
-            peeking = peeking,
-            kickoff = kickoff && kickoffKeys,
-            countdown = kickoff && kickoffKeys && countdown,
-            canBoth = actionable && canBoth
+            cardOk = actionable && nowMs - shownAtMs >= SportsLiveAlertCards.OK_GRACE_MS,
+            cardBack = actionable
         )
     }
 
     /**
-     * The action of a key's first press, or of a held OK's first repeat ([held]: about half a second in); the rest
-     * of that press follows it (see the host's dispatcher). A plain OK never acts on an alert (research Q17: OK is
-     * the most-pressed key, and a prompt that took it took presses meant for the screen).
+     * The action of a key's first press. ▶ and Hold OK are never an alert's (live.24): ▶ is missing on many remotes and
+     * is the player's pause, and Hold OK keeps its meaning everywhere (#218, the dispatcher hands a held OK back).
      */
-    fun route(keyCode: Int, context: AlertKeyContext, held: Boolean = false): AlertKeyAction {
-        if (context.peeking) {
-            if (held) return AlertKeyAction.PASS
+    fun route(keyCode: Int, context: AlertKeyContext): AlertKeyAction {
+        val back = keyCode == KeyEvent.KEYCODE_BACK || keyCode == KeyEvent.KEYCODE_ESCAPE
+        if (context.expanded) {
             return when {
-                isOk(keyCode) -> AlertKeyAction.PEEK_STAY
-                keyCode == KeyEvent.KEYCODE_BACK || keyCode == KeyEvent.KEYCODE_ESCAPE -> AlertKeyAction.PEEK_RETURN
-                // The system's volume keys keep working for the peek's sound.
+                isOk(keyCode) -> AlertKeyAction.PRESS
+                back -> AlertKeyAction.CANCEL
+                keyCode == KeyEvent.KEYCODE_DPAD_LEFT || keyCode == KeyEvent.KEYCODE_DPAD_RIGHT ->
+                    if (context.canBoth) AlertKeyAction.MOVE else AlertKeyAction.CONSUME
+                // The system's volume keys keep working for the video underneath.
                 keyCode in SYSTEM_KEYS -> AlertKeyAction.PASS
                 else -> AlertKeyAction.CONSUME
             }
         }
-        if (held) {
-            return when {
-                !isOk(keyCode) -> AlertKeyAction.PASS
-                context.kickoff -> AlertKeyAction.PROMPT_WATCH
-                context.cardActionable -> AlertKeyAction.WATCH
-                else -> AlertKeyAction.PASS
-            }
-        }
-        if (context.kickoff) {
-            return when {
-                isWatchKey(keyCode) -> AlertKeyAction.PROMPT_WATCH
-                context.countdown && (keyCode == KeyEvent.KEYCODE_BACK || keyCode == KeyEvent.KEYCODE_ESCAPE) -> AlertKeyAction.PROMPT_CANCEL
-                else -> AlertKeyAction.PASS
-            }
-        }
-        if (!context.cardActionable) return AlertKeyAction.PASS
         return when {
-            isWatchKey(keyCode) -> AlertKeyAction.WATCH
-            keyCode == KeyEvent.KEYCODE_DPAD_DOWN && context.canPeek -> AlertKeyAction.PEEK
-            keyCode == KeyEvent.KEYCODE_DPAD_UP && context.canBoth -> AlertKeyAction.BOTH
-            keyCode == KeyEvent.KEYCODE_BACK || keyCode == KeyEvent.KEYCODE_ESCAPE -> AlertKeyAction.DISMISS
+            isOk(keyCode) && context.cardOk -> AlertKeyAction.OK
+            back && context.cardBack -> AlertKeyAction.DISMISS
             else -> AlertKeyAction.PASS
         }
     }
@@ -245,12 +203,116 @@ object SportsLiveAlertKeys {
     fun isOk(keyCode: Int): Boolean =
         keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
 
-    /** ▶: Play/Pause or Play, the deliberate key an alert's Watch is bound to (research Q17). */
-    fun isWatchKey(keyCode: Int): Boolean =
-        keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE || keyCode == KeyEvent.KEYCODE_MEDIA_PLAY
-
     private val SYSTEM_KEYS = setOf(KeyEvent.KEYCODE_VOLUME_UP, KeyEvent.KEYCODE_VOLUME_DOWN, KeyEvent.KEYCODE_VOLUME_MUTE)
 }
+
+/**
+ * A card's OK press (live.24): a plain OK on a card is taken on its press and acts on its release; held until the key
+ * repeats, it is handed back to the screens (Hold OK keeps its meaning everywhere, #218: the player menu, the Hold OK
+ * sheet). Pure: the dispatcher feeds it the OK key events.
+ */
+class AlertOkPress {
+    enum class Step {
+        /** Not a press this follows: the event goes on as usual. */
+        NONE,
+
+        /** Taken, nothing more yet. */
+        TAKE,
+
+        /** The release of a short press: the card's OK acts now. */
+        ACT,
+
+        /** Held: the press goes back to the screens from its start. */
+        HAND_BACK
+    }
+
+    private var pending: Long? = null
+
+    /** An OK key event ([action] as KeyEvent's, [repeatCount], [downTime]); [cardTakes]: on a fresh press, the card takes it. */
+    fun onOk(action: Int, repeatCount: Int, downTime: Long, cardTakes: Boolean): Step {
+        if (action == KeyEvent.ACTION_DOWN && repeatCount == 0) {
+            pending = if (cardTakes) downTime else null
+            return if (cardTakes) Step.TAKE else Step.NONE
+        }
+        if (pending != downTime) return Step.NONE
+        return when {
+            action == KeyEvent.ACTION_UP -> {
+                pending = null
+                Step.ACT
+            }
+            repeatCount > 0 -> {
+                pending = null
+                Step.HAND_BACK
+            }
+            else -> Step.TAKE
+        }
+    }
+}
+
+/** The expanded card's choices: Watch now (focused first), and Watch both where offered. */
+enum class AlertChoice { WATCH_NOW, WATCH_BOTH }
+
+/**
+ * The expanded countdown card (live.24): OK on a card opened it. [selected] is focused; [endsAtMs] is when the switch
+ * happens, null once the countdown stopped (focus moved to Watch both: the viewer is choosing).
+ */
+data class AlertCountdown(val cardId: Long, val selected: AlertChoice, val endsAtMs: Long?) {
+    /** ◀ ▶ (only with Watch both offered): the other choice; moving off Watch now stops the countdown for good. */
+    fun move(): AlertCountdown = copy(
+        selected = if (selected == AlertChoice.WATCH_NOW) AlertChoice.WATCH_BOTH else AlertChoice.WATCH_NOW,
+        endsAtMs = null
+    )
+
+    /** Whole seconds left, rounded up (the card's "in 3…"); null once stopped. */
+    fun secondsLeft(nowMs: Long): Int? = endsAtMs?.let { (((it - nowMs).coerceAtLeast(0L) + 999L) / 1_000L).toInt() }
+
+    /** True when the countdown ran out at [nowMs]: the switch happens. */
+    fun due(nowMs: Long): Boolean = endsAtMs != null && nowMs >= endsAtMs
+
+    companion object {
+        fun start(cardId: Long, nowMs: Long, durationMs: Long = SportsLiveAlertCards.COUNTDOWN_MS): AlertCountdown =
+            AlertCountdown(cardId, AlertChoice.WATCH_NOW, nowMs + durationMs)
+    }
+}
+
+/**
+ * A card's time on screen (live.24): it shows only while the screen's own overlays (the guide, controls, a menu, a
+ * dialog) are closed, and waits under them; its time counts only while it shows, and each time it shows again the OK
+ * grace starts afresh. Pure: the host steps it with the clock.
+ */
+data class AlertCardClock(
+    /** When the card showed this time; null: it waits. */
+    val shownAtMs: Long? = null,
+    /** Time it has shown before this showing. */
+    val shownMs: Long = 0L
+) {
+    /** The clock at [nowMs], the screen [busy] or not. */
+    fun step(nowMs: Long, busy: Boolean): AlertCardClock = when {
+        busy && shownAtMs != null -> AlertCardClock(null, shownMs + (nowMs - shownAtMs))
+        !busy && shownAtMs == null -> copy(shownAtMs = nowMs)
+        else -> this
+    }
+
+    fun totalShownMs(nowMs: Long): Long = shownMs + (shownAtMs?.let { nowMs - it } ?: 0L)
+
+    /**
+     * What becomes of [card] at [nowMs]: [Fate.UP] while its time lasts; [Fate.TIMED_OUT] once it has shown its
+     * [SportsLiveAlertCards.durationMs] ([duration]); [Fate.STALE] when it never showed within
+     * [SportsLiveAlertCards.STALE_MS] of being raised.
+     */
+    fun fate(card: AlertCard, nowMs: Long, duration: Long): Fate = when {
+        totalShownMs(nowMs) >= duration -> Fate.TIMED_OUT
+        shownAtMs == null && shownMs == 0L && nowMs - card.raisedAtMs >= SportsLiveAlertCards.STALE_MS -> Fate.STALE
+        else -> Fate.UP
+    }
+
+    enum class Fate { UP, TIMED_OUT, STALE }
+}
+
+/*
+ * The peek (#136) is no alert action any more (live.24: Watch, with Back to undo, and Watch both cover it; it needed a
+ * spare decoder and swallowed keys). Its state machine is kept for the panel to use later.
+ */
 
 /** A peek's phase (#136): its stream is looked up and starting, it plays, or OK was pressed and the zap runs. */
 enum class PeekPhase { LOADING, PLAYING, STAYING }

@@ -69,8 +69,8 @@ object SportsLiveActivityHooks {
      * the mini player, so the rest of that Back is eaten and opens no menu.
      */
     fun dispatchKeyEvent(event: KeyEvent, onHeldBack: () -> Unit): Boolean {
-        // A Sports & Live alert card takes OK / ▼ / Back only while it is up and actionable; a peek takes
-        // every key but the volume (#136). Before the screens, so the player never sees those presses.
+        // A Sports & Live alert card that shows "OK" takes a plain OK and Back; its countdown card every key but the
+        // volume (live.24). Before the screens, so the player never sees those presses.
         if (SportsLiveAlertSurfaces.dispatch(event)) return true
         // Play/Pause while the Sports & Live mini player plays expands it; otherwise upstream behavior.
         if ((event.keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE || event.keyCode == KeyEvent.KEYCODE_MEDIA_PLAY) &&
@@ -98,7 +98,12 @@ object SportsLiveActivityHooks {
         windowFocused: Boolean,
         reporter: SportsLiveReporter,
         screens: (KeyEvent) -> Boolean
-    ): Boolean = SportsLiveHoldOk.dispatch(event, windowFocused, reporter, screens)
+    ): Boolean {
+        // A held OK an alert card held back (live.24): the screens get its first press, then this repeat, so the
+        // player menu or the Hold OK sheet opens as without a card.
+        SportsLiveAlertSurfaces.takeReplay()?.let { SportsLiveHoldOk.dispatch(it, windowFocused, reporter, screens) }
+        return SportsLiveHoldOk.dispatch(event, windowFocused, reporter, screens)
+    }
 
     /** Every in-app launch (startActivity included) passes here; its leave hint is not Home. */
     fun onStartActivity() {

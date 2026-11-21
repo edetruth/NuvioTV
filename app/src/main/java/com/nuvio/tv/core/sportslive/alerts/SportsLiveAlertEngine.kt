@@ -49,7 +49,12 @@ data class SportsLiveWatching(
     /** The mini player plays a game: score toasts show over it as over the full player (#136). */
     val miniPlaying: Boolean = false,
     /** The title playing in the full player, for "you're watching ‹title›". */
-    val playingTitle: String? = null
+    val playingTitle: String? = null,
+    /**
+     * A Sports & Live screen is on (the section, a Game page), not dual screen or the player: no close finish there,
+     * the rows already say "Close late" (live.24).
+     */
+    val sportsLiveScreen: Boolean = false
 )
 
 /** A card the alerts look at: reminded, or a followed team's game, with its delayed ESPN game. */
@@ -65,14 +70,14 @@ data class AlertGame(
 
 /** How a kickoff prompt shows, by what is on screen ([SportsLiveAlertEngine.kickoffStyle]). */
 enum class KickoffStyle {
-    /** Outside the player: the kickoff toast (research Q17: never focused; ▶ or a held OK watch). */
+    /** Outside the player: the kickoff card (live.24: OK Watch · Back Close). */
     FULL,
 
-    /** Over a Sports & Live stream: the small kickoff toast, the same keys. */
-    COMPACT,
-
-    /** Over a movie or show: a toast only. It never takes focus or Back, so OK can never replace that player. */
-    TOAST
+    /**
+     * In the player, over a Sports & Live stream or a movie or show: the small kickoff card, the same keys. Over a movie
+     * OK switches to the game too, after the countdown, the movie's place saved (live.24: no more dead end).
+     */
+    COMPACT
 }
 
 /** One overlay to show. */
@@ -307,12 +312,9 @@ class SportsLiveAlertEngine {
             listOf(SportsLiveTeams.canonicalise(home), SportsLiveTeams.canonicalise(away)).sorted().joinToString("|")
         }
 
-        /** Full outside the player, small over a Sports & Live stream, a toast only over anything else. */
-        fun kickoffStyle(watching: SportsLiveWatching): KickoffStyle = when {
-            !watching.inPlayer -> KickoffStyle.FULL
-            watching.sportsPlayback -> KickoffStyle.COMPACT
-            else -> KickoffStyle.TOAST
-        }
+        /** Full outside the player, small in it (over a sports stream, a movie or a show). */
+        fun kickoffStyle(watching: SportsLiveWatching): KickoffStyle =
+            if (watching.inPlayer) KickoffStyle.COMPACT else KickoffStyle.FULL
 
         /**
          * [alert] as it may show now, under the current [mode] and [settings] (it may have waited in the
