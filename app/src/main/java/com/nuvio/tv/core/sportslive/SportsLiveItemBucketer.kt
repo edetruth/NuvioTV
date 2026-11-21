@@ -397,7 +397,7 @@ object SportsLiveItemBucketer {
                     val viewA = view(primary)
                     val viewB = view(item)
                     when (idVerdictOfViews(viewA, viewB, directory)) {
-                        IdVerdict.SAME -> when (idGuardFailureOfViews(viewA, viewB, nowMs)) {
+                        IdVerdict.SAME -> when (idGuardFailureOfViews(viewA, viewB, nowMs, directory)) {
                             null -> true.also { byIds = true }
                             // A copy of unknown sport: its teams were read in the other copy's league; names decide.
                             SPORT_UNKNOWN -> sameGame(primary, item, nowMs)
@@ -571,12 +571,12 @@ object SportsLiveItemBucketer {
         b: SportsLiveItem,
         nowMs: Long,
         directory: TeamDirectory = TeamDirectory.shared
-    ): String? = idGuardFailureOfViews(idView(a, directory), idView(b, directory), nowMs)
+    ): String? = idGuardFailureOfViews(idView(a, directory), idView(b, directory), nowMs, directory)
 
     // [idGuardFailure] on two copies' views ([idView]) already built.
-    private fun idGuardFailureOfViews(viewA: SportsLiveItem, viewB: SportsLiveItem, nowMs: Long): String? {
+    private fun idGuardFailureOfViews(viewA: SportsLiveItem, viewB: SportsLiveItem, nowMs: Long, directory: TeamDirectory): String? {
         if (SportsLiveTeams.knownSport(viewA) == null || SportsLiveTeams.knownSport(viewB) == null) return SPORT_UNKNOWN
-        if (!sportsAgree(viewA, viewB)) return "sport mismatch"
+        if (!sportsAgree(viewA, viewB) && !footballWordMixUp(viewA, viewB, directory)) return "sport mismatch"
         // A women's copy is never one game with a copy that does not say women's; "NCAAM" and an unmarked "College"
         // copy of the same two schools are (live.18: the sweep's most common split).
         val womenA = EspnLeagueMap.saysWomen(viewA) || saysWomenCompetition(viewA)
@@ -585,6 +585,31 @@ object SportsLiveItemBucketer {
         if (!sameTime(viewA, viewB, nowMs)) return "start window"
         return null
     }
+
+    /**
+     * True when one copy is filed under soccer ("Soccer", "⚽ Football") and the other under American football, and all
+     * four sides resolve to the same two teams of the NFL or college football list (#215.3, live.23 nightly: an addon
+     * files college football as "Soccer"; "Clemson Tigers vs Duke Blue Devils" stayed a second, unscored row beside
+     * "Duke vs Clemson", NCAAF). One game: the merged row shows the copy that names its league. No other sport pair.
+     */
+    private fun footballWordMixUp(viewA: SportsLiveItem, viewB: SportsLiveItem, directory: TeamDirectory): Boolean {
+        val kindsA = SportsLiveTeams.knownSport(viewA)?.let(::sportKinds) ?: return false
+        val kindsB = SportsLiveTeams.knownSport(viewB)?.let(::sportKinds) ?: return false
+        val soccerOnly = setOf(SportsLiveSportKind.SOCCER)
+        val american = SportsLiveSportKind.FOOTBALL
+        if (!((kindsA == soccerOnly && american in kindsB) || (kindsB == soccerOnly && american in kindsA))) return false
+        val teamsA = viewA.teams ?: return false
+        val teamsB = viewB.teams ?: return false
+        return AMERICAN_FOOTBALL_LISTS.any { league ->
+            val a1 = directory.teamId(league, teamsA.home) ?: return@any false
+            val a2 = directory.teamId(league, teamsA.away) ?: return@any false
+            val b1 = directory.teamId(league, teamsB.home) ?: return@any false
+            val b2 = directory.teamId(league, teamsB.away) ?: return@any false
+            a1 != a2 && ((a1 == b1 && a2 == b2) || (a1 == b2 && a2 == b1))
+        }
+    }
+
+    private val AMERICAN_FOOTBALL_LISTS = listOf(EspnLeagueMap.NFL, EspnLeagueMap.COLLEGE_FOOTBALL)
 
     /**
      * Why [a] and [b] are not one row (the debug duplicate log, live.18), or null when [merge] would join them:
