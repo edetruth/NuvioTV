@@ -480,10 +480,11 @@ class SportsLiveResultsTodayTest {
     fun `a followed team's result stays hidden on open, focus and return, until revealed`() = runTest {
         val celtics = aFinal.home
         followed.value = listOf(FollowedTeam(celtics.displayName.orEmpty(), "Basketball", espnId = celtics.id, league = "basketball/nba"))
-        // Show, and the profile turned "hide my teams' scores" off: still hidden in Results (results redesign).
+        // Show, and the profile turned the older "hide my teams' scores" (live chips) off: still hidden in Results, by
+        // M2's own "Hide my teams' results" key (on until set).
         val stored = MutableStateFlow<List<com.nuvio.tv.core.sportslive.scores.ProtectedGame>>(emptyList())
         val protection = kotlinx.coroutines.flow.combine(stored, followed) { games, teams ->
-            com.nuvio.tv.core.sportslive.scores.SpoilerProtection(games = games, myTeams = false, followed = teams, nowMs = base + 60_000L)
+            com.nuvio.tv.core.sportslive.scores.SpoilerProtection(games = games, myTeams = false, followed = teams, nowMs = base + 60_000L, myTeamsResults = true)
         }
         every { prefs.spoilerProtection } returns protection
         io.mockk.coEvery { prefs.updateProtectedGames(any()) } answers {

@@ -124,13 +124,17 @@ data class ResultsNotPlayed(val team: String, val nextStartMs: Long?, val lastFi
 
 /**
  * [notPlayed] as Results shows it (live.23 review S4): a team whose last final is still hidden for the profile (Scores
- * Off, or a followed team's result not revealed or watched, as [SportsLiveResultsUiState.hiddenReason]) loses its
+ * Off, or with Hide my teams' results on a followed team's result not revealed or watched, as
+ * [SportsLiveResultsUiState.hiddenReason]) loses its
  * "next" part, which could tell a knockout result (a next game: they won; none: they lost).
  */
 internal fun resultsNotPlayedShown(notPlayed: List<ResultsNotPlayed>, mode: ScoresMode, protection: SpoilerProtection): List<ResultsNotPlayed> =
     notPlayed.map { line ->
         val last = line.lastFinal ?: return@map line
-        if (mode == ScoresMode.OFF || !protection.revealed(last.eventId)) line.copy(nextStartMs = null) else line
+        // Hidden: Scores Off, a protected final, or (Hide my teams' results on, M2's own key) one not revealed or watched.
+        val hidden = mode == ScoresMode.OFF || protection.protects(last) ||
+            (protection.myTeamsResults && !protection.revealed(last.eventId))
+        if (hidden) line.copy(nextStartMs = null) else line
     }
 
 data class SportsLiveResultsUiState(
@@ -172,7 +176,8 @@ data class SportsLiveResultsUiState(
 
     /**
      * Why [row]'s score is hidden, or null when it shows (results redesign §4.3): a protected game (#151) never shows;
-     * a followed team's game shows only once revealed or watched ([SpoilerProtection.revealed]), never on focus; the
+     * with Hide my teams' results on ([SpoilerProtection.myTeamsResults]), a followed team's game shows only once revealed
+     * or watched ([SpoilerProtection.revealed]), never on focus; the
      * rest follow the Scores setting ([ResultSpoilerReveal.showsScore]).
      */
     fun hiddenReason(row: ResultRow): ResultHiddenReason? {
@@ -180,7 +185,9 @@ data class SportsLiveResultsUiState(
         return when {
             protection.protects(row.event) -> if (protection.isSaved(id)) ResultHiddenReason.SAVED else ResultHiddenReason.YOUR_TEAM
             mode == ScoresMode.OFF -> ResultHiddenReason.SETTING
-            row.followed -> if (protection.revealed(id)) null else ResultHiddenReason.YOUR_TEAM
+            // "Hide my teams' results until I reveal" (M2: its own key, on until set) holds a followed row; off, it follows
+            // the Scores setting like any other.
+            row.followed && protection.myTeamsResults -> if (protection.revealed(id)) null else ResultHiddenReason.YOUR_TEAM
             ResultSpoilerReveal.showsScore(mode, revealed, id) -> null
             else -> ResultHiddenReason.SETTING
         }

@@ -212,8 +212,10 @@ class SportsLiveResultsTest {
         val last = nba.first().copy(state = ScoreState.POST, isFinal = true)
         val line = ResultsNotPlayed("Chicago Bears", 1_000L, lastFinal = last)
         val ended = SpoilerProtection(games = listOf(SpoilerProtection.of(last, 0L).copy(endedAtMs = 1L)))
-        assertNull(resultsNotPlayedShown(listOf(line), ScoresMode.SHOW, SpoilerProtection()).single().nextStartMs)
+        assertNull(resultsNotPlayedShown(listOf(line), ScoresMode.SHOW, SpoilerProtection(myTeamsResults = true)).single().nextStartMs)
         assertNull(resultsNotPlayedShown(listOf(line), ScoresMode.OFF, ended).single().nextStartMs)
+        // Hide my teams' results switched off (M2's key): the next game shows under Show.
+        assertEquals(1_000L, resultsNotPlayedShown(listOf(line), ScoresMode.SHOW, SpoilerProtection()).single().nextStartMs)
         // Revealed or watched: the next game shows.
         assertEquals(1_000L, resultsNotPlayedShown(listOf(line), ScoresMode.SHOW, ended).single().nextStartMs)
         // No final within Results' days: as it was.
@@ -336,7 +338,8 @@ class SportsLiveResultsTest {
         assertEquals(setOf("g"), reveal.revealed.value)
         for (mode in listOf(ScoresMode.SHOW, ScoresMode.HIDE_UNTIL_FOCUSED)) {
             for (myTeams in listOf(true, false)) {
-                val protection = SpoilerProtection(myTeams = myTeams, followed = followed, nowMs = now)
+                // M2: Hide my teams' results (its own key, on until set) holds it, whatever the older live-scores choice.
+                val protection = SpoilerProtection(myTeams = myTeams, followed = followed, nowMs = now, myTeamsResults = true)
                 val state = SportsLiveResultsUiState(mode = mode, revealed = reveal.revealed.value, protection = protection)
                 assertFalse("$mode $myTeams", state.showsScore(mine))
                 assertEquals(ResultHiddenReason.YOUR_TEAM, state.hiddenReason(mine))
@@ -348,6 +351,10 @@ class SportsLiveResultsTest {
                 assertTrue("$mode $myTeams", state.copy(protection = revealed).showsScore(mine))
             }
         }
+        // Hide my teams' results switched off: a followed team's result follows the Scores setting like any other.
+        val off = SpoilerProtection(followed = followed, nowMs = now)
+        assertTrue(SportsLiveResultsUiState(mode = ScoresMode.SHOW, protection = off).showsScore(mine))
+        assertEquals(ResultHiddenReason.SETTING, SportsLiveResultsUiState(mode = ScoresMode.HIDE_UNTIL_FOCUSED, protection = off).hiddenReason(mine))
         // Another team's game still follows the setting: Show at once, Hide until focused once dwelled.
         val theirs = mine.copy(followed = false)
         assertTrue(SportsLiveResultsUiState(mode = ScoresMode.SHOW).showsScore(theirs))
