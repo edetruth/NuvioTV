@@ -1,5 +1,8 @@
 package com.nuvio.tv.core.sportslive
 
+import com.nuvio.tv.core.sportslive.scores.DirectoryTeam
+import com.nuvio.tv.core.sportslive.scores.EspnLeagueMap
+import com.nuvio.tv.core.sportslive.scores.TeamDirectory
 import com.nuvio.tv.domain.model.Addon
 import com.nuvio.tv.domain.model.CatalogDescriptor
 import com.nuvio.tv.domain.model.ClaimedCatalog
@@ -100,7 +103,8 @@ class SportsLiveChannelCatalogsTest {
 
     @Test
     fun `a game in a channel catalog is a game, real channels stay channels`() {
-        val game = entry("g", "Memphis Tigers @ Navy Midshipmen")
+        // Both sides are known teams (a loaded team list): a game, though it has no time and no live signal.
+        val game = entry("g", "Memphis Tigers @ Navy Midshipmen", directory = collegeFootball)
         assertFalse(game.isChannel)
         assertEquals(SportsLiveKind.EVENTS, game.kind)
         assertFalse(listed(game, SportsLiveTab.CHANNELS))
@@ -110,6 +114,19 @@ class SportsLiveChannelCatalogsTest {
             assertTrue(name, channel.isChannel)
             assertTrue(name, listed(channel, SportsLiveTab.CHANNELS))
         }
+    }
+
+    @Test
+    fun `a title written as a game with no time, live signal or known teams stays a channel`() {
+        for (name in listOf("Samurai vs Ninja", "Memphis Tigers @ Navy Midshipmen")) {
+            val channel = entry(name, name, directory = TeamDirectory())
+            assertTrue(name, channel.isChannel)
+            assertTrue(name, listed(channel, SportsLiveTab.CHANNELS))
+            assertFalse(name, listed(channel, SportsLiveTab.UPCOMING))
+        }
+        // A time, a live marker or two listed teams (nations by their codes) make it a game.
+        assertFalse(SportsLiveItemBucketer.describe(meta("t", "Samurai vs Ninja", releaseInfo = "LIVE"), channels(), now, TeamDirectory()).isChannel)
+        assertFalse(entry("p", "PAK vs SL", directory = TeamDirectory()).isChannel)
     }
 
     @Test
@@ -164,6 +181,55 @@ class SportsLiveChannelCatalogsTest {
         assertEquals(us.id, popular.single().id)
     }
 
+    // --- IPTV region tags ---
+
+    @Test
+    fun `IPTV region tags and spelled-out prefixes are regions`() {
+        val cases = listOf(
+            channel("DSTV| SUPERSPORT BLITZ", group = "DSTV") to "AF",
+            channel("EXYU| CITY TV HD", group = "EXYU") to "BLK",
+            channel("AR-SP| ALKASS 4 HD", group = "AR-SP") to "ARB",
+            channel("LATIN-CAR| CANAL 1", group = "ACME IPTV") to "LAT",
+            channel("VIP - PK| WASEEB TV HD", group = "ACME IPTV") to "PK",
+            channel("SRI LANKA| SRI TV", group = "ACME IPTV") to "LK",
+            channel("AF-WAFCON| WAFCON 1", group = "ACME IPTV") to "AF",
+            channel("24/7 AR| قيصرية", group = "ACME IPTV") to "ARB",
+            channel("AR| CANAL 13", group = "AR") to "AR"
+        )
+        for ((item, region) in cases) assertEquals(item.meta.name, region, SportsLiveChannelRegions.regionOf(item))
+        assertEquals("Arabic", SportsLiveChannelRegions.label("ARB"))
+        assertEquals("Balkans", SportsLiveChannelRegions.label("BLK"))
+        assertEquals("Africa", SportsLiveChannelRegions.label("AF"))
+        // An unknown tag stays "No country listed".
+        assertEquals(SportsLiveChannelRegions.OTHER, SportsLiveChannelRegions.regionOf(channel("PPV| EVENT 01", group = "PPV")))
+    }
+
+    // --- A whole catalog of US networks ---
+
+    @Test
+    fun `a catalog mostly of US networks files its other unwritten channels under the US`() {
+        val names = listOf("📺 ABC", "📺 CBS", "📺 ESPN", "📺 FOX", "📺 CNN", "📺 Animal Planet", "📺 Discovery Channel", "UK| BBC One")
+        val items = networks(names)
+        assertEquals("US", SportsLiveChannelRegions.regionOf(items.single { it.meta.name == "📺 Animal Planet" }))
+        assertEquals("US", SportsLiveChannelRegions.regionOf(items.single { it.meta.name == "📺 Discovery Channel" }))
+        // A written country keeps winning.
+        assertEquals("UK", SportsLiveChannelRegions.regionOf(items.single { it.meta.name == "UK| BBC One" }))
+    }
+
+    @Test
+    fun `a mixed or mostly unknown catalog is no US list`() {
+        val mixed = networks(listOf("📺 ABC", "📺 CBS", "📺 ESPN", "📺 FOX", "📺 CNN", "📺 Animal Planet", "📺 beIN Sports Mena 1"))
+        assertEquals(SportsLiveChannelRegions.OTHER, SportsLiveChannelRegions.regionOf(mixed.single { it.meta.name == "📺 Animal Planet" }))
+        val singapore = networks(listOf("📺 ABC", "📺 CBS", "📺 ESPN", "📺 FOX", "📺 CNN", "📺 Animal Planet", "📺 Hub Sports 1 Singapore"))
+        assertEquals(SportsLiveChannelRegions.OTHER, SportsLiveChannelRegions.regionOf(singapore.single { it.meta.name == "📺 Animal Planet" }))
+        val few = networks(listOf("📺 ABC", "📺 CBS", "📺 Animal Planet", "📺 Discovery Channel", "📺 Food Network", "📺 Boomerang"))
+        assertEquals(SportsLiveChannelRegions.OTHER, SportsLiveChannelRegions.regionOf(few.single { it.meta.name == "📺 Animal Planet" }))
+        assertEquals("US", SportsLiveChannelRegions.regionOf(few.single { it.meta.name == "📺 ABC" }))
+    }
+
+    private fun networks(names: List<String>): List<SportsLiveItem> =
+        SportsLiveItemBucketer.describeCatalog(names.map { meta(it, it) }, claimed("tv", "Networks", SportsLiveKind.CHANNELS), now, TeamDirectory())
+
     private fun kindOf(type: String, name: String): SportsLiveKind? {
         val catalog = catalog(type, "c", name)
         return SportsLiveCatalogPolicy.classify(addon(catalog), catalog, emptyMap())?.kind
@@ -172,8 +238,21 @@ class SportsLiveChannelCatalogsTest {
     private fun listed(item: SportsLiveItem, tab: SportsLiveTab) =
         SportsLiveItemBucketer.bucketTab(listOf(item), tab, now, addonOrder = listOf(item.addonId)).any { it.id == item.id }
 
-    private fun entry(id: String, name: String, addonId: String = "a"): SportsLiveItem =
-        SportsLiveItemBucketer.describe(meta(id, name), claimed("tv", "TV", SportsLiveKind.CHANNELS, addonId = addonId), now)
+    private fun channels(addonId: String = "a") = claimed("tv", "TV", SportsLiveKind.CHANNELS, addonId = addonId)
+
+    private fun entry(id: String, name: String, addonId: String = "a", directory: TeamDirectory = TeamDirectory()): SportsLiveItem =
+        SportsLiveItemBucketer.describe(meta(id, name), channels(addonId), now, directory)
+
+    private val collegeFootball = TeamDirectory().apply {
+        put(
+            EspnLeagueMap.COLLEGE_FOOTBALL,
+            listOf(
+                DirectoryTeam("235", "Memphis Tigers", "Memphis", "MEM", "Memphis", "Tigers", "https://a.espncdn.com/i/teamlogos/ncaa/500/235.png"),
+                DirectoryTeam("2426", "Navy Midshipmen", "Navy", "NAVY", "Navy", "Midshipmen", "https://a.espncdn.com/i/teamlogos/ncaa/500/2426.png")
+            ),
+            0L
+        )
+    }
 
     private fun channel(name: String, group: String? = null, addonId: String = "a"): SportsLiveItem =
         SportsLiveItemBucketer.describe(meta(name, name), claimed("tv", "Channels", SportsLiveKind.CHANNELS, addonId = addonId), now)

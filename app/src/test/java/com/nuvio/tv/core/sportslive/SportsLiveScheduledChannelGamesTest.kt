@@ -41,7 +41,7 @@ class SportsLiveScheduledChannelGamesTest {
     }
 
     @Test
-    fun `a game entry is a game whatever its time, live or not`() {
+    fun `a game entry with a time or a live signal is a game, one with neither stays a channel`() {
         val live = entry("l", "🔴 Sevilla vs. Real Betis", released = "2026-11-20T19:00:00Z")
         assertFalse(live.isChannel)
         assertTrue(live.isLive)
@@ -51,12 +51,11 @@ class SportsLiveScheduledChannelGamesTest {
         val started = entry("p", "Nice vs. Paris Saint-Germain", released = "2026-11-20T15:00:00Z")
         assertFalse(started.isChannel)
         assertTrue(listed(started, SportsLiveTab.LIVE_NOW))
-        // No start at all: a game with its time to come, never a channel.
-        val untimed = entry("n", "AS Monaco vs. AJ Auxerre")
-        assertFalse(untimed.isChannel)
-        assertEquals(SportsLiveKind.EVENTS, untimed.kind)
-        assertTrue(listed(untimed, SportsLiveTab.UPCOMING))
-        assertFalse(listed(untimed, SportsLiveTab.CHANNELS))
+        // Written as a game but with no time, no live signal and no known teams: it stays a channel (never "Time TBA").
+        val untimed = entry("n", "Samurai vs Ninja")
+        assertTrue(untimed.isChannel)
+        assertTrue(listed(untimed, SportsLiveTab.CHANNELS))
+        assertFalse(listed(untimed, SportsLiveTab.UPCOMING))
     }
 
     private fun listed(item: SportsLiveItem, tab: SportsLiveTab) =

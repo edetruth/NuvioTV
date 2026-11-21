@@ -46,18 +46,25 @@ object SportsLiveItemBucketer {
             .thenBy(nullsLast(reverseOrder())) { it.startMs }
             .thenBy(String.CASE_INSENSITIVE_ORDER) { it.meta.name }
 
-    fun describe(rawMeta: MetaPreview, claimed: ClaimedCatalog, nowMs: Long): SportsLiveItem =
-        describeWithSignal(rawMeta, claimed, nowMs).first
+    /** [directory]: the team lists that tell a channel catalog's game entry from a channel ([isGameEntry]). */
+    fun describe(rawMeta: MetaPreview, claimed: ClaimedCatalog, nowMs: Long, directory: TeamDirectory = TeamDirectory.shared): SportsLiveItem =
+        describeWithSignal(rawMeta, claimed, nowMs, directory).first
 
     /**
      * Describes a catalog's items. When none of them carries a signal of its own (a parseable start,
      * a live marker, a 🔴/🔜 status or a channel marker), the catalog name decides for all of them;
      * see [SportsLiveCatalogFallback].
      */
-    fun describeCatalog(metas: List<MetaPreview>, claimed: ClaimedCatalog, nowMs: Long): List<SportsLiveItem> {
+    fun describeCatalog(
+        metas: List<MetaPreview>,
+        claimed: ClaimedCatalog,
+        nowMs: Long,
+        directory: TeamDirectory = TeamDirectory.shared
+    ): List<SportsLiveItem> {
         val catalog = channelListOf(metas, claimed)
-        val described = metas.map { describeWithSignal(it, catalog, nowMs) }
-        val items = described.map { it.first }
+        val described = metas.map { describeWithSignal(it, catalog, nowMs, directory) }
+        // live.24: a catalog of US networks files its channels that write no country under the US.
+        val items = SportsLiveUsNetworks.wholeCatalog(described.map { it.first })
         return if (described.any { it.second }) items else SportsLiveCatalogFallback.apply(items, claimed.catalog.name)
     }
 
@@ -100,7 +107,12 @@ object SportsLiveItemBucketer {
     }
 
     /** The item, and whether the item itself (not its catalog) says what it is. */
-    private fun describeWithSignal(rawMeta: MetaPreview, claimed: ClaimedCatalog, nowMs: Long): Pair<SportsLiveItem, Boolean> {
+    private fun describeWithSignal(
+        rawMeta: MetaPreview,
+        claimed: ClaimedCatalog,
+        nowMs: Long,
+        directory: TeamDirectory
+    ): Pair<SportsLiveItem, Boolean> {
         val catalog = claimed.catalog
         // An events catalog's item tagged as a TV network (#145) is a channel listing, never a game; so is a broadcaster's
         // channel without a suffix ("Fox Footy", live.20) and a title naming nothing but a stream ("Streams"). One naming
@@ -115,8 +127,9 @@ object SportsLiveItemBucketer {
         val start = SportsLiveTimeParser.parseStart(meta.releaseInfo, meta.released)
         val startMs = start?.startMs
         // live.20 F16 / live.24 (#12): a channels catalog's entry titled as a game ("Memphis Tigers @ Navy Midshipmen")
-        // is that game, not a channel: Live now or Upcoming by its own signals, merged with other addons' copies.
-        val gameEntry = !network && isGameEntry(claimed.kind, meta, startMs, nowMs)
+        // with a time, a live signal or two known teams is that game, not a channel: Live now or Upcoming by its own
+        // signals, merged with other addons' copies.
+        val gameEntry = !network && isGameEntry(claimed.kind, meta, status, startMs, nowMs, directory)
         val kind = when {
             network -> SportsLiveKind.CHANNELS
             gameEntry -> SportsLiveKind.EVENTS
@@ -174,20 +187,43 @@ object SportsLiveItemBucketer {
 
     /**
      * A channels catalog's entry that is a game, not a channel (live.20 F16; live.24 #12: some addons list event streams
-     * in their channel catalogs): its title names two sides written as a game ("A vs B", "A @ B", "A at B"), or
-     * two sides any way with a start still to come. A channel naming the game it airs in brackets ("US| PEACOCK PPV 004
-     * [Celtics vs. 76ers]"), a broadcaster's channel and a round-the-clock "24/7" channel stay channels.
+     * in their channel catalogs). Its title names two sides, and either
+     * - it is written as a game ("A vs B", "A @ B", "A at B") and has a start, a status (🔴 🔜 ✅) or a live marker,
+     *   or both sides are known teams ([TeamDirectory.leaguesHolding], or both listed in [SportsLiveTeamAliases]), or
+     * - its start is still to come, however the sides are written (F16).
+     * Otherwise it stays a channel ("Samurai vs Ninja" with no time is a show's channel, never a "Time TBA" game). A
+     * channel naming the game it airs in brackets ("US| PEACOCK PPV 004 [Celtics vs. 76ers]"), a broadcaster's channel
+     * and a round-the-clock "24/7" channel stay channels.
      */
-    private fun isGameEntry(catalogKind: SportsLiveKind, meta: MetaPreview, startMs: Long?, nowMs: Long): Boolean {
+    private fun isGameEntry(
+        catalogKind: SportsLiveKind,
+        meta: MetaPreview,
+        status: String?,
+        startMs: Long?,
+        nowMs: Long,
+        directory: TeamDirectory
+    ): Boolean {
         if (catalogKind != SportsLiveKind.CHANNELS) return false
         val name = meta.name
         // Plain string checks first: thousands of channels pass here on every load (#152).
         val lower = name.lowercase()
-        if (GAME_SEPARATORS.none { it in lower } && (startMs == null || startMs <= nowMs)) return false
+        val writtenAsGame = GAME_SEPARATORS.any { it in lower }
+        val comingUp = startMs != null && startMs > nowMs
+        if (!writtenAsGame && !comingUp) return false
         if (ALWAYS_ON.any { it in lower }) return false
-        if (SportsLiveTeams.parseBracketed(name) != null || SportsLiveTeams.parse(name) == null) return false
-        return !SportsLiveBroadcasters.isBroadcaster(name)
+        if (SportsLiveTeams.parseBracketed(name) != null) return false
+        val teams = SportsLiveTeams.parse(name) ?: return false
+        if (SportsLiveBroadcasters.isBroadcaster(name)) return false
+        if (startMs != null || status != null) return true
+        val liveSignal = isLiveMarker(meta.releaseInfo) || name.contains("LIVE NOW") || meta.description?.let(::saysLiveNow) == true
+        return liveSignal || knownTeams(teams, directory)
     }
+
+    /** Both sides are known teams: one loaded team list holds both, or both are listed names ([SportsLiveTeamAliases]). */
+    private fun knownTeams(teams: TeamPair, directory: TeamDirectory): Boolean =
+        directory.leaguesHolding(teams.home, teams.away).isNotEmpty() ||
+            (SportsLiveTeamAliases.canonical(SportsLiveTeams.normalise(teams.home)) != null &&
+                SportsLiveTeamAliases.canonical(SportsLiveTeams.normalise(teams.away)) != null)
 
     /** "vs", "v", "at" or "@" between two sides: a title written as a game. Not " - " (a channel's parts) nor " x " ("News X World"). */
     private val GAME_SEPARATORS = listOf(" vs ", " vs. ", " v ", " v. ", " at ", " @ ")
