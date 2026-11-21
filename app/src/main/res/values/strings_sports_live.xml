@@ -457,6 +457,9 @@
     <string name="sports_live_more_live_other">Other</string>
     <!-- The player's panel and guide: the chip and the line over the list while More live is shown. -->
     <string name="sports_live_more_live_title">More live</string>
+    <!-- J7: the line under Now playing in the player's panel, and the guide row's tag: the game played before this one. -->
+    <string name="sports_live_just_watched">Just watched</string>
+    <string name="sports_live_just_watched_tag">WATCHED</string>
     <string name="sports_live_more_live_scope">More live: games outside My sports</string>
     <string name="sports_live_channels_browse_all">All channels</string>
     <string name="sports_live_channels_browse_sports">Sports channels</string>

@@ -943,28 +943,40 @@ private fun LiveGamesPanel(
                                     val row = entry.row
                                     val item = row.item
                                     item(key = entry.key) {
-                                        SportsLivePanelLine(
-                                            row = state.boards[item.streamKey]?.board
-                                                ?: panelBoards(listOf(row), emptyMap(), null, emptySet(), 0L).single().board,
-                                            nowPlaying = false,
-                                            titleSuffix = suffixes[item.streamKey],
-                                            isNew = row.isNew,
-                                            gone = row.gone,
-                                            onClick = { onPick(item) },
-                                            onLongClick = { onLongPick(item) },
-                                            onFocus = { lineFocus(item.streamKey, item.streamKey) },
-                                            okHint = boxScoreHint.takeIf { item.streamKey in state.boxScores },
-                                            readyMark = readiness[item.streamKey],
-                                            onReadyHidden = { hidden ->
-                                                readyHiddenKeys = if (hidden) readyHiddenKeys + item.streamKey else readyHiddenKeys - item.streamKey
-                                            },
-                                            modifier = when {
-                                                entry.key == firstKey && upFromFirst != null ->
-                                                    Modifier.focusRequester(requesterOf(entry.key)).focusProperties { up = upFromFirst }
-                                                else -> Modifier.focusRequester(requesterOf(entry.key))
-                                            },
-                                            menuOpen = menuOpen
-                                        )
+                                        Column {
+                                            // J7: the game played before this one, one ▼ OK away.
+                                            if (entry.justWatched) {
+                                                Text(
+                                                    text = stringResource(R.string.sports_live_just_watched).uppercase(),
+                                                    style = SportsLiveTokens.style(SportsLiveTokens.Type.Tag),
+                                                    color = SportsLiveTokens.Colors.TextSecondary,
+                                                    maxLines = 1,
+                                                    modifier = Modifier.padding(start = 8.dp, bottom = 2.dp)
+                                                )
+                                            }
+                                            SportsLivePanelLine(
+                                                row = state.boards[item.streamKey]?.board
+                                                    ?: panelBoards(listOf(row), emptyMap(), null, emptySet(), 0L).single().board,
+                                                nowPlaying = false,
+                                                titleSuffix = suffixes[item.streamKey],
+                                                isNew = row.isNew,
+                                                gone = row.gone,
+                                                onClick = { onPick(item) },
+                                                onLongClick = { onLongPick(item) },
+                                                onFocus = { lineFocus(item.streamKey, item.streamKey) },
+                                                okHint = boxScoreHint.takeIf { item.streamKey in state.boxScores },
+                                                readyMark = readiness[item.streamKey],
+                                                onReadyHidden = { hidden ->
+                                                    readyHiddenKeys = if (hidden) readyHiddenKeys + item.streamKey else readyHiddenKeys - item.streamKey
+                                                },
+                                                modifier = when {
+                                                    entry.key == firstKey && upFromFirst != null ->
+                                                        Modifier.focusRequester(requesterOf(entry.key)).focusProperties { up = upFromFirst }
+                                                    else -> Modifier.focusRequester(requesterOf(entry.key))
+                                                },
+                                                menuOpen = menuOpen
+                                            )
+                                        }
                                     }
                                 }
                             }

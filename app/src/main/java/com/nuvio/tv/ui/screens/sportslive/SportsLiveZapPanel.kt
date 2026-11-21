@@ -395,7 +395,8 @@ internal sealed interface PanelGuideEntry {
         override val key: String get() = "group_${run}_$section"
     }
 
-    data class Game(val row: ZapPanelRow) : PanelGuideEntry {
+    /** [justWatched]: the "Just watched" line under Now playing (J7), the game played before this one. */
+    data class Game(val row: ZapPanelRow, val justWatched: Boolean = false) : PanelGuideEntry {
         override val key: String get() = row.item.streamKey
     }
 
@@ -470,14 +471,19 @@ internal fun panelGuide(
     /** The game playing when the lineup leaves it out (a chip, My sports): its copies are left out all the same. */
     playing: SportsLiveItem? = null,
     /** More live's row ([SportsLiveMoreLive.summary]) for the last line. */
-    moreLive: List<Pair<String, Int>> = emptyList()
+    moreLive: List<Pair<String, Int>> = emptyList(),
+    /** J7: the game played before this one, still live: the first line, its copies not listed again. */
+    justWatched: ZapPanelRow? = null
 ): PanelGuide {
     val current = lineup.firstOrNull { it.item.streamKey == currentKey }
     // J5: another addon's copy of the game playing (same teams, same day) is the game playing: not listed again.
     val playingItem = current?.item ?: playing
     val seenEvents = HashSet<String>()
     current?.let(::eventIdOf)?.let(seenEvents::add)
+    val back = justWatched?.takeIf { row -> playingItem == null || !SportsLivePlayingGame.isSameGame(row.item, playingItem) }
     val entries = buildList {
+        back?.let { add(PanelGuideEntry.Game(it, justWatched = true)) }
+        back?.let(::eventIdOf)?.let(seenEvents::add)
         var start = 0
         var run = 0
         while (start < lineup.size) {
@@ -486,7 +492,8 @@ internal fun panelGuide(
             while (end < lineup.size && lineup[end].placed == section) end++
             val drawn = (start until end).map { lineup[it] }.filter { row ->
                 row.item.streamKey != currentKey && eventIdOf(row)?.let(seenEvents::add) != false &&
-                    (playingItem == null || !SportsLivePlayingGame.isSameGame(row.item, playingItem))
+                    (playingItem == null || !SportsLivePlayingGame.isSameGame(row.item, playingItem)) &&
+                    (back == null || !SportsLivePlayingGame.isSameGame(row.item, back.item))
             }
             if (drawn.isNotEmpty()) {
                 add(PanelGuideEntry.Header(section, drawn.size, run++))
@@ -595,13 +602,15 @@ data class SportsLiveZapPanelState(
     val hiddenByMySports: Int = 0,
     /** More live's row (user 2026-11-21): (group key, count), largest first; empty with nothing hidden. */
     val moreLive: List<Pair<String, Int>> = emptyList(),
+    /** J7: the game played before the one playing, still live, as a row: the "Just watched" line. */
+    val justWatchedRow: ZapPanelRow? = null,
     /** The shared Live now list is not loaded yet (Watch from outside Sports & Live): "Loading games…" shows. */
     val loading: Boolean = false
 ) {
     val items: List<SportsLiveItem> = rows.map { it.item }
 
     /** The list under Now playing, in the lineup's own order (#140, #164). */
-    internal val guide: PanelGuide by lazy { panelGuide(rows, currentKey, hiddenByMySports, playing = nowPlayingRow?.item, moreLive = moreLive) }
+    internal val guide: PanelGuide by lazy { panelGuide(rows, currentKey, hiddenByMySports, playing = nowPlayingRow?.item, moreLive = moreLive, justWatched = justWatchedRow) }
 }
 
 /** What OK on a panel row does (#140): play its stream, or open its Game page on the box score. */

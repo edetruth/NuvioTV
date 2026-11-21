@@ -4,6 +4,7 @@ import com.nuvio.tv.core.sportslive.SportsLiveToastKind
 import com.nuvio.tv.core.sportslive.SportsLiveToasts
 import com.nuvio.tv.core.sportslive.SportsLivePlayingGame
 import com.nuvio.tv.core.sportslive.SportsLiveMoreLive
+import com.nuvio.tv.core.sportslive.SportsLiveJustWatched
 import com.nuvio.tv.core.sportslive.SportsLiveOtherEvents
 import com.nuvio.tv.core.sportslive.scores.FollowTarget
 import com.nuvio.tv.core.sportslive.scores.WatchingNow
@@ -505,7 +506,17 @@ class SportsLiveZapViewModel internal constructor(
                     listOf(listed?.item ?: current.list.all.firstOrNull { it.streamKey == playingKey } ?: session.current),
                     boardScores, current.mode, current.revealed, current.nowMs, current.ended, logos
                 ).firstOrNull()?.let { built -> listed?.let { built.copy(placed = it.placed, isNew = it.isNew, gone = it.gone) } ?: built }
-            val drawn = if (nowRow == null || nowRow in current.rows) current.rows else current.rows + nowRow
+            // J7: the game played before this one, while it is still live, under Now playing.
+            val backItem = SportsLiveJustWatched.shared.justWatched(
+                session.current,
+                current.list.all.filter { it.streamKey !in current.finished }
+            )
+            val backRow = backItem?.let { item ->
+                current.rows.firstOrNull { it.item.streamKey == item.streamKey }
+                    ?: groupPanelRows(listOf(item), boardScores, current.mode, current.revealed, current.nowMs, current.ended, logos).firstOrNull()
+            }
+            val drawn = (if (nowRow == null || nowRow in current.rows) current.rows else current.rows + nowRow)
+                .let { rows -> if (backRow == null || backRow in rows) rows else rows + backRow }
             val state = SportsLiveZapPanelState(
                 rows = current.rows,
                 currentKey = playingKey,
@@ -523,6 +534,7 @@ class SportsLiveZapViewModel internal constructor(
                     .filter { panelRowOk(it, strictGame(current, it.item)) == PanelRowOk.BOX_SCORE }
                     .mapTo(HashSet()) { it.item.streamKey },
                 nowPlayingRow = nowRow,
+                justWatchedRow = backRow,
                 // #167: under My sports (All picked), the list ends with the live games it hides, one press from All sports.
                 // More live (user 2026-11-21): under My sports (All picked), the list ends with its row.
                 hiddenByMySports = if (current.list.chip == null) {

@@ -188,6 +188,8 @@ internal object SportsLiveZapSessions {
 
     fun start(session: SportsLiveZapSession) {
         this.session = session
+        // J7: the panel's "Just watched" line reads the games played this app session.
+        com.nuvio.tv.core.sportslive.SportsLiveJustWatched.shared.played(session.current)
         zapArrivalPending = false
         // A new session tries every game afresh (#138 follow-up).
         com.nuvio.tv.core.sportslive.SportsLiveTriedGames.shared.clear()
@@ -204,6 +206,9 @@ internal object SportsLiveZapSessions {
     }
 
     fun update(session: SportsLiveZapSession) {
+        if (this.session?.current?.streamKey != session.current.streamKey) {
+            com.nuvio.tv.core.sportslive.SportsLiveJustWatched.shared.played(session.current)
+        }
         this.session = session
     }
 

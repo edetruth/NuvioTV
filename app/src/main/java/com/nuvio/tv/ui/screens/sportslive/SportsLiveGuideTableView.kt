@@ -305,7 +305,9 @@ internal fun SportsLiveGuideTable(
                             suffix = suffixes[line.key]
                         )
                         val row = memory.stable(fresh, line.row.matched, System.currentTimeMillis())
-                        GuideTableRow(row, board.art, selected)
+                        // J7: the game played before this one says so in its tag column.
+                        val shown = if (line.justWatched) row.copy(tag = stringResource(R.string.sports_live_just_watched_tag)) else row
+                        GuideTableRow(shown, board.art, selected)
                     }
                     is PanelGuideEntry.HiddenByMySports -> GuideHiddenRow(line.count, selected, line.summary)
                     is PanelGuideEntry.Header -> Unit
