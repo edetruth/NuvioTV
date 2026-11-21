@@ -49,7 +49,7 @@ class NationalPairIdentityTest {
 
     private val start = Instant.parse("2026-11-20T22:40:00Z").toEpochMilli()
 
-    private class FakeCricket(private val body: String?) : CricketLiveSource {
+    private class FakeCricket(var body: String?) : CricketLiveSource {
         var asked = 0
         override suspend fun livePairs(): CricketLiveResult {
             asked++
@@ -91,6 +91,27 @@ class NationalPairIdentityTest {
         assertEquals(SportsLiveSportKind.CRICKET, SportsLiveMySportsScope.kindOf(identified))
         // No flags from a cricket list: the soccer team's badges are not the cricket side's.
         assertNull(SportsLiveTeamIdentity.logosOf("New Zealand", "India", book))
+    }
+
+    @Test
+    fun `the cricket label lasts while ESPN lists the game in progress and ends after it, never the whole session`() = runTest {
+        val cricket = FakeCricket(scorepanel)
+        val identifier = identifier(cricket)
+        identifier.offer(listOf(game("New Zealand vs India")))
+        advanceUntilIdle()
+        assertEquals("cricket", book.identityOf("New Zealand", "India")!!.sport)
+        // 25 min on, still in progress: the label nears its end, so the list is asked again and the label kept.
+        advanceTimeBy(25 * 60_000L)
+        identifier.offer(listOf(game("New Zealand vs India")))
+        advanceUntilIdle()
+        assertEquals(2, cricket.asked)
+        assertEquals("cricket", book.identityOf("New Zealand", "India")!!.sport)
+        // The Test is over: no one confirms it, and the label is taken back once it runs out.
+        cricket.body = scorepanel.replace("\"state\": \"in\"", "\"state\": \"post\"")
+        advanceTimeBy(TeamIdentifier.CRICKET_LABEL_MS + 1)
+        identifier.offer(emptyList())
+        assertNull(book.identityOf("New Zealand", "India"))
+        assertFalse(book.has("New Zealand", "India"))
     }
 
     @Test

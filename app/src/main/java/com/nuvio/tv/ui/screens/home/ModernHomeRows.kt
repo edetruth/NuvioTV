@@ -551,13 +551,17 @@ internal fun ModernRowSection(
         val textModifier = remember(rowTitleBottom) {
             Modifier.padding(start = 52.dp, bottom = rowTitleBottom)
         }
-        SportsLiveHomeTodayLine(row.addonId, row.catalogId, Modifier.padding(start = 52.dp, bottom = 2.dp))
-        Text(
-            text = rowTitle,
-            style = rowTitleStyle.copy(textDirection = rowTitle.contentTextDirection()),
-            color = textColor,
-            modifier = textModifier
-        )
+        // The Live now row's quiet line sits beside the title, not above it: the rows viewport is sized to
+        // one title line, so a line above it slid under the hero's fade (TV QA, live.20 RC).
+        androidx.compose.foundation.layout.Row(modifier = textModifier) {
+            Text(
+                text = rowTitle,
+                style = rowTitleStyle.copy(textDirection = rowTitle.contentTextDirection()),
+                color = textColor,
+                modifier = Modifier.alignByBaseline()
+            )
+            SportsLiveHomeTodayLine(row.addonId, row.catalogId, Modifier.alignByBaseline().padding(start = 16.dp))
+        }
 
         val rowListState = rowListStates.getOrPut(row.key) {
             // Resolved when the row is built, so a refresh that already moved the card is seen.

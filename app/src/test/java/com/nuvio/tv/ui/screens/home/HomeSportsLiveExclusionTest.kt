@@ -192,7 +192,10 @@ class HomeSportsLiveExclusionTest {
             libraryRepository = mockk(relaxed = true),
             metaRepository = mockk(relaxed = true),
             collectionsDataStore = mockk(relaxed = true),
-            layoutPreferenceDataStore = mockk(relaxed = true),
+            // Home reads the saved hero sources before every catalog load; a relaxed Flow never emits.
+            layoutPreferenceDataStore = mockk(relaxed = true) {
+                every { heroCatalogSelections } returns flowOf(emptyList())
+            },
             playerSettingsDataStore = mockk(relaxed = true),
             tmdbSettingsDataStore = mockk(relaxed = true),
             mdbListSettingsDataStore = mockk(relaxed = true),

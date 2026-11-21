@@ -7,7 +7,7 @@ import com.nuvio.tv.core.sportslive.SportsLiveReadyMark
 import com.nuvio.tv.core.sportslive.SportsLiveReadySchedule
 import com.nuvio.tv.core.sportslive.SportsLiveStreamThresholds
 import com.nuvio.tv.core.sportslive.alerts.RemindersState
-import com.nuvio.tv.core.sportslive.alerts.SportsLiveAlerts
+import com.nuvio.tv.core.sportslive.alerts.SportsLiveCandidatesMemo
 import com.nuvio.tv.core.sportslive.scores.LiveScoresRepository
 import com.nuvio.tv.core.sportslive.scores.ScoreChips
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
@@ -17,7 +17,9 @@ import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.repository.SportsLiveRepository
 import com.nuvio.tv.ui.screens.sportslive.dual.sportsLiveSavedForLater
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
@@ -25,6 +27,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.coroutines.CoroutineContext
 
 /**
  * Keeps my games "▶ Ready" (live.20 1b): the proactive readiness checks, for my games only ([SportsLiveMyGames]:
@@ -53,7 +56,12 @@ class SportsLiveReadyKeeper internal constructor(
     /** Loads the games once when nothing was loaded this session and there are my games to look for. */
     private val loadIfNone: suspend () -> Unit = {},
     private val readiness: SportsLiveGameReadiness = SportsLiveGameReadiness.shared,
-    private val nowMs: () -> Long = { System.currentTimeMillis() }
+    private val nowMs: () -> Long = { System.currentTimeMillis() },
+    /**
+     * Where the keeper's passes run (#207): never the main thread the host's effect starts it on. Each pass reads every
+     * listed game; on Main it froze the UI for over a second every [TICK_MS] on a slow box.
+     */
+    private val compute: CoroutineContext = Dispatchers.Default
 ) {
     @Inject constructor(
         repo: SportsLiveRepository,
@@ -61,7 +69,7 @@ class SportsLiveReadyKeeper internal constructor(
         liveScores: LiveScoresRepository,
         resolver: SportsLiveZapResolver
     ) : this(
-        cards = { SportsLiveAlerts.candidates(repo.latest.value, repo.claimedCatalogs.first(), repo.followedTeams.first()) },
+        cards = listedGames(repo, SportsLiveCandidatesMemo()),
         reminders = { prefs.reminders.first() },
         scores = { liveScores.scores.value },
         savedForLater = { sportsLiveSavedForLater(liveScores.protection.value, liveScores.scores.value) },
@@ -102,8 +110,8 @@ class SportsLiveReadyKeeper internal constructor(
         )
     }.distinctUntilChanged()
 
-    /** Runs until cancelled (the app left the foreground). */
-    suspend fun runInForeground() {
+    /** Runs until cancelled (the app left the foreground), on [compute]. */
+    suspend fun runInForeground() = withContext(compute) {
         if (!loadAsked) {
             loadAsked = true
             quietly { loadIfNone() }
@@ -164,6 +172,10 @@ class SportsLiveReadyKeeper internal constructor(
     }
 
     companion object {
+        /** The listed games, sorted again only when the load, catalogs, follows or team directory changed (#207). */
+        private fun listedGames(repo: SportsLiveRepository, memo: SportsLiveCandidatesMemo): suspend () -> List<SportsLiveItem> =
+            { memo.of(repo.latest.value, repo.claimedCatalogs.first(), repo.followedTeams.first()) }
+
         /** The keeper looks at my games this often; the checks themselves are minutes apart. */
         const val TICK_MS = 30_000L
         private const val MAX_GAMES = 200

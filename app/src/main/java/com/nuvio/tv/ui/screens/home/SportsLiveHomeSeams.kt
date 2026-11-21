@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -16,6 +17,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nuvio.tv.R
 import com.nuvio.tv.core.sportslive.SportsLiveEndedGames
 import com.nuvio.tv.core.sportslive.scores.LiveScoresRepository
+import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
+import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.domain.model.MetaPreview
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.ui.components.LocalDrawnCardArt
@@ -176,8 +179,9 @@ internal fun sportsLiveHome(viewModel: HomeViewModel, uiState: HomeUiState, nav:
     }
 
     // Live now cards get a score label under Show only (Home has no focus reveal), polled only while
-    // Home is started.
-    val liveScores by liveScoresViewModel.scores.collectAsStateWithLifecycle()
+    // Home is started. #207: the scores (and the clock) are read in [SportsLiveHomeScores] and by each drawn card,
+    // never here: this function shares Home's recomposition scope, so a read here redrew all of Home on every update.
+    val liveScores = liveScoresViewModel.scores.collectAsStateWithLifecycle()
     val liveScoresMode by liveScoresViewModel.mode.collectAsStateWithLifecycle()
     TrackLiveScores(
         screenId = LiveScoresRepository.SCREEN_HOME,
@@ -187,26 +191,40 @@ internal fun sportsLiveHome(viewModel: HomeViewModel, uiState: HomeUiState, nav:
         enabled = liveScoresMode != null,
         tracking = liveScoresViewModel.tracking
     )
-    val scoreChipStrings = rememberScoreChipStrings()
-    val liveScoreFormat = stringResource(R.string.sports_live_chip_home_live)
-    val liveNowScoreLabels = remember(uiState.liveNowItems, liveScores, liveScoresMode, scoreChipStrings, liveScoreFormat) {
-        SportsLiveHomeRow.scoreLabels(uiState.liveNowItems, liveScores, liveScoresMode, scoreChipStrings, liveScoreFormat)
-    }
-    LaunchedEffect(liveNowScoreLabels) { viewModel.setLiveNowScoreLabels(liveNowScoreLabels) }
-    // Games ESPN confirmed final (#60, past the grace) leave the row; an estimate never drops one.
-    val liveClockMs by rememberSportsLiveClockMs()
-    val liveNowEnded = remember(uiState.liveNowItems, liveScores, liveClockMs) {
-        SportsLiveEndedGames.shared.confirmedEndedKeys(uiState.liveNowItems, liveScores, liveClockMs)
-    }
-    LaunchedEffect(liveNowEnded) { viewModel.setLiveNowEnded(liveNowEnded) }
+    SportsLiveHomeScores(viewModel, uiState.liveNowItems, liveScores, liveScoresMode)
     // V2 phase 10: Live now games are drawn as the section's game card; See all counts every live game.
     val liveNowCardArt = rememberLiveNowCardArt(uiState.liveNowItems, liveScores, liveScoresMode)
     val sportsCardArt = remember(catchUpCardArt, liveNowCardArt) { drawnArtOf(catchUpCardArt, liveNowCardArt) }
+    val liveNowEnded = uiState.liveNowEnded
     val liveGameCount = remember(uiState.liveNowItems, liveNowEnded) {
         viewModel.liveNowAllItems.count { !it.isChannel && it.streamKey !in liveNowEnded }
     }
     val liveNowSeeAll = if (liveGameCount > 0) stringResource(R.string.sports_live_home_see_all_live, liveGameCount) else null
     return SportsLiveHome(router = router, cardArt = sportsCardArt, seeAll = liveNowSeeAll)
+}
+
+/**
+ * Live now's score labels and the games ESPN confirmed final, from the scores and the 30 s clock, handed to Home's view
+ * model. In a recomposition scope of its own (#207): a score update or a clock tick reruns only this, not all of Home.
+ */
+@Composable
+private fun SportsLiveHomeScores(
+    viewModel: HomeViewModel,
+    items: List<SportsLiveItem>,
+    scores: State<Map<String, ScoreSnapshot>>,
+    mode: ScoresMode?
+) {
+    val current = scores.value
+    val scoreChipStrings = rememberScoreChipStrings()
+    val liveScoreFormat = stringResource(R.string.sports_live_chip_home_live)
+    val labels = remember(items, current, mode, scoreChipStrings, liveScoreFormat) {
+        SportsLiveHomeRow.scoreLabels(items, current, mode, scoreChipStrings, liveScoreFormat)
+    }
+    LaunchedEffect(labels) { viewModel.setLiveNowScoreLabels(labels) }
+    // Games ESPN confirmed final (#60, past the grace) leave the row; an estimate never drops one.
+    val clockMs by rememberSportsLiveClockMs()
+    val ended = remember(items, current, clockMs) { SportsLiveEndedGames.shared.confirmedEndedKeys(items, current, clockMs) }
+    LaunchedEffect(ended) { viewModel.setLiveNowEnded(ended) }
 }
 
 /** Provides Home's content the Sports & Live drawn card art, Live now's See all line and My games today. */

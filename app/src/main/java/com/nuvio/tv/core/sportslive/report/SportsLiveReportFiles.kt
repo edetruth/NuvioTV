@@ -42,6 +42,9 @@ class SportsLiveReportFiles(private val dir: File, private val keep: Int = KEEP)
 
     companion object {
         const val KEEP = 20
+
+        /** How old the newest report may be for Report a problem to show it rather than save a new one (release review). */
+        const val FRESH_MS = 5 * 60_000L
         const val LATEST = "report-latest.txt"
         const val FOLDER = "reports"
 
@@ -50,6 +53,14 @@ class SportsLiveReportFiles(private val dir: File, private val keep: Int = KEEP)
 
         fun fileName(number: Int, savedAtMs: Long, zone: ZoneId): String =
             "report-" + number.toString().padStart(3, '0') + "-" + STAMP.format(Instant.ofEpochMilli(savedAtMs).atZone(zone)) + ".txt"
+
+        /**
+         * True when Report a problem shows the newest report ([name], [text], written at [modifiedMs]) as it is: saved
+         * within [FRESH_MS] of [nowMs], or made by a crash, ANR or native crash (it is about that moment, and the
+         * crash toast sent the user to it). Otherwise a new report is saved, so the QR code tells the state now.
+         */
+        fun showsAsIs(name: String, text: String, modifiedMs: Long, nowMs: Long): Boolean =
+            nowMs - modifiedMs in 0..FRESH_MS || SportsLiveCrashReport.crashToastNumber(name, text, null) != null
 
         /** The report number in a report file's [name]; null for any other file ([LATEST] included). */
         fun numberOf(name: String): Int? = NAME.matchEntire(name)?.groupValues?.get(1)?.toIntOrNull()

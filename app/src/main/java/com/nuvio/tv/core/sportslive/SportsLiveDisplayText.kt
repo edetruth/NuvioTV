@@ -116,13 +116,18 @@ object SportsLiveDisplayText {
             break
         }
         text = stripTaglines(text)
-        // Quality suffixes: "Name HD", "Name (FHD)", "Name 4K".
+        // Quality suffixes ("Name HD", "Name (FHD)", "Name 4K", "Name 720p") and an addon's tails ("download free",
+        // "Full Match", #210), in any order.
         while (true) {
-            val q = QUALITY_SUFFIX.find(text) ?: break
-            val stripped = text.substring(0, q.range.first)
-            if (trimSeparators(stripped).isEmpty()) break
-            quality = quality ?: normalizeQuality(q.groupValues[1])
-            text = stripped
+            val q = QUALITY_SUFFIX.find(text)
+            if (q != null) {
+                val stripped = text.substring(0, q.range.first)
+                if (trimSeparators(stripped).isEmpty()) break
+                quality = quality ?: normalizeQuality(q.groupValues[1])
+                text = stripped
+                continue
+            }
+            text = withoutTail(text, game = GAME_IN_TITLE.containsMatchIn(text)) ?: break
         }
         text = trimSeparators(collapse(text))
         // "Moto2 | Round 22 | Portugal": a pipe inside a name reads as the section's dot (F4).
@@ -145,7 +150,44 @@ object SportsLiveDisplayText {
 
     private fun trimSeparators(text: String): String = text.trim().trim(*SEPARATORS).trim()
 
-    private fun normalizeQuality(token: String): String = token.uppercase(Locale.ROOT)
+    // "720p" is the HD badge, "1080p" FHD, "2160p" 4K, as the rest of the quality words read (#210).
+    private fun normalizeQuality(token: String): String = when (val upper = token.uppercase(Locale.ROOT)) {
+        "480P", "576P" -> "SD"
+        "720P" -> "HD"
+        "1080P" -> "FHD"
+        "2160P" -> "4K"
+        else -> upper
+    }
+
+    /**
+     * [text] without one addon tail at its end (#210): "download free", "free download", "watch online" always; the
+     * words that also name a show ("Full Match", "Replay", "Highlights", "Free") only after a game ([game]), so
+     * "NBA Highlights" keeps its name. Null when there is no tail, or nothing would be left.
+     */
+    private fun withoutTail(text: String, game: Boolean): String? {
+        val tail = JUNK_TAIL.find(text) ?: (if (game) GAME_TAIL.find(text) else null) ?: return null
+        return text.substring(0, tail.range.first).takeIf { trimSeparators(it).isNotEmpty() }
+    }
+
+    /**
+     * A side of a game as its team's name alone (#210): an addon's tails ("download free", "Full Match", "720p"), a
+     * competition written after it with its country ("Spain La Liga Football", "English Premier League",
+     * [competitionSuffix]) and a bare sport word ("Football", "Soccer") come off; a club's own words stay ("Real
+     * Sociedad", "Inter Miami", "Club América"). Never empty when [side] is not. Generic: it knows no addon.
+     */
+    fun teamSide(side: String): String = teamSides(side)
+
+    private val teamSides = Memo(4_096) { side: String ->
+        var text = side.trim()
+        while (true) {
+            val q = QUALITY_SUFFIX.find(text)
+            val next = if (q != null) text.substring(0, q.range.first).takeIf { trimSeparators(it).isNotEmpty() } else withoutTail(text, game = true)
+            text = next ?: break
+        }
+        text = competitionSuffix(text)?.first ?: text
+        SPORT_WORD_SUFFIX.find(text)?.let { match -> trimSeparators(text.substring(0, match.range.first)).takeIf { it.isNotEmpty() } }
+            ?: trimSeparators(text).ifEmpty { side.trim() }
+    }
 
     private fun isRegion(code: String): Boolean = code.uppercase(Locale.ROOT) in REGIONS
 
@@ -211,14 +253,37 @@ object SportsLiveDisplayText {
     /** A scoreline: 1-3 digits, a dash, 1-3 digits; never part of a longer number run (a date or a season). */
     private val SCORELINE = Regex("""[(\[]?(?<![\d/.\-–])\d{1,3}\s*[-–]\s*\d{1,3}(?![\d/.]|\s*[-–]\s*\d)[)\]]?""")
 
-    private const val QUALITY = """(?:FHD|UHD|HD|SD|4K|8K)"""
-    // A competition written after a team's name: basketball and soccer leagues addons append to sides.
+    private const val QUALITY = """(?:FHD|UHD|HD|SD|4K|8K|(?:480|576|720|1080|2160)p)"""
+    // A competition written after a team's name: basketball and soccer leagues addons append to sides, with the
+    // league's country before it and the sport after it ("Espanyol Spain La Liga Football", "Arsenal English Premier
+    // League", #210): both come off with it; the competition alone is the league.
     private val COMPETITION_SUFFIX = Regex(
-        """(?:\s+[-|·]?\s*|\s*[(\[])((?:euro ?league|euro ?cup|liga (?:acb|endesa)|lega basket|basketball champions league|""" +
-            """nba|wnba|ncaa[mbfw]?|nhl|khl|nfl|mlb|mls|premier league|la ?liga|serie a|bundesliga|ligue 1|eredivisie|""" +
+        """(?:^|\s+[-|·]?\s*|\s*[(\[])(?:(?:spain|spanish|england|english|germany|german|italy|italian|france|french|""" +
+            """netherlands|holland|dutch|portugal|portuguese|turkey|turkish|scotland|scottish|usa|mexico|mexican)\s+)?""" +
+            """((?:euro ?league|euro ?cup|liga (?:acb|endesa)|lega basket|basketball champions league|""" +
+            """nba|wnba|ncaa[mbfw]?|nhl|khl|nfl|mlb|mls|premier league|premiership|la ?liga|liga mx|serie a|bundesliga|ligue 1|eredivisie|""" +
             """champions league|europa league|conference league|super lig|primeira liga|""" +
             // Tennis events glued to a player's name (live.20: "Arthur Fils ATP Finals").
-            """(?:atp|wta)(?: tour)? finals|next gen atp finals|(?:atp|wta)(?: \d{3,4})?|davis cup|billie jean king cup|united cup|laver cup))[)\]]?\s*$""",
+            """(?:atp|wta)(?: tour)? finals|next gen atp finals|(?:atp|wta)(?: \d{3,4})?|davis cup|billie jean king cup|united cup|laver cup))""" +
+            """(?:\s+(?:football|soccer|basketball))?[)\]]?\s*$""",
+        RegexOption.IGNORE_CASE
+    )
+
+    /** A bare sport word at the end of a side ("Chelsea Football", #210). */
+    private val SPORT_WORD_SUFFIX = Regex("""\s+(?:football|soccer)\s*$""", RegexOption.IGNORE_CASE)
+
+    /** A title that names a game ("A vs B", "A v B", "A @ B", "A at B", "A x B"): its tails may be show words (#210). */
+    private val GAME_IN_TITLE = Regex("""\s(?:[Vv][Ss]\.?|[Vv]\.?|@|[Aa][Tt]|x)\s""")
+
+    /** An addon's tail that is never part of a name (#210): "download free", "free download", "watch online". */
+    private val JUNK_TAIL = Regex(
+        """[\s:|\-–—,(\[]+(?:(?:free\s+)?download(?:\s+(?:for\s+)?free)?|watch\s+(?:online|free)(?:\s+free)?)[)\]]?\s*$""",
+        RegexOption.IGNORE_CASE
+    )
+
+    /** An addon's tail after a game (#210): "Full Match", "Full Match Replay", "Highlights", "Replay", "Free". */
+    private val GAME_TAIL = Regex(
+        """[\s:|\-–—,(\[]+(?:full\s+(?:match|game)(?:\s+replay)?|(?:extended\s+)?highlights|replay|free)[)\]]?\s*$""",
         RegexOption.IGNORE_CASE
     )
 

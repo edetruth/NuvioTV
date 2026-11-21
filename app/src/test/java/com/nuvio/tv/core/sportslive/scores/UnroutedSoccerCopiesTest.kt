@@ -49,18 +49,26 @@ class UnroutedSoccerCopiesTest {
     private val provider = Provider(soccerAll, LocalDate.of(2026, 11, 20))
     private val base = Instant.parse("2026-11-20T22:50:00Z").toEpochMilli()
 
-    private fun item(name: String, sport: String?, addon: String = "b") = SportsLiveItem(
+    private fun item(name: String, sport: String?, addon: String = "b", startMs: Long? = null) = SportsLiveItem(
         meta = MetaPreview(
             id = name, type = ContentType.UNKNOWN, rawType = "sport", name = name, poster = null,
             posterShape = PosterShape.LANDSCAPE, background = null, logo = null, description = null,
             releaseInfo = null, imdbRating = null, genres = emptyList()
         ),
         addonId = addon, addonName = addon, addonBaseUrl = "https://example.invalid", catalogKey = "k", catalogName = "Live",
-        kind = SportsLiveKind.EVENTS, isLive = true, isChannel = false, startMs = null, sport = sport,
-        startHasTimeOfDay = false, teams = SportsLiveTeams.parse(name)
+        kind = SportsLiveKind.EVENTS, isLive = true, isChannel = false, startMs = startMs, sport = sport,
+        startHasTimeOfDay = startMs != null, teams = SportsLiveTeams.parse(name)
     )
 
-    private fun TestScope.repository() = LiveScoresRepository(
+    private fun team(id: String, name: String) = DirectoryTeam(id, name, name, null, name, name, "https://example.invalid/i/$id.png")
+
+    // The loaded team lists that tell an untagged card's sport by its two teams (release review).
+    private fun soccerLists() = TeamLogoBook().apply {
+        directory.put(EspnLeague("soccer", "fra.1"), listOf(team("1", "Troyes"), team("2", "Le Havre")), base)
+        directory.put(EspnLeague("soccer", "esp.1"), listOf(team("3", "Athletic Bilbao"), team("4", "Espanyol")), base)
+    }
+
+    private fun TestScope.repository(logos: TeamLogoBook = soccerLists()) = LiveScoresRepository(
         provider = provider,
         settings = MutableStateFlow(ScoreSettings()),
         mySports = MutableStateFlow(MySports.DEFAULT),
@@ -73,7 +81,7 @@ class UnroutedSoccerCopiesTest {
         io = EmptyCoroutineContext,
         health = EspnFeedHealth { base + testScheduler.currentTime },
         notifyOutage = {},
-        logos = TeamLogoBook(),
+        logos = logos,
         followedLeagues = flowOf(emptyList()),
         watching = WatchingNow(),
         espnStarts = SportsLiveEspnStarts()
@@ -82,15 +90,15 @@ class UnroutedSoccerCopiesTest {
     private val matched = item("Bayern vs Köln", "Soccer", addon = "a")
     private val bundes = item("Bayern Munich vs Köln", "BUNDES")
     private val andorra = item("FC Andorra vs Leganés", "FOOTBALL")
-    private val troyes = item("Troyes vs Le Havre", null)
-    private val athletic = item("Athletic Bilbao vs Espanyol", null)
+    private val troyes = item("Troyes vs Le Havre", null, startMs = Instant.parse("2026-11-20T19:45:00Z").toEpochMilli())
+    private val athletic = item("Athletic Bilbao vs Espanyol", null, startMs = Instant.parse("2026-11-20T20:00:00Z").toEpochMilli())
 
     @Test
     fun `BUNDES routes to the Bundesliga and a bare FOOTBALL to soccer`() {
         assertEquals(listOf(EspnLeague("soccer", "ger.1")), EspnLeagueMap.leaguesFor(bundes))
         assertEquals(SportsLiveSportKind.SOCCER, SportsLiveSportKind.tagOf(bundes))
         assertEquals(listOf(EspnLeagueMap.SOCCER_ALL), EspnLeagueMap.leaguesFor(andorra))
-        assertEquals(SportsLiveSportKind.SOCCER, SportsLiveSportKind.plainTagOf(andorra, TeamDirectory()))
+        assertEquals(SportsLiveSportKind.SOCCER, SportsLiveSportKind.plainTagOf(andorra, TeamDirectory().apply { put(EspnLeagueMap.NFL, emptyList(), base) }))
     }
 
     @Test
@@ -100,8 +108,14 @@ class UnroutedSoccerCopiesTest {
         }
         assertEquals(SportsLiveSportKind.FOOTBALL, SportsLiveSportKind.plainTagOf(item("Chicago Bears vs Green Bay Packers", "Football"), nfl))
         assertEquals(SportsLiveSportKind.SOCCER, SportsLiveSportKind.plainTagOf(item("FC Andorra vs Leganés", "Football"), nfl))
-        // Before the NFL list is loaded, nothing says American football: soccer.
-        assertEquals(SportsLiveSportKind.SOCCER, SportsLiveSportKind.plainTagOf(item("Chicago Bears vs Green Bay Packers", "Football"), TeamDirectory()))
+        // Before the NFL list is loaded nothing can tell: "Football" stays as written, never SOCCER first (release review).
+        assertNull(SportsLiveSportKind.plainTagOf(item("Chicago Bears vs Green Bay Packers", "Football"), TeamDirectory()))
+        assertNull(SportsLiveSportKind.plainTagOf(andorra, TeamDirectory()))
+        // A card that says soccer elsewhere needs no list.
+        assertEquals(
+            SportsLiveSportKind.SOCCER,
+            SportsLiveSportKind.plainTagOf(item("FC Andorra vs Leganés", "Football").copy(catalogName = "Soccer"), TeamDirectory())
+        )
     }
 
     @Test
@@ -130,5 +144,43 @@ class UnroutedSoccerCopiesTest {
         runCurrent()
         assertTrue(provider.calls.isEmpty())
         assertNull(repo.scores.value[troyes.streamKey])
+    }
+    @Test
+    fun `an untagged card with no start time gets no score from another card's feed`() = runTest {
+        val repo = repository()
+        val undated = item("Troyes vs Le Havre", null, addon = "c")
+        repo.track(LiveScoresRepository.SCREEN_SECTION, listOf(matched, undated))
+        runCurrent()
+        assertEquals(ScoreState.POST, repo.scores.value[matched.streamKey]?.state)
+        assertNull(repo.scores.value[undated.streamKey])
+    }
+
+    @Test
+    fun `an untagged card whose teams no loaded list holds gets no score`() = runTest {
+        val repo = repository(logos = TeamLogoBook())
+        repo.track(LiveScoresRepository.SCREEN_SECTION, listOf(matched, troyes))
+        runCurrent()
+        assertEquals(ScoreState.POST, repo.scores.value[matched.streamKey]?.state)
+        assertNull(repo.scores.value[troyes.streamKey])
+    }
+
+    @Test
+    fun `an untagged card whose teams are another sport's never takes the soccer game`() = runTest {
+        val basketball = TeamLogoBook().apply {
+            directory.put(EspnLeague("basketball", "example"), listOf(team("5", "Troyes"), team("6", "Le Havre")), base)
+        }
+        val repo = repository(logos = basketball)
+        repo.track(LiveScoresRepository.SCREEN_SECTION, listOf(matched, troyes))
+        runCurrent()
+        assertNull(repo.scores.value[troyes.streamKey])
+    }
+
+    @Test
+    fun `an untagged card starting hours from the game gets no score`() = runTest {
+        val repo = repository()
+        val later = item("Troyes vs Le Havre", null, addon = "c", startMs = Instant.parse("2026-11-21T02:00:00Z").toEpochMilli())
+        repo.track(LiveScoresRepository.SCREEN_SECTION, listOf(matched, later))
+        runCurrent()
+        assertNull(repo.scores.value[later.streamKey])
     }
 }

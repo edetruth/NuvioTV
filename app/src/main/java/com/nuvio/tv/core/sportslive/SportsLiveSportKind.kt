@@ -96,7 +96,9 @@ enum class SportsLiveSportKind {
          * league or competition ("NBA", "Premier League"), which stays as written. A bare "Football" is soccer, as most
          * of the world means it (#206), unless the card says American football (a copy tagged so, or its title, genres,
          * description or catalog naming an American football competition) or both its teams are on the loaded NFL or
-         * college football list of [directory]; null when the card says both.
+         * college football list of [directory]; null when the card says both. Until [directory] has the NFL list (cold
+         * start, first launch) a bare "Football" the card says nothing more about stays as written (null): "Chiefs vs
+         * Bills" never reads SOCCER first (release review). Callers read it again when the directory's revision moves.
          */
         fun plainTagOf(item: SportsLiveItem, directory: TeamDirectory = TeamDirectory.shared): SportsLiveSportKind? {
             val sport = item.sport ?: return null
@@ -108,6 +110,8 @@ enum class SportsLiveSportKind {
             return when {
                 SOCCER in kinds && FOOTBALL in kinds -> null
                 FOOTBALL in kinds || americanTeams(item, directory) -> FOOTBALL
+                SOCCER in kinds -> SOCCER
+                directory.fetchedAt(EspnLeagueMap.NFL) == null -> null
                 else -> SOCCER
             }
         }

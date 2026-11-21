@@ -372,6 +372,27 @@ class LiveScoresRepositoryTest {
     }
 
     @Test
+    fun `polls that bring the same scores publish nothing new, a changed score publishes once (#207)`() = runTest {
+        var home = 50
+        // A new answer each poll, equal to the last until the score moves.
+        provider.respond = { ScoreboardResult(listOf(game(ScoreState.IN, home, 48, "Q3 4:12"))) }
+        val repo = repository("2026-11-15T19:00:00Z")
+        val seen = ArrayList<Map<String, ScoreSnapshot>>()
+        backgroundScope.launch { repo.scores.collect { seen += it } }
+        repo.track(SECTION, listOf(pacersCard))
+        runCurrent()
+        assertEquals(50, seen.last()[pacersCard.streamKey]?.homeScore)
+        val published = seen.size
+        advanceTimeBy(60_000); runCurrent()
+        assertEquals(3, provider.calls.size)
+        assertEquals(published, seen.size)
+        home = 52
+        advanceTimeBy(30_000); runCurrent()
+        assertEquals(published + 1, seen.size)
+        assertEquals(52, seen.last()[pacersCard.streamKey]?.homeScore)
+    }
+
+    @Test
     fun `a live game polls every 30 s`() = runTest {
         provider.respond = { ScoreboardResult(listOf(game(ScoreState.IN, 50, 48))) }
         val repo = repository("2026-11-15T19:00:00Z")

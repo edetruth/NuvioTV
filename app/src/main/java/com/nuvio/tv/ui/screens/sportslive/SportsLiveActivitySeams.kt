@@ -18,6 +18,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
@@ -198,15 +200,22 @@ class SportsLiveActivityServices @Inject constructor(
     }
 }
 
-/** A route on Sports & Live while the section is not available goes Home; the mini player follows the route. */
+/**
+ * A route on Sports & Live while the section stays unavailable for 5 s goes Home (#211: a short drop no longer
+ * throws the user out, see [sportsLiveUnavailableRedirects]); the mini player follows the route.
+ */
 @Composable
 fun SportsLiveRouteEffects(navController: NavHostController, currentRoute: String?, availability: Boolean?) {
     // The mini player stays inside Sports & Live (BUG13).
     LaunchedEffect(currentRoute) { SportsLiveMiniPlayers.controller.onRoute(currentRoute) }
-    LaunchedEffect(availability, currentRoute) {
-        val onSportsLiveRoute = currentRoute == Screen.SportsLive.route ||
-            currentRoute?.startsWith("${Screen.SportsLive.route}/") == true
-        if (availability == false && onSportsLiveRoute) {
+    val latestRoute by rememberUpdatedState(currentRoute)
+    val latestAvailability by rememberUpdatedState(availability)
+    LaunchedEffect(navController) {
+        val state = snapshotFlow {
+            val route = latestRoute
+            latestAvailability to (route == Screen.SportsLive.route || route?.startsWith("${Screen.SportsLive.route}/") == true)
+        }
+        sportsLiveUnavailableRedirects(state).collect {
             navController.navigate(Screen.Home.route) {
                 popUpTo(navController.graph.startDestinationId) { saveState = false }
                 launchSingleTop = true

@@ -295,4 +295,23 @@ class EspnFeedHealthTest {
         )
         assertEquals("summary", EspnFeedHealth.feedName(EspnFeedKey.SUMMARY))
     }
+    @Test
+    fun `the data errors kept are bounded - old ones age out and only the newest feeds stay`() {
+        val start = LocalDate.of(2026, 11, 1)
+        val old = EspnFeedKey.scoreboard(EspnLeague("soccer", "ger.1"), start)
+        health.recordDataError(old, "unreadable (JsonDataException)")
+        nowMs += EspnFeedHealth.DATA_ERROR_MAX_AGE_MS
+        val keys = (1..EspnFeedHealth.MAX_DATA_ERRORS + 10).map { EspnFeedKey.scoreboard(EspnLeagueMap.NBA, start.plusDays(it.toLong())) }
+        keys.forEach { key ->
+            nowMs += 1_000L
+            health.recordDataError(key, "1 entry skipped")
+        }
+        val kept = health.dataErrors.value
+        assertEquals(EspnFeedHealth.MAX_DATA_ERRORS, kept.size)
+        assertFalse(old in kept)
+        assertEquals(keys.takeLast(EspnFeedHealth.MAX_DATA_ERRORS).toSet(), kept.keys)
+        // A feed erring again keeps its count.
+        health.recordDataError(keys.last(), "1 entry skipped")
+        assertEquals(2, health.dataErrors.value.getValue(keys.last()).times)
+    }
 }

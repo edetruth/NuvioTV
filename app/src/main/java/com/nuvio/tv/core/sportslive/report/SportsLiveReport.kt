@@ -76,18 +76,23 @@ object SportsLiveReport {
 
     private val STAMP = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss xxx", Locale.ROOT)
     private val FILE_FIELD = Regex("""file=(\S+)""")
+    // A result split across a title's two sides ("Arsenal 2 vs 1 Chelsea"); four-digit numbers (1860, years) are no score.
+    private val SPLIT_SCORE = Regex("""(?<!\d)\d{1,3}\s+(?:vs?\.?|@)\s+\d{1,3}(?!\d)""", RegexOption.IGNORE_CASE)
     private val MEDIA = setOf("m3u8", "mpd", "ts", "m4s", "mp4", "mkv", "aac", "vtt", "srt", "webm")
 
     fun text(input: SportsLiveReportInput, secrets: Collection<String>): String {
         fun clean(value: String?): String = oneLine(LogRedact.report(value, secrets))
+        // Titles are an addon's words, and a replay's can carry its result ("A 2-1 B", its sides "A 2" and "1 B"): no
+        // score-shaped pair survives (spoilers).
+        fun title(value: String?): String = SportsLiveCrashReport.noScores(SPLIT_SCORE.replace(clean(value), SportsLiveCrashReport.NUMBERS))
         val game = input.game
         return buildString {
             appendLine("Nuvio Live report #${input.number}")
             appendLine("Saved: ${STAMP.format(Instant.ofEpochMilli(input.savedAtMs).atZone(input.zone))}")
             appendLine("App: ${clean(input.appVersion)} (${clean(input.appBuild)})")
             appendLine("Screen: ${input.screen?.let(::clean) ?: "unknown"}")
-            appendLine("Focused: ${input.focused?.let(::clean) ?: "none"}")
-            appendLine("Game: ${game?.let { clean(gameLine(it)) } ?: "none"}")
+            appendLine("Focused: ${input.focused?.let(::title) ?: "none"}")
+            appendLine("Game: ${game?.let { title(gameLine(it)) } ?: "none"}")
             appendLine("Links: ${linksLine(input.linkChecks)}")
             appendLine("Scores: ${clean(input.scores)}" + if (input.feedDataErrors.isEmpty()) "" else " · ${input.feedDataErrors.size} feed data errors")
             appendLine("Device: ${clean(input.device)}")
@@ -95,8 +100,8 @@ object SportsLiveReport {
             appendLine(DETAILS)
             section("Playback events, newest last", input.playbackEvents.map { clean(playbackLine(it)) })
             section("Sign-in log", input.signInLog.map(::clean))
-            section("Titles not placed, loads | title", input.unplaced.map(::clean))
-            section("Merge near misses", input.nearMisses?.map(::clean) ?: listOf("not collected in this build"))
+            section("Titles not placed, loads | title", input.unplaced.map(::title))
+            section("Merge near misses", input.nearMisses?.map(::title) ?: listOf("not collected in this build"))
             section("Score feed data errors, newest first", input.feedDataErrors.map(::clean))
             appendLine("Links, hosts, IP addresses, tokens, addon names and ids, e-mail and account ids are removed. No scores.")
         }

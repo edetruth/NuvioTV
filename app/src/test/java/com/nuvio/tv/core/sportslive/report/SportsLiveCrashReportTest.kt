@@ -175,6 +175,20 @@ class SportsLiveCrashReportTest {
     }
 
     @Test
+    fun `an ANR trace line never carries a score and its code frames stay as they are`() {
+        val trace = listOf(
+            "\"DefaultDispatcher-worker-2 Arsenal 2-1 Chelsea\" prio=5 tid=21 Waiting",
+            "  at com.nuvio.tv.Foo.bar(Foo.kt:12)",
+            "  - waiting on <0x0a1b2c3d> held by thread 3:0"
+        )
+        val text = exit(anr1, trace)
+        assertFalse(text, text.contains("2-1"))
+        assertFalse(text, text.contains("3:0"))
+        assertTrue(text, text.contains("Arsenal <numbers> Chelsea"))
+        assertTrue(text, text.contains("  at com.nuvio.tv.Foo.bar(Foo.kt:12)"))
+    }
+
+    @Test
     fun `a native crash report has no trace section and an unreadable ANR trace says so`() {
         val native = exit(native2, null)
         assertTrue(native.contains("From: native crash"))
