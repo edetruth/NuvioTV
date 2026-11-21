@@ -5,6 +5,7 @@ import com.nuvio.tv.core.network.NetworkResult
 import com.nuvio.tv.core.sportslive.SportsLiveCalmOpen
 import com.nuvio.tv.core.sportslive.SportsLiveCatalogOptions
 import com.nuvio.tv.core.sportslive.SportsLiveCatalogPolicy
+import com.nuvio.tv.core.sportslive.SportsLiveChannelRegions
 import com.nuvio.tv.core.sportslive.SportsLiveDebugTiming
 import com.nuvio.tv.core.sportslive.SportsLiveSharedBuckets
 import com.nuvio.tv.core.sportslive.SportsLiveItemBucketer
@@ -180,7 +181,19 @@ class SportsLiveRepositoryImpl @Inject constructor(
                     }
                     items += catalogItems
                     stats[catalog.key] = SportsLiveItemBucketer.stats(catalogItems, now)
+                    // live.24: how many channels each catalog gives Channels ("kind=EVENTS" with channels: by its items).
+                    SportsLiveDebugTiming.log {
+                        val channels = catalogItems.count { it.isChannel }
+                        "sportsOpen stage=channels source=${SportsLiveDebugTiming.label(catalog.addon.displayName)} " +
+                            "kind=${catalog.kind.name} channels=$channels games=${catalogItems.size - channels}"
+                    }
                 }
+            }
+            SportsLiveDebugTiming.log {
+                val channels = items.filter { it.isChannel }
+                "sportsOpen stage=channelCountries channels=${channels.size} " +
+                    "inferredUs=${channels.count(SportsLiveChannelRegions::inferred)} " +
+                    "noCountry=${channels.count { SportsLiveChannelRegions.regionOf(it) == SportsLiveChannelRegions.OTHER }}"
             }
             val load = SportsLiveLoad(
                 items, failures, loadedAtMs = now, claimedKeys = claimedKeys, catalogOptions = options,

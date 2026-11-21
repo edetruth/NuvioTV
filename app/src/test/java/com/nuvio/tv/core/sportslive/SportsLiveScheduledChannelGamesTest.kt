@@ -15,7 +15,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** live.20 F16: a channels catalog's scheduled game entries are games on Upcoming, not channels. */
+/** live.20 F16, live.24 #12: a channels catalog's game entries are games (Live now, Upcoming), not channels. */
 class SportsLiveScheduledChannelGamesTest {
     private val now = Instant.parse("2026-11-20T16:00:00Z").toEpochMilli()
 
@@ -41,14 +41,22 @@ class SportsLiveScheduledChannelGamesTest {
     }
 
     @Test
-    fun `a live game entry stays as it was`() {
+    fun `a game entry is a game whatever its time, live or not`() {
         val live = entry("l", "🔴 Sevilla vs. Real Betis", released = "2026-11-20T19:00:00Z")
-        assertTrue(live.isChannel)
+        assertFalse(live.isChannel)
         assertTrue(live.isLive)
-        assertTrue(listed(live, SportsLiveTab.CHANNELS))
-        // Started already, or with no start: still a channel entry.
-        assertTrue(entry("p", "Nice vs. Paris Saint-Germain", released = "2026-11-20T15:00:00Z").isChannel)
-        assertTrue(entry("n", "AS Monaco vs. AJ Auxerre").isChannel)
+        assertTrue(listed(live, SportsLiveTab.LIVE_NOW))
+        assertFalse(listed(live, SportsLiveTab.CHANNELS))
+        // Started already: live by its clock.
+        val started = entry("p", "Nice vs. Paris Saint-Germain", released = "2026-11-20T15:00:00Z")
+        assertFalse(started.isChannel)
+        assertTrue(listed(started, SportsLiveTab.LIVE_NOW))
+        // No start at all: a game with its time to come, never a channel.
+        val untimed = entry("n", "AS Monaco vs. AJ Auxerre")
+        assertFalse(untimed.isChannel)
+        assertEquals(SportsLiveKind.EVENTS, untimed.kind)
+        assertTrue(listed(untimed, SportsLiveTab.UPCOMING))
+        assertFalse(listed(untimed, SportsLiveTab.CHANNELS))
     }
 
     private fun listed(item: SportsLiveItem, tab: SportsLiveTab) =

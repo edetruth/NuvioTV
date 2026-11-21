@@ -14,15 +14,31 @@ object SportsLiveChannelRegions {
     /** The filter value of channels with no known region; never an addon's own text. */
     const val OTHER = "\u0000region:other"
 
-    /** [item]'s region: a country code, a long group name, or [OTHER]. */
+    /**
+     * [item]'s region: a country code its group or title names, else the one its name implies (live.24: an unambiguous
+     * US network such as "ABC" or "ESPN 2", [SportsLiveUsNetworks]), else a long group name, else [OTHER].
+     */
     fun regionOf(item: SportsLiveItem): String {
         val group = item.group?.trim().orEmpty()
-        return code(group)
-            ?: group.substringAfterLast('-').let(::code)
-            ?: SportsLiveDisplayText.of(item.meta.name).region?.let(::code)
+        return writtenCode(item, group)
+            ?: SportsLiveUsNetworks.countryOf(item.meta.name, group)
             ?: group.takeIf { it.length > LONG_NAME_MIN && it.any(Char::isWhitespace) }
             ?: OTHER
     }
+
+    /** True when [item]'s region comes from its network's name alone ([SportsLiveUsNetworks]), not a written code. */
+    fun inferred(item: SportsLiveItem): Boolean {
+        val group = item.group?.trim().orEmpty()
+        return writtenCode(item, group) == null && SportsLiveUsNetworks.countryOf(item.meta.name, group) != null
+    }
+
+    /** True when [text] is a country or region code ("US", "UK", "ARG"), as a channel's prefix writes one. */
+    fun isCode(text: String): Boolean = code(text) != null
+
+    private fun writtenCode(item: SportsLiveItem, group: String): String? =
+        code(group)
+            ?: group.substringAfterLast('-').let(::code)
+            ?: SportsLiveDisplayText.of(item.meta.name).region?.let(::code)
 
     /** [regions] in the list's order: country codes A to Z by [label], then long names A to Z, [OTHER] last. */
     fun ordered(regions: Collection<String>, locale: Locale = Locale.getDefault()): List<String> =
