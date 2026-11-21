@@ -2276,4 +2276,43 @@ class LiveScoresRepositoryTest {
         runCurrent()
         assertTrue(provider.calls.none { it.league == EspnLeagueMap.COLLEGE_FOOTBALL })
     }
+
+    private fun school(id: String, display: String, short: String, abbr: String, nickname: String) =
+        DirectoryTeam(id, display, short, abbr, short, nickname, "https://a.espncdn.com/i/teamlogos/ncaa/500/$id.png")
+
+    /** The NBA list and a college list holding Baylor and Texas, as the directory loads them. */
+    private fun basketballLists() = TeamLogoBook(directory = TeamDirectory().apply {
+        put(EspnLeagueMap.NBA, nbaTeams, 1L)
+        put(
+            EspnLeagueMap.COLLEGE_BASKETBALL,
+            listOf(school("239", "Baylor Bears", "Baylor", "BAY", "Bears"), school("251", "Texas Longhorns", "Texas", "TEX", "Longhorns")),
+            1L
+        )
+    })
+
+    @Test
+    fun `a Basketball card of two schools polls college basketball as its own feed, at once and with both sides strong`() = runTest {
+        provider.respond = ::nbaAndCollege
+        // The NBA feed hangs: as a fallback, college basketball would wait for it.
+        val nbaHangs = CompletableDeferred<Unit>()
+        provider.gateFor = mapOf(nba15 to nbaHangs)
+        val repo = repository("2026-11-15T21:00:00Z", logos = basketballLists())
+        collect(repo)
+        repo.track(SECTION, listOf(baylorCard))
+        runCurrent()
+        assertTrue(cbb15 in provider.calls)
+        assertEquals("401906866", repo.scores.value.getValue(baylorCard.streamKey).eventId)
+        nbaHangs.complete(Unit)
+    }
+
+    @Test
+    fun `a Basketball card of two NBA teams stays on the NBA feed alone`() = runTest {
+        provider.respond = ::nbaAndCollege
+        val repo = repository("2026-11-15T21:00:00Z", logos = basketballLists())
+        collect(repo)
+        repo.track(SECTION, listOf(pacersCard))
+        runCurrent()
+        assertEquals(listOf(nba15), provider.calls)
+        assertEquals("401909985", repo.scores.value.getValue(pacersCard.streamKey).eventId)
+    }
 }

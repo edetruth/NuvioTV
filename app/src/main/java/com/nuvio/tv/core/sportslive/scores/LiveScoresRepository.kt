@@ -246,10 +246,11 @@ class LiveScoresRepository internal constructor(
         /** A [piggyback] card's ESPN sports when a source names one no feed covers; null: told by its teams. */
         val piggybackSports: Set<String>? = null,
         /**
-         * A card whose only sport is the generic "American Football" (live.24, TV report #18): its own feeds are the NFL's
-         * and college football's alike, college football's games matched with both sides STRONG.
+         * The college feed that is one of a generic card's own feeds (live.24, TV report #18): a card whose only sport is
+         * "American Football", or a "Basketball" card whose two teams the loaded lists name as schools. Its games are
+         * matched with both sides STRONG, the pro feed's as usual. Null for every other card.
          */
-        val strict: Boolean = false
+        val strictLeague: EspnLeague? = null
     )
 
     private class FeedState {
@@ -464,10 +465,14 @@ class LiveScoresRepository internal constructor(
             val liveKeys = if (item.isLive && !item.isChannel) sources.filter { !it.isChannel }.map { it.streamKey } else emptyList()
             val college = EspnLeagueMap.collegeFallbackFor(source)
             // A card that says only "American Football" (live.24, TV report #18: "Illinois vs Iowa" on a busy Saturday): the
-            // NFL and college football are both its own feeds, budgeted as any live game's, matched with both sides STRONG.
-            // As a fallback, college football came after every other game's feeds and found no slot.
-            if (leagues == listOf(EspnLeagueMap.NFL) && college == EspnLeagueMap.COLLEGE_FOOTBALL) {
-                return@mapNotNull TrackedCard(card, leagues + college, item.followed, live, fallback = null, liveKeys = liveKeys, strict = true)
+            // NFL and college football are both its own feeds, budgeted as any live game's, college football's games matched
+            // with both sides STRONG. As a fallback, college football came after every other game's feeds and found no slot.
+            // A "Basketball" card goes so only when the loaded lists name both sides as schools, not as NBA teams: addons
+            // tag most NBA games "Basketball", which would otherwise poll college basketball for each.
+            val bothOwn = (leagues == listOf(EspnLeagueMap.NFL) && college == EspnLeagueMap.COLLEGE_FOOTBALL) ||
+                (leagues == listOf(EspnLeagueMap.NBA) && college == EspnLeagueMap.COLLEGE_BASKETBALL && schoolsOnly(card.teams))
+            if (bothOwn && college != null) {
+                return@mapNotNull TrackedCard(card, leagues + college, item.followed, live, fallback = null, liveKeys = liveKeys, strictLeague = college)
             }
             // A bare sport word's college feed (#66), else a men's soccer league's women's counterpart (live.23).
             val fallback = (college ?: EspnLeagueMap.womenFallbackFor(source))?.takeIf { it !in leagues }
@@ -986,10 +991,10 @@ class LiveScoresRepository internal constructor(
             val strict = entry.fallback != null && remembered[card.key] == entry.fallback
             var match = when {
                 entry.tennis -> matchOn(card, cardFeeds, tennis = true)
-                // A generic American football card (live.24): the NFL's games as any NFL card, college football's with
-                // both sides STRONG, as the college fallback always was.
-                entry.strict -> matchOn(card, cardFeeds.filter { it.league != EspnLeagueMap.COLLEGE_FOOTBALL }, matcher)
-                    ?: matchOn(card, cardFeeds.filter { it.league == EspnLeagueMap.COLLEGE_FOOTBALL }, strictMatcher)
+                // A generic American football or basketball card (live.24): the pro feed's games as any card's, the college
+                // feed's with both sides STRONG, as the college fallback always was.
+                entry.strictLeague != null -> matchOn(card, cardFeeds.filter { it.league != entry.strictLeague }, matcher)
+                    ?: matchOn(card, cardFeeds.filter { it.league == entry.strictLeague }, strictMatcher)
                 else -> matchOn(card, cardFeeds, if (strict) strictMatcher else matcher)
             }
             // A soccer competition feed without the game: try soccer/all (shared, at its own cadence).
@@ -1216,6 +1221,18 @@ class LiveScoresRepository internal constructor(
         val start = card.startMs?.takeIf { card.hasTimeOfDay } ?: return false
         val at = match.startMs ?: return false
         return kotlin.math.abs(at - start) <= WOMEN_FALLBACK_NEAR_MS
+    }
+
+    /**
+     * True when the loaded men's college basketball list holds both of [teams] as two schools and the NBA list does not
+     * hold both (live.24): a "Basketball" card of two schools. False while the lists are not loaded.
+     */
+    private fun schoolsOnly(teams: com.nuvio.tv.core.sportslive.TeamPair): Boolean {
+        val directory = logos.directory
+        val home = directory.resolve(EspnLeagueMap.COLLEGE_BASKETBALL, teams.home) ?: return false
+        val away = directory.resolve(EspnLeagueMap.COLLEGE_BASKETBALL, teams.away) ?: return false
+        if (home.id == away.id) return false
+        return directory.resolve(EspnLeagueMap.NBA, teams.home) == null || directory.resolve(EspnLeagueMap.NBA, teams.away) == null
     }
 
     private fun matchOn(card: ScoreCard, cardFeeds: List<ScoreFeed>, using: ScoreMatcher = matcher, tennis: Boolean = false): ScoreSnapshot? {
