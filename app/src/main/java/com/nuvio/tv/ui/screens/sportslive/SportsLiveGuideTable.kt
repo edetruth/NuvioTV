@@ -180,6 +180,36 @@ internal fun guideOpeningKey(lines: List<PanelGuideEntry>, lineup: List<ZapPanel
     return lines.firstOrNull()?.key
 }
 
+/** The key Now playing is selected by (coordinator decision 5: selectable, above the table's first row). */
+internal const val GUIDE_NOW_PLAYING_KEY = "guide_now_playing"
+
+/** What the selection moves through, top to bottom: Now playing when the game playing is known, then the table's lines. */
+internal fun guideSelectableKeys(nowPlaying: Boolean, lines: List<PanelGuideEntry>): List<String> =
+    listOfNotNull(GUIDE_NOW_PLAYING_KEY.takeIf { nowPlaying }) + lines.map { it.key }
+
+/** The table line at selection [index] ([guideSelectableKeys]); -1 while Now playing is selected. */
+internal fun guideTableIndex(index: Int, nowPlaying: Boolean): Int = if (nowPlaying) index - 1 else index
+
+/** What OK does on the selection. */
+internal enum class GuideOkAction {
+    /** Now playing: the guide just closes, the game plays on. */
+    CLOSE,
+
+    /** A game: switch to it (a matched Just ended game opens its box score), the guide closes. */
+    PLAY,
+
+    /** "N more hidden by My sports · Show all". */
+    SHOW_ALL_SPORTS,
+    NONE
+}
+
+internal fun guideOkAction(selectedKey: String?, line: PanelGuideEntry?): GuideOkAction = when {
+    selectedKey == GUIDE_NOW_PLAYING_KEY -> GuideOkAction.CLOSE
+    line is PanelGuideEntry.Game -> GuideOkAction.PLAY
+    line is PanelGuideEntry.HiddenByMySports -> GuideOkAction.SHOW_ALL_SPORTS
+    else -> GuideOkAction.NONE
+}
+
 /** The selected index after a move of [delta] rows among [size]: never past either end; -1 when empty. */
 internal fun guideMove(index: Int, delta: Int, size: Int): Int = if (size <= 0) -1 else (index + delta).coerceIn(0, size - 1)
 

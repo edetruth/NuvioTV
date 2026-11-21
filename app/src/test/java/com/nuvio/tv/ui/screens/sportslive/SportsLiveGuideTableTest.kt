@@ -177,6 +177,29 @@ class SportsLiveGuideTableTest {
     }
 
     @Test
+    fun `Now playing is selectable above the table, OK on it only closes the guide and the table window ignores it`() {
+        val lineup = listOf(row("a"), row("b"), row("c"))
+        val lines = guideLines(panelGuide(lineup, lineup[0].item.streamKey))
+        val keys = guideSelectableKeys(nowPlaying = true, lines = lines)
+        assertEquals(listOf(GUIDE_NOW_PLAYING_KEY) + lines.map { it.key }, keys)
+        // Up from the table's first row reaches Now playing, and no further.
+        assertEquals(0, guideMove(1, -1, keys.size))
+        assertEquals(0, guideMove(0, -1, keys.size))
+        assertEquals(-1, guideTableIndex(0, nowPlaying = true))
+        assertEquals(0, guideTableIndex(1, nowPlaying = true))
+        assertEquals(1, guideTableIndex(1, nowPlaying = false))
+        // Now playing selected: the table keeps its window.
+        assertEquals(0, guideWindowStart(0, guideTableIndex(0, nowPlaying = true), lines.size))
+        // Without a known game playing, only the table.
+        assertEquals(lines.map { it.key }, guideSelectableKeys(nowPlaying = false, lines = lines))
+
+        assertEquals(GuideOkAction.CLOSE, guideOkAction(GUIDE_NOW_PLAYING_KEY, null))
+        assertEquals(GuideOkAction.PLAY, guideOkAction(lines[0].key, lines[0]))
+        assertEquals(GuideOkAction.SHOW_ALL_SPORTS, guideOkAction(HIDDEN_BY_MY_SPORTS_KEY, PanelGuideEntry.HiddenByMySports(3)))
+        assertEquals(GuideOkAction.NONE, guideOkAction(null, null))
+    }
+
+    @Test
     fun `moves stop at the ends, the selection follows its key across updates, and the window scrolls as little as it can`() {
         assertEquals(0, guideMove(0, -1, 7))
         assertEquals(6, guideMove(5, 5, 7))

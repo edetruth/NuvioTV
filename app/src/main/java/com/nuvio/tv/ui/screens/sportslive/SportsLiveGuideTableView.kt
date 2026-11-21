@@ -105,27 +105,34 @@ internal fun SportsLiveGuideTable(
     onChip: (String?) -> Unit,
     onRowFocus: (String?) -> Unit,
     onKey: (Int) -> Unit,
+    /** OK on Now playing: the guide closes, the game plays on. */
+    onClose: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val guide = state?.guide
     val lines = remember(guide) { guide?.let(::guideLines).orEmpty() }
-    val keys = remember(lines) { lines.map { it.key } }
     val nowRow = guide?.nowPlaying ?: state?.nowPlayingRow
+    // Now playing is selectable above the table (Hold OK on it reaches Choose stream; OK just closes the guide).
+    val hasNow = nowRow != null
+    val keys = remember(lines, hasNow) { guideSelectableKeys(hasNow, lines) }
     // The row the user moved to, by key (null: the opening row, the game ▼ would zap to), and where it last was.
     var chosenKey by remember { mutableStateOf<String?>(null) }
     var lastIndex by remember { mutableIntStateOf(0) }
     var windowStart by remember { mutableIntStateOf(0) }
     val openingKey = remember(lines, guide) { guide?.let { guideOpeningKey(lines, it.rows, state?.currentKey) } }
     val index = guideReselect(keys, chosenKey ?: openingKey, lastIndex)
-    val start = guideWindowStart(windowStart, index, keys.size)
+    val tableIndex = guideTableIndex(index, hasNow)
+    val start = guideWindowStart(windowStart, tableIndex, lines.size)
     SideEffect {
         if (index >= 0) lastIndex = index
         windowStart = start
     }
-    val selectedLine = lines.getOrNull(index)
-    // Hide until focused and the look-ahead follow the selected game.
+    val selectedKey = keys.getOrNull(index)
+    val nowSelected = selectedKey == GUIDE_NOW_PLAYING_KEY
+    val selectedLine = lines.getOrNull(tableIndex)
+    // Hide until focused and the look-ahead follow the selected game (the look-ahead never takes the game playing).
     val currentOnRowFocus by rememberUpdatedState(onRowFocus)
-    val selectedGame = (selectedLine as? PanelGuideEntry.Game)?.key
+    val selectedGame = if (nowSelected) nowRow?.item?.streamKey else (selectedLine as? PanelGuideEntry.Game)?.key
     LaunchedEffect(selectedGame, open) { if (open) currentOnRowFocus(selectedGame) }
 
     // The guide keeps focus while open (a request in its first frames can come to nothing; a menu gives it back).
@@ -190,14 +197,16 @@ internal fun SportsLiveGuideTable(
                     SportsLiveGuideKey.PREVIOUS_SPORT -> true.also { stepChip(-1) }
                     SportsLiveGuideKey.NEXT_SPORT -> true.also { stepChip(1) }
                     SportsLiveGuideKey.WATCH -> true.also {
-                        when (val line = selectedLine) {
-                            is PanelGuideEntry.Game -> onPick(line.row.item)
-                            is PanelGuideEntry.HiddenByMySports -> stepToAllSports(state, onChip)
-                            else -> Unit
+                        when (guideOkAction(selectedKey, selectedLine)) {
+                            GuideOkAction.CLOSE -> onClose()
+                            GuideOkAction.PLAY -> (selectedLine as? PanelGuideEntry.Game)?.let { onPick(it.row.item) }
+                            GuideOkAction.SHOW_ALL_SPORTS -> stepToAllSports(state, onChip)
+                            GuideOkAction.NONE -> Unit
                         }
                     }
                     SportsLiveGuideKey.MORE -> true.also {
-                        (selectedLine as? PanelGuideEntry.Game)?.let { onLongPick(it.row.item) }
+                        val item = if (nowSelected) nowRow?.item else (selectedLine as? PanelGuideEntry.Game)?.row?.item
+                        item?.let(onLongPick)
                     }
                 }
             }
@@ -226,7 +235,7 @@ internal fun SportsLiveGuideTable(
             Spacer(modifier = Modifier.height(22.dp))
             nowRow?.let { row ->
                 val board = boardOf(state, row)
-                GuideNowPlaying(rememberGuideRow(board, ready = null, nowPlaying = true, suffix = suffixes[row.item.streamKey]), board.art)
+                GuideNowPlaying(rememberGuideRow(board, ready = null, nowPlaying = true, suffix = suffixes[row.item.streamKey]), board.art, nowSelected)
             }
         }
         // The table: five rows under the video, the selected one ringed.
@@ -247,7 +256,7 @@ internal fun SportsLiveGuideTable(
             }
             val end = minOf(start + GUIDE_VISIBLE_ROWS, lines.size)
             for (at in start until end) {
-                val selected = at == index
+                val selected = at == tableIndex
                 when (val line = lines[at]) {
                     is PanelGuideEntry.Game -> {
                         val board = boardOf(state, line.row)
@@ -381,15 +390,21 @@ private fun GuideChipArrow(text: String) {
 
 /** NOW PLAYING: the game playing on two lines (one team each, or its title), its marks and score · time at the end. */
 @Composable
-private fun GuideNowPlaying(row: GuideRow, art: GameArt?) {
+private fun GuideNowPlaying(row: GuideRow, art: GameArt?, selected: Boolean) {
     Text(
         text = stringResource(R.string.sports_live_panel_now_playing),
         style = SportsLiveTokens.style(GuideType.Label),
         color = Colors.TextMuted,
         maxLines = 1
     )
-    Spacer(modifier = Modifier.height(6.dp))
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    Spacer(modifier = Modifier.height(4.dp))
+    val shape = RoundedCornerShape(GUIDE_ROW_RADIUS)
+    Row(
+        modifier = Modifier
+            .then(if (selected) Modifier.background(GUIDE_SELECTED_FILL, shape).border(2.dp, Colors.FocusWhite, shape) else Modifier)
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
         Box(
             modifier = Modifier
                 .width(3.dp)

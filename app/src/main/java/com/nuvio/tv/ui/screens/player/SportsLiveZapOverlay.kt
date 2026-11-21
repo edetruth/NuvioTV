@@ -292,7 +292,8 @@ internal fun BoxScope.SportsLiveZapOverlay(
                 onLongPick = { item -> menu = viewModel.panelMenu(item) },
                 onChip = viewModel::onPanelChip,
                 onRowFocus = viewModel::onPanelRowFocus,
-                onKey = viewModel::onPanelKey
+                onKey = viewModel::onPanelKey,
+                onClose = { viewModel.closePanel() }
             )
         }
     } else {
