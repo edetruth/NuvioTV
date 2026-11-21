@@ -1143,6 +1143,8 @@ class LiveScoresRepository internal constructor(
     /**
      * The kept scores to serve now (live.23), flagged [ScoreSnapshot.kept]: each for one poll at most from when it was
      * first served, and none of a game being watched (its picture runs behind; it keeps the delay's first-seen hold).
+     * A live game's kept score is drawn without its clock, scorers and situation (live.23 review A4): it may be minutes
+     * old, so only the score shows until the first fresh answer.
      */
     private fun keptServedLocked(): Map<String, ScoreSnapshot> {
         if (keptShown.isEmpty()) return emptyMap()
@@ -1156,7 +1158,9 @@ class LiveScoresRepository internal constructor(
                 kept -= key
                 continue
             }
-            served[key] = keptCard.snapshot.copy(kept = true)
+            served[key] = keptCard.snapshot.let { s ->
+                if (s.state == ScoreState.IN) s.copy(kept = true, clockText = null, scorers = emptyList(), situation = null) else s.copy(kept = true)
+            }
         }
         return served
     }

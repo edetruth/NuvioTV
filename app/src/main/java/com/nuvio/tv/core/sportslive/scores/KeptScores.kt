@@ -11,8 +11,11 @@ import okio.Buffer
  * [MAX_AGE_MS] is not read back; [LiveScoresRepository] drops a kept score once the card's own feed has answered.
  */
 internal object KeptScores {
-    /** A kept copy older than this is not shown: a live score moves on. */
-    const val MAX_AGE_MS = 10 * 60_000L
+    /**
+     * A kept copy older than this is not shown: a live score moves on. Long enough for the first fetch in flight
+     * (one or two polls), no longer (live.23 review A4: a 10-minute copy drew a stale score and LIVE).
+     */
+    const val MAX_AGE_MS = 2 * 60_000L
 
     const val MAX_GAMES = 200
 

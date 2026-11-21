@@ -1368,6 +1368,8 @@ class LiveScoresRepositoryTest {
         runCurrent()
         assertEquals(50, second.scores.value.getValue(key).homeScore)
         assertTrue(second.scores.value.getValue(key).kept)
+        // Score only: the kept clock may be minutes old (review A4).
+        assertNull(second.scores.value.getValue(key).clockText)
         // ...then the fresh one, first seen, at once.
         provider.gate = null
         gate.complete(Unit)
@@ -1433,7 +1435,7 @@ class LiveScoresRepositoryTest {
     }
 
     @Test
-    fun `a kept score is not drawn when older than 10 minutes, for another game, or for the game being watched`() = runTest {
+    fun `a kept score is not drawn when older than 2 minutes, for another game, or for the game being watched`() = runTest {
         val base = ms("2026-11-15T19:00:00Z")
         val lakers = item("Los Angeles Lakers at Phoenix Suns", "Basketball", "2026-11-15T20:30:00Z")
         val shown = mapOf(pacersCard.streamKey to game(ScoreState.IN, 50, 48), lakers.streamKey to game(ScoreState.IN, 50, 48))
@@ -1528,18 +1530,19 @@ class LiveScoresRepositoryTest {
         // First seen while video plays: at once.
         assertEquals(50, repo.scores.value.getValue(key).homeScore)
         assertEquals("Q2 5:00", repo.scores.value.getValue(key).clockText)
-        // Closed for five minutes: the feed is stale by then and fetched again on the reopen.
+        // Closed for 90 s: the feed is stale by then and fetched again on the reopen.
         repo.untrack(panel)
         runCurrent()
         assertTrue(key !in repo.scores.value)
-        advanceTimeBy(5 * 60_000L); runCurrent()
+        advanceTimeBy(90_000L); runCurrent()
         val gate = CompletableDeferred<Unit>()
         provider.gate = gate
         repo.track(panel, listOf(pacersCard))
         runCurrent()
         repo.scores.value.getValue(key).let {
             assertEquals(50, it.homeScore)
-            assertEquals("Q2 5:00", it.clockText)
+            // Score only until the fresh answer (review A4).
+            assertNull(it.clockText)
             assertTrue(it.kept)
         }
         // The fetch lands: the delayed score takes over.
