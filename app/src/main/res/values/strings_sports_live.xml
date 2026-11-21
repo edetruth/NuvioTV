@@ -922,7 +922,7 @@
     <string name="sports_live_setting_reminded_team_help">OK stops the reminders for this team\'s games</string>
     <string name="sports_live_setting_reminded_team_remove">Remove</string>
     <string name="sports_live_setting_report_problem">Report a problem</string>
-    <string name="sports_live_setting_report_problem_help">Saves what the app is doing now, for fixing a problem, with no links, accounts or addon names. On a game: Hold OK → More… → Report a problem, or hold Play/Pause on remotes that have it</string>
+    <string name="sports_live_setting_report_problem_help">Saves what the app is doing now, for fixing a problem, with no links, accounts or addon names. Hold OK on any screen, or hold Play/Pause or Info</string>
     <string name="sports_live_hold_ok_status">Saves what the app is doing now</string>
     <string name="sports_live_report_saved">Report #%1$d saved</string>
     <string name="sports_live_report_saved_adb">Ready to pull over adb. QR code: Settings › Sports &amp; Live › More</string>
