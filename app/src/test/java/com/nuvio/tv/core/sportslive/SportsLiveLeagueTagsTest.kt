@@ -75,10 +75,29 @@ class SportsLiveLeagueTagsTest {
 
     @Test
     fun `a long competition no rule knows reads as its game's sport, not its first word`() {
-        assertEquals("SOCCER", scoreboardRowTag("Mexican Liga de Expansion MX Apertura", "Soccer", "Live"))
+        assertEquals("SOCCER", scoreboardRowTag("Liga de Expansion MX Apertura Regular Season", "Soccer", "Live"))
         assertEquals("BASKETBALL", scoreboardRowTag("Lithuanian Basketball League Regular", null, "Live", SportsLiveSportKind.BASKETBALL))
         assertEquals("HOCKEY", scoreboardRowTag("Swedish Hockey League Regular Season", "Ice Hockey", "Live"))
         // A short ESPN tag of ten capitals or fewer stays as it is.
         assertEquals("NBA", scoreboardRowTag("NBA", "Basketball", "Live"))
+    }
+
+    @Test
+    fun `a tag is never a nationality alone, live 23`() {
+        // TV report: an Indian Super League game read "INDIAN".
+        assertEquals("ISL", scoreboardRowTag("Indian Super League", "Soccer", "Live"))
+        assertEquals("ISL", SportsLiveLeagueTags.of("ind.1"))
+        assertEquals("I-LEAGUE", SportsLiveLeagueTags.of("Indian Football League"))
+        assertEquals("CSL", SportsLiveLeagueTags.of("Chinese Super League"))
+        // A league no table knows reads as its country, also with no sport known.
+        assertEquals("MEXICO", scoreboardRowTag("Mexican Liga de Expansion MX Apertura", "Soccer", "Live"))
+        assertEquals("CROATIA", SportsLiveTags.short("CROATIAN FIRST LEAGUE", null))
+        assertEquals("COSTA RICA", SportsLiveTags.short("COSTA RICAN PRIMERA DIVISION", null))
+        assertEquals("INDIA", SportsLiveTags.short("INDIAN", null))
+        // A nationality whose country does not fit: the sport, else the next word, never the nationality.
+        assertEquals("SOCCER", SportsLiveTags.short("SWISS CHALLENGE LEAGUE", SportsLiveSportKind.SOCCER))
+        assertEquals("CHALLENGE", SportsLiveTags.short("SWISS CHALLENGE LEAGUE", null))
+        // A league that names its sport keeps the sport word.
+        assertEquals("HOCKEY", SportsLiveTags.short("SWEDISH HOCKEY LEAGUE", null))
     }
 }

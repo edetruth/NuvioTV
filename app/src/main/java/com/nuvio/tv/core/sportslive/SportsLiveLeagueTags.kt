@@ -80,6 +80,16 @@ object SportsLiveLeagueTags {
         tag("ROMANIA", "Romanian Liga 1", "Romanian Liga I", "rou.1"),
         tag("LIGA MX", "Mexican Liga MX", "mex.1"),
         tag("LALIGA 2", "Spanish LALIGA 2", "LaLiga 2", "esp.2"),
+        // Leagues ESPN names by a nationality first ("Indian Super League" read "INDIAN", TV report live.23): the name fans use.
+        tag("ISL", "Indian Super League", "ind.1"),
+        tag("I-LEAGUE", "Indian Football League", "I-League", "ind.2"),
+        tag("IPL", "Indian Premier League"),
+        tag("SERIE B", "Italian Serie B", "ita.2"),
+        tag("LIGUE 2", "French Ligue 2", "fra.2"),
+        tag("CSL", "Chinese Super League", "chn.1"),
+        tag("RPL", "Russian Premier League", "rus.1"),
+        tag("PSL", "South African Premiership", "rsa.1"),
+        tag("NBL", "Australian NBL", "nbl"),
         tag("BRAZIL A", "Brazilian Serie A", "Brazil Serie A", "Brasileirão", "Brasileirao", "bra.1"),
         // ESPN's own abbreviation is the key rows use: "Argentine LPF" read "AL" by its initials (TV QA live.20).
         tag("ARGENTINA", "Argentine Liga Profesional de Fútbol", "Argentine Liga Profesional", "Argentine LPF", "arg.1"),
