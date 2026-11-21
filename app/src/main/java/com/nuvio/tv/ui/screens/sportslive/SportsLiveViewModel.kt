@@ -298,7 +298,9 @@ class SportsLiveViewModel internal constructor(
         /** When the catalogs shown were loaded (a list restored from the device: when it was saved); null: none. */
         val listAtMs: Long? = null,
         /** Built from this session's own load, not the saved list or nothing (#214). */
-        val fromLoad: Boolean = false
+        val fromLoad: Boolean = false,
+        /** The followed teams the tabs were pinned with (null: not pinned yet). */
+        val followed: List<FollowedTeam>? = null
     )
 
     @VisibleForTesting
@@ -331,6 +333,10 @@ class SportsLiveViewModel internal constructor(
     // The profile's answers to "Add ‹sport› to My sports?", as last read.
     @Volatile
     private var addSportMemoryNow = SportsLiveAddSportPrompt.Memory()
+
+    // The follows and My sports Live now was last ranked with: a change is the user's (Follow, Unfollow, Edit my sports),
+    // so Live now is ranked again once (J2) instead of keeping its calm order.
+    private var liveNowRankedFor: Pair<List<FollowedTeam>?, MySports>? = null
 
     // J1: Live now has been shown this visit of the screen (reset when the screen is left): it stays calm, also across tabs.
     @Volatile
@@ -472,6 +478,7 @@ class SportsLiveViewModel internal constructor(
         hiddenNow = hidden
         val startedAt = System.nanoTime()
         bucketed.copy(
+            followed = followed,
             tabs = bucketed.tabs.mapValues { (tab, all) ->
                 val listed = if (tab == SportsLiveTab.LIVE_NOW || tab == SportsLiveTab.UPCOMING) SportsLiveHiddenTitles.filter(all, hidden) else all
                 val items = if (tab in INFERRED_TABS) listed.map(inferSport) else listed
@@ -1264,7 +1271,11 @@ class SportsLiveViewModel internal constructor(
                 // is browsed nothing moves at all (F6, TV QA BUG7): no row leaves, none re-orders, new ones wait for
                 // "N new" on Refresh; once the user leaves it (or asks), the list is as built.
                 val focusedId = selection.itemId.takeIf { selection.tab == SportsLiveTab.LIVE_NOW }
-                val thawed = selection.thaw != thawApplied
+                // A follow or My sports change is the user's own: the list is ranked afresh, as "N new" does.
+                val rankedFor = bucketed.followed to mySports
+                val reranked = liveNowRankedFor.let { it != null && it != rankedFor }
+                liveNowRankedFor = rankedFor
+                val thawed = selection.thaw != thawApplied || reranked
                 thawApplied = selection.thaw
                 val kept = keptLiveNow(selection, built, ranked.size, focusedId, thawed).also { heldBack = it.heldBack }.items.let { listed ->
                     // The game playing in the mini player stays listed while it plays (BUG7: its row vanished).
