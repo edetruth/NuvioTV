@@ -397,6 +397,46 @@ class SportsLiveOpenSpeedTest {
     }
 
     @Test
+    fun `back from the player a held Live now board is dropped once too old, other tabs' boards are kept`() = runTest {
+        // live.24 RC review H2: back from a 30-minute game, the board StateFlow re-sent the Live now board from before it.
+        var live = true
+        val sharing = keptBoardSharing(5_000L, SportsLiveBoardCache.LIVE_MAX_AGE_MS) { live }
+        val watchers = MutableStateFlow(1)
+        val commands = mutableListOf<kotlinx.coroutines.flow.SharingCommand>()
+        val job = launch { sharing.command(watchers).collect { commands += it } }
+        try {
+            runCurrent()
+            assertEquals(listOf(kotlinx.coroutines.flow.SharingCommand.START), commands)
+            // The player opens: sharing stops after 5 s, the Live now board is still held until 90 s.
+            watchers.value = 0
+            advanceTimeBy(5_001L); runCurrent()
+            assertEquals(kotlinx.coroutines.flow.SharingCommand.STOP, commands.last())
+            advanceTimeBy(SportsLiveBoardCache.LIVE_MAX_AGE_MS - 5_000L); runCurrent()
+            assertEquals(kotlinx.coroutines.flow.SharingCommand.STOP_AND_RESET_REPLAY_CACHE, commands.last())
+            // Back: sharing starts again with nothing held.
+            watchers.value = 1
+            runCurrent()
+            assertEquals(kotlinx.coroutines.flow.SharingCommand.START, commands.last())
+            // Upcoming's board (no live score) is kept however long the screen is away.
+            live = false
+            watchers.value = 0
+            advanceTimeBy(30 * MINUTE); runCurrent()
+            assertEquals(kotlinx.coroutines.flow.SharingCommand.STOP, commands.last())
+            // Back within 5 s: sharing never stopped.
+            watchers.value = 1
+            runCurrent()
+            watchers.value = 0
+            advanceTimeBy(1_000L); runCurrent()
+            watchers.value = 1
+            runCurrent()
+            assertEquals(kotlinx.coroutines.flow.SharingCommand.START, commands.last())
+            assertEquals(1, commands.drop(4).count { it == kotlinx.coroutines.flow.SharingCommand.START })
+        } finally {
+            job.cancel()
+        }
+    }
+
+    @Test
     fun `Live now's kept board shows at once only while it is fresh, other tabs' boards always`() {
         // live.23 review H2: back on Live now after 20 minutes, its old board showed scores, clocks and LIVE as they were.
         var clock = NOW

@@ -27,6 +27,16 @@ import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveTab
 import java.time.LocalDate
 import java.time.ZoneId
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharingCommand
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.dropWhile
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.transformLatest
 
 /** The scores, setting and reveals the screen has: what the Scoreboard and drawn cards read. */
 data class SportsLiveBoardScores(
@@ -307,6 +317,34 @@ internal fun SportsLiveBoard.reusingRows(previous: SportsLiveBoard?): SportsLive
     val sameList = rows.size == before.size && rows.indices.all { rows[it] === before[it] }
     return copy(rows = if (sameList) before else rows)
 }
+
+/**
+ * How the shown board is shared: as `WhileSubscribed(stopTimeoutMs)`, and while nothing watches, a held Live now board
+ * is dropped [maxAgeMs] after the screen stopped watching (live.24 RC review H2): back from the player, the screen
+ * draws its skeleton until the fresh board, never the scores, clocks and LIVE marks from before the game. Other tabs'
+ * boards are kept (they show no live score), as [SportsLiveBoardCache.instantFor] does for tab switches.
+ */
+@OptIn(ExperimentalCoroutinesApi::class)
+internal fun keptBoardSharing(stopTimeoutMs: Long, maxAgeMs: Long, holdsLiveNow: () -> Boolean): SharingStarted =
+    object : SharingStarted {
+        override fun command(subscriptionCount: StateFlow<Int>): Flow<SharingCommand> = subscriptionCount
+            .map { it > 0 }
+            .distinctUntilChanged()
+            .transformLatest { watched ->
+                if (watched) {
+                    emit(SharingCommand.START)
+                    return@transformLatest
+                }
+                delay(stopTimeoutMs)
+                emit(SharingCommand.STOP)
+                if (holdsLiveNow()) {
+                    delay((maxAgeMs - stopTimeoutMs).coerceAtLeast(0L))
+                    emit(SharingCommand.STOP_AND_RESET_REPLAY_CACHE)
+                }
+            }
+            .dropWhile { it != SharingCommand.START }
+            .distinctUntilChanged()
+    }
 
 /**
  * The boards last built for each view (#143: tab, filter and Channels' browse view), with the inputs each was built

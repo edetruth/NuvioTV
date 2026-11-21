@@ -789,6 +789,10 @@ class SportsLiveViewModel internal constructor(
     @VisibleForTesting
     internal var buildBoard: suspend (SportsLiveBoardInputs) -> SportsLiveBoard = { SportsLiveBoard.build(it) }
 
+    /** The tab of the board last published ([keptBoardSharing]: a held Live now board expires while nothing watches). */
+    @Volatile
+    private var shownTab: SportsLiveTab? = null
+
     /**
      * What the list draws (#71): the selected tab's items in the order shown, with the Scoreboard's rows
      * and the cards' drawn art, built on the compute dispatcher and published ready.
@@ -855,10 +859,16 @@ class SportsLiveViewModel internal constructor(
                 }
             }
             .onEach(::onBoardShown)
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+            // live.24 RC review H2: back from the player, never the Live now board from before the game.
+            .stateIn(
+                viewModelScope,
+                keptBoardSharing(5_000, SportsLiveBoardCache.LIVE_MAX_AGE_MS) { shownTab == SportsLiveTab.LIVE_NOW },
+                null
+            )
 
     /** Each board as it is published: the tab-open timing line, and Upcoming built ahead from Live now. */
     private fun onBoardShown(shown: SportsLiveBoard) {
+        shownTab = shown.tab
         val opening = tabOpening
         if (opening != null && opening.first == shown.tab) {
             tabOpening = null
