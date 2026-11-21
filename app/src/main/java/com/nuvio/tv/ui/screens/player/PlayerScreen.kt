@@ -1487,6 +1487,9 @@ fun PlayerScreen(
                 .zIndex(2f)
         )
 
+        // Sports & Live (#39): a dual pane handed to full screen plays on over the player until its first frame.
+        com.nuvio.tv.ui.screens.sportslive.SportsLiveHeldPicture(viewModel.controller.contentId, { viewModel.hasStartedPlaying() }, uiState.error != null, (uiState.sportsStarting?.linkNumber ?: 1) > 1, Modifier.fillMaxSize().zIndex(2.6f))
+
         // Sports & Live (#138): a link is starting; the viewer can move on instead of waiting.
         uiState.sportsStarting?.takeIf { SportsLivePlayerLayers.shows(SportsLivePlayerLayer.STARTING, sportsLayers) }?.let { starting ->
             val linkCount = remember(uiState.sourceAllStreams) {

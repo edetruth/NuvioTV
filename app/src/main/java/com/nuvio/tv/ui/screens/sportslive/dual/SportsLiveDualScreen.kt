@@ -100,6 +100,7 @@ import com.nuvio.tv.ui.screens.sportslive.RegisterSportsLiveAlertSurface
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveAlertSurface
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveAlertSurfaces
 import com.nuvio.tv.ui.screens.sportslive.SportsLivePeekHost
+import com.nuvio.tv.ui.screens.sportslive.SportsLiveFullScreenHold
 import com.nuvio.tv.ui.screens.sportslive.SportsLivePlayHost
 import com.nuvio.tv.ui.screens.sportslive.SportsLivePlayState
 import com.nuvio.tv.ui.screens.sportslive.SportsLivePlayViewModel
@@ -172,6 +173,22 @@ fun SportsLiveDualScreen(
         players = null
     }
 
+    // Full screen for [item] (#39): its pane, playing with sound, plays on (held) until the full player's first
+    // frame; the other pane stops. Otherwise both stop, as before.
+    fun handOverPlayers(item: SportsLiveItem) {
+        val current = players ?: return
+        val state = viewModel.state.value
+        views.values.forEach { it.player = null }
+        players = null
+        val side = state?.sideOf(item)
+        val kept = if (state != null && side != null) {
+            current.handOver(side, audible = side == state.audibleSide && state.pane(side).status == PaneStatus.Playing)
+        } else {
+            null
+        }
+        if (kept == null) current.release() else SportsLiveFullScreenHold.holdPlayer(item.id, kept)
+    }
+
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
@@ -235,7 +252,8 @@ fun SportsLiveDualScreen(
     // Set once Back from dual is what plays a game full screen (the game with sound, Close this side).
     var backPlayed by remember { mutableStateOf(false) }
     // OK plays the pane's stream (or takes the section's path); the players stop before the full
-    // player (or Stream screen) opens, and the zap session runs over the dual list.
+    // player (or Stream screen) opens, but a playing pane with sound plays on until the full player's
+    // first frame (#39), and the zap session runs over the dual list.
     SportsLivePlayHost(
         playViewModel = playViewModel,
         onOpenStreamScreen = { item, manual ->
@@ -245,7 +263,7 @@ fun SportsLiveDualScreen(
             onOpenStreamScreen(item, manual)
         },
         onPlayTarget = { target ->
-            releasePlayers()
+            handOverPlayers(target.item)
             viewModel.startZapSession(target.item, returnToDual = !backPlayed)
             onPlayTarget(target)
         }

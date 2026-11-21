@@ -206,6 +206,16 @@ internal class DualPlayers(
             player.release()
         }
 
+        /** Stops reporting this player's events (#39): it plays on for whoever it is handed to. */
+        fun detach() {
+            loads++
+            report(null, false)
+            listener?.let(player::removeListener)
+            listener = null
+            analyticsListener?.let(player::removeAnalyticsListener)
+            analyticsListener = null
+        }
+
         /** Samples this player's health (#138): reports a problem, or that a recovering stream moves. */
         fun checkHealth() {
             val (item, stream) = loaded ?: return
@@ -300,6 +310,24 @@ internal class DualPlayers(
         val audible = state.audibleSide
         assigned.getValue(audible.other).setAudible(false)
         assigned.getValue(audible).setAudible(true)
+    }
+
+    /**
+     * Full screen from [side]'s pane (#39): the other player is released, and [side]'s, playing with sound, is
+     * returned as it plays (no longer reporting to dual screen) for the full player to show until its own first
+     * frame. Null, with both released, when [side]'s player plays nothing or does not have the sound. Later calls,
+     * and [release], do nothing.
+     */
+    fun handOver(side: Side, audible: Boolean): ExoPlayer? {
+        if (released) return null
+        val kept = bySide.getValue(side).takeIf { audible && it.loaded != null }
+        released = true
+        ticker.stop()
+        slots.forEach {
+            it.loaded = null
+            if (it === kept) it.detach() else it.release()
+        }
+        return kept?.player
     }
 
     /** Releases both players; later calls do nothing. */
