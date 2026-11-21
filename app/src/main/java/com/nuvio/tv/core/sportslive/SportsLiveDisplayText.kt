@@ -270,7 +270,8 @@ object SportsLiveDisplayText {
     )
 
     /** A bare sport word at the end of a side ("Chelsea Football", #210). */
-    private val SPORT_WORD_SUFFIX = Regex("""\s+(?:football|soccer)\s*$""", RegexOption.IGNORE_CASE)
+    // #216: "NEW vs India Cricket" listed a team "India Cricket": the sport word after a national side is the sport ("Dubai Basketball", "Bath Rugby" are clubs: kept).
+    private val SPORT_WORD_SUFFIX = Regex("""\s+(?:football|soccer|cricket)\s*$""", RegexOption.IGNORE_CASE)
 
     /** A title that names a game ("A vs B", "A v B", "A @ B", "A at B", "A x B"): its tails may be show words (#210). */
     private val GAME_IN_TITLE = Regex("""\s(?:[Vv][Ss]\.?|[Vv]\.?|@|[Aa][Tt]|x)\s""")

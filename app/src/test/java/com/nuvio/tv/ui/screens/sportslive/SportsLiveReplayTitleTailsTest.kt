@@ -61,6 +61,11 @@ class SportsLiveReplayTitleTailsTest {
         assertEquals(TeamPair("Lakers", "Celtics"), SportsLiveTeams.parse("Lakers vs Celtics NBA 1080p"))
         assertEquals(TeamPair("Real Sociedad", "Inter Miami"), SportsLiveTeams.parse("Real Sociedad vs Inter Miami Full Match Replay"))
         assertEquals("Chelsea", SportsLiveDisplayText.teamSide("Chelsea Football"))
+        // #216: a trailing Cricket is the sport, never part of the team.
+        assertEquals(TeamPair("NEW", "India"), SportsLiveTeams.parse("NEW vs India Cricket"))
+        // A club named after its sport keeps it.
+        assertEquals("Dubai Basketball", SportsLiveDisplayText.teamSide("Dubai Basketball"))
+        assertEquals("Cricket", SportsLiveDisplayText.teamSide("Cricket"))
     }
 
     @Test
