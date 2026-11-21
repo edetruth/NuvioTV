@@ -146,6 +146,20 @@ class SportsLiveV2P4Test {
     }
 
     @Test
+    fun `a Results line steps from the full name to the short name and abbreviation`() {
+        val umes = ScoreTeam(
+            id = "1", abbreviation = "UMES", displayName = "Maryland Eastern Shore Hawks", shortDisplayName = "MD Eastern",
+            name = "Hawks", location = "Maryland Eastern Shore", logo = null, score = 60, linescores = emptyList()
+        )
+        assertEquals(listOf("Maryland Eastern Shore Hawks", "MD Eastern", "UMES"), resultNameChoices(umes))
+        // Blanks and repeats drop; a team with no names keeps one line.
+        val plain = umes.copy(abbreviation = " ", shortDisplayName = "Maryland Eastern Shore Hawks")
+        assertEquals(listOf("Maryland Eastern Shore Hawks"), resultNameChoices(plain))
+        val bare = umes.copy(abbreviation = null, displayName = null, shortDisplayName = null)
+        assertEquals(listOf("Hawks"), resultNameChoices(bare))
+    }
+
+    @Test
     fun `the dropdown's face names the selected option, else the first`() {
         val options = sportsLiveFilterOptions(listOf("US", "UK"), "★ My teams", "All regions")
         assertEquals("All regions", sportsLiveDropdownFace(options, null)?.label)
