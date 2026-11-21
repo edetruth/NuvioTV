@@ -1488,6 +1488,8 @@ internal fun PlayerRuntimeController.initializePlayer(
                         // Playback has started: begin the sports stall watchdog (sports-only, guarded),
                         // and remember that this sports source works.
                         if (isFirstFrame) recordSportsSourceFirstFrame()
+                        // Playing on the software decoder after a hardware failure: say so, once per link.
+                        if (isFirstFrame) maybeShowCompatibilityNote()
                         scheduleSportsStallWatchdog()
                         _uiState.update {
                             it.copy(

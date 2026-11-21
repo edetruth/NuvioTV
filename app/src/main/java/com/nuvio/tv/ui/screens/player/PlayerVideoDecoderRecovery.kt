@@ -82,6 +82,13 @@ internal object PlayerVideoDecoderRecovery {
             errorCode == PlaybackException.ERROR_CODE_DECODING_FAILED ||
             errorCode == PlaybackException.ERROR_CODE_DECODING_RESOURCES_RECLAIMED
 
+    /**
+     * Whether the "compatibility mode" note shows now: the link [currentUrl] plays on the software decoder
+     * ([softwareUrl]) and the note was not shown for it yet ([notedUrl]). Once per link.
+     */
+    fun compatibilityNoteDue(softwareUrl: String?, currentUrl: String, notedUrl: String?): Boolean =
+        currentUrl.isNotBlank() && softwareUrl == currentUrl && notedUrl != currentUrl
+
     /** Where the retry starts: a live stream rejoins the live edge (0 = default position), anything else resumes. */
     fun resumePositionMs(isLive: Boolean, positionMs: Long): Long =
         if (isLive) 0L else positionMs.coerceAtLeast(0L)
@@ -158,6 +165,21 @@ internal fun PlayerRuntimeController.tryVideoDecoderRecovery(error: PlaybackExce
         reinitializeCurrentStream(startPaused = paused)
     }
     return true
+}
+
+/**
+ * A short toast when the picture comes from the software decoder ([PlayerVideoDecoderRecovery.compatibilityNoteDue]),
+ * so a choppier picture has a reason. No link or decoder name on screen.
+ */
+internal fun PlayerRuntimeController.maybeShowCompatibilityNote() {
+    val url = currentStreamUrl
+    if (!PlayerVideoDecoderRecovery.compatibilityNoteDue(softwareVideoDecoderUrl, url, compatibilityNoteShownUrl)) return
+    compatibilityNoteShownUrl = url
+    android.widget.Toast.makeText(
+        context,
+        context.getString(com.nuvio.tv.R.string.player_software_decoder_note),
+        android.widget.Toast.LENGTH_LONG
+    ).show()
 }
 
 /** Only Android's software decoders for video; audio, and any format with no software decoder, keep [base]. */

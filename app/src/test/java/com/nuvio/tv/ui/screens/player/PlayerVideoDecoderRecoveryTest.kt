@@ -121,6 +121,18 @@ class PlayerVideoDecoderRecoveryTest {
         )
     }
 
+    @Test
+    fun `the compatibility note shows once per link and only on the software decoder`() {
+        val link = "https://example.invalid/live.m3u8"
+        val other = "https://example.invalid/other.m3u8"
+        assertTrue(PlayerVideoDecoderRecovery.compatibilityNoteDue(softwareUrl = link, currentUrl = link, notedUrl = null))
+        assertFalse(PlayerVideoDecoderRecovery.compatibilityNoteDue(softwareUrl = link, currentUrl = link, notedUrl = link))
+        assertFalse(PlayerVideoDecoderRecovery.compatibilityNoteDue(softwareUrl = null, currentUrl = link, notedUrl = null))
+        assertFalse(PlayerVideoDecoderRecovery.compatibilityNoteDue(softwareUrl = other, currentUrl = link, notedUrl = null))
+        assertTrue(PlayerVideoDecoderRecovery.compatibilityNoteDue(softwareUrl = other, currentUrl = other, notedUrl = link))
+        assertFalse(PlayerVideoDecoderRecovery.compatibilityNoteDue(softwareUrl = "", currentUrl = "", notedUrl = null))
+    }
+
     private fun rendererError(mime: String, width: Int = Format.NO_VALUE, height: Int = Format.NO_VALUE) =
         ExoPlaybackException.createForRenderer(
             RuntimeException("decoder"),

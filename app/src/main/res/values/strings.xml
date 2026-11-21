@@ -3048,6 +3048,7 @@
     <string name="player_error_mpv_playback_failed">Failed to initialize libmpv playback</string>
     <string name="player_error_torrent">Torrent error: %1$s</string>
     <string name="player_error_playback_fallback">Playback error</string>
+    <string name="player_software_decoder_note">Playing in compatibility mode: the TV video decoder had a problem</string>
     <!-- Subtitle timing recovery -->
     <string name="subtitle_timing_file_no_lines">No subtitle lines were found in this file.</string>
     <string name="subtitle_timing_load_lines_failed">Failed to load subtitle lines.</string>
