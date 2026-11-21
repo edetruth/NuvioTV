@@ -1029,9 +1029,9 @@ class SportsLiveViewModel internal constructor(
             if (tab == SportsLiveTab.LIVE_NOW && holdLiveNow) {
                 emptyList<SportsLiveItem>()
             } else if (tab == SportsLiveTab.LIVE_NOW) {
-                // H (live.23): listings that are no game and no event of their own leave the list for its "Other events" row.
+                // H (live.23): listings that are no game and no event of their own leave the list for More live's Other.
                 // With nothing picked in My sports there is no More live: they stay in the list, as before.
-                val (tabItems, others) = if (mySports.isDefault) allItems to emptyList() else SportsLiveOtherEvents.split(allItems)
+                val (tabItems, others) = if (mySports.isDefault) allItems to emptyList<SportsLiveItem>() else SportsLiveOtherEvents.split(allItems)
                 otherEvents = SportsLiveHiddenTitles.filter(others, hiddenNow)
                 val scores = inputs.scores
                 noStreams = tabItems.filter { it.hasEnded(endedKeys) }.mapTo(HashSet()) { it.streamKey }

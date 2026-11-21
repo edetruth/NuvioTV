@@ -435,7 +435,7 @@ class SportsLiveZapViewModel internal constructor(
             SportsLiveReportTrail.onMySports(mySportsReportLine(sports))
             // More live (user 2026-11-21): under My sports the listings that are no game (H) are never in the lineup, and the
             // All sports value shows More live's games, by sport (the games My sports leaves out), not everything.
-            val (games, others) = if (sports.isDefault) list to emptyList() else SportsLiveOtherEvents.split(list)
+            val (games, others) = if (sports.isDefault) list to emptyList<SportsLiveItem>() else SportsLiveOtherEvents.split(list)
             val scoped = SportsLiveMySportsScope.scope(games, sports)
             val scopedKeys = scoped.mapTo(HashSet()) { it.streamKey }
             val moreLive = SportsLiveMoreLive.groups(games.filter { it.streamKey !in scopedKeys }, others)
