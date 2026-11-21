@@ -798,9 +798,13 @@ fun ModernHomeContent(
                     
                     val activeRowKeyVal = activeRowKey.value
                     val activeRow = activeRowKeyVal?.let { rowByKey[it] }
-                    val activeRowFallbackBackdrop = activeRow?.items?.list?.firstNotNullOfOrNull { item ->
-                        item.heroPreview.backdrop?.takeIf { it.isNotBlank() }
-                    }
+                    // Not on the Live now row: a drawn game has no art of its own, and another card's channel
+                    // art behind it reads as that channel's broadcast (TV QA, live.20 RC).
+                    val activeRowFallbackBackdrop = activeRow
+                        ?.takeUnless { it.addonId == SportsLiveHomeRow.ADDON_ID && it.catalogId == SportsLiveHomeRow.CATALOG_ID }
+                        ?.items?.list?.firstNotNullOfOrNull { item ->
+                            item.heroPreview.backdrop?.takeIf { it.isNotBlank() }
+                        }
                     
                     val heroBackdrop = firstNonBlank(
                         resolvedHero?.backdrop,
