@@ -118,6 +118,7 @@ import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniStop
 import com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveNowPlayingCard
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualPick
 import com.nuvio.tv.ui.screens.sportslive.dual.SportsLiveDualPickerDialog
+import com.nuvio.tv.ui.screens.sportslive.dual.dualPickerRows
 import com.nuvio.tv.ui.screens.sportslive.preview.SportsLivePreviewPlayer
 import com.nuvio.tv.ui.screens.sportslive.preview.SportsLivePreviewState
 import com.nuvio.tv.ui.screens.sportslive.preview.SportsLivePreviewVideo
@@ -350,7 +351,11 @@ fun SportsLiveScreen(
     dualPick?.let { pick ->
         SportsLiveDualPickerDialog(
             candidates = pick.candidates,
-            rows = emptyMap(),
+            // Each row's logos and score under the Scores setting (live.23 TV test: none showed).
+            rows = remember(pick, scores, scoresMode, revealed, uiState.nowMs) {
+                dualPickerRows(pick.candidates, scores, scoresMode, revealed, uiState.nowMs)
+            },
+            onFocus = scoresViewModel::onCardFocus,
             onPick = { second ->
                 dualPick = null
                 startDual(pick.session(second))

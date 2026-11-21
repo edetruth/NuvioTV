@@ -2,6 +2,8 @@ package com.nuvio.tv.ui.screens.sportslive.dual
 
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.displayName
+import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
+import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -35,6 +37,7 @@ import com.nuvio.tv.ui.screens.sportslive.SportsLiveScoreChip
 import com.nuvio.tv.ui.screens.sportslive.TeamLogoPairSlot
 import com.nuvio.tv.ui.screens.sportslive.rememberTeamLogoPair
 import com.nuvio.tv.ui.screens.sportslive.ZapPanelRow
+import com.nuvio.tv.ui.screens.sportslive.groupPanelRows
 import com.nuvio.tv.ui.theme.NuvioTheme
 import kotlinx.coroutines.delay
 
@@ -43,15 +46,17 @@ private const val FOCUS_RETRY_MS = 50L
 
 /**
  * "Pick a second game": the [candidates] of a [SportsLiveDualPick]. Picking one starts dual screen; Back
- * dismisses. Each game shows its logos and score chip from its player panel row in [rows] (M11), so the
- * panel's spoiler rules hold here too: a hidden score stays hidden.
+ * dismisses. Each game shows its logos and score chip from its panel row in [rows] ([dualPickerRows], M11), so
+ * the panel's spoiler rules hold here too: a hidden score stays hidden. [onFocus] gets the focused game's card key
+ * (Hide until focused reveals its score), and null when the picker closes.
  */
 @Composable
 internal fun SportsLiveDualPickerDialog(
     candidates: List<SportsLiveItem>,
     rows: Map<String, ZapPanelRow>,
     onPick: (SportsLiveItem) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onFocus: (String?) -> Unit = {}
 ) {
     val firstFocusRequester = remember { FocusRequester() }
     val firstFocused = remember { mutableStateOf(false) }
@@ -100,7 +105,9 @@ internal fun SportsLiveDualPickerDialog(
                     }
                     Button(
                         onClick = { onPick(item) },
-                        modifier = (if (index == 0) firstModifier else Modifier).fillMaxWidth(),
+                        modifier = (if (index == 0) firstModifier else Modifier)
+                            .fillMaxWidth()
+                            .onFocusChanged { if (it.isFocused) onFocus(item.streamKey) },
                         colors = ButtonDefaults.colors(
                             containerColor = NuvioTheme.colors.BackgroundCard,
                             contentColor = NuvioTheme.colors.TextPrimary
@@ -114,7 +121,8 @@ internal fun SportsLiveDualPickerDialog(
                             // Logos only when both teams have one and both loaded (#130); never letters.
                             rememberTeamLogoPair(row?.teams)?.let { logos -> TeamLogoPairSlot(logos, 28.dp, NuvioTheme.spacing.xs) }
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(item.displayName, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                // The whole name, on two lines when long (live.23 TV test): never cut.
+                                Text(item.displayName)
                                 Text(
                                     text = listOfNotNull(SportsLiveTeams.sportLabelOf(item), item.addonName).joinToString(" · "),
                                     style = MaterialTheme.typography.bodySmall,
@@ -137,3 +145,18 @@ internal fun SportsLiveDualPickerDialog(
  */
 internal fun dualPickerSections(candidates: List<SportsLiveItem>): Pair<List<SportsLiveItem>, List<SportsLiveItem>> =
     candidates.partition { !it.isChannel }
+
+/**
+ * The picker's rows by card key (live.23 TV test: they showed no logos and no score): each candidate's logos and
+ * score chip as the live games panel builds them ([groupPanelRows]), so the Scores setting holds: Show the score,
+ * Hide until focused a hidden chip until the row has been focused ([revealed]), Off no chip at all. A spoiler-
+ * protected game (followed team's results hidden, Watch later) stays hidden whatever the setting.
+ */
+internal fun dualPickerRows(
+    candidates: List<SportsLiveItem>,
+    scores: Map<String, ScoreSnapshot>,
+    mode: ScoresMode?,
+    revealed: Set<String>,
+    nowMs: Long
+): Map<String, ZapPanelRow> =
+    groupPanelRows(candidates, scores, mode, revealed, nowMs).associateBy { it.item.streamKey }

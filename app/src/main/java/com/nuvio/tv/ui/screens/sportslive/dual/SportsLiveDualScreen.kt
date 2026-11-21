@@ -86,6 +86,7 @@ import com.nuvio.tv.ui.screens.sportslive.SportsLiveGameInfoViewModel
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveScoresViewModel
 import com.nuvio.tv.ui.screens.sportslive.TeamLogoSlot
 import com.nuvio.tv.ui.screens.sportslive.TrackLiveScores
+import com.nuvio.tv.ui.screens.sportslive.rememberSportsLiveClockMs
 import com.nuvio.tv.ui.screens.sportslive.rememberScoreChipStrings
 import com.nuvio.tv.ui.screens.sportslive.rememberScoreDetailsStrings
 import com.nuvio.tv.ui.screens.sportslive.rememberTeamLogoPair
@@ -229,10 +230,12 @@ fun SportsLiveDualScreen(
     val scores by scoresViewModel.scores.collectAsStateWithLifecycle()
     val scoresMode by scoresViewModel.mode.collectAsStateWithLifecycle()
     val revealed by scoresViewModel.revealed.collectAsStateWithLifecycle()
-    val paneItems = remember(dual.left.item, dual.right.item) { listOf(dual.left.item, dual.right.item) }
+    // The open picker's games are scored too (live.23 TV test): its rows show their logos and scores.
+    val paneItems = remember(dual.left.item, dual.right.item, pairPicker) { listOf(dual.left.item, dual.right.item) + pairPicker.orEmpty() }
     TrackLiveScores(SCREEN_DUAL, paneItems, enabled = scoresMode != null && scoresMode != ScoresMode.OFF, tracking = scoresViewModel.tracking)
     val highlightedKey = dual.pane(dual.highlighted).item.streamKey
-    LaunchedEffect(highlightedKey) { scoresViewModel.onCardFocus(highlightedKey) }
+    // The picker's focused row counts as focused while it is open; the highlighted pane again once it closes.
+    LaunchedEffect(highlightedKey, pairPicker == null) { if (pairPicker == null) scoresViewModel.onCardFocus(highlightedKey) }
 
     // The game info overlay (#139) is about the game with sound, and follows it while open.
     val info by gameInfo.info.collectAsStateWithLifecycle()
@@ -552,11 +555,13 @@ fun SportsLiveDualScreen(
     }
 
     pairPicker?.let { candidates ->
+        val nowMs = rememberSportsLiveClockMs().value
         SportsLiveDualPickerDialog(
             candidates = candidates,
-            rows = emptyMap(),
+            rows = remember(candidates, scores, scoresMode, revealed, nowMs) { dualPickerRows(candidates, scores, scoresMode, revealed, nowMs) },
             onPick = viewModel::pickPair,
-            onDismiss = viewModel::closePairPicker
+            onDismiss = viewModel::closePairPicker,
+            onFocus = scoresViewModel::onCardFocus
         )
     }
 }
