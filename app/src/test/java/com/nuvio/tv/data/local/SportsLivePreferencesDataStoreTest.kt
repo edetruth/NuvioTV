@@ -387,16 +387,27 @@ class SportsLivePreferencesDataStoreTest {
     }
 
     @Test
+    fun `hide my teams' results is on until set, on its own key, whatever the older live choice stores (M2)`() = runTest {
+        val store = SportsLivePreferencesDataStore(factory, profiles)
+        assertTrue(store.hideMyTeamsResults.first())
+        assertTrue(store.spoilerProtection.first().myTeamsResults)
+        assertFalse(store.spoilerProtection.first().myTeams)
+        // The live.20 "Hide scores for my teams only" stored off leaves results hidden.
+        store.setHideMyTeamsScores(false)
+        assertTrue(store.spoilerProtection.first().myTeamsResults)
+        store.setHideMyTeamsResults(false)
+        assertFalse(store.spoilerProtection.first().myTeamsResults)
+        assertEquals(false, profile1Store.data.first()[booleanPreferencesKey("sports_live_my_teams_results_hidden")])
+        // Per profile: another profile still has the default.
+        activeProfile.value = 2
+        assertTrue(store.hideMyTeamsResults.first())
+        activeProfile.value = 1
+    }
+
+    @Test
     fun `the scores choice reads the stored mode and my teams switch and writes both`() = runTest {
         val store = SportsLivePreferencesDataStore(factory, profiles)
-        // Never set (results redesign Q1): my teams' scores hide by default, so Settings reads My teams only.
-        assertEquals(ScoresChoice(ScoresMode.HIDE_UNTIL_FOCUSED, myTeamsOnly = true), store.scoresChoice.first())
-        assertTrue(store.spoilerProtection.first().myTeams)
-        assertTrue(store.hideMyTeamsScores.first())
-        // A stored Show is respected: nothing of my teams hides then.
-        store.updateScoresChoice { it.withMode(ScoresMode.SHOW) }
         assertEquals(ScoresChoice(), store.scoresChoice.first())
-        assertFalse(store.spoilerProtection.first().myTeams)
         // A profile from before live.20: Show plus "Hide scores of my teams' games" reads as my teams only.
         store.setScoresMode(ScoresMode.SHOW)
         store.setHideMyTeamsScores(true)

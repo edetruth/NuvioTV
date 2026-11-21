@@ -53,6 +53,7 @@ object SportsLiveSettingsSync {
         "sports_live_tip_off" to Kind.STRING,
         "sports_live_catch_up_row" to Kind.BOOLEAN,
         "sports_live_my_teams_spoilers" to Kind.BOOLEAN,
+        "sports_live_my_teams_results_hidden" to Kind.BOOLEAN,
         "sports_live_my_sports" to Kind.STRING_SET
         // Not synced, as this TV's own: picture-in-picture, data saver, hover preview, the section and Home row
         // switches, "Hide links this TV can't play" (sports_live_hide_unplayable_links: what plays is this TV's

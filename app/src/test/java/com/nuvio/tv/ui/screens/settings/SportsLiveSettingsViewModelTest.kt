@@ -125,10 +125,6 @@ class SportsLiveSettingsViewModelTest {
         val viewModel = newViewModel()
         advanceUntilIdle()
         assertEquals(ScoreSettings(delaySeconds = ScoreDelayChoices.DEFAULT_SECONDS), viewModel.uiState.value.scores)
-        // Never chosen: "my teams only" is on (results redesign Q1, user decision 2026-11-21), and picking Hide until
-        // I reveal keeps that scope. Widened to every game first, Hide until I reveal is stored as the mode.
-        assertTrue(prefs.spoilerProtection.first().myTeams)
-        viewModel.setSwitch(SportsLiveSetting.MY_TEAMS_SPOILERS, false)
         viewModel.setScoresMode(ScoresMode.HIDE_UNTIL_FOCUSED)
         viewModel.setScoreDelaySeconds(90)
         advanceUntilIdle()
@@ -454,6 +450,7 @@ class SportsLiveSettingsViewModelTest {
             SportsLiveSetting.FULL_TIME_ALERTS to "sports_live_full_time_alerts",
             SportsLiveSetting.CLOSE_GAME_ALERTS to "sports_live_close_game_alerts",
             SportsLiveSetting.MY_TEAMS_SPOILERS to "sports_live_my_teams_spoilers",
+            SportsLiveSetting.MY_TEAMS_RESULTS to "sports_live_my_teams_results_hidden",
             SportsLiveSetting.REAL_TIME_SCORES to "sports_live_real_time_scores"
         )
         keys.forEach { (setting, key) ->
@@ -474,8 +471,6 @@ class SportsLiveSettingsViewModelTest {
     fun `the pickers of the regrouped screen write their old pref keys`() = runTest {
         val viewModel = newViewModel()
         advanceUntilIdle()
-        // Every game, not the default "my teams only" scope (results redesign Q1, 2026-11-21).
-        viewModel.setSwitch(SportsLiveSetting.MY_TEAMS_SPOILERS, false)
         viewModel.setScoresMode(ScoresMode.HIDE_UNTIL_FOCUSED)
         viewModel.setScoreDelaySeconds(30)
         viewModel.setOpenGame(SportsLiveOpenGame.LET_ME_CHOOSE)

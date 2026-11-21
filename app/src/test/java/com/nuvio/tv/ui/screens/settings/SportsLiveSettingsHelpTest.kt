@@ -29,6 +29,7 @@ import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.HOVER_PREVIEW
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.MY_SPORTS
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.MY_TEAMS
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.MY_TEAMS_SPOILERS
+import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.MY_TEAMS_RESULTS
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.REAL_TIME_SCORES
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.REPORT_PROBLEM
 import com.nuvio.tv.ui.screens.settings.SportsLiveSetting.OPEN_GAME
@@ -72,7 +73,7 @@ class SportsLiveSettingsHelpTest {
     fun `main page rows run by use with more collapsed and no setup yet`() {
         assertEquals(
             listOf(
-                header(SCORES_AND_SPOILERS), row(SCORES), row(SCORE_DELAY), row(MY_TEAMS_SPOILERS),
+                header(SCORES_AND_SPOILERS), row(SCORES), row(SCORE_DELAY), row(MY_TEAMS_SPOILERS), row(MY_TEAMS_RESULTS),
                 header(WHAT_I_FOLLOW), row(MY_TEAMS), row(MY_SPORTS),
                 header(ALERTS), row(REMIND_MY_TEAMS), row(TIP_OFF), row(SCORE_ALERTS), row(FULL_TIME_ALERTS), row(CLOSE_GAME_ALERTS), row(REMINDED_TEAMS),
                 header(PLAYING), row(OPEN_GAME), row(OK_ON_LIVE), row(GAME_END), row(HIDE_UNPLAYABLE), row(PICTURE_IN_PICTURE),
@@ -224,7 +225,7 @@ class SportsLiveSettingsHelpTest {
 
     @Test
     fun `a cause lists the rows it switches off right now in screen order`() {
-        assertEquals(listOf(SCORE_DELAY, MY_TEAMS_SPOILERS, SCORE_ALERTS, FULL_TIME_ALERTS, CLOSE_GAME_ALERTS, CATCH_UP_ROW), sportsLiveSwitchedOffBy(SCORES, scoresOff))
+        assertEquals(listOf(SCORE_DELAY, MY_TEAMS_SPOILERS, MY_TEAMS_RESULTS, SCORE_ALERTS, FULL_TIME_ALERTS, CLOSE_GAME_ALERTS, CATCH_UP_ROW), sportsLiveSwitchedOffBy(SCORES, scoresOff))
         assertEquals(listOf(SCORE_ALERTS), sportsLiveSwitchedOffBy(SCORES, hideUntilFocused))
         assertEquals(emptyList<SportsLiveSetting>(), sportsLiveSwitchedOffBy(SCORES, SportsLiveSettingsUiState()))
         assertEquals(listOf(CATCH_UP_ROW), sportsLiveSwitchedOffBy(HOME_ROW, SportsLiveSettingsUiState(showHomeRow = false)))
@@ -257,7 +258,7 @@ class SportsLiveSettingsHelpTest {
     @Test
     fun `a setting that switches others off names them`() {
         assertEquals(
-            SportsLiveHelp(SCORES.help, switchesOff = listOf(SCORE_DELAY, MY_TEAMS_SPOILERS, SCORE_ALERTS, FULL_TIME_ALERTS, CLOSE_GAME_ALERTS, CATCH_UP_ROW)),
+            SportsLiveHelp(SCORES.help, switchesOff = listOf(SCORE_DELAY, MY_TEAMS_SPOILERS, MY_TEAMS_RESULTS, SCORE_ALERTS, FULL_TIME_ALERTS, CLOSE_GAME_ALERTS, CATCH_UP_ROW)),
             sportsLiveHelpFor(row(SCORES), scoresOff)
         )
         assertEquals(

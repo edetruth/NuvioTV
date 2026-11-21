@@ -1309,13 +1309,13 @@ class LiveScoresRepository internal constructor(
 
         /**
          * [source], kept alive by a settings read error (L8, live.23 review): an error before the first value gives the
-         * profile defaults (protective: "hide my teams' results" on), so scores still show; a later error keeps the last value.
+         * profile defaults (protective: "Hide my teams' results until I reveal" on), so scores still show; a later error keeps the last value.
          */
         internal fun protectionOrDefaults(source: Flow<SpoilerProtection>): Flow<SpoilerProtection> {
             var last: SpoilerProtection? = null
             return source.onEach { last = it }.catch { error ->
                 if (error is CancellationException) throw error
-                emit(last ?: SpoilerProtection(myTeams = SportsLivePreferencesDataStore.MY_TEAMS_SPOILERS_DEFAULT))
+                emit(last ?: SpoilerProtection(myTeamsResults = SportsLivePreferencesDataStore.MY_TEAMS_RESULTS_HIDDEN_DEFAULT))
             }
         }
 

@@ -420,7 +420,7 @@ class LiveScoresRepositoryTest {
         assertEquals(listOf(saved, saved), LiveScoresRepository.protectionOrDefaults(source).toList())
         val failing = kotlinx.coroutines.flow.flow<SpoilerProtection> { throw java.io.IOException("prefs") }
         assertEquals(
-            listOf(SpoilerProtection(myTeams = com.nuvio.tv.data.local.SportsLivePreferencesDataStore.MY_TEAMS_SPOILERS_DEFAULT)),
+            listOf(SpoilerProtection(myTeamsResults = com.nuvio.tv.data.local.SportsLivePreferencesDataStore.MY_TEAMS_RESULTS_HIDDEN_DEFAULT)),
             LiveScoresRepository.protectionOrDefaults(failing).toList()
         )
     }
@@ -1473,7 +1473,7 @@ class LiveScoresRepositoryTest {
     }
 
     @Test
-    fun `no kept score shows before the profile's spoiler settings are read, and only a saved game stays hidden after`() = runTest {
+    fun `no kept score shows before the profile's spoiler settings are read, and my teams' stays hidden after`() = runTest {
         val base = ms("2026-11-15T19:00:00Z")
         val lakers = item("Los Angeles Lakers at Phoenix Suns", "Basketball", "2026-11-15T20:30:00Z")
         val lakersGame = nbaFixture.first { it.eventId == "401909986" }.let {
@@ -1489,11 +1489,9 @@ class LiveScoresRepositoryTest {
         runCurrent()
         // Settings not read yet: nothing at all.
         assertTrue(repo.scores.value.isEmpty())
-        // Read with the 76ers' game saved for later (and "hide my teams' results", which leaves live games alone, M2):
-        // their game stays hidden, the other one shows.
+        // Read with "hide my teams' scores" and the 76ers followed: their game stays hidden, the other one shows.
         val followed = listOf(com.nuvio.tv.domain.model.FollowedTeam(name = "Philadelphia 76ers", sport = "Basketball"))
-        val savedGame = ProtectedGame(eventId = shown.getValue(pacersCard.streamKey).eventId, home = null, away = null, startMs = null, savedAtMs = base)
-        protection.emit(SpoilerProtection(games = listOf(savedGame), myTeams = true, followed = followed, nowMs = base))
+        protection.emit(SpoilerProtection(myTeams = true, followed = followed))
         runCurrent()
         assertTrue(repo.scores.value.getValue(pacersCard.streamKey).spoilerProtected)
         repo.scores.value.getValue(lakers.streamKey).let {

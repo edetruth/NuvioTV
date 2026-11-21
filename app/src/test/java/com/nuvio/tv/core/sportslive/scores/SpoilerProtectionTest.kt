@@ -105,16 +105,11 @@ class SpoilerProtectionTest {
     }
 
     @Test
-    fun `hide my teams' results protects followed teams' finished games until watched or revealed`() {
+    fun `hide my teams' scores protects followed teams' games until watched or revealed`() {
         val followed = listOf(FollowedTeam(name = "Philadelphia 76ers", sport = "Basketball"))
         val auto = SpoilerProtection(myTeams = true, followed = followed, nowMs = now)
         assertTrue(auto.protects(final))
-        // M2: results only. A followed team's live game keeps its score chip on Live now, the panel and the guide.
-        assertFalse(auto.protects(live))
-        assertFalse(auto.stamp(live).spoilerProtected)
-        assertTrue(auto.stamp(final).spoilerProtected)
-        // A game saved for later is still hidden while live.
-        assertTrue(auto.copy(games = SpoilerProtection.saved(emptyList(), live, now)).protects(live))
+        assertTrue(auto.protects(live))
         // Off by default, and never another team's game or one not started.
         assertFalse(auto.copy(myTeams = false).protects(final))
         assertFalse(auto.copy(followed = listOf(FollowedTeam(name = "Boston Celtics", sport = "Basketball"))).protects(final))
@@ -123,6 +118,21 @@ class SpoilerProtectionTest {
         assertFalse(auto.copy(games = SpoilerProtection.ended(emptyList(), live, now)).protects(final))
         // Over seven days after its start.
         assertFalse(auto.copy(nowMs = START + 7 * 24 * 60 * MINUTE).protects(final))
+    }
+
+    @Test
+    fun `hide my teams' results protects a followed team's finished game only, apart from the live choice (M2)`() {
+        val followed = listOf(FollowedTeam(name = "Philadelphia 76ers", sport = "Basketball"))
+        val results = SpoilerProtection(myTeamsResults = true, followed = followed, nowMs = now)
+        assertTrue(results.protects(final))
+        assertTrue(results.stamp(final).spoilerProtected)
+        // Its live game keeps its score chip: live scores follow the older "my teams" choice, off here.
+        assertFalse(results.protects(live))
+        assertTrue(results.copy(myTeams = true).protects(live))
+        // Never another team's game; watched live or revealed ends it; off protects nothing.
+        assertFalse(results.copy(followed = listOf(FollowedTeam(name = "Boston Celtics", sport = "Basketball"))).protects(final))
+        assertFalse(results.copy(games = SpoilerProtection.ended(emptyList(), live, now)).protects(final))
+        assertFalse(results.copy(myTeamsResults = false).protects(final))
     }
 
     @Test

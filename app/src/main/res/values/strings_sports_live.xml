@@ -323,8 +323,10 @@
     <string name="sports_live_watch_later_toast_line">Hidden for 7 days. Undo it with Reveal result</string>
     <string name="sports_live_reveal_result_menu">Reveal result</string>
     <string name="sports_live_replays_saved">Saved for later</string>
-    <string name="sports_live_setting_my_teams_spoilers">Hide my teams\' results until I reveal</string>
-    <string name="sports_live_setting_my_teams_spoilers_subtitle">On: your teams\' finished games hide their result until you watch them or pick Reveal result (up to 7 days). Live scores and other games show. Off: Hide until I reveal hides every game.</string>
+    <string name="sports_live_setting_my_teams_spoilers">Hide scores for my teams only</string>
+    <string name="sports_live_setting_my_teams_spoilers_subtitle">On: only your teams\' games hide their score, until you watch them or pick Reveal result (up to 7 days). Other games show scores. Off: Hide until I reveal hides every game.</string>
+    <string name="sports_live_setting_my_teams_results">Hide my teams\' results until I reveal</string>
+    <string name="sports_live_setting_my_teams_results_subtitle">On: your teams\' finished games hide their result on Results, Home and the Game page until you watch them or pick Reveal result (up to 7 days). Live scores follow the Scores setting.</string>
     <string name="sports_live_game_hidden">Score and stats are hidden</string>
     <string name="sports_live_game_hidden_reveal_note">Reveal shows the score, records, box score and highlights for this game.</string>
     <string name="sports_live_game_hidden_replay_note">Watch replay starts the game without showing the score.</string>

@@ -33,9 +33,10 @@ data class ProtectedGame(
 
 /**
  * Spoiler protection (#151): which games hide their score everywhere. A game is protected when it was saved
- * for later within [PROTECT_MS] and not ended, or, with [myTeams] on ("Hide my teams' results until I reveal"),
- * when it is finished (M2: results only, never a live game's score), a followed team played in it, it started
- * within [PROTECT_MS] and it was not watched or revealed. Protection wins over the Scores setting and over Hide until focused's focus reveal; only the Game
+ * for later within [PROTECT_MS] and not ended, or, with [myTeams] on ("Hide scores of my teams' games until
+ * I've watched"), when a followed team plays in it, it started within [PROTECT_MS] and it was not watched or
+ * revealed; or, with [myTeamsResults] on ("Hide my teams' results until I reveal", M2, live.23), the same for a
+ * followed team's finished game only (its live score is left to [myTeams]). Protection wins over the Scores setting and over Hide until focused's focus reveal; only the Game
  * page's Reveal result lifts it. Every surface reads it through [ScoreSnapshot.spoilerProtected], stamped by
  * [stamp] where the scores are served.
  */
@@ -43,7 +44,8 @@ data class SpoilerProtection(
     val games: List<ProtectedGame> = emptyList(),
     val myTeams: Boolean = false,
     val followed: List<FollowedTeam> = emptyList(),
-    val nowMs: Long = 0L
+    val nowMs: Long = 0L,
+    val myTeamsResults: Boolean = false
 ) {
     private val byId: Map<String, ProtectedGame> by lazy { games.associateBy { it.eventId } }
 
@@ -51,16 +53,14 @@ data class SpoilerProtection(
     fun protects(event: ScoreSnapshot): Boolean {
         val entry = byId[event.eventId]
         if (entry != null) return entry.endedAtMs == null && nowMs - entry.savedAtMs < PROTECT_MS
-        // "Hide my teams' results until I reveal" (M2): finished games only. A live game's score chip on Live now,
-        // the panel and the guide shows as it did before the setting was on by default.
-        if (!myTeams || followed.isEmpty() || !isFinished(event)) return false
+        if (followed.isEmpty() || event.state == ScoreState.PRE) return false
+        val finished = event.state == ScoreState.POST || event.isFinal
+        if (!myTeams && !(myTeamsResults && finished)) return false
         val start = event.startMs ?: return false
         if (nowMs - start >= PROTECT_MS) return false
         return TeamFollows.followersOf(followed, event, event.home).isNotEmpty() ||
             TeamFollows.followersOf(followed, event, event.away).isNotEmpty()
     }
-
-    private fun isFinished(event: ScoreSnapshot): Boolean = event.state == ScoreState.POST || event.isFinal
 
     /** True when [eventId] was saved for later and is still protected (the More… entry reads "Reveal result"). */
     fun isSaved(eventId: String): Boolean = byId[eventId]?.let { it.endedAtMs == null && nowMs - it.savedAtMs < PROTECT_MS } == true

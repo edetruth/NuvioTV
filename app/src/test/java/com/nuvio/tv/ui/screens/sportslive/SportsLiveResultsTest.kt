@@ -24,6 +24,7 @@ import com.nuvio.tv.domain.model.PosterShape
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.domain.model.SportsLiveKind
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -255,6 +256,47 @@ class SportsLiveResultsTest {
         // Leaving the list (a replay, the Game page, the header) disarms it again.
         guard.onLeave()
         assertNull(guard.focusTarget("a"))
+    }
+
+    @Test
+    fun `an older my teams live choice stored off never shows a followed team's result (M2)`() = runTest {
+        val now = 10_000_000_000L
+        val data = com.nuvio.tv.TestPreferencesStore()
+        val factory = io.mockk.mockk<com.nuvio.tv.data.local.ProfileDataStoreFactory> {
+            io.mockk.every { get(1, com.nuvio.tv.data.local.SportsLivePreferencesDataStore.FEATURE) } returns data
+        }
+        val profiles = io.mockk.mockk<com.nuvio.tv.core.profile.ProfileManager> {
+            io.mockk.every { activeProfileId } returns kotlinx.coroutines.flow.MutableStateFlow(1)
+        }
+        val prefs = com.nuvio.tv.data.local.SportsLivePreferencesDataStore(factory, profiles).also { it.nowMs = { now } }
+        // The live.20 "Hide scores for my teams only" stored off; the results switch never set.
+        prefs.setHideMyTeamsScores(false)
+        prefs.follow(FollowedTeam("Boston Celtics", "Basketball", espnId = "7", league = "basketball/nba"))
+        val team = ScoreTeam("7", "BOS", "Boston Celtics", null, null, null, null, 101, emptyList())
+        val other = ScoreTeam("8", "NYK", "New York Knicks", null, null, null, null, 99, emptyList())
+        val final = ScoreSnapshot(
+            eventId = "g", league = EspnLeague("basketball", "nba"), startMs = now - 3 * 3_600_000L, state = ScoreState.POST,
+            clockText = "Final", isFinal = true, home = team, away = other
+        )
+        val protection = prefs.spoilerProtection.first()
+        assertTrue(protection.myTeamsResults)
+        assertFalse(protection.myTeams)
+        assertTrue(protection.protects(final))
+        // A live game of the team keeps its score chip: the older choice (off) governs live scores.
+        assertFalse(protection.protects(final.copy(state = ScoreState.IN, isFinal = false, clockText = "Q3 4:12")))
+        // Results: the row, the stage (it reads the same reason) and the Game page it opens stay hidden, in every mode.
+        for (followed in listOf(true, false)) {
+            val row = ResultRow(final, followed = followed, note = FinalNote.FT)
+            for (mode in listOf(ScoresMode.SHOW, ScoresMode.HIDE_UNTIL_FOCUSED)) {
+                val state = SportsLiveResultsUiState(mode = mode, protection = protection)
+                assertFalse("$mode $followed", state.showsScore(row))
+                assertEquals(ResultHiddenReason.YOUR_TEAM, state.hiddenReason(row))
+                assertTrue(state.gameRequestFor(row).spoilerSafe)
+            }
+        }
+        // Switched off: the result shows (Show), and Reveal result still ends protection with it on.
+        prefs.setHideMyTeamsResults(false)
+        assertFalse(prefs.spoilerProtection.first().protects(final))
     }
 
     @Test
