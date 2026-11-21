@@ -190,11 +190,7 @@ fun SportsLiveScreen(
         // Live now tracks the whole tab (every filter), so each game's feed answers before it may be
         // estimated as ended (#60) and the tab count does not change with the filter. J4: and the strip's later-today
         // games, so their cards get ESPN's logos and names (Mavericks vs Clippers drew "Da… Lo…" untracked).
-        cards = when (uiState.selectedTab) {
-            SportsLiveTab.LIVE_NOW -> uiState.tabs[SportsLiveTab.LIVE_NOW].orEmpty() + laterTodayTracked
-            SportsLiveTab.UPCOMING -> uiState.visibleItems
-            else -> emptyList()
-        },
+        cards = sectionTrackedCards(uiState, laterTodayTracked),
         // Under Off too: only the start of games listed live is read then, never a score (live.20, a wrong LIVE).
         enabled = scoresMode != null,
         tracking = scoresViewModel.tracking

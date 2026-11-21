@@ -65,6 +65,37 @@ class SportsLiveSharedBucketsTest {
         assertNotSame(atTip, shared.tab(load, keys, order, SportsLiveTab.LIVE_NOW, tipOff + 5 * 60_000L, stamp = 1L))
     }
 
+    @Test
+    fun `an early (partial) load and a failed catalog never prune the score matches of games still listed`() {
+        // live.23 review L3: the early list lacks the slow addons' games, and a failed catalog's games are unread, not gone.
+        val matches = SportsLiveMatchedEvents()
+        val shared = SportsLiveSharedBuckets(matchedEvents = matches)
+        val event = com.nuvio.tv.core.sportslive.scores.ScoreSnapshot(
+            eventId = "e1", league = com.nuvio.tv.core.sportslive.scores.EspnLeagueMap.NBA, startMs = loadedAt,
+            state = com.nuvio.tv.core.sportslive.scores.ScoreState.IN, clockText = null, isFinal = false,
+            home = team("Alpha"), away = team("Beta")
+        )
+        val liveKey = load.items.first().streamKey
+        shared.tab(load, keys, order, SportsLiveTab.LIVE_NOW, loadedAt, stamp = 0L)
+        matches.record(listOf(liveKey), event, loadedAt)
+        // The early list of the next load, without that game: its match stays.
+        val early = load.copy(items = load.items.drop(1), partial = true)
+        shared.tab(early, keys, order, SportsLiveTab.LIVE_NOW, loadedAt, stamp = 0L)
+        assertEquals(com.nuvio.tv.core.sportslive.scores.EspnLeagueMap.NBA, matches.leagueOf(liveKey))
+        // A full load whose catalog failed: its games keep their matches too.
+        val failed = load.copy(items = emptyList(), failures = listOf(com.nuvio.tv.domain.repository.SportsLiveFailure(catalog, "timeout")))
+        shared.tab(failed, keys, order, SportsLiveTab.LIVE_NOW, loadedAt, stamp = 0L)
+        assertEquals(com.nuvio.tv.core.sportslive.scores.EspnLeagueMap.NBA, matches.leagueOf(liveKey))
+        // A full load that no longer lists it: it goes.
+        shared.tab(load.copy(items = load.items.drop(1)), keys, order, SportsLiveTab.LIVE_NOW, loadedAt, stamp = 0L)
+        assertEquals(null, matches.leagueOf(liveKey))
+    }
+
+    private fun team(name: String) = com.nuvio.tv.core.sportslive.scores.ScoreTeam(
+        id = name, abbreviation = null, displayName = name, shortDisplayName = name, name = name, location = null,
+        logo = null, score = 1, linescores = emptyList()
+    )
+
     private fun claimed(): ClaimedCatalog {
         val catalog = CatalogDescriptor(type = ContentType.fromString("tv"), rawType = "tv", id = "games", name = "Games")
         val addon = Addon(

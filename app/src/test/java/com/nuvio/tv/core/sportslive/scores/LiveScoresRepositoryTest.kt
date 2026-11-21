@@ -1097,6 +1097,65 @@ class LiveScoresRepositoryTest {
     }
 
     @Test
+    fun `a card re-tracked on a stale feed is never confirmed unmatched before the feed answers again`() = runTest {
+        // live.23 review H1: back on Live now after 5 minutes, every live card read "no score" until its feed refetched.
+        provider.respond = { ScoreboardResult(listOf(game(ScoreState.IN, 50, 48, "Q2 5:00"))) }
+        val repo = repository("2026-11-15T19:00:00Z")
+        collect(repo)
+        repo.track(SECTION, listOf(pacersCard))
+        runCurrent()
+        assertEquals(50, repo.scores.value[pacersCard.streamKey]?.homeScore)
+        repo.untrack(SECTION)
+        runCurrent()
+        advanceTimeBy(5 * 60_000L); runCurrent()
+        val gate = CompletableDeferred<Unit>()
+        provider.gate = gate
+        repo.track(SECTION, listOf(pacersCard))
+        runCurrent()
+        // The feed was fetched before but is stale now: it says nothing about the game.
+        assertTrue(pacersCard.streamKey !in repo.unmatched.value)
+        gate.complete(Unit)
+        runCurrent()
+        assertTrue(pacersCard.streamKey !in repo.unmatched.value)
+        assertEquals(50, repo.scores.value[pacersCard.streamKey]?.homeScore)
+    }
+
+    @Test
+    fun `a paused (failing) feed never confirms its cards unmatched`() = runTest {
+        // live.23 review H1: an ESPN outage of one league read "no score" on all its live games, and opened the ended estimate.
+        provider.respond = { ScoreboardResult.FAILED }
+        val repo = repository("2026-11-15T19:00:00Z")
+        collect(repo)
+        repo.track(SECTION, listOf(pacersCard))
+        runCurrent()
+        advanceTimeBy(30_001L); runCurrent()
+        advanceTimeBy(60_001L); runCurrent()
+        assertTrue(provider.calls.size >= ScoreCadence.PAUSE_AFTER_FAILURES)
+        assertTrue(repo.unmatched.value.isEmpty())
+    }
+
+    @Test
+    fun `over the budget a card with no start is never matched on yesterday's feed alone, nor confirmed unmatched`() = runTest {
+        // live.23 review M4: (NBA, yesterday) polled for another card, (NBA, today) over the budget: last night's final of the
+        // pair landed on today's live card, or the card read "no score" though its own feed was never asked.
+        val yesterday = LocalDate.of(2026, 11, 15)
+        provider.respond = { feed -> if (feed == nba15) ScoreboardResult(listOf(game(ScoreState.POST, 110, 100, "Final"))) else ScoreboardResult(emptyList()) }
+        val repo = repository("2026-11-16T12:00:00Z")
+        collect(repo)
+        val lastNight = item("Miami Heat at Chicago Bulls", "NBA", "${yesterday}T18:00:00Z")
+        val fillers = (1 until LiveScoresRepository.MAX_FEEDS).map { day ->
+            item("Team$day A vs Team$day B", "NBA", "${LocalDate.of(2026, 11, 17).plusDays(day.toLong())}T18:00:00Z")
+        }
+        val undated = item("Indiana Pacers at Philadelphia 76ers", "NBA", null)
+        repo.track(SECTION, listOf(lastNight) + fillers + undated)
+        runCurrent()
+        assertTrue(nba15 in provider.calls)
+        assertTrue(ScoreFeed(EspnLeagueMap.NBA, LocalDate.of(2026, 11, 16)) !in provider.calls)
+        assertNull(repo.scores.value[undated.streamKey])
+        assertTrue(undated.streamKey !in repo.unmatched.value)
+    }
+
+    @Test
     fun `after a pause no old score shows until a fresh fetch`() = runTest {
         provider.respond = { ScoreboardResult(listOf(game(ScoreState.IN, 50, 48, "Q2 5:00"))) }
         val repo = repository("2026-11-15T19:00:00Z")

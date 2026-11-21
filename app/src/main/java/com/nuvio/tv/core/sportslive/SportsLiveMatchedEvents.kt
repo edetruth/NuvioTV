@@ -67,8 +67,9 @@ class SportsLiveMatchedEvents {
 
     /** Forgets the matches of sources no longer listed: [listed] are the source keys of the newest load. */
     @Synchronized
-    fun retain(listed: Set<String>) {
-        matches.keys.retainAll(listed)
+    fun retain(listed: Set<String>, unread: (String) -> Boolean = { false }) {
+        // [unread]: a source whose catalog failed this load (live.23 review L3) is not gone, only unread: it stays.
+        matches.keys.retainAll { it in listed || unread(it) }
     }
 
     @Synchronized

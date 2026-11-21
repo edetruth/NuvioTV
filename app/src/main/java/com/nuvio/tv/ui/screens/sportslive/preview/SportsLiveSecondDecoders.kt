@@ -61,6 +61,13 @@ object SportsLiveSecondDecoders {
         }.getOrDefault(0)
     }
 
+    /** Reads [hardwareInstances] for the usual video types ahead, off the main thread (live.23 review L4). */
+    fun warm(mimes: List<String> = WARM_MIMES) {
+        mimes.forEach(::hardwareInstances)
+    }
+
+    private val WARM_MIMES = listOf("video/avc", "video/hevc")
+
     private fun isSoftware(info: android.media.MediaCodecInfo): Boolean =
         if (Build.VERSION.SDK_INT >= 29) info.isSoftwareOnly
         else info.name.let { it.startsWith("OMX.google.", true) || it.startsWith("c2.android.", true) }

@@ -48,6 +48,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
@@ -170,6 +171,9 @@ class SportsLiveRepositoryImpl @Inject constructor(
             withContext(computeDispatcher) {
                 // In claimed order, as the bucketer keeps an item's first occurrence.
                 for (catalog in claimed) {
+                    // The early list's pass stops when the full load no longer needs it (live.23 review L4): the full
+                    // list waited on a describe pass that was thrown away.
+                    ensureActive()
                     val catalogItems = when (val result = fetched[catalog.key]) {
                         null -> carriedItems[catalog.key].orEmpty()
                         is NetworkResult.Success -> SportsLiveItemBucketer.describeCatalog(result.data.items, catalog, now)
