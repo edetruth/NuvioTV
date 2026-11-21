@@ -45,6 +45,8 @@ import androidx.tv.material3.Text
 import com.nuvio.tv.R
 import com.nuvio.tv.core.sportslive.SportsLiveDisplayText
 import com.nuvio.tv.core.sportslive.SportsLiveStreamThresholds
+import com.nuvio.tv.core.sportslive.SportsLiveToastKind
+import com.nuvio.tv.core.sportslive.SportsLiveToasts
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveButton
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveButtonRole
 import com.nuvio.tv.ui.screens.sportslive.theme.SportsLiveFocus
@@ -100,6 +102,16 @@ fun SportsLiveStartingCard(
     }
     // The source by its clean name: no emoji or symbols (V2).
     val source = sourceName?.let { SportsLiveDisplayText.label(it) }
+    // #220: the full player's card names the link's source, so the "Playing from ‹source›" toast would only repeat it
+    // over the card: it goes while the card shows.
+    if (selected == null && sourceName != null) {
+        val playingFrom = stringResource(R.string.sports_live_playing_from, source ?: sourceName).trim()
+        LaunchedEffect(playingFrom) {
+            SportsLiveToasts.shared.current.collect { toast ->
+                if (toast?.kind == SportsLiveToastKind.INFO && toast.title == playingFrom) SportsLiveToasts.shared.dismiss(toast.id)
+            }
+        }
+    }
     val line = listOfNotNull(link, source, sportsLiveStartingElapsed(now - startedAtMs))
         .joinToString(stringResource(R.string.sports_live_game_info_separator))
     val shape = RoundedCornerShape(SportsLiveTokens.Alert.Radius)
