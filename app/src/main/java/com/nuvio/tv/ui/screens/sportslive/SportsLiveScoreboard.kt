@@ -327,9 +327,13 @@ internal fun scoreboardStatusLines(row: ScoreboardRow, strings: GameStatusString
     }
 }
 
-/** ESPN's clock as (clock, period): "9:51 - 2nd Half" → ("9:51", "2nd half"), "Q4 4:12" → ("4:12", "Q4"); else whole on line 1. */
+/**
+ * ESPN's clock as (clock, period): "9:51 - 2nd Half" → ("9:51", "2nd half"), "Q4 4:12" → ("4:12", "Q4"),
+ * "End of 2nd" → ("End of", "2nd") (#209: one line beside the dot cut it to "End of …"); else whole on line 1.
+ */
 internal fun splitClock(clockText: String): Pair<String, String?> {
     val text = clockText.trim()
+    END_OF_PERIOD.matchEntire(text)?.let { return it.groupValues[1] to it.groupValues[2].let { p -> if (p.first().isDigit()) p.lowercase() else p } }
     val parts = text.split(" - ", limit = 2).map { it.trim() }
     if (parts.size == 2 && parts.all { it.isNotEmpty() }) {
         val period = parts[1].let { if (it.first().isDigit()) it.lowercase() else it }
@@ -340,6 +344,7 @@ internal fun splitClock(clockText: String): Pair<String, String?> {
 }
 
 private val QUARTER_CLOCK = Regex("""^(Q\d|OT\d?)\s+(\d{1,2}:\d{2})$""", RegexOption.IGNORE_CASE)
+private val END_OF_PERIOD = Regex("""^(End of)\s+(\S.*)$""", RegexOption.IGNORE_CASE)
 
 /** An entry of the More… sheet (V2, #132, #134), in the order it lists them. */
 internal enum class SportsLiveMoreEntry { WATCH_WITH, CHOOSE_STREAM, GAME_STATS, FOLLOW, REMIND, DETAILS, HIDE, REPORT }

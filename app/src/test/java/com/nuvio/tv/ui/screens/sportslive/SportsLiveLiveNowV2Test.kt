@@ -155,6 +155,10 @@ class SportsLiveLiveNowV2Test {
         assertEquals("4:12" to "Q4", splitClock("Q4 4:12"))
         assertEquals("67'" to null, splitClock("67'"))
         assertEquals("9:51" to "2nd half", splitClock("9:51 - 2nd Half"))
+        // #209: "End of 2nd" no longer ends in an ellipsis on one line.
+        assertEquals("End of" to "2nd", splitClock("End of 2nd"))
+        assertEquals("End of" to "1st half", splitClock("End of 1st Half"))
+        assertEquals("End of" to "OT", splitClock("End of OT"))
     }
 
     @Test
