@@ -117,7 +117,9 @@ class LiveScoresRepositoryTest {
         notifyOutage: () -> Unit = {},
         logos: TeamLogoBook = TeamLogoBook(),
         followedLeagues: kotlinx.coroutines.flow.Flow<List<EspnLeague>> = kotlinx.coroutines.flow.flowOf(emptyList()),
-        espnStarts: SportsLiveEspnStarts = SportsLiveEspnStarts()
+        espnStarts: SportsLiveEspnStarts = SportsLiveEspnStarts(),
+        keptFile: TeamLogoFile? = null,
+        prewarm: Boolean = false
     ): LiveScoresRepository {
         val base = ms(start)
         return LiveScoresRepository(
@@ -136,7 +138,9 @@ class LiveScoresRepositoryTest {
             logos = logos,
             followedLeagues = followedLeagues,
             watching = watching,
-            espnStarts = espnStarts
+            espnStarts = espnStarts,
+            keptFile = keptFile,
+            prewarm = prewarm
         )
     }
 
@@ -1306,6 +1310,123 @@ class LiveScoresRepositoryTest {
         assertEquals(before, provider.calls.count { it == nba15 })
         advanceTimeBy(ScoreCadence.LIVE_MS - ScoreCadence.FOLLOWED_LIVE_MS); runCurrent()
         assertEquals(before + 1, provider.calls.count { it == nba15 })
+    }
+
+    // --- live.23: the scores last shown kept for a reopen, and the warm start ---
+
+    private fun keptFile() = TeamLogoFile(java.io.File(java.nio.file.Files.createTempDirectory("kept").toFile(), "last_scores.json"))
+
+    @Test
+    fun `the scores last shown are kept and drawn on a reopen until the feed answers`() = runTest {
+        val file = keptFile()
+        val key = pacersCard.streamKey
+        provider.respond = { ScoreboardResult(listOf(game(ScoreState.IN, 50, 48, "Q2 5:00"))) }
+        val first = repository("2026-11-15T19:00:00Z", keptFile = file)
+        val looking = collect(first)
+        first.track(SECTION, listOf(pacersCard))
+        runCurrent()
+        advanceTimeBy(LiveScoresRepository.KEPT_WRITE_DELAY_MS + 1); runCurrent()
+        looking.cancel()
+        runCurrent()
+        val nowMs = ms("2026-11-15T19:00:00Z") + testScheduler.currentTime
+        assertEquals(50, KeptScores.decode(file.read()!!, nowMs)!!.games.getValue(key).homeScore)
+
+        // Reopened with the delay on: the kept score at once while the fetch is in flight...
+        settings.value = ScoreSettings(delaySeconds = 60)
+        val gate = CompletableDeferred<Unit>()
+        provider.gate = gate
+        provider.respond = { ScoreboardResult(listOf(game(ScoreState.IN, 55, 48, "Q3 9:00"))) }
+        val second = repository("2026-11-15T19:00:00Z", keptFile = file)
+        collect(second)
+        second.track(SECTION, listOf(pacersCard))
+        runCurrent()
+        assertEquals(50, second.scores.value.getValue(key).homeScore)
+        assertTrue(second.scores.value.getValue(key).kept)
+        // ...then the fresh one, first seen, at once.
+        provider.gate = null
+        gate.complete(Unit)
+        runCurrent()
+        assertEquals(55, second.scores.value.getValue(key).homeScore)
+        assertEquals("Q3 9:00", second.scores.value.getValue(key).clockText)
+    }
+
+    @Test
+    fun `a kept score is drawn for one poll at most when the feed never answers`() = runTest {
+        val file = keptFile()
+        val base = ms("2026-11-15T19:00:00Z")
+        file.write(KeptScores.encode(mapOf(pacersCard.streamKey to game(ScoreState.IN, 50, 48, "Q2 5:00")), base - 60_000L))
+        provider.gate = CompletableDeferred()
+        val repo = repository("2026-11-15T19:00:00Z", keptFile = file)
+        collect(repo)
+        repo.track(SECTION, listOf(pacersCard))
+        runCurrent()
+        assertEquals(50, repo.scores.value.getValue(pacersCard.streamKey).homeScore)
+        advanceTimeBy(ScoreCadence.LIVE_MS); runCurrent()
+        assertEquals(50, repo.scores.value.getValue(pacersCard.streamKey).homeScore)
+        advanceTimeBy(2); runCurrent()
+        assertTrue(pacersCard.streamKey !in repo.scores.value)
+    }
+
+    @Test
+    fun `a kept score is not drawn when older than 10 minutes, for another game, or while video plays`() = runTest {
+        val base = ms("2026-11-15T19:00:00Z")
+        val lakers = item("Los Angeles Lakers at Phoenix Suns", "Basketball", "2026-11-15T20:30:00Z")
+        val shown = mapOf(pacersCard.streamKey to game(ScoreState.IN, 50, 48), lakers.streamKey to game(ScoreState.IN, 50, 48))
+        provider.gate = CompletableDeferred()
+
+        val old = keptFile().apply { write(KeptScores.encode(shown, base - KeptScores.MAX_AGE_MS - 1)) }
+        val oldRepo = repository("2026-11-15T19:00:00Z", keptFile = old)
+        val looking = collect(oldRepo)
+        oldRepo.track(SECTION, listOf(pacersCard))
+        runCurrent()
+        assertTrue(oldRepo.scores.value.isEmpty())
+        looking.cancel()
+
+        // The Lakers card was kept with the Pacers game: the matcher disagrees, so nothing.
+        val fresh = keptFile().apply { write(KeptScores.encode(shown, base - 60_000L)) }
+        val repo = repository("2026-11-15T19:00:00Z", keptFile = fresh)
+        collect(repo)
+        watching.watch("player", setOf("another card"), "addon-a")
+        repo.track(SECTION, listOf(pacersCard, lakers))
+        runCurrent()
+        assertTrue(repo.scores.value.isEmpty())
+        watching.stop("player")
+        runCurrent()
+        repo.track(SECTION, listOf(lakers, pacersCard))
+        runCurrent()
+        assertEquals(setOf(pacersCard.streamKey), repo.scores.value.keys)
+    }
+
+    @Test
+    fun `the warm start fetches followed teams' and My sports' feeds once scores are collected, shared with the cards`() = runTest {
+        val eng = EspnLeague("soccer", "eng.1")
+        val gate = CompletableDeferred<Unit>()
+        provider.gate = gate
+        provider.respond = { feed -> ScoreboardResult(if (feed == nba15) listOf(game(ScoreState.IN, 50, 48)) else emptyList()) }
+        val repo = repository("2026-11-15T19:00:00Z", followedLeagues = kotlinx.coroutines.flow.flowOf(listOf(eng)), prewarm = true)
+        collect(repo)
+        runCurrent()
+        assertEquals(ScoreFeed(eng, LocalDate.of(2026, 11, 15)), provider.calls.first())
+        assertTrue(provider.calls.size <= LiveScoresRepository.PREWARM_FEEDS)
+        assertTrue(provider.calls.none { it.league == EspnLeagueMap.SOCCER_ALL || EspnIndividualResults.covers(it.league) })
+        assertTrue(nba15 in provider.calls)
+        // A card tracked while its feed is in flight shares that request, and shows when it lands.
+        repo.track(SECTION, listOf(pacersCard))
+        runCurrent()
+        assertEquals(1, provider.calls.count { it == nba15 })
+        provider.gate = null
+        gate.complete(Unit)
+        runCurrent()
+        assertEquals(50, repo.scores.value.getValue(pacersCard.streamKey).homeScore)
+    }
+
+    @Test
+    fun `no warm start while Scores is Off`() = runTest {
+        settings.value = ScoreSettings(mode = ScoresMode.OFF)
+        val repo = repository("2026-11-15T19:00:00Z", prewarm = true)
+        collect(repo)
+        runCurrent()
+        assertTrue(provider.calls.isEmpty())
     }
 
     // --- live.20 Q18 (#85): the game being watched, and the others while video plays ---

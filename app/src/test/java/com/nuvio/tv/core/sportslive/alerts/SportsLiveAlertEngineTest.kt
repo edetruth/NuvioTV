@@ -180,6 +180,14 @@ class SportsLiveAlertEngineTest {
     }
 
     @Test
+    fun `a score kept from before the app closed is never the score a toast measures from`() {
+        val engine = SportsLiveAlertEngine()
+        val game = { s: ScoreSnapshot -> listOf(AlertGame(card, s, false, setOf(ScoreSide.AWAY))) }
+        engine.update(START + 10 * MINUTE, game(live(10, 8).copy(kept = true)), SportsLiveAlertSettings(), ScoresMode.SHOW, watchingOther)
+        assertEquals(0, engine.update(START + 11 * MINUTE, game(live(10, 11)), SportsLiveAlertSettings(), ScoresMode.SHOW, watchingOther).size)
+    }
+
+    @Test
     fun `score toasts follow the delayed feed`() {
         val delay = ScoreDelay()
         val delayMs = 30_000L

@@ -98,7 +98,12 @@ data class ScoreSnapshot(
     /** Spoiler-protected (#151, [SpoilerProtection]): every surface hides the score, stats and alerts. */
     val spoilerProtected: Boolean = false,
     /** Being watched now (live.20 Q18, [ScoreWatch.masked]): served with no score and no clock; the player says LIVE. */
-    val watched: Boolean = false
+    val watched: Boolean = false,
+    /**
+     * Read back from the scores last shown before the app closed (live.23, [KeptScores]), drawn until the card's feed
+     * answers: not news, so no alert treats it as a score seen before.
+     */
+    val kept: Boolean = false
 ) {
     val homeAbbr: String? get() = home.abbreviation
     val awayAbbr: String? get() = away.abbreviation

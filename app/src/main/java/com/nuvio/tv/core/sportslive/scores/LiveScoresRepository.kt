@@ -69,6 +69,9 @@ import kotlin.random.Random
  *   it on the next launch before any feed answers, and tracked games' logos are prefetched.
  * - Warm start (#66): a feed's first fetch after a restart is preceded by the provider's copy of it
  *   from the last two minutes, if any ([ScoreProvider.recentScoreboard]); the network fetch follows at once.
+ *   live.23: when scores are first collected (Home's first show), today's feeds of followed teams' leagues and
+ *   My sports are fetched before any card asks ([prewarmFeeds]); and the scores last shown are kept on disk
+ *   ([KeptScores]), drawn on a reopen until each card's own feed answers, at most one poll ([ScoreCadence.LIVE_MS]).
  * - Logo directory (#82): while Scores is not Off and someone collects [scores], the team lists of the
  *   leagues on screen, in My sports and of followed teams are fetched in the background, one league at a
  *   time after a short wait, at most weekly ([TeamDirectorySync]); never on the poll path or under its lock.
@@ -110,7 +113,11 @@ class LiveScoresRepository internal constructor(
     /** Each stream source's "Scores ahead? +15 s" seconds, by addon id. */
     private val nudges: Flow<Map<String, Int>> = flowOf(emptyMap()),
     /** Where ESPN's start goes for a game an addon lists live that ESPN schedules later (live.20, a wrong LIVE). */
-    private val espnStarts: SportsLiveEspnStarts = SportsLiveEspnStarts.shared
+    private val espnStarts: SportsLiveEspnStarts = SportsLiveEspnStarts.shared,
+    /** Where the scores last shown are kept (live.23, [KeptScores]); null: not kept. */
+    private val keptFile: TeamLogoFile? = null,
+    /** Fetch followed teams' and My sports' feeds when scores are first collected (live.23, [prewarmFeeds]). */
+    private val prewarm: Boolean = false
 ) : LiveScoreTracking {
     @Inject
     constructor(
@@ -141,7 +148,9 @@ class LiveScoresRepository internal constructor(
         followedLeagues = prefs.followedTeams.map { teams -> teams.mapNotNull { leagueOfPath(it.league) } },
         protectionSource = prefs.spoilerProtection,
         watching = WatchingNow.shared,
-        nudges = prefs.scoreNudges
+        nudges = prefs.scoreNudges,
+        keptFile = TeamLogoFile(File(context.filesDir, "sportslive/last_scores.json")),
+        prewarm = true
     )
 
     /** What the settings screen and surfaces read: Show / Hide until focused / Off. */
@@ -283,6 +292,19 @@ class LiveScoresRepository internal constructor(
     private var scoresMode = ScoresMode.OFF
     /** When "Retry now" last fetched. */
     private var lastRetryAt: Long? = null
+    /** The scores read back from [keptFile] (live.23), by card key; a card's entry goes once its own feed answers. */
+    private var kept: Map<String, ScoreSnapshot> = emptyMap()
+    /** When the [kept] scores were shown: none is drawn once older than [KeptScores.MAX_AGE_MS]. */
+    private var keptSavedAt = 0L
+    /** The [kept] scores of tracked cards no feed has answered for yet ([refreshLocked]), by card key. */
+    private var keptShown: Map<String, ScoreSnapshot> = emptyMap()
+    /** When a kept score was first served: none is served longer than one poll ([ScoreCadence.LIVE_MS]). */
+    private var keptServedAt: Long? = null
+    /** The scores to write to [keptFile] next, and when they were shown. */
+    private var keptPending: Pair<Map<String, ScoreSnapshot>, Long>? = null
+    private var keptWrite: Job? = null
+    /** [prewarmFeeds] ran this app session. */
+    private var prewarmed = false
 
     init {
         logoFile?.let { file ->
@@ -296,6 +318,17 @@ class LiveScoresRepository internal constructor(
         }
         // Reading the kept lists is no request: they show once Scores is known not to be Off.
         scope.launch(io) { directorySync.load() }
+        // The scores last shown (live.23): drawn on the cards until their feeds answer; never while Scores is Off.
+        keptFile?.let { file ->
+            scope.launch(io) {
+                val read = file.read()?.let { KeptScores.decode(it, now()) } ?: return@launch
+                lock.withLock {
+                    kept = read.games
+                    keptSavedAt = read.savedAt
+                    activePollerScope?.let { refreshLocked(it, restartStopped = false) }
+                }
+            }
+        }
         // No learned logo is drawn before the Scores setting is known, nor while it is Off.
         scope.launch { mode.collect { logos.active = it != ScoresMode.OFF } }
         // A player starting or stopping, its distance behind live, or a nudge: served again at once (Q18, #85).
@@ -412,6 +445,10 @@ class LiveScoresRepository internal constructor(
                     sports = picked
                     activePollerScope = pollerScope
                 }
+                if (prewarm && !prewarmed) {
+                    prewarmed = true
+                    launch { prewarmFeeds(picked) }
+                }
                 try {
                     // The logo directory (#82): low priority, off the poll path, one league at a time.
                     launch(io) {
@@ -439,6 +476,26 @@ class LiveScoresRepository internal constructor(
                 }
             }
         }
+    }
+
+    /**
+     * Warm start (live.23): once per app session, when scores are first collected (Home's first show) and Scores is not
+     * Off, today's (ESPN's Eastern day) scoreboards of followed teams' leagues, then My sports' team leagues, at most
+     * [PREWARM_FEEDS] and none a poller already has: the cards tracked a moment later find them in the provider's
+     * recent copy ([warmStart]) instead of waiting on the network. Shared with any request in flight for the feed.
+     */
+    private suspend fun prewarmFeeds(picked: MySports) {
+        val date = Instant.ofEpochMilli(now()).atZone(EASTERN).toLocalDate()
+        val leagues = (followedLeagues.first() + picked.feeds())
+            .filter { it != EspnLeagueMap.SOCCER_ALL && !EspnIndividualResults.covers(it) }
+            .distinct()
+        val requests = lock.withLock {
+            leagues.map { ScoreFeed(it, date) }.filter { it !in feeds }.take(PREWARM_FEEDS).map { fetchLocked(it) }
+        }
+        if (requests.isEmpty()) return
+        requests.awaitAll()
+        // A card tracked meanwhile has its answer recorded: shown now, not at its next poll.
+        lock.withLock { activePollerScope?.let { refreshLocked(it, restartStopped = false) } }
     }
 
     /**
@@ -779,6 +836,7 @@ class LiveScoresRepository internal constructor(
             matched[entry.card.key] = match
         }
         raw = matched
+        keptShown = if (kept.isEmpty()) emptyMap() else keptLocked(matched, nowMs)
         matchedStates.value = matched.values.associate { it.eventId to it.state }
         unmatchedOutput.value = unmatchedKeys.toSet()
         if (logos.revision.value != learnedBefore) saveLogos()
@@ -816,6 +874,34 @@ class LiveScoresRepository internal constructor(
         }
         // The named My sports leagues' lists (#159, soccer competitions included) tell games with no league apart.
         return directoryLeagueOrder(onScreen + picked.feeds() + picked.teamListLeagues() + followed)
+    }
+
+    /**
+     * The [kept] scores to draw (live.23): a tracked card's, while no feed it routes to has answered yet and the
+     * matcher still pairs the card with that game (a wrong score is worse than none). A card matched, or one of whose
+     * feeds has answered (or failed), loses its kept score for good. Cards that name no sport and tennis get none.
+     */
+    private fun keptLocked(matched: Map<String, ScoreSnapshot>, nowMs: Long): Map<String, ScoreSnapshot> {
+        if (nowMs - keptSavedAt > KeptScores.MAX_AGE_MS) {
+            kept = emptyMap()
+            return emptyMap()
+        }
+        val shown = HashMap<String, ScoreSnapshot>()
+        val done = HashSet<String>()
+        for (entry in trackedUnion()) {
+            val key = entry.card.key
+            val snapshot = kept[key] ?: continue
+            val leagues = remembered[key]?.let(::listOf) ?: entry.leagues
+            if (entry.piggyback || entry.tennis || key in matched ||
+                feedsOf(leagues, datesFor(entry.card)).any { feeds[it]?.lastAttemptAt != null }
+            ) {
+                done += key
+                continue
+            }
+            if (matcher.match(entry.card, listOf(snapshot), nowMs) != null) shown[key] = snapshot.copy(kept = true)
+        }
+        if (done.isNotEmpty()) kept = kept - done
+        return shown
     }
 
     /** Both ESPN teams of a matched game: their logos, abbreviations and names, by ESPN identity. */
@@ -933,14 +1019,47 @@ class LiveScoresRepository internal constructor(
         // Read against the clock now, so a protection's 7 days run out without a settings change.
         val delay = ScoreWatch.delayMs(settingDelayMs, realTime, playing, nudgeSeconds)
         // A game first seen shows its score at once, except the games being watched (their picture runs behind).
-        val shown = scoreDelay.apply(raw, delay, now(), holdFirstSeen = ScoreWatch.watchedEvents(playing, raw))
+        val delayed = scoreDelay.apply(raw, delay, now(), holdFirstSeen = ScoreWatch.watchedEvents(playing, raw))
+        saveKept(delayed)
+        val keptNow = keptServedLocked()
+        val shown = if (keptNow.isEmpty()) delayed else keptNow + delayed
         // The games being watched: no score and no clock from us; the broadcast shows its own (Q18).
         val watched = ScoreWatch.watchedEvents(playing, shown)
         val served = if (watched.isEmpty()) shown else shown.mapValues { (_, event) -> if (event.eventId in watched) ScoreWatch.masked(event) else event }
         val stamping = protectionState.value.copy(nowMs = now())
         output.value = stamping.stampAll(served)
         watchedOutput.value = if (watched.isEmpty()) emptyMap() else stamping.stampAll(shown.filterValues { it.eventId in watched })
-        nextRelease.value = scoreDelay.nextChangeAt
+        // A kept score leaves one poll after it was first served, even with no answer to replace it.
+        val keptUntil = keptServedAt?.takeIf { keptNow.isNotEmpty() }?.let { it + ScoreCadence.LIVE_MS + 1 }
+        nextRelease.value = listOfNotNull(scoreDelay.nextChangeAt, keptUntil).minOrNull()
+    }
+
+    /** The kept scores to serve now (live.23): none while video plays, and none past one poll from the first served. */
+    private fun keptServedLocked(): Map<String, ScoreSnapshot> {
+        if (keptShown.isEmpty() || playing.isNotEmpty()) return emptyMap()
+        val at = now()
+        val since = keptServedAt ?: at.also { keptServedAt = it }
+        if (at - since > ScoreCadence.LIVE_MS) {
+            kept = emptyMap()
+            keptShown = emptyMap()
+            return emptyMap()
+        }
+        return keptShown
+    }
+
+    /** Writes [shown] (the delayed scores, unmasked) to [keptFile] a moment after the last change, off the poll path. */
+    private fun saveKept(shown: Map<String, ScoreSnapshot>) {
+        val file = keptFile ?: return
+        if (shown.isEmpty()) return
+        keptPending = shown to now()
+        if (keptWrite?.isActive == true) return
+        keptWrite = scope.launch(io) {
+            while (true) {
+                delay(KEPT_WRITE_DELAY_MS)
+                val (games, at) = lock.withLock { keptPending.also { keptPending = null } } ?: break
+                file.write(KeptScores.encode(games, at))
+            }
+        }
     }
 
     private fun today(): LocalDate = Instant.ofEpochMilli(now()).atZone(zone()).toLocalDate()
@@ -991,6 +1110,10 @@ class LiveScoresRepository internal constructor(
         internal const val MAX_FEEDS = 16
         private const val RETAIN_RETIRED_MS = 10 * 60_000L
         private const val LOGO_WRITE_DELAY_MS = 2_000L
+        /** The kept scores are written at most this often (live.23). */
+        internal const val KEPT_WRITE_DELAY_MS = 10_000L
+        /** Feeds fetched ahead when scores are first collected (live.23). */
+        internal const val PREWARM_FEEDS = 6
         private const val COLLEGE_MAX_MISSES = 2
         /** The logo directory waits this long after polling starts, so the first scoreboards go first. */
         internal const val DIRECTORY_START_DELAY_MS = 2_000L
