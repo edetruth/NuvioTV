@@ -74,7 +74,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import com.nuvio.tv.R
-import com.nuvio.tv.core.sportslive.scores.FinalNote
+import com.nuvio.tv.core.sportslive.scores.ScoreChips
 import com.nuvio.tv.core.sportslive.scores.GameArt
 import com.nuvio.tv.core.sportslive.scores.GolfResult
 import com.nuvio.tv.core.sportslive.scores.ResultDay
@@ -522,7 +522,23 @@ internal fun SportsLiveResultsView(
                                     }
                                     when (item) {
                                         is ResultListItem.Header -> ResultsHeader(item, first = index == 0)
-                                        is ResultListItem.NotPlayed -> ResultsNotPlayedLine(item)
+                                        is ResultListItem.NotPlayed -> ResultsNotPlayedRow(item)
+                                        // More than one line of teams that did not play: OK lists them, focus moving on to
+                                        // the next game (the lines themselves take no focus).
+                                        is ResultListItem.NotPlayedMore -> ResultsNotPlayedMoreRow(
+                                            count = item.count,
+                                            onClick = {
+                                                val next = items.drop(index + 1).firstOrNull { it.isFocusable }?.key
+                                                expandFocusKey = next
+                                                focusedKey = next
+                                                onExpandGroup(RESULTS_NOT_PLAYED_KEY)
+                                            },
+                                            onFocus = {
+                                                focusedKey = item.key
+                                                onRowFocus(null)
+                                            },
+                                            modifier = focusModifier
+                                        )
                                         // Tennis, UFC, F1, golf: the Game page cannot show them. OK on golf lists
                                         // its top five; on the others OK plays its replay, else says why nothing opens.
                                         is ResultListItem.Row -> if (item.row.event.individual != null) {
@@ -611,7 +627,8 @@ internal fun SportsLiveResultsView(
     }
 }
 
-private val ResultListItem.isFocusable: Boolean get() = this is ResultListItem.Row || this is ResultListItem.More
+private val ResultListItem.isFocusable: Boolean get() =
+    this is ResultListItem.Row || this is ResultListItem.More || this is ResultListItem.NotPlayedMore
 
 /** ◂ (false) or ▸ (true) pressed on a row: [jump] moves focus and returns true, or false to let focus move as usual. */
 private fun Modifier.leagueJumps(jump: (forward: Boolean) -> Boolean): Modifier = onPreviewKeyEvent { event ->
@@ -754,29 +771,81 @@ private fun ResultsLiveNowLine(count: Int, onClick: () -> Unit, modifier: Modifi
 }
 
 /**
- * "Bears didn't play · next: Sun 12:00 PM" under YOUR TEAMS (results redesign §4.4): a quiet line, not focusable, so a
- * followed team that had no game never just vanishes. Without a known next game: "Bears didn't play".
+ * The followed teams that did not play, as one compact line under YOUR TEAMS's results (live.24, TV report #19: three
+ * full-width sentences read unfinished and pushed the results down): per team its logo, its code (the game identity's,
+ * never a cut name) and its next game ("Tomorrow 6:00 PM", "Mon 7:30 PM"), else a muted "No game" ("Didn't play" on a
+ * past day). Not focusable. A team whose last result is still hidden shows no next game ([resultsNotPlayedShown]).
  */
 @Composable
-private fun ResultsNotPlayedLine(item: ResultListItem.NotPlayed) {
+private fun ResultsNotPlayedRow(item: ResultListItem.NotPlayed) {
     val context = LocalContext.current
-    val base = stringResource(if (item.today) R.string.sports_live_results_no_game_today else R.string.sports_live_results_did_not_play, item.team)
-    val next = item.nextStartMs?.let { start ->
-        val label = when (val pill = SportsLivePillTime.of(start, hasTimeOfDay = true, System.currentTimeMillis(), ZoneId.systemDefault(), Locale.getDefault())) {
-            is SportsLivePillTime.Today -> context.getString(R.string.sports_live_results_next_today, pill.time)
-            is SportsLivePillTime.Tomorrow -> context.getString(R.string.sports_live_tomorrow, pill.time)
-            is SportsLivePillTime.Other -> pill.text
-        }
-        stringResource(R.string.sports_live_results_next, label)
-    }
-    Text(
-        text = listOfNotNull(base, next).joinToString(" · "),
-        style = SportsLiveTokens.style(SportsLiveTokens.Type.Meta),
-        color = Colors.TextSecondary,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
+    val none = stringResource(if (item.today) R.string.sports_live_results_no_game else R.string.sports_live_results_did_not_play_short)
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(NOT_PLAYED_GAP),
+        verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.padding(start = 4.dp, top = 2.dp, bottom = 2.dp)
-    )
+    ) {
+        item.teams.forEach { team ->
+            val next = remember(team.nextStartMs, context) {
+                team.nextStartMs?.let { start ->
+                    when (val pill = SportsLivePillTime.of(start, hasTimeOfDay = true, System.currentTimeMillis(), ZoneId.systemDefault(), Locale.getDefault())) {
+                        is SportsLivePillTime.Today -> context.getString(R.string.sports_live_results_next_today, pill.time)
+                        is SportsLivePillTime.Tomorrow -> context.getString(R.string.sports_live_tomorrow, pill.time)
+                        is SportsLivePillTime.Other -> pill.text
+                    }
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                rememberTeamLogo(team.logo)?.let { logo -> TeamLogoSlot(logo.painter, logo.shown, NOT_PLAYED_LOGO) }
+                Text(
+                    text = team.code,
+                    style = SportsLiveTokens.style(SportsLiveTokens.Type.Meta).copy(fontWeight = FontWeight.SemiBold),
+                    color = Colors.TextPrimary,
+                    maxLines = 1,
+                    softWrap = false
+                )
+                Text(
+                    text = next ?: none,
+                    style = SportsLiveTokens.style(SportsLiveTokens.Type.Meta),
+                    color = if (next != null) Colors.TextSecondary else Colors.TextMuted,
+                    maxLines = 1,
+                    softWrap = false
+                )
+            }
+        }
+    }
+}
+
+private val NOT_PLAYED_GAP = 20.dp
+private val NOT_PLAYED_LOGO = 20.dp
+
+/** "5 of your teams didn't play ›": the collapsed lines (more than one line's worth); OK lists them. */
+@Composable
+private fun ResultsNotPlayedMoreRow(count: Int, onClick: () -> Unit, onFocus: () -> Unit, modifier: Modifier = Modifier) {
+    val shape = SportsLiveTokens.Radius.RowShape
+    Surface(
+        onClick = onClick,
+        modifier = modifier
+            .fillMaxWidth()
+            .onFocusChanged { if (it.isFocused) onFocus() },
+        shape = ClickableSurfaceDefaults.shape(shape),
+        scale = ClickableSurfaceDefaults.scale(focusedScale = SportsLiveTokens.Focus.LIFT),
+        colors = ClickableSurfaceDefaults.colors(
+            containerColor = Color.Transparent,
+            contentColor = Colors.TextSecondary,
+            focusedContainerColor = SportsLiveFocus.focusedFill(Color.Transparent),
+            focusedContentColor = Colors.TextPrimary
+        ),
+        border = ClickableSurfaceDefaults.border(focusedBorder = SportsLiveFocus.ring(shape))
+    ) {
+        Text(
+            text = pluralStringResource(R.plurals.sports_live_results_not_played_more, count, count),
+            style = SportsLiveTokens.style(SportsLiveTokens.Type.Meta),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+        )
+    }
 }
 
 /** A section header: YOUR TEAMS (gold) or the competition's name, in the Scoreboard's group style. */
@@ -938,10 +1007,10 @@ private fun ResultBoardRow(
                     verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically)
                 ) {
                     Text(
-                        // The note ("AET", "Pens", "OT") tells how the game ended, so it hides with the score; a
-                        // plain end reads per sport (#102): "FT" for soccer, "Final" for the US sports.
+                        // The note ("AET", "Pens", "OT") tells how the game ended, so it hides with the score; the game
+                        // grammar's final words (live.24): "Final · OT", "FT · Pens"; a plain end per sport (#102).
                         text = if (showScore) {
-                            stringResource(row.note.labelRes(event.league.sport))
+                            resultsFinalWords(event)
                         } else {
                             stringResource(R.string.sports_live_results_score_hidden)
                         },
@@ -1068,7 +1137,7 @@ private fun ResultsStage(
                 softWrap = false,
                 autoSize = TextAutoSize.StepBased(minFontSize = 16.sp, maxFontSize = SportsLiveTokens.Type.StageScore.fontSize, stepSize = 1.sp)
             )
-            val note = if (showScore) stringResource(row.note.labelRes(event.league.sport)) else stringResource(R.string.sports_live_results_score_hidden)
+            val note = if (showScore) resultsFinalWords(event) else stringResource(R.string.sports_live_results_score_hidden)
             Text(
                 text = listOfNotNull(note, event.leagueName, dayName).joinToString(" · "),
                 style = SportsLiveTokens.style(SportsLiveTokens.Type.Meta),
@@ -1229,13 +1298,14 @@ internal fun sportLabel(sport: String): String = when (sport) {
     else -> sport.replaceFirstChar { it.titlecase(Locale.getDefault()) }
 }
 
-private fun FinalNote.labelRes(sport: String): Int = when (this) {
-    FinalNote.FT -> if (GameStatusText.endsAtFullTime(sport)) R.string.sports_live_results_note_ft else R.string.sports_live_chip_final_note
-    FinalNote.OT -> R.string.sports_live_results_note_ot
-    FinalNote.SO -> R.string.sports_live_results_note_so
-    FinalNote.AET -> R.string.sports_live_results_note_aet
-    FinalNote.PENS -> R.string.sports_live_results_note_pens
-}
+/** A result's final words in the game grammar ([ScoreChips.finalWords]): "Final · OT", "FT · Pens", "Final", "FT". */
+@Composable
+private fun resultsFinalWords(event: ScoreSnapshot): String = ScoreChips.finalWords(
+    note = event.clockText,
+    final = stringResource(R.string.sports_live_chip_final_note),
+    fullTime = stringResource(R.string.sports_live_results_note_ft),
+    fullTimeSport = GameStatusText.endsAtFullTime(event.league.sport)
+)
 
 private val REPLAY_PILL_COLOR = Color(0xFF7EE0A1)
 private val REPLAY_PILL_TEXT = Color(0xFF0B1F12)

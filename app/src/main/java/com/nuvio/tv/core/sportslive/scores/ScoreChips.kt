@@ -92,10 +92,38 @@ object ScoreChips {
             }
         }
         is ScoreChip.Final ->
-            String.format(strings.final, chip.note ?: strings.finalNote, String.format(strings.score, chip.score.first, chip.score.second))
+            String.format(strings.final, finalWords(chip.note, strings.finalNote), String.format(strings.score, chip.score.first, chip.score.second))
         is ScoreChip.Status -> chip.text ?: strings.postponed
         is ScoreChip.Hidden -> strings.hidden
     }
+
+    /**
+     * The game grammar's words for a finished game (live.24, TV report #19: a final read just "OT"): the final word, then
+     * the way it ended when ESPN's note says so: "Final", "FT", "Final · OT", "Final · 2OT", "Final · SO", "FT · AET",
+     * "FT · Pens". [note] is ESPN's final shortDetail ("Final/OT", "FT-Pens", "AET"); [final] the final word when the
+     * note says nothing else; [fullTime] the word of a game that ends at full time (soccer, rugby: [fullTimeSport], or a
+     * note written "FT…" / "AET").
+     */
+    fun finalWords(note: String?, final: String, fullTime: String = FULL_TIME, fullTimeSport: Boolean = false): String {
+        val detail = note?.trim().orEmpty()
+        val marker = when {
+            detail.contains("pen", ignoreCase = true) -> PENS
+            detail.contains("aet", ignoreCase = true) -> AET
+            SHOOTOUT.containsMatchIn(detail) -> SHOOTOUT_WORD
+            else -> OVERTIME.find(detail)?.value?.uppercase()
+        }
+        val atFullTime = fullTimeSport || detail.startsWith(FULL_TIME, ignoreCase = true) || marker == AET || marker == PENS
+        val base = if (atFullTime) fullTime else final
+        return if (marker != null) "$base$FINAL_SEPARATOR$marker" else base
+    }
+
+    private const val FULL_TIME = "FT"
+    private const val PENS = "Pens"
+    private const val AET = "AET"
+    private const val SHOOTOUT_WORD = "SO"
+    private const val FINAL_SEPARATOR = " · "
+    private val OVERTIME = Regex("""\b\d*OT\b""", RegexOption.IGNORE_CASE)
+    private val SHOOTOUT = Regex("""\bSO\b""", RegexOption.IGNORE_CASE)
 
     /**
      * The card's two sides in the order its title names them ("Patriots at Jets": Patriots, then Jets),

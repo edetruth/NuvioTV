@@ -188,7 +188,7 @@ class GameStatusTest {
         assertEquals("FT", text(GameStatus.Final(soccer)))
         // ESPN's own note wins when it gave one.
         assertEquals("FT 2–1", text(GameStatus.Final(soccer), ScoreChip.Final("FT", ChipScore(2, 1))))
-        assertEquals("Final/OT 101–99", text(GameStatus.Final(nfl), ScoreChip.Final("Final/OT", ChipScore(101, 99))))
+        assertEquals("Final · OT 101–99", text(GameStatus.Final(nfl), ScoreChip.Final("Final/OT", ChipScore(101, 99))))
         // No note: the sport's word.
         assertEquals("Final 24–17", text(GameStatus.Final(nfl), ScoreChip.Final(null, ChipScore(24, 17))))
         assertEquals("FT 2–1", text(GameStatus.Final(soccer), ScoreChip.Final(null, ChipScore(2, 1))))

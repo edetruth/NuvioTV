@@ -46,7 +46,8 @@ internal object SportsLiveHomeMeta {
         }
         ScoreChip.Hidden -> DrawnCardFooter(lead = liveWord, live = true, trailing = DrawnCardTrailing.Note(strings.hidden))
         is ScoreChip.Final -> DrawnCardFooter(
-            lead = chip.note ?: strings.finalNote,
+            // The game grammar's final words (live.24): "Final · OT", never ESPN's bare "OT" or "Final/OT".
+            lead = ScoreChips.finalWords(chip.note, strings.finalNote),
             trailing = DrawnCardTrailing.Score(String.format(strings.score, chip.score.first, chip.score.second))
         )
         is ScoreChip.Status -> DrawnCardFooter(lead = chip.text ?: strings.postponed)

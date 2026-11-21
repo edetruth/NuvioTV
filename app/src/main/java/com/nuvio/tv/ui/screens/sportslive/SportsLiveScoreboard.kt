@@ -404,7 +404,10 @@ internal fun scoreboardStatusLines(row: ScoreboardRow, strings: GameStatusString
             val clock = chip.clock?.let { splitClock(it) }
             ScoreboardStatusLines(clock?.first ?: strings.live, clock?.second, live = true)
         }
-        chip is ScoreChip.Final -> ScoreboardStatusLines(chip.note ?: GameStatusText.finalWord(sport, strings))
+        // The game grammar's final words (live.24): "Final · OT", "FT · Pens"; the sport's word alone otherwise.
+        chip is ScoreChip.Final -> ScoreboardStatusLines(
+            ScoreChips.finalWords(chip.note, GameStatusText.finalWord(sport, strings), strings.fullTime, GameStatusText.endsAtFullTime(sport))
+        )
         chip is ScoreChip.Status -> ScoreboardStatusLines(chip.text ?: strings.postponed)
         row.group == ScoreboardGroup.JUST_ENDED -> ScoreboardStatusLines(GameStatusText.finalWord(sport, strings))
         row.group == ScoreboardGroup.LIVE && row.status is GameStatus.Live ->

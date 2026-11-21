@@ -71,7 +71,7 @@ class ScoreChipsTest {
     fun `finals show ESPN's note and the score`() {
         assertEquals("FT 1–3", chipText(item("Crystal Palace vs Liverpool"), palace))
         assertEquals("Final 131–124", chipText(item("76ers vs Pacers"), pacers))
-        assertEquals("Final/OT 124–131", chipText(item("Pacers at 76ers"), pacers.copy(clockText = "Final/OT")))
+        assertEquals("Final · OT 124–131", chipText(item("Pacers at 76ers"), pacers.copy(clockText = "Final/OT")))
         assertEquals("Final 131–124", chipText(item("76ers vs Pacers"), pacers.copy(clockText = null)))
     }
 
