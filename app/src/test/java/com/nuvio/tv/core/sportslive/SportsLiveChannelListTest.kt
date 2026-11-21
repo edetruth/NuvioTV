@@ -77,6 +77,15 @@ class SportsLiveChannelListTest {
         assertTrue(merged[1].alternates.isEmpty())
     }
 
+    @Test
+    fun `a copy with a bracketed source tag is the same channel`() {
+        val main = channel("a1", "US: NFL Network", addon = "a")
+        val backup = channel("a2", "US: NFL Network [BK]", addon = "a")
+        val merged = l.merge(listOf(main, backup))
+        assertEquals(listOf("a1"), merged.map { it.id })
+        assertEquals(listOf("a2"), merged.single().alternates.map { it.id })
+    }
+
     // --- Popular now ---
 
     private val catalog = listOf(

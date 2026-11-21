@@ -127,6 +127,15 @@ object SportsLiveDisplayText {
                 text = stripped
                 continue
             }
+            // A source tag at the end ("NFL Network [BK]", "[Backup]", "[ALT]", "[2]", l24 polish P3): one channel's other
+            // link, never part of its name, so the copies share a name (and Channels' one row).
+            val tag = SOURCE_TAG_SUFFIX.find(text)
+            if (tag != null) {
+                val stripped = text.substring(0, tag.range.first)
+                if (trimSeparators(stripped).isEmpty()) break
+                text = stripped
+                continue
+            }
             text = withoutTail(text, game = GAME_IN_TITLE.containsMatchIn(text)) ?: break
         }
         text = trimSeparators(collapse(text))
@@ -296,6 +305,15 @@ object SportsLiveDisplayText {
 
     /** "Name HD", "Name (FHD)", "Name [4K]", "Name - HD" at the end. */
     private val QUALITY_SUFFIX = Regex("""[\s:|\-–]+[(\[]?($QUALITY)[)\]]?\s*$""", RegexOption.IGNORE_CASE)
+
+    /**
+     * A trailing square-bracketed source tag: "[BK]", "[Backup]", "[ALT]", "[Alt 2]", "[2]". Only a tag at the very end,
+     * and only these words or a bare number, so a name with brackets inside ("Name [Lakers vs Suns]") keeps them.
+     */
+    private val SOURCE_TAG_SUFFIX = Regex(
+        """\s*\[\s*(?:(?:bk|backup|back-up|alt|alternate|alternative|mirror|source|src|link|server|feed)\s*\d{0,2}|\d{1,2})\s*]\s*$""",
+        RegexOption.IGNORE_CASE
+    )
 
     /** "24/7 -", "24/7-EN -", "24-7 EN |" at the start, before the name. */
     private val ALWAYS_ON_PREFIX =

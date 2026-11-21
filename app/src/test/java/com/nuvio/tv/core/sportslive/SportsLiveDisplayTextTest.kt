@@ -197,6 +197,24 @@ class SportsLiveDisplayTextTest {
     }
 
     @Test
+    fun `a trailing bracketed source tag comes off the name`() {
+        assertEquals("NFL Network", of("NFL Network [BK]").name)
+        assertEquals("NFL Network", of("NFL Network [Backup]").name)
+        assertEquals("Sports Channel", of("Sports Channel [ALT]").name)
+        assertEquals("Sports Channel", of("Sports Channel [2]").name)
+        val both = of("US: Sports Channel HD [BK]")
+        assertEquals("Sports Channel", both.name)
+        assertEquals("HD", both.quality)
+        assertEquals("US", both.region)
+    }
+
+    @Test
+    fun `brackets inside a name or round other words stay`() {
+        assertEquals("Sports [BK] Channel", of("Sports [BK] Channel").name)
+        assertEquals("Sports Channel [Main Feed]", of("Sports Channel [Main Feed]").name)
+    }
+
+    @Test
     fun `spoiler free also cleans the title`() {
         assertEquals("Team A vs Team B", SportsLiveDisplayText.spoilerFree("TEAM A VS TEAM B 1-0 Live IPTV Recording"))
     }
