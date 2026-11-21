@@ -904,8 +904,23 @@ class LiveScoresRepository internal constructor(
             }
         }
 
+        val union = trackedUnion()
+        // Each card's own feeds (its leagues on its days; a matched card's only where its game is) are budgeted first, in
+        // card order, before any card's extras (soccer/all, the college or women's league, ESPN's later days). live.23 RC7,
+        // TV: those extras of the games ranked first took the slots of later live games' own feeds, so Bundesliga, La Liga
+        // and Ligue 1 games in play were never polled while obscure leagues' fallbacks were.
+        for (entry in union) {
+            if (entry.piggyback) continue
+            val own = feedsOf(remembered[entry.card.key]?.let(::listOf) ?: entry.leagues, datesFor(entry.card))
+            val shown = raw[entry.card.key]
+            val kept = if (shown == null) own else own.filter { feed ->
+                feeds[feed]?.let { !it.fetched || it.events.any { event -> event.eventId == shown.eventId } } ?: true
+            }
+            if (fits(kept)) needed += kept
+        }
+
         val piggybacks = ArrayList<TrackedCard>()
-        for (entry in trackedUnion()) {
+        for (entry in union) {
             if (entry.piggyback) {
                 piggybacks += entry
                 continue
@@ -918,10 +933,11 @@ class LiveScoresRepository internal constructor(
             if (card.key in remembered && leagues.single().sport == "soccer" && cardFeeds.any { feeds[it]?.fetched != true }) {
                 cardFeeds += feedsOf(listOf(EspnLeagueMap.SOCCER_ALL), dates)
             }
-            // Over the budget: a card whose feeds are not polled already gets no score (never a stale one).
-            if (!fits(cardFeeds)) {
+            // Over the budget: the feeds already budgeted for it (its own, above), else no score (never a stale one).
+            if (!fits(cardFeeds)) cardFeeds.retainAll { it in needed }
+            if (cardFeeds.isEmpty()) {
                 // Debug builds name the skipped league so a TV run shows a full feed budget (live.23 RC6 missing scores).
-                if (com.nuvio.tv.BuildConfig.DEBUG) {
+                if (com.nuvio.tv.BuildConfig.IS_DEBUG_BUILD) {
                     android.util.Log.d("LiveScores", "no feed slot: ${leagues.joinToString { it.path }} live=${entry.live}")
                 }
                 continue

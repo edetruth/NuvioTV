@@ -1042,6 +1042,41 @@ class LiveScoresRepositoryTest {
     }
 
     @Test
+    fun `every live game's own feed is budgeted before any game's soccer-all fallback or extra days`() = runTest {
+        // live.23 RC7, TV 12:28 CT: Serie A, NBA and NHL scored, Bundesliga, La Liga and Ligue 1 games in play did not.
+        // The games listed before them (no start, ESPN without the game) took their own two days, then soccer/all's
+        // fallback and ESPN's later days, and the budget ran out before the later games' own feeds.
+        val today = LocalDate.of(2026, 11, 21)
+        val elsewhere = listOf("Champions League", "Europa League", "Conference League", "Nations League", "Friendly")
+            .mapIndexed { index, competition -> item("Club$index A vs Club$index B", "Soccer", null, genres = listOf(competition)) }
+        val top = listOf(
+            Triple(EspnLeague("soccer", "eng.1"), "Premier League", "Newcastle vs Arsenal"),
+            Triple(EspnLeague("soccer", "ita.1"), "Serie A", "Parma vs Roma"),
+            Triple(EspnLeague("soccer", "ger.1"), "Bundesliga", "Schalke 04 vs Stuttgart"),
+            Triple(EspnLeague("soccer", "esp.1"), "La Liga", "Sevilla vs Betis"),
+            Triple(EspnLeague("soccer", "fra.1"), "Ligue 1", "Nice vs Lens")
+        ).mapIndexed { index, (league, sport, name) ->
+            Triple(league, item(name, sport, "2026-11-21T17:30:00Z"), liveGame("top$index", league, name, "2026-11-21T17:30:00Z", 1, 0))
+        }
+        provider.respond = { feed ->
+            ScoreboardResult(top.filter { (league, _, _) -> league == feed.league && feed.date == today }.map { it.third })
+        }
+        val repo = repository("2026-11-21T18:28:00Z")
+        collect(repo)
+        repo.track(SECTION, elsewhere + top.map { it.second })
+        runCurrent()
+        advanceTimeBy(60_000L); runCurrent()
+        for ((league, card, game) in top) {
+            assertTrue("${league.path} polled", ScoreFeed(league, today) in provider.calls)
+            assertEquals("${card.meta.name} scored", game.eventId, repo.scores.value[card.streamKey]?.eventId)
+        }
+        // The games before them keep their own feeds; only their extras wait for a free slot.
+        for (competition in listOf("uefa.champions", "uefa.europa", "uefa.europa.conf", "uefa.nations", "fifa.friendly")) {
+            assertTrue(competition, ScoreFeed(EspnLeague("soccer", competition), today) in provider.calls)
+        }
+    }
+
+    @Test
     fun `after a pause no old score shows until a fresh fetch`() = runTest {
         provider.respond = { ScoreboardResult(listOf(game(ScoreState.IN, 50, 48, "Q2 5:00"))) }
         val repo = repository("2026-11-15T19:00:00Z")
