@@ -8,6 +8,7 @@ package com.nuvio.tv.core.sportslive.report
 object SportsLiveReportTrail {
     const val MAX_SIGN_IN = 40
     const val MAX_NEAR_MISSES = 30
+    const val MAX_PANEL_ROWS = 40
 
     @Volatile
     var screen: String? = null
@@ -16,6 +17,31 @@ object SportsLiveReportTrail {
     @Volatile
     var focused: String? = null
         private set
+
+    /** The profile's My sports, as a line ("All sports (default)", "Basketball: NBA, NCAAM · Soccer"), #218. */
+    @Volatile
+    var mySports: String? = null
+        private set
+
+    /** The in-player panel's or guide's scope while it shows ("My sports", "All sports", a sport); null when closed (#218). */
+    @Volatile
+    var panelScope: String? = null
+        private set
+
+    /** The open panel's rows, "‹tag› | ‹score shown / hidden / no score›" in order, at most [MAX_PANEL_ROWS] (#218). */
+    @Volatile
+    var panelRows: List<String> = emptyList()
+        private set
+
+    fun onMySports(line: String) {
+        mySports = line
+    }
+
+    /** The in-player panel shows [scope] with [rows]; a null [scope] (closed) clears both. */
+    fun onPanel(scope: String?, rows: List<String>) {
+        panelScope = scope
+        panelRows = if (scope == null) emptyList() else rows.take(MAX_PANEL_ROWS)
+    }
 
     private val signIn = Ring(MAX_SIGN_IN)
     private val nearMisses = Ring(MAX_NEAR_MISSES)

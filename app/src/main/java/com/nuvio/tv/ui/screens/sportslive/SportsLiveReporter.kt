@@ -130,22 +130,48 @@ class SportsLiveReporter @Inject constructor(
      * so: "Report #N saved" with how to send it, or, with adb off and no video playing, the QR dialog at once.
      */
     fun report(trigger: String) {
-        scope.launch {
-            val saved = runCatching { save(trigger) }.getOrNull()
-            val adb = adbOn()
-            val miniPlaying = com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniPlayers.controller.isActive
-            if (saved == null) {
-                SportsLiveToasts.show(SportsLiveToastKind.PROBLEM, context.getString(R.string.sports_live_report_failed))
-            } else if (SportsLiveReportQrPrompt.opensAfterSave(adb, SportsLiveReportTrail.screen, miniPlaying)) {
-                // adb is off and no video plays (coordinator decision 4): the QR code at once; its subtitle names the report.
-                _qrPrompt.value = true
-            } else {
-                SportsLiveToasts.show(
-                    SportsLiveToastKind.INFO,
-                    context.getString(R.string.sports_live_report_saved, saved.number),
-                    context.getString(if (adb) R.string.sports_live_report_saved_adb else R.string.sports_live_report_saved_qr)
-                )
+        scope.launch { announce(runCatching { save(trigger) }.getOrNull()) }
+    }
+
+    /**
+     * #218: the report's snapshot taken now (Hold OK in the player, before its menu draws, so the report says what was
+     * on screen); the function returned saves it when Report a problem is picked, with the same toast as [report].
+     * Nothing is saved when it is never called.
+     */
+    fun capture(trigger: String): () -> Unit {
+        val captured = input(0, System.currentTimeMillis(), ZoneId.systemDefault(), trigger, scoresNow ?: "unknown")
+        return {
+            scope.launch {
+                val saved = runCatching {
+                    val secrets = secrets()
+                    lock.withLock {
+                        val files = files
+                        val number = files.nextNumber()
+                        val input = captured.copy(number = number)
+                        val text = SportsLiveReport.text(input, secrets)
+                        Saved(number, files.save(number, text, input.savedAtMs, input.zone), text)
+                    }
+                }.getOrNull()
+                announce(saved)
             }
+        }
+    }
+
+    /** "Report #N saved" with how to send it, or the QR dialog at once (adb off, no video playing); a failure toast for none. */
+    private fun announce(saved: Saved?) {
+        val adb = adbOn()
+        val miniPlaying = com.nuvio.tv.ui.screens.sportslive.mini.SportsLiveMiniPlayers.controller.isActive
+        if (saved == null) {
+            SportsLiveToasts.show(SportsLiveToastKind.PROBLEM, context.getString(R.string.sports_live_report_failed))
+        } else if (SportsLiveReportQrPrompt.opensAfterSave(adb, SportsLiveReportTrail.screen, miniPlaying)) {
+            // adb is off and no video plays (coordinator decision 4): the QR code at once; its subtitle names the report.
+            _qrPrompt.value = true
+        } else {
+            SportsLiveToasts.show(
+                SportsLiveToastKind.INFO,
+                context.getString(R.string.sports_live_report_saved, saved.number),
+                context.getString(if (adb) R.string.sports_live_report_saved_adb else R.string.sports_live_report_saved_qr)
+            )
         }
     }
 
@@ -230,7 +256,10 @@ class SportsLiveReporter @Inject constructor(
             signInLog = SportsLiveReportTrail.signInLines(),
             unplaced = SportsLiveUnidentified.shared.snapshot().take(MAX_UNPLACED).map { "${it.loads}x | ${it.title}" },
             nearMisses = if (BuildConfig.IS_DEBUG_BUILD) SportsLiveReportTrail.nearMissLines() else null,
-            feedDataErrors = feedHealth.dataErrorLines(now)
+            feedDataErrors = feedHealth.dataErrorLines(now),
+            mySports = SportsLiveReportTrail.mySports,
+            panelScope = SportsLiveReportTrail.panelScope,
+            panelRows = SportsLiveReportTrail.panelRows
         )
     }
 

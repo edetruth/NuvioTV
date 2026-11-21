@@ -35,7 +35,13 @@ data class SportsLiveReportInput(
     /** Recent merge near misses; null when this build does not collect them (release). */
     val nearMisses: List<String>? = null,
     /** Score feeds ESPN answered with data the app could not read, newest first (live.20, [com.nuvio.tv.core.sportslive.scores.EspnFeedHealth.dataErrorLines]). */
-    val feedDataErrors: List<String> = emptyList()
+    val feedDataErrors: List<String> = emptyList(),
+    /** The profile's My sports ([SportsLiveReportTrail.mySports]); null when not known (#218). */
+    val mySports: String? = null,
+    /** The in-player panel's or guide's scope when it showed; null when it was closed (#218). */
+    val panelScope: String? = null,
+    /** Its rows, "‹tag› | ‹score shown / hidden / no score›" (#218: "no scores" and "wrong sports" reports explain themselves). */
+    val panelRows: List<String> = emptyList()
 ) {
     /** The game playing (or watched last). */
     data class Game(
@@ -71,6 +77,9 @@ object SportsLiveReport {
     /** The most a QR summary holds, in UTF-8 bytes: at most a version-19 code (93 modules), still sharp at 420 px. */
     const val QR_MAX_BYTES = 700
 
+    /** A panel row's ending when its score showed ([SportsLiveReportInput.panelRows]). */
+    const val SCORE_SHOWN = "score shown"
+
     /** The longest note the summary keeps; the details keep it whole. */
     const val NOTE_MAX_CHARS = 200
 
@@ -95,6 +104,11 @@ object SportsLiveReport {
             appendLine("Game: ${game?.let { title(gameLine(it)) } ?: "none"}")
             appendLine("Links: ${linksLine(input.linkChecks)}")
             appendLine("Scores: ${clean(input.scores)}" + if (input.feedDataErrors.isEmpty()) "" else " · ${input.feedDataErrors.size} feed data errors")
+            appendLine("My sports: ${input.mySports?.let(::clean) ?: "unknown"}")
+            input.panelScope?.let { scope ->
+                val scored = input.panelRows.count { it.endsWith(SCORE_SHOWN) }
+                appendLine("Panel: ${clean(scope)} · ${input.panelRows.size} rows, $scored with a score")
+            }
             appendLine("Device: ${clean(input.device)}")
             appendLine("From: ${clean(input.trigger)}")
             appendLine(DETAILS)
@@ -103,6 +117,7 @@ object SportsLiveReport {
             section("Titles not placed, loads | title", input.unplaced.map(::title))
             section("Merge near misses", input.nearMisses?.map(::title) ?: listOf("not collected in this build"))
             section("Score feed data errors, newest first", input.feedDataErrors.map(::clean))
+            if (input.panelScope != null) section("Panel rows, tag | score", input.panelRows.map(::clean))
             appendLine("Links, hosts, IP addresses, tokens, addon names and ids, e-mail and account ids are removed. No scores.")
         }
     }

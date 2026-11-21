@@ -78,11 +78,33 @@ class SportsLiveReportTest {
                 "Game: Celtics vs 76ers · NBA · basketball · live · 3 sources · ESPN 401585 in",
                 "Links: game: ready, checking, 2 failed (didnt start), 1 played · all games: 4 ready, 2 no stream, 1 checking",
                 "Scores: show · delay 30 s · real-time off",
+                "My sports: unknown",
                 "Device: onn 4K Pro · Android 12 (API 31)",
                 "From: Hold Play/Pause"
             ),
             summary
         )
+    }
+
+    @Test
+    fun `a report says what My sports holds and what the panel showed, tag and score only`() {
+        // #218: "no scores" and "wrong sports" reports explain themselves.
+        val text = SportsLiveReport.text(
+            input().copy(
+                mySports = "basketball: nba · soccer",
+                panelScope = "All sports",
+                panelRows = listOf("NBA | ${SportsLiveReport.SCORE_SHOWN}", "BASKETBALL | no score", "RACING | score hidden")
+            ),
+            secrets
+        )
+        val summary = text.substringBefore(SportsLiveReport.DETAILS)
+        assertTrue(summary, summary.contains("My sports: basketball: nba · soccer"))
+        assertTrue(summary, summary.contains("Panel: All sports · 3 rows, 1 with a score"))
+        assertTrue(text, text.contains("[Panel rows, tag | score]\nNBA | score shown\nBASKETBALL | no score\nRACING | score hidden"))
+        // No panel shown: no panel line, no section.
+        val closed = SportsLiveReport.text(input(), secrets)
+        assertFalse(closed, closed.contains("Panel:"))
+        assertFalse(closed, closed.contains("[Panel rows"))
     }
 
     @Test
