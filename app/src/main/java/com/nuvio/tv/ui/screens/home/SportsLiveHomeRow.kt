@@ -1,7 +1,6 @@
 package com.nuvio.tv.ui.screens.home
 
 import com.nuvio.tv.core.sportslive.SportsLiveDisplayText
-import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.displayName
 import com.nuvio.tv.core.sportslive.scores.GameArt
 import com.nuvio.tv.core.sportslive.scores.ScoreChipStrings
@@ -11,6 +10,8 @@ import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.domain.model.CatalogRow
 import com.nuvio.tv.domain.model.ContentType
 import com.nuvio.tv.domain.model.SportsLiveItem
+import com.nuvio.tv.core.sportslive.SportsLiveSportKind
+import com.nuvio.tv.ui.screens.sportslive.liveNowItemTag
 
 /** The synthetic Home row that shows live Sports & Live items, marked by sentinel ids. */
 object SportsLiveHomeRow {
@@ -19,7 +20,13 @@ object SportsLiveHomeRow {
     const val CATALOG_ID = "live_now"
 
     /** Home's words for the hero (V2 phase 10): "Live now", "★ Your team", "2 streams". */
-    data class Words(val liveNow: String, val yourTeam: String, val streams: (Int) -> String)
+    data class Words(
+        val liveNow: String,
+        val yourTeam: String,
+        val streams: (Int) -> String,
+        /** A sport's word ("Soccer"), for the tag when no league is known (Live Now's rule). */
+        val sportWord: (SportsLiveSportKind) -> String = { it.name.lowercase().replaceFirstChar(Char::uppercase) }
+    )
 
     /**
      * [scoreLabels] (item streamKey → [SportsLiveHomeMeta.statusLine]) replace a card's label line (its release
@@ -60,8 +67,9 @@ object SportsLiveHomeRow {
                     // The hero's status line is the score label only: never the addon's date ("Nov 19, 20:30").
                     releaseInfo = scoreLabels[item.streamKey],
                     genres = listOf(SportsLiveHomeMeta.eyebrow(
-                        // Never a catch-all tag ("Other") as the league.
-                        GameArt.of(item, null)?.league ?: item.sport?.takeUnless(SportsLiveTeams::isNonSportTag),
+                        // Live Now's own tag for the row (RC TV finding): its league ("EPL"), else the sport word; never a
+                        // catalog's or addon's name, never a catch-all ("Other").
+                        liveNowItemTag(item, null, words.sportWord).ifEmpty { null },
                         words.liveNow
                     )),
                     description = SportsLiveHomeMeta.extraLine(item.followed, item.sourceCount, words.yourTeam, words.streams),

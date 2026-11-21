@@ -2,6 +2,11 @@ package com.nuvio.tv.ui.screens.sportslive
 
 import com.nuvio.tv.core.sportslive.scores.TennisColumns
 import com.nuvio.tv.core.sportslive.scores.RankDisplay
+import com.nuvio.tv.core.sportslive.scores.GameArt
+import com.nuvio.tv.core.sportslive.scores.ScoreChips
+import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
+import com.nuvio.tv.core.sportslive.scores.TennisMatch
+import com.nuvio.tv.domain.model.SportsLiveItem
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -317,22 +322,52 @@ internal fun rowTagText(row: ScoreboardRow): String {
  * [rowTagText] with the sport its text tells already worded ([sportLabel]): ESPN's league, the card's sport, else
  * [sportLabel] in capitals; empty when none is known. The same for a two-team row as for a single-line one (#167).
  */
-internal fun rowTagOf(row: ScoreboardRow, sportLabel: String?, plainLabel: String? = null): String {
+internal fun rowTagOf(row: ScoreboardRow, sportLabel: String?, plainLabel: String? = null): String =
+    itemTagOf(row.item, row.art, row.sportTag, row.leagueTag, sportLabel, plainLabel)
+
+/** [rowTagOf] from what a row is built of, so a surface with no [ScoreboardRow] (Home's Live now row) tags as Live Now does. */
+internal fun itemTagOf(
+    item: SportsLiveItem,
+    art: GameArt?,
+    sportTag: SportsLiveSportKind?,
+    leagueTag: String?,
+    sportLabel: String?,
+    plainLabel: String? = null
+): String {
     // A tennis match's tour (#160): "ATP", never its tournament's initials.
-    row.leagueTag?.let { return it }
-    val item = row.item
+    leagueTag?.let { return it }
     // One word per sport (F4): an addon's plain sport word ("Football", "Soccer") as the sport's one name, unless ESPN named the league.
-    plainLabel?.takeIf { row.art?.league.let { league -> league == null || league == item.sport } }?.let { return it.uppercase(Locale.getDefault()) }
+    plainLabel?.takeIf { art?.league.let { league -> league == null || league == item.sport } }?.let { return it.uppercase(Locale.getDefault()) }
     // A non-sport tag ("OTHER", #145) says nothing about the game: the sport its title names, else none.
     val sport = item.sport?.takeUnless(SportsLiveTeams::isNonSportTag)
     val tag = scoreboardRowTag(
-        row.art?.league,
+        art?.league,
         sport,
         item.catalogName.takeUnless(SportsLiveTeams::isNonSportTag).orEmpty(),
-        row.sportTag ?: SportsLiveSportKind.of(sport)
+        sportTag ?: SportsLiveSportKind.of(sport)
     )
     if (tag.isNotEmpty()) return tag
     return sportLabel?.uppercase(Locale.getDefault()).orEmpty()
+}
+
+/**
+ * Live Now's short tag for [item] outside a board (Home's Live now cards and hero, RC TV finding): the same rule as a
+ * Live Now row ([itemTagOf], then [com.nuvio.tv.core.sportslive.SportsLiveTags.short]) with [snapshot]'s ESPN league when
+ * known; [label] words a sport ("SOCCER"). Never an addon's or catalog's name.
+ */
+internal fun liveNowItemTag(item: SportsLiveItem, snapshot: ScoreSnapshot?, label: (SportsLiveSportKind) -> String): String {
+    val sportTag = SportsLiveSportKind.tagOf(item)
+    val plain = SportsLiveSportKind.plainTagOf(item)
+    val tag = itemTagOf(
+        item = item,
+        art = GameArt.of(item, snapshot),
+        sportTag = sportTag,
+        leagueTag = (ScoreChips.matchedEvent(item, snapshot)?.individual as? TennisMatch)?.takeIf { it.live }
+            ?.let { snapshot?.league?.league?.uppercase() },
+        sportLabel = sportTag?.let(label),
+        plainLabel = plain?.let(label)
+    )
+    return com.nuvio.tv.core.sportslive.SportsLiveTags.short(tag, sportTag ?: plain)
 }
 
 /**
@@ -438,7 +473,10 @@ internal fun AgendaBellIcon(bell: AgendaBell, modifier: Modifier = Modifier, off
 
 /** A sport's short name ("Football", "Soccer", "Tennis"). */
 @Composable
-internal fun sportKindLabel(kind: SportsLiveSportKind): String = stringResource(
+internal fun sportKindLabel(kind: SportsLiveSportKind): String = stringResource(sportKindLabelRes(kind))
+
+/** [sportKindLabel]'s string, for code outside composition (Home's view model). */
+internal fun sportKindLabelRes(kind: SportsLiveSportKind): Int =
     when (kind) {
         SportsLiveSportKind.FOOTBALL -> R.string.sports_live_sport_football
         SportsLiveSportKind.SOCCER -> R.string.sports_live_sport_soccer
@@ -457,7 +495,6 @@ internal fun sportKindLabel(kind: SportsLiveSportKind): String = stringResource(
         SportsLiveSportKind.WRESTLING -> R.string.sports_live_sport_wrestling
         SportsLiveSportKind.CYCLING -> R.string.sports_live_sport_cycling
     }
-)
 
 /** A sport filter option's label: the short name of a [SportsLiveSportKind] value, else the addon's text cleaned. */
 @Composable
@@ -840,13 +877,28 @@ internal fun scoreboardRowTag(
     // ESPN's raw abbreviation ("FU17W") gives way to a readable short tag ("U17 WC") when one is known.
     // A catch-all ("Other Sports") is no league either: it would read "OS".
     league?.takeIf { it.isNotBlank() && it.trim() != catalog }
+        ?.takeUnless { raw -> namesSource(raw, catalog) }
         ?.takeUnless { raw -> SportsLiveTeams.isGenericSport(SportsLiveDisplayText.label(raw) ?: raw) }
         ?.let { return SportsLiveLeagueTags.of(it) ?: scoreboardTag(it, sportKind) }
     return sport
         ?.takeIf { it.trim() != catalog }
+        ?.takeUnless { raw -> namesSource(raw, catalog) }
         ?.takeUnless { raw -> SportsLiveTeams.isGenericSport(SportsLiveDisplayText.label(raw) ?: raw) }
         ?.let(::scoreboardTag)
         .orEmpty()
+}
+
+/**
+ * True when [raw] is only the source's name inside its [catalog]'s name ("⚡PLAYZTV" of "⚡PlayzTV Live Events (tv)", RC TV
+ * finding: an addon put its provider in the genre), and no sport or league anyone knows: never a tag.
+ */
+private fun namesSource(raw: String, catalog: String): Boolean {
+    val word = raw.filter(Char::isLetterOrDigit).uppercase()
+    if (word.length < 4) return false
+    if (!catalog.filter(Char::isLetterOrDigit).uppercase().contains(word)) return false
+    val label = SportsLiveDisplayText.label(raw) ?: raw
+    return SportsLiveSportKind.of(raw) == null && SportsLiveSportKind.of(label) == null &&
+        SportsLiveLeagueTags.of(label.uppercase()) == null
 }
 
 

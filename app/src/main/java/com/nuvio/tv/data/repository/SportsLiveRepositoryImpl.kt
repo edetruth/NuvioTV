@@ -8,7 +8,7 @@ import com.nuvio.tv.core.sportslive.SportsLiveCatalogPolicy
 import com.nuvio.tv.core.sportslive.SportsLiveDebugTiming
 import com.nuvio.tv.core.sportslive.SportsLiveSharedBuckets
 import com.nuvio.tv.core.sportslive.SportsLiveItemBucketer
-import com.nuvio.tv.core.sportslive.SportsLiveMySportsScope
+import com.nuvio.tv.core.sportslive.SportsLiveHomeLiveNow
 import com.nuvio.tv.data.local.SportsLivePreferencesDataStore
 import com.nuvio.tv.domain.model.CatalogOption
 import com.nuvio.tv.domain.model.CatalogRow
@@ -318,8 +318,8 @@ class SportsLiveRepositoryImpl @Inject constructor(
             claimedCatalogs,
             endedKeys,
             // A team list landing merges copies of one game by their teams (live.18): the row is built again.
-            combine(followedTeams, prefs.mySports, directoryChanges) { followed, mySports, _ -> followed to mySports }
-        ) { load, shown, claimed, ended, (followed, mySports) ->
+            combine(followedTeams, prefs.mySports, prefs.hiddenTitles, directoryChanges) { followed, mySports, hidden, _ -> Triple(followed, mySports, hidden) }
+        ) { load, shown, claimed, ended, (followed, mySports, hidden) ->
             if (load == null || !shown) {
                 emptyList()
             } else {
@@ -328,9 +328,9 @@ class SportsLiveRepositoryImpl @Inject constructor(
                 val addonOrder = claimed.map { it.addon.id }.distinct()
                 // The section's own sorting of this load, when it has one (live.20): never a second merge of the same games.
                 val live = sharedBuckets.tab(load, keys, addonOrder, SportsLiveTab.LIVE_NOW, nowMs())
-                // My sports scopes the row as it does the section (#146, #167): followed teams' games and channels stay;
-                // games of no identifiable sport go.
-                SportsLiveMySportsScope.scope(SportsLiveItemBucketer.pinFollowed(live, followed), mySports)
+                // Live Now's own rules and order (RC TV finding): no listing that is no game, nothing More live holds,
+                // the section's league tags, followed teams first (SportsLiveHomeLiveNow).
+                SportsLiveHomeLiveNow.of(live, followed, mySports, hidden)
                     .filterNot { it.hasEnded(ended) }
                     .take(limit)
             }

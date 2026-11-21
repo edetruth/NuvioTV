@@ -11,7 +11,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import com.nuvio.tv.R
 import com.nuvio.tv.core.sportslive.SportsLiveReadyMark
-import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import com.nuvio.tv.core.sportslive.displayName
 import com.nuvio.tv.core.sportslive.scores.GameArt
 import com.nuvio.tv.core.sportslive.scores.ScoreChips
@@ -22,6 +21,8 @@ import com.nuvio.tv.ui.screens.sportslive.SportsLiveDrawnEventCard
 import com.nuvio.tv.ui.screens.sportslive.SportsLiveDrawnGameCard
 import com.nuvio.tv.ui.screens.sportslive.rememberSportsLiveReadyMark
 import com.nuvio.tv.ui.screens.sportslive.rememberScoreChipStrings
+import com.nuvio.tv.ui.screens.sportslive.liveNowItemTag
+import com.nuvio.tv.ui.screens.sportslive.sportKindLabelRes
 
 /**
  * Home's drawn Live now cards (V2 phase 10), by card id ([com.nuvio.tv.ui.components.LocalDrawnCardArt]): the
@@ -40,15 +41,19 @@ internal fun rememberLiveNowCardArt(
     val strings = rememberScoreChipStrings()
     val liveWord = stringResource(R.string.sports_live_team_live)
     val listedWord = stringResource(R.string.sports_live_listed_live)
+    // Live Now's tag words (RC TV finding): the same league tag as its row, else the sport word, never a catalog's name.
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val sportWord: (com.nuvio.tv.core.sportslive.SportsLiveSportKind) -> String = remember(context) {
+        { kind -> context.getString(sportKindLabelRes(kind)) }
+    }
     // #207: the lookup changes with the cards only, never with a score. Every card on Home reads it, so a new one on
     // each score update redrew them all; each drawn card reads its own game's score instead, and only a card whose game
     // changed is drawn again.
-    return remember(items, scores, mode, strings, liveWord, unmatched, listedWord) {
+    return remember(items, scores, mode, strings, liveWord, unmatched, listedWord, sportWord) {
         val cards = HashMap<String, @Composable () -> Unit>()
         for (item in items) {
             if (item.id in cards || !SportsLiveHomeMeta.drawsCard(item)) continue
             val title = SportsLiveHomeMeta.cleanTitle(item.displayName)
-            val league = item.sport?.takeUnless(SportsLiveTeams::isNonSportTag)
             val card: @Composable () -> Unit = {
                 val snapshot by remember { derivedStateOf { scores.value[item.streamKey] } }
                 val confirmedUnmatched by remember { derivedStateOf { item.streamKey in unmatched.value } }
@@ -59,11 +64,12 @@ internal fun rememberLiveNowCardArt(
                     SportsLiveHomeMeta.cardFooter(ScoreChips.of(item, snapshot, mode, revealed = false), mode, strings, liveWord, listedWord.takeIf { listed })
                 }
                 val art = remember(snapshot) { GameArt.of(item, snapshot) }
+                val tag = remember(snapshot) { liveNowItemTag(item, snapshot, sportWord).ifEmpty { null } }
                 val ready = rememberSportsLiveReadyMark(item) == SportsLiveReadyMark.READY
                 if (art != null) {
-                    SportsLiveDrawnGameCard(art = art, followed = item.followed, footer = footer, modifier = Modifier.fillMaxSize(), ready = ready)
+                    SportsLiveDrawnGameCard(art = art.copy(league = tag), followed = item.followed, footer = footer, modifier = Modifier.fillMaxSize(), ready = ready)
                 } else {
-                    SportsLiveDrawnEventCard(title = title, league = league, followed = item.followed, footer = footer, modifier = Modifier.fillMaxSize(), ready = ready)
+                    SportsLiveDrawnEventCard(title = title, league = tag, followed = item.followed, footer = footer, modifier = Modifier.fillMaxSize(), ready = ready)
                 }
             }
             cards[item.id] = card
