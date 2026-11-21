@@ -191,13 +191,19 @@ class SportsLiveRepositoryImpl @Inject constructor(
             return load to stats
         }
 
-        suspend fun publish(load: SportsLiveLoad, stats: Map<String, CatalogStats>) {
+        suspend fun publish(load: SportsLiveLoad, stats: Map<String, CatalogStats>): Boolean {
             val claimedNow = claimedCatalogs.first()
             if (claimedNow.map { it.key }.toSet() == claimedKeys && optionsOf(claimedNow) == options) {
                 _latest.value = load
                 _catalogStats.value = stats
+                return true
             }
+            return false
         }
+
+        // J1's early list of this load, while it is the one published: withdrawn if the claims change before the end.
+        val statsBefore = _catalogStats.value
+        var earlyPublished: SportsLiveLoad? = null
 
         val toFetch = claimed.filterNot { it.key in carriedItems }
         val answered = java.util.concurrent.ConcurrentHashMap<String, NetworkResult<CatalogRow>>()
@@ -210,7 +216,7 @@ class SportsLiveRepositoryImpl @Inject constructor(
                     answeredCount.first { SportsLiveCalmOpen.mostAnswered(it, toFetch.size) }
                     val (load, stats) = built(HashMap(answered), partial = true)
                     SportsLiveDebugTiming.log { "sportsOpen stage=early t=${elapsedMs()} answered=${answered.size}/${toFetch.size}" }
-                    publish(load, stats)
+                    if (publish(load, stats)) earlyPublished = load
                 }
             } else {
                 null
@@ -238,7 +244,15 @@ class SportsLiveRepositoryImpl @Inject constructor(
         SportsLiveDebugTiming.log { "sportsOpen stage=fetched t=${elapsedMs()}" }
         val (load, stats) = built(fetched, partial = false)
         SportsLiveDebugTiming.log { "sportsOpen stage=described t=${elapsedMs()} items=${load.items.size} failures=${load.failures.size}" }
-        publish(load, stats)
+        if (!publish(load, stats)) {
+            // The profile, the overrides or a pin changed mid-load: no part of this load stays published, not even its
+            // early list (it would show another profile's or option's games), so the list is as it was before it.
+            val early = earlyPublished
+            if (early != null && _latest.value === early) {
+                _latest.value = cached
+                _catalogStats.value = statsBefore
+            }
+        }
         load
     }
 
