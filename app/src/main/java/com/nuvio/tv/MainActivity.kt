@@ -1445,7 +1445,7 @@ open class MainActivity : ComponentActivity() {
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (ambientIdleController.consumeKeyEvent(event)) return true
-        // Report a problem (#172): a held ★, TV, Play/Pause or Info saves a report; the first press still does its job.
+        // Report a problem (#172): a held Play/Pause or Info saves a report; the first press still does its job.
         if (sportsLiveReporter.onKey(event)) return true
         if (SportsLiveActivityHooks.dispatchKeyEvent(event) { longPressBackHeld.value = true }) return true
         if (event.keyCode == KeyEvent.KEYCODE_BACK) {
@@ -1463,7 +1463,8 @@ open class MainActivity : ComponentActivity() {
             }
             return true
         }
-        return super.dispatchKeyEvent(event)
+        // Hold OK where nothing focused has a hold of its own: the Report a problem sheet (#218 everywhere).
+        return SportsLiveActivityHooks.dispatchToScreens(event, hasWindowFocus(), sportsLiveReporter) { super.dispatchKeyEvent(it) }
     }
 
     override fun onStart() {

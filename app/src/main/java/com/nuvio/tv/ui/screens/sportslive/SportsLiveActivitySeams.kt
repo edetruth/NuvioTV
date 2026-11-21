@@ -89,6 +89,17 @@ object SportsLiveActivityHooks {
         return false
     }
 
+    /**
+     * The screens' dispatch ([screens]: Activity.dispatchKeyEvent's super), through Hold OK (#218 everywhere): where
+     * nothing focused has a hold of its own, a held OK opens the Report a problem sheet ([SportsLiveHoldOk]).
+     */
+    fun dispatchToScreens(
+        event: KeyEvent,
+        windowFocused: Boolean,
+        reporter: SportsLiveReporter,
+        screens: (KeyEvent) -> Boolean
+    ): Boolean = SportsLiveHoldOk.dispatch(event, windowFocused, reporter, screens)
+
     /** Every in-app launch (startActivity included) passes here; its leave hint is not Home. */
     fun onStartActivity() {
         SportsLivePip.ownLaunchInFlight = true
@@ -267,6 +278,8 @@ fun SportsLiveActivityOverlays(navController: NavHostController, currentRoute: S
     )
     // Sports & Live's one toast card (#134): top right, never focused, newest wins.
     SportsLiveToastLayer()
+    // Hold OK's Report a problem sheet, on any screen without a hold of its own (#218 everywhere).
+    SportsLiveHoldOkHost()
 }
 
 /**
