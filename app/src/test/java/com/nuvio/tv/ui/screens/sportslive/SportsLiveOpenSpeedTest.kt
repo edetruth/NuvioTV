@@ -157,6 +157,32 @@ class SportsLiveOpenSpeedTest {
     }
 
     @Test
+    fun `back on Live now from another tab its rows keep their place and new ones wait for N new`() = runTest {
+        // J1 + #143 (l23-rc): the tab's kept board shows at once on return, so the fresh build must not reshuffle it.
+        loadGate = CompletableDeferred()
+        val viewModel = newViewModel(MemoryCache())
+        runCurrent()
+        loadGate!!.complete(load(listOf(item("a", isLive = true))))
+        runCurrent()
+        assertEquals(listOf("a"), viewModel.uiState.value.visibleItems.map { it.id })
+        loadGate = null
+
+        viewModel.selectTab(SportsLiveTab.UPCOMING)
+        runCurrent()
+        latestFlow.value = load(listOf(item("b", isLive = true), item("a", isLive = true)))
+        runCurrent()
+        viewModel.selectTab(SportsLiveTab.LIVE_NOW)
+        runCurrent()
+
+        val back = viewModel.uiState.value
+        assertEquals(listOf("a"), back.visibleItems.map { it.id })
+        assertEquals(1, back.newLiveRows)
+        viewModel.showNewRows()
+        runCurrent()
+        assertEquals(setOf("a", "b"), viewModel.uiState.value.visibleItems.map { it.id }.toSet())
+    }
+
+    @Test
     fun `coming back to the section reuses the list built from the same load`() = runTest {
         latestFlow.value = load(listOf(item("a", isLive = true)))
         val cache = MemoryCache()
