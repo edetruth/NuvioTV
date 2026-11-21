@@ -722,7 +722,7 @@ private fun ResultBoardRow(
                     val homeChoices = remember(event.home) { resultNameChoices(event.home) }
                     var nameLevel by remember(awayChoices, homeChoices) { mutableStateOf(0) }
                     val maxLevel = maxOf(awayChoices.lastIndex, homeChoices.lastIndex)
-                    val tooLong: () -> Unit = { if (nameLevel < maxLevel) nameLevel++ }
+                    val tooLong: (Int) -> Unit = { from -> nameLevel = nextNameLevel(nameLevel, from, maxLevel) }
                     TeamLine(awayChoices, nameLevel, tooLong, logos?.first, logos?.shown == true, bold = awayWon, rank = RankDisplay.rank(event.league, event.away.rank)?.takeIf { RankDisplay.onRows(event.league) })
                     TeamLine(homeChoices, nameLevel, tooLong, logos?.second, logos?.shown == true, bold = homeWon, rank = RankDisplay.rank(event.league, event.home.rank)?.takeIf { RankDisplay.onRows(event.league) })
                 }
@@ -958,7 +958,7 @@ internal fun ReplayPill() {
 private fun TeamLine(
     choices: List<String>,
     level: Int,
-    onTooLong: () -> Unit,
+    onTooLong: (Int) -> Unit,
     logo: Painter?,
     logoShown: Boolean,
     bold: Boolean,
@@ -989,7 +989,7 @@ private fun TeamLine(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             onTextLayout = { layout ->
-                if (index < choices.lastIndex && (layout.hasVisualOverflow || layout.isLineEllipsized(0))) onTooLong()
+                if (index < choices.lastIndex && (layout.hasVisualOverflow || layout.isLineEllipsized(0))) onTooLong(level)
             }
         )
     }

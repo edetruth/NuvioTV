@@ -259,6 +259,14 @@ internal fun scoreboardNameChoices(team: GameArtTeam): List<String> =
     listOf(team.name, team.shortName, team.short).map { it.trim() }.filter { it.isNotEmpty() }.distinct()
         .ifEmpty { listOf(team.name) }
 
+/**
+ * The names level after a team line at level [from] did not fit: one step down, once per level, never past [max].
+ * Both lines of a row can overflow in one layout pass ("Pittsburgh Panthers" over "Central Michigan Chippewas"); a
+ * plain `level++` from each skipped the short names and read "PITT" over "CMU" (TV QA live.20).
+ */
+internal fun nextNameLevel(current: Int, from: Int, max: Int): Int =
+    if (current == from && current < max) current + 1 else current
+
 /** What a row's scores column shows. */
 internal sealed interface ScoreboardScores {
     /** Both scores, stacked; [leader] is 0 (first), 1 (second) or null (level), set semibold / white. */

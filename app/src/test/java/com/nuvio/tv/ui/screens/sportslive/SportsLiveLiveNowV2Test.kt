@@ -162,6 +162,17 @@ class SportsLiveLiveNowV2Test {
     }
 
     @Test
+    fun `both team lines too long at once step the names down one level, not two`() {
+        // Both lines report level 0 in the same pass: the second report changes nothing.
+        val afterFirst = nextNameLevel(current = 0, from = 0, max = 2)
+        assertEquals(1, afterFirst)
+        assertEquals(1, nextNameLevel(current = afterFirst, from = 0, max = 2))
+        // The short names too long as well: then the abbreviations.
+        assertEquals(2, nextNameLevel(current = 1, from = 1, max = 2))
+        assertEquals(2, nextNameLevel(current = 2, from = 2, max = 2))
+    }
+
+    @Test
     fun `starting soon shows the kickoff over its countdown, red inside the last hour`() {
         val row = rows().first { it.item == soon }
         assertEquals(ScoreboardScores.None, scoreboardScoresOf(row.chip))
