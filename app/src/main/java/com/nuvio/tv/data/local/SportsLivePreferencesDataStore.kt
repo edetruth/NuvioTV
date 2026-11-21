@@ -170,7 +170,7 @@ class SportsLivePreferencesDataStore @Inject constructor(
         factory.get(pid, FEATURE).data.map { it[dataSaverKey] ?: false }
     }
 
-    /** "In-player guide (beta)" (live.21, design B2): the side panel by default ([SportsLiveGuideStyle.DEFAULT]). */
+    /** "In-player guide" (live.21 design B2; out of beta in live.23): the smooth table by default ([SportsLiveGuideStyle.DEFAULT]). */
     val guideStyle: Flow<com.nuvio.tv.core.sportslive.SportsLiveGuideStyle> = profileManager.activeProfileId.flatMapLatest { pid ->
         factory.get(pid, FEATURE).data.map { com.nuvio.tv.core.sportslive.SportsLiveGuideStyle.fromStored(it[guideStyleKey]) }
     }
