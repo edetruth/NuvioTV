@@ -85,7 +85,6 @@ import com.nuvio.tv.core.sportslive.scores.GameSituations
 import com.nuvio.tv.core.sportslive.scores.GameArt
 import com.nuvio.tv.core.sportslive.scores.TeamLogoBook
 import com.nuvio.tv.core.sportslive.scores.LiveScoresRepository
-import com.nuvio.tv.core.sportslive.scores.MySport
 import com.nuvio.tv.core.sportslive.scores.ResultRow
 import com.nuvio.tv.core.sportslive.scores.ScoreChip
 import com.nuvio.tv.core.sportslive.scores.ScoreChips
@@ -444,7 +443,7 @@ fun SportsLiveScreen(
             },
             results = resultsState,
             onSelectResultsDay = resultsViewModel::selectDay,
-            onSelectResultsSport = resultsViewModel::selectSport,
+            resultsActions = resultsViewModel,
             onExpandResultsGroup = resultsViewModel::expandGroup,
             onEditMySports = onOpenMySports,
             onResultFocus = resultsViewModel::onRowFocus,
@@ -591,7 +590,8 @@ private fun SportsLiveContent(
     onWatchWith: (SportsLiveItem) -> Unit,
     results: SportsLiveResultsUiState,
     onSelectResultsDay: (Int) -> Unit,
-    onSelectResultsSport: (MySport?) -> Unit,
+    /** Results' Jump to and reveals (results redesign). */
+    resultsActions: ResultsActions,
     onExpandResultsGroup: (String) -> Unit,
     onEditMySports: () -> Unit,
     onResultFocus: (String?) -> Unit,
@@ -986,7 +986,8 @@ private fun SportsLiveContent(
     val showingResults = uiState.selectedTab == SportsLiveTab.RESULTS
     // The tab's filter (V2): one focus stop in the header. Upcoming inline; Channels' regions, Replays' sports
     // and Results' sports as one dropdown each (P4).
-    val resultsFilterShown = showingResults && results.status == ResultsStatus.READY && results.sports.isNotEmpty()
+    // Results' Jump to ▾ (results redesign): whenever a day has loaded, so Other sports is always reachable.
+    val resultsFilterShown = showingResults && results.status == ResultsStatus.READY
     // #146: while My sports hides games, All sports is offered (on Live now too, as its only option).
     val allSportsOffered = SportsLiveUiState.ALL_SPORTS_FILTER in uiState.filters
     // Channels phase 2: no region dropdown; the browse view's Countries panel filters instead.
@@ -1054,17 +1055,14 @@ private fun SportsLiveContent(
     }
     // Live now has no sport filter (V2): only My sports and All sports (#146).
     val headerFilters = if (uiState.selectedTab == SportsLiveTab.LIVE_NOW) uiState.filters.filter { it == SportsLiveUiState.ALL_SPORTS_FILTER } else uiState.filters
-    val mySportsLabel = stringResource(R.string.sports_live_results_my_sports_star)
-    val resultsSportLabels = results.sports.associateWith { mySportLabel(it) }
-    val filterOptions = remember(filterShown, showingResults, headerFilters, myTeamsLabel, allLabel, filterLabels, results.sports, resultsSportLabels, mySportsLabel) {
+    val filterOptions = remember(filterShown, showingResults, headerFilters, myTeamsLabel, allLabel, filterLabels) {
         when {
             !filterShown -> null
-            showingResults -> listOf(SportsLiveFilterOption(null, mySportsLabel, gold = true)) +
-                results.sports.map { SportsLiveFilterOption(it.id, resultsSportLabels[it] ?: it.id) }
+            // Jump to ▾ draws its own menu (results redesign).
+            showingResults -> emptyList()
             else -> sportsLiveFilterOptions(headerFilters, myTeamsLabel, allLabel) { filterLabels[it] ?: it }
         }
     }
-    val editMySportsLabel = stringResource(R.string.sports_live_results_edit_my_sports)
     val filterDropdown = when (uiState.selectedTab) {
         SportsLiveTab.LIVE_NOW -> SportsLiveHeaderDropdown(stringResource(R.string.sports_live_filter_title_sport))
         // F16: Upcoming's sports as one dropdown too; the inline strip clipped its last option ("G…").
@@ -1072,7 +1070,7 @@ private fun SportsLiveContent(
         SportsLiveTab.CHANNELS -> SportsLiveHeaderDropdown(stringResource(R.string.sports_live_filter_title_region))
         SportsLiveTab.REPLAYS -> SportsLiveHeaderDropdown(stringResource(R.string.sports_live_filter_title_sport))
         // "Edit my sports" closes the menu (F7: no chip runs under it any more).
-        SportsLiveTab.RESULTS -> SportsLiveHeaderDropdown(stringResource(R.string.sports_live_filter_title_sport), listOf(editMySportsLabel to onEditMySports))
+        SportsLiveTab.RESULTS -> resultsJumpDropdown(results, resultsActions, onEditMySports)
         else -> null
     }
     // Results' day in the title: OK on ‹ older, on › newer (#153).
@@ -1640,12 +1638,8 @@ private fun SportsLiveContent(
             onOpenTab = openList,
             filterOptions = filterOptions,
             filterFocusRequester = filterFocusRequester,
-            selectedFilter = if (showingResults) results.selectedSport?.id else uiState.selectedFilter,
-            onSelectFilter = if (showingResults) {
-                { id -> onSelectResultsSport(MySport.entries.firstOrNull { it.id == id }) }
-            } else {
-                onSelectFilter
-            },
+            selectedFilter = uiState.selectedFilter,
+            onSelectFilter = onSelectFilter,
             filterDropdown = filterDropdown,
             date = resultsDate,
             dateFocusRequester = resultsDateFocusRequester,
@@ -1694,7 +1688,7 @@ private fun SportsLiveContent(
                 onExpandGroup = onExpandResultsGroup,
                 onRowFocus = onResultFocus,
                 onOpen = { row -> onOpenResult(row, null) },
-                onGameStats = { row -> onOpenResult(row, GameSection.BOX_SCORE) },
+                actions = resultsActions,
                 onWatchReplay = { row, replay ->
                     onWatchReplay(replay, resultsReplayTitle(row))
                 },
@@ -1706,7 +1700,6 @@ private fun SportsLiveContent(
                 liveGames = uiState.liveGameCount,
                 onEditMySports = onEditMySports,
                 onSaveForLater = onSaveForLater,
-                onRevealResult = onRevealResult,
                 onReport = onReport,
                 modifier = Modifier.padding(top = SportsLiveTokens.Size.HeaderBottomGap)
             )

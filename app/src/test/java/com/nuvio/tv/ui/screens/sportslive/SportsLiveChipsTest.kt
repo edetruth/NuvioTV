@@ -2,7 +2,6 @@ package com.nuvio.tv.ui.screens.sportslive
 
 import com.nuvio.tv.core.sportslive.scores.EspnLeague
 import com.nuvio.tv.core.sportslive.scores.FinalNote
-import com.nuvio.tv.core.sportslive.scores.MySport
 import com.nuvio.tv.core.sportslive.scores.MySports
 import com.nuvio.tv.core.sportslive.scores.ResultRow
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
@@ -78,15 +77,6 @@ class SportsLiveChipsTest {
     }
 
     @Test
-    fun `Results sport and league chips select on OK, never on focus`() {
-        val rows = listOf(result("1", "basketball", "nba"), result("2", "basketball", "mens-college-basketball"), result("3", "soccer", "eng.1"))
-        val sports: List<MySport?> = listOf<MySport?>(null) + resultSportChips(rows, MySports.DEFAULT)
-        assertOkSelectsAndFocusDoesNot(sports, null)
-        val leagues: List<String?> = listOf<String?>(null) + resultLeagueChips(rows, MySport.BASKETBALL).map { it.key }
-        assertOkSelectsAndFocusDoesNot(leagues, null)
-    }
-
-    @Test
     fun `the player panel chips select on OK, never on Left or Right`() {
         val items = listOf(item("a", "Soccer"), item("b", "NBA"), item("c", "NFL"))
         assertOkSelectsAndFocusDoesNot(panelChips(items, null), null)
@@ -121,22 +111,22 @@ class SportsLiveChipsTest {
     }
 
     @Test
-    fun `Results chip counts follow the day's games`() {
+    fun `Results Jump to counts follow the day's games`() {
         val rows = listOf(
             result("1", "basketball", "nba"),
             result("2", "basketball", "nba"),
+            // College is not in the default My sports: under Other sports, not counted here.
             result("3", "basketball", "mens-college-basketball"),
             result("4", "soccer", "eng.1", followed = true)
         )
-        val sports = resultSportChips(rows, MySports.DEFAULT)
-        val counts = resultChipCounts(rows, MySports.DEFAULT, sports, MySport.BASKETBALL)
-        assertEquals(3, counts.sports[MySport.BASKETBALL])
-        assertEquals(1, counts.sports[MySport.SOCCER])
-        assertEquals(3, counts.leagues[null])
-        assertEquals(2, counts.leagues[SportsResults.groupKey(rows[0].event)])
-        assertEquals(1, counts.leagues[SportsResults.groupKey(rows[2].event)])
-        // ★ My sports picked: no league chips to count.
-        assertTrue(resultChipCounts(rows, MySports.DEFAULT, sports, null).leagues.isEmpty())
+        val counts = resultsJumpEntries(rows, MySports.DEFAULT).associate { it.jump to it.count }
+        assertEquals(3, counts[null])
+        assertEquals(1, counts[ResultsJump.YourTeams])
+        assertEquals(2, counts[ResultsJump.League(SportsResults.groupKey(rows[0].event))])
+        assertEquals(1, counts[ResultsJump.League(SportsResults.groupKey(rows[3].event))])
+        assertNull(counts[ResultsJump.League(SportsResults.groupKey(rows[2].event))])
+        // No followed team played: no Your teams entry.
+        assertTrue(resultsJumpEntries(rows.take(2), MySports.DEFAULT).none { it.jump == ResultsJump.YourTeams })
     }
 
     @Test
