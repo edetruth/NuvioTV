@@ -389,7 +389,14 @@ class SportsLivePreferencesDataStoreTest {
     @Test
     fun `the scores choice reads the stored mode and my teams switch and writes both`() = runTest {
         val store = SportsLivePreferencesDataStore(factory, profiles)
+        // Never set (results redesign Q1): my teams' scores hide by default, so Settings reads My teams only.
+        assertEquals(ScoresChoice(ScoresMode.HIDE_UNTIL_FOCUSED, myTeamsOnly = true), store.scoresChoice.first())
+        assertTrue(store.spoilerProtection.first().myTeams)
+        assertTrue(store.hideMyTeamsScores.first())
+        // A stored Show is respected: nothing of my teams hides then.
+        store.updateScoresChoice { it.withMode(ScoresMode.SHOW) }
         assertEquals(ScoresChoice(), store.scoresChoice.first())
+        assertFalse(store.spoilerProtection.first().myTeams)
         // A profile from before live.20: Show plus "Hide scores of my teams' games" reads as my teams only.
         store.setScoresMode(ScoresMode.SHOW)
         store.setHideMyTeamsScores(true)
