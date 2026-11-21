@@ -847,11 +847,18 @@ internal class ResultSpoilerReveal(private val scope: CoroutineScope, private va
 /**
  * OK on a Results row: the Game page for its event (#18), carrying the row's strict replay match (Watch
  * replay) and whether its score already shows here (Hide until focused: a revealed row opens revealed). A
- * followed team's game hidden here opens spoiler-safe, so the page hides it under Show too (results redesign).
+ * game hidden here for the viewer's teams or a protection opens spoiler-safe, so the page hides it under Show too.
  */
 internal fun SportsLiveResultsUiState.gameRequestFor(row: ResultRow): SportsLiveGameRequest {
-    val shows = showsScore(row)
-    return SportsLiveGameRequest(event = row.event, replay = replays[row.key], revealed = shows, spoilerSafe = !shows && row.followed)
+    // Spoiler-safe whenever it is hidden for the viewer's teams or protection (M2, #151), not only for a followed row: a
+    // protected final opened from another row stays hidden on the Game page under Show too.
+    val reason = hiddenReason(row)
+    return SportsLiveGameRequest(
+        event = row.event,
+        replay = replays[row.key],
+        revealed = reason == null,
+        spoilerSafe = reason == ResultHiddenReason.YOUR_TEAM || reason == ResultHiddenReason.SAVED
+    )
 }
 
 /** A result row's list key. */
