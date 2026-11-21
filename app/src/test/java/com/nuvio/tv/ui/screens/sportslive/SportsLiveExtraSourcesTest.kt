@@ -225,19 +225,19 @@ class SportsLiveExtraSourcesTest {
     fun `a single-addon multi-provider card reads by provider, primary group included`() {
         // Primary from the shared addon (its search group is named by the addon); alternates already
         // carry provider labels. The primary relabel folds its group in under its provider too.
-        val primary = stream("p", "https://cnc.example/p.m3u8", "CNCVerse")
-        val livXow = stream("alt1", "https://cnc.example/alt1.m3u8", "LivXow")
-        val skTech = stream("alt2", "https://cnc.example/alt2.m3u8", "SKTech")
+        val primary = stream("p", "https://addon.example/p.m3u8", "Example Addon")
+        val livXow = stream("alt1", "https://addon.example/alt1.m3u8", "LivXow")
+        val skTech = stream("alt2", "https://addon.example/alt2.m3u8", "SKTech")
 
         val result = withExtraStreams(
-            NetworkResult.Success(listOf(AddonStreams("CNCVerse", null, listOf(primary)))),
+            NetworkResult.Success(listOf(AddonStreams("Example Addon", null, listOf(primary)))),
             listOf(livXow, skTech),
-            primaryRelabel = "CNCVerse" to "SportzX"
+            primaryRelabel = "Example Addon" to "SportzX"
         ) as NetworkResult.Success
 
         assertEquals(listOf("SportzX", "LivXow", "SKTech"), result.data.map { it.addonName })
         // No source still shows the raw addon name.
-        assertTrue(result.data.flatMap { it.streams }.none { it.addonName == "CNCVerse" })
+        assertTrue(result.data.flatMap { it.streams }.none { it.addonName == "Example Addon" })
     }
 
     @Test
