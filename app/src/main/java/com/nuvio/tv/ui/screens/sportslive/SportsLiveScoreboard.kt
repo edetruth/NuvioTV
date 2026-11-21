@@ -110,10 +110,12 @@ internal fun scoreboardRows(
     nowMs: Long,
     ended: Map<String, EndedGame> = emptyMap(),
     followsSide: (SportsLiveItem, String) -> Boolean = { _, _ -> false },
-    excitement: Map<String, WhyTag> = emptyMap()
+    excitement: Map<String, WhyTag> = emptyMap(),
+    /** Live now (J2): [items] are in importance order already; each group keeps it. */
+    keepOrder: Boolean = false
 ): List<ScoreboardRow> {
     val scoresOn = mode != null && mode != ScoresMode.OFF
-    return groupPanelRows(items, scores, mode, revealed, nowMs, ended, listedLive = tab != SportsLiveTab.UPCOMING).map { row ->
+    return groupPanelRows(items, scores, mode, revealed, nowMs, ended, listedLive = tab != SportsLiveTab.UPCOMING, keepOrder = keepOrder).map { row ->
         val endedGame = ended[row.item.streamKey]
         val snapshot = (scores[row.item.streamKey] ?: endedGame?.event).takeIf { scoresOn }
         scoreboardRowOf(row, snapshot, endedGame, nowMs, followsSide, GameArt.of(row.item, snapshot), tab)

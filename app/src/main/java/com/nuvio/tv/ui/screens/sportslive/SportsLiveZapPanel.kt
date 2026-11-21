@@ -229,7 +229,9 @@ internal fun groupPanelRows(
     ended: Map<String, EndedGame> = emptyMap(),
     known: TeamLogoBook = TeamLogoBook.shared,
     /** The list says its games are live (Live now, the panel); Upcoming's are not: ESPN alone makes one live there. */
-    listedLive: Boolean = true
+    listedLive: Boolean = true,
+    /** Live now (J2, live.23): [items] come in importance order ([SportsLiveImportance]), kept inside each group. */
+    keepOrder: Boolean = false
 ): List<ZapPanelRow> {
     class Entry(val row: ZapPanelRow, val startMs: Long?, val index: Int, val rank: Int)
     val entries = items.mapIndexed { index, item ->
@@ -254,10 +256,14 @@ internal fun groupPanelRows(
         val rank = lineupRankOf(item, liveScored, bigGame = liveScored && isLiveBigGame(event!!))
         Entry(ZapPanelRow(item, group, chip, art, teams, status, scoreboardGroupOf(status, item), matched = event != null), start, index, rank)
     }
-    val order = compareBy<Entry> { it.row.group.ordinal }
-        .thenBy { it.rank }
-        .thenBy { if (it.row.group >= ZapPanelGroup.OTHER) 0L else it.startMs ?: Long.MAX_VALUE }
-        .thenBy { it.index }
+    val order = if (keepOrder) {
+        compareBy<Entry> { it.row.group.ordinal }.thenBy { it.index }
+    } else {
+        compareBy<Entry> { it.row.group.ordinal }
+            .thenBy { it.rank }
+            .thenBy { if (it.row.group >= ZapPanelGroup.OTHER) 0L else it.startMs ?: Long.MAX_VALUE }
+            .thenBy { it.index }
+    }
     return entries.sortedWith(order).map { it.row }
 }
 
