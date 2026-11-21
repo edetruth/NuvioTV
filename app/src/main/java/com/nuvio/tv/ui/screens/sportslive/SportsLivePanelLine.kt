@@ -394,7 +394,7 @@ internal fun SportsLivePanelLine(
     val endedShort = stringResource(R.string.sports_live_panel_probably_ended_short)
     val kickoff = row.art?.let { kickoffText(it) }
     // live.20 F5: the panel's own short tag, so the fixed column never cuts it ("MOTORSPORT" → "MOTOR").
-    val sport = remember(row) { row.sportTag ?: SportsLiveSportKind.plainTagOf(row.item) }
+    val sport = rememberRowPlainTag(row)
     val tag = SportsLiveTags.short(rowTagText(row), sport)
     val individual = sport in PANEL_INDIVIDUAL_SPORTS
     val line = remember(row, strings, kickoff, tag, individual, titleSuffix) {

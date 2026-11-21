@@ -27,6 +27,7 @@ import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -59,6 +60,7 @@ import com.nuvio.tv.R
 import com.nuvio.tv.core.sportslive.SportsLiveDisplayText
 import com.nuvio.tv.core.sportslive.SportsLiveLeagueTags
 import com.nuvio.tv.core.sportslive.SportsLiveSportKind
+import com.nuvio.tv.core.sportslive.scores.TeamDirectory
 import com.nuvio.tv.core.sportslive.SportsLiveTeams
 import java.util.Locale
 import com.nuvio.tv.core.sportslive.displayName
@@ -277,6 +279,16 @@ private fun GameCells(row: ScoreboardRow, reminded: Boolean, hasReplay: Boolean,
         row.tennis?.let { TennisSetsCell(it, live, compact) } ?: ScoresCell(scores, reminded, compact)
         StatusCell(row, hasReplay, ready = ready, watching = watching)
     }
+}
+
+/**
+ * The sport [row]'s text tells ([SportsLiveSportKind.plainTagOf]) when it has no sport tag of its own, read again when
+ * the team directory's lists change (a bare "Football" waits for the NFL list, release review).
+ */
+@Composable
+internal fun rememberRowPlainTag(row: ScoreboardRow): SportsLiveSportKind? {
+    val revision by TeamDirectory.shared.revision.collectAsState()
+    return remember(row, revision) { row.sportTag ?: SportsLiveSportKind.plainTagOf(row.item) }
 }
 
 /** The board's tag in the one shared vocabulary (live.20: same short tags as the panel, Home and dual). */

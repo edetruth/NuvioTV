@@ -98,7 +98,7 @@ class UnroutedSoccerCopiesTest {
         assertEquals(listOf(EspnLeague("soccer", "ger.1")), EspnLeagueMap.leaguesFor(bundes))
         assertEquals(SportsLiveSportKind.SOCCER, SportsLiveSportKind.tagOf(bundes))
         assertEquals(listOf(EspnLeagueMap.SOCCER_ALL), EspnLeagueMap.leaguesFor(andorra))
-        assertEquals(SportsLiveSportKind.SOCCER, SportsLiveSportKind.plainTagOf(andorra, TeamDirectory()))
+        assertEquals(SportsLiveSportKind.SOCCER, SportsLiveSportKind.plainTagOf(andorra, TeamDirectory().apply { put(EspnLeagueMap.NFL, emptyList(), base) }))
     }
 
     @Test
@@ -108,8 +108,14 @@ class UnroutedSoccerCopiesTest {
         }
         assertEquals(SportsLiveSportKind.FOOTBALL, SportsLiveSportKind.plainTagOf(item("Chicago Bears vs Green Bay Packers", "Football"), nfl))
         assertEquals(SportsLiveSportKind.SOCCER, SportsLiveSportKind.plainTagOf(item("FC Andorra vs Leganés", "Football"), nfl))
-        // Before the NFL list is loaded, nothing says American football: soccer.
-        assertEquals(SportsLiveSportKind.SOCCER, SportsLiveSportKind.plainTagOf(item("Chicago Bears vs Green Bay Packers", "Football"), TeamDirectory()))
+        // Before the NFL list is loaded nothing can tell: "Football" stays as written, never SOCCER first (release review).
+        assertNull(SportsLiveSportKind.plainTagOf(item("Chicago Bears vs Green Bay Packers", "Football"), TeamDirectory()))
+        assertNull(SportsLiveSportKind.plainTagOf(andorra, TeamDirectory()))
+        // A card that says soccer elsewhere needs no list.
+        assertEquals(
+            SportsLiveSportKind.SOCCER,
+            SportsLiveSportKind.plainTagOf(item("FC Andorra vs Leganés", "Football").copy(catalogName = "Soccer"), TeamDirectory())
+        )
     }
 
     @Test

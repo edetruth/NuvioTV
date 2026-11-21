@@ -1,5 +1,7 @@
 package com.nuvio.tv.core.sportslive
 
+import com.nuvio.tv.core.sportslive.scores.EspnLeagueMap
+import com.nuvio.tv.core.sportslive.scores.TeamDirectory
 import com.nuvio.tv.domain.model.Addon
 import com.nuvio.tv.domain.model.CatalogDescriptor
 import com.nuvio.tv.domain.model.ClaimedCatalog
@@ -190,8 +192,12 @@ class SportsLiveLive20DataTest {
     fun `a plain sport word is the sport's one name, a bare Football is soccer unless it says American football`() {
         assertEquals(SportsLiveSportKind.SOCCER, SportsLiveSportKind.plainTagOf(event("a", "1", "East Bengal FC vs Sporting Delhi", listOf("Soccer"))))
         assertEquals(SportsLiveSportKind.HOCKEY, SportsLiveSportKind.plainTagOf(event("a", "2", "Devils vs Rangers", listOf("Ice Hockey"))))
-        // A lone "Football" is soccer unless the card says American football (#206).
-        assertEquals(SportsLiveSportKind.SOCCER, SportsLiveSportKind.plainTagOf(event("a", "3", "East Bengal FC vs Sporting Delhi", listOf("Football"))))
+        // A lone "Football" is soccer unless the card says American football (#206), once the NFL list is loaded;
+        // before it, as written (release review).
+        val nflLoaded = TeamDirectory().apply { put(EspnLeagueMap.NFL, emptyList(), 0L) }
+        val bare = event("a", "3", "East Bengal FC vs Sporting Delhi", listOf("Football"))
+        assertEquals(SportsLiveSportKind.SOCCER, SportsLiveSportKind.plainTagOf(bare, nflLoaded))
+        assertNull(SportsLiveSportKind.plainTagOf(bare, TeamDirectory()))
         // A league stays as written.
         assertNull(SportsLiveSportKind.plainTagOf(event("a", "4", "Arsenal vs Chelsea", listOf("Premier League"))))
         // A bare "Football" with an NFL genre is American football.
