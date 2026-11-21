@@ -7,6 +7,7 @@ import com.nuvio.tv.core.sportslive.scores.EspnFixtures
 import com.nuvio.tv.core.sportslive.scores.EspnLeagueMap
 import com.nuvio.tv.core.sportslive.scores.ScoreSnapshot
 import com.nuvio.tv.core.sportslive.scores.ScoreState
+import com.nuvio.tv.core.sportslive.scores.ScoresMode
 import com.nuvio.tv.domain.model.SportsLiveItem
 import com.nuvio.tv.core.sportslive.SportsLiveGameReadiness
 import com.nuvio.tv.core.sportslive.SportsLiveWorkingLinks
@@ -83,6 +84,16 @@ class SportsLiveNextGameTest {
     fun `then the top big game live anywhere`() {
         val pick = SportsLiveNextGame.pick(ended, listOf(ended, nbaBlowout, nflOvertime), scores, emptySet(), emptySet())
         assertEquals(nflOvertime, pick)
+    }
+
+    @Test
+    fun `under Hide until focused or Off Up next never picks a game for how close it is (sorting model)`() {
+        // Show would pick the overtime game; the other settings go forward in the lineup, as with no scores.
+        val lineup = listOf(ended, nbaBlowout, nflOvertime)
+        assertEquals(nflOvertime, SportsLiveNextGame.pick(ended, lineup, scores, emptySet(), emptySet(), mode = ScoresMode.SHOW))
+        for (mode in listOf(ScoresMode.HIDE_UNTIL_FOCUSED, ScoresMode.OFF, null)) {
+            assertEquals("$mode", nbaBlowout, SportsLiveNextGame.pick(ended, lineup, scores, emptySet(), emptySet(), mode = mode))
+        }
     }
 
     @Test

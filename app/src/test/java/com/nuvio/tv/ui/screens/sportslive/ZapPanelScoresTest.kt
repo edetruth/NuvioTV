@@ -78,15 +78,16 @@ class ZapPanelScoresTest {
 
     @Test
     fun `the big-game lift orders the panel, guide and CH only under Scores Show (sorting model)`() {
-        val now = pacersEvent.startMs!! + 2 * HOUR
-        // Two scored games: the early one is not close; the later one is in crunch time (Q4 2:00, 100-98).
-        val calm = item("Los Angeles Lakers at Phoenix Suns", now - 2 * HOUR)
-        val crunch = item("Indiana Pacers at Philadelphia 76ers", now - HOUR)
+        // Two scored games: the early one (ESPN 18:00) is not close; the later one (ESPN 21:00) is in crunch time
+        // (Q4 2:00, 100-98). Neither is big by its stakes (no records in the fixture), so only the crunch can lift.
+        val at = lakersEvent.startMs!! + HOUR
+        val calm = item("Indiana Pacers at Philadelphia 76ers", pacersEvent.startMs!!)
+        val crunch = item("Los Angeles Lakers at Phoenix Suns", lakersEvent.startMs!!)
         val scores = mapOf(
-            calm.streamKey to live(lakersEvent, "Q3 9:00", 60, 40),
-            crunch.streamKey to live(pacersEvent, "Q4 2:00", 100, 98)
+            calm.streamKey to live(pacersEvent, "Q3 9:00", 60, 40),
+            crunch.streamKey to live(lakersEvent, "Q4 2:00", 100, 98)
         )
-        fun order(mode: ScoresMode) = panelLineup(groupPanelRows(listOf(calm, crunch), scores, mode, emptySet(), now)).map { it.item.id }
+        fun order(mode: ScoresMode) = panelLineup(groupPanelRows(listOf(calm, crunch), scores, mode, emptySet(), at)).map { it.item.id }
         // Show: the close game moves up (it is on screen, with its score).
         assertEquals(listOf(crunch.id, calm.id), order(ScoresMode.SHOW))
         // Hide until focused: no lift, so the order never tells a hidden score is close; start order.

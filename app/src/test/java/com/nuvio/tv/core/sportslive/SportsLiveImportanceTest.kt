@@ -75,6 +75,29 @@ class SportsLiveImportanceTest {
     }
 
     @Test
+    fun `a followed game with no score still leads every scored game (sorting model)`() {
+        val followed = game("Liverpool vs Chelsea", "Premier League", start = 9).copy(followed = true)
+        val ucl = game("Inter vs Porto", "Champions League", start = 1)
+        val epl = game("Brighton vs Leeds", "Premier League", start = 1)
+        val scored = setOf(ucl.streamKey, epl.streamKey)
+        assertEquals(listOf(followed, ucl, epl), SportsLiveImportance.sort(listOf(ucl, epl, followed), mine, directory = directory, scored = scored))
+    }
+
+    @Test
+    fun `a game with a score leads the scoreless ones of its own tier only (sorting model)`() {
+        val ucl = game("Inter vs Porto", "Champions League", start = 9)
+        val eplEarly = game("Wolves vs Fulham", "Premier League", start = 1)
+        val eplScored = game("Arsenal vs Spurs", "Premier League", start = 5)
+        val college = game("Duke vs Kansas", "NCAAM", start = 0)
+        val items = listOf(college, eplEarly, eplScored, ucl)
+        // An unscored higher tier still beats a scored lower one; inside the tier the scored game goes first.
+        val scored = setOf(eplScored.streamKey, college.streamKey)
+        assertEquals(listOf(ucl, eplScored, eplEarly, college), SportsLiveImportance.sort(items, mine, directory = directory, scored = scored))
+        // No score set (Off, or a caller that does not rank by it): nothing moves.
+        assertEquals(listOf(ucl, eplEarly, eplScored, college), SportsLiveImportance.sort(items, mine, directory = directory))
+    }
+
+    @Test
     fun `nothing picked ranks every placed league as My sports`() {
         val bundesliga = game("Frankfurt vs HSV", "Bundesliga", start = 1)
         val nba = game("Spurs vs Pelicans", "NBA", start = 5)

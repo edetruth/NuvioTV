@@ -8,17 +8,19 @@ import com.nuvio.tv.domain.model.SportsLiveItem
 
 /**
  * Live now's order by importance (J2, user 2026-11-21), replacing "live, then start, then name":
- * 1. followed teams' games;
+ * 1. followed teams' games, always first: a section no other key can outrank (sorting model, live.24);
  * 2. games of My sports' leagues (every placed league while nothing is picked), by [tierOf]: Champions League, Premier
- *    League, NBA, NFL, the other top leagues, then college and the rest; a close or late game ([bumped]: the excitement
- *    badge, #43, which exists only while scores are shown) first within its tier;
+ *    League, NBA, NFL, the other top leagues, then college and the rest; inside a tier, games with a score of ours
+ *    ([scored]: a chip, matched to a feed) before the scoreless ones, and among them a close or late game ([bumped]:
+ *    the excitement badge, #43, which exists only while scores are shown) first;
  * 3. games of other placed leagues (listed under All sports), by tier;
  * 4. games whose league is not known.
  * Within a group: soonest start first, then name, then the card's key, so the order is the same on every refresh.
  * "Other events" (H) are folded apart and never ranked here.
  *
- * Spoilers: nothing but [bumped] reads a score, and the caller fills it only under Scores Show (never Hide or Off,
- * never a spoiler-protected game), so the order never tells a score that is not on screen.
+ * Spoilers: nothing but [bumped] reads a score ([scored] says only that a feed has the game), and the caller fills it
+ * only under Scores Show (never Hide or Off, never a spoiler-protected game), so the order never tells a score that is
+ * not on screen.
  */
 object SportsLiveImportance {
 
