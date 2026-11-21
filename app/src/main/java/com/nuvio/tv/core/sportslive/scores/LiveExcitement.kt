@@ -201,13 +201,13 @@ object LiveExcitement {
 
 /**
  * What changed in each live game lately (#43), from the successive delayed snapshots this screen saw:
- * a score (the total went up) and a lead change (the leader flipped, a tie in between too), each
- * remembered for [windowMs]. In memory only; the first sight of a game records nothing, and games that
- * finish or leave the feed are forgotten (a snapshot that briefly lacks a score is not).
+ * a score that is news in its sport ([scoreIsNews]) and a lead change (the leader flipped, a tie in
+ * between too), each remembered for [windowMs]. In memory only; the first sight of a game records
+ * nothing, and games that finish or leave the feed are forgotten (a snapshot that briefly lacks a score is not).
  */
 class ExcitementHistory(private val windowMs: Long = RECENT_WINDOW_MS) {
 
-    private class Track(var total: Int, var leader: Int, var scoredAtMs: Long? = null, var leadChangedAtMs: Long? = null)
+    private class Track(var home: Int, var away: Int, var leader: Int, var scoredAtMs: Long? = null, var leadChangedAtMs: Long? = null)
 
     private val tracks = HashMap<String, Track>()
 
@@ -224,13 +224,14 @@ class ExcitementHistory(private val windowMs: Long = RECENT_WINDOW_MS) {
             val lead = (home - away).sign
             val track = tracks[event.eventId]
             if (track == null) {
-                tracks[event.eventId] = Track(home + away, lead)
+                tracks[event.eventId] = Track(home, away, lead)
                 continue
             }
-            if (home + away > track.total) track.scoredAtMs = nowMs
+            if (scoreIsNews(event.league.sport, home - track.home, away - track.away)) track.scoredAtMs = nowMs
             if (lead != 0 && track.leader != 0 && lead != track.leader) track.leadChangedAtMs = nowMs
             if (lead != 0) track.leader = lead
-            track.total = home + away
+            track.home = home
+            track.away = away
         }
         tracks.keys.retainAll(seen)
     }
@@ -244,5 +245,20 @@ class ExcitementHistory(private val windowMs: Long = RECENT_WINDOW_MS) {
 
     companion object {
         const val RECENT_WINDOW_MS = 5 * 60_000L
+
+        /** A touchdown's six points: a field goal (3) or a safety (2) is not "Just scored" news. */
+        private const val TOUCHDOWN = 6
+
+        /**
+         * Whether a side's gain since the last snapshot is worth "Just scored" (#209): where scoring is rare enough
+         * to be news. Every goal in soccer and hockey and every run in baseball; in football a touchdown (one side up
+         * 6 or more), not a field goal; in basketball never, as both sides score every few seconds there (a lead
+         * change still tags the game).
+         */
+        internal fun scoreIsNews(sport: String, homeGain: Int, awayGain: Int): Boolean = when (sport) {
+            LiveExcitement.BASKETBALL -> false
+            LiveExcitement.FOOTBALL -> maxOf(homeGain, awayGain) >= TOUCHDOWN
+            else -> homeGain > 0 || awayGain > 0
+        }
     }
 }
