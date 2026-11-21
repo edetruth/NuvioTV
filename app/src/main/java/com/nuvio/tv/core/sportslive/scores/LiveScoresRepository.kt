@@ -896,8 +896,10 @@ class LiveScoresRepository internal constructor(
             val college = feedsOf(listOf(wait.fallback), wait.dates)
             // No budget left: no score for it this time, and not confirmed unmatched either.
             if (!fits(college)) continue
-            // Both sides STRONG, on the college feed alone.
+            // Both sides STRONG, on the college feed alone. The women's league only for its game within 3 h of the card's
+            // own start (live.23 review B1): never another meeting of the pair, nor for an undated card.
             val match = matchOn(wait.entry.card, college, strictMatcher)
+                ?.takeIf { !EspnLeagueMap.isWomenFallback(wait.fallback) || nearCardStart(wait.entry.card, it) }
             if (match != null) {
                 // Matched there: the card is polled on its college feed alone from now on.
                 if (remembered.size >= MAX_REMEMBERED) remembered.clear()
@@ -1076,6 +1078,13 @@ class LiveScoresRepository internal constructor(
         }
     }
 
+    /** True when [match] starts within [WOMEN_FALLBACK_NEAR_MS] of [card]'s timed start (none: false). */
+    private fun nearCardStart(card: ScoreCard, match: ScoreSnapshot): Boolean {
+        val start = card.startMs?.takeIf { card.hasTimeOfDay } ?: return false
+        val at = match.startMs ?: return false
+        return kotlin.math.abs(at - start) <= WOMEN_FALLBACK_NEAR_MS
+    }
+
     private fun matchOn(card: ScoreCard, cardFeeds: List<ScoreFeed>, using: ScoreMatcher = matcher, tennis: Boolean = false): ScoreSnapshot? {
         val nowMs = now()
         // A card with no start is matched across ESPN's days: a league counts only once all its days are
@@ -1232,6 +1241,8 @@ class LiveScoresRepository internal constructor(
         const val SCREEN_PLAYER_NOW = "player_now"
 
         private const val WINDOW_MS = 3 * 60 * 60 * 1000L
+        /** The women's-league fallback's game is at most this far from the card's start (live.23 review B1). */
+        private const val WOMEN_FALLBACK_NEAR_MS = 3 * 60 * 60 * 1000L
         private const val MAX_REMEMBERED = 2_000
         /** Feeds polled at once, at most; followed teams' games claim theirs first (and poll faster while live). */
         internal const val MAX_FEEDS = 16

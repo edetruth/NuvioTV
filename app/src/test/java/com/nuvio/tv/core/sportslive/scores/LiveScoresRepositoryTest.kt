@@ -1945,6 +1945,23 @@ class LiveScoresRepositoryTest {
     }
 
     @Test
+    fun `the women's league gives no score for a card more than 3 hours from its game, or with no time`() = runTest {
+        // Review B1: a men's game missing from ESPN took the WSL meeting up to 14 h away, or yesterday's for an undated card.
+        com.nuvio.tv.core.sportslive.SportsLiveWomenGames.shared.clear()
+        provider.respond = { feed -> ScoreboardResult(if (feed.league == wslLeague) listOf(wslGame) else emptyList()) }
+        val repo = repository("2026-11-21T13:30:00Z")
+        collect(repo)
+        val evening = item("Liverpool vs Chelsea", "Premier League", "2026-11-21T19:30:00Z")
+        val undated = item("Liverpool vs Chelsea", "Premier League", null, addon = "b")
+        repo.track(SECTION, listOf(evening, undated))
+        runCurrent()
+        assertFalse(evening.streamKey in repo.scores.value)
+        assertFalse(undated.streamKey in repo.scores.value)
+        assertFalse(com.nuvio.tv.core.sportslive.SportsLiveWomenGames.shared.has(evening.streamKey))
+        com.nuvio.tv.core.sportslive.SportsLiveWomenGames.shared.clear()
+    }
+
+    @Test
     fun `the women's league is never tried when the men's league has the pairing today`() = runTest {
         com.nuvio.tv.core.sportslive.SportsLiveWomenGames.shared.clear()
         // The men's game is late that evening, out of the card's reach, but on its ESPN day.
